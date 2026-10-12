@@ -1,0 +1,13 @@
+{
+  "name": "@polypack/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": { "@polypack/geometry": "*", "@polypack/solver": "*" },
+  "devDependencies": { "vite": "^7.0.0" }
+}

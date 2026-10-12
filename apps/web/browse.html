@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Records</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="scroll">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html" aria-current="page">Records</a>
+        <a href="/api">API</a>
+      </nav>
+    </header>
+    <main class="page">
+      <h2 class="title">Records across P</h2>
+      <div class="row wrap">
+        <label for="n-select">Piece (N)</label>
+        <select id="n-select"></select>
+        <label for="m-select">Container (M)</label>
+        <select id="m-select"></select>
+        <span id="live" class="live" title="Live updates"></span>
+      </div>
+      <p id="note" class="note" role="status" aria-live="polite"></p>
+
+      <section id="atlas" class="atlas" aria-labelledby="atlas-title">
+        <h3 id="atlas-title" class="atlas-title">Atlas</h3>
+        <p id="atlas-lede" class="note atlas-lede"></p>
+        <form id="atlas-controls" class="atlas-controls" aria-label="Atlas display">
+          <div class="seg" role="radiogroup" aria-labelledby="seg-layout">
+            <span id="seg-layout" class="seg-name">Layout</span>
+            <span class="seg-track">
+              <label><input type="radio" name="layout" value="grid" /><span>Grid</span></label>
+              <label><input type="radio" name="layout" value="rows" /><span>Rows</span></label>
+            </span>
+          </div>
+          <div class="seg" role="radiogroup" aria-labelledby="seg-size">
+            <span id="seg-size" class="seg-name">Tile size</span>
+            <span class="seg-track">
+              <label><input type="radio" name="size" value="small" /><span>Small</span></label>
+              <label><input type="radio" name="size" value="medium" /><span>Medium</span></label>
+              <label><input type="radio" name="size" value="large" /><span>Large</span></label>
+            </span>
+          </div>
+          <div class="seg" role="radiogroup" aria-labelledby="seg-scale">
+            <span id="seg-scale" class="seg-name">Drawing scale</span>
+            <span class="seg-track">
+              <label><input type="radio" name="scale" value="fixed" /><span>Fixed</span></label>
+              <label><input type="radio" name="scale" value="row" /><span>Row</span></label>
+              <label><input type="radio" name="scale" value="global" /><span>Global</span></label>
+            </span>
+          </div>
+        </form>
+        <div id="atlas-legend" class="atlas-legend"></div>
+        <div id="atlas-tiles" class="atlas-tiles"></div>
+        <p class="atlas-more"><button id="atlas-more" type="button" hidden></button></p>
+        <p id="atlas-sources" class="note atlas-credit" hidden></p>
+        <p class="note atlas-credit">
+          Atlas layout inspired by <a href="https://jlevy.github.io/squares/" target="_blank" rel="noopener noreferrer">The Squares Project</a>.
+        </p>
+      </section>
+      <dialog id="atlas-detail" class="atlas-detail" aria-labelledby="detail-title">
+        <div class="detail-head">
+          <h3 id="detail-title"></h3>
+          <button id="detail-close" type="button" aria-label="Close">Close</button>
+        </div>
+        <div id="detail-body" class="detail-body"></div>
+      </dialog>
+
+      <h3 class="atlas-title">Chart and table</h3>
+      <figure>
+        <svg id="chart" role="img" aria-labelledby="chart-title" viewBox="0 0 900 380"></svg>
+        <figcaption id="chart-title" class="note"></figcaption>
+      </figure>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">P</th>
+              <th scope="col">Site best</th>
+              <th scope="col">By</th>
+              <th scope="col">Published</th>
+              <th scope="col">Status</th>
+              <th scope="col">Area bound</th>
+              <th scope="col">Board</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <section class="sources" aria-labelledby="sources-title">
+        <h3 id="sources-title" class="atlas-title">Sources</h3>
+        <p class="note">
+          The published records on this page were compiled by the authors below and are used here with attribution and
+          thanks. Captions, with the names of the people who found or proved a packing, are quoted as the sources give
+          them. A small number beside a value, a caption or a drawing refers to its source in this list.
+        </p>
+        <ol id="source-list" class="source-list"></ol>
+      </section>
+    </main>
+    <script type="module" src="/src/browse.ts"></script>
+  </body>
+</html>

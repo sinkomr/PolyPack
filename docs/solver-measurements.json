@@ -1,0 +1,127 @@
+{
+  "node": "v26.5.0",
+  "knownAnswers": [
+    {
+      "name": "five squares clean",
+      "before": 2.7412489168102785,
+      "after": 2.707106781186926,
+      "valid": true,
+      "target": 2.7071067811865475,
+      "error": 3.7836400679225335e-13,
+      "evaluations": 361,
+      "milliseconds": 45.203666999999996
+    },
+    {
+      "name": "five squares jittered",
+      "before": 2.7722415374342613,
+      "after": 2.7071067811891862,
+      "valid": true,
+      "target": 2.7071067811865475,
+      "error": 2.638778084929072e-12,
+      "evaluations": 492,
+      "milliseconds": 98.568791
+    },
+    {
+      "name": "seven circles clean",
+      "before": 3.04,
+      "after": 3.000000000000302,
+      "valid": true,
+      "target": 3,
+      "error": 3.019806626980426e-13,
+      "evaluations": 97,
+      "milliseconds": 10.715708999999976
+    },
+    {
+      "name": "seven circles loose",
+      "before": 4,
+      "after": 3.0000000000002305,
+      "valid": true,
+      "target": 3,
+      "error": 2.304822999121825e-13,
+      "evaluations": 145,
+      "milliseconds": 11.735250000000008
+    },
+    {
+      "name": "two circles ten apart",
+      "before": 6,
+      "after": 2.0000000000001,
+      "valid": true,
+      "target": 2,
+      "error": 9.992007221626409e-14,
+      "evaluations": 122,
+      "milliseconds": 1.458500000000015
+    }
+  ],
+  "overhead": [
+    {
+      "name": "polish: five squares expanded 1.03",
+      "samples": 11,
+      "warmups": 4,
+      "directMilliseconds": 12.902833000000044,
+      "frameworkMilliseconds": 13.47345800000005,
+      "overheadPercent": 4.422478381298167,
+      "directSamples": [
+        12.902833000000044,
+        13.562792000000002,
+        12.93566599999997,
+        11.979666000000009,
+        12.56412499999999,
+        12.875084000000015,
+        13.461957999999981,
+        13.536375000000021,
+        15.789541999999983,
+        12.77420799999993,
+        12.021542000000068
+      ],
+      "frameworkSamples": [
+        13.278875000000028,
+        13.442334000000017,
+        13.733374999999967,
+        13.47345800000005,
+        13.065417000000025,
+        12.94170900000006,
+        14.32162500000004,
+        14.089042000000063,
+        18.874915999999985,
+        13.552458000000001,
+        13.068957999999952
+      ]
+    },
+    {
+      "name": "identity: N4 M4 P30, 1000 evaluations",
+      "samples": 11,
+      "warmups": 4,
+      "directMilliseconds": 73.66229199999998,
+      "frameworkMilliseconds": 74.68662499999982,
+      "overheadPercent": 1.3905798641180578,
+      "directSamples": [
+        81.96374999999989,
+        73.25466599999982,
+        74.68370800000002,
+        78.73358400000006,
+        72.89470800000004,
+        79.47345900000028,
+        73.66229199999998,
+        72.07433299999957,
+        72.81579199999987,
+        73.26375000000007,
+        81.06666700000005
+      ],
+      "frameworkSamples": [
+        76.93579199999999,
+        74.871625,
+        73.34933299999989,
+        74.32579099999998,
+        74.68212500000004,
+        79.1374579999997,
+        74.68662499999982,
+        75.27199999999993,
+        81.17824999999993,
+        73.5535420000001,
+        74.58341700000028
+      ]
+    }
+  ],
+  "measurement": "Wall-clock medians of 11 alternating-order samples after four paired warmups. Identity baseline is a direct shared-geometry loop with identical start/final orientation scoring and elapsed-time yields, without candidate parsing, tracking, callbacks or automatic polish. Framework identity finalPolish=false isolates plumbing; polish runs its normal framework path. Local Node measurements, not browser benchmarks.",
+  "atomicScoreMilliseconds": 123.7941249999999
+}

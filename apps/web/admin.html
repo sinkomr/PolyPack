@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Review</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="scroll">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html">Records</a>
+        <a href="/api">API</a>
+      </nav>
+    </header>
+    <main class="page">
+      <h2 class="title">Submissions pending verification</h2>
+      <p class="note">Entries that scored below the best published value. Confirm or reject each after checking it.</p>
+      <div class="row">
+        <label for="token">Admin token</label>
+        <input id="token" type="password" autocomplete="off" />
+        <button id="load">Load</button>
+      </div>
+      <p id="note" class="note" role="status" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Id</th>
+              <th scope="col">Problem</th>
+              <th scope="col">Name</th>
+              <th scope="col">Score</th>
+              <th scope="col">Published</th>
+              <th scope="col">Shrink test</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </main>
+    <script type="module" src="/src/admin.ts"></script>
+  </body>
+</html>

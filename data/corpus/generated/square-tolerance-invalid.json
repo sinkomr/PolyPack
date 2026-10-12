@@ -1,0 +1,23 @@
+{
+  "config": {
+    "N": 4,
+    "M": 4,
+    "P": 2,
+    "container_phi": 0,
+    "pieces": [
+      {
+        "x": 0,
+        "y": 0,
+        "theta": 0.7853981633974483
+      },
+      {
+        "x": 0.9999999989,
+        "y": 0,
+        "theta": 0.7853981633974483
+      }
+    ]
+  },
+  "expected_score": 1.9999999989000001,
+  "expected_valid": false,
+  "auto_oriented_phi": 0
+}

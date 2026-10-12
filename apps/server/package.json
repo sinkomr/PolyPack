@@ -1,0 +1,17 @@
+{
+  "name": "@polypack/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/node.ts",
+    "start": "tsx src/node.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "@polypack/geometry": "*",
+    "hono": "^4.6.0",
+    "tsx": "^4.19.0"
+  }
+}

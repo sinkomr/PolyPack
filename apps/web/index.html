@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/" aria-current="page">Board</a>
+        <a href="/browse.html">Records</a>
+        <a href="/api">API</a>
+      </nav>
+    </header>
+    <main class="layout">
+      <section class="stage" aria-label="Workspace">
+        <div class="toolbar" role="toolbar" aria-label="Board tools">
+          <button id="add" title="Add a piece (A)">+ Add piece</button>
+          <button id="add-all" title="Add pieces until P are placed">Add all</button>
+          <button id="delete" title="Delete the selected pieces (Delete)">Delete</button>
+          <button id="undo" title="Undo (Ctrl+Z)">Undo</button>
+          <button id="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+          <button id="multi" aria-pressed="false" title="Tap pieces to add them to the selection">Multi-select</button>
+          <label for="mouse-snap">Mouse snap</label>
+          <select id="mouse-snap" title="Magnetic snapping while dragging. Hold Option / Alt to bypass.">
+            <option value="both">Corners &amp; edges</option>
+            <option value="corners">Corners</option>
+            <option value="edges">Edges</option>
+            <option value="off">Off</option>
+          </select>
+          <button id="rot-ccw" title="Rotate selection 1° counter-clockwise (Q)">⟲ 1°</button>
+          <button id="rot-cw" title="Rotate selection 1° clockwise (E)">⟳ 1°</button>
+          <span class="snap" role="group" aria-label="Snap selection to contact">
+            <span class="label">Snap</span>
+            <button id="snap-left" title="Push left until contact (Shift+←)" aria-label="Snap left">←</button>
+            <button id="snap-up" title="Push up until contact (Shift+↑)" aria-label="Snap up">↑</button>
+            <button id="snap-down" title="Push down until contact (Shift+↓)" aria-label="Snap down">↓</button>
+            <button id="snap-right" title="Push right until contact (Shift+→)" aria-label="Snap right">→</button>
+          </span>
+          <button id="fit" title="Fit the view to the container (F)">Fit view</button>
+          <button id="clear" title="Remove all pieces">Clear</button>
+        </div>
+        <canvas
+          id="board"
+          tabindex="0"
+          role="application"
+          aria-label="Packing board. Drag near polygon corners or edges to snap; hold Option or Alt for free movement. A adds a piece, N and P select the next and previous piece, arrow keys move, Q and E rotate, Shift plus arrow snaps to contact."
+        ></canvas>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <aside class="panel" aria-label="Controls">
+        <section>
+          <h2>Problem</h2>
+          <div class="row">
+            <label for="n-select">Piece (N)</label>
+            <select id="n-select"></select>
+            <input id="n-custom" type="number" min="3" max="100" step="1" aria-label="Piece sides" hidden />
+          </div>
+          <div class="row">
+            <label for="m-select">Container (M)</label>
+            <select id="m-select"></select>
+            <input id="m-custom" type="number" min="3" max="100" step="1" aria-label="Container sides" hidden />
+          </div>
+          <div class="row">
+            <label for="p-input">Pieces (P)</label>
+            <input id="p-input" type="number" min="1" max="500" step="1" />
+          </div>
+        </section>
+
+        <section id="solve-panel" aria-labelledby="solve-heading">
+          <h2 id="solve-heading">Solve automatically</h2>
+          <form id="solve-form" novalidate>
+            <fieldset id="solve-settings">
+              <div class="row">
+                <label for="solve-method">Method</label>
+                <select id="solve-method" disabled><option>Loading methods…</option></select>
+              </div>
+              <p id="solve-description" class="note"></p>
+              <div class="row">
+                <label for="solve-start">Start from</label>
+                <select id="solve-start">
+                  <option value="auto">Board if complete</option>
+                  <option value="board">Current board</option>
+                  <option value="scratch">New arrangement</option>
+                </select>
+              </div>
+              <p id="solve-start-note" class="note"></p>
+              <div class="row">
+                <label for="solve-budget">Budget</label>
+                <select id="solve-budget">
+                  <option value="both">Time + evaluations</option>
+                  <option value="evals">Evaluations only</option>
+                </select>
+              </div>
+              <div class="row">
+                <label for="solve-time">Time limit</label>
+                <input id="solve-time" type="range" min="1" max="300" step="1" value="15" />
+                <output id="solve-time-value" for="solve-time">15 s</output>
+              </div>
+              <div class="row">
+                <label for="solve-evals">Evaluations</label>
+                <input id="solve-evals" type="number" min="1" max="1000000" step="1" value="30000" required />
+              </div>
+              <div class="row">
+                <label for="solve-seed">Random seed</label>
+                <input id="solve-seed" type="number" min="0" max="4294967295" step="1" value="1" required />
+              </div>
+              <details>
+                <summary>Method settings</summary>
+                <p class="note">Defaults are ready to use. Hover over a setting for its description. Angles are in degrees unless a setting's label gives another unit.</p>
+                <div id="solve-params"></div>
+              </details>
+            </fieldset>
+            <button id="solve-run" class="wide primary" type="submit" disabled>Run optimizer</button>
+          </form>
+          <div class="row wrap solve-actions">
+            <button id="solve-pause" disabled>Pause</button>
+            <button id="solve-stop" disabled>Stop</button>
+            <button id="solve-accept" disabled>Accept result</button>
+            <button id="solve-dismiss" disabled>Back to board</button>
+            <button id="solve-download" disabled title="Save the full settings, starting arrangement, result and progress trace">Download run JSON</button>
+          </div>
+          <p id="solve-status" class="note" role="status" aria-live="polite">Choose a method, then run.</p>
+          <dl class="stats solve-stats">
+            <dt>Best solver score</dt><dd id="solve-score">—</dd>
+            <dt>Progress</dt><dd id="solve-progress">—</dd>
+          </dl>
+          <svg id="solve-trace" viewBox="0 0 300 100" role="img" aria-label="Best solver score over elapsed time" hidden></svg>
+        </section>
+
+        <section>
+          <h2>Board score</h2>
+          <dl class="stats">
+            <dt>Pieces placed</dt>
+            <dd id="count"></dd>
+            <dt id="score-label">Container side s</dt>
+            <dd id="score" class="big"></dd>
+            <dt>Area lower bound</dt>
+            <dd id="bound"></dd>
+            <dt>Current record</dt>
+            <dd id="record"></dd>
+            <dt>Gap to record</dt>
+            <dd id="gap"></dd>
+          </dl>
+          <button id="show-record" class="wide"></button>
+          <div id="record-info" class="note" hidden></div>
+        </section>
+
+        <section>
+          <h2>Container orientation</h2>
+          <div class="row">
+            <label for="phi">φ (degrees)</label>
+            <input id="phi" type="number" step="any" />
+            <button id="auto-orient" title="Search for the orientation that gives the smallest container">Auto-orient</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>Selected piece</h2>
+          <div class="row three">
+            <label>x <input id="sel-x" type="number" step="any" /></label>
+            <label>y <input id="sel-y" type="number" step="any" /></label>
+            <label>θ° <input id="sel-theta" type="number" step="any" /></label>
+          </div>
+          <p id="sel-note" class="note"></p>
+        </section>
+
+        <section>
+          <h2>Submit</h2>
+          <div class="row">
+            <label for="name">Name</label>
+            <input id="name" maxlength="40" autocomplete="nickname" />
+          </div>
+          <div class="row">
+            <label for="agent">Made by</label>
+            <select id="agent">
+              <option value="human">Human</option>
+              <option value="ai">AI agent</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="agent-note">Note</label>
+            <input id="agent-note" maxlength="200" placeholder="optional, e.g. method" />
+          </div>
+          <button id="submit" class="wide primary">Submit to leaderboard</button>
+          <p id="submit-result" class="note" role="status" aria-live="polite"></p>
+        </section>
+
+        <section>
+          <h2>Leaderboard <span id="live" class="live" title="Live updates"></span></h2>
+          <ol id="leaderboard" class="leaderboard"></ol>
+          <p id="leaderboard-note" class="note"></p>
+        </section>
+
+        <section>
+          <h2>Save and share</h2>
+          <div class="row wrap">
+            <button id="export">Export JSON</button>
+            <button id="import">Import JSON</button>
+            <button id="share">Copy share link</button>
+            <input id="import-file" type="file" accept="application/json,.json" hidden />
+          </div>
+        </section>
+
+        <details>
+          <summary>Controls and shortcuts</summary>
+          <ul class="help">
+            <li><b>Drag</b> a piece to move it. It slides along whatever blocks it and never overlaps.</li>
+            <li><b>Mouse snap</b>: drag near a polygon corner or edge for magnetic contact. Matching faces align when their angles are within 6°. A guide marks the contact; hold <b>Option / Alt</b> for free movement, or choose Corners, Edges or Off in the toolbar. Selected groups snap without changing their relative positions.</li>
+            <li><b>Rotate</b>: drag the ⟳ handle, scroll the wheel over a selected piece, twist with two fingers, or press Q / E (1°), Shift+Q / E (15°), Alt+Q / E (0.1°).</li>
+            <li><b>Arrow keys</b> move by 0.1; Alt+arrow by 0.01; <b>Shift+arrow snaps to contact</b>.</li>
+            <li><b>Multi-select</b>: Shift-click pieces, Shift-drag a box on empty space, Ctrl+A, or the Multi-select button on touch screens.</li>
+            <li><b>Touch</b>: drag a piece with one finger; with a piece selected, twist two fingers to rotate it; with nothing selected, pinch to zoom.</li>
+            <li><b>View</b>: drag empty space to pan, wheel or pinch to zoom, F to fit, + / − to zoom.</li>
+            <li><b>Container</b>: drag the φ handle on its corner, type φ, or use Auto-orient.</li>
+            <li><b>Keyboard only</b>: focus the board, A adds a piece, N / P select the next / previous piece (Shift+N / P extend the selection), Esc deselects, Delete removes the selection, Ctrl+Z / Ctrl+Shift+Z undo and redo.</li>
+          </ul>
+        </details>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

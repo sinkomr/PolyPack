@@ -1,0 +1,246 @@
+import {
+  boundingRadius,
+  MAX_COORD,
+  pairPenetration,
+  penaltyEdgeNormals,
+  penaltyContainerNormals,
+  visitContainerProtrusions,
+  type PackingConfig,
+  type Container,
+  type Pose,
+} from "@polypack/geometry";
+import type { ObjectiveValue } from "./lbfgs";
+
+export interface PenaltyState {
+  config: PackingConfig;
+  container: Container;
+}
+export function packState(state: PenaltyState): number[] {
+  const { config, container } = state;
+  return [
+    ...config.pieces.flatMap((p) => (config.N === 0 ? [p.x, p.y] : [p.x, p.y, p.theta])),
+    container.cx,
+    container.cy,
+    container.size,
+    ...(config.M === 0 ? [] : [container.phi]),
+  ];
+}
+export function unpackState(template: PackingConfig, x: readonly number[]): PenaltyState {
+  const stride = template.N === 0 ? 2 : 3;
+  const offset = stride * template.P;
+  const phi = template.M === 0 ? 0 : x[offset + 3];
+  return {
+    config: {
+      ...template,
+      container_phi: phi,
+      pieces: template.pieces.map((_, i) => ({
+        x: x[stride * i],
+        y: x[stride * i + 1],
+        theta: stride === 2 ? 0 : x[stride * i + 2],
+      })),
+    },
+    container: { M: template.M, cx: x[offset], cy: x[offset + 1], size: x[offset + 2], phi },
+  };
+}
+
+/** A rebuilt grid is safe even for long line-search moves; no Verlet displacement assumption. */
+export function nearbyPairs(poses: readonly Pose[], reach: number, stopped: () => boolean): [number, number][] {
+  const grid = new Map<number, Map<number, number[]>>();
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < poses.length; i++) {
+    if (stopped()) return pairs;
+    const a = poses[i];
+    const ix = Math.floor(a.x / reach);
+    const iy = Math.floor(a.y / reach);
+    if (!Number.isSafeInteger(ix) || !Number.isSafeInteger(iy)) {
+      // Outside the representable cell lattice, neighbouring integer offsets
+      // can collapse to one number. A bounded fallback avoids duplicate pairs.
+      const all: [number, number][] = [];
+      for (let j = 0; j < poses.length; j++) {
+        for (let k = j + 1; k < poses.length; k++) {
+          if (stopped()) return all;
+          if (Math.hypot(poses[j].x - poses[k].x, poses[j].y - poses[k].y) <= reach) all.push([j, k]);
+        }
+      }
+      return all;
+    }
+    for (let ox = -1; ox <= 1; ox++) {
+      if (stopped()) return pairs;
+      const column = grid.get(ix + ox);
+      if (!column) continue;
+      for (let oy = -1; oy <= 1; oy++) {
+        if (stopped()) return pairs;
+        for (const j of column.get(iy + oy) ?? []) {
+          if (Math.hypot(a.x - poses[j].x, a.y - poses[j].y) <= reach) pairs.push([j, i]);
+        }
+      }
+    }
+    let column = grid.get(ix);
+    if (!column) {
+      column = new Map();
+      grid.set(ix, column);
+    }
+    const cell = column.get(iy);
+    if (cell) cell.push(i);
+    else column.set(iy, [i]);
+  }
+  return pairs;
+}
+
+export interface PenaltyObjective {
+  evaluate(x: readonly number[]): ObjectiveValue;
+  updateMultipliers(x: readonly number[]): void;
+  violation(x: readonly number[]): number;
+}
+/** Powell–Hestenes–Rockafellar inequality AL: [max(0,lambda+2wg)^2-lambda^2]/(4w). */
+export function createPenaltyObjective(
+  template: PackingConfig,
+  weight: number,
+  multipliers: Map<number, number> | Map<string, number>,
+  augmented: boolean,
+  stopped: () => boolean = () => false,
+  supportOnly = false,
+): PenaltyObjective {
+  const stride = template.N === 0 ? 2 : 3;
+  const offset = stride * template.P;
+  const radius = boundingRadius(template.N);
+  const pairCount = template.P * template.P;
+  const wallCount = template.M === 0 ? template.N || 1 : supportOnly ? template.M : (template.N || 1) * template.M;
+  // Older direct callers use vertex-edge string IDs. Translate once at the API
+  // boundary; the hot loops and the registered method use only integer IDs.
+  const firstKey = multipliers.keys().next().value;
+  const legacy = typeof firstKey === "string" || (firstKey === undefined && !supportOnly);
+  const lambdas = legacy ? new Map<number, number>() : (multipliers as Map<number, number>);
+  if (legacy) {
+    for (const [key, lambda] of multipliers as Map<string, number>) {
+      const [kind, a, b] = key.split(":");
+      lambdas.set(
+        kind === "p" ? Number(a) * template.P + Number(b) : pairCount + Number(a) * wallCount + Number(b),
+        lambda,
+      );
+    }
+  }
+  const scratch = new Float64Array(2 * (template.N + template.M));
+  const containerAxes = new Float64Array(3 * template.M);
+  let constant = 0;
+  if (augmented) {
+    for (const lambda of lambdas.values()) constant -= (lambda * lambda) / (4 * weight);
+  }
+  function pairs(poses: readonly Pose[]): [number, number][] {
+    const out = nearbyPairs(poses, 2 * radius, stopped);
+    if (augmented && lambdas.size) {
+      const seen = new Set(out.map(([i, j]) => i * template.P + j));
+      for (const key of lambdas.keys()) {
+        if (key >= pairCount || seen.has(key)) continue;
+        out.push([Math.floor(key / template.P), key % template.P]);
+      }
+    }
+    return out;
+  }
+  const axes = template.N === 0 ? [] : Array.from({ length: template.P }, () => new Float64Array(3 * template.N));
+  function visit(
+    x: readonly number[],
+    add: (
+      depth: number,
+      i: number,
+      px: number,
+      py: number,
+      pt: number,
+      j: number,
+      qx: number,
+      qy: number,
+      qt: number,
+      cs: number,
+      cp: number,
+      index: number,
+    ) => void,
+  ): void {
+    const state = unpackState(template, x);
+    if (template.M !== 0) penaltyContainerNormals(template.M, state.container.phi, containerAxes);
+    if (template.N !== 0) {
+      for (let i = 0; i < template.P; i++) penaltyEdgeNormals(template.N, state.config.pieces[i].theta, axes[i]);
+    }
+    for (const [i, j] of pairs(state.config.pieces)) {
+      if (stopped()) return;
+      const p = pairPenetration(template.N, state.config.pieces[i], state.config.pieces[j], axes[i], axes[j]);
+      add(p.depth, i, p.a.x, p.a.y, p.a.theta, j, p.b.x, p.b.y, p.b.theta, 0, 0, 0);
+    }
+    for (let i = 0; i < template.P; i++) {
+      if (stopped()) return;
+      visitContainerProtrusions(
+        template.N,
+        state.config.pieces[i],
+        state.container,
+        (depth, px, py, pt, cx, cy, cs, cp, index) => add(depth, i, px, py, pt, -1, cx, cy, 0, cs, cp, index),
+        supportOnly,
+        scratch,
+        containerAxes,
+      );
+    }
+  }
+  return {
+    evaluate(x) {
+      const gradient = Array<number>(x.length).fill(0);
+      if (!x.every(Number.isFinite) || x[offset + 2] <= 0 || stopped()) return { value: Infinity, gradient };
+      // A start in the accepted global range can span at most 2*MAX_COORD
+      // relative to its centroid. Guard spatial blow-ups, not finite angles.
+      for (let i = 0; i < template.P; i++) {
+        if (Math.abs(x[stride * i]) > 2 * MAX_COORD || Math.abs(x[stride * i + 1]) > 2 * MAX_COORD)
+          return { value: Infinity, gradient };
+      }
+      if (Math.abs(x[offset]) > 2 * MAX_COORD || Math.abs(x[offset + 1]) > 2 * MAX_COORD)
+        return { value: Infinity, gradient };
+      let value = x[offset + 2] + constant;
+      gradient[offset + 2] = 1;
+      visit(x, (depth, i, px, py, pt, j, qx, qy, qt, cs, cp, index) => {
+        const lambda = augmented
+          ? (lambdas.get(j >= 0 ? i * template.P + j : pairCount + i * wallCount + index) ?? 0)
+          : 0;
+        const factor = Math.max(0, lambda + 2 * weight * depth);
+        if (factor === 0) return;
+        value += (factor * factor) / (4 * weight);
+        gradient[stride * i] += factor * px;
+        gradient[stride * i + 1] += factor * py;
+        if (stride === 3) gradient[stride * i + 2] += factor * pt;
+        if (j >= 0) {
+          gradient[stride * j] += factor * qx;
+          gradient[stride * j + 1] += factor * qy;
+          if (stride === 3) gradient[stride * j + 2] += factor * qt;
+        } else {
+          gradient[offset] += factor * qx;
+          gradient[offset + 1] += factor * qy;
+          gradient[offset + 2] += factor * cs;
+          if (template.M !== 0) gradient[offset + 3] += factor * cp;
+        }
+      });
+      return { value: stopped() ? Infinity : value, gradient };
+    },
+    updateMultipliers(x) {
+      if (!augmented) return;
+      visit(x, (depth, i, _px, _py, _pt, j, _qx, _qy, _qt, _cs, _cp, index) => {
+        const key = j >= 0 ? i * template.P + j : pairCount + i * wallCount + index;
+        const next = Math.max(0, (lambdas.get(key) ?? 0) + 2 * weight * depth);
+        if (next > 0 && Number.isFinite(next)) lambdas.set(key, next);
+        else lambdas.delete(key);
+      });
+      if (legacy) {
+        const old = multipliers as Map<string, number>;
+        old.clear();
+        for (const [key, lambda] of lambdas) {
+          const id =
+            key < pairCount
+              ? `p:${Math.floor(key / template.P)}:${key % template.P}`
+              : `w:${Math.floor((key - pairCount) / wallCount)}:${(key - pairCount) % wallCount}`;
+          old.set(id, lambda);
+        }
+      }
+    },
+    violation(x) {
+      let maximum = 0;
+      visit(x, (depth) => {
+        maximum = Math.max(maximum, depth);
+      });
+      return maximum;
+    },
+  };
+}

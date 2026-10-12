@@ -1,0 +1,78 @@
+{
+  "node": "v26.5.0",
+  "server": [
+    {
+      "N": 0,
+      "M": 0,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 0.7204844589999999,
+      "perSecond": 416.38649696398244,
+      "score": 6.291502622130195,
+      "strict": true
+    },
+    {
+      "N": 3,
+      "M": 3,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 2.215845959,
+      "perSecond": 135.38847264247036,
+      "score": 6,
+      "strict": true
+    },
+    {
+      "N": 4,
+      "M": 4,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 1.4557482090000002,
+      "perSecond": 206.0795940845289,
+      "score": 6.000000000001039,
+      "strict": true
+    },
+    {
+      "N": 5,
+      "M": 5,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 4.208414083999999,
+      "perSecond": 71.28576086192949,
+      "score": 6.282428561659973,
+      "strict": true
+    },
+    {
+      "N": 6,
+      "M": 6,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 1.687790499999999,
+      "perSecond": 177.7471789300865,
+      "score": 6.000000000001222,
+      "strict": true
+    },
+    {
+      "N": 7,
+      "M": 7,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 4.76632925,
+      "perSecond": 62.94151836027694,
+      "score": 6.415257466187829,
+      "strict": true
+    },
+    {
+      "N": 8,
+      "M": 8,
+      "P": 30,
+      "evaluations": 300,
+      "wallTime": 6.578178833,
+      "perSecond": 45.60532749505444,
+      "score": 6.236793969989071,
+      "strict": true
+    }
+  ],
+  "browser": [],
+  "browserVersion": null,
+  "browserError": "Chromium launch failed: MachPortRendezvousServer bootstrap_check_in Permission denied (1100), SIGTRAP. Local HTTP fallback failed with listen EPERM; computer-use browser inventory is empty."
+}

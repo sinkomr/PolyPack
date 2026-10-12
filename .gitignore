@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.env
+.env.local
+*.sqlite
+*.sqlite-*
+.DS_Store
+test-results/
+playwright-report/
+.wrangler/
+.env.*
+!.env.example
+*.ipynb
+.ipynb_checkpoints/
+.ruff_cache/
+# local copies of the record sources read by the importers (docs/RECORDS.md)
+cci_coords*
+friedman/
+ellsworth.html
+packomania/

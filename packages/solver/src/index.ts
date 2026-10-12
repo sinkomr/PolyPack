@@ -1,0 +1,27 @@
+import { MethodRegistry } from "./framework";
+import { identityMethod, polishMethod } from "./methods";
+import { penaltyMethod } from "./methods/penalty";
+import { seedMethod } from "./methods/seed";
+import { basinHoppingMethod } from "./methods/basin_hopping";
+import { mcCompressMethod } from "./methods/mc_compress";
+import { morphMethod } from "./methods/morph";
+import { ascMethod } from "./methods/asc";
+import { lsGrowthMethod } from "./methods/ls_growth";
+import { hardenMethod } from "./methods/harden";
+export * from "./framework";
+export * from "./schema";
+export * from "./polish";
+
+export const registry = new MethodRegistry();
+registry.register(identityMethod);
+registry.register(polishMethod);
+registry.register(seedMethod);
+registry.register(penaltyMethod);
+registry.register(basinHoppingMethod);
+registry.register(mcCompressMethod);
+registry.register(morphMethod);
+registry.register(ascMethod);
+registry.register(lsGrowthMethod);
+registry.register(hardenMethod);
+export const run: MethodRegistry["run"] = registry.run.bind(registry);
+export const runPipeline: MethodRegistry["runPipeline"] = registry.runPipeline.bind(registry);
