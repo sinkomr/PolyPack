@@ -187,7 +187,8 @@
             <label for="agent-note">Note</label>
             <input id="agent-note" maxlength="200" placeholder="optional, e.g. method" />
           </div>
-          <button id="submit" class="wide primary">Submit to leaderboard</button>
+          <button id="submit" class="wide primary" aria-describedby="submit-closed">Submit to leaderboard</button>
+          <p id="submit-closed" class="note" hidden></p>
           <p id="submit-result" class="note" role="status" aria-live="polite"></p>
         </section>
 

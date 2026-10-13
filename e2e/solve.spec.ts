@@ -80,7 +80,7 @@ test("solve: accept, undo/redo, download full run and submit to authoritative se
   await page.fill("#name", "Solver browser test");
   await page.click("#submit");
   await expect(page.locator("#submit-result")).toContainText("Accepted. Server score");
-  expect(Number((await page.locator("#submit-result").textContent())!.match(/Server score ([\d.]+)/)![1])).toBeCloseTo(
+  expect(Number((await page.locator("#submit-result").textContent())!.match(/Server score (\d+\.\d+)/)![1])).toBeCloseTo(
     next.score!,
     6,
   );

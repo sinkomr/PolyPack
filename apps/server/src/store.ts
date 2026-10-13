@@ -28,7 +28,8 @@ export interface StoredSubmission extends NewSubmission {
 /**
  * Persistence used by the API. Async so that the same routes can run on a hosted SQL service
  * (for example Cloudflare D1) as well as on local SQLite.
- * Leaderboard order is score ascending, then earliest first. Rejected entries are excluded.
+ * Rejected entries are excluded from every listing. The leader of a problem is the earliest
+ * listed entry whose score is within SCORE_TIE (relative) of the smallest listed score.
  */
 export interface Store {
   insert(s: NewSubmission): Promise<number>;
@@ -38,13 +39,19 @@ export interface Store {
    * left out. At most GET_MANY_LIMIT ids; asking for more is a programming error and throws.
    */
   getMany(ids: readonly number[]): Promise<StoredSubmission[]>;
-  top(N: number, M: number, P: number, limit: number): Promise<LeaderboardEntry[]>;
+  /** The leader of one problem, or null when it has no listed entry. */
+  leader(N: number, M: number, P: number): Promise<LeaderboardEntry | null>;
+  /** Number of listed entries of one problem. */
   count(N: number, M: number, P: number): Promise<number>;
-  /** 1 + the number of entries ranked ahead of submission `id`. */
+  /**
+   * 1 + the number of listed entries ahead of submission `id`: those with a smaller score, or an
+   * equal score and a smaller id. Position 1 is not always the leader; see `leader`.
+   */
   rank(N: number, M: number, P: number, id: number): Promise<number>;
   /**
-   * Best entry for every P of one (N, M). With `verifiedOnly`, entries that are pending
-   * verification are left out as well, so the result is the best reviewed or unremarkable entry.
+   * The leader for every P of one (N, M). With `verifiedOnly`, entries that are pending
+   * verification are left out before the leader is chosen, so the result is the leader among the
+   * reviewed or unremarkable entries.
    */
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
   pending(): Promise<StoredSubmission[]>;

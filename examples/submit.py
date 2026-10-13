@@ -3,8 +3,13 @@
 Usage:  python3 examples/submit.py [base_url]
 The default base_url is http://localhost:8787.
 
-The example packs 7 unit circles in a circle: one in the middle and six around it,
-which gives a container radius of 3.
+The example packs 11 unit squares in a square as a 4-by-3 grid with one cell left
+empty, which gives a container side of 4. The best known packing is smaller, so the
+problem is open. Problems whose optimum is proven are closed: the server takes no
+entries for them (HTTP 409), and "accepts_submissions" in the problem says so.
+
+Each problem shows one entry, its leader: the earliest of the best. A valid packing
+that does not improve on the leader is stored but does not replace it.
 """
 import json
 import math
@@ -13,7 +18,7 @@ import urllib.error
 import urllib.request
 
 BASE = sys.argv[1].rstrip("/") if len(sys.argv) > 1 else "http://localhost:8787"
-N, M, P = 0, 0, 7
+N, M, P = 4, 4, 11
 
 
 def get(path):
@@ -31,7 +36,7 @@ def post(path, body):
         with urllib.request.urlopen(request) as response:
             return json.load(response)
     except urllib.error.HTTPError as error:
-        # invalid packings come back as 4xx with the same JSON shape and the reasons
+        # refusals come back as 4xx with the same JSON shape and the reasons
         return json.load(error)
 
 
@@ -39,12 +44,14 @@ problem = get(f"/api/problems/{N}/{M}/{P}")
 print("area lower bound:", problem["area_bound"])
 if problem["literature"]:
     print("published:", problem["literature"]["display"], "-", problem["literature"]["status"])
+if problem["site_best"]:
+    print("leader:", problem["site_best"]["score"], "by", problem["site_best"]["name"])
+if not problem["accepts_submissions"]:
+    sys.exit("this problem is closed: its optimum is proven")
 
-# Poses are (x, y, theta). Circle pieces have radius 1 and ignore theta.
-pieces = [{"x": 0.0, "y": 0.0, "theta": 0.0}]
-for k in range(6):
-    angle = k * math.pi / 3
-    pieces.append({"x": 2 * math.cos(angle), "y": 2 * math.sin(angle), "theta": 0.0})
+# Poses are (x, y, theta). Square pieces have side 1; at theta = pi/4 their sides are
+# horizontal and vertical, so centres one unit apart touch.
+pieces = [{"x": float(i % 4), "y": float(i // 4), "theta": math.pi / 4} for i in range(P)]
 
 result = post(
     "/api/submit",
@@ -59,8 +66,10 @@ result = post(
         "agent_note": "examples/submit.py",
     },
 )
-if result["valid"]:
-    print("accepted: score", result["score"], "rank", result["rank"])
+if result["valid"] and result["leader"]:
+    print("accepted: score", result["score"], "- now the leader of this problem")
+elif result["valid"]:
+    print("stored: score", result["score"], "does not improve on the leader's", result["leader_score"])
 else:
     print("rejected:", "; ".join(result["reasons"]))
 

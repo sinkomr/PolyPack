@@ -10,6 +10,7 @@ import {
 } from "@polypack/geometry";
 import * as api from "./api";
 import { Board } from "./board";
+import { CLOSED_NOTE, acceptedMessage, leaderboardNote } from "./leaderboard-text";
 import { decodeShare, encodeShare } from "./share";
 import { fillShapeSelect } from "./shapes-ui";
 import { BoardView } from "./view";
@@ -184,7 +185,8 @@ $("show-record").addEventListener("click", showRecord);
 function renderLeaderboard(): void {
   const list = $("leaderboard");
   list.replaceChildren();
-  for (const e of entries) {
+  // one row at most: the leader
+  for (const e of entries.slice(0, 1)) {
     const li = document.createElement("li");
     const pending = e.verification === "pending";
     if (pending) li.className = "pending";
@@ -213,8 +215,7 @@ function renderLeaderboard(): void {
     li.append(head, meta);
     list.append(li);
   }
-  if (info && !entries.length) $("leaderboard-note").textContent = "No entries yet. Yours could be the first.";
-  else if (info) $("leaderboard-note").textContent = `${total} submission${total === 1 ? "" : "s"} in total; the top ${entries.length} shown.`;
+  if (info) $("leaderboard-note").textContent = leaderboardNote(total, entries.length, info.accepts_submissions !== false);
 }
 
 // ---------- rendering of the side panel ----------
@@ -269,6 +270,11 @@ function render(): void {
     refreshProblem();
   }
   renderLeaderboard();
+  // A problem with a proven optimum takes no entries. Until its data has arrived the button stays
+  // usable: the server refuses such a submission with the same explanation.
+  const isClosed = fresh && info?.accepts_submissions === false;
+  $<HTMLButtonElement>("submit").disabled = isClosed;
+  $("submit-closed").hidden = !isClosed;
 
   setField(phiInput, fmt(s.phi * DEG), s.M !== 0);
   $<HTMLButtonElement>("auto-orient").disabled = s.M === 0 || k === 0;
@@ -396,6 +402,7 @@ for (const el of [selX, selY, selTheta]) el.addEventListener("change", applySele
 
 // ---------- submit ----------
 
+$("submit-closed").textContent = CLOSED_NOTE;
 const nameInput = $<HTMLInputElement>("name");
 try {
   nameInput.value = localStorage.getItem("polypack.name") ?? "";
@@ -429,11 +436,14 @@ $("submit").addEventListener("click", async () => {
     agent_note: $<HTMLInputElement>("agent-note").value.trim(),
   });
   if ("error" in r) return fail(r.error);
-  if (!r.valid) return fail(r.reasons.join("; "));
-  out.className = "note good";
-  out.textContent =
-    `✓ Accepted. Server score ${r.score!.toFixed(6)}, rank ${r.rank}.` +
-    (r.pending_verification ? " This beats the published value and is pending verification." : "");
+  if (!r.valid) {
+    fail(r.reasons.join("; "));
+    // a refusal can mean that the problem was closed since it was loaded
+    refreshProblem();
+    return;
+  }
+  out.className = r.leader ? "note good" : "note";
+  out.textContent = acceptedMessage(r);
   refreshProblem();
 });
 

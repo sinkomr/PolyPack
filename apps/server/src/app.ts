@@ -1,7 +1,6 @@
 import {
   AtlasResponse,
   AtlasTile,
-  LEADERBOARD_SIZE,
   LeaderboardEntry,
   LeaderboardEvent,
   LiteratureRecord,
@@ -12,6 +11,7 @@ import {
   TOL,
   areaLowerBound,
   beatsLiterature,
+  closedToSubmissions,
   evaluate,
   isShapeCode,
   parseConfig,
@@ -101,6 +101,12 @@ export function createApp(opts: AppOptions): Hono {
   const literature = new Map<string, LiteratureRecord>();
   for (const r of opts.records) literature.set(`${r.N}/${r.M}/${r.P}`, r);
 
+  /**
+   * Closed problems take no submissions and show no site entries: their published optimum stands.
+   * Entries stored before a problem was closed stay in the database and keep their share links.
+   */
+  const closed = (N: number, M: number, P: number) => closedToSubmissions(literature.get(`${N}/${M}/${P}`));
+
   const listeners = new Set<(e: LeaderboardEvent) => void>();
 
   /** Reads N, M, P from the path; null when out of range. */
@@ -123,13 +129,14 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/problems/:N/:M/:P", async (c) => {
     const p = problemOf(c);
     if (!p) return badProblem(c);
-    const top = await store.top(p.N, p.M, p.P, 1);
+    const open = !closed(p.N, p.M, p.P);
     const body: ProblemInfo = {
       ...p,
       conventions: CONVENTIONS,
       area_bound: areaLowerBound(p.N, p.M, p.P),
       literature: literature.get(`${p.N}/${p.M}/${p.P}`) ?? null,
-      site_best: top[0] ?? null,
+      site_best: open ? await store.leader(p.N, p.M, p.P) : null,
+      accepts_submissions: open,
     };
     return c.json(body);
   });
@@ -137,11 +144,10 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/leaderboard/:N/:M/:P", async (c) => {
     const p = problemOf(c);
     if (!p) return badProblem(c);
-    const [entries, total] = await Promise.all([
-      store.top(p.N, p.M, p.P, LEADERBOARD_SIZE),
-      store.count(p.N, p.M, p.P),
-    ]);
-    return c.json({ ...p, entries, total });
+    const open = !closed(p.N, p.M, p.P);
+    const [leader, total] = await Promise.all([open ? store.leader(p.N, p.M, p.P) : null, store.count(p.N, p.M, p.P)]);
+    // `entries` is a list for clients written when several rows were shown; it holds the leader only
+    return c.json({ ...p, entries: leader ? [leader] : [], total, accepts_submissions: open });
   });
 
   app.get("/api/records", async (c) => {
@@ -153,7 +159,7 @@ export function createApp(opts: AppOptions): Hono {
       .filter((r) => r.N === N && r.M === M)
       .sort((a, b) => a.P - b.P)
       .map(({ pieces, ...rest }) => ({ ...rest, has_coordinates: !!pieces }));
-    const site = await store.bestPerP(N, M);
+    const site = (await store.bestPerP(N, M)).filter((e) => !closed(N, M, e.P));
     // Where the best entry of a P still awaits review, the best reviewed one is listed as well, so
     // that a page never has to present an unverified claim as the smallest known value.
     const awaiting = new Set(site.filter((e) => e.verification === "pending").map((e) => e.P));
@@ -191,7 +197,9 @@ export function createApp(opts: AppOptions): Hono {
     }
     // bestPerP lists only entries that are not rejected; the second call also leaves out pending ones
     type Best = LeaderboardEntry & { P: number };
-    const inRange = (list: Best[]) => new Map(list.filter((e) => e.P >= from && e.P <= to).map((e) => [e.P, e]));
+    // entries of closed problems are never drawn: the published packing is
+    const inRange = (list: Best[]) =>
+      new Map(list.filter((e) => e.P >= from && e.P <= to && !closed(N, M, e.P)).map((e) => [e.P, e]));
     const best = inRange(await store.bestPerP(N, M));
     const awaiting = [...best.values()].some((e) => e.verification === "pending");
     const verified = awaiting ? inRange(await store.bestPerP(N, M, true)) : best;
@@ -255,12 +263,14 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   app.post("/api/submit", async (c) => {
-    const reject = (status: 400 | 413 | 422 | 429, reasons: string[]) => {
+    const reject = (status: 400 | 409 | 413 | 422 | 429, reasons: string[]) => {
       const body: SubmitResponse = {
         valid: false,
         reasons,
         score: null,
         rank: null,
+        leader: false,
+        leader_score: null,
         id: null,
         container: null,
         pending_verification: false,
@@ -281,6 +291,10 @@ export function createApp(opts: AppOptions): Hono {
     const parsed = parseConfig(json);
     if (!parsed.ok) return reject(400, parsed.errors);
     const config = parsed.config;
+    const lit = literature.get(`${config.N}/${config.M}/${config.P}`);
+    // decided before the packing is looked at: nothing can improve on a proven optimum
+    if (closedToSubmissions(lit))
+      return reject(409, [`this problem is closed: its optimum ${lit!.display} is proven (${lit!.source_name})`]);
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
     if (!nameLimit.allow(name.toLowerCase()))
@@ -293,10 +307,10 @@ export function createApp(opts: AppOptions): Hono {
     const container = result.container;
     const score = container.size;
 
-    const lit = literature.get(`${config.N}/${config.M}/${config.P}`);
     const beats = !!lit && beatsLiterature(score, lit);
     const strict = beats ? strictVerify(config.N, config.pieces, container) : null;
 
+    const before = await store.leader(config.N, config.M, config.P);
     const id = await store.insert({
       N: config.N,
       M: config.M,
@@ -312,7 +326,14 @@ export function createApp(opts: AppOptions): Hono {
       literature_value: beats ? lit!.value : null,
       strict_check: strict,
     });
-    const rank = await store.rank(config.N, config.M, config.P, id);
+    // The leader is the earliest entry among the equally good ones, so an entry that only ties the
+    // smallest score is not rank 1 although nothing is strictly ahead of it.
+    const [leader, position] = await Promise.all([
+      store.leader(config.N, config.M, config.P),
+      store.rank(config.N, config.M, config.P, id),
+    ]);
+    const leads = leader?.id === id;
+    const rank = leads ? 1 : Math.max(2, position);
     if (beats) {
       log(
         `[review] submission ${id} by "${name}" for N=${config.N} M=${config.M} P=${config.P}: ` +
@@ -320,8 +341,18 @@ export function createApp(opts: AppOptions): Hono {
           `shrink test ${strict!.ok ? "passed" : "FAILED"}, certified ${strict!.certifiedSize}`,
       );
     }
-    if (rank <= LEADERBOARD_SIZE) {
-      const event: LeaderboardEvent = { N: config.N, M: config.M, P: config.P, id, score, rank, name };
+    // Viewers hear of a change of leader only. That is nearly always this entry; in a chain of
+    // near ties it can be an earlier one that the new smallest score brought within the tolerance.
+    if (leader && leader.id !== before?.id) {
+      const event: LeaderboardEvent = {
+        N: config.N,
+        M: config.M,
+        P: config.P,
+        id: leader.id,
+        score: leader.score,
+        rank: 1,
+        name: leader.name,
+      };
       for (const fn of listeners) fn(event);
     }
     const body: SubmitResponse = {
@@ -329,6 +360,8 @@ export function createApp(opts: AppOptions): Hono {
       reasons: [],
       score,
       rank,
+      leader: leads,
+      leader_score: leader?.score ?? null,
       id,
       container,
       pending_verification: beats,
@@ -337,7 +370,7 @@ export function createApp(opts: AppOptions): Hono {
     return c.json(body);
   });
 
-  // Live updates: one "leaderboard" event whenever a submission enters a displayed top list.
+  // Live updates: one "leaderboard" event whenever a problem gets a new leader.
   app.get("/api/events", (c) =>
     streamSSE(c, async (stream) => {
       const queue: LeaderboardEvent[] = [];

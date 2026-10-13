@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { LeaderboardEntry } from "@polypack/geometry";
+import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
 import { GET_MANY_LIMIT, NewSubmission, Store, StoredSubmission } from "./store";
 
 const SCHEMA = `
@@ -97,13 +97,16 @@ export class SqliteStore implements Store {
     return (rows as Row[]).map(toStored);
   }
 
-  async top(N: number, M: number, P: number, limit: number): Promise<LeaderboardEntry[]> {
-    return this.db
+  async leader(N: number, M: number, P: number): Promise<LeaderboardEntry | null> {
+    // earliest entry within the tie tolerance of the smallest score, not simply the smallest
+    const r = this.db
       .prepare(
         `SELECT ${ENTRY_COLUMNS} FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED}
-         ORDER BY score ASC, id ASC LIMIT ?`,
+           AND score <= (SELECT MIN(score) FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED}) * (1 + ?)
+         ORDER BY id ASC LIMIT 1`,
       )
-      .all(N, M, P, limit) as unknown as LeaderboardEntry[];
+      .get(N, M, P, N, M, P, SCORE_TIE);
+    return (r as unknown as LeaderboardEntry | undefined) ?? null;
   }
 
   async count(N: number, M: number, P: number): Promise<number> {
@@ -125,17 +128,21 @@ export class SqliteStore implements Store {
   }
 
   async bestPerP(N: number, M: number, verifiedOnly = false): Promise<(LeaderboardEntry & { P: number })[]> {
-    // the first row of each P in leaderboard order
-    const listed = verifiedOnly ? `${LISTED} AND verification != 'pending'` : LISTED;
-    const inner = verifiedOnly ? `t.${LISTED} AND t.verification != 'pending'` : `t.${LISTED}`;
+    // the same rule as `leader`, for every P at once: the smallest score per P, then the earliest
+    // entry within the tie tolerance of it
+    const listed = (t: string) =>
+      verifiedOnly ? `${t}.${LISTED} AND ${t}.verification != 'pending'` : `${t}.${LISTED}`;
     return this.db
       .prepare(
-        `SELECT p AS P, ${ENTRY_COLUMNS} FROM submissions s WHERE n = ? AND m = ? AND ${listed}
-           AND id = (SELECT id FROM submissions t WHERE t.n = s.n AND t.m = s.m AND t.p = s.p AND ${inner}
-                     ORDER BY score ASC, id ASC LIMIT 1)
-         ORDER BY p ASC`,
+        `WITH best AS (SELECT u.p AS bp, MIN(u.score) AS lo FROM submissions u
+                       WHERE u.n = ? AND u.m = ? AND ${listed("u")} GROUP BY u.p)
+         SELECT s.p AS P, ${ENTRY_COLUMNS} FROM submissions s JOIN best ON best.bp = s.p
+         WHERE s.n = ? AND s.m = ?
+           AND s.id = (SELECT MIN(t.id) FROM submissions t
+                       WHERE t.n = s.n AND t.m = s.m AND t.p = s.p AND ${listed("t")} AND t.score <= best.lo * (1 + ?))
+         ORDER BY s.p ASC`,
       )
-      .all(N, M) as unknown as (LeaderboardEntry & { P: number })[];
+      .all(N, M, N, M, SCORE_TIE) as unknown as (LeaderboardEntry & { P: number })[];
   }
 
   async pending(): Promise<StoredSubmission[]> {

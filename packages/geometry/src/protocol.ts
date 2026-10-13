@@ -52,14 +52,22 @@ export interface ProblemInfo {
   conventions: Record<string, string>;
   area_bound: number;
   literature: LiteratureRecord | null;
+  /** The leader of the problem; null when there is none or the problem is closed. */
   site_best: LeaderboardEntry | null;
+  /** False when the published optimum is proven: see `closedToSubmissions`. */
+  accepts_submissions: boolean;
 }
 
 export interface SubmitResponse {
   valid: boolean;
   reasons: string[];
   score: number | null;
+  /** 1 when this entry is the problem's leader after it was stored, otherwise its position (at least 2). */
   rank: number | null;
+  /** True exactly when `rank` is 1. */
+  leader: boolean;
+  /** Score of the problem's leader after this submission; null when nothing was stored. */
+  leader_score: number | null;
   id: number | null;
   container: Container | null;
   pending_verification: boolean;
@@ -96,19 +104,44 @@ export interface AtlasResponse {
   tiles: AtlasTile[];
 }
 
-/** Sent to all viewers when a submission enters the displayed leaderboard. */
+/** Sent to all viewers when a problem gets a new leader; `id`, `score` and `name` are the leader's. */
 export interface LeaderboardEvent {
   N: number;
   M: number;
   P: number;
   id: number;
   score: number;
+  /** Always 1; kept for clients written when several rows were shown. */
   rank: number;
   name: string;
 }
 
-/** Number of leaderboard rows shown per problem. */
-export const LEADERBOARD_SIZE = 3;
+/** Number of leaderboard rows shown per problem: only the leader. */
+export const LEADERBOARD_SIZE = 1;
+
+/**
+ * Relative score difference below which two entries count as equally good. It has the magnitude
+ * of the validity tolerance TOL: a smaller improvement cannot be told apart from the slack that
+ * validity already allows, so it must not take the lead from an earlier entry.
+ *
+ * The leader of a problem is the earliest listed entry whose score is within this tolerance of
+ * the smallest listed score, i.e. score <= min * (1 + SCORE_TIE).
+ */
+export const SCORE_TIE = 1e-9;
+
+/** True when `score` is better than `leaderScore` by more than the tie tolerance. */
+export function improvesOn(score: number, leaderScore: number): boolean {
+  return score < leaderScore * (1 - SCORE_TIE);
+}
+
+/**
+ * True when a problem no longer takes submissions: its published optimum is proven in the
+ * refereed literature or is a zero-waste tiling. An unrefereed proof leaves the problem open, so
+ * that a counterexample can still be entered.
+ */
+export function closedToSubmissions(rec: LiteratureRecord | null | undefined): boolean {
+  return !!rec && (rec.status === "proven" || rec.status === "trivial_tiling");
+}
 
 export function isProven(status: RecordStatus): boolean {
   return status !== "best_known";

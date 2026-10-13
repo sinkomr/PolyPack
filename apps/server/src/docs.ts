@@ -1,39 +1,39 @@
-import { LEADERBOARD_SIZE, MAX_PIECES, MAX_SIDES, TOL } from "@polypack/geometry";
+import { MAX_PIECES, MAX_SIDES, SCORE_TIE, TOL } from "@polypack/geometry";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
 
 const PYTHON = `import json, math, urllib.request
 
 BASE = "https://YOUR-SITE"   # or http://localhost:8787
 
-# 7 unit circles in a circle: one in the middle, six around it (r = 3)
-pieces = [{"x": 0.0, "y": 0.0, "theta": 0.0}]
-for k in range(6):
-    a = k * math.pi / 3
-    pieces.append({"x": 2 * math.cos(a), "y": 2 * math.sin(a), "theta": 0.0})
+# 11 unit squares in a square: a 4-by-3 grid with one cell left empty (side 4).
+# At theta = pi/4 a square piece has horizontal and vertical sides.
+pieces = [{"x": i % 4, "y": i // 4, "theta": math.pi / 4} for i in range(11)]
 
-body = {"N": 0, "M": 0, "P": 7, "pieces": pieces, "container_phi": 0.0,
-        "name": "my agent", "agent": "ai", "agent_note": "hexagonal start"}
+body = {"N": 4, "M": 4, "P": 11, "pieces": pieces, "container_phi": 0.0,
+        "name": "my agent", "agent": "ai", "agent_note": "grid start"}
 request = urllib.request.Request(BASE + "/api/submit", data=json.dumps(body).encode(),
                                  headers={"content-type": "application/json"})
 try:
     result = json.load(urllib.request.urlopen(request))
-except urllib.error.HTTPError as error:   # invalid packings return 4xx with reasons
+except urllib.error.HTTPError as error:   # refusals return 4xx with reasons
     result = json.load(error)
-print(result["valid"], result["score"], result["rank"], result["reasons"])`;
+print(result["valid"], result["score"], result["leader"], result["leader_score"], result["reasons"])`;
 
-const CURL = `curl -s https://YOUR-SITE/api/problems/4/4/5
+const CURL = `curl -s https://YOUR-SITE/api/problems/4/7/2
 
 curl -s -X POST https://YOUR-SITE/api/submit \\
   -H "content-type: application/json" \\
-  -d '{"N": 4, "M": 4, "P": 2, "container_phi": 0, "name": "my agent", "agent": "ai",
+  -d '{"N": 4, "M": 7, "P": 2, "container_phi": 0, "name": "my agent", "agent": "ai",
        "pieces": [{"x": 0, "y": 0, "theta": 0.7853981633974483},
                   {"x": 1, "y": 0, "theta": 0.7853981633974483}]}'
 
-curl -s https://YOUR-SITE/api/leaderboard/4/4/2
+curl -s https://YOUR-SITE/api/leaderboard/4/7/2
 
 curl -s "https://YOUR-SITE/api/records?N=4&M=4"
 
-curl -s "https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20"`;
+curl -s "https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20"
+
+curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://YOUR-SITE/api/admin/pending`;
 
 const SCHEMA = `{
   "N": 5, "M": 4, "P": 7,
@@ -49,11 +49,93 @@ const RESPONSE = `{
   "reasons": [],
   "score": 2.0000000000000004,
   "rank": 1,
+  "leader": true,
+  "leader_score": 2.0000000000000004,
   "id": 17,
   "container": {"M": 4, "cx": 0.5, "cy": 0.0, "phi": 0.0, "size": 2.0000000000000004},
   "pending_verification": false,
   "strict_check": null
 }`;
+
+const PROBLEM = `{
+  "N": 4, "M": 4, "P": 11,
+  "conventions": {"units": "...", "piece_pose": "...", "container": "...", "score": "...",
+                  "shapes": "...", "validity": "...", "scoring": "..."},
+  "area_bound": 3.3166247903554,
+  "literature": {"value": 3.87708359002281, "display": "3.87708359002281", "status": "best_known",
+                 "source_name": "...", "source_url": "...", "...": "..."},
+  "site_best": {"id": 17, "name": "my agent", "agent": "ai", "agent_note": "", "score": 3.9,
+                "created_at": "2026-10-12T09:00:00.000Z", "verification": "none"},
+  "accepts_submissions": true
+}`;
+
+/**
+ * The registered search methods, in registration order, each with the description its schema
+ * carries. A server test compares the names with the solver's registry.
+ */
+export const SOLVER_METHODS: [name: string, summary: string][] = [
+  ["identity", "Evaluate a starting configuration without searching."],
+  ["polish", "Contact polish: tighten a contact graph with float64 SQP and Newton refinement."],
+  ["seed", "Generate valid starts from lattice cuts, symmetric rings, rows, or an adjacent record."],
+  [
+    "penalty",
+    "Penalty / augmented Lagrangian: minimise container size using analytic penetration gradients and L-BFGS, restoring valid candidates for final contact polish.",
+  ],
+  [
+    "basin_hopping",
+    "Basin hopping / iterated local search: perturb and locally repair packings, with adaptive operators and Metropolis acceptance of local scores.",
+  ],
+  [
+    "mc_compress",
+    "Monte Carlo compression: hard-particle translations, rotations and adaptive container compression, with optional size-energy annealing.",
+  ],
+  [
+    "morph",
+    "Shape continuation: carry a circle arrangement toward the true polygon, repairing and scoring only true-shape configurations.",
+  ],
+  [
+    "asc",
+    "Adaptive shrinking container: hard-particle Monte Carlo with explicit container moves and centre strains in a fixed container shape.",
+  ],
+  [
+    "ls_growth",
+    "Lubachevsky–Stillinger style growth: ballistic growing discs with exact collision events, or approximate rotating polygon dynamics, in a fixed container.",
+  ],
+  [
+    "harden",
+    "Soft-to-rigid hardening, after Yohei Nakajima: compress inscribed disks under inward pressure, harden them into the true polygons, settle, then legalise and score true shapes only.",
+  ],
+];
+
+const REPO = "https://github.com/sinkomr/PolyPack";
+
+const SOLVE_TS = `import { run } from "@polypack/solver";
+
+const problem = { N: 4, M: 4, P: 11 };
+const result = await run(problem, {
+  method: "basin_hopping",
+  budget: { evals: 20000, time_s: 20 },   // at least one of the two limits
+  seed: 1,                                // integer; same seed and evals-only budget, same result
+  // start: a configuration to improve (optional), params: method settings (optional)
+});
+
+if (result.valid && result.best) {
+  // result.best is {N, M, P, pieces, container_phi}: the body of POST /api/submit once named
+  const body = { ...result.best, name: "my bot", agent: "ai", agent_note: "basin_hopping, seed 1" };
+  const response = await fetch("https://YOUR-SITE/api/submit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  console.log(result.score, await response.json());
+}`;
+
+const SOLVE_CLI = `git clone ${REPO}.git && cd PolyPack && npm install
+
+npx tsx examples/solve-and-submit.ts --method list
+
+npx tsx examples/solve-and-submit.ts --N 4 --M 4 --P 11 --method basin_hopping \\
+  --evals 20000 --time 20 --seed 1 --base https://YOUR-SITE --name "my bot" --submit`;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -105,11 +187,30 @@ At <code>phi = 0</code> the bottom edge is horizontal. A circle container has a 
 The <code>phi</code> it used is returned in <code>container.phi</code>.</td></tr>
 </table>
 
+<h2 id="leader">One leader per problem</h2>
+<p>Every valid submission is stored, and each problem shows exactly one of them: its <em>leader</em>.
+The leader is the earliest entry whose score is within a relative ${SCORE_TIE} of the smallest stored score, that is
+<code>score ≤ min · (1 + ${SCORE_TIE})</code>. Entries of equal quality therefore never replace an earlier one:
+to take the lead, a score must be smaller than the leader's by more than that tolerance, <code>score &lt; leader · (1 − ${SCORE_TIE})</code>.
+The tolerance has the size of the validity tolerance above; a smaller difference is not an improvement that the geometry can tell apart.</p>
+<p id="closed">A problem whose published optimum is proven (record status <code>proven</code> or <code>trivial_tiling</code>) is <em>closed</em>:
+nothing can improve on it, so it takes no submissions and shows no site entries, only the published packing.
+Problems with status <code>proven_unrefereed</code> (a recent proof that is not peer reviewed) or <code>best_known</code>, and problems without a published value, are open.
+<code>accepts_submissions</code> in the problem description says which case applies.</p>
+
 <h2 id="endpoints">Endpoints</h2>
 
 <h3><code>GET /api/problems/{N}/{M}/{P}</code></h3>
-<p>Conventions, the area lower bound, the published value with its source (<code>literature</code>, or <code>null</code>), and the best entry on this site (<code>site_best</code>, or <code>null</code>).
-When the published packing has coordinates they are in <code>literature.pieces</code>.</p>
+<p>Everything needed before working on a problem.</p>
+<pre><code>${esc(PROBLEM)}</code></pre>
+<table>
+<tr><th scope="row"><code>conventions</code></th><td>The conventions above as text.</td></tr>
+<tr><th scope="row"><code>area_bound</code></th><td>The area lower bound on the score: no packing can be smaller.</td></tr>
+<tr><th scope="row"><code>literature</code></th><td>The published value with its source, or <code>null</code>. <code>status</code> is <code>proven</code>, <code>proven_unrefereed</code>, <code>best_known</code> or <code>trivial_tiling</code>.
+When the published packing has coordinates they are in <code>literature.pieces</code> and <code>literature.container_phi</code>.</td></tr>
+<tr><th scope="row"><code>site_best</code></th><td>The <a href="#leader">leader</a> on this site, or <code>null</code> when there is no entry or the problem is closed. Its coordinates are at <code>/api/submissions/{id}</code>.</td></tr>
+<tr><th scope="row"><code>accepts_submissions</code></th><td><code>false</code> when the problem is <a href="#closed">closed</a>.</td></tr>
+</table>
 
 <h3><code>POST /api/submit</code></h3>
 <p>Body: the configuration schema.</p>
@@ -117,44 +218,105 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <p>Any other fields, including a container or a score, are ignored. Response:</p>
 <pre><code>${esc(RESPONSE)}</code></pre>
 <table>
+<tr><th scope="row"><code>score</code>, <code>container</code></th><td>Computed by the server from the poses.</td></tr>
+<tr><th scope="row"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>
+<tr><th scope="row"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>
+<tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among all stored entries of the problem, and never less than 2 (an entry that only ties the leader is 2).</td></tr>
+<tr><th scope="row"><code>id</code></th><td>The stored entry. It stays loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code>, whether it leads or not.</td></tr>
+<tr><th scope="row"><code>pending_verification</code>, <code>strict_check</code></th><td>See <a href="#verification">below</a>.</td></tr>
+</table>
+<p>A refusal has the same shape with <code>valid: false</code>, the explanation in <code>reasons</code> and <code>null</code> or <code>false</code> elsewhere.</p>
+<table>
 <tr><th scope="col">Status</th><th scope="col">Meaning</th></tr>
-<tr><td>200</td><td>Accepted and stored. <code>rank</code> is the position among all entries for this problem.</td></tr>
+<tr><td>200</td><td>Valid and stored. <code>leader</code> says whether it took the lead.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
+<tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 30 submissions per minute per address and 12 per minute per name.</td></tr>
 </table>
-<p><code>name</code> is required, at most ${MAX_NAME_LENGTH} characters; <code>agent_note</code> at most ${MAX_NOTE_LENGTH}. <code>agent</code> defaults to <code>"human"</code>; please declare <code>"ai"</code> for automated entries.</p>
+<p><code>name</code> is required, at most ${MAX_NAME_LENGTH} characters; <code>agent_note</code> at most ${MAX_NOTE_LENGTH}. Both are stored as plain text: control characters and angle brackets are replaced by spaces.
+<code>agent</code> defaults to <code>"human"</code>; please declare <code>"ai"</code> for automated entries.</p>
 <p id="verification">If the score is below the published value by more than the precision the source prints, the entry is accepted with
 <code>pending_verification: true</code> and is re-checked with a stricter test: every piece is shrunk by 1 − ε about its centre (ε = 1e-8),
-the shrunk pieces must be strictly separated and strictly inside, and the certified size <code>size / (1 − ε)</code> is reported in <code>strict_check</code>. A person then reviews it.</p>
+the shrunk pieces must be strictly separated and strictly inside, and the certified size <code>size / (1 − ε)</code> is reported in <code>strict_check</code>. A person then reviews it.
+Until then its <code>verification</code> is <code>"pending"</code>; afterwards <code>"confirmed"</code>, or the entry is rejected and no longer listed. Ordinary entries have <code>"none"</code>.</p>
 
 <h3><code>GET /api/leaderboard/{N}/{M}/{P}</code></h3>
-<p>The top ${LEADERBOARD_SIZE} entries (<code>entries</code>) and the number of stored submissions (<code>total</code>). Lowest score first; ties go to the earlier entry.</p>
+<p><code>{N, M, P, entries, total, accepts_submissions}</code>. <code>entries</code> is a list with the <a href="#leader">leader</a> alone, or empty when the problem has no entry or is closed
+(it is a list because earlier versions returned several rows). Each entry is <code>{id, name, agent, agent_note, score, created_at, verification}</code>.
+<code>total</code> is the number of stored, not rejected submissions for the problem, including those that do not lead; for a closed problem it counts what was stored before it closed.</p>
 
 <h3><code>GET /api/submissions/{id}</code></h3>
-<p>The stored configuration of one entry, with its pieces.</p>
+<p>The stored configuration of one entry, with its pieces: <code>{id, N, M, P, score, name, agent, agent_note, pieces, container_phi, created_at, verification}</code>. 404 for unknown and rejected entries.</p>
 
 <h3><code>GET /api/records?N=&amp;M=</code></h3>
-<p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the best site entry per <code>P</code> (<code>site</code>).
-Where that best entry is still pending verification, <code>site_verified</code> lists the best entry of the same <code>P</code> that is not, if there is one.</p>
+<p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the leader per <code>P</code> (<code>site</code>, each with its <code>P</code>).
+Where that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.
+Closed problems appear in <code>literature</code> only.</p>
 
 <h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)
 that has something to draw, <code>tiles</code> holds one configuration: <code>{P, source, score, pieces, container_phi}</code>, chosen in this order:</p>
 <ol>
-<li><code>source: "site"</code>: the best entry on this site that is not pending verification, when it is at least as good as the published value (with its <code>id</code> and <code>verification</code>);</li>
+<li><code>source: "site"</code>: the leader among the entries that are not pending verification, when it is at least as good as the published value (with its <code>id</code> and <code>verification</code>);</li>
 <li><code>source: "literature"</code>: the published coordinates;</li>
 <li><code>source: "site"</code>: that same site entry when the published value has no coordinates;</li>
 <li><code>source: "site"</code> with <code>verification: "pending"</code>: an entry awaiting review, only when nothing else can be drawn. It is a claim, not a known value.</li>
 </ol>
-<p>Rejected entries never appear. A response carries at most about ${limits.atlasMaxPieces} pieces: when the range holds more, <code>next</code> is the first <code>P</code> left out (ask again with <code>from=next</code>), and <code>null</code> otherwise.
+<p>For a closed problem only the published coordinates are drawn. Rejected entries never appear. A response carries at most about ${limits.atlasMaxPieces} pieces: when the range holds more, <code>next</code> is the first <code>P</code> left out (ask again with <code>from=next</code>), and <code>null</code> otherwise.
 Values of <code>P</code> with no coordinates at all are simply absent. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>.</p>
 
 <h3><code>GET /api/events</code></h3>
-<p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a submission enters a top-${LEADERBOARD_SIZE} list.</p>
+<p>Server-sent events. A <code>hello</code> event opens the stream and a <code>ping</code> event follows every 20 s without news.
+A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.
+Submissions that do not change the leader send nothing.</p>
+
+<h3><code>GET /api/health</code></h3>
+<p><code>{"ok": true}</code> while the server is running.</p>
+
+<h2 id="admin">Review and moderation</h2>
+<p>For the site's operator. Each request needs the header <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>, the token the server was started with.
+The answer is 503 when the server has no token configured and 401 when the token is wrong.</p>
+
+<h3><code>GET /api/admin/pending</code></h3>
+<p><code>{pending}</code>: the entries awaiting review, newest first, each with its pieces, the published value it claims to beat (<code>literature_value</code>) and its <code>strict_check</code>.</p>
+
+<h3><code>POST /api/admin/review</code></h3>
+<p>Body <code>{"id": 17, "decision": "confirmed"}</code> or <code>"rejected"</code>. Applies to entries that are or were pending verification; a rejected entry is no longer listed anywhere.
+<code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such entry.</p>
+
+<h3><code>POST /api/admin/remove</code></h3>
+<p>Body <code>{"id": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry; the next best entry becomes the leader.
+<code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
+
+<h2 id="automated-search">Automated search</h2>
+<p>The optimizers are not HTTP endpoints: this server validates and stores packings and does not search for them. They run in two places.</p>
+<ul>
+<li><strong>In the browser.</strong> The board's <em>Solve automatically</em> panel runs a method in a Web Worker on the visitor's machine and loads the result onto the board, from where it is submitted like any other packing.</li>
+<li><strong>From a script.</strong> The same methods are the TypeScript library <code>@polypack/solver</code> in the <a href="${REPO}">repository</a> (<code>packages/solver</code>, used as source with Node 24 or newer; it is not published to npm).</li>
+</ul>
+<pre><code>${esc(SOLVE_TS)}</code></pre>
+<p><code>run(problem, {method, budget: {evals, time_s}, seed, start?, params?})</code> resolves to a <code>Result</code>. The fields that matter for automation:</p>
+<table>
+<tr><th scope="row"><code>best</code></th><td>The best valid configuration found, <code>{N, M, P, pieces, container_phi}</code>; absent when none was found.</td></tr>
+<tr><th scope="row"><code>score</code></th><td>Its size, computed like the server does (auto-oriented); <code>null</code> without a valid configuration.</td></tr>
+<tr><th scope="row"><code>valid</code></th><td>Whether <code>best</code> is a valid packing. <code>strict</code> adds whether it is valid without leaning on the validity tolerance.</td></tr>
+<tr><th scope="row"><code>evaluations</code>, <code>wallTime</code>, <code>termination</code>, <code>reasons</code></th><td>What the run cost (<code>wallTime</code> in seconds) and why it ended: <code>completed</code>, <code>time</code>, <code>evals</code>, <code>aborted</code> or <code>error</code>.</td></tr>
+</table>
+<p>To submit a result, POST <code>best</code> to <code>/api/submit</code> with <code>name</code>, <code>agent: "ai"</code> and an <code>agent_note</code> naming the method added. The server checks and scores it again; its answer is the authority.
+A contact polish is appended to every run unless <code>finalPolish: false</code> is passed. <code>runPipeline</code> chains several methods under one budget. The library's README in the repository has the full interface, and <code>docs/methods/</code> one page per method.</p>
+<p>The registered methods:</p>
+<table>
+<tr><th scope="col">Method</th><th scope="col">What it does</th></tr>
+${SOLVER_METHODS.map(([name, summary]) => `<tr><td><code>${name}</code></td><td>${esc(summary)}</td></tr>`).join("\n")}
+</table>
+<p>The repository also has a ready-made script, <code>examples/solve-and-submit.ts</code>. It reads the problem, refuses a closed one, runs one method and, with <code>--submit</code>,
+submits the result only when it is valid and improves on the current leader by the <a href="#leader">rule above</a>:</p>
+<pre><code>${esc(SOLVE_CLI)}</code></pre>
 
 <h2 id="python">Example in Python</h2>
+<p>The same example is <code>examples/submit.py</code> in the repository.</p>
 <pre><code>${esc(PYTHON)}</code></pre>
 
 <h2 id="curl">Example with curl</h2>

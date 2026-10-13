@@ -3,14 +3,14 @@ import { findOverlaps, pieceSeparation } from "@polypack/geometry";
 import { openProblem, pieceCentre, pieces } from "./helpers";
 
 test("build a packing, submit it, and a second browser sees the leaderboard update", async ({ page, browser }) => {
-  // squares in a heptagon: a problem with no published record
+  // squares in a nine-sided container: a problem with no published record, used by no other test
   // a second visitor already watching the same problem
   const other = await (await browser.newContext()).newPage();
-  await openProblem(other, 4, 7, 3);
+  await openProblem(other, 4, 9, 3);
   await expect(other.locator("#leaderboard-note")).toContainText("No entries yet");
   await expect(other.locator("#live")).toHaveClass(/on/);
 
-  await openProblem(page, 4, 7, 3);
+  await openProblem(page, 4, 9, 3);
   await page.click("#add");
   await page.click("#add");
   await page.click("#add");
@@ -52,8 +52,10 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   await page.fill("#name", "Playwright");
   await page.click("#submit");
   await expect(page.locator("#submit-result")).toContainText("Accepted");
-  await expect(page.locator("#submit-result")).toContainText("rank 1");
+  await expect(page.locator("#submit-result")).toContainText("This is now the best entry for this problem.");
+  await expect(page.locator("#leaderboard li")).toHaveCount(1);
   await expect(page.locator("#leaderboard li")).toContainText("Playwright");
+  await expect(page.locator("#leaderboard-note")).toHaveText("1 submission so far.");
 
   // the other browser updates without a reload
   await expect(other.locator("#leaderboard li")).toContainText("Playwright", { timeout: 5000 });
@@ -63,14 +65,84 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   await expect(other.locator("#count")).toContainText("3 / 3");
   expect(Number(await other.textContent("#score"))).toBeCloseTo(score, 5);
 
-  // the records page lists it
-  await other.goto("/browse.html#4,7");
+  // the same packing again, under another name: stored, but the earlier entry keeps the lead
+  await page.fill("#name", "Latecomer");
+  await page.click("#submit");
+  await expect(page.locator("#submit-result")).toContainText("Valid, score");
+  await expect(page.locator("#submit-result")).toContainText("does not beat the current best");
+  await expect(page.locator("#submit-result")).toContainText("equal scores keep the earlier entry");
+  await expect(page.locator("#leaderboard-note")).toHaveText("2 submissions in total; the earliest best one is shown.");
+  await expect(page.locator("#leaderboard li")).toHaveCount(1);
+  await expect(page.locator("#leaderboard li")).toContainText("Playwright");
+  await expect(other.locator("#leaderboard-note")).toContainText("1 submission so far.");
+
+  // the records page lists the leader only
+  await other.goto("/browse.html#4,9");
   await expect(other.locator("#rows tr")).toContainText("Playwright");
+  await expect(other.locator("#rows")).not.toContainText("Latecomer");
+});
+
+test("a problem with a proven optimum takes no submissions, and an open one does again", async ({ page, request }) => {
+  const closedNote = "This problem is solved: its optimum is proven, so the leaderboard is closed. You can still play it.";
+  // seven circles in a circle: proven
+  await openProblem(page, 0, 0, 7);
+  await expect(page.locator("#show-record")).toHaveText("Show proven minimum");
+  await expect(page.locator("#submit")).toBeDisabled();
+  await expect(page.locator("#submit-closed")).toBeVisible();
+  await expect(page.locator("#submit-closed")).toHaveText(closedNote);
+  await expect(page.locator("#leaderboard li")).toHaveCount(0);
+  await expect(page.locator("#leaderboard-note")).toHaveText(closedNote);
+  // the board and the optimizer stay usable
+  await page.click("#add-all");
+  await expect(page.locator("#count")).toContainText("7 / 7");
+  await expect(page.locator("#solve-run")).toBeEnabled();
+  await expect(page.locator("#submit")).toBeDisabled();
+
+  // the server refuses on its own account, whatever the page does
+  const r = await request.post("/api/submit", {
+    data: { N: 0, M: 0, P: 7, name: "x", container_phi: 0, pieces: await pieces(page) },
+  });
+  expect(r.status()).toBe(409);
+  expect((await r.json()).reasons[0]).toMatch(/^this problem is closed: its optimum 3 is proven \(.+\)$/);
+  expect((await (await request.get("/api/leaderboard/0/0/7")).json()).total).toBe(0);
+
+  // twenty circles in a circle: best known only, so open
+  await page.fill("#p-input", "20");
+  await page.locator("#p-input").blur();
+  await expect(page.locator("#show-record")).toHaveText("Show best record");
+  await expect(page.locator("#submit")).toBeEnabled();
+  await expect(page.locator("#submit-closed")).toBeHidden();
+  await expect(page.locator("#leaderboard-note")).toContainText("No entries yet");
+
+  // and back to a closed one
+  await page.fill("#p-input", "7");
+  await page.locator("#p-input").blur();
+  await expect(page.locator("#submit")).toBeDisabled();
+  await expect(page.locator("#submit-closed")).toBeVisible();
+});
+
+test("a refusal of a closed problem is shown when the page did not know", async ({ page }) => {
+  // the page is told that the problem is open; the server knows better
+  await page.route("**/api/problems/0/0/7", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), accepts_submissions: true } });
+  });
+  await openProblem(page, 0, 0, 7);
+  await expect(page.locator("#submit")).toBeEnabled();
+  await page.click("#show-record");
+  await expect(page.locator("#count")).toContainText("7 / 7");
+  await page.fill("#name", "Playwright");
+  await page.click("#submit");
+  await expect(page.locator("#submit-result")).toContainText("this problem is closed: its optimum 3 is proven");
+  await expect(page.locator("#submit-result")).toHaveClass(/bad/);
+  // the refusal makes the page ask for the problem again; that request may outlive the test
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("an invalid submission is refused by the server with a reason", async ({ request }) => {
   const r = await request.post("/api/submit", {
-    data: { N: 4, M: 4, P: 2, name: "x", container_phi: 0, pieces: [{ x: 0, y: 0, theta: 0 }, { x: 0.2, y: 0, theta: 0 }] },
+    // an open problem: a closed one is refused before the packing is looked at
+    data: { N: 4, M: 7, P: 2, name: "x", container_phi: 0, pieces: [{ x: 0, y: 0, theta: 0 }, { x: 0.2, y: 0, theta: 0 }] },
   });
   expect(r.status()).toBe(422);
   expect((await r.json()).reasons[0]).toContain("overlapping");
