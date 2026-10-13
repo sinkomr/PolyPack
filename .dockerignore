@@ -1,0 +1,12 @@
+# Only what the image needs is sent to the builder; everything else in the folder stays local.
+*
+!package.json
+!package-lock.json
+!tsconfig.base.json
+!apps
+!packages
+!data
+data/*
+!data/records.json
+**/node_modules
+**/dist

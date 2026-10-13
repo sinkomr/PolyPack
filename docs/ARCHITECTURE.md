@@ -21,11 +21,11 @@ Repo layout: npm workspaces. `packages/geometry` is consumed as TypeScript sourc
 
 ## Hosting
 
-Not chosen yet. Facts read from the providers' documentation on 2026-10-07.
+Fly.io is set up: see [DEPLOY_FLY.md](DEPLOY_FLY.md). An always-on Mac behind a tunnel is the alternative: see [HOSTING.md](HOSTING.md). The comparison below was read from the providers' documentation on 2026-10-07.
 
 | Option | Monthly cost | What it needs | Fit |
 |---|---|---|---|
-| Fly.io: one small machine with a 1 GB volume | [EST] $2.19 (shared-cpu-1x, 256 MB, running all month) + $0.15 per GB of volume, so about $2.34. No free tier; card required. Source: https://docs.fly.io/about/pricing | Fly.io account with a card, a Dockerfile and `fly.toml` (not written yet). | Runs the tested Node server unchanged: SQLite on the volume, server-sent events, no CPU limit. |
+| Fly.io: one small machine with a 1 GB volume | [EST] $2.19 (shared-cpu-1x, 256 MB, running all month) + $0.15 per GB of volume, so about $2.34. No free tier; card required. Source: https://docs.fly.io/about/pricing | Fly.io account with a card, the repository's `Dockerfile` and `fly.toml`. | Runs the tested Node server unchanged: SQLite on the volume, server-sent events, no CPU limit. |
 | Cloudflare Workers + D1 | [EST] $0 on the free plan: 100,000 requests per day, 10 ms CPU per request, D1 with 5 GB and 100,000 rows written per day. Paid plan from $5. Sources: https://developers.cloudflare.com/workers/platform/pricing/ and https://developers.cloudflare.com/workers/platform/limits/ | Cloudflare account (no card), plus new code: a D1 store, a Worker entry and a wrangler config. | Live updates fall back to 10 s polling unless a Durable Object is added. [CALC] Scoring a submission takes 0.1 to 2 ms on an Apple Silicon Mac for M up to 20, but about 120 ms for M = 100, which is over the free CPU limit; large M would need a faster solver or a cap. |
 | Render free web service | [EST] $0, but it spins down after 15 minutes without traffic and has no persistent disk. Source: https://render.com/docs/free . Paid prices were not checked. | Render account, plus a hosted Postgres and a Postgres store to keep the leaderboard. | Poor: the leaderboard would not persist without extra services. |
 | GitHub Pages | $0 | [EST] On GitHub Free the repository must be public. Source: https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site | Static files only, so no submissions, leaderboard or live updates. Not enough by itself. |

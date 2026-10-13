@@ -62,6 +62,7 @@ POLYPACK_E2E_PRODUCTION=1 npm run e2e -- e2e/solve.spec.ts e2e/mobile.spec.ts
 | `e2e/` | Playwright end-to-end tests. |
 | `docs/ARCHITECTURE.md` | Stack, geometric conventions and design decisions. |
 | `docs/SOLVER_FRAMEWORK.md` | Solver framework design and measurements. |
+| `docs/DEPLOY_FLY.md`, `Dockerfile`, `fly.toml` | Running a public copy on Fly.io. |
 | `docs/HOSTING.md`, `deploy/` | Running a public copy on an always-on Mac. |
 | `docs/methods/` | One page per search method: algorithm, parameters, benchmarks, limitations. |
 

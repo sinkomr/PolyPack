@@ -1,5 +1,7 @@
 # Hosting PolyPack on a Mac
 
+For a rented server instead, see [DEPLOY_FLY.md](DEPLOY_FLY.md).
+
 PolyPack is one Node process: it serves the built website and the API, and keeps its data in one SQLite file. Any always-on machine can host it. This page sets it up on a Mac at home, reachable from the internet through a tunnel, so that no port is opened on the home router and the home address is not exposed.
 
 The scripts are in `deploy/macos/`.
@@ -55,7 +57,7 @@ Settings are in `~/.polypack/env`:
 | `PORT`, `HOST` | Where the server listens. Leave `HOST=127.0.0.1`. |
 | `DATABASE_PATH` | The SQLite file. |
 | `ADMIN_TOKEN` | Password for the admin page. Generated at random by `install.sh`; never commit it or paste it anywhere public. Without one, the admin page is switched off. |
-| `TRUST_PROXY` | `1` behind a tunnel, so that rate limits apply to the visitor's address rather than the tunnel's. |
+| `CLIENT_IP_HEADER` | The header in which the tunnel reports the visitor's address, so that rate limits apply per visitor rather than to the tunnel. `cf-connecting-ip` for Cloudflare; remove the line for Tailscale Funnel. |
 
 ## 3. Make it reachable: Cloudflare Tunnel
 

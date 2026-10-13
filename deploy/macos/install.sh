@@ -16,7 +16,7 @@ PORT=8787
 HOST=127.0.0.1
 DATABASE_PATH=$STATE/polypack.sqlite
 ADMIN_TOKEN=$(openssl rand -hex 32)
-TRUST_PROXY=1
+CLIENT_IP_HEADER=cf-connecting-ip
 SETTINGS
   echo "Wrote $ENV_FILE with a new random ADMIN_TOKEN (read it with: grep ADMIN_TOKEN $ENV_FILE)"
 fi
