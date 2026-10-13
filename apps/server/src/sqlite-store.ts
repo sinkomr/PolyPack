@@ -90,7 +90,8 @@ export class SqliteStore implements Store {
 
   async getMany(ids: readonly number[]): Promise<StoredSubmission[]> {
     if (!ids.length) return [];
-    if (ids.length > GET_MANY_LIMIT) throw new RangeError(`getMany accepts at most ${GET_MANY_LIMIT} ids, got ${ids.length}`);
+    if (ids.length > GET_MANY_LIMIT)
+      throw new RangeError(`getMany accepts at most ${GET_MANY_LIMIT} ids, got ${ids.length}`);
     const marks = ids.map(() => "?").join(", ");
     const rows = this.db.prepare(`SELECT * FROM submissions WHERE id IN (${marks}) AND ${LISTED}`).all(...ids);
     return (rows as Row[]).map(toStored);
@@ -146,6 +147,13 @@ export class SqliteStore implements Store {
     const r = this.db
       .prepare("UPDATE submissions SET verification = ? WHERE id = ? AND verification != 'none'")
       .run(decision, id);
+    return Number(r.changes) > 0;
+  }
+
+  async remove(id: number): Promise<boolean> {
+    const r = this.db
+      .prepare("UPDATE submissions SET verification = 'rejected' WHERE id = ? AND verification != 'rejected'")
+      .run(id);
     return Number(r.changes) > 0;
   }
 }

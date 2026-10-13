@@ -41,6 +41,17 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
+
+      <h2 class="title">Remove an entry</h2>
+      <p class="note">
+        Takes any entry off the leaderboards, for example a test entry or one with an abusive name. The entry's number
+        is the one in its link from a leaderboard (<code>#s=12</code> is entry 12). This cannot be undone here.
+      </p>
+      <div class="row">
+        <label for="remove-id">Entry number</label>
+        <input id="remove-id" type="number" min="1" step="1" inputmode="numeric" />
+        <button id="remove">Remove</button>
+      </div>
     </main>
     <script type="module" src="/src/admin.ts"></script>
   </body>

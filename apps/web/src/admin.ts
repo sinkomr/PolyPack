@@ -24,7 +24,11 @@ token.value = sessionStorage.getItem("polypack.admin") ?? "";
 const headers = () => ({ authorization: `Bearer ${token.value}`, "content-type": "application/json" });
 
 async function review(id: number, decision: "confirmed" | "rejected"): Promise<void> {
-  const r = await fetch("/api/admin/review", { method: "POST", headers: headers(), body: JSON.stringify({ id, decision }) });
+  const r = await fetch("/api/admin/review", {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ id, decision }),
+  });
   note.textContent = r.ok ? `Submission ${id} ${decision}.` : `Could not update submission ${id} (${r.status}).`;
   if (r.ok) load();
 }
@@ -41,7 +45,12 @@ async function load(): Promise<void> {
     return;
   }
   if (!r.ok) {
-    note.textContent = r.status === 401 ? "Wrong token." : r.status === 503 ? "ADMIN_TOKEN is not set on the server." : `Error ${r.status}.`;
+    note.textContent =
+      r.status === 401
+        ? "Wrong token."
+        : r.status === 503
+          ? "ADMIN_TOKEN is not set on the server."
+          : `Error ${r.status}.`;
     return;
   }
   const { pending } = (await r.json()) as { pending: Pending[] };
@@ -50,7 +59,12 @@ async function load(): Promise<void> {
     const tr = el("tr");
     tr.append(el("td", String(p.id)));
     tr.append(el("td", `${p.P} ${shapeLabel(p.N)}s in a ${shapeLabel(p.M)} (N=${p.N}, M=${p.M})`));
-    tr.append(el("td", `${p.name} (${p.agent})${p.agent_note ? " — " + p.agent_note : ""}, ${p.created_at.slice(0, 16).replace("T", " ")}`));
+    tr.append(
+      el(
+        "td",
+        `${p.name} (${p.agent})${p.agent_note ? " — " + p.agent_note : ""}, ${p.created_at.slice(0, 16).replace("T", " ")}`,
+      ),
+    );
     tr.append(el("td", String(p.score)));
     tr.append(el("td", p.literature_value === null ? "—" : String(p.literature_value)));
     const s = p.strict_check;
@@ -69,7 +83,25 @@ async function load(): Promise<void> {
   }
 }
 
+async function remove(): Promise<void> {
+  const id = Number($<HTMLInputElement>("remove-id").value);
+  if (!Number.isInteger(id) || id < 1) {
+    note.textContent = "Enter the entry's number.";
+    return;
+  }
+  const r = await fetch("/api/admin/remove", { method: "POST", headers: headers(), body: JSON.stringify({ id }) });
+  note.textContent = r.ok
+    ? `Entry ${id} removed.`
+    : r.status === 404
+      ? `There is no listed entry ${id}.`
+      : r.status === 401
+        ? "Wrong token."
+        : `Could not remove entry ${id} (${r.status}).`;
+  if (r.ok) load();
+}
+
 $("load").addEventListener("click", load);
+$("remove").addEventListener("click", remove);
 token.addEventListener("keydown", (e) => {
   if (e.key === "Enter") load();
 });

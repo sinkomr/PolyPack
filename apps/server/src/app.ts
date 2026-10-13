@@ -69,7 +69,8 @@ export function atlasSource(
   lit: LiteratureRecord | undefined,
   pending?: { score: number },
 ): "verified" | "literature" | "pending" | null {
-  if (verified && (!lit || verified.score <= lit.value + Math.max(Math.pow(10, -lit.display_precision), 1e-9))) return "verified";
+  if (verified && (!lit || verified.score <= lit.value + Math.max(Math.pow(10, -lit.display_precision), 1e-9)))
+    return "verified";
   if (lit?.pieces) return "literature";
   if (verified) return "verified";
   return pending ? "pending" : null;
@@ -111,7 +112,10 @@ export function createApp(opts: AppOptions): Hono {
     return { N, M, P };
   };
   const badProblem = (c: Context) =>
-    c.json({ error: `N and M must be 0 or an integer from 3 to ${MAX_SIDES}; P an integer from 1 to ${MAX_PIECES}` }, 400);
+    c.json(
+      { error: `N and M must be 0 or an integer from 3 to ${MAX_SIDES}; P an integer from 1 to ${MAX_PIECES}` },
+      400,
+    );
 
   app.get("/api", (c) => c.html(docsPage({ atlasMaxSpan: ATLAS_MAX_SPAN, atlasMaxPieces: ATLAS_MAX_PIECES })));
   app.get("/api/health", (c) => c.json({ ok: true }));
@@ -133,7 +137,10 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/leaderboard/:N/:M/:P", async (c) => {
     const p = problemOf(c);
     if (!p) return badProblem(c);
-    const [entries, total] = await Promise.all([store.top(p.N, p.M, p.P, LEADERBOARD_SIZE), store.count(p.N, p.M, p.P)]);
+    const [entries, total] = await Promise.all([
+      store.top(p.N, p.M, p.P, LEADERBOARD_SIZE),
+      store.count(p.N, p.M, p.P),
+    ]);
     return c.json({ ...p, entries, total });
   });
 
@@ -167,9 +174,18 @@ export function createApp(opts: AppOptions): Hono {
     const toText = c.req.query("to");
     const from = fromText === undefined ? 1 : decimalInteger(fromText);
     const to = toText === undefined ? Math.min(from + ATLAS_MAX_SPAN - 1, MAX_PIECES) : decimalInteger(toText);
-    if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to > MAX_PIECES || from > to || to - from >= ATLAS_MAX_SPAN) {
+    if (
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from < 1 ||
+      to > MAX_PIECES ||
+      from > to ||
+      to - from >= ATLAS_MAX_SPAN
+    ) {
       return c.json(
-        { error: `from and to must be integers with 1 <= from <= to <= ${MAX_PIECES}, covering at most ${ATLAS_MAX_SPAN} values of P` },
+        {
+          error: `from and to must be integers with 1 <= from <= to <= ${MAX_PIECES}, covering at most ${ATLAS_MAX_SPAN} values of P`,
+        },
         400,
       );
     }
@@ -207,9 +223,23 @@ export function createApp(opts: AppOptions): Hono {
       const sub = entry ? stored.get(entry.id) : undefined;
       // a submission rejected between the two queries is never shown
       if (sub && sub.verification !== "rejected" && sub.N === N && sub.M === M && sub.P === P) {
-        tiles.push({ P, source: "site", score: sub.score, pieces: sub.pieces, container_phi: sub.container_phi, id: sub.id, verification: sub.verification });
+        tiles.push({
+          P,
+          source: "site",
+          score: sub.score,
+          pieces: sub.pieces,
+          container_phi: sub.container_phi,
+          id: sub.id,
+          verification: sub.verification,
+        });
       } else if (lit?.pieces) {
-        tiles.push({ P, source: "literature", score: lit.value, pieces: lit.pieces, container_phi: lit.container_phi ?? 0 });
+        tiles.push({
+          P,
+          source: "literature",
+          score: lit.value,
+          pieces: lit.pieces,
+          container_phi: lit.container_phi ?? 0,
+        });
       }
     }
     const body: AtlasResponse = { N, M, from, to, next, tiles };
@@ -253,7 +283,8 @@ export function createApp(opts: AppOptions): Hono {
     const config = parsed.config;
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
-    if (!nameLimit.allow(name.toLowerCase())) return reject(429, ["too many submissions under this name; wait a minute"]);
+    if (!nameLimit.allow(name.toLowerCase()))
+      return reject(429, ["too many submissions under this name; wait a minute"]);
 
     // The score is always recomputed here. Any container or score fields in the body were
     // already dropped by parseConfig.
@@ -357,6 +388,17 @@ export function createApp(opts: AppOptions): Hono {
     const ok = await store.review(body.id as number, body.decision);
     if (ok) log(`[review] submission ${body.id} marked ${body.decision}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such pending submission" }, 404);
+  });
+
+  // Moderation: unlike a review, this applies to any listed entry, not only to those awaiting one.
+  app.post("/api/admin/remove", async (c) => {
+    const denied = admin(c);
+    if (denied) return denied;
+    const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
+    if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
+    const ok = await store.remove(body.id as number);
+    if (ok) log(`[review] submission ${body.id} removed`);
+    return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));

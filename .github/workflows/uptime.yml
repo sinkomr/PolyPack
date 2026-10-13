@@ -1,0 +1,18 @@
+name: Uptime
+# Asks the live site whether it is healthy. A failed run is reported by GitHub's usual
+# notification for failed workflows, to whoever last changed this schedule.
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health
+        run: |
+          body=$(curl --fail --silent --show-error --retry 3 --retry-delay 10 --retry-all-errors --max-time 20 https://polypack.fly.dev/api/health)
+          echo "$body"
+          test "$body" = '{"ok":true}'
+      - name: Records page
+        run: curl --fail --silent --show-error --max-time 20 --output /dev/null https://polypack.fly.dev/browse.html

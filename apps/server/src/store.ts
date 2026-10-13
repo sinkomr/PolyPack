@@ -49,4 +49,9 @@ export interface Store {
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
   pending(): Promise<StoredSubmission[]>;
   review(id: number, decision: "confirmed" | "rejected"): Promise<boolean>;
+  /**
+   * Takes any entry off the site (an abusive name, a test entry). The row is kept and marked
+   * rejected, which hides it from every listing. False when there is no such listed entry.
+   */
+  remove(id: number): Promise<boolean>;
 }

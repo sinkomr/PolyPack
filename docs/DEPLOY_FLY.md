@@ -53,10 +53,23 @@ fly scale count 1
 
 ## Updating
 
+Every push to `main` runs the tests (`.github/workflows/ci.yml`); when they all pass, the same workflow deploys to Fly. It needs a repository secret `FLY_API_TOKEN` holding a deploy token for the app:
+
 ```sh
-git pull
+fly tokens create deploy -a <name> | gh secret set FLY_API_TOKEN
+```
+
+To deploy by hand instead:
+
+```sh
 fly deploy
 ```
+
+`.github/workflows/uptime.yml` asks the site every 15 minutes whether it is healthy; GitHub reports a failed run by its usual notification. GitHub pauses scheduled workflows in a repository that has had no activity for 60 days.
+
+## Moderation
+
+`/admin.html`, with the admin token, lists entries that claim to beat a published value for review, and can remove any entry by its number.
 
 ## Looking after it
 

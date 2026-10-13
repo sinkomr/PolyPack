@@ -44,8 +44,17 @@ if (existsSync(dist)) {
   app.use("/*", serveStatic({ root: dist }));
 }
 
-serve({ fetch: app.fetch, port, hostname }, () => {
+const server = serve({ fetch: app.fetch, port, hostname }, () => {
   console.log(
     `PolyPack server on http://localhost:${port} (database ${databasePath}, ${records.length} literature records)`,
   );
 });
+
+// A host stops the process with a signal at every deploy and restart. Open live-update streams
+// would keep it alive until the host kills it, so exit at once; SQLite has committed every write.
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    server.close();
+    process.exit(0);
+  });
+}
