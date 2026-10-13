@@ -47,13 +47,23 @@ try {
 }
 
 const methods = registry.list();
+// These two refine a configuration they are given; this script starts every search from nothing.
+const NEEDS_START = ["identity", "polish"];
 if (args.method === "list") {
-  for (const m of methods)
-    console.log(`${m.name.padEnd(14)} ${(m.schema as { description?: string }).description ?? ""}`);
+  for (const m of methods) {
+    const needs = NEEDS_START.includes(m.name) ? " (needs a starting configuration: library only)" : "";
+    console.log(`${m.name.padEnd(14)} ${(m.schema as { description?: string }).description ?? ""}${needs}`);
+  }
   process.exit(0);
 }
 if (!methods.some((m) => m.name === args.method)) {
   fail(2, `unknown method "${args.method}"; registered: ${methods.map((m) => m.name).join(", ")}`);
+}
+if (NEEDS_START.includes(args.method)) {
+  fail(
+    2,
+    `"${args.method}" refines a starting configuration, which this script does not take; use run() with \`start\``,
+  );
 }
 
 /** A plain non-negative decimal integer option; anything else ends the script. */
@@ -118,9 +128,12 @@ if (!args.submit) {
   process.exit(0);
 }
 if (leader && !improvesOn(result.score, leader.score)) {
+  const tie = result.score <= leader.score * (1 + SCORE_TIE);
   console.log(
-    `not submitted: ${result.score} does not improve on the leader's ${leader.score} ` +
-      `by more than the tie tolerance (relative ${SCORE_TIE})`,
+    tie
+      ? `not submitted: ${result.score} equals the leader's ${leader.score} within the tie tolerance ` +
+          `(relative ${SCORE_TIE}); the earlier entry keeps the lead`
+      : `not submitted: ${result.score} is worse than the leader's ${leader.score}`,
   );
   process.exit(0);
 }
@@ -128,18 +141,24 @@ if (leader && !improvesOn(result.score, leader.score)) {
 let status: number;
 let answer: SubmitResponse;
 try {
-  const response = await fetch(`${base}/api/submit`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      ...result.best,
-      name: args.name,
-      agent: "ai",
-      agent_note: args.note ?? `${args.method}, seed ${seed}, ${result.evaluations} evaluations`,
-    }),
-  });
-  status = response.status;
-  answer = (await response.json()) as SubmitResponse;
+  // The rate limits count per minute, so a refusal for that reason is retried after one.
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(`${base}/api/submit`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...result.best,
+        name: args.name,
+        agent: "ai",
+        agent_note: args.note ?? `${args.method}, seed ${seed}, ${result.evaluations} evaluations`,
+      }),
+    });
+    status = response.status;
+    answer = (await response.json()) as SubmitResponse;
+    if (status !== 429 || attempt === 2) break;
+    console.log("server      HTTP 429 (rate limit); trying again in 65 s");
+    await new Promise((resolve) => setTimeout(resolve, 65_000));
+  }
 } catch (error) {
   fail(1, `the submission could not be sent: ${(error as Error).message}`);
 }

@@ -74,8 +74,8 @@ const PROBLEM = `{
  * carries. A server test compares the names with the solver's registry.
  */
 export const SOLVER_METHODS: [name: string, summary: string][] = [
-  ["identity", "Evaluate a starting configuration without searching."],
-  ["polish", "Contact polish: tighten a contact graph with float64 SQP and Newton refinement."],
+  ["identity", "Evaluate a starting configuration without searching. Needs a starting configuration (start)."],
+  ["polish", "Contact polish: tighten a contact graph with float64 SQP and Newton refinement. Needs a starting configuration (start)."],
   ["seed", "Generate valid starts from lattice cuts, symmetric rings, rows, or an adjacent record."],
   [
     "penalty",
@@ -233,7 +233,7 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
-<tr><td>429</td><td>Rate limit: 30 submissions per minute per address and 12 per minute per name.</td></tr>
+<tr><td>429</td><td>Rate limit: 30 submissions per minute per address and 12 per minute per name. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
 </table>
 <p><code>name</code> is required, at most ${MAX_NAME_LENGTH} characters; <code>agent_note</code> at most ${MAX_NOTE_LENGTH}. Both are stored as plain text: control characters and angle brackets are replaced by spaces.
 <code>agent</code> defaults to <code>"human"</code>; please declare <code>"ai"</code> for automated entries.</p>
