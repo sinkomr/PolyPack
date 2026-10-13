@@ -1,34 +1,34 @@
-# Fly.io configuration. `fly launch` asks for the app name and region and rewrites these two lines.
-app = "polypack"
-primary_region = "sjc"
+# fly.toml app configuration file generated for polypack on 2026-10-12T21:37:09-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'polypack'
+primary_region = 'sjc'
 
 [build]
-
 [env]
-  # Fly's proxy sets this header itself, so rate limits apply to the visitor's real address.
-  CLIENT_IP_HEADER = "fly-client-ip"
+  CLIENT_IP_HEADER = 'fly-client-ip'
 
-# The SQLite database lives on a volume, which survives deploys and restarts.
-[mounts]
-  source = "polypack_data"
-  destination = "/data"
-  initial_size = "1gb"
+[[mounts]]
+  source = 'polypack_data'
+  destination = '/data'
+  initial_size = '1gb'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # One always-on machine: the database is a single file, and live leaderboard updates hold connections open.
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
   [[http_service.checks]]
-    method = "GET"
-    path = "/api/health"
-    interval = "30s"
-    timeout = "5s"
-    grace_period = "20s"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/api/health'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
