@@ -4,7 +4,7 @@
 #   start <cents> '<batch arguments>'   create environment, agent and a session capped at <cents>, start the job
 #   status | watch | stop | fetch | delete
 # Ids are kept in ~/.polypack/managed/ so that later subcommands find the session.
-set -eu
+set -euo pipefail
 HERE="${0:A:h}"
 STATE="$HOME/.polypack/managed"
 API=https://api.anthropic.com/v1
@@ -12,9 +12,10 @@ mkdir -p "$STATE"
 
 [[ -n "${ANTHROPIC_API_KEY:-}" ]] || { print -u2 "Set ANTHROPIC_API_KEY first (it is never printed)."; exit 2; }
 api() {
-  local method="$1" path="$2"
+  # not "path": in zsh that name is PATH itself, and a local of it hides every command
+  local method="$1" endpoint="$2"
   shift 2
-  curl -fsS -X "$method" "$API$path" \
+  curl -fsS -X "$method" "$API$endpoint" \
     -H "x-api-key: $ANTHROPIC_API_KEY" \
     -H "anthropic-version: 2023-06-01" \
     -H "anthropic-beta: managed-agents-2026-04-01" \
