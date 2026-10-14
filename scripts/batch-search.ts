@@ -15,6 +15,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import os from "node:os";
@@ -23,6 +24,7 @@ import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import { Worker } from "node:worker_threads";
+import { build } from "esbuild";
 import { type PackingConfig, type ProblemInfo, type SubmitResponse, improvesOn } from "@polypack/geometry";
 import { registry } from "@polypack/solver";
 import {
@@ -583,7 +585,21 @@ const deadline = started + hours * 3600_000;
 let stopping = false;
 let interrupted = false;
 let nextId = 1;
-const workerUrl = new URL("./batch-search/worker.ts", import.meta.url);
+// The worker is bundled into one plain JavaScript file first. Threads do not reliably inherit tsx's
+// loader: on Node 22, which strips TypeScript types itself, a thread loads the .ts entry natively and
+// then fails on the sources' extensionless imports.
+const workerFile = join(os.tmpdir(), `polypack-batch-worker-${process.pid}.mjs`);
+await build({
+  entryPoints: [new URL("./batch-search/worker.ts", import.meta.url).pathname],
+  bundle: true,
+  platform: "node",
+  format: "esm",
+  target: "node22",
+  outfile: workerFile,
+  logLevel: "error",
+});
+const workerUrl = new URL(`file://${workerFile}`);
+process.on("exit", () => rmSync(workerFile, { force: true }));
 // A cooperative run ends within its time budget; this only catches a stuck or runaway thread.
 const watchdogMs = (budget.time_s * 3 + 60) * 1000;
 
@@ -597,9 +613,7 @@ class Slot {
   }
 
   private spawn(): void {
-    // The worker inherits this process's execArgv, which under `npx tsx` holds tsx's loader,
-    // so the thread can import TypeScript sources just like the main thread.
-    const worker = new Worker(workerUrl);
+    const worker = new Worker(workerUrl, { execArgv: [] });
     this.worker = worker;
     worker.on("message", (m: WorkerResult) => {
       if (this.pending && m.id === this.pending.id) this.settle(m);

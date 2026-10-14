@@ -12,7 +12,7 @@ The repository is checked out at /workspace/PolyPack. Results go to /mnt/session
    echo $! > /mnt/session/outputs/batch.pid
    ```
 
-4. Check on it every 10 minutes until it ends: run `sleep 600; tail -n 3 /mnt/session/outputs/run.log; kill -0 $(cat /mnt/session/outputs/batch.pid) && echo running || echo finished` as one command, and reply with just the latest status line. Do not read whole files or explore the repository.
+4. Check on it about every 5 minutes until it ends (a single command may run for at most about 5 minutes): run `sleep 280; tail -n 3 /mnt/session/outputs/run.log; kill -0 $(cat /mnt/session/outputs/batch.pid) && echo running || echo finished` as one command, and reply with just the latest status line. Do not read whole files or explore the repository.
 5. When the process has finished, reply with the last 40 lines of run.log and stop.
 
 Do not change any file in the repository, do not install anything else, and do not contact any host except through the batch script.
