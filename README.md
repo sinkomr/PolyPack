@@ -28,7 +28,7 @@ Search runs in a Web Worker. The canvas shows a read-only preview; **Pause**, **
 
 **Method settings** use the registered schemas and defaults, with angles displayed in degrees. The optional adjacent-record JSON uses the stored radians convention. **Download run JSON** saves the starting configuration, supplied and resolved settings, seed, budget, result and trace; its result can also be imported onto the board. An accepted result can be edited, exported, shared and submitted through the existing authoritative server validation.
 
-All seven completed optimizers (the seventh is soft-to-rigid hardening, after Yohei Nakajima; see [docs/methods/harden.md](docs/methods/harden.md)), lattice/symmetry seeds and float64 contact polish are available. From a script, `examples/solve-and-submit.ts` runs one method and can submit an improvement. A full command-line interface, solver jobs over HTTP, population search and LLM-guided search are not built yet.
+All seven completed optimizers (the seventh is soft-to-rigid hardening, after Yohei Nakajima; see [docs/methods/harden.md](docs/methods/harden.md)), lattice/symmetry seeds and float64 contact polish are available. From a script, `examples/solve-and-submit.ts` runs one method and can submit an improvement. For unattended searches over many problems, see [docs/AUTOMATION.md](docs/AUTOMATION.md). A full command-line interface, solver jobs over HTTP, population search and LLM-guided search are not built yet.
 
 ## Tests
 

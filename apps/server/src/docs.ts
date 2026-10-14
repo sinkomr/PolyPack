@@ -314,6 +314,7 @@ ${SOLVER_METHODS.map(([name, summary]) => `<tr><td><code>${name}</code></td><td>
 <p>The repository also has a ready-made script, <code>examples/solve-and-submit.ts</code>. It reads the problem, refuses a closed one, runs one method and, with <code>--submit</code>,
 submits the result only when it is valid and improves on the current leader by the <a href="#leader">rule above</a>:</p>
 <pre><code>${esc(SOLVE_CLI)}</code></pre>
+<p>For unattended searches over many problems, <code>scripts/batch-search.ts</code> runs several methods and seeds in parallel, resumes after an interruption and paces its submissions below the rate limit; see <a href="${REPO}/blob/main/docs/AUTOMATION.md"><code>docs/AUTOMATION.md</code></a>.</p>
 
 <h2 id="python">Example in Python</h2>
 <p>The same example is <code>examples/submit.py</code> in the repository.</p>
