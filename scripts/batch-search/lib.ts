@@ -6,9 +6,12 @@
 import {
   type LeaderboardEntry,
   type LiteratureRecord,
+  MAX_METHOD_PARAMS_BYTES,
   MAX_PIECES,
   MAX_SIDES,
+  type PackingConfig,
   closedToSubmissions,
+  utf8Length,
 } from "@polypack/geometry";
 
 export interface Problem {
@@ -20,6 +23,35 @@ export interface Problem {
 export interface Budget {
   evals: number;
   time_s: number;
+}
+
+/**
+ * The body of POST /api/submit for a problem's best run: the packing, the display name, how it was
+ * found (the method, its resolved parameters, the seed and the budget) and the user's note, which
+ * is sent only when one was given. Parameters larger than the server accepts are left out.
+ */
+export function submissionBody(
+  best: { config: PackingConfig; method: string; params?: Record<string, unknown>; seed: number; budget: Budget },
+  name: string,
+  note: string,
+): Record<string, unknown> {
+  const { N, M, P, pieces, container_phi } = best.config;
+  const params =
+    best.params && utf8Length(JSON.stringify(best.params)) <= MAX_METHOD_PARAMS_BYTES ? best.params : undefined;
+  return {
+    N,
+    M,
+    P,
+    pieces,
+    container_phi,
+    name,
+    ...(note ? { agent_note: note.slice(0, 200) } : {}),
+    found_with: "optimizer",
+    method: best.method,
+    ...(params ? { method_params: params } : {}),
+    seed: best.seed,
+    budget: { evals: best.budget.evals, time_s: best.budget.time_s },
+  };
 }
 
 /** Shape codes: 0 (circle) and 3..MAX_SIDES. */

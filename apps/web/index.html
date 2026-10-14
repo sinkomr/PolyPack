@@ -177,16 +177,10 @@
             <input id="name" maxlength="40" autocomplete="nickname" />
           </div>
           <div class="row">
-            <label for="agent">Made by</label>
-            <select id="agent">
-              <option value="human">Human</option>
-              <option value="ai">AI agent</option>
-            </select>
-          </div>
-          <div class="row">
             <label for="agent-note">Note</label>
-            <input id="agent-note" maxlength="200" placeholder="optional, e.g. method" />
+            <input id="agent-note" maxlength="200" placeholder="optional" />
           </div>
+          <p id="found-with" class="note">Found by hand.</p>
           <button id="submit" class="wide primary" aria-describedby="submit-closed">Submit to leaderboard</button>
           <p id="submit-closed" class="note" hidden></p>
           <p id="submit-result" class="note" role="status" aria-live="polite"></p>

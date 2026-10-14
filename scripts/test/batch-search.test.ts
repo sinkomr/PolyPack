@@ -14,6 +14,7 @@ import {
   runKey,
   sampleProblems,
   siteInfoByP,
+  submissionBody,
 } from "../batch-search/lib";
 
 describe("list parsing", () => {
@@ -200,5 +201,32 @@ describe("median", () => {
     expect(median([])).toBeNull();
     expect(median([3, 1, 2])).toBe(2);
     expect(median([4, 1, 3, 2])).toBe(2.5);
+  });
+});
+
+describe("submission body", () => {
+  const config = { N: 0, M: 0, P: 1, pieces: [{ x: 0, y: 0, theta: 0 }], container_phi: 0 };
+  const best = { config, method: "asc", params: { sweeps: 4 }, seed: 2, budget: { evals: 20000, time_s: 15 } };
+
+  it("records the run in its own fields and sends no note unless one was given", () => {
+    expect(submissionBody(best, "Claude Haiku 5.5", "")).toEqual({
+      ...config,
+      name: "Claude Haiku 5.5",
+      found_with: "optimizer",
+      method: "asc",
+      method_params: { sweeps: 4 },
+      seed: 2,
+      budget: { evals: 20000, time_s: 15 },
+    });
+    expect(submissionBody(best, "x", "cloud pilot").agent_note).toBe("cloud pilot");
+    expect(submissionBody(best, "x", "")).not.toHaveProperty("agent");
+  });
+
+  it("leaves out parameters that are missing or larger than the server accepts", () => {
+    const { params: _params, ...old } = best;
+    expect(submissionBody(old, "x", "")).not.toHaveProperty("method_params");
+    expect(submissionBody({ ...best, params: { blob: "x".repeat(5000) } }, "x", "")).not.toHaveProperty(
+      "method_params",
+    );
   });
 });

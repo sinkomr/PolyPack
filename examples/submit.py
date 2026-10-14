@@ -62,8 +62,8 @@ result = post(
         "pieces": pieces,
         "container_phi": 0.0,
         "name": "python example",
-        "agent": "ai",
-        "agent_note": "examples/submit.py",
+        # a hand-written arrangement; scripts that run an optimizer send "optimizer" with the method
+        "found_with": "hand",
     },
 )
 if result["valid"] and result["leader"]:
@@ -74,4 +74,4 @@ else:
     print("rejected:", "; ".join(result["reasons"]))
 
 for entry in get(f"/api/leaderboard/{N}/{M}/{P}")["entries"]:
-    print(f'{entry["score"]:.6f}  {entry["name"]}  ({entry["agent"]})')
+    print(f'{entry["score"]:.6f}  {entry["name"]}  ({entry["found_with"] or "not recorded"})')

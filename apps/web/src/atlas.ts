@@ -1,4 +1,5 @@
-import { AtlasResponse, AtlasTile, RecordStatus } from "@polypack/geometry";
+import { AtlasResponse, AtlasTile, LeaderboardEntry, RecordStatus } from "@polypack/geometry";
+import { foundWithLabel } from "./found-with";
 import {
   AtlasRow,
   AtlasView,
@@ -404,7 +405,7 @@ export class Atlas {
         site?.id,
         site?.score,
         site?.name,
-        site?.agent,
+        site?.found_with,
         site?.verification,
         reviewed?.id,
         reviewed?.score,
@@ -866,7 +867,10 @@ export class Atlas {
       `P = ${t.P}: ${t.P} ${t.P === 1 ? shapeLabel(N) : plural(N)} in ${withArticle(M)}`;
     const reviewed = verifiedEntry(row);
     const pending = pendingEntry(row);
-    const who = (e: { name: string; agent: string }) => `${e.name} (${e.agent === "ai" ? "AI" : "human"})`;
+    const who = (e: LeaderboardEntry) => {
+      const found = foundWithLabel(e.found_with);
+      return found ? `${e.name} (${found})` : e.name;
+    };
 
     const figure = el("div", "", "detail-figure");
     const art = el("div", "", `tile-art ${state}`);

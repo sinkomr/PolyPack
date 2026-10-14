@@ -8,6 +8,10 @@
  *     [--note "..."] [--submit]
  *   npx tsx examples/solve-and-submit.ts --method list
  *
+ * The entry records how it was found: found_with "optimizer", the method, its resolved
+ * parameters, the seed and the budget. --note adds free text shown with it; nothing is written
+ * there otherwise. An AI agent running this script uses its model name as --name.
+ *
  * Without --submit nothing is ever sent. With it, the result is submitted only when it is valid
  * and improves on the problem's current leader by more than the tie tolerance, because an entry
  * of equal quality never replaces an earlier one. Problems with a proven optimum are closed and
@@ -17,7 +21,14 @@
  * refused the submission; 2 wrong arguments or a closed problem.
  */
 import { parseArgs } from "node:util";
-import { type ProblemInfo, SCORE_TIE, type SubmitResponse, improvesOn } from "@polypack/geometry";
+import {
+  MAX_METHOD_PARAMS_BYTES,
+  type ProblemInfo,
+  SCORE_TIE,
+  type SubmitResponse,
+  improvesOn,
+  utf8Length,
+} from "@polypack/geometry";
 import { registry, run } from "@polypack/solver";
 
 function fail(code: 1 | 2, message: string): never {
@@ -149,8 +160,15 @@ try {
       body: JSON.stringify({
         ...result.best,
         name: args.name,
-        agent: "ai",
-        agent_note: args.note ?? `${args.method}, seed ${seed}, ${result.evaluations} evaluations`,
+        ...(args.note ? { agent_note: args.note } : {}),
+        found_with: "optimizer",
+        method: result.method,
+        // the server takes at most MAX_METHOD_PARAMS_BYTES of parameters; larger ones are left out
+        ...(utf8Length(JSON.stringify(result.params)) <= MAX_METHOD_PARAMS_BYTES
+          ? { method_params: result.params }
+          : {}),
+        seed: result.seed,
+        budget: { evals, time_s },
       }),
     });
     status = response.status;

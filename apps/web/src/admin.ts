@@ -1,4 +1,5 @@
-import { Pose, StrictResult } from "@polypack/geometry";
+import { FoundWith, Pose, StrictResult } from "@polypack/geometry";
+import { foundWithLabel } from "./found-with";
 import { el, shapeLabel } from "./shapes-ui";
 
 interface Pending {
@@ -7,7 +8,7 @@ interface Pending {
   M: number;
   P: number;
   name: string;
-  agent: string;
+  found_with: FoundWith | null;
   agent_note: string;
   score: number;
   created_at: string;
@@ -57,12 +58,13 @@ async function load(): Promise<void> {
   note.textContent = pending.length ? `${pending.length} pending.` : "Nothing is pending.";
   for (const p of pending) {
     const tr = el("tr");
+    const found = foundWithLabel(p.found_with);
     tr.append(el("td", String(p.id)));
     tr.append(el("td", `${p.P} ${shapeLabel(p.N)}s in a ${shapeLabel(p.M)} (N=${p.N}, M=${p.M})`));
     tr.append(
       el(
         "td",
-        `${p.name} (${p.agent})${p.agent_note ? " — " + p.agent_note : ""}, ${p.created_at.slice(0, 16).replace("T", " ")}`,
+        `${p.name}${found ? ` (${found})` : ""}${p.agent_note ? " — " + p.agent_note : ""}, ${p.created_at.slice(0, 16).replace("T", " ")}`,
       ),
     );
     tr.append(el("td", String(p.score)));

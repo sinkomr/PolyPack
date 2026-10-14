@@ -49,6 +49,7 @@ import {
   runKey,
   sampleProblems,
   siteInfoByP,
+  submissionBody,
   summaryTable,
 } from "./batch-search/lib";
 import type { WorkerRequest, WorkerResult } from "./batch-search/protocol";
@@ -79,8 +80,11 @@ Run control
 Submission (nothing is ever sent without --submit)
   --submit              submit each problem's best when it improves on the current leader
   --base URL            server (default https://polypack.fly.dev)
-  --name NAME           display name of the entries (required with --submit)
-  --note-prefix TEXT    text put before the method, seed and budget in agent_note
+  --name NAME           display name of the entries (required with --submit); an AI agent
+                        uses its model name, e.g. "Claude Haiku 5.5"
+  --note TEXT           free text shown with the entries (default: none). The method, its
+                        parameters, the seed and the budget are always sent in their own fields
+  --note-prefix TEXT    deprecated name of --note
 Other
   --list-methods        list the search methods and exit
   --help                this text
@@ -112,7 +116,8 @@ function parseOptions() {
         submit: { type: "boolean", default: false },
         base: { type: "string", default: "https://polypack.fly.dev" },
         name: { type: "string" },
-        "note-prefix": { type: "string", default: "" },
+        note: { type: "string" },
+        "note-prefix": { type: "string" },
         "list-methods": { type: "boolean", default: false },
         help: { type: "boolean", default: false },
       },
@@ -186,7 +191,10 @@ if (!/^https?:\/\//.test(base)) fail("--base must be an http(s) URL");
 const name = (opts.name ?? "").trim();
 if (opts.submit && !name) fail("--submit needs --name");
 if (name.length > 40) fail("--name is limited to 40 characters by the server");
-const notePrefix = opts["note-prefix"].trim();
+if (opts.note !== undefined && opts["note-prefix"] !== undefined) fail("give --note or --note-prefix, not both");
+// --note-prefix is the old name: it was put before an automatic note, which is no longer written
+const note = (opts.note ?? opts["note-prefix"] ?? "").trim();
+if (note.length > 200) fail("--note is limited to 200 characters by the server");
 
 let problems: Problem[];
 if (opts.sample !== undefined) {
@@ -317,6 +325,8 @@ interface BestFile {
   found_at: string;
   published: number | null;
   config: PackingConfig;
+  /** The method's resolved parameters; absent in files written before they were kept. */
+  params?: Record<string, unknown>;
 }
 interface ProblemState {
   problem: Problem;
@@ -463,11 +473,6 @@ function enqueueSubmission(st: ProblemState): void {
   })();
 }
 
-function noteFor(best: BestFile): string {
-  const text = `${notePrefix ? `${notePrefix} ` : ""}${best.method}, seed ${best.seed}, budget ${best.budget.evals} evals / ${best.budget.time_s} s`;
-  return text.slice(0, 200);
-}
-
 /** Submit a problem's best when it improves on the current leader (re-read just before). */
 async function submitBest(st: ProblemState): Promise<void> {
   const best = loadBest(st);
@@ -507,7 +512,7 @@ async function submitBest(st: ProblemState): Promise<void> {
     sub.skipped++;
     return record({ submitted: false, decision: "not better than the leader", leader_score: leader });
   }
-  const body = JSON.stringify({ ...best.config, name, agent: "ai", agent_note: noteFor(best) });
+  const body = JSON.stringify(submissionBody(best, name, note));
   let answer: HttpAnswer | null = null;
   for (let attempt = 0; ; attempt++) {
     await pacer.acquire();
@@ -721,6 +726,7 @@ function handleResult(task: Task, r: WorkerResult): void {
         found_at: line.time,
         published,
         config: r.best,
+        ...(r.params ? { params: r.params } : {}),
       });
     }
   }

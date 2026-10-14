@@ -1,6 +1,7 @@
 import { areaLowerBound } from "@polypack/geometry";
 import * as api from "./api";
 import { Atlas } from "./atlas";
+import { foundWithLabel } from "./found-with";
 import { AtlasRow, AtlasView, parseView, safeHref, viewQuery } from "./atlas-model";
 import { el, fillShapeSelect, shapeLabel } from "./shapes-ui";
 import { SOURCES, followSourceMarks, recordSources, renderSourceList, sourceMarks } from "./sources";
@@ -179,7 +180,8 @@ async function refresh(): Promise<void> {
     if (r.site?.verification === "pending") tr.className = "pending";
     tr.append(el("td", String(r.P)));
     tr.append(el("td", r.site ? r.site.score.toFixed(6) + (r.site.verification === "pending" ? " ⚑ pending verification" : "") : "—"));
-    tr.append(el("td", r.site ? `${r.site.name} (${r.site.agent === "ai" ? "AI" : "human"})` : "—"));
+    const found = foundWithLabel(r.site?.found_with);
+    tr.append(el("td", r.site ? (found ? `${r.site.name} (${found})` : r.site.name) : "—"));
     const pub = el("td");
     if (r.lit) {
       // an address from the data is followed only when it is http(s) or a path of this site

@@ -15,14 +15,19 @@ import {
   evaluate,
   isShapeCode,
   parseConfig,
+  MAX_SOFTWARE_LENGTH,
+  parseProvenance,
   strictVerify,
 } from "@polypack/geometry";
 import { Context, Hono } from "hono";
 import { compress } from "hono/compress";
 import { streamSSE } from "hono/streaming";
-import { docsPage } from "./docs";
+import { SOLVER_METHODS, docsPage } from "./docs";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, RateLimiter, sanitizeText } from "./limits";
 import { Store, StoredSubmission } from "./store";
+
+/** Names a submission may give as its `method`: the registered search methods. */
+const METHOD_NAMES = SOLVER_METHODS.map(([name]) => name);
 
 export interface AppOptions {
   store: Store;
@@ -238,6 +243,7 @@ export function createApp(opts: AppOptions): Hono {
           container_phi: sub.container_phi,
           id: sub.id,
           verification: sub.verification,
+          found_with: sub.found_with,
         });
       } else if (lit?.pieces) {
         tiles.push({
@@ -288,8 +294,15 @@ export function createApp(opts: AppOptions): Hono {
       return reject(400, ["body is not valid JSON"]);
     }
     const parsed = parseConfig(json);
-    if (!parsed.ok) return reject(400, parsed.errors);
+    // how the packing was found is read from the same body, and its errors are reported alongside
+    const found =
+      typeof json === "object" && json !== null && !Array.isArray(json)
+        ? parseProvenance(json as Record<string, unknown>, METHOD_NAMES)
+        : null;
+    if (!parsed.ok || !found?.ok)
+      return reject(400, [...(parsed.ok ? [] : parsed.errors), ...(found && !found.ok ? found.errors : [])]);
     const config = parsed.config;
+    const provenance = found.provenance;
     const lit = literature.get(`${config.N}/${config.M}/${config.P}`);
     // decided before the packing is looked at: nothing can improve on a proven optimum
     if (closedToSubmissions(lit))
@@ -314,8 +327,9 @@ export function createApp(opts: AppOptions): Hono {
       P: config.P,
       score,
       name,
-      agent: config.agent ?? "human",
       agent_note: sanitizeText(config.agent_note ?? "", MAX_NOTE_LENGTH),
+      ...provenance,
+      software: provenance.software === null ? null : sanitizeText(provenance.software, MAX_SOFTWARE_LENGTH) || null,
       pieces: config.pieces,
       container_phi: container.phi,
       created_at: new Date().toISOString(),

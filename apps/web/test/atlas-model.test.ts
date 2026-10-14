@@ -46,7 +46,7 @@ const lit = (value: number, extra: Partial<ListedRecord> = {}): ListedRecord => 
 const site = (score: number, extra: Partial<LeaderboardEntry> = {}): LeaderboardEntry => ({
   id: 9,
   name: "ann",
-  agent: "human",
+  found_with: "hand",
   agent_note: "",
   score,
   created_at: "2026-10-11T00:00:00Z",

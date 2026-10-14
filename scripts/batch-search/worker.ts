@@ -38,6 +38,7 @@ port.on("message", async (message: WorkerRequest) => {
       termination: result.termination,
       reasons: result.reasons.slice(0, 5),
       best: result.valid ? result.best : undefined,
+      params: result.params,
     };
   } catch (error) {
     // run() rejects only for bad input (unknown method, bad budget): report it as an error run

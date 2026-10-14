@@ -189,54 +189,111 @@ test("solve: delayed pause acknowledgement cannot undo a stop request", async ({
   expect((await lastResult(page))!.termination).toBe("aborted");
 });
 
-test("solve: accepted results are attributed to an AI agent only while they are on the board", async ({ page }) => {
-  await openProblem(page, 4, 7, 3);
+const HAND = "Found by hand.";
+const OPTIMIZER = /^Found with the PolyPack optimizer;/;
+const EDITED = /^Found with the PolyPack optimizer, then edited by hand;/;
+
+/** Clicks Submit and returns the body the page sent and the server's answer. */
+async function submitted(page: Page): Promise<{ body: any; answer: any }> {
+  const [request, response] = await Promise.all([
+    page.waitForRequest("**/api/submit"),
+    page.waitForResponse("**/api/submit"),
+    page.click("#submit"),
+  ]);
+  await expect(page.locator("#submit-result")).toContainText("✓");
+  return { body: request.postDataJSON(), answer: await response.json() };
+}
+
+test("solve: a board is submitted as found with the optimizer, or with it and then edited", async ({ page }) => {
+  await openProblem(page, 4, 11, 3);
   await page.click("#add-all");
-  const agent = page.locator("#agent"),
+  const found = page.locator("#found-with"),
     note = page.locator("#agent-note");
-  await expect(agent).toHaveValue("human");
+  // nobody declares Human or AI any more
+  await expect(page.locator("#agent")).toHaveCount(0);
+  await expect(found).toHaveText(HAND);
   await choose(page, "asc", 100);
   await page.click("#solve-run");
   const r = await completed(page);
-  // A preview alone does not change who made the board.
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("");
+  // A preview alone does not change how the board was found.
+  await expect(found).toHaveText(HAND);
   await page.click("#solve-accept");
-  const filled = 'asc; seed 1; budget {"evals":100}';
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(filled);
-  await page.click("#undo");
-  await expect(agent).toHaveValue("human");
+  await expect(found).toHaveText(OPTIMIZER);
+  // the note is never filled in: the run is sent in its own fields
   await expect(note).toHaveValue("");
+  await page.click("#undo");
+  await expect(found).toHaveText(HAND);
   await page.click("#redo");
   expect(await pieces(page)).toEqual(r.best!.pieces);
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(filled);
-  // Editing the accepted packing by hand also ends the solver attribution.
+  await expect(found).toHaveText(OPTIMIZER);
+
+  await page.fill("#name", "Claude Haiku 5.5");
+  const exact = await submitted(page);
+  expect(exact.body).toMatchObject({
+    found_with: "optimizer",
+    method: "asc",
+    method_params: r.params,
+    seed: 1,
+    budget: { evals: 100 },
+  });
+  for (const key of ["agent", "agent_note", "software"]) expect(exact.body).not.toHaveProperty(key);
+  // the leaderboard shows the label only; the full record has the run
+  await expect(page.locator("#leaderboard li .meta")).toContainText("PolyPack optimizer");
+  await expect(page.locator("#leaderboard li")).not.toContainText("asc");
+  expect(exact.answer.leader).toBe(true);
+  const stored = await (await page.request.get(`/api/submissions/${exact.answer.id}`)).json();
+  expect(stored).toMatchObject({ found_with: "optimizer", method: "asc", method_params: r.params, seed: 1 });
+
+  // Editing the accepted packing by hand keeps the run, as an edited result.
   await page.evaluate(() => {
     const { board } = (window as any).polypack;
     board.select([0]);
     board.step(() => board.translateSelection(0, 0.25));
   });
-  expect(await pieces(page)).not.toEqual(r.best!.pieces);
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("");
+  const edited = await pieces(page);
+  expect(edited).not.toEqual(r.best!.pieces);
+  await expect(found).toHaveText(EDITED);
+  await note.fill("nudged one square");
+  const changed = await submitted(page);
+  expect(changed.body).toMatchObject({
+    found_with: "optimizer_edited",
+    method: "asc",
+    method_params: r.params,
+    seed: 1,
+    budget: { evals: 100 },
+    agent_note: "nudged one square",
+  });
+  // undo and redo return each board to how it was found
   await page.click("#undo");
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(filled);
-  // What the user typed after the automatic fill is never replaced.
-  await note.fill("my own note");
-  await page.click("#undo");
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("my own note");
+  await expect(found).toHaveText(OPTIMIZER);
   await page.click("#redo");
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue("my own note");
-  await agent.selectOption("human");
+  await expect(found).toHaveText(EDITED);
+  // a cleared board is the user's again, and so is what is built on it
+  await page.click("#clear");
+  await expect(found).toHaveText(HAND);
+  await page.click("#add-all");
+  await expect(found).toHaveText(HAND);
   await page.click("#undo");
-  await page.click("#redo");
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("my own note");
+  await page.click("#undo");
+  expect(await pieces(page)).toEqual(edited);
+  await expect(found).toHaveText(EDITED);
+  // an edited board stays edited through a reload; the page saves the board 400 ms after a change
+  await page.waitForTimeout(700);
+  await page.reload();
+  await expect(page.locator("#count")).toContainText("3 / 3");
+  expect(await pieces(page)).toEqual(edited);
+  await expect(found).toHaveText(EDITED);
+  // The leader is the exact optimizer result submitted above: loaded, it is recognised as such.
+  await page.locator("#leaderboard button.linkish").click();
+  await expect(page.locator("#status")).toContainText("Loaded");
+  expect(await pieces(page)).toEqual(r.best!.pieces);
+  await expect(found).toHaveText(OPTIMIZER);
+  // Any other configuration loaded from elsewhere (an entry, a record, an import, a share link) is not.
+  await page.evaluate((ps) => {
+    const { board } = (window as any).polypack;
+    board.load({ N: 4, M: 11, P: 3, pieces: ps.map((p: any) => ({ ...p, x: p.x + 10 })), container_phi: 0 });
+  }, edited);
+  await expect(found).toHaveText(HAND);
 });
 
 test("solve: an invalid setting inside collapsed method settings is revealed and nothing runs", async ({ page }) => {
@@ -354,50 +411,85 @@ test("solve: a worker failure during a run leaves the panel usable with a fresh 
 test("solve: every accepted result stays attributed through undo history and a reload", async ({ page }) => {
   await openProblem(page, 4, 7, 3);
   await page.click("#add-all");
-  const agent = page.locator("#agent"),
+  const found = page.locator("#found-with"),
     note = page.locator("#agent-note");
+  /** The run the board would be submitted with, read from the request the page sends. */
+  const sentRun = async () => {
+    let body: any = null;
+    await page.route("**/api/submit", (route) => {
+      body = route.request().postDataJSON();
+      return route.fulfill({ status: 400, json: { valid: false, reasons: ["not sent in this test"] } });
+    });
+    await page.fill("#name", "attribution test");
+    await page.click("#submit");
+    await expect(page.locator("#submit-result")).toContainText("not sent in this test");
+    await page.unroute("**/api/submit");
+    return body;
+  };
   await choose(page, "asc", 100);
   await page.click("#solve-run");
   const first = await completed(page);
   await page.click("#solve-accept");
-  const firstNote = 'asc; seed 1; budget {"evals":100}';
-  await expect(note).toHaveValue(firstNote);
+  await expect(found).toHaveText(OPTIMIZER);
   await choose(page, "mc_compress", 100);
   await page.fill("#solve-seed", "7");
   await page.click("#solve-run");
   const second = await completed(page);
   expect(second.best!.pieces).not.toEqual(first.best!.pieces);
   await page.click("#solve-accept");
-  const secondNote = 'mc_compress; seed 7; budget {"evals":100}';
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(secondNote);
-  // Undo lands exactly on the first solver result, which is still solver-made.
+  await expect(found).toHaveText(OPTIMIZER);
+  expect(await sentRun()).toMatchObject({
+    found_with: "optimizer",
+    method: "mc_compress",
+    seed: 7,
+    method_params: second.params,
+  });
+  // Undo lands exactly on the first solver result, which is still the optimizer's, with its own run.
   await page.click("#undo");
   expect(await pieces(page)).toEqual(first.best!.pieces);
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(firstNote);
+  await expect(found).toHaveText(OPTIMIZER);
+  expect(await sentRun()).toMatchObject({
+    found_with: "optimizer",
+    method: "asc",
+    seed: 1,
+    method_params: first.params,
+  });
   await page.click("#undo");
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("");
+  await expect(found).toHaveText(HAND);
   await page.click("#redo");
   await page.click("#redo");
   expect(await pieces(page)).toEqual(second.best!.pieces);
-  await expect(note).toHaveValue(secondNote);
-  // The board is restored from storage on reload, and so is who made it.
+  await expect(found).toHaveText(OPTIMIZER);
+  await expect(note).toHaveValue("");
+  // The board is restored from storage on reload, and so is how it was found.
   // The page saves the board 400 ms after its last change.
   await page.waitForTimeout(700);
   await page.reload();
   await expect(page.locator("#count")).toContainText("3 / 3");
   expect(await pieces(page)).toEqual(second.best!.pieces);
-  await expect(agent).toHaveValue("ai");
-  await expect(note).toHaveValue(secondNote);
+  await expect(found).toHaveText(OPTIMIZER);
+  expect(await sentRun()).toMatchObject({
+    found_with: "optimizer",
+    method: "mc_compress",
+    seed: 7,
+    budget: { evals: 100 },
+  });
   // Malformed stored attribution is ignored without breaking the panel.
   await page.evaluate(() => localStorage.setItem("polypack.solve.accepted", '{"not":["a list"]'));
   await page.reload();
   await expect(page.locator("#solve-run")).toBeEnabled();
   expect(await pieces(page)).toEqual(second.best!.pieces);
-  await expect(agent).toHaveValue("human");
-  await expect(note).toHaveValue("");
+  await expect(found).toHaveText(HAND);
+  expect(await sentRun()).toEqual(expect.objectContaining({ found_with: "hand" }));
+  // An attribution stored by an earlier version of the page (a note) is still understood.
+  await page.evaluate(
+    (key) =>
+      localStorage.setItem("polypack.solve.accepted", JSON.stringify([[key, 'asc; seed 3; budget {"evals":50}']])),
+    JSON.stringify(await page.evaluate(() => (window as any).polypack.board.toConfig())),
+  );
+  await page.reload();
+  await expect(found).toHaveText(OPTIMIZER);
+  expect(await sentRun()).toMatchObject({ found_with: "optimizer", method: "asc", seed: 3, budget: { evals: 50 } });
 });
 
 test("solve: accepting a result identical to a hand-made board does not attribute it to the solver", async ({
@@ -418,7 +510,7 @@ test("solve: accepting a result identical to a hand-made board does not attribut
   await expect(page.locator("#solve-accept")).toBeEnabled();
   await page.click("#solve-accept");
   await expect(page.locator("#solve-status")).toContainText("identical to your board");
-  await expect(page.locator("#agent")).toHaveValue("human");
+  await expect(page.locator("#found-with")).toHaveText(HAND);
   await expect(page.locator("#agent-note")).toHaveValue("");
   await expect(page.locator("#solve-accept")).toBeDisabled();
   expect(

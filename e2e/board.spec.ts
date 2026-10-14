@@ -49,12 +49,21 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   const score = Number(await page.textContent("#score"));
   expect(score).toBeLessThanOrEqual(before);
 
+  // a board built by hand is submitted as found by hand; nobody declares Human or AI any more
+  await expect(page.locator("#agent")).toHaveCount(0);
+  await expect(page.locator("#found-with")).toHaveText("Found by hand.");
+  await expect(page.locator("#agent-note")).toHaveValue("");
   await page.fill("#name", "Playwright");
-  await page.click("#submit");
+  const [sent] = await Promise.all([page.waitForRequest("**/api/submit"), page.click("#submit")]);
+  const body = sent.postDataJSON();
+  expect(body.found_with).toBe("hand");
+  for (const key of ["agent", "agent_note", "method", "method_params", "seed", "budget"]) expect(body).not.toHaveProperty(key);
   await expect(page.locator("#submit-result")).toContainText("Accepted");
   await expect(page.locator("#submit-result")).toContainText("This is now the best entry for this problem.");
   await expect(page.locator("#leaderboard li")).toHaveCount(1);
   await expect(page.locator("#leaderboard li")).toContainText("Playwright");
+  await expect(page.locator("#leaderboard li .meta")).toContainText("by hand");
+  await expect(page.locator("#leaderboard li")).not.toContainText(/\bHuman\b|\bAI\b/);
   await expect(page.locator("#leaderboard-note")).toHaveText("1 submission so far.");
 
   // the other browser updates without a reload
@@ -78,7 +87,7 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
 
   // the records page lists the leader only
   await other.goto("/browse.html#4,9");
-  await expect(other.locator("#rows tr")).toContainText("Playwright");
+  await expect(other.locator("#rows tr")).toContainText("Playwright (by hand)");
   await expect(other.locator("#rows")).not.toContainText("Latecomer");
 });
 

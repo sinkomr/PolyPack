@@ -40,7 +40,10 @@ export const getRecords = (N: number, M: number) => getJson<RecordsResponse>(`/a
 export const getAtlas = (N: number, M: number, from: number, to: number) =>
   getJson<AtlasResponse>(`/api/atlas?N=${N}&M=${M}&from=${from}&to=${to}`);
 
-export async function submit(config: PackingConfig): Promise<SubmitResponse | { error: string }> {
+/** POST /api/submit: a configuration with its name, note and how it was found (see submissionFields). */
+export async function submit(
+  config: PackingConfig & Record<string, unknown>,
+): Promise<SubmitResponse | { error: string }> {
   try {
     const r = await fetch("/api/submit", {
       method: "POST",

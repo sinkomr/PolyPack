@@ -1,6 +1,7 @@
 import { Container, PackingConfig, parseConfig } from "@polypack/geometry";
 import type { Result } from "@polypack/solver";
 import { Board } from "./board";
+import { Attribution, HAND, RunInfo, attributionAfter, readRun } from "./found-with";
 import { BoardView } from "./view";
 import { ParameterError, parameterForm } from "./solve-params";
 import type { SolveMethod, SolveRequest, SolveResponse } from "./solve-protocol";
@@ -40,12 +41,30 @@ interface Candidate {
 type Control = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
 const ACCEPTED_KEY = "polypack.solve.accepted";
 const ACCEPTED_LIMIT = 20;
-/** A Submit field the panel filled in: `before` is the user's value, `applied` the solver's. */
-interface AutoField {
-  input: HTMLInputElement | HTMLSelectElement;
-  before: string;
-  applied: string;
+/** Edited optimizer boards, by a hash of the board: what undo and a reload return to. */
+const LINEAGE_KEY = "polypack.solve.lineage";
+const LINEAGE_LIMIT = 100;
+
+/** A short hash of a board fingerprint (cyrb53), so that the lineage stays small in storage. */
+function hashBoard(text: string): string {
+  let h1 = 0xdeadbeef,
+    h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
+
+const FOUND_TEXT: Record<Attribution["found_with"], string> = {
+  hand: "Found by hand.",
+  optimizer: "Found with the PolyPack optimizer; its method and settings are sent with the entry.",
+  optimizer_edited:
+    "Found with the PolyPack optimizer, then edited by hand; the method and settings are sent with the entry.",
+};
 
 /** Owns one worker job and a read-only preview. Board edits invalidate the whole job. */
 export class SolvePanel {
@@ -64,18 +83,27 @@ export class SolvePanel {
   private request?: Extract<SolveRequest, { type: "run" }>;
   private result: Result | null = null;
   private accepting = false;
-  // Solver attribution in the Submit fields is a function of the board: every accepted result's
-  // fingerprint maps to its note, oldest first, and survives undo history and reloads.
-  private accepted = new Map<string, string>();
-  /** Fields currently filled in for the solver board `board`. */
-  private attribution: { board: string; fields: AutoField[] } | null = null;
-  /** Per solver board, ids of Submit fields the user changed by hand; those stay theirs. */
-  private manual = new Map<string, Set<string>>();
+  // How the board was found is a function of the board and its lineage (see attributionAfter):
+  // every accepted result's fingerprint maps to its run, oldest first, and the hashes of boards
+  // edited from one map to that run. Both survive undo history and reloads.
+  private accepted = new Map<string, RunInfo>();
+  private lineage = new Map<string, Attribution>();
+  /** The attribution of the board `board`; `hash` is set once an edited board is remembered. */
+  private attribution: { board: string; value: Attribution; hash: string | null } = {
+    board: "",
+    value: HAND,
+    hash: null,
+  };
   private rejected: HTMLElement | null = null;
   private restarting = false;
 
   get lastResult(): Result | null {
     return this.result;
+  }
+
+  /** How the board's current pieces were found, for the submission. */
+  get foundWith(): Attribution {
+    return this.attribution.value;
   }
 
   constructor(
@@ -105,7 +133,8 @@ export class SolvePanel {
       clearTimeout(this.stopTimer);
     });
     this.loadAccepted();
-    this.trackAttribution(this.fingerprint);
+    // the board was restored from storage or a link before the panel existed
+    this.trackAttribution(this.fingerprint, "history");
     this.createWorker();
     this.updateButtons();
   }
@@ -491,14 +520,14 @@ export class SolvePanel {
       this.view.fit();
       this.candidate = null;
       if (this.request)
-        this.remember(
-          after,
-          `${this.request.method}; seed ${this.request.seed}; budget ${JSON.stringify(this.request.budget)}`.slice(
-            0,
-            200,
-          ),
-        );
-      this.trackAttribution(after);
+        this.remember(after, {
+          method: this.request.method,
+          // the resolved parameters; a preview kept after a forced stop has only the requested ones
+          params: structuredClone(this.result?.params ?? this.request.params),
+          seed: this.request.seed,
+          budget: { ...this.request.budget },
+        });
+      this.trackAttribution(after, "load", true);
       this.status("Result accepted. Undo returns to your previous board; you can edit or submit this packing.");
       this.say("Optimizer result accepted. Undo returns to your previous board.");
     }
@@ -507,67 +536,81 @@ export class SolvePanel {
   }
 
   private loadAccepted(): void {
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(ACCEPTED_KEY) ?? "[]");
-      if (!Array.isArray(stored)) return;
-      for (const entry of stored.slice(-ACCEPTED_LIMIT))
-        if (Array.isArray(entry) && typeof entry[0] === "string" && typeof entry[1] === "string")
-          this.accepted.set(entry[0], entry[1].slice(0, 200));
-    } catch {
-      // Unavailable or malformed storage only loses attribution of earlier sessions.
-    }
+    // Unavailable or malformed storage only loses attribution of earlier sessions.
+    for (const [key, map, limit] of [
+      [ACCEPTED_KEY, this.accepted, ACCEPTED_LIMIT],
+      [LINEAGE_KEY, this.lineage, LINEAGE_LIMIT],
+    ] as const)
+      try {
+        const stored: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+        if (!Array.isArray(stored)) continue;
+        for (const entry of stored.slice(-limit)) {
+          if (!Array.isArray(entry) || typeof entry[0] !== "string") continue;
+          // accepted results map to a run (older pages stored a note), edited boards to an attribution
+          if (map === this.accepted) {
+            const run = readRun(entry[1]);
+            if (run) this.accepted.set(entry[0], run);
+          } else {
+            const run = entry[1]?.found_with === "optimizer_edited" ? readRun(entry[1].run) : undefined;
+            if (run) this.lineage.set(entry[0], { found_with: "optimizer_edited", run });
+          }
+        }
+      } catch {
+        // see above
+      }
   }
 
-  /** Record an accepted solver board, newest last, within a small bound. */
-  private remember(board: string, note: string): void {
-    this.accepted.delete(board);
-    this.accepted.set(board, note);
-    for (const oldest of this.accepted.keys()) {
-      if (this.accepted.size <= ACCEPTED_LIMIT) break;
-      this.accepted.delete(oldest);
-      this.manual.delete(oldest);
+  /** Newest last, within `limit`: the oldest entries are dropped first. */
+  private store<T>(key: string, map: Map<string, T>, limit: number, id: string, value: T): void {
+    map.delete(id);
+    map.set(id, value);
+    for (const oldest of map.keys()) {
+      if (map.size <= limit) break;
+      map.delete(oldest);
     }
     try {
-      localStorage.setItem(ACCEPTED_KEY, JSON.stringify([...this.accepted]));
+      localStorage.setItem(key, JSON.stringify([...map]));
     } catch {
       // Storage may be full or disabled; attribution still works for this session.
     }
   }
 
-  /** Leaving a solver board: give back the user's values, except in fields they changed since the fill. */
-  private unattribute(): void {
-    const a = this.attribution;
-    if (!a) return;
-    for (const field of a.fields)
-      if (field.input.value === field.applied) field.input.value = field.before;
-      else {
-        const ids = this.manual.get(a.board) ?? new Set<string>();
-        this.manual.set(a.board, ids.add(field.input.id));
-      }
-    this.attribution = null;
+  /** Record an accepted solver board. */
+  private remember(board: string, run: RunInfo): void {
+    this.store(ACCEPTED_KEY, this.accepted, ACCEPTED_LIMIT, board, run);
   }
 
-  /** Make "Made by" and the note match the board: accepted solver results are AI-made, anything else is the user's. */
-  private trackAttribution(current: string): void {
-    if (this.attribution?.board === current) return;
-    this.unattribute();
-    const solverNote = this.accepted.get(current);
-    if (solverNote === undefined) return;
-    const agent = $<HTMLSelectElement>("agent"),
-      note = $<HTMLInputElement>("agent-note"),
-      mine = this.manual.get(current);
-    const fields: AutoField[] = [];
-    if (!mine?.has(agent.id)) fields.push({ input: agent, before: agent.value, applied: "ai" });
-    // A note the user already typed is theirs; only an empty one is filled.
-    if (!mine?.has(note.id) && !note.value.trim())
-      fields.push({ input: note, before: note.value, applied: solverNote });
-    for (const field of fields) field.input.value = field.applied;
-    this.attribution = { board: current, fields };
+  /**
+   * Decide how the board `current` was found after a change of the given kind. A change that
+   * leaves the board as it was (a selection, say) keeps its attribution, unless `force`.
+   */
+  private trackAttribution(current: string, change: Board["lastChange"], force = false): void {
+    if (this.attribution.board !== current || force) {
+      const value = attributionAfter({
+        change,
+        previous: this.attribution.value,
+        accepted: this.accepted.get(current),
+        recorded: this.lineage.get(hashBoard(current)),
+        empty: this.board.state.pieces.length === 0,
+      });
+      this.attribution = { board: current, value, hash: null };
+      $("found-with").textContent = FOUND_TEXT[value.found_with];
+    }
+    // Edited boards are remembered so that undo and a reload return to them as edited. Only boards
+    // that end a gesture can be returned to, so the intermediate steps of a drag are not kept; the
+    // end of a gesture often leaves the board as its last step did, which is why this is checked on
+    // every change. Exact results need no entry: they are recognised from the accepted results.
+    const a = this.attribution;
+    if (a.value.found_with === "optimizer_edited" && a.hash === null && !this.board.gesturing) {
+      a.hash = hashBoard(current);
+      if (this.lineage.get(a.hash)?.found_with !== "optimizer_edited")
+        this.store(LINEAGE_KEY, this.lineage, LINEAGE_LIMIT, a.hash, a.value);
+    }
   }
 
   private boardChanged(): void {
     const current = JSON.stringify(this.board.toConfig());
-    this.trackAttribution(current);
+    this.trackAttribution(current, this.board.lastChange);
     if (!this.accepting && current !== this.fingerprint && (this.activeId !== null || this.candidate)) {
       this.worker?.terminate();
       this.finish();

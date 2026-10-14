@@ -17,4 +17,6 @@ export interface WorkerResult {
   termination: string;
   reasons: string[];
   best?: PackingConfig;
+  /** The method's resolved parameters, recorded with a submission. */
+  params?: Record<string, unknown>;
 }

@@ -35,10 +35,40 @@ export interface LiteratureRecord {
 
 export type Verification = "none" | "pending" | "confirmed" | "rejected";
 
+/**
+ * How a submitted packing was found: by hand on the board, by a PolyPack optimizer (unchanged, or
+ * edited by hand afterwards), or by the submitter's own software. Entries stored before this was
+ * recorded, and legacy submissions that declared `agent: "ai"` without it, have `null`.
+ */
+export const FOUND_WITH = ["hand", "optimizer", "optimizer_edited", "external"] as const;
+export type FoundWith = (typeof FOUND_WITH)[number];
+
+/** Search budget of an optimizer run, as the solver takes it. */
+export interface RunBudget {
+  evals?: number;
+  time_s?: number;
+}
+
+/**
+ * How a stored entry was found, as GET /api/submissions/{id} returns it. The method fields are
+ * set only for found_with "optimizer" and "optimizer_edited", `software` only for "external".
+ */
+export interface Provenance {
+  found_with: FoundWith | null;
+  /** Registered PolyPack search method. */
+  method: string | null;
+  /** The method's resolved parameters. */
+  method_params: Record<string, unknown> | null;
+  seed: number | null;
+  budget: RunBudget | null;
+  /** Name of the submitter's own tool. */
+  software: string | null;
+}
+
 export interface LeaderboardEntry {
   id: number;
   name: string;
-  agent: "human" | "ai";
+  found_with: FoundWith | null;
   agent_note: string;
   score: number;
   created_at: string;
@@ -91,6 +121,8 @@ export interface AtlasTile {
   id?: number;
   /** Site entries only. Rejected entries are never listed. */
   verification?: Verification;
+  /** Site entries only: how the entry was found (null when not recorded). */
+  found_with?: FoundWith | null;
 }
 
 /** Answer of GET /api/atlas: the drawable packings of one (N, M) for P in [from, to]. */

@@ -134,12 +134,17 @@ describe("POST /api/submit", () => {
 
   it("sanitizes names and notes", async () => {
     await submit(
-      squares(2, { name: "  <b>Bob</b>\u0000\n  the   builder ", agent: "ai", agent_note: "<script>x</script>" }),
+      squares(2, {
+        name: "  <b>Bob</b>\u0000\n  the   builder ",
+        agent_note: "<script>x</script>",
+        found_with: "external",
+        software: " <i>my</i>\ttool ",
+      }),
     );
     const e = (await get("/api/leaderboard/4/4/2")).body.entries[0];
     expect(e.name).toBe("b Bob /b the builder");
-    expect(e.agent).toBe("ai");
     expect(e.agent_note).not.toMatch(/[<>]/);
+    expect((await get(`/api/submissions/${e.id}`)).body.software).toBe("i my /i tool");
   });
 
   it("rate-limits by address, not by name", async () => {
@@ -147,6 +152,154 @@ describe("POST /api/submit", () => {
     expect((await submit(squares(2, { name: "fresh" }))).status).toBe(429);
     ip = "2.2.2.2";
     expect((await submit(squares(2))).status).toBe(200);
+  });
+});
+
+describe("how a submission was found", () => {
+  const run = {
+    method: "basin_hopping",
+    method_params: { iterations: 200, stepScale: 0.25, operators: ["shift", "swap"] },
+    seed: 7,
+    budget: { evals: 20000, time_s: 20 },
+  };
+  const stored = async (id: number | null) => (await get(`/api/submissions/${id}`)).body;
+  let sent = 0;
+  const reasons = async (extra: object) => {
+    // a fresh address each time: the rate limit is not under test here
+    ip = `10.0.0.${++sent}`;
+    const r = await submit(squares(2, extra));
+    expect(r.status).toBe(400);
+    expect(r.body.valid).toBe(false);
+    return r.body.reasons.join("; ");
+  };
+
+  it("stores the method and its settings, and returns them only with the full entry", async () => {
+    const r = await submit(squares(2, { found_with: "optimizer", ...run }));
+    expect(r.status).toBe(200);
+    const s = await stored(r.body.id);
+    expect(s).toMatchObject({ found_with: "optimizer", ...run, software: null, agent_note: "" });
+    expect(s).not.toHaveProperty("agent");
+    // the listings carry found_with only
+    const listed = [
+      (await get("/api/leaderboard/4/4/2")).body.entries[0],
+      (await get("/api/problems/4/4/2")).body.site_best,
+      (await get("/api/records?N=4&M=4")).body.site[0],
+    ];
+    for (const e of listed) {
+      expect(e.found_with).toBe("optimizer");
+      for (const key of ["agent", "method", "method_params", "seed", "budget", "software"])
+        expect(e).not.toHaveProperty(key);
+    }
+  });
+
+  it("records an edited optimizer result, one's own software and a hand-made entry", async () => {
+    const edited = await submit(squares(2, { found_with: "optimizer_edited", method: "asc" }));
+    expect(await stored(edited.body.id)).toMatchObject({
+      found_with: "optimizer_edited",
+      method: "asc",
+      method_params: null,
+      seed: null,
+      budget: null,
+      software: null,
+    });
+    const own = await submit(squares(3, { found_with: "external", software: "my packer 2.1" }));
+    expect(await stored(own.body.id)).toMatchObject({
+      found_with: "external",
+      software: "my packer 2.1",
+      method: null,
+    });
+    // without found_with, an entry counts as found by hand
+    const hand = await submit(squares(4));
+    expect(await stored(hand.body.id)).toMatchObject({ found_with: "hand", method: null, seed: null });
+    expect((await get("/api/leaderboard/4/4/4")).body.entries[0].found_with).toBe("hand");
+  });
+
+  it("accepts the legacy agent field unchanged and ignores it", async () => {
+    // the body the batch runner sent before found_with existed
+    const legacy = await submit(
+      squares(2, { agent: "ai", agent_note: "cloud pilot asc, seed 2, 20000 evaluations / 15 s" }),
+    );
+    expect(legacy.status).toBe(200);
+    expect(legacy.body.valid).toBe(true);
+    const s = await stored(legacy.body.id);
+    // an AI entry without found_with may or may not come from an optimizer: not recorded
+    expect(s).toMatchObject({ found_with: null, agent_note: "cloud pilot asc, seed 2, 20000 evaluations / 15 s" });
+    expect(s).not.toHaveProperty("agent");
+    expect((await get("/api/leaderboard/4/4/2")).body.entries[0]).not.toHaveProperty("agent");
+    // "human" was the old default; any other value is ignored too
+    expect((await stored((await submit(squares(3, { agent: "human" }))).body.id)).found_with).toBe("hand");
+    ip = "10.0.2.1";
+    expect((await submit(squares(4, { agent: "robot" }))).status).toBe(200);
+    expect(
+      (await stored((await submit(squares(5, { agent: "ai", found_with: "optimizer", method: "asc" }))).body.id))
+        .found_with,
+    ).toBe("optimizer");
+  });
+
+  it("accepts every registered method with its default parameters", async () => {
+    let n = 0;
+    for (const m of registry.list()) {
+      ip = `10.0.3.${++n}`;
+      const r = await submit(
+        squares(2, {
+          found_with: "optimizer",
+          method: m.name,
+          method_params: m.defaults,
+          seed: 0,
+          budget: { evals: 1 },
+        }),
+      );
+      expect([m.name, r.status]).toEqual([m.name, 200]);
+    }
+  });
+
+  it("refuses wrong values with a reason and stores nothing", async () => {
+    expect(await reasons({ found_with: "magic" })).toMatch(/found_with must be one of "hand", "optimizer"/);
+    expect(await reasons({ found_with: 1 })).toMatch(/found_with must be one of/);
+    expect(await reasons({ found_with: "optimizer", method: "simulated_annealing" })).toMatch(
+      /method must be the name of a registered search method/,
+    );
+    expect(await reasons({ found_with: "optimizer", method: 3 })).toMatch(/method must be the name/);
+    expect(await reasons({ found_with: "optimizer" })).toMatch(/method is required when found_with is "optimizer"/);
+    expect(await reasons({ found_with: "optimizer_edited", seed: 1 })).toMatch(/method is required/);
+    expect(await reasons({ found_with: "optimizer", method: "asc", method_params: [1, 2] })).toMatch(
+      /method_params must be a JSON object/,
+    );
+    expect(await reasons({ found_with: "optimizer", method: "asc", method_params: null })).toMatch(
+      /method_params must be a JSON object/,
+    );
+    expect(
+      await reasons({ found_with: "optimizer", method: "asc", method_params: { blob: "x".repeat(4100) } }),
+    ).toMatch(/method_params must be at most 4096 bytes/);
+    for (const seed of [1.5, -1, "1", 2 ** 60])
+      expect(await reasons({ found_with: "optimizer", method: "asc", seed })).toMatch(
+        /seed must be a non-negative integer/,
+      );
+    for (const budget of [
+      20000,
+      {},
+      { evals: 0 },
+      { evals: 1.5 },
+      { time_s: "15" },
+      { time_s: -1 },
+      { evals: 10, steps: 3 },
+      null,
+    ])
+      expect(await reasons({ found_with: "optimizer", method: "asc", budget })).toMatch(/budget must be/);
+    expect(await reasons({ found_with: "external", software: 7 })).toMatch(/software must be a string/);
+    expect(await reasons({ found_with: "external", software: "x".repeat(81) })).toMatch(/at most 80 characters/);
+    // fields that contradict found_with
+    expect(await reasons({ method: "asc" })).toMatch(/need found_with "optimizer" or "optimizer_edited"/);
+    expect(await reasons({ found_with: "external", method: "asc", seed: 2 })).toMatch(/method, seed describe/);
+    expect(await reasons({ found_with: "optimizer", method: "asc", software: "x" })).toMatch(
+      /software needs found_with "external"/,
+    );
+    expect(await reasons({ software: "x" })).toMatch(/software needs found_with "external"/);
+    // configuration errors and provenance errors are reported together
+    ip = "10.0.1.1";
+    const both = await submit({ ...squares(2), P: 0, found_with: "nope" });
+    expect(both.body.reasons.join("; ")).toMatch(/P must be.*found_with must be/);
+    expect((await get("/api/leaderboard/4/4/2")).body.total).toBe(0);
   });
 });
 
@@ -346,8 +499,13 @@ describe("store: the leader per problem", () => {
     P,
     score,
     name: `P${P}`,
-    agent: "human",
     agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
     pieces: [],
     container_phi: 0,
     created_at: "2026-10-12T00:00:00.000Z",
@@ -394,7 +552,7 @@ describe("store: the leader per problem", () => {
       P: 2,
       id: id["2a"],
       name: "P2",
-      agent: "human",
+      found_with: "hand",
       agent_note: "",
       score: 2,
       created_at: "2026-10-12T00:00:00.000Z",
@@ -450,6 +608,80 @@ describe("store: the leader per problem", () => {
         expect(rows.map((r) => r.score).sort()).toEqual([3, 4, 5, 9]);
       },
     );
+  });
+  it("adds the found-with columns to a database created before them; old rows read back as not recorded", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-found-")), "old.sqlite");
+    // the schema as deployed before found_with existed, tallies included
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE submissions (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER NOT NULL, m INTEGER NOT NULL,
+      p INTEGER NOT NULL, score REAL NOT NULL, name TEXT NOT NULL, agent TEXT NOT NULL, agent_note TEXT NOT NULL,
+      pieces TEXT NOT NULL, container_phi REAL NOT NULL, created_at TEXT NOT NULL,
+      verification TEXT NOT NULL DEFAULT 'none', literature_value REAL, strict_check TEXT);
+      CREATE TABLE tallies (n INTEGER NOT NULL, m INTEGER NOT NULL, p INTEGER NOT NULL, accepted INTEGER NOT NULL,
+      PRIMARY KEY (n, m, p));
+      INSERT INTO tallies VALUES (4, 4, 2, 1);`);
+    old
+      .prepare(
+        `INSERT INTO submissions (n, m, p, score, name, agent, agent_note, pieces, container_phi, created_at)
+         VALUES (4, 4, 2, 2, 'old', 'ai', 'annealing', '[]', 0, '2026-10-12')`,
+      )
+      .run();
+    old.close();
+
+    const columns = (db: DatabaseSync) =>
+      (db.prepare("PRAGMA table_info(submissions)").all() as { name: string }[]).map((c) => c.name);
+    const store = new SqliteStore(path);
+    const first = await store.get(1);
+    expect(first).toMatchObject({
+      name: "old",
+      agent_note: "annealing",
+      found_with: null,
+      method: null,
+      method_params: null,
+      seed: null,
+      budget: null,
+      software: null,
+    });
+    expect(first).not.toHaveProperty("agent");
+    expect((await store.leader(4, 4, 2))!.found_with).toBeNull();
+    // a new row goes into the old table, whose agent column is NOT NULL without a default
+    const id = await store.insert({
+      N: 4,
+      M: 4,
+      P: 3,
+      score: 3,
+      name: "new",
+      agent_note: "",
+      found_with: "optimizer",
+      method: "asc",
+      method_params: { a: 1 },
+      seed: 4294967295,
+      budget: { evals: 5 },
+      software: null,
+      pieces: [],
+      container_phi: 0,
+      created_at: "2026-10-13",
+      verification: "none",
+      literature_value: null,
+      strict_check: null,
+    });
+    expect(await store.get(id)).toMatchObject({
+      found_with: "optimizer",
+      method_params: { a: 1 },
+      seed: 4294967295,
+      budget: { evals: 5 },
+    });
+    // opening it again changes nothing, and the old count is kept
+    const again = new SqliteStore(path);
+    expect(await again.count(4, 4, 2)).toBe(1);
+    const db = new DatabaseSync(path);
+    const names = columns(db);
+    expect(names.filter((n) => n === "found_with")).toHaveLength(1);
+    expect(names).toEqual(
+      expect.arrayContaining(["agent", "found_with", "method", "method_params", "seed", "budget", "software"]),
+    );
+    expect(db.prepare("SELECT agent FROM submissions WHERE id = ?").get(id)).toEqual({ agent: "" });
+    db.close();
   });
 });
 
@@ -735,6 +967,7 @@ describe("GET /api/atlas", () => {
         container_phi: match.body.container!.phi,
         id: match.body.id,
         verification: "none",
+        found_with: "hand",
       },
     ]);
 

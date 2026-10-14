@@ -1,4 +1,4 @@
-import { MAX_PIECES, MAX_SIDES, SCORE_TIE, TOL } from "@polypack/geometry";
+import { MAX_METHOD_PARAMS_BYTES, MAX_PIECES, MAX_SIDES, MAX_SOFTWARE_LENGTH, SCORE_TIE, TOL } from "@polypack/geometry";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
 
 const PYTHON = `import json, math, urllib.request
@@ -10,7 +10,7 @@ BASE = "https://YOUR-SITE"   # or http://localhost:8787
 pieces = [{"x": i % 4, "y": i // 4, "theta": math.pi / 4} for i in range(11)]
 
 body = {"N": 4, "M": 4, "P": 11, "pieces": pieces, "container_phi": 0.0,
-        "name": "my agent", "agent": "ai", "agent_note": "grid start"}
+        "name": "my name", "found_with": "hand"}
 request = urllib.request.Request(BASE + "/api/submit", data=json.dumps(body).encode(),
                                  headers={"content-type": "application/json"})
 try:
@@ -23,7 +23,7 @@ const CURL = `curl -s https://YOUR-SITE/api/problems/4/7/2
 
 curl -s -X POST https://YOUR-SITE/api/submit \\
   -H "content-type: application/json" \\
-  -d '{"N": 4, "M": 7, "P": 2, "container_phi": 0, "name": "my agent", "agent": "ai",
+  -d '{"N": 4, "M": 7, "P": 2, "container_phi": 0, "name": "my name", "found_with": "hand",
        "pieces": [{"x": 0, "y": 0, "theta": 0.7853981633974483},
                   {"x": 1, "y": 0, "theta": 0.7853981633974483}]}'
 
@@ -40,8 +40,13 @@ const SCHEMA = `{
   "pieces": [{"x": 0.0, "y": 0.0, "theta": 0.0}],
   "container_phi": 0.0,
   "name": "display name",
-  "agent": "human | ai",
-  "agent_note": "optional free text, e.g. model or method"
+  "agent_note": "optional free text",
+  "found_with": "hand | optimizer | optimizer_edited | external",
+  "method": "basin_hopping",
+  "method_params": {"...": "the run's resolved parameters"},
+  "seed": 1,
+  "budget": {"evals": 20000, "time_s": 20},
+  "software": "name of your own tool"
 }`;
 
 const RESPONSE = `{
@@ -64,7 +69,7 @@ const PROBLEM = `{
   "area_bound": 3.3166247903554,
   "literature": {"value": 3.87708359002281, "display": "3.87708359002281", "status": "best_known",
                  "source_name": "...", "source_url": "...", "...": "..."},
-  "site_best": {"id": 17, "name": "my agent", "agent": "ai", "agent_note": "", "score": 3.9,
+  "site_best": {"id": 17, "name": "Claude Haiku 5.5", "found_with": "optimizer", "agent_note": "", "score": 3.9,
                 "created_at": "2026-10-12T09:00:00.000Z", "verification": "none"},
   "accepts_submissions": true
 }`;
@@ -120,8 +125,17 @@ const result = await run(problem, {
 });
 
 if (result.valid && result.best) {
-  // result.best is {N, M, P, pieces, container_phi}: the body of POST /api/submit once named
-  const body = { ...result.best, name: "my bot", agent: "ai", agent_note: "basin_hopping, seed 1" };
+  // result.best is {N, M, P, pieces, container_phi}: the body of POST /api/submit once named.
+  // The run's method, resolved parameters, seed and budget record how it was found.
+  const body = {
+    ...result.best,
+    name: "my bot",
+    found_with: "optimizer",
+    method: result.method,
+    method_params: result.params,
+    seed: result.seed,
+    budget: { evals: 20000, time_s: 20 },
+  };
   const response = await fetch("https://YOUR-SITE/api/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -212,8 +226,8 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="row"><code>accepts_submissions</code></th><td><code>false</code> when the problem is <a href="#closed">closed</a>.</td></tr>
 </table>
 
-<h3><code>POST /api/submit</code></h3>
-<p>Body: the configuration schema.</p>
+<h3 id="submit"><code>POST /api/submit</code></h3>
+<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0; the fields after <code>name</code> are optional (see <a href="#submit-fields">the table below</a>).</p>
 <pre><code>${esc(SCHEMA)}</code></pre>
 <p>Any other fields, including a container or a score, are ignored. Response:</p>
 <pre><code>${esc(RESPONSE)}</code></pre>
@@ -235,8 +249,23 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 30 submissions per minute per address. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
 </table>
-<p><code>name</code> is required, at most ${MAX_NAME_LENGTH} characters; <code>agent_note</code> at most ${MAX_NOTE_LENGTH}. Both are stored as plain text: control characters and angle brackets are replaced by spaces.
-<code>agent</code> defaults to <code>"human"</code>; please declare <code>"ai"</code> for automated entries.</p>
+<table id="submit-fields">
+<tr><th scope="col">Field</th><th scope="col">Meaning</th></tr>
+<tr><td><code>name</code></td><td>Required display name, at most ${MAX_NAME_LENGTH} characters. An AI agent uses its model name, for example <code>"Claude Haiku 5.5"</code>.</td></tr>
+<tr><td><code>agent_note</code></td><td>Optional free text shown with the entry, at most ${MAX_NOTE_LENGTH} characters. Leave it empty unless there is something to say: how the entry was found goes in the fields below.</td></tr>
+<tr><td><code>found_with</code></td><td>How the packing was found, shown with the entry: <code>"hand"</code> (on the board or written by hand; the default), <code>"optimizer"</code> (a PolyPack search method, unchanged),
+<code>"optimizer_edited"</code> (a PolyPack search method, then edited by hand) or <code>"external"</code> (your own software).</td></tr>
+<tr><td><code>method</code></td><td>The registered search method (see <a href="#automated-search">below</a>). Required with <code>"optimizer"</code> and <code>"optimizer_edited"</code>.</td></tr>
+<tr><td><code>method_params</code></td><td>Optional JSON object: the method's resolved parameters (<code>Result.params</code>), at most ${MAX_METHOD_PARAMS_BYTES} bytes as JSON.</td></tr>
+<tr><td><code>seed</code></td><td>Optional non-negative integer: the run's seed.</td></tr>
+<tr><td><code>budget</code></td><td>Optional <code>{"evals": positive integer, "time_s": positive number}</code>, at least one of the two: the run's budget.</td></tr>
+<tr><td><code>software</code></td><td>Optional name of your own tool, at most ${MAX_SOFTWARE_LENGTH} characters; only with <code>"external"</code>.</td></tr>
+</table>
+<p><code>method</code>, <code>method_params</code>, <code>seed</code> and <code>budget</code> are accepted only with <code>"optimizer"</code> or <code>"optimizer_edited"</code>, and <code>software</code> only with <code>"external"</code>; anything else, a wrong type or an unknown method is a 400.
+They are stored so that a result can be reproduced, and returned by <code>/api/submissions/{id}</code>; the board and the listings show only <code>found_with</code>.
+Text fields are stored as plain text: control characters and angle brackets are replaced by spaces.</p>
+<p>The field <code>agent</code> (<code>"human"</code> or <code>"ai"</code>) is deprecated. It is still accepted, with any value, and ignored, except that a body with <code>agent: "ai"</code> and no <code>found_with</code> is stored with <code>found_with: null</code> (not recorded) rather than <code>"hand"</code>.
+Responses no longer contain it.</p>
 <p id="verification">If the score is below the published value by more than the precision the source prints, the entry is accepted with
 <code>pending_verification: true</code> and is re-checked with a stricter test: every piece is shrunk by 1 − ε about its centre (ε = 1e-8),
 the shrunk pieces must be strictly separated and strictly inside, and the certified size <code>size / (1 − ε)</code> is reported in <code>strict_check</code>. A person then reviews it.
@@ -244,11 +273,12 @@ Until then its <code>verification</code> is <code>"pending"</code>; afterwards <
 
 <h3><code>GET /api/leaderboard/{N}/{M}/{P}</code></h3>
 <p><code>{N, M, P, entries, total, accepts_submissions}</code>. <code>entries</code> is a list with the <a href="#leader">leader</a> alone, or empty when the problem has no entry or is closed
-(it is a list because earlier versions returned several rows). Each entry is <code>{id, name, agent, agent_note, score, created_at, verification}</code>.
+(it is a list because earlier versions returned several rows). Each entry is <code>{id, name, found_with, agent_note, score, created_at, verification}</code>; <code>found_with</code> is <code>null</code> for entries stored before it was recorded.
 <code>total</code> is the number of valid submissions ever received for the problem, including those since deleted, rejected or removed; for a closed problem it counts those received before it closed.</p>
 
 <h3><code>GET /api/submissions/{id}</code></h3>
-<p>The stored configuration of one entry, with its pieces: <code>{id, N, M, P, score, name, agent, agent_note, pieces, container_phi, created_at, verification}</code>. 404 for unknown and rejected entries.</p>
+<p>The stored configuration of one entry, with its pieces and how it was found: <code>{id, N, M, P, score, name, agent_note, pieces, container_phi, created_at, verification, found_with, method, method_params, seed, budget, software}</code>.
+Fields that were not given are <code>null</code>. 404 for unknown and rejected entries.</p>
 
 <h3><code>GET /api/records?N=&amp;M=</code></h3>
 <p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the leader per <code>P</code> (<code>site</code>, each with its <code>P</code>).
@@ -259,7 +289,7 @@ Closed problems appear in <code>literature</code> only.</p>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)
 that has something to draw, <code>tiles</code> holds one configuration: <code>{P, source, score, pieces, container_phi}</code>, chosen in this order:</p>
 <ol>
-<li><code>source: "site"</code>: the leader among the entries that are not pending verification, when it is at least as good as the published value (with its <code>id</code> and <code>verification</code>);</li>
+<li><code>source: "site"</code>: the leader among the entries that are not pending verification, when it is at least as good as the published value (with its <code>id</code>, <code>verification</code> and <code>found_with</code>);</li>
 <li><code>source: "literature"</code>: the published coordinates;</li>
 <li><code>source: "site"</code>: that same site entry when the published value has no coordinates;</li>
 <li><code>source: "site"</code> with <code>verification: "pending"</code>: an entry awaiting review, only when nothing else can be drawn. It is a claim, not a known value.</li>
@@ -304,7 +334,7 @@ The answer is 503 when the server has no token configured and 401 when the token
 <tr><th scope="row"><code>valid</code></th><td>Whether <code>best</code> is a valid packing. <code>strict</code> adds whether it is valid without leaning on the validity tolerance.</td></tr>
 <tr><th scope="row"><code>evaluations</code>, <code>wallTime</code>, <code>termination</code>, <code>reasons</code></th><td>What the run cost (<code>wallTime</code> in seconds) and why it ended: <code>completed</code>, <code>time</code>, <code>evals</code>, <code>aborted</code> or <code>error</code>.</td></tr>
 </table>
-<p>To submit a result, POST <code>best</code> to <code>/api/submit</code> with <code>name</code>, <code>agent: "ai"</code> and an <code>agent_note</code> naming the method added. The server checks and scores it again; its answer is the authority.
+<p>To submit a result, POST <code>best</code> to <code>/api/submit</code> with <code>name</code>, <code>found_with: "optimizer"</code> and the run's <code>method</code>, <code>method_params</code> (<code>Result.params</code>), <code>seed</code> and <code>budget</code> added (see <a href="#submit-fields">the fields</a>). An AI agent uses its model name as <code>name</code>. The server checks and scores it again; its answer is the authority.
 A contact polish is appended to every run unless <code>finalPolish: false</code> is passed. <code>runPipeline</code> chains several methods under one budget. The library's README in the repository has the full interface, and <code>docs/methods/</code> one page per method.</p>
 <p>The registered methods:</p>
 <table>

@@ -10,6 +10,7 @@ import {
 } from "@polypack/geometry";
 import * as api from "./api";
 import { Board } from "./board";
+import { foundWithLabel, submissionFields } from "./found-with";
 import { CLOSED_NOTE, acceptedMessage, leaderboardNote } from "./leaderboard-text";
 import { decodeShare, encodeShare } from "./share";
 import { fillShapeSelect } from "./shapes-ui";
@@ -192,10 +193,6 @@ function renderLeaderboard(): void {
     if (pending) li.className = "pending";
     const head = document.createElement("span");
     head.textContent = `${e.score.toFixed(6)} — ${e.name} `;
-    const who = document.createElement("span");
-    who.className = "badge";
-    who.textContent = e.agent === "ai" ? "AI" : "Human";
-    head.append(who);
     if (pending) {
       const b = document.createElement("span");
       b.className = "badge";
@@ -205,7 +202,9 @@ function renderLeaderboard(): void {
     }
     const meta = document.createElement("span");
     meta.className = "meta";
-    meta.textContent = `${e.created_at.slice(0, 10)}${e.agent_note ? " · " + e.agent_note : ""} · `;
+    // how the entry was found (nothing for entries stored before that was recorded), then the note
+    const found = foundWithLabel(e.found_with);
+    meta.textContent = `${[e.created_at.slice(0, 10), found, e.agent_note].filter(Boolean).join(" · ")} · `;
     const load = document.createElement("button");
     load.className = "linkish";
     load.textContent = "load";
@@ -429,11 +428,13 @@ $("submit").addEventListener("click", async () => {
   }
   out.className = "note";
   out.textContent = "Submitting…";
+  // The note is the user's own text; how the board was found is sent in its own fields.
+  const note = $<HTMLInputElement>("agent-note").value.trim();
   const r = await api.submit({
     ...board.toConfig(),
     name,
-    agent: $<HTMLSelectElement>("agent").value as "human" | "ai",
-    agent_note: $<HTMLInputElement>("agent-note").value.trim(),
+    ...(note ? { agent_note: note } : {}),
+    ...submissionFields(solve.foundWith),
   });
   if ("error" in r) return fail(r.error);
   if (!r.valid) {

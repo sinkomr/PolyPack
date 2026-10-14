@@ -1,4 +1,4 @@
-import { LeaderboardEntry, Pose, StrictResult, Verification } from "@polypack/geometry";
+import { LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
 
 /** Most ids one `getMany` call accepts. */
 export const GET_MANY_LIMIT = 500;
@@ -9,13 +9,16 @@ export const GET_MANY_LIMIT = 500;
  */
 export const KEEP_PER_PROBLEM = 3;
 
-export interface NewSubmission {
+/**
+ * How the entry was found (see Provenance). The legacy `agent` column of older databases is no
+ * longer read; new rows store an empty string in it.
+ */
+export interface NewSubmission extends Provenance {
   N: number;
   M: number;
   P: number;
   score: number;
   name: string;
-  agent: "human" | "ai";
   agent_note: string;
   pieces: Pose[];
   /** Orientation the score was computed at (the better of submitted and auto-oriented). */

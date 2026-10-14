@@ -96,7 +96,7 @@ test("phone: run an optimizer and accept its preview", async ({ page }) => {
   expect(await pieces(page)).toEqual([]);
   await page.tap("#solve-accept");
   await expect(page.locator("#count")).toContainText("3 / 3");
-  await expect(page.locator("#agent")).toHaveValue("ai");
+  await expect(page.locator("#found-with")).toContainText("Found with the PolyPack optimizer;");
   expect(findOverlaps(0, await pieces(page))).toHaveLength(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });

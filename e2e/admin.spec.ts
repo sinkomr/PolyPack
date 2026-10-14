@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
 // pending entry, because no honest submission beats a published value on demand.
 test("the admin page lists pending entries and sends a review", async ({ page }) => {
   const entry = {
-    id: 7, N: 4, M: 4, P: 11, name: "<b>Eve</b>", agent: "ai", agent_note: "annealing", score: 3.87,
+    id: 7, N: 4, M: 4, P: 11, name: "<b>Eve</b>", found_with: "optimizer_edited", agent_note: "annealing", score: 3.87,
     created_at: "2026-10-07T12:00:00.000Z", literature_value: 3.87708359002281,
     strict_check: { ok: true, certifiedSize: 3.8700000387, eps: 1e-8 }, pieces: [],
   };
@@ -28,6 +28,8 @@ test("the admin page lists pending entries and sends a review", async ({ page })
   await expect(row).toContainText("11 squares in a square");
   // names are shown as text, never as markup
   await expect(row).toContainText("<b>Eve</b>");
+  // how it was found, as a short label; no Human/AI badge
+  await expect(row).toContainText("<b>Eve</b> (optimizer, then edited) — annealing");
   await expect(row).toContainText("passed, certified 3.8700000387");
   await row.getByRole("button", { name: "Reject" }).click();
   await expect(page.locator("#note")).toHaveText("Nothing is pending.");

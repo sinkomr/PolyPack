@@ -34,6 +34,11 @@ export class Board {
   state: BoardState = { N: 7, M: 7, P: 7, pieces: [], phi: 0 };
   selection = new Set<number>();
   container: Container | null = null;
+  /**
+   * What the latest change was, for listeners that care: "load" when a configuration replaced the
+   * board, "history" for undo and redo, "edit" for everything else.
+   */
+  lastChange: "edit" | "load" | "history" = "edit";
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private gestureStart: string | null = null;
@@ -43,10 +48,16 @@ export class Board {
     this.listeners.add(fn);
   }
 
-  private changed(): void {
+  private changed(kind: Board["lastChange"] = "edit"): void {
+    this.lastChange = kind;
     const s = this.state;
     this.container = s.pieces.length ? enclose(s.N, s.pieces, s.M, s.phi) : null;
     for (const fn of this.listeners) fn();
+  }
+
+  /** True between begin and commit: the board is in the middle of one undoable gesture. */
+  get gesturing(): boolean {
+    return this.gestureStart !== null;
   }
 
   get canUndo(): boolean {
@@ -62,21 +73,21 @@ export class Board {
   }
 
   /** End of a gesture; records one undo step if anything changed. */
-  commit(): void {
+  commit(kind: Board["lastChange"] = "edit"): void {
     if (this.gestureStart !== null && this.gestureStart !== JSON.stringify(this.state)) {
       this.undoStack.push(this.gestureStart);
       if (this.undoStack.length > HISTORY_LIMIT) this.undoStack.shift();
       this.redoStack = [];
     }
     this.gestureStart = null;
-    this.changed();
+    this.changed(kind);
   }
 
   /** Run one operation as its own undo step. */
-  step<T>(fn: () => T): T {
+  step<T>(fn: () => T, kind: Board["lastChange"] = "edit"): T {
     this.begin();
     const r = fn();
-    this.commit();
+    this.commit(kind);
     return r;
   }
 
@@ -86,7 +97,7 @@ export class Board {
     to.push(JSON.stringify(this.state));
     this.state = JSON.parse(snap);
     this.selection.clear();
-    this.changed();
+    this.changed("history");
   }
   undo(): void {
     this.restore(this.undoStack, this.redoStack);
@@ -265,10 +276,10 @@ export class Board {
       };
       this.selection.clear();
     };
-    if (undoable) this.step(apply);
+    if (undoable) this.step(apply, "load");
     else {
       apply();
-      this.changed();
+      this.changed("load");
     }
     return null;
   }

@@ -70,7 +70,7 @@ const listed = (N: number, M: number, r: Listed) => ({
 });
 const entry = (e: Entry) => ({
   name: "ann",
-  agent: "human",
+  found_with: "hand",
   agent_note: "",
   created_at: "2026-10-11T00:00:00Z",
   verification: "none",
@@ -121,7 +121,7 @@ async function freeSlot(request: APIRequestContext): Promise<{ M: number; P: num
 /** Submits P circles in a row to the real server; a smaller gap is a better entry. */
 async function submitRow(request: APIRequestContext, slot: { M: number; P: number }, gap: number, name = "atlas test") {
   const pieces = Array.from({ length: slot.P }, (_, i) => ({ x: gap * i, y: 0, theta: 0 }));
-  const r = await request.post("/api/submit", { data: { N: 0, ...slot, container_phi: 0, name, agent: "ai", pieces } });
+  const r = await request.post("/api/submit", { data: { N: 0, ...slot, container_phi: 0, name, found_with: "external", software: "e2e", pieces } });
   const body = await r.json();
   expect(body.valid).toBe(true);
   return body as { id: number; score: number };
@@ -460,7 +460,7 @@ test("a new site best appears on its tile without a reload", async ({ page, requ
   await expect.poll(() => tile(page, P).locator(".tile-art svg").getAttribute("viewBox")).not.toBe(before);
   await tile(page, P).click();
   const detail = page.getByRole("dialog");
-  await expect(detail).toContainText(`${second.score.toFixed(6)} by atlas test (AI)`);
+  await expect(detail).toContainText(`${second.score.toFixed(6)} by atlas test (own software)`);
   await expect(detail).toContainText("no published value on record");
   await expect(detail.getByRole("link", { name: "Load this entry on the board" })).toHaveAttribute(
     "href",
@@ -776,7 +776,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
   const board = detail.getByRole("link", { name: "Open on the board" });
   await board.focus();
   await board.evaluate((e) => ((e as HTMLElement & { marked?: boolean }).marked = true));
-  await expect(detail).toContainText("9.000000 by ann (human)");
+  await expect(detail).toContainText("9.000000 by ann (by hand)");
 
   // a live event for the same problem, with nothing new about this P: the panel is not rebuilt
   const seen = listings;
@@ -790,7 +790,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
   best = { id: 2005, score: 8, name: "bea" };
   fixture.site![0] = { P: 5, ...best };
   await submitRow(request, slot, 2.5, "atlas nudge");
-  await expect(detail).toContainText("8.000000 by bea (human)", { timeout: 20_000 });
+  await expect(detail).toContainText("8.000000 by bea (by hand)", { timeout: 20_000 });
   await expect(detail.getByRole("link", { name: "Load this entry on the board" })).toHaveAttribute("href", "/#s=2005");
   await expect(board).toBeFocused();
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
@@ -870,14 +870,14 @@ test("a pending entry is never shown as the smallest known value", async ({ page
   await expect(detail.locator("dd.big")).toHaveText("5.000000");
   await expect(detail.locator(".detail-badges")).toContainText("an entry is pending verification");
   await expect(detail.locator(".detail-list")).toContainText("Site bestnone verified yet");
-  await expect(detail.locator(".detail-list")).toContainText("Pending verification3.000000 by pat (human)");
+  await expect(detail.locator(".detail-list")).toContainText("Pending verification3.000000 by pat (by hand)");
   await expect(detail).toContainText("which is pending verification and is not counted as a known value");
   await expect(detail.locator(".tile-art")).toHaveClass(/pending-drawing/);
   await page.keyboard.press("Escape");
   await tile(page, 5).click();
   await expect(detail.locator("dd.big")).toHaveText("7.000000");
-  await expect(detail.locator(".detail-list")).toContainText("Site best7.400000 by ann (human)");
-  await expect(detail.locator(".detail-list")).toContainText("Pending verification5.100000 by pat (human)");
+  await expect(detail.locator(".detail-list")).toContainText("Site best7.400000 by ann (by hand)");
+  await expect(detail.locator(".detail-list")).toContainText("Pending verification5.100000 by pat (by hand)");
   await expect(detail).toContainText("Drawn from the entry by ann at 7.400000: above the published value");
 });
 

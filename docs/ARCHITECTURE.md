@@ -77,6 +77,12 @@ Each (N, M, P) keeps its three best valid entries (`KEEP_PER_PROBLEM`; the other
 
 A problem whose published record has status `proven` or `trivial_tiling` is closed (`closedToSubmissions`): the server refuses submissions with HTTP 409 before examining them, and entries stored earlier are no longer listed, so the published packing stands alone. `proven_unrefereed` and `best_known` problems stay open, the first so that a counterexample to an unrefereed proof can still be entered. Rows of closed problems are kept in the database, and their share links keep working.
 
+## How an entry was found
+
+A submission says how its packing was found (`found_with`: `hand`, `optimizer`, `optimizer_edited` or `external`; decided 2026-10-13, replacing the self-declared Human/AI `agent`). Optimizer entries also carry the registered `method`, its resolved `method_params` (at most 4 KB of JSON), `seed` and `budget`, and `external` ones an optional `software` name, so that a result can be reproduced. Only the short `found_with` label is shown and listed; the full record is returned by `GET /api/submissions/{id}`. The free-text `agent_note` is the submitter's own and is never filled in automatically. `parseProvenance` (geometry package) validates the fields; the store adds their columns to an older database when it opens it, and rows stored before have `found_with` null ("not recorded"). The legacy `agent` field is accepted and ignored, except that `agent: "ai"` without `found_with` is stored as not recorded rather than as by hand; the column stays in old databases and new rows store an empty string in it.
+
+On the board the attribution is a function of the board and its lineage (`apps/web/src/found-with.ts`): a board that is exactly an accepted optimizer result is `optimizer`; an edit of such a board, or of an edited one, is `optimizer_edited` with the same run; a load from elsewhere or an empty board is `hand`; undo, redo and a reload return a board to what it was when made. Accepted results and edited boards are kept in local storage (`polypack.solve.accepted`, `polypack.solve.lineage`).
+
 ## Limits
 
 N and M: 0 (circle) or 3 to 100. P: 1 to 500. Coordinates: |x|, |y| ≤ 1e6.

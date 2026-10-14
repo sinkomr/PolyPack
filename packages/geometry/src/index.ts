@@ -4,4 +4,5 @@ export * from "./enclose";
 export * from "./config";
 export * from "./motion";
 export * from "./protocol";
+export * from "./provenance";
 export * from "./penalty";

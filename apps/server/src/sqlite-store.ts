@@ -10,14 +10,20 @@ CREATE TABLE IF NOT EXISTS submissions (
   p INTEGER NOT NULL,
   score REAL NOT NULL,
   name TEXT NOT NULL,
-  agent TEXT NOT NULL,
+  agent TEXT NOT NULL DEFAULT '',
   agent_note TEXT NOT NULL,
   pieces TEXT NOT NULL,
   container_phi REAL NOT NULL,
   created_at TEXT NOT NULL,
   verification TEXT NOT NULL DEFAULT 'none',
   literature_value REAL,
-  strict_check TEXT
+  strict_check TEXT,
+  found_with TEXT,
+  method TEXT,
+  method_params TEXT,
+  seed INTEGER,
+  budget TEXT,
+  software TEXT
 );
 CREATE INDEX IF NOT EXISTS submissions_problem ON submissions (n, m, p, score, id);
 CREATE INDEX IF NOT EXISTS submissions_verification ON submissions (verification);
@@ -30,7 +36,20 @@ CREATE TABLE tallies (n INTEGER NOT NULL, m INTEGER NOT NULL, p INTEGER NOT NULL
 INSERT INTO tallies SELECT n, m, p, COUNT(*) FROM submissions WHERE verification != 'rejected' GROUP BY n, m, p;
 `;
 
-const ENTRY_COLUMNS = "id, name, agent, agent_note, score, created_at, verification";
+/**
+ * Columns added after the first deployment, with their types. A database created before them gets
+ * them by ALTER TABLE on open; its existing rows read back NULL ("not recorded").
+ */
+const ADDED_COLUMNS: [name: string, type: string][] = [
+  ["found_with", "TEXT"],
+  ["method", "TEXT"],
+  ["method_params", "TEXT"],
+  ["seed", "INTEGER"],
+  ["budget", "TEXT"],
+  ["software", "TEXT"],
+];
+
+const ENTRY_COLUMNS = "id, name, found_with, agent_note, score, created_at, verification";
 const LISTED = "verification != 'rejected'";
 
 type Row = Record<string, unknown>;
@@ -43,7 +62,6 @@ function toStored(r: Row): StoredSubmission {
     P: r.p as number,
     score: r.score as number,
     name: r.name as string,
-    agent: r.agent as "human" | "ai",
     agent_note: r.agent_note as string,
     pieces: JSON.parse(r.pieces as string),
     container_phi: r.container_phi as number,
@@ -51,6 +69,12 @@ function toStored(r: Row): StoredSubmission {
     verification: r.verification as StoredSubmission["verification"],
     literature_value: r.literature_value as number | null,
     strict_check: r.strict_check ? JSON.parse(r.strict_check as string) : null,
+    found_with: (r.found_with ?? null) as StoredSubmission["found_with"],
+    method: (r.method ?? null) as string | null,
+    method_params: r.method_params ? JSON.parse(r.method_params as string) : null,
+    seed: (r.seed ?? null) as number | null,
+    budget: r.budget ? JSON.parse(r.budget as string) : null,
+    software: (r.software ?? null) as string | null,
   };
 }
 
@@ -62,6 +86,13 @@ export class SqliteStore implements Store {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(SCHEMA);
+    // A database from before a column existed: add it. The legacy `agent` column stays as it was
+    // (SQLite cannot drop its NOT NULL), and new rows store an empty string in it.
+    const present = new Set(
+      (this.db.prepare("PRAGMA table_info(submissions)").all() as Row[]).map((c) => c.name as string),
+    );
+    for (const [name, type] of ADDED_COLUMNS)
+      if (!present.has(name)) this.db.exec(`ALTER TABLE submissions ADD COLUMN ${name} ${type}`);
     // A database from before pruning: start the tallies from what it holds, then prune it.
     if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tallies'").get()) {
       this.db.exec(TALLIES);
@@ -76,8 +107,8 @@ export class SqliteStore implements Store {
     const r = this.db
       .prepare(
         `INSERT INTO submissions (n, m, p, score, name, agent, agent_note, pieces, container_phi, created_at,
-           verification, literature_value, strict_check)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           verification, literature_value, strict_check, found_with, method, method_params, seed, budget, software)
+         VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         s.N,
@@ -85,7 +116,6 @@ export class SqliteStore implements Store {
         s.P,
         s.score,
         s.name,
-        s.agent,
         s.agent_note,
         // JSON keeps every double exactly
         JSON.stringify(s.pieces),
@@ -94,6 +124,12 @@ export class SqliteStore implements Store {
         s.verification,
         s.literature_value,
         s.strict_check ? JSON.stringify(s.strict_check) : null,
+        s.found_with,
+        s.method,
+        s.method_params ? JSON.stringify(s.method_params) : null,
+        s.seed,
+        s.budget ? JSON.stringify(s.budget) : null,
+        s.software,
       );
     this.db
       .prepare(

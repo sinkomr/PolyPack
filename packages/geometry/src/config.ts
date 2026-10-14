@@ -10,7 +10,6 @@ export interface PackingConfig {
   pieces: Pose[];
   container_phi: number;
   name?: string;
-  agent?: "human" | "ai";
   agent_note?: string;
 }
 
@@ -54,7 +53,7 @@ export function parseConfig(input: unknown): ParseResult {
   }
   const phi = o.container_phi === undefined ? 0 : o.container_phi;
   if (!isFiniteNumber(phi)) errors.push("container_phi must be a finite number");
-  if (o.agent !== undefined && o.agent !== "human" && o.agent !== "ai") errors.push('agent must be "human" or "ai"');
+  // `agent` ("human" | "ai") was replaced by found_with (see parseProvenance); old clients still send it, and it is ignored
   if (o.name !== undefined && typeof o.name !== "string") errors.push("name must be a string");
   if (o.agent_note !== undefined && typeof o.agent_note !== "string") errors.push("agent_note must be a string");
   if (errors.length) return { ok: false, errors };
@@ -66,7 +65,6 @@ export function parseConfig(input: unknown): ParseResult {
     container_phi: phi as number,
   };
   if (o.name !== undefined) config.name = o.name as string;
-  if (o.agent !== undefined) config.agent = o.agent as "human" | "ai";
   if (o.agent_note !== undefined) config.agent_note = o.agent_note as string;
   return { ok: true, config };
 }
