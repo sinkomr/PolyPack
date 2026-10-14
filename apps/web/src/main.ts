@@ -534,7 +534,7 @@ function loadInitial(): void {
   } catch {
     // fall through to the default board
   }
-  if (!restored) board.load({ N: 4, M: 4, P: 5, pieces: [], container_phi: 0 }, false);
+  if (!restored) board.load({ N: 7, M: 7, P: 7, pieces: [], container_phi: 0 }, false);
   followLink();
 }
 loadInitial();

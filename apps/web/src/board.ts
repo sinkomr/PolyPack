@@ -31,7 +31,7 @@ const HISTORY_LIMIT = 300;
  * piece goes through the no-overlap moves of the geometry package, so the state is always valid.
  */
 export class Board {
-  state: BoardState = { N: 4, M: 4, P: 5, pieces: [], phi: 0 };
+  state: BoardState = { N: 7, M: 7, P: 7, pieces: [], phi: 0 };
   selection = new Set<number>();
   container: Container | null = null;
   private undoStack: string[] = [];

@@ -7,7 +7,9 @@ for (const scheme of ["light", "dark"] as const) {
   test(`no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
     for (const path of ["/", "/browse.html#0,4", "/api", "/admin.html"]) {
-      await page.goto(path);
+      // the default problem has no published record, so the board is checked on one that does
+      if (path === "/") await openProblem(page, 4, 4, 5);
+      else await page.goto(path);
       if (path === "/") {
         await page.click("#add");
         await page.click("#show-record");
