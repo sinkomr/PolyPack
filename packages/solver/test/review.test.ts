@@ -118,7 +118,7 @@ function server() {
   return createApp({
     store: new SqliteStore(":memory:"),
     records: [],
-    limits: { perIp: 1e6, perName: 1e6 },
+    limits: { perIp: 1e6 },
     log: () => {},
   });
 }

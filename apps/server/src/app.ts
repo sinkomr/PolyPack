@@ -33,7 +33,7 @@ export interface AppOptions {
   clientIp?: (c: Context) => string;
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
-  limits?: { perIp?: number; perName?: number; windowMs?: number };
+  limits?: { perIp?: number; windowMs?: number };
 }
 
 const CONVENTIONS = {
@@ -94,7 +94,6 @@ export function createApp(opts: AppOptions): Hono {
   const app = new Hono();
   const windowMs = opts.limits?.windowMs ?? 60_000;
   const ipLimit = new RateLimiter(opts.limits?.perIp ?? 30, windowMs);
-  const nameLimit = new RateLimiter(opts.limits?.perName ?? 12, windowMs);
   const clientIp = opts.clientIp ?? (() => "unknown");
   const log = opts.log ?? ((msg: string) => console.log(msg));
 
@@ -297,8 +296,6 @@ export function createApp(opts: AppOptions): Hono {
       return reject(409, [`this problem is closed: its optimum ${lit!.display} is proven (${lit!.source_name})`]);
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
-    if (!nameLimit.allow(name.toLowerCase()))
-      return reject(429, ["too many submissions under this name; wait a minute"]);
 
     // The score is always recomputed here. Any container or score fields in the body were
     // already dropped by parseConfig.
@@ -334,6 +331,8 @@ export function createApp(opts: AppOptions): Hono {
     ]);
     const leads = leader?.id === id;
     const rank = leads ? 1 : Math.max(2, position);
+    // Only the best few entries of a problem are kept; this one may already be among the deleted.
+    const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
     if (beats) {
       log(
         `[review] submission ${id} by "${name}" for N=${config.N} M=${config.M} P=${config.P}: ` +
@@ -362,7 +361,7 @@ export function createApp(opts: AppOptions): Hono {
       rank,
       leader: leads,
       leader_score: leader?.score ?? null,
-      id,
+      id: kept ? id : null,
       container,
       pending_verification: beats,
       strict_check: strict,

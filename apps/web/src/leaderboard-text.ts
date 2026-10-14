@@ -17,7 +17,7 @@ export function acceptedMessage(r: SubmitResponse): string {
   return `✓ Valid, score ${score}, but it does not beat the current best${best} (an entry must improve on it; equal scores keep the earlier entry).`;
 }
 
-/** The line under the leaderboard: `total` stored submissions, of which only the leader is shown. */
+/** The line under the leaderboard: `total` submissions received, of which only the leader is shown. */
 export function leaderboardNote(total: number, shown: number, open: boolean): string {
   if (!open) return CLOSED_NOTE;
   if (!shown) return "No entries yet. Yours could be the first.";

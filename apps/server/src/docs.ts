@@ -188,7 +188,7 @@ The <code>phi</code> it used is returned in <code>container.phi</code>.</td></tr
 </table>
 
 <h2 id="leader">One leader per problem</h2>
-<p>Every valid submission is stored, and each problem shows exactly one of them: its <em>leader</em>.
+<p>For each problem the server keeps the three best valid entries and deletes the rest as soon as they are overtaken; it shows exactly one of them, its <em>leader</em>. The two runners-up are kept so that the problem still has an entry if the leader is removed.
 The leader is the earliest entry whose score is within a relative ${SCORE_TIE} of the smallest stored score, that is
 <code>score ≤ min · (1 + ${SCORE_TIE})</code>. Entries of equal quality therefore never replace an earlier one:
 to take the lead, a score must be smaller than the leader's by more than that tolerance, <code>score &lt; leader · (1 − ${SCORE_TIE})</code>.
@@ -222,18 +222,18 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="row"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>
 <tr><th scope="row"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>
 <tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among all stored entries of the problem, and never less than 2 (an entry that only ties the leader is 2).</td></tr>
-<tr><th scope="row"><code>id</code></th><td>The stored entry. It stays loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code>, whether it leads or not.</td></tr>
+<tr><th scope="row"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is among the three best of its problem. <code>null</code> when the entry was valid but not good enough to be kept.</td></tr>
 <tr><th scope="row"><code>pending_verification</code>, <code>strict_check</code></th><td>See <a href="#verification">below</a>.</td></tr>
 </table>
 <p>A refusal has the same shape with <code>valid: false</code>, the explanation in <code>reasons</code> and <code>null</code> or <code>false</code> elsewhere.</p>
 <table>
 <tr><th scope="col">Status</th><th scope="col">Meaning</th></tr>
-<tr><td>200</td><td>Valid and stored. <code>leader</code> says whether it took the lead.</td></tr>
+<tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
-<tr><td>429</td><td>Rate limit: 30 submissions per minute per address and 12 per minute per name. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
+<tr><td>429</td><td>Rate limit: 30 submissions per minute per address. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
 </table>
 <p><code>name</code> is required, at most ${MAX_NAME_LENGTH} characters; <code>agent_note</code> at most ${MAX_NOTE_LENGTH}. Both are stored as plain text: control characters and angle brackets are replaced by spaces.
 <code>agent</code> defaults to <code>"human"</code>; please declare <code>"ai"</code> for automated entries.</p>
@@ -245,7 +245,7 @@ Until then its <code>verification</code> is <code>"pending"</code>; afterwards <
 <h3><code>GET /api/leaderboard/{N}/{M}/{P}</code></h3>
 <p><code>{N, M, P, entries, total, accepts_submissions}</code>. <code>entries</code> is a list with the <a href="#leader">leader</a> alone, or empty when the problem has no entry or is closed
 (it is a list because earlier versions returned several rows). Each entry is <code>{id, name, agent, agent_note, score, created_at, verification}</code>.
-<code>total</code> is the number of stored, not rejected submissions for the problem, including those that do not lead; for a closed problem it counts what was stored before it closed.</p>
+<code>total</code> is the number of valid submissions ever received for the problem, including those since deleted, rejected or removed; for a closed problem it counts those received before it closed.</p>
 
 <h3><code>GET /api/submissions/{id}</code></h3>
 <p>The stored configuration of one entry, with its pieces: <code>{id, N, M, P, score, name, agent, agent_note, pieces, container_phi, created_at, verification}</code>. 404 for unknown and rejected entries.</p>

@@ -1,5 +1,7 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import {
   AtlasResponse,
   LEADERBOARD_SIZE,
@@ -51,7 +53,7 @@ beforeEach(() => {
     adminToken: "secret",
     clientIp: () => ip,
     log: (m) => logs.push(m),
-    limits: { perIp: 8, perName: 5 },
+    limits: { perIp: 8 },
   });
 });
 
@@ -140,13 +142,11 @@ describe("POST /api/submit", () => {
     expect(e.agent_note).not.toMatch(/[<>]/);
   });
 
-  it("rate-limits by address and by name", async () => {
-    for (let i = 0; i < 5; i++) expect((await submit(squares(2))).status).toBe(200);
-    expect((await submit(squares(2))).status).toBe(429);
-    for (let i = 0; i < 2; i++) expect((await submit(squares(2, { name: `n${i}` }))).status).toBe(200);
+  it("rate-limits by address, not by name", async () => {
+    for (let i = 0; i < 8; i++) expect((await submit(squares(2))).status).toBe(200);
     expect((await submit(squares(2, { name: "fresh" }))).status).toBe(429);
     ip = "2.2.2.2";
-    expect((await submit(squares(2, { name: "fresh" }))).status).toBe(200);
+    expect((await submit(squares(2))).status).toBe(200);
   });
 });
 
@@ -218,7 +218,7 @@ const twoCircles = (score: number, name: string) => ({
 });
 
 describe("leaderboard", () => {
-  it("keeps every submission and shows only the best one", async () => {
+  it("keeps the best three entries, shows only the best one and counts every submission", async () => {
     expect(LEADERBOARD_SIZE).toBe(1);
     const gaps = [1.5, 1.2, 1.0, 1.3, 1.1];
     const answers: SubmitResponse[] = [];
@@ -239,8 +239,14 @@ describe("leaderboard", () => {
     expect(problem.area_bound).toBeCloseTo(Math.SQRT2, 12);
     const stored = (await get(`/api/submissions/${problem.site_best.id}`)).body;
     expect(stored.pieces).toEqual(row(2, 1.0));
-    // entries that do not lead are stored too, and stay loadable by id
-    expect((await get(`/api/submissions/${answers[3].id}`)).body.pieces).toEqual(row(2, 1.3));
+    // the runners-up stay loadable by id; the gaps 1.5 and then 1.3 were deleted when overtaken
+    expect(answers.map((a) => a.id)).toEqual([1, 2, 3, 4, 5]);
+    for (const [i, gap] of [
+      [1, 1.2],
+      [4, 1.1],
+    ] as const)
+      expect((await get(`/api/submissions/${answers[i].id}`)).body.pieces).toEqual(row(2, gap));
+    for (const i of [0, 3]) expect((await get(`/api/submissions/${answers[i].id}`)).status).toBe(404);
     const records = (await get("/api/records?N=4&M=4")).body;
     expect(records.site.map((s: { P: number }) => s.P)).toEqual([2]);
     expect(records.site[0].name).toBe("p2");
@@ -403,7 +409,47 @@ describe("store: the leader per problem", () => {
     expect(await store.remove(id["7b"])).toBe(true);
     expect((await store.leader(4, 4, 7))!.id).toBe(id["7c"]);
     expect((await leaders())[7]).toBe(id["7c"]);
-    expect(await store.count(4, 4, 7)).toBe(2);
+    // the count is of submissions received, not of what is still listed
+    expect(await store.count(4, 4, 7)).toBe(3);
+  });
+
+  it("keeps the leader and the next two, also when the leader is not first by score", async () => {
+    const store = new SqliteStore(":memory:");
+    // the second is within the tolerance of the first, so the first stays leader though it is larger
+    const ids: number[] = [];
+    for (const score of [3, 3 * (1 - SCORE_TIE / 2), 3.2, 3.1, 3.3]) ids.push(await store.insert(entry(9, score)));
+    expect(await store.prune(4, 4, 9)).toEqual([ids[2], ids[4]]);
+    expect((await store.leader(4, 4, 9))!.id).toBe(ids[0]);
+    expect((await store.getMany(ids)).map((s) => s.id).sort()).toEqual([ids[0], ids[1], ids[3]].sort());
+    expect(await store.count(4, 4, 9)).toBe(5);
+    expect(await store.prune(4, 4, 9)).toEqual([]);
+  });
+
+  it("prunes a database written before pruning existed, keeping its counts", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-prune-")), "old.sqlite");
+    const old = new DatabaseSync(path);
+    old.exec(`CREATE TABLE submissions (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER NOT NULL, m INTEGER NOT NULL,
+      p INTEGER NOT NULL, score REAL NOT NULL, name TEXT NOT NULL, agent TEXT NOT NULL, agent_note TEXT NOT NULL,
+      pieces TEXT NOT NULL, container_phi REAL NOT NULL, created_at TEXT NOT NULL,
+      verification TEXT NOT NULL DEFAULT 'none', literature_value REAL, strict_check TEXT)`);
+    const add = old.prepare(
+      `INSERT INTO submissions (n, m, p, score, name, agent, agent_note, pieces, container_phi, created_at, verification)
+       VALUES (4, 4, ?, ?, 'x', 'human', '', '[]', 0, '2026-10-12', ?)`,
+    );
+    for (const score of [5, 4, 6, 3, 7]) add.run(2, score, "none");
+    add.run(2, 1, "rejected");
+    add.run(3, 9, "none");
+    old.close();
+
+    const store = new SqliteStore(path);
+    return Promise.all([store.count(4, 4, 2), store.count(4, 4, 3), store.getMany([1, 2, 3, 4, 5, 6, 7])]).then(
+      ([two, three, rows]) => {
+        expect(two).toBe(5);
+        expect(three).toBe(1);
+        // scores 3, 4 and 5 remain; 6 and 7 are gone; the rejected row is not listed either way
+        expect(rows.map((r) => r.score).sort()).toEqual([3, 4, 5, 9]);
+      },
+    );
   });
 });
 
@@ -432,7 +478,7 @@ describe("problems with a proven optimum", () => {
       adminToken: "secret",
       clientIp: () => ip,
       log: (m) => logs.push(m),
-      limits: { perIp: 8, perName: 5 },
+      limits: { perIp: 8 },
     });
 
   beforeEach(() => {
@@ -573,7 +619,9 @@ describe("submissions that beat the literature", () => {
       body: JSON.stringify({ id: 1, decision: "rejected" }),
     });
     expect(review.status).toBe(200);
-    expect((await get("/api/leaderboard/4/4/3")).body.total).toBe(0);
+    // `total` counts submissions received, so a rejection does not lower it
+    expect((await get("/api/leaderboard/4/4/3")).body.entries).toEqual([]);
+    expect((await get("/api/leaderboard/4/4/3")).body.total).toBe(1);
     expect((await get("/api/submissions/1")).status).toBe(404);
   });
 
@@ -596,7 +644,8 @@ describe("submissions that beat the literature", () => {
     expect((await get("/api/leaderboard/4/4/2")).body.total).toBe(1);
 
     expect((await send(auth, { id })).status).toBe(200);
-    expect((await get("/api/leaderboard/4/4/2")).body.total).toBe(0);
+    expect((await get("/api/leaderboard/4/4/2")).body.entries).toEqual([]);
+    expect((await get("/api/leaderboard/4/4/2")).body.total).toBe(1);
     expect((await get(`/api/submissions/${id}`)).status).toBe(404);
     // a removed entry is no longer listed, so there is nothing left to remove
     expect((await send(auth, { id })).status).toBe(404);

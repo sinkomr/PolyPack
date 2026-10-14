@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
-import { GET_MANY_LIMIT, NewSubmission, Store, StoredSubmission } from "./store";
+import { GET_MANY_LIMIT, KEEP_PER_PROBLEM, NewSubmission, Store, StoredSubmission } from "./store";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS submissions (
@@ -21,6 +21,13 @@ CREATE TABLE IF NOT EXISTS submissions (
 );
 CREATE INDEX IF NOT EXISTS submissions_problem ON submissions (n, m, p, score, id);
 CREATE INDEX IF NOT EXISTS submissions_verification ON submissions (verification);
+`;
+
+// Running count of accepted submissions per problem; the rows themselves are pruned.
+const TALLIES = `
+CREATE TABLE tallies (n INTEGER NOT NULL, m INTEGER NOT NULL, p INTEGER NOT NULL, accepted INTEGER NOT NULL,
+  PRIMARY KEY (n, m, p));
+INSERT INTO tallies SELECT n, m, p, COUNT(*) FROM submissions WHERE verification != 'rejected' GROUP BY n, m, p;
 `;
 
 const ENTRY_COLUMNS = "id, name, agent, agent_note, score, created_at, verification";
@@ -55,6 +62,14 @@ export class SqliteStore implements Store {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec(SCHEMA);
+    // A database from before pruning: start the tallies from what it holds, then prune it.
+    if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tallies'").get()) {
+      this.db.exec(TALLIES);
+      const crowded = this.db
+        .prepare(`SELECT n, m, p FROM submissions WHERE ${LISTED} GROUP BY n, m, p HAVING COUNT(*) > ?`)
+        .all(KEEP_PER_PROBLEM) as Row[];
+      for (const r of crowded) this.pruneSync(r.n as number, r.m as number, r.p as number);
+    }
   }
 
   async insert(s: NewSubmission): Promise<number> {
@@ -80,6 +95,12 @@ export class SqliteStore implements Store {
         s.literature_value,
         s.strict_check ? JSON.stringify(s.strict_check) : null,
       );
+    this.db
+      .prepare(
+        `INSERT INTO tallies (n, m, p, accepted) VALUES (?, ?, ?, 1)
+         ON CONFLICT (n, m, p) DO UPDATE SET accepted = accepted + 1`,
+      )
+      .run(s.N, s.M, s.P);
     return Number(r.lastInsertRowid);
   }
 
@@ -98,6 +119,10 @@ export class SqliteStore implements Store {
   }
 
   async leader(N: number, M: number, P: number): Promise<LeaderboardEntry | null> {
+    return this.leaderSync(N, M, P);
+  }
+
+  private leaderSync(N: number, M: number, P: number): LeaderboardEntry | null {
     // earliest entry within the tie tolerance of the smallest score, not simply the smallest
     const r = this.db
       .prepare(
@@ -110,10 +135,28 @@ export class SqliteStore implements Store {
   }
 
   async count(N: number, M: number, P: number): Promise<number> {
-    const r = this.db
-      .prepare(`SELECT COUNT(*) AS c FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED}`)
-      .get(N, M, P) as Row;
-    return r.c as number;
+    const r = this.db.prepare("SELECT accepted FROM tallies WHERE n = ? AND m = ? AND p = ?").get(N, M, P) as
+      Row | undefined;
+    return (r?.accepted as number | undefined) ?? 0;
+  }
+
+  async prune(N: number, M: number, P: number): Promise<number[]> {
+    return this.pruneSync(N, M, P);
+  }
+
+  private pruneSync(N: number, M: number, P: number): number[] {
+    const leader = this.leaderSync(N, M, P);
+    if (!leader) return [];
+    // the leader is not always first by score (see `leader`), so it is kept explicitly
+    const others = this.db
+      .prepare(
+        `SELECT id FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED} AND id != ? ORDER BY score, id`,
+      )
+      .all(N, M, P, leader.id) as Row[];
+    const doomed = others.slice(KEEP_PER_PROBLEM - 1).map((r) => r.id as number);
+    const drop = this.db.prepare("DELETE FROM submissions WHERE id = ?");
+    for (const id of doomed) drop.run(id);
+    return doomed;
   }
 
   async rank(N: number, M: number, P: number, id: number): Promise<number> {

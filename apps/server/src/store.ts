@@ -3,6 +3,12 @@ import { LeaderboardEntry, Pose, StrictResult, Verification } from "@polypack/ge
 /** Most ids one `getMany` call accepts. */
 export const GET_MANY_LIMIT = 500;
 
+/**
+ * Entries kept per problem: the leader and the next best two, so that removing or rejecting the
+ * leader still leaves a drawing. Anything further down is deleted as soon as it is overtaken.
+ */
+export const KEEP_PER_PROBLEM = 3;
+
 export interface NewSubmission {
   N: number;
   M: number;
@@ -41,8 +47,13 @@ export interface Store {
   getMany(ids: readonly number[]): Promise<StoredSubmission[]>;
   /** The leader of one problem, or null when it has no listed entry. */
   leader(N: number, M: number, P: number): Promise<LeaderboardEntry | null>;
-  /** Number of listed entries of one problem. */
+  /** Number of valid submissions ever accepted for one problem, including those since deleted. */
   count(N: number, M: number, P: number): Promise<number>;
+  /**
+   * Deletes the listed entries of one problem beyond the leader and the next best
+   * KEEP_PER_PROBLEM - 1 (by score, then earliest). Returns the ids deleted.
+   */
+  prune(N: number, M: number, P: number): Promise<number[]>;
   /**
    * 1 + the number of listed entries ahead of submission `id`: those with a smaller score, or an
    * equal score and a smaller id. Position 1 is not always the leader; see `leader`.
