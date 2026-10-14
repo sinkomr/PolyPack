@@ -58,6 +58,15 @@ describe("the sources of a published record", () => {
     };
     // the name of the page mentions Erich Friedman; the record is David Ellsworth's all the same
     expect(recordSources(ellsworth)).toEqual({ value: [2], coordinates: [] });
+    // coordinates found by the solver at the published value (scripts/construct-coordinates.ts)
+    const solved = {
+      ...base,
+      has_coordinates: true,
+      coordinates_note:
+        "Coordinates constructed by PolyPack (harden, seed 1): a packing that reaches the published value, not necessarily the source's arrangement.",
+    };
+    expect(recordSources(solved)).toEqual({ value: [1], coordinates: [] });
+    expect(recordCredits(solved)).toEqual([{ n: 1, what: "value and caption" }]);
     // a note about coordinates means nothing while the listing has none to draw
     const note = `Coordinates from ${PACKOMANIA}, http://www.packomania.com/cci/ (read 2026-10-07).`;
     expect(recordSources({ ...base, coordinates_note: note }).coordinates).toEqual([]);

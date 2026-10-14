@@ -49,4 +49,22 @@ describe("data/records.json", () => {
     }
     expect(bad).toEqual([]);
   });
+
+  it("attaches solver-constructed coordinates only where they reach the published value", () => {
+    // data/sources/constructed.json (scripts/construct-coordinates.ts): a packing of the published
+    // size within 10^-display_precision, never above it, at the stored container angle
+    const constructed = records.filter((r) => /^Coordinates constructed by PolyPack \(/.test(r.coordinates_note ?? ""));
+    const { constructions } = JSON.parse(
+      readFileSync(new URL("../../../data/sources/constructed.json", import.meta.url), "utf8"),
+    ) as { constructions: { N: number; M: number; P: number }[] };
+    expect(constructed.length).toBeGreaterThan(0);
+    expect(constructed.length).toBeLessThanOrEqual(constructions.length);
+    const bad: string[] = [];
+    for (const r of constructed) {
+      const e = evaluate({ N: r.N, M: r.M, P: r.P, pieces: r.pieces!, container_phi: r.container_phi! });
+      if (!e.valid || !(Math.abs(e.score! - r.value) <= 10 ** -r.display_precision)) bad.push(`${r.N}/${r.M}/${r.P}`);
+      if (!constructions.some((c) => c.N === r.N && c.M === r.M && c.P === r.P)) bad.push(`${r.N}/${r.M}/${r.P}: not in constructed.json`);
+    }
+    expect(bad).toEqual([]);
+  });
 });

@@ -8,10 +8,20 @@
 //      digits or with coordinates, those are attached and the note says where they come from.
 // Every kept entry is checked: value not below the area bound, coordinates accepted by the
 // site's own checker and reproducing the value. Disagreements between sources are reported.
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+//
+// data/sources/constructed.json is not a literature source: it holds coordinates that PolyPack's
+// solver constructed for records without any (scripts/construct-coordinates.ts). They are
+// attached last, only to records that still have no coordinates, and only when they are again
+// found valid at a size within the record's tolerance of its value.
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { LiteratureRecord, Pose, areaLowerBound, evaluate, isProven } from "@polypack/geometry";
 
-const TODAY = new Date().toISOString().slice(0, 10);
+// --date stamps the build with a given day instead of today, so that a rebuild that changes
+// nothing else does not restamp the derived entries
+const dateArg = process.argv.indexOf("--date");
+const TODAY = dateArg > 0 ? process.argv[dateArg + 1] : new Date().toISOString().slice(0, 10);
+if (!/^\d{4}-\d{2}-\d{2}$/.test(TODAY)) throw new Error(`--date must be YYYY-MM-DD, got ${TODAY}`);
+const CONSTRUCTED = "constructed.json";
 const DERIVED = {
   source_name: "PolyPack (derived here, not from the literature)",
   source_url: "/api#derived-records",
@@ -20,7 +30,7 @@ const DERIVED = {
 
 const key = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 const groups = new Map<string, LiteratureRecord[]>();
-for (const file of readdirSync("data/sources").filter((f) => f.endsWith(".json")).sort()) {
+for (const file of readdirSync("data/sources").filter((f) => f.endsWith(".json") && f !== CONSTRUCTED).sort()) {
   const { records } = JSON.parse(readFileSync(`data/sources/${file}`, "utf8")) as { records: LiteratureRecord[] };
   for (const r of records) groups.set(key(r), [...(groups.get(key(r)) ?? []), r]);
 }
@@ -133,6 +143,45 @@ for (let k = 1; k * k <= 500; k++) {
   derive(3, 3, k * k, k, "trivial_tiling", `${k * k} = ${k}² unit triangles tile a triangle of side ${k} with no waste, so s = ${k} is optimal by area.`, triangleTiling(k));
 }
 
+// ---------- coordinates constructed here [CALC] ----------
+
+interface Construction {
+  N: number;
+  M: number;
+  P: number;
+  published: number;
+  score: number;
+  method: string;
+  params: { kind?: string };
+  seed: number;
+  pieces: Pose[];
+  container_phi: number;
+}
+let attached = 0;
+if (existsSync(`data/sources/${CONSTRUCTED}`)) {
+  const { constructions } = JSON.parse(readFileSync(`data/sources/${CONSTRUCTED}`, "utf8")) as { constructions: Construction[] };
+  for (const c of constructions) {
+    const r = merged.get(key(c));
+    if (!r) {
+      report.push(`${key(c)}: constructed coordinates for a record that no longer exists; not used`);
+      continue;
+    }
+    if (r.pieces) continue;
+    const e = evaluate({ N: c.N, M: c.M, P: c.P, pieces: c.pieces, container_phi: c.container_phi });
+    // the rule of scripts/construct-coordinates.ts: within 10^-display_precision of the value, never above
+    if (c.published !== r.value || !e.valid || Math.abs(e.score! - r.value) > tolerance(r)) {
+      report.push(`${key(c)}: constructed coordinates give ${e.valid ? e.score : e.reasons.join("; ")} for ${r.display}; not used`);
+      continue;
+    }
+    r.pieces = c.pieces;
+    r.container_phi = c.container_phi;
+    // the seed method's generator is part of the recipe: "seed method, auto" or "seed method, record_plus_one"
+    const method = c.method === "seed" ? `seed method, ${c.params.kind ?? "auto"}` : c.method;
+    r.coordinates_note = `Coordinates constructed by PolyPack (${method}, seed ${c.seed}): a packing that reaches the published value, not necessarily the source's arrangement.`;
+    attached++;
+  }
+}
+
 // ---------- checks ----------
 
 const records = [...merged.values()].sort((a, b) => a.N - b.N || a.M - b.M || a.P - b.P);
@@ -153,7 +202,7 @@ const count = (f: (r: LiteratureRecord) => boolean) => records.filter(f).length;
 console.log(
   `${records.length} records: ${count((r) => r.status === "proven")} proven, ${count((r) => r.status === "proven_unrefereed")} proven (unrefereed), ` +
     `${count((r) => r.status === "trivial_tiling")} trivial tilings, ${count((r) => r.status === "best_known")} best known; ` +
-    `${count((r) => !!r.pieces)} with coordinates.`,
+    `${count((r) => !!r.pieces)} with coordinates (${attached} constructed by the solver, data/sources/${CONSTRUCTED}).`,
 );
 const pairs = new Map<string, number>();
 for (const r of records) pairs.set(`${r.N} in ${r.M}`, (pairs.get(`${r.N} in ${r.M}`) ?? 0) + 1);

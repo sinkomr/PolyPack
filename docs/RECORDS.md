@@ -59,10 +59,36 @@ The Packomania directory layout is described at the top of `scripts/import-packo
 
 - An entry whose number cannot be read is skipped and reported, never guessed.
 - Every value must be at or above the area lower bound.
-- Stored coordinates must pass this site's own overlap check and reproduce the value to 1e-8. The overlap check is the one used for submissions: a penetration up to 1e-9 counts as contact. No stored configuration is polished. `packages/geometry/test/records.test.ts` repeats the check on the generated file.
+- Stored coordinates must pass this site's own overlap check and reproduce the value to 1e-8. The overlap check is the one used for submissions: a penetration up to 1e-9 counts as contact. No configuration taken from a source is polished (constructed ones are the solver's output; see below). `packages/geometry/test/records.test.ts` repeats the check on the generated file.
 - A Packomania coordinate file is used only if every line is `index x y` and the indices run from 1 to n.
 - A caption that contains "proved" or "proven" but cannot be read as a proof claim is reported, never stored silently as `best_known`. [An earlier version read "Proved by F. Fodor in 2003." only as far as the initial, so 13 and 19 circles in a circle were stored as `best_known`. Corrected 2026-10-11.]
 - Where two sources cover the same problem (circles in a circle or square, n up to 24), their values must agree; disagreements are printed. The current build has none.
+
+## Coordinates constructed by the solver
+
+Most published records come without coordinates: Friedman and Ellsworth publish pictures only. `scripts/construct-coordinates.ts` searches for such records with PolyPack's own solver library (`packages/solver`) and keeps a packing only when it reaches the published value. A drawing made from it shows *a* packing of the published size, not necessarily the arrangement of the source. Its `coordinates_note` says so: "Coordinates constructed by PolyPack (<method>, seed <s>): a packing that reaches the published value, not necessarily the source's arrangement." No source is credited for such coordinates on the records page.
+
+- [CALC] A configuration is kept when, with the site's shared geometry: it is valid with auto-orientation; it is valid at the container angle found, which is stored, with the same score; no pair penetrates by more than the solver's strict margin (1e-12), so it does not lean on the 1e-9 validity allowance; it passes the server's shrink test (`strictVerify`, the test for submissions that beat a published value); and its score lies within the record's own tolerance 10^-`display_precision` of the published value. A score above the value plus that tolerance is never kept. A score below the value minus the tolerance is not stored either; it is logged and listed by `--report`, and it is not a claim of a new record.
+- Search, in tiers per record, each tier only when the earlier ones found nothing: (0) the seed method's lattice, ring and row generators, and its adjacent-record generators (`record_plus_one`, `record_minus_one`) from a record of the same N and M with P ± 1 that has coordinates, published or constructed earlier; (1) harden (polygons) or basin hopping (circles) at 3,000 evaluations, basin hopping from the best tier-0 configuration, ls_growth for circles; (2) morph and mc_compress at 3,000 and harden or basin hopping at 10,000 evaluations; (3) 30,000 evaluations, seeds 1 and 2. Every run ends with the framework's float polish. A result just above the value (within 1e-6) is contracted towards the container centre by the largest factor 1 − δ, δ ≤ 1e-6, at which no pair penetrates at all (`tighten`); lattice seeds and the polish stop a few 1e-13 short of contact on purpose. An optional pass (`--mp`) repeats the run behind a near miss (within 1e-7) and refines it with the 50-digit contact solver `python/polish_mp.py` (P ≤ 100).
+- Budgets are evaluation counts with a fixed seed, so a run is reproducible bit for bit in the same Node version. A time limit guards against runaway runs only; an entry whose `termination` is `time` was cut by it and is not exactly reproducible.
+- Order: the proven and proven_unrefereed records first, then best_known by increasing P. At most six worker processes. The script appends each finished attempt to `construct-coordinates.log.jsonl` (not committed), so a second invocation resumes, and stops dispatching at `--time-min`.
+- `data/sources/constructed.json` holds `{description, constructions}`. Each construction gives N, M, P, the `published` value and `display_precision` it was checked against, the evaluated `score` at the stored angle, the recipe (`method`, `params`, `seed`, `budget`, `finalPolish`, `start`: none, the adjacent record and where its coordinates came from, or the tier-0 start; `tighten` and `mpPolish` when applied), `termination`, `evaluations`, `tier`, the date, `pieces` and `container_phi`.
+- `scripts/build-records.ts` does not merge `constructed.json` as a source. It attaches a construction last, only to a record that still has no coordinates, and only when the published value is unchanged and the stored configuration is again valid within the tolerance. `packages/geometry/test/records.test.ts` repeats that check on the generated file.
+
+```
+npx tsx scripts/construct-coordinates.ts --time-min 150 --jobs 6
+python/.venv/bin/python -c "import mpmath"
+npx tsx scripts/construct-coordinates.ts --mp
+npx tsx scripts/construct-coordinates.ts --report
+npx tsx scripts/build-records.ts --date 2026-10-12
+```
+
+`--only 4/0/3,5/5/6`, `--max-p`, `--max-tier` and `--group proven` restrict a run. `--date` keeps the build stamp of the previous build, so that a rebuild that only adds coordinates leaves every other byte of `data/records.json` unchanged; without it the build is stamped with today's date.
+
+[CALC] Run of 2026-10-13 (Apple M1 Pro, eight logical CPUs shared with other jobs, Node v26.5.0, six workers, about 2 h 10 min of wall time in total, including two restarts that changed only the order of the queue, then the `--mp` pass): 370 of the 2,050 records without coordinates were constructed: 163 of 170 `proven`, all 6 `proven_unrefereed` and 201 of 1,874 `best_known`. By method: seed generators 203 (`auto`) and 15 (`record_plus_one`), harden 119, basin hopping 29 (2 of them refined by `--mp`), ls_growth 3, mc_compress 1; five needed `tighten`. Two constructions were cut by their time limit (`termination: time`) and are not reproducible bit for bit. No search result was below a published value by more than its tolerance.
+
+- Proven records still without coordinates, after all tiers: 2 and 3 pentagons in a hexagon, 2 and 4 pentagons in an octagon (best found 1.538842, 1.732455, 1.177778, 1.429890 against 1.53879+, 1.73240+, 1.17774+, 1.42986+), 25 squares in a hexagon (3.465193 against 3.46410+), 45 and 46 squares in an octagon (3.313816 and 3.314924 against 3.31370+).
+- `best_known` coverage of that run: tier 0 up to P = 41 and tier 1 up to P = 21 were reached before the time cap. 255 records with P ≤ 50 and all 531 with P > 50 (squares in a square to 307, printed to 14 decimals, and circles in a square from 101, printed to 10 decimals) were not attempted. A longer run resumes from the log.
 
 ## Known gaps
 
