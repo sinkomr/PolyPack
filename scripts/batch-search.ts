@@ -66,6 +66,8 @@ Problem set
   --order ORDER         missing-first (default), smallest-first or random. missing-first: problems
                         with neither a site leader nor a published value, then those whose leader
                         is missing or worse than the published value, then the rest
+  --skip-existing       leave out problems that already have an entry on the site, so that
+                        several machines can fill gaps without repeating each other
 Search
   --methods LIST        search methods (default asc,harden); see --list-methods
   --seeds LIST          random seeds per method, e.g. 1-3 (default 1)
@@ -105,6 +107,7 @@ function parseOptions() {
         sample: { type: "string" },
         "seed-problems": { type: "string", default: "1" },
         order: { type: "string", default: "missing-first" },
+        "skip-existing": { type: "boolean", default: false },
         methods: { type: "string", default: "asc,harden" },
         seeds: { type: "string", default: "1" },
         evals: { type: "string", default: "20000" },
@@ -343,8 +346,12 @@ interface ProblemState {
 }
 
 const skippedClosed = problems.filter((p) => infoOf(p)?.closed);
+// The leaders were read once at start; a problem filled by another machine since then is still searched.
+const skippedExisting = opts["skip-existing"]
+  ? problems.filter((p) => !infoOf(p)?.closed && infoOf(p)?.leader != null)
+  : [];
 const open = orderProblems(
-  problems.filter((p) => !infoOf(p)?.closed),
+  problems.filter((p) => !infoOf(p)?.closed && !skippedExisting.includes(p)),
   order,
   infoOf,
   problemSeed,
@@ -420,7 +427,9 @@ let newRunsDone = 0;
 let problemsDone = 0;
 const sub = { sent: 0, accepted: 0, leading: 0, skipped: 0, failed: 0 };
 log(
-  `${open.length} open problem(s), ${skippedClosed.length} closed skipped; ${totalRuns} run(s), ` +
+  `${open.length} open problem(s), ${skippedClosed.length} closed skipped` +
+    (opts["skip-existing"] ? `, ${skippedExisting.length} with an entry skipped` : "") +
+    `; ${totalRuns} run(s), ` +
     `${resumed} already in ${runsPath}`,
 );
 

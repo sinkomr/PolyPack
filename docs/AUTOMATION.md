@@ -68,11 +68,13 @@ The cost is CPU time. Each search uses one core for up to `--time` seconds, so a
 `deploy/managed-agent/run.sh` runs this script in an Anthropic-hosted cloud sandbox (Managed Agents, beta), supervised by a small model that only starts the job and checks on it. It needs `ANTHROPIC_API_KEY` in the environment, `jq`, and, while the repository is private, a read-only GitHub token for it in `~/.polypack/github-token` (otherwise it asks for one). The sandbox may reach only this site, GitHub and the npm registry, and the session has a hard spending cap in US cents:
 
 ```sh
-./deploy/managed-agent/run.sh start 1000 '--sample 300 --methods asc,harden --seeds 1-2 --hours 1 --submit --name "My batch"'
-./deploy/managed-agent/run.sh watch
+./deploy/managed-agent/run.sh start phase1a 1000 '--N 0,3-5 --M 0,3-12 --P 1-100 --skip-existing --order smallest-first --methods harden,asc --seeds 1-2 --hours 12 --submit --name "Claude Haiku 5.5"'
 ./deploy/managed-agent/run.sh status
-./deploy/managed-agent/run.sh fetch
-./deploy/managed-agent/run.sh delete
+./deploy/managed-agent/run.sh watch phase1a
+./deploy/managed-agent/run.sh fetch phase1a
+./deploy/managed-agent/run.sh delete phase1a
 ```
 
-`fetch` downloads `run.log`, `runs.jsonl` and the best configurations into `~/.polypack/managed/`. `delete` removes the sandbox and its files. The number of cores a sandbox has is not documented; the job reports it in its first lines.
+Each session gets a short name. Several can run at once on different slices of the problems; `--skip-existing` keeps them from repeating problems that already have an entry. `status` without a name lists every session with its hours and cost.
+
+`fetch` downloads `run.log`, `runs.jsonl` and the best configurations into `~/.polypack/managed/outputs-<name>/`. `delete` removes the sandbox and its files. The number of cores a sandbox has is not documented; the job reports it in its first lines.

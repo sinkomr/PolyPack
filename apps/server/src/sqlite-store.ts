@@ -1,6 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
-import { GET_MANY_LIMIT, KEEP_PER_PROBLEM, NewSubmission, Store, StoredSubmission } from "./store";
+import { EntryEdit, GET_MANY_LIMIT, KEEP_PER_PROBLEM, NewSubmission, Store, StoredSubmission } from "./store";
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS submissions (
@@ -233,6 +233,34 @@ export class SqliteStore implements Store {
     const r = this.db
       .prepare("UPDATE submissions SET verification = ? WHERE id = ? AND verification != 'none'")
       .run(decision, id);
+    return Number(r.changes) > 0;
+  }
+
+  async edit(id: number, changes: EntryEdit): Promise<boolean> {
+    const sets: string[] = [];
+    const values: (string | number | null)[] = [];
+    const set = (column: string, value: string | number | null) => {
+      sets.push(`${column} = ?`);
+      values.push(value);
+    };
+    if (changes.name !== undefined) set("name", changes.name);
+    if (changes.agent_note !== undefined) set("agent_note", changes.agent_note);
+    const p = changes.provenance;
+    if (p) {
+      set("found_with", p.found_with);
+      set("method", p.method);
+      set("method_params", p.method_params ? JSON.stringify(p.method_params) : null);
+      set("seed", p.seed);
+      set("budget", p.budget ? JSON.stringify(p.budget) : null);
+      set("software", p.software);
+    }
+    if (!sets.length) {
+      const s = await this.get(id);
+      return !!s && s.verification !== "rejected";
+    }
+    const r = this.db
+      .prepare(`UPDATE submissions SET ${sets.join(", ")} WHERE id = ? AND ${LISTED}`)
+      .run(...values, id);
     return Number(r.changes) > 0;
   }
 

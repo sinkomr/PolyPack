@@ -1,5 +1,12 @@
 import { LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
 
+/** What `edit` may change; `provenance` replaces all six provenance fields together. */
+export interface EntryEdit {
+  name?: string;
+  agent_note?: string;
+  provenance?: Provenance;
+}
+
 /** Most ids one `getMany` call accepts. */
 export const GET_MANY_LIMIT = 500;
 
@@ -75,4 +82,9 @@ export interface Store {
    * rejected, which hides it from every listing. False when there is no such listed entry.
    */
   remove(id: number): Promise<boolean>;
+  /**
+   * Corrects the name, note or provenance of a listed entry (a renamed bot, a provenance recorded in
+   * the note by an older client). Fields left undefined are kept. False when there is no such entry.
+   */
+  edit(id: number, changes: EntryEdit): Promise<boolean>;
 }

@@ -24,7 +24,7 @@ import { compress } from "hono/compress";
 import { streamSSE } from "hono/streaming";
 import { SOLVER_METHODS, docsPage } from "./docs";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, RateLimiter, sanitizeText } from "./limits";
-import { Store, StoredSubmission } from "./store";
+import { EntryEdit, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
 const METHOD_NAMES = SOLVER_METHODS.map(([name]) => name);
@@ -444,6 +444,46 @@ export function createApp(opts: AppOptions): Hono {
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
     const ok = await store.remove(body.id as number);
     if (ok) log(`[review] submission ${body.id} removed`);
+    return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
+  });
+
+  // Corrects an entry's name, note or provenance; the packing and its score never change.
+  app.post("/api/admin/edit", async (c) => {
+    const denied = admin(c);
+    if (denied) return denied;
+    const body = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!body || !Number.isInteger(body.id)) return c.json({ error: "body must be an object with a numeric id" }, 400);
+    const errors: string[] = [];
+    const changes: EntryEdit = {};
+    if (body.name !== undefined) {
+      const name = typeof body.name === "string" ? sanitizeText(body.name, MAX_NAME_LENGTH) : "";
+      if (!name) errors.push("name must be a non-empty string");
+      else changes.name = name;
+    }
+    if (body.agent_note !== undefined) {
+      if (typeof body.agent_note !== "string") errors.push("agent_note must be a string");
+      else changes.agent_note = sanitizeText(body.agent_note, MAX_NOTE_LENGTH);
+    }
+    const touched = ["found_with", "method", "method_params", "seed", "budget", "software"].some((k) => k in body);
+    if (touched) {
+      // all six are replaced together, so found_with must be given rather than default to "hand"
+      if (body.found_with === undefined) errors.push("found_with is required when provenance is changed");
+      else {
+        const parsed = parseProvenance(body, METHOD_NAMES);
+        if (!parsed.ok) errors.push(...parsed.errors);
+        else
+          changes.provenance = {
+            ...parsed.provenance,
+            software:
+              parsed.provenance.software === null
+                ? null
+                : sanitizeText(parsed.provenance.software, MAX_SOFTWARE_LENGTH) || null,
+          };
+      }
+    }
+    if (errors.length) return c.json({ error: errors.join("; ") }, 400);
+    const ok = await store.edit(body.id as number, changes);
+    if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
 

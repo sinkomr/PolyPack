@@ -857,6 +857,46 @@ describe("submissions that beat the literature", () => {
     expect((await get("/api/submissions/1")).status).toBe(404);
   });
 
+  it("lets the admin correct an entry's name, note and provenance, never its packing", async () => {
+    const auth = { authorization: "Bearer secret", "content-type": "application/json" };
+    const edit = (body: unknown, headers: Record<string, string> = auth) =>
+      app.request("/api/admin/edit", { method: "POST", headers, body: JSON.stringify(body) });
+    const r = await submit(squares(2, { name: "bot batch", agent: "ai", agent_note: "harden, seed 2, 20000 evals" }));
+    const id = r.body.id!;
+    expect((await edit({ id, name: "x" }, { "content-type": "application/json" })).status).toBe(401);
+    expect((await edit({ id, method: "harden" })).status).toBe(400);
+    expect((await edit({ id, found_with: "optimizer" })).status).toBe(400);
+    expect((await edit({ id, found_with: "optimizer", method: "no-such-method" })).status).toBe(400);
+    expect((await edit({ id, name: "   " })).status).toBe(400);
+    expect((await edit({ id: id + 99, name: "x" })).status).toBe(404);
+
+    const ok = await edit({
+      id,
+      name: "Bot 1",
+      agent_note: "",
+      found_with: "optimizer",
+      method: "harden",
+      seed: 2,
+      budget: { evals: 20000, time_s: 15 },
+    });
+    expect(ok.status).toBe(200);
+    const stored = (await get(`/api/submissions/${id}`)).body;
+    expect(stored).toMatchObject({
+      name: "Bot 1",
+      agent_note: "",
+      found_with: "optimizer",
+      method: "harden",
+      seed: 2,
+      budget: { evals: 20000, time_s: 15 },
+      method_params: null,
+      score: r.body.score,
+    });
+    expect((await get("/api/leaderboard/4/4/2")).body.entries[0]).toMatchObject({ id, name: "Bot 1", found_with: "optimizer" });
+    // a name alone leaves the provenance as it is
+    expect((await edit({ id, name: "Bot 2" })).status).toBe(200);
+    expect((await get(`/api/submissions/${id}`)).body).toMatchObject({ name: "Bot 2", method: "harden" });
+  });
+
   it("lets the admin remove an ordinary entry, which no review applies to", async () => {
     const send = (headers: Record<string, string>, body: unknown) =>
       app.request("/api/admin/remove", {

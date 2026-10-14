@@ -320,6 +320,11 @@ The answer is 503 when the server has no token configured and 401 when the token
 <p>Body <code>{"id": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry; the next best entry becomes the leader.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
 
+<h3><code>POST /api/admin/edit</code></h3>
+<p>Body <code>{"id": 17, ...}</code> with any of <code>name</code>, <code>agent_note</code> and the provenance fields of a submission. Corrects how an entry is labelled; its packing and score never change.
+Provenance is replaced as a whole, so <code>found_with</code> is required whenever any provenance field is given, and the same validation as on submission applies.
+<code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
+
 <h2 id="automated-search">Automated search</h2>
 <p>The optimizers are not HTTP endpoints: this server validates and stores packings and does not search for them. They run in two places.</p>
 <ul>
