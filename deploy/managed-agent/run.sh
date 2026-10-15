@@ -3,6 +3,7 @@
 # Needs ANTHROPIC_API_KEY in the environment and jq. Each session has a short name of your choosing:
 #   start <name> <cents> '<batch arguments>'   start a session capped at <cents> (US cents)
 #   status [name]                              state and spending of one session, or of all
+#   nudge [name]                               wake a session whose supervisor stopped (all idle ones by default)
 #   watch <name> | stop <name> | fetch <name> | delete <name>
 # Ids are kept in ~/.polypack/managed/ so that later subcommands find the sessions.
 set -euo pipefail
@@ -86,6 +87,22 @@ status)
     api GET "/sessions/$(named "$name")" |
       jq -c --arg name "$name" '{session: $name, status, active_hours: ((.usage.active_seconds // 0) / 3600 | . * 100 | round / 100),
         cost_cents: (.usage.list_cost.amount // "0"), cap_cents: .budget.max_list_cost.amount}'
+  done
+  ;;
+nudge)
+  # A supervisor that ends its turn (for instance after a crashed check) leaves the session idle,
+  # and an idle sandbox stops running the batch. A new message wakes it; the batch resumes from runs.jsonl.
+  nudge='Your previous turn ended while the batch should still be working. Check whether the process in /mnt/session/outputs/batch.pid is alive. If it is not, and the last lines of run.log do not show the batch finishing, start it again with exactly the same command as before (it resumes from runs.jsonl, so nothing is repeated). Then go on with the 5-minute check cycle. If a check fails or is interrupted, run it again; do not end your turn until the batch has finished.'
+  for name in ${1:-$(ls "$STATE/sessions")}; do
+    id=$(named "$name")
+    state=$(api GET "/sessions/$id" | jq -r .status)
+    if [[ -n "${1:-}" || "$state" == idle ]]; then
+      jq -n --arg text "$nudge" '{events:[{type:"user.message", content:[{type:"text", text:$text}]}]}' |
+        api POST "/sessions/$id/events?beta=true" --data @- > /dev/null
+      print "$name: was $state, nudged"
+    else
+      print "$name: $state"
+    fi
   done
   ;;
 watch)
