@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   TOL,
   circleSeparation,
+  evaluate,
   findOverlaps,
   pieceSeparation,
   pieceVertices,
@@ -63,8 +64,18 @@ describe("polygon separation (SAT)", () => {
 describe("circles", () => {
   it("circle-circle uses the centre distance", () => {
     expect(circleSeparation({ x: 0, y: 0, theta: 0 }, { x: 3, y: 4, theta: 0 }).sep).toBeCloseTo(3, 12);
-    expect(findOverlaps(0, [{ x: 0, y: 0, theta: 0 }, { x: 2, y: 0, theta: 0 }])).toHaveLength(0);
-    expect(findOverlaps(0, [{ x: 0, y: 0, theta: 0 }, { x: 1.999, y: 0, theta: 0 }])).toHaveLength(1);
+    expect(
+      findOverlaps(0, [
+        { x: 0, y: 0, theta: 0 },
+        { x: 2, y: 0, theta: 0 },
+      ]),
+    ).toHaveLength(0);
+    expect(
+      findOverlaps(0, [
+        { x: 0, y: 0, theta: 0 },
+        { x: 1.999, y: 0, theta: 0 },
+      ]),
+    ).toHaveLength(1);
   });
 
   it("polygon-circle closest-point distance", () => {
@@ -79,17 +90,40 @@ describe("circles", () => {
 describe("broad phase", () => {
   it("grid search finds the same pairs as the all-pairs search", () => {
     fc.assert(
-      fc.property(fc.constantFrom(0, 3, 4, 5, 6, 9), fc.array(poseArb(4), { minLength: 2, maxLength: 40 }), (N, poses) => {
-        const brute: string[] = [];
-        for (let i = 0; i < poses.length; i++) {
-          for (let j = i + 1; j < poses.length; j++) {
-            if (pieceSeparation(N, poses[i], poses[j]).sep < -TOL) brute.push(`${i}-${j}`);
+      fc.property(
+        fc.constantFrom(0, 3, 4, 5, 6, 9),
+        fc.array(poseArb(4), { minLength: 2, maxLength: 40 }),
+        (N, poses) => {
+          const brute: string[] = [];
+          for (let i = 0; i < poses.length; i++) {
+            for (let j = i + 1; j < poses.length; j++) {
+              if (pieceSeparation(N, poses[i], poses[j]).sep < -TOL) brute.push(`${i}-${j}`);
+            }
           }
-        }
-        const grid = findOverlaps(N, poses).map((o) => `${o.i}-${o.j}`);
-        expect(grid.sort()).toEqual(brute.sort());
-      }),
+          const grid = findOverlaps(N, poses).map((o) => `${o.i}-${o.j}`);
+          expect(grid.sort()).toEqual(brute.sort());
+        },
+      ),
       { numRuns: 300 },
     );
+  });
+});
+
+describe("overlap limit", () => {
+  // every piece at one point: P(P-1)/2 overlapping pairs without the limit
+  const stacked = Array.from({ length: 60 }, () => ({ x: 0, y: 0, theta: 0 }));
+
+  it("stops at the limit and finds every pair without one", () => {
+    expect(findOverlaps(7, stacked)).toHaveLength((60 * 59) / 2);
+    expect(findOverlaps(7, stacked, TOL, 1, 20)).toHaveLength(20);
+    expect(findOverlaps(0, stacked.slice(0, 3), TOL, 1, 20)).toHaveLength(3);
+  });
+
+  it("evaluate reports a capped count as a lower bound and still rejects", () => {
+    const capped = evaluate({ N: 7, M: 4, P: 60, pieces: stacked, container_phi: 0 }, { maxOverlaps: 20 });
+    expect(capped.valid).toBe(false);
+    expect(capped.reasons[0]).toMatch(/^at least 20 overlapping pair/);
+    const few = evaluate({ N: 7, M: 4, P: 2, pieces: stacked.slice(0, 2), container_phi: 0 }, { maxOverlaps: 20 });
+    expect(few.reasons[0]).toMatch(/^1 overlapping pair/);
   });
 });

@@ -458,7 +458,7 @@ function saveBest(st: ProblemState, best: BestFile): void {
 
 // ---------- submissions ----------
 
-/** At most 25 POSTs per sliding minute across the whole batch; the server allows 30 per address. */
+/** At most 25 POSTs per sliding minute across the whole batch; the server allows 120 per address, shared by every copy behind one. */
 const pacer = new Pacer(25, 60_000, Date.now, sleep);
 const submitQueue: ProblemState[] = [];
 let submitter: Promise<void> | null = null;

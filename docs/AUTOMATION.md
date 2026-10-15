@@ -51,7 +51,7 @@ Running the same command again resumes: runs whose (problem, method, seed, budge
 
 ## The rate limit
 
-The server accepts 30 submissions per minute per address. The script keeps all its workers together at or below 25 per minute; on HTTP 429 it waits 65 s and tries again (at most three times), on 409 it marks the problem closed, and network errors are retried with backoff up to 60 s without stopping the batch. Several copies of the script behind one address share the server's limit but not the script's pacing, so run one copy per address and use `--workers` for parallelism.
+The server accepts 120 submissions per minute per address. The script keeps all its workers together at or below 25 per minute; on HTTP 429 it waits 65 s and tries again (at most three times), on 409 it marks the problem closed, and network errors are retried with backoff up to 60 s without stopping the batch. Several copies of the script behind one address share the server's limit but not the script's pacing, so on one machine run one copy and use `--workers` for parallelism. Cloud sandboxes may also share an address: a few dozen sessions on problems of a hundred pieces or more stay well under the limit, but many sessions on very small problems may not.
 
 ## Choosing methods
 

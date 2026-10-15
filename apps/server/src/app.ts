@@ -23,7 +23,15 @@ import { Context, Hono } from "hono";
 import { compress } from "hono/compress";
 import { streamSSE } from "hono/streaming";
 import { SOLVER_METHODS, docsPage } from "./docs";
-import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, RateLimiter, sanitizeText } from "./limits";
+import {
+  MAX_BODY_BYTES,
+  MAX_NAME_LENGTH,
+  MAX_NOTE_LENGTH,
+  MAX_REPORTED_OVERLAPS,
+  RateLimiter,
+  SUBMISSIONS_PER_MINUTE,
+  sanitizeText,
+} from "./limits";
 import { EntryEdit, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
@@ -98,7 +106,7 @@ export function createApp(opts: AppOptions): Hono {
   const { store } = opts;
   const app = new Hono();
   const windowMs = opts.limits?.windowMs ?? 60_000;
-  const ipLimit = new RateLimiter(opts.limits?.perIp ?? 30, windowMs);
+  const ipLimit = new RateLimiter(opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE, windowMs);
   const clientIp = opts.clientIp ?? (() => "unknown");
   const log = opts.log ?? ((msg: string) => console.log(msg));
 
@@ -312,7 +320,7 @@ export function createApp(opts: AppOptions): Hono {
 
     // The score is always recomputed here. Any container or score fields in the body were
     // already dropped by parseConfig.
-    const result = evaluate(config, { autoOrient: true });
+    const result = evaluate(config, { autoOrient: true, maxOverlaps: MAX_REPORTED_OVERLAPS });
     if (!result.valid || !result.container) return reject(422, result.reasons);
     const container = result.container;
     const score = container.size;

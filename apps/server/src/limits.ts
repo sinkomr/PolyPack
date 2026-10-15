@@ -41,3 +41,10 @@ export function sanitizeText(raw: string, maxLength: number): string {
     .slice(0, maxLength)
     .trim();
 }
+/** Submissions per minute from one address. Cloud batch sessions may share one address. */
+export const SUBMISSIONS_PER_MINUTE = 120;
+/**
+ * Overlapping pairs the server looks for before rejecting. Finding every pair of a heavily
+ * overlapping 500-piece configuration takes up to seconds; the first few are found at once.
+ */
+export const MAX_REPORTED_OVERLAPS = 20;

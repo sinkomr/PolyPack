@@ -83,17 +83,20 @@ export interface Evaluation {
 /**
  * Validity and score of a configuration. This is the single scoring routine for client and server.
  * With `autoOrient` the container is computed at the given phi and at the auto-oriented phi,
- * and the smaller one is kept.
+ * and the smaller one is kept. With `maxOverlaps`, at most that many overlapping pairs are found
+ * and reported (the server's guard against slow, deliberately invalid submissions).
  */
-export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean } = {}): Evaluation {
+export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean; maxOverlaps?: number } = {}): Evaluation {
   const { N, M, P, pieces } = config;
   const reasons: string[] = [];
   if (pieces.length !== P) reasons.push(`expected exactly ${P} pieces, got ${pieces.length}`);
-  const overlaps = findOverlaps(N, pieces);
+  const limit = opts.maxOverlaps ?? Infinity;
+  const overlaps = findOverlaps(N, pieces, TOL, 1, limit);
   if (overlaps.length) {
     const worst = overlaps.reduce((a, b) => (b.sep < a.sep ? b : a));
+    const count = overlaps.length >= limit ? `at least ${overlaps.length}` : `${overlaps.length}`;
     reasons.push(
-      `${overlaps.length} overlapping pair(s); deepest is pieces ${worst.i} and ${worst.j}, ` +
+      `${count} overlapping pair(s); deepest found is pieces ${worst.i} and ${worst.j}, ` +
         `penetration ${(-worst.sep).toExponential(3)} (tolerance ${TOL})`,
     );
   }
@@ -130,7 +133,12 @@ export function strictVerify(N: number, pieces: readonly Pose[], container: Cont
   // tol = 0 would still accept exact contact; require a strictly positive gap
   const touching = findOverlaps(N, pieces, -Number.MIN_VALUE, scale);
   if (touching.length) {
-    return { ok: false, certifiedSize, eps, reason: `${touching.length} pair(s) not strictly separated after shrinking` };
+    return {
+      ok: false,
+      certifiedSize,
+      eps,
+      reason: `${touching.length} pair(s) not strictly separated after shrinking`,
+    };
   }
   const shrunk = encloseSet(extremePoints(N, pieces, scale), container.M, container.phi);
   if (!(shrunk.size < container.size)) {

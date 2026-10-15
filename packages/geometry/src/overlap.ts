@@ -184,8 +184,11 @@ export interface Overlap {
  * Broad phase: uniform grid with cell size 2R, where R is the bounding radius. Two pieces
  * can only overlap when their centres are closer than 2R, so only the 3x3 block of
  * neighbouring cells needs the exact test.
+ * With `limit`, the search stops once that many pairs are found. Pieces that do not overlap
+ * leave only a bounded number of neighbours in each cell, so the cost of a heavily overlapping
+ * configuration (say every piece at one point) then stays near that of a valid one.
  */
-export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale = 1): Overlap[] {
+export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale = 1, limit = Infinity): Overlap[] {
   const reach = 2 * boundingRadius(N) * scale;
   const reach2 = reach * reach;
   const OFFSET = 2 ** 25;
@@ -206,7 +209,7 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
           const dy = a.y - b.y;
           if (dx * dx + dy * dy > reach2) continue;
           const sep = pieceSeparation(N, a, b, scale).sep;
-          if (sep < -tol) out.push({ i: j, j: i, sep });
+          if (sep < -tol && out.push({ i: j, j: i, sep }) >= limit) return out;
         }
       }
     }
