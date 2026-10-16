@@ -119,10 +119,12 @@ function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "siz
     chart.append(svg("line", { class: "gridline", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
     chart.append(svg("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, v.toFixed(digits)));
   }
-  const every = Math.max(1, Math.ceil(rows.length / 20));
-  rows.forEach((r, i) => {
-    if (i % every === 0) chart.append(svg("text", { x: x(r.P), y: H - B + 16, "text-anchor": "middle" }, String(r.P)));
-  });
+  // P ticks at round values (1, 2 or 5 times a power of ten apart), at most about 16 of them
+  const raw = (pMax - pMin) / 16;
+  const pow = 10 ** Math.floor(Math.log10(Math.max(raw, 1)));
+  const step = [1, 2, 5, 10].map((k) => k * pow).find((k) => k >= raw) ?? 10 * pow;
+  for (let p = Math.ceil(pMin / step) * step; p <= pMax; p += step)
+    chart.append(svg("text", { x: x(p), y: H - B + 16, "text-anchor": "middle" }, String(p)));
   chart.append(svg("line", { class: "axis", x1: L, x2: W - R, y1: H - B, y2: H - B }));
   chart.append(svg("line", { class: "axis", x1: L, x2: L, y1: T, y2: H - B }));
   chart.append(svg("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle" }, "P (number of pieces)"));
@@ -135,8 +137,20 @@ function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "siz
     ),
   );
 
-  const line = (pts: [number, number][], cls: string) =>
-    chart.append(svg("polyline", { class: cls, points: pts.map(([p, v]) => `${x(p)},${y(val(p, v))}`).join(" ") }));
+  // a run of P without a value breaks the line, rather than drawing a value nobody has
+  const line = (pts: [number, number][], cls: string) => {
+    let run: [number, number][] = [];
+    const flush = () => {
+      if (run.length)
+        chart.append(svg("polyline", { class: cls, points: run.map(([p, v]) => `${x(p)},${y(val(p, v))}`).join(" ") }));
+      run = [];
+    };
+    for (const pt of pts) {
+      if (run.length && pt[0] !== run[run.length - 1][0] + 1) flush();
+      run.push(pt);
+    }
+    flush();
+  };
   line(
     rows.map((r) => [r.P, r.bound]),
     "bound",

@@ -35,7 +35,7 @@ test("the records page lists published values with a chart", async ({ page }) =>
   await expect(page.locator("#chart *")).toHaveCount(0);
   await page.getByText("Charts: records against the area bound").click();
   await expect(page.locator("#chart .lit-mark").first()).toBeVisible();
-  await expect(page.locator("#chart .record")).toHaveCount(2);
+  await expect(page.locator("#chart polyline.record")).toHaveCount(1);
   // the second chart subtracts the bound: ten circles, 6.747442 against sqrt(10 pi) = 5.604991
   await expect(page.locator("#chart-gap .lit-mark title").nth(9)).toContainText("1.142450 above");
   await expect(page.locator("#chart-gap-title")).toContainText("minus the bound");
