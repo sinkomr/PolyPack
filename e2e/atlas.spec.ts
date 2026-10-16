@@ -121,7 +121,9 @@ async function freeSlot(request: APIRequestContext): Promise<{ M: number; P: num
 /** Submits P circles in a row to the real server; a smaller gap is a better entry. */
 async function submitRow(request: APIRequestContext, slot: { M: number; P: number }, gap: number, name = "atlas test") {
   const pieces = Array.from({ length: slot.P }, (_, i) => ({ x: gap * i, y: 0, theta: 0 }));
-  const r = await request.post("/api/submit", { data: { N: 0, ...slot, container_phi: 0, name, found_with: "external", software: "e2e", pieces } });
+  const r = await request.post("/api/submit", {
+    data: { N: 0, ...slot, container_phi: 0, name, found_with: "external", software: "e2e", pieces },
+  });
   const body = await r.json();
   expect(body.valid).toBe(true);
   return body as { id: number; score: number };
@@ -199,11 +201,15 @@ test("published data carries reference marks to the notes of its sources", async
   await tile(page, 7).click();
   const detail = page.getByRole("dialog");
   const credit = detail.locator("#detail-source-1");
-  await expect(credit).toHaveText("Source 1 Erich Friedman, Packing Center: Circles in Circles, read 2026-10-07: value and caption");
+  await expect(credit).toHaveText(
+    "Source 1 Erich Friedman, Packing Center: Circles in Circles, read 2026-10-07: value and caption",
+  );
   await expect(credit.getByRole("link")).toHaveAttribute("href", "https://erich-friedman.github.io/packing/cirincir/");
   await expect(detail.locator("#detail-source-3")).toHaveText("Source 3 Eckard Specht, Packomania: coordinates");
   await expect(detail.locator(".detail-figure .src-ref a")).toHaveText(["3"]);
-  await expect(detail.locator(".detail-source", { hasText: "Proved by Graham" }).locator(".src-ref a")).toHaveText(["1"]);
+  await expect(detail.locator(".detail-source", { hasText: "Proved by Graham" }).locator(".src-ref a")).toHaveText([
+    "1",
+  ]);
   await detail.locator(".detail-figure .src-ref a").click();
   await expect(detail.locator("#detail-source-3")).toBeFocused();
   await expect(detail).toBeVisible();
@@ -226,7 +232,9 @@ test("published data carries reference marks to the notes of its sources", async
 
   // squares in a square: David Ellsworth's values, with coordinates that this site constructed
   await page.goto("/browse.html#4,4");
-  await expect(page.locator("#atlas-sources")).toHaveText("Published records compiled by David Ellsworth2, used with attribution.");
+  await expect(page.locator("#atlas-sources")).toHaveText(
+    "Published records compiled by David Ellsworth2, used with attribution.",
+  );
   await expect(page.locator("#rows tr").nth(10).locator(".src-ref a")).toHaveText(["2"]);
 });
 
@@ -381,6 +389,9 @@ test("the atlas can be operated with the keyboard alone", async ({ page }) => {
   await expect(art(page, 4)).toHaveClass(/drawn/);
   // the choosers are radio groups: Tab reaches the group, the arrow keys choose
   await page.locator("#m-select").focus();
+  // the closed charts are one stop: their summary
+  await page.keyboard.press("Tab");
+  await expect(page.locator("#plot > summary")).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("radio", { name: "Grid" })).toBeFocused();
   await page.keyboard.press("ArrowRight");
@@ -493,6 +504,7 @@ test("the wall of tiles is wider than the chart and the table, which keep their 
   await page.setViewportSize({ width: 1400, height: 800 });
   await page.goto("/browse.html#0,4");
   await expect(art(page, 1)).toHaveClass(/drawn/);
+  await page.locator("#plot > summary").click();
   const box = (selector: string) => page.locator(selector).evaluate((e) => e.getBoundingClientRect().toJSON());
   const [atlas, chart, table] = [await box("#atlas"), await box("#chart"), await box(".table-wrap")];
   expect(atlas.width).toBeCloseTo(1120, 0);

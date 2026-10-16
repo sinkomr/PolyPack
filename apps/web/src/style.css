@@ -47,7 +47,11 @@ body {
   margin: 0;
 }
 body {
-  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font:
+    15px/1.4 system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
   background: var(--bg);
   color: var(--text);
   display: flex;
@@ -97,7 +101,10 @@ a {
   border-bottom: 1px solid var(--border);
   align-items: center;
 }
-.toolbar #mouse-snap { flex: 0 0 auto; width: 154px; }
+.toolbar #mouse-snap {
+  flex: 0 0 auto;
+  width: 154px;
+}
 .snap {
   display: inline-flex;
   gap: 2px;
@@ -139,21 +146,66 @@ canvas#board {
   padding: 0;
   min-width: 0;
 }
-.solve-actions { margin-top: 8px; gap: 6px; }
-.solve-stats { margin-top: 8px; font-size: 13px; }
-#solve-params .parameter { display: block; margin: 10px 0; }
-#solve-params .parameter span { display: block; font-size: 13px; margin-bottom: 3px; }
-#solve-params input:not([type="checkbox"]), #solve-params select, #solve-params textarea { width: 100%; }
-#solve-params textarea {
-  color: inherit; background: var(--bg); border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px; min-height: 80px; resize: vertical; font: 12px monospace;
+.solve-actions {
+  margin-top: 8px;
+  gap: 6px;
 }
-#solve-form [aria-invalid="true"] { border-color: var(--bad); }
-#solve-params fieldset { border: 1px solid var(--border); margin: 10px 0; padding: 8px; min-width: 0; }
-#solve-params legend { font-size: 13px; }
-#solve-trace { width: 100%; margin-top: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
-#solve-trace text { fill: var(--muted); font-size: 10px; }
-#solve-trace polyline { fill: none; stroke: var(--accent); stroke-width: 2; }
+.solve-stats {
+  margin-top: 8px;
+  font-size: 13px;
+}
+#solve-params .parameter {
+  display: block;
+  margin: 10px 0;
+}
+#solve-params .parameter span {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+#solve-params input:not([type="checkbox"]),
+#solve-params select,
+#solve-params textarea {
+  width: 100%;
+}
+#solve-params textarea {
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  min-height: 80px;
+  resize: vertical;
+  font: 12px monospace;
+}
+#solve-form [aria-invalid="true"] {
+  border-color: var(--bad);
+}
+#solve-params fieldset {
+  border: 1px solid var(--border);
+  margin: 10px 0;
+  padding: 8px;
+  min-width: 0;
+}
+#solve-params legend {
+  font-size: 13px;
+}
+#solve-trace {
+  width: 100%;
+  margin-top: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+#solve-trace text {
+  fill: var(--muted);
+  font-size: 10px;
+}
+#solve-trace polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
 h2 {
   font-size: 13px;
   text-transform: uppercase;
@@ -379,46 +431,62 @@ body.scroll {
 figure {
   margin: 12px 0;
 }
-#chart {
+.plot {
+  margin: 20px 0 8px;
+}
+.plot > summary {
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  padding: 6px 0;
+}
+.plot > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.chart {
   width: 100%;
   height: auto;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
-#chart text {
+.chart text {
   fill: var(--text);
   font-size: 12px;
 }
-#chart .axis {
+.chart .axis {
   stroke: var(--muted);
   stroke-width: 1;
 }
-#chart .gridline {
+.chart .gridline {
   stroke: var(--grid-major);
   stroke-width: 1;
 }
-#chart .bound {
+.chart .bound {
   stroke: var(--muted);
   stroke-width: 1.5;
   stroke-dasharray: 6 4;
   fill: none;
 }
-#chart .lit {
-  stroke: var(--container);
+.chart .record {
+  stroke: var(--text);
   fill: none;
   stroke-width: 1.5;
+  stroke-linejoin: round;
 }
-#chart .lit-mark {
+.chart .lit-mark {
   fill: var(--panel);
   stroke: var(--container);
   stroke-width: 2;
 }
-#chart .site-mark {
+.chart .site-mark {
   fill: var(--accent);
 }
 
-#chart .site-mark.pending {
+.chart .site-mark.pending {
   fill: var(--panel);
   stroke: var(--accent);
   stroke-width: 1.5;

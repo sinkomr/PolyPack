@@ -27,6 +27,18 @@
       </div>
       <p id="note" class="note" role="status" aria-live="polite"></p>
 
+      <details id="plot" class="plot">
+        <summary>Charts: records against the area bound</summary>
+        <figure>
+          <svg id="chart" class="chart" role="img" aria-labelledby="chart-title" viewBox="0 0 900 380"></svg>
+          <figcaption id="chart-title" class="note"></figcaption>
+        </figure>
+        <figure>
+          <svg id="chart-gap" class="chart" role="img" aria-labelledby="chart-gap-title" viewBox="0 0 900 380"></svg>
+          <figcaption id="chart-gap-title" class="note"></figcaption>
+        </figure>
+      </details>
+
       <section id="atlas" class="atlas" aria-labelledby="atlas-title">
         <h3 id="atlas-title" class="atlas-title">Atlas</h3>
         <p id="atlas-lede" class="note atlas-lede"></p>
@@ -60,7 +72,8 @@
         <p class="atlas-more"><button id="atlas-more" type="button" hidden></button></p>
         <p id="atlas-sources" class="note atlas-credit" hidden></p>
         <p class="note atlas-credit">
-          Atlas layout inspired by <a href="https://jlevy.github.io/squares/" target="_blank" rel="noopener noreferrer">The Squares Project</a>.
+          Atlas layout inspired by
+          <a href="https://jlevy.github.io/squares/" target="_blank" rel="noopener noreferrer">The Squares Project</a>.
         </p>
       </section>
       <dialog id="atlas-detail" class="atlas-detail" aria-labelledby="detail-title">
@@ -71,11 +84,7 @@
         <div id="detail-body" class="detail-body"></div>
       </dialog>
 
-      <h3 class="atlas-title">Chart and table</h3>
-      <figure>
-        <svg id="chart" role="img" aria-labelledby="chart-title" viewBox="0 0 900 380"></svg>
-        <figcaption id="chart-title" class="note"></figcaption>
-      </figure>
+      <h3 class="atlas-title">Table</h3>
       <div class="table-wrap">
         <table>
           <thead>

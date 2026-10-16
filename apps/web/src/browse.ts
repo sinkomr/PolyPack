@@ -2,7 +2,7 @@ import { areaLowerBound } from "@polypack/geometry";
 import * as api from "./api";
 import { Atlas } from "./atlas";
 import { foundWithLabel } from "./found-with";
-import { AtlasRow, AtlasView, parseView, safeHref, viewQuery } from "./atlas-model";
+import { AtlasRow, AtlasView, parseView, safeHref, verifiedEntry, viewQuery } from "./atlas-model";
 import { el, fillShapeSelect, shapeLabel } from "./shapes-ui";
 import { SOURCES, followSourceMarks, recordSources, renderSourceList, sourceMarks } from "./sources";
 
@@ -67,24 +67,57 @@ function svg(tag: string, attrs: Record<string, string | number>, text = ""): SV
   return e;
 }
 
-/** Score against P: published values, site bests and the area bound, each with its own mark shape. */
-function drawChart(rows: Row[], sizeName: string): void {
-  const chart = $("chart");
+/** The charts are optional: a closed section draws nothing, and whether it is open is remembered. */
+const PLOT_KEY = "polypack.charts";
+const plot = $<HTMLDetailsElement>("plot");
+try {
+  plot.open = localStorage.getItem(PLOT_KEY) === "open";
+} catch {
+  // storage may be unavailable; the charts then start closed
+}
+
+/**
+ * Against P: the record of each P (the smaller of the published value and the best entry not
+ * awaiting review) as a line, published values and site bests as marks, and the area bound.
+ * "size" plots container sizes; "gap" plots each size minus the area bound of its P, so that the
+ * bound is the zero line and the height of a mark is how far it stands from the bound.
+ */
+function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "size" | "gap"): void {
   chart.replaceChildren();
   if (!rows.length) return;
-  const W = 900, H = 380, L = 56, R = 16, T = 34, B = 42;
+  const bound = new Map(rows.map((r) => [r.P, r.bound]));
+  const val = (P: number, size: number) => (mode === "size" ? size : size - bound.get(P)!);
+  const record = (r: Row): number | undefined => {
+    const site = verifiedEntry(r)?.score;
+    const lit = r.lit?.value;
+    return site === undefined ? lit : lit === undefined ? site : Math.min(site, lit);
+  };
+  const W = 900,
+    H = 380,
+    L = 56,
+    R = 16,
+    T = 34,
+    B = 42;
   const pMin = rows[0].P;
   const pMax = Math.max(rows[rows.length - 1].P, pMin + 1);
-  const values = rows.flatMap((r) => [r.bound, r.site?.score, r.lit?.value].filter((v): v is number => v !== undefined));
-  const yMin = Math.min(...values) * 0.97;
-  const yMax = Math.max(...values) * 1.03;
+  const values = rows.flatMap((r) =>
+    [r.bound, r.site?.score, r.lit?.value].filter((v): v is number => v !== undefined).map((v) => val(r.P, v)),
+  );
+  const lo = Math.min(...values);
+  const hi = Math.max(...values);
+  const pad = (hi - lo || 1) * 0.04;
+  const yMin = mode === "size" ? lo * 0.97 : lo - pad;
+  const yMax = mode === "size" ? hi * 1.03 : hi + pad;
   const x = (p: number) => L + ((p - pMin) / (pMax - pMin)) * (W - L - R);
   const y = (v: number) => H - B - ((v - yMin) / (yMax - yMin)) * (H - T - B);
+  const digits = mode === "gap" && yMax - yMin < 0.4 ? 3 : 2;
+  // many points: smaller marks, so that the record line stays readable
+  const dot = rows.length > 120 ? 2 : 4;
 
   for (let i = 0; i <= 4; i++) {
     const v = yMin + ((yMax - yMin) * i) / 4;
     chart.append(svg("line", { class: "gridline", x1: L, x2: W - R, y1: y(v), y2: y(v) }));
-    chart.append(svg("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, v.toFixed(2)));
+    chart.append(svg("text", { x: L - 6, y: y(v) + 4, "text-anchor": "end" }, v.toFixed(digits)));
   }
   const every = Math.max(1, Math.ceil(rows.length / 20));
   rows.forEach((r, i) => {
@@ -93,39 +126,84 @@ function drawChart(rows: Row[], sizeName: string): void {
   chart.append(svg("line", { class: "axis", x1: L, x2: W - R, y1: H - B, y2: H - B }));
   chart.append(svg("line", { class: "axis", x1: L, x2: L, y1: T, y2: H - B }));
   chart.append(svg("text", { x: (L + W - R) / 2, y: H - 6, "text-anchor": "middle" }, "P (number of pieces)"));
-  chart.append(svg("text", { x: 14, y: (T + H - B) / 2, "text-anchor": "middle", transform: `rotate(-90 14 ${(T + H - B) / 2})` }, sizeName));
+  const yName = mode === "size" ? sizeName : `${sizeName} minus area bound`;
+  chart.append(
+    svg(
+      "text",
+      { x: 14, y: (T + H - B) / 2, "text-anchor": "middle", transform: `rotate(-90 14 ${(T + H - B) / 2})` },
+      yName,
+    ),
+  );
 
   const line = (pts: [number, number][], cls: string) =>
-    chart.append(svg("polyline", { class: cls, points: pts.map(([p, v]) => `${x(p)},${y(v)}`).join(" ") }));
-  line(rows.map((r) => [r.P, r.bound]), "bound");
-  const lit = rows.filter((r) => r.lit);
-  line(lit.map((r) => [r.P, r.lit!.value]), "lit");
-  for (const r of lit) {
-    const m = svg("rect", { class: "lit-mark", x: x(r.P) - 4, y: y(r.lit!.value) - 4, width: 8, height: 8 });
-    m.append(svg("title", {}, `P = ${r.P}: published ${r.lit!.display} (${STATUS[r.lit!.status]})`));
+    chart.append(svg("polyline", { class: cls, points: pts.map(([p, v]) => `${x(p)},${y(val(p, v))}`).join(" ") }));
+  line(
+    rows.map((r) => [r.P, r.bound]),
+    "bound",
+  );
+  line(
+    rows.flatMap((r): [number, number][] => (record(r) === undefined ? [] : [[r.P, record(r)!]])),
+    "record",
+  );
+  const tip = (P: number, size: number) =>
+    mode === "size" ? size.toFixed(6) : `${size.toFixed(6)}, ${(size - bound.get(P)!).toFixed(6)} above the area bound`;
+  for (const r of rows.filter((q) => q.lit)) {
+    const v = y(val(r.P, r.lit!.value));
+    const m = svg("rect", { class: "lit-mark", x: x(r.P) - dot, y: v - dot, width: 2 * dot, height: 2 * dot });
+    m.append(svg("title", {}, `P = ${r.P}: published ${tip(r.P, r.lit!.value)} (${STATUS[r.lit!.status]})`));
     chart.append(m);
   }
   for (const r of rows.filter((q) => q.site)) {
     // an entry that awaits review is a claim: hollow and dashed, and named as such
     const pending = r.site!.verification === "pending";
-    const m = svg("circle", { class: pending ? "site-mark pending" : "site-mark", cx: x(r.P), cy: y(r.site!.score), r: 4 });
+    const m = svg("circle", {
+      class: pending ? "site-mark pending" : "site-mark",
+      cx: x(r.P),
+      cy: y(val(r.P, r.site!.score)),
+      r: dot,
+    });
     const what = pending ? "entry pending verification" : "site best";
-    m.append(svg("title", {}, `P = ${r.P}: ${what} ${r.site!.score.toFixed(6)} by ${r.site!.name}`));
+    m.append(svg("title", {}, `P = ${r.P}: ${what} ${tip(r.P, r.site!.score)} by ${r.site!.name}`));
     chart.append(m);
   }
   // legend
   const lx = L + 12;
-  chart.append(svg("circle", { class: "site-mark", cx: lx, cy: 16, r: 4 }));
-  chart.append(svg("text", { x: lx + 10, y: 20 }, "site best"));
-  chart.append(svg("rect", { class: "lit-mark", x: lx + 86, y: 12, width: 8, height: 8 }));
-  chart.append(svg("text", { x: lx + 100, y: 20 }, "published"));
-  chart.append(svg("line", { class: "bound", x1: lx + 176, x2: lx + 204, y1: 16, y2: 16 }));
-  chart.append(svg("text", { x: lx + 210, y: 20 }, "area lower bound"));
+  chart.append(svg("line", { class: "record", x1: lx - 4, x2: lx + 20, y1: 16, y2: 16 }));
+  chart.append(svg("text", { x: lx + 26, y: 20 }, "record"));
+  chart.append(svg("circle", { class: "site-mark", cx: lx + 90, cy: 16, r: 4 }));
+  chart.append(svg("text", { x: lx + 100, y: 20 }, "site best"));
+  chart.append(svg("rect", { class: "lit-mark", x: lx + 172, y: 12, width: 8, height: 8 }));
+  chart.append(svg("text", { x: lx + 186, y: 20 }, "published"));
+  chart.append(svg("line", { class: "bound", x1: lx + 264, x2: lx + 292, y1: 16, y2: 16 }));
+  chart.append(svg("text", { x: lx + 298, y: 20 }, mode === "size" ? "area bound" : "area bound (zero)"));
   if (rows.some((r) => r.site?.verification === "pending")) {
-    chart.append(svg("circle", { class: "site-mark pending", cx: lx + 340, cy: 16, r: 4 }));
-    chart.append(svg("text", { x: lx + 350, y: 20 }, "pending verification"));
+    chart.append(svg("circle", { class: "site-mark pending", cx: lx + 430, cy: 16, r: 4 }));
+    chart.append(svg("text", { x: lx + 440, y: 20 }, "pending verification"));
   }
 }
+
+/** What the charts show; they are drawn only while their section is open. */
+let charted: { rows: Row[]; sizeName: string } = { rows: [], sizeName: "" };
+function drawCharts(): void {
+  const { rows, sizeName } = charted;
+  const shown = plot.open && rows.length > 0;
+  $("chart-title").textContent = shown
+    ? `The record ${sizeName} for each number of pieces P against the area bound, the size at which the pieces would fill the container exactly. No packing can be smaller.`
+    : "";
+  $("chart-gap-title").textContent = shown
+    ? `How far each value stands above the area bound: the record ${sizeName} minus the bound, for each P.`
+    : "";
+  drawChart($("chart"), shown ? rows : [], sizeName, "size");
+  drawChart($("chart-gap"), shown ? rows : [], sizeName, "gap");
+}
+plot.addEventListener("toggle", () => {
+  try {
+    localStorage.setItem(PLOT_KEY, plot.open ? "open" : "closed");
+  } catch {
+    // the choice is then not remembered
+  }
+  drawCharts();
+});
 
 /** Under the atlas: whose published values and coordinates the tiles of this problem show. */
 function creditSources(rows: Row[]): void {
@@ -153,7 +231,8 @@ async function refresh(): Promise<void> {
   tbody.replaceChildren();
   if (!data) {
     $("note").textContent = "The server is not reachable.";
-    drawChart([], "");
+    charted = { rows: [], sizeName: "" };
+    drawCharts();
     creditSources([]);
     atlas.unavailable(N, M);
     followView(atlas.view, "replace");
@@ -170,8 +249,8 @@ async function refresh(): Promise<void> {
   $("note").textContent = rows.length
     ? `${rows.length} values of P for ${shapeLabel(N)}s in a ${shapeLabel(M)}. Sizes are the ${sizeName}, for pieces of ${N === 0 ? "radius" : "side"} 1.`
     : `No published values or site entries yet for ${shapeLabel(N)}s in a ${shapeLabel(M)}.`;
-  $("chart-title").textContent = rows.length ? `Smallest known ${sizeName} against the number of pieces P.` : "";
-  drawChart(rows, sizeName);
+  charted = { rows, sizeName };
+  drawCharts();
   creditSources(rows);
   atlas.update(N, M, rows);
   followView(atlas.view, "replace");
@@ -179,7 +258,12 @@ async function refresh(): Promise<void> {
     const tr = el("tr");
     if (r.site?.verification === "pending") tr.className = "pending";
     tr.append(el("td", String(r.P)));
-    tr.append(el("td", r.site ? r.site.score.toFixed(6) + (r.site.verification === "pending" ? " ⚑ pending verification" : "") : "—"));
+    tr.append(
+      el(
+        "td",
+        r.site ? r.site.score.toFixed(6) + (r.site.verification === "pending" ? " ⚑ pending verification" : "") : "—",
+      ),
+    );
     const found = foundWithLabel(r.site?.found_with);
     tr.append(el("td", r.site ? (found ? `${r.site.name} (${found})` : r.site.name) : "—"));
     const pub = el("td");

@@ -30,14 +30,26 @@ test("a best-known record without coordinates shows its value and source", async
 test("the records page lists published values with a chart", async ({ page }) => {
   await page.goto("/browse.html#0,4");
   await expect(page.locator("#rows tr").nth(9)).toContainText("6.747");
+  // the charts are optional: closed, nothing is drawn
+  await expect(page.locator("#chart")).toBeHidden();
+  await expect(page.locator("#chart *")).toHaveCount(0);
+  await page.getByText("Charts: records against the area bound").click();
   await expect(page.locator("#chart .lit-mark").first()).toBeVisible();
-  await page.locator("#rows tr").nth(4).getByRole("link", { name: /Open P = 5/ }).click();
+  await expect(page.locator("#chart .record")).toHaveCount(2);
+  // the second chart subtracts the bound: ten circles, 6.747442 against sqrt(10 pi) = 5.604991
+  await expect(page.locator("#chart-gap .lit-mark title").nth(9)).toContainText("1.142450 above");
+  await expect(page.locator("#chart-gap-title")).toContainText("minus the bound");
+  await page
+    .locator("#rows tr")
+    .nth(4)
+    .getByRole("link", { name: /Open P = 5/ })
+    .click();
   await expect(page.locator("#count")).toContainText("0 / 5");
   await expect(page.locator("#m-select")).toHaveValue("4");
   await expect(page.locator("#n-select")).toHaveValue("0");
 });
 
-test("the records page puts the atlas above the chart and the complete table", async ({ page }) => {
+test("the records page puts the chart above the atlas and the complete table", async ({ page }) => {
   await page.goto("/browse.html#0,4");
   await expect(page.locator("#atlas-title")).toHaveText("The atlas of circles in a square");
   await expect(page.locator("#rows tr")).toHaveCount(500);
@@ -46,9 +58,10 @@ test("the records page puts the atlas above the chart and the complete table", a
   await expect(page.locator("#atlas-tiles a.tile:visible")).toHaveCount(100);
   await expect(page.locator('#atlas-tiles a.tile[data-p="10"] .tile-score')).toHaveText("6.747442");
   await expect(page.locator('#atlas-tiles a.tile[data-p="10"] .tile-art')).toHaveClass(/drawn/);
-  const top = (selector: string) => page.locator(selector).evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
-  expect(await top("#atlas-tiles")).toBeLessThan(await top("#chart"));
-  expect(await top("#chart")).toBeLessThan(await top("table"));
+  const top = (selector: string) =>
+    page.locator(selector).evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
+  expect(await top("#plot")).toBeLessThan(await top("#atlas-tiles"));
+  expect(await top("#atlas-tiles")).toBeLessThan(await top("table"));
   // the old address form still selects the problem
   await expect(page.locator("#n-select")).toHaveValue("0");
   await expect(page.locator("#m-select")).toHaveValue("4");
