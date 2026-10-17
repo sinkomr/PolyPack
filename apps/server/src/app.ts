@@ -63,6 +63,8 @@ const CONVENTIONS = {
 
 /** Most values of P that one /api/atlas request may cover. */
 export const ATLAS_MAX_SPAN = 100;
+/** Most bytes of /api/records answers the server keeps in memory. */
+export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
 
@@ -162,10 +164,40 @@ export function createApp(opts: AppOptions): Hono {
     return c.json({ ...p, entries: leader ? [leader] : [], total, accepts_submissions: open });
   });
 
+  // The listing of one (N, M) runs a query over every entry of the pair, and SQLite blocks the
+  // process while it does, so answers are kept until an entry of that pair changes. A new entry
+  // clears its own pair; an administrator's change, rare, clears all. The bytes kept are bounded.
+  const recordsCache = new Map<string, string>();
+  let recordsCacheBytes = 0;
+  const forgetRecords = (key?: string) => {
+    if (key === undefined) {
+      recordsCache.clear();
+      recordsCacheBytes = 0;
+      return;
+    }
+    const old = recordsCache.get(key);
+    if (old !== undefined) recordsCacheBytes -= old.length;
+    recordsCache.delete(key);
+  };
+  const keepRecords = (key: string, body: string) => {
+    forgetRecords(key);
+    // the oldest answers go first
+    for (const [k] of recordsCache) {
+      if (recordsCacheBytes + body.length <= RECORDS_CACHE_BYTES) break;
+      forgetRecords(k);
+    }
+    if (body.length > RECORDS_CACHE_BYTES) return;
+    recordsCache.set(key, body);
+    recordsCacheBytes += body.length;
+  };
+
   app.get("/api/records", async (c) => {
     const N = Number(c.req.query("N"));
     const M = Number(c.req.query("M"));
     if (!isShapeCode(N) || !isShapeCode(M)) return c.json({ error: "query parameters N and M are required" }, 400);
+    const key = `${N}/${M}`;
+    const cached = recordsCache.get(key);
+    if (cached !== undefined) return c.body(cached, 200, { "content-type": "application/json" });
     // coordinates are left out of the listing; /api/problems/{N}/{M}/{P} has them
     const lit = opts.records
       .filter((r) => r.N === N && r.M === M)
@@ -176,7 +208,9 @@ export function createApp(opts: AppOptions): Hono {
     // that a page never has to present an unverified claim as the smallest known value.
     const awaiting = new Set(site.filter((e) => e.verification === "pending").map((e) => e.P));
     const site_verified = awaiting.size ? (await store.bestPerP(N, M, true)).filter((e) => awaiting.has(e.P)) : [];
-    return c.json({ N, M, literature: lit, site, site_verified });
+    const body = JSON.stringify({ N, M, literature: lit, site, site_verified });
+    keepRecords(key, body);
+    return c.body(body, 200, { "content-type": "application/json" });
   });
 
   // The drawings of the records page: for each P in [from, to], the one best packing that can be
@@ -355,6 +389,8 @@ export function createApp(opts: AppOptions): Hono {
     const rank = leads ? 1 : Math.max(2, position);
     // Only the best few entries of a problem are kept; this one may already be among the deleted.
     const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
+    // after the insert and the prune, so that no answer computed in between is kept
+    forgetRecords(`${config.N}/${config.M}`);
     if (beats) {
       log(
         `[review] submission ${id} by "${name}" for N=${config.N} M=${config.M} P=${config.P}: ` +
@@ -440,6 +476,7 @@ export function createApp(opts: AppOptions): Hono {
       return c.json({ error: 'body must be {"id": number, "decision": "confirmed" | "rejected"}' }, 400);
     }
     const ok = await store.review(body.id as number, body.decision);
+    if (ok) forgetRecords();
     if (ok) log(`[review] submission ${body.id} marked ${body.decision}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such pending submission" }, 404);
   });
@@ -451,6 +488,7 @@ export function createApp(opts: AppOptions): Hono {
     const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
     const ok = await store.remove(body.id as number);
+    if (ok) forgetRecords();
     if (ok) log(`[review] submission ${body.id} removed`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
@@ -491,6 +529,7 @@ export function createApp(opts: AppOptions): Hono {
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
     const ok = await store.edit(body.id as number, changes);
+    if (ok) forgetRecords();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });

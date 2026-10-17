@@ -891,7 +891,11 @@ describe("submissions that beat the literature", () => {
       method_params: null,
       score: r.body.score,
     });
-    expect((await get("/api/leaderboard/4/4/2")).body.entries[0]).toMatchObject({ id, name: "Bot 1", found_with: "optimizer" });
+    expect((await get("/api/leaderboard/4/4/2")).body.entries[0]).toMatchObject({
+      id,
+      name: "Bot 1",
+      found_with: "optimizer",
+    });
     // a name alone leaves the provenance as it is
     expect((await edit({ id, name: "Bot 2" })).status).toBe(200);
     expect((await get(`/api/submissions/${id}`)).body).toMatchObject({ name: "Bot 2", method: "harden" });
@@ -1084,6 +1088,29 @@ describe("GET /api/atlas", () => {
     expect(records.site_verified.map((e: { P: number }) => e.P)).toEqual([]);
     // without anything pending the field is still there, and empty
     expect((await get("/api/records?N=4&M=3")).body.site_verified).toEqual([]);
+  });
+
+  it("keeps the records listing current although answers are cached", async () => {
+    const admin = (path: string, body: object) =>
+      app.request(path, {
+        method: "POST",
+        headers: { authorization: "Bearer secret", "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const listed = async () =>
+      (await get("/api/records?N=4&M=4")).body.site.map((e: { P: number; name: string }) => `${e.P}:${e.name}`);
+    expect(await listed()).toEqual([]);
+    const loose = await submit({ ...squares(2, { name: "ann" }), pieces: row(2, 3) });
+    expect(await listed()).toEqual(["2:ann"]);
+    // another pair's listing is not touched by an entry of this one, nor the other way round
+    expect((await get("/api/records?N=4&M=3")).body.site).toEqual([]);
+    const tight = await submit(squares(2, { name: "bob" }));
+    expect(await listed()).toEqual(["2:bob"]);
+    expect((await admin("/api/admin/edit", { id: tight.body.id, name: "Bob", found_with: "hand" })).status).toBe(200);
+    expect(await listed()).toEqual(["2:Bob"]);
+    expect((await admin("/api/admin/remove", { id: tight.body.id })).status).toBe(200);
+    expect(await listed()).toEqual(["2:ann"]);
+    expect(loose.body.id).toBeDefined();
   });
 
   it("bounds the range and the payload", async () => {
