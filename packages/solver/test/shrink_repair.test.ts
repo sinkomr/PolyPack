@@ -158,9 +158,7 @@ describe("shrink_repair kernel", () => {
       const random = seededRandom(N * 10 + M);
       const state = new RepairState({ N, M, P }, settings);
       state.setSize(2.2);
-      state.load(
-        Array.from({ length: P }, () => ({ x: 2 * random() - 1, y: 2 * random() - 1, theta: 6 * random() })),
-      );
+      state.load(Array.from({ length: P }, () => ({ x: 2 * random() - 1, y: 2 * random() - 1, theta: 6 * random() })));
       const gradient = new Float64Array(3 * P);
       const value = state.evaluate(gradient);
       expect(value).toBeGreaterThan(0);
@@ -205,7 +203,12 @@ describe("shrink_repair legalisation", () => {
           container_phi: 0,
           pieces: grid.map((p) => ({ ...p, x: p.x * (1 - squeeze), y: p.y * (1 - squeeze) })),
         };
-        const legal = await legaliseStrict(config, () => false, () => true, seededRandom(1));
+        const legal = await legaliseStrict(
+          config,
+          () => false,
+          () => true,
+          seededRandom(1),
+        );
         expect(legal).toBeDefined();
         expect(findOverlaps(N, legal!.pieces, 0)).toEqual([]);
         if (squeeze <= 1e-6) {
@@ -233,7 +236,12 @@ describe("shrink_repair legalisation", () => {
             theta: N === 0 ? 0 : 7 * random(),
           })),
         };
-        const legal = await legaliseStrict(config, () => false, () => true, seededRandom(1));
+        const legal = await legaliseStrict(
+          config,
+          () => false,
+          () => true,
+          seededRandom(1),
+        );
         expect(legal).toBeDefined();
         expect(findOverlaps(N, legal!.pieces, 0)).toEqual([]);
       }
@@ -262,14 +270,29 @@ describe("shrink_repair method", () => {
       [0, 4, 1, {}, undefined],
       [7, 7, 2, {}, undefined],
       // An overlapping start: every piece at one point.
-      [4, 4, 4, {}, { N: 4, M: 4, P: 4, container_phi: 0, pieces: Array.from({ length: 4 }, () => ({ x: 0, y: 0, theta: 0 })) }],
+      [
+        4,
+        4,
+        4,
+        {},
+        { N: 4, M: 4, P: 4, container_phi: 0, pieces: Array.from({ length: 4 }, () => ({ x: 0, y: 0, theta: 0 })) },
+      ],
       // A start valid only within the evaluator's tolerance.
       [
         0,
         4,
         2,
         {},
-        { N: 0, M: 4, P: 2, container_phi: 0, pieces: [{ x: -1 + 2e-10, y: 0, theta: 0 }, { x: 1 - 2e-10, y: 0, theta: 0 }] },
+        {
+          N: 0,
+          M: 4,
+          P: 2,
+          container_phi: 0,
+          pieces: [
+            { x: -1 + 2e-10, y: 0, theta: 0 },
+            { x: 1 - 2e-10, y: 0, theta: 0 },
+          ],
+        },
       ],
     ];
     for (const [N, M, P, params, start] of cases) {
@@ -313,7 +336,12 @@ describe("shrink_repair method", () => {
 
   it("is reproducible for a seed and differs between seeds", async () => {
     // Random starts, so that the seed matters from the first draw.
-    const options = { method: "shrink_repair", params: { start: "random" }, budget: { evals: 400 }, finalPolish: false };
+    const options = {
+      method: "shrink_repair",
+      params: { start: "random" },
+      budget: { evals: 400 },
+      finalPolish: false,
+    };
     const first = await run({ N: 4, M: 4, P: 7 }, { ...options, seed: 9 });
     const again = await run({ N: 4, M: 4, P: 7 }, { ...options, seed: 9 });
     expect(again.best).toEqual(first.best);
@@ -479,7 +507,10 @@ describe("shrink_repair escapes the grid basin", () => {
     };
     expect(evaluate(grid).score).toBeCloseTo(3, 9);
     for (const seed of [1, 2, 3]) {
-      const result = await run({ N: 4, M: 4, P: 5 }, { method: "shrink_repair", seed, start: grid, budget: { evals: 1500 } });
+      const result = await run(
+        { N: 4, M: 4, P: 5 },
+        { method: "shrink_repair", seed, start: grid, budget: { evals: 1500 } },
+      );
       expect(result.valid && result.strict).toBe(true);
       expect(result.score!).toBeLessThan(2 + Math.SQRT1_2 + 1e-6);
       expect(minimumSeparation(result.best!)).toBeGreaterThan(-strictTolerance(result.best!));

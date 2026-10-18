@@ -86,7 +86,16 @@ export class Kernel {
    * Penetration depth of pieces a and b when they overlap, otherwise 0 (it may stop at the
    * first separating axis). ua and ub are the pieces' edge normals from `normals`.
    */
-  depth(xa: number, ya: number, ta: number, ua: Float64Array, xb: number, yb: number, tb: number, ub: Float64Array): number {
+  depth(
+    xa: number,
+    ya: number,
+    ta: number,
+    ua: Float64Array,
+    xb: number,
+    yb: number,
+    tb: number,
+    ub: Float64Array,
+  ): number {
     const dx = xb - xa;
     const dy = yb - ya;
     if (this.N === 0) {

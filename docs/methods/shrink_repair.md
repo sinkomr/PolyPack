@@ -192,24 +192,24 @@ without an observer is identical, tested).
 [CALC] The registered schema is an object with `additionalProperties:false`;
 every property has a title, a description, a default and bounds.
 
-| Parameter           | Default | Range          | Purpose                                                          |
-| ------------------- | ------- | -------------- | ---------------------------------------------------------------- |
-| `start`             | auto    | auto, random   | Supplied start or seed generators; or random poses               |
-| `shrinkRatio`       | 0.01    | 1e-6 to 0.5    | First compression ratio r                                        |
-| `minShrinkRatio`    | 0.0002  | 1e-9 to 0.5    | Below it, compression turns to exploration                       |
-| `maxShrinkRatio`    | 0.05    | 1e-6 to 0.5    | Cap on the growing ratio                                         |
-| `strikes`           | 3       | 1 to 1000      | Strikes of a failing repair                                      |
-| `patience`          | 12      | 1 to 10000     | Iterations without a 0.1% lower raw overlap that end a strike    |
-| `explorePatience`   | 24      | 1 to 10000     | Patience of exploring, restart and start repairs                 |
-| `globalSamples`     | 48      | 0 to 10000     | Container-wide samples per relocation                            |
-| `localSamples`      | 24      | 0 to 10000     | Near samples per relocation                                      |
-| `weightGrowth`      | 2       | 1 to 100       | GLS multiplier of the deepest conflict                           |
-| `weightDecay`       | 0.95    | 0 to 1         | GLS decay of former conflicts                                    |
-| `descentIterations` | 40      | 1 to 100000    | L-BFGS iterations per descent                                    |
-| `maxRuin`           | 1       | 0 to 1         | Largest ruined fraction of P                                     |
-| `restartAfter`      | 40      | 0 to 100000    | Failed explorations in a row before a restart (0: never)         |
-| `restartSlack`      | 0.02    | 0 to 1         | Restart container relative to the best                           |
-| `evaluationWork`    | 4000    | 1 to 10000000  | Counted feature tests per assessment and piece                   |
+| Parameter           | Default | Range         | Purpose                                                       |
+| ------------------- | ------- | ------------- | ------------------------------------------------------------- |
+| `start`             | auto    | auto, random  | Supplied start or seed generators; or random poses            |
+| `shrinkRatio`       | 0.01    | 1e-6 to 0.5   | First compression ratio r                                     |
+| `minShrinkRatio`    | 0.0002  | 1e-9 to 0.5   | Below it, compression turns to exploration                    |
+| `maxShrinkRatio`    | 0.05    | 1e-6 to 0.5   | Cap on the growing ratio                                      |
+| `strikes`           | 3       | 1 to 1000     | Strikes of a failing repair                                   |
+| `patience`          | 12      | 1 to 10000    | Iterations without a 0.1% lower raw overlap that end a strike |
+| `explorePatience`   | 24      | 1 to 10000    | Patience of exploring, restart and start repairs              |
+| `globalSamples`     | 48      | 0 to 10000    | Container-wide samples per relocation                         |
+| `localSamples`      | 24      | 0 to 10000    | Near samples per relocation                                   |
+| `weightGrowth`      | 2       | 1 to 100      | GLS multiplier of the deepest conflict                        |
+| `weightDecay`       | 0.95    | 0 to 1        | GLS decay of former conflicts                                 |
+| `descentIterations` | 40      | 1 to 100000   | L-BFGS iterations per descent                                 |
+| `maxRuin`           | 1       | 0 to 1        | Largest ruined fraction of P                                  |
+| `restartAfter`      | 40      | 0 to 100000   | Failed explorations in a row before a restart (0: never)      |
+| `restartSlack`      | 0.02    | 0 to 1        | Restart container relative to the best                        |
+| `evaluationWork`    | 4000    | 1 to 10000000 | Counted feature tests per assessment and piece                |
 
 ## Verification
 
@@ -243,3 +243,249 @@ five squares from the plain grid start (size 3) reach `2 + 1/sqrt(2)` to
 within 1e-6 for seeds 1, 2 and 3 at 1,500 evaluations; ten squares with the
 automatic start reach `3 + 1/sqrt(2)` to within 1e-4 for seed 1 at 3,000
 evaluations.
+
+## Measurements
+
+[CALC] Everything in this section was measured here on 2026-10-17/18: Apple
+M1 Pro (eight logical CPUs), Darwin arm64, Node v26.5.0. The machine was
+loaded by unrelated jobs (load average 30 to 110) and eight benchmark
+processes ran at once, so the seconds are observed wall times under load, not
+throughput claims. Scores do not depend on load: each is reproducible bits for
+its seed and evaluation budget (two rows were rerun with the committed script
+and matched to the last bit).
+
+[CALC] Setup: registered defaults for every method, 20,000 evaluations, final
+polish on, seeds 1, 2 and 3, no seed selected or omitted and no parameter tuned
+on these problems after the defaults were fixed. (The defaults were chosen
+during development from runs on 5, 10, 17, 26 and 37 squares with seeds 1 to
+3; see the notes on development below.) _grid_: the plain grid start,
+ceil(sqrt P) columns of edge-aligned unit squares at pitch 1 (size
+ceil(sqrt P)). _scatter_: a valid start with centres uniform in
+[-v, v]^2 (v the published size) and uniform angles, rejecting any piece
+whose bounding disk meets one already placed, one start per seed, the same
+start for every method. _default_: no start; each method's own automatic
+start. "Published" is `data/records.json` (sources in `docs/RECORDS.md`).
+Every one of the 225 results was checked valid and strict with no budget
+overrun and a recomputed score equal to the reported one; the smallest pair
+separation is -9.9e-13 (`asc`), -5.2e-13 for `shrink_repair`, within the
+strict margin. Raw rows: `shrink_repair/benchmark-squares.jsonl` and
+`benchmark-general.jsonl` beside the method. Reproduce from the repository
+root (about an hour each with eight workers on a loaded machine):
+
+```sh
+node --import tsx packages/solver/src/methods/shrink_repair/benchmark.mjs squares squares.jsonl 8
+node --import tsx packages/solver/src/methods/shrink_repair/benchmark.mjs general general.jsonl 8
+node --import tsx packages/solver/src/methods/shrink_repair/benchmark.mjs report squares.jsonl general.jsonl
+```
+
+### Squares in a square: the grid basin
+
+| N/M/P  | Start   | Published | Method        | Scores, seeds 1, 2, 3        | Best / published | Median / published | Mean s | Mean evals |
+| ------ | ------- | --------- | ------------- | ---------------------------- | ---------------- | ------------------ | ------ | ---------- |
+| 4/4/10 | grid    | 3.707107  | shrink_repair | 3.707107, 3.707107, 3.707107 | 1.00000          | 1.00000            | 31.1   | 18135      |
+| 4/4/10 | grid    | 3.707107  | asc           | 4.000000, 4.000000, 4.000000 | 1.07901          | 1.07901            | 0.6    | 290        |
+| 4/4/10 | grid    | 3.707107  | harden        | 3.707107, 3.707107, 3.707107 | 1.00000          | 1.00000            | 22.7   | 18278      |
+| 4/4/10 | grid    | 3.707107  | mc_compress   | 4.000000, 4.000000, 4.000000 | 1.07901          | 1.07901            | 2.3    | 2510       |
+| 4/4/10 | grid    | 3.707107  | basin_hopping | 3.707107, 3.707107, 3.707107 | 1.00000          | 1.00000            | 15.2   | 18159      |
+| 4/4/10 | scatter | 3.707107  | shrink_repair | 3.707110, 3.707107, 3.707107 | 1.00000          | 1.00000            | 26.7   | 18166      |
+| 4/4/10 | scatter | 3.707107  | asc           | 4.002216, 4.000002, 4.008876 | 1.07901          | 1.07961            | 5.3    | 4547       |
+| 4/4/10 | scatter | 3.707107  | harden        | 3.707107, 3.707107, 3.707107 | 1.00000          | 1.00000            | 19.4   | 18300      |
+| 4/4/10 | scatter | 3.707107  | mc_compress   | 4.000150, 3.707381, 4.000000 | 1.00007          | 1.07901            | 6.9    | 9886       |
+| 4/4/10 | scatter | 3.707107  | basin_hopping | 3.707107, 3.707107, 3.707177 | 1.00000          | 1.00000            | 13.0   | 18164      |
+| 4/4/17 | grid    | 4.675530  | shrink_repair | 4.675718, 4.707107, 4.677711 | 1.00004          | 1.00047            | 40.9   | 19535      |
+| 4/4/17 | grid    | 4.675530  | asc           | 5.000000, 5.000000, 5.000000 | 1.06940          | 1.06940            | 0.5    | 291        |
+| 4/4/17 | grid    | 4.675530  | harden        | 4.677651, 4.676036, 4.677651 | 1.00011          | 1.00045            | 36.1   | 19703      |
+| 4/4/17 | grid    | 4.675530  | mc_compress   | 5.000000, 5.000000, 5.000000 | 1.06940          | 1.06940            | 10.1   | 8618       |
+| 4/4/17 | grid    | 4.675530  | basin_hopping | 4.707145, 4.707107, 4.707528 | 1.00675          | 1.00676            | 48.1   | 18628      |
+| 4/4/17 | scatter | 4.675530  | shrink_repair | 4.677652, 4.707107, 4.707116 | 1.00045          | 1.00675            | 38.3   | 18841      |
+| 4/4/17 | scatter | 4.675530  | asc           | 5.003022, 4.774376, 4.755552 | 1.01712          | 1.02114            | 18.8   | 7352       |
+| 4/4/17 | scatter | 4.675530  | harden        | 4.677651, 4.676036, 4.677654 | 1.00011          | 1.00045            | 35.6   | 19703      |
+| 4/4/17 | scatter | 4.675530  | mc_compress   | 4.707163, 5.001116, 4.803826 | 1.00677          | 1.02744            | 5.7    | 4352       |
+| 4/4/17 | scatter | 4.675530  | basin_hopping | 4.707255, 4.707107, 4.707170 | 1.00675          | 1.00677            | 49.8   | 18747      |
+| 4/4/26 | grid    | 5.621320  | shrink_repair | 5.621321, 5.621373, 5.621350 | 1.00000          | 1.00001            | 68.1   | 18615      |
+| 4/4/26 | grid    | 5.621320  | asc           | 6.000000, 6.000000, 6.000000 | 1.06736          | 1.06736            | 1.1    | 291        |
+| 4/4/26 | grid    | 5.621320  | harden        | 5.621556, 5.621510, 5.621493 | 1.00003          | 1.00003            | 48.7   | 18132      |
+| 4/4/26 | grid    | 5.621320  | mc_compress   | 6.000000, 6.000000, 6.000000 | 1.06736          | 1.06736            | 7.0    | 2693       |
+| 4/4/26 | grid    | 5.621320  | basin_hopping | 5.707579, 5.707108, 5.678480 | 1.01017          | 1.01526            | 78.9   | 18373      |
+| 4/4/26 | scatter | 5.621320  | shrink_repair | 5.690396, 5.621332, 5.707142 | 1.00000          | 1.01229            | 72.4   | 19419      |
+| 4/4/26 | scatter | 5.621320  | asc           | 5.872729, 5.826673, 5.757031 | 1.02414          | 1.03653            | 54.8   | 8760       |
+| 4/4/26 | scatter | 5.621320  | harden        | 5.621556, 5.621510, 5.621493 | 1.00003          | 1.00003            | 51.2   | 18132      |
+| 4/4/26 | scatter | 5.621320  | mc_compress   | 6.006131, 6.001277, 6.000023 | 1.06737          | 1.06759            | 25.2   | 7500       |
+| 4/4/26 | scatter | 5.621320  | basin_hopping | 5.707194, 5.728891, 5.717941 | 1.01528          | 1.01719            | 114.9  | 18700      |
+| 4/4/37 | grid    | 6.598620  | shrink_repair | 6.598756, 6.621339, 6.621343 | 1.00002          | 1.00344            | 152.5  | 18473      |
+| 4/4/37 | grid    | 6.598620  | asc           | 7.000000, 7.000000, 7.000000 | 1.06083          | 1.06083            | 2.4    | 278        |
+| 4/4/37 | grid    | 6.598620  | harden        | 6.621771, 6.632616, 6.598670 | 1.00001          | 1.00351            | 107.9  | 18426      |
+| 4/4/37 | grid    | 6.598620  | mc_compress   | 7.000000, 7.000000, 7.000000 | 1.06083          | 1.06083            | 11.7   | 3966       |
+| 4/4/37 | grid    | 6.598620  | basin_hopping | 6.775265, 6.730156, 6.767865 | 1.01993          | 1.02565            | 135.5  | 18389      |
+| 4/4/37 | scatter | 6.598620  | shrink_repair | 6.621387, 6.707126, 6.598702 | 1.00001          | 1.00345            | 128.2  | 18468      |
+| 4/4/37 | scatter | 6.598620  | asc           | 6.756713, 6.827990, 6.840280 | 1.02396          | 1.03476            | 137.2  | 17968      |
+| 4/4/37 | scatter | 6.598620  | harden        | 6.621771, 6.632616, 6.598670 | 1.00001          | 1.00351            | 98.1   | 18426      |
+| 4/4/37 | scatter | 6.598620  | mc_compress   | 6.733304, 6.897251, 7.000001 | 1.02041          | 1.04526            | 74.4   | 10102      |
+| 4/4/37 | scatter | 6.598620  | basin_hopping | 6.708056, 6.823647, 6.622076 | 1.00355          | 1.01658            | 127.6  | 18353      |
+| 4/4/50 | grid    | 7.571429  | shrink_repair | 7.621622, 7.621882, 7.621427 | 1.00660          | 1.00663            | 183.2  | 18442      |
+| 4/4/50 | grid    | 7.571429  | asc           | 8.000000, 8.000000, 8.000000 | 1.05660          | 1.05660            | 4.6    | 254        |
+| 4/4/50 | grid    | 7.571429  | harden        | 7.622226, 7.621406, 7.655314 | 1.00660          | 1.00671            | 187.2  | 18789      |
+| 4/4/50 | grid    | 7.571429  | mc_compress   | 8.000000, 8.000000, 8.000000 | 1.05660          | 1.05660            | 9.9    | 3445       |
+| 4/4/50 | grid    | 7.571429  | basin_hopping | 7.707703, 7.771921, 7.707213 | 1.01793          | 1.01800            | 155.2  | 18142      |
+| 4/4/50 | scatter | 7.571429  | shrink_repair | 7.621500, 7.621454, 7.659969 | 1.00661          | 1.00661            | 129.4  | 18216      |
+| 4/4/50 | scatter | 7.571429  | asc           | 7.878015, 7.880809, 7.928245 | 1.04049          | 1.04086            | 201.4  | 18211      |
+| 4/4/50 | scatter | 7.571429  | harden        | 7.622226, 7.621406, 7.655314 | 1.00660          | 1.00671            | 176.4  | 18789      |
+| 4/4/50 | scatter | 7.571429  | mc_compress   | 8.008213, 8.000195, 7.736720 | 1.02183          | 1.05663            | 120.0  | 11820      |
+| 4/4/50 | scatter | 7.571429  | basin_hopping | 7.928333, 7.663539, 7.678997 | 1.01217          | 1.01421            | 214.6  | 18300      |
+
+### Other pieces and containers
+
+[CALC] Each method's own start. The 19-heptagon problem has no published value in `data/records.json`.
+The 17-triangle value is stored to three decimals as "4.465+" (Maurizio
+Morandi, 2008), so a ratio of 1.00013 is consistent with reaching it and no
+finer comparison is possible.
+
+| N/M/P  | Start   | Published | Method        | Scores, seeds 1, 2, 3           | Best / published | Median / published | Mean s | Mean evals |
+| ------ | ------- | --------- | ------------- | ------------------------------- | ---------------- | ------------------ | ------ | ---------- |
+| 0/4/30 | default | 10.908568 | shrink_repair | 10.908568, 10.908568, 10.908568 | 1.00000          | 1.00000            | 141.8  | 18602      |
+| 0/4/30 | default | 10.908568 | asc           | 10.908568, 10.908568, 10.908568 | 1.00000          | 1.00000            | 8.0    | 4585       |
+| 0/4/30 | default | 10.908568 | harden        | 10.908568, 10.908568, 10.908568 | 1.00000          | 1.00000            | 17.2   | 18579      |
+| 0/4/30 | default | 10.908568 | mc_compress   | 10.908568, 10.908568, 10.908568 | 1.00000          | 1.00000            | 2.1    | 3304       |
+| 0/4/30 | default | 10.908568 | basin_hopping | 10.908568, 10.908568, 10.908568 | 1.00000          | 1.00000            | 53.1   | 18087      |
+| 5/4/20 | default | 6.661350  | shrink_repair | 6.662056, 6.661839, 6.661849    | 1.00007          | 1.00007            | 54.7   | 19712      |
+| 5/4/20 | default | 6.661350  | asc           | 6.738627, 6.722865, 6.718367    | 1.00856          | 1.00923            | 56.9   | 19142      |
+| 5/4/20 | default | 6.661350  | harden        | 6.662607, 6.662522, 6.663056    | 1.00018          | 1.00019            | 54.2   | 18972      |
+| 5/4/20 | default | 6.661350  | mc_compress   | 6.721081, 6.733945, 6.718710    | 1.00861          | 1.00897            | 28.2   | 15917      |
+| 5/4/20 | default | 6.661350  | basin_hopping | 6.662028, 6.663009, 6.665976    | 1.00010          | 1.00025            | 61.9   | 18695      |
+| 7/7/19 | default | none      | shrink_repair | 4.918690, 4.918698, 4.918708    | —                | —                  | 43.3   | 19950      |
+| 7/7/19 | default | none      | asc           | 5.001075, 4.996043, 4.990685    | —                | —                  | 95.7   | 20000      |
+| 7/7/19 | default | none      | harden        | 4.918677, 4.918670, 4.918666    | —                | —                  | 51.3   | 18661      |
+| 7/7/19 | default | none      | mc_compress   | 4.990674, 4.992328, 4.987361    | —                | —                  | 34.3   | 20000      |
+| 7/7/19 | default | none      | basin_hopping | 4.921086, 4.919864, 4.921834    | —                | —                  | 56.3   | 18246      |
+| 3/3/17 | default | 4.465000  | shrink_repair | 4.465573, 4.465571, 4.465571    | 1.00013          | 1.00013            | 54.1   | 20000      |
+| 3/3/17 | default | 4.465000  | asc           | 5.000000, 5.000000, 5.000000    | 1.11982          | 1.11982            | 0.7    | 314        |
+| 3/3/17 | default | 4.465000  | harden        | 4.500001, 4.500000, 4.465572    | 1.00013          | 1.00784            | 42.3   | 20000      |
+| 3/3/17 | default | 4.465000  | mc_compress   | 4.622739, 5.000000, 4.729105    | 1.03533          | 1.05915            | 18.9   | 17200      |
+| 3/3/17 | default | 4.465000  | basin_hopping | 4.500265, 4.500000, 4.500174    | 1.00784          | 1.00788            | 44.7   | 19237      |
+| 6/6/20 | default | 5.000000  | shrink_repair | 5.000000, 5.000000, 5.000012    | 1.00000          | 1.00000            | 41.2   | 19210      |
+| 6/6/20 | default | 5.000000  | asc           | 5.000000, 5.331696, 5.331696    | 1.00000          | 1.06634            | 15.4   | 1781       |
+| 6/6/20 | default | 5.000000  | harden        | 5.123899, 5.122757, 5.129118    | 1.02455          | 1.02478            | 44.6   | 18669      |
+| 6/6/20 | default | 5.000000  | mc_compress   | 5.000000, 5.331696, 5.144988    | 1.00000          | 1.02900            | 32.4   | 13486      |
+| 6/6/20 | default | 5.000000  | basin_hopping | 5.000000, 5.123673, 5.130074    | 1.00000          | 1.02473            | 59.2   | 18817      |
+
+### What these runs show, and no more
+
+[CALC] Squares, 30 runs per method (five P, two starts, three seeds):
+
+| Method        | Below the grid | Within 1e-4 of published (relative) | Within 1e-3 | Mean score / published |
+| ------------- | -------------- | ----------------------------------- | ----------- | ---------------------- |
+| shrink_repair | 30/30          | 13/30                               | 15/30       | 1.00401                |
+| harden        | 30/30          | 14/30                               | 20/30       | 1.00228                |
+| basin_hopping | 30/30          | 6/30                                | 6/30        | 1.01319                |
+| asc           | 11/30          | 0/30                                | 0/30        | 1.05590                |
+| mc_compress   | 6/30           | 1/30                                | 1/30        | 1.05759                |
+
+- From the plain grid start, `asc` and `mc_compress` end at the grid
+  (ceil(sqrt P)) in all 15 of their grid-start runs each; their escapes
+  counted above are all from scattered starts. `shrink_repair`, `harden` and `basin_hopping` leave
+  the grid in every run.
+- `shrink_repair` reaches the published 3.707107 (10 squares) in 6 of 6 runs
+  (one at 3.707110) and 5.621320 (26) to within 1e-5 relative in 3 of 6
+  (1e-4 in 4 of 6); it comes
+  within 5e-5 relative of 4.675530 (17: 4.675718) and of 6.598620 (37:
+  6.598702, 6.598756) in one or two runs each. Its other runs stop in the
+  `k + 1/sqrt(2)` basin (4.707107 for 17, 5.707142 for 26, 6.707126 for 37)
+  or just above the record (5.690 for 26, 6.6213 for 37).
+- `basin_hopping` mostly stops in the `k + 1/sqrt(2)` basin or above it.
+- `harden` is as strong on squares: better medians for 17 squares (4.6777
+  from both starts, against 4.6777 and 4.7071) and for scattered 26 squares
+  (5.6215 against 5.6904); worse for 26 squares from the grid (5.62151
+  against 5.62135); level on 37 and 50 squares. `harden`'s grid and scattered
+  rows are identical for 26, 37 and 50 squares: its best result came from a
+  later random run, not from the supplied start.
+- Nobody comes near the published 50-square packing (7.571429, sixteen
+  squares at arctan(4/3)): the best runs of `shrink_repair` and `harden` are
+  0.66% above it.
+
+[CALC] Other pieces: `shrink_repair` has the best median on pentagons in a
+square (6.661849; published 6.66135, stored to five decimals), triangles in a
+triangle (4.465571 in 3 of 3; `harden` 1 of 3, the rest 4.5 or worse) and
+hexagons in a hexagon (5.000000 in 2 of 3 and 5.000012; the published 5 is
+proven; `asc`, `mc_compress` and `basin_hopping` reach it in 1 of 3, `harden`
+in none). Every method reaches the published 10.908568 for 30 circles in a
+square, `shrink_repair` in about eight times `harden`'s wall time. On 19
+heptagons `harden` is ahead by 3e-5 (4.918670 against 4.918698, medians).
+
+[CALC] Cost. Mean wall time per counted evaluation over all 225 runs:
+`mc_compress` 3.2 ms, `harden` 3.5 ms, `shrink_repair` 4.3 ms,
+`basin_hopping` 4.4 ms, `asc` 5.5 ms; `asc` and `mc_compress` often stop
+early by their stagnation rules. For circle pieces `shrink_repair` is
+relatively slow (7.6 ms per evaluation for 30 circles, `harden` 0.9 ms): a
+circle pair test counts one unit of work against 2N for an N-gon, so an
+evaluation buys more pair tests.
+
+These are three seeds per cell on ten problems. They are not a benchmark
+study, they do not show that `shrink_repair` is better than `harden` in
+general, and nothing here is a packing record: no result is below its
+published value.
+
+## Fit and limitations
+
+[CALC]
+
+- Strengths: pieces that tile or nearly tile the container, where the grid
+  or lattice basin traps methods that never allow overlap (hexagons in a
+  hexagon and triangles in a triangle above), and the first teeth of the
+  square sawtooth (10 and 26 squares) at this budget.
+- 17 squares: a third to a half of the runs stay in the 4.707107 basin. In
+  development a single repair at 4.70 from that basin never became feasible
+  in 20,000 iterations, nor from random poses in 15,000, while random poses
+  at 4.72 became feasible in 650 to 2,800 iterations. Escaping that basin is
+  left to luck in the exploration.
+- Large P: 50 squares end 0.66% above the published packing; the repair cost
+  grows with P and a ruin is a smaller share of the packing.
+- Restarts: at 20,000 evaluations, restarts after 40 failed explorations were
+  neither clearly better nor worse than no restarts on 17 and 26 squares
+  (three seeds each); restarting after 15 lost one 26-square seed.
+- Precision: a feasible repair may keep depths up to 1e-10 and the legalised
+  result keeps that slack; the framework's final polish removes it only
+  within its allowance (3.707110 for one 10-square run).
+- Circles are slow per evaluation (above).
+- Browser throughput was not measured separately; the figures are from Node.
+
+## Development notes
+
+[CALC] Recorded so that the defaults can be judged; all at 20,000
+evaluations, automatic start, seeds 1 to 3.
+
+- First version (compression, then uniform disruption of two random pieces
+  instead of region ruins): always below the grid, but 26 squares stopped at
+  5.7071 in 3 of 3 runs and 37 squares at 6.7072 in 2 of 3.
+- Region ruins with rigid block turns: 26 squares 5.621352, 5.621320,
+  5.621333; 37 squares 6.6214, 6.6213, 6.6213. A trace of one 26-square run
+  shows the record basin opened by a turn of a 20-piece block after about
+  twenty failed explorations.
+- Exploration patience 8 instead of 24, or restarts after 15 instead of 40:
+  within seed noise on 17 and 26 squares; the defaults were kept.
+- Restoring the least-overlap state at each strike (as sparrow does) pulls a
+  repair that starts from a uniformly shrunk basin back into it, because that
+  state has the least raw overlap; region ruins start the repair elsewhere.
+
+## References
+
+[EST] Read on 2026-10-17:
+
+- J. Gardeyn, G. Vanden Berghe and T. Wauters, _An open-source heuristic to
+  reboot 2D nesting research_, arXiv:2509.13329 (v1 5 September 2025, v3
+  11 February 2026), <https://arxiv.org/abs/2509.13329>. Used here: the
+  decomposition into feasibility problems, sampled placement of colliding
+  items (diverse and focused samples, then coordinate-descent refinement),
+  the guided-local-search weights (multipliers 2.0, 1.2 and 0.95, weights at
+  least 1) and strikes (limit 3 when exploring). Read in the HTML version
+  (v3), which does not state the sample counts.
+- J. Egeblad, B. K. Nielsen and A. Odgaard, _Fast neighborhood search for
+  two- and three-dimensional nesting problems_, European Journal of
+  Operational Research 183(3), 1249–1266 (2007),
+  doi:10.1016/j.ejor.2005.11.063 (bibliographic record checked; full text not
+  read).
+- T. Imamichi, M. Yagiura and H. Nagamochi, _An iterated local search
+  algorithm based on nonlinear programming for the irregular strip packing
+  problem_, Discrete Optimization 6(4), 345–361 (2009) (bibliographic record
+  and abstract checked: overlap separation by nonlinear programming and a
+  swap move inside iterated local search; full text not read).
+- Published values: `data/records.json` (sources in `docs/RECORDS.md`).

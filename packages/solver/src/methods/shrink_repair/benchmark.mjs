@@ -82,7 +82,17 @@ function jobs(kind) {
     for (const startKind of kind === "squares" ? ["grid", "scatter"] : ["default"]) {
       for (const method of METHODS) {
         for (const seed of SEEDS) {
-          const job = { key: `${tag}-${N}/${M}/${P}-${startKind}-${method}-${seed}`, N, M, P, method, params: {}, seed, evals: EVALS, startKind };
+          const job = {
+            key: `${tag}-${N}/${M}/${P}-${startKind}-${method}-${seed}`,
+            N,
+            M,
+            P,
+            method,
+            params: {},
+            seed,
+            evals: EVALS,
+            startKind,
+          };
           if (startKind === "grid") job.startConfig = grid(N, M, P);
           if (startKind === "scatter") job.startConfig = scattered(N, M, P, v, seed);
           out.push(job);
@@ -96,10 +106,15 @@ function jobs(kind) {
 /** One run in this process; prints one JSON line. */
 async function runJob(job) {
   const { run, strictTolerance } = await import(new URL("packages/solver/src/index.ts", root).href);
-  const { evaluate, findOverlaps, pieceSeparation } = await import(new URL("packages/geometry/src/index.ts", root).href);
+  const { evaluate, findOverlaps, pieceSeparation } = await import(
+    new URL("packages/geometry/src/index.ts", root).href
+  );
   const { N, M, P, method, params, seed, evals } = job;
   const t0 = performance.now();
-  const r = await run({ N, M, P }, { method, params, seed, budget: { evals }, start: job.startConfig, finalPolish: true });
+  const r = await run(
+    { N, M, P },
+    { method, params, seed, budget: { evals }, start: job.startConfig, finalPolish: true },
+  );
   const seconds = (performance.now() - t0) / 1000;
   let gap = Infinity;
   let strict = false;
@@ -107,7 +122,8 @@ async function runJob(job) {
   if (r.best) {
     strict = findOverlaps(N, r.best.pieces, strictTolerance(r.best)).length === 0;
     rescore = evaluate(r.best, { autoOrient: true }).score;
-    for (let i = 0; i < P; i++) for (let j = 0; j < i; j++) gap = Math.min(gap, pieceSeparation(N, r.best.pieces[i], r.best.pieces[j]).sep);
+    for (let i = 0; i < P; i++)
+      for (let j = 0; j < i; j++) gap = Math.min(gap, pieceSeparation(N, r.best.pieces[i], r.best.pieces[j]).sep);
   }
   const { startConfig: _, ...rest } = job;
   console.log(
@@ -127,7 +143,8 @@ async function runJob(job) {
 
 async function runAll(list, out, workers) {
   const done = new Set();
-  if (existsSync(out)) for (const line of readFileSync(out, "utf8").split("\n")) if (line.trim()) done.add(JSON.parse(line).key);
+  if (existsSync(out))
+    for (const line of readFileSync(out, "utf8").split("\n")) if (line.trim()) done.add(JSON.parse(line).key);
   const todo = list.filter((j) => !done.has(j.key));
   console.error(`${todo.length} runs to do, ${list.length - todo.length} already in ${out}`);
   let next = 0;
@@ -135,7 +152,9 @@ async function runAll(list, out, workers) {
     while (next < todo.length) {
       const job = todo[next++];
       const text = await new Promise((resolve) => {
-        const child = spawn(process.execPath, ["--import", "tsx", here, "--job", JSON.stringify(job)], { cwd: fileURLToPath(root) });
+        const child = spawn(process.execPath, ["--import", "tsx", here, "--job", JSON.stringify(job)], {
+          cwd: fileURLToPath(root),
+        });
         let stdout = "";
         let stderr = "";
         child.stdout.on("data", (d) => (stdout += d));
@@ -151,10 +170,19 @@ async function runAll(list, out, workers) {
 }
 
 function report(files) {
-  const rows = files.flatMap((f) => readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)));
+  const rows = files.flatMap((f) =>
+    readFileSync(f, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => JSON.parse(l)),
+  );
   const fmt = (x, d = 6) => (typeof x === "number" && Number.isFinite(x) ? x.toFixed(d) : "—");
-  console.log("| N/M/P | Start | Published | Method | Scores, seeds 1, 2, 3 | Best / published | Median / published | Mean s | Mean evals |");
-  console.log("| ----- | ----- | --------- | ------ | --------------------- | ---------------- | ------------------ | ------ | ---------- |");
+  console.log(
+    "| N/M/P | Start | Published | Method | Scores, seeds 1, 2, 3 | Best / published | Median / published | Mean s | Mean evals |",
+  );
+  console.log(
+    "| ----- | ----- | --------- | ------ | --------------------- | ---------------- | ------------------ | ------ | ---------- |",
+  );
   const keys = [...new Set(rows.map((r) => `${r.N}/${r.M}/${r.P}|${r.startKind}`))];
   let problems = 0;
   for (const key of keys) {
@@ -162,9 +190,12 @@ function report(files) {
     const [N, M, P] = name.split("/").map(Number);
     const published = records.find((r) => r.N === N && r.M === M && r.P === P)?.value;
     for (const method of METHODS) {
-      const g = rows.filter((r) => `${r.N}/${r.M}/${r.P}|${r.startKind}` === key && r.method === method).sort((a, b) => a.seed - b.seed);
+      const g = rows
+        .filter((r) => `${r.N}/${r.M}/${r.P}|${r.startKind}` === key && r.method === method)
+        .sort((a, b) => a.seed - b.seed);
       if (!g.length) continue;
-      for (const r of g) if (r.error || !r.valid || !r.strict || r.rescoreDiff > 1e-12 || r.evaluations > r.evals) problems++;
+      for (const r of g)
+        if (r.error || !r.valid || !r.strict || r.rescoreDiff > 1e-12 || r.evaluations > r.evals) problems++;
       const scores = g.map((r) => r.score);
       const sorted = [...scores].sort((a, b) => a - b);
       const median = (sorted[Math.floor((sorted.length - 1) / 2)] + sorted[Math.ceil((sorted.length - 1) / 2)]) / 2;
@@ -177,7 +208,9 @@ function report(files) {
     }
   }
   const gap = Math.min(...rows.map((r) => r.gap).filter(Number.isFinite));
-  console.log(`\n${rows.length} runs; ${problems} invalid, non-strict, over budget or mis-scored; smallest pair separation ${gap}`);
+  console.log(
+    `\n${rows.length} runs; ${problems} invalid, non-strict, over budget or mis-scored; smallest pair separation ${gap}`,
+  );
 }
 
 const [mode, ...rest] = process.argv.slice(2);
@@ -187,7 +220,11 @@ else if (mode === "squares" || mode === "general") {
   const only = rest.indexOf("--only");
   const filter = only >= 0 ? rest[only + 1] : "";
   const positional = rest.filter((_, i) => only < 0 || (i !== only && i !== only + 1));
-  await runAll(jobs(mode).filter((j) => j.key.includes(filter)), positional[0], Number(positional[1] ?? 4));
+  await runAll(
+    jobs(mode).filter((j) => j.key.includes(filter)),
+    positional[0],
+    Number(positional[1] ?? 4),
+  );
 } else {
   console.error("usage: benchmark.mjs squares|general OUT.jsonl [workers] [--only KEY] | report FILE.jsonl ...");
   process.exit(2);
