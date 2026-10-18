@@ -33,7 +33,7 @@ export const SOURCES: readonly Source[] = [
     title: "Squares in Squares",
     url: "https://kingbird.myphotos.cc/packing/squares_in_squares.html",
     takes:
-      "Record values and their captions, with the finder and prover attributions, for squares in a square. Pictures are linked, not copied.",
+      "Record values and their captions, with the finder and prover attributions, for squares in a square, and the coordinates of most of those packings, read from its drawings. Pictures are linked, not copied.",
   },
   {
     n: 3,

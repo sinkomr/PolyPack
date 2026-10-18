@@ -64,6 +64,16 @@ The Packomania directory layout is described at the top of `scripts/import-packo
 - A caption that contains "proved" or "proven" but cannot be read as a proof claim is reported, never stored silently as `best_known`. [An earlier version read "Proved by F. Fodor in 2003." only as far as the initial, so 13 and 19 circles in a circle were stored as `best_known`. Corrected 2026-10-11.]
 - Where two sources cover the same problem (circles in a circle or square, n up to 24), their values must agree; disagreements are printed. The current build has none.
 
+## Coordinates read from Ellsworth's drawings
+
+Ellsworth draws each squares-in-a-square record as a hand-written SVG file: a filled shape stands for a group of unit squares (a block, a staircase), placed by exact transforms, with the container side as a 30-digit value. `scripts/read-ellsworth-svg.ts` reads those drawings into `data/sources/svg-ellsworth.json`, crediting the source, and `build-records.ts` attaches them like any second source's coordinates, with a note naming the drawing.
+
+- Each filled shape is split into unit squares on the integer grid of its own frame. Any exact tiling of a shape by unit squares is a valid packing of as many squares, so the result does not depend on matching the drawn subdivision.
+- Some drawings show a packing of more squares in the same side (the drawing for 14 shows 15 squares in side 4); the outermost extra squares are left out, and the note says so.
+- A drawing is used only when everything holds: only `svg`, `g`, `defs`, `rect`, `path` (straight lines), `polygon` and `use` appear; each shape is whole unit cells; every transform is a rigid motion; the count is P; the site's checker finds no overlap; and the container is within 1e-9 of the published value. Anything else is skipped and listed under `skipped` in the file.
+
+[CALC] Read 2026-10-18: 165 of the 189 drawings. Skipped: the three perfect squares (one container-sized square, already tiled here), five with shapes off the unit grid, one with a scaled frame, one with text, and fourteen whose reading overlaps (drawings that rely on paint order or another construction this reader does not model).
+
 ## Coordinates constructed by the solver
 
 Most published records come without coordinates: Friedman and Ellsworth publish pictures only. `scripts/construct-coordinates.ts` searches for such records with PolyPack's own solver library (`packages/solver`) and keeps a packing only when it reaches the published value. A drawing made from it shows *a* packing of the published size, not necessarily the arrangement of the source. Its `coordinates_note` says so: "Coordinates constructed by PolyPack (<method>, seed <s>): a packing that reaches the published value, not necessarily the source's arrangement." No source is credited for such coordinates on the records page.

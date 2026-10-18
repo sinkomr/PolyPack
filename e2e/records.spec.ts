@@ -17,14 +17,23 @@ test("a proven record with coordinates loads onto the board", async ({ page }) =
 });
 
 test("a best-known record without coordinates shows its value and source", async ({ page }) => {
-  await openProblem(page, 4, 4, 11);
+  await openProblem(page, 4, 4, 55);
   await expect(page.locator("#show-record")).toHaveText("Show best record");
   await page.click("#show-record");
-  await expect(page.locator("#record-info")).toContainText("3.87708359002281");
+  await expect(page.locator("#record-info")).toContainText("7.94577100750391");
   await expect(page.locator("#record-info")).toContainText("best known, not proven");
   await expect(page.locator("#record-info")).toContainText("Coordinates are not available");
-  await expect(page.locator("#record-info a", { hasText: "Picture" })).toHaveAttribute("href", /square-11\.svg/);
-  await expect(page.locator("#count")).toContainText("0 / 11");
+  await expect(page.locator("#record-info a", { hasText: "Picture" })).toHaveAttribute("href", /square-55\.svg/);
+  await expect(page.locator("#count")).toContainText("0 / 55");
+});
+
+test("a record read from the source's drawing loads onto the board and names the drawing", async ({ page }) => {
+  await openProblem(page, 4, 4, 11);
+  await page.click("#show-record");
+  await expect(page.locator("#record-info")).toContainText("3.87708359002281");
+  await expect(page.locator("#record-info")).toContainText("drawing of the packing");
+  await expect(page.locator("#count")).toContainText("11 / 11");
+  await expect(page.locator("#score")).toHaveText("3.877084");
 });
 
 test("the records page lists published values with a chart", async ({ page }) => {

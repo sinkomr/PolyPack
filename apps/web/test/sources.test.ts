@@ -85,10 +85,16 @@ describe("the sources of a published record", () => {
       const { value, coordinates } = recordSources({ ...r, has_coordinates: !!r.pieces });
       if (r.source_name.startsWith("PolyPack")) expect(value).toEqual([]);
       else expect(value.length).toBeGreaterThan(0);
-      // coordinates in the data are Packomania's or constructed here
-      expect(coordinates.every((n) => n === 3)).toBe(true);
-      if (r.pieces && !/constructed by PolyPack/.test(r.coordinates_note ?? "") && !r.source_name.startsWith("PolyPack"))
-        expect(coordinates).toEqual([3]);
+      // coordinates in the data are Packomania's, read from Ellsworth's drawings (squares in a
+      // square only), or constructed here
+      const from = r.N === 4 && r.M === 4 ? 2 : 3;
+      expect(coordinates.every((n) => n === from)).toBe(true);
+      if (
+        r.pieces &&
+        !/constructed by PolyPack/.test(r.coordinates_note ?? "") &&
+        !r.source_name.startsWith("PolyPack")
+      )
+        expect(coordinates).toEqual([from]);
       counts[value[0] ?? 0]++;
     }
     expect(counts.every((c) => c > 0)).toBe(true);

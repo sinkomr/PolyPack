@@ -30,7 +30,9 @@ const DERIVED = {
 
 const key = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 const groups = new Map<string, LiteratureRecord[]>();
-for (const file of readdirSync("data/sources").filter((f) => f.endsWith(".json") && f !== CONSTRUCTED).sort()) {
+for (const file of readdirSync("data/sources")
+  .filter((f) => f.endsWith(".json") && f !== CONSTRUCTED)
+  .sort()) {
   const { records } = JSON.parse(readFileSync(`data/sources/${file}`, "utf8")) as { records: LiteratureRecord[] };
   for (const r of records) groups.set(key(r), [...(groups.get(key(r)) ?? []), r]);
 }
@@ -41,7 +43,10 @@ const tolerance = (r: LiteratureRecord) => 10 ** -r.display_precision;
 const merged = new Map<string, LiteratureRecord>();
 for (const [k, list] of groups) {
   const ranked = [...list].sort(
-    (a, b) => Number(isProven(b.status)) - Number(isProven(a.status)) || a.value - b.value || b.display_precision - a.display_precision,
+    (a, b) =>
+      Number(isProven(b.status)) - Number(isProven(a.status)) ||
+      a.value - b.value ||
+      b.display_precision - a.display_precision,
   );
   const winner = { ...ranked[0] };
   for (const other of ranked.slice(1)) {
@@ -61,7 +66,11 @@ for (const [k, list] of groups) {
     if (other.pieces && !winner.pieces) {
       winner.pieces = other.pieces;
       winner.container_phi = other.container_phi;
-      winner.coordinates_note = `Coordinates from ${other.source_name}, ${other.source_url} (read ${other.accessed}).`;
+      // a source whose coordinates were read rather than given says how (read-ellsworth-svg.ts)
+      const reading = (other as { reading_note?: string }).reading_note;
+      winner.coordinates_note =
+        `Coordinates from ${other.source_name}, ${other.source_url} (read ${other.accessed}).` +
+        (reading ? ` ${reading}` : "");
     }
   }
   merged.set(k, winner);
@@ -87,12 +96,22 @@ function triangleTiling(k: number): Pose[] {
   return out;
 }
 
-function derive(N: number, M: number, P: number, value: number, status: LiteratureRecord["status"], why: string, pieces: Pose[]): void {
+function derive(
+  N: number,
+  M: number,
+  P: number,
+  value: number,
+  status: LiteratureRecord["status"],
+  why: string,
+  pieces: Pose[],
+): void {
   const k = key({ N, M, P });
   const existing = merged.get(k);
   if (existing) {
     if (Math.abs(existing.value - value) > 2 * tolerance(existing)) {
-      report.push(`${k}: derived value ${value} disagrees with ${existing.display} from the literature; literature kept`);
+      report.push(
+        `${k}: derived value ${value} disagrees with ${existing.display} from the literature; literature kept`,
+      );
       return;
     }
     // keep the literature entry and its source; add what is derived here
@@ -108,7 +127,10 @@ function derive(N: number, M: number, P: number, value: number, status: Literatu
     return;
   }
   merged.set(k, {
-    N, M, P, value,
+    N,
+    M,
+    P,
+    value,
     display: String(value),
     display_precision: 12,
     status,
@@ -121,11 +143,15 @@ function derive(N: number, M: number, P: number, value: number, status: Literatu
 }
 
 // One piece in a container of its own shape: the piece is the container.
-derive(0, 0, 1, 1, "trivial_tiling", "One circle fills a circle of the same radius, so r = 1.", [{ x: 0, y: 0, theta: 0 }]);
+derive(0, 0, 1, 1, "trivial_tiling", "One circle fills a circle of the same radius, so r = 1.", [
+  { x: 0, y: 0, theta: 0 },
+]);
 for (let n = 3; n <= 20; n++) {
   // a piece at theta = 0 has a vertex up; for odd n that already gives a horizontal bottom edge
   const theta = n % 2 === 0 ? Math.PI / n : 0;
-  derive(n, n, 1, 1, "trivial_tiling", `One ${n}-gon fills a container of the same shape and size, so s = 1.`, [{ x: 0, y: 0, theta }]);
+  derive(n, n, 1, 1, "trivial_tiling", `One ${n}-gon fills a container of the same shape and size, so s = 1.`, [
+    { x: 0, y: 0, theta },
+  ]);
 }
 // k^2 squares tile a square of side k; other n up to 324 on Ellsworth's page use the same grid.
 for (const r of [...merged.values()]) {
@@ -133,14 +159,30 @@ for (const r of [...merged.values()]) {
   const k = Math.ceil(Math.sqrt(r.P));
   if (r.value !== k) continue;
   if (k * k === r.P) {
-    derive(4, 4, r.P, k, "trivial_tiling", `${r.P} = ${k}² unit squares tile a square of side ${k} with no waste, so s = ${k} is optimal by area.`, gridSquares(r.P, k));
+    derive(
+      4,
+      4,
+      r.P,
+      k,
+      "trivial_tiling",
+      `${r.P} = ${k}² unit squares tile a square of side ${k} with no waste, so s = ${k} is optimal by area.`,
+      gridSquares(r.P, k),
+    );
   } else {
     derive(4, 4, r.P, k, r.status, "", gridSquares(r.P, k));
   }
 }
 // k^2 unit triangles tile a triangle of side k.
 for (let k = 1; k * k <= 500; k++) {
-  derive(3, 3, k * k, k, "trivial_tiling", `${k * k} = ${k}² unit triangles tile a triangle of side ${k} with no waste, so s = ${k} is optimal by area.`, triangleTiling(k));
+  derive(
+    3,
+    3,
+    k * k,
+    k,
+    "trivial_tiling",
+    `${k * k} = ${k}² unit triangles tile a triangle of side ${k} with no waste, so s = ${k} is optimal by area.`,
+    triangleTiling(k),
+  );
 }
 
 // ---------- coordinates constructed here [CALC] ----------
@@ -159,7 +201,9 @@ interface Construction {
 }
 let attached = 0;
 if (existsSync(`data/sources/${CONSTRUCTED}`)) {
-  const { constructions } = JSON.parse(readFileSync(`data/sources/${CONSTRUCTED}`, "utf8")) as { constructions: Construction[] };
+  const { constructions } = JSON.parse(readFileSync(`data/sources/${CONSTRUCTED}`, "utf8")) as {
+    constructions: Construction[];
+  };
   for (const c of constructions) {
     const r = merged.get(key(c));
     if (!r) {
@@ -170,7 +214,9 @@ if (existsSync(`data/sources/${CONSTRUCTED}`)) {
     const e = evaluate({ N: c.N, M: c.M, P: c.P, pieces: c.pieces, container_phi: c.container_phi });
     // the rule of scripts/construct-coordinates.ts: within 10^-display_precision of the value, never above
     if (c.published !== r.value || !e.valid || Math.abs(e.score! - r.value) > tolerance(r)) {
-      report.push(`${key(c)}: constructed coordinates give ${e.valid ? e.score : e.reasons.join("; ")} for ${r.display}; not used`);
+      report.push(
+        `${key(c)}: constructed coordinates give ${e.valid ? e.score : e.reasons.join("; ")} for ${r.display}; not used`,
+      );
       continue;
     }
     r.pieces = c.pieces;
@@ -192,7 +238,9 @@ for (const r of records) {
   if (r.pieces) {
     const e = evaluate({ N: r.N, M: r.M, P: r.P, pieces: r.pieces, container_phi: r.container_phi ?? 0 });
     if (!e.valid || Math.abs(e.score! - r.value) > Math.max(1e-8, 2 * tolerance(r))) {
-      throw new Error(`${key(r)}: stored coordinates give ${e.valid ? e.score : e.reasons.join("; ")}, expected ${r.value}`);
+      throw new Error(
+        `${key(r)}: stored coordinates give ${e.valid ? e.score : e.reasons.join("; ")}, expected ${r.value}`,
+      );
     }
   }
 }
