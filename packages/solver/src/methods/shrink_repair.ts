@@ -259,8 +259,8 @@ export async function executeShrinkRepair(
     localSamples: params.localSamples as number,
     weightGrowth: params.weightGrowth as number,
     weightDecay: params.weightDecay as number,
-    descentIterations: params.descentIterations as number,
   };
+  const descentIterations = params.descentIterations as number;
   const r0 = params.shrinkRatio as number;
   const rMin = Math.min(params.minShrinkRatio as number, r0);
   const rMax = Math.max(params.maxShrinkRatio as number, r0);
@@ -348,7 +348,7 @@ export async function executeShrinkRepair(
   /** Repair the loaded state at the current size. */
   const repair = async (): Promise<{ outcome: RepairOutcome; iterations: number }> => {
     let iterations = 0;
-    if (!(await state.descend(settings.descentIterations, pulse))) return { outcome: "stopped", iterations };
+    if (!(await state.descend(descentIterations, pulse))) return { outcome: "stopped", iterations };
     if (state.feasible()) return { outcome: "feasible", iterations };
     let leastRaw = state.raw;
     let least = state.snapshot();
@@ -363,7 +363,7 @@ export async function executeShrinkRepair(
           state.relocate(i, ctx.random);
           if (!(await pulse())) return { outcome: "stopped", iterations };
         }
-        if (!(await state.descend(settings.descentIterations, pulse))) return { outcome: "stopped", iterations };
+        if (!(await state.descend(descentIterations, pulse))) return { outcome: "stopped", iterations };
         ctx.sketch?.(sketch);
         if (state.feasible()) return { outcome: "feasible", iterations };
         if (state.raw < leastRaw * (1 - 1e-3)) {

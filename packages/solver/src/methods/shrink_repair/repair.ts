@@ -1,20 +1,11 @@
 // Repair phase of shrink_repair: at a fixed container, minimise the weighted sum of squared pair
 // penetrations and squared wall protrusions, with per-piece relocation by sampling, local descent
-// and guided-local-search weights. The overlap measures and their analytic derivatives are the
-// shared ones (`pairPenetration`, `visitContainerProtrusions`), so "zero" here is the same zero
-// the strict verifier tests. See docs/methods/shrink_repair.md.
-import {
-  boundingRadius,
-  inradius,
-  pairPenetration,
-  penaltyContainerNormals,
-  penaltyEdgeNormals,
-  visitContainerProtrusions,
-  type Container,
-  type Pose,
-  type ProtrusionVisitor,
-} from "@polypack/geometry";
+// and guided-local-search weights. Penetration depths and protrusions are the shared ones
+// (separating-axis depth of `pairPenetration`, support-form walls of `visitContainerProtrusions`),
+// evaluated by the allocation-free kernel in kernel.ts. See docs/methods/shrink_repair.md.
+import { boundingRadius, inradius, type Container, type Pose } from "@polypack/geometry";
 import { gaussian } from "../harden/dynamics";
+import { Kernel } from "./kernel";
 
 /** A state is feasible for the repair when no pair penetrates and no piece protrudes by more than this. */
 export const SUCCESS_DEPTH = 1e-10;
@@ -28,8 +19,6 @@ export interface RepairSettings {
   weightGrowth: number;
   /** Factor applied to the weight of a pair or wall that no longer conflicts (weights never fall below 1). */
   weightDecay: number;
-  /** L-BFGS iterations of one global descent. */
-  descentIterations: number;
 }
 
 /** L-BFGS memory of the global descent. */
@@ -66,13 +55,10 @@ export class RepairState {
   raw = 0;
   value = 0;
   maxDepth = 0;
-  /** Deepest pair penetration (walls excluded) of the last full evaluation. */
-  maxPairDepth = 0;
 
   private readonly settings: RepairSettings;
+  private readonly kernel: Kernel;
   private readonly axes: Float64Array[];
-  private readonly containerAxes: Float64Array;
-  private readonly scratch: Float64Array;
   private readonly pairWeight: Float64Array;
   private readonly wallWeight: Float64Array;
   private readonly activePairs = new Set<number>();
@@ -84,7 +70,7 @@ export class RepairState {
   private cellSize = 1;
   private gridOrigin = 0;
   private G = 1;
-  private head = new Int32Array(1);
+  private head = new Int32Array(1).fill(-1);
   private readonly next: Int32Array;
   private readonly prev: Int32Array;
   private readonly cellOf: Int32Array;
@@ -94,17 +80,11 @@ export class RepairState {
   private pairD = new Float64Array(64);
   private pairCount = 0;
   private readonly wallDepth: Float64Array;
-  // Wall visitor accumulators.
-  private wSum = 0;
-  private wMax = 0;
-  private wgx = 0;
-  private wgy = 0;
-  private wgt = 0;
-  private readonly visitor: ProtrusionVisitor;
-  // Candidate pose and its edge axes for sampling.
+  // Candidate poses and their edge normals for sampling and refinement.
   private readonly candidate: Pose = { x: 0, y: 0, theta: 0 };
   private readonly candidateAxes: Float64Array;
   private readonly trialAxes: Float64Array;
+  private readonly pieceGrad = new Float64Array(3);
   private readonly pairCost: number;
   private readonly wallCost: number;
 
@@ -114,17 +94,16 @@ export class RepairState {
     this.P = problem.P;
     this.settings = settings;
     const { N, M, P } = this;
+    this.kernel = new Kernel(N, M);
     this.poses = Array.from({ length: P }, () => ({ x: 0, y: 0, theta: 0 }));
     this.container = { M, cx: 0, cy: 0, phi: 0, size: 1 };
     this.R = boundingRadius(N);
     this.rin = N === 0 ? 1 : inradius(N);
     this.period = N === 0 ? 2 * Math.PI : (2 * Math.PI) / N;
     this.apothem = M === 0 ? 1 : inradius(M);
-    this.axes = N === 0 ? [] : Array.from({ length: P }, () => new Float64Array(3 * N));
-    this.candidateAxes = new Float64Array(3 * Math.max(N, 1));
-    this.trialAxes = new Float64Array(3 * Math.max(N, 1));
-    this.containerAxes = M === 0 ? new Float64Array(0) : penaltyContainerNormals(M, 0);
-    this.scratch = new Float64Array(2 * (N + M));
+    this.axes = Array.from({ length: P }, () => new Float64Array(2 * N));
+    this.candidateAxes = new Float64Array(2 * N);
+    this.trialAxes = new Float64Array(2 * N);
     this.pairWeight = new Float64Array(P * P).fill(1);
     this.wallWeight = new Float64Array(P).fill(1);
     this.stamp = new Uint32Array(P * P);
@@ -133,15 +112,7 @@ export class RepairState {
     this.cellOf = new Int32Array(P);
     this.wallDepth = new Float64Array(P);
     this.pairCost = N === 0 ? 1 : 2 * N;
-    this.wallCost = M === 0 ? Math.max(1, N) : M;
-    this.visitor = (depth, px, py, pt) => {
-      if (!(depth > 0)) return;
-      this.wSum += depth * depth;
-      if (depth > this.wMax) this.wMax = depth;
-      this.wgx += 2 * depth * px;
-      this.wgy += 2 * depth * py;
-      this.wgt += 2 * depth * pt;
-    };
+    this.wallCost = M === 0 ? 1 : M;
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -153,8 +124,7 @@ export class RepairState {
     // Half-width of the container's bounding box: its circumradius (radius for a circle).
     const half = this.M === 0 ? size : size / (2 * Math.sin(Math.PI / this.M));
     this.cellSize = 2 * this.R;
-    const span = 2 * (half + this.R);
-    this.G = Math.max(1, Math.min(256, Math.ceil(span / this.cellSize)));
+    this.G = Math.max(1, Math.min(256, Math.ceil((2 * (half + this.R)) / this.cellSize)));
     this.gridOrigin = -this.G * this.cellSize * 0.5;
     if (this.head.length !== this.G * this.G) this.head = new Int32Array(this.G * this.G);
     this.rebuildGrid();
@@ -189,7 +159,7 @@ export class RepairState {
   }
 
   private refreshAxes(i: number): void {
-    if (this.N !== 0) penaltyEdgeNormals(this.N, this.poses[i].theta, this.axes[i]);
+    if (this.N !== 0) this.kernel.normals(this.poses[i].theta, this.axes[i]);
   }
 
   private cellIndex(x: number, y: number): number {
@@ -252,31 +222,6 @@ export class RepairState {
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Walls
-
-  /** Unweighted wall terms of one pose into wSum, wMax and the gradient accumulators. */
-  private walls(pose: Pose): void {
-    this.wSum = 0;
-    this.wMax = 0;
-    this.wgx = 0;
-    this.wgy = 0;
-    this.wgt = 0;
-    // A piece whose bounding disk lies inside the container's inscribed circle touches no wall.
-    if (Math.hypot(pose.x, pose.y) + this.R <= this.apothem * this.container.size) return;
-    this.work += this.wallCost;
-    // Support form for polygon containers: one constraint per wall, at the piece's furthest vertex.
-    visitContainerProtrusions(
-      this.N,
-      pose,
-      this.container,
-      this.visitor,
-      true,
-      this.scratch,
-      this.M === 0 ? undefined : this.containerAxes,
-    );
-  }
-
-  // ---------------------------------------------------------------------------------------------
   // Full objective
 
   private pushPair(i: number, j: number): void {
@@ -288,9 +233,7 @@ export class RepairState {
       };
       this.pairI = grow(this.pairI);
       this.pairJ = grow(this.pairJ);
-      const d = new Float64Array(2 * this.pairD.length);
-      d.set(this.pairD);
-      this.pairD = d;
+      this.pairD = new Float64Array(2 * this.pairD.length);
     }
     this.pairI[this.pairCount] = i;
     this.pairJ[this.pairCount] = j;
@@ -326,55 +269,57 @@ export class RepairState {
    * gradient. Updates raw, value, maxDepth, the pair list with depths and the wall depths.
    */
   evaluate(gradient?: Float64Array): number {
-    const { N, P, poses, axes, pairWeight, wallWeight } = this;
+    const { P, poses, axes, pairWeight, wallWeight, kernel } = this;
     if (gradient) gradient.fill(0);
     this.collectPairs();
     let value = 0;
     let raw = 0;
-    let maxPair = 0;
+    let deepest = 0;
     for (let k = 0; k < this.pairCount; k++) {
       const i = this.pairI[k];
       const j = this.pairJ[k];
-      const hit = pairPenetration(N, poses[i], poses[j], axes[i], axes[j]);
-      const d = hit.depth;
+      const a = poses[i];
+      const b = poses[j];
+      const d = gradient
+        ? kernel.depthGradient(a.x, a.y, a.theta, axes[i], b.x, b.y, b.theta, axes[j])
+        : kernel.depth(a.x, a.y, a.theta, axes[i], b.x, b.y, b.theta, axes[j]);
       this.pairD[k] = d;
       if (!(d > 0)) continue;
       const w = pairWeight[i * P + j];
       raw += d * d;
       value += w * d * d;
-      if (d > maxPair) maxPair = d;
+      if (d > deepest) deepest = d;
       if (gradient) {
         const f = 2 * w * d;
-        gradient[3 * i] += f * hit.a.x;
-        gradient[3 * i + 1] += f * hit.a.y;
-        gradient[3 * i + 2] += f * hit.a.theta;
-        gradient[3 * j] += f * hit.b.x;
-        gradient[3 * j + 1] += f * hit.b.y;
-        gradient[3 * j + 2] += f * hit.b.theta;
+        gradient[3 * i] += f * kernel.ax;
+        gradient[3 * i + 1] += f * kernel.ay;
+        gradient[3 * i + 2] += f * kernel.at;
+        gradient[3 * j] += f * kernel.bx;
+        gradient[3 * j + 1] += f * kernel.by;
+        gradient[3 * j + 2] += f * kernel.bt;
       }
     }
     this.work += this.pairCount * this.pairCost;
-    let maxWall = 0;
+    const size = this.container.size;
     for (let i = 0; i < P; i++) {
-      this.walls(poses[i]);
-      this.wallDepth[i] = this.wMax;
-      if (this.wSum === 0) continue;
+      const p = poses[i];
+      kernel.walls(p.x, p.y, p.theta, size, !!gradient);
+      this.wallDepth[i] = kernel.wallMax;
+      if (kernel.wallSum === 0) continue;
       const v = wallWeight[i];
-      raw += this.wSum;
-      value += v * this.wSum;
-      if (this.wMax > maxWall) maxWall = this.wMax;
+      raw += kernel.wallSum;
+      value += v * kernel.wallSum;
+      if (kernel.wallMax > deepest) deepest = kernel.wallMax;
       if (gradient) {
-        gradient[3 * i] += v * this.wgx;
-        gradient[3 * i + 1] += v * this.wgy;
-        gradient[3 * i + 2] += v * this.wgt;
+        gradient[3 * i] += v * kernel.wx;
+        gradient[3 * i + 1] += v * kernel.wy;
+        gradient[3 * i + 2] += v * kernel.wt;
       }
     }
-    this.work += P;
-    if (gradient && N === 0) for (let i = 0; i < P; i++) gradient[3 * i + 2] = 0;
+    this.work += P * this.wallCost;
     this.raw = raw;
     this.value = value;
-    this.maxPairDepth = maxPair;
-    this.maxDepth = Math.max(maxPair, maxWall);
+    this.maxDepth = deepest;
     return value;
   }
 
@@ -460,13 +405,11 @@ export class RepairState {
    * at its current pose and the walls. Stops early once the loss reaches `cutoff`.
    */
   pieceLoss(i: number, pose: Pose, axes: Float64Array, cutoff: number): number {
-    const { G, head, next, poses, P, N } = this;
-    let loss = 0;
-    this.walls(pose);
-    if (this.wSum > 0) {
-      loss += this.wallWeight[i] * this.wSum;
-      if (loss >= cutoff) return loss;
-    }
+    const { G, head, next, poses, P, kernel } = this;
+    kernel.walls(pose.x, pose.y, pose.theta, this.container.size, false);
+    this.work += this.wallCost;
+    let loss = this.wallWeight[i] * kernel.wallSum;
+    if (loss >= cutoff) return loss;
     const reach2 = 4 * this.R * this.R;
     const c = this.cellIndex(pose.x, pose.y);
     const cx = c % G;
@@ -481,7 +424,7 @@ export class RepairState {
           const dy = pose.y - q.y;
           if (dx * dx + dy * dy > reach2) continue;
           tests++;
-          const d = pairPenetration(N, pose, q, axes, this.axes[j]).depth;
+          const d = kernel.depth(pose.x, pose.y, pose.theta, axes, q.x, q.y, q.theta, this.axes[j]);
           if (!(d > 0)) continue;
           loss += this.pairWeight[i < j ? i * P + j : j * P + i] * d * d;
           if (loss >= cutoff) {
@@ -495,21 +438,17 @@ export class RepairState {
     return loss;
   }
 
-  /** Weighted loss of piece i at `pose` and its gradient with respect to that pose. */
-  private pieceGradient(i: number, pose: Pose, axes: Float64Array, g: Float64Array): number {
-    const { G, head, next, poses, P, N } = this;
-    g[0] = 0;
-    g[1] = 0;
-    g[2] = 0;
-    let loss = 0;
-    this.walls(pose);
-    if (this.wSum > 0) {
-      const v = this.wallWeight[i];
-      loss += v * this.wSum;
-      g[0] += v * this.wgx;
-      g[1] += v * this.wgy;
-      g[2] += v * this.wgt;
-    }
+  /** Weighted loss of piece i at `pose` and its gradient with respect to that pose (into pieceGrad). */
+  private pieceGradient(i: number, pose: Pose, axes: Float64Array): number {
+    const { G, head, next, poses, P, kernel } = this;
+    const g = this.pieceGrad;
+    kernel.walls(pose.x, pose.y, pose.theta, this.container.size, true);
+    this.work += this.wallCost;
+    const v = this.wallWeight[i];
+    let loss = v * kernel.wallSum;
+    g[0] = v * kernel.wx;
+    g[1] = v * kernel.wy;
+    g[2] = v * kernel.wt;
     const reach2 = 4 * this.R * this.R;
     const c = this.cellIndex(pose.x, pose.y);
     const cx = c % G;
@@ -524,23 +463,21 @@ export class RepairState {
           const dy = pose.y - q.y;
           if (dx * dx + dy * dy > reach2) continue;
           tests++;
-          const hit = pairPenetration(N, pose, q, axes, this.axes[j]);
-          const d = hit.depth;
+          const d = kernel.depthGradient(pose.x, pose.y, pose.theta, axes, q.x, q.y, q.theta, this.axes[j]);
           if (!(d > 0)) continue;
           const w = this.pairWeight[i < j ? i * P + j : j * P + i];
           loss += w * d * d;
-          g[0] += 2 * w * d * hit.a.x;
-          g[1] += 2 * w * d * hit.a.y;
-          g[2] += 2 * w * d * hit.a.theta;
+          g[0] += 2 * w * d * kernel.ax;
+          g[1] += 2 * w * d * kernel.ay;
+          g[2] += 2 * w * d * kernel.at;
         }
       }
     }
     this.work += tests * this.pairCost;
-    if (N === 0) g[2] = 0;
     return loss;
   }
 
-  /** Uniform centre inside the container, at least `margin` from every wall. */
+  /** Uniform centre inside the container, at least the piece inradius from every wall. */
   private sampleCentre(random: () => number, out: Pose): void {
     const s = this.container.size;
     if (this.M === 0) {
@@ -558,7 +495,8 @@ export class RepairState {
       const y = (2 * random() - 1) * half;
       let inside = true;
       for (let k = 0; k < this.M && inside; k++) {
-        if (x * this.containerAxes[3 * k + 1] + y * this.containerAxes[3 * k + 2] > limit) inside = false;
+        const angle = -Math.PI / 2 + (2 * Math.PI * k) / this.M;
+        if (x * Math.cos(angle) + y * Math.sin(angle) > limit) inside = false;
       }
       if (inside) {
         out.x = x;
@@ -572,7 +510,7 @@ export class RepairState {
 
   /**
    * Angle for a sampled pose. The interlocking angles come first: an edge parallel to a
-   * container wall, rotated by a quarter of the piece's symmetry period at a time (multiples of
+   * container wall, turned by a quarter of the piece's symmetry period at a time (multiples of
    * 22.5 degrees from the walls for squares, which include the 45-degree tilt); the angle of a
    * random other piece, or that angle turned by pi/N (the inverted neighbour that tiles with
    * triangles); for a circular container, an edge facing the centre. The rest are uniform.
@@ -582,7 +520,8 @@ export class RepairState {
     if (N === 0) return 0;
     const u = random();
     if (u < 0.4) {
-      // Edge normal theta + pi/2 + pi/N parallel to wall normal -pi/2 + 2 pi k / M.
+      // Edge normal theta + pi/2 + pi/N parallel to the wall normal -pi/2 + 2 pi k / M, or to
+      // the radial direction of the sample in a circular container.
       const wall = M === 0 ? Math.atan2(y, x) + Math.PI / 2 : (2 * Math.PI * Math.floor(random() * M)) / M;
       return wall - Math.PI - Math.PI / N + (period / 4) * Math.floor(random() * 4);
     }
@@ -597,26 +536,26 @@ export class RepairState {
 
   /** Short gradient descent of one piece's weighted loss from `pose`, in place; returns the loss. */
   private refine(i: number, pose: Pose): number {
-    const g = new Float64Array(3);
+    const g = this.pieceGrad;
     const axes = this.candidateAxes;
-    if (this.N !== 0) penaltyEdgeNormals(this.N, pose.theta, axes);
-    let loss = this.pieceGradient(i, pose, axes, g);
+    const { kernel, N } = this;
+    if (N !== 0) kernel.normals(pose.theta, axes);
+    let loss = this.pieceGradient(i, pose, axes);
     const trial: Pose = { x: 0, y: 0, theta: 0 };
     const trialAxes = this.trialAxes;
     let step = 0;
     for (let k = 0; k < REFINE_STEPS && loss > 0; k++) {
       const norm = Math.hypot(g[0], g[1], this.R * g[2]);
       if (!(norm > 0)) break;
-      // First step moves the piece by a tenth of its bounding radius.
+      // The first step moves the piece by a tenth of its bounding radius.
       if (step === 0) step = (0.1 * this.R) / norm;
       let accepted = false;
       for (let line = 0; line < 12; line++) {
         trial.x = pose.x - step * g[0];
         trial.y = pose.y - step * g[1];
         trial.theta = pose.theta - step * g[2];
-        if (this.N !== 0) penaltyEdgeNormals(this.N, trial.theta, trialAxes);
-        const value = this.pieceLoss(i, trial, trialAxes, loss);
-        if (value < loss) {
+        if (N !== 0) kernel.normals(trial.theta, trialAxes);
+        if (this.pieceLoss(i, trial, trialAxes, loss) < loss) {
           accepted = true;
           break;
         }
@@ -626,8 +565,8 @@ export class RepairState {
       pose.x = trial.x;
       pose.y = trial.y;
       pose.theta = trial.theta;
-      if (this.N !== 0) penaltyEdgeNormals(this.N, pose.theta, axes);
-      loss = this.pieceGradient(i, pose, axes, g);
+      if (N !== 0) kernel.normals(pose.theta, axes);
+      loss = this.pieceGradient(i, pose, axes);
       step *= 2;
     }
     return loss;
@@ -639,16 +578,16 @@ export class RepairState {
    * there if that lowers its loss. Returns true when the piece moved.
    */
   relocate(i: number, random: () => number): boolean {
-    const { N, settings } = this;
+    const { N, settings, kernel } = this;
     const current = this.poses[i];
-    const currentLoss = this.pieceLoss(i, current, N === 0 ? this.candidateAxes : this.axes[i], Infinity);
+    const currentLoss = this.pieceLoss(i, current, this.axes[i], Infinity);
     if (currentLoss === 0) return false;
     const best: Pose = { x: current.x, y: current.y, theta: current.theta };
     let bestLoss = currentLoss;
     const cand = this.candidate;
     const axes = this.candidateAxes;
     const consider = () => {
-      if (N !== 0) penaltyEdgeNormals(N, cand.theta, axes);
+      if (N !== 0) kernel.normals(cand.theta, axes);
       const loss = this.pieceLoss(i, cand, axes, bestLoss);
       if (loss < bestLoss) {
         bestLoss = loss;
