@@ -312,7 +312,8 @@ describe("shrink_repair method", () => {
   });
 
   it("is reproducible for a seed and differs between seeds", async () => {
-    const options = { method: "shrink_repair", budget: { evals: 400 }, finalPolish: false };
+    // Random starts, so that the seed matters from the first draw.
+    const options = { method: "shrink_repair", params: { start: "random" }, budget: { evals: 400 }, finalPolish: false };
     const first = await run({ N: 4, M: 4, P: 7 }, { ...options, seed: 9 });
     const again = await run({ N: 4, M: 4, P: 7 }, { ...options, seed: 9 });
     expect(again.best).toEqual(first.best);

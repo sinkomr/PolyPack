@@ -15,6 +15,7 @@ const names: Record<string, string> = {
   ls_growth: "Lubachevsky–Stillinger growth",
   morph: "Shape continuation",
   harden: "Soft-to-rigid hardening, after Yohei Nakajima",
+  shrink_repair: "Shrink and repair",
   seed: "Lattice & symmetry seeds",
   polish: "Contact polish",
 };
@@ -30,6 +31,8 @@ const descriptions: Record<string, string> = {
   morph: "Starts with rounded pieces and gradually changes them to the chosen shape.",
   harden:
     "Soft-to-rigid hardening, after Yohei Nakajima: squeezes soft inscribed disks together, hardens them into the true shapes and keeps the best of several seeded runs.",
+  shrink_repair:
+    "Shrinks the container below the best packing, then removes the overlaps by moving, relocating and regrouping pieces. Good at escaping the grid arrangement for pieces that tile the container.",
   seed: "Generates arrangements from lattices, rings, rows, or an adjacent record.",
   polish: "Fine-tunes the contacts and positions in a complete packing.",
 };

@@ -49,6 +49,8 @@ export const shrinkRepairMethod: MethodDefinition = {
     descentIterations: 40,
     explorePatience: 24,
     maxRuin: 1,
+    restartAfter: 40,
+    restartSlack: 0.02,
     evaluationWork: 4000,
   },
   schema: {
@@ -150,6 +152,21 @@ export const shrinkRepairMethod: MethodDefinition = {
         0,
         1,
       ),
+      restartAfter: numeric(
+        "Restart after",
+        "Explorations in a row that fail to improve the current packing before random poses are repaired near the best size and become the current packing; 0 never restarts.",
+        40,
+        0,
+        100000,
+        true,
+      ),
+      restartSlack: numeric(
+        "Restart slack",
+        "A restart repairs random poses in a container this fraction larger than the best (growing by 2% after each failure).",
+        0.02,
+        0,
+        1,
+      ),
       evaluationWork: numeric(
         "Work per assessment and piece",
         "Counted pair and wall feature tests per counted assessment, per piece. Every successful repair is assessed at once; between successes one legalised working state is assessed per P times this much work, so an evaluation budget bounds the work.",
@@ -172,7 +189,7 @@ export const CHECKPOINT_WORK = 60000;
 export type RepairOutcome = "feasible" | "failed" | "stopped";
 
 export interface ShrinkRepairObservation {
-  kind: "start" | "repair" | "assessment" | "improvement" | "disruption";
+  kind: "start" | "repair" | "assessment" | "improvement" | "disruption" | "restart";
   /** Container size the repair worked at, or of the assessed state. */
   size: number;
   /** Best size so far (Infinity before the first valid packing). */
@@ -279,11 +296,17 @@ export async function executeShrinkRepair(
   const patience = params.patience as number;
   const explorePatience = params.explorePatience as number;
   const maxRuin = params.maxRuin as number;
+  const restartAfter = params.restartAfter as number;
+  const restartSlack = params.restartSlack as number;
   const interval = (params.evaluationWork as number) * P;
   const state = new RepairState(ctx.problem, settings);
 
+  // The best packing so far, and the current one that compression and exploration work on: the
+  // best, or since the last restart the descendant of a random start until it beats the best.
   let best: Pose[] | undefined;
   let bestSize = Infinity;
+  let current: Pose[] | undefined;
+  let currentSize = Infinity;
   let ratio = r0;
   let sinceCheckpoint = 0;
   let sinceAssessment = 0;
@@ -311,30 +334,38 @@ export async function executeShrinkRepair(
     return ctx.checkpoint();
   };
   /**
-   * Legalise and score poses in the container frame; the result becomes the packing to shrink
-   * from when it is smaller than that (unless `insurance`). Returns false to end the method,
-   * true when nothing valid was scored, otherwise the score.
+   * Legalise and score poses in the container frame. Unless `insurance`, a result smaller than
+   * the current packing (the one being shrunk) or the best replaces it. Returns false to end the
+   * method, null when nothing valid was scored, otherwise the score and the poses re-centred on
+   * their enclosing container.
    */
   const assess = async (
     pieces: readonly Pose[],
     kind: "assessment" | "improvement",
     insurance = false,
-  ): Promise<boolean | number> => {
+  ): Promise<false | null | { score: number; pieces: Pose[] }> => {
     if (ctx.shouldStop()) return false;
     const legal = await legaliseStrict(configOf(ctx.problem, pieces), ctx.shouldStop, tick, ctx.random);
     if (ctx.shouldStop()) return false;
-    if (!legal) return true;
+    if (!legal) return null;
     notify({ kind, size: state.container.size, best: bestSize, ratio, config: legal });
     const result = await ctx.evaluate(legal, { autoOrient: false });
     if (!result) return false;
-    if (!result.valid || result.score === null || !result.container) return true;
+    if (!result.valid || result.score === null || !result.container) return null;
     const container: Container = result.container;
-    if (!insurance && result.score < bestSize) {
-      // Re-centre on the enclosing container (phi = 0 in this frame).
-      best = legal.pieces.map((p) => ({ x: p.x - container.cx, y: p.y - container.cy, theta: p.theta }));
-      bestSize = result.score;
+    // Re-centre on the enclosing container (phi = 0 in this frame).
+    const centred = legal.pieces.map((p) => ({ x: p.x - container.cx, y: p.y - container.cy, theta: p.theta }));
+    if (!insurance) {
+      if (result.score < currentSize) {
+        current = centred;
+        currentSize = result.score;
+      }
+      if (result.score < bestSize) {
+        best = centred;
+        bestSize = result.score;
+      }
     }
-    return result.score;
+    return { score: result.score, pieces: centred };
   };
   /** Called inside the repair after every unit of work: checkpoints and periodic assessments. */
   const pulse = async (): Promise<boolean> => {
@@ -410,15 +441,45 @@ export async function executeShrinkRepair(
     if (ctx.shouldStop()) return;
     if (!initial || initial.pieces.length !== P) random = true;
   }
+  /**
+   * Repair the loaded state at `size`, growing the container (and the centres) by `growth`
+   * after each failure, until a strict packing is scored; it becomes the current packing.
+   * Returns false to end the method.
+   */
+  const settle = async (size: number, growth: number): Promise<boolean> => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      state.setSize(size);
+      state.resetWeights();
+      const { outcome, iterations } = await repair(explorePatience);
+      notify({ kind: "repair", size, best: bestSize, ratio, outcome, iterations });
+      if (outcome === "stopped") return false;
+      if (outcome === "feasible") {
+        const scored = await assess(state.poses, "improvement");
+        if (scored === false) return false;
+        if (scored) {
+          current = scored.pieces;
+          currentSize = scored.score;
+          return true;
+        }
+      }
+      // A repair that reached feasibility but whose legalisation failed counts as a failure.
+      state.scaleCentres(growth);
+      size *= growth;
+    }
+    return true;
+  };
+
   let size: number;
+  let settled = false;
   if (initial) {
     const adopted = adopt(initial);
     state.load(adopted.pieces);
     size = adopted.size;
-    if (!findOverlaps(N, initial.pieces, 0).length && size < bestSize) {
+    if (!findOverlaps(N, initial.pieces, 0).length) {
       // A strict start is the packing to shrink from; the framework (or the seed) has scored it.
-      best = state.snapshot();
-      bestSize = size;
+      best = current = state.snapshot();
+      bestSize = currentSize = size;
+      settled = true;
     }
   } else {
     // Random poses in a container 30% larger than the area bound, repaired before shrinking.
@@ -427,40 +488,50 @@ export async function executeShrinkRepair(
     for (let i = 0; i < P; i++) state.scatterPiece(i, ctx.random);
   }
   notify({ kind: "start", size, best: bestSize, ratio });
-
   // An invalid start (or a random one) is repaired at its own size, which grows by 5% after
   // each failure, until a strict packing is scored.
   phase = "repairing the start";
-  for (let attempt = 0; !best && attempt < 60; attempt++) {
-    state.setSize(size);
-    state.resetWeights();
-    const { outcome, iterations } = await repair(explorePatience);
-    notify({ kind: "repair", size, best: bestSize, ratio, outcome, iterations });
-    if (outcome === "stopped") return;
-    if (outcome === "feasible") {
-      const score = await assess(state.poses, "improvement");
-      if (score === false) return;
-      if (best) break;
-    }
-    // A repair that reached feasibility but whose legalisation failed is treated like a failure.
-    state.scaleCentres(1.05);
-    size *= 1.05;
-  }
-  if (!best) return;
+  if (!settled && !(await settle(size, 1.05))) return;
+  if (!best || !current) return;
 
   // --- Shrink and repair ---------------------------------------------------------------------
-  // Compression: shrink the best by `ratio`, which grows after a success and halves after a
-  // failure. Once it falls below its minimum the search is at the floor of the best packing's
-  // basin and turns to exploration: targets just below the best (1 to 4 times the minimum
-  // ratio), each from the best with a ruined region of a log-uniform number of pieces, repaired
-  // with the longer exploration patience. A better packing found that way resumes compression.
+  // Compression: shrink the current packing by `ratio`, which grows after a success and halves
+  // after a failure. Once it falls below its minimum the search is at the floor of the current
+  // packing's basin and turns to exploration: targets just below it (1 to 4 times the minimum
+  // ratio), each from the current packing with a ruined region of a log-uniform number of
+  // pieces, repaired with the longer exploration patience. A better packing found that way
+  // resumes compression. After `restartAfter` explorations in a row without one, random poses
+  // are repaired at a container `restartSlack` larger than the best (growing by 2% on failure)
+  // and the result becomes the current packing, whose descendants replace the best only when
+  // they beat it.
   let exploring = false;
+  let stale = 0;
   while (!ctx.shouldStop()) {
     if (!(await checkpoint())) return;
+    if (restartAfter > 0 && stale >= restartAfter) {
+      phase = "restarting";
+      stale = 0;
+      exploring = false;
+      ratio = r0;
+      const restartSize = bestSize * (1 + restartSlack);
+      state.setSize(restartSize);
+      for (let i = 0; i < P; i++) state.scatterPiece(i, ctx.random);
+      notify({ kind: "restart", size: restartSize, best: bestSize, ratio });
+      // The restart's packing replaces the current one even when it is worse.
+      currentSize = Infinity;
+      const kept: Pose[] | undefined = current;
+      if (!(await settle(restartSize, 1.02))) return;
+      if (currentSize === Infinity) {
+        current = kept;
+        currentSize = bestSize;
+      }
+      continue;
+    }
     const r = exploring ? rMin * (1 + 3 * ctx.random()) : ratio;
-    const target = bestSize * (1 - r);
+    const from = currentSize;
+    const target = from * (1 - r);
     phase = exploring ? "exploring" : "compressing";
-    state.load(best);
+    state.load(current!);
     state.setSize(target);
     state.scaleCentres(1 - r);
     state.resetWeights();
@@ -472,23 +543,21 @@ export async function executeShrinkRepair(
     const { outcome, iterations } = await repair(exploring ? explorePatience : patience);
     notify({ kind: "repair", size: target, best: bestSize, ratio: r, outcome, iterations });
     if (outcome === "stopped") return;
-    let improved = false;
     if (outcome === "feasible") {
-      const before = bestSize;
-      const score = await assess(state.poses, "improvement");
-      if (score === false) return;
-      improved = bestSize < before;
+      if ((await assess(state.poses, "improvement")) === false) return;
     }
-    if (improved) {
+    // The current packing may also have improved through a periodic assessment.
+    if (currentSize < from) {
       ratio = exploring ? Math.max(ratio, 2 * r) : Math.min(rMax, ratio * 1.25);
       exploring = false;
+      stale = 0;
     } else if (!exploring) {
       ratio *= 0.5;
       if (ratio < rMin) {
         ratio = rMin;
         exploring = true;
       }
-    }
+    } else stale++;
   }
 }
 
