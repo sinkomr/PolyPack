@@ -1,0 +1,23 @@
+name: Free improvements
+# Every night: records that a larger packing (minus pieces) or, for squares and triangles, a
+# smaller one grown by strips beats are submitted to the live site (scripts/trim-down.ts). New
+# entries from the day's batches create new cases; a night without any sends nothing.
+on:
+  schedule:
+    - cron: "30 10 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency: trim-down
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx tsx scripts/trim-down.ts --N 0,3-20 --M 0,3-20 --submit --name "PolyPack trim-down" --per-minute 60
