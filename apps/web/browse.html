@@ -29,6 +29,12 @@
 
       <details id="plot" class="plot">
         <summary>Charts: records against the area bound</summary>
+        <p class="note chart-help">
+          Point at a chart for the values of the nearest P. Drag across a chart to zoom into a range of P; double-click
+          or Reset zoom to see every P. With the keyboard: arrow keys choose a P, + and − zoom, 0 resets.
+          <span id="chart-range" class="chart-range"></span>
+          <button id="chart-reset" type="button" hidden>Reset zoom</button>
+        </p>
         <figure>
           <svg id="chart" class="chart" role="img" aria-labelledby="chart-title" viewBox="0 0 900 380"></svg>
           <figcaption id="chart-title" class="note"></figcaption>

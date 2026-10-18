@@ -370,9 +370,11 @@ test("a tile opens its record, Back closes it, and the board link opens the prob
   await page.goto("/browse.html?size=large&p=19#0,0");
   await expect(detail.getByRole("heading")).toHaveText("P = 19: 19 circles in a circle");
   await expect(page.getByRole("radio", { name: "Large" })).toBeChecked();
-  await detail.getByRole("link", { name: "Open on the board" }).click();
-  await expect(page).toHaveURL(/\/#p=0,0,19$/);
-  await expect(page.locator("#count")).toContainText("/ 19");
+  // the main link puts the drawn record on the board; the other opens the problem empty
+  await expect(detail.getByRole("link", { name: "Open an empty board" })).toHaveAttribute("href", "/#p=0,0,19");
+  await detail.getByRole("link", { name: "Show on the board" }).click();
+  await expect(page).toHaveURL(/\/#p=0,0,19&record$/);
+  await expect(page.locator("#count")).toContainText("19 / 19");
   await expect(page.locator("#n-select")).toHaveValue("0");
   await expect(page.locator("#m-select")).toHaveValue("0");
 
@@ -473,10 +475,7 @@ test("a new site best appears on its tile without a reload", async ({ page, requ
   const detail = page.getByRole("dialog");
   await expect(detail).toContainText(`${second.score.toFixed(6)} by atlas test (own software)`);
   await expect(detail).toContainText("no published value on record");
-  await expect(detail.getByRole("link", { name: "Load this entry on the board" })).toHaveAttribute(
-    "href",
-    `/#s=${second.id}`,
-  );
+  await expect(detail.getByRole("link", { name: "Show on the board" })).toHaveAttribute("href", `/#s=${second.id}`);
 });
 
 test("the atlas fits a phone without sideways scrolling", async ({ page }) => {
@@ -785,7 +784,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
   await expect(art(page, 5)).toHaveClass(/drawn/);
   await tile(page, 5).click();
   const detail = page.getByRole("dialog");
-  const board = detail.getByRole("link", { name: "Open on the board" });
+  const board = detail.getByRole("link", { name: "Show on the board" });
   await board.focus();
   await board.evaluate((e) => ((e as HTMLElement & { marked?: boolean }).marked = true));
   await expect(detail).toContainText("9.000000 by ann (by hand)");
@@ -803,7 +802,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
   fixture.site![0] = { P: 5, ...best };
   await submitRow(request, slot, 2.5, "atlas nudge");
   await expect(detail).toContainText("8.000000 by bea (by hand)", { timeout: 20_000 });
-  await expect(detail.getByRole("link", { name: "Load this entry on the board" })).toHaveAttribute("href", "/#s=2005");
+  await expect(board).toHaveAttribute("href", "/#s=2005");
   await expect(board).toBeFocused();
   expect(await page.evaluate(() => document.activeElement === document.body)).toBe(false);
 });

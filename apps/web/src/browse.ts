@@ -89,6 +89,8 @@ function drawChart(
   M: number,
   sizeName: string,
   mode: "size" | "gap",
+  onZoom: (from: number | null, to?: number, keep?: number) => void,
+  keep?: number,
 ): void {
   chart.replaceChildren();
   const tipBox = chartTip(chart);
@@ -263,26 +265,80 @@ function drawChart(
     hover.setAttribute("visibility", "hidden");
     tipBox.hidden = true;
   };
-  chart.onpointermove = (e: PointerEvent) => {
+  // Zoom: a drag across the plot selects a range of P, shown by a band while dragging.
+  const band = svg("rect", { class: "zoom-band", y: T, height: H - B - T, width: 0, visibility: "hidden" });
+  chart.append(band);
+  const toView = (e: PointerEvent) => {
     const box = chart.getBoundingClientRect();
-    const vx = ((e.clientX - box.left) / box.width) * W;
+    return ((e.clientX - box.left) / box.width) * W;
+  };
+  const pAt = (vx: number) => pMin + ((Math.max(L, Math.min(W - R, vx)) - L) / (W - L - R)) * (pMax - pMin);
+  let dragFrom: number | null = null;
+  chart.onpointerdown = (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    const vx = toView(e);
+    if (vx < L || vx > W - R) return;
+    dragFrom = vx;
+    chart.setPointerCapture(e.pointerId);
+  };
+  chart.onpointerup = (e: PointerEvent) => {
+    if (dragFrom === null) return;
+    const from = dragFrom;
+    dragFrom = null;
+    band.setAttribute("visibility", "hidden");
+    const to = toView(e);
+    // a click, or a drag too short to mean a range, is not a zoom
+    if (Math.abs(to - from) < 8) return;
+    const [a, b] = [pAt(Math.min(from, to)), pAt(Math.max(from, to))];
+    onZoom(Math.floor(a), Math.ceil(b));
+  };
+  chart.ondblclick = () => onZoom(null);
+
+  chart.onpointermove = (e: PointerEvent) => {
+    const vx = toView(e);
+    if (dragFrom !== null) {
+      const lo = Math.max(L, Math.min(dragFrom, vx));
+      const hi = Math.min(W - R, Math.max(dragFrom, vx));
+      band.setAttribute("x", String(lo));
+      band.setAttribute("width", String(hi - lo));
+      band.setAttribute("visibility", "visible");
+    }
     if (vx < L - 8 || vx > W - R + 8) return hide();
-    const p = pMin + ((vx - L) / (W - L - R)) * (pMax - pMin);
+    const p = pAt(vx);
     // rows are sorted by P: the nearest is beside the first one at or above p
     let i = rows.findIndex((r) => r.P >= p);
     if (i < 0) i = rows.length - 1;
     else if (i > 0 && p - rows[i - 1].P < rows[i].P - p) i--;
     show(i);
   };
-  chart.onpointerleave = hide;
+  chart.onpointerleave = () => {
+    if (dragFrom === null) hide();
+  };
   chart.onblur = hide;
   chart.tabIndex = 0;
   chart.onkeydown = (e: KeyboardEvent) => {
+    // + and - halve or double the range around the chosen point (the middle when none); 0 resets
+    if (e.key === "+" || e.key === "=" || e.key === "-" || e.key === "_") {
+      e.preventDefault();
+      const centre = at >= 0 ? rows[at].P : (pMin + pMax) / 2;
+      const half = ((pMax - pMin) / 2) * (e.key === "+" || e.key === "=" ? 0.5 : 2);
+      onZoom(Math.floor(centre - half), Math.ceil(centre + half), at >= 0 ? rows[at].P : undefined);
+      return;
+    }
+    if (e.key === "0") {
+      e.preventDefault();
+      onZoom(null);
+      return;
+    }
     const step = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity }[e.key];
     if (step === undefined) return;
     e.preventDefault();
     show(Number.isFinite(step) ? (at < 0 ? 0 : at + step) : step < 0 ? 0 : rows.length - 1);
   };
+  if (keep !== undefined) {
+    const i = rows.findIndex((r) => r.P === keep);
+    if (i >= 0) show(i);
+  }
 }
 
 /** The box that describes a hovered point: one per chart, in the chart's figure. */
@@ -301,7 +357,7 @@ function chartTip(chart: HTMLElement): HTMLElement {
 
 /** What the charts show; they are drawn only while their section is open. */
 let charted: { rows: Row[]; N: number; M: number; sizeName: string } = { rows: [], N: 0, M: 0, sizeName: "" };
-function drawCharts(): void {
+function drawCharts(keep?: number, focusOn?: HTMLElement): void {
   const { rows, N, M, sizeName } = charted;
   const shown = plot.open && rows.length > 0;
   $("chart-title").textContent = shown
@@ -310,9 +366,54 @@ function drawCharts(): void {
   $("chart-gap-title").textContent = shown
     ? `How far each value stands above the area bound: the record ${sizeName} minus the bound, for each P.`
     : "";
-  drawChart($("chart"), shown ? rows : [], N, M, sizeName, "size");
-  drawChart($("chart-gap"), shown ? rows : [], N, M, sizeName, "gap");
+  // both charts show the same range of P; the vertical scale fits what is in it
+  const inRange = zoom ? rows.filter((r) => r.P >= zoom!.from && r.P <= zoom!.to) : rows;
+  const visible = inRange.length >= 2 ? inRange : rows;
+  const reset = $<HTMLButtonElement>("chart-reset");
+  reset.hidden = !shown || visible === rows;
+  $("chart-range").textContent =
+    shown && visible !== rows ? `P = ${visible[0].P} to ${visible[visible.length - 1].P}` : "";
+  const zoomTo = (from: number | null, to?: number, keepP?: number) => {
+    const all = charted.rows;
+    if (from === null || !all.length || to === undefined) zoom = null;
+    else {
+      const lo = Math.max(all[0].P, from);
+      const hi = Math.min(all[all.length - 1].P, to);
+      // the whole range again, or too little to draw: no zoom
+      zoom = hi - lo < 2 || (lo <= all[0].P && hi >= all[all.length - 1].P) ? null : { from: lo, to: hi };
+    }
+    drawCharts(
+      keepP,
+      document.activeElement instanceof SVGElement ? (document.activeElement as unknown as HTMLElement) : undefined,
+    );
+  };
+  drawChart(
+    $("chart"),
+    shown ? visible : [],
+    N,
+    M,
+    sizeName,
+    "size",
+    zoomTo,
+    focusOn === $("chart") ? keep : undefined,
+  );
+  drawChart(
+    $("chart-gap"),
+    shown ? visible : [],
+    N,
+    M,
+    sizeName,
+    "gap",
+    zoomTo,
+    focusOn === $("chart-gap") ? keep : undefined,
+  );
 }
+/** The range of P the charts are zoomed to; null shows every P. A new problem starts unzoomed. */
+let zoom: { from: number; to: number } | null = null;
+$("chart-reset").addEventListener("click", () => {
+  zoom = null;
+  drawCharts();
+});
 plot.addEventListener("toggle", () => {
   try {
     localStorage.setItem(PLOT_KEY, plot.open ? "open" : "closed");
@@ -366,6 +467,7 @@ async function refresh(): Promise<void> {
   $("note").textContent = rows.length
     ? `${rows.length} values of P for ${shapeLabel(N)}s in a ${shapeLabel(M)}. Sizes are the ${sizeName}, for pieces of ${N === 0 ? "radius" : "side"} 1.`
     : `No published values or site entries yet for ${shapeLabel(N)}s in a ${shapeLabel(M)}.`;
+  if (charted.N !== N || charted.M !== M) zoom = null;
   charted = { rows, N, M, sizeName };
   drawCharts();
   creditSources(rows);

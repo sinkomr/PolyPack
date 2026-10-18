@@ -90,6 +90,8 @@ let entries: LeaderboardEntry[] = [];
 let total = 0;
 let loadedKey = "";
 let requestedKey = "";
+/** A problem whose record a link asked to load (#p=N,M,P&record), until its data has arrived. */
+let recordWanted: string | null = null;
 
 type RecordChoice =
   | { kind: "literature"; value: number; lit: LiteratureRecord }
@@ -116,8 +118,14 @@ async function refreshProblem(): Promise<void> {
   entries = lb?.entries ?? [];
   total = lb?.total ?? 0;
   loadedKey = key;
-  $("leaderboard-note").textContent = problem ? "" : "The server is not reachable; records and the leaderboard are unavailable.";
+  $("leaderboard-note").textContent = problem
+    ? ""
+    : "The server is not reachable; records and the leaderboard are unavailable.";
   render();
+  if (recordWanted === key) {
+    recordWanted = null;
+    if (currentRecord()) await showRecord();
+  }
 }
 
 const statusText: Record<string, string> = {
@@ -158,7 +166,12 @@ async function showRecord(): Promise<void> {
   };
   if (rec.kind === "site") {
     line(`Best record: ${rec.value.toFixed(6)} by ${rec.entry.name} on this site's leaderboard.`);
-    if (info?.literature) line(`Best published value: ${info.literature.display} (`, link(info.literature.source_name, info.literature.source_url), ").");
+    if (info?.literature)
+      line(
+        `Best published value: ${info.literature.display} (`,
+        link(info.literature.source_name, info.literature.source_url),
+        ").",
+      );
     await loadEntry(rec.entry.id, rec.entry.name);
     return;
   }
@@ -214,7 +227,8 @@ function renderLeaderboard(): void {
     li.append(head, meta);
     list.append(li);
   }
-  if (info) $("leaderboard-note").textContent = leaderboardNote(total, entries.length, info.accepts_submissions !== false);
+  if (info)
+    $("leaderboard-note").textContent = leaderboardNote(total, entries.length, info.accepts_submissions !== false);
 }
 
 // ---------- rendering of the side panel ----------
@@ -310,7 +324,11 @@ board.onChange(render);
 
 $("mouse-snap").addEventListener("change", () => {
   view.snapMode = $<HTMLSelectElement>("mouse-snap").value as SnapMode;
-  say(view.snapMode === "off" ? "Mouse snapping off." : "Drag near a corner or edge to snap. Hold Option / Alt for free movement.");
+  say(
+    view.snapMode === "off"
+      ? "Mouse snapping off."
+      : "Drag near a corner or edge to snap. Hold Option / Alt for free movement.",
+  );
 });
 
 const addNear = () => (board.container ? { x: board.container.cx, y: board.container.cy } : view.cam);
@@ -373,7 +391,11 @@ $("auto-orient").addEventListener("click", () => {
   const before = board.container?.size ?? 0;
   board.autoOrient();
   const after = board.container?.size ?? 0;
-  say(after < before ? `Auto-orient: ${before.toFixed(6)} → ${after.toFixed(6)}.` : "Auto-orient found no better orientation.");
+  say(
+    after < before
+      ? `Auto-orient: ${before.toFixed(6)} → ${after.toFixed(6)}.`
+      : "Auto-orient found no better orientation.",
+  );
   view.fit();
 });
 
@@ -503,15 +525,31 @@ setInterval(() => $("live").classList.toggle("on", isLive()), 1500);
 
 // ---------- start ----------
 
-/** Links from the records page (#p=N,M,P) and to a stored submission (#s=id). */
+/**
+ * Links from the records page (#p=N,M,P, with &record to load the record's arrangement once the
+ * problem's data has arrived) and to a stored submission (#s=id).
+ */
 function followLink(): boolean {
-  const p = /[#&]p=(\d+),(\d+),(\d+)/.exec(location.hash);
+  const p = /[#&]p=(\d+),(\d+),(\d+)(&record)?/.exec(location.hash);
   if (p) {
     const parsed = parseConfig({ N: Number(p[1]), M: Number(p[2]), P: Number(p[3]), pieces: [], container_phi: 0 });
     if (parsed.ok) {
-      const same = parsed.config.N === board.state.N;
+      const { N, M, P } = parsed.config;
+      const same = N === board.state.N;
+      if (p[4]) {
+        const key = `${N}/${M}/${P}`;
+        // already loaded: show it now; otherwise when refreshProblem has the problem's data
+        if (loadedKey === key && board.state.N === N && board.state.M === M && board.state.P === P) {
+          board.setProblem(N, M, P);
+          void showRecord();
+        } else {
+          recordWanted = key;
+          board.setProblem(N, M, P);
+        }
+        return true;
+      }
       // keep the saved pieces when only M or P differ
-      board.setProblem(parsed.config.N, parsed.config.M, parsed.config.P);
+      board.setProblem(N, M, P);
       if (!same) say("Problem opened with an empty board.");
       return true;
     }

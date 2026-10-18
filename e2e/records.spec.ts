@@ -49,6 +49,7 @@ test("the records page lists published values with a chart", async ({ page }) =>
   await page.locator("#chart-gap").blur();
   await expect(tip).toBeHidden();
   // pointer: the P nearest the pointer is described, whatever the mark's size
+  await page.locator("#chart").scrollIntoViewIfNeeded();
   const box = (await page.locator("#chart").boundingBox())!;
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   const first = page.locator("#plot figure").first().locator(".chart-tip");
@@ -57,6 +58,30 @@ test("the records page lists published values with a chart", async ({ page }) =>
   await expect(first).toContainText("area bound s =");
   await page.mouse.move(box.x - 40, box.y - 40);
   await expect(first).toBeHidden();
+
+  // zoom: a drag across the chart narrows both charts to that range of P, double-click undoes it
+  const marks = page.locator("#chart rect.lit-mark");
+  const all = await marks.count();
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.5, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.locator("#chart-range")).toContainText(/P = \d+ to \d+/);
+  await expect(page.getByRole("button", { name: "Reset zoom" })).toBeVisible();
+  expect(await marks.count()).toBeLessThan(all / 2);
+  expect(await page.locator("#chart-gap rect.lit-mark").count()).toBe(await marks.count());
+  await page.locator("#chart").dblclick();
+  await expect(page.locator("#chart-range")).toHaveText("");
+  await expect(page.getByRole("button", { name: "Reset zoom" })).toBeHidden();
+  expect(await marks.count()).toBe(all);
+  // and from the keyboard: + zooms around the chosen P, 0 resets
+  await page.locator("#chart").focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("+");
+  await expect(page.locator("#chart-range")).toContainText("P = 1 to");
+  await expect(page.locator("#chart")).toBeFocused();
+  await page.keyboard.press("0");
+  await expect(page.locator("#chart-range")).toHaveText("");
   await expect(page.locator("#chart-gap-title")).toContainText("minus the bound");
   await page
     .locator("#rows tr")

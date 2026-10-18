@@ -451,6 +451,23 @@ figure {
   stroke: var(--text);
   stroke-width: 2;
 }
+.chart .zoom-band {
+  fill: var(--accent);
+  fill-opacity: 0.12;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+.chart {
+  touch-action: pan-y;
+  user-select: none;
+}
+.chart-help {
+  text-align: center;
+}
+.chart-range {
+  font-weight: 600;
+  margin: 0 6px;
+}
 .chart-tip {
   position: absolute;
   z-index: 2;

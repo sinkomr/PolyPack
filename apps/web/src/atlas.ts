@@ -1007,16 +1007,24 @@ export class Atlas {
     }
     facts.append(list);
 
+    // The main link puts on the board the arrangement this panel draws: a site entry by its id, a
+    // published packing through the board's record button. Without a drawing it opens the problem.
     const links = el("p", "", "detail-links");
-    const board = el("a", "Open on the board", "button-link");
-    board.href = `/#p=${N},${M},${t.P}`;
+    const drawn = !!t.data;
+    const board = el("a", drawn ? "Show on the board" : "Open on the board", "button-link");
+    board.href =
+      t.data?.source === "site" && t.data.id !== undefined
+        ? `/#s=${t.data.id}`
+        : drawn
+          ? `/#p=${N},${M},${t.P}&record`
+          : `/#p=${N},${M},${t.P}`;
     board.dataset.focus = "board";
     links.append(board);
-    if (t.data?.source === "site" && t.data.id !== undefined) {
-      const entry = el("a", "Load this entry on the board");
-      entry.href = `/#s=${t.data.id}`;
-      entry.dataset.focus = "entry";
-      links.append(entry);
+    if (drawn) {
+      const empty = el("a", "Open an empty board");
+      empty.href = `/#p=${N},${M},${t.P}`;
+      empty.dataset.focus = "empty";
+      links.append(empty);
     }
     facts.append(links);
 
