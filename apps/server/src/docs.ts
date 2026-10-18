@@ -1,4 +1,11 @@
-import { MAX_METHOD_PARAMS_BYTES, MAX_PIECES, MAX_SIDES, MAX_SOFTWARE_LENGTH, SCORE_TIE, TOL } from "@polypack/geometry";
+import {
+  MAX_METHOD_PARAMS_BYTES,
+  MAX_PIECES,
+  MAX_SIDES,
+  MAX_SOFTWARE_LENGTH,
+  SCORE_TIE,
+  TOL,
+} from "@polypack/geometry";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
 
 const PYTHON = `import json, math, urllib.request
@@ -80,7 +87,10 @@ const PROBLEM = `{
  */
 export const SOLVER_METHODS: [name: string, summary: string][] = [
   ["identity", "Evaluate a starting configuration without searching. Needs a starting configuration (start)."],
-  ["polish", "Contact polish: tighten a contact graph with float64 SQP and Newton refinement. Needs a starting configuration (start)."],
+  [
+    "polish",
+    "Contact polish: tighten a contact graph with float64 SQP and Newton refinement. Needs a starting configuration (start).",
+  ],
   ["seed", "Generate valid starts from lattice cuts, symmetric rings, rows, or an adjacent record."],
   [
     "penalty",
@@ -109,6 +119,10 @@ export const SOLVER_METHODS: [name: string, summary: string][] = [
   [
     "harden",
     "Soft-to-rigid hardening, after Yohei Nakajima: compress inscribed disks under inward pressure, harden them into the true polygons, settle, then legalise and score true shapes only.",
+  ],
+  [
+    "shrink_repair",
+    "Shrink the container below the best packing, then repair the overlaps at that fixed size by local descent, relocation of conflicting pieces and guided-local-search weights; score only strictly legalised repairs.",
   ],
 ];
 
@@ -154,7 +168,9 @@ npx tsx examples/solve-and-submit.ts --N 4 --M 4 --P 11 --method basin_hopping \
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /** API documentation page served at /api. The atlas limits are owned by the route and passed in. */
-export function docsPage(limits: { atlasMaxSpan: number; atlasMaxPieces: number } = { atlasMaxSpan: 100, atlasMaxPieces: 6000 }): string {
+export function docsPage(
+  limits: { atlasMaxSpan: number; atlasMaxPieces: number } = { atlasMaxSpan: 100, atlasMaxPieces: 6000 },
+): string {
   return `<!doctype html>
 <html lang="en">
 <head>
