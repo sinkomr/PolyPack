@@ -37,7 +37,26 @@ test("the records page lists published values with a chart", async ({ page }) =>
   await expect(page.locator("#chart .lit-mark").first()).toBeVisible();
   await expect(page.locator("#chart polyline.record")).toHaveCount(1);
   // the second chart subtracts the bound: ten circles, 6.747442 against sqrt(10 pi) = 5.604991
-  await expect(page.locator("#chart-gap .lit-mark title").nth(9)).toContainText("1.142450 above");
+  // keyboard: Home, then nine steps right, is P = 10; its box names the problem and the values
+  const tip = page.locator("#plot figure").nth(1).locator(".chart-tip");
+  await page.locator("#chart-gap").focus();
+  await page.keyboard.press("Home");
+  for (let i = 0; i < 9; i++) await page.keyboard.press("ArrowRight");
+  await expect(tip).toBeVisible();
+  await expect(tip).toContainText("N = 0 (circle), M = 4 (square), P = 10");
+  await expect(tip).toContainText("published s = 6.7474415232 (proven)");
+  await expect(tip).toContainText("1.142450 above the bound");
+  await page.locator("#chart-gap").blur();
+  await expect(tip).toBeHidden();
+  // pointer: the P nearest the pointer is described, whatever the mark's size
+  const box = (await page.locator("#chart").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  const first = page.locator("#plot figure").first().locator(".chart-tip");
+  await expect(first).toBeVisible();
+  await expect(first).toContainText(/N = 0 \(circle\), M = 4 \(square\), P = \d+/);
+  await expect(first).toContainText("area bound s =");
+  await page.mouse.move(box.x - 40, box.y - 40);
+  await expect(first).toBeHidden();
   await expect(page.locator("#chart-gap-title")).toContainText("minus the bound");
   await page
     .locator("#rows tr")

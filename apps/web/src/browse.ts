@@ -1,4 +1,4 @@
-import { areaLowerBound } from "@polypack/geometry";
+import { areaLowerBound, containerArea, pieceArea } from "@polypack/geometry";
 import * as api from "./api";
 import { Atlas } from "./atlas";
 import { foundWithLabel } from "./found-with";
@@ -82,8 +82,17 @@ try {
  * "size" plots container sizes; "gap" plots each size minus the area bound of its P, so that the
  * bound is the zero line and the height of a mark is how far it stands from the bound.
  */
-function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "size" | "gap"): void {
+function drawChart(
+  chart: HTMLElement,
+  rows: Row[],
+  N: number,
+  M: number,
+  sizeName: string,
+  mode: "size" | "gap",
+): void {
   chart.replaceChildren();
+  const tipBox = chartTip(chart);
+  tipBox.hidden = true;
   if (!rows.length) return;
   const bound = new Map(rows.map((r) => [r.P, r.bound]));
   const val = (P: number, size: number) => (mode === "size" ? size : size - bound.get(P)!);
@@ -159,12 +168,9 @@ function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "siz
     rows.flatMap((r): [number, number][] => (record(r) === undefined ? [] : [[r.P, record(r)!]])),
     "record",
   );
-  const tip = (P: number, size: number) =>
-    mode === "size" ? size.toFixed(6) : `${size.toFixed(6)}, ${(size - bound.get(P)!).toFixed(6)} above the area bound`;
   for (const r of rows.filter((q) => q.lit)) {
     const v = y(val(r.P, r.lit!.value));
     const m = svg("rect", { class: "lit-mark", x: x(r.P) - dot, y: v - dot, width: 2 * dot, height: 2 * dot });
-    m.append(svg("title", {}, `P = ${r.P}: published ${tip(r.P, r.lit!.value)} (${STATUS[r.lit!.status]})`));
     chart.append(m);
   }
   for (const r of rows.filter((q) => q.site)) {
@@ -176,8 +182,6 @@ function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "siz
       cy: y(val(r.P, r.site!.score)),
       r: dot,
     });
-    const what = pending ? "entry pending verification" : "site best";
-    m.append(svg("title", {}, `P = ${r.P}: ${what} ${tip(r.P, r.site!.score)} by ${r.site!.name}`));
     chart.append(m);
   }
   // legend
@@ -194,12 +198,111 @@ function drawChart(chart: HTMLElement, rows: Row[], sizeName: string, mode: "siz
     chart.append(svg("circle", { class: "site-mark pending", cx: lx + 430, cy: 16, r: 4 }));
     chart.append(svg("text", { x: lx + 440, y: 20 }, "pending verification"));
   }
+
+  // Hover: the P nearest the pointer is picked (marks are too small to aim at), marked with a
+  // guide line and a dot on its record, and described in a box beside it. The arrow keys, Home
+  // and End do the same from the keyboard.
+  const guide = svg("line", { class: "hover-line", y1: T, y2: H - B });
+  const spot = svg("circle", { class: "hover-dot", r: 5 });
+  const hover = svg("g", { class: "hover", visibility: "hidden" });
+  hover.append(guide, spot);
+  chart.append(hover);
+  const letter = M === 0 ? "r" : "s";
+  const fmt = (v: number) => v.toFixed(6);
+  let at = -1;
+  const show = (i: number) => {
+    at = Math.max(0, Math.min(rows.length - 1, i));
+    const r = rows[at];
+    const rec = record(r) ?? r.site?.score ?? r.bound;
+    const px = x(r.P);
+    const py = y(val(r.P, rec));
+    for (const [k, v] of Object.entries({ x1: px, x2: px })) guide.setAttribute(k, String(v));
+    spot.setAttribute("cx", String(px));
+    spot.setAttribute("cy", String(py));
+    hover.setAttribute("visibility", "visible");
+
+    const lines: (string | [string, string])[] = [];
+    lines.push(`N = ${N} (${shapeLabel(N)}), M = ${M} (${shapeLabel(M)}), P = ${r.P}`);
+    const recSource = record(r) === undefined ? "" : record(r) === r.lit?.value ? " (published)" : " (site)";
+    if (record(r) !== undefined) lines.push(["record", `${letter} = ${fmt(rec)}${recSource}`]);
+    if (r.site) {
+      const found = foundWithLabel(r.site.found_with);
+      const pending = r.site.verification === "pending" ? ", pending verification" : "";
+      lines.push([
+        "site best",
+        `${letter} = ${fmt(r.site.score)} by ${r.site.name}${found ? ` (${found})` : ""}${pending}`,
+      ]);
+    }
+    if (r.lit) lines.push(["published", `${letter} = ${r.lit.display} (${STATUS[r.lit.status]})`]);
+    lines.push(["area bound", `${letter} = ${fmt(r.bound)}`]);
+    if (record(r) !== undefined) {
+      const density = (r.P * pieceArea(N)) / containerArea(M, rec);
+      lines.push(["gap", `${fmt(rec - r.bound)} above the bound, density ${(100 * density).toFixed(2)}%`]);
+    }
+    tipBox.replaceChildren(
+      ...lines.map((l) => {
+        const row = el("div");
+        if (typeof l === "string") {
+          row.className = "tip-head";
+          row.textContent = l;
+        } else row.append(el("span", l[0]), " ", l[1]);
+        return row;
+      }),
+    );
+    tipBox.hidden = false;
+    // placed beside the point, on whichever side has room, in the figure's own pixels
+    const box = chart.getBoundingClientRect();
+    const scale = box.width / W;
+    const left = px * scale;
+    const right = left > box.width / 2;
+    tipBox.style.left = right ? "" : `${left + 12}px`;
+    tipBox.style.right = right ? `${box.width - left + 12}px` : "";
+    tipBox.style.top = `${Math.max(0, Math.min(py * scale - 20, box.height - tipBox.offsetHeight))}px`;
+  };
+  const hide = () => {
+    hover.setAttribute("visibility", "hidden");
+    tipBox.hidden = true;
+  };
+  chart.onpointermove = (e: PointerEvent) => {
+    const box = chart.getBoundingClientRect();
+    const vx = ((e.clientX - box.left) / box.width) * W;
+    if (vx < L - 8 || vx > W - R + 8) return hide();
+    const p = pMin + ((vx - L) / (W - L - R)) * (pMax - pMin);
+    // rows are sorted by P: the nearest is beside the first one at or above p
+    let i = rows.findIndex((r) => r.P >= p);
+    if (i < 0) i = rows.length - 1;
+    else if (i > 0 && p - rows[i - 1].P < rows[i].P - p) i--;
+    show(i);
+  };
+  chart.onpointerleave = hide;
+  chart.onblur = hide;
+  chart.tabIndex = 0;
+  chart.onkeydown = (e: KeyboardEvent) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity }[e.key];
+    if (step === undefined) return;
+    e.preventDefault();
+    show(Number.isFinite(step) ? (at < 0 ? 0 : at + step) : step < 0 ? 0 : rows.length - 1);
+  };
+}
+
+/** The box that describes a hovered point: one per chart, in the chart's figure. */
+function chartTip(chart: HTMLElement): HTMLElement {
+  const figure = chart.parentElement!;
+  let tip = figure.querySelector<HTMLElement>(".chart-tip");
+  if (!tip) {
+    tip = el("div");
+    tip.className = "chart-tip";
+    tip.setAttribute("role", "status");
+    tip.hidden = true;
+    figure.append(tip);
+  }
+  return tip;
 }
 
 /** What the charts show; they are drawn only while their section is open. */
-let charted: { rows: Row[]; sizeName: string } = { rows: [], sizeName: "" };
+let charted: { rows: Row[]; N: number; M: number; sizeName: string } = { rows: [], N: 0, M: 0, sizeName: "" };
 function drawCharts(): void {
-  const { rows, sizeName } = charted;
+  const { rows, N, M, sizeName } = charted;
   const shown = plot.open && rows.length > 0;
   $("chart-title").textContent = shown
     ? `The record ${sizeName} for each number of pieces P against the area bound, the size at which the pieces would fill the container exactly. No packing can be smaller.`
@@ -207,8 +310,8 @@ function drawCharts(): void {
   $("chart-gap-title").textContent = shown
     ? `How far each value stands above the area bound: the record ${sizeName} minus the bound, for each P.`
     : "";
-  drawChart($("chart"), shown ? rows : [], sizeName, "size");
-  drawChart($("chart-gap"), shown ? rows : [], sizeName, "gap");
+  drawChart($("chart"), shown ? rows : [], N, M, sizeName, "size");
+  drawChart($("chart-gap"), shown ? rows : [], N, M, sizeName, "gap");
 }
 plot.addEventListener("toggle", () => {
   try {
@@ -245,7 +348,7 @@ async function refresh(): Promise<void> {
   tbody.replaceChildren();
   if (!data) {
     $("note").textContent = "The server is not reachable.";
-    charted = { rows: [], sizeName: "" };
+    charted = { rows: [], N, M, sizeName: "" };
     drawCharts();
     creditSources([]);
     atlas.unavailable(N, M);
@@ -263,7 +366,7 @@ async function refresh(): Promise<void> {
   $("note").textContent = rows.length
     ? `${rows.length} values of P for ${shapeLabel(N)}s in a ${shapeLabel(M)}. Sizes are the ${sizeName}, for pieces of ${N === 0 ? "radius" : "side"} 1.`
     : `No published values or site entries yet for ${shapeLabel(N)}s in a ${shapeLabel(M)}.`;
-  charted = { rows, sizeName };
+  charted = { rows, N, M, sizeName };
   drawCharts();
   creditSources(rows);
   atlas.update(N, M, rows);
