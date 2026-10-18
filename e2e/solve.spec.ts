@@ -20,7 +20,17 @@ async function completed(page: Page): Promise<Result> {
   return r!;
 }
 
-for (const method of ["penalty", "basin_hopping", "mc_compress", "morph", "asc", "ls_growth", "harden", "seed"]) {
+for (const method of [
+  "penalty",
+  "basin_hopping",
+  "mc_compress",
+  "morph",
+  "asc",
+  "ls_growth",
+  "harden",
+  "shrink_repair",
+  "seed",
+]) {
   test(`solve: ${method} runs from scratch in a worker and preserves the board`, async ({ page }) => {
     await openProblem(page, 0, 0, 3);
     await choose(page, method);
@@ -595,7 +605,7 @@ test("solve: a worker that dies before it is ready is replaced and the status sa
   await expect(page.locator("#solve-run")).toBeEnabled();
   await page.click("#solve-run");
   await expect(status).toHaveText("Optimizer ready. Choose a method, then run.");
-  await expect(page.locator("#solve-method option")).toHaveCount(9);
+  await expect(page.locator("#solve-method option")).toHaveCount(10);
   expect(await lastResult(page)).toBeNull();
   await choose(page, "seed", 50);
   await page.click("#solve-run");
