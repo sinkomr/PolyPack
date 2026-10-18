@@ -1,10 +1,12 @@
 // Shrink and repair: separate feasibility from size, as the strongest irregular-packing
 // (nesting) heuristics do (Egeblad, Nielsen & Odgaard 2007; Imamichi, Yagiura & Nagamochi 2009;
-// Gardeyn & Wauters' sparrow). From the best valid packing at size s the container is shrunk to
-// s (1 - r), the centres are scaled into it (overlaps appear), and a repair phase at that fixed
-// size removes the overlap with local descent, relocation of conflicting pieces by sampling, and
-// guided-local-search weights. A repaired state is legalised strictly and scored; the shrink
-// ratio r adapts to success and failure, and repeated failure restores the best and disrupts it.
+// Gardeyn, Vanden Berghe & Wauters' sparrow). From the current valid packing at size s the
+// container is shrunk to s (1 - r), the centres are scaled into it (overlaps appear), and a
+// repair phase at that fixed size removes the overlap with global descent, relocation of
+// conflicting pieces by sampling, and guided-local-search weights. A repaired state is legalised
+// strictly and scored; the shrink ratio r adapts to success and failure. At the floor of a basin
+// the search explores (ruins a region, repairs just below the current size), and after repeated
+// failed explorations it restarts from random poses near the best size.
 // See docs/methods/shrink_repair.md.
 import {
   areaLowerBound,
@@ -70,14 +72,14 @@ export const shrinkRepairMethod: MethodDefinition = {
       },
       shrinkRatio: numeric(
         "Shrink ratio",
-        "Initial fractional shrink r of the container from the best size; it grows by a quarter after a successful repair and halves after a failed one.",
+        "Initial fractional shrink r of the container from the current size; it grows by a quarter after a successful repair and halves after a failed one.",
         0.01,
         1e-6,
         0.5,
       ),
       minShrinkRatio: numeric(
         "Smallest shrink ratio",
-        "Below this ratio a failure restores the best packing, disrupts it and resets the ratio.",
+        "When the halving ratio falls below this, compression has reached the floor of the current packing's basin and the search explores: ruined regions repaired at 1 to 4 times this ratio below the current size.",
         0.0002,
         1e-9,
         0.5,

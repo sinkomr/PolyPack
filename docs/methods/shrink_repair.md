@@ -33,14 +33,17 @@ that barrier. A method that accepts overlap at a smaller size and then removes
 it can.
 
 [EST] The approach is that of the strongest irregular-packing (nesting)
-heuristics: a fixed-size overlap minimisation inside a strip- or
-container-shrinking loop with guided local search (Egeblad, Nielsen and
-Odgaard 2007; Imamichi, Yagiura and Nagamochi 2009; Umetani et al.), and in
-particular Gardeyn and Wauters' `sparrow`, whose separator moves every
-colliding item to the best of many sampled placements under adaptive
-collision weights (references at the end). The implementation here is
-PolyPack's [CALC]: none of their code is used, and their weight constants are
-only the starting point of the defaults below.
+heuristics, which minimise overlap at a fixed strip or container size inside a
+shrinking loop (Egeblad, Nielsen and Odgaard 2007; Imamichi, Yagiura and
+Nagamochi 2009), and in particular `sparrow` (Gardeyn, Vanden Berghe and
+Wauters 2025), which splits strip packing into a sequence of feasibility
+problems, moves colliding items to the best of sampled placements (diverse
+over the container and focused near the item) followed by a coordinate-descent
+refinement, and weights colliding pairs by guided local search with
+multipliers (2.0, 1.2, 0.95). References at the end. The implementation here
+is PolyPack's [CALC]: no code from these works is used. The GLS multipliers
+are sparrow's; the rest (global L-BFGS descent, ruins, block turns, restarts,
+legalisation, the budgets) is PolyPack's and differs from all three.
 
 ## The repair phase
 
@@ -92,8 +95,9 @@ legalisation and scoring use the shared `findOverlaps` and `evaluate`.
    weight of each pair or wall still in conflict is multiplied by between
    `1 + (weightGrowth - 1)/5` (shallowest) and `weightGrowth` (2, deepest
    conflict), in proportion to its depth; former conflicts decay by
-   `weightDecay` (0.95) towards 1. Weights start at 1 for every new
-   container size.
+   `weightDecay` (0.95) towards 1. With the defaults these are sparrow's
+   multipliers 1.2, 2.0 and 0.95 [EST]; the wall weights and the reset to 1
+   for every new container size are PolyPack's [CALC].
 
 [CALC] A repair first descends once; then each _strike_ runs iterations until
 `patience` of them in a row fail to lower the least raw overlap of the repair
@@ -206,3 +210,36 @@ every property has a title, a description, a default and bounds.
 | `restartAfter`      | 40      | 0 to 100000    | Failed explorations in a row before a restart (0: never)         |
 | `restartSlack`      | 0.02    | 0 to 1         | Restart container relative to the best                           |
 | `evaluationWork`    | 4000    | 1 to 10000000  | Counted feature tests per assessment and piece                   |
+
+## Verification
+
+[CALC] `packages/solver/test/shrink_repair.test.ts` (16 tests) covers: the
+kernel against the shared `pairPenetration` (depth, the depth-only test and
+all six derivatives) and `visitContainerProtrusions` (support form; deepest
+vertex for a circular container) for circles and 3-, 4-, 5-, 6- and 12-gons
+in circular, triangular, square, hexagonal and heptagonal containers, within
+1e-12; the objective's gradient against central differences; strict
+legalisation of squeezed contact grids (by a factor near 1 + depth when
+shallow) and of random overlapping arrangements of 0-, 3-, 5-, 6-, 9- and
+40-gons; registration and schema defaults; that every configuration the
+method submits is complete and has no zero-tolerance overlap, for nine
+problems including P = 1 and 2, N = 0, M = 0, triangles and heptagons, random
+starts, a start with every piece at one point and a start valid only within
+the evaluator's tolerance; exact evaluation budgets from 1 to 250; a time
+budget; bit-identical repeats, a different result for another seed, no
+`Math.random`, the same result with and without a sketch observer; never
+worse than a valid start, including the published records for 5 and 10
+squares and 7 circles; stop from inside a run with no further assessment, an
+already-aborted run, pause and resume to identical bits; checkpoints placed by
+counted work, identical in repeated runs; and the grid-escape regressions
+below.
+
+```sh
+npx vitest run packages/solver/test/shrink_repair.test.ts
+```
+
+[CALC] Grid-escape regressions (fixed seeds and budgets, final polish on):
+five squares from the plain grid start (size 3) reach `2 + 1/sqrt(2)` to
+within 1e-6 for seeds 1, 2 and 3 at 1,500 evaluations; ten squares with the
+automatic start reach `3 + 1/sqrt(2)` to within 1e-4 for seed 1 at 3,000
+evaluations.
