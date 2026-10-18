@@ -1,5 +1,5 @@
 import { Container, PackingConfig, parseConfig } from "@polypack/geometry";
-import type { Result } from "@polypack/solver";
+import type { Result, SketchFrame, StageIdentity } from "@polypack/solver";
 import { Board } from "./board";
 import { Attribution, HAND, RunInfo, attributionAfter, readRun } from "./found-with";
 import { BoardView } from "./view";
@@ -76,6 +76,8 @@ export class SolvePanel {
   private state: "idle" | "running" | "pausing" | "paused" | "stopping" = "idle";
   private readParams: () => Record<string, unknown> = () => ({});
   private candidate: Candidate | null = null;
+  /** Stage whose working shapes are on the canvas, or null when none are. */
+  private sketchStage: StageIdentity | null = null;
   private fingerprint: string;
   private savedCamera: BoardView["cam"] | null = null;
   private stopTimer = 0;
@@ -361,14 +363,20 @@ export class SolvePanel {
             : "Running…",
       );
       this.updateButtons();
+    } else if (message.type === "sketch") {
+      this.showSketch(message.frame);
     } else if (message.type === "progress") {
       $("solve-progress").textContent =
         `${message.frame.evaluations.toLocaleString()} evaluations · ${message.frame.elapsed.toFixed(1)} s`;
       if (message.preview && message.previewContainer)
         this.showCandidate(message.preview, message.previewContainer, message.frame.elapsed);
+      // A later stage, such as the final polish, draws no sketch: show its strict preview.
+      const s = this.sketchStage;
+      if (s && (s.index !== message.frame.stage.index || s.method !== message.frame.stage.method)) this.clearSketch();
     } else if (message.type === "result") {
       this.result = message.result;
       this.finish();
+      this.clearSketch();
       const r = message.result;
       this.candidate = null;
       if (r.valid && r.strict && r.best && r.container && r.score !== null)
@@ -429,6 +437,39 @@ export class SolvePanel {
     this.drawTrace();
   }
 
+  /**
+   * Show a method's working shapes while its stage runs. They replace the strict preview on the
+   * canvas but not the candidate: the score, the trace and Accept still use strict results only.
+   */
+  private showSketch(frame: SketchFrame): void {
+    const problem = this.request?.problem;
+    const { sketch } = frame;
+    if (
+      this.state === "stopping" ||
+      !problem ||
+      sketch.N !== problem.N ||
+      sketch.container.M !== problem.M ||
+      sketch.pieces.length !== problem.P ||
+      !(sketch.container.size > 0) ||
+      !Number.isFinite(sketch.container.size)
+    )
+      return;
+    if (!this.savedCamera) this.savedCamera = { ...this.view.cam };
+    const first = this.sketchStage === null;
+    this.sketchStage = { ...frame.stage };
+    this.view.setSketch(sketch);
+    // The starting container of a run is roomy; fitting it once keeps every piece in view.
+    if (first) this.view.fit();
+  }
+
+  /** Return the canvas to the strict preview, fitted to it. */
+  private clearSketch(): void {
+    if (this.sketchStage === null) return;
+    this.sketchStage = null;
+    this.view.setSketch(null);
+    if (this.candidate) this.view.fit();
+  }
+
   private pause(): void {
     if (this.activeId === null || this.state === "stopping" || this.state === "pausing") return;
     const resume = this.state === "paused";
@@ -440,6 +481,7 @@ export class SolvePanel {
   private stop(): void {
     if (this.activeId === null || this.state === "stopping") return;
     this.state = "stopping";
+    this.clearSketch();
     this.status("Stopping; keeping the best result…");
     this.worker?.postMessage({ type: "stop", id: this.activeId } satisfies SolveRequest);
     // A worker can be terminated even during an atomic scoring call. Keep only the last
@@ -466,6 +508,8 @@ export class SolvePanel {
   }
 
   private clearPreview(): void {
+    this.sketchStage = null;
+    this.view.setSketch(null);
     this.view.setPreview(null);
     if (this.savedCamera) {
       this.view.cam = this.savedCamera;

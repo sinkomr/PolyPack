@@ -11,7 +11,7 @@
 // a grid-based implementation of his legalisation rule, extended to scale together.
 // See docs/methods/harden.md.
 import { findOverlaps, type PackingConfig } from "@polypack/geometry";
-import type { MethodContext, MethodDefinition } from "../framework";
+import type { MethodContext, MethodDefinition, Sketch } from "../framework";
 import type { ParameterSchema } from "../schema";
 import { restore, scatter } from "./penalty/restoration";
 import { HardenDynamics } from "./harden/dynamics";
@@ -205,6 +205,40 @@ export interface HardenObservation {
   config?: PackingConfig;
 }
 
+const PHASE_TEXT: Record<HardenPhase, string> = {
+  compress: "compressing",
+  morph: "following the path",
+  settle: "settling",
+};
+
+/** Sketch of a run's current soft shapes in its moving container (centred, phi = 0). */
+export function hardenSketch(
+  run: number,
+  step: number,
+  phase: HardenPhase,
+  plan: PhaseSteps,
+  shape: SoftShape,
+  state: HardenDynamics,
+  path: HardenPath,
+): Sketch {
+  const total = plan.compress + plan.morph + plan.settle;
+  const progress = Math.round((100 * step) / total);
+  // Softness belongs to the polygon paths, scale to grow; a circle piece has only its scale.
+  const form =
+    state.N !== 0 && (path === "harden" || path === "snap")
+      ? `softness ${shape.tau.toFixed(2)} (1 disk, 0 polygon)`
+      : `scale ${shape.gamma.toFixed(2)}`;
+  return {
+    N: state.N,
+    pieces: state.poses.map((p) => ({ x: p.x, y: p.y, theta: p.theta })),
+    container: { M: state.M, cx: 0, cy: 0, phi: 0, size: state.size },
+    scale: shape.scale,
+    padding: shape.padding,
+    label: `harden run ${run + 1}, ${PHASE_TEXT[phase]}, ${progress}%: ${form}`,
+    values: { run, step, steps: total, tau: shape.tau, gamma: shape.gamma },
+  };
+}
+
 export async function executeHarden(ctx: MethodContext, observe?: (event: HardenObservation) => void): Promise<void> {
   if (!(await ctx.checkpoint())) return;
   const { N, P } = ctx.problem;
@@ -335,6 +369,9 @@ export async function executeHarden(ctx: MethodContext, observe?: (event: Harden
       state.advance(report, strength, sigma, ctx.random);
       done++;
       notify("step");
+      // The working shapes for display: disks, rounded polygons or small polygons, which may
+      // overlap and stick out of the moving container. Drawing one reads no random number.
+      ctx.sketch?.(() => hardenSketch(run, done, phase, plan, shape, state, path));
       // A diverged state cannot be scored or continued; the next run starts afresh.
       if (!state.finite()) break;
       if ((done % interval === 0 || done === total) && !(await assess())) return;

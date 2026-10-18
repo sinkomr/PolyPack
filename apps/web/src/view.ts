@@ -1,6 +1,7 @@
 import { Container, PackingConfig, containerVertices, pieceContainsPoint, pieceVertices } from "@polypack/geometry";
 import { Board } from "./board";
 import { MagneticSnap, SnapMode } from "./snapping";
+import type { Sketch } from "@polypack/solver";
 
 const HANDLE_OFFSET_PX = 30;
 const HANDLE_RADIUS_PX = 9;
@@ -26,6 +27,8 @@ export class BoardView {
   snapMode: SnapMode = "both";
   private snapGuide: MagneticSnap | null = null;
   private preview: { config: PackingConfig; container: Container } | null = null;
+  /** A solver method's working shapes, drawn instead of the preview while it runs. */
+  private sketch: Sketch | null = null;
   private ctx: CanvasRenderingContext2D;
   private w = 0;
   private h = 0;
@@ -59,19 +62,19 @@ export class BoardView {
     let lastRotation = 0;
     canvas.addEventListener("gesturestart", (e) => {
       e.preventDefault();
-      if (this.preview) return;
+      if (this.locked) return;
       lastRotation = 0;
       this.board.begin();
     });
     canvas.addEventListener("gesturechange", (e) => {
       e.preventDefault();
-      if (this.preview) return;
+      if (this.locked) return;
       const rot = (e as unknown as { rotation: number }).rotation;
       const pivot = this.board.selectionPivot();
       if (pivot) this.board.rotateSelection((-(rot - lastRotation) * Math.PI) / 180, pivot.x, pivot.y);
       lastRotation = rot;
     });
-    canvas.addEventListener("gestureend", () => { if (!this.preview) this.board.commit(); });
+    canvas.addEventListener("gestureend", () => { if (!this.locked) this.board.commit(); });
   }
 
   private readColors(): void {
@@ -120,7 +123,7 @@ export class BoardView {
 
   /** Centre the view on the container (or the pieces) with a margin. */
   fit(): void {
-    const c = this.preview?.container ?? this.board.container;
+    const c = this.sketch?.container ?? this.preview?.container ?? this.board.container;
     if (!c || c.size === 0) {
       this.cam = { x: 0, y: 0, zoom: 60 };
     } else {
@@ -134,10 +137,32 @@ export class BoardView {
 
   /** Solver frames are read-only and never enter board history or persistent storage. */
   setPreview(config: PackingConfig | null, container?: Container): void {
-    if (this.gesture && !!config !== !!this.preview) this.endGesture();
+    // A gesture ends under the mode it began in, before the board locks or unlocks.
+    if (this.gesture && this.locked !== (!!(config && container) || !!this.sketch)) this.endGesture();
     this.preview = config && container ? { config, container } : null;
     this.snapGuide = null;
     this.requestDraw();
+  }
+
+  /**
+   * A solver method's working state, shown in place of the preview until cleared. It is only
+   * a picture: it never enters the board, and accepting a run always takes its strict result.
+   */
+  setSketch(sketch: Sketch | null): void {
+    if (this.gesture && this.locked !== (!!sketch || !!this.preview)) this.endGesture();
+    this.sketch = sketch;
+    this.snapGuide = null;
+    this.requestDraw();
+  }
+
+  /** The sketch shown, if any (used by the end-to-end tests). */
+  get shownSketch(): Sketch | null {
+    return this.sketch;
+  }
+
+  /** Solver output is on screen, so the board cannot be edited. */
+  private get locked(): boolean {
+    return !!this.preview || !!this.sketch;
   }
 
   private zoomAt(sx: number, sy: number, factor: number): void {
@@ -157,7 +182,7 @@ export class BoardView {
   }
 
   private rotateHandle(): { x: number; y: number; px: number; py: number } | null {
-    if (this.preview) return null;
+    if (this.locked) return null;
     const pivot = this.board.selectionPivot();
     if (!pivot) return null;
     const px = this.sx(pivot.x);
@@ -169,7 +194,7 @@ export class BoardView {
   }
 
   private phiHandle(): { x: number; y: number } | null {
-    if (this.preview) return null;
+    if (this.locked) return null;
     const c = this.board.container;
     if (!c || c.M === 0) return null;
     const v = containerVertices(c);
@@ -200,7 +225,7 @@ export class BoardView {
     }
     if (this.pointers.size > 2) return;
 
-    if (this.preview) {
+    if (this.locked) {
       this.gesture = { kind: "pan", sx: p.x, sy: p.y, camX: this.cam.x, camY: this.cam.y, moved: false };
       return;
     }
@@ -277,7 +302,7 @@ export class BoardView {
       }
       case "rotate": {
         // the pivot follows the group, which a rotation may nudge away from a neighbour
-        const pivot = this.preview ? null : this.board.selectionPivot();
+        const pivot = this.locked ? null : this.board.selectionPivot();
         if (!pivot) break;
         const ang = Math.atan2(this.sy(pivot.y) - p.y, p.x - this.sx(pivot.x));
         g.pending = wrapAngle(g.pending + wrapAngle(ang - g.last));
@@ -306,7 +331,7 @@ export class BoardView {
         const ang = Math.atan2(-(b.y - a.y), b.x - a.x);
         const midX = (a.x + b.x) / 2;
         const midY = (a.y + b.y) / 2;
-        const pivot = this.preview ? null : this.board.selectionPivot();
+        const pivot = this.locked ? null : this.board.selectionPivot();
         if (pivot) {
           // two fingers with a selection: twist rotates the selected pieces
           g.pending = wrapAngle(g.pending + wrapAngle(ang - g.ang));
@@ -344,7 +369,7 @@ export class BoardView {
     this.requestDraw();
     if (!g) return;
     if (g.kind === "pan") {
-      if (!this.preview && !g.moved && !this.multiSelect && this.board.selection.size) this.board.select([]);
+      if (!this.locked && !g.moved && !this.multiSelect && this.board.selection.size) this.board.select([]);
       return;
     }
     if (g.kind === "marquee") {
@@ -364,7 +389,7 @@ export class BoardView {
     e.preventDefault();
     const p = this.local(e);
     const overSelected = (() => {
-      if (this.preview) return false;
+      if (this.locked) return false;
       const hit = this.pieceAt(this.wx(p.x), this.wy(p.y));
       return hit >= 0 && this.board.selection.has(hit);
     })();
@@ -386,7 +411,7 @@ export class BoardView {
     const b = this.board;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    if (this.preview) {
+    if (this.locked) {
       if (key === "f" && !mod) this.fit();
       else if ((key === "+" || key === "=") && !mod) this.zoomAt(this.w / 2, this.h / 2, 1.25);
       else if (key === "-" && !mod) this.zoomAt(this.w / 2, this.h / 2, 0.8);
@@ -466,6 +491,43 @@ export class BoardView {
     ctx.closePath();
   }
 
+  /**
+   * Path of a sketch's working shape: the polygon scaled by `scale` about its centre, dilated by
+   * a disk of radius `padding`, i.e. the scaled polygon with each corner replaced by an arc of
+   * that radius spanning the turn between its two edge normals (2 pi / N). Scale 0 is the disk
+   * itself; a circle piece (N = 0) is a disk of radius `scale`.
+   */
+  private softPath(N: number, p: { x: number; y: number; theta: number }, scale: number, padding: number, buf: Float64Array | null): void {
+    const ctx = this.ctx;
+    const z = this.cam.zoom;
+    ctx.beginPath();
+    if (!N || !buf || scale <= 0) {
+      ctx.arc(this.sx(p.x), this.sy(p.y), (N ? padding : scale) * z, 0, 2 * Math.PI);
+      return;
+    }
+    pieceVertices(N, p, scale, buf);
+    if (!(padding > 0)) {
+      this.path(buf);
+      return;
+    }
+    // Vertices run counter-clockwise; the outward normal at vertex k points along the centre-to-vertex
+    // direction a, and its corner arc runs from a - pi/N to a + pi/N, joining the adjacent edges.
+    const segments = Math.max(2, Math.ceil(48 / N));
+    for (let k = 0; k < N; k++) {
+      const vx = buf[2 * k];
+      const vy = buf[2 * k + 1];
+      const a = Math.atan2(vy - p.y, vx - p.x);
+      for (let j = 0; j <= segments; j++) {
+        const t = a - Math.PI / N + ((2 * Math.PI) / N) * (j / segments);
+        const x = this.sx(vx + padding * Math.cos(t));
+        const y = this.sy(vy + padding * Math.sin(t));
+        if (k === 0 && j === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+    }
+    ctx.closePath();
+  }
+
   private drawGrid(): void {
     const ctx = this.ctx;
     const z = this.cam.zoom;
@@ -495,13 +557,14 @@ export class BoardView {
 
   private draw(): void {
     const ctx = this.ctx;
-    const { N, pieces } = this.preview?.config ?? this.board.state;
+    const sketch = this.sketch;
+    const { N, pieces } = sketch ?? this.preview?.config ?? this.board.state;
     const z = this.cam.zoom;
     ctx.fillStyle = this.colors["bg"];
     ctx.fillRect(0, 0, this.w, this.h);
     this.drawGrid();
 
-    const c = this.preview?.container ?? this.board.container;
+    const c = sketch?.container ?? this.preview?.container ?? this.board.container;
     if (c && c.size > 0) {
       ctx.strokeStyle = this.colors["container"];
       ctx.lineWidth = 2;
@@ -517,7 +580,8 @@ export class BoardView {
     const buf = N ? new Float64Array(2 * N) : null;
     const outline = (i: number) => {
       const p = pieces[i];
-      if (buf) this.path(pieceVertices(N, p, 1, buf));
+      if (sketch) this.softPath(N, p, sketch.scale, sketch.padding, buf);
+      else if (buf) this.path(pieceVertices(N, p, 1, buf));
       else {
         ctx.beginPath();
         ctx.arc(this.sx(p.x), this.sy(p.y), z, 0, 2 * Math.PI);
@@ -529,18 +593,30 @@ export class BoardView {
     for (let pass = 0; pass < 2; pass++) {
       // selected pieces are drawn last so their outline is never hidden
       for (let i = 0; i < pieces.length; i++) {
-        const sel = !this.preview && this.board.selection.has(i);
+        const sel = !this.locked && this.board.selection.has(i);
         if (sel !== (pass === 1)) continue;
+        const p = pieces[i];
+        if (sketch && buf) {
+          // A dotted outline of the true polygon around each working shape shows what it becomes.
+          this.path(pieceVertices(N, p, 1, buf));
+          ctx.strokeStyle = this.colors["muted"];
+          ctx.lineWidth = 1;
+          ctx.setLineDash([2, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
         outline(i);
         ctx.fillStyle = this.colors[sel ? "sel" : "piece"];
+        // Working shapes may overlap; translucency keeps the overlaps visible.
+        if (sketch) ctx.globalAlpha = 0.7;
         ctx.fill();
+        ctx.globalAlpha = 1;
         ctx.strokeStyle = this.colors[sel ? "sel-stroke" : "piece-stroke"];
         ctx.lineWidth = sel ? 3 : 1.25;
         // selection is shown by a dashed, thicker outline as well as by colour
         ctx.setLineDash(sel ? [7, 4] : []);
         ctx.stroke();
         ctx.setLineDash([]);
-        const p = pieces[i];
         if (sel && N) {
           // tick from the centre toward vertex 0 shows the orientation
           const R = 0.5 / Math.sin(Math.PI / N);
@@ -557,7 +633,13 @@ export class BoardView {
       }
     }
 
-    if (this.preview) {
+    if (sketch) {
+      ctx.fillStyle = this.colors["text"];
+      ctx.textAlign = "left";
+      ctx.fillText("Solver working shapes — not a valid packing; the result is the true pieces", 14, 20);
+      ctx.fillText(sketch.label, 14, 36);
+      ctx.textAlign = "center";
+    } else if (this.preview) {
       ctx.fillStyle = this.colors["text"];
       ctx.textAlign = "left";
       ctx.fillText("Solver preview — Accept result to edit", 14, 20);

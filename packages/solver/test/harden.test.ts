@@ -14,8 +14,8 @@ import {
   type PackingConfig,
   type Pose,
 } from "@polypack/geometry";
-import { registry, run, seededRandom, strictTolerance } from "../src";
-import type { MethodContext } from "../src/framework";
+import { SKETCH_INTERVAL_MS, registry, run, seededRandom, strictTolerance } from "../src";
+import type { MethodContext, Sketch, SketchFrame } from "../src/framework";
 import {
   CHECKPOINT_WORK,
   executeHarden,
@@ -1112,5 +1112,75 @@ describe("registered harden method", () => {
     expect(small.add(latest)).toBe(false);
     const oldest = { ...first, pieces: first.pieces.map((p, i) => (i === 0 ? { ...p, x: p.x + 1 } : p)) };
     expect(small.add(oldest)).toBe(true);
+  });
+});
+
+describe("harden sketches of its working shapes", () => {
+  it("draws the shape it uses: inscribed disks while compressing, softening to the true polygon", async () => {
+    for (const problem of [
+      { N: 7, M: 7, P: 7 },
+      { N: 4, M: 4, P: 5 },
+    ]) {
+      const f = fake(problem, { evals: 23, params: { ...short, restarts: 1 } });
+      const sketches: Sketch[] = [];
+      // A context that wants every sketch, so each step's drawing is recorded.
+      const ctx: MethodContext = { ...f.ctx, sketch: (draw) => void sketches.push(draw()) };
+      const events: HardenObservation[] = [];
+      await executeHarden(ctx, (event) => {
+        if (event.kind === "step") events.push({ ...event, shape: { ...event.shape } });
+      });
+      expect(sketches.length).toBe(events.length);
+      expect(sketches.length).toBeGreaterThan(80);
+      const rho = inradius(problem.N);
+      let previous = Infinity;
+      sketches.forEach((sketch, k) => {
+        const event = events[k];
+        // The sketch is the shape and container the dynamics used at that step.
+        expect(sketch.N).toBe(problem.N);
+        expect(sketch.pieces).toHaveLength(problem.P);
+        expect(sketch.container).toEqual({ M: problem.M, cx: 0, cy: 0, phi: 0, size: event.size });
+        expect(sketch.scale).toBe(event.shape.scale);
+        expect(sketch.padding).toBe(event.shape.padding);
+        expect(sketch.values!.tau).toBe(event.shape.tau);
+        // Every working shape lies inside the true polygon: its inradius stays rho.
+        expect(sketch.scale * rho + sketch.padding).toBeCloseTo(rho, 12);
+        expect(sketch.values!.tau).toBeLessThanOrEqual(previous);
+        previous = sketch.values!.tau;
+        if (event.phase === "compress") expect([sketch.scale, sketch.values!.tau]).toEqual([0, 1]);
+        if (event.phase === "settle") expect([sketch.scale, sketch.padding]).toEqual([1, 0]);
+        expect(sketch.label).toContain(
+          event.phase === "compress" ? "compressing" : event.phase === "morph" ? "path" : "settling",
+        );
+      });
+      // The softness passes through intermediate values on the way: a gradual morph, not a snap.
+      const middle = sketches.filter((s) => s.values!.tau > 0.25 && s.values!.tau < 0.75);
+      expect(middle.length).toBeGreaterThan(20);
+      expect(sketches.at(-1)!.values!.tau).toBe(0);
+    }
+  });
+
+  it("sends throttled sketches through run without changing a seeded result", async () => {
+    const problem = { N: 7, M: 7, P: 7 };
+    const options = { method: "harden", seed: 5, budget: { evals: 400 }, params: { restarts: 1 } };
+    const frames: SketchFrame[] = [];
+    const watched = await run(problem, { ...options, onSketch: (frame) => frames.push(frame) });
+    const plain = await run(problem, options);
+    expect(watched.best).toEqual(plain.best);
+    expect(watched.score).toBe(plain.score);
+    expect(watched.evaluations).toBe(plain.evaluations);
+    expect(watched.strict).toBe(true);
+    expect(frames.length).toBeGreaterThan(0);
+    for (const frame of frames) expect(frame.stage.method).toBe("harden");
+    // At most one sketch per interval (frame.elapsed is in seconds).
+    for (let k = 1; k < frames.length; k++)
+      expect(frames[k].elapsed - frames[k - 1].elapsed).toBeGreaterThanOrEqual(SKETCH_INTERVAL_MS / 1000 - 1e-3);
+    // An observer that throws cannot affect the run either.
+    const failing = await run(problem, {
+      ...options,
+      onSketch: () => {
+        throw new Error("observer");
+      },
+    });
+    expect(failing.best).toEqual(plain.best);
   });
 });

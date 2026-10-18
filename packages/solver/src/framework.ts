@@ -31,6 +31,33 @@ export interface ProgressFrame {
   evaluations: number;
   final: boolean;
 }
+/**
+ * A picture of a method's working state, for display only. It is never scored, never a result
+ * and need not be valid: harden's pieces, for example, are softened disks or rounded polygons
+ * that may overlap. Poses are in the frame of `container`.
+ */
+export interface Sketch {
+  N: number;
+  pieces: { x: number; y: number; theta: number }[];
+  container: Container;
+  /**
+   * Every piece is drawn as its polygon scaled by `scale` about its centre and dilated by a disk
+   * of radius `padding` (scale 0 is a disk of radius `padding`); a circle piece is a disk of
+   * radius `scale`. Scale 1 and padding 0 are the true pieces.
+   */
+  scale: number;
+  padding: number;
+  /** Short plain description of the state, such as the phase and softness. */
+  label: string;
+  /** Method-specific numbers, such as harden's softness `tau`. */
+  values?: Record<string, number>;
+}
+export interface SketchFrame {
+  sketch: Sketch;
+  stage: StageIdentity;
+  elapsed: number;
+  evaluations: number;
+}
 export interface RunOptions {
   method?: string;
   start?: PackingConfig;
@@ -38,6 +65,8 @@ export interface RunOptions {
   budget: Budget;
   seed: number;
   onProgress?: (frame: ProgressFrame) => void;
+  /** Sketches of a method's working state, at most one per SKETCH_INTERVAL_MS. */
+  onSketch?: (frame: SketchFrame) => void;
   signal?: StopSignal;
   control?: StopSignal;
   finalPolish?: boolean;
@@ -47,6 +76,9 @@ export interface RunOptions {
  * accepts penetration up to 1e-9; a search method must reach contact and not use that allowance.
  */
 export const STRICT_TOLERANCE = 1e-12;
+
+/** Shortest interval between two sketches sent to `onSketch`. */
+export const SKETCH_INTERVAL_MS = 50;
 
 /**
  * Strict margin for one configuration. Far from the origin a separation cannot be computed more
@@ -115,6 +147,13 @@ export interface MethodContext {
   evaluate(config: PackingConfig, options?: { autoOrient?: boolean }): Promise<Evaluation | undefined>;
   emit(config: PackingConfig): Promise<Evaluation | undefined>;
   run(method: string, params?: Record<string, unknown>, options?: SubRunOptions): Promise<SubRunResult>;
+  /**
+   * Offer a sketch of the working state for display. `draw` is called only when an observer
+   * wants a sketch now, at most once per SKETCH_INTERVAL_MS; it must not draw random numbers or
+   * change the method's state, so a seeded run is the same with or without an observer.
+   * Optional: contexts built outside the framework need not support it.
+   */
+  sketch?(draw: () => Sketch): void;
 }
 export interface MethodDefinition {
   name: string;
@@ -250,6 +289,7 @@ export class MethodRegistry {
     let trace: [number, number][] = [];
     const stageResults: StageResult[] = [];
     let lastFrame = -Infinity;
+    let lastSketch = -Infinity;
     let lastYield = begun;
     let pausedAt: number | undefined;
     let pausedMilliseconds = 0;
@@ -474,6 +514,18 @@ export class MethodRegistry {
             time = Math.min(time, s.timeLimit - activeMilliseconds());
           }
           return { evals: Math.max(0, evals), time_s: Math.max(0, time) / 1000 };
+        },
+        sketch: (draw) => {
+          // Display only: no evaluation is counted and nothing returns to the method.
+          if (!options.onSketch || !scope.active || closed) return;
+          const time = now();
+          if (time - lastSketch < SKETCH_INTERVAL_MS) return;
+          lastSketch = time;
+          try {
+            options.onSketch({ sketch: clone(draw()), stage: { ...scope.frame }, elapsed: wallTime(), evaluations });
+          } catch {
+            /* A sketch is cosmetic; neither its drawing nor its observer can affect the run. */
+          }
         },
         checkpoint: () => guarded(() => waitCheckpoint(scope)),
         evaluate: (candidate, opts) => guarded(() => submit(candidate, opts)),
