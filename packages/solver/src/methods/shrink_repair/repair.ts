@@ -625,6 +625,53 @@ export class RepairState {
     this.place(i, cand);
   }
 
+  /**
+   * Ruin a region: the `count` pieces nearest to a random piece are either scattered over the
+   * disk they occupied (new centres uniform in it, angles drawn like relocation angles), or
+   * turned rigidly together about their mean centre by a random angle, which keeps the block's
+   * internal contacts and tilts it as a whole, as in the published square records. Returns the
+   * kind of ruin applied.
+   */
+  ruin(count: number, random: () => number): "scatter" | "rotate" {
+    const { P, poses } = this;
+    const k = Math.max(1, Math.min(P, count));
+    const centre = poses[Math.floor(random() * P)];
+    const order = Array.from({ length: P }, (_, i) => i);
+    const distance = (i: number) => Math.hypot(poses[i].x - centre.x, poses[i].y - centre.y);
+    order.sort((a, b) => distance(a) - distance(b) || a - b);
+    const chosen = order.slice(0, k);
+    const radius = distance(chosen[k - 1]) + this.R;
+    if (random() < 0.5) {
+      let mx = 0;
+      let my = 0;
+      for (const i of chosen) {
+        mx += poses[i].x / k;
+        my += poses[i].y / k;
+      }
+      // A turn by up to half the symmetry period in either direction (any angle for circles).
+      const alpha = (random() - 0.5) * (this.N === 0 ? 2 * Math.PI : this.period);
+      const c = Math.cos(alpha);
+      const s = Math.sin(alpha);
+      for (const i of chosen) {
+        const dx = poses[i].x - mx;
+        const dy = poses[i].y - my;
+        this.place(i, { x: mx + c * dx - s * dy, y: my + s * dx + c * dy, theta: poses[i].theta + alpha });
+      }
+      return "rotate";
+    }
+    const cand: Pose = { x: 0, y: 0, theta: 0 };
+    for (const i of chosen) {
+      // Uniform in the region's disk, within the container (rejection, then anywhere inside).
+      for (let trial = 0; trial < 32; trial++) {
+        this.sampleCentre(random, cand);
+        if (Math.hypot(cand.x - centre.x, cand.y - centre.y) <= radius) break;
+      }
+      cand.theta = this.sampleAngle(i, cand.x, cand.y, random);
+      this.place(i, cand);
+    }
+    return "scatter";
+  }
+
   // ---------------------------------------------------------------------------------------------
   // Global descent
 

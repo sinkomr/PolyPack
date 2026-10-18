@@ -47,7 +47,8 @@ export const shrinkRepairMethod: MethodDefinition = {
     weightGrowth: 2,
     weightDecay: 0.95,
     descentIterations: 40,
-    disruption: 2,
+    explorePatience: 24,
+    maxRuin: 1,
     evaluationWork: 4000,
   },
   schema: {
@@ -134,13 +135,20 @@ export const shrinkRepairMethod: MethodDefinition = {
         100000,
         true,
       ),
-      disruption: numeric(
-        "Disrupted pieces",
-        "Pieces moved to random poses when the best packing is restored after the shrink ratio has fallen below its minimum.",
-        2,
-        0,
-        500,
+      explorePatience: numeric(
+        "Exploration patience",
+        "Patience of the repairs that explore below the floor of the best packing's basin, and of the repair of a start.",
+        24,
+        1,
+        10000,
         true,
+      ),
+      maxRuin: numeric(
+        "Largest ruin",
+        "Largest fraction of the pieces ruined (scattered over their region, or turned together as a block) before an exploring repair; their number is log-uniform between 1 and this fraction of P.",
+        1,
+        0,
+        1,
       ),
       evaluationWork: numeric(
         "Work per assessment and piece",
@@ -173,6 +181,9 @@ export interface ShrinkRepairObservation {
   outcome?: RepairOutcome;
   /** Repair iterations of a repair. */
   iterations?: number;
+  /** Pieces ruined before an exploring repair, and how. */
+  ruined?: number;
+  ruin?: "scatter" | "rotate";
   /** The strictly legalised configuration of an assessment. */
   config?: PackingConfig;
 }
@@ -266,7 +277,8 @@ export async function executeShrinkRepair(
   const rMax = Math.max(params.maxShrinkRatio as number, r0);
   const strikes = params.strikes as number;
   const patience = params.patience as number;
-  const disruption = Math.min(params.disruption as number, P);
+  const explorePatience = params.explorePatience as number;
+  const maxRuin = params.maxRuin as number;
   const interval = (params.evaluationWork as number) * P;
   const state = new RepairState(ctx.problem, settings);
 
@@ -346,7 +358,7 @@ export async function executeShrinkRepair(
   });
 
   /** Repair the loaded state at the current size. */
-  const repair = async (): Promise<{ outcome: RepairOutcome; iterations: number }> => {
+  const repair = async (patience: number): Promise<{ outcome: RepairOutcome; iterations: number }> => {
     let iterations = 0;
     if (!(await state.descend(descentIterations, pulse))) return { outcome: "stopped", iterations };
     if (state.feasible()) return { outcome: "feasible", iterations };
@@ -422,7 +434,7 @@ export async function executeShrinkRepair(
   for (let attempt = 0; !best && attempt < 60; attempt++) {
     state.setSize(size);
     state.resetWeights();
-    const { outcome, iterations } = await repair();
+    const { outcome, iterations } = await repair(explorePatience);
     notify({ kind: "repair", size, best: bestSize, ratio, outcome, iterations });
     if (outcome === "stopped") return;
     if (outcome === "feasible") {
@@ -437,23 +449,28 @@ export async function executeShrinkRepair(
   if (!best) return;
 
   // --- Shrink and repair ---------------------------------------------------------------------
-  let disrupt = 0;
+  // Compression: shrink the best by `ratio`, which grows after a success and halves after a
+  // failure. Once it falls below its minimum the search is at the floor of the best packing's
+  // basin and turns to exploration: targets just below the best (1 to 4 times the minimum
+  // ratio), each from the best with a ruined region of a log-uniform number of pieces, repaired
+  // with the longer exploration patience. A better packing found that way resumes compression.
+  let exploring = false;
   while (!ctx.shouldStop()) {
     if (!(await checkpoint())) return;
-    const target = bestSize * (1 - ratio);
-    phase = disrupt ? "repairing a disrupted packing" : "repairing";
+    const r = exploring ? rMin * (1 + 3 * ctx.random()) : ratio;
+    const target = bestSize * (1 - r);
+    phase = exploring ? "exploring" : "compressing";
     state.load(best);
     state.setSize(target);
-    state.scaleCentres(1 - ratio);
+    state.scaleCentres(1 - r);
     state.resetWeights();
-    if (disrupt) {
-      const chosen = new Set<number>();
-      while (chosen.size < disrupt) chosen.add(Math.floor(ctx.random() * P));
-      for (const i of chosen) state.scatterPiece(i, ctx.random);
-      notify({ kind: "disruption", size: target, best: bestSize, ratio });
+    if (exploring) {
+      const count = Math.max(1, Math.round(Math.pow(Math.max(1, maxRuin * P), ctx.random())));
+      const kind = state.ruin(count, ctx.random);
+      notify({ kind: "disruption", size: target, best: bestSize, ratio: r, ruined: count, ruin: kind });
     }
-    const { outcome, iterations } = await repair();
-    notify({ kind: "repair", size: target, best: bestSize, ratio, outcome, iterations });
+    const { outcome, iterations } = await repair(exploring ? explorePatience : patience);
+    notify({ kind: "repair", size: target, best: bestSize, ratio: r, outcome, iterations });
     if (outcome === "stopped") return;
     let improved = false;
     if (outcome === "feasible") {
@@ -463,13 +480,13 @@ export async function executeShrinkRepair(
       improved = bestSize < before;
     }
     if (improved) {
-      ratio = Math.min(rMax, ratio * 1.25);
-      disrupt = 0;
-    } else {
+      ratio = exploring ? Math.max(ratio, 2 * r) : Math.min(rMax, ratio * 1.25);
+      exploring = false;
+    } else if (!exploring) {
       ratio *= 0.5;
       if (ratio < rMin) {
-        ratio = r0;
-        disrupt = disruption;
+        ratio = rMin;
+        exploring = true;
       }
     }
   }
