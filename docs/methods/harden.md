@@ -256,11 +256,29 @@ shared jitter-free grid (`scatter` with every draw 0.5, no seeded draw). A
 stop or an expired time budget in the first steps then still returns a strict
 result. This reads no clock.
 
-**Previews.** Every assessment is an ordinary framework frame, so the Solve
-panel's live preview shows only true-shape, valid arrangements. Mid-run
-frames are the legalised current poses: during compression and early
+**Previews and working shapes.** Every assessment is an ordinary framework
+frame carrying the legalised current poses: during compression and early
 hardening the true pieces overlap deeply and their legalisation is a loose,
-scaled-apart arrangement that tightens as the pieces harden.
+scaled-apart arrangement that tightens as the pieces harden. The Solve
+panel's strict preview keeps only the best of these, so on its own it never
+showed the hardening: it showed the starting grid, then true polygons that
+improved mostly late in a run.
+
+So that the board shows what the method is doing, every momentum step also
+offers the framework a _sketch_ (`ctx.sketch`): the current poses, the moving
+container and the current soft shape (core `scale` and disk `padding`). The
+framework draws at most one sketch per 50 ms and only when an observer
+(`onSketch`) is attached; drawing one counts no evaluation, reads no random
+number and returns nothing to the method, so a seeded run gives the same
+result with or without it (tested). While the harden stage runs, the board
+draws these working shapes in place of the strict preview: inscribed disks
+while compressing, rounded polygons whose corners sharpen as the softness
+falls from 1 to 0 along the path, and true polygons while settling, each over
+a dotted outline of its true polygon, translucent because working shapes may
+overlap or cross the moving container, under the caption "Solver working
+shapes — not a valid packing". When the stage ends (the final polish, a stop
+or the result), the board returns to the strict preview. The score, the
+trace, Accept and Download use strict results only, as before.
 
 ## Parameters and defaults
 

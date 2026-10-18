@@ -89,6 +89,10 @@ export function createSolveRuntime(send: (message: SolveResponse) => void): { ha
             seed: snapshot.seed,
             start: snapshot.start,
             control: job.control,
+            onSketch(frame) {
+              // The framework already sends a copy, at most once per SKETCH_INTERVAL_MS.
+              publish({ type: "sketch", id: job.id, frame });
+            },
             onProgress(frame) {
               const candidate = strictPreview(frame, snapshot.problem);
               if (candidate && (job.previewScore === null || frame.score! < job.previewScore)) {

@@ -47,6 +47,46 @@ for (const method of ["penalty", "basin_hopping", "mc_compress", "morph", "asc",
   });
 }
 
+test("solve: harden shows its pieces morphing from inscribed disks to polygons, then the strict result", async ({
+  page,
+}, info) => {
+  await openProblem(page, 7, 7, 7);
+  await choose(page, "harden", 3000);
+  // Sample the sketch on screen from inside the page, so short runs are not missed between polls.
+  await page.evaluate(() => {
+    const w = window as any;
+    w.sketchTaus = [];
+    w.sketchTimer = setInterval(() => {
+      const s = w.polypack.view.shownSketch;
+      if (s) w.sketchTaus.push(s.values.tau);
+    }, 5);
+  });
+  await page.click("#solve-run");
+  // Capture the canvas mid-morph for the record.
+  await page.waitForFunction(() => {
+    const tau = (window as any).polypack.view.shownSketch?.values?.tau;
+    return tau > 0.3 && tau < 0.7;
+  });
+  await page.locator("#board").screenshot({ path: info.outputPath("harden-morph.png") });
+  const r = await completed(page);
+  const taus: number[] = await page.evaluate(() => {
+    const w = window as any;
+    clearInterval(w.sketchTimer);
+    return w.sketchTaus;
+  });
+  // Disks while compressing, intermediate rounded polygons, and true polygons while settling.
+  expect(taus.some((t) => t === 1)).toBe(true);
+  expect(taus.some((t) => t > 0.1 && t < 0.9)).toBe(true);
+  expect(taus.some((t) => t === 0)).toBe(true);
+  // The working shapes are gone once the run ends: the canvas shows the strict result to accept.
+  expect(await page.evaluate(() => (window as any).polypack.view.shownSketch)).toBeNull();
+  expect(r.valid && r.strict).toBe(true);
+  expect(findOverlaps(7, r.best!.pieces, strictTolerance(r.best!))).toEqual([]);
+  await page.locator("#board").screenshot({ path: info.outputPath("harden-result.png") });
+  await page.click("#solve-accept");
+  expect(await pieces(page)).toEqual(r.best!.pieces);
+});
+
 test("solve: accept, undo/redo, download full run and submit to authoritative server", async ({ page }) => {
   await openProblem(page, 4, 7, 3);
   await page.click("#add-all");

@@ -107,6 +107,34 @@ describe("browser solve runtime", () => {
     expect(messages.some((m) => m.type === "progress" && m.preview?.pieces.length === 2)).toBe(true);
   });
 
+  it("sends harden's working shapes as sketches, separate from its strict previews and result", async () => {
+    const { runtime, terminal, messages } = harness();
+    const problem = { N: 7, M: 7, P: 7 };
+    runtime.handle(request(1, { problem, method: "harden", params: { restarts: 1 }, budget: { evals: 400 } }));
+    const message = await terminal(1);
+    if (message.type !== "result") throw new Error("missing result");
+    expect(message.result.valid && message.result.strict).toBe(true);
+    const sketches = messages.filter((m) => m.type === "sketch");
+    expect(sketches.length).toBeGreaterThan(0);
+    // Every sketch precedes the result, belongs to the job and draws the method's soft shape:
+    // a disk or rounded polygon no larger than the true piece, with softness in [0, 1].
+    expect(messages.indexOf(sketches.at(-1)!)).toBeLessThan(messages.indexOf(message));
+    for (const m of sketches) {
+      if (m.type !== "sketch") continue;
+      expect(m.id).toBe(1);
+      expect(m.frame.stage.method).toBe("harden");
+      expect(m.frame.sketch.pieces).toHaveLength(7);
+      expect(m.frame.sketch.scale).toBeLessThanOrEqual(1);
+      expect(m.frame.sketch.values!.tau).toBeGreaterThanOrEqual(0);
+      expect(m.frame.sketch.values!.tau).toBeLessThanOrEqual(1);
+      expect(structuredClone(m)).toEqual(m);
+    }
+    // Strict previews stay true, non-overlapping pieces.
+    for (const m of messages)
+      if (m.type === "progress" && m.preview)
+        expect(findOverlaps(m.preview.N, m.preview.pieces, strictTolerance(m.preview))).toEqual([]);
+  });
+
   it("snapshots all caller inputs before asynchronous execution and preserves budget/start semantics", async () => {
     const { runtime, terminal } = harness();
     const input = request(1, {
