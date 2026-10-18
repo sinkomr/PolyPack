@@ -11,6 +11,8 @@ import {
   MAX_SIDES,
   type PackingConfig,
   closedToSubmissions,
+  containerArea,
+  pieceArea,
   utf8Length,
 } from "@polypack/geometry";
 
@@ -193,8 +195,37 @@ export function siteInfoByP(body: RecordsResponse): Map<number, SiteInfo> {
   return out;
 }
 
-export type Order = "missing-first" | "smallest-first" | "random";
-export const ORDERS: readonly Order[] = ["missing-first", "smallest-first", "random"];
+export type Order = "missing-first" | "smallest-first" | "random" | "teeth";
+export const ORDERS: readonly Order[] = ["missing-first", "smallest-first", "random", "teeth"];
+
+/**
+ * How deep a problem sits in a sawtooth: the fraction by which its record container would shrink
+ * if it were packed as densely as its neighbours. Density is the pieces' area over the container's;
+ * the neighbours are the P within max(3, 4%) on either side, and the target is the second-highest
+ * density among them, so that one exceptional neighbour (a perfect tiling such as k^2 squares)
+ * does not mark everything around it. Only problems with a site leader and no published value are
+ * rated: a published value, matched or not, comes from long searches that a batch run will not
+ * beat. Null when not rated.
+ */
+export function toothDepth(p: Problem, info: (p: Problem) => SiteInfo | undefined): number | null {
+  const own = info(p);
+  if (!own || own.closed || own.leader === null) return null;
+  if (own.published !== null) return null;
+  const density = (P: number, size: number) => (P * pieceArea(p.N)) / containerArea(p.M, size);
+  const w = Math.max(3, Math.ceil(0.04 * p.P));
+  const around: number[] = [];
+  for (let Q = Math.max(1, p.P - w); Q <= Math.min(MAX_PIECES, p.P + w); Q++) {
+    if (Q === p.P) continue;
+    const i = info({ N: p.N, M: p.M, P: Q });
+    const record = Math.min(i?.leader ?? Infinity, i?.published ?? Infinity);
+    if (Number.isFinite(record)) around.push(density(Q, record));
+  }
+  if (around.length < 2) return null;
+  around.sort((a, b) => b - a);
+  const target = around[1];
+  const mine = density(p.P, own.leader);
+  return mine >= target ? 0 : 1 - Math.sqrt(mine / target);
+}
 
 /**
  * Priority class for missing-first: 0 when the site has neither a leader nor a published value
@@ -220,6 +251,10 @@ export function orderProblems(
 ): Problem[] {
   if (order === "random") return shuffled(problems, mulberry32(seed));
   if (order === "smallest-first") return [...problems].sort(bySize);
+  if (order === "teeth") {
+    const depth = new Map(problems.map((p) => [p, toothDepth(p, info) ?? -1]));
+    return [...problems].sort((a, b) => depth.get(b)! - depth.get(a)! || bySize(a, b));
+  }
   return [...problems].sort((a, b) => missingClass(info(a)) - missingClass(info(b)) || bySize(a, b));
 }
 

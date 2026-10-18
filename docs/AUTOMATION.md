@@ -49,6 +49,20 @@ The output directory (`--out`, default `./batch-out`) holds:
 
 Running the same command again resumes: runs whose (problem, method, seed, budget) are already in `runs.jsonl` are skipped, and the best of each finished problem is submitted if it still improves on the leader (so a submission lost to an interruption is sent later, and one already leading is not sent twice). A run interrupted by a signal is not recorded and runs again. Changing `--evals` or `--time` makes new experiments.
 
+## Sawteeth and free improvements
+
+Quick first searches leave a sawtooth in each family's records: just past a number that packs well (a perfect square of squares, say), the easy answer is the next regular arrangement, so the container jumps up and only slowly comes down again. `--order teeth` searches the deepest teeth first, those whose site record is least dense against their neighbours' (only problems with a site leader and no published value are rated), and `--top K` keeps the first K:
+
+```sh
+npx tsx scripts/batch-search.ts --N 0,3-12 --M 0,3-12 --P 1-500 --order teeth --top 2000 --methods asc,harden --seeds 1-3 --time 120 --submit --name "<model name>"
+```
+
+A record can never be worse than one for more pieces: removing pieces from a packing of Q > P leaves a packing of P in a container no larger. `scripts/trim-down.ts` finds every such case and submits the trimmed packing (found_with "external", with the donor named in `software`); without `--submit` it only reports:
+
+```sh
+npx tsx scripts/trim-down.ts --N 0,3-20 --M 0,3-20
+```
+
 ## The rate limit
 
 The server accepts 120 submissions per minute per address. The script keeps all its workers together at or below 25 per minute; on HTTP 429 it waits 65 s and tries again (at most three times), on 409 it marks the problem closed, and network errors are retried with backoff up to 60 s without stopping the batch. Several copies of the script behind one address share the server's limit but not the script's pacing, so on one machine run one copy and use `--workers` for parallelism. Cloud sandboxes may also share an address: a few dozen sessions on problems of a hundred pieces or more stay well under the limit, but many sessions on very small problems may not.

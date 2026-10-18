@@ -63,9 +63,12 @@ Problem set
   --sample K            draw K random problems instead of taking every combination; --N/--M/--P
                         then restrict the draw and default to the full ranges (0,3-100 and 1-500)
   --seed-problems S     seed of the --sample draw and of --order random (default 1)
-  --order ORDER         missing-first (default), smallest-first or random. missing-first: problems
-                        with neither a site leader nor a published value, then those whose leader
-                        is missing or worse than the published value, then the rest
+  --order ORDER         missing-first (default), smallest-first, random or teeth. missing-first:
+                        problems with neither a site leader nor a published value, then those whose
+                        leader is missing or worse than the published value, then the rest. teeth:
+                        the deepest sawteeth first, problems whose site record is least dense
+                        against their neighbours' (see toothDepth in batch-search/lib.ts)
+  --top K               search only the first K problems in that order
   --skip-existing       leave out problems that already have an entry on the site, so that
                         several machines can fill gaps without repeating each other
 Search
@@ -105,6 +108,7 @@ function parseOptions() {
         M: { type: "string" },
         P: { type: "string" },
         sample: { type: "string" },
+        top: { type: "string" },
         "seed-problems": { type: "string", default: "1" },
         order: { type: "string", default: "missing-first" },
         "skip-existing": { type: "boolean", default: false },
@@ -350,12 +354,13 @@ const skippedClosed = problems.filter((p) => infoOf(p)?.closed);
 const skippedExisting = opts["skip-existing"]
   ? problems.filter((p) => !infoOf(p)?.closed && infoOf(p)?.leader != null)
   : [];
+const skipped = new Set(skippedExisting);
 const open = orderProblems(
-  problems.filter((p) => !infoOf(p)?.closed && !skippedExisting.includes(p)),
+  problems.filter((p) => !infoOf(p)?.closed && !skipped.has(p)),
   order,
   infoOf,
   problemSeed,
-);
+).slice(0, opts.top === undefined ? undefined : positiveInteger("top", opts.top));
 const states = new Map<string, ProblemState>();
 for (const p of open)
   states.set(problemKey(p), {

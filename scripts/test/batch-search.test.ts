@@ -7,6 +7,7 @@ import {
   median,
   missingClass,
   orderProblems,
+  toothDepth,
   parseIntList,
   parsePieceCounts,
   parseShapes,
@@ -228,5 +229,33 @@ describe("submission body", () => {
     expect(submissionBody({ ...best, params: { blob: "x".repeat(5000) } }, "x", "")).not.toHaveProperty(
       "method_params",
     );
+  });
+});
+
+describe("teeth order", () => {
+  // squares in a square where every record is the plain ceil(sqrt P) grid, held by the site:
+  // just after a perfect square the grid is far less dense than its neighbours
+  const grid = (P: number) => ({ closed: false, published: null, leader: Math.ceil(Math.sqrt(P)) });
+  const lookup = (p: { P: number }) => grid(p.P);
+  const at = (P: number) => ({ N: 4, M: 4, P });
+
+  it("rates a problem by how much denser its neighbours pack", () => {
+    // P = 10: 10/16 against the second-densest neighbour, 8/9 (9/9 is the exceptional tiling)
+    expect(toothDepth(at(10), lookup)).toBeCloseTo(1 - Math.sqrt(10 / 16 / (8 / 9)), 9);
+    expect(toothDepth(at(16), lookup)).toBe(0);
+    expect(toothDepth(at(9), lookup)).toBe(0);
+  });
+
+  it("leaves out problems with a published value, and those without a site leader", () => {
+    const published = (p: { P: number }) => ({ ...grid(p.P), published: p.P === 10 ? 4 : null });
+    expect(toothDepth(at(10), published)).toBeNull();
+    const none = (p: { P: number }) => ({ ...grid(p.P), leader: p.P === 10 ? null : grid(p.P).leader });
+    expect(toothDepth(at(10), none)).toBeNull();
+  });
+
+  it("orders the deepest teeth first", () => {
+    const order = orderProblems([9, 10, 16, 17, 25].map(at), "teeth", lookup).map((p) => p.P);
+    expect(order.slice(0, 2)).toEqual([10, 17]);
+    expect(order.slice(2)).toEqual([9, 16, 25]);
   });
 });
