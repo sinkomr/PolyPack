@@ -25,8 +25,20 @@ CREATE TABLE IF NOT EXISTS submissions (
   budget TEXT,
   software TEXT
 );
-CREATE INDEX IF NOT EXISTS submissions_problem ON submissions (n, m, p, score, id);
 CREATE INDEX IF NOT EXISTS submissions_verification ON submissions (verification);
+`;
+
+/**
+ * Every column that finding leaders, pruning, ranking and listing read, so that those queries are
+ * answered from the index alone. In the table, verification and the columns added later come
+ * after pieces (up to tens of kilobytes); a query that reads them from the table walks every
+ * row's pieces, which turned each listing into gigabytes of disk reads once the database
+ * outgrew memory. It replaces the narrower index on (n, m, p, score, id).
+ */
+const LISTING_INDEX = `
+CREATE INDEX IF NOT EXISTS submissions_listing
+  ON submissions (n, m, p, score, id, verification, name, found_with, agent_note, created_at);
+DROP INDEX IF EXISTS submissions_problem;
 `;
 
 // Running count of accepted submissions per problem; the rows themselves are pruned.
@@ -93,6 +105,8 @@ export class SqliteStore implements Store {
     );
     for (const [name, type] of ADDED_COLUMNS)
       if (!present.has(name)) this.db.exec(`ALTER TABLE submissions ADD COLUMN ${name} ${type}`);
+    // after the added columns, which it covers; building it on a large database takes a while, once
+    this.db.exec(LISTING_INDEX);
     // A database from before pruning: start the tallies from what it holds, then prune it.
     if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tallies'").get()) {
       this.db.exec(TALLIES);
