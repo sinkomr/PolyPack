@@ -80,13 +80,25 @@ fly volumes list
 fly volumes snapshots list <volume id>
 ```
 
-Fly takes a daily snapshot of the volume and keeps it for a few days; see <https://fly.io/docs/volumes/snapshots/>. For a copy of your own, download the database:
+Fly takes a daily snapshot of the volume and keeps it for a few days; see <https://fly.io/docs/volumes/snapshots/>. The volume lives on one server, so the snapshots are the only copy on Fly.
+
+For a copy of your own on a Mac, `deploy/fly/backup-to-mac.sh` takes a consistent copy on the server (`VACUUM INTO`, which reads one snapshot while the server goes on writing), downloads it, checks it, and keeps it gzip-compressed, the newest four by default:
 
 ```sh
-fly ssh sftp get /data/polypack.sqlite ./polypack-backup.sqlite
+./deploy/fly/backup-to-mac.sh
+./deploy/fly/backup-to-mac.sh install
 ```
 
-A file fetched while the server is writing can miss the most recent entries; a snapshot is the consistent copy.
+The first takes a backup now; the second runs it every Sunday at 04:00 through launchd (a run missed while the Mac sleeps happens on wake). Backups go to `~/GitHub/PolyPack-backups/database` unless `POLYPACK_BACKUP_DIR` says otherwise, and the log to `~/Library/Logs/polypack-backup.log`. The copy needs free space on the volume as large as the database, and reading the whole database slows the site for a few minutes. Copying the file directly (`fly ssh sftp get /data/polypack.sqlite`) while the server writes can give an inconsistent file.
+
+To restore from such a backup: `gunzip` it, upload it with `fly ssh sftp shell` (`put polypack-….sqlite /data/restore.sqlite`), then in `fly ssh console` replace the database and its journal, and restart. Entries submitted between the replacement and the restart are lost.
+
+```sh
+mv /data/restore.sqlite /data/polypack.sqlite && rm -f /data/polypack.sqlite-wal /data/polypack.sqlite-shm
+fly machine restart
+```
+
+The first line runs on the server (in `fly ssh console`), the second on your Mac.
 
 ## Your own domain
 
