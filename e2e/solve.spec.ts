@@ -130,9 +130,10 @@ test("solve: accept, undo/redo, download full run and submit to authoritative se
   await page.fill("#name", "Solver browser test");
   await page.click("#submit");
   await expect(page.locator("#submit-result")).toContainText("Accepted. Server score");
-  expect(
-    Number((await page.locator("#submit-result").textContent())!.match(/Server score (\d+\.\d+)/)![1]),
-  ).toBeCloseTo(next.score!, 6);
+  expect(Number((await page.locator("#submit-result").textContent())!.match(/Server score (\d+\.\d+)/)![1])).toBeCloseTo(
+    next.score!,
+    6,
+  );
 });
 
 test("solve: pause, resume, stop while paused, and cancel stale preview on board change", async ({ page }) => {
@@ -392,9 +393,7 @@ test("solve: an invalid setting inside collapsed method settings is revealed and
   expect(r.params.adaptationSweeps).toBe(20);
   await choose(page, "basin_hopping", 60);
   expect(await page.locator("#solve-form").evaluate((f: HTMLFormElement) => f.checkValidity())).toBe(true);
-  expect(
-    await page.locator("#solve-param-alignmentTolerance").evaluate((i: HTMLInputElement) => i.value === i.max),
-  ).toBe(false);
+  expect(await page.locator("#solve-param-alignmentTolerance").evaluate((i: HTMLInputElement) => i.value === i.max)).toBe(false);
   await page.locator("#solve-param-alignmentTolerance").evaluate((i: HTMLInputElement) => {
     i.value = i.max;
   });
