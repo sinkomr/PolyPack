@@ -57,7 +57,7 @@ Quick first searches leave a sawtooth in each family's records: just past a numb
 npx tsx scripts/batch-search.ts --N 0,3-12 --M 0,3-12 --P 1-500 --order teeth --top 2000 --methods asc,harden --seeds 1-3 --time 120 --submit --name "<model name>"
 ```
 
-A record can never be worse than one for more pieces: removing pieces from a packing of Q > P leaves a packing of P in a container no larger. `scripts/trim-down.ts` finds every such case and submits the trimmed packing (found_with "external", with the donor named in `software`); without `--submit` it only reports:
+A record can never be worse than one for more pieces: removing pieces from a packing of Q > P leaves a packing of P in a container no larger. For squares in a square and triangles in a triangle there is a step the other way: a packing of P in side s gives one of P + 2⌊s⌋ + 1 in side s + 1, by adding a strip of pieces along the container (two adjacent sides for squares, one side for triangles). `scripts/trim-down.ts` applies both, growing upwards and then trimming downwards, and submits every result that beats the record it started from (found_with "external", with the source packing and the steps named in `software`); without `--submit` it only reports:
 
 ```sh
 npx tsx scripts/trim-down.ts --N 0,3-20 --M 0,3-20
