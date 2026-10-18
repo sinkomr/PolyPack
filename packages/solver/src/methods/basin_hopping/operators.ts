@@ -15,7 +15,7 @@ import {
 import { restore } from "../penalty/restoration";
 
 export type Random = () => number;
-export const operatorNames = ["kick", "swap", "cluster", "reinsert", "restart"] as const;
+export const operatorNames = ["kick", "swap", "cluster", "reinsert", "restart", "peel", "cleave"] as const;
 export type Operator = (typeof operatorNames)[number];
 
 const angle = (theta: number): number => theta % (2 * Math.PI);

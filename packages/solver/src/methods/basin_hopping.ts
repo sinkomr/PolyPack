@@ -5,6 +5,7 @@ import { penaltyMethod } from "./penalty";
 import { scatter } from "./penalty/restoration";
 import { congruenceSignature } from "./seed/signature";
 import { refineAligned } from "./basin_hopping/refinement";
+import { crossCleave, peelLayerCooperative } from "./basin_hopping/escape";
 import {
   copy,
   centerLocalStart,
@@ -55,7 +56,7 @@ function numeric(
   return { type: integer ? "integer" : "number", title, description, default: value, minimum: min, maximum: max };
 }
 
-const weights = { kick: 4, swap: 1, cluster: 2, reinsert: 2, restart: 0.3 };
+const weights = { kick: 4, swap: 1, cluster: 2, reinsert: 2, restart: 0.3, peel: 2, cleave: 2 };
 export const basinHoppingMethod: MethodDefinition = {
   name: "basin_hopping",
   doc: "docs/methods/basin_hopping.md",
@@ -285,10 +286,10 @@ export async function executeBasinHopping(ctx: MethodContext): Promise<BasinTrac
   // reserve. Unlimited-evaluation runs cannot promise a final refinement slice.
   const initialAllowance = ctx.remaining().evals;
   const initialTime = ctx.remaining().time_s;
-  const timeReserve =
-    !Number.isFinite(initialAllowance) && Number.isFinite(initialTime) && (p.refinementEvals as number) > 0
-      ? initialTime / 6
-      : 0;
+  // A finite time limit gets a terminal reserve too, also when evaluations are
+  // limited: with both limits (the batch runner's default) time usually binds
+  // first for large P, and an evaluation reserve alone never reached refinement.
+  const timeReserve = Number.isFinite(initialTime) && (p.refinementEvals as number) > 0 ? initialTime / 6 : 0;
   const finalReserve = Number.isFinite(initialAllowance)
     ? Math.min(p.refinementEvals as number, Math.floor(initialAllowance / 6))
     : 0;
@@ -406,6 +407,9 @@ export async function executeBasinHopping(ctx: MethodContext): Promise<BasinTrac
     const stats = trace.operators[operator];
     let perturbed: PackingConfig;
     if (operator === "swap") perturbed = swapOrientations(current, ctx.random);
+    else if (operator === "peel")
+      perturbed = await peelLayerCooperative(current, ctx.random, ctx.checkpoint, ctx.shouldStop);
+    else if (operator === "cleave") perturbed = crossCleave(current, ctx.random);
     else if (operator === "cluster")
       perturbed = rotateCluster(current, ctx.random, p.clusterRadius as number, p.rotationMagnitude as number);
     else if (operator === "restart")
@@ -536,7 +540,7 @@ export async function executeBasinHopping(ctx: MethodContext): Promise<BasinTrac
       if (best) await remember(best, bestScore);
     }
   }
-  if (best && timeReserve > 0 && !ctx.shouldStop()) {
+  if (best && !Number.isFinite(initialAllowance) && timeReserve > 0 && !ctx.shouldStop()) {
     try {
       const result = await ctx.run(
         "penalty",

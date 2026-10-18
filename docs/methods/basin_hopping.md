@@ -13,6 +13,10 @@
 3. **Cluster:** choose a pivot. Include centres within `clusterRadius * 2 * boundingRadius(N)`: the parameter is a multiple of the piece's bounding diameter. Require at least two members. Rotate positions and orientations rigidly about their centroid; preserve internal distances. Reject the whole move at a coordinate boundary rather than clipping members independently.
 4. **Reinsert:** choose the piece whose removal gives the smallest enclosing size, with first-minimum tie breaking. Submit P counted removal assessments, retaining the original P so incomplete packings cannot enter the valid best. Sample within the current enclosure's bounding box, and reject poses protruding outside the enclosure. Include its centre and the removed centre as exact anchors, so a centred piece-sized hole can be found. For each centre try a random orientation, the four nearest neighbours' orientations and their half-symmetry turns, and up to eight container edge directions. Deduplicate angles modulo piece symmetry. Require nonnegative pair clearance. Rank by resulting fixed-phi enclosing size first (1e-12 tie band), then minimum clearance. Retain the original pose if no free candidate exists. This is sampled free-space search, not a proof of the largest hole. Disable it when there is insufficient budget for all removal assessments and a local solve.
 5. **Restart:** choose a matching seed uniformly and strongly kick all its pieces. The small base weight makes this uncommon. If no matching seed exists, strongly kick the current state.
+6. **Peel** (added 2026-10-17): choose a container wall normal (a uniform direction for circle containers) and empty the outermost layer along it, the pieces whose centre lies within one inradius (radius 1 for circles) of the extreme centre. Candidate sites are the edge-reflected neighbours of every other piece: centre at twice the inradius along each edge normal, orientation reflected (unchanged for even N, turned by π/N for odd N); circles use six neighbours at distance 2. A site must be at least one layer (two inradii) inward, inside the current enclosure up to 1e-9, and clear of all other pieces, including layer pieces not yet moved, up to 1e-9. Layer pieces are processed in seeded random order, each at a uniformly drawn valid site; a piece with none keeps its pose. Only analytic separation and protrusion queries are used; nothing is assessed. The generator yields every 256 site checks and stops cooperatively.
+7. **Cleave** (added 2026-10-17): move the piece whose removal shrinks the fixed-angle enclosure most (analytic enclosures; uniform tie breaking, so every piece of a full grid is equally likely) into a cross-shaped gap. Draw two distinct container wall normals u1, u2 (for circle containers a uniform direction and its perpendicular) and a vertex X of another, uniformly chosen piece (a point at distance 1 from a circle's centre). Every other piece whose centre lies on the positive side of X along u_i is translated by δ·u_i, δ uniform in [0.75, 1.25] piece circumradii, and the moved piece is placed at the gap centre X + δ(u1+u2)/2, turned by π/N from the vertex owner. [CALC] For k²+1 squares packed as a k-by-k block plus one protruding square, with X the block centre, perpendicular normals and δ ≥ 1/√2, the result is the valid k + δ arrangement of four corner blocks around a 45-degree square; δ = 1/√2 gives k + 1/√2. Elsewhere it is a large structured kick that the local solve compresses. Antiparallel normals give a single straight gap and are kept, not redrawn.
+
+[CALC] Why peel and cleave exist: the (k+1)-by-(k+1) grid, or a (k+1)-by-k rectangle, holding k²+j squares is a strict local optimum of the penalty solve, and the hop moves above leave it only by chance (see "Grid basin above perfect squares" below). [SPEC] Beating the grid for k²+1 squares appears to need turned squares; [CALC] every sub-grid result in the 2026-10-17 measurements below has turned squares. Peel consolidates the scattered single-cell holes of a near-grid (exact piece-sized holes have zero area in centre space, so the reinsertion sampler cannot find them); cleave makes the coordinated turn that the k + 1/√2 family needs.
 
 [CALC] Compare every perturbation with the current packing, including symmetry-equivalent polygon angles. Redraw an unchanged perturbation without spending a local solve or crediting a trial. After eight consecutive redraws, fall back to a kick, including for operator-only parameter sets with no legal move. `redraws` reports these selections separately; operator `tries` counts actual hop solves. Pure helpers copy exactly P finite poses. The method's reinsertion sampler uses the same seeded stream as its synchronous helper and yields every four centre trials and every 256 pair checks.
 
@@ -32,11 +36,11 @@ For these trials the expected logarithmic change vanishes at the target acceptan
 
 ## Final refinement, budgets and strictness
 
-[CALC] For an evaluation-limited run, reserve `min(refinementEvals, floor(initialMethodAllowance/6))` evaluations for terminal refinement, plus space for pool emissions. Ordinary slices use `min(localEvals, remaining-reserve)`. The framework's separate final-polish reserve is untouched. Zero refinement allowance disables the terminal phase.
+[CALC] For an evaluation-limited run, reserve `min(refinementEvals, floor(initialMethodAllowance/6))` evaluations for terminal refinement, plus space for pool emissions. Whenever the time limit is finite and `refinementEvals > 0`, also reserve one sixth of the initial method time: hops stop, and hop solves are limited, at that reserve. [CALC] Before 2026-10-17 the time reserve applied only to runs without an evaluation limit; with both limits (the batch runner defaults, 20,000 evaluations and 15 s) time binds first for large P, and the terminal refinement never ran: P=26 and P=101 squares, seed 1, both reported zero refinement evaluations (wall times measured on a heavily loaded machine). Ordinary slices use `min(localEvals, remaining-reserve)`. The framework's separate final-polish reserve is untouched. Zero refinement allowance disables the terminal phase.
 
 [CALC] Refine the strict shared best, rather than the last accepted state. First, when every polygon is within `alignmentTolerance` of a container face or vertex direction, try a restricted penalty solve: transform into the container frame, snap those angles, freeze piece and container orientations, and optimize translations and size. This uses the existing penalty objective, L-BFGS and restoration; it contains no record lookup or packing template. It gets at most half the terminal allowance. Parameters are 20 outer iterations, 200 inner iterations, memory 12, tolerance 1e-11, augmented multipliers and initial weight 100 growing by 4 up to 1e10. Only strictly restored, counted assessments can replace the existing best. Skip circles, circular containers, and arrangements outside the angle guard.
 
-[CALC] Then rerun the existing unrestricted penalty driver from the best with at least 20 outer and 300 inner iterations, gradient tolerance at most 1e-10, and zero jitter, using the remaining terminal allowance. A scoped MethodContext counts every assessment through the parent's `ctx.evaluate`, caps both phases, and cooperatively checks stop. This terminal work is separate from the hop record; it is not an additional polish call. For time-only runs, reserve one sixth of the initial method time and run a final tighter penalty child through `ctx.run`; the restricted phase is omitted. A finite budget or a stalled optimizer can still prevent full convergence; the measurements below explicitly report that case.
+[CALC] Then rerun the existing unrestricted penalty driver from the best with at least 20 outer and 300 inner iterations, gradient tolerance at most 1e-10, and zero jitter, using the remaining terminal allowance. A scoped MethodContext counts every assessment through the parent's `ctx.evaluate`, caps both phases, and cooperatively checks stop. This terminal work is separate from the hop record; it is not an additional polish call. For time-only runs, run a final tighter penalty child through `ctx.run` in the time reserve; the restricted phase is omitted. Runs with both limits use the evaluation-limited terminal phase above, inside the time reserve. A finite budget or a stalled optimizer can still prevent full convergence; the measurements below explicitly report that case.
 
 [CALC] Seed work, starts, removals, local assessments, refinement and emissions all count against the framework budget. Analytic objective, clearance and enclosure queries used to rank perturbations are not independent scored submissions, consistently with penalty's convention. Count child `evaluations` and parent assessments to detect zero-cost failures; never compare Infinity with Infinity. On early convergence, assess the retained strict best to finish the finite method allowance. Appended polish may converge before spending its own reserve.
 
@@ -58,25 +62,25 @@ For these trials the expected logarithmic change vanishes at the target acceptan
 
 [EST] Every schema node has a title and description for form tooltips. Defaults merge recursively; unknown properties are rejected. The exact schema is at the end of this page.
 
-| Parameter          | Default                                            | Range/meaning                                                               |
-| ------------------ | -------------------------------------------------- | --------------------------------------------------------------------------- |
-| localEvals         | 150                                                | Integer 2–1,000,000; maximum per hop solve                                  |
-| refinementEvals    | 3000                                               | Integer 0–1,000,000; terminal cap, limited to one sixth of method allowance |
-| alignmentTolerance | 0.01                                               | 0–0.1 radians; zero disables restricted refinement                          |
-| seedEvals          | 24                                                 | Integer 1–10,000; also spent with a start                                   |
-| temperature        | 0.04                                               | 0–1000, score units                                                         |
-| kickMagnitude      | 0.35                                               | 0.001–10, displacement in piece units                                       |
-| kickFraction       | 0.4                                                | 0–1; at least one selected piece                                            |
-| rotationMagnitude  | π/2                                                | 0–π radians                                                                 |
-| clusterRadius      | 1.8                                                | 0–10,000, multiples of bounding diameter                                    |
-| reinsertionTrials  | 48                                                 | Integer 1–4096, centre samples                                              |
-| restartStrength    | 3                                                  | 1–100, displacement multiplier                                              |
-| targetAcceptance   | 0.5                                                | 0–1                                                                         |
-| adaptationRate     | 0.15                                               | 0–1; zero disables adaptations                                              |
-| weightFloor        | 0.2                                                | 0.001–1                                                                     |
-| weights            | kick 4, swap 1, cluster 2, reinsert 2, restart 0.3 | Each 0–1000; circles disable swap                                           |
-| poolLimit          | 8                                                  | Integer 0–64                                                                |
-| penalty            | Nested defaults below                              | Existing penalty schema                                                     |
+| Parameter          | Default                                                              | Range/meaning                                                               |
+| ------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| localEvals         | 150                                                                  | Integer 2–1,000,000; maximum per hop solve                                  |
+| refinementEvals    | 3000                                                                 | Integer 0–1,000,000; terminal cap, limited to one sixth of method allowance |
+| alignmentTolerance | 0.01                                                                 | 0–0.1 radians; zero disables restricted refinement                          |
+| seedEvals          | 24                                                                   | Integer 1–10,000; also spent with a start                                   |
+| temperature        | 0.04                                                                 | 0–1000, score units                                                         |
+| kickMagnitude      | 0.35                                                                 | 0.001–10, displacement in piece units                                       |
+| kickFraction       | 0.4                                                                  | 0–1; at least one selected piece                                            |
+| rotationMagnitude  | π/2                                                                  | 0–π radians                                                                 |
+| clusterRadius      | 1.8                                                                  | 0–10,000, multiples of bounding diameter                                    |
+| reinsertionTrials  | 48                                                                   | Integer 1–4096, centre samples                                              |
+| restartStrength    | 3                                                                    | 1–100, displacement multiplier                                              |
+| targetAcceptance   | 0.5                                                                  | 0–1                                                                         |
+| adaptationRate     | 0.15                                                                 | 0–1; zero disables adaptations                                              |
+| weightFloor        | 0.2                                                                  | 0.001–1                                                                     |
+| weights            | kick 4, swap 1, cluster 2, reinsert 2, restart 0.3, peel 2, cleave 2 | Each 0–1000; circles disable swap                                           |
+| poolLimit          | 8                                                                    | Integer 0–64                                                                |
+| penalty            | Nested defaults below                                                | Existing penalty schema                                                     |
 
 [EST] Nested penalty defaults: `start:"seed", schedule:"augmented", initialWeight:10, growthFactor:4, outerIterations:6, innerIterations:120, memory:12, gradientTolerance:1e-7, restoration:"separate", jitter:1e-5, violationReduction:0.5`. The terminal solve tightens the limits and tolerance as described above. See [penalty](penalty.md) for inherited ranges.
 
@@ -96,9 +100,53 @@ For these trials the expected logarithmic change vanishes at the target acceptan
 - Helena R. Lourenço, Olivier C. Martin and Thomas Stützle, “Iterated Local Search,” in Fred Glover and Gary A. Kochenberger (eds.), _Handbook of Metaheuristics_, International Series in Operations Research & Management Science **57**, 320–353, **2003**. [Springer publisher chapter](https://link.springer.com/chapter/10.1007/0-306-48056-5_11) verified authors, title, venue, pages and year.
 - Bernardetta Addis, Marco Locatelli and Fabio Schoen, “Disk Packing in a Square: A New Global Optimization Approach,” _INFORMS Journal on Computing_ **20**(4), 516–524, **2008**. [INFORMS publisher metadata](https://pubsonline.informs.org/doi/10.1287/ijoc.1080.0263) verified title, author initials, journal, issue, pages and year; [Addis's author bibliography](https://members.loria.fr/BAddis/publications/) independently verified the attribution.
 
+## Grid basin above perfect squares (2026-10-17)
+
+[CALC] Complaint: on squares in a square, basin hopping returned the obvious near-grid just after a perfect square (P = k²+1), e.g. 442 squares at 22. Reproduced with the previous defaults (seeds and budgets below): every run with P ≥ 65 at 4,000 evaluations returned exactly the grid side k+1, and the score equalled the seed's. Small counts (P ≤ 50, 20,000 evaluations) already left the grid.
+
+[CALC] Diagnosis, reproduced unless marked otherwise:
+
+- Start: the automatic seed is the (k+1)-wide grid or a (k+1)-by-k rectangle with scattered single-cell holes (P=65: 9 by 8 with 7 holes). A penalty solve from it, and also from a random scatter (P=26, 50, 65, 1,500 evaluations, two seeds), returns side k+1.
+- Hops: at P=50 and 4,000 evaluations every hop's local solve came back to 8.000x and was accepted as a near tie; nothing went below 8. At P=82 kicks were accepted 0/13 and 0/12 times: kicking 40% of the pieces (33) by up to ±π/2 cannot be repaired by a 150-evaluation solve. Kicks rotate pieces off-axis, but independently, and the solve turns them back.
+- A fixed-size squeeze (shrink, then minimise overlap with the size frozen) and a container shake (uniform compression with a free size) were tried and dropped: the squeezed grid kept its overlap without turning any square, and the free-size solve regrows a compressed grid.
+- Parameters, one at a time from the defaults (P = 17, 26, 37; 6,000 evaluations; seeds 1–3; mean score/published 1.0288): temperature 0 / 0.01 / 0.1 / 0.25 gave 1.0550 / 1.0408 / 1.0332 / 1.0327; localEvals 50 / 75 / 300 gave 1.0425 / 1.0223 / 1.0325; kickFraction 0.2 / 0.7 / 1 gave 1.0386 / 1.0205 / 1.0288; rotationMagnitude 0.4 gave 1.0464. Only cooling and smaller kicks clearly hurt; the rest are within seed noise (single runs vary by about 0.02). At P = 65 and 82 with 8,000 evaluations, kickFraction 0.7, a band-tilt operator, shake, and localEvals 75 all stayed on the grid (7 of 8 runs at exactly k+1). No default value was changed.
+- Peel and cleave (Search and operators) at weight 2 each: at 8,000 evaluations P=65 and 82 left the grid in 4/4 runs (8.77, 8.92, 9.707, 9.709) against 1/4 before; cleave alone 3/4. On P = 17, 26, 37 at 6,000 evaluations the mean ratio was 1.0200 against 1.0288 (cleave alone 1.0263, peel plus band tilt 1.0283; tilt was not kept). These development runs used an experimental copy whose cleave put the moved piece at X rather than at the gap centre; the table below measures the shipped code.
+- Budget: the batch runner's defaults (20,000 evaluations and 15 s) are time-bound for large P. [CALC] On this machine under a load average near 100, P=101 completed 371 evaluations (3 hops) in 15 s, so no hop move can matter there; the time reserve fix only makes the terminal refinement run (0 → 127 refinement evaluations for P=101, 0 → 377 for P=26, seed 1).
+
+[CALC] Before/after on identical problems, seeds and evaluation budgets; previous commit 7560837 against this change, Node v26.5.0, evaluation budgets only (a 3,600 s time cap was never reached), no start, framework polish enabled. Every result is valid and strict. Ratio = score / published value from data/records.json (P=442 has none; the grid is 22). "Turned" counts squares off the container axes by more than 1e-3 rad in the after result.
+
+| P   | Seeds | Evaluations | Published         | Before scores                | After scores                 | Before ratio (mean) | After ratio (mean) | Turned after |
+| --- | ----- | ----------- | ----------------- | ---------------------------- | ---------------------------- | ------------------- | ------------------ | ------------ |
+| 10  | 1–3   | 20,000      | 3.70710678118654  | 3.707107, 3.707107, 3.707110 | 3.707107, 3.707111, 3.707107 | 1.0000              | 1.0000             | 1, 1, 1      |
+| 17  | 1–3   | 20,000      | 4.67553009360455  | 4.707137, 4.707582, 4.729832 | 4.707113, 4.707107, 4.728986 | 1.0084              | 1.0083             | 11, 10, 5    |
+| 26  | 1–3   | 20,000      | 5.62132034355964  | 5.729779, 5.708953, 5.655206 | 5.713291, 5.729120, 5.708791 | 1.0136              | 1.0170             | 10, 10, 10   |
+| 37  | 1–3   | 20,000      | 6.59861960924436  | 6.730641, 6.730691, 6.707290 | 6.621437, 6.707759, 6.757870 | 1.0188              | 1.0147             | 14, 17, 16   |
+| 50  | 1–3   | 20,000      | 7.57142857142857  | 7.708421, 7.809613, 7.707133 | 7.707107, 7.708516, 7.707180 | 1.0225              | 1.0180             | 1, 14, 18    |
+| 65  | 1–2   | 4,000       | 8.53553390593273  | 9.000000, 9.000000           | 9.000000, 9.000000           | 1.0544              | 1.0544             | 0, 0         |
+| 82  | 1–2   | 4,000       | 9.53553390593273  | 10.000000, 10.000000         | 9.707107, 9.714933           | 1.0487              | 1.0184             | 1, 38        |
+| 101 | 1–2   | 4,000       | 10.53553390593273 | 11.000000, 11.000000         | 10.781402, 10.710962         | 1.0441              | 1.0200             | 85, 44       |
+| 145 | 1–2   | 4,000       | 12.53553390593273 | 13.000000, 13.000000         | 12.713882, 12.714421         | 1.0371              | 1.0142             | 119, 99      |
+| 197 | 1–2   | 4,000       | 14.53553390593273 | 15.000000, 15.000000         | 14.728823, 14.737380         | 1.0320              | 1.0136             | 119, 136     |
+| 257 | 1–2   | 4,000       | 16.53553390593273 | 17.000000, 17.000000         | 17.000000, 17.000000         | 1.0281              | 1.0281             | 0, 0         |
+| 442 | 1–2   | 4,000       | none              | 22.000000, 22.000000         | 21.707147, 22.000000         | —                   | —                  | 1, 0         |
+
+[CALC] Mean ratio over P ≤ 50 (15 runs): 1.0127 before, 1.0116 after, within seed noise. Over P = 65–257 (12 runs): 1.0407 before, 1.0248 after. Evaluations used in total: 327,953 before and 324,523 after, of 356,000 allowed (the framework keeps a polish reserve). Nothing beat a published value: the best ratio is 1.0035 (P=37, seed 1, 6.621437). P = 65 and 257 still return the grid at 4,000 evaluations, and P=442 left it on one of two seeds.
+
+[CALC] Other shapes, 3,000 evaluations, seeds 1–5, previous against new defaults: circles in a circle (P = 7, 19), circles in a square (10), pentagons in a pentagon (6) and hexagons in a hexagon (7) gave identical scores to nine decimals. Eleven squares: four seeds 4.0 in both; one seed 3.924706 before and 3.943479 after. Five squares within 1e-4 of 2 + 1/√2: seeds 1–20 at 3,000 evaluations 5/20 before and 7/20 after; at 10,000, 14/20 and 15/20; seeds 41–55 at 10,000, 12/15 and 11/15.
+
+[CALC] Reproduce one row (the scratch harness used for the table calls `MethodRegistry.run` exactly like this):
+
+```sh
+node --import tsx --input-type=module <<'JS'
+import { run } from './packages/solver/src/index.ts';
+const r = await run({ N: 4, M: 4, P: 101 }, { method: 'basin_hopping', budget: { evals: 4000, time_s: 3600 }, seed: 2 });
+console.log(r.score, r.evaluations, r.strict);
+JS
+```
+
 ## Measurements
 
-[CALC] Recomputed with the complete final defaults, no start, and the framework final polish enabled, on Node v26.5.0. The eight-problem tables use seeds 1–5; the square success table uses seeds 1–20. Runs are sequential within each batch, but test and other measurement processes ran concurrently, so these are observed wall times, not isolated performance claims. `Result.wallTime` covers the solver, refinement and polish; independent post-validation is excluded. Full-precision individual scores, evaluation counts, wall times, pair separations and per-operator summaries are in [measurements.json](../../packages/solver/src/methods/basin_hopping/measurements.json). The pure [measurement wrapper](../../packages/solver/src/methods/basin_hopping/measure.ts) rejects any invalid/non-strict result, separation below −1e-12, budget overrun, or geometry score discrepancy above 1e-12.
+[CALC] The sections below were measured on the version before the 2026-10-17 peel/cleave change and are kept as its record; the defaults have since gained the two operators and the time reserve, so individual scores may differ. Recomputed with the complete final defaults, no start, and the framework final polish enabled, on Node v26.5.0. The eight-problem tables use seeds 1–5; the square success table uses seeds 1–20. Runs are sequential within each batch, but test and other measurement processes ran concurrently, so these are observed wall times, not isolated performance claims. `Result.wallTime` covers the solver, refinement and polish; independent post-validation is excluded. Full-precision individual scores, evaluation counts, wall times, pair separations and per-operator summaries are in [measurements.json](../../packages/solver/src/methods/basin_hopping/measurements.json). The pure [measurement wrapper](../../packages/solver/src/methods/basin_hopping/measure.ts) rejects any invalid/non-strict result, separation below −1e-12, budget overrun, or geometry score discrepancy above 1e-12.
 
 [EST] Published values and displayed precision are read from [data/records.json](../../data/records.json), rather than encoded into the optimizer. For squares P=5 and P=10 the corresponding exact expressions are `2 + 1/sqrt(2)` and `3 + 1/sqrt(2)`. The other cited record pages are [squares in squares](https://kingbird.myphotos.cc/packing/squares_in_squares.html), [circles in circles](https://erich-friedman.github.io/packing/cirincir/), [circles in squares](https://erich-friedman.github.io/packing/cirinsqu/), [pentagons in pentagons](https://erich-friedman.github.io/packing/peninpen/) and [hexagons in hexagons](https://erich-friedman.github.io/packing/hexinhex/).
 
@@ -392,6 +440,22 @@ JS
           "title": "restart",
           "description": "Relative selection weight for restart.",
           "default": 0.3,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "peel": {
+          "type": "number",
+          "title": "peel",
+          "description": "Relative selection weight for peel.",
+          "default": 2,
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "cleave": {
+          "type": "number",
+          "title": "cleave",
+          "description": "Relative selection weight for cleave.",
+          "default": 2,
           "minimum": 0,
           "maximum": 1000
         }

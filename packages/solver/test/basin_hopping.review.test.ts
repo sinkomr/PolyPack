@@ -24,6 +24,7 @@ import {
   worstPiece,
   type Operator,
 } from "../src/methods/basin_hopping/operators";
+import { crossCleave, peelLayer } from "../src/methods/basin_hopping/escape";
 import { penaltyMethod } from "../src/methods/penalty";
 import { scatter } from "../src/methods/penalty/restoration";
 import { seedMethod } from "../src/methods/seed";
@@ -158,6 +159,13 @@ describe("review: perturbation operators", () => {
             cluster: (r) => rotateCluster(shifted, r, magnitude, Math.PI),
             reinsert: (r) => reinsertPiece(shifted, worstPiece(shifted), r, 24),
             restart: (r) => globalRestart(shifted, [shifted, config], r, magnitude, Math.PI),
+            peel: (r) => {
+              const sampler = peelLayer(shifted, r);
+              let next = sampler.next();
+              while (!next.done) next = sampler.next();
+              return next.value;
+            },
+            cleave: (r) => crossCleave(shifted, r),
           };
           for (const name of operatorNames) {
             const first = apply[name](seededRandom(seed));
@@ -321,8 +329,8 @@ describe("review: acceptance rule and adaptation", () => {
   });
 
   it("selects operators in proportion to base weight times (floor + recent success rate)", () => {
-    const base = { kick: 4, swap: 1, cluster: 2, reinsert: 2, restart: 0.3 };
-    const rates = { kick: 0.1, swap: 0.9, cluster: 0, reinsert: 0.45, restart: 1 };
+    const base = { kick: 4, swap: 1, cluster: 2, reinsert: 2, restart: 0.3, peel: 2, cleave: 2 };
+    const rates = { kick: 0.1, swap: 0.9, cluster: 0, reinsert: 0.45, restart: 1, peel: 0.3, cleave: 0.6 };
     const stats = Object.fromEntries(
       operatorNames.map((name) => [name, { tries: 9, accepted: 3, improvements: 2, successRate: rates[name] }]),
     ) as Record<Operator, OperatorStats>;
@@ -730,7 +738,11 @@ describe("review: fit with the framework and the documentation", () => {
   });
 
   it("uses no DOM, Node, clock or unseeded random API in the method sources", () => {
-    for (const file of ["../src/methods/basin_hopping.ts", "../src/methods/basin_hopping/operators.ts"]) {
+    for (const file of [
+      "../src/methods/basin_hopping.ts",
+      "../src/methods/basin_hopping/operators.ts",
+      "../src/methods/basin_hopping/escape.ts",
+    ]) {
       const source = read(file);
       expect(source).not.toMatch(
         /Math\.random|Date\b|performance\b|process\b|window\b|document\b|setTimeout|setInterval|require\(|from "node:/,
