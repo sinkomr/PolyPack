@@ -1,8 +1,9 @@
 /**
- * Submission pacing (design.md §9). A problem's best goes to the server at most once a minute, and
- * one player sends at most 6 a minute. A first record goes at once, and so does the best of a problem
- * that leaves the queue, but both still count against the player's 6 a minute. A 429 from the
- * server, or an unreachable server, stops all sending for a while.
+ * Submission pacing (design.md §9, as the owner's rule): at most one POST per problem a minute, and
+ * at most 6 a minute per player. A problem never sent before goes at once (a first record); every
+ * later POST for it waits for its minute, whatever the previous answer was (a refusal included) and
+ * whether or not the problem is leaving the queue. A 429 from the server, or an unreachable
+ * server, stops all sending for a while.
  *
  * Pure: every function takes the time and returns a new state.
  */
@@ -25,18 +26,20 @@ export interface PacerState {
 
 export const newPacer = (): PacerState => ({ sent: [], lastByProblem: {}, pausedUntil: 0 });
 
+/**
+ * What the caller knows about a send. It orders the queue of sends (leaving problems and first
+ * records go first) but exempts nothing from the minute: only a problem never POSTed goes at once.
+ */
 export interface SendKind {
-  /** The problem's first record: not held back by the problem's minute. */
   first?: boolean;
-  /** The problem is leaving the queue: its best goes now, if the player's limit allows. */
   leaving?: boolean;
 }
 
 /** Earliest time at which a POST for `key` is allowed; `now` or earlier means now. */
-export function nextAllowedAt(state: PacerState, key: string, now: number, kind: SendKind = {}): number {
+export function nextAllowedAt(state: PacerState, key: string, now: number, _kind: SendKind = {}): number {
   let t = Math.max(now, state.pausedUntil);
   const last = state.lastByProblem[key];
-  if (last !== undefined && !kind.first && !kind.leaving) t = Math.max(t, last + PROBLEM_INTERVAL_MS);
+  if (last !== undefined) t = Math.max(t, last + PROBLEM_INTERVAL_MS);
   // the player's window: the (6th most recent send) + 1 minute
   const recent = state.sent.filter((s) => s > now - PLAYER_WINDOW_MS);
   if (recent.length >= PLAYER_PER_MINUTE) t = Math.max(t, recent[recent.length - PLAYER_PER_MINUTE] + PLAYER_WINDOW_MS);

@@ -8,7 +8,7 @@
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/tighter/tighter.css" />
   </head>
-  <body class="tighter">
+  <body class="tighter standby">
     <header class="top">
       <h1>PolyPack</h1>
       <nav aria-label="Site">
@@ -18,6 +18,11 @@
       </nav>
       <span id="t-hold" class="t-hold" role="status" aria-live="polite"></span>
     </header>
+
+    <section id="t-elsewhere" class="t-elsewhere" aria-labelledby="t-elsewhere-text" hidden>
+      <p id="t-elsewhere-text" role="status"></p>
+      <button id="t-take-over" class="primary">Play here instead</button>
+    </section>
 
     <section id="t-bar" class="t-bar" aria-label="Totals" hidden>
       <div><span>Record points</span><strong id="t-bar-rp">0</strong></div>

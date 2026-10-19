@@ -1,4 +1,23 @@
 /* Tighter: the board page, stripped, with panels that appear as they are earned. */
+/* Until this tab holds the game (and while another tab does), nothing can be pressed. */
+.tighter.standby .layout,
+.tighter.standby .t-bar {
+  display: none;
+}
+.t-elsewhere {
+  margin: 24px auto;
+  max-width: 560px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.t-elsewhere[hidden] {
+  display: none;
+}
+.t-elsewhere p {
+  margin: 0 0 12px;
+}
 .tighter .top .t-hold {
   margin-left: auto;
   color: var(--muted);

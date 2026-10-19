@@ -5,6 +5,7 @@ import { ProblemKey, keyOf } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
 import { Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
+import { sanitizeName } from "./names";
 import { EvolveMethod, UpgradeId, canBuy, upgrade } from "./upgrades";
 
 /**
@@ -20,6 +21,14 @@ export interface Leader {
   score: number;
   name: string;
   id: number | null;
+}
+
+export interface PendingSend {
+  score: number;
+  /** The name sent, cleaned as the server cleans it. */
+  name: string;
+  leaderBefore: Leader | null;
+  at: number;
 }
 
 export interface ProblemState extends ProblemKey {
@@ -52,6 +61,8 @@ export interface ProblemState extends ProblemKey {
   refused: { score: number; reasons: string[] } | null;
   /** Dropped from the queue; leaves once its best has been sent (or there is nothing to send). */
   leaving: boolean;
+  /** A POST whose answer has not arrived (or was lost): what was sent, under which name, after which leader. */
+  sending: PendingSend | null;
   /** Best score after each run, oldest first (bounded). */
   trace: number[];
   /** Runs since the last improvement above the floor. */
@@ -168,6 +179,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     closed: false,
     refused: null,
     leaving: false,
+    sending: null,
     trace: [],
     deadRuns: 0,
     runs: 0,
@@ -314,12 +326,30 @@ export function pendingPoints(p: ProblemState, name: string): Points | null {
     sNew: p.best,
     tier: p.tier,
     first: p.leader === null && p.verified === null,
-    beatOther: beatsOther(p, name),
+    beatOther: beatsOther(p, p.leader, name),
   });
 }
 
-function beatsOther(p: ProblemState, name: string): boolean {
-  return !p.beatPaid && !!p.leader && p.leader.id !== p.ourId && p.leader.name !== name;
+/**
+ * Whether beating `leader` pays the bonus for another name's record: not yet paid here, not our
+ * entry, and not our name as the server stores it (it strips angle brackets, for one).
+ */
+function beatsOther(p: ProblemState, leader: Leader | null, name: string): boolean {
+  return !p.beatPaid && !!leader && leader.id !== p.ourId && sanitizeName(leader.name) !== sanitizeName(name);
+}
+
+/**
+ * Records a POST about to go, before it goes (and the page saves it), so that an answer lost to a
+ * reload or a dropped connection can be recognised later (see applyLeader).
+ */
+export function markSending(
+  p: ProblemState,
+  score: number,
+  name: string,
+  leaderBefore: Leader | null,
+  now: number,
+): void {
+  p.sending = { score, name: sanitizeName(name), leaderBefore, at: now };
 }
 
 /** Whether the problem has something the server would make leader, as far as the game knows. */
@@ -361,7 +391,7 @@ export function applyAnswer(
         sNew: outcome.score,
         tier: p.tier,
         first,
-        beatOther: !p.beatPaid && !!leaderBefore && leaderBefore.id !== p.ourId && leaderBefore.name !== s.name,
+        beatOther: beatsOther(p, leaderBefore, s.name),
       });
     }
     if (points) {
@@ -374,34 +404,64 @@ export function applyAnswer(
     s.stats.verifiedImprovements++;
     p.verified = outcome.score;
     p.ourId = outcome.id;
-    p.leader = { score: outcome.score, name: s.name, id: outcome.id };
+    p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
   } else if (outcome.kind === "behind") {
-    // another entry got there first; it is now the one to beat
-    if (outcome.leaderScore !== null)
-      p.leader = { score: outcome.leaderScore, name: p.leader?.name ?? "another name", id: null };
+    // another entry got there first; it is now the one to beat (whose it is, the next read says)
+    if (outcome.leaderScore !== null) p.leader = { score: outcome.leaderScore, name: "another name", id: null };
     p.ourId = null;
   } else if (outcome.kind === "closed") {
     p.closed = true;
   } else if (outcome.kind === "refused") {
     p.refused = { score: sentScore, reasons: outcome.reasons };
   }
-  if (outcome.kind !== "offline") s.stats.submissions++;
+  // Without an answer the send may still have reached the server: it is kept to be recognised later.
+  if (outcome.kind !== "offline") {
+    p.sending = null;
+    s.stats.submissions++;
+  }
   void now;
   return { points, outcome };
 }
 
+/** Relative difference under which the leader's score is the score we sent (same packing, same code). */
+const SAME_SCORE = 1e-12;
+
 /**
- * The leader read from the server (GET /api/problems), for a problem in the queue or one that left.
- * Our record is lost when the leader is no longer our entry.
+ * The leader read from the server (GET /api/problems, or a live event), for a problem in the queue
+ * or one that left. Our record is lost when the leader is no longer our entry.
+ *
+ * With the game state `s`, a send whose answer never arrived is settled first: when the leader has
+ * the name and the score of that send, it is our entry, and it is paid once, as its answer would have
+ * been. Otherwise that send did not lead and is forgotten (the board goes again if it still improves).
+ * Call it only while no POST for the problem is on its way.
  */
-export function applyLeader(p: ProblemState | PastProblem, leader: Leader | null): { lost: boolean } {
+export function applyLeader(
+  p: ProblemState | PastProblem,
+  leader: Leader | null,
+  s?: GameState,
+  now = 0,
+): { lost: boolean; reconciled: boolean; points: Points | null } {
+  if (s && "sending" in p && p.sending) {
+    const send = p.sending;
+    p.sending = null;
+    if (
+      leader &&
+      leader.id !== null &&
+      sanitizeName(leader.name) === send.name &&
+      Math.abs(leader.score - send.score) <= SAME_SCORE * send.score
+    ) {
+      const outcome: SubmitOutcome = { kind: "leader", score: leader.score, id: leader.id, pending: false };
+      const { points } = applyAnswer(s, p, send.leaderBefore, send.score, outcome, now);
+      return { lost: false, reconciled: true, points };
+    }
+  }
   const held = p.ourId !== null;
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;
   const lost = held && !ours;
   if (!ours) p.ourId = null;
   if ("leader" in p) p.leader = leader;
-  return { lost };
+  return { lost, reconciled: false, points: null };
 }
 
 /** Problems where the player is the current leader, as far as the game has seen. */

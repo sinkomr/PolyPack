@@ -27,10 +27,13 @@ describe("Tighter submission pacing", () => {
     expect(canSend(s, "24/30/60", T0 + PROBLEM_INTERVAL_MS + 1)).toBe(false);
   });
 
-  it("lets a first record and a leaving problem go at once", () => {
+  it("lets only a problem never sent go at once: leaving or refused, the minute holds", () => {
+    expect(canSend(newPacer(), "24/30/60", T0, { first: true })).toBe(true);
     const s = recordSend(newPacer(), "24/30/60", T0);
-    expect(canSend(s, "24/30/60", T0 + 1, { first: true })).toBe(true);
-    expect(canSend(s, "24/30/60", T0 + 1, { leaving: true })).toBe(true);
+    // after any POST (a refused first record included), and when the problem leaves the queue
+    expect(canSend(s, "24/30/60", T0 + 1, { first: true })).toBe(false);
+    expect(canSend(s, "24/30/60", T0 + 1, { leaving: true })).toBe(false);
+    expect(canSend(s, "24/30/60", T0 + PROBLEM_INTERVAL_MS, { leaving: true })).toBe(true);
   });
 
   it("sends at most 6 a minute per player, whatever the problems", () => {

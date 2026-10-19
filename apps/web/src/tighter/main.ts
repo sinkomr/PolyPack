@@ -20,6 +20,7 @@ import { FRONTIER, STARTER, keyOf, problemTitle } from "./frontier";
 import {
   GameState,
   Leader,
+  PastProblem,
   ProblemState,
   RunChange,
   RunOutcome,
@@ -34,6 +35,7 @@ import {
   evolvable,
   hasUnsent,
   leave,
+  markSending,
   log,
   newGame,
   newProblem,
@@ -61,6 +63,7 @@ import { FLOOR, gapOf, show6 } from "./points";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { classifyAnswer, shouldSubmit, submissionBody } from "./submission";
+import { sanitizeName } from "./names";
 import {
   COMPACT_EVALS,
   EvolveMethod,
@@ -149,10 +152,16 @@ let state = initialState();
 // Compute starts only on a press: auto-eval is off after every load.
 state.settings.auto = false;
 
+/**
+ * Only the tab that holds the game (see "one tab" below) runs anything or writes the save; another
+ * tab on the same save would double the caps and overwrite its points.
+ */
+let ownsGame = false;
+
 let saveTimer = 0;
 function saveNow(): void {
   clearTimeout(saveTimer);
-  if (savesDisabled) return;
+  if (savesDisabled || !ownsGame) return;
   try {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
@@ -161,11 +170,15 @@ function saveNow(): void {
   }
 }
 function persist(): void {
-  if (savesDisabled) return;
+  if (savesDisabled || !ownsGame) return;
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(saveNow, 400);
 }
 window.addEventListener("pagehide", saveNow);
+// leaving for another tab (which may take the game over) saves at once
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) saveNow();
+});
 
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
@@ -276,6 +289,11 @@ const lastChange = new Map<string, RunChange & { seed: number; method: string; e
 /** Problems whose first-record banner is up. */
 let banner: { key: string; text: string } | null = null;
 
+/**
+ * The run as the game records it. The budget is the one requested, also for a run that was stopped
+ * early, as the Solve panel records it: replaying a stopped run with a smaller budget would not give
+ * the same packing either (the final polish reserves a tenth of the budget), so neither is exact.
+ */
 function toOutcome(end: LaneEnd, req: LaneRequest): RunOutcome | null {
   if (end.kind === "result") {
     const r = end.result;
@@ -310,7 +328,7 @@ const loading = new Set<string>();
 /** Load all: the board's Add all from the centre. Its score is the free floor and is never sent. */
 async function loadAll(p: ProblemState): Promise<boolean> {
   if (p.phase !== "bare") return true;
-  if (loading.has(p.key)) return false;
+  if (loading.has(p.key) || !ownsGame) return false;
   loading.add(p.key);
   try {
     const b = new Board();
@@ -347,7 +365,7 @@ async function loadAll(p: ProblemState): Promise<boolean> {
 }
 
 async function startRun(lv: LaneView, p: ProblemState, action: "compact" | "evolve", manual: boolean): Promise<void> {
-  if (lv.key || lv.lane.busy || laneOn(p.key) || p.leaving || p.closed) return;
+  if (!ownsGame || lv.key || lv.lane.busy || laneOn(p.key) || p.leaving || p.closed) return;
   lv.key = p.key;
   lv.action = action;
   try {
@@ -488,10 +506,13 @@ function holdReason(): "hidden" | "battery" | null {
     battery: state.settings.battery,
   });
 }
-/** Runs pause while the tab is hidden, unless the player allowed it. */
+/**
+ * Every run pauses (the one going, and auto-eval's next) while the tab is hidden or the device is on
+ * battery power, unless the player allowed it in Settings. A run pressed in that state starts paused.
+ */
 function applyHold(): void {
-  const hiddenHold = document.hidden && !state.settings.background;
-  for (const l of lanes) l.lane.setPaused(hiddenHold);
+  const hold = holdReason() !== null;
+  for (const l of lanes) l.lane.setPaused(hold);
   render();
 }
 document.addEventListener("visibilitychange", applyHold);
@@ -504,7 +525,7 @@ if (getBattery) {
       $("t-battery-box").hidden = false;
       const update = () => {
         onBattery = !b.charging;
-        render();
+        applyHold();
       };
       b.addEventListener("chargingchange", update);
       update();
@@ -516,7 +537,7 @@ if (getBattery) {
 
 function autoTick(): void {
   const o = owned();
-  if (!o.has("auto1") || !state.settings.auto || holdReason()) return;
+  if (!ownsGame || !o.has("auto1") || !state.settings.auto || holdReason()) return;
   ensureLanes();
   const t = now();
   lanes.forEach((lv, i) => {
@@ -539,7 +560,7 @@ async function submitTick(): Promise<void> {
   const t = now();
   // problems dropped with nothing left to send leave now
   for (const p of [...state.queue]) if (p.leaving && (!state.consent || !hasUnsent(p))) leave(state, p.key, t);
-  if (!state.consent || !state.name.trim()) return;
+  if (!ownsGame || !state.consent || !state.name) return;
   const candidates = state.queue
     .filter(hasUnsent)
     .map((p) => ({ p, kind: { first: p.verified === null && p.leader === null, leaving: p.leaving } }))
@@ -561,10 +582,10 @@ async function submit(p: ProblemState): Promise<void> {
   const board0 = structuredClone(p.board!);
   const best = p.best!;
   const run = structuredClone(p.run!);
-  const name = state.name.trim();
+  const name = state.name;
   // the leader just before: the server's exact check decides, and points are paid against it
   const info = await api.getProblem(p.N, p.M, p.P);
-  if (problem(state, p.key) !== p) return;
+  if (problem(state, p.key) !== p || !ownsGame) return;
   if (!info) {
     state.pacer = pause(state.pacer, now(), OFFLINE_BACKOFF_MS);
     log(state, now(), "The server cannot be reached; sending waits half a minute.");
@@ -579,14 +600,15 @@ async function submit(p: ProblemState): Promise<void> {
   const leaderBefore: Leader | null = info.site_best
     ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
     : null;
-  if (applyLeader(p, leaderBefore).lost)
-    log(
-      state,
-      now(),
-      `Your record on ${problemTitle(p)} was beaten: ${show6(leaderBefore!.score)} by ${leaderBefore!.name}.`,
-    );
+  noteLeader(p, leaderBefore);
   if (!shouldSubmit(best, submitTarget(p, leaderBefore?.score ?? null))) return;
+  // The player may have withdrawn consent or changed the name while the leader was read: what goes
+  // to the server is decided now, immediately before the POST.
+  if (!ownsGame || !state.consent || state.name !== name || !name) return;
   state.pacer = recordSend(state.pacer, p.key, now());
+  // Kept in the save before the POST goes, so that an answer lost to a reload is recognised later.
+  markSending(p, best, name, leaderBefore, now());
+  saveNow();
   // the server announces a new leader before it answers: that event is this entry, not a rival's
   inFlight.add(p.key);
   let answer: Awaited<ReturnType<typeof api.postSubmission>>;
@@ -639,7 +661,7 @@ let dealPausedUntil = 0;
 const skipped = new Set<string>();
 
 async function dealTick(): Promise<void> {
-  if (dealing || now() < dealPausedUntil) return;
+  if (!ownsGame || dealing || now() < dealPausedUntil) return;
   const slots = queueSize(owned());
   if (slotted(state).length >= slots || !canDeal(state.dealer, slots, now())) return;
   dealing = true;
@@ -718,52 +740,74 @@ async function dealLoose(d: DealerState, exclude: Set<string>): Promise<ProblemS
 
 // ---------- records held: live leader changes ----------
 
+/**
+ * A leader read from the server: settles a send whose answer was lost (paid once, as its answer
+ * would have been) and tells the player when a record of theirs was beaten.
+ */
+function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void {
+  const r = applyLeader(p, leader, state, now());
+  if (r.reconciled && leader) {
+    reveal(state, "points", "upgrades");
+    log(
+      state,
+      now(),
+      `Verified: ${show6(leader.score)} is the record for ${problemTitle(p)}` +
+        `${r.points ? ` (+${fmtRP(r.points.total)} RP)` : ""}; its answer had not arrived.`,
+    );
+  } else if (r.lost)
+    log(
+      state,
+      now(),
+      `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.`,
+    );
+}
+
 function onLeaderEvent(e: LeaderboardEvent): void {
   const key = keyOf(e);
   // our own entry, announced before its answer arrives; a rival's is seen in that answer instead
-  if (inFlight.has(key)) return;
-  const q = problem(state, key);
-  const past = q ? undefined : state.past.find((p) => p.key === key);
-  const target = q ?? past;
+  if (!ownsGame || inFlight.has(key)) return;
+  const target = problem(state, key) ?? state.past.find((p) => p.key === key);
   if (!target) return;
-  if (applyLeader(target, { score: e.score, name: e.name, id: e.id }).lost) {
-    log(state, now(), `Your record on ${problemTitle(target)} was beaten: ${show6(e.score)} by ${e.name}.`);
-    persist();
-    render();
+  noteLeader(target, { score: e.score, name: e.name, id: e.id });
+  persist();
+  render();
+}
+function listen(): void {
+  try {
+    const source = new EventSource("/api/events");
+    source.addEventListener("leaderboard", (e) => {
+      try {
+        onLeaderEvent(JSON.parse((e as MessageEvent).data));
+      } catch {
+        // a malformed event is ignored
+      }
+    });
+  } catch {
+    // no live updates: records held are checked when the game next looks at each problem
   }
 }
-try {
-  const source = new EventSource("/api/events");
-  source.addEventListener("leaderboard", (e) => {
-    try {
-      onLeaderEvent(JSON.parse((e as MessageEvent).data));
-    } catch {
-      // a malformed event is ignored
-    }
-  });
-} catch {
-  // no live updates: records held are checked when the game next looks at each problem
-}
 
-/** Checks the records held when the page opens, one GET at a time. */
+/**
+ * When the page opens: settles sends whose answer was lost (a reload during a POST), then checks the
+ * records held, one GET a second.
+ */
 async function refreshHeld(): Promise<void> {
-  const held = [...state.queue, ...state.past].filter((p) => p.ourId !== null).slice(-30);
-  for (const p of held) {
+  const check = [
+    ...state.queue.filter((p) => p.sending !== null),
+    ...[...state.queue, ...state.past].filter((p) => p.ourId !== null && !("sending" in p && p.sending)).slice(-30),
+  ];
+  for (const p of check) {
     const info = await api.getProblem(p.N, p.M, p.P);
     if (!info) return;
+    if (inFlight.has(p.key)) continue;
     const leader = info.site_best
       ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
       : null;
-    if (applyLeader(p, leader).lost)
-      log(
-        state,
-        now(),
-        `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.`,
-      );
+    noteLeader(p, leader);
+    persist();
+    render();
     await new Promise((r) => setTimeout(r, 1000));
   }
-  persist();
-  render();
 }
 
 // ---------- rendering ----------
@@ -820,8 +864,8 @@ function render(): void {
     "t-hold",
     hold === "hidden"
       ? "Paused while the tab is hidden"
-      : hold === "battery" && s.settings.auto
-        ? "Auto-eval waits: on battery power (allow it in Settings)"
+      : hold === "battery"
+        ? "Paused: on battery power (allow it in Settings)"
         : "",
   );
 
@@ -918,8 +962,13 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
         ? "0 pieces placed"
         : `${p.P} pieces placed`;
     if (o.has("seeds") && p.runs) info += ` · ${fmtInt(p.runs)} seeds tried on this problem`;
+    // why Evolve (or Compact) cannot be pressed: every lane runs another problem
+    if (!lane && (canEvolve || p.phase === "loaded"))
+      info = `Every lane is busy on another problem; ${canEvolve ? "Evolve" : "Compact"} waits for one to finish.`;
   }
   text("t-runinfo", info);
+  const why = !busy && !lane && p ? "Every lane is busy on another problem" : "";
+  $("t-evolve").title = why || "One solver run from the board with the next seed";
   const b = banner && p && banner.key === p.key ? banner.text : "";
   show("t-banner", !!b);
   const el = $("t-banner");
@@ -1283,15 +1332,22 @@ $("t-next").addEventListener("click", () => {
 for (const id of ["t-name", "t-agree"]) $(id).addEventListener("input", () => ($(id).dataset.edited = "1"));
 $("t-consent-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  const name = $<HTMLInputElement>("t-name").value.replace(/\s+/g, " ").trim().slice(0, 40);
+  // the name as the server will store it: what is shown, sent and compared is the same
+  const typed = $<HTMLInputElement>("t-name").value;
+  const name = sanitizeName(typed);
   const agree = $<HTMLInputElement>("t-agree").checked;
-  delete $("t-name").dataset.edited;
-  delete $("t-agree").dataset.edited;
   if (agree && !name) {
-    say("Enter a display name first: records go to PolyPack under it.");
+    say(
+      typed.trim()
+        ? "That name is empty once cleaned as PolyPack stores names (no angle brackets or control characters). Choose another."
+        : "Enter a display name first: records go to PolyPack under it.",
+    );
+    text("t-consent-note", "No name, so nothing is sent.");
     $("t-name").focus();
     return;
   }
+  delete $("t-name").dataset.edited;
+  delete $("t-agree").dataset.edited;
   state.name = name;
   state.consent = agree;
   say(
@@ -1312,7 +1368,7 @@ $("t-bg").addEventListener("change", () => {
 $("t-battery").addEventListener("change", () => {
   state.settings.battery = $<HTMLInputElement>("t-battery").checked;
   persist();
-  render();
+  applyHold();
 });
 $("t-export").addEventListener("click", async () => {
   const area = $<HTMLTextAreaElement>("t-save-text");
@@ -1370,12 +1426,63 @@ window.tighter = {
 if (startNote) say(startNote);
 showFocus(true);
 render();
-applyHold();
-void dealTick();
-void refreshHeld();
-setInterval(() => {
+
+let ticker = 0;
+/** This tab holds the game: it may run, send and save. */
+function start(): void {
+  ownsGame = true;
+  $("t-elsewhere").hidden = true;
+  document.body.classList.remove("standby");
+  applyHold();
+  listen();
   void dealTick();
-  void submitTick();
-  autoTick();
-  render();
-}, 1000);
+  void refreshHeld();
+  ticker = window.setInterval(() => {
+    void dealTick();
+    void submitTick();
+    autoTick();
+    render();
+  }, 1000);
+}
+
+/** Another tab holds the game: nothing runs here and the save is not written. */
+function standBy(takenOver: boolean): void {
+  if (ownsGame) {
+    ownsGame = false;
+    clearInterval(ticker);
+    clearTimeout(saveTimer);
+    state.settings.auto = false;
+    for (const l of lanes) l.lane.terminate();
+  }
+  text(
+    "t-elsewhere-text",
+    takenOver
+      ? "Tighter was opened in another tab, which now runs the game. Nothing runs here."
+      : "Tighter is open in another tab. One tab runs the game at a time, so nothing runs here.",
+  );
+  $("t-elsewhere").hidden = false;
+  document.body.classList.add("standby");
+}
+
+// One tab at a time (Web Locks): a second tab waits briefly (a reload releases the lock as it goes),
+// then stands by and offers to take over, which moves the game here and stops the other tab.
+const LOCK = "tighter.game";
+const locks = (navigator as Navigator & { locks?: LockManager }).locks;
+const holdForever = () => new Promise<void>(() => {});
+if (locks) {
+  locks
+    .request(LOCK, { signal: AbortSignal.timeout(1500) }, () => {
+      start();
+      return holdForever();
+    })
+    // stolen by a tab that took over (when this one ran), or never granted
+    .catch(() => standBy(ownsGame));
+  $("t-take-over").addEventListener("click", () => {
+    $<HTMLButtonElement>("t-take-over").disabled = true;
+    // the other tab saved when it was left; this tab reads that save afresh
+    void locks.request(LOCK, { steal: true }, () => {
+      location.reload();
+      return holdForever();
+    });
+  });
+} else start();

@@ -8,11 +8,13 @@ import {
   Leader,
   PAST_LIMIT,
   PastProblem,
+  PendingSend,
   Phase,
   ProblemState,
   TRACE_LIMIT,
   newGame,
 } from "./game";
+import { sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
@@ -95,6 +97,13 @@ function leader(v: unknown): Leader | null {
   return { score: v.score as number, name: str(v.name, "another name", 40), id: idOrNull(v.id) };
 }
 
+function pendingSend(v: unknown): PendingSend | null {
+  if (!isObj(v) || posOrNull(v.score) === null || typeof v.name !== "string") return null;
+  const name = sanitizeName(v.name);
+  if (!name) return null;
+  return { score: v.score as number, name, leaderBefore: leader(v.leaderBefore), at: num(v.at, 0) };
+}
+
 function problemState(v: unknown, now: number): ProblemState | null {
   if (!isObj(v)) return null;
   const k = parseKey(str(v.key, ""));
@@ -132,6 +141,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
+    sending: pendingSend(v.sending),
     trace: phase === "bare" ? [] : trace,
     deadRuns: int(v.deadRuns, 0),
     runs: int(v.runs, 0),
@@ -214,8 +224,9 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     rp: num(save.rp, 0, 0),
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
-    name: str(save.name, "", 40),
-    consent: bool(save.consent, false) && str(save.name, "", 40).trim() !== "",
+    // the name as the server stores it; no consent without one
+    name: sanitizeName(str(save.name, "", 400)),
+    consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: settings.method === "basin_hopping" && owned.includes("basin") ? "basin_hopping" : "mc_compress",
