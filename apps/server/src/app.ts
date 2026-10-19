@@ -275,7 +275,7 @@ export function createApp(opts: AppOptions): Hono {
     const tiles: AtlasTile[] = [];
     for (const { P, entry, lit } of plan) {
       const sub = entry ? stored.get(entry.id) : undefined;
-      // a submission rejected between the two queries is never shown
+      // a submission rejected or deleted between the two queries is never shown
       if (sub && sub.verification !== "rejected" && sub.N === N && sub.M === M && sub.P === P) {
         tiles.push({
           P,
@@ -301,6 +301,8 @@ export function createApp(opts: AppOptions): Hono {
     return c.json(body);
   });
 
+  // 404 also for an entry deleted when it was overtaken: only the leader of a problem is kept
+  // (see KEEP_PER_PROBLEM)
   app.get("/api/submissions/:id", async (c) => {
     const id = Number(c.req.param("id"));
     const s = Number.isInteger(id) ? await store.get(id) : null;

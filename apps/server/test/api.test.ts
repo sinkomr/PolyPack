@@ -371,14 +371,15 @@ const twoCircles = (score: number, name: string) => ({
 });
 
 describe("leaderboard", () => {
-  it("keeps the best three entries, shows only the best one and counts every submission", async () => {
+  it("keeps and shows only the best entry, and counts every submission", async () => {
     expect(LEADERBOARD_SIZE).toBe(1);
     const gaps = [1.5, 1.2, 1.0, 1.3, 1.1];
     const answers: SubmitResponse[] = [];
     for (const [i, gap] of gaps.entries()) {
       answers.push((await submit({ ...squares(2, { name: `p${i}` }), pieces: row(2, gap) })).body);
     }
-    expect(answers.map((a) => a.rank)).toEqual([1, 1, 1, 3, 2]);
+    // a rank counts the entries stored when the entry arrived: by then only the leader
+    expect(answers.map((a) => a.rank)).toEqual([1, 1, 1, 2, 2]);
     expect(answers.map((a) => a.leader)).toEqual([true, true, true, false, false]);
     // each answer names the score to beat, which is the entry's own when it leads
     const best = answers[2].score;
@@ -392,14 +393,9 @@ describe("leaderboard", () => {
     expect(problem.area_bound).toBeCloseTo(Math.SQRT2, 12);
     const stored = (await get(`/api/submissions/${problem.site_best.id}`)).body;
     expect(stored.pieces).toEqual(row(2, 1.0));
-    // the runners-up stay loadable by id; the gaps 1.5 and then 1.3 were deleted when overtaken
-    expect(answers.map((a) => a.id)).toEqual([1, 2, 3, 4, 5]);
-    for (const [i, gap] of [
-      [1, 1.2],
-      [4, 1.1],
-    ] as const)
-      expect((await get(`/api/submissions/${answers[i].id}`)).body.pieces).toEqual(row(2, gap));
-    for (const i of [0, 3]) expect((await get(`/api/submissions/${answers[i].id}`)).status).toBe(404);
+    // the overtaken leaders were deleted, and the entries that never led were not kept
+    expect(answers.map((a) => a.id)).toEqual([1, 2, 3, null, null]);
+    for (const id of [1, 2, 4, 5]) expect((await get(`/api/submissions/${id}`)).status).toBe(404);
     const records = (await get("/api/records?N=4&M=4")).body;
     expect(records.site.map((s: { P: number }) => s.P)).toEqual([2]);
     expect(records.site[0].name).toBe("p2");
@@ -441,9 +437,9 @@ describe("leaderboard", () => {
     expect((await get("/api/problems/0/0/2")).body.site_best.id).toBe(first.id);
     expect((await get("/api/records?N=0&M=0")).body.site).toEqual([expect.objectContaining({ P: 2, id: first.id })]);
 
-    // a worse score
+    // a worse score; the two before were not kept, so it is second among what is stored
     const worse = (await submit(twoCircles(2.6, "worse"))).body;
-    expect(worse).toMatchObject({ valid: true, rank: 4, leader: false, leader_score: first.score });
+    expect(worse).toMatchObject({ valid: true, rank: 2, leader: false, leader_score: first.score, id: null });
 
     // better by more than the tolerance: the lead changes
     const better = (await submit(twoCircles(2.5 * (1 - 3 * SCORE_TIE), "better"))).body;
@@ -465,28 +461,31 @@ describe("leaderboard", () => {
     await events.until(`"id":${better.id},`);
     await events.close();
 
-    // when the leader is taken off the site, the earliest of the remaining best entries leads
+    // only the leader was kept, so when it is taken off the site the problem has no entry
     const removed = await app.request("/api/admin/remove", {
       method: "POST",
       headers: { authorization: "Bearer secret", "content-type": "application/json" },
       body: JSON.stringify({ id: better.id }),
     });
     expect(removed.status).toBe(200);
-    expect(await leaderOf()).toEqual([again.id]);
+    expect(await leaderOf()).toEqual([]);
+    expect((await get("/api/leaderboard/0/0/2")).body.total).toBe(6);
   });
 
-  it("announces the entry that leads, also when a later submission made it the leader", async () => {
-    // Three scores, each within the tolerance of the next but the last not of the first: the
-    // third does not lead (the second is as good and earlier), yet it ends the first one's lead.
+  it("measures a new entry against the leader alone, since nothing else is kept", async () => {
+    // Three scores, each within the tolerance of the next but the last not of the first. The
+    // second does not lead and is not kept, so no chain of near ties forms: the third is better
+    // than the leader by more than the tolerance, and takes the lead.
     const events = await listen();
     const a = (await submit(twoCircles(2.5, "a"))).body;
     const b = (await submit(twoCircles(2.5 * (1 - 0.6 * SCORE_TIE), "b"))).body;
-    expect(b.leader).toBe(false);
+    expect(b).toMatchObject({ leader: false, id: null });
     const c = (await submit(twoCircles(2.5 * (1 - 1.2 * SCORE_TIE), "c"))).body;
-    expect(c).toMatchObject({ valid: true, rank: 2, leader: false, leader_score: b.score });
-    expect((await get("/api/leaderboard/0/0/2")).body.entries[0].id).toBe(b.id);
+    expect(improvesOn(c.score!, a.score!)).toBe(true);
+    expect(c).toMatchObject({ valid: true, rank: 1, leader: true, leader_score: c.score });
+    expect((await get("/api/leaderboard/0/0/2")).body.entries.map((e: { id: number }) => e.id)).toEqual([c.id]);
     await events.until(`"id":${a.id},`);
-    await events.until(`"id":${b.id},`);
+    await events.until(`"id":${c.id},`);
     expect(events.count()).toBe(2);
     await events.close();
   });
@@ -571,14 +570,15 @@ describe("store: the leader per problem", () => {
     expect(await store.count(4, 4, 7)).toBe(3);
   });
 
-  it("keeps the leader and the next two, also when the leader is not first by score", async () => {
+  it("keeps the leader alone, also when it is not first by score", async () => {
     const store = new SqliteStore(":memory:");
     // the second is within the tolerance of the first, so the first stays leader though it is larger
     const ids: number[] = [];
     for (const score of [3, 3 * (1 - SCORE_TIE / 2), 3.2, 3.1, 3.3]) ids.push(await store.insert(entry(9, score)));
-    expect(await store.prune(4, 4, 9)).toEqual([ids[2], ids[4]]);
+    // the others go in order of score
+    expect(await store.prune(4, 4, 9)).toEqual([ids[1], ids[3], ids[2], ids[4]]);
     expect((await store.leader(4, 4, 9))!.id).toBe(ids[0]);
-    expect((await store.getMany(ids)).map((s) => s.id).sort()).toEqual([ids[0], ids[1], ids[3]].sort());
+    expect((await store.getMany(ids)).map((s) => s.id)).toEqual([ids[0]]);
     expect(await store.count(4, 4, 9)).toBe(5);
     expect(await store.prune(4, 4, 9)).toEqual([]);
   });
@@ -604,8 +604,8 @@ describe("store: the leader per problem", () => {
       ([two, three, rows]) => {
         expect(two).toBe(5);
         expect(three).toBe(1);
-        // scores 3, 4 and 5 remain; 6 and 7 are gone; the rejected row is not listed either way
-        expect(rows.map((r) => r.score).sort()).toEqual([3, 4, 5, 9]);
+        // the leaders remain (3, and 9 for P = 3); the rest is gone, the rejected row included
+        expect(rows.map((r) => r.score).sort()).toEqual([3, 9]);
       },
     );
   });
@@ -928,6 +928,165 @@ describe("submissions that beat the literature", () => {
   });
 });
 
+describe("only the leader is kept", () => {
+  const admin = (path: string, body: object) =>
+    app.request(path, {
+      method: "POST",
+      headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const status = async (id: number | null) => (await get(`/api/submissions/${id}`)).status;
+  const piecesOf = async (id: number | null) => (await get(`/api/submissions/${id}`)).body.pieces;
+  const drawn = async (N: number, M: number, P: number) =>
+    (await get(`/api/atlas?N=${N}&M=${M}&from=${P}&to=${P}`)).body.tiles.map((t: { id?: number }) => t.id);
+  const leaderOf = async (N: number, M: number, P: number) =>
+    (await get(`/api/leaderboard/${N}/${M}/${P}`)).body.entries[0]?.id;
+  // three squares in a row, far apart: valid, and above the made-up published 5 for P = 3, so not pending
+  const loose = (gap: number, name: string) => ({ ...squares(3, { name }), pieces: row(3, gap) });
+  // three squares in a corner of a square of side 2: a claim that beats the row of three squares
+  const corner = (name: string) => ({
+    ...squares(3, { name }),
+    pieces: [
+      { x: 0, y: 0, theta: SQ },
+      { x: 1, y: 0, theta: SQ },
+      { x: 0, y: 1, theta: SQ },
+    ],
+  });
+
+  it("leaves a problem that loses its only entry to its published value, in every listing", async () => {
+    const published: LiteratureRecord = {
+      ...fakeRecord,
+      P: 2,
+      value: 2,
+      display: "2",
+      display_precision: 6,
+      status: "proven_unrefereed",
+      pieces: row(2),
+      container_phi: 0,
+    };
+    app = createApp({
+      store: new SqliteStore(":memory:"),
+      records: [fakeRecord, published],
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: (m) => logs.push(m),
+    });
+    // as good as the published value, so not pending, and drawn instead of it
+    const e = (await submit(squares(2, { name: "ann" }))).body;
+    expect(e).toMatchObject({ leader: true, pending_verification: false });
+    expect(await drawn(4, 4, 2)).toEqual([e.id]);
+
+    expect((await admin("/api/admin/remove", { id: e.id })).status).toBe(200);
+    expect((await get("/api/leaderboard/4/4/2")).body).toMatchObject({ entries: [], total: 1 });
+    const problem = (await get("/api/problems/4/4/2")).body;
+    expect(problem.site_best).toBeNull();
+    expect(problem.literature.value).toBe(2);
+    const records = (await get("/api/records?N=4&M=4")).body;
+    expect(records.site).toEqual([]);
+    expect(records.site_verified).toEqual([]);
+    expect(records.literature.map((r: { P: number; has_coordinates: boolean }) => [r.P, r.has_coordinates])).toEqual([
+      [2, true],
+      [3, false],
+    ]);
+    expect((await get("/api/atlas?N=4&M=4&from=2&to=2")).body.tiles).toEqual([
+      { P: 2, source: "literature", score: 2, pieces: row(2), container_phi: 0 },
+    ]);
+    expect(await status(e.id)).toBe(404);
+    // and the next entry is the leader again
+    const next = (await submit(squares(2, { name: "bea" }))).body;
+    expect(next).toMatchObject({ leader: true, rank: 1 });
+    expect(await leaderOf(4, 4, 2)).toBe(next.id);
+  });
+
+  it("keeps the best reviewed entry behind a pending leader, which leads again when the claim is rejected", async () => {
+    const a = (await submit(loose(4, "a"))).body;
+    const b = (await submit(loose(4.5, "b"))).body;
+    expect(b).toMatchObject({ leader: false, id: null });
+    const x = (await submit(squares(3, { name: "x" }))).body;
+    expect(x).toMatchObject({ leader: true, pending_verification: true });
+    expect(x.id).not.toBeNull();
+    expect(await leaderOf(4, 4, 3)).toBe(x.id);
+    expect(await piecesOf(a.id)).toEqual(row(3, 4));
+    // the claim is listed with the reviewed record beside it, and the atlas draws the reviewed one
+    const records = (await get("/api/records?N=4&M=4")).body;
+    expect(records.site).toEqual([expect.objectContaining({ P: 3, id: x.id, verification: "pending" })]);
+    expect(records.site_verified).toEqual([expect.objectContaining({ P: 3, id: a.id })]);
+    expect(await drawn(4, 4, 3)).toEqual([a.id]);
+    // the reviewer sees the claim's arrangement
+    const pending = (await get("/api/admin/pending", { authorization: "Bearer secret" })).body.pending;
+    expect(pending.map((p: { id: number; pieces: unknown }) => [p.id, p.pieces])).toEqual([[x.id, row(3)]]);
+
+    expect((await admin("/api/admin/review", { id: x.id, decision: "rejected" })).status).toBe(200);
+    expect(await status(x.id)).toBe(404);
+    expect(await leaderOf(4, 4, 3)).toBe(a.id);
+    expect(await drawn(4, 4, 3)).toEqual([a.id]);
+    expect((await get("/api/records?N=4&M=4")).body.site).toEqual([expect.objectContaining({ P: 3, id: a.id })]);
+    expect((await get("/api/admin/pending", { authorization: "Bearer secret" })).body.pending).toEqual([]);
+    // the rejected claim is gone, so it cannot be reviewed again
+    expect((await admin("/api/admin/review", { id: x.id, decision: "confirmed" })).status).toBe(404);
+    expect((await get("/api/leaderboard/4/4/3")).body.total).toBe(3);
+  });
+
+  it("keeps the confirmed claim alone", async () => {
+    const a = (await submit(loose(4, "a"))).body;
+    const x = (await submit(squares(3, { name: "x" }))).body;
+    expect(await status(a.id)).toBe(200);
+    expect((await admin("/api/admin/review", { id: x.id, decision: "confirmed" })).status).toBe(200);
+    expect(await status(a.id)).toBe(404);
+    expect(await leaderOf(4, 4, 3)).toBe(x.id);
+    expect(await piecesOf(x.id)).toEqual(row(3));
+    expect(await drawn(4, 4, 3)).toEqual([x.id]);
+    expect((await get("/api/records?N=4&M=4")).body.site_verified).toEqual([]);
+  });
+
+  it("keeps one claim at a time, the leading one, with the reviewed entry behind it", async () => {
+    const a = (await submit(loose(4, "a"))).body;
+    const x1 = (await submit(squares(3, { name: "x1" }))).body;
+    // a second, worse claim does not lead, so it is not kept for review
+    const x2 = (await submit({ ...squares(3, { name: "x2" }), pieces: row(3, 1.05) })).body;
+    expect(x2).toMatchObject({ pending_verification: true, leader: false, id: null });
+    const pending = async () =>
+      (await get("/api/admin/pending", { authorization: "Bearer secret" })).body.pending.map(
+        (p: { id: number }) => p.id,
+      );
+    expect(await pending()).toEqual([x1.id]);
+    // a better claim takes the lead; the one it overtook goes unreviewed, the reviewed entry stays
+    const x3 = (await submit(corner("x3"))).body;
+    expect(x3).toMatchObject({ pending_verification: true, leader: true });
+    expect(await status(x1.id)).toBe(404);
+    expect(await pending()).toEqual([x3.id]);
+    expect(await piecesOf(a.id)).toEqual(row(3, 4));
+    expect(await drawn(4, 4, 3)).toEqual([a.id]);
+    expect((await admin("/api/admin/review", { id: x3.id, decision: "rejected" })).status).toBe(200);
+    expect(await leaderOf(4, 4, 3)).toBe(a.id);
+    expect(await drawn(4, 4, 3)).toEqual([a.id]);
+  });
+
+  it("follows the tie rule in what it keeps", async () => {
+    // without a claim: an equal score, and a smaller one within the tolerance, do not lead and are not kept
+    const L = (await submit(twoCircles(2.5, "L"))).body;
+    const E = (await submit(twoCircles(2.5, "E"))).body;
+    const H = (await submit(twoCircles(2.5 * (1 - 0.5 * SCORE_TIE), "H"))).body;
+    expect(H.score!).toBeLessThan(L.score!);
+    expect([E.id, H.id]).toEqual([null, null]);
+    expect(await leaderOf(0, 0, 2)).toBe(L.id);
+
+    // behind a claim: an entry as good as the kept one does not replace it; a better one does
+    const a = (await submit(loose(4, "a"))).body;
+    const x = (await submit(squares(3, { name: "x" }))).body;
+    const same = (await submit(loose(4, "same"))).body;
+    expect(same).toMatchObject({ score: a.score, leader: false, id: null });
+    const closer = (await submit(loose(3.9, "closer"))).body;
+    expect(closer.pending_verification).toBe(false);
+    expect(closer.score!).toBeLessThan(a.score! * (1 - SCORE_TIE));
+    expect(closer).toMatchObject({ leader: false, rank: 2 });
+    expect(closer.id).not.toBeNull();
+    expect(await status(a.id)).toBe(404);
+    expect(await leaderOf(4, 4, 3)).toBe(x.id);
+    expect(await drawn(4, 4, 3)).toEqual([closer.id]);
+  });
+});
+
 describe("GET /api/atlas", () => {
   const lit = (P: number, value: number, extra: Partial<LiteratureRecord> = {}): LiteratureRecord => ({
     ...fakeRecord,
@@ -1108,9 +1267,10 @@ describe("GET /api/atlas", () => {
     expect(await listed()).toEqual(["2:bob"]);
     expect((await admin("/api/admin/edit", { id: tight.body.id, name: "Bob", found_with: "hand" })).status).toBe(200);
     expect(await listed()).toEqual(["2:Bob"]);
+    // ann's entry was deleted when bob's overtook it, so after the removal nothing is listed
     expect((await admin("/api/admin/remove", { id: tight.body.id })).status).toBe(200);
-    expect(await listed()).toEqual(["2:ann"]);
-    expect(loose.body.id).toBeDefined();
+    expect(await listed()).toEqual([]);
+    expect((await get(`/api/submissions/${loose.body.id}`)).status).toBe(404);
   });
 
   it("bounds the range and the payload", async () => {

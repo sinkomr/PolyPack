@@ -1,7 +1,10 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
+import { blobFromJson, encodePieces, readPieces } from "./pieces";
 import { EntryEdit, GET_MANY_LIMIT, KEEP_PER_PROBLEM, NewSubmission, Store, StoredSubmission } from "./store";
 
+// `pieces` is declared TEXT NOT NULL, as it was created; new rows store a BLOB in it (see
+// pieces.ts), which SQLite keeps unchanged in a TEXT column, so the table needs no rebuild.
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS submissions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,10 +64,50 @@ const ADDED_COLUMNS: [name: string, type: string][] = [
   ["software", "TEXT"],
 ];
 
+/** Small settings of the store itself; for now the progress of the pieces migration. */
+const META = `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);`;
+/** Id of the last row the pieces migration has handled. */
+const CURSOR = "pieces_cursor";
+/** 1 once the pieces migration has reached the last row. */
+const MIGRATED = "pieces_migrated";
+
 const ENTRY_COLUMNS = "id, name, found_with, agent_note, score, created_at, verification";
+// Rows are no longer marked rejected (they are deleted); older databases still have such rows
+// until the pieces migration or a prune of their problem deletes them.
 const LISTED = "verification != 'rejected'";
 
 type Row = Record<string, unknown>;
+
+/** What one step of the pieces migration did. */
+export interface MigrationStep {
+  /** True when no row was left after the cursor: the migration is complete. */
+  done: boolean;
+  /** Id of the last row handled so far. */
+  cursor: number;
+  rows: number;
+  /** Rows whose JSON text became a BLOB. */
+  converted: number;
+  /**
+   * Rows deleted because their problem no longer keeps them (see KEEP_PER_PROBLEM), rejected rows
+   * included. Rows of the same problem beyond this step count here too.
+   */
+  deleted: number;
+  /** Rows left as JSON text because it is not exactly a list of {x, y, theta}. */
+  unreadable: number;
+  /** Bytes of pieces of the converted rows, before and after. */
+  bytesBefore: number;
+  bytesAfter: number;
+}
+
+export interface MigrationOptions {
+  /** Rows per step; each step is one short transaction. */
+  batch: number;
+  /** Pause between steps, during which requests are served. */
+  pauseMs: number;
+  log: (msg: string) => void;
+  /** Least time between two progress lines in the log. */
+  logEveryMs?: number;
+}
 
 function toStored(r: Row): StoredSubmission {
   return {
@@ -75,7 +118,7 @@ function toStored(r: Row): StoredSubmission {
     score: r.score as number,
     name: r.name as string,
     agent_note: r.agent_note as string,
-    pieces: JSON.parse(r.pieces as string),
+    pieces: readPieces(r.pieces),
     container_phi: r.container_phi as number,
     created_at: r.created_at as string,
     verification: r.verification as StoredSubmission["verification"],
@@ -97,7 +140,11 @@ export class SqliteStore implements Store {
   constructor(path: string) {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL;");
+    const fresh = !this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'submissions'").get();
     this.db.exec(SCHEMA);
+    this.db.exec(META);
+    // a new database never holds pieces in the older format, so there is nothing to migrate
+    if (fresh) this.setMeta(MIGRATED, 1);
     // A database from before a column existed: add it. The legacy `agent` column stays as it was
     // (SQLite cannot drop its NOT NULL), and new rows store an empty string in it.
     const present = new Set(
@@ -131,8 +178,8 @@ export class SqliteStore implements Store {
         s.score,
         s.name,
         s.agent_note,
-        // JSON keeps every double exactly
-        JSON.stringify(s.pieces),
+        // a BLOB of Float64s keeps every double exactly, -0 included, in a third of the JSON
+        encodePieces(s.pieces),
         s.container_phi,
         s.created_at,
         s.verification,
@@ -172,16 +219,38 @@ export class SqliteStore implements Store {
     return this.leaderSync(N, M, P);
   }
 
-  private leaderSync(N: number, M: number, P: number): LeaderboardEntry | null {
+  /**
+   * The leader of one problem; with `reviewedOnly`, the leader among the entries that are not
+   * pending (as `bestPerP` with `verifiedOnly`).
+   */
+  private leaderSync(N: number, M: number, P: number, reviewedOnly = false): LeaderboardEntry | null {
+    const among = reviewedOnly ? `${LISTED} AND verification != 'pending'` : LISTED;
     // earliest entry within the tie tolerance of the smallest score, not simply the smallest
     const r = this.db
       .prepare(
-        `SELECT ${ENTRY_COLUMNS} FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED}
-           AND score <= (SELECT MIN(score) FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED}) * (1 + ?)
+        `SELECT ${ENTRY_COLUMNS} FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${among}
+           AND score <= (SELECT MIN(score) FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${among}) * (1 + ?)
          ORDER BY id ASC LIMIT 1`,
       )
       .get(N, M, P, N, M, P, SCORE_TIE);
     return (r as unknown as LeaderboardEntry | undefined) ?? null;
+  }
+
+  /**
+   * The entries one problem keeps (see KEEP_PER_PROBLEM): its leader, and while the leader is
+   * pending, the leader among the entries that are not, which is the record the site shows
+   * again if the claim is rejected. Empty when the problem has no listed entry.
+   */
+  private keepersSync(N: number, M: number, P: number): Set<number> {
+    const keep = new Set<number>();
+    const leader = this.leaderSync(N, M, P);
+    if (!leader) return keep;
+    keep.add(leader.id);
+    if (leader.verification === "pending") {
+      const previous = this.leaderSync(N, M, P, true);
+      if (previous) keep.add(previous.id);
+    }
+    return keep;
   }
 
   async count(N: number, M: number, P: number): Promise<number> {
@@ -195,15 +264,15 @@ export class SqliteStore implements Store {
   }
 
   private pruneSync(N: number, M: number, P: number): number[] {
-    const leader = this.leaderSync(N, M, P);
-    if (!leader) return [];
-    // the leader is not always first by score (see `leader`), so it is kept explicitly
-    const others = this.db
-      .prepare(
-        `SELECT id FROM submissions WHERE n = ? AND m = ? AND p = ? AND ${LISTED} AND id != ? ORDER BY score, id`,
-      )
-      .all(N, M, P, leader.id) as Row[];
-    const doomed = others.slice(KEEP_PER_PROBLEM - 1).map((r) => r.id as number);
+    // The leader is not always first by score (see `leader`), so the kept entries are chosen
+    // explicitly. All of the problem's other rows go, rejected ones of older versions included:
+    // nothing reads those any more. Deleting them all at once keeps the leader from changing
+    // because of the order in which they go.
+    const keep = this.keepersSync(N, M, P);
+    const rows = this.db
+      .prepare("SELECT id FROM submissions WHERE n = ? AND m = ? AND p = ? ORDER BY score, id")
+      .all(N, M, P) as Row[];
+    const doomed = rows.map((r) => r.id as number).filter((id) => !keep.has(id));
     const drop = this.db.prepare("DELETE FROM submissions WHERE id = ?");
     for (const id of doomed) drop.run(id);
     return doomed;
@@ -244,10 +313,15 @@ export class SqliteStore implements Store {
   }
 
   async review(id: number, decision: "confirmed" | "rejected"): Promise<boolean> {
+    // A rejected entry is deleted (nothing reads it, and it is never listed again). A confirmed
+    // leader is no longer pending, so the prune that follows deletes the entry kept behind it.
+    const change =
+      decision === "rejected" ? "DELETE FROM submissions" : "UPDATE submissions SET verification = 'confirmed'";
     const r = this.db
-      .prepare("UPDATE submissions SET verification = ? WHERE id = ? AND verification != 'none'")
-      .run(decision, id);
-    return Number(r.changes) > 0;
+      .prepare(`${change} WHERE id = ? AND verification IN ('pending', 'confirmed') RETURNING n, m, p`)
+      .get(id) as Row | undefined;
+    if (r) this.pruneSync(r.n as number, r.m as number, r.p as number);
+    return !!r;
   }
 
   async edit(id: number, changes: EntryEdit): Promise<boolean> {
@@ -279,9 +353,181 @@ export class SqliteStore implements Store {
   }
 
   async remove(id: number): Promise<boolean> {
-    const r = this.db
-      .prepare("UPDATE submissions SET verification = 'rejected' WHERE id = ? AND verification != 'rejected'")
-      .run(id);
-    return Number(r.changes) > 0;
+    const r = this.db.prepare(`DELETE FROM submissions WHERE id = ? AND ${LISTED} RETURNING n, m, p`).get(id) as
+      Row | undefined;
+    // Without a pending leader, the problem now has no entry. Removing a pending leader leaves the
+    // entry kept behind it as the leader; the prune applies the rule to what remains.
+    if (r) this.pruneSync(r.n as number, r.m as number, r.p as number);
+    return !!r;
+  }
+
+  private getMeta(key: string): number | null {
+    const r = this.db.prepare("SELECT value FROM meta WHERE key = ?").get(key) as Row | undefined;
+    return r ? (r.value as number) : null;
+  }
+
+  private setMeta(key: string, value: number): void {
+    this.db
+      .prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value")
+      .run(key, value);
+  }
+
+  /** Whether every row has been through the pieces migration (always true for a new database). */
+  piecesMigrated(): boolean {
+    return this.getMeta(MIGRATED) === 1;
+  }
+
+  /**
+   * One step of the pieces migration, in one transaction: the next `batch` rows by id after the
+   * stored cursor. The problem of each row is pruned as a whole (see KEEP_PER_PROBLEM), which
+   * deletes the rows it no longer keeps, rejected rows included, also those further on; the JSON
+   * text of each kept row in the step becomes a BLOB. The cursor is saved with the changes, so a
+   * step cut short by a restart is simply done again, and nothing before the cursor is read again.
+   * Rows written after the cursor passed are BLOBs already, and `prune`, `review` and `remove`
+   * keep their problems to the rule.
+   */
+  migratePieces(batch: number): MigrationStep {
+    // an empty step would look like the end of the table
+    if (!Number.isInteger(batch) || batch < 1)
+      throw new RangeError(`a migration step needs at least one row, not ${batch}`);
+    const step: MigrationStep = {
+      done: false,
+      cursor: this.getMeta(CURSOR) ?? 0,
+      rows: 0,
+      converted: 0,
+      deleted: 0,
+      unreadable: 0,
+      bytesBefore: 0,
+      bytesAfter: 0,
+    };
+    // n, m and p come before pieces in the row, and typeof() and octet_length() are answered from
+    // its header, so this reads no pieces (and no overflow pages)
+    const rows = this.db
+      .prepare(
+        `SELECT id, n, m, p, typeof(pieces) AS kind, octet_length(pieces) AS bytes FROM submissions
+         WHERE id > ? ORDER BY id LIMIT ?`,
+      )
+      .all(step.cursor, batch) as Row[];
+    if (!rows.length) {
+      this.setMeta(MIGRATED, 1);
+      return { ...step, done: true };
+    }
+    const read = this.db.prepare("SELECT pieces FROM submissions WHERE id = ?");
+    const write = this.db.prepare("UPDATE submissions SET pieces = ? WHERE id = ?");
+    const pruned = new Set<string>();
+    const gone = new Set<number>();
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const r of rows) {
+        const id = r.id as number;
+        step.rows++;
+        step.cursor = id;
+        const problem = `${r.n}/${r.m}/${r.p}`;
+        if (!pruned.has(problem)) {
+          pruned.add(problem);
+          for (const d of this.pruneSync(r.n as number, r.m as number, r.p as number)) gone.add(d);
+        }
+        if (gone.has(id) || r.kind !== "text") continue; // deleted, or a BLOB already
+        const blob = blobFromJson((read.get(id) as Row).pieces as string);
+        if (!blob) {
+          step.unreadable++;
+          continue;
+        }
+        write.run(blob, id);
+        step.converted++;
+        step.bytesBefore += r.bytes as number;
+        step.bytesAfter += blob.length;
+      }
+      step.deleted = gone.size;
+      this.setMeta(CURSOR, step.cursor);
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+    return step;
+  }
+
+  /**
+   * Runs the pieces migration in the background, one step of `batch` rows every `pauseMs`, until
+   * it is complete. Each step blocks the process for its own few milliseconds only. A step that
+   * fails (for example while an operator holds the database) is tried again after a minute; after
+   * five failures in a row the migration stops until the next start. Does nothing when the
+   * migration is complete or `batch` is 0.
+   */
+  startPiecesMigration(opts: MigrationOptions): { stop: () => void; finished: Promise<void> } {
+    const { batch, pauseMs, log } = opts;
+    const logEveryMs = opts.logEveryMs ?? 60_000;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    let resolveFinished!: () => void;
+    const finished = new Promise<void>((resolve) => (resolveFinished = resolve));
+    if (batch <= 0 || this.piecesMigrated()) {
+      resolveFinished();
+      return { stop: () => {}, finished };
+    }
+    const lastId = () => ((this.db.prepare("SELECT MAX(id) AS id FROM submissions").get() as Row).id as number) ?? 0;
+    const mb = (bytes: number) => `${(bytes / 1e6).toFixed(1)} MB`;
+    const total = { rows: 0, converted: 0, deleted: 0, unreadable: 0, bytesBefore: 0, bytesAfter: 0, ms: 0 };
+    let failures = 0;
+    let lastLog = Date.now();
+    log(
+      `[pieces] migration starting after row ${this.getMeta(CURSOR) ?? 0} of ${lastId()}: ` +
+        `${batch} rows every ${pauseMs} ms`,
+    );
+    const summary = () =>
+      `${total.converted} converted (${mb(total.bytesBefore)} of JSON to ${mb(total.bytesAfter)}), ` +
+      `${total.deleted} deleted, ${total.unreadable} left as text; ${total.rows} rows in ${(total.ms / 1000).toFixed(1)} s of work`;
+    const finish = () => {
+      stopped = true;
+      resolveFinished();
+    };
+    const tick = () => {
+      timer = undefined;
+      if (stopped) return;
+      let step: MigrationStep;
+      const started = performance.now();
+      try {
+        step = this.migratePieces(batch);
+        failures = 0;
+      } catch (e) {
+        failures++;
+        log(`[pieces] migration step failed (${failures} in a row): ${e instanceof Error ? e.message : String(e)}`);
+        if (failures >= 5) {
+          log("[pieces] migration stopped; it resumes at the next start");
+          return finish();
+        }
+        timer = setTimeout(tick, Math.max(pauseMs, 60_000));
+        timer.unref?.();
+        return;
+      }
+      total.ms += performance.now() - started;
+      for (const k of ["rows", "converted", "deleted", "unreadable", "bytesBefore", "bytesAfter"] as const)
+        total[k] += step[k];
+      if (step.done) {
+        const pragma = (name: string) => Object.values(this.db.prepare(`PRAGMA ${name}`).get() as Row)[0] as number;
+        const free = pragma("freelist_count") * pragma("page_size");
+        log(
+          `[pieces] migration complete: ${summary()}. ${mb(free)} of the file is free for reuse; ` +
+            "docs/DEPLOY_FLY.md says how to give it back to the disk",
+        );
+        return finish();
+      }
+      if (Date.now() - lastLog >= logEveryMs) {
+        lastLog = Date.now();
+        log(`[pieces] migration at row ${step.cursor} of ${lastId()}: ${summary()}`);
+      }
+      timer = setTimeout(tick, pauseMs);
+      timer.unref?.();
+    };
+    timer = setTimeout(tick, pauseMs);
+    timer.unref?.();
+    return {
+      stop: () => {
+        if (timer) clearTimeout(timer);
+        finish();
+      },
+      finished,
+    };
   }
 }

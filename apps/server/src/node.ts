@@ -25,8 +25,27 @@ if (process.env.ADMIN_TOKEN === "change-me")
 
 const records: LiteratureRecord[] = JSON.parse(readFileSync(resolve(root, "data/records.json"), "utf8")).records;
 
+/** A non-negative integer setting; the default when it is unset or not such a number. */
+function wholeNumber(name: string, fallback: number): number {
+  const text = process.env[name];
+  if (text === undefined || text === "") return fallback;
+  if (/^\d{1,9}$/.test(text)) return Number(text);
+  console.warn(`${name}=${text} is not a whole number; using ${fallback}`);
+  return fallback;
+}
+
+const store = new SqliteStore(databasePath);
+// Rewrites the pieces of older rows in small steps while the site runs (see docs/DEPLOY_FLY.md).
+// Each step is one short transaction, so requests wait at most for one step.
+// PIECES_MIGRATION_BATCH=0 switches it off.
+store.startPiecesMigration({
+  batch: wholeNumber("PIECES_MIGRATION_BATCH", 100),
+  pauseMs: wholeNumber("PIECES_MIGRATION_PAUSE_MS", 1000),
+  log: (msg) => console.log(msg),
+});
+
 const app = createApp({
-  store: new SqliteStore(databasePath),
+  store,
   records,
   adminToken,
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.

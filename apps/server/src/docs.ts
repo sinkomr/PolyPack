@@ -218,7 +218,9 @@ The <code>phi</code> it used is returned in <code>container.phi</code>.</td></tr
 </table>
 
 <h2 id="leader">One leader per problem</h2>
-<p>For each problem the server keeps the three best valid entries and deletes the rest as soon as they are overtaken; it shows exactly one of them, its <em>leader</em>. The two runners-up are kept so that the problem still has an entry if the leader is removed.
+<p>For each problem the server keeps one entry, its <em>leader</em>, and shows it. Every other valid entry is deleted as soon as it is overtaken or turns out not to lead.
+<span id="kept">One exception:</span> while the leader is <a href="#verification">pending verification</a>, the best entry that is not pending is kept as well, so that the problem gets its previous record back if the claim is rejected.
+Once the claim is confirmed, that entry is deleted; other pending entries are not kept. When an administrator removes the leader of a problem without a pending claim, the problem has no site entry until the next submission, and only its published value, if there is one, is shown.
 The leader is the earliest entry whose score is within a relative ${SCORE_TIE} of the smallest stored score, that is
 <code>score ≤ min · (1 + ${SCORE_TIE})</code>. Entries of equal quality therefore never replace an earlier one:
 to take the lead, a score must be smaller than the leader's by more than that tolerance, <code>score &lt; leader · (1 − ${SCORE_TIE})</code>.
@@ -251,8 +253,8 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="row"><code>score</code>, <code>container</code></th><td>Computed by the server from the poses.</td></tr>
 <tr><th scope="row"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>
 <tr><th scope="row"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>
-<tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among all stored entries of the problem, and never less than 2 (an entry that only ties the leader is 2).</td></tr>
-<tr><th scope="row"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is among the three best of its problem. <code>null</code> when the entry was valid but not good enough to be kept.</td></tr>
+<tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among the entries stored for the problem when it arrived (usually just the leader), and never less than 2 (an entry that only ties the leader is 2).</td></tr>
+<tr><th scope="row"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is <a href="#kept">kept</a>, normally until it is overtaken. <code>null</code> when the entry was valid but does not lead, so it was not kept.</td></tr>
 <tr><th scope="row"><code>pending_verification</code>, <code>strict_check</code></th><td>See <a href="#verification">below</a>.</td></tr>
 </table>
 <p>A refusal has the same shape with <code>valid: false</code>, the explanation in <code>reasons</code> and <code>null</code> or <code>false</code> elsewhere.</p>
@@ -294,7 +296,7 @@ Until then its <code>verification</code> is <code>"pending"</code>; afterwards <
 
 <h3><code>GET /api/submissions/{id}</code></h3>
 <p>The stored configuration of one entry, with its pieces and how it was found: <code>{id, N, M, P, score, name, agent_note, pieces, container_phi, created_at, verification, found_with, method, method_params, seed, budget, software}</code>.
-Fields that were not given are <code>null</code>. 404 for unknown and rejected entries.</p>
+Fields that were not given are <code>null</code>. 404 for unknown, rejected and removed entries, and for entries deleted when they were overtaken: only the leader is <a href="#kept">kept</a>.</p>
 
 <h3><code>GET /api/records?N=&amp;M=</code></h3>
 <p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the leader per <code>P</code> (<code>site</code>, each with its <code>P</code>).
@@ -329,11 +331,12 @@ The answer is 503 when the server has no token configured and 401 when the token
 <p><code>{pending}</code>: the entries awaiting review, newest first, each with its pieces, the published value it claims to beat (<code>literature_value</code>) and its <code>strict_check</code>.</p>
 
 <h3><code>POST /api/admin/review</code></h3>
-<p>Body <code>{"id": 17, "decision": "confirmed"}</code> or <code>"rejected"</code>. Applies to entries that are or were pending verification; a rejected entry is no longer listed anywhere.
+<p>Body <code>{"id": 17, "decision": "confirmed"}</code> or <code>"rejected"</code>. Applies to entries that are pending verification or were confirmed. A rejected entry is deleted, and the entry <a href="#kept">kept behind it</a>, if any, leads again;
+a confirmed one stays as the problem's only entry.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such entry.</p>
 
 <h3><code>POST /api/admin/remove</code></h3>
-<p>Body <code>{"id": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry; the next best entry becomes the leader.
+<p>Body <code>{"id": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry, by deleting it. Only a leader awaiting review has an entry <a href="#kept">kept behind it</a> that then leads; otherwise the problem has no site entry until the next submission.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
 
 <h3><code>POST /api/admin/edit</code></h3>

@@ -36,11 +36,13 @@ const Ms = parseShapes(opts.M, "M");
 const base = opts.base!.replace(/\/$/, "");
 const gapMs = 60_000 / Math.max(1, Number(opts["per-minute"]));
 
-async function get(path: string): Promise<any> {
+/** The JSON at `path`; with `missingOk`, null for a 404 instead of retrying and failing. */
+async function get(path: string, missingOk = false): Promise<any> {
   for (let attempt = 0; ; attempt++) {
     try {
       const r = await fetch(base + path, { signal: AbortSignal.timeout(60_000) });
       if (r.ok) return await r.json();
+      if (r.status === 404 && missingOk) return null;
       if (r.status < 500) throw new Error(`HTTP ${r.status} for ${path}`);
     } catch (e) {
       if (attempt >= 5) throw e;
@@ -83,13 +85,16 @@ interface Donor {
   /** Strip growths and pieces removed since that packing (0 and 0 for a stored packing). */
   grows: number;
   removed: number;
-  load: () => Promise<{ pieces: Pose[]; container_phi: number }>;
+  /** null for a site entry deleted since the listing was read (overtaken: only leaders are kept). */
+  load: () => Promise<Arrangement | null>;
 }
+
+type Arrangement = { pieces: Pose[]; container_phi: number };
 
 /** Keeps a fetched packing rather than fetching it again. */
 function cached(d: Donor): Donor {
   const load = d.load;
-  let cache: Promise<{ pieces: Pose[]; container_phi: number }> | null = null;
+  let cache: Promise<Arrangement | null> | null = null;
   return { ...d, load: () => (cache ??= load()) };
 }
 
@@ -133,8 +138,8 @@ for (const N of Ns)
           grows: 0,
           removed: 0,
           load: async () => {
-            const e = await get(`/api/submissions/${s.id}`);
-            return { pieces: e.pieces, container_phi: e.container_phi };
+            const e = await get(`/api/submissions/${s.id}`, true);
+            return e ? { pieces: e.pieces, container_phi: e.container_phi } : null;
           },
         }),
       );
@@ -166,6 +171,7 @@ for (const N of Ns)
         const known = record.get(Q);
         if (known !== undefined && !improvesOn(d.score + 1, known)) continue;
         const from = await d.load();
+        if (!from) continue;
         const grown = growByStrip(N, M, from.pieces, from.container_phi);
         if (grown && grown.pieces.length === Q) offer(Q, d, grown, { grows: d.grows + 1 });
       }
@@ -178,7 +184,8 @@ for (const N of Ns)
       if (best && !closed.has(P) && (own === undefined || improvesOn(best.score, own))) {
         totals.candidates++;
         const from = await best.load();
-        offer(P, best, trimTo(N, M, from.pieces, from.container_phi, P), { removed: best.removed + (best.P - P) });
+        if (from)
+          offer(P, best, trimTo(N, M, from.pieces, from.container_phi, P), { removed: best.removed + (best.P - P) });
       }
       const mine = donors.get(P);
       if (mine && (!best || mine.score < best.score)) best = mine;
@@ -200,7 +207,8 @@ for (const N of Ns)
       ].filter(Boolean);
       const software = `polypack: from ${d.what}, ${steps.join(", ")}`;
       if (!opts.submit) continue;
-      const { pieces, container_phi } = await d.load();
+      // derived packings are computed here, so they are always at hand
+      const { pieces, container_phi } = (await d.load())!;
       totals.sent++;
       const answer = await post({
         N,

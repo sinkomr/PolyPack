@@ -11,10 +11,18 @@ export interface EntryEdit {
 export const GET_MANY_LIMIT = 500;
 
 /**
- * Entries kept per problem: the leader and the next best two, so that removing or rejecting the
- * leader still leaves a drawing. Anything further down is deleted as soon as it is overtaken.
+ * Entries kept per problem: the leader alone (decided 2026-10-18, to keep the database small;
+ * it was 3). Every other entry is deleted as soon as it is overtaken, row and name included.
+ *
+ * One exception: while the leader is pending verification (it claims to beat a published value
+ * and awaits review), the best entry that is not pending is kept as well, so that rejecting the
+ * claim gives the problem back its previous record. Other pending entries are deleted like any
+ * other. Once the claim is confirmed, that entry goes; once it is rejected, the claim goes.
+ *
+ * Removing the leader therefore leaves a problem without a site entry, unless the leader was a
+ * pending claim: the published value, if there is one, is then all the site shows.
  */
-export const KEEP_PER_PROBLEM = 3;
+export const KEEP_PER_PROBLEM = 1;
 
 /**
  * How the entry was found (see Provenance). The legacy `agent` column of older databases is no
@@ -60,8 +68,9 @@ export interface Store {
   /** Number of valid submissions ever accepted for one problem, including those since deleted. */
   count(N: number, M: number, P: number): Promise<number>;
   /**
-   * Deletes the listed entries of one problem beyond the leader and the next best
-   * KEEP_PER_PROBLEM - 1 (by score, then earliest). Returns the ids deleted.
+   * Deletes every entry of one problem except those it keeps (see KEEP_PER_PROBLEM): the leader,
+   * and while the leader is pending, the leader among the entries that are not. Rejected rows of
+   * the problem left by older versions go too. Returns the ids deleted.
    */
   prune(N: number, M: number, P: number): Promise<number[]>;
   /**
@@ -76,10 +85,15 @@ export interface Store {
    */
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
   pending(): Promise<StoredSubmission[]>;
+  /**
+   * Decides on an entry that is pending or was confirmed, then prunes its problem. A rejected entry
+   * is deleted, so the entry kept behind a pending claim leads again; a confirmed one is kept
+   * alone. False when there is no such entry.
+   */
   review(id: number, decision: "confirmed" | "rejected"): Promise<boolean>;
   /**
-   * Takes any entry off the site (an abusive name, a test entry). The row is kept and marked
-   * rejected, which hides it from every listing. False when there is no such listed entry.
+   * Takes any listed entry off the site (an abusive name, a test entry): the row is deleted, and
+   * the problem is pruned again. False when there is no such listed entry.
    */
   remove(id: number): Promise<boolean>;
   /**

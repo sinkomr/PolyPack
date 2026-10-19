@@ -187,6 +187,6 @@ console.log(
   answer.leader
     ? `submitted as entry ${answer.id}: it now leads the problem with ${answer.score}`
     : answer.id === null
-      ? `valid, but not among the three best kept for this problem; the leader stays at ${answer.leader_score}`
-      : `kept as entry ${answer.id}, but the leader stays at ${answer.leader_score}`,
+      ? `valid, but not kept: only the leader of a problem is; the leader stays at ${answer.leader_score}`
+      : `kept as entry ${answer.id} behind a leader awaiting review, which stays at ${answer.leader_score}`,
 );
