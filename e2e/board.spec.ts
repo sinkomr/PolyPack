@@ -74,7 +74,7 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   await expect(other.locator("#count")).toContainText("3 / 3");
   expect(Number(await other.textContent("#score"))).toBeCloseTo(score, 5);
 
-  // the same packing again, under another name: stored, but the earlier entry keeps the lead
+  // the same packing again, under another name: counted, but not kept, and the earlier entry keeps the lead
   await page.fill("#name", "Latecomer");
   await page.click("#submit");
   await expect(page.locator("#submit-result")).toContainText("Valid, score");
@@ -89,6 +89,29 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   await other.goto("/browse.html#4,9");
   await expect(other.locator("#rows tr")).toContainText("Playwright (by hand)");
   await expect(other.locator("#rows")).not.toContainText("Latecomer");
+});
+
+test("a link to an entry that is no longer kept says why it cannot be loaded", async ({ page, request }) => {
+  // squares in an eight-sided container: an entry, then a better one, which deletes the first
+  const entry = (gap: number) => ({
+    N: 4,
+    M: 8,
+    P: 2,
+    container_phi: 0,
+    name: "Link test",
+    pieces: [
+      { x: 0, y: 0, theta: Math.PI / 4 },
+      { x: gap, y: 0, theta: Math.PI / 4 },
+    ],
+  });
+  const first = await (await request.post("/api/submit", { data: entry(3) })).json();
+  const better = await (await request.post("/api/submit", { data: entry(1) })).json();
+  expect([first.leader, better.leader]).toEqual([true, true]);
+  expect((await request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
+  await page.goto(`/#s=${first.id}`);
+  await expect(page.locator("#status")).toContainText("Only the best entry of each problem is kept.");
+  await page.goto(`/#s=${better.id}`);
+  await expect(page.locator("#status")).toContainText("Loaded the submitter's entry");
 });
 
 test("a problem with a proven optimum takes no submissions, and an open one does again", async ({ page, request }) => {

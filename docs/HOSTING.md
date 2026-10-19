@@ -58,6 +58,7 @@ Settings are in `~/.polypack/env`:
 | `DATABASE_PATH` | The SQLite file. |
 | `ADMIN_TOKEN` | Password for the admin page. Generated at random by `install.sh`; never commit it or paste it anywhere public. Without one, the admin page is switched off. |
 | `CLIENT_IP_HEADER` | The header in which the tunnel reports the visitor's address, so that rate limits apply per visitor rather than to the tunnel. `cf-connecting-ip` for Cloudflare; remove the line for Tailscale Funnel. |
+| `PIECES_MIGRATION_BATCH`, `PIECES_MIGRATION_PAUSE_MS` | Optional. The pace at which the server converts a database from before 2026-10-18 in the background: rows per step (100; `0` switches it off) and the pause between steps in milliseconds (1000). See "Database size" in `docs/DEPLOY_FLY.md`. |
 
 ## 3. Make it reachable: Cloudflare Tunnel
 

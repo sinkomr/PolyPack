@@ -5,6 +5,7 @@
  *
  *   npx tsx scripts/measure-storage.ts                 1000 problems, three entries each
  *   npx tsx scripts/measure-storage.ts --problems 3000 --batch 100
+ *   npx tsx scripts/measure-storage.ts --keep /tmp/x     also keep the migrated database there
  *
  * The database is written as the server wrote it before the migration: the deployed schema,
  * pieces as JSON text with full-precision doubles, three entries per problem with P drawn from
@@ -24,6 +25,7 @@ const { values: opts } = parseArgs({
     problems: { type: "string", default: "1000" },
     batch: { type: "string", default: "100" },
     seed: { type: "string", default: "1" },
+    keep: { type: "string" },
   },
 });
 const problems = Number(opts.problems);
@@ -31,7 +33,7 @@ const batch = Number(opts.batch);
 const random = seededRandom(Number(opts.seed));
 
 const dir = mkdtempSync(join(tmpdir(), "polypack-storage-"));
-const path = join(dir, "polypack.sqlite");
+const path = opts.keep ? join(opts.keep, "polypack.sqlite") : join(dir, "polypack.sqlite");
 const db = new DatabaseSync(path);
 db.exec(`PRAGMA journal_mode = WAL;
   CREATE TABLE submissions (id INTEGER PRIMARY KEY AUTOINCREMENT, n INTEGER NOT NULL, m INTEGER NOT NULL,
