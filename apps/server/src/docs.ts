@@ -254,7 +254,7 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><th scope="row"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>
 <tr><th scope="row"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>
 <tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among the entries stored for the problem when it arrived (usually just the leader), and never less than 2 (an entry that only ties the leader is 2).</td></tr>
-<tr><th scope="row"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is <a href="#kept">kept</a>, normally until it is overtaken. <code>null</code> when the entry was valid but does not lead, so it was not kept.</td></tr>
+<tr><th scope="row"><code>id</code></th><td>The stored entry, loadable at <code>/api/submissions/{id}</code> and on the board at <code>/#s={id}</code> while it is <a href="#kept">kept</a>, normally until it is overtaken. <code>null</code> when the entry was valid but was not kept: it does not lead, and it is not the record kept behind a leader that awaits review.</td></tr>
 <tr><th scope="row"><code>pending_verification</code>, <code>strict_check</code></th><td>See <a href="#verification">below</a>.</td></tr>
 </table>
 <p>A refusal has the same shape with <code>valid: false</code>, the explanation in <code>reasons</code> and <code>null</code> or <code>false</code> elsewhere.</p>

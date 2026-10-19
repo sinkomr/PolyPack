@@ -49,6 +49,9 @@ function report(db) {
   };
 }
 
+// SQLite puts VACUUM's temporary copy in SQLITE_TMPDIR, which it reads once, when the first
+// database is opened: next to the database, on the disk whose free space is checked below
+if (vacuum) process.env.SQLITE_TMPDIR = dirname(path);
 const db = new DatabaseSync(path, { readOnly: !vacuum });
 // wait for the server's own short transactions rather than fail at once
 db.exec("PRAGMA busy_timeout = 30000");
@@ -66,8 +69,6 @@ if (before.disk_free_mb < needed) {
   console.error(`VACUUM needs about ${needed} MB free on the disk; there are ${before.disk_free_mb}`);
   process.exit(1);
 }
-// SQLite puts the temporary copy in SQLITE_TMPDIR; next to the database, on the disk checked above
-process.env.SQLITE_TMPDIR = dirname(path);
 const started = Date.now();
 db.exec("VACUUM");
 // copies the rewritten pages from the log into the file, which is cut to its new size

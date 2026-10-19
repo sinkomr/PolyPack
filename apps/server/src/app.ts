@@ -389,7 +389,8 @@ export function createApp(opts: AppOptions): Hono {
     ]);
     const leads = leader?.id === id;
     const rank = leads ? 1 : Math.max(2, position);
-    // Only the best few entries of a problem are kept; this one may already be among the deleted.
+    // A problem keeps only its leader (and, behind a pending leader, the record it displaced); this
+    // entry may already be among the deleted.
     const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
     // after the insert and the prune, so that no answer computed in between is kept
     forgetRecords(`${config.N}/${config.M}`);

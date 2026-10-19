@@ -109,7 +109,7 @@ test("a link to an entry that is no longer kept says why it cannot be loaded", a
   expect([first.leader, better.leader]).toEqual([true, true]);
   expect((await request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
   await page.goto(`/#s=${first.id}`);
-  await expect(page.locator("#status")).toContainText("Only the best entry of each problem is kept.");
+  await expect(page.locator("#status")).toContainText("only the best entry of each problem is kept.");
   await page.goto(`/#s=${better.id}`);
   await expect(page.locator("#status")).toContainText("Loaded the submitter's entry");
 });

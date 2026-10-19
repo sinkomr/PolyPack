@@ -147,7 +147,7 @@ function link(text: string, href: string): HTMLAnchorElement {
 async function loadEntry(id: number, who: string): Promise<void> {
   const cfg = await api.getSubmission(id);
   // the server keeps only the best entry of each problem, so a link to one since overtaken is dead
-  if (!cfg) return say("That entry could not be loaded. Only the best entry of each problem is kept.");
+  if (!cfg) return say("That entry could not be loaded. It may have been overtaken: only the best entry of each problem is kept.");
   const err = board.load({ N: cfg.N, M: cfg.M, P: cfg.P, pieces: cfg.pieces, container_phi: cfg.container_phi });
   if (err) return say(`That entry could not be loaded: ${err}.`);
   view.fit();

@@ -115,7 +115,7 @@ Rows written before this version are converted in the background by the server i
 fly logs | grep '\[pieces\]'
 ```
 
-Two settings (as `fly secrets set` or in `[env]` of `fly.toml`) change its pace: `PIECES_MIGRATION_BATCH`, the rows per step (100; `0` switches it off), and `PIECES_MIGRATION_PAUSE_MS`, the pause between steps (1000). On a synthetic database with three entries per problem, a step of 100 rows took 16 ms (median; 37 ms at most) on an Apple Silicon Mac [CALC]. On Fly's shared CPU it is slower, by an amount not yet measured. Rows that an earlier step deleted are skipped, so about 60% of the rows are visited. For the 212,000 rows of October 2026 that is about 1,300 steps, or roughly half an hour [SPEC].
+Two settings (as `fly secrets set` or in `[env]` of `fly.toml`) change its pace: `PIECES_MIGRATION_BATCH`, the rows per step (100; `0` switches it off), and `PIECES_MIGRATION_PAUSE_MS`, the pause between steps (1000). On a synthetic database with three entries per problem, a step of 100 rows took 16 ms (median; 37 ms at most) on an Apple Silicon Mac [CALC]. On Fly's shared CPU it is slower, by an amount not yet measured. A dry run on a copy of the live database of 2026-10-18 (212,394 rows over 179,010 problems) took about 2,116 steps, 24 ms each (median; 92 ms at most), 52 s of work on a Mac, so about 36 minutes at the default pause [CALC]. It kept every problem's leader with the same id and score and its pieces bit for bit, and deleted 33,385 rows [CALC].
 
 Take a backup (`./deploy/fly/backup-to-mac.sh`) before deploying this version. **There is no way back to an older version afterwards**: older versions read pieces only as JSON text, and the deleted rows are gone. To go back, restore that backup; entries submitted since are then lost.
 
@@ -129,7 +129,7 @@ On a synthetic copy (`npx tsx scripts/measure-storage.ts --problems 3000`: 9,000
 | after the migration | 3,028 | 24.8 MB | 2.75 kB (12.8%) |
 | after VACUUM | 3,028 | 23.5 MB (file) | |
 
-What remains is about 24 bytes per piece of each leader, plus about 1.5 kB per row for the other columns and the index. If the live database likewise holds about three entries per problem, its 4.56 GB in use would fall to about 0.6 GB [SPEC]. `db-space.mjs` below reports the real figures.
+What remains is about 24 bytes per piece of each leader, plus about 1.5 kB per row for the other columns and the index. The live database held about 1.19 entries per problem, not three: in the dry run on its copy of 2026-10-18, the pages in use fell from 4,392 MB to 1,408 MB (pieces from 3,310 MB to 1,073 MB), and VACUUM then gave a 1,309 MB file in 21.5 s on a Mac [CALC]. `db-space.mjs` below reports the real figures.
 
 ### Checking and reclaiming the space
 
@@ -141,7 +141,7 @@ fly ssh console -C "node --no-warnings /app/apps/server/scripts/db-space.mjs"
 
 It prints JSON and changes nothing. `page_count × page_size` is the file, `freelist_count × page_size` the free part (`free_in_file_mb`), `in_use_mb` the rest, `disk_free_mb` the room left on the volume, and `migration` how far the migration is (`done`, and `cursor` against `last_id`).
 
-The weekly backup asks for free room of 1.05 × the file. The file no longer grows, so that need stays below the free room on the volume. `VACUUM INTO` copies only the pages in use, so the backup itself is small.
+The weekly backup streams the database and needs no room on the volume, but its single read transaction keeps the write-ahead log from being emptied while it runs. During the migration the log grows by about 0.7 MB a step (about 40 MB a minute) [CALC], so let a backup and the migration overlap only when the volume has room for that.
 
 To give the free pages back to the volume, optionally and once the migration is complete:
 

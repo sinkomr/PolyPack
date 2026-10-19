@@ -69,7 +69,7 @@ result = post(
 if result["valid"] and result["leader"]:
     print("accepted: score", result["score"], "- now the leader of this problem")
 elif result["valid"]:
-    print("stored: score", result["score"], "does not improve on the leader's", result["leader_score"])
+    print("not kept: score", result["score"], "does not improve on the leader's", result["leader_score"])
 else:
     print("rejected:", "; ".join(result["reasons"]))
 
