@@ -1,7 +1,9 @@
 #!/bin/zsh
 # Copies the live PolyPack database from Fly.io to this Mac, compressed, keeping the newest few.
-# The copy is taken on the server with VACUUM INTO, which reads one consistent snapshot while the
-# server goes on writing, then downloaded over `fly ssh sftp` and checked before it is kept.
+# backup-dump.cjs runs on the server and streams one consistent snapshot of the database (a single
+# read transaction, while the server goes on writing) straight over `fly ssh`, so nothing is
+# written to the server's disk and no free space is needed there. backup-rebuild.mjs turns the
+# stream back into a database here, which is checked before it is kept.
 #   backup-to-mac.sh            take a backup now
 #   backup-to-mac.sh install    run it every Sunday at 04:00 (launchd; a missed run happens on wake)
 #   backup-to-mac.sh uninstall  stop the schedule
@@ -12,7 +14,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.fly/bin:/usr/bin:/bin:/usr/
 APP="${POLYPACK_APP:-polypack}"
 DEST="${POLYPACK_BACKUP_DIR:-$HOME/GitHub/PolyPack-backups/database}"
 KEEP="${POLYPACK_BACKUP_KEEP:-4}"
-REMOTE=/data/backup.sqlite
+HERE="${0:A:h}"
 LABEL=com.polypack.backup
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/polypack-backup.log"
@@ -46,55 +48,34 @@ uninstall)
   ;;
 "") ;;
 *)
-  sed -n '2,8p' "$0"
+  sed -n '2,10p' "$0"
   exit 2
   ;;
 esac
 
-# Runs a Node script on the server. It is sent base64-encoded so that no quoting survives the trip.
-remote_node() {
-  fly ssh console -a "$APP" -C "sh -c 'echo $(print -rn -- "$1" | base64) | base64 -d | node --no-warnings -'" 2>&1 |
-    grep -v '^Connecting to '
-}
-
 print "$(date '+%Y-%m-%d %H:%M:%S') backup of $APP starting"
 mkdir -p "$DEST"
 work=$(mktemp -d "${TMPDIR:-/tmp}/polypack-backup.XXXXXX")
-cleanup() {
-  remote_node "require('node:fs').rmSync('$REMOTE', { force: true })" > /dev/null || true
-  rm -rf "$work"
-}
-trap cleanup EXIT
+trap 'rm -rf "$work"' EXIT
 
-# On the server: room for a full copy, the copy itself, and a check of it.
-made=$(remote_node "
-const fs = require('node:fs');
-const { DatabaseSync } = require('node:sqlite');
-const live = '/data/polypack.sqlite', out = '$REMOTE';
-fs.rmSync(out, { force: true });
-const free = fs.statfsSync('/data');
-if (free.bavail * free.bsize < fs.statSync(live).size * 1.05) {
-  console.log(JSON.stringify({ error: 'not enough free space on /data for a copy' }));
-  process.exit(1);
-}
-const started = Date.now();
-const db = new DatabaseSync(live, { readOnly: true });
-db.exec('PRAGMA busy_timeout = 30000');
-db.prepare('VACUUM INTO ?').run(out);
-db.close();
-const copy = new DatabaseSync(out, { readOnly: true });
-const check = Object.values(copy.prepare('PRAGMA quick_check').get())[0];
-const entries = copy.prepare('SELECT COUNT(*) AS n FROM submissions').get().n;
-console.log(JSON.stringify({ bytes: fs.statSync(out).size, entries, check, seconds: (Date.now() - started) / 1000 }));
-")
-print "server copy: $made"
-[[ "$made" == *'"check":"ok"'* ]] || { print -u2 "The server copy failed its check; nothing kept."; exit 1; }
+# On the server, at low CPU priority: the dump script arrives base64-encoded on the command line
+# (so that no quoting survives the trip) and its gzipped stream comes back on stdout.
+started=$SECONDS
+script=$(base64 < "$HERE/backup-dump.cjs" | tr -d '\n')
+fly ssh console -q -a "$APP" -C "sh -c 'echo $script | base64 -d | nice -n 10 node --no-warnings -'" \
+  > "$work/dump.ndjson.gz" 2> "$work/dump.err" ||
+  { print -u2 "The dump failed: $(tail -3 "$work/dump.err")"; exit 1; }
+print "streamed $(du -h "$work/dump.ndjson.gz" | cut -f1) in $((SECONDS - started)) s: $(tail -1 "$work/dump.err")"
 
-fly ssh sftp get -a "$APP" "$REMOTE" "$work/polypack.sqlite" > /dev/null
+# Here: rebuild the database from the stream (which checks every table's row count against the
+# dump's own and runs quick_check), then check it again with the sqlite3 tool.
+report=$(node "$HERE/backup-rebuild.mjs" "$work/dump.ndjson.gz" "$work/polypack.sqlite") ||
+  { print -u2 "The stream could not be rebuilt into a database; nothing kept."; exit 1; }
 check=$(sqlite3 "$work/polypack.sqlite" 'PRAGMA quick_check')
 entries=$(sqlite3 "$work/polypack.sqlite" 'SELECT COUNT(*) FROM submissions')
-[[ "$check" == ok && "$made" == *"\"entries\":$entries,"* ]] ||
-  { print -u2 "The downloaded copy does not match ($check, $entries entries); nothing kept."; exit 1; }
+[[ "$check" == ok && "$report" == *"\"submissions\":$entries"[,}]* ]] ||
+  { print -u2 "The rebuilt copy does not match ($check, $entries entries; $report); nothing kept."; exit 1; }
+rm -f "$work/dump.ndjson.gz"
 
 name="polypack-$(date +%Y-%m-%d-%H%M).sqlite.gz"
 gzip -6 -c "$work/polypack.sqlite" > "$work/$name"
