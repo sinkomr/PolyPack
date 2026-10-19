@@ -210,8 +210,36 @@ function showFocus(force = false): void {
   if (board.load(config, false)) board.load({ N: p.N, M: p.M, P: p.P, pieces: [], container_phi: 0 }, false);
   // the dashed area bound frames a board that has no record yet
   view.ghost = p.phase === "ready" ? null : ghost(p, board.container);
-  view.fit();
+  fitView(board.container ?? view.ghost);
 }
+
+/**
+ * The view's fit, allowed to zoom out further: BoardView.fit stops at 4 pixels per unit, which
+ * leaves large frontier problems (300 pieces of up to 100 sides) overflowing the canvas.
+ */
+function fitView(c: Container | null): void {
+  view.fit();
+  const canvas = $<HTMLCanvasElement>("board");
+  const w = canvas.clientWidth,
+    h = canvas.clientHeight;
+  if (!c || !(c.size > 0) || !w || !h) return;
+  // distance from the centre to a vertex (polygon) or the rim (circle)
+  const reach = c.M === 0 ? c.size : c.size / (2 * Math.sin(Math.PI / c.M));
+  const zoom = (0.42 * Math.min(w, h)) / reach;
+  if (zoom < view.cam.zoom) {
+    view.cam.zoom = zoom;
+    view.requestDraw();
+  }
+}
+// The canvas changes size when the banner comes and goes (and with the window): fit again.
+let canvasSize = "";
+new ResizeObserver(() => {
+  const c = $("board");
+  const size = `${c.clientWidth}x${c.clientHeight}`;
+  if (size === canvasSize) return;
+  canvasSize = size;
+  fitView(board.container ?? view.ghost);
+}).observe($("board"));
 
 // ---------- lanes ----------
 
