@@ -25,6 +25,12 @@ export class BoardView {
   /** When on, tapping a piece toggles it in the selection (for touch screens and keyboards without Shift). */
   multiSelect = false;
   snapMode: SnapMode = "both";
+  /** When set, the view never edits the board: it only pans and zooms (the Tighter page). */
+  readOnly = false;
+  /** Text drawn over a solver preview; null draws none. */
+  previewLabel: string | null = "Solver preview — Accept result to edit";
+  /** A dashed outline drawn under the pieces, such as the area lower bound; null for none. */
+  ghost: Container | null = null;
   private snapGuide: MagneticSnap | null = null;
   private preview: { config: PackingConfig; container: Container } | null = null;
   /** A solver method's working shapes, drawn instead of the preview while it runs. */
@@ -123,7 +129,7 @@ export class BoardView {
 
   /** Centre the view on the container (or the pieces) with a margin. */
   fit(): void {
-    const c = this.sketch?.container ?? this.preview?.container ?? this.board.container;
+    const c = this.sketch?.container ?? this.preview?.container ?? this.board.container ?? this.ghost;
     if (!c || c.size === 0) {
       this.cam = { x: 0, y: 0, zoom: 60 };
     } else {
@@ -138,7 +144,7 @@ export class BoardView {
   /** Solver frames are read-only and never enter board history or persistent storage. */
   setPreview(config: PackingConfig | null, container?: Container): void {
     // A gesture ends under the mode it began in, before the board locks or unlocks.
-    if (this.gesture && this.locked !== (!!(config && container) || !!this.sketch)) this.endGesture();
+    if (this.gesture && this.locked !== (this.readOnly || !!(config && container) || !!this.sketch)) this.endGesture();
     this.preview = config && container ? { config, container } : null;
     this.snapGuide = null;
     this.requestDraw();
@@ -149,7 +155,7 @@ export class BoardView {
    * a picture: it never enters the board, and accepting a run always takes its strict result.
    */
   setSketch(sketch: Sketch | null): void {
-    if (this.gesture && this.locked !== (!!sketch || !!this.preview)) this.endGesture();
+    if (this.gesture && this.locked !== (this.readOnly || !!sketch || !!this.preview)) this.endGesture();
     this.sketch = sketch;
     this.snapGuide = null;
     this.requestDraw();
@@ -160,9 +166,9 @@ export class BoardView {
     return this.sketch;
   }
 
-  /** Solver output is on screen, so the board cannot be edited. */
+  /** Solver output is on screen (or the view is read-only), so the board cannot be edited. */
   private get locked(): boolean {
-    return !!this.preview || !!this.sketch;
+    return this.readOnly || !!this.preview || !!this.sketch;
   }
 
   private zoomAt(sx: number, sy: number, factor: number): void {
@@ -564,6 +570,21 @@ export class BoardView {
     ctx.fillRect(0, 0, this.w, this.h);
     this.drawGrid();
 
+    const ghost = this.ghost;
+    if (ghost && ghost.size > 0) {
+      ctx.strokeStyle = this.colors["muted"];
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 5]);
+      if (ghost.M === 0) {
+        ctx.beginPath();
+        ctx.arc(this.sx(ghost.cx), this.sy(ghost.cy), ghost.size * z, 0, 2 * Math.PI);
+      } else {
+        this.path(containerVertices(ghost));
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     const c = sketch?.container ?? this.preview?.container ?? this.board.container;
     if (c && c.size > 0) {
       ctx.strokeStyle = this.colors["container"];
@@ -639,10 +660,10 @@ export class BoardView {
       ctx.fillText("Solver working shapes — not a valid packing; the result is the true pieces", 14, 20);
       ctx.fillText(sketch.label, 14, 36);
       ctx.textAlign = "center";
-    } else if (this.preview) {
+    } else if (this.preview && this.previewLabel !== null) {
       ctx.fillStyle = this.colors["text"];
       ctx.textAlign = "left";
-      ctx.fillText("Solver preview — Accept result to edit", 14, 20);
+      ctx.fillText(this.previewLabel, 14, 20);
       ctx.textAlign = "center";
     }
 

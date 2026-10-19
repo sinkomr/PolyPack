@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Tighter</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <link rel="stylesheet" href="/src/tighter/tighter.css" />
+  </head>
+  <body class="tighter">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html">Records</a>
+        <a href="/tighter.html" aria-current="page">Tighter</a>
+      </nav>
+      <span id="t-hold" class="t-hold" role="status" aria-live="polite"></span>
+    </header>
+
+    <section id="t-bar" class="t-bar" aria-label="Totals" hidden>
+      <div><span>Record points</span><strong id="t-bar-rp">0</strong></div>
+      <div><span>Earned</span><strong id="t-bar-earned">0</strong></div>
+      <div><span>Records held</span><strong id="t-bar-held">0</strong></div>
+      <div><span>Evaluations run</span><strong id="t-bar-evals">0</strong></div>
+      <div><span>Compute</span><strong id="t-bar-cpu">0 s</strong></div>
+      <div id="t-bar-auto-box" hidden><span>Auto-eval</span><strong id="t-bar-auto">off</strong></div>
+      <div id="t-bar-lanes-box" hidden><span>Lanes</span><strong id="t-bar-lanes">1</strong></div>
+    </section>
+
+    <main class="layout">
+      <section class="stage" aria-label="Board">
+        <div class="toolbar" role="toolbar" aria-label="Game">
+          <button
+            id="t-loadall"
+            class="primary"
+            title="Place every piece on rings around the centre (the board's Add all)"
+          >
+            Load all
+          </button>
+          <button id="t-compact" disabled title="mc_compress, 100 evaluations, from the board">Compact</button>
+          <button id="t-evolve" class="primary" hidden title="One solver run from the board with the next seed">
+            Evolve
+          </button>
+          <span id="t-method-box" class="t-method" hidden>
+            <label for="t-method">Method</label>
+            <select id="t-method"></select>
+          </span>
+          <button id="t-auto" aria-pressed="false" hidden>Auto-eval</button>
+          <button id="t-stop" title="Stop every run and switch auto-eval off">Stop</button>
+          <span id="t-runinfo" class="t-runinfo"></span>
+        </div>
+        <p id="t-banner" class="t-banner" hidden></p>
+        <canvas id="board" tabindex="0" role="img" aria-label="The board of the current problem"></canvas>
+        <p id="status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <aside class="panel" aria-label="Game panels">
+        <section id="t-problem" aria-labelledby="t-problem-heading">
+          <h2 id="t-problem-heading">Problem</h2>
+          <p id="t-title" class="t-title">Dealing a problem…</p>
+          <p id="t-problem-note" class="note"></p>
+          <dl class="stats t-held-row">
+            <dt>Records held</dt>
+            <dd id="t-held" class="big">0</dd>
+          </dl>
+          <button id="t-next" class="wide" hidden>Next problem</button>
+        </section>
+
+        <section id="t-score" aria-labelledby="t-score-heading" hidden>
+          <h2 id="t-score-heading">Board score</h2>
+          <dl class="stats">
+            <dt id="t-side-label">Container side s</dt>
+            <dd id="t-side" class="big">—</dd>
+            <dt>Last run</dt>
+            <dd id="t-delta">—</dd>
+            <dt>Area lower bound</dt>
+            <dd id="t-bound">—</dd>
+            <dt>Gap to area bound</dt>
+            <dd id="t-gap">—</dd>
+            <dt>Density</dt>
+            <dd id="t-density">—</dd>
+            <dt>Record</dt>
+            <dd id="t-record">—</dd>
+          </dl>
+          <svg
+            id="t-trace"
+            class="t-trace"
+            viewBox="0 0 300 100"
+            role="img"
+            aria-label="Side after each run"
+            hidden
+          ></svg>
+        </section>
+
+        <section id="t-consent" aria-labelledby="t-consent-heading" hidden>
+          <h2 id="t-consent-heading">Your name on records</h2>
+          <form id="t-consent-form" class="t-consent">
+            <div class="row">
+              <label for="t-name">Display name</label>
+              <input id="t-name" maxlength="40" autocomplete="nickname" placeholder="display name" />
+            </div>
+            <label class="t-check"
+              ><input id="t-agree" type="checkbox" /> Send my records to PolyPack under this name</label
+            >
+            <button id="t-consent-save" type="submit" class="primary">Save</button>
+          </form>
+          <p id="t-consent-note" class="note">Nothing has been sent yet; your record is kept here until you send it.</p>
+        </section>
+
+        <section id="t-points" aria-labelledby="t-points-heading" hidden>
+          <h2 id="t-points-heading">Record points</h2>
+          <dl class="stats">
+            <dt>To spend</dt>
+            <dd id="t-rp" class="big">0</dd>
+            <dt>Earned, verified</dt>
+            <dd id="t-earned">0</dd>
+            <dt>Pending</dt>
+            <dd id="t-pending">—</dd>
+            <dt>Evaluations run</dt>
+            <dd id="t-evals">0</dd>
+          </dl>
+          <p class="note">
+            Points come only from records the server has checked: each one above the 10<sup>−9</sup> floor earns w·c·[1
+            + decades above the floor] plus its size and gap terms.
+          </p>
+        </section>
+
+        <section id="t-upgrades" aria-labelledby="t-upgrades-heading" hidden>
+          <h2 id="t-upgrades-heading">Upgrades</h2>
+          <div id="t-cards" class="t-cards"></div>
+        </section>
+
+        <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
+          <h2 id="t-queue-heading">Queue</h2>
+          <ol id="t-queue-list" class="t-queue"></ol>
+          <p id="t-deal" class="note"></p>
+        </section>
+
+        <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
+          <h2 id="t-lanes-heading">Lanes</h2>
+          <ul id="t-lane-list" class="t-lanes"></ul>
+        </section>
+
+        <section id="t-events" aria-labelledby="t-events-heading" hidden>
+          <h2 id="t-events-heading">Log</h2>
+          <ol id="t-log" class="t-log"></ol>
+        </section>
+
+        <section id="t-settings" aria-labelledby="t-settings-heading">
+          <h2 id="t-settings-heading">Settings</h2>
+          <label class="t-check"><input id="t-bg" type="checkbox" /> Keep running while this tab is hidden</label>
+          <label id="t-battery-box" class="t-check" hidden
+            ><input id="t-battery" type="checkbox" /> Keep running on battery power</label
+          >
+          <details class="t-save">
+            <summary>Save</summary>
+            <p class="note">The game lives in this browser. Copy the save string to keep it or move it.</p>
+            <div class="row wrap">
+              <button id="t-export" type="button">Export</button>
+              <button id="t-import" type="button">Import</button>
+            </div>
+            <label for="t-save-text" class="t-sr">Save string</label>
+            <textarea id="t-save-text" rows="3" spellcheck="false" placeholder="tighter:1:…"></textarea>
+            <p id="t-save-note" class="note" role="status"></p>
+          </details>
+          <p class="note">
+            Every run is a real solver run in this browser, and every record is checked by the server. Plays best in
+            Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
+            <a href="/">Board</a> offers all of it, unrestricted.
+          </p>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="/src/tighter/main.ts"></script>
+  </body>
+</html>

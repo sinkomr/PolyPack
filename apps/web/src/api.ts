@@ -59,6 +59,29 @@ export async function submit(
 }
 
 /**
+ * POST /api/submit, answered with its HTTP status: 200 for a valid entry, 409 for a closed problem,
+ * 429 when the address sent too many, 400/413/422 for a refused body. `status` is null when the
+ * server could not be reached, and `body` null when its answer was not JSON.
+ */
+export async function postSubmission(body: Record<string, unknown>): Promise<{ status: number | null; body: unknown }> {
+  let r: Response;
+  try {
+    r = await fetch("/api/submit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { status: null, body: null };
+  }
+  try {
+    return { status: r.status, body: await r.json() };
+  } catch {
+    return { status: r.status, body: null };
+  }
+}
+
+/**
  * Live leaderboard updates. Server-sent events are the primary channel. While the event stream
  * is not open, `poll` is called every 10 s as the fallback.
  */
