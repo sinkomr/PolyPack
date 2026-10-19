@@ -125,6 +125,10 @@ test("tighter: Load all, Compact, the first record is sent, Evolve improves it, 
   expect(second.name).toBe("E2E Tighter");
   const second_entry = await (await page.request.get(`/api/submissions/${second.id}`)).json();
   expect(second_entry).toMatchObject({ found_with: "optimizer", method: "mc_compress", budget: { evals: 30 } });
+  // the server keeps only the leader: the overtaken first record is gone, and the game holds one record
+  expect((await page.request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
+  expect(await page.evaluate(() => (window as any).tighter.state.queue[0].ourId)).toBe(second.id);
+  await expect(page.locator("#t-held")).toHaveText("1");
   expect(second_entry.seed).toBeGreaterThanOrEqual(2);
   await expect.poll(() => rp(page)).toBeGreaterThan(earned);
 
