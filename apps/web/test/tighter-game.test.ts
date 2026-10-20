@@ -4,34 +4,51 @@ import type { PackingConfig, ProblemInfo } from "@polypack/geometry";
 import {
   GameState,
   ProblemState,
-  RunOutcome,
-  STALE_RUNS,
+  STALE_EVALS,
+  StepOutcome,
+  TRACE_LIMIT,
+  accrue,
   addToQueue,
   applyAnswer,
   applyLeader,
   applyLoadAll,
-  applyRun,
+  applyStep,
   buy,
   drop,
+  evolvable,
   hasUnsent,
+  markSending,
   newGame,
   newProblem,
+  openedRun,
+  payAll,
   pendingPoints,
   recordsHeld,
+  spent,
   submitTarget,
+  unconfirmedPoints,
+  withdrawConsent,
 } from "../src/tighter/game";
 import { FRONTIER, STARTER, problemTitle } from "../src/tighter/frontier";
 import { autoHold, autoTarget } from "../src/tighter/scheduler";
 import { CLIENT_TAG, classifyAnswer, shouldSubmit, submissionBody } from "../src/tighter/submission";
 import {
+  COMPACT_EVALS,
+  RUN_BUDGET,
   UPGRADES,
   UpgradeId,
+  autoPerSecond,
   available,
+  awayHours,
+  bankCap,
   canBuy,
-  evalsPerRun,
-  evolveEvals,
+  evalsPerClick,
   laneCount,
+  methodParams,
+  methods,
   queueSize,
+  seedsPerProblem,
+  upgrade,
 } from "../src/tighter/upgrades";
 import { drawProblem, looseCandidates, newDealer, openDealable } from "../src/tighter/dealer";
 
@@ -43,31 +60,35 @@ const board = (P: number, shift = 0): PackingConfig => ({
   pieces: Array.from({ length: P }, (_, i) => ({ x: 3 * i + shift, y: 0, theta: 0 })),
   container_phi: 0,
 });
-const run = (seed: number) => ({
+const run = (seed: number, evals = 30) => ({
   method: "mc_compress",
   params: { translationStep: 0.15 },
   seed,
-  budget: { evals: 30 },
+  budget: { evals },
 });
-const outcome = (score: number, seed: number, extra: Partial<RunOutcome> = {}): RunOutcome => ({
-  best: board(3, seed),
+/** One step of an open run that found `score` (null: nothing strict yet). */
+const step = (score: number | null, seed = 1, extra: Partial<StepOutcome> = {}): StepOutcome => ({
+  evaluations: 1,
+  best: score === null ? null : board(3, seed),
   score,
-  valid: true,
-  strict: true,
-  evaluations: 30,
-  wallTime: 0.5,
   run: run(seed),
+  ms: 2,
+  ended: false,
+  click: true,
   ...extra,
 });
 
-function game(): { s: GameState; p: ProblemState } {
+function game(consent = true): { s: GameState; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = true;
+  s.consent = consent;
   const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   return { s, p };
 }
+
+/** Realistic gaps for 24-gons in a 30-gon, 3 pieces: Load all 28 % above the area bound. */
+const B = areaLowerBound(24, 30, 3);
 
 describe("Tighter frontier", () => {
   it("is the curated 2,601, with a 108-problem starter corner inside it", () => {
@@ -82,19 +103,45 @@ describe("Tighter frontier", () => {
 });
 
 describe("Tighter upgrades", () => {
-  it("are the design's first ten, through Basin hopping, Reach: loose records and Second lane", () => {
-    expect(UPGRADES.map((u) => [u.id, u.cost])).toEqual([
-      ["trace", 5],
-      ["evals1", 30],
-      ["queue3", 50],
-      ["seeds", 70],
-      ["auto1", 85],
-      ["basin", 170],
-      ["reach2", 300],
-      ["evals2", 560],
-      ["advance", 850],
-      ["lanes2", 1200],
-    ]);
+  const ids = UPGRADES.map((u) => u.id);
+  const cost = (id: UpgradeId) => upgrade(id).cost;
+
+  it("form a tree: unique ids, every prerequisite an upgrade listed before it", () => {
+    expect(new Set(ids).size).toBe(ids.length);
+    UPGRADES.forEach((u, i) => {
+      for (const r of u.requires) {
+        expect(ids).toContain(r);
+        // listed earlier, so the prerequisites form no cycle and buying in list order always works
+        expect(ids.indexOf(r)).toBeLessThan(i);
+      }
+      expect(u.cost).toBeGreaterThan(0);
+    });
+    const owned = new Set<UpgradeId>();
+    for (const u of UPGRADES) {
+      expect(canBuy(owned, 1e9, u.id)).toEqual({ ok: true });
+      owned.add(u.id);
+    }
+    expect(available(owned)).toEqual([]);
+  });
+
+  it("climb slowly: each rung of a ladder, and each new method, costs more than the last", () => {
+    const ladder = (list: UpgradeId[]) => {
+      for (let i = 1; i < list.length; i++) {
+        expect(cost(list[i])).toBeGreaterThan(cost(list[i - 1]));
+        // one at a time: each rung needs the one before
+        expect(upgrade(list[i]).requires).toContain(list[i - 1]);
+      }
+    };
+    ladder(["click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"]);
+    ladder(["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"]);
+    ladder(["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"]);
+    ladder(["seeds2", "seeds4", "seeds8", "seeds16"]);
+    ladder(["away2", "away3", "away4"]);
+    // methods come well after the click ladder and a faster auto-eval
+    expect(upgrade("basin").requires).toEqual(expect.arrayContaining(["click10", "auto4"]));
+    expect(cost("basin")).toBeGreaterThan(cost("click10"));
+    // auto-eval comes after a few rungs of the click ladder
+    expect(upgrade("auto1").requires).toEqual(["click4"]);
   });
 
   it("are gated by their prerequisites and by points", () => {
@@ -102,41 +149,94 @@ describe("Tighter upgrades", () => {
     expect(available(owned).map((u) => u.id)).toEqual(["trace"]);
     expect(canBuy(owned, 4.99, "trace")).toEqual({ ok: false, reason: "points" });
     expect(canBuy(owned, 5, "trace")).toEqual({ ok: true });
-    expect(canBuy(owned, 1e6, "evals1")).toEqual({ ok: false, reason: "locked" });
+    expect(canBuy(owned, 1e6, "click2")).toEqual({ ok: false, reason: "locked" });
     owned.add("trace");
     expect(canBuy(owned, 1e6, "trace")).toEqual({ ok: false, reason: "owned" });
-    expect(available(owned).map((u) => u.id)).toEqual(["evals1", "queue3"]);
-    // Basin hopping needs both the seed counter and the queue
-    for (const id of ["evals1", "auto1", "seeds"] as UpgradeId[]) owned.add(id);
-    expect(canBuy(owned, 1e6, "basin")).toEqual({ ok: false, reason: "locked" });
-    owned.add("queue3");
-    expect(canBuy(owned, 1e6, "basin")).toEqual({ ok: true });
-    // Second lane needs Reach: loose records
+    expect(available(owned).map((u) => u.id)).toEqual(["click2"]);
+    for (const id of ["click2", "click3"] as UpgradeId[]) owned.add(id);
+    expect(canBuy(owned, 1e6, "auto1")).toEqual({ ok: false, reason: "locked" });
+    owned.add("click4");
+    expect(available(owned).map((u) => u.id)).toEqual(["auto1", "click5"]);
+    // Auto-advance needs both Reach: loose records and the queue
+    for (const id of [
+      "auto1",
+      "auto2",
+      "auto3",
+      "auto4",
+      "click5",
+      "click6",
+      "click7",
+      "click8",
+      "click9",
+      "click10",
+    ] as UpgradeId[])
+      owned.add(id);
     owned.add("basin");
-    expect(canBuy(owned, 1e6, "lanes2").ok).toBe(false);
     owned.add("reach2");
-    expect(canBuy(owned, 1e6, "lanes2").ok).toBe(true);
+    expect(canBuy(owned, 1e6, "advance")).toEqual({ ok: false, reason: "locked" });
+    owned.add("queue3");
+    expect(canBuy(owned, 1e6, "advance")).toEqual({ ok: true });
   });
 
   it("spend points, and turn into game parameters", () => {
     const s = newGame(T0, 1);
     s.rp = 4;
     expect(buy(s, "trace")).toBe(false);
-    s.rp = 40;
+    s.rp = cost("click2") + 5;
     expect(buy(s, "trace")).toBe(true);
-    expect(s.rp).toBe(35);
     expect(buy(s, "trace")).toBe(false);
-    expect(buy(s, "evals1")).toBe(true);
-    expect(s.rp).toBe(5);
-    const owned = new Set(s.owned);
-    expect(evalsPerRun(owned)).toBe(60);
-    expect(evolveEvals(owned, "basin_hopping")).toBe(100);
-    expect(queueSize(owned)).toBe(1);
-    expect(laneCount(owned)).toBe(1);
-    expect(evalsPerRun(new Set<UpgradeId>(["evals1", "evals2"]))).toBe(300);
-    expect(evolveEvals(new Set<UpgradeId>(["evals2"]), "basin_hopping")).toBe(300);
-    expect(queueSize(new Set<UpgradeId>(["queue3"]))).toBe(3);
-    expect(laneCount(new Set<UpgradeId>(["lanes2"]))).toBe(2);
+    expect(buy(s, "click2")).toBe(true);
+    expect(s.rp).toBe(0);
+    const none = new Set<UpgradeId>();
+    const o = (...list: UpgradeId[]) => new Set<UpgradeId>(list);
+    expect(evalsPerClick(none)).toBe(1);
+    expect(evalsPerClick(new Set(s.owned))).toBe(2);
+    expect(evalsPerClick(o("click2", "click3", "click4"))).toBe(4);
+    expect(evalsPerClick(o("click10"))).toBe(10);
+    expect(COMPACT_EVALS).toBe(100);
+    expect(RUN_BUDGET).toBe(100_000);
+    // auto-eval starts at one evaluation every 5 s and speeds up step by step
+    expect(autoPerSecond(none)).toBeNull();
+    expect(autoPerSecond(o("auto2"))).toBeNull();
+    expect(autoPerSecond(o("auto1"))).toBe(0.2);
+    expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(0.5);
+    expect(autoPerSecond(o("auto1", "auto5"))).toBe(1);
+    expect(autoPerSecond(o("auto1", "auto9"))).toBe(10);
+    // away: an hour with auto-eval, more with upgrades; the bank holds the rate over those hours
+    expect(awayHours(none)).toBe(0);
+    expect(awayHours(o("auto1"))).toBe(1);
+    expect(awayHours(o("auto1", "away2"))).toBe(4);
+    expect(awayHours(o("auto1", "away2", "away3", "away4"))).toBe(24);
+    expect(bankCap(none)).toBe(1);
+    expect(bankCap(o("auto1"))).toBeCloseTo(720, 9);
+    expect(bankCap(o("auto1", "away2"))).toBeCloseTo(2880, 9);
+    expect(bankCap(o("auto1", "auto5", "away3"))).toBeCloseTo(43_200, 9);
+    expect(seedsPerProblem(none)).toBe(1);
+    expect(seedsPerProblem(o("seeds2"))).toBe(2);
+    expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);
+    expect(seedsPerProblem(o("seeds16"))).toBe(16);
+    // methods in the order they unlock, mc_compress first
+    expect(methods(none)).toEqual(["mc_compress"]);
+    expect(methods(o("shrink", "basin"))).toEqual(["mc_compress", "basin_hopping", "shrink_repair"]);
+    expect(methods(new Set(ids))).toEqual([
+      "mc_compress",
+      "basin_hopping",
+      "shrink_repair",
+      "penalty",
+      "seed",
+      "harden",
+      "morph",
+      "asc",
+      "ls_growth",
+    ]);
+    // method settings are bought too: mc_compress starts at 5 sweeps per evaluation
+    expect(methodParams(none, "mc_compress")).toEqual({ sweepsPerEvaluation: 5 });
+    expect(methodParams(o("sweeps10"), "mc_compress")).toEqual({ sweepsPerEvaluation: 10 });
+    expect(methodParams(o("sweeps10"), "basin_hopping")).toEqual({});
+    expect(queueSize(none)).toBe(1);
+    expect(queueSize(o("queue3"))).toBe(3);
+    expect(laneCount(none)).toBe(1);
+    expect(laneCount(o("lanes2"))).toBe(2);
   });
 });
 
@@ -147,21 +247,28 @@ describe("Tighter runs on the board", () => {
     expect(p.phase).toBe("loaded");
     expect(p.floor).toBe(10);
     expect(hasUnsent(p)).toBe(false);
-    // a run that returns the start unchanged is no record
-    let c = applyRun(s, p, outcome(10, 1), T0);
+    openedRun(s, p, 1, T0);
+    expect(p.nextSeed).toBe(2);
+    // a step that returns the start unchanged is no record
+    let c = applyStep(s, p, step(10, 1, { evaluations: 100 }), T0);
     expect(c.improved).toBe(false);
     expect(p.phase).toBe("loaded");
     // nor one that beats it by less than the floor F
-    c = applyRun(s, p, outcome(10 * (1 - 5e-10), 2), T0);
-    expect(c.counted).toBe(false);
+    c = applyStep(s, p, step(10 * (1 - 5e-10)), T0);
+    expect(c).toMatchObject({ improved: true, counted: false, firstRecord: false, points: null });
     expect(p.phase).toBe("loaded");
-    c = applyRun(s, p, outcome(9.5, 3), T0);
+    c = applyStep(s, p, step(9.5), T0);
     expect(c).toMatchObject({ improved: true, counted: true, firstRecord: true, after: 9.5 });
     expect(p.phase).toBe("ready");
     expect(hasUnsent(p)).toBe(true);
-    expect(p.nextSeed).toBe(4);
-    expect(s.stats.runs).toBe(3);
-    expect(s.stats.evaluations).toBe(90);
+    expect(s.stats.runs).toBe(1);
+    expect(s.stats.evaluations).toBe(102);
+    expect(s.stats.clicks).toBe(3);
+    expect(p.evaluations).toBe(102);
+    // auto-eval's steps count as evaluations, not as clicks
+    applyStep(s, p, step(null, 1, { click: false, evaluations: 4 }), T0);
+    expect(s.stats.clicks).toBe(3);
+    expect(s.stats.evaluations).toBe(106);
   });
 
   it("takes the trim floor when the P + 1 record is smaller than Load all", () => {
@@ -170,74 +277,268 @@ describe("Tighter runs on the board", () => {
     expect(p.floor).toBe(9.8);
   });
 
-  it("keeps the side from growing and accepts only strict, valid results", () => {
+  it("lets Evolve go on after a Compact that did not beat a trim floor", () => {
+    // Compact improved the Load-all board, but not past the trim floor: no record, yet a run's board
+    let { s, p } = game();
+    applyLoadAll(p, board(3), 10, 9.0);
+    expect(evolvable(p)).toBe(false);
+    // the run's start scoring (one evaluation, not Compact's step) does not make the problem evolvable
+    applyStep(s, p, step(null, 1, { click: false, evaluations: 1 }), T0);
+    expect(evolvable(p)).toBe(false);
+    let c = applyStep(s, p, step(9.5, 1, { evaluations: 100, compact: true }), T0);
+    expect(c).toMatchObject({ improved: true, counted: false, firstRecord: false });
+    expect(p.phase).toBe("loaded");
+    expect(p.run).toEqual(run(1));
+    expect(evolvable(p)).toBe(true);
+    // Compact found nothing better at all: the board is still the run's start, and Evolve may go on
+    ({ s, p } = game());
+    applyLoadAll(p, board(3), 10, 9.0);
+    c = applyStep(s, p, step(null, 1, { evaluations: 100, compact: true }), T0);
+    expect(c.improved).toBe(false);
+    expect(evolvable(p)).toBe(true);
+    expect(p.best).toBe(10);
+  });
+
+  it("keeps the side from growing and accepts only strict results with a finite positive score", () => {
     const { s, p } = game();
     applyLoadAll(p, board(3), 10, null);
-    applyRun(s, p, outcome(9.5, 1), T0);
-    for (const bad of [
-      outcome(9.9, 2),
-      outcome(9.4, 3, { strict: false }),
-      outcome(9.4, 4, { valid: false }),
-      outcome(9.4, 5, { best: undefined }),
-      outcome(NaN, 6),
-    ]) {
-      const c = applyRun(s, p, bad, T0);
+    applyStep(s, p, step(9.5), T0);
+    for (const bad of [step(9.9), step(9.5), step(9.4, 3, { best: null }), step(null), step(NaN), step(-1), step(0)]) {
+      const c = applyStep(s, p, bad, T0);
       expect(c.improved).toBe(false);
+      expect(c.points).toBeNull();
       expect(p.best).toBe(9.5);
     }
-    expect(p.deadRuns).toBe(5);
-    // a tiny improvement below the floor still improves the board, but is no event
-    const c = applyRun(s, p, outcome(9.5 * (1 - 1e-12), 7), T0);
+    expect(p.sinceGain).toBe(7);
+    // a tiny improvement below the floor still improves the board, but is no event and is not traced
+    const c = applyStep(s, p, step(9.5 * (1 - 1e-12), 7, { evaluations: 3 }), T0);
     expect(c).toMatchObject({ improved: true, counted: false });
-    expect(p.deadRuns).toBe(6);
-    expect(p.trace.at(-1)).toBe(9.5 * (1 - 1e-12));
+    expect(p.sinceGain).toBe(10);
+    expect(p.trace).toEqual([[1, 9.5]]);
+    // a counted improvement resets the count, and the trace records it by evaluations run here
+    applyStep(s, p, step(9.4, 8, { evaluations: 2 }), T0);
+    expect(p.sinceGain).toBe(0);
+    expect(p.trace).toEqual([
+      [1, 9.5],
+      [13, 9.4],
+    ]);
+  });
+
+  it("thins a long trace, keeping its first and last points", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 10, null);
+    let score = 9.9;
+    for (let i = 0; i < 3 * TRACE_LIMIT; i++) {
+      score *= 1 - 1e-6;
+      applyStep(s, p, step(score), T0);
+      expect(p.trace.length).toBeLessThanOrEqual(TRACE_LIMIT);
+    }
+    expect(p.trace[0]).toEqual([1, 9.9 * (1 - 1e-6)]);
+    expect(p.trace.at(-1)).toEqual([3 * TRACE_LIMIT, p.best]);
+    // still in order of evaluations
+    for (let i = 1; i < p.trace.length; i++) expect(p.trace[i][0]).toBeGreaterThan(p.trace[i - 1][0]);
+  });
+
+  it("spends a problem's seeds as its runs end by themselves", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 10, null);
+    openedRun(s, p, 1, T0);
+    applyStep(s, p, step(9.5), T0);
+    expect(spent(p, 1)).toBe(false);
+    applyStep(s, p, step(9.4, 1, { ended: true }), T0);
+    expect(p.endedRuns).toBe(1);
+    expect(spent(p, 1)).toBe(true);
+    expect(spent(p, 2)).toBe(false);
+    // the next seed opens a new run; when it ends too, two seeds are spent
+    openedRun(s, p, 2, T0);
+    expect(p.runs).toBe(2);
+    expect(p.nextSeed).toBe(3);
+    expect(spent(p, 2)).toBe(false);
+    applyStep(s, p, step(null, 2, { ended: true }), T0);
+    expect(spent(p, 2)).toBe(true);
+    expect(spent(p, 4)).toBe(false);
+  });
+});
+
+describe("Tighter points per click", () => {
+  it("pay each improving click at once, the first record with its bonus", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 1.28 * B, null);
+    // Compact: the first record, against the free floor
+    const c1 = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    expect(c1.firstRecord).toBe(true);
+    expect(c1.points!.firstBonus).toBe(true);
+    expect(s.rp).toBeCloseTo(c1.points!.total, 12);
+    expect(s.rpEarned).toBeCloseTo(c1.points!.total, 12);
+    expect(p.paidTo).toBe(1.2 * B);
+    expect(p.unconfirmed).toBeCloseTo(c1.points!.total, 12);
+    // the next click is measured from what was paid, without the bonus
+    const c2 = applyStep(s, p, step(1.19 * B, 2), T0);
+    expect(c2.points!.firstBonus).toBe(false);
+    expect(c2.points!.delta).toBeCloseTo(1 - 1.19 / 1.2, 12);
+    expect(s.rp).toBeCloseTo(c1.points!.total + c2.points!.total, 12);
+    expect(p.rp).toBeCloseTo(s.rp, 12);
+    expect(unconfirmedPoints(s)).toBeCloseTo(s.rp, 12);
+    // below the floor: no event, nothing paid
+    const c3 = applyStep(s, p, step(1.19 * B * (1 - 1e-12), 3), T0);
+    expect(c3.points).toBeNull();
+    expect(p.paidTo).toBe(1.19 * B);
+  });
+
+  it("pay nothing without a name; on consent, what the board improved pays as one event", () => {
+    const { s, p } = game(false);
+    applyLoadAll(p, board(3), 1.28 * B, null);
+    applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    applyStep(s, p, step(1.18 * B, 2), T0);
+    expect(s.rp).toBe(0);
+    expect(p.paidTo).toBeNull();
+    const pending = pendingPoints(p, s.name)!;
+    expect(pending.firstBonus).toBe(true);
+    expect(pending.delta).toBeCloseTo(1 - 1.18 / 1.28, 12);
+    s.consent = true;
+    expect(payAll(s)).toBeCloseTo(pending.total, 12);
+    expect(s.rp).toBeCloseTo(pending.total, 12);
+    expect(p.paidTo).toBe(1.18 * B);
+    // paid once
+    expect(payAll(s)).toBe(0);
+  });
+
+  it("measure a dealt record from its leader, and pay the bonus for beating another name once", () => {
+    const s = newGame(T0, 1);
+    s.name = "Ada";
+    s.consent = true;
+    const p = newProblem({ N: 24, M: 30, P: 3 }, "loose", T0);
+    addToQueue(s, p);
+    p.phase = "ready";
+    p.board = board(3);
+    p.best = 1.3 * B;
+    p.floor = 1.3 * B;
+    p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
+    // the dealt board is Bob's: nothing to pay or send until a run beats it
+    expect(pendingPoints(p, s.name)).toBeNull();
+    expect(hasUnsent(p)).toBe(false);
+    const c1 = applyStep(s, p, step(1.29 * B, 1), T0);
+    expect(c1.points!.beatBonus).toBe(true);
+    expect(c1.points!.c).toBe(3);
+    expect(c1.points!.firstBonus).toBe(false);
+    expect(p.beatPaid).toBe(true);
+    const c2 = applyStep(s, p, step(1.28 * B, 2), T0);
+    expect(c2.points!.beatBonus).toBe(false);
   });
 });
 
 describe("Tighter answers from the server", () => {
+  /** A first record paid at once (Compact), and a click paid since. */
   function recordOn(s: GameState, p: ProblemState) {
     applyLoadAll(p, board(3), 10, null);
-    applyRun(s, p, outcome(9.5, 1), T0);
+    applyStep(s, p, step(9.5, 1, { evaluations: 100 }), T0);
   }
 
-  it("pays points only for an answer that makes the entry leader", () => {
+  it("confirm points paid per click when the server makes the entry leader", () => {
     const { s, p } = game();
-    // realistic gaps: Load all 28 % above the area bound, Compact 20 %
-    const B = areaLowerBound(24, 30, 3);
-    applyLoadAll(p, board(3), 1.28 * B, null);
-    applyRun(s, p, outcome(1.2 * B, 1), T0);
-    const pending = pendingPoints(p, s.name)!;
-    expect(pending.firstBonus).toBe(true);
-    expect(s.rp).toBe(0);
-    const a = applyAnswer(s, p, null, 1.2 * B, { kind: "leader", score: 1.2 * B, id: 17, pending: false }, T0);
-    expect(a.points!.total).toBeCloseTo(pending.total, 12);
-    expect(s.rp).toBeCloseTo(pending.total, 12);
+    recordOn(s, p);
+    const paid = s.rp;
+    expect(paid).toBeGreaterThan(0);
+    markSending(p, 9.5, "Ada", null, T0);
+    // the points ride with the send
+    expect(p.unconfirmed).toBe(0);
+    expect(p.sending!.rp).toBe(paid);
+    expect(unconfirmedPoints(s)).toBe(paid);
+    const a = applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 17, pending: false }, T0);
+    expect(a).toMatchObject({ confirmed: paid, takenBack: 0, points: null });
+    expect(s.rp).toBe(paid);
+    expect(unconfirmedPoints(s)).toBe(0);
     expect(s.stats.firstRecords).toBe(1);
+    expect(s.stats.submissions).toBe(1);
     expect(p.ourId).toBe(17);
     expect(recordsHeld(s)).toBe(1);
     expect(hasUnsent(p)).toBe(false);
     // the next improvement is measured against our own record, without the first-record bonus
-    applyRun(s, p, outcome(1.19 * B, 2), T0);
+    applyStep(s, p, step(9.4, 2), T0);
     expect(hasUnsent(p)).toBe(true);
-    const next = pendingPoints(p, s.name)!;
-    expect(next.firstBonus).toBe(false);
-    expect(next.beatBonus).toBe(false);
+    expect(s.stats.firstRecords).toBe(1);
   });
 
-  it("pays nothing when another entry got there first, and nothing for refusals", () => {
+  it("take back what another entry's earlier record makes no record, and pay what the board still beats", () => {
     const { s, p } = game();
     recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
+    // a click while the send was on its way
+    applyStep(s, p, step(9.2, 2), T0);
+    const carried = p.sending!.rp;
+    const since = p.unconfirmed;
+    expect(since).toBeGreaterThan(0);
+    const a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.3 }, T0);
+    expect(a.takenBack).toBeCloseTo(carried + since, 12);
+    expect(p.leader?.score).toBe(9.3);
+    expect(p.paidTo).toBe(9.2);
+    // 9.2 still beats the new record 9.3: that much pays again, and goes with the next send
+    expect(a.points).not.toBeNull();
+    expect(a.points!.delta).toBeCloseTo(1 - 9.2 / 9.3, 12);
+    expect(s.rp).toBeCloseTo(a.points!.total, 12);
+    expect(p.unconfirmed).toBeCloseTo(a.points!.total, 12);
+    expect(p.sending).toBeNull();
+    expect(hasUnsent(p)).toBe(true);
+  });
+
+  it("take back everything when the board no longer beats the record, or the problem closes", () => {
+    let { s, p } = game();
+    recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
     let a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.3 }, T0);
     expect(a.points).toBeNull();
     expect(s.rp).toBe(0);
-    expect(p.leader?.score).toBe(9.3);
+    expect(s.rpEarned).toBe(0);
     expect(hasUnsent(p)).toBe(false);
-    a = applyAnswer(s, p, null, 9.5, { kind: "refused", status: 400, reasons: ["nope"] }, T0);
-    expect(p.refused).toEqual({ score: 9.5, reasons: ["nope"] });
+    ({ s, p } = game());
+    recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
+    applyStep(s, p, step(9.4, 2), T0);
     a = applyAnswer(s, p, null, 9.5, { kind: "closed", reasons: ["closed"] }, T0);
     expect(p.closed).toBe(true);
-    expect(hasUnsent(p)).toBe(false);
     expect(s.rp).toBe(0);
+    expect(p.unconfirmed).toBe(0);
+    expect(hasUnsent(p)).toBe(false);
+  });
+
+  it("take back only the refused send's points; a 429 keeps them for the next send", () => {
+    const { s, p } = game();
+    recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
+    const carried = p.sending!.rp;
+    const c = applyStep(s, p, step(9.4, 2), T0);
+    let a = applyAnswer(s, p, null, 9.5, { kind: "refused", status: 422, reasons: ["overlap"] }, T0);
+    expect(a.takenBack).toBe(carried);
+    expect(p.refused).toEqual({ score: 9.5, reasons: ["overlap"] });
+    expect(s.rp).toBeCloseTo(c.points!.total, 12);
+    expect(p.unconfirmed).toBeCloseTo(c.points!.total, 12);
+    // rate-limited: not looked at, so nothing is taken and the points wait in the problem
+    markSending(p, 9.4, "Ada", null, T0);
+    const submissions = s.stats.submissions;
+    a = applyAnswer(s, p, null, 9.4, { kind: "rate-limited", reasons: ["wait"] }, T0);
+    expect(a.takenBack).toBe(0);
+    expect(p.sending).toBeNull();
+    expect(p.unconfirmed).toBeCloseTo(c.points!.total, 12);
+    expect(s.stats.submissions).toBe(submissions);
+    // no answer at all: the send is kept, points and all, to be recognised later
+    markSending(p, 9.4, "Ada", null, T0);
+    a = applyAnswer(s, p, null, 9.4, { kind: "offline" }, T0);
+    expect(p.sending?.rp).toBeCloseTo(c.points!.total, 12);
+    expect(s.rp).toBeCloseTo(c.points!.total, 12);
+  });
+
+  it("never take the balance below zero when the points were already spent", () => {
+    const { s, p } = game();
+    recordOn(s, p);
+    const paid = s.rp;
+    s.rp = paid + 1;
+    expect(buy(s, "trace")).toBe(true);
+    markSending(p, 9.5, "Ada", null, T0);
+    const a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.0 }, T0);
+    expect(a.takenBack).toBe(paid);
+    expect(s.rp).toBe(0);
+    expect(s.rpEarned).toBe(0);
+    expect(p.rp).toBe(0);
   });
 
   it("does not resend a refused board, but sends the next one", () => {
@@ -245,7 +546,7 @@ describe("Tighter answers from the server", () => {
     recordOn(s, p);
     applyAnswer(s, p, null, 9.5, { kind: "refused", status: 422, reasons: ["overlap"] }, T0);
     expect(hasUnsent(p)).toBe(false);
-    applyRun(s, p, outcome(9.4, 2), T0);
+    applyStep(s, p, step(9.4, 2), T0);
     expect(hasUnsent(p)).toBe(true);
   });
 
@@ -257,13 +558,60 @@ describe("Tighter answers from the server", () => {
     expect(recordsHeld(s)).toBe(1);
     expect(applyLeader(p, { score: 9.2, name: "Bob", id: 18 }).lost).toBe(true);
     expect(recordsHeld(s)).toBe(0);
-    // taking it back from another name pays the beat bonus once
-    applyRun(s, p, outcome(9.1, 2), T0);
-    const before = { score: 9.2, name: "Bob", id: 18 };
-    const a = applyAnswer(s, p, before, 9.1, { kind: "leader", score: 9.1, id: 19, pending: false }, T0);
-    expect(a.points!.beatBonus).toBe(true);
+    // taking it back from another name pays the beat bonus once, measured from what was paid
+    const c = applyStep(s, p, step(9.1, 2), T0);
+    expect(c.points!.beatBonus).toBe(true);
+    expect(c.points!.delta).toBeCloseTo(1 - 9.1 / 9.5, 12);
     expect(p.beatPaid).toBe(true);
-    expect(submitTarget(p, 9.1)).toBe(9.1);
+    expect(submitTarget(p, 9.2)).toBe(9.2);
+    expect(submitTarget(p, null)).toBe(10);
+  });
+
+  it("settles a send whose answer was lost: confirmed if it leads, else its points wait for the next", () => {
+    let { s, p } = game();
+    recordOn(s, p);
+    const paid = s.rp;
+    markSending(p, 9.5, "Ada", null, T0);
+    let r = applyLeader(p, { score: 9.5, name: "Ada", id: 9 }, s, T0);
+    expect(r).toMatchObject({ reconciled: true, confirmed: paid, lost: false });
+    expect(s.rp).toBe(paid);
+    expect(p.ourId).toBe(9);
+    expect(p.sending).toBeNull();
+    ({ s, p } = game());
+    recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
+    r = applyLeader(p, { score: 9.3, name: "Bob", id: 4 }, s, T0);
+    expect(r).toMatchObject({ reconciled: false, confirmed: 0 });
+    expect(p.sending).toBeNull();
+    expect(p.unconfirmed).toBe(paid);
+    expect(s.rp).toBe(paid);
+  });
+
+  it("takes back unsent points when sending is switched off, and pays again from the last confirmed score", () => {
+    const { s, p } = game();
+    recordOn(s, p);
+    markSending(p, 9.5, "Ada", null, T0);
+    applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 17, pending: false }, T0);
+    const confirmed = s.rp;
+    const c = applyStep(s, p, step(9.4, 2), T0);
+    expect(withdrawConsent(s)).toBeCloseTo(c.points!.total, 12);
+    expect(s.consent).toBe(false);
+    expect(s.rp).toBeCloseTo(confirmed, 12);
+    expect(p.paidTo).toBe(9.5);
+    // nothing pays while sending is off
+    expect(applyStep(s, p, step(9.3, 3), T0).points).toBeNull();
+    // back on: the board pays again from the last confirmed score, 9.5, as one event
+    s.consent = true;
+    const again = pendingPoints(p, s.name)!;
+    expect(again.delta).toBeCloseTo(1 - 9.3 / 9.5, 12);
+    expect(payAll(s)).toBeCloseTo(again.total, 12);
+    expect(p.paidTo).toBe(9.3);
+    // a send already on its way keeps its points until its answer
+    markSending(p, 9.3, "Ada", null, T0);
+    const riding = p.sending!.rp;
+    expect(withdrawConsent(s)).toBe(0);
+    expect(p.sending!.rp).toBe(riding);
+    expect(p.paidTo).toBe(9.3);
   });
 
   it("keeps a dropped problem until its best is sent", () => {
@@ -276,6 +624,31 @@ describe("Tighter answers from the server", () => {
     addToQueue(s, other);
     expect(drop(s, other.key, T0)).toBe(true);
     expect(s.past.map((q) => q.key)).toEqual(["21/21/40"]);
+  });
+});
+
+describe("Tighter auto-eval's bank", () => {
+  it("earns at its rate, up to its cap, from where it last stood", () => {
+    const s = newGame(T0, 1);
+    expect(accrue(s, T0 + 10_000, 0.2, 720)).toBeCloseTo(2, 12);
+    expect(s.bank).toBeCloseTo(2, 12);
+    expect(s.bankAt).toBe(T0 + 10_000);
+    // a long absence fills it to the cap, no further
+    expect(accrue(s, T0 + 10_000 + 86_400_000, 0.2, 720)).toBeCloseTo(718, 9);
+    expect(s.bank).toBe(720);
+    // time never runs backwards: an earlier clock earns nothing and leaves bankAt where it was
+    const at = s.bankAt;
+    s.bank = 0;
+    expect(accrue(s, at - 60_000, 1, 720)).toBe(0);
+    expect(s.bankAt).toBe(at);
+    // off (rate 0): nothing earned, but the clock moves on, so nothing is owed for that time later
+    expect(accrue(s, at + 60_000, 0, 720)).toBe(0);
+    expect(s.bank).toBe(0);
+    expect(s.bankAt).toBe(at + 60_000);
+    // a bank above a smaller cap keeps what it has, and earns nothing more
+    s.bank = 1000;
+    expect(accrue(s, at + 120_000, 1, 720)).toBe(0);
+    expect(s.bank).toBe(1000);
   });
 });
 
@@ -364,8 +737,8 @@ describe("Tighter dealer", () => {
   });
 
   it("draws reproducibly and never deals a problem twice", () => {
-    const a = newDealer(42, T0);
-    const b = newDealer(42, T0);
+    const a = newDealer(42);
+    const b = newDealer(42);
     const seen = new Set<string>();
     for (let i = 0; i < 20; i++) {
       const pa = drawProblem(a, STARTER, seen)!;
@@ -418,41 +791,58 @@ describe("Tighter auto-eval", () => {
       return p;
     });
   }
+  const base = { busy: new Set<string>(), seeds: 1 };
 
   it("keeps lane 1 on the board's problem and lane 2 on another, without Auto-advance", () => {
     const q = queue();
     const owned = new Set<UpgradeId>(["auto1"]);
-    expect(autoTarget({ lane: 0, queue: q, focus: "21/21/40", busy: new Set(), owned })).toEqual({
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toEqual({
       key: "21/21/40",
       action: "evolve",
     });
-    expect(autoTarget({ lane: 1, queue: q, focus: "21/21/40", busy: new Set(), owned })).toEqual({
+    expect(autoTarget({ ...base, lane: 1, queue: q, focus: "21/21/40", owned })).toEqual({
       key: "24/30/60",
       action: "evolve",
     });
     // never two lanes on one problem
-    expect(autoTarget({ lane: 0, queue: q, focus: "21/21/40", busy: new Set(["21/21/40"]), owned })).toBeNull();
+    expect(
+      autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", busy: new Set(["21/21/40"]), owned }),
+    ).toBeNull();
+    // a problem whose seeds are spent has nothing left to give
+    q[1].endedRuns = 1;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toBeNull();
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned, seeds: 2 })?.key).toBe("21/21/40");
     // a problem without a record is left to the player
+    q[1].endedRuns = 0;
     q[1].phase = "bare";
-    expect(autoTarget({ lane: 0, queue: q, focus: "21/21/40", busy: new Set(), owned })).toBeNull();
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toBeNull();
   });
 
-  it("moves on when runs stop paying, and compacts fresh problems, with Auto-advance", () => {
+  it("moves on when evaluations stop paying, and compacts fresh problems, with Auto-advance", () => {
     const q = queue();
     const owned = new Set<UpgradeId>(["auto1", "advance"]);
-    q[0].deadRuns = STALE_RUNS;
-    q[1].deadRuns = 3;
-    q[2].deadRuns = 1;
-    expect(autoTarget({ lane: 0, queue: q, focus: q[0].key, busy: new Set(), owned })?.key).toBe("27/27/80");
-    q[2].deadRuns = STALE_RUNS;
-    q[1].deadRuns = STALE_RUNS;
+    q[0].sinceGain = STALE_EVALS;
+    q[1].sinceGain = 300;
+    q[2].sinceGain = 10;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
+    // spent problems are skipped, however fresh their last gain
+    q[2].endedRuns = 1;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
+    q[2].endedRuns = 0;
+    q[2].sinceGain = STALE_EVALS;
+    q[1].sinceGain = STALE_EVALS;
     // everything has stopped paying: the least stale one still runs
     q[0].lastRunAt = 5;
-    expect(autoTarget({ lane: 0, queue: q, focus: q[0].key, busy: new Set(), owned })?.key).toBe("21/21/40");
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
     q.push(newProblem({ N: 30, M: 30, P: 60 }, "open", T0));
-    expect(autoTarget({ lane: 1, queue: q, focus: q[0].key, busy: new Set(), owned })).toEqual({
+    expect(autoTarget({ ...base, lane: 1, queue: q, focus: q[0].key, owned })).toEqual({
       key: "30/30/60",
       action: "compact",
+    });
+    // a bank that cannot pay for a Compact sends the lane to a run elsewhere
+    expect(autoTarget({ ...base, lane: 1, queue: q, focus: q[0].key, owned, canCompact: false })).toEqual({
+      key: "21/21/40",
+      action: "evolve",
     });
   });
 

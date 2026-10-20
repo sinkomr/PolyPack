@@ -10,7 +10,7 @@ import {
   recordSend,
   sentLastMinute,
 } from "../src/tighter/pacer";
-import { DEAL_INTERVAL_MS, canDeal, newDealer, nextDealAt, refill, takeToken } from "../src/tighter/dealer";
+import { DEAL_CLICKS, canDeal, dealEvals, evalsToNextDeal, newDealer, refill, takeToken } from "../src/tighter/dealer";
 
 const T0 = 1_000_000;
 
@@ -71,25 +71,53 @@ describe("Tighter submission pacing", () => {
 });
 
 describe("Tighter deal rate", () => {
-  it("deals one problem per slot every 5 minutes, at most one per slot waiting", () => {
-    const d = newDealer(7, T0);
-    expect(canDeal(d, 1, T0)).toBe(true);
+  it("deals one problem per slot per 300 clicks' worth of evaluations, at most one per slot waiting", () => {
+    expect(DEAL_CLICKS).toBe(300);
+    expect(dealEvals(1)).toBe(300);
+    // more evaluations a click: still 300 clicks
+    expect(dealEvals(4)).toBe(1200);
+    expect(dealEvals(0)).toBe(300);
+    const d = newDealer(7);
+    expect(canDeal(d, 1, 0, 1)).toBe(true);
     takeToken(d);
-    expect(nextDealAt(d, 1, T0 + 60_000)).toBeCloseTo(T0 + DEAL_INTERVAL_MS, 6);
-    expect(canDeal(d, 1, T0 + DEAL_INTERVAL_MS - 1)).toBe(false);
-    expect(canDeal(d, 1, T0 + DEAL_INTERVAL_MS)).toBe(true);
-    // a long absence fills the bucket to the number of slots, no further
-    refill(d, 3, T0 + 10 * DEAL_INTERVAL_MS);
+    expect(evalsToNextDeal(d, 1, 150, 1)).toBe(150);
+    expect(canDeal(d, 1, 299, 1)).toBe(false);
+    expect(canDeal(d, 1, 300, 1)).toBe(true);
+    d.tokens = 0;
+    expect(evalsToNextDeal(d, 1, 300, 4)).toBe(1200);
+    // a long session fills the bucket to the number of slots, no further
+    refill(d, 3, 100_000, 1);
     expect(d.tokens).toBe(3);
     takeToken(d);
     takeToken(d);
     takeToken(d);
-    expect(canDeal(d, 3, T0 + 10 * DEAL_INTERVAL_MS)).toBe(false);
-    // three slots refill three times as fast
-    expect(nextDealAt(d, 3, T0 + 10 * DEAL_INTERVAL_MS)).toBeCloseTo(
-      T0 + 10 * DEAL_INTERVAL_MS + DEAL_INTERVAL_MS / 3,
-      6,
-    );
+    expect(canDeal(d, 3, 100_000, 1)).toBe(false);
+    // three slots earn three times as fast
+    expect(evalsToNextDeal(d, 3, 100_000, 1)).toBe(100);
     expect(d.dealt).toBe(4);
+    // evaluations are counted once: an older count changes nothing
+    refill(d, 3, 50_000, 1);
+    expect(d.evalsAt).toBe(100_000);
+    expect(d.tokens).toBe(0);
+  });
+
+  it("deals on credit when the queue is empty, and the next evaluations repay the debt", () => {
+    const d = newDealer(7);
+    takeToken(d);
+    takeToken(d);
+    expect(d.tokens).toBe(-1);
+    expect(canDeal(d, 1, 300, 1)).toBe(false);
+    expect(evalsToNextDeal(d, 1, 300, 1)).toBe(300);
+    expect(canDeal(d, 1, 600, 1)).toBe(true);
+  });
+
+  it("counts the evaluations left exactly, whatever the rounding in the bucket", () => {
+    const d = newDealer(7);
+    takeToken(d);
+    expect(evalsToNextDeal(d, 1, 100, 1)).toBe(200);
+    const e = newDealer(7);
+    refill(e, 3, 0, 1);
+    takeToken(e);
+    expect(evalsToNextDeal(e, 3, 70, 1)).toBe(30);
   });
 });

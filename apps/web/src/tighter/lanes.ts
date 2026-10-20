@@ -1,68 +1,51 @@
-import type { Container, PackingConfig } from "@polypack/geometry";
-import type { Result } from "@polypack/solver";
-import type { SolveRequest, SolveResponse } from "../solve-protocol";
+import type { OpenRunRequest, RunState } from "./open-run";
+import type { HostReply, HostRequest } from "./run-host";
 
 /**
- * One lane: one solver worker (the Board page's solve-worker.ts), running one run() at a time.
- * Every run is exactly what the Solve panel sends: a method, its parameters, a seed, an
- * evaluations-only budget and the current board as start. Controls are the worker's own: pause,
- * resume and stop. A stop the worker does not answer within STOP_GRACE_MS ends with the worker
- * terminated and replaced, keeping the last strict preview it sent, as the Solve panel does.
+ * One lane: one worker (run-worker.ts) holding at most one open run. The page opens a run on a
+ * problem's board, then steps it: each step allows a number of evaluations (a click's, or one of
+ * auto-eval's) and answers with the run's state once they are done. Steps of one run are done in
+ * the order they were sent.
  */
-export const STOP_GRACE_MS = 1500;
 
-export interface LaneRequest {
-  problem: { N: number; M: number; P: number };
-  method: string;
-  params: Record<string, unknown>;
-  budget: { evals: number };
-  seed: number;
-  start: PackingConfig;
-}
-
-export interface LaneProgress {
-  evaluations: number;
-  elapsed: number;
-  /** The best strict configuration so far, and its auto-oriented container. */
-  preview?: PackingConfig;
-  previewContainer?: Container;
-}
-
-export type LaneEnd =
-  | { kind: "result"; result: Result }
-  /** Stopped by force: only the last strict preview is left. */
-  | { kind: "stopped"; preview?: PackingConfig; container?: Container; evaluations: number; elapsed: number }
-  | { kind: "error"; message: string };
+export type OpenAnswer =
+  { ok: true; params: Record<string, unknown>; state: RunState } | { ok: false; message: string };
+export type StepAnswer = { ok: true; state: RunState; ms: number } | { ok: false; message: string };
 
 export class Lane {
   private worker: Worker | null = null;
   private nextId = 0;
-  private active: {
-    id: number;
-    resolve: (end: LaneEnd) => void;
-    onProgress: (p: LaneProgress) => void;
-    last: LaneProgress;
-    stopTimer: number;
-  } | null = null;
-  paused = false;
+  private nextStep = 0;
+  /** The open run's id (0: none). */
+  private runId = 0;
+  private opening: ((a: OpenAnswer) => void) | null = null;
+  private steps = new Map<number, (a: StepAnswer) => void>();
+  private closing = new Map<number, (s: RunState | null) => void>();
+  /** The open run's state while a long step goes, at most ten times a second. */
+  onProgress: ((s: RunState) => void) | null = null;
 
   constructor(readonly index: number) {}
 
-  get busy(): boolean {
-    return this.active !== null;
+  get open(): boolean {
+    return this.runId !== 0;
+  }
+
+  /** Steps sent and not answered yet. */
+  get pending(): number {
+    return this.steps.size + (this.opening ? 1 : 0);
   }
 
   private ensureWorker(): Worker {
     if (this.worker) return this.worker;
-    const worker = new Worker(new URL("../solve-worker.ts", import.meta.url), { type: "module" });
-    worker.onmessage = (e: MessageEvent<SolveResponse>) => {
+    const worker = new Worker(new URL("./run-worker.ts", import.meta.url), { type: "module" });
+    worker.onmessage = (e: MessageEvent<HostReply>) => {
       if (worker === this.worker) this.receive(e.data);
     };
     const failed = (message: string) => {
       if (worker !== this.worker) return;
       worker.terminate();
       this.worker = null;
-      this.finish({ kind: "error", message });
+      this.fail(message);
     };
     worker.onerror = (e) => {
       e.preventDefault();
@@ -73,81 +56,95 @@ export class Lane {
     return worker;
   }
 
-  /** Starts a run; resolves when it ends. One run at a time. */
-  run(request: LaneRequest, onProgress: (p: LaneProgress) => void): Promise<LaneEnd> {
-    if (this.active) return Promise.resolve({ kind: "error", message: "this lane is busy" });
-    let worker: Worker;
-    try {
-      worker = this.ensureWorker();
-    } catch (error) {
-      return Promise.resolve({ kind: "error", message: `the solver could not start: ${String(error)}` });
-    }
+  private post(m: HostRequest): void {
+    this.ensureWorker().postMessage(m);
+  }
+
+  /** Opens a run (closing the one open). */
+  openRun(request: OpenRunRequest): Promise<OpenAnswer> {
+    if (this.opening) return Promise.resolve({ ok: false, message: "a run is being opened" });
     const id = ++this.nextId;
-    return new Promise<LaneEnd>((resolve) => {
-      this.active = { id, resolve, onProgress, last: { evaluations: 0, elapsed: 0 }, stopTimer: 0 };
-      const message: SolveRequest = { type: "run", id, ...request };
-      // a fresh worker queues this until its script has loaded
-      worker.postMessage(message);
-      if (this.paused) worker.postMessage({ type: "pause", id } satisfies SolveRequest);
+    this.runId = id;
+    return new Promise<OpenAnswer>((resolve) => {
+      this.opening = resolve;
+      try {
+        this.post({ type: "open", id, request });
+      } catch (error) {
+        this.opening = null;
+        this.runId = 0;
+        resolve({ ok: false, message: `the solver could not start: ${String(error)}` });
+      }
     });
   }
 
-  private receive(m: SolveResponse): void {
-    const a = this.active;
-    if (m.type === "ready" || !a || m.id !== a.id) return;
-    if (m.type === "progress") {
-      a.last = {
-        evaluations: m.frame.evaluations,
-        elapsed: m.frame.elapsed,
-        preview: m.preview ?? a.last.preview,
-        previewContainer: m.previewContainer ?? a.last.previewContainer,
-      };
+  /** Allows `evals` more evaluations of the open run. */
+  step(evals: number): Promise<StepAnswer> {
+    if (!this.runId) return Promise.resolve({ ok: false, message: "no open run" });
+    const step = ++this.nextStep;
+    return new Promise<StepAnswer>((resolve) => {
+      this.steps.set(step, resolve);
+      this.post({ type: "step", id: this.runId, step, evals });
+    });
+  }
+
+  /** Closes the open run; resolves with its final state (null without one). */
+  close(): Promise<RunState | null> {
+    const id = this.runId;
+    if (!id || !this.worker) return Promise.resolve(null);
+    this.runId = 0;
+    return new Promise((resolve) => {
+      this.closing.set(id, resolve);
+      this.post({ type: "close", id });
+    });
+  }
+
+  private receive(m: HostReply): void {
+    if (m.type === "closed") {
+      this.closing.get(m.id)?.(m.state);
+      this.closing.delete(m.id);
+      return;
+    }
+    // a step is answered whatever happened to its run since (a close answers it as ended)
+    if (m.type === "stepped" || (m.type === "error" && m.step !== undefined)) {
+      const resolve = this.steps.get(m.step!);
+      this.steps.delete(m.step!);
+      if (m.type === "stepped") {
+        resolve?.({ ok: true, state: m.state, ms: m.ms });
+        if (m.state.ended && m.id === this.runId) this.runId = 0;
+      } else resolve?.({ ok: false, message: m.message });
+      return;
+    }
+    if (m.id !== this.runId) return;
+    if (m.type === "opened") {
+      const resolve = this.opening;
+      this.opening = null;
+      resolve?.({ ok: true, params: m.params, state: m.state });
+    } else if (m.type === "progress") {
       try {
-        a.onProgress(a.last);
+        this.onProgress?.(m.state);
       } catch {
         // a failing observer must not stop the run
       }
-    } else if (m.type === "result") this.finish({ kind: "result", result: m.result });
-    else if (m.type === "error") this.finish({ kind: "error", message: m.message });
+    } else if (m.type === "error") {
+      this.runId = 0;
+      this.fail(m.message);
+    }
   }
 
-  private finish(end: LaneEnd): void {
-    const a = this.active;
-    if (!a) return;
-    clearTimeout(a.stopTimer);
-    this.active = null;
-    a.resolve(end);
-  }
-
-  setPaused(paused: boolean): void {
-    if (this.paused === paused) return;
-    this.paused = paused;
-    if (this.active && this.worker)
-      this.worker.postMessage({ type: paused ? "pause" : "resume", id: this.active.id } satisfies SolveRequest);
-  }
-
-  /** Stops the current run; it ends with its best result so far. */
-  stop(): void {
-    const a = this.active;
-    if (!a || !this.worker || a.stopTimer) return;
-    this.worker.postMessage({ type: "stop", id: a.id } satisfies SolveRequest);
-    a.stopTimer = window.setTimeout(() => {
-      if (this.active !== a) return;
-      this.worker?.terminate();
-      this.worker = null;
-      this.finish({
-        kind: "stopped",
-        preview: a.last.preview,
-        container: a.last.previewContainer,
-        evaluations: a.last.evaluations,
-        elapsed: a.last.elapsed,
-      });
-    }, STOP_GRACE_MS);
+  private fail(message: string): void {
+    this.runId = 0;
+    const opening = this.opening;
+    this.opening = null;
+    opening?.({ ok: false, message });
+    for (const resolve of this.steps.values()) resolve({ ok: false, message });
+    this.steps.clear();
+    for (const resolve of this.closing.values()) resolve(null);
+    this.closing.clear();
   }
 
   terminate(): void {
     this.worker?.terminate();
     this.worker = null;
-    this.finish({ kind: "error", message: "the lane was closed" });
+    this.fail("the lane was closed");
   }
 }

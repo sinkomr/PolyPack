@@ -8,14 +8,16 @@ import type { UpgradeId } from "./upgrades";
 /**
  * The dealer: which problem the player gets next, and how often (design.md §5, §6).
  *
- * The deal rate replaces a server-side limit on new problems per address: each queue slot is dealt
- * at most one problem per DEAL_INTERVAL_MS, as a token bucket of `slots` tokens that refills at
- * `slots` per interval. Every problem is checked with GET /api/problems just before it is dealt.
+ * New problems are earned by work, not time: each queue slot is dealt one problem per DEAL_CLICKS
+ * clicks' worth of evaluations (at the evaluations a click does when they run), as a token bucket of
+ * `slots` tokens. Clicking faster, or auto-eval, brings the next problem sooner. The rate also stands
+ * in for a server-side limit on new problems per address. Every problem is checked with
+ * GET /api/problems just before it is dealt.
  *
  * Pure apart from the random draws, which come from a seeded generator kept in the save, so a game
  * started with the same seed is dealt the same candidates.
  */
-export const DEAL_INTERVAL_MS = 5 * 60_000;
+export const DEAL_CLICKS = 300;
 /** A loose record is a site record of N, M <= 20 whose gap to the area bound is above this. */
 export const LOOSE_GAP = 0.12;
 /** Shapes of loose records: circles and 3 to 20 sides. */
@@ -30,17 +32,20 @@ export interface DealerState {
   dealt: number;
   /** Deal tokens; a deal takes one. */
   tokens: number;
-  /** When `tokens` was last brought up to date. */
-  updatedAt: number;
+  /** The player's evaluations run when `tokens` was last brought up to date. */
+  evalsAt: number;
 }
 
-export const newDealer = (seed: number, now: number): DealerState => ({
+export const newDealer = (seed: number): DealerState => ({
   seed: seed >>> 0,
   draws: 0,
   dealt: 0,
   tokens: 1,
-  updatedAt: now,
+  evalsAt: 0,
 });
+
+/** Evaluations that earn one slot one problem: DEAL_CLICKS clicks of `perClick` evaluations. */
+export const dealEvals = (perClick: number) => DEAL_CLICKS * Math.max(1, perClick);
 
 /** mulberry32, the solver's generator (seededRandom), one value at a time. */
 export function mulberry32(state: number): number {
@@ -57,28 +62,35 @@ export function nextRandom(d: DealerState): number {
   return value;
 }
 
-/** Brings the tokens up to `now`: `slots` per DEAL_INTERVAL_MS, at most `slots`. */
-export function refill(d: DealerState, slots: number, now: number): void {
-  const elapsed = Math.max(0, now - d.updatedAt);
-  d.tokens = Math.min(slots, d.tokens + (elapsed * slots) / DEAL_INTERVAL_MS);
-  d.updatedAt = Math.max(d.updatedAt, now);
+/**
+ * Brings the tokens up to `evaluations` (the player's evaluations run): `slots` per
+ * dealEvals(perClick) evaluations, at most `slots`.
+ */
+export function refill(d: DealerState, slots: number, evaluations: number, perClick: number): void {
+  const run = Math.max(0, evaluations - d.evalsAt);
+  d.tokens = Math.min(slots, d.tokens + (run * slots) / dealEvals(perClick));
+  d.evalsAt = Math.max(d.evalsAt, evaluations);
 }
 
-export function canDeal(d: DealerState, slots: number, now: number): boolean {
-  refill(d, slots, now);
+export function canDeal(d: DealerState, slots: number, evaluations: number, perClick: number): boolean {
+  refill(d, slots, evaluations, perClick);
   return d.tokens >= 1 - 1e-9;
 }
 
-/** When the next token arrives (now when one is there). */
-export function nextDealAt(d: DealerState, slots: number, now: number): number {
-  refill(d, slots, now);
-  if (d.tokens >= 1 - 1e-9) return now;
-  return now + ((1 - d.tokens) * DEAL_INTERVAL_MS) / slots;
+/** Evaluations still to run before the next token (0 when one is there). */
+export function evalsToNextDeal(d: DealerState, slots: number, evaluations: number, perClick: number): number {
+  refill(d, slots, evaluations, perClick);
+  if (d.tokens >= 1 - 1e-9) return 0;
+  // less a hair, so that a rounding error in the bucket does not show one evaluation too many
+  return Math.ceil(((1 - d.tokens) * dealEvals(perClick)) / slots - 1e-9);
 }
 
-/** Takes one token for a problem dealt. */
+/**
+ * Takes one token for a problem dealt. A problem dealt without a token (the queue was empty, so the
+ * player had nothing to work on) leaves the bucket in debt, repaid by the next evaluations.
+ */
 export function takeToken(d: DealerState): void {
-  d.tokens = Math.max(0, d.tokens - 1);
+  d.tokens -= 1;
   d.dealt++;
 }
 
