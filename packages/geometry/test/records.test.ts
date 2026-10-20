@@ -31,6 +31,28 @@ describe("data/records.json", () => {
     for (const r of flagged) expect(Number(/\bProved by\b.*?\b(\d{4})\b/.exec(r.citation ?? "")?.[1])).toBeGreaterThanOrEqual(2023);
   });
 
+  it("holds no value below the bound from a proven circle record", () => {
+    // an M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)) (scripts/build-records.ts)
+    const below = records.filter((r) => {
+      const circle = find(r.N, 0, r.P);
+      if (r.M === 0 || circle?.status !== "proven") return false;
+      return r.value + 2 * 10 ** -r.display_precision < 2 * Math.sin(Math.PI / r.M) * circle.value;
+    });
+    expect(below.map((r) => `${r.N}/${r.M}/${r.P}: ${r.display}`)).toEqual([]);
+  });
+
+  it("gives two pentagons in a hexagon and in an octagon PolyPack's own packings, not claimed optimal", () => {
+    // Friedman's 1.53879+ and 1.17774+ lie below that bound and are left out
+    for (const M of [6, 8]) {
+      const r = find(5, M, 2)!;
+      expect(r.status).toBe("best_known");
+      expect(r.source_name).toMatch(/^PolyPack/);
+      const e = evaluate({ N: 5, M, P: 2, pieces: r.pieces!, container_phi: r.container_phi! });
+      expect(e.valid).toBe(true);
+      expect(Math.abs(e.score! - r.value)).toBeLessThan(1e-12);
+    }
+  });
+
   it("has coordinates for every circles-in-a-circle record up to P = 500", () => {
     for (let P = 1; P <= 500; P++) {
       const r = find(0, 0, P);

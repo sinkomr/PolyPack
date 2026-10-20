@@ -40,6 +40,29 @@ for (const file of readdirSync("data/sources")
 const report: string[] = [];
 const tolerance = (r: LiteratureRecord) => 10 ** -r.display_precision;
 
+// ---------- literature values below a bound [CALC] ----------
+// An M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)), so P pieces that fit the
+// M-gon fit that circle too: s ≥ 2 sin(π/M)·ρ, where ρ is the smallest radius of a circle holding
+// the same P pieces. With ρ proven, a source value below this bound is wrong, whatever the source
+// says. It is left out and reported, so that the site neither shows an impossible value nor closes
+// the problem on it. Printed values are truncated, so both sides are allowed their printed precision.
+for (const [k, list] of groups) {
+  const [N, M, P] = k.split("/").map(Number);
+  if (M === 0) continue;
+  const circle = (groups.get(key({ N, M: 0, P })) ?? []).filter((r) => r.status === "proven");
+  if (!circle.length) continue;
+  const rho = Math.min(...circle.map((r) => r.value));
+  const bound = 2 * Math.sin(Math.PI / M) * rho;
+  const kept = list.filter((r) => r.value + 2 * tolerance(r) >= bound);
+  for (const r of list.filter((r) => !kept.includes(r))) {
+    report.push(
+      `${k}: ${r.source_name.split(":")[0]} gives ${r.display} (${r.status}), below ${bound.toFixed(7)}, the bound from ${rho} for a circle; left out`,
+    );
+  }
+  if (kept.length) groups.set(k, kept);
+  else groups.delete(k);
+}
+
 const merged = new Map<string, LiteratureRecord>();
 for (const [k, list] of groups) {
   const ranked = [...list].sort(
@@ -104,6 +127,7 @@ function derive(
   status: LiteratureRecord["status"],
   why: string,
   pieces: Pose[],
+  container_phi = 0,
 ): void {
   const k = key({ N, M, P });
   const existing = merged.get(k);
@@ -117,7 +141,7 @@ function derive(
     // keep the literature entry and its source; add what is derived here
     if (!existing.pieces) {
       existing.pieces = pieces;
-      existing.container_phi = 0;
+      existing.container_phi = container_phi;
       existing.coordinates_note = "Coordinates constructed by PolyPack, not taken from the source.";
     }
     if (status === "trivial_tiling") {
@@ -131,14 +155,14 @@ function derive(
     M,
     P,
     value,
-    display: String(value),
+    display: Number.isInteger(value) ? String(value) : value.toFixed(12),
     display_precision: 12,
     status,
     ...DERIVED,
     conversion_note: "None: computed in this site's units.",
     note: `[CALC] ${why}`,
     pieces,
-    container_phi: 0,
+    container_phi,
   });
 }
 
@@ -183,6 +207,30 @@ for (let k = 1; k * k <= 500; k++) {
     `${k * k} = ${k}² unit triangles tile a triangle of side ${k} with no waste, so s = ${k} is optimal by area.`,
     triangleTiling(k),
   );
+}
+// Two pentagons in a hexagon and in an octagon. Friedman's values for these (1.53879+ and 1.17774+)
+// fall below the bound above and are left out; these packings, PolyPack's own, take their place.
+// The two pentagons meet face to face, so the pair spans r + R from vertex to vertex (r and R the
+// pentagon's inradius and circumradius), and the far vertices sit in opposite corners of a
+// container of circumradius r + R. A pentagon's corner (108°) fits a hexagon's (120°) and an
+// octagon's (135°), and its other vertices lie well inside.
+{
+  const r = 1 / (2 * Math.tan(Math.PI / 5));
+  const R = 1 / (2 * Math.sin(Math.PI / 5));
+  // vertex 0 points along θ + π/2: these poses turn it away from the shared face, along the x axis
+  const pair: Pose[] = [
+    { x: -r, y: 0, theta: Math.PI / 2 },
+    { x: r, y: 0, theta: -Math.PI / 2 },
+  ];
+  const why = (container: string, listed: string, bound: number) =>
+    `Two pentagons face to face, with their far vertices in opposite corners of ${container} of circumradius r + R = ${(r + R).toFixed(6)}, ` +
+    `r and R being the pentagon's inradius and circumradius. Erich Friedman's page listed ${listed} (read 2026-10-07), ` +
+    `below ${bound.toFixed(6)}, the bound from the proven value r + R for two pentagons in a circle; that value is left out. ` +
+    `This packing is PolyPack's own and is not claimed optimal.`;
+  // at φ = 0 a hexagon has corners on the x axis and its side equals its circumradius; an octagon needs φ = π/8
+  derive(5, 6, 2, r + R, "best_known", why("a hexagon", "1.53879+", r + R), pair);
+  const octagon = 2 * Math.sin(Math.PI / 8) * (r + R);
+  derive(5, 8, 2, octagon, "best_known", why("an octagon", "1.17774+", octagon), pair, Math.PI / 8);
 }
 
 // ---------- coordinates constructed here [CALC] ----------

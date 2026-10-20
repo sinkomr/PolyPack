@@ -381,6 +381,7 @@ submits the result only when it is valid and improves on the current leader by t
 <p>Most records come from the literature and carry their source. A few are computed here and say so:
 one piece in a container of its own shape (size 1), k² unit squares tiling a square of side k, and k² unit triangles tiling a triangle of side k.
 Each is a zero-waste tiling, so it meets the area lower bound and is optimal.</p>
+<p>Two more are this site's own packings, listed as best known: two pentagons in a hexagon and two in an octagon. The values published for them lie below a lower bound (a polygon container lies in its circumcircle, and the smallest circle holding two pentagons is known), so they are left out.</p>
 <p class="muted">Published values are quoted with the precision their source prints; the <code>display</code> field holds the printed form and <code>conversion_note</code> says how it was converted to this site's units.</p>
 </main>
 <script>
