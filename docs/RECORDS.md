@@ -22,6 +22,8 @@ The coordinates of circles in a circle for n = 101 to 500 were read on 2026-10-1
 - [CALC] The source prints 30 decimals for 315 of the n up to 500 and 12 decimals for the other 185 (all above 100), in the coordinates and in the radius alike. After conversion the 12-decimal files reproduce the published value to 3.3e-11 and have contacts that overlap by at most 6.2e-11. The site's rule for a valid configuration allows 1e-9, so all 400 new configurations are stored as printed. None was polished and none was left out. `coordinates_note` gives the number of decimals for each.
 - The published `value` and `display` are the source's table entries. Coordinates never change them.
 
+Proofs written for PolyPack, with their review status, are in [docs/proofs/](proofs/README.md).
+
 ## Status of an entry
 
 The project's rule: a claim of proof that is generally accepted is recorded as proven. In this file that means the source reports the result as proved and the proof is dated before the cut-off year, 2023. A more recent claim stays flagged until its acceptance is confirmed.
