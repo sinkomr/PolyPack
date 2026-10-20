@@ -37,17 +37,17 @@
 <line x1="-1.00000" y1="-2.74748" x2="-1.34202" y2="-3.68717" stroke="#c2410c" stroke-width="0.0423" stroke-dasharray="0.0905"/>
 <line x1="1.00000" y1="-2.74748" x2="1.34202" y2="-3.68717" stroke="#c2410c" stroke-width="0.0423" stroke-dasharray="0.0905"/>
 <line x1="2.53209" y1="-1.46190" x2="3.39811" y2="-1.96190" stroke="#c2410c" stroke-width="0.0423" stroke-dasharray="0.0905"/>
-<text transform="translate(2.87939,0.38771) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">0</tspan></text>
-<text transform="translate(1.87939,2.11976) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">1</tspan></text>
-<text transform="translate(-1.87939,2.11976) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">3</tspan></text>
-<text transform="translate(-2.87939,0.38771) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">4</tspan></text>
-<text transform="translate(-2.53209,-1.58190) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">5</tspan></text>
-<text transform="translate(-1.00000,-2.86748) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">6</tspan></text>
-<text transform="translate(1.00000,-2.86748) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">7</tspan></text>
-<text transform="translate(2.53209,-1.58190) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">8</tspan></text>
-<text transform="translate(-1.00000,-0.29633) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">L</text>
-<text transform="translate(1.00000,-0.29633) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">R</text>
-<text transform="translate(0.00000,1.43572) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933">T</text>
+<text transform="translate(2.87939,0.38771) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">0</tspan></text>
+<text transform="translate(1.87939,2.11976) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(-1.87939,2.11976) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">3</tspan></text>
+<text transform="translate(-2.87939,0.38771) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">4</tspan></text>
+<text transform="translate(-2.53209,-1.58190) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">5</tspan></text>
+<text transform="translate(-1.00000,-2.86748) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">6</tspan></text>
+<text transform="translate(1.00000,-2.86748) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">7</tspan></text>
+<text transform="translate(2.53209,-1.58190) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">8</tspan></text>
+<text transform="translate(-1.00000,-0.29633) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">X<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(1.00000,-0.29633) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">X<tspan font-size="8" dy="3">2</tspan></text>
+<text transform="translate(0.00000,1.43572) scale(0.03018,-0.03018)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">X<tspan font-size="8" dy="3">3</tspan></text>
 </g>
 <text x="150.0" y="16" text-anchor="middle" font-size="13" fill="#1f2933">P = 11: radius 1 + 1/sin 20°</text>
 <g transform="translate(450.0,164.0) scale(30.6888,-30.6888)">
@@ -91,19 +91,19 @@
 <line x1="0.00000" y1="-3.23607" x2="0.00000" y2="-4.23607" stroke="#c2410c" stroke-width="0.0456" stroke-dasharray="0.0978"/>
 <line x1="1.90211" y1="-2.61803" x2="2.48990" y2="-3.42705" stroke="#c2410c" stroke-width="0.0456" stroke-dasharray="0.0978"/>
 <line x1="3.07768" y1="-1.00000" x2="4.02874" y2="-1.30902" stroke="#c2410c" stroke-width="0.0456" stroke-dasharray="0.0978"/>
-<text transform="translate(3.07768,0.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">0</tspan></text>
-<text transform="translate(1.90211,2.49803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">1</tspan></text>
-<text transform="translate(-1.90211,2.49803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">3</tspan></text>
-<text transform="translate(-3.07768,0.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">4</tspan></text>
-<text transform="translate(-3.07768,-1.12000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">5</tspan></text>
-<text transform="translate(-1.90211,-2.73803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">6</tspan></text>
-<text transform="translate(0.00000,-3.35607) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">7</tspan></text>
-<text transform="translate(1.90211,-2.73803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">8</tspan></text>
-<text transform="translate(3.07768,-1.12000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">9</tspan></text>
-<text transform="translate(-0.00000,-1.35607) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">u</text>
-<text transform="translate(-1.17557,0.26197) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">l</text>
-<text transform="translate(1.17557,0.26197) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">r</text>
-<text transform="translate(-0.00000,1.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933">T</text>
+<text transform="translate(3.07768,0.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">0</tspan></text>
+<text transform="translate(1.90211,2.49803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(-1.90211,2.49803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">3</tspan></text>
+<text transform="translate(-3.07768,0.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">4</tspan></text>
+<text transform="translate(-3.07768,-1.12000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">5</tspan></text>
+<text transform="translate(-1.90211,-2.73803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">6</tspan></text>
+<text transform="translate(0.00000,-3.35607) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">7</tspan></text>
+<text transform="translate(1.90211,-2.73803) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">8</tspan></text>
+<text transform="translate(3.07768,-1.12000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">9</tspan></text>
+<text transform="translate(-0.00000,-1.35607) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">Y<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(-1.17557,0.26197) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">Y<tspan font-size="8" dy="3">2</tspan></text>
+<text transform="translate(1.17557,0.26197) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">Y<tspan font-size="8" dy="3">3</tspan></text>
+<text transform="translate(-0.00000,1.88000) scale(0.03259,-0.03259)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">Y<tspan font-size="8" dy="3">4</tspan></text>
 </g>
 <text x="450.0" y="16" text-anchor="middle" font-size="13" fill="#1f2933">P = 13: radius 2 + √5</text>
 <g transform="translate(750.0,164.0) scale(26.7286,-26.7286)">
@@ -175,25 +175,25 @@
 <line x1="1.00000" y1="-3.73205" x2="1.25882" y2="-4.69798" stroke="#c2410c" stroke-width="0.0524" stroke-dasharray="0.1122"/>
 <line x1="2.73205" y1="-2.73205" x2="3.43916" y2="-3.43916" stroke="#c2410c" stroke-width="0.0524" stroke-dasharray="0.1122"/>
 <line x1="3.73205" y1="-1.00000" x2="4.69798" y2="-1.25882" stroke="#c2410c" stroke-width="0.0524" stroke-dasharray="0.1122"/>
-<text transform="translate(0.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">O</text>
-<text transform="translate(2.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">0</tspan></text>
-<text transform="translate(1.00000,1.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">1</tspan></text>
-<text transform="translate(-1.00000,1.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">2</tspan></text>
-<text transform="translate(-2.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">3</tspan></text>
-<text transform="translate(-1.00000,-1.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">4</tspan></text>
-<text transform="translate(1.00000,-1.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">H<tspan font-size="8" dy="3">5</tspan></text>
-<text transform="translate(3.73205,0.88000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">0</tspan></text>
-<text transform="translate(2.73205,2.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">1</tspan></text>
-<text transform="translate(1.00000,3.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">2</tspan></text>
-<text transform="translate(-1.00000,3.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">3</tspan></text>
-<text transform="translate(-2.73205,2.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">4</tspan></text>
-<text transform="translate(-3.73205,0.88000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">5</tspan></text>
-<text transform="translate(-3.73205,-1.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">6</tspan></text>
-<text transform="translate(-2.73205,-2.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">7</tspan></text>
-<text transform="translate(-1.00000,-3.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">8</tspan></text>
-<text transform="translate(1.00000,-3.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">9</tspan></text>
-<text transform="translate(2.73205,-2.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">10</tspan></text>
-<text transform="translate(3.73205,-1.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933">W<tspan font-size="8" dy="3">11</tspan></text>
+<text transform="translate(0.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">O</text>
+<text transform="translate(2.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">0</tspan></text>
+<text transform="translate(1.00000,1.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(-1.00000,1.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">2</tspan></text>
+<text transform="translate(-2.00000,-0.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">3</tspan></text>
+<text transform="translate(-1.00000,-1.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">4</tspan></text>
+<text transform="translate(1.00000,-1.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">H<tspan font-size="8" dy="3">5</tspan></text>
+<text transform="translate(3.73205,0.88000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">0</tspan></text>
+<text transform="translate(2.73205,2.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">1</tspan></text>
+<text transform="translate(1.00000,3.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">2</tspan></text>
+<text transform="translate(-1.00000,3.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">3</tspan></text>
+<text transform="translate(-2.73205,2.61205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">4</tspan></text>
+<text transform="translate(-3.73205,0.88000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">5</tspan></text>
+<text transform="translate(-3.73205,-1.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">6</tspan></text>
+<text transform="translate(-2.73205,-2.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">7</tspan></text>
+<text transform="translate(-1.00000,-3.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">8</tspan></text>
+<text transform="translate(1.00000,-3.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">9</tspan></text>
+<text transform="translate(2.73205,-2.85205) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">10</tspan></text>
+<text transform="translate(3.73205,-1.12000) scale(0.03741,-0.03741)" text-anchor="middle" font-size="11" fill="#1f2933" stroke="#ffffff" stroke-width="3" paint-order="stroke">W<tspan font-size="8" dy="3">11</tspan></text>
 </g>
 <text x="750.0" y="16" text-anchor="middle" font-size="13" fill="#1f2933">P = 19: radius 1 + √2 + √6</text>
 </svg>

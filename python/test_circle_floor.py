@@ -26,9 +26,9 @@ class CircleFloor(unittest.TestCase):
         self.assertEqual(F.cos(60), F.const(Fraction(1, 2)))
         x, y = F.e(10).decimal()
         self.assertLess(abs(x * x + y * y - 1), Decimal("1e-80"))
-        # a wrong contact must fail: (L, W4) at 150 degrees instead of 160
+        # a wrong contact must fail: (X1, W4) at 150 degrees instead of 160
         c11 = cf.config_11()
-        self.assertNotEqual(c11.points["W4"] - c11.points["L"], 2 * c11.f.e(150))
+        self.assertNotEqual(c11.points["W4"] - c11.points["X1"], 2 * c11.f.e(150))
 
     def test_decimal_functions_against_mpmath(self):
         try:

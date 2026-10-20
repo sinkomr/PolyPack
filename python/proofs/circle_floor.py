@@ -11,9 +11,12 @@ Standard library only, so CI's plain python3 runs it (`npm run test:python`).
   c_i = a e(phi) is checked as an identity of field elements, as are the closed forms of
   rho0 - 1. Contact directions are exact fractions of a turn, so the congruence condition
   mod 2 pi / N is checked exactly.
-- 70-digit layer (decimal): the polygon packings are built from the same formulas (not from
+- 90-digit layer (decimal): the polygon packings are built from the same formulas (not from
   Packomania's numbers) and checked: contact gaps, clearance of all other pairs, containment
   and the container radius against the floor sqrt(r_N^2 rho0^2 + 1/4).
+- The page's own tables are parsed and compared with this script's data: the summary table of
+  Theorem 2, the values q_n of Section 5.3, the contact and direction tables of Sections
+  5.4-5.6, and the value tables of Sections 10 and 11.
 
 The proof does not rest on this script; it repeats the proof's computations.
 """
@@ -30,7 +33,9 @@ ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs/proofs/circle-container-floor.md"
 
 getcontext().prec = 90
-# Contacts must close to this; a 90-digit computation leaves errors near 1e-85.
+# Tolerance for quantities that are exactly zero in the proof (contact gaps, distances of
+# face normals from contact directions, floor minus farthest vertex); a 90-digit computation
+# leaves errors near 1e-85.
 EXACT = Decimal("1e-60")
 
 # ------------------------------------------------------------------------------------------
@@ -274,8 +279,9 @@ class Config:
     Angles are in degrees, as Fractions.
     """
 
-    def __init__(self, P, label, field, a, rho0_text, points, walls, contacts, identities, classes):
+    def __init__(self, P, label, field, a, rho0_text, points, walls, contacts, identities, classes, index_mod=None):
         self.P = P
+        self.index_mod = index_mod or {}  # how the page's tables reduce indices, e.g. {"W": 12}
         self.label = label
         self.f = field
         self.a = a
@@ -393,7 +399,7 @@ def configurations():
 
 def config_11():
     """Eight circles on the ring of nine positions 10 + 40 k (k != 2) and an inner
-    equilateral triangle L, R, T (docs: Section 5.6)."""
+    equilateral triangle X1 (left), X2 (right), X3 (top) (docs: Section 5.4)."""
     F = Field(36)
     i = F.e(90)
     a = 1 / F.sin(20)
@@ -401,22 +407,22 @@ def config_11():
     sqrt3 = 2 * F.cos(30)
     ks = [0, 1, 3, 4, 5, 6, 7, 8]
     pts = {f"W{k}": a * F.e(10 + 40 * k) for k in ks}
-    pts["L"] = -1 - i * t
-    pts["R"] = 1 - i * t
-    pts["T"] = i * (sqrt3 - t)
+    pts["X1"] = -1 - i * t
+    pts["X2"] = 1 - i * t
+    pts["X3"] = i * (sqrt3 - t)
     walls = {f"W{k}": 10 + 40 * k for k in ks}
     contacts = [(f"W{k}", f"W{k + 1}", 120 + 40 * k) for k in (0, 3, 4, 5, 6, 7)]
     contacts.append(("W8", "W0", 80))
     contacts += [
-        ("L", "R", 0),
-        ("L", "T", 60),
-        ("R", "T", 120),
-        ("L", "W4", 160),
-        ("L", "W5", 220),
-        ("R", "W0", 20),
-        ("R", "W8", 320),
-        ("T", "W1", 20),
-        ("T", "W3", 160),
+        ("X1", "X2", 0),
+        ("X1", "X3", 60),
+        ("X2", "X3", 120),
+        ("X1", "W4", 160),
+        ("X1", "W5", 220),
+        ("X2", "W0", 20),
+        ("X2", "W8", 320),
+        ("X3", "W1", 20),
+        ("X3", "W3", 160),
     ]
     identities = [("a sin 20 = 1", a * F.sin(20) == 1), ("sqrt3^2 = 3", sqrt3 * sqrt3 == 3)]
     return Config(11, "Melissen's 11", F, a, "1 + 1/sin(20 deg)", pts, walls, contacts, identities, [36, 72])
@@ -424,34 +430,34 @@ def config_11():
 
 def config_13():
     """Nine circles at radius 1 + sqrt5 on the positions 18 + 36 k (k != 2), three at radius
-    sqrt5 - 1 in the directions 270, 162, 18, and T = (0, 2) (docs: Section 5.7)."""
+    sqrt5 - 1 in the directions 270 (Y1), 162 (Y2), 18 (Y3), and Y4 = (0, 2) (docs: Section 5.5)."""
     F = Field(20)
     sqrt5 = 4 * F.cos(36) - 1
     A = 1 + sqrt5
     b = sqrt5 - 1
     ks = [0, 1, 3, 4, 5, 6, 7, 8, 9]
     pts = {f"W{k}": A * F.e(18 + 36 * k) for k in ks}
-    pts.update({"u": b * F.e(270), "l": b * F.e(162), "r": b * F.e(18), "T": 2 * F.e(90)})
+    pts.update({"Y1": b * F.e(270), "Y2": b * F.e(162), "Y3": b * F.e(18), "Y4": 2 * F.e(90)})
     walls = {f"W{k}": 18 + 36 * k for k in ks}
     contacts = [(f"W{k}", f"W{(k + 1) % 10}", 126 + 36 * k) for k in (0, 3, 4, 5, 6, 7, 8, 9)]
     contacts += [
-        ("u", "W7", 270),
-        ("r", "W0", 18),
-        ("l", "W4", 162),
-        ("T", "W1", 18),
-        ("T", "W3", 162),
-        ("u", "r", 54),
-        ("u", "l", 126),
-        ("r", "T", 126),
-        ("l", "T", 54),
+        ("Y1", "W7", 270),
+        ("Y3", "W0", 18),
+        ("Y2", "W4", 162),
+        ("Y4", "W1", 18),
+        ("Y4", "W3", 162),
+        ("Y1", "Y3", 54),
+        ("Y1", "Y2", 126),
+        ("Y3", "Y4", 126),
+        ("Y2", "Y4", 54),
     ]
     identities = [("sqrt5^2 = 5", sqrt5 * sqrt5 == 5)]
-    return Config(13, "Fodor's 13", F, A, "2 + sqrt(5)", pts, walls, contacts, identities, every_n(10))
+    return Config(13, "Fodor's 13", F, A, "2 + sqrt(5)", pts, walls, contacts, identities, every_n(10), {"W": 10})
 
 
 def config_19():
     """Twelve circles at radius sqrt2 + sqrt6 on 15 + 30 k, six at radius 2 on 60 j and one at
-    the centre (docs: Section 5.8)."""
+    the centre (docs: Section 5.6)."""
     F = Field(24)
     A = 4 * F.cos(15)
     sqrt2 = 2 * F.cos(45)
@@ -470,7 +476,9 @@ def config_19():
         ("sqrt2^2 = 2", sqrt2 * sqrt2 == 2),
         ("sqrt3^2 = 3", sqrt3 * sqrt3 == 3),
     ]
-    return Config(19, "Fodor's 19", F, A, "1 + sqrt(2) + sqrt(6)", pts, walls, contacts, identities, every_n(24))
+    return Config(
+        19, "Fodor's 19", F, A, "1 + sqrt(2) + sqrt(6)", pts, walls, contacts, identities, every_n(24), {"H": 6, "W": 12}
+    )
 
 
 def every_n(q):
@@ -486,7 +494,7 @@ def six_gaps(N):
 
 def config_six_centre(N):
     """P = 6, centre + five: the circle at 0 touches five circles at radius 2 whose angular
-    gaps are multiples of 360/N, each larger than 60 degrees (docs: Section 6)."""
+    gaps are multiples of 360/N, each larger than 60 degrees (docs: Section 5.7)."""
     F = Field(N)
     gaps = six_gaps(N)
     phis = [Fraction(360 * sum(gaps[:k]), N) for k in range(5)]
@@ -568,7 +576,8 @@ def poses(cfg, N):
 
 
 def vertices(N, pose):
-    """Vertex k at angle theta + pi/2 + 2 pi k / N (PROMPT.md Section 2), counter-clockwise.
+    """Vertex k at angle theta + pi/2 + 2 pi k / N, counter-clockwise, as in
+    packages/geometry/src/shapes.ts (pieceVertices).
     The angles are stepped by complex multiplication with e(2 pi / N); at 90 digits the
     accumulated rounding stays far below EXACT."""
     x, y, theta = pose
@@ -618,8 +627,9 @@ def check_packing(cfg, N, rep):
         normals = normals_of[name]
         for psi in ds:
             u = unit(psi)
-            best = max(n[0] * u[0] + n[1] * u[1] for n in normals)
-            rep.check(abs(best - 1) < EXACT, f"{tag}: {psi} is a face normal of {name}")
+            # distance of e(psi) from the nearest face normal: certifies the angle to ~1e-60
+            best = min(((n[0] - u[0]) ** 2 + (n[1] - u[1]) ** 2).sqrt() for n in normals)
+            rep.check(best < EXACT, f"{tag}: {psi} is a face normal of {name}")
     worst_contact = Decimal(0)
     for i, j, psi in cfg.contacts:
         g = gap_along(unit(psi), vs[i], vs[j])
@@ -668,11 +678,14 @@ def check_vertex_lemma(rep, samples=400):
 
     rng = random.Random(20261019)
     worst = None
-    for _ in range(samples):
+    face_on = Decimal(0)
+    for s in range(samples):
         N = rng.randint(3, 100)
         D = Decimal(rng.random() * 50)
         phi = Decimal(rng.random()) * 2 * dpi()
         theta = Decimal(rng.random()) * 2 * dpi()
+        if s % 4 == 0:  # face-on: a face normal along the radial direction (equality case)
+            theta = phi - dpi() / 2 - dpi() / N + 2 * dpi() * rng.randint(0, N - 1) / N
         pose = (D * dcos(phi), D * dsin(phi), theta)
         r, R = inradius(N), circumradius(N)
         far2 = max(x * x + y * y for x, y in vertices(N, pose))
@@ -685,12 +698,16 @@ def check_vertex_lemma(rep, samples=400):
         rep.check(abs(far2 - formula) < EXACT, f"vertex lemma formula N={N}")
         slack = far2 - ((D + r) ** 2 + Decimal(1) / 4)
         rep.check(slack > -EXACT, f"vertex lemma N={N} D={D}")
-        worst = slack if worst is None else min(worst, slack)
-    return worst
+        if s % 4 == 0:
+            face_on = max(face_on, abs(slack))
+        else:
+            worst = slack if worst is None else min(worst, slack)
+    rep.check(face_on < EXACT, "vertex lemma: equality when face-on")
+    return worst, face_on
 
 
 def theorem3_six(N):
-    """Lemma 4 lists the optimal 6-configurations: the hexagon on radius 2, or the centre
+    """Lemma 5 lists the optimal 6-configurations: the hexagon on radius 2, or the centre
     and five circles on radius 2 with angular gaps of at least 60 degrees. Is one of them
     commensurate with N? For the five, the centre touches all of them, so (if the
     configuration is commensurate) the gaps are multiples of 360/N: compositions of N into
@@ -793,6 +810,170 @@ def doc_rows():
     return out
 
 
+# ------------------------------------------------------------------------------------------
+# The page's own tables, parsed from the Markdown and compared with the data above
+# ------------------------------------------------------------------------------------------
+
+
+def _evaluate(expr, env):
+    """Exact value of an arithmetic expression in integers and the variables of env."""
+    import ast
+
+    ops = {ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b, ast.Mult: lambda a, b: a * b}
+
+    def ev(n):
+        if isinstance(n, ast.Constant) and isinstance(n.value, int):
+            return Fraction(n.value)
+        if isinstance(n, ast.Name) and n.id in env:
+            return Fraction(env[n.id])
+        if isinstance(n, ast.UnaryOp) and isinstance(n.op, ast.USub):
+            return -ev(n.operand)
+        if isinstance(n, ast.BinOp) and type(n.op) in ops:
+            return ops[type(n.op)](ev(n.left), ev(n.right))
+        raise ValueError(f"cannot read {expr!r}")
+
+    return ev(ast.parse(expr, mode="eval").body)
+
+
+def _arith(tex):
+    """'$120^\\circ + 40^\\circ k$' -> '120 + 40*k'; '2j-1' -> '2*j-1'."""
+    t = tex.replace("$", "").replace("^\\circ", "").replace("−", "-").replace("{", "(").replace("}", ")")
+    return re.sub(r"(\d)\s*([a-z(])", r"\1*\2", t).strip()
+
+
+def _range(tex):
+    """'$k = 0, 3, 4, \\dots, 9$' -> ('k', [0, 3, 4, 5, 6, 7, 8, 9]); '' -> (None, [None])."""
+    t = tex.replace("$", "").strip()
+    if not t:
+        return None, [None]
+    var, rhs = (x.strip() for x in t.split("="))
+    items = [x.strip() for x in rhs.split(",")]
+    out = []
+    for i, item in enumerate(items):
+        if item in ("\\dots", "\\ldots", "…"):
+            out.extend(range(out[-1] + 1, int(items[i + 1])))
+        else:
+            out.append(int(item))
+    return var, out
+
+
+def _circle(tex, env, mods):
+    """'W_{k+1}' at k = 3 -> 'W4'; 'X_1' -> 'X1'; 'O' -> 'O'. Indices reduced by mods."""
+    m = re.fullmatch(r"([A-Z])(?:_\{?([^}]*)\}?)?", tex.strip())
+    if not m:
+        raise ValueError(f"cannot read circle {tex!r}")
+    if m.group(2) is None:
+        return m.group(1)
+    k = int(_evaluate(_arith(m.group(2)), env))
+    return f"{m.group(1)}{k % mods[m.group(1)] if m.group(1) in mods else k}"
+
+
+def _cells(line):
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def doc_sections():
+    """{section number: lines} for the '### n.m' subsections of the page."""
+    out, current = {}, None
+    for line in DOC.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^#{2,3} (\d+(?:\.\d+)?)\.? ", line)
+        if m:
+            current = m.group(1)
+            out[current] = []
+        elif current:
+            out[current].append(line)
+    return out
+
+
+def _table(lines, header):
+    """Rows (as cell lists) of the table whose header row starts with `header`."""
+    rows, inside = [], False
+    for line in lines:
+        if line.startswith(header):
+            inside, rows = True, []
+            continue
+        if inside:
+            if not line.startswith("|"):
+                break
+            if not set(line) <= set("|-: "):
+                rows.append(_cells(line))
+    return rows
+
+
+def _canonical(contacts):
+    """{frozenset(pair): direction from the alphabetically first circle, mod 360}."""
+    out = {}
+    for i, j, psi in contacts:
+        first, psi = (i, psi) if i < j else (j, psi + 180)
+        out[frozenset((i, j))] = (first, Fraction(psi) % 360)
+    return out
+
+
+def check_doc_tables(cfgs, rep):
+    secs = doc_sections()
+    by_p = {c.P: c for c in cfgs}
+    # Theorem 2 summary: q_P, the decimal of rho0(P) (truncated), and the count
+    rows = _table(secs["2"], "| $P$ | $\\rho_0(P)$ | decimal |")
+    rep.check(sorted(int(r[0]) for r in rows) == sorted(by_p), "summary table lists every P")
+    for r in rows:
+        cfg = by_p[int(r[0])]
+        q = int(r[3])
+        rep.check(cfg.classes == [N for N in range(3, 101) if N % q == 0], f"summary: q_{cfg.P} = {q}")
+        rep.check(int(r[5]) == len(cfg.classes), f"summary: count for P = {cfg.P}")
+        dec = re.search(r"(\d+\.\d+)", r[2])
+        if dec:
+            printed, rho0 = Decimal(dec.group(1)), cfg.a.decimal()[0] + 1
+            ulp = Decimal(1).scaleb(-len(dec.group(1).split(".")[1]))
+            rep.check(printed <= rho0 < printed + ulp, f"summary: decimal of rho0({cfg.P})")
+        else:
+            integer = re.fullmatch(r"\$(\d+)\$", r[1])
+            rep.check(bool(integer) and cfg.a == int(integer.group(1)) - 1, f"summary: rho0({cfg.P}) = {r[1]}")
+    # Section 5.3: q_n = 4n / gcd(4n, n + 2), and the classes of the rings
+    import math
+
+    qs = {int(n): int(q) for n, q in re.findall(r"\$q_(\d+) = (\d+)\$", "\n".join(secs["5.3"]))}
+    rep.check(sorted(qs) == [2, 3, 4, 5, 6, 7, 8], "Section 5.3 lists q_2..q_8")
+    for n, q in qs.items():
+        rep.check(q == 4 * n // math.gcd(4 * n, n + 2), f"q_{n} = {q}")
+        P = {7: 8, 8: 9}.get(n, n)
+        rep.check(by_p[P].classes == [N for N in range(3, 101) if N % q == 0], f"q_{n} gives the classes of P = {P}")
+    # Sections 5.4-5.6: contact tables and direction tables
+    for sec, P in (("5.4", 11), ("5.5", 13), ("5.6", 19)):
+        cfg = by_p[P]
+        found = []
+        for pair, rng, psi in _table(secs[sec], "| pair | for | $\\psi$ |"):
+            var, values = _range(rng)
+            names = pair.replace("$", "").strip("()").split(",")
+            for v in values:
+                env = {var: v} if var else {}
+                i, j = (_circle(n, env, cfg.index_mod) for n in names)
+                found.append((i, j, _evaluate(_arith(psi), env)))
+        rep.check(len(found) == len(cfg.contacts), f"Section {sec}: {len(found)} contacts in the table")
+        rep.check(_canonical(found) == _canonical(cfg.contacts), f"Section {sec}: contact table matches")
+        dirs = cfg.directions()
+        seen = set()
+        for name, listed, diffs in _table(secs[sec], "| circle | $\\Psi_i$ (degrees) |"):
+            c = _circle(name.replace("$", ""), {}, {})
+            listed = [Fraction(x) for x in re.findall(r"-?\d+", listed)]
+            diffs = [Fraction(x) for x in re.findall(r"-?\d+", diffs)]
+            seen.add(c)
+            rep.check(sorted(d % 360 for d in listed) == sorted(dirs[c]), f"Section {sec}: directions of {c}")
+            rep.check(diffs == [(d - listed[0]) % 360 for d in listed[1:]], f"Section {sec}: differences of {c}")
+        rep.check(seen == set(cfg.points), f"Section {sec}: direction table covers every circle")
+
+
+def direction_rows(cfg):
+    """Rows for the page's direction tables: the wall direction first, the rest by difference."""
+    out = []
+    for name, dirs in cfg.directions().items():
+        first, rest = dirs[0], sorted(dirs[1:], key=lambda d: (d - dirs[0]) % 360)
+        label = re.sub(r"([A-Z])(\d+)", lambda m: f"{m[1]}_{{{m[2]}}}" if len(m[2]) > 1 else f"{m[1]}_{m[2]}", name)
+        listed = ", ".join(str(d) for d in [first] + rest)
+        diffs = ", ".join(str((d - first) % 360) for d in rest)
+        out.append(f"| ${label}$ | ${listed}$ | ${diffs}$ |")
+    return out
+
+
 def run(quick=False):
     rep = Report()
     cfgs = configurations()
@@ -810,7 +991,7 @@ def run(quick=False):
     rep.check(total == 148, f"Theorem 2 has {total} cases")
     rep.say(f"  Theorem 2 cases: {total}")
 
-    rep.say("70-digit layer: polygon packings")
+    rep.say("90-digit layer: polygon packings")
     worst = {"contact": Decimal(0), "clear": None, "ratio": None}
     cases = [(cfg, N) for cfg in cfgs for N in cfg.classes]
     extra = [(config_six_centre(N), N) for N in theorem3_extra()]
@@ -830,7 +1011,7 @@ def run(quick=False):
     rep.say(f"  smallest certified separation of other pairs (N > 3): {fmt(worst['clear'], 6)}")
     rep.say(f"  smallest centre distance / 2 R_N of other pairs (N > 3): {fmt(worst['ratio'], 6)}")
 
-    rep.say("Theorem 3, P = 6 (Lemma 4's configurations, brute force over gaps)")
+    rep.say("Theorem 3, P = 6: the counting step (Lemma 5's configurations, all admissible gap sequences)")
     for N in range(3, 101):
         cfg6 = config_six_centre(N) if N % 2 == 0 and N % 3 and N not in (4, 8, 14) else None
         if cfg6:
@@ -841,8 +1022,8 @@ def run(quick=False):
     rep.say(f"  N <= 100 added for P = 6: {theorem3_extra()} ({len(theorem3_extra())})")
 
     rep.say("Theorem 1 (vertex lemma) on pseudo-random poses")
-    slack = check_vertex_lemma(rep, 60 if quick else 400)
-    rep.say(f"  smallest slack: {slack:.3e}")
+    slack, face_on = check_vertex_lemma(rep, 60 if quick else 400)
+    rep.say(f"  smallest slack (random poses): {slack:.3e}; largest |slack| in face-on poses: {face_on:.3e}")
 
     rep.say("Remarks of Section 9 (floating point, data/records.json)")
     checked, below, equal, classes = records_remarks()
@@ -853,6 +1034,9 @@ def run(quick=False):
         rep.say(f"  stored configuration for P = {P}: congruence condition holds for N <= 100 in {ns}")
 
     rep.say("Tables in docs/proofs/circle-container-floor.md")
+    if DOC.exists():
+        check_doc_tables(cfgs, rep)
+        rep.say("  summary table of Theorem 2, q_n of Section 5.3, contact and direction tables of 5.4-5.6: compared")
     expected = {(P, N): fmt(v) for P, N, v in table_rows(cfgs)}
     expected3 = {(6, N): fmt(v) for P, N, v in table_rows([config_six_centre(N) for N in theorem3_extra()])}
     if DOC.exists():
@@ -869,6 +1053,11 @@ def run(quick=False):
 
 def print_tables():
     cfgs = configurations()
+    for cfg in cfgs:
+        if cfg.P in (11, 13, 19):
+            print(f"P = {cfg.P}")
+            print("\n".join(direction_rows(cfg)))
+            print()
     for P, N, v in table_rows(cfgs):
         print(f"| {P} | {N} | {fmt(v)} |")
     print()

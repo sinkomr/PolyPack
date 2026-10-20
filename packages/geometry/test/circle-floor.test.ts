@@ -47,11 +47,11 @@ function config11(): Config {
   const a = 1 / Math.sin(20 * deg);
   const t = Math.tan(10 * deg);
   const ks = [0, 1, 3, 4, 5, 6, 7, 8];
-  const points: Record<string, Pt> = { L: [-1, -t], R: [1, -t], T: [0, Math.sqrt(3) - t] };
+  const points: Record<string, Pt> = { X1: [-1, -t], X2: [1, -t], X3: [0, Math.sqrt(3) - t] };
   for (const k of ks) points[`W${k}`] = e(10 + 40 * k, a);
   const contacts: [string, string][] = [0, 3, 4, 5, 6, 7].map((k) => [`W${k}`, `W${k + 1}`]);
-  contacts.push(["W8", "W0"], ["L", "R"], ["L", "T"], ["R", "T"], ["L", "W4"], ["L", "W5"]);
-  contacts.push(["R", "W0"], ["R", "W8"], ["T", "W1"], ["T", "W3"]);
+  contacts.push(["W8", "W0"], ["X1", "X2"], ["X1", "X3"], ["X2", "X3"], ["X1", "W4"], ["X1", "W5"]);
+  contacts.push(["X2", "W0"], ["X2", "W8"], ["X3", "W1"], ["X3", "W3"]);
   return { P: 11, a, points, walls: ks.map((k) => `W${k}`), contacts, classes: [36, 72] };
 }
 
@@ -59,11 +59,11 @@ function config13(): Config {
   const A = 1 + Math.sqrt(5);
   const b = Math.sqrt(5) - 1;
   const ks = [0, 1, 3, 4, 5, 6, 7, 8, 9];
-  const points: Record<string, Pt> = { u: e(270, b), l: e(162, b), r: e(18, b), T: [0, 2] };
+  const points: Record<string, Pt> = { Y1: e(270, b), Y2: e(162, b), Y3: e(18, b), Y4: [0, 2] };
   for (const k of ks) points[`W${k}`] = e(18 + 36 * k, A);
   const contacts: [string, string][] = [0, 3, 4, 5, 6, 7, 8, 9].map((k) => [`W${k}`, `W${(k + 1) % 10}`]);
-  contacts.push(["u", "W7"], ["r", "W0"], ["l", "W4"], ["T", "W1"], ["T", "W3"]);
-  contacts.push(["u", "r"], ["u", "l"], ["r", "T"], ["l", "T"]);
+  contacts.push(["Y1", "W7"], ["Y3", "W0"], ["Y2", "W4"], ["Y4", "W1"], ["Y4", "W3"]);
+  contacts.push(["Y1", "Y3"], ["Y1", "Y2"], ["Y3", "Y4"], ["Y2", "Y4"]);
   return { P: 13, a: A, points, walls: ks.map((k) => `W${k}`), contacts, classes: every(10) };
 }
 
@@ -151,7 +151,7 @@ function build(c: Config, N: number): { names: string[]; pieces: Pose[] } {
   const pieces = names.map((k) => ({
     x: r * c.points[k][0],
     y: r * c.points[k][1],
-    // PROMPT.md vertex formula: face normals at theta + pi/2 + pi/N + 2 pi k / N
+    // vertex k at theta + pi/2 + 2 pi k / N (shapes.ts), so face normals at theta + pi/2 + pi/N + 2 pi k / N
     theta: dirs[k].length ? dirs[k][0] - Math.PI / 2 - Math.PI / N : 0,
   }));
   return { names, pieces };

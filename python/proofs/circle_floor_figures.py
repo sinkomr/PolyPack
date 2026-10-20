@@ -62,13 +62,13 @@ def circle_panel(cfg, ox):
     for name, (x, y) in pts.items():
         items.append(
             f'<text transform="translate({x:.5f},{y - 0.12:.5f}) scale({w:.5f},{-w:.5f})" text-anchor="middle" '
-            f'font-size="11" fill="{INK}">{label(name)}</text>'
+            f'font-size="11" fill="{INK}" stroke="#ffffff" stroke-width="3" paint-order="stroke">{label(name)}</text>'
         )
     return panel(ox, scale, f"P = {cfg.P}: {TITLES[cfg.P]}", items)
 
 
 def label(name):
-    if name[0] in "WHc" and name[1:].isdigit():
+    if name[0] in "WHXYc" and name[1:].isdigit():
         return f'{name[0]}<tspan font-size="8" dy="3">{name[1:]}</tspan>'
     return name
 
