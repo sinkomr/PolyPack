@@ -31,6 +31,7 @@
       <div><span>Evaluations run</span><strong id="t-bar-evals">0</strong></div>
       <div><span>Compute</span><strong id="t-bar-cpu">0 s</strong></div>
       <div id="t-bar-auto-box" hidden><span>Auto-eval</span><strong id="t-bar-auto">off</strong></div>
+      <div id="t-bar-bank-box" hidden><span>Banked evaluations</span><strong id="t-bar-bank">0</strong></div>
       <div id="t-bar-lanes-box" hidden><span>Lanes</span><strong id="t-bar-lanes">1</strong></div>
     </section>
 
@@ -44,8 +45,8 @@
           >
             Load all
           </button>
-          <button id="t-compact" disabled title="mc_compress, 100 evaluations, from the board">Compact</button>
-          <button id="t-evolve" class="primary" hidden title="One solver run from the board with the next seed">
+          <button id="t-compact" disabled title="mc_compress, 100 evaluations of a run from the board">Compact</button>
+          <button id="t-evolve" class="primary" hidden title="Runs one evaluation of the open solver run on this board">
             Evolve
           </button>
           <span id="t-method-box" class="t-method" hidden>
@@ -78,7 +79,7 @@
           <dl class="stats">
             <dt id="t-side-label">Container side s</dt>
             <dd id="t-side" class="big">—</dd>
-            <dt>Last run</dt>
+            <dt>Last step</dt>
             <dd id="t-delta">—</dd>
             <dt>Area lower bound</dt>
             <dd id="t-bound">—</dd>
@@ -94,7 +95,7 @@
             class="t-trace"
             viewBox="0 0 300 100"
             role="img"
-            aria-label="Side after each run"
+            aria-label="Side after each improvement"
             hidden
           ></svg>
         </section>
@@ -119,16 +120,19 @@
           <dl class="stats">
             <dt>To spend</dt>
             <dd id="t-rp" class="big">0</dd>
-            <dt>Earned, verified</dt>
+            <dt>Earned</dt>
             <dd id="t-earned">0</dd>
-            <dt>Pending</dt>
+            <dt>Awaiting the server</dt>
             <dd id="t-pending">—</dd>
             <dt>Evaluations run</dt>
             <dd id="t-evals">0</dd>
+            <dt>Clicks</dt>
+            <dd id="t-clicks">0</dd>
           </dl>
           <p class="note">
-            Points come only from records the server has checked: each one above the 10<sup>−9</sup> floor earns w·c·[1
-            + decades above the floor] plus its size and gap terms.
+            Every click that improves your record by more than the 10<sup>−9</sup> floor pays at once: w·c·[1 + decades
+            above the floor] plus its size and gap terms. Your best goes to the server within the minute; points it does
+            not confirm are taken back.
           </p>
         </section>
 
@@ -146,6 +150,7 @@
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
           <h2 id="t-lanes-heading">Lanes</h2>
           <ul id="t-lane-list" class="t-lanes"></ul>
+          <p id="t-bank-note" class="note"></p>
         </section>
 
         <section id="t-events" aria-labelledby="t-events-heading" hidden>
@@ -171,8 +176,8 @@
             <p id="t-save-note" class="note" role="status"></p>
           </details>
           <p class="note">
-            Every run is a real solver run in this browser, and every record is checked by the server. Plays best in
-            Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
+            Every click runs real evaluations of a real solver run in this browser, and every record is checked by the
+            server. Plays best in Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
             <a href="/">Board</a> offers all of it, unrestricted.
           </p>
         </section>

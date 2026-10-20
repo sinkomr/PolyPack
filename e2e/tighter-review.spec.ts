@@ -1,9 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { Page, expect, test } from "@playwright/test";
 
-// Independent review of Tighter (2026-10-19), against the local stack only (playwright.config.ts:
-// in-memory server on 8788 behind Vite on 5174). Tests named "owner rule" assert the site owner's
-// rules from the review brief; a failure there is a finding. Screenshots go to tighter-review-shots/.
+// Independent review of Tighter (2026-10-19, adapted to open runs and points per click 2026-10-20),
+// against the local stack only (playwright.config.ts: in-memory server on 8788 behind Vite on 5174).
+// Tests named "owner rule" assert the site owner's rules from the review brief; a failure there is a
+// finding. Screenshots go to tighter-review-shots/.
 
 const SHOTS = "tighter-review-shots";
 mkdirSync(SHOTS, { recursive: true });
@@ -33,6 +34,7 @@ const focus = async (page: Page) => {
   const s = await state(page);
   return s.queue.find((p: { key: string }) => p.key === s.focus);
 };
+const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
 const posts = (log: Req[]) => log.filter((r) => r.method === "POST" && r.path === "/api/submit");
 const siteBest = async (page: Page, k: { N: number; M: number; P: number }) =>
   (await (await page.request.get(`/api/problems/${k.N}/${k.M}/${k.P}`)).json()).site_best;
@@ -48,7 +50,9 @@ async function firstRecord(page: Page): Promise<void> {
   await page.click("#t-loadall");
   await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
   await page.click("#t-compact");
-  await expect(page.locator("#t-evolve")).toBeVisible({ timeout: 120_000 });
+  await expect
+    .poll(async () => (await focus(page)).phase === "ready" && (await idle(page)), { timeout: 120_000 })
+    .toBe(true);
 }
 
 async function consent(page: Page, name: string, agree = true): Promise<void> {
@@ -57,18 +61,37 @@ async function consent(page: Page, name: string, agree = true): Promise<void> {
   await page.click("#t-consent-save");
 }
 
-async function evolveOnce(page: Page): Promise<number> {
+/** One Evolve click, waited until it has run; returns its time in ms. */
+async function click(page: Page): Promise<number> {
   await expect(page.locator("#t-evolve")).toBeEnabled({ timeout: 120_000 });
-  const runs = (await state(page)).stats.runs;
+  const clicks = (await state(page)).stats.clicks;
   const t = Date.now();
   await page.click("#t-evolve");
-  await expect.poll(async () => (await state(page)).stats.runs, { timeout: 180_000 }).toBe(runs + 1);
+  await expect
+    .poll(async () => (await state(page)).stats.clicks > clicks && (await idle(page)), { timeout: 120_000 })
+    .toBe(true);
   return Date.now() - t;
 }
 
-async function evolveUntilBetter(page: Page, than: number, tries = 10): Promise<void> {
-  for (let i = 0; i < tries && (await focus(page)).best >= than * (1 - 2e-9); i++) await evolveOnce(page);
+async function clickUntilBetter(page: Page, than: number, tries = 200): Promise<void> {
+  for (let i = 0; i < tries && (await focus(page)).best >= than * (1 - 2e-9); i++) await click(page);
   expect((await focus(page)).best).toBeLessThan(than * (1 - 2e-9));
+}
+
+const grant = (page: Page, points: number) =>
+  page.evaluate((n) => {
+    const s = (window as any).tighter.state;
+    s.rp += n;
+    s.rpEarned += n;
+  }, points);
+
+async function buyAll(page: Page, ids: string[]): Promise<void> {
+  for (const id of ids) {
+    const btn = page.locator(`.t-card[data-id="${id}"] button`);
+    await expect(btn).toBeEnabled({ timeout: 10_000 });
+    await btn.click();
+    await expect.poll(async () => (await state(page)).owned.includes(id)).toBe(true);
+  }
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -107,11 +130,22 @@ test("owner rule: a problem's best is POSTed at most once a minute, also when it
   await consent(page, "Leaving Player");
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 20_000 }).toBe("Leaving Player");
   const first = await siteBest(page, p);
-  await evolveUntilBetter(page, first.score);
-  // the next problem may be dealt (in real play: 5 minutes after this one was dealt)
-  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 1));
-  await expect(page.locator("#t-next")).toBeEnabled({ timeout: 10_000 });
+  await clickUntilBetter(page, first.score);
+  // the next problem is earned by evaluations (300 clicks of one), not yet
+  await expect(page.locator("#t-next")).toBeDisabled();
+  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ evaluations$/);
+  // a problem whose seeds are spent (its one run ended by itself) can be left at once
+  await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.queue.find((q: any) => q.key === s.focus).endedRuns = 1;
+  });
+  await expect(page.locator("#t-next")).toBeEnabled({ timeout: 5_000 });
+  await expect(page.locator("#t-next")).toHaveText("Next problem");
+  await expect(page.locator("#t-problem-note")).toContainText("seed");
+  await expect(page.locator("#t-evolve")).toBeDisabled();
   await page.click("#t-next");
+  // the next problem is dealt at once (on credit: there was nothing left to work on)
+  await expect.poll(async () => (await state(page)).queue.some((q: any) => !q.leaving), { timeout: 20_000 }).toBe(true);
   await sleep(5000);
   const mine = posts(log);
   const gaps = mine.slice(1).map((r, i) => r.t - mine[i].t);
@@ -127,8 +161,7 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   await fresh(page, 23);
   await firstRecord(page);
   const p = await focus(page);
-  // Adjusted after the fix: the page cleans names as the server does, so "<>" (empty once cleaned)
-  // is refused at the form and nothing is sent.
+  // the page cleans names as the server does, so "<>" (empty once cleaned) is refused at the form
   await consent(page, "<>");
   await expect(page.locator("#status")).toContainText("empty once cleaned");
   expect((await state(page)).consent).toBe(false);
@@ -145,10 +178,12 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   await consent(page, "Refused Player");
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
   await expect(page.locator("#t-log")).toContainText("name is required");
+  // the refused send's points are taken back
+  await expect(page.locator("#t-log")).toContainText("taken back");
   const best0 = (await focus(page)).best;
-  await evolveUntilBetter(page, best0);
+  await clickUntilBetter(page, best0);
   const b1 = (await focus(page)).best;
-  await evolveUntilBetter(page, b1);
+  await clickUntilBetter(page, b1);
   await sleep(3000);
   const mine = posts(log);
   console.log(
@@ -159,7 +194,41 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   expect(firstMinute.length).toBe(1);
 });
 
-test("an accepted first record whose answer is lost to a reload: no second POST, but is it counted?", async ({
+test("owner rule: points the server does not confirm are taken back", async ({ page }) => {
+  test.setTimeout(240_000);
+  const log = recorder(page);
+  await fresh(page, 29);
+  await firstRecord(page);
+  const p = await focus(page);
+  // another entry got there first: valid, but not the leader, and better than the board
+  await page.route("**/api/submit", async (route) => {
+    const best = (await focus(page)).best;
+    await sleep(1500);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ valid: true, score: best, leader: false, leader_score: best * 0.9, reasons: [] }),
+    });
+  });
+  await consent(page, "Behind Player");
+  // consent paid the record at once
+  expect((await state(page)).rp).toBeGreaterThan(5);
+  await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
+  await expect(page.locator("#t-log")).toContainText("Another entry got there first");
+  await expect(page.locator("#t-log")).toContainText("taken back");
+  const s = await state(page);
+  const q = s.queue.find((x: any) => x.key === p.key);
+  expect(s.rp).toBeLessThan(1e-6);
+  expect(q.unconfirmed).toBe(0);
+  expect(q.sending).toBeNull();
+  expect(q.ourId).toBeNull();
+  // the board no longer beats the record to beat: clicks pay nothing until it does
+  const rp0 = s.rp;
+  for (let i = 0; i < 5; i++) await click(page);
+  expect((await state(page)).rp).toBe(rp0);
+});
+
+test("an accepted first record whose answer is lost to a reload: no second POST, and it is counted", async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -177,6 +246,7 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   });
   await consent(page, "Reload Player");
   await atServer;
+  const paid = (await state(page)).rp;
   await page.reload();
   await page.unroute("**/api/submit");
   await expect(page.locator("#t-evolve")).toBeVisible({ timeout: 30_000 });
@@ -191,8 +261,13 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   await page.screenshot({ path: `${SHOTS}/r2-lost-answer-after-reload.png`, fullPage: true });
   expect(server?.name).toBe("Reload Player");
   expect(posts(log)).toHaveLength(1);
-  // the game should know it holds this record
+  // the game knows it holds this record, and the points it paid before the send are confirmed, once
   await expect(page.locator("#t-held")).toHaveText("1");
+  expect(after.ourId).toBe(server.id);
+  expect(after.sending).toBeNull();
+  expect(after.unconfirmed).toBe(0);
+  expect(s.rp).toBeCloseTo(paid, 9);
+  await expect(page.locator("#t-log")).toContainText("its answer had not arrived");
 });
 
 test("server errors do not cause retry storms: 429, 500, network failure, failed leader check, 409, 422", async ({
@@ -258,7 +333,7 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
   // a 409 takes the problem out of the queue (a new best first: the refused board is never resent)
   await page.unroute("**/api/submit");
   await page.route("**/api/submit", (route) => route.abort());
-  await evolveUntilBetter(page, (await focus(page)).best);
+  await clickUntilBetter(page, (await focus(page)).best);
   await answer(409);
   await page.evaluate(() => (window as any).tighter.skipAhead(61_000));
   const before409 = posts(log).length;
@@ -268,8 +343,8 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
   expect(posts(log).length - before409).toBeLessThanOrEqual(1);
 });
 
-// Adjusted after the fix: one tab runs the game at a time, so tab B stands by instead of playing;
-// the owner's rules (one POST per problem a minute, no save overwritten) are asserted on that design.
+// One tab runs the game at a time, so tab B stands by instead of playing; the owner's rules (one POST
+// per problem a minute, no save overwritten) are asserted on that design.
 test("two tabs sharing one save: the second stands by, sends and saves nothing, and can take over", async ({
   context,
 }) => {
@@ -281,6 +356,7 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
   const p = await focus(a);
   await consent(a, "Two Tabs");
   await expect.poll(async () => (await siteBest(a, p))?.name, { timeout: 20_000 }).toBe("Two Tabs");
+  const first = await siteBest(a, p);
   await sleep(1000);
   const b = await context.newPage();
   const logB = recorder(b);
@@ -299,7 +375,7 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
   await expect(b.locator("#t-elsewhere-text")).toContainText("open in another tab");
   await expect(b.locator("#t-evolve")).toBeHidden();
   // tab A plays on and sends its next improvement after the problem's minute; B does nothing
-  for (let i = 0; i < 2; i++) await evolveOnce(a);
+  await clickUntilBetter(a, first.score);
   await a.evaluate(() => (window as any).tighter.skipAhead(61_000));
   await expect.poll(() => posts(logA).length, { timeout: 15_000 }).toBe(2);
   await b.evaluate(() => (window as any).tighter.skipAhead(61_000));
@@ -314,7 +390,7 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
   expect(late.filter((r) => r.t - late[0].t < 60_000).length).toBeLessThanOrEqual(1);
 
   // B takes over: A stops and stands by, B carries on from A's save with A's points
-  await sleep(1000);
+  await sleep(1500);
   const rpA = (await state(a)).rp;
   await b.click("#t-take-over");
   await expect(b.locator("#t-evolve")).toBeVisible({ timeout: 30_000 });
@@ -322,17 +398,18 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
   await expect(a.locator("#t-elsewhere-text")).toContainText("another tab");
   expect((await state(b)).rp).toBeCloseTo(rpA, 9);
   const postsA = posts(logA).length;
-  await evolveOnce(b);
+  await click(b);
   await a.evaluate(() => (window as any).tighter.skipAhead(120_000));
   await sleep(3000);
   expect(posts(logA).length).toBe(postsA);
+  await sleep(1500);
   const saved = await b.evaluate(() => JSON.parse(localStorage.getItem("tighter.save")!).rp);
   expect(saved).toBeGreaterThanOrEqual(rpA - 1e-9);
 });
 
-// Adjusted after the fix: on battery every run pauses (as in a hidden tab) until the player allows
-// battery use, so the Compact is checked paused first and then allowed.
-test("hidden tab pauses a run; on battery a manual run is paused too, until allowed", async ({ page }) => {
+// Clicks are the player's own and always run. Auto-eval runs nothing while the tab is hidden or the
+// device is on battery power (unless allowed): it keeps earning into its bank, which runs afterwards.
+test("hidden tab and battery: auto-eval banks instead of running, clicks always run", async ({ page }) => {
   test.setTimeout(400_000);
   await page.addInitScript(() => {
     const battery = Object.assign(new EventTarget(), { charging: false, level: 0.5 });
@@ -340,57 +417,61 @@ test("hidden tab pauses a run; on battery a manual run is paused too, until allo
   });
   await fresh(page, 27);
   await expect(page.locator("#t-battery-box")).toBeVisible();
-  await page.click("#t-loadall");
-  await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
-  await page.click("#t-compact"); // a manual Compact, on battery power
-  await expect(page.locator("#t-runinfo")).toContainText("paused", { timeout: 10_000 });
-  const onBattery = await page.locator("#t-runinfo").textContent();
+  // a manual Compact and clicks on battery power: they run
+  await firstRecord(page);
+  expect((await state(page)).stats.evaluations).toBe(101);
+  await click(page);
+  expect((await state(page)).stats.evaluations).toBe(102);
+  await expect(page.locator("#t-hold")).toHaveText("");
+
+  await grant(page, 5000);
+  await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
+  await page.click("#t-auto");
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
   await expect(page.locator("#t-hold")).toContainText("battery");
-  const doneOf = (t: string | null) => Number(/([\d,]+) done/.exec(t ?? "")?.[1].replace(/,/g, "") ?? -1);
-  // the framework always scores the start before its first checkpoint, where the pause takes hold
-  await sleep(1000);
-  const b0 = doneOf(await page.locator("#t-runinfo").textContent());
-  expect(b0).toBeLessThanOrEqual(1);
+  const bank = () => page.evaluate(() => (window as any).tighter.state.bank);
+  const evaluations = async () => (await state(page)).stats.evaluations;
+  // a minute's earnings (12 evaluations) wait in the bank on battery
+  const e0 = await evaluations();
+  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
+  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(11);
   await sleep(3000);
-  expect(doneOf(await page.locator("#t-runinfo").textContent())).toBe(b0);
-  // allowing battery use lets the run go on to its end
+  expect(await evaluations()).toBe(e0);
+  // a click on battery still runs, 4 evaluations
+  await click(page);
+  expect(await evaluations()).toBe(e0 + 4);
+  const onBattery = await page.locator("#t-hold").textContent();
+  // allowing battery use runs the bank, in clicks of 4
   await page.locator("#t-settings").scrollIntoViewIfNeeded();
   await page.check("#t-battery");
-  await expect(page.locator("#t-evolve")).toBeVisible({ timeout: 120_000 });
-  // longer runs so that one can be watched: Longer runs II (300 evaluations), granted through the page's handle
-  await page.evaluate(() => {
-    const s = (window as any).tighter.state;
-    s.owned.push("trace", "evals1", "queue3", "auto1", "seeds", "basin", "evals2");
-  });
-  await expect(page.locator("#t-evolve")).toBeEnabled();
-  await page.click("#t-evolve");
-  await expect(page.locator("#t-runinfo")).toContainText(/[1-9]\d* done/, { timeout: 60_000 });
-  // battery use is allowed now: the run goes on
-  expect(await page.locator("#t-runinfo").textContent()).not.toContain("paused");
+  await expect(page.locator("#t-hold")).toHaveText("");
+  await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
+  await expect.poll(() => idle(page)).toBe(true);
+  const e1 = await evaluations();
+  expect(e1 - (e0 + 4)).toBeGreaterThanOrEqual(8);
+
+  // a hidden tab banks too
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await sleep(1500);
-  const done = (t: string | null) => Number(/([\d,]+) done/.exec(t ?? "")?.[1].replace(/,/g, "") ?? -1);
-  const h0 = await page.locator("#t-runinfo").textContent();
-  await sleep(6000);
-  const h1 = await page.locator("#t-runinfo").textContent();
-  await page.screenshot({ path: `${SHOTS}/r4-hidden-paused.png`, fullPage: true });
-  console.log(
-    `battery: "${onBattery}"; hidden: "${h0}" then "${h1}"; hold "${await page.locator("#t-hold").textContent()}"`,
-  );
-  expect(h1).toContain("paused");
-  expect(done(h1)).toBe(done(h0));
+  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
+  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(11);
+  await sleep(3000);
+  const e2 = await evaluations();
+  expect(e2).toBe(e1);
+  const hidden = await page.locator("#t-hold").textContent();
+  await page.screenshot({ path: `${SHOTS}/r4-hidden-banking.png`, fullPage: true });
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect(page.locator("#t-evolve")).toBeEnabled({ timeout: 300_000 });
-  // owner rule: battery does what a hidden tab does (where detectable): the run was paused
-  expect(onBattery).toContain("paused");
+  await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
+  console.log(`battery: "${onBattery}"; hidden: "${hidden}"; ran after: ${(await evaluations()) - e2}`);
+  expect(onBattery).toContain("battery");
+  expect(hidden).toContain("hidden");
 });
 
 test("names and server text are shown as text, never as HTML", async ({ page }) => {
@@ -399,7 +480,7 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
   await firstRecord(page);
   const evil = `<img src=x onerror="window.__xss=1">`;
   await consent(page, evil);
-  // adjusted after the fix: the name is shown cleaned as the server stores it (no angle brackets)
+  // the name is shown cleaned as the server stores it (no angle brackets)
   await expect(page.locator("#t-consent-note")).toContainText(`img src=x onerror="window.__xss=1"`);
   await sleep(4000);
   expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
@@ -410,7 +491,7 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
     name: "<b onmouseover=alert(1)>x</b>",
     log: [{ t: 1, text: "<img src=y onerror=window.__xss=2>" }],
   };
-  const str = `tighter:1:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
+  const str = `tighter:2:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
   await page.locator("#t-settings summary").click();
   await page.fill("#t-save-text", str);
   page.once("dialog", (d) => d.accept());
@@ -421,10 +502,10 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
   expect(await page.locator("#t-log img, #t-consent b").count()).toBe(0);
 });
 
-test("a sustained session: Load all, Compact, consent, Evolves, upgrades, auto-eval on two lanes, Stop, reload", async ({
+test("a sustained session: Load all, Compact, consent, clicks, upgrades, auto-eval on two lanes, Stop, reload", async ({
   page,
 }) => {
-  test.setTimeout(1_500_000);
+  test.setTimeout(900_000);
   const log = recorder(page);
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -447,77 +528,96 @@ test("a sustained session: Load all, Compact, consent, Evolves, upgrades, auto-e
   await shot("02-load-all");
   const tc = Date.now();
   await page.click("#t-compact");
-  await expect(page.locator("#t-evolve")).toBeVisible({ timeout: 120_000 });
+  await expect
+    .poll(async () => (await focus(page)).phase === "ready" && (await idle(page)), { timeout: 120_000 })
+    .toBe(true);
   const compactMs = Date.now() - tc;
   await shot("03-first-record-consent");
   endPhase("Load all and Compact");
   await consent(page, "Review Player");
   const p0 = await focus(page);
   await expect.poll(async () => (await siteBest(page, p0))?.name, { timeout: 20_000 }).toBe("Review Player");
-  const evolveMs: number[] = [];
-  for (let i = 0; i < 15; i++) evolveMs.push(await evolveOnce(page));
-  await shot("04-after-15-evolves");
-  endPhase("consent and 15 manual Evolves");
+  const clickMs: number[] = [];
+  for (let i = 0; i < 60; i++) clickMs.push(await click(page));
+  await shot("04-after-60-clicks");
+  endPhase("consent and 60 manual clicks");
 
-  // grant points through the page's handle, then buy the ten upgrades through their cards
-  await page.evaluate(() => {
-    const s = (window as any).tighter.state;
-    s.rp += 5000;
-    s.rpEarned += 5000;
-  });
-  for (const id of ["trace", "evals1", "queue3", "auto1", "seeds", "basin", "reach2", "evals2", "advance", "lanes2"]) {
-    const btn = page.locator(`.t-card[data-id="${id}"] button`);
-    await expect(btn).toBeEnabled({ timeout: 10_000 });
-    await btn.click();
-    await expect.poll(async () => (await state(page)).owned.includes(id)).toBe(true);
-  }
-  await shot("05-all-upgrades");
-  // fill the 3 slots without waiting 100 s per deal
+  // grant points through the page's handle, then buy the path to the second lane through the cards
+  await grant(page, 200_000);
+  const path = [
+    "trace",
+    "click2",
+    "click3",
+    "click4",
+    "auto1",
+    "click5",
+    "seeds",
+    "auto2",
+    "click6",
+    "queue3",
+    "click7",
+    "auto3",
+    "click8",
+    "click9",
+    "click10",
+    "auto4",
+    "basin",
+    "reach2",
+    "advance",
+    "lanes2",
+  ];
+  await buyAll(page, path);
+  await shot("05-upgrades");
+  // fill the 3 slots without earning each deal
   await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 3));
   await expect.poll(async () => (await state(page)).queue.length, { timeout: 60_000 }).toBeGreaterThanOrEqual(3);
   endPhase("buy upgrades, deal 3");
 
+  const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
+  // twenty minutes of auto-eval earned at once (1 evaluation every 2 s on each of two lanes: 1,200),
+  // two lanes, Auto-advance compacting the new problems
+  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 20 * 60_000));
   let twoBusy = false;
-  const autoEnd = Date.now() + 4 * 60_000;
   let shotTaken = false;
+  const autoEnd = Date.now() + 60_000;
   while (Date.now() < autoEnd) {
     const lines = await page.locator(".t-lane-line").allTextContents();
-    if (lines.length === 2 && lines.every((l) => !l.includes("idle"))) {
+    if (lines.length === 2 && lines.every((l) => l.includes("run at"))) {
       twoBusy = true;
       if (!shotTaken) {
         await shot("06-auto-eval-two-lanes");
         shotTaken = true;
       }
     }
-    await sleep(2000);
+    await sleep(500);
   }
   if (!shotTaken) await shot("06-auto-eval-two-lanes");
-  endPhase("auto-eval, two lanes, 4 min");
+  // owner rule: every evaluation earned runs once, or waits in the bank; none is lost
+  const afterAuto = await state(page);
+  const conserved = afterAuto.stats.evaluations - e0 + afterAuto.bank;
+  endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
   const busyBefore = await page.locator(".t-lane-line").allTextContents();
   const ts = Date.now();
   await page.click("#t-stop");
-  await expect
-    .poll(async () => (await page.locator(".t-lane-line").allTextContents()).every((l) => l.includes("idle")), {
-      timeout: 30_000,
-    })
-    .toBe(true);
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
+  await expect.poll(() => idle(page), { timeout: 30_000 }).toBe(true);
   const stopMs = Date.now() - ts;
   await shot("07-stopped");
   const s1 = await state(page);
   endPhase("Stop");
-  await sleep(1000);
+  await sleep(1500);
   await page.reload();
   await expect(page.locator("#t-title")).toHaveText(/pieces/, { timeout: 30_000 });
   await sleep(3000);
   const s2 = await state(page);
   await shot("08-after-reload");
-  // a minute idle after the reload, to see what an idle open tab sends
-  await sleep(60_000);
-  endPhase("reload and 1 idle minute");
+  // half a minute idle after the reload, to see what an idle open tab sends
+  await sleep(30_000);
+  endPhase("reload and 30 s idle");
 
   const byPhase = phases.map((ph) => {
     const rs = log.filter((r) => r.t >= ph.from && r.t < ph.to);
@@ -536,15 +636,19 @@ test("a sustained session: Load all, Compact, consent, Evolves, upgrades, auto-e
   });
   const report = {
     compactMs,
-    evolveMs,
+    clickMs: { median: [...clickMs].sort((x, y) => x - y)[clickMs.length >> 1], max: Math.max(...clickMs) },
     stopMs,
     twoBusy,
+    conserved,
     busyBefore,
     owned: s1.owned,
     rpBeforeReload: s1.rp,
     rpAfterReload: s2.rp,
     autoAfterReload: s2.settings.auto,
-    queue: s2.queue.map((q: any) => `${q.key} ${q.phase} best ${q.best} ours ${q.ourId} runs ${q.runs}`),
+    bankAfterReload: s2.bank,
+    queue: s2.queue.map(
+      (q: any) => `${q.key} ${q.phase} best ${q.best} ours ${q.ourId} runs ${q.runs} evaluations ${q.evaluations}`,
+    ),
     stats: s2.stats,
     byPhase,
     errors,
@@ -552,6 +656,9 @@ test("a sustained session: Load all, Compact, consent, Evolves, upgrades, auto-e
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
+  expect(conserved).toBeGreaterThanOrEqual(1200);
+  expect(twoBusy).toBe(true);
   expect(s2.settings.auto).toBe(false);
-  expect(s2.owned).toHaveLength(10);
+  expect(s2.owned).toHaveLength(path.length);
+  expect(s2.rp).toBeGreaterThanOrEqual(s1.rp - 1e-6);
 });

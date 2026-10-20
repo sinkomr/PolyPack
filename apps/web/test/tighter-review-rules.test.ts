@@ -6,12 +6,13 @@ import {
   addToQueue,
   applyAnswer,
   applyLeader,
-  applyRun,
+  applyStep,
   hasUnsent,
   markSending,
   newGame,
   newProblem,
   recordsHeld,
+  unconfirmedPoints,
 } from "../src/tighter/game";
 import { MAX_NAME_LENGTH as SERVER_MAX_NAME_LENGTH, sanitizeText } from "../../server/src/limits";
 import { MAX_NAME_LENGTH, sanitizeName } from "../src/tighter/names";
@@ -44,10 +45,11 @@ function readyProblem(name = "Ada"): { s: ReturnType<typeof newGame>; p: Problem
   p.board = cfg(0);
   p.best = 12;
   p.floor = 12;
-  applyRun(
+  // Compact: the first record, paid at once
+  applyStep(
     s,
     p,
-    { best: cfg(1), score: 11, valid: true, strict: true, evaluations: 100, wallTime: 1, run: runRec(1) },
+    { best: cfg(1), score: 11, evaluations: 100, ms: 1000, run: runRec(1), ended: false, click: true },
     T0,
   );
   return { s, p };
@@ -100,20 +102,38 @@ describe("tighter review: points", () => {
     }
   });
 
-  it("are never paid for an answer that is not leader", () => {
-    const kinds: SubmitOutcome[] = [
+  it("paid per click are kept only when the server makes the entry leader", () => {
+    // taken back: the server looked at the entry and did not make it leader
+    const lost: SubmitOutcome[] = [
       { kind: "behind", score: 11, leaderScore: 10.9 },
       { kind: "closed", reasons: [] },
-      { kind: "rate-limited", reasons: [] },
       { kind: "refused", status: 422, reasons: ["overlap"] },
-      { kind: "offline" },
     ];
-    for (const o of kinds) {
+    for (const o of lost) {
       const { s, p } = readyProblem();
+      expect(s.rp).toBeGreaterThan(0);
+      markSending(p, 11, "Ada", null, T0);
       applyAnswer(s, p, null, 11, o, T0);
       expect(s.rp).toBe(0);
       expect(s.rpEarned).toBe(0);
+      expect(unconfirmedPoints(s)).toBe(0);
     }
+    // not looked at (429) or no answer: the points stay, waiting for a verdict
+    for (const o of [{ kind: "rate-limited", reasons: [] }, { kind: "offline" }] as SubmitOutcome[]) {
+      const { s, p } = readyProblem();
+      const paid = s.rp;
+      markSending(p, 11, "Ada", null, T0);
+      applyAnswer(s, p, null, 11, o, T0);
+      expect(s.rp).toBe(paid);
+      expect(unconfirmedPoints(s)).toBe(paid);
+    }
+    // confirmed
+    const { s, p } = readyProblem();
+    const paid = s.rp;
+    markSending(p, 11, "Ada", null, T0);
+    applyAnswer(s, p, null, 11, { kind: "leader", score: 11, id: 4, pending: false }, T0);
+    expect(s.rp).toBe(paid);
+    expect(unconfirmedPoints(s)).toBe(0);
   });
 
   it("do not pay the beat-other bonus for beating your own record under the server's sanitised name", () => {
@@ -124,8 +144,15 @@ describe("tighter review: points", () => {
     const ownEntry = { score: 11, name: "Ada 3", id: 77 };
     applyLeader(p, ownEntry);
     p.verified = null;
-    const pts = applyAnswer(s, p, ownEntry, 10.9, { kind: "leader", score: 10.9, id: 78, pending: false }, T0).points;
-    expect(pts?.beatBonus).toBe(false);
+    // the next click beats that entry: it is ours, so no bonus for beating another name
+    const pts = applyStep(
+      s,
+      p,
+      { best: cfg(2), score: 10.9, evaluations: 1, ms: 1, run: runRec(1), ended: false, click: true },
+      T0,
+    ).points;
+    expect(pts).not.toBeNull();
+    expect(pts!.beatBonus).toBe(false);
   });
 });
 
@@ -147,17 +174,20 @@ describe("tighter review: what the player sees after edge answers", () => {
     // with the game state when it next reads the leader.
     markSending(p, 11, "Ada", null, T0);
     expect(hasUnsent(p)).toBe(true);
-    const r = applyLeader(p, { score: 11, name: "Ada", id: 9 }, s, T0 + 5000);
-    expect(r.reconciled).toBe(true);
-    expect(hasUnsent(p)).toBe(false);
-    expect(recordsHeld(s)).toBe(1);
-    // paid once, as its answer would have been: a first record, against the free floor
-    expect(r.points).not.toBeNull();
+    // the first record was paid when the click found it; the lost answer only confirms it
     const paid = s.rp;
     expect(paid).toBeGreaterThan(0);
+    const r = applyLeader(p, { score: 11, name: "Ada", id: 9 }, s, T0 + 5000);
+    expect(r.reconciled).toBe(true);
+    expect(r.confirmed).toBe(paid);
+    expect(hasUnsent(p)).toBe(false);
+    expect(recordsHeld(s)).toBe(1);
+    expect(s.rp).toBe(paid);
+    expect(unconfirmedPoints(s)).toBe(0);
     expect(s.stats.firstRecords).toBe(1);
     applyLeader(p, { score: 11, name: "Ada", id: 9 }, s, T0 + 6000);
     expect(s.rp).toBe(paid);
+    expect(s.stats.firstRecords).toBe(1);
   });
 });
 
@@ -182,15 +212,22 @@ describe("tighter review fixes: regressions", () => {
     expect(sanitizeName("<>")).toBe("");
   });
 
-  it("a lost send that did not lead is forgotten, and nothing is paid", () => {
+  it("a lost send that did not lead is forgotten, and its points wait for the next send's verdict", () => {
     const { s, p } = readyProblem();
+    const paid = s.rp;
     markSending(p, 11, "Ada", null, T0);
     // the leader is a rival's 10.9: our POST never arrived, or arrived too late
     const r = applyLeader(p, { score: 10.9, name: "Bob", id: 4 }, s, T0);
     expect(r.reconciled).toBe(false);
+    expect(r.confirmed).toBe(0);
     expect(p.sending).toBeNull();
-    expect(s.rp).toBe(0);
+    expect(p.unconfirmed).toBe(paid);
     expect(recordsHeld(s)).toBe(0);
+    // the board does not beat 10.9, so nothing goes; the next submission that is answered decides
+    expect(hasUnsent(p)).toBe(false);
+    markSending(p, 11, "Ada", p.leader, T0 + 61_000);
+    applyAnswer(s, p, p.leader, 11, { kind: "behind", score: 11, leaderScore: 10.9 }, T0 + 61_000);
+    expect(s.rp).toBe(0);
     // a same-named entry with another score is not ours either
     markSending(p, 11, "Ada", null, T0);
     expect(applyLeader(p, { score: 10.99, name: "Ada", id: 5 }, s, T0).reconciled).toBe(false);
@@ -205,8 +242,24 @@ describe("tighter review fixes: regressions", () => {
     expect(p.sending).toBeNull();
   });
 
-  it("the pending send survives a save and a reload", () => {
+  it("a board that still beats the rival found by a 'behind' answer pays the beat-other bonus", () => {
     const { s, p } = readyProblem();
+    // a better board than the rival's 10.99999, sent as 11 and answered "behind"
+    applyStep(
+      s,
+      p,
+      { best: cfg(2), score: 10.9, evaluations: 1, ms: 1, run: runRec(1), ended: false, click: true },
+      T0,
+    );
+    markSending(p, 10.9, "Ada", null, T0);
+    const a = applyAnswer(s, p, null, 10.9, { kind: "behind", score: 10.9, leaderScore: 10.95 }, T0);
+    expect(a.points?.beatBonus).toBe(true);
+    expect(p.beatPaid).toBe(true);
+  });
+
+  it("the pending send survives a save and a reload, with the points it carries", () => {
+    const { s, p } = readyProblem();
+    const paid = s.rp;
     markSending(p, 11, "Ada <3", { score: 12, name: "Bob", id: 2 }, T0);
     const r = fromJson(toJson(s), T0);
     expect(r.ok && r.state.queue[0].sending).toEqual({
@@ -214,6 +267,7 @@ describe("tighter review fixes: regressions", () => {
       name: "Ada 3",
       leaderBefore: { score: 12, name: "Bob", id: 2 },
       at: T0,
+      rp: paid,
     });
   });
 });

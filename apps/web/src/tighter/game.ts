@@ -10,8 +10,13 @@ import { EvolveMethod, UpgradeId, canBuy, upgrade } from "./upgrades";
 
 /**
  * The game state and the rules that change it. No DOM, no network, no workers: the page (main.ts)
- * runs solver runs and server calls and reports their outcomes here. Functions change the state
+ * runs the solver and the server calls and reports their outcomes here. Functions change the state
  * they are given in place and return what happened, so the page can tell the player.
+ *
+ * Points are paid per click: every step of a run that improves the board by more than the floor
+ * pays at once (with consent), measured from the last score paid. The server still judges every
+ * record: the paid points ride with the next submission, and are taken back if the server does not
+ * make it the leader.
  */
 
 /** What a problem's board is: bare (nothing placed), loaded (Load all, not a record) or ready. */
@@ -29,6 +34,8 @@ export interface PendingSend {
   name: string;
   leaderBefore: Leader | null;
   at: number;
+  /** Points paid for the improvements this send carries: kept if it leads, taken back if not. */
+  rp: number;
 }
 
 export interface ProblemState extends ProblemKey {
@@ -47,7 +54,7 @@ export interface ProblemState extends ProblemKey {
   best: number | null;
   /** The run that produced `board`; null for Load all and for a dealt site record. */
   run: RunRecord | null;
-  /** Seed of the next Evolve run. Compact uses seed 1; seeds are never repeated on a problem. */
+  /** Seed of the next run. Compact's run uses seed 1; seeds are never repeated on a problem. */
   nextSeed: number;
   /** The problem's leader as last seen (null: none). */
   leader: Leader | null;
@@ -63,11 +70,23 @@ export interface ProblemState extends ProblemKey {
   leaving: boolean;
   /** A POST whose answer has not arrived (or was lost): what was sent, under which name, after which leader. */
   sending: PendingSend | null;
-  /** Best score after each run, oldest first (bounded). */
-  trace: number[];
-  /** Runs since the last improvement above the floor. */
-  deadRuns: number;
+  /** The score up to which points have been paid (null: none yet, so from the leader or the floor). */
+  paidTo: number | null;
+  /** Points paid here that no submission has carried yet. */
+  unconfirmed: number;
+  /** The board's score after each counted improvement, by evaluations run here (thinned when long). */
+  trace: [number, number][];
+  /** Evaluations run on this problem, and since its last improvement above the floor. */
+  evaluations: number;
+  sinceGain: number;
+  /** Runs opened here (seeds used). */
   runs: number;
+  /**
+   * Runs that ended by themselves here (their method stopped improving, or their budget ran out). A
+   * run closed by the game (another problem, another method, a reload) does not count: the next one
+   * takes a new seed but not one of the player's seeds per problem.
+   */
+  endedRuns: number;
   lastRunAt: number;
   /** RP earned on this problem. */
   rp: number;
@@ -96,6 +115,8 @@ export interface Settings {
 
 export interface Stats {
   evaluations: number;
+  /** Clicks of Evolve (and Compact). */
+  clicks: number;
   runs: number;
   computeMs: number;
   submissions: number;
@@ -112,7 +133,7 @@ export interface LogLine {
 export interface GameState {
   version: number;
   createdAt: number;
-  /** Spendable record points, and all ever earned. */
+  /** Spendable record points, and all ever earned (less any taken back). */
   rp: number;
   rpEarned: number;
   owned: UpgradeId[];
@@ -121,6 +142,10 @@ export interface GameState {
   consent: boolean;
   settings: Settings;
   stats: Stats;
+  /** Evaluations auto-eval has earned and that have not run yet (fractional). */
+  bank: number;
+  /** When auto-eval's earnings were last brought up to date (the page's last moment of play). */
+  bankAt: number;
   dealer: DealerState;
   pacer: PacerState;
   queue: ProblemState[];
@@ -134,12 +159,12 @@ export interface GameState {
 export const TRACE_LIMIT = 400;
 export const LOG_LIMIT = 40;
 export const PAST_LIMIT = 3000;
-/** A problem whose last this many runs found nothing above the floor stops paying (Auto-advance). */
-export const STALE_RUNS = 8;
+/** A problem that has run this many evaluations without an improvement above the floor stops paying (Auto-advance). */
+export const STALE_EVALS = 1500;
 
 export function newGame(now: number, seed: number): GameState {
   return {
-    version: 1,
+    version: 2,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
@@ -147,8 +172,18 @@ export function newGame(now: number, seed: number): GameState {
     name: "",
     consent: false,
     settings: { auto: false, method: "mc_compress", background: false, battery: false },
-    stats: { evaluations: 0, runs: 0, computeMs: 0, submissions: 0, firstRecords: 0, verifiedImprovements: 0 },
-    dealer: newDealer(seed, now),
+    stats: {
+      evaluations: 0,
+      clicks: 0,
+      runs: 0,
+      computeMs: 0,
+      submissions: 0,
+      firstRecords: 0,
+      verifiedImprovements: 0,
+    },
+    bank: 0,
+    bankAt: now,
+    dealer: newDealer(seed),
     pacer: newPacer(),
     queue: [],
     focus: null,
@@ -171,7 +206,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     board: null,
     best: null,
     run: null,
-    nextSeed: 2,
+    nextSeed: 1,
     leader: null,
     verified: null,
     ourId: null,
@@ -180,9 +215,13 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     refused: null,
     leaving: false,
     sending: null,
+    paidTo: null,
+    unconfirmed: 0,
     trace: [],
-    deadRuns: 0,
+    evaluations: 0,
+    sinceGain: 0,
     runs: 0,
+    endedRuns: 0,
     lastRunAt: 0,
     rp: 0,
   };
@@ -226,6 +265,9 @@ export function density(p: ProblemKey, s: number): number {
  */
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
+/** As many runs as the player has seeds per problem have run to their end here: nothing is left to give. */
+export const spent = (p: ProblemState, seeds: number): boolean => p.endedRuns >= seeds;
+
 /** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
 export function applyLoadAll(p: ProblemState, board: PackingConfig, score: number, trimFloor: number | null): void {
   if (p.phase !== "bare") return;
@@ -236,66 +278,90 @@ export function applyLoadAll(p: ProblemState, board: PackingConfig, score: numbe
   p.phase = "loaded";
 }
 
-/** The parts of a finished solver run that the game uses. */
-export interface RunOutcome {
-  best?: PackingConfig;
-  score: number | null;
-  valid: boolean;
-  strict: boolean;
-  evaluations: number;
-  /** Seconds. */
-  wallTime: number;
-  run: RunRecord;
+/** A run opened on the problem: it uses the next seed. */
+export function openedRun(s: GameState, p: ProblemState, seed: number, now: number): void {
+  s.stats.runs++;
+  p.runs++;
+  p.lastRunAt = now;
+  if (seed >= p.nextSeed) p.nextSeed = seed + 1;
 }
 
-export interface RunChange {
-  /** The record (or before the first one, the free floor) the run is measured against. */
+/** One step of an open run: the evaluations it did and the run's best strict packing so far. */
+export interface StepOutcome {
+  evaluations: number;
+  best: PackingConfig | null;
+  score: number | null;
+  /** The run as a board it found records it (budget: the evaluations the run had done). */
+  run: RunRecord;
+  ms: number;
+  /** The run ended by itself (not closed by the game): it uses up one of the player's seeds here. */
+  ended: boolean;
+  /** A click of the player's (true) or auto-eval's evaluations. */
+  click: boolean;
+  /** Compact's step (its 100 evaluations from the Load-all board). */
+  compact?: boolean;
+}
+
+export interface StepChange {
+  /** The record (or before the first one, the free floor) the step is measured against. */
   before: number | null;
-  /** The board's score after the run. */
+  /** The board's score after the step. */
   after: number | null;
   /** The board changed (any strictly smaller strict result). */
   improved: boolean;
   /** It improved by more than the floor: an event the server will count. */
   counted: boolean;
   firstRecord: boolean;
+  /** Points paid for this step (null: none, or no consent yet). */
+  points: Points | null;
 }
 
 /**
- * A finished run on problem `p`. Its result becomes the board only when it is strict, valid and
- * smaller than the board: the side never grows. Every run counts toward the effort counters.
+ * A step of a run on problem `p`. Its best becomes the board only when it is strict, valid and
+ * smaller than the board: the side never grows. Every step counts toward the effort counters, and
+ * an improvement above the floor pays at once (with consent).
  */
-export function applyRun(s: GameState, p: ProblemState, r: RunOutcome, now: number): RunChange {
-  s.stats.evaluations += r.evaluations;
-  s.stats.runs++;
-  s.stats.computeMs += Math.round(r.wallTime * 1000);
-  p.runs++;
+export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: number): StepChange {
+  s.stats.evaluations += o.evaluations;
+  s.stats.computeMs += Math.round(o.ms);
+  if (o.click) s.stats.clicks++;
+  p.evaluations += o.evaluations;
   p.lastRunAt = now;
-  if (r.run.seed >= p.nextSeed) p.nextSeed = r.run.seed + 1;
+  if (o.ended) p.endedRuns++;
   const wasReady = p.phase === "ready";
   // what an improvement is measured against: the board's record, or before the first one the free floor
   const before = wasReady ? p.best : (p.floor ?? p.best);
-  const ok = r.valid && r.strict && !!r.best && r.score !== null && Number.isFinite(r.score) && r.score > 0;
-  const smaller = ok && p.best !== null && p.phase !== "bare" && r.score! < p.best;
+  const ok = !!o.best && o.score !== null && Number.isFinite(o.score) && o.score > 0;
+  const smaller = ok && p.best !== null && p.phase !== "bare" && o.score! < p.best;
   let counted = false;
   let firstRecord = false;
   if (smaller) {
-    counted = before !== null && improvesOn(r.score!, before);
-    p.board = structuredClone(r.best!);
-    p.best = r.score!;
-    p.run = structuredClone(r.run);
+    counted = before !== null && improvesOn(o.score!, before);
+    p.board = structuredClone(o.best!);
+    p.best = o.score!;
+    p.run = structuredClone(o.run);
     p.refused = null;
     // Load all is never a record: the first record must beat the free floor by more than F.
     if (!wasReady && counted) {
       p.phase = "ready";
       firstRecord = true;
     }
+  } else if (o.compact && !wasReady && p.phase === "loaded" && !p.run) {
+    // a Compact that did not beat a trim floor: the board is still a run's, and Evolve may go on
+    p.run = structuredClone(o.run);
   }
-  p.deadRuns = counted ? 0 : p.deadRuns + 1;
-  if (p.phase === "ready" && p.best !== null) {
-    p.trace.push(p.best);
-    if (p.trace.length > TRACE_LIMIT) p.trace.splice(0, p.trace.length - TRACE_LIMIT);
-  }
-  return { before, after: smaller ? p.best : before, improved: smaller, counted, firstRecord };
+  p.sinceGain = counted ? 0 : p.sinceGain + o.evaluations;
+  if (counted && p.phase === "ready") pushTrace(p);
+  const points = counted ? pay(s, p) : null;
+  return { before, after: smaller ? p.best : before, improved: smaller, counted, firstRecord, points };
+}
+
+function pushTrace(p: ProblemState): void {
+  if (p.best === null) return;
+  p.trace.push([p.evaluations, p.best]);
+  // thin the middle, keeping the first and the last points, so the whole history stays drawn
+  if (p.trace.length > TRACE_LIMIT)
+    p.trace = [p.trace[0], ...p.trace.slice(1, -1).filter((_, i) => i % 2 === 1), p.trace.at(-1)!];
 }
 
 /** The score a submission must beat: the leader read just before, or without one the free floor. */
@@ -303,7 +369,7 @@ export function submitTarget(p: ProblemState, leaderScore: number | null): numbe
   return leaderScore ?? p.floor;
 }
 
-// ---------- points and the server ----------
+// ---------- points ----------
 
 /**
  * The score the next submission improves on, as far as the game knows: the leader (often our own
@@ -313,10 +379,12 @@ export function previousScore(p: ProblemState): number | null {
   return p.leader?.score ?? p.verified ?? p.floor;
 }
 
-/** Points the board would earn if it were verified now (shown as pending; never credited). */
-export function pendingPoints(p: ProblemState, name: string): Points | null {
+/** What the next payment is measured from: the last score paid, else the score to beat. */
+const payBase = (p: ProblemState): number | null => p.paidTo ?? previousScore(p);
+
+function pointsFor(p: ProblemState, name: string): Points | null {
   if (p.phase !== "ready" || p.best === null || !p.run || p.closed) return null;
-  const sPrev = previousScore(p);
+  const sPrev = payBase(p);
   if (sPrev === null) return null;
   return recordPoints({
     N: p.N,
@@ -325,9 +393,65 @@ export function pendingPoints(p: ProblemState, name: string): Points | null {
     sPrev,
     sNew: p.best,
     tier: p.tier,
-    first: p.leader === null && p.verified === null,
+    first: p.paidTo === null && p.leader === null && p.verified === null,
     beatOther: beatsOther(p, p.leader, name),
   });
+}
+
+/** Points the board would pay now (shown while no name is given; paid as one event on consent). */
+export function pendingPoints(p: ProblemState, name: string): Points | null {
+  return pointsFor(p, name);
+}
+
+/** Pays the board's improvement since the last payment, as one event. Nothing without consent. */
+export function pay(s: GameState, p: ProblemState): Points | null {
+  if (!s.consent) return null;
+  const points = pointsFor(p, s.name);
+  if (!points) return null;
+  s.rp += points.total;
+  s.rpEarned += points.total;
+  p.rp += points.total;
+  p.unconfirmed += points.total;
+  p.paidTo = p.best;
+  if (points.beatBonus) p.beatPaid = true;
+  return points;
+}
+
+/** On consent: every board's improvement since its last payment pays, one event per problem. */
+export function payAll(s: GameState): number {
+  let total = 0;
+  for (const p of s.queue) total += pay(s, p)?.total ?? 0;
+  return total;
+}
+
+/**
+ * Sending switched off: points paid and not yet carried by a submission will never be confirmed, so
+ * they are taken back, and each board pays again from its last confirmed score once sending is back
+ * on. A submission already on its way keeps its points until its answer. Returns the points taken.
+ */
+export function withdrawConsent(s: GameState): number {
+  let total = 0;
+  for (const p of s.queue) {
+    total += takeBack(s, p, p.unconfirmed);
+    p.unconfirmed = 0;
+    p.paidTo = p.sending?.score ?? p.verified;
+  }
+  s.consent = false;
+  return total;
+}
+
+/** Takes back points the server did not confirm. Spent points are not owed: the balance stops at zero. */
+function takeBack(s: GameState, p: ProblemState, rp: number): number {
+  if (!(rp > 0)) return 0;
+  s.rp = Math.max(0, s.rp - rp);
+  s.rpEarned = Math.max(0, s.rpEarned - rp);
+  p.rp = Math.max(0, p.rp - rp);
+  return rp;
+}
+
+/** Points paid and not yet confirmed by the server, in the queue. */
+export function unconfirmedPoints(s: GameState): number {
+  return s.queue.reduce((t, p) => t + p.unconfirmed + (p.sending?.rp ?? 0), 0);
 }
 
 /**
@@ -335,12 +459,21 @@ export function pendingPoints(p: ProblemState, name: string): Points | null {
  * entry, and not our name as the server stores it (it strips angle brackets, for one).
  */
 function beatsOther(p: ProblemState, leader: Leader | null, name: string): boolean {
-  return !p.beatPaid && !!leader && leader.id !== p.ourId && sanitizeName(leader.name) !== sanitizeName(name);
+  // a leader read from a "behind" answer has no id; the name tells it from ours
+  return (
+    !p.beatPaid &&
+    !!leader &&
+    (leader.id === null || leader.id !== p.ourId) &&
+    sanitizeName(leader.name) !== sanitizeName(name)
+  );
 }
+
+// ---------- the server ----------
 
 /**
  * Records a POST about to go, before it goes (and the page saves it), so that an answer lost to a
- * reload or a dropped connection can be recognised later (see applyLeader).
+ * reload or a dropped connection can be recognised later (see applyLeader). The points paid so far
+ * ride with it.
  */
 export function markSending(
   p: ProblemState,
@@ -349,7 +482,8 @@ export function markSending(
   leaderBefore: Leader | null,
   now: number,
 ): void {
-  p.sending = { score, name: sanitizeName(name), leaderBefore, at: now };
+  p.sending = { score, name: sanitizeName(name), leaderBefore, at: now, rp: p.unconfirmed };
+  p.unconfirmed = 0;
 }
 
 /** Whether the problem has something the server would make leader, as far as the game knows. */
@@ -361,14 +495,18 @@ export function hasUnsent(p: ProblemState): boolean {
 }
 
 export interface AnswerChange {
-  points: Points | null;
   outcome: SubmitOutcome;
+  /** Points the answer confirmed (they were paid before), and points it took back. */
+  confirmed: number;
+  takenBack: number;
+  /** Points paid after the answer: the board measured against a new leader that it still beats. */
+  points: Points | null;
 }
 
 /**
  * The answer to a submission of `sentScore` on problem `p`, sent after the leader was read as
- * `leaderBefore` (null: none). Points are paid only when the server made the entry leader, against
- * that leader or, for a problem without one, its free floor.
+ * `leaderBefore` (null: none). Points were paid per click; the answer confirms them when the
+ * server made the entry leader, and takes them back when it did not.
  */
 export function applyAnswer(
   s: GameState,
@@ -378,50 +516,47 @@ export function applyAnswer(
   outcome: SubmitOutcome,
   now: number,
 ): AnswerChange {
+  const carried = p.sending?.rp ?? 0;
+  let confirmed = 0;
+  let takenBack = 0;
   let points: Points | null = null;
   if (outcome.kind === "leader") {
-    const sPrev = leaderBefore?.score ?? p.verified ?? p.floor;
-    const first = leaderBefore === null && p.verified === null;
-    if (sPrev !== null) {
-      points = recordPoints({
-        N: p.N,
-        M: p.M,
-        P: p.P,
-        sPrev,
-        sNew: outcome.score,
-        tier: p.tier,
-        first,
-        beatOther: beatsOther(p, leaderBefore, s.name),
-      });
-    }
-    if (points) {
-      s.rp += points.total;
-      s.rpEarned += points.total;
-      p.rp += points.total;
-      if (points.beatBonus) p.beatPaid = true;
-    }
-    if (first) s.stats.firstRecords++;
+    confirmed = carried;
+    if (leaderBefore === null && p.verified === null) s.stats.firstRecords++;
     s.stats.verifiedImprovements++;
     p.verified = outcome.score;
     p.ourId = outcome.id;
     p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
   } else if (outcome.kind === "behind") {
-    // another entry got there first; it is now the one to beat (whose it is, the next read says)
-    if (outcome.leaderScore !== null) p.leader = { score: outcome.leaderScore, name: "another name", id: null };
+    // another entry got there first: nothing paid since the last confirmation was a record
+    takenBack = takeBack(s, p, carried + p.unconfirmed);
+    p.unconfirmed = 0;
     p.ourId = null;
+    if (outcome.leaderScore !== null) {
+      // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
+      p.leader = { score: outcome.leaderScore, name: "another name", id: null };
+      p.paidTo = outcome.leaderScore;
+      points = pay(s, p);
+    }
   } else if (outcome.kind === "closed") {
+    takenBack = takeBack(s, p, carried + p.unconfirmed);
+    p.unconfirmed = 0;
     p.closed = true;
   } else if (outcome.kind === "refused") {
+    takenBack = takeBack(s, p, carried);
     p.refused = { score: sentScore, reasons: outcome.reasons };
+  } else if (outcome.kind === "rate-limited") {
+    // not looked at: the points ride with the next submission
+    p.unconfirmed += carried;
   }
   // Without an answer the send may still have reached the server: it is kept to be recognised later.
   if (outcome.kind !== "offline") {
     p.sending = null;
-    s.stats.submissions++;
+    if (outcome.kind !== "rate-limited") s.stats.submissions++;
   }
   void now;
-  return { points, outcome };
+  return { outcome, confirmed, takenBack, points };
 }
 
 /** Relative difference under which the leader's score is the score we sent (same packing, same code). */
@@ -432,19 +567,18 @@ const SAME_SCORE = 1e-12;
  * or one that left. Our record is lost when the leader is no longer our entry.
  *
  * With the game state `s`, a send whose answer never arrived is settled first: when the leader has
- * the name and the score of that send, it is our entry, and it is paid once, as its answer would have
- * been. Otherwise that send did not lead and is forgotten (the board goes again if it still improves).
- * Call it only while no POST for the problem is on its way.
+ * the name and the score of that send, it is our entry and its points are confirmed. Otherwise that
+ * send did not lead; its points wait for the next submission (the board goes again if it still
+ * improves). Call it only while no POST for the problem is on its way.
  */
 export function applyLeader(
   p: ProblemState | PastProblem,
   leader: Leader | null,
   s?: GameState,
   now = 0,
-): { lost: boolean; reconciled: boolean; points: Points | null } {
+): { lost: boolean; reconciled: boolean; confirmed: number } {
   if (s && "sending" in p && p.sending) {
     const send = p.sending;
-    p.sending = null;
     if (
       leader &&
       leader.id !== null &&
@@ -452,21 +586,39 @@ export function applyLeader(
       Math.abs(leader.score - send.score) <= SAME_SCORE * send.score
     ) {
       const outcome: SubmitOutcome = { kind: "leader", score: leader.score, id: leader.id, pending: false };
-      const { points } = applyAnswer(s, p, send.leaderBefore, send.score, outcome, now);
-      return { lost: false, reconciled: true, points };
+      const { confirmed } = applyAnswer(s, p, send.leaderBefore, send.score, outcome, now);
+      return { lost: false, reconciled: true, confirmed };
     }
+    p.sending = null;
+    p.unconfirmed += send.rp;
   }
   const held = p.ourId !== null;
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;
   const lost = held && !ours;
   if (!ours) p.ourId = null;
   if ("leader" in p) p.leader = leader;
-  return { lost, reconciled: false, points: null };
+  return { lost, reconciled: false, confirmed: 0 };
 }
 
 /** Problems where the player is the current leader, as far as the game has seen. */
 export function recordsHeld(s: GameState): number {
   return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
+}
+
+// ---------- auto-eval's bank ----------
+
+/**
+ * Brings auto-eval's earnings up to `now`: `perSecond` evaluations a second since `bankAt`, the
+ * bank holding at most `cap`. Earned while the page is open, hidden or closed alike; the bank runs
+ * whenever running is allowed. Returns the evaluations added.
+ */
+export function accrue(s: GameState, now: number, perSecond: number, cap: number): number {
+  const elapsed = Math.max(0, now - s.bankAt) / 1000;
+  s.bankAt = Math.max(s.bankAt, now);
+  if (!(perSecond > 0)) return 0;
+  const before = s.bank;
+  s.bank = Math.min(Math.max(cap, before), before + elapsed * perSecond);
+  return s.bank - before;
 }
 
 // ---------- upgrades ----------

@@ -18,7 +18,7 @@ import { sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
-import { isUpgradeId } from "./upgrades";
+import { EvolveMethod, isUpgradeId, methods } from "./upgrades";
 
 /**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
@@ -30,12 +30,42 @@ import { isUpgradeId } from "./upgrades";
  * Adding a field needs no new version (missing fields take their default). A change that would
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS.
  */
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
 export type Migration = (save: Record<string, unknown>) => Record<string, unknown>;
-export const MIGRATIONS: Record<number, Migration> = {};
+export const MIGRATIONS: Record<number, Migration> = {
+  /**
+   * Version 1 ran a whole run per click (30 to 300 evaluations) and paid points on the server's
+   * answer. Version 2 opens runs and steps them, and pays per click: what version 1 had verified is
+   * paid, the rest pays from there. Its "Longer runs" upgrades become evaluations per click.
+   */
+  1: (save) => {
+    const PER_RUN = 30;
+    const evalsOld = isObj(save.stats) ? int(save.stats.evaluations, 0) : 0;
+    const queue = (Array.isArray(save.queue) ? save.queue : []).map((q) => {
+      if (!isObj(q)) return q;
+      const trace = Array.isArray(q.trace) ? q.trace.filter((x): x is number => posOrNull(x) !== null) : [];
+      return {
+        ...q,
+        trace: trace.map((v, i) => [i * PER_RUN, v]),
+        sinceGain: int(q.deadRuns, 0) * PER_RUN,
+        evaluations: int(q.runs, 0) * PER_RUN,
+        paidTo: posOrNull(q.verified),
+        unconfirmed: 0,
+        sending: isObj(q.sending) ? { ...q.sending, rp: 0 } : null,
+      };
+    });
+    const renamed: Record<string, string> = { evals1: "click2", evals2: "click3" };
+    const owned = (Array.isArray(save.owned) ? save.owned : []).map((id) =>
+      typeof id === "string" ? (renamed[id] ?? id) : id,
+    );
+    const dealer = isObj(save.dealer) ? { ...save.dealer, evalsAt: evalsOld } : save.dealer;
+    const stats = isObj(save.stats) ? { ...save.stats, clicks: int(save.stats.runs, 0) } : save.stats;
+    return { ...save, queue, owned, dealer, stats };
+  },
+};
 
 export type LoadResult = { ok: true; state: GameState } | { ok: false; error: string };
 
@@ -101,7 +131,13 @@ function pendingSend(v: unknown): PendingSend | null {
   if (!isObj(v) || posOrNull(v.score) === null || typeof v.name !== "string") return null;
   const name = sanitizeName(v.name);
   if (!name) return null;
-  return { score: v.score as number, name, leaderBefore: leader(v.leaderBefore), at: num(v.at, 0) };
+  return {
+    score: v.score as number,
+    name,
+    leaderBefore: leader(v.leaderBefore),
+    at: num(v.at, 0),
+    rp: num(v.rp, 0, 0),
+  };
 }
 
 function problemState(v: unknown, now: number): ProblemState | null {
@@ -117,7 +153,13 @@ function problemState(v: unknown, now: number): ProblemState | null {
   const run = runRecord(v.run);
   if (phase === "ready" && !run && tier(v.tier) === "open") phase = "bare";
   const trace = Array.isArray(v.trace)
-    ? v.trace.filter((x): x is number => posOrNull(x) !== null).slice(-TRACE_LIMIT)
+    ? v.trace
+        .filter(
+          (x): x is [number, number] =>
+            Array.isArray(x) && x.length === 2 && Number.isSafeInteger(x[0]) && x[0] >= 0 && posOrNull(x[1]) !== null,
+        )
+        .map(([e, s]) => [e, s] as [number, number])
+        .slice(-TRACE_LIMIT)
     : [];
   const refused =
     isObj(v.refused) && posOrNull(v.refused.score) !== null && Array.isArray(v.refused.reasons)
@@ -133,7 +175,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     board: phase === "bare" ? null : b,
     best: phase === "bare" ? null : best,
     run: phase === "bare" ? null : run,
-    nextSeed: int(v.nextSeed, 2, 2, 0xffffffff),
+    nextSeed: int(v.nextSeed, 1, 1, 0xffffffff),
     leader: leader(v.leader),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
@@ -142,9 +184,13 @@ function problemState(v: unknown, now: number): ProblemState | null {
     refused,
     leaving: bool(v.leaving, false),
     sending: pendingSend(v.sending),
+    paidTo: phase === "ready" ? posOrNull(v.paidTo) : null,
+    unconfirmed: num(v.unconfirmed, 0, 0),
     trace: phase === "bare" ? [] : trace,
-    deadRuns: int(v.deadRuns, 0),
+    evaluations: int(v.evaluations, 0),
+    sinceGain: int(v.sinceGain, 0),
     runs: int(v.runs, 0),
+    endedRuns: int(v.endedRuns, 0),
     lastRunAt: num(v.lastRunAt, 0),
     rp: num(v.rp, 0, 0),
   };
@@ -166,15 +212,16 @@ function pastProblem(v: unknown, now: number): PastProblem | null {
   };
 }
 
-function dealer(v: unknown, now: number): DealerState {
-  const d = newDealer(Math.floor(Math.random() * 0xffffffff), now);
-  if (!isObj(v)) return d;
+function dealer(v: unknown, evaluations: number): DealerState {
+  const d = newDealer(Math.floor(Math.random() * 0xffffffff));
+  if (!isObj(v)) return { ...d, evalsAt: evaluations };
   return {
     seed: int(v.seed, d.seed, 0, 0xffffffff),
     draws: int(v.draws, 0),
     dealt: int(v.dealt, 0),
-    tokens: num(v.tokens, 1, 0, 100),
-    updatedAt: num(v.updatedAt, now),
+    // in debt after a problem dealt on credit
+    tokens: num(v.tokens, 1, -100, 100),
+    evalsAt: Math.min(int(v.evalsAt, evaluations), evaluations),
   };
 }
 
@@ -216,6 +263,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
+  const evaluations = int(stats.evaluations, 0);
+  const method = methods(new Set(owned)).find((m) => m === settings.method) ?? "mc_compress";
   const focus =
     typeof save.focus === "string" && queue.some((p) => p.key === save.focus) ? save.focus : (queue[0]?.key ?? null);
   return {
@@ -229,19 +278,22 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
     settings: {
       auto: bool(settings.auto, g.settings.auto),
-      method: settings.method === "basin_hopping" && owned.includes("basin") ? "basin_hopping" : "mc_compress",
+      method: method as EvolveMethod,
       background: bool(settings.background, false),
       battery: bool(settings.battery, false),
     },
     stats: {
-      evaluations: int(stats.evaluations, 0),
+      evaluations,
+      clicks: int(stats.clicks, 0),
       runs: int(stats.runs, 0),
       computeMs: int(stats.computeMs, 0),
       submissions: int(stats.submissions, 0),
       firstRecords: int(stats.firstRecords, 0),
       verifiedImprovements: int(stats.verifiedImprovements, 0),
     },
-    dealer: dealer(save.dealer, now),
+    bank: num(save.bank, 0, 0),
+    bankAt: num(save.bankAt, now, 0, now),
+    dealer: dealer(save.dealer, evaluations),
     pacer: pacer(save.pacer),
     queue,
     focus,
