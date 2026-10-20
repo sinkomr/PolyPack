@@ -3,12 +3,12 @@
 **Abstract.** Let $\rho(N,P)$ be the smallest radius of a disc holding $P$ regular $N$-gons of side 1 with disjoint interiors, and $\rho_0(P)$ the smallest radius of a disc holding $P$ unit circles. We prove that for all $N \ge 3$ and $P \ge 1$
 
 $$
-\rho(N,P) \;\ge\; \sqrt{r_N^2\,\rho_0(P)^2 + \tfrac14},
+\rho(N,P) \ge \sqrt{r_N^2 \rho_0(P)^2 + \tfrac14},
 $$
 
-where $r_N$ is the inradius of the $N$-gon. If the bound is attained, the piece centres, scaled by $1/r_N$, form an optimal packing of unit circles in which the contact directions of each circle are congruent modulo $2\pi/N$, so that every piece meets each neighbour and the container face-on. Conversely, an optimal circle packing with this property gives a packing of polygons at the bound, provided its non-touching circles are not too close (Lemma 4). Using optimal circle packings that are proved here ($P \le 7$) or in the literature ($P = 8, 9, 11, 13, 19$), we obtain the exact value of $\rho(N,P)$ for 148 pairs with $N \le 100$, listed in [Section 10](#10-table-of-the-148-cases-of-theorem-2). For $P \le 7$ we determine every $N$ for which the bound is attained; for $P = 6$ this adds 30 further $N \le 100$ ([Section 11](#11-table-of-the-30-cases-of-theorem-3)).
+where $r_N$ is the inradius of the $N$-gon. If the bound is attained, the piece centres, scaled by $1/r_N$, form an optimal packing of unit circles in which the contact directions of each circle are congruent modulo $2\pi/N$, so that every piece meets each neighbour and the container face-on. Conversely, an optimal circle packing with this property gives a packing of polygons at the bound, provided its non-touching circles are far enough apart and its circles off the wall far enough from it (conditions (b) and (c) of Lemma 4). Using optimal circle packings that are proved here ($P \le 7$) or in the literature ($P = 8, 9, 11, 13, 19$), we obtain the exact value of $\rho(N,P)$ for 148 pairs with $N \le 100$, listed in [Section 10](#10-table-of-the-148-cases-of-theorem-2). For $P \le 7$ we determine every $N$ for which the bound is attained; for $P = 6$ this adds 30 further $N \le 100$ ([Section 11](#11-table-of-the-30-cases-of-theorem-3)).
 
-**Status.** Proved in this document, except that for $P = 8, 9, 11, 13, 19$ (25 of the 148 pairs) the optimal radius $\rho_0(P)$ of the circle packing is taken from the cited literature (Section 5.2). Reviewed by independent AI reviewers; not yet reviewed by a human mathematician. See the [changelog](#14-changelog).
+**Status.** Proved in this document, except that for $P = 8, 9, 11, 13, 19$ (25 of the 148 pairs) the optimal radius $\rho_0(P)$ of the circle packing is taken from the cited literature (Section 5.2). Of these sources, [Fo03] ($P = 13$, 10 pairs) was read in full; [Pi69] ($P = 8, 9$, 9 pairs) is known here through [Fo03] and [GLNÖ98], and [Me94] and [Fo99] ($P = 11, 19$, 6 pairs) through their zbMATH reviews. Reviewed by independent AI reviewers; not yet reviewed by a human mathematician. See the [changelog](#14-changelog).
 
 ## Contents
 
@@ -29,14 +29,14 @@ where $r_N$ is the inradius of the $N$-gon. If the bound is attained, the piece 
 
 ## 1. Conventions
 
-These are PolyPack's conventions (pieces of side 1, unit circles, the score of a circular container is its radius). Remarks labelled [EST] rest on a cited source and [CALC] on a computation; they are outside the proofs and nothing in the proofs depends on them.
+These are PolyPack's conventions (pieces of side 1, unit circles, the score of a circular container is its radius). Remarks labelled [EST] rest on a cited source and [CALC] on a computation; they appear after Theorem 2 and in Section 9, are outside the proofs, and nothing in the proofs depends on them. The proofs do depend on the cited theorems of Section 5.2; the notes "Source check" there say how each was verified.
 
 **Angles.** $e(\varphi) = (\cos\varphi, \sin\varphi)$ is the unit vector at angle $\varphi$. Angles of points and directions in the configurations of Section 5 are given in degrees; formulas with $\pi/N$ are in radians. Two identities are used throughout: for all $\alpha, \beta$,
 
 $$
-e(\beta) - e(\alpha) = 2\sin\tfrac{\beta-\alpha}{2}\; e\!\left(\tfrac{\alpha+\beta}{2} + 90^\circ\right),
+e(\beta) - e(\alpha) = 2\sin\tfrac{\beta-\alpha}{2} e\left(\tfrac{\alpha+\beta}{2} + 90^\circ\right),
 \qquad
-e(\alpha) + e(\beta) = 2\cos\tfrac{\beta-\alpha}{2}\; e\!\left(\tfrac{\alpha+\beta}{2}\right).
+e(\alpha) + e(\beta) = 2\cos\tfrac{\beta-\alpha}{2} e\left(\tfrac{\alpha+\beta}{2}\right).
 $$
 
 **Pieces.** A piece is a closed regular $N$-gon ($N \ge 3$) of side 1. Its inradius and circumradius are
@@ -45,10 +45,10 @@ $$
 r_N = \frac{1}{2\tan(\pi/N)}, \qquad R_N = \frac{1}{2\sin(\pi/N)}, \qquad\text{so}\qquad R_N\cos\tfrac{\pi}{N} = r_N,\quad R_N^2 = r_N^2 + \tfrac14,\quad \frac{R_N}{r_N} = \sec\tfrac{\pi}{N}.
 $$
 
-A piece with pose $(x, y, \theta)$ has centre $p = (x, y)$ and vertices $v_k = p + R_N\, e(\theta + \pi/2 + 2\pi k/N)$, $k = 0, \dots, N-1$. The face from $v_k$ to $v_{k+1}$ has midpoint $p + R_N\cos(\pi/N)\, e(\theta + \pi/2 + \pi/N + 2\pi k/N)$, so its outward unit normal is
+A piece with pose $(x, y, \theta)$ has centre $p = (x, y)$ and vertices $v_k = p + R_N e(\theta + \pi/2 + 2\pi k/N)$, $k = 0, \dots, N-1$. The face from $v_k$ to $v_{k+1}$ has midpoint $p + R_N\cos(\pi/N) e(\theta + \pi/2 + \pi/N + 2\pi k/N)$, so its outward unit normal is
 
 $$
-n_k = e\!\left(\theta + \tfrac{\pi}{2} + \tfrac{\pi}{N} + \tfrac{2\pi k}{N}\right),
+n_k = e\left(\theta + \tfrac{\pi}{2} + \tfrac{\pi}{N} + \tfrac{2\pi k}{N}\right),
 $$
 
 and the face lies on the line $\lbrace x : (x - p)\cdot n_k = r_N \rbrace$. The piece is $\lbrace x : (x-p)\cdot n_k \le r_N \text{ for all } k \rbrace$. Hence $e(\psi)$ is an outward face normal of the piece if and only if
@@ -78,12 +78,12 @@ A circle with $\Psi_i = \emptyset$ is a *rattler*. The configuration satisfies t
 **The bound.** Throughout,
 
 $$
-F(N,P) = \sqrt{r_N^2\,\rho_0(P)^2 + \tfrac14} = \tfrac12\sqrt{\rho_0(P)^2\cot^2(\pi/N) + 1}.
+F(N,P) = \sqrt{r_N^2 \rho_0(P)^2 + \tfrac14} = \tfrac12\sqrt{\rho_0(P)^2\cot^2(\pi/N) + 1}.
 $$
 
 **Lemma 0 (the minima exist).** For every $N \ge 3$ and $P \ge 1$ there is a packing of $P$ pieces (or unit circles) in a closed disc of radius $\rho(N,P)$ (or $\rho_0(P)$).
 
-*Proof.* Take packings in discs centred at $O$ with radii decreasing to the infimum $\rho^\ast$; all radii are at most some $\rho_1$. The poses lie in the compact set $\lbrace \lvert p\rvert \le \rho_1\rbrace \times [0, 2\pi]$, so a subsequence converges. Containment in the closed disc of radius $\rho_k$ passes to the limit as containment in the disc of radius $\rho^\ast$. Two convex pieces $K, K'$ have disjoint interiors if and only if a line separates them [Ro70, Theorem 11.3]. Write such a line as $\lbrace x : n\cdot x = s\rbrace$ with $\lvert n\rvert = 1$, $K \subseteq \lbrace n\cdot x \le s\rbrace$, $K' \subseteq \lbrace n\cdot x \ge s\rbrace$; replacing $s$ by $\max_{x \in K} n\cdot x$ keeps both inclusions and gives $\lvert s\rvert \le \rho_1$. So a further subsequence of the separating lines converges, and the limit line separates the limit pieces. $\square$
+*Proof.* Take packings in discs centred at $O$ with radii decreasing to the infimum $\rho^\ast$; all radii are at most some $\rho_1$. The poses lie in the compact set $\lbrace \lvert p\rvert \le \rho_1\rbrace \times [0, 2\pi]$, so a subsequence converges. Containment in the closed disc of radius $\rho_k$ passes to the limit as containment in the disc of radius $\rho^\ast$. Two convex pieces $K, K'$ have disjoint interiors if and only if a line separates them [Ro70, Theorem 11.3]. Write such a line as $\lbrace x : \nu\cdot x = s\rbrace$ with $\lvert \nu\rvert = 1$, $K \subseteq \lbrace \nu\cdot x \le s\rbrace$, $K' \subseteq \lbrace \nu\cdot x \ge s\rbrace$; replacing $s$ by $\max_{x \in K} \nu\cdot x$ keeps both inclusions and gives $\lvert s\rvert \le \rho_1$. So a further subsequence of the separating lines converges, and the limit line separates the limit pieces. $\square$
 
 ## 2. Results
 
@@ -117,7 +117,7 @@ The values of $\rho_0(P)$ for $P \le 7$ are proved in Lemma 5; those for $P = 8,
 
 For $N \le 100$ this adds to Theorem 2 exactly the 30 pairs $(N, 6)$ with $N$ even, $3 \nmid N$ and $N \ge 10$, $N \ne 14$ (Section 11).
 
-**Proposition 4 (no other $N$ for the chosen configurations).** For each $P$ of Theorem 2, let $C_P$ be the configuration of Section 5 used in the proof. If a packing of $P$ regular $N$-gons in a closed disc of radius $F(N,P)$ has its piece centres at $r_N c_i$, where $(c_i)$ is the image of $C_P$ under an isometry fixing $O$ (the rattler of $P = 8, 9$ may be anywhere), then $q_P \mid N$.
+**Proposition 4 (no other $N$ for the chosen configurations).** For each $P$ of Theorem 2, let $C_P$ be the configuration of Section 5 used in the proof. If a packing of $P$ regular $N$-gons in the closed disc of radius $F(N,P)$ about $O$ has its piece centres at $r_N c_i$, where $(c_i)$ is the image of $C_P$ under an isometry fixing $O$ (the rattler of $P = 8, 9$ may be anywhere), then $q_P \mid N$.
 
 Proposition 4 does not exclude other $N$ for $P \ge 8$: a different optimal configuration of circles could satisfy the congruence condition for further $N$. For $P \le 7$ Theorem 3 settles this; for $P = 6$ it does find further $N$.
 
@@ -126,7 +126,7 @@ Proposition 4 does not exclude other $N$ for $P \ge 8$: a different optimal conf
 **Lemma 1 (support function).** Let $K$ be a regular $N$-gon with centre $p$, circumradius $R$ and inradius $r$, and let $u$ be a unit vector. Let $\delta \in [0, \pi/N]$ be the angle between $u$ and the nearest outward face normal of $K$. Then
 
 $$
-h_K(u) := \max_{x \in K}\,(x - p)\cdot u = R\cos\!\left(\tfrac{\pi}{N} - \delta\right).
+h_K(u) := \max_{x \in K} (x - p)\cdot u = R\cos\left(\tfrac{\pi}{N} - \delta\right).
 $$
 
 In particular $r \le h_K(u) \le R$, and $h_K(u) = r$ if and only if $u$ is an outward face normal of $K$.
@@ -136,22 +136,22 @@ In particular $r \le h_K(u) \le R$, and $h_K(u) = r$ if and only if $u$ is an ou
 **Lemma 2 (vertex lemma).** Let $K$ be a regular $N$-gon of side 1 with centre $p$, and $D = \lvert p\rvert$. Then
 
 $$
-\max_{x \in K}\lvert x\rvert^2 = D^2 + R_N^2 + 2D\,h_K(\hat p) \;\ge\; (D + r_N)^2 + \tfrac14 ,
+\max_{x \in K}\lvert x\rvert^2 = D^2 + R_N^2 + 2D h_K(\hat p) \ge (D + r_N)^2 + \tfrac14 ,
 $$
 
-where $\hat p = p/D$ (the term $2D\,h_K(\hat p)$ is $0$ when $D = 0$). For $D > 0$, equality holds if and only if $\hat p$ is an outward face normal of $K$. For $D = 0$ both sides equal $R_N^2$.
+where $\hat p = p/D$ (the term $2D h_K(\hat p)$ is $0$ when $D = 0$). For $D > 0$, equality holds if and only if $\hat p$ is an outward face normal of $K$. For $D = 0$ both sides equal $R_N^2$.
 
-*Proof.* $\lvert x\rvert^2$ is convex, so its maximum over $K$ is attained at a vertex $v$. Every vertex satisfies $\lvert v - p\rvert = R_N$, so $\lvert v\rvert^2 = D^2 + R_N^2 + 2D\,\hat p\cdot(v - p)$, and the maximum of $\hat p\cdot(v-p)$ over the vertices is $h_K(\hat p)$. By Lemma 1, $h_K(\hat p) \ge r_N$, with equality if and only if $\hat p$ is a face normal. Finally $D^2 + R_N^2 + 2Dr_N = (D + r_N)^2 + R_N^2 - r_N^2 = (D+r_N)^2 + \tfrac14$. $\square$
+*Proof.* $\lvert x\rvert^2$ is convex, so its maximum over $K$ is attained at a vertex $v$. Every vertex satisfies $\lvert v - p\rvert = R_N$, so $\lvert v\rvert^2 = D^2 + R_N^2 + 2D \hat p\cdot(v - p)$, and the maximum of $\hat p\cdot(v-p)$ over the vertices is $h_K(\hat p)$. By Lemma 1, $h_K(\hat p) \ge r_N$, with equality if and only if $\hat p$ is a face normal. Finally $D^2 + R_N^2 + 2Dr_N = (D + r_N)^2 + R_N^2 - r_N^2 = (D+r_N)^2 + \tfrac14$. $\square$
 
-*Remark.* By Lemma 1, $2D\,h_K(\hat p) = 2DR_N\cos(\pi/N - \beta) = 2Dr_N\cos\beta + D\sin\beta$, where $\beta \in [0, \pi/N]$ is the angle between $\hat p$ and the nearest face normal (using $R_N\cos(\pi/N) = r_N$ and $R_N\sin(\pi/N) = \frac12$). In this form the farthest vertex is seen to be an endpoint of the face whose normal is nearest the radial direction.
+*Remark.* By Lemma 1, $2D h_K(\hat p) = 2DR_N\cos(\pi/N - \delta) = 2Dr_N\cos\delta + D\sin\delta$, where $\delta \in [0, \pi/N]$ is the angle between $\hat p$ and the nearest face normal (using $R_N\cos(\pi/N) = r_N$ and $R_N\sin(\pi/N) = \frac12$). By the proof of Lemma 1, the farthest vertex is the vertex nearest in angle to $\hat p$, which is an endpoint of the face whose normal is nearest $\hat p$.
 
 **Proof of Theorem 1.** Let pieces $K_1, \dots, K_P$ with centres $p_i$ form a packing in the closed disc of radius $\rho$ about $O$, and put $D_i = \lvert p_i\rvert$. Let $B_i$ be the incircle of $K_i$. Since $B_i \subseteq K_i$, the interiors of the $B_i$ are pairwise disjoint, and every $B_i$ lies in the closed disc of radius
 
 $$
-\rho' = \max_i\,(D_i + r_N)
+\rho' = \max_i (D_i + r_N)
 $$
 
-about $O$. Scaling by $1/r_N$ gives $P$ unit circles with disjoint interiors in a closed disc of radius $\rho'/r_N$, so $\rho' \ge r_N\,\rho_0(P)$ by the definition of $\rho_0$. Choose $i$ with $D_i + r_N = \rho'$ (any one, if several attain the maximum). By Lemma 2, $K_i$ contains a point $x$ with $\lvert x\rvert^2 \ge \rho'^2 + \frac14$. As $K_i$ lies in the closed disc of radius $\rho$, $\rho^2 \ge \lvert x\rvert^2 \ge \rho'^2 + \frac14 \ge r_N^2\rho_0(P)^2 + \frac14$. $\square$
+about $O$. Scaling by $1/r_N$ gives $P$ unit circles with disjoint interiors in a closed disc of radius $\rho'/r_N$, so $\rho' \ge r_N \rho_0(P)$ by the definition of $\rho_0$. Choose $i$ with $D_i + r_N = \rho'$ (any one, if several attain the maximum). By Lemma 2, $K_i$ contains a point $x$ with $\lvert x\rvert^2 \ge \rho'^2 + \frac14$. As $K_i$ lies in the closed disc of radius $\rho$, $\rho^2 \ge \lvert x\rvert^2 \ge \rho'^2 + \frac14 \ge r_N^2\rho_0(P)^2 + \frac14$. $\square$
 
 *Edge cases.* The proof uses no choice of a face when $D_i = 0$ (Lemma 2 covers it). Ties in the maximum are allowed. The container is closed, and only $\lvert x\rvert \le \rho$ for points of the pieces is used. For $P = 1$, $\rho_0(1) = 1$ and $F(N,1) = \sqrt{r_N^2 + 1/4} = R_N$, which one piece centred at $O$ attains, so $\rho(N,1) = R_N$ for every $N$. For $P \ge 2$, $\rho_0(P) \ge 2$ (two points at distance at least 2 cannot both lie in a disc of radius less than 1).
 
@@ -169,13 +169,13 @@ Consequently $(c_i)$ satisfies the congruence condition for $N$.
 
 (2) If $\lvert c_i\rvert = \rho_0(P) - 1$, then $D_i = r_N(\rho_0(P) - 1) > 0$ and $(D_i + r_N)^2 + \frac14 = F(N,P)^2$. Lemma 2 gives a point of $K_i$ at squared distance at least $F(N,P)^2$ from $O$, with strict inequality unless $\hat p_i$ is a face normal. As $K_i$ lies in the disc, $\hat p_i$ is a face normal.
 
-(3) Let $\lvert p_j - p_i\rvert = 2r_N$, so $u = (p_j - p_i)/(2r_N)$, and let $M = (p_i + p_j)/2 = p_i + r_N u$. Then $M$ lies in both incircles, so in $K_i \cap K_j$. Since $K_i$ and $K_j$ are convex with disjoint interiors, there is a line $\lbrace x : n\cdot x = s\rbrace$ with $\lvert n\rvert = 1$, $K_i \subseteq \lbrace n\cdot x \le s\rbrace$ and $K_j \subseteq \lbrace n\cdot x \ge s \rbrace$ [Ro70, Theorem 11.3]. As $M \in K_i \cap K_j$, $n\cdot M = s$. The incircle of $K_i$ lies in $\lbrace n\cdot x \le s\rbrace$, so
+(3) Let $\lvert p_j - p_i\rvert = 2r_N$, so $u = (p_j - p_i)/(2r_N)$, and let $M = (p_i + p_j)/2 = p_i + r_N u$. Then $M$ lies in both incircles, so in $K_i \cap K_j$. Since $K_i$ and $K_j$ are convex with disjoint interiors, there is a line $\lbrace x : \nu\cdot x = s\rbrace$ with $\lvert \nu\rvert = 1$, $K_i \subseteq \lbrace \nu\cdot x \le s\rbrace$ and $K_j \subseteq \lbrace \nu\cdot x \ge s \rbrace$ [Ro70, Theorem 11.3]. As $M \in K_i \cap K_j$, $\nu\cdot M = s$. The incircle of $K_i$ lies in $\lbrace \nu\cdot x \le s\rbrace$, so
 
 $$
-n\cdot p_i + r_N = \max_{\lvert x - p_i\rvert \le r_N} n\cdot x \le s = n\cdot M = n\cdot p_i + r_N\,(n\cdot u).
+\nu\cdot p_i + r_N = \max_{\lvert x - p_i\rvert \le r_N} \nu\cdot x \le s = \nu\cdot M = \nu\cdot p_i + r_N (\nu\cdot u).
 $$
 
-Hence $n\cdot u \ge 1$, and since both are unit vectors, $n = u$. So every $x \in K_i$ satisfies $(x - p_i)\cdot u \le s - p_i\cdot u = (M - p_i)\cdot u = r_N$, that is $h_{K_i}(u) \le r_N$, and by Lemma 1, $u$ is a face normal of $K_i$. The same argument with $i$ and $j$ exchanged shows that $-u$ is a face normal of $K_j$.
+Hence $\nu\cdot u \ge 1$, and since both are unit vectors, $\nu = u$. So every $x \in K_i$ satisfies $(x - p_i)\cdot u \le s - p_i\cdot u = (M - p_i)\cdot u = r_N$, that is $h_{K_i}(u) \le r_N$, and by Lemma 1, $u$ is a face normal of $K_i$. The same argument with $i$ and $j$ exchanged shows that $-u$ is a face normal of $K_j$.
 
 The directions in $\Psi_i$ are therefore all outward face normals of $K_i$, and any two face normals differ by a multiple of $2\pi/N$. $\square$
 
@@ -195,7 +195,7 @@ Place piece $i$ at centre $p_i = r_N c_i$ with $\theta_i = \psi_i - \pi/2 - \pi/
 
 *Proof.* *Face normals.* By (1.1) the face normals of piece $i$ are $e(\psi_i + 2\pi k/N)$. By (a), every direction in $\Psi_i^E$ is one of them.
 
-*Pairs in $E$.* Let $c_j - c_i = d\,u$ with $\lvert u\rvert = 1$ and $d \ge 2$. Then $u$ is a face normal of piece $i$ and $-u$ one of piece $j$ (the direction from $c_j$ to $c_i$ is in $\Psi_j^E$). So piece $i$ lies in $\lbrace x : (x - p_i)\cdot u \le r_N\rbrace$ and piece $j$ in $\lbrace x : (x - p_j)\cdot(-u) \le r_N\rbrace = \lbrace x : (x - p_i)\cdot u \ge r_N d - r_N \rbrace$. Since $r_N d - r_N \ge r_N$, the line $(x - p_i)\cdot u = r_N$ separates the two pieces, so their interiors are disjoint.
+*Pairs in $E$.* Let $c_j - c_i = \Delta u$ with $\lvert u\rvert = 1$ and $\Delta \ge 2$. Then $u$ is a face normal of piece $i$ and $-u$ one of piece $j$ (the direction from $c_j$ to $c_i$ is in $\Psi_j^E$). So piece $i$ lies in $\lbrace x : (x - p_i)\cdot u \le r_N\rbrace$ and piece $j$ in $\lbrace x : (x - p_j)\cdot(-u) \le r_N\rbrace = \lbrace x : (x - p_i)\cdot u \ge r_N \Delta - r_N \rbrace$. Since $r_N \Delta - r_N \ge r_N$, the line $(x - p_i)\cdot u = r_N$ separates the two pieces, so their interiors are disjoint.
 
 *Pairs not in $E$.* Each piece lies in the closed disc of radius $R_N$ about its centre, and its interior in the open disc. By (b), $\lvert p_i - p_j\rvert \ge 2r_N\sec(\pi/N) = 2R_N$, so the open discs, and the interiors, are disjoint.
 
@@ -212,12 +212,12 @@ Condition (b) forces every touching pair into $E$, since $2 < 2\sec(\pi/N)$; and
 **Lemma 5.** Let $2 \le n \le 7$ and let $c_1, \dots, c_n$ lie in the closed disc of radius $\alpha$ about $O$, with $\lvert c_i - c_j\rvert \ge d$ for $i \ne j$. Then
 
 $$
-d \le \alpha\,\max\!\left(1,\, 2\sin\tfrac{\pi}{n}\right).
+d \le \alpha \max\left(1, 2\sin\tfrac{\pi}{n}\right).
 $$
 
 Consequently $\rho_0(n) = 1 + 1/\sin(\pi/n)$ for $2 \le n \le 6$ and $\rho_0(7) = 3$. Moreover, with $a_n = \rho_0(n) - 1$, every optimal configuration for $n$ is, up to rotation about $O$:
 
-- for $n \le 5$: the regular $n$-gon $a_n\, e(k\cdot 360^\circ/n)$, $k = 0, \dots, n-1$;
+- for $n \le 5$: the regular $n$-gon $a_n e(k\cdot 360^\circ/n)$, $k = 0, \dots, n-1$;
 - for $n = 6$: either the regular hexagon $2e(60^\circ k)$, or the point $O$ together with five points on the circle of radius 2 whose angular separations are all at least $60^\circ$;
 - for $n = 7$: the point $O$ together with the regular hexagon $2e(60^\circ k)$.
 
@@ -245,20 +245,20 @@ The values for $n \le 7$ are classical. For $n = 7$, [BE51, Theorem 3] shows tha
 
 For $P = 8, 9, 11, 13, 19$ the configurations of Sections 5.3–5.6 give $\rho_0(P) \le \rho_P$, where $\rho_P$ is the value in Theorem 2. The reverse inequality is a published theorem in each case. The sources use other normalisations: $d_n$, the largest possible minimum distance of $n$ points in a closed unit disc, or $\lambda_n$, the smallest radius of a disc holding $n$ points at mutual distances at least 1. Scaling gives $\rho_0(n) = 1 + 2/d_n = 1 + 2\lambda_n$.
 
-- **$P = 8, 9$.** Pirl [Pi69] proved that Kravitz's arrangements are optimal for $n \le 9$ [Fo03, Section 1]; [GLNÖ98, Section 2] credits Pirl with optimality up to 10 circles, and [GLNÖ98, Section 4] gives $d = 2\sin(\pi/k)$ for $n = 8$ ($k = 7$), $n = 9$ ($k = 8$), $n = 11$ ($k = 9$) and $n = 19$ ($k = 12$). For $n = 8, 9$ these arrangements are a regular heptagon, respectively octagon, on the boundary and one point at the centre, which are $C_8$ and $C_9$ (Section 5.3). So $\rho_0(8) = 1 + 1/\sin(\pi/7)$ and $\rho_0(9) = 1 + 1/\sin(\pi/8)$, i.e. $d_8 = 2\sin(\pi/7)$ and $d_9 = 2\sin(\pi/8)$. [EST: the content of [Pi69] is taken from [Fo03] and [GLNÖ98], both read for this write-up; [Pi69] itself could not be consulted. Its bibliographic data were checked against Crossref and zbMATH.] Friedman's Packing Center, the source of the site's caption, attributes $P = 8$ to "Braaksma 1963". No published work matching that attribution was found (zbMATH, Crossref, and the reference lists of [Me94], [Fo99], [Fo03] and [GLNÖ98]), so it is not used here.
-- **$P = 11$.** Melissen [Me94] proved $d_{11} = 2\sin(\pi/9)$ and determined the only two optimal configurations [zbMATH 0810.52013, review]. So $\rho_0(11) = 1 + 1/\sin(\pi/9)$. [EST: from the zbMATH review; the full text was not consulted.]
-- **$P = 13$.** Fodor [Fo03, Theorem 1] proved $\lambda_{13} = \frac{1 + \sqrt5}{2}$ (written $r_{13}$ there), so $\rho_0(13) = 2 + \sqrt5$. He also proved that every optimal configuration is one of two: a rigid one, and one with ten points in a regular decagon on the boundary and three free points inside. (Theorem 1 prints $r_{13} = (2\sin 36^\circ)^{-1} = \frac{1+\sqrt5}{2}$; the middle expression should read $(2\sin 18^\circ)^{-1}$, as the paper's later statements $r_{13} - 1/r_{13} = 1$ and $\varphi(r_{13}, r_{13}) = 36^\circ$ confirm, where $\varphi(r, r) = 2\arcsin(1/(2r))$ is the least angle at $O$ between two points at distance at least 1 on the circle of radius $r$.) [EST: full text read.]
-- **$P = 19$.** Fodor [Fo99] proved that the densest packing of 19 circles is the conjectured one: one circle at the centre, six around it, and twelve at the vertices of a regular dodecagon [zbMATH 0927.52024, review]. That is $C_{19}$ of Section 5.6, whose radius is $1 + \sqrt2 + \sqrt6$ (in the unit-distance normalisation, $\lambda_{19} = (2\sin 15^\circ)^{-1}$). The proof uses the optimality results for 7, 8, 9 and 10 circles. [EST: from the zbMATH review; the full text was not consulted.]
+- **$P = 8, 9$.** Pirl [Pi69] proved that Kravitz's arrangements [Kr67] are optimal for $n \le 9$ [Fo03, Section 1]; [GLNÖ98, Section 2] credits Pirl with optimality up to 10 circles, and [GLNÖ98, Section 4] gives $d = 2\sin(\pi/k)$ for $n = 8$ ($k = 7$), $n = 9$ ($k = 8$), $n = 11$ ($k = 9$) and $n = 19$ ($k = 12$). [GLNÖ98, Table 1] lists $d_8 = 0.867767478$ and $d_9 = 0.765366865$, each with one loose circle and symmetry $D_7$, respectively $D_8$; these are $2\sin(\pi/7)$ and $2\sin(\pi/8)$. For $n = 8, 9$ these arrangements are a regular heptagon, respectively octagon, on the boundary and one point at the centre, which are $C_8$ and $C_9$ (Section 5.3). So $\rho_0(8) = 1 + 1/\sin(\pi/7)$ and $\rho_0(9) = 1 + 1/\sin(\pi/8)$, i.e. $d_8 = 2\sin(\pi/7)$ and $d_9 = 2\sin(\pi/8)$. (Source check: the content of [Pi69] is taken from [Fo03] and [GLNÖ98], both read for this write-up; [Pi69] itself could not be consulted. Its bibliographic data were checked against Crossref and zbMATH.) Friedman's Packing Center, the source of the site's caption, attributes $P = 8$ to "Braaksma 1963". No published work matching that attribution was found (zbMATH, Crossref, and the reference lists of [Me94], [Fo99], [Fo03] and [GLNÖ98]), so it is not used here.
+- **$P = 11$.** Melissen [Me94] proved $d_{11} = 2\sin(\pi/9)$ and determined the only two optimal configurations [zbMATH 0810.52013, review]. So $\rho_0(11) = 1 + 1/\sin(\pi/9)$. (Source check: the zbMATH review; the full text was not consulted.)
+- **$P = 13$.** Fodor [Fo03, Theorem 1] proved $\lambda_{13} = \frac{1 + \sqrt5}{2}$ (written $r_{13}$ there), so $\rho_0(13) = 2 + \sqrt5$. He also proved that every optimal configuration is one of two: a rigid one, and one with ten points in a regular decagon on the boundary and three free points inside. (Theorem 1 prints $r_{13} = (2\sin 36^\circ)^{-1} = \frac{1+\sqrt5}{2}$; the middle expression should read $(2\sin 18^\circ)^{-1}$, as the paper's later statements $r_{13} - 1/r_{13} = 1$ and $\varphi(r_{13}, r_{13}) = 36^\circ$ confirm, where $\varphi(r, r) = 2\arcsin(1/(2r))$ is the least angle at $O$ between two points at distance at least 1 on the circle of radius $r$.) (Source check: full text read.)
+- **$P = 19$.** Fodor [Fo99] proved that the densest packing of 19 circles is the conjectured one: one circle at the centre, six around it, and twelve at the vertices of a regular dodecagon [zbMATH 0927.52024, review]. That is $C_{19}$ of Section 5.6, whose radius is $1 + \sqrt2 + \sqrt6$ (in the unit-distance normalisation, $\lambda_{19} = (2\sin 15^\circ)^{-1}$). The proof uses the optimality results for 7, 8, 9 and 10 circles. (Source check: the zbMATH review; the full text was not consulted.)
 
 ### 5.3 Rings: $P = 2, \dots, 9$
 
 For $n \ge 2$ and an angle $\varphi_0$, the ring $\mathcal R_n(\varphi_0)$ is
 
 $$
-c_k = a_n\, e(\varphi_k), \qquad \varphi_k = \varphi_0 + k\cdot\tfrac{360^\circ}{n}, \qquad a_n = \frac{1}{\sin(180^\circ/n)}, \qquad k = 0, \dots, n-1 .
+c_k = A_n e(\varphi_k), \qquad \varphi_k = \varphi_0 + k\cdot\tfrac{360^\circ}{n}, \qquad A_n = \frac{1}{\sin(180^\circ/n)}, \qquad k = 0, \dots, n-1 .
 $$
 
-By the difference formula, $c_{k+1} - c_k = 2a_n\sin(180^\circ/n)\, e(\varphi_k + 90^\circ + 180^\circ/n) = 2e(\varphi_k + 90^\circ + 180^\circ/n)$: consecutive circles touch, and the direction from $c_k$ to $c_{k+1}$ is $\varphi_k + 90^\circ + 180^\circ/n$; the direction from $c_k$ to $c_{k-1}$ is $\varphi_k - 90^\circ - 180^\circ/n$. Non-consecutive circles $k, l$ are at distance $2a_n\sin(j\cdot 180^\circ/n)$ with $2 \le j = \min(\lvert k - l\rvert, n - \lvert k - l\rvert) \le n/2$, hence at least $2a_n\sin(360^\circ/n) = 4\cos(180^\circ/n)$ (for $n \ge 4$).
+By the difference formula, $c_{k+1} - c_k = 2A_n\sin(180^\circ/n) e(\varphi_k + 90^\circ + 180^\circ/n) = 2e(\varphi_k + 90^\circ + 180^\circ/n)$: consecutive circles touch, and the direction from $c_k$ to $c_{k+1}$ is $\varphi_k + 90^\circ + 180^\circ/n$; the direction from $c_k$ to $c_{k-1}$ is $\varphi_k - 90^\circ - 180^\circ/n$. Non-consecutive circles $k, l$ are at distance $2A_n\sin(j\cdot 180^\circ/n)$ with $2 \le j = \min(\lvert k - l\rvert, n - \lvert k - l\rvert) \le n/2$, hence at least $2A_n\sin(360^\circ/n) = 4\cos(180^\circ/n)$ (for $n \ge 4$).
 
 The configurations $C_P$ for $P \le 9$ are:
 
@@ -273,15 +273,15 @@ The configurations $C_P$ for $P \le 9$ are:
 | 8 | $\mathcal R_7(90^\circ)$ and $O$ | $1/\sin(180^\circ/7)$ | the ring | $O$ | $a > 7/\pi > 2.2$ |
 | 9 | $\mathcal R_8(22.5^\circ)$ and $O$ | $1/\sin 22.5^\circ$ | the ring | $O$ | $a > 8/\pi > 2.5$ |
 
-In each ring the touching pairs are exactly the consecutive ones (the others are at distance at least $4\cos(180^\circ/n) > 2$ for $n \ge 4$). For $P = 7$ the centre touches all six ring circles ($\lvert c_k\rvert = 2$). For $P = 8, 9$ the centre is at distance $a_n > 2$ from every ring circle (by $\sin x < x$), so it is a rattler; the ring's own non-consecutive pairs are at distance at least $4\cos(180^\circ/n) > 3.6$. In every case all ring circles touch the wall and the centre does not. The radii are $a_n + 1 = \rho_0(P)$: by Lemma 5 for $P \le 7$, and by Section 5.2 for $P = 8, 9$. The numbers $2/\sqrt3 = 1/\sin 60^\circ$, $\sqrt 2 = 1/\sin 45^\circ$ and $2 = 1/\sin 30^\circ$ are $a_3, a_4, a_6$.
+In each ring the touching pairs are exactly the consecutive ones (the others are at distance at least $4\cos(180^\circ/n) > 2$ for $n \ge 4$). For $P = 7$ the centre touches all six ring circles ($\lvert c_k\rvert = 2$). For $P = 8, 9$ the centre is at distance $A_n > 2$ from every ring circle (by $\sin x < x$), so it is a rattler; the ring's own non-consecutive pairs are at distance at least $4\cos(180^\circ/n) > 3.6$. In every case all ring circles touch the wall and the centre does not. The radii are $A_n + 1 = \rho_0(P)$: by Lemma 5 for $P \le 7$, and by Section 5.2 for $P = 8, 9$. The numbers $2/\sqrt3 = 1/\sin 60^\circ$, $\sqrt 2 = 1/\sin 45^\circ$ and $2 = 1/\sin 30^\circ$ are $a_3, a_4, a_6$.
 
-**Contact directions.** For a ring circle $c_k$, $\Psi_k$ consists of $\varphi_k$ (the wall) and $\varphi_k \pm (90^\circ + 180^\circ/n)$, and, for $P = 7$, also $\varphi_k + 180^\circ$ (towards $O$). For $P = 7$ the centre has $\Psi_O = \lbrace 60^\circ k \rbrace$. The difference between the two neighbour directions is $180^\circ + 360^\circ/n = 2(90^\circ + 180^\circ/n)$, so the congruence condition holds for a ring circle if and only if $N(90^\circ + 180^\circ/n)/360^\circ = N(n+2)/(4n)$ is an integer, i.e. if and only if
+**Contact directions.** For a ring circle $c_k$, $\Psi_k$ consists of $\varphi_k$ (the wall) and $\varphi_k \pm (90^\circ + 180^\circ/n)$, and, for $P = 7$, also $\varphi_k + 180^\circ$ (towards $O$). For $P = 7$ the centre has $\Psi_O = \lbrace 60^\circ k \rbrace$. The difference between the two neighbour directions is $180^\circ + 360^\circ/n = 2(90^\circ + 180^\circ/n)$, so (writing $Q_n$ for the period of the ring, to distinguish it from $q_P$) the congruence condition holds for a ring circle if and only if $N(90^\circ + 180^\circ/n)/360^\circ = N(n+2)/(4n)$ is an integer, i.e. if and only if
 
 $$
-q_n \mid N, \qquad q_n = \frac{4n}{\gcd(4n,\, n+2)} .
+Q_n \mid N, \qquad Q_n = \frac{4n}{\gcd(4n, n+2)} .
 $$
 
-This gives $q_2 = 2$, $q_3 = 12$, $q_4 = 8$, $q_5 = 20$, $q_6 = 3$, $q_7 = 28$, $q_8 = 16$. For $P = 2$ the two directions of each circle are $\varphi_k$ and $\varphi_k + 180^\circ$, and the condition is $2 \mid N$. For $P = 7$ the ring circles also need $N \cdot 180^\circ/360^\circ \in \mathbb Z$ and the centre needs $N \cdot 60^\circ / 360^\circ \in \mathbb Z$, so the condition is $\mathrm{lcm}(3, 2, 6) = 6 \mid N$. The rattlers of $P = 8, 9$ impose nothing. So for $2 \le P \le 9$ the congruence condition for $C_P$ holds if and only if $q_P \mid N$ with $q_P$ as in Theorem 2.
+This gives $Q_2 = 2$, $Q_3 = 12$, $Q_4 = 8$, $Q_5 = 20$, $Q_6 = 3$, $Q_7 = 28$, $Q_8 = 16$. For $P = 2$ the two directions of each circle are $\varphi_k$ and $\varphi_k + 180^\circ$, and the condition is $2 \mid N$. For $P = 7$ the ring circles also need $N \cdot 180^\circ/360^\circ \in \mathbb Z$ and the centre needs $N \cdot 60^\circ / 360^\circ \in \mathbb Z$, so the condition is $\mathrm{lcm}(3, 2, 6) = 6 \mid N$. The rattlers of $P = 8, 9$ impose nothing. So for $2 \le P \le 9$ the congruence condition for $C_P$ holds if and only if $q_P \mid N$ with $q_P$ as in Theorem 2: $q_P = Q_P$ for $P \le 6$, $q_7 = 6$, $q_8 = Q_7 = 28$ and $q_9 = Q_8 = 16$.
 
 ### 5.4 Eleven circles
 
@@ -292,11 +292,11 @@ This gives $q_2 = 2$, $q_3 = 12$, $q_4 = 8$, $q_5 = 20$, $q_6 = 3$, $q_7 = 28$, 
 Let $a = 1/\sin 20^\circ$, so $\rho_{11} = 1 + a = 1 + 1/\sin(\pi/9) = 3.9238044\ldots$. The configuration $C_{11}$ consists of
 
 $$
-W_k = a\, e(10^\circ + 40^\circ k)\quad (k \in \lbrace 0, 1, 3, 4, 5, 6, 7, 8\rbrace),
+W_k = a e(10^\circ + 40^\circ k)\quad (k \in \lbrace 0, 1, 3, 4, 5, 6, 7, 8\rbrace),
 \qquad X_1 = (-1, -\tan 10^\circ),\quad X_2 = (1, -\tan 10^\circ),\quad X_3 = (0, \sqrt3 - \tan 10^\circ).
 $$
 
-The eight $W_k$ occupy nine equally spaced positions on the circle of radius $a$, with the one at $90^\circ$ left empty; $X_1, X_2, X_3$ form an equilateral triangle of side 2 below it. Equivalently $X_1 = \sec 10^\circ\, e(190^\circ)$, $X_2 = \sec 10^\circ\, e(-10^\circ)$ and $X_3 = X_1 + 2e(60^\circ)$. The configuration is symmetric under the reflection $\sigma(x,y) = (-x,y)$, which maps an angle $\varphi$ to $180^\circ - \varphi$, swaps $X_1 \leftrightarrow X_2$, $W_0 \leftrightarrow W_4$, $W_1 \leftrightarrow W_3$, $W_5 \leftrightarrow W_8$, $W_6 \leftrightarrow W_7$, and fixes $X_3$.
+The eight $W_k$ occupy nine equally spaced positions on the circle of radius $a$, with the one at $90^\circ$ left empty; $X_1, X_2, X_3$ form an equilateral triangle of side 2 below it. Equivalently $X_1 = \sec 10^\circ e(190^\circ)$, $X_2 = \sec 10^\circ e(-10^\circ)$ and $X_3 = X_1 + 2e(60^\circ)$. The configuration is symmetric under the reflection $\sigma(x,y) = (-x,y)$, which maps an angle $\varphi$ to $180^\circ - \varphi$, swaps $X_1 \leftrightarrow X_2$, $W_0 \leftrightarrow W_4$, $W_1 \leftrightarrow W_3$, $W_5 \leftrightarrow W_8$, $W_6 \leftrightarrow W_7$, and fixes $X_3$.
 
 **Identity.** $\sin 20^\circ + \sin 40^\circ = 2\sin 30^\circ\cos 10^\circ = \cos 10^\circ$; multiplying by $a = 1/\sin 20^\circ$ and using $\sin 40^\circ = 2\sin 20^\circ\cos 20^\circ$,
 
@@ -320,7 +320,7 @@ $$
 | $(X_3, W_1)$ | | $20^\circ$ |
 | $(X_3, W_3)$ | | $160^\circ$ |
 
-*Proof.* Ring: $W_{k+1} - W_k = 2a\sin 20^\circ\, e(10^\circ + 40^\circ k + 20^\circ + 90^\circ) = 2e(120^\circ + 40^\circ k)$, and $W_0 - W_8 = 2e(80^\circ)$ in the same way (write $W_0 = a\,e(370^\circ)$). Triangle: $X_2 - X_1 = (2, 0)$, $X_3 - X_1 = (1, \sqrt3)$, $X_3 - X_2 = (-1, \sqrt3)$. For $(X_1, W_4)$: $e(-170^\circ)(W_4 - X_1) = a + \sec 10^\circ\, e(-160^\circ)$, and this equals $2e(-10^\circ)$ if and only if $a = 2e(-10^\circ) + \sec 10^\circ\, e(20^\circ)$. The imaginary part of the right side is $-2\sin 10^\circ + \sin 20^\circ/\cos 10^\circ = 0$; its real part is $2\cos 10^\circ + \cos 20^\circ/\cos 10^\circ = (1 + 2\cos 20^\circ)/\cos 10^\circ = a$ by (5.1). For $(X_1, W_5)$: $e(-210^\circ)(W_5 - X_1) = a + \sec 10^\circ\, e(160^\circ)$, and it equals $2e(10^\circ)$ if and only if $a = 2e(10^\circ) + \sec 10^\circ\, e(-20^\circ)$, the complex conjugate of the previous identity. For $(X_3, W_1)$: since $X_3 = X_1 + 2e(60^\circ)$, the claim is $W_1 - X_1 = 2e(20^\circ) + 2e(60^\circ) = 4\cos 20^\circ\, e(40^\circ)$. Now $e(-40^\circ)(W_1 - X_1) = a\,e(10^\circ) + \sec 10^\circ\, e(-30^\circ)$, whose imaginary part is $\sin 10^\circ/\sin 20^\circ - \sin 30^\circ/\cos 10^\circ = 0$ and whose real part is $a\cos 10^\circ + \cos 30^\circ/\cos 10^\circ = 1 + 2\cos 20^\circ + \cos 30^\circ/\cos 10^\circ$ by (5.1). This equals $4\cos 20^\circ$ because $\cos 30^\circ = (2\cos 20^\circ - 1)\cos 10^\circ$, i.e. $2\cos 20^\circ\cos 10^\circ = \cos 30^\circ + \cos 10^\circ$. The remaining three contacts are the images under $\sigma$, which maps $\psi$ to $180^\circ - \psi$. $\square$
+*Proof.* Ring: $W_{k+1} - W_k = 2a\sin 20^\circ e(10^\circ + 40^\circ k + 20^\circ + 90^\circ) = 2e(120^\circ + 40^\circ k)$, and $W_0 - W_8 = 2e(80^\circ)$ in the same way (write $W_0 = a e(370^\circ)$). Triangle: $X_2 - X_1 = (2, 0)$, $X_3 - X_1 = (1, \sqrt3)$, $X_3 - X_2 = (-1, \sqrt3)$. For $(X_1, W_4)$: $e(-170^\circ)(W_4 - X_1) = a + \sec 10^\circ e(-160^\circ)$, and this equals $2e(-10^\circ)$ if and only if $a = 2e(-10^\circ) + \sec 10^\circ e(20^\circ)$. The imaginary part of the right side is $-2\sin 10^\circ + \sin 20^\circ/\cos 10^\circ = 0$; its real part is $2\cos 10^\circ + \cos 20^\circ/\cos 10^\circ = (1 + 2\cos 20^\circ)/\cos 10^\circ = a$ by (5.1). For $(X_1, W_5)$: $e(-210^\circ)(W_5 - X_1) = a + \sec 10^\circ e(160^\circ)$, and it equals $2e(10^\circ)$ if and only if $a = 2e(10^\circ) + \sec 10^\circ e(-20^\circ)$, the complex conjugate of the previous identity. For $(X_3, W_1)$: since $X_3 = X_1 + 2e(60^\circ)$, the claim is $W_1 - X_1 = 2e(20^\circ) + 2e(60^\circ) = 4\cos 20^\circ e(40^\circ)$. Now $e(-40^\circ)(W_1 - X_1) = a e(10^\circ) + \sec 10^\circ e(-30^\circ)$, whose imaginary part is $\sin 10^\circ/\sin 20^\circ - \sin 30^\circ/\cos 10^\circ = 0$ and whose real part is $a\cos 10^\circ + \cos 30^\circ/\cos 10^\circ = 1 + 2\cos 20^\circ + \cos 30^\circ/\cos 10^\circ$ by (5.1). This equals $4\cos 20^\circ$ because $\cos 30^\circ = (2\cos 20^\circ - 1)\cos 10^\circ$, i.e. $2\cos 20^\circ\cos 10^\circ = \cos 30^\circ + \cos 10^\circ$. The remaining three contacts are the images under $\sigma$, which maps $\psi$ to $180^\circ - \psi$. $\square$
 
 **Wall and non-contacts.** The $W_k$ touch the wall; $\lvert X_1\rvert = \lvert X_2\rvert = \sec 10^\circ < 1.02$ (as $\cos x > 1 - x^2/2$) and $\lvert X_3\rvert < \sqrt3 < 1.74$, while $a > 9/\pi > 2.86$ (as $\sin x < x$). No other pair touches, and every non-touching pair is at distance greater than $2.35$:
 
@@ -354,8 +354,8 @@ All differences are multiples of $10^\circ$, so $36 \mid N$ suffices. Conversely
 Let $A = 1 + \sqrt5 = 4\cos 36^\circ$ and $b = \sqrt5 - 1 = 4\sin 18^\circ$, so that $A - b = 2$, $Ab = 4$ and $\rho_{13} = 1 + A = 2 + \sqrt5$. The configuration $C_{13}$ consists of
 
 $$
-W_k = A\, e(18^\circ + 36^\circ k)\quad (k \in \lbrace 0, 1, 3, 4, \dots, 9\rbrace), \qquad
-Y_1 = b\,e(270^\circ),\quad Y_2 = b\,e(162^\circ),\quad Y_3 = b\,e(18^\circ),\quad Y_4 = 2e(90^\circ) = (0, 2).
+W_k = A e(18^\circ + 36^\circ k)\quad (k \in \lbrace 0, 1, 3, 4, \dots, 9\rbrace), \qquad
+Y_1 = b e(270^\circ),\quad Y_2 = b e(162^\circ),\quad Y_3 = b e(18^\circ),\quad Y_4 = 2e(90^\circ) = (0, 2).
 $$
 
 The nine $W_k$ occupy ten equally spaced positions on the circle of radius $A$, with the one at $90^\circ$ left empty; $Y_1$, $Y_2$, $Y_3$ lie on the rays of $W_7$, $W_4$, $W_0$. Indices of $W$ are taken mod 10. The configuration is symmetric under $\sigma(x,y) = (-x,y)$, which maps an angle $\varphi$ to $180^\circ - \varphi$, swaps $Y_2 \leftrightarrow Y_3$ and $W_k \leftrightarrow W_{4-k}$ (so $W_0 \leftrightarrow W_4$, $W_1 \leftrightarrow W_3$, $W_5 \leftrightarrow W_9$, $W_6 \leftrightarrow W_8$), and fixes $Y_1$, $Y_4$ and $W_7$.
@@ -375,7 +375,7 @@ The nine $W_k$ occupy ten equally spaced positions on the circle of radius $A$, 
 | $(Y_3, Y_4)$ | | $126^\circ$ |
 | $(Y_2, Y_4)$ | | $54^\circ$ |
 
-*Proof.* Ring: $W_{k+1} - W_k = 2A\sin 18^\circ\, e(18^\circ + 36^\circ k + 18^\circ + 90^\circ)$ and $2A\sin 18^\circ = 2(\sqrt5+1)(\sqrt5-1)/4 = 2$. Radial: $W_7 - Y_1 = (A - b)e(270^\circ) = 2e(270^\circ)$, and likewise for $(Y_3, W_0)$, $(Y_2, W_4)$. $(Y_1, Y_3)$: $Y_3 - Y_1 = b(e(18^\circ) - e(-90^\circ)) = 2b\sin 54^\circ\, e(54^\circ)$ and $2b\sin 54^\circ = 8\sin 18^\circ\cos 36^\circ = 2$, using $\sin 18^\circ\cos 36^\circ = \frac{(\sqrt5-1)(\sqrt5+1)}{16} = \frac14$. $(Y_3, Y_4)$: $Y_4 - Y_3 = 2e(126^\circ)$ is equivalent to $2(e(90^\circ) - e(126^\circ)) = b\,e(18^\circ)$, and $e(90^\circ) - e(126^\circ) = -2\sin 18^\circ\, e(198^\circ) = 2\sin 18^\circ\, e(18^\circ)$, so both sides are $4\sin 18^\circ\, e(18^\circ)$. $(Y_4, W_1)$: $W_1 - Y_4 = 2e(18^\circ)$ is equivalent to $A\,e(54^\circ) = 2e(18^\circ) + 2e(90^\circ) = 4\cos 36^\circ\, e(54^\circ)$, true as $A = 4\cos 36^\circ$. The pairs $(Y_1, Y_2)$, $(Y_2, Y_4)$, $(Y_4, W_3)$ are the images of $(Y_1, Y_3)$, $(Y_3, Y_4)$, $(Y_4, W_1)$ under $\sigma$. $\square$
+*Proof.* Ring: $W_{k+1} - W_k = 2A\sin 18^\circ e(18^\circ + 36^\circ k + 18^\circ + 90^\circ)$ and $2A\sin 18^\circ = 2(\sqrt5+1)(\sqrt5-1)/4 = 2$. Radial: $W_7 - Y_1 = (A - b)e(270^\circ) = 2e(270^\circ)$, and likewise for $(Y_3, W_0)$, $(Y_2, W_4)$. $(Y_1, Y_3)$: $Y_3 - Y_1 = b(e(18^\circ) - e(-90^\circ)) = 2b\sin 54^\circ e(54^\circ)$ and $2b\sin 54^\circ = 8\sin 18^\circ\cos 36^\circ = 2$, using $\sin 18^\circ\cos 36^\circ = \frac{(\sqrt5-1)(\sqrt5+1)}{16} = \frac14$. $(Y_3, Y_4)$: $Y_4 - Y_3 = 2e(126^\circ)$ is equivalent to $2(e(90^\circ) - e(126^\circ)) = b e(18^\circ)$, and $e(90^\circ) - e(126^\circ) = -2\sin 18^\circ e(198^\circ) = 2\sin 18^\circ e(18^\circ)$, so both sides are $4\sin 18^\circ e(18^\circ)$. $(Y_4, W_1)$: $W_1 - Y_4 = 2e(18^\circ)$ is equivalent to $A e(54^\circ) = 2e(18^\circ) + 2e(90^\circ) = 4\cos 36^\circ e(54^\circ)$, true as $A = 4\cos 36^\circ$. The pairs $(Y_1, Y_2)$, $(Y_2, Y_4)$, $(Y_4, W_3)$ are the images of $(Y_1, Y_3)$, $(Y_3, Y_4)$, $(Y_4, W_1)$ under $\sigma$. $\square$
 
 **Wall and non-contacts.** The $W_k$ touch the wall; $\lvert Y_1\rvert = \lvert Y_2\rvert = \lvert Y_3\rvert = b < 1.24$ and $\lvert Y_4\rvert = 2$, while $A > 3.23$. For a point at distance $s$ from $O$ and a point at distance $A$ from $O$, at angular separation $\gamma$, the squared distance $A^2 + s^2 - 2As\cos\gamma$ increases with $\gamma \in [0^\circ, 180^\circ]$. Every non-touching pair is at distance at least $4\sin 36^\circ = \sqrt{10 - 2\sqrt5} = 2.3511\ldots$:
 
@@ -408,7 +408,7 @@ All differences are multiples of $36^\circ$, so $10 \mid N$ suffices; conversely
 
 ### 5.6 Nineteen circles
 
-Let $A = \sqrt2 + \sqrt6 = 4\cos 15^\circ$, so $\rho_{19} = 1 + \sqrt2 + \sqrt6$. The configuration $C_{19}$ consists of the centre $O$, the hexagon $H_j = 2e(60^\circ j)$ ($j = 0, \dots, 5$) and the ring $W_k = A\,e(15^\circ + 30^\circ k)$ ($k = 0, \dots, 11$). Indices of $H$ are taken mod 6 and of $W$ mod 12.
+Let $A = \sqrt2 + \sqrt6 = 4\cos 15^\circ$, so $\rho_{19} = 1 + \sqrt2 + \sqrt6$. The configuration $C_{19}$ consists of the centre $O$, the hexagon $H_j = 2e(60^\circ j)$ ($j = 0, \dots, 5$) and the ring $W_k = A e(15^\circ + 30^\circ k)$ ($k = 0, \dots, 11$). Indices of $H$ are taken mod 6 and of $W$ mod 12.
 
 **Contacts.** The following 36 pairs $(c_i, c_j)$ touch, with $c_j - c_i = 2e(\psi)$ (six pairs in each of the first four rows, twelve in the last):
 
@@ -420,7 +420,7 @@ Let $A = \sqrt2 + \sqrt6 = 4\cos 15^\circ$, so $\rho_{19} = 1 + \sqrt2 + \sqrt6$
 | $(H_j, W_{2j-1})$ | $j = 0, \dots, 5$ | $60^\circ j - 30^\circ$ |
 | $(W_k, W_{k+1})$ | $k = 0, \dots, 11$ | $120^\circ + 30^\circ k$ |
 
-*Proof.* $(O, H_j)$ is clear, and $(H_j, H_{j+1})$ is the ring $\mathcal R_6(0^\circ)$. Ring $W$: $W_{k+1} - W_k = 2A\sin 15^\circ\, e(15^\circ + 30^\circ k + 15^\circ + 90^\circ)$ and $2A\sin 15^\circ = 8\sin 15^\circ\cos 15^\circ = 4\sin 30^\circ = 2$. $(H_j, W_{2j})$: $W_{2j} - H_j = e(60^\circ j)\,(A\,e(15^\circ) - 2)$ and $A\,e(15^\circ) - 2 = (4\cos^2 15^\circ - 2,\ 4\sin 15^\circ\cos 15^\circ) = (2\cos 30^\circ, 2\sin 30^\circ) = 2e(30^\circ)$. $(H_j, W_{2j-1})$ is the complex conjugate computation, rotated by $60^\circ j$. $\square$
+*Proof.* $(O, H_j)$ is clear, and $(H_j, H_{j+1})$ is the ring $\mathcal R_6(0^\circ)$. Ring $W$: $W_{k+1} - W_k = 2A\sin 15^\circ e(15^\circ + 30^\circ k + 15^\circ + 90^\circ)$ and $2A\sin 15^\circ = 8\sin 15^\circ\cos 15^\circ = 4\sin 30^\circ = 2$. $(H_j, W_{2j})$: $W_{2j} - H_j = e(60^\circ j) (A e(15^\circ) - 2)$ and $A e(15^\circ) - 2 = (4\cos^2 15^\circ - 2,\ 4\sin 15^\circ\cos 15^\circ) = (2\cos 30^\circ, 2\sin 30^\circ) = 2e(30^\circ)$. $(H_j, W_{2j-1})$ is the complex conjugate computation, rotated by $60^\circ j$. $\square$
 
 **Wall and non-contacts.** The $W_k$ touch the wall; $\lvert H_j\rvert = 2$ and $O$ are inside ($A > 3.8$). Non-touching pairs:
 
@@ -457,7 +457,7 @@ All differences are multiples of $15^\circ$, so $24 \mid N$ suffices; conversely
 
 ### 5.7 Six circles: the centre and five
 
-For Theorem 3. Let $N \ge 10$ be even with $3 \nmid N$ and $N \ne 14$. Write $\ell = \lfloor N/6 \rfloor$ and $g = \ell + 1$, and let $k_1 = k_2 = k_3 = k_4 = g$, $k_5 = N - 4g$. Writing $N = 6\ell + j$ with $j \in \lbrace 2, 4\rbrace$: $k_5 - g = N - 5g = \ell + j - 5$, which is non-negative for $j = 4$, $\ell \ge 1$ and for $j = 2$, $\ell \ge 3$, i.e. for every $N$ considered. Put $s_0 = 0$, $s_t = k_1 + \dots + k_t$, and
+For Theorem 3. Let $N \ge 10$ be even with $3 \nmid N$ and $N \ne 14$. Write $\ell = \lfloor N/6 \rfloor$ and $g = \ell + 1$, and let $k_1 = k_2 = k_3 = k_4 = g$, $k_5 = N - 4g$. Writing $N = 6\ell + \tau$ with $\tau \in \lbrace 2, 4\rbrace$: $k_5 - g = N - 5g = \ell + \tau - 5$, which is non-negative for $\tau = 4$, $\ell \ge 1$ and for $\tau = 2$, $\ell \ge 3$, i.e. for every $N$ considered. Put $s_0 = 0$, $s_t = k_1 + \dots + k_t$, and
 
 $$
 C_6^{(N)}:\qquad O, \qquad c_t = 2e(\varphi_t), \quad \varphi_t = s_t \cdot \tfrac{360^\circ}{N}, \quad t = 0, \dots, 4 .
@@ -475,7 +475,7 @@ Fix $P$ and $N$ with $q_P \mid N$, and apply Lemma 4 to the configuration $C_P$ 
 
 *(c)* The circles of $C_P$ that do not touch the wall are $O$ ($P = 7, 8, 9, 19$), $X_1, X_2, X_3$ ($P = 11$, moduli below 1.74), $Y_1, \dots, Y_4$ ($P = 13$, moduli at most 2) and $H_j$ ($P = 19$, modulus 2). For $N \ge 6$, $\sec(\pi/N) \le 2/\sqrt3 < 1.16$, so (c) holds if $\lvert c_i\rvert \le a - 0.16$; and $a \ge 2$ for $P = 7, 8, 9$, $a > 2.86$ for $P = 11$, $a = A > 3.2$ for $P = 13$ and $a = A > 3.8$ for $P = 19$.
 
-*The case $(N, P) = (3, 6)$.* Here $r_3 = 1/(2\sqrt3)$, $R_3 = 1/\sqrt3$ and $F(3,6) = \sqrt{9/12 + 1/4} = 1$. The construction puts piece $k$ ($k = 0, \dots, 5$) at $p_k = 2r_3\,e(60^\circ k) = R_3\, e(60^\circ k)$ with $\theta_k = 60^\circ k - 90^\circ - 60^\circ$. Its vertices are at $p_k + R_3\,e(60^\circ k - 60^\circ + 120^\circ i)$, $i = 0,1,2$: these are $R_3(e(60^\circ k) + e(60^\circ k - 60^\circ)) = e(60^\circ k - 30^\circ)$ (as $2R_3\cos 30^\circ = 1$), then $e(60^\circ k + 30^\circ)$, and $p_k - R_3 e(60^\circ k) = O$. So the six pieces are the triangles $O\, e(60^\circ k - 30^\circ)\, e(60^\circ k + 30^\circ)$, which tile the regular hexagon with vertices $e(30^\circ + 60^\circ k)$ and have disjoint interiors (they lie in disjoint open angular sectors about $O$). All lie in the closed unit disc. $\square$
+*The case $(N, P) = (3, 6)$.* Here $r_3 = 1/(2\sqrt3)$, $R_3 = 1/\sqrt3$ and $F(3,6) = \sqrt{9/12 + 1/4} = 1$. The construction puts piece $k$ ($k = 0, \dots, 5$) at $p_k = 2r_3 e(60^\circ k) = R_3 e(60^\circ k)$ with $\theta_k = 60^\circ k - 90^\circ - 60^\circ$. Its vertices are at $p_k + R_3 e(60^\circ k - 60^\circ + 120^\circ i)$, $i = 0,1,2$: these are $R_3(e(60^\circ k) + e(60^\circ k - 60^\circ)) = e(60^\circ k - 30^\circ)$ (as $2R_3\cos 30^\circ = 1$), then $e(60^\circ k + 30^\circ)$, and $p_k - R_3 e(60^\circ k) = O$. So the six pieces are the triangles $O e(60^\circ k - 30^\circ) e(60^\circ k + 30^\circ)$, which tile the regular hexagon with vertices $e(30^\circ + 60^\circ k)$ and have disjoint interiors (they lie in disjoint open angular sectors about $O$). All lie in the closed unit disc. $\square$
 
 For $N \le 100$, the multiples of $q_P$ are the 148 pairs listed in Theorem 2 and in Section 10.
 
@@ -491,19 +491,19 @@ For $N \le 100$, the multiples of $q_P$ are the 148 pairs listed in Theorem 2 an
 
 *$P = 1$:* Section 3, edge cases.
 
-*"If".* For $P = 2, 3, 4, 5, 7$ and for $P = 6$ with $3 \mid N$, this is Theorem 2. For $P = 6$, $N$ even, $3 \nmid N$, $N \notin \lbrace 4, 8, 14\rbrace$ (so $N \ge 10$), apply Lemma 4 to $C_6^{(N)}$ of Section 5.7, with $a = 2$ and $E$ the five pairs $(O, c_t)$. (a) was shown there. (c): only $O$ is off the wall, and $\lvert O\rvert = 0 \le 3 - \sec(\pi/N)$. (b): the pairs not in $E$ are pairs of ring circles. For consecutive ones the angular separation is a gap $\gamma = k_t\cdot 360^\circ/N$ with $k_t \ge g$; since the other four gaps are at least $g\cdot 360^\circ/N$ each, $\gamma \le 360^\circ - 4g\cdot 360^\circ/N$. So $\gamma/2$ lies in $[g\pi/N,\ \pi - 4g\pi/N] \subseteq [g\pi/N,\ \pi - g\pi/N]$, on which $\sin \ge \sin(g\pi/N)$, and the distance $4\sin(\gamma/2)$ is at least $4\sin(g\pi/N)$. Moreover $g\pi/N \le \pi/5 < \pi/2$ because $5g \le N$, and $\sin$ increases on $[0, \pi/2]$. With $N = 6\ell + j$, $j \in \lbrace 2, 4\rbrace$,
+*"If".* For $P = 2, 3, 4, 5, 7$ and for $P = 6$ with $3 \mid N$, this is Theorem 2. For $P = 6$, $N$ even, $3 \nmid N$, $N \notin \lbrace 4, 8, 14\rbrace$ (so $N \ge 10$), apply Lemma 4 to $C_6^{(N)}$ of Section 5.7, with $a = 2$ and $E$ the five pairs $(O, c_t)$. (a) was shown there. (c): only $O$ is off the wall, and $\lvert O\rvert = 0 \le 3 - \sec(\pi/N)$. (b): the pairs not in $E$ are pairs of ring circles. For consecutive ones the angular separation is a gap $\gamma = k_t\cdot 360^\circ/N$ with $k_t \ge g$; since the other four gaps are at least $g\cdot 360^\circ/N$ each, $\gamma \le 360^\circ - 4g\cdot 360^\circ/N$. So $\gamma/2$ lies in $[g\pi/N,\ \pi - 4g\pi/N] \subseteq [g\pi/N,\ \pi - g\pi/N]$. Since $5g \le N$, $g\pi/N \le \pi/5 < \pi/2$, so $\sin \ge \sin(g\pi/N)$ on that interval, and the distance $4\sin(\gamma/2)$ is at least $4\sin(g\pi/N)$; also $\sin$ increases on $[0, \pi/2]$. With $N = 6\ell + \tau$, $\tau \in \lbrace 2, 4\rbrace$,
 
 $$
-g\cdot\frac{\pi}{N} = \frac{(\ell+1)\pi}{6\ell + j} = \frac{\pi}{6} + \frac{(6-j)\pi}{6N} \ge \frac{\pi}{6} + \frac{x}{3}, \qquad x = \frac{\pi}{N} \in \left(0, \tfrac{\pi}{10}\right],
+g\cdot\frac{\pi}{N} = \frac{(\ell+1)\pi}{6\ell + \tau} = \frac{\pi}{6} + \frac{(6-\tau)\pi}{6N} \ge \frac{\pi}{6} + \frac{\xi}{3}, \qquad \xi = \frac{\pi}{N} \in \left(0, \tfrac{\pi}{10}\right],
 $$
 
-so $4\sin(g\pi/N) \ge 4\sin(\frac{\pi}{6} + \frac{x}{3})$, and it suffices that $\Phi(x) := 2\sin(\frac{\pi}{6} + \frac{x}{3})\cos x > 1$, i.e. $4\sin(\frac{\pi}{6} + \frac{x}{3}) > 2\sec x$. By the product formula $\Phi(x) = \sin(\frac{\pi}{6} + \frac{4x}{3}) + \sin(\frac{\pi}{6} - \frac{2x}{3})$, so $\Phi(0) = 1$ and $\Phi'(x) = \frac43\cos(\frac{\pi}{6} + \frac{4x}{3}) - \frac23\cos(\frac{\pi}{6} - \frac{2x}{3}) \ge \frac43\cos 54^\circ - \frac23 > 0$ on $[0, \pi/10]$, since $\cos 54^\circ = \sin 36^\circ > 0.58$. Non-consecutive ring circles are separated by at least two gaps on either side, so their angular separation lies in $[2\cdot 60^\circ, 360^\circ - 2\cdot 60^\circ]$ and their distance is at least $4\sin 60^\circ = 2\sqrt3 > 2\sec(\pi/10)$.
+so $4\sin(g\pi/N) \ge 4\sin(\frac{\pi}{6} + \frac{\xi}{3})$, and it suffices that $\Phi(\xi) := 2\sin(\frac{\pi}{6} + \frac{\xi}{3})\cos \xi > 1$, i.e. $4\sin(\frac{\pi}{6} + \frac{\xi}{3}) > 2\sec \xi$. By the product formula $\Phi(\xi) = \sin(\frac{\pi}{6} + \frac{4\xi}{3}) + \sin(\frac{\pi}{6} - \frac{2\xi}{3})$, so $\Phi(0) = 1$ and $\Phi'(\xi) = \frac43\cos(\frac{\pi}{6} + \frac{4\xi}{3}) - \frac23\cos(\frac{\pi}{6} - \frac{2\xi}{3}) \ge \frac43\cos 54^\circ - \frac23 > 0$ on $[0, \pi/10]$, since $\cos 54^\circ = \sin 36^\circ > 0.58$. Non-consecutive ring circles are separated by at least two gaps on either side, so their angular separation lies in $[2\cdot 60^\circ, 360^\circ - 2\cdot 60^\circ]$ and their distance is at least $4\sin 60^\circ = 2\sqrt3 > 2\sec(\pi/10)$.
 
 *"Only if".* Suppose $\rho(N,P) = F(N,P)$ with $2 \le P \le 7$. By Lemma 0 there is a packing in a closed disc of radius $F(N,P)$, and by Lemma 3 the points $c_i = p_i/r_N$ form an optimal configuration satisfying the congruence condition for $N$. By Lemma 5 it is one of the listed configurations, up to rotation, which does not affect the condition.
 
 - $P \le 5$ and $P = 7$: the configuration is $C_P$ rotated, and Section 5.3 shows $q_P \mid N$.
 - $P = 6$, regular hexagon: $3 \mid N$ (Section 5.3).
-- $P = 6$, centre $O$ and $c_1, \dots, c_5$ on the circle of radius 2 with angular gaps $\gamma_t \ge 60^\circ$: each $c_t$ touches the wall and $O$, with directions $\varphi_t$ and $\varphi_t + 180^\circ$, so $N$ is even. If some gap is exactly $60^\circ$, the two circles bounding it touch, and the direction from one to the other is $\varphi_t \pm 120^\circ$ (Section 5.3 with $n = 6$), so $3 \mid N$. Otherwise all gaps exceed $60^\circ$; the centre's directions $\varphi_t$ are congruent mod $360^\circ/N$, so $\gamma_t = k_t\cdot 360^\circ/N$ with integers $k_t > N/6$, i.e. $k_t \ge \lfloor N/6\rfloor + 1$, and $\sum k_t = N$. So $5(\lfloor N/6 \rfloor + 1) \le N$. For even $N = 6\ell + j$, $j \in \lbrace 2, 4\rbrace$, this is $\ell + j \ge 5$, which fails exactly for $N = 2, 4, 8, 14$.
+- $P = 6$, centre $O$ and $c_1, \dots, c_5$ on the circle of radius 2 with angular gaps $\gamma_t \ge 60^\circ$: each $c_t$ touches the wall and $O$, with directions $\varphi_t$ and $\varphi_t + 180^\circ$, so $N$ is even. If some gap is exactly $60^\circ$, the two circles bounding it touch, and the direction from one to the other is $\varphi_t \pm 120^\circ$ (Section 5.3 with $n = 6$), so $3 \mid N$. Otherwise all gaps exceed $60^\circ$, and we may assume $3 \nmid N$; the centre's directions $\varphi_t$ are congruent mod $360^\circ/N$, so $\gamma_t = k_t\cdot 360^\circ/N$ with integers $k_t > N/6$, i.e. $k_t \ge \lfloor N/6\rfloor + 1$, and $\sum k_t = N$. So $5(\lfloor N/6 \rfloor + 1) \le N$. For even $N = 6\ell + \tau$, $\tau \in \lbrace 2, 4\rbrace$, this is $\ell + \tau \ge 5$, which fails exactly for $N = 2, 4, 8, 14$.
 
 So $3 \mid N$, or $N$ is even and not in $\lbrace 4, 8, 14 \rbrace$ ($N = 2$ is excluded by $N \ge 3$). $\square$
 
@@ -513,7 +513,7 @@ Let the packing have centres $p_i = r_N c_i$ with $(c_i)$ an isometric image of 
 
 ## 9. Remarks outside the proof
 
-- **[EST + proof] $P = 13$, all $N$.** By [Fo03, Theorem 1] every optimal configuration for 13 is one of two. The second contains ten circles in a regular decagon at the wall, each touching both neighbours; by Section 5.3 (a ring with $n = 10$, $q_{10} = 40/\gcd(40, 12) = 10$) the congruence condition then needs $10 \mid N$, whatever the three inner circles do. The first is rigid; the contact graph drawn in [Fo03, Figure 1] (nine boundary points with one position empty, an inner point joined to the two boundary points beside the gap, an inner point joined radially to the boundary point opposite the gap, and two inner points between them, each joined radially to a boundary point) is that of $C_{13}$ (Figure 1 here), and so are Packomania's coordinates. Granting that identification, Theorem 2 and Lemmas 0 and 3 give: $\rho(N, 13) = F(N, 13)$ if and only if $10 \mid N$.
+- **[EST] $P = 13$, all $N$.** By [Fo03, Theorem 1] every optimal configuration for 13 is one of two. The second contains ten circles in a regular decagon at the wall, each touching both neighbours; by Section 5.3 (a ring with $n = 10$, $Q_{10} = 40/\gcd(40, 12) = 10$) the congruence condition then needs $10 \mid N$, whatever the three inner circles do. The first is rigid; the contact graph drawn in [Fo03, Figure 1] (nine boundary points with one position empty, an inner point joined to the two boundary points beside the gap, an inner point joined radially to the boundary point opposite the gap, and two inner points between them, each joined radially to a boundary point) is that of $C_{13}$ (Figure 1 here), and so are Packomania's coordinates. Granting that identification, Theorem 2 (for "if") and Lemmas 0 and 3 with Section 5.5 or Proposition 4 (for "only if") give: $\rho(N, 13) = F(N, 13)$ if and only if $10 \mid N$.
 - **[EST] $P = 11$.** [Me94] shows that there are exactly two optimal configurations for 11. The second was not examined here, so Theorem 3's kind of statement is not claimed for $P = 11$, nor for $P = 8, 9, 19$.
 - **[CALC] $P = 18$, conditional.** Removing $O$ from $C_{19}$ leaves 18 circles in the same disc; the proof of Theorem 2 still applies to them (removing a circle removes conditions). So if $\rho_0(18) = 1 + \sqrt2 + \sqrt6$, the best known value but not proved, then $\rho(N, 18) = F(N, 18)$ for $24 \mid N$.
 - **[CALC] $P = 37$, conditional.** In floating point, with contacts read from the best known configuration in `data/records.json` (Packomania), the congruence condition holds for $N = 18, 36, 54, 72, 90$ and no other $N \le 100$. $\rho_0(37)$ is not proved, and these cases are not proved here.
@@ -719,11 +719,12 @@ $P = 6$, $\rho_0(6) = 3$, $N$ even, $3 \nmid N$, $10 \le N \le 100$, $N \ne 14$.
 All DOIs and zbMATH numbers below were checked against Crossref and the zbMATH Open API on 2026-10-20.
 
 - **[BE51]** P. Bateman, P. Erdős, Geometrical extrema suggested by a lemma of Besicovitch, *Amer. Math. Monthly* 58 (1951), no. 5, 306–314. doi:10.1080/00029890.1951.11999682. zbMATH 0043.16202. (Theorem 3 read.)
-- **[CGG68]** H. S. M. Coxeter, M. G. Greening, R. L. Graham, J. Rätz, E1921, *Amer. Math. Monthly* 75 (1968), no. 2, 192–193 (the author list and the title "E1921" are Crossref's; the item is a problem with its solutions). doi:10.2307/2315913. Cited as R. L. Graham, "Sets of points with given minimum separation (Solution to Problem E1921)" in [GLNÖ98] and as Coxeter, Greening, Graham, "Sets of points with given maximum separation (Problem E1921)" in [Fo03]. Not consulted.
+- **[CGG68]** H. S. M. Coxeter, M. G. Greening, R. L. Graham, J. Rätz, E1921, *Amer. Math. Monthly* 75 (1968), no. 2, 192–193 (the author list, the title "E1921" and the first page are Crossref's; the page range is as cited in [Fo03] and [GLNÖ98]; the item is a problem with its solutions). doi:10.2307/2315913. Cited as R. L. Graham, "Sets of points with given minimum separation (Solution to Problem E1921)" in [GLNÖ98] and as Coxeter, Greening, Graham, "Sets of points with given maximum separation (Problem E1921)" in [Fo03]. Not consulted.
 - **[CS87]** T. Crilly, S. Suen, An improbable game of darts, *Math. Gazette* 71 (1987), no. 456, 97–100. doi:10.2307/3616491. Not consulted.
 - **[Fo99]** F. Fodor, The densest packing of 19 congruent circles in a circle, *Geom. Dedicata* 74 (1999), no. 2, 139–145. doi:10.1023/A:1005091317243. zbMATH 0927.52024.
 - **[Fo03]** F. Fodor, The densest packing of 13 congruent circles in a circle, *Beiträge zur Algebra und Geometrie* 44 (2003), no. 2, 431–440. zbMATH 1039.52015. Electronic edition: <https://ftp.gwdg.de/pub/misc/EMIS/journals/BAG/vol.44/no.2/10.html> (EMIS mirror). (Full text read.)
-- **[GLNÖ98]** R. L. Graham, B. D. Lubachevsky, K. J. Nurmela, P. R. J. Östergård, Dense packings of congruent circles in a circle, *Discrete Math.* 181 (1998), no. 1–3, 139–154. doi:10.1016/S0012-365X(97)00050-2. (Sections 2 and 4 read.)
+- **[GLNÖ98]** R. L. Graham, B. D. Lubachevsky, K. J. Nurmela, P. R. J. Östergård, Dense packings of congruent circles in a circle, *Discrete Math.* 181 (1998), no. 1–3, 139–154. doi:10.1016/S0012-365X(97)00050-2. zbMATH 0901.52017. (Sections 2 and 4 and Table 1 read.)
+- **[Kr67]** S. Kravitz, Packing cylinders into cylindrical containers, *Math. Mag.* 40 (1967), no. 2, 65–71. doi:10.2307/2688509. zbMATH 0192.28801. Not consulted.
 - **[Me94]** H. Melissen, Densest packings of eleven congruent circles in a circle, *Geom. Dedicata* 50 (1994), no. 1, 15–25. doi:10.1007/BF01263647. zbMATH 0810.52013.
 - **[Pi69]** U. Pirl, Der Mindestabstand von n in der Einheitskreisscheibe gelegenen Punkten, *Math. Nachr.* 40 (1969), no. 1–3, 111–124. doi:10.1002/mana.19690400110. zbMATH 0182.25102. Not consulted; see Section 5.2.
 - **[Ro70]** R. T. Rockafellar, *Convex Analysis*, Princeton University Press, 1970. Theorem 11.3: two non-empty convex sets can be properly separated by a hyperplane if and only if their relative interiors are disjoint.
@@ -741,15 +742,16 @@ npm run test:python
 ```
 
 - `python/proofs/circle_floor.py` (standard library only):
-  - builds every configuration of Section 5 in exact arithmetic in a cyclotomic field $\mathbb Q(\zeta_m)$ and checks, as identities of field elements, each wall contact $c_i = a\,e(\varphi)$, each contact $c_j - c_i = 2e(\psi)$ and the closed forms of $a$;
-  - checks at 90 digits that no other pair is at distance $\le 2 + 10^{-3}$ and no other circle within $10^{-3}$ of the wall;
+  - builds every configuration of Section 5 in exact arithmetic in a cyclotomic field $\mathbb Q(\zeta_m)$ and checks, as identities of field elements, each wall contact $c_i = a e(\varphi)$, each contact $c_j - c_i = 2e(\psi)$, and the identities $a^2 = 4/3$, $a^2 = 2$, $a = 2$ ($P = 3, 4, 6, 7$), $(A - 1)^2 = 5$, $b = 4\sin 18^\circ$, $Ab = 4$ ($P = 13$) and $A = \sqrt2 + \sqrt6$ ($P = 19$); for $P = 5, 8, 9, 11$, $a$ is $1/\sin(180^\circ/n)$ by definition;
+  - checks at 90 digits that every other pair is at distance greater than $2 + 10^{-3}$ and every other circle more than $10^{-3}$ inside the wall;
   - checks exactly, with fractions, for which $N \le 100$ the congruence condition holds (the classes of Theorem 2, and no other $N$);
-  - parses this page and compares with its own data: the summary table of Theorem 2 ($q_P$, the decimals of $\rho_0(P)$, the counts), the values $q_n$ of Section 5.3, the contact tables and direction tables of Sections 5.4–5.6, and the tables of Sections 10 and 11;
+  - parses this page and compares with its own data: the summary table of Theorem 2 (the closed forms and decimals of $\rho_0(P)$, $q_P$, the lists of $N$, the counts), the values $Q_n$ of Section 5.3, the contact tables and direction tables of Sections 5.4–5.6, and the tables of Sections 10 and 11 row by row;
+  - quotes 75 numerical claims, closed forms and coordinates verbatim from the page (the coordinates of every configuration, the bounds $m_P$, the inequalities used in Sections 5–7, the exceptional set of Theorem 3, the residue-class statements) and recomputes each one; a claim that is edited on the page without the script fails;
   - builds all 148 + 30 polygon packings from the same formulas (not from Packomania's coordinates), at 90 digits, and checks: every contact direction is within $10^{-60}$ of an outward face normal computed from the actual vertices; every contact closes (gap below $10^{-60}$); every other pair has centre distance at least $2R_N$ and a positive separating axis (at $N = 3$: separation $\ge -10^{-60}$); every wall piece reaches $F(N,P)$ to $10^{-60}$ and every other piece satisfies $D + R_N \le r_N\rho_0$; the radius equals $F(N,P)$;
   - checks the counting step of Theorem 3 for $P = 6$, $N \le 100$, over all admissible gap sequences of Lemma 5's configurations (not Lemma 5 itself), the vertex lemma on pseudo-random poses (and its equality case on face-on poses), and prints the floating-point remarks of Section 9.
 
   `python/test_circle_floor.py` runs it under `unittest`, and `npm run test:python` runs that.
-- `packages/geometry/test/circle-floor.test.ts` builds the same 178 packings in floating point and checks them with the site's own code: `evaluate` (valid, and $\lvert\text{score} - F\rvert / F < 10^{-12}$), `strictVerify` (the shrink test) and `pieceSeparation` (contacts within $10^{-12}$ of touching, every other pair separated by more than $0.3$, except at $N = 3$). `evaluate` alone allows overlaps up to $10^{-9}$; the separation checks do not.
+- `packages/geometry/test/circle-floor.test.ts` builds the same 178 packings in floating point and checks them with the site's own code: `evaluate` (valid, and $\lvert\text{score} - F\rvert / F < 10^{-12}$), `strictVerify` (the shrink test) and `pieceSeparation` (contacts within $10^{-12}$ of touching, every other pair separated by more than $0.3$, except at $N = 3$, where separation $\ge -10^{-12}$ is required). `evaluate` alone allows overlaps up to $10^{-9}$; the separation checks allow at most $10^{-12}$.
 
 The machine checks repeat the proof's computations; the proof does not depend on them.
 
@@ -760,4 +762,13 @@ The machine checks repeat the proof's computations; the proof does not depend on
   - added detail in Section 7 (the bound on a gap, and $g\pi/N < \pi/2$) and Section 5.7 (why the configuration is optimal); stated where $\arg c_i$ is defined; the status line now names the cases that rest on the literature;
   - corrected the section of [GLNÖ98] that is cited (Section 2, not 1) and added its Section 4; listed Crossref's four authors for [CGG68]; noted that [Me94] and [Fo99] are known here only from their zbMATH reviews; spelled out how [BE51] gives $\rho_0(7)$;
   - renamed the inner circles of $C_{11}$ and $C_{13}$ to $X_i$ and $Y_i$, the midpoint in Lemma 3 to $M$, the wall set of Lemma 4 to $\mathcal W$, and the literature's radius to $\lambda_n$, to avoid clashes with $R_N$, $r_N$ and the unit vector $u$;
-  - rewrote the contact and direction tables of Sections 5.4–5.6 so that the machine check parses them, together with the summary table of Theorem 2 and the values $q_n$; previously only the value tables were checked against the page.
+  - rewrote the contact and direction tables of Sections 5.4–5.6 so that the machine check parses them, together with the summary table of Theorem 2 and the values $Q_n$ (then written $q_n$); previously only the value tables were checked against the page.
+- **2026-10-20.** Second review by another independent AI reviewer (a fresh instance, given only this page and the scripts). It found no error in the mathematics, recomputed every configuration, table and packing with its own code, and checked every citation record. Changes made in response:
+  - removed `\,`, `\;` and `\!` from the formulas, which GitHub's Markdown turns into visible punctuation;
+  - renamed the ring radius and period of Section 5.3 to $A_n$ and $Q_n$ (they clashed with $a_n$ of Lemma 5 and $q_P$ of Theorem 2), the separating normal to $\nu$, and a few local variables;
+  - small additions: "about $O$" in Proposition 4; the case $3 \mid N$ in the proof of Theorem 3; the order of two steps in Section 7; why the farthest vertex is an endpoint of the nearest face (remark after Lemma 2); both conditions of Lemma 4 in the abstract; the citation of Section 5.5 or Proposition 4 in the $P = 13$ remark;
+  - [EST] is now used only for remarks outside the proofs, and the notes on how each cited theorem was verified are labelled "Source check"; the status line says which sources were read in full;
+  - added [Kr67], the zbMATH number of [GLNÖ98] and its Table 1, and the provenance of the page range of [CGG68];
+  - the machine check now also verifies the page's numerical claims, closed forms and coordinates (each quoted from the page and recomputed; see Section 13), compares the value tables row by row, and checks that each direction-table row of a wall circle starts with the wall direction.
+
+Not yet reviewed by a human mathematician.

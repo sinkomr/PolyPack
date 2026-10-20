@@ -451,7 +451,7 @@ def config_13():
         ("Y3", "Y4", 126),
         ("Y2", "Y4", 54),
     ]
-    identities = [("sqrt5^2 = 5", sqrt5 * sqrt5 == 5)]
+    identities = [("sqrt5^2 = 5", sqrt5 * sqrt5 == 5), ("b = 4 sin 18", b == 4 * F.sin(18)), ("A b = 4", A * b == 4)]
     return Config(13, "Fodor's 13", F, A, "2 + sqrt(5)", pts, walls, contacts, identities, every_n(10), {"W": 10})
 
 
@@ -551,7 +551,7 @@ def check_configuration(cfg, rep):
         d2 = (pts[i][0] - pts[j][0]) ** 2 + (pts[i][1] - pts[j][1]) ** 2
         if frozenset((i, j)) in stated:
             continue
-        rep.check(d2 > 4 + Decimal("1e-3"), f"P={cfg.P}: {i}-{j} is not a contact")
+        rep.check(d2.sqrt() > 2 + Decimal("1e-3"), f"P={cfg.P}: {i}-{j} is not a contact")
         min_gap = d2.sqrt() if min_gap is None else min(min_gap, d2.sqrt())
     max_inner = Decimal(0)
     for name in names:
@@ -931,8 +931,8 @@ def check_doc_tables(cfgs, rep):
     # Section 5.3: q_n = 4n / gcd(4n, n + 2), and the classes of the rings
     import math
 
-    qs = {int(n): int(q) for n, q in re.findall(r"\$q_(\d+) = (\d+)\$", "\n".join(secs["5.3"]))}
-    rep.check(sorted(qs) == [2, 3, 4, 5, 6, 7, 8], "Section 5.3 lists q_2..q_8")
+    qs = {int(n): int(q) for n, q in re.findall(r"\$Q_(\d+) = (\d+)\$", "\n".join(secs["5.3"]))}
+    rep.check(sorted(qs) == [2, 3, 4, 5, 6, 7, 8], "Section 5.3 lists Q_2..Q_8")
     for n, q in qs.items():
         rep.check(q == 4 * n // math.gcd(4 * n, n + 2), f"q_{n} = {q}")
         P = {7: 8, 8: 9}.get(n, n)
@@ -958,8 +958,209 @@ def check_doc_tables(cfgs, rep):
             diffs = [Fraction(x) for x in re.findall(r"-?\d+", diffs)]
             seen.add(c)
             rep.check(sorted(d % 360 for d in listed) == sorted(dirs[c]), f"Section {sec}: directions of {c}")
+            if c in cfg.walls:
+                rep.check(listed[0] % 360 == cfg.walls[c], f"Section {sec}: row of {c} starts with the wall direction")
             rep.check(diffs == [(d - listed[0]) % 360 for d in listed[1:]], f"Section {sec}: differences of {c}")
         rep.check(seen == set(cfg.points), f"Section {sec}: direction table covers every circle")
+    # the N <= 100 column of the summary table
+    for r in rows:
+        cfg, cell = by_p[int(r[0])], r[4].replace("$", "")
+        m = re.fullmatch(r"every (even|multiple of (\d+))(?: N)? from (\d+) to (\d+)", cell)
+        if m:
+            step = 2 if m.group(1) == "even" else int(m.group(2))
+            listed = list(range(int(m.group(3)), int(m.group(4)) + 1, step))
+        else:
+            items = [x.strip() for x in cell.split(",")]
+            if "\u2026" in items:
+                k = items.index("\u2026")
+                first, second, last = int(items[0]), int(items[1]), int(items[k + 1])
+                listed = list(range(first, last + 1, second - first))
+            else:
+                listed = [int(x) for x in items]
+        rep.check(listed == cfg.classes, f"summary: N <= 100 column for P = {cfg.P}")
+    # every quoted claim occurs in the page and holds
+    text = DOC.read_text(encoding="utf-8")
+    claims = page_claims(cfgs)
+    rep.claims = len(claims)
+    for quoted, holds, label in claims:
+        rep.check(quoted in text, f"claim not found in the page ({label}): {quoted}")
+        rep.check(holds, f"claim false ({label}): {quoted}")
+
+
+def page_claims(cfgs):
+    """The page's numerical claims, closed forms and coordinates: (quoted text, holds?, label).
+    Each quoted text must occur verbatim in the page, and the claim is recomputed at 90 digits
+    (or exactly) from this script's configurations. Changing the prose without changing this
+    list fails the check."""
+    D = Decimal
+    pi = dpi()
+
+    def sind(x):
+        return dsin(pi * D(x) / 180)
+
+    def cosd(x):
+        return dcos(pi * D(x) / 180)
+
+    def sq(x):
+        return D(x).sqrt()
+
+    def close(x, y):
+        return abs(D(x) - D(y)) < EXACT
+
+    by_p = {c.P: c for c in cfgs}
+    a = {P: c.a.decimal()[0] for P, c in by_p.items()}
+    pts = {P: {k: v.decimal() for k, v in c.points.items()} for P, c in by_p.items()}
+
+    def norm(P, name):
+        x, y = pts[P][name]
+        return (x * x + y * y).sqrt()
+
+    def at(P, name, x, y):
+        return close(pts[P][name][0], x) and close(pts[P][name][1], y)
+
+    def polar(P, name, r, deg):
+        return at(P, name, D(r) * cosd(deg), D(r) * sind(deg))
+
+    def gap(P):
+        """Smallest distance between circles of C_P that do not touch."""
+        c = by_p[P]
+        touching = {frozenset((i, j)) for i, j, _ in c.contacts}
+        out = None
+        for i, j in itertools.combinations(list(c.points), 2):
+            if frozenset((i, j)) not in touching:
+                (x0, y0), (x1, y1) = pts[P][i], pts[P][j]
+                d = ((x0 - x1) ** 2 + (y0 - y1) ** 2).sqrt()
+                out = d if out is None else min(out, d)
+        return out
+
+    def ring(P, n, phi0, radius):
+        return all(polar(P, f"c{k}", radius, D(phi0) + D(360) * k / n) for k in range(n))
+
+    sec = lambda x: 1 / dcos(x)  # noqa: E731
+    out = [
+        # Theorem 2, summary table: rho0(P) as printed
+        ("| 2 | $2$ |", close(a[2] + 1, 2), "rho0(2)"),
+        ("| 3 | $1 + 2/\\sqrt3$ |", close(a[3] + 1, 1 + 2 / sq(3)), "rho0(3)"),
+        ("| 4 | $1 + \\sqrt2$ |", close(a[4] + 1, 1 + sq(2)), "rho0(4)"),
+        ("| 5 | $1 + 1/\\sin(\\pi/5)$ |", close(a[5] + 1, 1 + 1 / dsin(pi / 5)), "rho0(5)"),
+        ("| 6 | $3$ |", close(a[6] + 1, 3), "rho0(6)"),
+        ("| 7 | $3$ |", close(a[7] + 1, 3), "rho0(7)"),
+        ("| 8 | $1 + 1/\\sin(\\pi/7)$ |", close(a[8] + 1, 1 + 1 / dsin(pi / 7)), "rho0(8)"),
+        ("| 9 | $1 + 1/\\sin(\\pi/8)$ |", close(a[9] + 1, 1 + 1 / dsin(pi / 8)), "rho0(9)"),
+        ("| 11 | $1 + 1/\\sin(\\pi/9)$ |", close(a[11] + 1, 1 + 1 / dsin(pi / 9)), "rho0(11)"),
+        ("| 13 | $2 + \\sqrt5$ |", close(a[13] + 1, 2 + sq(5)), "rho0(13)"),
+        ("| 19 | $1 + \\sqrt2 + \\sqrt6$ |", close(a[19] + 1, 1 + sq(2) + sq(6)), "rho0(19)"),
+        # Theorem 3
+        ("$P = 6$: $3 \\mid N$, or $N$ is even and $N \\notin \\lbrace 4, 8, 14 \\rbrace$.",
+         all((N % 3 == 0 or (N % 2 == 0 and N not in (4, 8, 14))) == theorem3_six(N) for N in range(3, 101)),
+         "Theorem 3, P = 6"),
+        ("exactly the 30 pairs $(N, 6)$", len(theorem3_extra()) == 30, "Theorem 3 count"),
+        ("which fails exactly for $N = 2, 4, 8, 14$",
+         [N for N in range(2, 1001, 2) if N % 3 and 5 * (N // 6 + 1) > N] == [2, 4, 8, 14], "exceptions"),
+        # Section 3 edge cases, Lemma 5
+        ("$f(2,2) = 16\\sin^2(\\pi/7) < 4$", 16 * dsin(pi / 7) ** 2 < 4, "Lemma 5, n = 7"),
+        # Section 5.2
+        ("$d_8 = 2\\sin(\\pi/7)$ and $d_9 = 2\\sin(\\pi/8)$",
+         close(2 / a[8], 2 * dsin(pi / 7)) and close(2 / a[9], 2 * dsin(pi / 8)), "d_8, d_9"),
+        ("$d_{11} = 2\\sin(\\pi/9)$", close(2 / a[11], 2 * dsin(pi / 9)), "d_11"),
+        ("$\\lambda_{13} = \\frac{1 + \\sqrt5}{2}$", close(a[13] / 2, (1 + sq(5)) / 2), "lambda_13"),
+        ("$\\lambda_{19} = (2\\sin 15^\\circ)^{-1}$", close(a[19] / 2, 1 / (2 * sind(15))), "lambda_19"),
+        ("$d_8 = 0.867767478$ and $d_9 = 0.765366865$",
+         f"{2 / a[8]:.9f}" == "0.867767478" and f"{2 / a[9]:.9f}" == "0.765366865", "GLNO98 Table 1"),
+        # Section 5.3
+        ("| 2 | $\\mathcal R_2(0^\\circ)$: $c_0 = (1,0)$, $c_1 = (-1,0)$ | $1$ |",
+         at(2, "c0", 1, 0) and at(2, "c1", -1, 0) and close(a[2], 1), "C_2"),
+        ("| 3 | $\\mathcal R_3(90^\\circ)$ | $2/\\sqrt3$ |", ring(3, 3, 90, 2 / sq(3)) and close(a[3], 2 / sq(3)), "C_3"),
+        ("| 4 | $\\mathcal R_4(45^\\circ)$ | $\\sqrt2$ |", ring(4, 4, 45, sq(2)) and close(a[4], sq(2)), "C_4"),
+        ("| 5 | $\\mathcal R_5(90^\\circ)$ | $1/\\sin 36^\\circ$ |", ring(5, 5, 90, 1 / sind(36)) and close(a[5], 1 / sind(36)), "C_5"),
+        ("| 6 | $\\mathcal R_6(0^\\circ)$ | $2$ |", ring(6, 6, 0, 2) and close(a[6], 2), "C_6"),
+        ("| 7 | $\\mathcal R_6(0^\\circ)$ and $O$ | $2$ |", ring(7, 6, 0, 2) and at(7, "O", 0, 0) and close(a[7], 2), "C_7"),
+        ("| 8 | $\\mathcal R_7(90^\\circ)$ and $O$ | $1/\\sin(180^\\circ/7)$ |",
+         ring(8, 7, 90, 1 / sind(D(180) / 7)) and at(8, "O", 0, 0), "C_8"),
+        ("| 9 | $\\mathcal R_8(22.5^\\circ)$ and $O$ | $1/\\sin 22.5^\\circ$ |",
+         ring(9, 8, D("22.5"), 1 / sind(D("22.5"))) and at(9, "O", 0, 0), "C_9"),
+        ("$4\\cos 36^\\circ = 1 + \\sqrt5$", close(4 * cosd(36), 1 + sq(5)), "4 cos 36"),
+        ("$a > 7/\\pi > 2.2$", a[8] > 7 / pi > D("2.2"), "a_8"),
+        ("$a > 8/\\pi > 2.5$", a[9] > 8 / pi > D("2.5"), "a_9"),
+        ("at distance at least $4\\cos(180^\\circ/n) > 3.6$", 4 * cosd(D(180) / 7) > D("3.6"), "rings 7, 8"),
+        # Section 5.4
+        ("Let $a = 1/\\sin 20^\\circ$, so $\\rho_{11} = 1 + a = 1 + 1/\\sin(\\pi/9) = 3.9238044\\ldots$",
+         close(a[11], 1 / sind(20)) and str(a[11] + 1).startswith("3.9238044"), "a for 11"),
+        ("W_k = a e(10^\\circ + 40^\\circ k)\\quad (k \\in \\lbrace 0, 1, 3, 4, 5, 6, 7, 8\\rbrace)",
+         sorted(n for n in pts[11] if n[0] == "W") == [f"W{k}" for k in (0, 1, 3, 4, 5, 6, 7, 8)]
+         and all(polar(11, f"W{k}", a[11], 10 + 40 * k) for k in (0, 1, 3, 4, 5, 6, 7, 8)), "W_k for 11"),
+        ("X_1 = (-1, -\\tan 10^\\circ),\\quad X_2 = (1, -\\tan 10^\\circ),\\quad X_3 = (0, \\sqrt3 - \\tan 10^\\circ)",
+         at(11, "X1", -1, -sind(10) / cosd(10)) and at(11, "X2", 1, -sind(10) / cosd(10))
+         and at(11, "X3", 0, sq(3) - sind(10) / cosd(10)), "X_i"),
+        ("$X_1 = \\sec 10^\\circ e(190^\\circ)$, $X_2 = \\sec 10^\\circ e(-10^\\circ)$",
+         polar(11, "X1", 1 / cosd(10), 190) and polar(11, "X2", 1 / cosd(10), -10), "X_i polar"),
+        ("a\\cos 10^\\circ = 1 + 2\\cos 20^\\circ", close(a[11] * cosd(10), 1 + 2 * cosd(20)), "(5.1)"),
+        ("$\\lvert X_1\\rvert = \\lvert X_2\\rvert = \\sec 10^\\circ < 1.02$", norm(11, "X1") < D("1.02"), "|X_1|"),
+        ("$\\lvert X_3\\rvert < \\sqrt3 < 1.74$", norm(11, "X3") < sq(3) < D("1.74"), "|X_3|"),
+        ("$a > 9/\\pi > 2.86$", a[11] > 9 / pi > D("2.86"), "a > 2.86"),
+        ("$2a\\sin 40^\\circ = 4\\cos 20^\\circ > 3.7$", close(2 * a[11] * sind(40), 4 * cosd(20)) and 4 * cosd(20) > D("3.7"), "ring 11"),
+        ("> 2.86 - 0.51 = 2.35$", D("1.02") / 2 == D("0.51") and D("2.86") - D("0.51") == D("2.35"), "0.51"),
+        ("$\\lvert W - X_3\\rvert \\ge a - \\lvert X_3\\rvert\\cos 80^\\circ > 2.86 - 1.74\\cdot 0.18 > 2.5$",
+         D("2.86") - D("1.74") * D("0.18") > D("2.5"), "X_3 bound"),
+        ("$\\cos 80^\\circ = \\sin 10^\\circ < \\pi/18$", close(cosd(80), sind(10)) and sind(10) < pi / 18 < D("0.18"), "cos 80"),
+        ("at distance greater than $2.35$", gap(11) > D("2.35"), "m_11"),
+        # Section 5.5
+        ("$A = 1 + \\sqrt5 = 4\\cos 36^\\circ$ and $b = \\sqrt5 - 1 = 4\\sin 18^\\circ$, so that $A - b = 2$, $Ab = 4$",
+         close(a[13], 1 + sq(5)) and close(a[13], 4 * cosd(36)) and close(sq(5) - 1, 4 * sind(18))
+         and close(a[13] - norm(13, "Y1"), 2) and close(a[13] * norm(13, "Y1"), 4), "A, b"),
+        ("W_k = A e(18^\\circ + 36^\\circ k)\\quad (k \\in \\lbrace 0, 1, 3, 4, \\dots, 9\\rbrace)",
+         sorted(n for n in pts[13] if n[0] == "W") == sorted(f"W{k}" for k in (0, 1, 3, 4, 5, 6, 7, 8, 9))
+         and all(polar(13, f"W{k}", a[13], 18 + 36 * k) for k in (0, 1, 3, 4, 5, 6, 7, 8, 9)), "W_k for 13"),
+        ("Y_1 = b e(270^\\circ),\\quad Y_2 = b e(162^\\circ),\\quad Y_3 = b e(18^\\circ),\\quad Y_4 = 2e(90^\\circ) = (0, 2)",
+         polar(13, "Y1", sq(5) - 1, 270) and polar(13, "Y2", sq(5) - 1, 162) and polar(13, "Y3", sq(5) - 1, 18)
+         and at(13, "Y4", 0, 2), "Y_i"),
+        ("$\\lvert Y_1\\rvert = \\lvert Y_2\\rvert = \\lvert Y_3\\rvert = b < 1.24$", sq(5) - 1 < D("1.24"), "b"),
+        ("while $A > 3.23$", a[13] > D("3.23"), "A > 3.23"),
+        ("$4\\sin 36^\\circ = \\sqrt{10 - 2\\sqrt5} = 2.3511\\ldots$",
+         close(gap(13), 4 * sind(36)) and close(4 * sind(36), sq(10 - 2 * sq(5))) and str(gap(13)).startswith("2.3511"), "m_13"),
+        ("= 12 - 8\\cos 36^\\circ = 10 - 2\\sqrt5$", close(12 - 8 * cosd(36), 10 - 2 * sq(5)), "12 - 8 cos 36"),
+        ("= 6 + 2\\sqrt5$", close(4 + a[13] ** 2 - 4 * a[13] * cosd(72), 6 + 2 * sq(5)), "Y_4 bound"),
+        ("$10 - 2\\sqrt5 > 10 - 4.4722 > 5.5225 = 2.35^2$", 10 - 2 * sq(5) > D("5.5278") > D("5.5225") == D("2.35") ** 2, "2.35^2"),
+        ("$2A\\sin 36^\\circ > 3.7$", 2 * a[13] * sind(36) > D("3.7"), "ring 13"),
+        # Section 5.6
+        ("Let $A = \\sqrt2 + \\sqrt6 = 4\\cos 15^\\circ$", close(a[19], sq(2) + sq(6)) and close(a[19], 4 * cosd(15)), "A for 19"),
+        ("the hexagon $H_j = 2e(60^\\circ j)$ ($j = 0, \\dots, 5$) and the ring $W_k = A e(15^\\circ + 30^\\circ k)$ ($k = 0, \\dots, 11$)",
+         all(polar(19, f"H{j}", 2, 60 * j) for j in range(6)) and all(polar(19, f"W{k}", a[19], 15 + 30 * k) for k in range(12))
+         and at(19, "O", 0, 0), "C_19"),
+        ("$4 + A^2 - 4A\\cos 45^\\circ = 4 + (8 + 4\\sqrt3) - 2\\sqrt2(\\sqrt2 + \\sqrt6) = 8$",
+         close(4 + a[19] ** 2 - 4 * a[19] * cosd(45), 8), "H-W bound"),
+        ("inside ($A > 3.8$)", a[19] > D("3.8"), "A > 3.8"),
+        ("every non-touching pair is at distance at least $2\\sqrt2$", close(gap(19), 2 * sq(2)), "m_19"),
+        # Section 5.7
+        ("Write $\\ell = \\lfloor N/6 \\rfloor$ and $g = \\ell + 1$, and let $k_1 = k_2 = k_3 = k_4 = g$, $k_5 = N - 4g$.",
+         all(six_gaps(N) == [N // 6 + 1] * 4 + [N - 4 * (N // 6 + 1)] for N in theorem3_extra()), "gaps"),
+        ("All differences are multiples of $10^\\circ$, so $36 \\mid N$ suffices. Conversely $W_6$ alone needs $110 N/360 = 11N/36 \\in \\mathbb Z$, i.e. $36 \\mid N$.",
+         by_p[11].classes == [36, 72] and Fraction(110, 360) == Fraction(11, 36), "class of 11"),
+        ("All differences are multiples of $36^\\circ$, so $10 \\mid N$ suffices; conversely $W_5$ (directions $198^\\circ$ and $198^\\circ \\pm 108^\\circ$) needs $108N/360 = 3N/10 \\in \\mathbb Z$, i.e. $10 \\mid N$.",
+         by_p[13].classes == every_n(10) and Fraction(108, 360) == Fraction(3, 10) and by_p[13].walls["W5"] == 198, "class of 13"),
+        ("All differences are multiples of $15^\\circ$, so $24 \\mid N$ suffices; conversely each $W_k$ needs $105N/360 = 7N/24 \\in \\mathbb Z$, i.e. $24 \\mid N$.",
+         by_p[19].classes == every_n(24) and Fraction(105, 360) == Fraction(7, 24), "class of 19"),
+        # Section 6
+        ("$m_4 = 2\\sqrt2$, $m_5 = 1 + \\sqrt5$, $m_6 = m_7 = 2\\sqrt3$, $m_8 > 2.2$, $m_9 > 2.5$, $m_{11} > 2.35$, $m_{13} > 2.35$, $m_{19} = 2\\sqrt2$",
+         close(gap(4), 2 * sq(2)) and close(gap(5), 1 + sq(5)) and close(gap(6), 2 * sq(3)) and close(gap(7), 2 * sq(3))
+         and gap(8) > D("2.2") and gap(9) > D("2.5") and gap(11) > D("2.35") and gap(13) > D("2.35")
+         and close(gap(19), 2 * sq(2)), "m_P"),
+        ("$2\\sec(\\pi/N) \\le 2\\sec(\\pi/8) < 2.17$, because $\\cos(\\pi/8) = \\frac12\\sqrt{2 + \\sqrt2} > 0.9238$",
+         2 * sec(pi / 8) < D("2.17") and close(dcos(pi / 8), sq(2 + sq(2)) / 2) and dcos(pi / 8) > D("0.9238"), "sec(pi/8)"),
+        ("and every $m_P$ exceeds 2.2", min(gap(P) for P in (4, 5, 6, 7, 8, 9, 11, 13, 19)) > D("2.2"), "m_P > 2.2"),
+        ("$2\\sec(\\pi/6) = 4/\\sqrt3 < 2.31 < 2\\sqrt3$", close(2 * sec(pi / 6), 4 / sq(3)) and 4 / sq(3) < D("2.31") < 2 * sq(3), "N = 6"),
+        ("$\\sec(\\pi/N) \\le 2/\\sqrt3 < 1.16$", 2 / sq(3) < D("1.16"), "sec(pi/6)"),
+        ("($P = 11$, moduli below 1.74), $Y_1, \\dots, Y_4$ ($P = 13$, moduli at most 2)",
+         max(norm(11, n) for n in ("X1", "X2", "X3")) < D("1.74") and max(norm(13, f"Y{k}") for k in range(1, 5)) <= 2, "inner moduli"),
+        ("$a \\ge 2$ for $P = 7, 8, 9$, $a > 2.86$ for $P = 11$, $a = A > 3.2$ for $P = 13$ and $a = A > 3.8$ for $P = 19$",
+         min(a[7], a[8], a[9]) >= 2 and a[11] > D("2.86") and a[13] > D("3.2") and a[19] > D("3.8"), "a bounds"),
+        ("$F(3,6) = \\sqrt{9/12 + 1/4} = 1$", close((inradius(3) ** 2 * 9 + D(1) / 4).sqrt(), 1) and close(inradius(3) ** 2, D(1) / 12), "F(3,6)"),
+        # Section 7
+        ("since $\\cos 54^\\circ = \\sin 36^\\circ > 0.58$", close(cosd(54), sind(36)) and sind(36) > D("0.58"), "cos 54"),
+        ("\\ge \\frac43\\cos 54^\\circ - \\frac23 > 0$", D(4) / 3 * cosd(54) - D(2) / 3 > 0, "Phi'"),
+        ("$4\\sin 60^\\circ = 2\\sqrt3 > 2\\sec(\\pi/10)$", 2 * sq(3) > 2 * sec(pi / 10), "2 sqrt 3"),
+    ]
+    return out
 
 
 def direction_rows(cfg):
@@ -1036,15 +1237,15 @@ def run(quick=False):
     rep.say("Tables in docs/proofs/circle-container-floor.md")
     if DOC.exists():
         check_doc_tables(cfgs, rep)
-        rep.say("  summary table of Theorem 2, q_n of Section 5.3, contact and direction tables of 5.4-5.6: compared")
+        rep.say(f"  summary table of Theorem 2, Q_n of Section 5.3, contact and direction tables of 5.4-5.6, and {getattr(rep, 'claims', 0)} quoted claims: compared")
     expected = {(P, N): fmt(v) for P, N, v in table_rows(cfgs)}
     expected3 = {(6, N): fmt(v) for P, N, v in table_rows([config_six_centre(N) for N in theorem3_extra()])}
     if DOC.exists():
         found = doc_rows()
-        main = {(P, N): v for sec, rows in found.items() if sec and "Table of the 148" in sec for P, N, v in rows}
-        add = {(P, N): v for sec, rows in found.items() if sec and "Table of the 30" in sec for P, N, v in rows}
-        rep.check(main == expected, "doc table of the 148 cases matches")
-        rep.check(add == expected3, "doc table of the 30 cases matches")
+        main = [((P, N), v) for sec, rows in found.items() if sec and "Table of the 148" in sec for P, N, v in rows]
+        add = [((P, N), v) for sec, rows in found.items() if sec and "Table of the 30" in sec for P, N, v in rows]
+        rep.check(main == list(expected.items()), "doc table of the 148 cases matches, row by row")
+        rep.check(add == list(expected3.items()), "doc table of the 30 cases matches, row by row")
         rep.say(f"  148-case table rows: {len(main)}, 30-case table rows: {len(add)}")
     else:
         rep.check(False, f"{DOC} not found")
