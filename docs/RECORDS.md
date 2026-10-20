@@ -71,9 +71,10 @@ Ellsworth draws each squares-in-a-square record as a hand-written SVG file: a fi
 
 - Each filled shape is split into unit squares on the integer grid of its own frame. Any exact tiling of a shape by unit squares is a valid packing of as many squares, so the result does not depend on matching the drawn subdivision.
 - Some drawings show a packing of more squares in the same side (the drawing for 14 shows 15 squares in side 4); the outermost extra squares are left out, and the note says so.
-- A drawing is used only when everything holds: only `svg`, `g`, `defs`, `rect`, `path` (straight lines), `polygon` and `use` appear; each shape is whole unit cells; every transform is a rigid motion; the count is P; the site's checker finds no overlap; and the container is within 1e-9 of the published value. Anything else is skipped and listed under `skipped` in the file.
+- A drawing is used only when everything holds: only `svg`, `g`, `defs`, `rect`, `path` (straight lines), `polygon` and `use` appear; every number and transform parses in full; each shape is whole unit cells; every transform is a rigid motion; the count is P; the site's checker finds no overlap; and the container is within 1e-9 of the published value. Anything else is skipped and listed under `skipped` in the file.
+- As in a browser, an entity may use other entities (`<!ENTITY tr "translate(-&u2; 1)">`) and is expanded in full, and an id that appears twice refers to its first element. The reading parts are in `scripts/read-ellsworth-svg/lib.ts`, with tests in `scripts/test/read-ellsworth-svg.test.ts`.
 
-[CALC] Read 2026-10-18: 165 of the 189 drawings. Skipped: the three perfect squares (one container-sized square, already tiled here), five with shapes off the unit grid, one with a scaled frame, one with text, and fourteen whose reading overlaps (drawings that rely on paint order or another construction this reader does not model).
+[CALC] Read 2026-10-20: 180 of the 189 drawings. Skipped: the three perfect squares (one container-sized square, already tiled here), five with shapes off the unit grid, and one with text. The first reading (2026-10-18) took 165: it expanded entities only one level deep, which misplaced the strips of 13 drawings (among them 293 and 300), and it took the last of two elements sharing an id, which doubled squares in 107 and 267. The checks above caught every such misreading, so none reached the records.
 
 ## Coordinates constructed by the solver
 
@@ -104,7 +105,7 @@ npx tsx scripts/build-records.ts --date 2026-10-12
 ## Known gaps
 
 - Friedman's values are printed truncated (for example "2.154+"), to 3 to 5 decimals. They are stored as printed, with `display_precision` set to the number of printed decimals.
-- No coordinates for polygon packings from the literature. Friedman publishes pictures only. Ellsworth's SVG files and the `jlevy/squares` registry contain coordinates for squares in squares; they are not imported yet.
+- No coordinates for polygon packings from the literature, except squares in a square read from Ellsworth's drawings (above). Friedman publishes pictures only. The `jlevy/squares` registry also has coordinates for squares in squares; it is not imported.
 - Container shapes other than circle, triangle, square, pentagon, hexagon and octagon, and piece shapes with 7 or more than 8 sides, have no published values in these sources.
 - Published papers were not searched one by one. Proofs are recorded as the three sources above report them. Example: Friedman lists 12 and 14 circles in a circle as "Found by", so they are `best_known` here, although Wikipedia's "Circle packing in a circle" (read 2026-10-11) cites proofs by Fodor (2000) and by Ekanayake and LaFountain (2024).
 - Packomania coordinates for circles in a square are stored only to n = 100.
