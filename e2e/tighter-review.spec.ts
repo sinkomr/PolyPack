@@ -315,8 +315,9 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
           }),
     );
   };
-  const measure = async (label: string, ms: number) => {
-    const n0 = log.length;
+  // `from`: where the window's requests start in the log (by default, now)
+  const measure = async (label: string, ms: number, from = log.length) => {
+    const n0 = from;
     await sleep(ms);
     const w = log.slice(n0);
     counts[label] = w.filter((r) => r.method === "POST").length;
@@ -328,8 +329,10 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
     );
   };
   await answer(429);
+  // the first send goes as soon as there is consent, often before consent() returns: count from before
+  const beforeConsent = log.length;
   await consent(page, "Error Player");
-  await measure("429 first 10 s", 10_000);
+  await measure("429 first 10 s", 10_000, beforeConsent);
   await page.evaluate(() => (window as any).tighter.skipAhead(61_000));
   await measure("429 after a game minute, 10 s", 10_000);
   await answer(500);

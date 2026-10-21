@@ -2,13 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
     <title>PolyPack — Tighter</title>
     <link rel="stylesheet" href="/src/style.css" />
     <link rel="stylesheet" href="/src/tighter/tighter.css" />
   </head>
-  <body class="tighter standby">
+  <body class="tighter standby" data-pane="board">
     <header class="top">
       <h1>PolyPack</h1>
       <nav aria-label="Site">
@@ -137,7 +137,7 @@
         <p id="t-notice" class="t-notice" role="status" aria-live="polite" hidden></p>
       </section>
 
-      <aside class="panel" aria-label="Game panels">
+      <aside id="t-panel" class="panel" aria-label="Game panels">
         <section id="t-points" aria-labelledby="t-points-heading" hidden>
           <h2 id="t-points-heading">Record points</h2>
           <dl class="stats">
@@ -244,6 +244,31 @@
         </section>
       </aside>
     </main>
+
+    <!-- phones: the views of the game, at the bottom of the screen within thumb reach -->
+    <div id="t-dock" class="t-dock" hidden>
+      <div class="t-dock-tabs" role="tablist" aria-label="Views">
+        <button id="t-dock-board" type="button" role="tab" aria-selected="true" aria-controls="t-board-view">
+          Board
+        </button>
+        <button
+          id="t-dock-tree"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="t-upgrades"
+          tabindex="-1"
+        >
+          Tree<span id="t-dock-count" class="t-tab-count" hidden></span>
+        </button>
+        <button id="t-dock-queue" type="button" role="tab" aria-selected="false" aria-controls="t-panel" tabindex="-1">
+          Queue
+        </button>
+        <button id="t-dock-points" type="button" role="tab" aria-selected="false" aria-controls="t-panel" tabindex="-1">
+          Points
+        </button>
+      </div>
+    </div>
 
     <dialog id="t-settings" class="t-dialog" aria-labelledby="t-settings-heading">
       <div class="t-dialog-head">

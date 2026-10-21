@@ -98,6 +98,9 @@ async function buy(page: Page, id: string): Promise<void> {
   await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
 }
 
+/** At phone width the panel's sections are views of their own, chosen with the dock's tabs. */
+const dockView = (page: Page, view: "queue" | "points") => page.click(`#t-dock-${view}`);
+
 const noOverflow = (page: Page) =>
   page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
 
@@ -262,6 +265,7 @@ test("long game: offers to pick from, best first; filters saved and applied; dea
   await expect(offers).toHaveCount(3, { timeout: 30_000 });
   expect(await game(page, (s) => s.picks.filters)).toMatchObject({ minP: 100, maxP: 150 });
   await page.setViewportSize({ width: 390, height: 844 });
+  await dockView(page, "queue");
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   await page.locator("#t-queue").screenshot({ path: test.info().outputPath("queue-390.png") });
@@ -318,6 +322,7 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await page.getByRole("button", { name: "Remove stage 2, seed" }).click();
   await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress"]);
   await page.setViewportSize({ width: 390, height: 844 });
+  await dockView(page, "queue");
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   await page.locator("#t-runs").screenshot({ path: test.info().outputPath("runs-390.png") });
@@ -403,6 +408,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
   await expect(page.locator("#t-st-history-box")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
+  await dockView(page, "points");
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   await page.locator("#t-standing").screenshot({ path: test.info().outputPath("standing-390.png") });

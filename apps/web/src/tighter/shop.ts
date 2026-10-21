@@ -326,6 +326,23 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
 /** Sizes of the tree's layout, in CSS pixels. */
 export const TREE = { nodeW: 136, nodeH: 62, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
 
+/**
+ * The phone layout (tighter.css, "phones"): there the tree is a list, row after row, in the order of
+ * the columns, instead of a canvas some 3,300 px wide.
+ */
+export const PHONE_QUERY =
+  "(max-width: 759px), (max-height: 500px) and (orientation: landscape) and (max-width: 1023px)";
+
+/**
+ * The nodes of one row in reading order: what is not owned yet first, by column (prerequisites
+ * first) then by price, and the owned ones after. The order changes only when something is bought,
+ * never as points come in, so a node does not move under a tapping finger.
+ */
+export function listOrder(nodes: readonly NodeView[]): NodeView[] {
+  const owned = (n: NodeView) => (n.state === "owned" ? 1 : 0);
+  return [...nodes].sort((a, b) => owned(a) - owned(b) || a.depth - b.depth || upgrade(a.id).cost - upgrade(b.id).cost);
+}
+
 export interface TreeLayout {
   width: number;
   height: number;
@@ -390,6 +407,8 @@ export class TreeRenderer {
   private preview: UpgradeId | null = null;
   private detailSig = "";
   private readonly touch: boolean;
+  /** A list instead of the canvas: the phone layout. */
+  private list: boolean;
 
   constructor(
     private readonly box: HTMLElement,
@@ -400,6 +419,13 @@ export class TreeRenderer {
     private readonly canBuyNow: (id: UpgradeId) => boolean,
   ) {
     this.touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
+    const phone = typeof matchMedia === "function" ? matchMedia(PHONE_QUERY) : null;
+    this.list = !!phone?.matches;
+    phone?.addEventListener("change", () => {
+      this.list = phone.matches;
+      this.layoutSig = "";
+      if (this.view) this.render(this.view, this.funds);
+    });
   }
 
   render(view: TreeView, funds: Funds): void {
@@ -410,10 +436,13 @@ export class TreeRenderer {
       (view.mysteries ? ` · ${fmtInt(view.mysteries)} still ${MYSTERY}` : "") +
       (view.buyable ? ` · ${fmtInt(view.buyable)} to buy now` : "");
     if (this.summary.textContent !== summary) this.summary.textContent = summary;
-    const sig = view.nodes.map((n) => n.id).join(",");
+    // the list's order depends on what is owned (the canvas's does not)
+    const owned = this.list ? view.nodes.filter((n) => n.state === "owned").map((n) => n.id) : [];
+    const sig = `${this.list ? "list" : "tree"}|${view.nodes.map((n) => n.id).join(",")}|${owned.join(",")}`;
     if (sig !== this.layoutSig) {
       this.layoutSig = sig;
-      this.build(view);
+      if (this.list) this.buildList(view);
+      else this.build(view);
     }
     for (const n of view.nodes) this.update(n);
     const byId = new Map(view.nodes.map((n) => [n.id, n] as const));
@@ -431,8 +460,65 @@ export class TreeRenderer {
     const v = this.view;
     if (!v) return;
     const open = v.nodes.filter((n) => n.state === "buyable" || n.state === "dear");
+    if (this.list) {
+      // the first row with something to buy or save for, from its top
+      const row = v.rows.find((r) => open.some((n) => n.row === r.id));
+      const band = row ? this.box.querySelector<HTMLElement>(`.t-list-row[data-row="${row.id}"]`) : null;
+      this.box.scrollTop = band ? Math.max(0, band.offsetTop - this.box.offsetTop - 4) : 0;
+      return;
+    }
     const first = open.length ? Math.min(...open.map((n) => n.depth)) : 0;
     this.box.scrollLeft = Math.max(0, (first - 1) * (TREE.nodeW + TREE.colGap));
+  }
+
+  /** The phone's tree: each row's upgrades as a list of the same nodes, without the lines. */
+  private buildList(view: TreeView): void {
+    const list = el("div", "t-tree-list");
+    this.edges = [];
+    this.nodes.clear();
+    for (const r of view.rows) {
+      const nodes = listOrder(view.nodes.filter((n) => n.row === r.id));
+      if (!nodes.length) continue;
+      const row = el("section", "t-list-row");
+      row.dataset.row = r.id;
+      row.setAttribute("aria-label", r.title);
+      const grid = el("div", "t-list-nodes");
+      for (const n of nodes) grid.append(this.node(n));
+      row.append(el("h3", "t-list-title", r.title), grid);
+      list.append(row);
+    }
+    const focused = document.activeElement?.closest<HTMLElement>(".t-node")?.dataset.id;
+    this.box.replaceChildren(list);
+    if (focused)
+      this.nodes
+        .get(focused as UpgradeId)
+        ?.querySelector("button")
+        ?.focus();
+  }
+
+  /** One node: a card with one button over it (placed by the caller). */
+  private node(n: NodeView): HTMLElement {
+    const node = el("div", "t-node t-card");
+    node.dataset.id = n.id;
+    const name = el("h3", "t-node-name");
+    const foot = el("p", "t-node-foot");
+    foot.append(el("span", "t-node-price"), el("span", "t-level"));
+    const bar = el("span", "t-node-bar");
+    const btn = el("button", "t-node-act");
+    btn.type = "button";
+    btn.addEventListener("click", () => this.press(n.id));
+    btn.addEventListener("focus", () => this.hover(n.id));
+    btn.addEventListener("blur", () => this.hover(null));
+    // On a touch screen a tap selects, and hovering is left out: iOS takes a first tap on an element
+    // whose mouseenter changes the page for a hover and sends no click, and the emulated mouseleave
+    // of the next tap (on Buy, below) would take the details away under the finger.
+    if (!this.touch) {
+      node.addEventListener("mouseenter", () => this.hover(n.id));
+      node.addEventListener("mouseleave", () => this.hover(null));
+    }
+    node.append(name, foot, bar, btn);
+    this.nodes.set(n.id, node);
+    return node;
   }
 
   private build(view: TreeView): void {
@@ -476,24 +562,10 @@ export class TreeRenderer {
     this.nodes.clear();
     for (const n of view.nodes) {
       const pos = layout.at.get(n.id)!;
-      const node = el("div", "t-node t-card");
-      node.dataset.id = n.id;
+      const node = this.node(n);
       node.style.left = `${pos.x}px`;
       node.style.top = `${pos.y}px`;
-      const name = el("h3", "t-node-name");
-      const foot = el("p", "t-node-foot");
-      foot.append(el("span", "t-node-price"), el("span", "t-level"));
-      const bar = el("span", "t-node-bar");
-      const btn = el("button", "t-node-act");
-      btn.type = "button";
-      btn.addEventListener("click", () => this.press(n.id));
-      btn.addEventListener("focus", () => this.hover(n.id));
-      btn.addEventListener("blur", () => this.hover(null));
-      node.addEventListener("mouseenter", () => this.hover(n.id));
-      node.addEventListener("mouseleave", () => this.hover(null));
-      node.append(name, foot, bar, btn);
       canvas.append(node);
-      this.nodes.set(n.id, node);
     }
     const focused = document.activeElement?.closest<HTMLElement>(".t-node")?.dataset.id;
     this.box.replaceChildren(canvas);
