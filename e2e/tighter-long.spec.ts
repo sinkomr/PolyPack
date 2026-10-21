@@ -214,8 +214,9 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   await expect(page.locator("#t-lanes")).toBeVisible();
-  // one click of 2 every 5 s: an hour away banks 1,440 evaluations
-  await expect(page.locator("#t-bank-note")).toContainText("at most 1,440 evaluations (1 h");
+  // it runs live: no bank, and no Away upgrades in the tree
+  expect(await page.locator("#t-bar-bank-box, #t-bank-note").count()).toBe(0);
+  expect(await page.locator('.t-card[data-id^="away"], .t-node[data-id^="away"]').count()).toBe(0);
   expect(await game(page, (s) => s.rp)).toBeCloseTo(0, 6);
 });
 
@@ -428,12 +429,13 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   const p = await focused(page);
   await page.waitForTimeout(1500);
   // the save as the live per-click build writes it: version 2, none of the long game's fields, its own
-  // upgrades, auto-eval on and an hour away
+  // upgrades, auto-eval on, an hour away and its bank
   const old = await page.evaluate(() => {
     const save = JSON.parse(localStorage.getItem("tighter.save")!);
     for (const k of ["levels", "standing", "economy", "picks", "runplan"]) delete save[k];
     save.owned = ["trace", "click2", "click3", "click4", "auto1", "seeds"];
     save.settings.auto = true;
+    save.bank = 700;
     save.bankAt = Date.now() - 3_600_000;
     save.rp = 123.5;
     return JSON.stringify(save);
@@ -457,15 +459,16 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     recorded: st.economy.recorded,
     picks: st.picks.offers.length,
     pipeline: st.runplan.pipeline,
-    bank: st.bank,
+    autoDue: st.autoDue,
+    auto: st.settings.auto,
   }));
   expect(s).toMatchObject({ version: 2, rp: 123.5, levels: {}, picks: 0, pipeline: [] });
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
   expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1", "seeds"]);
-  // the record it held is counted for collections, and auto-eval banked the hour it was away
+  // the record it held is counted for collections; auto-eval is off and owes nothing for the hour away
   expect(s.recorded).toContain(p.key);
-  expect(s.bank).toBeGreaterThan(700);
-  await expect(page.locator("#status")).toContainText("While you were away, auto-eval earned");
+  expect(s).toMatchObject({ autoDue: 0, auto: false });
+  await expect(page.locator("#status")).not.toContainText("While you were away");
   await expect(page.locator("#t-auto")).toBeVisible();
   await openTree(page);
   await expect(page.locator("#t-upgrades")).toBeVisible();

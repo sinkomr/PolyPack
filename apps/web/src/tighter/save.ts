@@ -28,6 +28,20 @@ import { EvolveMethod, UPGRADES, UpgradeId, isUpgradeId, methods, owning, upgrad
 const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
 
 /**
+ * Upgrades taken out of the tree, at their price: a save that owns one gets the price back once
+ * (the next save no longer owns it). 2026-10-21: auto-eval's bank went, and with it the Away
+ * upgrades and Keep the bank; auto-eval runs only while the page is open.
+ */
+const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
+  ["away2", { cost: 1200, currency: "rp" }],
+  ["away3", { cost: 12000, currency: "rp" }],
+  ["away4", { cost: 42000, currency: "rp" }],
+  ["away5", { cost: 250000, currency: "rp" }],
+  ["away6", { cost: 1_500_000, currency: "rp" }],
+  ["keepBank", { cost: 2, currency: "standing" }],
+]);
+
+/**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
  * document as a save string for export and import ("tighter:" + version + ":" + encoding + ":" +
  * base64url). Loading is defensive: every field is checked, anything malformed falls back to its
@@ -271,6 +285,13 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
+  const refund = { rp: 0, standing: 0 };
+  for (const id of new Set(Array.isArray(save.owned) ? save.owned : [])) {
+    const r = typeof id === "string" ? RETIRED.get(id) : undefined;
+    if (r) refund[r.currency] += r.cost;
+  }
+  const standing = normalizeStanding(save.standing, now);
+  standing.points += refund.standing;
   // levels of levelled upgrades that are owned, within their range
   const levels: Partial<Record<UpgradeId, number>> = {};
   if (isObj(save.levels))
@@ -287,7 +308,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
   return {
     version: SAVE_VERSION,
     createdAt: num(save.createdAt, now),
-    rp: num(save.rp, 0, 0),
+    rp: num(save.rp, 0, 0) + refund.rp,
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
     levels,
@@ -309,8 +330,9 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       firstRecords: int(stats.firstRecords, 0),
       verifiedImprovements: int(stats.verifiedImprovements, 0),
     },
-    bank: num(save.bank, 0, 0),
-    bankAt: num(save.bankAt, now, 0, now),
+    // auto-eval runs live: nothing is due from before the page was opened
+    autoDue: 0,
+    autoAt: now,
     dealer: dealer(save.dealer, evaluations),
     pacer: pacer(save.pacer),
     queue,
@@ -327,7 +349,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           .slice(-LOG_LIMIT)
           .map((l) => ({ t: l.t, text: l.text.slice(0, 300) }))
       : [],
-    standing: normalizeStanding(save.standing, now),
+    standing,
     economy: normalizeEconomy(save.economy),
     picks: normalizePicks(save.picks),
     runplan: normalizeRunPlan(save.runplan, ALL_METHODS),

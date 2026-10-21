@@ -44,8 +44,7 @@ import {
   autoPerSecond,
   autoRateText,
   available,
-  awayHours,
-  bankCap,
+  autoCap,
   canBuy,
   cardState,
   costOf,
@@ -191,7 +190,6 @@ describe("Tighter upgrades", () => {
     ladder(["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"]);
     ladder(["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"]);
     ladder(["seeds2", "seeds4", "seeds8", "seeds16"]);
-    ladder(["away2", "away3", "away4"]);
     // methods come well after the click ladder and a faster auto-eval
     expect(upgrade("basin").requires).toEqual(expect.arrayContaining(["click10", "auto4"]));
     expect(cost("basin")).toBeGreaterThan(cost("click10"));
@@ -275,17 +273,12 @@ describe("Tighter upgrades", () => {
     expect(autoRateText(o("click4", "auto1"), 1.6)).toBe("a click of 4 every 2.5 s");
     expect(autoRateText(o("click10", "auto5"), 20)).toBe("2 clicks of 10 a second");
     expect(autoRateText(o("auto1"), 0.2)).toBe("1 evaluation every 5 s");
-    // away: an hour with auto-eval, more with upgrades; the bank holds the rate over those hours
-    expect(awayHours(none)).toBe(0);
-    expect(awayHours(o("auto1"))).toBe(1);
-    expect(awayHours(o("auto1", "away2"))).toBe(4);
-    expect(awayHours(o("auto1", "away2", "away3", "away4"))).toBe(24);
-    expect(bankCap(none)).toBe(1);
-    expect(bankCap(o("auto1"))).toBeCloseTo(720, 9);
-    expect(bankCap(o("auto1", "away2"))).toBeCloseTo(2880, 9);
-    expect(bankCap(o("auto1", "auto5", "away3"))).toBeCloseTo(43_200, 9);
-    // the bank is in evaluations: an hour of auto clicks of 4, on 2 lanes
-    expect(bankCap(o("click4", "auto1"), 2)).toBeCloseTo(0.2 * 4 * 2 * 3600, 9);
+    // auto-eval runs live: at most a minute of every lane's rate is due at once, and at least a Compact
+    expect(autoCap(none)).toBe(COMPACT_EVALS);
+    expect(autoCap(o("auto1"))).toBe(COMPACT_EVALS);
+    expect(autoCap(o("auto1", "auto5"))).toBe(COMPACT_EVALS);
+    // a minute of clicks of 10, a click a second, on 2 lanes
+    expect(autoCap(o("click10", "auto1", "auto5"), 2)).toBeCloseTo(10 * 2 * 60, 9);
     expect(seedsPerProblem(none)).toBe(1);
     expect(seedsPerProblem(o("seeds2"))).toBe(2);
     expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);
@@ -702,28 +695,29 @@ describe("Tighter answers from the server", () => {
   });
 });
 
-describe("Tighter auto-eval's bank", () => {
-  it("earns at its rate, up to its cap, from where it last stood", () => {
+describe("Tighter auto-eval's pace", () => {
+  it("is due evaluations at its rate, at most its cap at once, from where it last stood", () => {
     const s = newGame(T0, 1);
-    expect(accrue(s, T0 + 10_000, 0.2, 720)).toBeCloseTo(2, 12);
-    expect(s.bank).toBeCloseTo(2, 12);
-    expect(s.bankAt).toBe(T0 + 10_000);
-    // a long absence fills it to the cap, no further
-    expect(accrue(s, T0 + 10_000 + 86_400_000, 0.2, 720)).toBeCloseTo(718, 9);
-    expect(s.bank).toBe(720);
-    // time never runs backwards: an earlier clock earns nothing and leaves bankAt where it was
-    const at = s.bankAt;
-    s.bank = 0;
-    expect(accrue(s, at - 60_000, 1, 720)).toBe(0);
-    expect(s.bankAt).toBe(at);
-    // off (rate 0): nothing earned, but the clock moves on, so nothing is owed for that time later
-    expect(accrue(s, at + 60_000, 0, 720)).toBe(0);
-    expect(s.bank).toBe(0);
-    expect(s.bankAt).toBe(at + 60_000);
-    // a bank above a smaller cap keeps what it has, and earns nothing more
-    s.bank = 1000;
-    expect(accrue(s, at + 120_000, 1, 720)).toBe(0);
-    expect(s.bank).toBe(1000);
+    expect(s.autoDue).toBe(0);
+    expect(accrue(s, T0 + 10_000, 0.2, 100)).toBeCloseTo(2, 12);
+    expect(s.autoDue).toBeCloseTo(2, 12);
+    expect(s.autoAt).toBe(T0 + 10_000);
+    // a long gap between ticks (a hidden tab's timers) fills it to the cap, no further
+    expect(accrue(s, T0 + 10_000 + 86_400_000, 0.2, 100)).toBeCloseTo(98, 9);
+    expect(s.autoDue).toBe(100);
+    // time never runs backwards: an earlier clock earns nothing and leaves autoAt where it was
+    const at = s.autoAt;
+    s.autoDue = 0;
+    expect(accrue(s, at - 60_000, 1, 100)).toBe(0);
+    expect(s.autoAt).toBe(at);
+    // stopped (rate 0): nothing earned, but the clock moves on, so nothing is owed for that time later
+    expect(accrue(s, at + 60_000, 0, 100)).toBe(0);
+    expect(s.autoDue).toBe(0);
+    expect(s.autoAt).toBe(at + 60_000);
+    // jobs handed back above a smaller cap stay due, and nothing more is earned
+    s.autoDue = 1000;
+    expect(accrue(s, at + 120_000, 1, 100)).toBe(0);
+    expect(s.autoDue).toBe(1000);
   });
 });
 
@@ -889,7 +883,7 @@ describe("Tighter auto-eval", () => {
       key: "30/30/60",
       action: "compact",
     });
-    // a bank that cannot pay for a Compact sends the lane to a run elsewhere
+    // auto-eval not yet due a Compact's evaluations sends the lane to a run elsewhere
     expect(autoTarget({ ...base, lane: 1, queue: q, focus: q[0].key, owned, canCompact: false })).toEqual({
       key: "21/21/40",
       action: "evolve",

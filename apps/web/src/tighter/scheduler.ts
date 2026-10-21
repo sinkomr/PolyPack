@@ -2,7 +2,7 @@ import { ProblemState, STALE_EVALS, evolvable, spent } from "./game";
 import type { UpgradeId } from "./upgrades";
 
 /**
- * Auto-eval: which problem a lane gives its next banked evaluation. A lane is one solver worker with
+ * Auto-eval: which problem a lane gives its next due evaluation. A lane is one solver worker with
  * one open run; two lanes never work the same problem, since one run's evaluations cannot be split.
  *
  * Without Auto-advance, lane 1 keeps to the problem on the board and lane 2 to the next problem of
@@ -28,7 +28,7 @@ export function autoTarget(opts: {
   owned: ReadonlySet<UpgradeId>;
   /** Seeds the player may use per problem. */
   seeds: number;
-  /** The bank can pay for a Compact (otherwise fresh problems wait and runs go on elsewhere). */
+  /** Auto-eval is due a Compact's evaluations (otherwise fresh problems wait and runs go on elsewhere). */
   canCompact?: boolean;
 }): AutoTarget | null {
   const { lane, queue, focus, busy, owned, seeds } = opts;
@@ -46,7 +46,7 @@ export function autoTarget(opts: {
   return pick ? { key: pick.key, action: "evolve" } : null;
 }
 
-/** Why auto-eval (and its bank) is held back, or null when it may run. Clicks are never held. */
+/** Why auto-eval is held back, or null when it may run. Clicks are never held. */
 export function autoHold(opts: {
   hidden: boolean;
   onBattery: boolean;

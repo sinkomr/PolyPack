@@ -85,7 +85,7 @@ export function priceText(cost: number, currency: Currency): string {
 
 /**
  * The owned line, with each ladder folded to where it stands: "2 to 10 evaluations per click",
- * "Seeds: up to 8 per problem", the fastest auto-eval and the longest away owned.
+ * "Seeds: up to 8 per problem", the fastest auto-eval owned.
  */
 export function foldOwned(names: readonly string[]): string[] {
   const out: string[] = [];
@@ -107,7 +107,6 @@ export function foldOwned(names: readonly string[]): string[] {
     } else if ((m = /^Seeds: (\d+) per problem$/.exec(n)))
       put("seeds", m[1] === "2" ? n : `Seeds: up to ${m[1]} per problem`);
     else if (/^Auto-eval: /.test(n)) put("auto", n);
-    else if (/^Away: /.test(n)) put("away", n);
     else if (/^Problem queue: /.test(n)) put("queue", n);
     else out.push(n);
   }

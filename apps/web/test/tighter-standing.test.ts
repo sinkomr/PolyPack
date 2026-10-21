@@ -23,10 +23,10 @@ import { fromJson, toJson } from "../src/tighter/save";
 const T0 = 1_000_000;
 const MIN = 60_000;
 
-/** A late first cycle: Standing bought, much of the tree owned, a record held, auto-eval's bank full. */
+/** A late first cycle: Standing bought, much of the tree owned, a record held, auto-eval running and due a click. */
 function lateGame(extra: UpgradeId[] = []): GameState {
   const s = newGame(T0, 1);
-  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "clickx", "away4", ...extra]);
+  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "clickx", "auto7", ...extra]);
   const add = (id: UpgradeId) => {
     if (s.owned.includes(id)) return;
     for (const r of upgrade(id).requires) add(r);
@@ -37,7 +37,7 @@ function lateGame(extra: UpgradeId[] = []): GameState {
   s.rp = 123_456;
   s.rpEarned = 2_000_000;
   s.standing.cycleEarned = 1_000_000;
-  s.bank = 5000;
+  s.autoDue = 50;
   s.settings.auto = true;
   const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
@@ -86,8 +86,8 @@ describe("Tighter standing", () => {
     expect(s.levels).toEqual({ rentx: 3 });
     expect(s.queue).toBe(queue);
     expect(s.queue[0].ourId).toBe(4);
-    // without Keep the bank, auto-eval's bank is gone; without auto-eval, it is off
-    expect(s.bank).toBe(0);
+    // auto-eval is due nothing in a new cycle; without auto-eval, it is off
+    expect(s.autoDue).toBe(0);
     expect(s.settings.auto).toBe(false);
     expect(s.standing.history).toHaveLength(1);
     expect(s.standing.history[0]).toMatchObject({ startedAt: T0, endedAt: T0 + 90 * MIN, earned: 1_000_000, gain: 2 });
@@ -98,7 +98,7 @@ describe("Tighter standing", () => {
   });
 
   it("begins the next cycle with the head starts owned, prerequisites and all, and keeps the rows bought", () => {
-    const s = lateGame(["head1", "head2", "head3", "keepAuto", "keepMethods", "keepBank", "study", "shrink", "auto9"]);
+    const s = lateGame(["head1", "head2", "head3", "keepAuto", "keepMethods", "study", "shrink", "auto9"]);
     s.levels.study = 2;
     s.levels.autox = 1;
     s.owned.push("autox");
@@ -117,9 +117,9 @@ describe("Tighter standing", () => {
     expect(owned.has("lanesx")).toBe(false);
     expect(tree.levels).toEqual({ rentx: 3, study: 2, autox: 1 });
     expect(tree.owned).toEqual(UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id));
-    // with Keep the bank, the bank stays within the new cap
+    // with Keep auto-eval, it stays on, due nothing yet
     resetCycle(s, T0);
-    expect(s.bank).toBe(5000);
+    expect(s.autoDue).toBe(0);
     expect(s.settings.auto).toBe(true);
     expect(evalsPerClick(ownedSet(s))).toBe(10);
   });

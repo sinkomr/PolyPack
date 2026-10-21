@@ -846,10 +846,11 @@
 .t-node[data-state="owned"] .t-node-bar {
   display: none;
 }
+/* a fixed height: a panel that grew with the hovered node's text would shrink the tree and could
+   slide the node under the pointer behind the panel */
 .t-tree-detail {
   flex: 0 0 auto;
-  min-height: 86px;
-  max-height: 40%;
+  height: 106px;
   overflow: auto;
   padding: 8px 12px;
   border-top: 1px solid var(--border);
@@ -1280,6 +1281,8 @@ html {
     font-size: 11px;
   }
   .t-tree-detail {
+    height: auto;
+    min-height: 86px;
     max-height: 45%;
     padding: 8px 12px 10px;
   }

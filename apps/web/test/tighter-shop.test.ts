@@ -134,15 +134,8 @@ describe("Tighter shop owned line", () => {
   it("folds each ladder to where it stands", async () => {
     const { foldOwned } = await import("../src/tighter/shop");
     expect(
-      foldOwned([
-        "Auto-eval",
-        "Auto-eval: every 4 s",
-        "Away: 4 hours",
-        "Auto-eval: 1 a second",
-        "Away: 12 hours",
-        "Faster auto-eval (level 2)",
-      ]),
-    ).toEqual(["Auto-eval", "Auto-eval: 1 a second", "Away: 12 hours", "Faster auto-eval (level 2)"]);
+      foldOwned(["Auto-eval", "Auto-eval: every 4 s", "Auto-eval: 1 a second", "Faster auto-eval (level 2)"]),
+    ).toEqual(["Auto-eval", "Auto-eval: 1 a second", "Faster auto-eval (level 2)"]);
     expect(foldOwned(["2 evaluations per click"])).toEqual(["2 evaluations per click"]);
     expect(foldOwned(["Problem queue: 3", "Auto-advance", "Problem queue: 4"])).toEqual([
       "Problem queue: 4",

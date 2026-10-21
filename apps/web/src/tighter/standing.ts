@@ -1,6 +1,6 @@
 import { FRONTIER, FRONTIER_P, FRONTIER_SIDES, ProblemKey } from "./frontier";
 import type { GameState } from "./game";
-import { EvolveMethod, UPGRADES, UpgradeId, bankCap, currencyOf, laneCount, owning, upgrade } from "./upgrades";
+import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
 /**
  * Standing: the reset currency (plan §5).
@@ -325,8 +325,7 @@ export function resetPreview(s: GameState): ResetPreview {
 /**
  * Resets the cycle, when it can (Standing owned, the gain at least one): standing gained, the rule
  * finished, the tree as nextCycleTree says, record points back to zero (less any still waiting for
- * the server, which carry over), the bank kept only with Keep
- * the bank (and within the new cap), the next cycle begun under the rule chosen for it. Records,
+ * the server, which carry over), the next cycle begun under the rule chosen for it. Records,
  * collections, rent, the queue and every lifetime count stay. Returns the standing gained, or 0.
  */
 export function resetCycle(s: GameState, now: number): number {
@@ -348,7 +347,6 @@ export function resetCycle(s: GameState, now: number): number {
   st.points += preview.gain;
   st.total += preview.gain;
   st.resets++;
-  const keepBank = s.owned.includes("keepBank");
   // points still waiting for the server are not traded for standing: they carry into the next
   // cycle, where a confirmation keeps them and a take-back takes them from there
   const waiting = st.cycleEarned - confirmedCycleEarned(s);
@@ -361,13 +359,12 @@ export function resetCycle(s: GameState, now: number): number {
   st.rule = s.owned.includes("rules") ? st.nextRule : null;
   st.nextRule = null;
   st.marks = {};
-  const o = owning(s.owned, s.levels, st.rule, st.rulesDone);
-  s.bank = keepBank ? Math.min(s.bank, bankCap(o, laneCount(o))) : 0;
+  s.autoDue = 0;
   // offers were drawn for the old tree; the new cycle draws its own (lost records stay owed a retake)
   const retakes = s.picks.offers.filter((x) => x.retake).map((x) => `${x.N}/${x.M}/${x.P}`);
   s.picks.retake = [...retakes, ...s.picks.retake.filter((k) => !retakes.includes(k))];
   s.picks.offers = [];
-  s.bankAt = now;
+  s.autoAt = now;
   if (!s.owned.includes("auto1") || st.rule === "clicks") s.settings.auto = false;
   markProgress(s, now);
   return preview.gain;

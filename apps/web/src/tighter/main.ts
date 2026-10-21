@@ -119,10 +119,9 @@ import {
   Owned,
   RUN_BUDGET,
   UpgradeId,
+  autoCap,
   autoPerSecond,
   autoRateText,
-  awayHours,
-  bankCap,
   canBuy,
   cores,
   dealerChoices,
@@ -165,8 +164,6 @@ const fmtCompute = (ms: number) =>
 const fmtChange = (before: number, after: number) =>
   `${after < before ? "−" : "+"}${(Math.abs(1 - after / before) * 100).toFixed(4)} %`;
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
-/** Hours as the bank note says them: "4 h", "3 days", "a week". */
-const fmtHours = (h: number) => (h < 48 ? `${h} h` : h === 168 ? "a week" : `${h / 24} days`);
 /** Auto-eval's pace from its evaluations a second, in its clicks: "a click of 4 every 5 s". */
 const fmtRate = (r: number) => autoRateText(owned(), r);
 
@@ -215,23 +212,9 @@ function initialState(): GameState {
 let state = initialState();
 // collections and the first cycle's earnings, for a save from before records were an economy
 syncEconomy(state);
-/**
- * While the page was closed, auto-eval (if it was on) kept earning evaluations into its bank, up to
- * the hours the player's upgrades keep. Then it is off: compute starts only on a press, and the
- * bank runs once the player switches auto-eval on again.
- */
-function welcomeBack(s: GameState): number {
-  const o = ownedSet(s);
-  const earned = s.settings.auto
-    ? accrue(s, now(), (autoPerSecond(o) ?? 0) * laneCount(o), bankCap(o, laneCount(o)))
-    : 0;
-  s.bankAt = now();
-  s.settings.auto = false;
-  return earned;
-}
-const earnedAway = welcomeBack(state);
-if (earnedAway >= 1 && !startNote)
-  startNote = `While you were away, auto-eval earned ${evals(Math.floor(earnedAway))}. Switch Auto-eval on to run them.`;
+// auto-eval runs live and owes nothing for the time the page was closed; it starts off, so compute
+// starts only on a press
+state.settings.auto = false;
 
 /**
  * Only the tab that holds the game (see "one tab" below) runs anything or writes the save; another
@@ -432,15 +415,15 @@ const MAX_QUEUED_CLICKS = 20;
 const lanes: LaneView[] = [];
 /**
  * As many lanes as the player owns (up to the CPU's cores less one). A lane no longer owned (after a
- * reset) goes once it is idle: its run closes, its worker stops, and auto-eval's jobs it held go
- * back to the bank.
+ * reset) goes once it is idle: its run closes, its worker stops, and auto-eval's jobs it held are
+ * due again.
  */
 function ensureLanes(): void {
   const want = laneCount(owned());
   while (lanes.length > want) {
     const lv = lanes[lanes.length - 1];
     if (lv.pumping || lv.current) break;
-    for (const j of lv.jobs) if (!j.click) state.bank += j.evals;
+    for (const j of lv.jobs) if (!j.click) state.autoDue += j.evals;
     lanes.pop();
     lv.lane.terminate();
   }
@@ -591,7 +574,7 @@ function press(): void {
   render();
 }
 
-/** Works through a lane's queue: clicks first, then auto-eval's banked evaluations. */
+/** Works through a lane's queue: clicks first, then auto-eval's due evaluations. */
 async function pump(lv: LaneView): Promise<void> {
   if (lv.pumping || !ownsGame) return;
   lv.pumping = true;
@@ -602,8 +585,8 @@ async function pump(lv: LaneView): Promise<void> {
       if (!job) break;
       const ran = await runJob(lv, job);
       if (!ran && !job.click) {
-        // auto-eval's evaluations are never lost: back to the bank, and the next tick tries again
-        state.bank += job.evals;
+        // a job that could not run is due again, and the next tick tries again
+        state.autoDue += job.evals;
         break;
       }
     }
@@ -871,7 +854,7 @@ function stopAll(): void {
   stopped = true;
   state.settings.auto = false;
   for (const l of lanes) l.jobs = l.jobs.filter((j) => j.compact && j.click);
-  say("Stopped: auto-eval is off and queued clicks are dropped. What auto-eval earned stays in its bank.");
+  say("Stopped: auto-eval is off and queued clicks are dropped.");
   persist();
   render();
 }
@@ -883,17 +866,18 @@ function holdReason(): "hidden" | "battery" | null {
   return autoHold({
     hidden: document.hidden,
     onBattery,
-    // running while hidden needs Continuous; before it a hidden tab banks, whatever the save says
+    // running while hidden needs Continuous; before it a hidden tab pauses auto-eval, whatever the save says
     background: state.settings.background && owned().has("continuous"),
     battery: state.settings.battery,
   });
 }
 /**
  * Auto-eval runs nothing while the tab is hidden or the device is on battery power, unless the
- * player allowed it in Settings; it keeps earning into its bank meanwhile, and the bank runs when
- * running is allowed again. Clicks are the player's own and always run.
+ * player allowed it in Settings, and owes nothing for that time. Clicks are the player's own and
+ * always run.
  */
 function applyHold(): void {
+  accrueAuto();
   if (!holdReason()) kickLanes();
   render();
 }
@@ -917,21 +901,34 @@ if (getBattery) {
 
 // ---------- auto-eval ----------
 
-/** Brings auto-eval's bank up to now. */
-function accrueBank(): void {
+/** Auto-eval may run now: owned, switched on, not held, in the tab that holds the game. */
+function autoRuns(o: Owned): boolean {
+  return ownsGame && state.settings.auto && autoPerSecond(o) !== null && !holdReason();
+}
+
+/** Auto-eval was running at the last accrual: a span counts only when it ran from start to end. */
+let autoRan = false;
+/**
+ * Brings auto-eval's due evaluations up to now. It runs live: it earns only while it may run, and
+ * once it may not (off, held), nothing stays due and nothing is owed for the time it was stopped.
+ */
+function accrueAuto(): void {
   const o = owned();
-  accrue(state, now(), state.settings.auto ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, bankCap(o, laneCount(o)));
+  const runs = autoRuns(o);
+  accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, autoCap(o, laneCount(o)));
+  autoRan = runs;
+  if (!runs) state.autoDue = 0;
 }
 
 /**
- * Auto-eval's next click for this lane, from its bank, when it may run one. It clicks as the player
+ * Auto-eval's next click for this lane, from what it is due, when it may run one. It clicks as the player
  * does, with as many evaluations as a click of theirs (its rate is in clicks, so it earns k evaluations
  * a click), and an evaluation pays the same either way.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
   const k = evalsPerClick(o);
-  if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || state.bank < k) return null;
+  if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || state.autoDue < k) return null;
   const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
   const target = autoTarget({
     lane: lanes.indexOf(lv),
@@ -940,20 +937,20 @@ function autoJob(lv: LaneView): Job | null {
     busy,
     owned: o,
     seeds: seedsPerProblem(o),
-    // a Compact waits until the bank holds its 100 evaluations; meanwhile runs go on elsewhere
-    canCompact: state.bank >= COMPACT_EVALS,
+    // a Compact waits until auto-eval is due its 100 evaluations; meanwhile runs go on elsewhere
+    canCompact: state.autoDue >= COMPACT_EVALS,
   });
   if (!target) return null;
   if (target.action === "compact") {
-    if (state.bank < COMPACT_EVALS) return null;
-    state.bank -= COMPACT_EVALS;
+    if (state.autoDue < COMPACT_EVALS) return null;
+    state.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
-  state.bank -= k;
+  state.autoDue -= k;
   return { key: target.key, evals: k, click: false, compact: false };
 }
 
-/** Starts every idle lane that has work, banked or queued. */
+/** Starts every idle lane that has work, auto-eval's or queued clicks. */
 function kickLanes(): void {
   if (!ownsGame) return;
   ensureLanes();
@@ -962,7 +959,7 @@ function kickLanes(): void {
 
 function autoTick(): void {
   if (!ownsGame) return;
-  accrueBank();
+  accrueAuto();
   kickLanes();
 }
 
@@ -1679,8 +1676,6 @@ function render(): void {
   const rate = autoPerSecond(o);
   show("t-bar-auto-box", rate !== null);
   text("t-bar-auto", rate !== null && s.settings.auto ? fmtRate(rate * laneCount(o)) : "off");
-  show("t-bar-bank-box", rate !== null);
-  text("t-bar-bank", fmtInt(Math.floor(s.bank)));
   show("t-bar-lanes-box", o.has("lanes2"));
   text("t-bar-lanes", `${laneCount(o)}`);
 
@@ -1690,9 +1685,9 @@ function render(): void {
   text(
     "t-hold",
     auto && hold === "hidden"
-      ? "Auto-eval is banking while the tab is hidden"
+      ? "Auto-eval is paused while the tab is hidden"
       : auto && hold === "battery"
-        ? "Auto-eval is banking: on battery power (allow it in Settings)"
+        ? "Auto-eval is paused: on battery power (allow it in Settings)"
         : "",
   );
 
@@ -1711,8 +1706,8 @@ function render(): void {
   text(
     "t-run-note",
     o.has("continuous")
-      ? "Without the first, a hidden tab banks auto-eval's evaluations and runs them when you are back."
-      : "A hidden tab banks auto-eval's evaluations and runs them when you are back (Continuous, in the tech tree, lets it run instead).",
+      ? "Without the first, auto-eval pauses while this tab is hidden."
+      : "Auto-eval pauses while this tab is hidden (Continuous, in the tech tree, lets it run instead).",
   );
   renderStanding(o);
   renderRecords(o);
@@ -2096,7 +2091,7 @@ statusEl.addEventListener("click", () => {
 });
 
 function onBuy(id: UpgradeId): void {
-  accrueBank();
+  accrueAuto();
   // a lane past the CPU's cores would add nothing
   if (id === "lanesx" && lanesMaxed(owned())) return;
   if (!buy(state, id)) return;
@@ -2361,17 +2356,11 @@ function renderLanes(o: Owned): void {
     if (rate !== null)
       msg += state.settings.auto
         ? holdReason()
-          ? " · auto-eval banking"
+          ? " · auto-eval paused"
           : ` · auto-eval ${fmtRate(rate)}`
         : " · auto-eval off";
     if (line.textContent !== msg) line.textContent = msg;
   });
-  text(
-    "t-bank-note",
-    rate === null
-      ? ""
-      : `Auto-eval's bank: ${evals(Math.floor(state.bank))} waiting to run, at most ${evals(Math.floor(bankCap(o, laneCount(o))))} (${fmtHours(awayHours(o))} of every lane's auto-eval).`,
-  );
 }
 
 function renderRuns(o: Owned): void {
@@ -2489,9 +2478,8 @@ function renderStanding(o: Owned): void {
       pv.held === 1 ? "1 record held and its rent" : `${fmtInt(pv.held)} records held and their rent`,
       `collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
       "Standing and every standing upgrade",
-      o.has("keepAuto") ? "the auto-eval and away upgrades" : "",
+      o.has("keepAuto") ? "the auto-eval upgrades" : "",
       o.has("keepMethods") ? "your methods" : "",
-      o.has("keepBank") ? "auto-eval's bank" : "",
       "the queue, the dealer's learning and every count",
     ].filter(Boolean);
     const next = ruleById(st.nextRule);
@@ -2598,7 +2586,7 @@ async function doReset(): Promise<void> {
     l.lane.terminate();
   }
   lanes.length = 0;
-  // let the stopped jobs settle first (an auto-eval job hands its evaluations back to the bank)
+  // let the stopped jobs settle first (an auto-eval job that could not run is due again)
   await new Promise((r) => setTimeout(r, 0));
   const rule = ruleById(state.standing.rule);
   const gain = resetCycle(state, now());
@@ -2704,15 +2692,14 @@ $("t-method").addEventListener("change", () => {
 $("t-auto").addEventListener("click", () => {
   const o = owned();
   if (autoPerSecond(o) === null) return;
-  // earnings start now: nothing is owed for the time it was off
-  accrueBank();
+  // it earns from now: nothing is owed for the time it was off
+  accrueAuto();
   state.settings.auto = !state.settings.auto;
-  const banked = Math.floor(state.bank);
+  accrueAuto();
   say(
     state.settings.auto
-      ? `Auto-eval on: ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))} on the problem on the board, beside your clicks.` +
-          (banked ? ` ${evals(banked)} banked while it was away run first.` : "")
-      : "Auto-eval off. What it has banked stays.",
+      ? `Auto-eval on: ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))} on the problem on the board, beside your clicks.`
+      : "Auto-eval off.",
   );
   persist();
   render();
@@ -2808,7 +2795,7 @@ $("t-import").addEventListener("click", async () => {
   lanes.length = 0;
   state = r.state;
   syncEconomy(state);
-  welcomeBack(state);
+  state.settings.auto = false;
   lastChange.clear();
   banner = null;
   savesDisabled = false;
@@ -2854,7 +2841,7 @@ function start(): void {
   ownsGame = true;
   $("t-elsewhere").hidden = true;
   document.body.classList.remove("standby");
-  state.bankAt = Math.max(state.bankAt, now());
+  state.autoAt = now();
   applyHold();
   listen();
   void dealTick();

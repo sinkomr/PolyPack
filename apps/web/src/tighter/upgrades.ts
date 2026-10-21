@@ -39,7 +39,7 @@ export type UpgradeId =
   | "click9"
   | "click10"
   | "clickx"
-  // auto-eval and away
+  // auto-eval
   | "auto1"
   | "auto2"
   | "auto3"
@@ -50,11 +50,6 @@ export type UpgradeId =
   | "auto8"
   | "auto9"
   | "autox"
-  | "away2"
-  | "away3"
-  | "away4"
-  | "away5"
-  | "away6"
   // seeds
   | "seeds"
   | "seeds2"
@@ -120,7 +115,6 @@ export type UpgradeId =
   | "head1"
   | "head2"
   | "head3"
-  | "keepBank"
   | "keepAuto"
   | "keepMethods"
   | "study"
@@ -134,7 +128,7 @@ export type Row =
 
 export const ROWS: readonly { id: Row; title: string }[] = [
   { id: "clicks", title: "Clicks" },
-  { id: "auto", title: "Auto-eval and away" },
+  { id: "auto", title: "Auto-eval" },
   { id: "seeds", title: "Seeds" },
   { id: "queue", title: "Queue and lanes" },
   { id: "methods", title: "Methods" },
@@ -234,8 +228,6 @@ const AUTO: Partial<Record<UpgradeId, number>> = {
 };
 /** Faster auto-eval: auto-eval's clicks a second grow by this much a level. */
 export const AUTOX_GROWTH = 1.3;
-/** Hours of auto-eval kept while the player is away, by upgrade (1 with Auto-eval I). */
-const AWAY: Partial<Record<UpgradeId, number>> = { auto1: 1, away2: 4, away3: 12, away4: 24, away5: 72, away6: 168 };
 /** Seeds (runs) per problem, by upgrade (1 without any). */
 const SEEDS: Partial<Record<UpgradeId, number>> = { seeds2: 2, seeds4: 4, seeds8: 8, seeds16: 16, seeds32: 32 };
 /** Problem slots, by upgrade (1 without any). */
@@ -276,7 +268,6 @@ const per = (n: number) => `${n} evaluation${n === 1 ? "" : "s"}`;
 /** A number as the shop writes it: whole, or to one decimal ("2.5"). */
 const number = (x: number) => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
 const seconds = (x: number) => `${number(x)} s`;
-const hours = (h: number) => (h < 48 ? `${h} hour${h === 1 ? "" : "s"}` : h === 168 ? "a week" : `${h / 24} days`);
 
 function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
   const n = CLICK[id]!;
@@ -304,22 +295,9 @@ function autoRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
     requires,
     effect:
       id === "auto1"
-        ? `while it is on, auto-eval clicks for you, ${clicksEvery(c)}, beside your own clicks, each as many evaluations as yours; it keeps earning while you are away (up to 1 hour) and runs what it earned when you are back`
+        ? `while it is on, auto-eval clicks for you, ${clicksEvery(c)}, beside your own clicks, each as many evaluations as yours; it runs while this page is open`
         : `auto-eval clicks ${clicksEvery(c)}, each as many evaluations as yours`,
     real: "the same run(), one click's evaluations at a time",
-    row: "auto",
-  };
-}
-
-function awayRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
-  const h = AWAY[id]!;
-  return {
-    id,
-    name: `Away: ${hours(h)}`,
-    cost,
-    requires,
-    effect: `auto-eval keeps earning for up to ${hours(h)} while you are away`,
-    real: "evaluations owed, run when you are back",
     row: "auto",
   };
 }
@@ -437,7 +415,6 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "queue",
   },
   clickRung("click7", 1100, ["click6"]),
-  awayRung("away2", 1200, ["auto2"]),
   clickRung("click8", 1400, ["click7"]),
   clickRung("click9", 1550, ["click8"]),
   {
@@ -511,7 +488,6 @@ export const UPGRADES: readonly Upgrade[] = [
     real: "an expected-gain rule over the queue",
     row: "queue",
   },
-  awayRung("away3", 12000, ["away2", "auto5"]),
   {
     id: "pick3",
     name: "Your pick: 3",
@@ -567,7 +543,8 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Continuous",
     cost: 26000,
     requires: ["lanes2"],
-    effect: "allows running while this tab is hidden (a setting, off until you tick it); without it a hidden tab banks",
+    effect:
+      "allows auto-eval to run while this tab is hidden (a setting, off until you tick it); without it, auto-eval pauses in a hidden tab",
     real: "Web Workers keep running in a background tab",
     row: "queue",
   },
@@ -613,7 +590,6 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "problems",
   },
   tuneRung("tunePenalty", "penalty", 40000, ["penalty", "tuneMc"]),
-  awayRung("away4", 42000, ["away3", "auto7"]),
   methodRung(
     "morph",
     45000,
@@ -727,7 +703,6 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "runs",
     mystery: true,
   },
-  awayRung("away5", 250000, ["away4", "rent"]),
   tuneRung("tuneGrowth", "ls_growth", 300000, ["growth"], true),
   ringRung("ring50", 400000, ["ring80"], true),
   seedRung("seeds32", 400000, ["seeds16", "growth"]),
@@ -753,7 +728,6 @@ export const UPGRADES: readonly Upgrade[] = [
     mystery: true,
   },
   ringRung("ring30", 1_000_000, ["ring50"], true),
-  awayRung("away6", 1_500_000, ["away5"]),
   ringRung("ringAll", 3_000_000, ["ring30"], true),
   // ---- standing: paid in standing, kept through resets ----
   standingRung(
@@ -763,14 +737,6 @@ export const UPGRADES: readonly Upgrade[] = [
     ["standing"],
     "each new cycle begins with 2 to 5 evaluations per click and Auto-eval",
     "the first upgrades, owned at once",
-  ),
-  standingRung(
-    "keepBank",
-    "Keep the bank",
-    2,
-    ["standing"],
-    "auto-eval's bank survives a reset",
-    "evaluations owed stay owed",
   ),
   standingRung(
     "head2",
@@ -801,7 +767,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Keep auto-eval",
     5,
     ["head1"],
-    "the Auto-eval and away upgrades survive resets",
+    "the Auto-eval upgrades survive resets",
     "the same workers, kept",
   ),
   standingRung(
@@ -951,14 +917,15 @@ export function autoRateText(o: Owned, perSecond: number): string {
   return c < 1 ? `a click of ${k} every ${seconds(1 / c)}` : `${number(c)} click${c === 1 ? "" : "s"} of ${k} a second`;
 }
 
-/** Hours of auto-eval earned while away, at most. */
-export function awayHours(o: Owned): number {
-  return highest(o, AWAY, 0, (a, b) => a > b);
-}
+/**
+ * Seconds of auto-eval a lane may fall behind and still catch up: a hidden tab's timers may wake
+ * only once a minute. Nothing is earned while auto-eval cannot run (off, held, or the page closed).
+ */
+export const AUTO_SLACK_SECONDS = 60;
 
-/** Most evaluations auto-eval's bank holds: its rate over the hours kept while away (at least one). */
-export function bankCap(o: Owned, lanes = 1): number {
-  return Math.max(1, (autoPerSecond(o) ?? 0) * lanes * awayHours(o) * 3600);
+/** Most evaluations auto-eval may be due at once: a minute of every lane's rate, and at least a Compact. */
+export function autoCap(o: Owned, lanes = 1): number {
+  return Math.max(COMPACT_EVALS, (autoPerSecond(o) ?? 0) * lanes * AUTO_SLACK_SECONDS);
 }
 
 /** Seeds per problem: one under the "one seed" cycle rule, twice as many for good once a cycle finished under it. */

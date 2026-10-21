@@ -153,10 +153,10 @@ export interface GameState {
   consent: boolean;
   settings: Settings;
   stats: Stats;
-  /** Evaluations auto-eval has earned and that have not run yet (fractional). */
-  bank: number;
-  /** When auto-eval's earnings were last brought up to date (the page's last moment of play). */
-  bankAt: number;
+  /** Evaluations auto-eval is due and has not run yet (fractional; at most a minute's worth; a loaded save starts at 0). */
+  autoDue: number;
+  /** When auto-eval's due evaluations were last brought up to date. */
+  autoAt: number;
   dealer: DealerState;
   pacer: PacerState;
   queue: ProblemState[];
@@ -198,8 +198,8 @@ export function newGame(now: number, seed: number): GameState {
       firstRecords: 0,
       verifiedImprovements: 0,
     },
-    bank: 0,
-    bankAt: now,
+    autoDue: 0,
+    autoAt: now,
     dealer: newDealer(seed),
     pacer: newPacer(),
     queue: [],
@@ -672,20 +672,20 @@ export function recordsHeld(s: GameState): number {
   return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 }
 
-// ---------- auto-eval's bank ----------
+// ---------- auto-eval's pace ----------
 
 /**
- * Brings auto-eval's earnings up to `now`: `perSecond` evaluations a second since `bankAt`, the
- * bank holding at most `cap`. Earned while the page is open, hidden or closed alike; the bank runs
- * whenever running is allowed. Returns the evaluations added.
+ * Brings auto-eval's due evaluations up to `now`: `perSecond` evaluations a second since `autoAt`,
+ * at most `cap` due at once. Auto-eval runs live: the caller passes 0 while it cannot run (off,
+ * held, or another tab holds the game), and nothing is owed for that time. Returns the evaluations added.
  */
 export function accrue(s: GameState, now: number, perSecond: number, cap: number): number {
-  const elapsed = Math.max(0, now - s.bankAt) / 1000;
-  s.bankAt = Math.max(s.bankAt, now);
+  const elapsed = Math.max(0, now - s.autoAt) / 1000;
+  s.autoAt = Math.max(s.autoAt, now);
   if (!(perSecond > 0)) return 0;
-  const before = s.bank;
-  s.bank = Math.min(Math.max(cap, before), before + elapsed * perSecond);
-  return s.bank - before;
+  const before = s.autoDue;
+  s.autoDue = Math.min(Math.max(cap, before), before + elapsed * perSecond);
+  return s.autoDue - before;
 }
 
 // ---------- upgrades ----------

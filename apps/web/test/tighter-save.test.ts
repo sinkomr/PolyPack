@@ -36,8 +36,8 @@ function loadAll(N: number, M: number, P: number): PackingConfig {
 
 /**
  * A game in the middle of Act I: a record paid per click and confirmed, a click paid since and on
- * its way to the server, an upgrade bought, a submission paced, auto-eval's bank part full, a deal
- * made on credit.
+ * its way to the server, an upgrade bought, a submission paced, auto-eval due part of a click, a
+ * deal made on credit.
  */
 function played(): GameState {
   const s = newGame(T0, 1234);
@@ -83,8 +83,8 @@ function played(): GameState {
   s.picks.retake.push("21/21/40");
   s.runplan.bandit["open|mc_compress"] = { n: 1, mean: 2, m2: 0 };
   s.pacer = recordSend(s.pacer, p.key, T0 + 3500);
-  s.bank = 12.75;
-  s.bankAt = T0 + 4000;
+  s.autoDue = 12.75;
+  s.autoAt = T0 + 4000;
   s.dealer.tokens = -0.5;
   s.dealer.evalsAt = 50;
   s.reveal.push("score", "points");
@@ -110,7 +110,8 @@ describe("Tighter saves", () => {
     const r = fromJson(toJson(s), T0 + 5000);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state).toEqual(s);
+    // all but auto-eval's pace, which runs live: a loaded game is due nothing from before
+    expect(r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // full precision of the pieces, the scores and the points
     const [a, b] = [r.state.queue[0], s.queue[0]];
     expect(a.board!.pieces[7].y).toBe(b.board!.pieces[7].y);
@@ -125,11 +126,31 @@ describe("Tighter saves", () => {
       [101, 6.4 + 1e-13],
     ]);
     expect(a).toMatchObject({ evaluations: 101, sinceGain: 0, runs: 1, endedRuns: 0, nextSeed: 2, unconfirmed: 0 });
-    expect(r.state).toMatchObject({ version: 2, bank: 12.75, bankAt: T0 + 4000 });
+    expect(r.state).toMatchObject({ version: 2 });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, evalsAt: 50, seed: 1234 });
     expect(r.state.levels).toEqual({ clickx: 2 });
+  });
+
+  it("give back the price of the Away upgrades and Keep the bank, once, now that auto-eval runs live", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    raw.owned = [...raw.owned, "away2", "away3", "standing", "keepBank", "away2"];
+    raw.rp = 100;
+    raw.bank = 5000;
+    raw.bankAt = T0 - 3_600_000;
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.owned).toEqual(s.owned);
+    expect(r.state.rp).toBe(100 + 1200 + 12000);
+    expect(r.state.standing.points).toBe(s.standing.points + 2);
+    expect(r.state.autoDue).toBe(0);
+    // the next save owns them no more, so a reload gives nothing back again
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.rp).toBe(100 + 1200 + 12000);
+    expect(again.ok && again.state.standing.points).toBe(s.standing.points + 2);
   });
 
   it("keep levels only for owned levelled upgrades, within their range", () => {
@@ -150,7 +171,7 @@ describe("Tighter saves", () => {
     const text = await exportString(s);
     expect(text).toMatch(/^tighter:2:[zj]:[A-Za-z0-9_-]+$/);
     const r = await importString(text, T0 + 5000);
-    expect(r.ok && r.state).toEqual(s);
+    expect(r.ok && r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // whitespace from a copy and paste is ignored
     const wrapped = text.replace(/(.{60})/g, "$1\n  ");
     expect((await importString(wrapped, T0)).ok).toBe(true);
@@ -197,7 +218,7 @@ describe("Tighter saves", () => {
     raw.name = "";
     raw.queue[0].board.pieces[0].x = "oops";
     raw.queue.push({ key: "not a problem" }, raw.queue[0]);
-    delete raw.bank;
+    raw.autoDue = 1e6;
     raw.dealer.tokens = "many";
     const s = normalize(raw, T0);
     expect(s.owned).toEqual(["trace", "click10", "clickx", "standing"]);
@@ -214,9 +235,9 @@ describe("Tighter saves", () => {
       firstRecords: 0,
       verifiedImprovements: 0,
     });
-    expect(s.bank).toBe(0);
-    // auto-eval's clock never stands in the future, and the dealer never counts evaluations not run
-    expect(s.bankAt).toBe(T0);
+    // auto-eval is due nothing from a save, and the dealer never counts evaluations not run
+    expect(s.autoDue).toBe(0);
+    expect(s.autoAt).toBe(T0);
     expect(s.dealer).toMatchObject({ tokens: 1, evalsAt: 0, seed: 1234 });
     // an unreadable board takes its problem back to the start; duplicates and junk are dropped
     expect(s.queue).toHaveLength(1);
@@ -341,7 +362,7 @@ describe("Tighter saves of version 1", () => {
     const s = r.state;
     expect(s.version).toBe(SAVE_VERSION);
     expect(s.owned).toEqual(["trace", "click2", "queue3", "auto1", "seeds", "click3"]);
-    expect(s).toMatchObject({ rp: 40, rpEarned: 100, bank: 0, consent: true });
+    expect(s).toMatchObject({ rp: 40, rpEarned: 100, autoDue: 0, consent: true });
     expect(s.stats).toMatchObject({ evaluations: 900, runs: 12, clicks: 12 });
     // the dealer counts evaluations from those already run
     expect(s.dealer).toMatchObject({ seed: 9, draws: 4, dealt: 2, tokens: 0.4, evalsAt: 900 });

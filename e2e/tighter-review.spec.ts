@@ -435,8 +435,8 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
 });
 
 // Clicks are the player's own and always run. Auto-eval runs nothing while the tab is hidden or the
-// device is on battery power (unless allowed): it keeps earning into its bank, which runs afterwards.
-test("hidden tab and battery: auto-eval banks instead of running, clicks always run", async ({ page }) => {
+// device is on battery power (unless allowed), and owes nothing for that time: it runs live.
+test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always run", async ({ page }) => {
   test.setTimeout(400_000);
   await page.addInitScript(() => {
     const battery = Object.assign(new EventTarget(), { charging: false, level: 0.5 });
@@ -459,48 +459,55 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
   await expect(page.locator("#t-hold")).toContainText("battery");
-  const bank = () => page.evaluate(() => (window as any).tighter.state.bank);
+  const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
   const evaluations = async () => (await state(page)).stats.evaluations;
-  // a minute's earnings (a click of 4 every 5 s: 48 evaluations) wait in the bank on battery
+  // on battery, a minute held (a click of 4 every 5 s would be 48 evaluations) earns nothing
   const e0 = await evaluations();
-  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
-  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(47);
+  await page.evaluate(() => ((window as any).tighter.state.autoAt -= 60_000));
   await sleep(3000);
+  expect(await due()).toBe(0);
   expect(await evaluations()).toBe(e0);
   // a click on battery still runs, 4 evaluations
   await click(page);
   expect(await evaluations()).toBe(e0 + 4);
   const onBattery = await page.locator("#t-hold").textContent();
-  // allowing battery use runs the bank, in clicks of 4
+  // allowing battery use runs it live from then on, in clicks of 4, with nothing owed for the minute held
+  const t1 = Date.now();
   await page.click("#t-open-settings");
   await page.check("#t-battery");
   await page.click("#t-settings-close");
   await expect(page.locator("#t-hold")).toHaveText("");
-  await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
+  await expect.poll(evaluations, { timeout: 20_000 }).toBeGreaterThanOrEqual(e0 + 8);
   await expect.poll(() => idle(page)).toBe(true);
   const e1 = await evaluations();
-  expect(e1 - (e0 + 4)).toBeGreaterThanOrEqual(44);
+  expect(e1 - (e0 + 4)).toBeLessThanOrEqual(0.8 * ((Date.now() - t1) / 1000) + 4);
 
-  // a hidden tab banks too
+  // a hidden tab pauses it too
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => true });
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
-  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(47);
-  await sleep(3000);
+  await expect.poll(() => idle(page)).toBe(true);
   const e2 = await evaluations();
-  expect(e2).toBe(e1);
+  await page.evaluate(() => ((window as any).tighter.state.autoAt -= 60_000));
+  await sleep(3000);
+  expect(await due()).toBe(0);
+  expect(await evaluations()).toBe(e2);
   const hidden = await page.locator("#t-hold").textContent();
-  await page.screenshot({ path: `${SHOTS}/r4-hidden-banking.png`, fullPage: true });
+  await page.screenshot({ path: `${SHOTS}/r4-hidden-paused.png`, fullPage: true });
+  const t2 = Date.now();
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", { configurable: true, get: () => false });
     Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
-  console.log(`battery: "${onBattery}"; hidden: "${hidden}"; ran after: ${(await evaluations()) - e2}`);
+  await sleep(6000);
+  await expect.poll(() => idle(page)).toBe(true);
+  // back: live again, nothing owed for the time hidden
+  const after = (await evaluations()) - e2;
+  console.log(`battery: "${onBattery}"; hidden: "${hidden}"; ran after: ${after}`);
+  expect(after).toBeLessThanOrEqual(0.8 * ((Date.now() - t2) / 1000) + 4);
   expect(onBattery).toContain("battery");
   expect(hidden).toContain("hidden");
 });
@@ -606,9 +613,10 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes of auto-eval earned at once (a click of 10 every 2 s on each of two lanes: 12,000),
-  // two lanes, Auto-advance compacting the new problems
-  await page.evaluate(() => ((window as any).tighter.state.bankAt -= 20 * 60_000));
+  // twenty minutes between ticks: auto-eval catches up at most a minute (a click of 10 every 2 s on
+  // each of two lanes: 600), then runs live, two lanes, Auto-advance compacting the new problems
+  const autoStart = Date.now();
+  await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));
   let twoBusy = false;
   let shotTaken = false;
   const autoEnd = Date.now() + 60_000;
@@ -624,9 +632,11 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
     await sleep(500);
   }
   if (!shotTaken) await shot("06-auto-eval-two-lanes");
-  // owner rule: every evaluation earned runs once, or waits in the bank; none is lost
+  // owner rule: every evaluation auto-eval was due runs once, or is still due; none is lost, and no
+  // more than a minute behind plus its live rate
   const afterAuto = await state(page);
-  const conserved = afterAuto.stats.evaluations - e0 + afterAuto.bank;
+  const conserved = afterAuto.stats.evaluations - e0 + afterAuto.autoDue;
+  const dueAtMost = 600 + 10 * ((Date.now() - autoStart) / 1000) + 40;
   endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
@@ -675,7 +685,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
     rpBeforeReload: s1.rp,
     rpAfterReload: s2.rp,
     autoAfterReload: s2.settings.auto,
-    bankAfterReload: s2.bank,
+    dueAfterReload: s2.autoDue,
     queue: s2.queue.map(
       (q: any) => `${q.key} ${q.phase} best ${q.best} ours ${q.ourId} runs ${q.runs} evaluations ${q.evaluations}`,
     ),
@@ -686,7 +696,9 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(12_000);
+  expect(conserved).toBeGreaterThanOrEqual(600);
+  expect(conserved).toBeLessThanOrEqual(dueAtMost);
+  expect(s2.autoDue).toBe(0);
   expect(twoBusy).toBe(true);
   expect(s2.settings.auto).toBe(false);
   expect(s2.owned).toHaveLength(path.length);
