@@ -93,7 +93,7 @@ import {
 } from "./rank";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
-import { TreeRenderer, treeView } from "./shop";
+import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
   MARKS,
   RESET_MIN,
@@ -1716,6 +1716,7 @@ function render(): void {
   );
   renderStanding(o);
   renderRecords(o);
+  renderDock();
 }
 
 function renderProblem(p: ProblemState | undefined): void {
@@ -2000,6 +2001,9 @@ function renderUpgrades(o: Owned): void {
 }
 
 function setView(toTree: boolean): void {
+  // on a phone the dock's Tree tab is the same view
+  if (toTree) setPaneAttr("tree");
+  else if (pane === "tree") setPaneAttr("board");
   if (treeOpen === toTree) return;
   treeOpen = toTree;
   $("t-tab-board").setAttribute("aria-selected", String(!toTree));
@@ -2010,6 +2014,86 @@ function setView(toTree: boolean): void {
   if (toTree) tree.scrollToFrontier();
   else fitView(board.container ?? view.ghost);
 }
+
+// ---------- phones: the dock's views ----------
+
+/**
+ * On a phone the screen shows one view at a time between the problem and the action dock: the
+ * board, the tech tree, the queue (offers, filters, lanes, runs) or the points (standing, records).
+ * The dock's tabs choose it; on wider screens the dock is not shown and the panel stays beside the
+ * board (the view chosen only matters to the phone layout's CSS).
+ */
+type Pane = "board" | "tree" | "queue" | "points";
+const PANES: readonly Pane[] = ["board", "tree", "queue", "points"];
+let pane: Pane = "board";
+
+function setPaneAttr(p: Pane): void {
+  pane = p;
+  if (document.body.dataset.pane !== p) document.body.dataset.pane = p;
+}
+
+function setPane(p: Pane): void {
+  setPaneAttr(p);
+  setView(p === "tree");
+  if (p === "board") fitView(board.container ?? view.ghost);
+  render();
+}
+
+/** Which views have something to show yet: the dock appears once there are two. */
+function panesOpen(): Record<Pane, boolean> {
+  const any = (...ids: string[]) => ids.some((id) => !$(id).hidden);
+  return {
+    board: true,
+    tree: !$("t-views").hidden,
+    queue: any("t-queue", "t-lanes", "t-runs"),
+    points: any("t-points", "t-standing", "t-records"),
+  };
+}
+
+function renderDock(): void {
+  const open = panesOpen();
+  if (!open[pane]) setPaneAttr("board");
+  show("t-dock", PANES.filter((p) => open[p]).length > 1);
+  for (const p of PANES) {
+    const tab = $(`t-dock-${p}`);
+    show(`t-dock-${p}`, open[p]);
+    const selected = String(p === pane);
+    if (tab.getAttribute("aria-selected") !== selected) tab.setAttribute("aria-selected", selected);
+    tab.tabIndex = p === pane ? 0 : -1;
+  }
+  // the tree's count of upgrades to buy, as on the desktop tab
+  const count = $("t-tab-count");
+  show("t-dock-count", !count.hidden);
+  text("t-dock-count", count.textContent ?? "");
+  const label = count.getAttribute("aria-label");
+  if (label) $("t-dock-count").setAttribute("aria-label", label);
+}
+
+for (const p of PANES) {
+  $(`t-dock-${p}`).addEventListener("click", () => setPane(p));
+  // the tabs as a tab list: the arrow keys move between those shown
+  $(`t-dock-${p}`).addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const open = panesOpen();
+    const shown = PANES.filter((q) => open[q]);
+    const next = shown[(shown.indexOf(pane) + (e.key === "ArrowRight" ? 1 : shown.length - 1)) % shown.length];
+    setPane(next);
+    $(`t-dock-${next}`).focus();
+  });
+}
+
+// On a phone the totals are one line that scrolls sideways: it takes the keyboard's focus there, so
+// it can be scrolled without a finger too.
+const phoneLayout = matchMedia(PHONE_QUERY);
+const totalsFocus = () => ($("t-bar").tabIndex = phoneLayout.matches ? 0 : -1);
+totalsFocus();
+phoneLayout.addEventListener("change", totalsFocus);
+
+// on a phone the status line shows three lines; a tap shows all of it
+statusEl.addEventListener("click", () => {
+  statusEl.dataset.open = String(statusEl.dataset.open !== "true");
+});
 
 function onBuy(id: UpgradeId): void {
   accrueBank();

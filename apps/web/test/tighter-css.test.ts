@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { PHONE_QUERY } from "../src/tighter/shop";
 
 // The game's stylesheet is appended to block by block (shop, dealer, economy, runs). A merge that
 // drops a closing brace leaves every later rule nested inside an unclosed one, which browsers ignore
@@ -19,5 +20,9 @@ describe("Tighter stylesheet", () => {
       }
     }
     expect(depth).toBe(0);
+  });
+
+  it("lays out phones under the same media query the tech tree uses to become a list", () => {
+    expect(css).toContain(`@media ${PHONE_QUERY} {`);
   });
 });

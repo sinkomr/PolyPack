@@ -207,4 +207,24 @@ describe("Tighter tech tree", () => {
     expect(l.bands.map((b) => b.id)).toEqual(v.rows.map((r) => r.id));
     l.bands.slice(1).forEach((b, i) => expect(b.y).toBe(l.bands[i].y + l.bands[i].h));
   });
+
+  it("list a row on a phone with what is not owned first, prerequisites before what they open, owned last", async () => {
+    const { treeView, listOrder, PHONE_QUERY } = await import("../src/tighter/shop");
+    const o = owning(["trace", "click2", "click3", "auto1"]);
+    const v = treeView(o, { rp: 0, standing: 0 });
+    const clicks = listOrder(v.nodes.filter((n) => n.row === "clicks"));
+    const firstOwned = clicks.findIndex((n) => n.state === "owned");
+    expect(firstOwned).toBeGreaterThan(0);
+    expect(clicks.slice(firstOwned).every((n) => n.state === "owned")).toBe(true);
+    const open = clicks.slice(0, firstOwned);
+    open.slice(1).forEach((n, i) => expect(n.depth).toBeGreaterThanOrEqual(open[i].depth));
+    expect(open[0].id).toBe("click4");
+    // the order does not depend on the points: affording something does not move it
+    const rich = treeView(o, { rp: 1e9, standing: 0 });
+    expect(listOrder(rich.nodes.filter((n) => n.row === "clicks")).map((n) => n.id)).toEqual(clicks.map((n) => n.id));
+    // the same breakpoint as the stylesheet's phone layout
+    expect(PHONE_QUERY).toBe(
+      "(max-width: 759px), (max-height: 500px) and (orientation: landscape) and (max-width: 1023px)",
+    );
+  });
 });
