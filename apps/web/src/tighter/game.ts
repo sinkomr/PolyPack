@@ -6,7 +6,11 @@ import { PacerState, newPacer } from "./pacer";
 import { Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
-import { EvolveMethod, UpgradeId, canBuy, upgrade } from "./upgrades";
+import { EconomyState, newEconomy } from "./economy";
+import { PicksState, newPicks } from "./picks";
+import { RunPlanState, newRunPlan } from "./runplan";
+import { StandingState, newStanding } from "./standing";
+import { EvolveMethod, Owned, UpgradeId, canBuy, costOf, currencyOf, level, owning, upgrade } from "./upgrades";
 
 /**
  * The game state and the rules that change it. No DOM, no network, no workers: the page (main.ts)
@@ -137,6 +141,8 @@ export interface GameState {
   rp: number;
   rpEarned: number;
   owned: UpgradeId[];
+  /** Levels of levelled upgrades (each also listed in `owned`). */
+  levels: Partial<Record<UpgradeId, number>>;
   name: string;
   /** "Send my records to PolyPack under this name": nothing is sent before. */
   consent: boolean;
@@ -154,6 +160,11 @@ export interface GameState {
   /** Panels shown so far; a panel once shown stays. */
   reveal: string[];
   log: LogLine[];
+  /** Standing (resets), records as an economy, the dealer's picks, how runs are planned. */
+  standing: StandingState;
+  economy: EconomyState;
+  picks: PicksState;
+  runplan: RunPlanState;
 }
 
 export const TRACE_LIMIT = 400;
@@ -169,6 +180,7 @@ export function newGame(now: number, seed: number): GameState {
     rp: 0,
     rpEarned: 0,
     owned: [],
+    levels: {},
     name: "",
     consent: false,
     settings: { auto: false, method: "mc_compress", background: false, battery: false },
@@ -190,6 +202,10 @@ export function newGame(now: number, seed: number): GameState {
     past: [],
     reveal: [],
     log: [],
+    standing: newStanding(now),
+    economy: newEconomy(),
+    picks: newPicks(),
+    runplan: newRunPlan(),
   };
 }
 
@@ -227,7 +243,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
   };
 }
 
-export const ownedSet = (s: GameState): Set<UpgradeId> => new Set(s.owned);
+export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels);
 
 export function log(s: GameState, now: number, text: string): void {
   s.log.push({ t: now, text });
@@ -623,11 +639,16 @@ export function accrue(s: GameState, now: number, perSecond: number, cap: number
 
 // ---------- upgrades ----------
 
+/** Buys an upgrade, or its next level, with record points or standing. */
 export function buy(s: GameState, id: UpgradeId): boolean {
-  const owned = ownedSet(s);
-  if (!canBuy(owned, s.rp, id).ok) return false;
-  s.rp = Math.max(0, s.rp - upgrade(id).cost);
-  s.owned.push(id);
+  const o = ownedSet(s);
+  if (!canBuy(o, { rp: s.rp, standing: s.standing.points }, id).ok) return false;
+  const cost = costOf(o, id)!;
+  const u = upgrade(id);
+  if (currencyOf(u) === "rp") s.rp = Math.max(0, s.rp - cost);
+  else s.standing.points = Math.max(0, s.standing.points - cost);
+  if (!s.owned.includes(id)) s.owned.push(id);
+  if (u.levels) s.levels[id] = level(o, id) + 1;
   return true;
 }
 

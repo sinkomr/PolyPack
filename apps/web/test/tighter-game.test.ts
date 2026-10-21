@@ -19,6 +19,7 @@ import {
   hasUnsent,
   markSending,
   newGame,
+  ownedSet,
   newProblem,
   openedRun,
   payAll,
@@ -34,6 +35,7 @@ import { autoHold, autoTarget } from "../src/tighter/scheduler";
 import { CLIENT_TAG, classifyAnswer, shouldSubmit, submissionBody } from "../src/tighter/submission";
 import {
   COMPACT_EVALS,
+  ROWS,
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
@@ -42,7 +44,12 @@ import {
   awayHours,
   bankCap,
   canBuy,
+  cardState,
+  costOf,
   evalsPerClick,
+  isRevealed,
+  level,
+  owning,
   laneCount,
   methodParams,
   methods,
@@ -117,11 +124,56 @@ describe("Tighter upgrades", () => {
       expect(u.cost).toBeGreaterThan(0);
     });
     const owned = new Set<UpgradeId>();
+    const levels: Partial<Record<UpgradeId, number>> = {};
+    const rich = { rp: 1e300, standing: 1e300 };
     for (const u of UPGRADES) {
-      expect(canBuy(owned, 1e9, u.id)).toEqual({ ok: true });
+      expect(canBuy(owning(owned, levels), rich, u.id)).toEqual({ ok: true });
       owned.add(u.id);
+      // a levelled upgrade is bought to its last level
+      if (u.levels) levels[u.id] = u.levels.max;
     }
-    expect(available(owned)).toEqual([]);
+    expect(available(owning(owned, levels))).toEqual([]);
+  });
+
+  it("show every upgrade, the mysteries as ?????? until their prerequisites are owned", () => {
+    const funds = { rp: 0, standing: 0 };
+    const none = owning([]);
+    expect(cardState(none, funds, "trace")).toBe("dear");
+    expect(cardState(none, funds, "click2")).toBe("locked");
+    expect(cardState(none, funds, "harden")).toBe("mystery");
+    expect(isRevealed(owning(["lattice"]), "harden")).toBe(true);
+    expect(cardState(owning(["lattice"]), { rp: 1e6, standing: 0 }, "harden")).toBe("buyable");
+    // the standing row is paid in standing and hidden until Standing is owned
+    expect(UPGRADES.filter((u) => u.row === "standing").every((u) => u.currency === "standing" && u.mystery)).toBe(
+      true,
+    );
+    expect(cardState(owning(["standing"]), { rp: 1e9, standing: 0 }, "head1")).toBe("dear");
+    expect(cardState(owning(["standing"]), { rp: 0, standing: 1 }, "head1")).toBe("buyable");
+    expect(ROWS.map((r) => r.id)).toEqual(expect.arrayContaining([...new Set(UPGRADES.map((u) => u.row))]));
+  });
+
+  it("level up again and again at a growing price; Quick study makes record-point prices cheaper", () => {
+    const s = newGame(T0, 1);
+    s.owned = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"];
+    expect(costOf(ownedSet(s), "clickx")).toBe(2000);
+    s.rp = 2000 + 2500;
+    expect(buy(s, "clickx")).toBe(true);
+    expect(level(ownedSet(s), "clickx")).toBe(1);
+    expect(costOf(ownedSet(s), "clickx")).toBe(2500);
+    expect(buy(s, "clickx")).toBe(true);
+    expect(s.rp).toBe(0);
+    expect(evalsPerClick(ownedSet(s))).toBe(12);
+    // standing buys standing upgrades, and Quick study lowers record-point prices by a tenth a level
+    s.owned.push("standing");
+    s.standing.points = 2;
+    expect(buy(s, "study")).toBe(true);
+    expect(s.standing.points).toBe(0);
+    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(2000 * 1.25 ** 2 * 0.9));
+    expect(costOf(ownedSet(s), "study")).toBe(Math.round(2 * 1.6));
+    expect(laneCount(owning(["lanes2"]), 16)).toBe(2);
+    expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 5 }), 16)).toBe(7);
+    expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 30 }), 8)).toBe(7);
+    expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 3 }), 2)).toBe(2);
   });
 
   it("climb slowly: each rung of a ladder, and each new method, costs more than the last", () => {
@@ -140,8 +192,9 @@ describe("Tighter upgrades", () => {
     // methods come well after the click ladder and a faster auto-eval
     expect(upgrade("basin").requires).toEqual(expect.arrayContaining(["click10", "auto4"]));
     expect(cost("basin")).toBeGreaterThan(cost("click10"));
-    // auto-eval comes after a few rungs of the click ladder
-    expect(upgrade("auto1").requires).toEqual(["click4"]);
+    // auto-eval comes early, right after 2 evaluations per click, and cheap
+    expect(upgrade("auto1").requires).toEqual(["click2"]);
+    expect(cost("auto1")).toBeLessThan(cost("click3"));
   });
 
   it("are gated by their prerequisites and by points", () => {
@@ -153,11 +206,11 @@ describe("Tighter upgrades", () => {
     owned.add("trace");
     expect(canBuy(owned, 1e6, "trace")).toEqual({ ok: false, reason: "owned" });
     expect(available(owned).map((u) => u.id)).toEqual(["click2"]);
-    for (const id of ["click2", "click3"] as UpgradeId[]) owned.add(id);
     expect(canBuy(owned, 1e6, "auto1")).toEqual({ ok: false, reason: "locked" });
-    owned.add("click4");
-    expect(available(owned).map((u) => u.id)).toEqual(["auto1", "click5"]);
-    // Auto-advance needs both Reach: loose records and the queue
+    owned.add("click2");
+    expect(available(owned).map((u) => u.id)).toEqual(["auto1", "click3"]);
+    for (const id of ["click3", "click4"] as UpgradeId[]) owned.add(id);
+    // Auto-advance needs both Reach: site records and the queue
     for (const id of [
       "auto1",
       "auto2",

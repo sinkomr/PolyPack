@@ -73,6 +73,15 @@ function played(): GameState {
   );
   markSending(p, 6.4 + 1e-13, "Ada", p.leader, T0 + 3500);
   buy(s, "trace");
+  // a levelled upgrade at level 2, standing, a record remembered, an arm of each bandit, a retake
+  s.owned.push("click10", "clickx", "standing");
+  s.levels.clickx = 2;
+  s.standing = { ...s.standing, points: 3, total: 5, resets: 1, cycleEarned: 1234.5, rule: "circles" };
+  s.economy.recorded.push("21/21/40");
+  s.economy.rentPaid = 12.5;
+  s.picks.bandit.open = { n: 3, mean: 0.25, m2: 0.01 };
+  s.picks.retake.push("21/21/40");
+  s.runplan.bandit["open|mc_compress"] = { n: 1, mean: 2, m2: 0 };
   s.pacer = recordSend(s.pacer, p.key, T0 + 3500);
   s.bank = 12.75;
   s.bankAt = T0 + 4000;
@@ -120,6 +129,20 @@ describe("Tighter saves", () => {
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, evalsAt: 50, seed: 1234 });
+    expect(r.state.levels).toEqual({ clickx: 2 });
+  });
+
+  it("keep levels only for owned levelled upgrades, within their range", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    raw.levels = { clickx: 5000, trace: 3, lanesx: 2, nope: 1, study: 0 };
+    const r = readSave(raw, T0);
+    expect(r.ok && r.state.levels).toEqual({ clickx: 990 });
+    raw.standing = "x";
+    raw.economy = { recorded: ["1/2/3", "bad", 4], rentPaid: -1 };
+    const t = readSave(raw, T0);
+    expect(t.ok && t.state.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
+    expect(t.ok && t.state.economy).toEqual({ recorded: ["1/2/3"], rentPaid: 0 });
   });
 
   it("round-trip through an export string", async () => {
@@ -177,7 +200,7 @@ describe("Tighter saves", () => {
     delete raw.bank;
     raw.dealer.tokens = "many";
     const s = normalize(raw, T0);
-    expect(s.owned).toEqual(["trace"]);
+    expect(s.owned).toEqual(["trace", "click10", "clickx", "standing"]);
     expect(s.rp).toBe(0);
     // no consent without a name
     expect(s.consent).toBe(false);

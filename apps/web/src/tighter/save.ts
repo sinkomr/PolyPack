@@ -18,7 +18,11 @@ import { sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
-import { EvolveMethod, isUpgradeId, methods } from "./upgrades";
+import { normalizeEconomy } from "./economy";
+import { normalizePicks } from "./picks";
+import { normalizeRunPlan } from "./runplan";
+import { normalizeStanding } from "./standing";
+import { EvolveMethod, UpgradeId, isUpgradeId, methods, owning, upgrade } from "./upgrades";
 
 /**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
@@ -263,8 +267,17 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
+  // levels of levelled upgrades that are owned, within their range
+  const levels: Partial<Record<UpgradeId, number>> = {};
+  if (isObj(save.levels))
+    for (const [id, l] of Object.entries(save.levels)) {
+      const u = isUpgradeId(id) && owned.includes(id) ? upgrade(id) : null;
+      if (u?.levels && Number.isSafeInteger(l) && (l as number) >= 1)
+        levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
+    }
   const evaluations = int(stats.evaluations, 0);
-  const method = methods(new Set(owned)).find((m) => m === settings.method) ?? "mc_compress";
+  const allMethods = methods(owning(owned, levels));
+  const method = allMethods.find((m) => m === settings.method) ?? "mc_compress";
   const focus =
     typeof save.focus === "string" && queue.some((p) => p.key === save.focus) ? save.focus : (queue[0]?.key ?? null);
   return {
@@ -273,6 +286,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     rp: num(save.rp, 0, 0),
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
+    levels,
     // the name as the server stores it; no consent without one
     name: sanitizeName(str(save.name, "", 400)),
     consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
@@ -309,6 +323,10 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
           .slice(-LOG_LIMIT)
           .map((l) => ({ t: l.t, text: l.text.slice(0, 300) }))
       : [],
+    standing: normalizeStanding(save.standing, now),
+    economy: normalizeEconomy(save.economy),
+    picks: normalizePicks(save.picks),
+    runplan: normalizeRunPlan(save.runplan, ["mc_compress", ...allMethods]),
   };
 }
 
