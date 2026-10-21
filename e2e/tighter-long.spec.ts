@@ -1,0 +1,445 @@
+import AxeBuilder from "@axe-core/playwright";
+import { expect, Page, test } from "@playwright/test";
+
+// Tighter's long game against the local end-to-end stack (an in-memory server on 8788 behind the
+// Vite dev server on 5174): the whole tree in the shop, the earlier auto-eval, the dealer's offers
+// and filters, method match and pipelines, rent, collections and a reset with a rule, and a save
+// from the per-click build. Upgrades the test does not play for are given through the page's
+// handle (development builds), as the other specs give points.
+
+interface ProblemView {
+  key: string;
+  N: number;
+  M: number;
+  P: number;
+  phase: string;
+  best: number | null;
+  ourId: number | null;
+  runs: number;
+  endedRuns: number;
+}
+const focused = (page: Page): Promise<ProblemView> =>
+  page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    return structuredClone(s.queue.find((p: { key: string }) => p.key === s.focus));
+  });
+const stats = (page: Page) => page.evaluate(() => structuredClone((window as any).tighter.state.stats));
+const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
+const game = <T>(page: Page, f: (s: any) => T): Promise<T> =>
+  page.evaluate(`(${f.toString()})(window.tighter.state)`) as Promise<T>;
+
+async function fresh(page: Page, seed: number): Promise<void> {
+  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.evaluate(() => localStorage.clear());
+  await page.goto(`/tighter.html?seed=${seed}`);
+  await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
+}
+
+async function firstRecord(page: Page): Promise<void> {
+  await page.click("#t-loadall");
+  await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
+  await page.click("#t-compact");
+  await expect
+    .poll(async () => (await focused(page)).phase === "ready" && (await idle(page)), { timeout: 60_000 })
+    .toBe(true);
+}
+
+async function click(page: Page): Promise<void> {
+  await expect(page.locator("#t-evolve")).toBeEnabled({ timeout: 60_000 });
+  const clicks = (await stats(page)).clicks;
+  await page.click("#t-evolve");
+  await expect
+    .poll(async () => (await stats(page)).clicks > clicks && (await idle(page)), { timeout: 60_000 })
+    .toBe(true);
+}
+
+async function consent(page: Page, name: string): Promise<void> {
+  await page.fill("#t-name", name);
+  await page.check("#t-agree");
+  await page.click("#t-consent-save");
+}
+
+/** Points for the tests, through the page's handle. */
+const grant = (page: Page, points: number) =>
+  page.evaluate((n) => {
+    const s = (window as any).tighter.state;
+    s.rp += n;
+    s.rpEarned += n;
+  }, points);
+
+/** Upgrades the test does not play for, owned at once. */
+const give = (page: Page, ids: string[]) =>
+  page.evaluate((list) => {
+    const s = (window as any).tighter.state;
+    for (const id of list) if (!s.owned.includes(id)) s.owned.push(id);
+  }, ids);
+
+async function buy(page: Page, id: string): Promise<void> {
+  const btn = page.locator(`.t-card[data-id="${id}"] button`);
+  await expect(btn).toBeEnabled({ timeout: 10_000 });
+  await btn.click();
+  await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
+}
+
+const noOverflow = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1);
+
+const axe = async (page: Page) =>
+  (await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze()).violations.map(
+    (v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 100)}`,
+  );
+
+const CLICK_LADDER = [
+  "trace",
+  "click2",
+  "click3",
+  "click4",
+  "click5",
+  "click6",
+  "click7",
+  "click8",
+  "click9",
+  "click10",
+];
+
+test("long game: the whole tree in the shop, mysteries until their prerequisites, levels, standing last", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 21);
+  await grant(page, 5);
+  const shop = page.locator("#t-upgrades");
+  await expect(shop).toBeVisible();
+  // every row but Standing from the start, and the summary counts the mysteries
+  const rows = await page
+    .locator("#t-cards [data-row]")
+    .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.row));
+  expect(rows).toEqual(["clicks", "auto", "seeds", "queue", "methods", "runs", "problems", "dealer", "records"]);
+  await expect(page.locator("#t-shop-summary")).toHaveText(/^0 of \d+ upgrades owned · \d+ still \?\?\?\?\?\?$/);
+  // the first card is buyable at once; the rest show as chips, the fancier ones as ??????
+  await expect(page.locator('.t-card[data-id="trace"] button')).toBeEnabled();
+  const harden = page.locator('.t-chip[data-id="harden"]');
+  await expect(harden).toHaveText("??????");
+  await harden.click();
+  await expect(page.locator('[data-row="methods"] .t-chip-detail')).toHaveText("?????? · needs Method: seed.");
+  await expect(page.locator('.t-chip[data-id="click3"]')).toContainText("3 a click");
+  expect(await axe(page)).toEqual([]);
+
+  // a mystery revealed: Method: seed bought, Method: harden shows as itself
+  const before = CLICK_LADDER.concat(["auto1", "auto2", "auto3", "auto4", "basin", "shrink", "penalty"]);
+  await give(page, before);
+  await grant(page, 21_000);
+  await buy(page, "lattice");
+  await expect(page.locator('.t-card[data-id="harden"] h3')).toHaveText("Method: harden");
+  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("30,000 RP");
+
+  // a levelled upgrade bought twice: one more evaluation per click a level, the price growing
+  await grant(page, 4500);
+  await buy(page, "clickx");
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next level 2,500 RP");
+  await expect(page.locator('.t-card[data-id="clickx"] .t-level')).toHaveText("Level 1");
+  const rp = await game(page, (s) => s.rp);
+  await page.click('.t-card[data-id="clickx"] button');
+  await expect.poll(() => game(page, (s) => s.levels.clickx)).toBe(2);
+  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 2500, 6);
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next level 3,125 RP");
+  await expect(page.locator("#t-evolve, #t-compact").first()).toBeAttached();
+
+  // Standing: its row appears once Standing is owned, priced in standing
+  expect(await page.locator('[data-row="standing"]').count()).toBe(0);
+  await give(page, ["standing"]);
+  await expect(page.locator('[data-row="standing"]')).toBeVisible();
+  await expect(page.locator('.t-card[data-id="head1"]')).toContainText("1 standing");
+  await expect(page.locator('.t-card[data-id="head1"] button')).toBeDisabled();
+  await page.evaluate(() => ((window as any).tighter.state.standing.points = 1));
+  await expect(page.locator('.t-card[data-id="head1"] button')).toBeEnabled();
+  await page.click('.t-card[data-id="head1"] button');
+  await expect.poll(() => game(page, (s) => [s.owned.includes("head1"), s.standing.points])).toEqual([true, 0]);
+
+  // at phone width: no sideways scroll, and still clean for assistive technology with a chip open
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator('.t-chip[data-state="mystery"]').first().click();
+  await page.waitForTimeout(300);
+  expect(await noOverflow(page)).toBe(true);
+  await shop.screenshot({ path: test.info().outputPath("shop-390.png") });
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP", async ({ page }) => {
+  test.setTimeout(90_000);
+  await fresh(page, 22);
+  await firstRecord(page);
+  await expect(page.locator("#t-auto")).toBeHidden();
+  await grant(page, 5);
+  await buy(page, "trace");
+  await grant(page, 150);
+  await buy(page, "click2");
+  // the next card along is Auto-eval at 100 RP, before 3 evaluations per click (320)
+  const card = page.locator('.t-card[data-id="auto1"]');
+  await expect(card).toContainText("100 RP");
+  await expect(card.locator("button")).toBeDisabled();
+  await grant(page, 100);
+  await buy(page, "auto1");
+  await expect(page.locator("#t-auto")).toBeVisible();
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
+  await expect(page.locator("#t-lanes")).toBeVisible();
+  await expect(page.locator("#t-bank-note")).toContainText("at most 720 evaluations (1 h");
+  expect(await game(page, (s) => s.rp)).toBeCloseTo(0, 6);
+});
+
+test("long game: offers to pick from, best first; filters saved and applied; deals ranked", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 23);
+  const first = await focused(page);
+  await grant(page, 1);
+  // the queue of 3 and the dealer's upgrades, with three deals earned
+  await give(page, ["queue3", "rank2", "pick3", "filters"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 3));
+  const offers = page.locator("#t-offer-list > li");
+  await expect(page.locator("#t-offers")).toBeVisible({ timeout: 30_000 });
+  await expect(offers).toHaveCount(3, { timeout: 30_000 });
+  await expect(offers.first()).toContainText("Best offer");
+  // offers are ranked: the stored scores fall from the first to the last
+  const scores = await game(page, (s) => s.picks.offers.map((x: { score: number }) => x.score));
+  expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+  // taking one deals it into the queue and focuses it
+  const taken = await game(page, (s) => `${s.picks.offers[1].N}/${s.picks.offers[1].M}/${s.picks.offers[1].P}`);
+  await offers.nth(1).locator("button").click();
+  await expect.poll(() => game(page, (s) => s.queue.map((p: { key: string }) => p.key))).toEqual([first.key, taken]);
+  await expect.poll(() => game(page, (s) => s.focus)).toBe(taken);
+  await expect(page.locator("#t-log")).toContainText("Dealt:");
+  expect(await game(page, (s) => Object.keys(s.picks.dealt))).toContain(taken);
+
+  // filters: only 100 to 150 pieces; offers outside go, and the new ones fit
+  await page.locator("#t-filters summary").click();
+  await page.fill("#t-f-minp", "100");
+  await page.fill("#t-f-maxp", "150");
+  await page.locator('#t-filter-form button[type="submit"]').click();
+  await expect(page.locator("#t-filter-note")).toContainText("Filters saved");
+  expect(await game(page, (s) => s.picks.filters)).toMatchObject({ minP: 100, maxP: 150 });
+  await expect(offers).toHaveCount(3, { timeout: 30_000 });
+  const ps = await game(page, (s) => s.picks.offers.map((x: { P: number }) => x.P));
+  for (const P of ps) expect(P >= 100 && P <= 150).toBe(true);
+  // a bad range is refused with a reason, and the saved filters stay
+  await page.fill("#t-f-minp", "200");
+  await page.locator('#t-filter-form button[type="submit"]').click();
+  await expect(page.locator("#t-filter-note")).toContainText("a range from 1 to 500");
+  expect(await game(page, (s) => s.picks.filters)).toMatchObject({ minP: 100, maxP: 150 });
+  // the filters and offers survive a reload
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await expect(offers).toHaveCount(3, { timeout: 30_000 });
+  expect(await game(page, (s) => s.picks.filters)).toMatchObject({ minP: 100, maxP: 150 });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  expect(await noOverflow(page)).toBe(true);
+  await page.locator("#t-queue").screenshot({ path: test.info().outputPath("queue-390.png") });
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("long game: Auto picks each run's method; a pipeline moves to its next method when a run ends", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 24);
+  await firstRecord(page);
+  // method match: an Auto option in the method select, and the Runs panel says what it learned
+  await give(page, [...CLICK_LADDER, "auto1", "auto2", "auto3", "auto4", "basin", "shrink", "learning", "methodMatch"]);
+  const select = page.locator("#t-method");
+  await expect(select.locator('option[value="auto"]')).toHaveText("Auto (method match)");
+  await select.selectOption("auto");
+  await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(true);
+  await expect(page.locator("#t-runs")).toBeVisible();
+  await expect(page.locator("#t-runs")).toContainText("Auto is on");
+  await click(page);
+  const method = await page.locator("#t-runinfo").textContent();
+  expect(method).toMatch(/^(mc_compress|basin_hopping|shrink_repair) /);
+  // back to a chosen method
+  await select.selectOption("mc_compress");
+  await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
+
+  // a pipeline of two stages: lattice starts (a run of about 45 evaluations), then mc_compress
+  await give(page, ["lattice", "seeds", "seeds2", "seeds4", "standing", "pipeline"]);
+  await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
+  const add = async (m: string) => {
+    await page.selectOption("#t-pipeline-method", m);
+    await page.getByRole("button", { name: "Add the chosen method as the pipeline's last stage" }).click();
+  };
+  await add("seed");
+  await add("mc_compress");
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["seed", "mc_compress"]);
+  await expect(page.locator(".t-pipeline li")).toHaveCount(2);
+  const ended0 = (await focused(page)).endedRuns;
+  await click(page);
+  await expect(page.locator("#t-runinfo")).toContainText("seed ");
+  for (let i = 0; i < 30 && (await focused(page)).endedRuns === ended0; i++) await click(page);
+  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
+  await expect(page.locator("#t-log")).toContainText("stopped improving");
+  await click(page);
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress ");
+  // a stage can be moved and removed
+  await page.getByRole("button", { name: "Move stage 2, mc_compress, up" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress", "seed"]);
+  await page.getByRole("button", { name: "Remove stage 2, seed" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress"]);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  expect(await noOverflow(page)).toBe(true);
+  await page.locator("#t-runs").screenshot({ path: test.info().outputPath("runs-390.png") });
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("long game: records counted, rent paid on a check, a reset under a rule that holds through a reload", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 25);
+  await firstRecord(page);
+  await consent(page, "E2E Long");
+  await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
+  const p = await focused(page);
+  // a confirmed record is remembered for collections, with its tier
+  await expect.poll(() => game(page, (s) => s.economy.recorded)).toContain(p.key);
+  await give(page, ["rent", "collections"]);
+  await expect(page.locator("#t-records")).toBeVisible();
+  await expect(page.locator("#t-rc-sets")).toContainText("First records by tier: open");
+  await expect(page.locator("#t-rc-stats")).toContainText("+5 % on all points");
+
+  // rent: the record's rent starts, and an hour later a check that finds it still ours pays it
+  await expect.poll(() => game(page, (s) => s.economy.checks?.[s.focus] !== undefined), { timeout: 15_000 }).toBe(true);
+  const rate = await game(page, (s) => s.economy.base[s.focus]);
+  expect(rate).toBeGreaterThan(0);
+  await page.evaluate(() => (window as any).tighter.skipAhead(3_600_000));
+  await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(0);
+  const paid = await game(page, (s) => s.economy.rentPaid);
+  // 1 % of what the record earned, an hour, times the collections bonus (+5 %)
+  expect(paid).toBeCloseTo(0.01 * rate * 1.05, 3);
+  await expect(page.locator("#t-rc-note")).toContainText("Last: +");
+
+  // a reset for standing, the next cycle under One method, with Head start I
+  await give(page, ["standing", "rules", "head1"]);
+  await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.standing.cycleEarned = 300_000;
+    s.rp += 300_000;
+    s.rpEarned += 300_000;
+  });
+  await expect(page.locator("#t-standing")).toBeVisible();
+  await expect(page.locator("#t-st-preview")).toContainText("Reset now for 1 standing");
+  await page.selectOption("#t-st-rule", "method");
+  await expect(page.locator("#t-st-rule-note")).toContainText("One method");
+  await page.click("#t-st-reset");
+  await expect(page.locator("#t-st-confirm")).toBeVisible();
+  await expect(page.locator("#t-st-confirm-text")).toContainText("Kept: 1 record held and its rent");
+  await page.click("#t-st-yes");
+  await expect.poll(() => game(page, (s) => s.standing.resets)).toBe(1);
+  const after = await game(page, (s) => ({
+    rp: s.rp,
+    owned: s.owned,
+    standing: s.standing,
+    recorded: s.economy.recorded,
+    ourId: s.queue.find((q: { key: string }) => q.key === s.focus)?.ourId,
+  }));
+  expect(after.rp).toBe(0);
+  expect(after.standing).toMatchObject({ points: 1, total: 1, rule: "method", cycleEarned: 0 });
+  // kept: Standing and its row, rent and collections; granted: Head start I's upgrades
+  expect(after.owned).toEqual(
+    expect.arrayContaining(["standing", "rules", "head1", "rent", "collections", "trace", "click5", "auto1"]),
+  );
+  expect(after.owned).not.toContain("click6");
+  expect(after.recorded).toContain(p.key);
+  expect(after.ourId).toBe(p.ourId);
+  await expect(page.locator("#t-bar-standing")).toHaveText("1 · ×1.1");
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×5");
+  // the rule holds: with Basin hopping owned, the select still offers only mc_compress
+  await give(page, ["basin"]);
+  await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
+  await click(page);
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress ");
+
+  // all of it survives a reload
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await expect(page.locator("#t-standing")).toBeVisible();
+  expect(await game(page, (s) => [s.standing.rule, s.standing.resets, s.standing.points])).toEqual(["method", 1, 1]);
+  await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
+  await expect(page.locator("#t-st-history-box")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  expect(await noOverflow(page)).toBe(true);
+  await page.locator("#t-standing").screenshot({ path: test.info().outputPath("standing-390.png") });
+  await page.locator("#t-records").screenshot({ path: test.info().outputPath("records-390.png") });
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("long game: a save from the per-click build (no new fields) loads and plays", async ({ page }) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 26);
+  await firstRecord(page);
+  await consent(page, "E2E Old Save");
+  await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
+  const p = await focused(page);
+  await page.waitForTimeout(1500);
+  // the save as the live per-click build writes it: version 2, none of the long game's fields, its own
+  // upgrades, auto-eval on and an hour away
+  const old = await page.evaluate(() => {
+    const save = JSON.parse(localStorage.getItem("tighter.save")!);
+    for (const k of ["levels", "standing", "economy", "picks", "runplan"]) delete save[k];
+    save.owned = ["trace", "click2", "click3", "click4", "auto1", "seeds"];
+    save.settings.auto = true;
+    save.bankAt = Date.now() - 3_600_000;
+    save.rp = 123.5;
+    return JSON.stringify(save);
+  });
+  // leaving saves the page's own state (pagehide): the old save goes in before the game's script next runs
+  await page.goto("about:blank");
+  await page.addInitScript((text) => {
+    if (!sessionStorage.getItem("old-save-put")) {
+      localStorage.setItem("tighter.save", text);
+      sessionStorage.setItem("old-save-put", "1");
+    }
+  }, old);
+  await page.goto("/tighter.html");
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×4", { timeout: 30_000 });
+  const s = await game(page, (st) => ({
+    version: st.version,
+    rp: st.rp,
+    owned: st.owned,
+    levels: st.levels,
+    standing: st.standing,
+    recorded: st.economy.recorded,
+    picks: st.picks.offers.length,
+    pipeline: st.runplan.pipeline,
+    bank: st.bank,
+  }));
+  expect(s).toMatchObject({ version: 2, rp: 123.5, levels: {}, picks: 0, pipeline: [] });
+  expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
+  expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1", "seeds"]);
+  // the record it held is counted for collections, and auto-eval banked the hour it was away
+  expect(s.recorded).toContain(p.key);
+  expect(s.bank).toBeGreaterThan(700);
+  await expect(page.locator("#status")).toContainText("While you were away, auto-eval earned");
+  await expect(page.locator("#t-auto")).toBeVisible();
+  await expect(page.locator("#t-upgrades")).toBeVisible();
+  expect(await page.locator('[data-row="standing"]').count()).toBe(0);
+  await expect(page.locator("#t-standing")).toBeHidden();
+  const e0 = (await stats(page)).evaluations;
+  await click(page);
+  // after a reload the click opens a run with the next seed: its start's scoring, then 4 evaluations
+  expect((await stats(page)).evaluations).toBe(e0 + 5);
+  expect(errors).toEqual([]);
+});

@@ -402,6 +402,7 @@
   background: var(--panel);
   font-size: 12.5px;
   overflow-wrap: anywhere;
+}
 
 /* ---- dealer ---- */
 .t-offers h3 {
@@ -480,6 +481,8 @@
   color: var(--muted);
 }
 .t-f-tiers .t-check {
+  font-size: 13px;
+}
 
 /* ---- economy ---- */
 .t-st-marks,
