@@ -68,6 +68,7 @@ import {
 import { FLOOR, gapOf, show6 } from "./points";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import { ShopRenderer, shopView } from "./shop";
 import { RunRecord, classifyAnswer, shouldSubmit, submissionBody } from "./submission";
 import { sanitizeName } from "./names";
 import {
@@ -75,13 +76,15 @@ import {
   EvolveMethod,
   RUN_BUDGET,
   UpgradeId,
+  Owned,
   autoPerSecond,
-  available,
   awayHours,
   bankCap,
-  canBuy,
+  cores,
   evalsPerClick,
   laneCount,
+  lanesMaxed,
+  level,
   methodParams,
   methods,
   queueSize,
@@ -112,6 +115,8 @@ const fmtCompute = (ms: number) =>
 const fmtChange = (before: number, after: number) =>
   `${after < before ? "−" : "+"}${(Math.abs(1 - after / before) * 100).toFixed(4)} %`;
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
+/** Hours as the bank note says them: "4 h", "3 days", "a week". */
+const fmtHours = (h: number) => (h < 48 ? `${h} h` : h === 168 ? "a week" : `${h / 24} days`);
 /** Auto-eval's pace: "1 evaluation every 5 s", "2 evaluations a second". */
 const fmtRate = (r: number) => (r < 1 ? `1 evaluation every ${Math.round(1 / r)} s` : `${evals(r)} a second`);
 
@@ -165,7 +170,9 @@ let state = initialState();
  */
 function welcomeBack(s: GameState): number {
   const o = ownedSet(s);
-  const earned = s.settings.auto ? accrue(s, now(), (autoPerSecond(o) ?? 0) * laneCount(o), bankCap(o)) : 0;
+  const earned = s.settings.auto
+    ? accrue(s, now(), (autoPerSecond(o) ?? 0) * laneCount(o), bankCap(o, laneCount(o)))
+    : 0;
   s.bankAt = now();
   s.settings.auto = false;
   return earned;
@@ -322,8 +329,21 @@ interface LaneView {
 const MAX_QUEUED_CLICKS = 20;
 
 const lanes: LaneView[] = [];
+/**
+ * As many lanes as the player owns (up to the CPU's cores less one). A lane no longer owned (after a
+ * reset) goes once it is idle: its run closes, its worker stops, and auto-eval's jobs it held go
+ * back to the bank.
+ */
 function ensureLanes(): void {
-  while (lanes.length < laneCount(owned())) {
+  const want = laneCount(owned());
+  while (lanes.length > want) {
+    const lv = lanes[lanes.length - 1];
+    if (lv.pumping || lv.current) break;
+    for (const j of lv.jobs) if (!j.click) state.bank += j.evals;
+    lanes.pop();
+    lv.lane.terminate();
+  }
+  while (lanes.length < want) {
     const lv: LaneView = {
       lane: new Lane(lanes.length),
       run: null,
@@ -625,7 +645,8 @@ function holdReason(): "hidden" | "battery" | null {
   return autoHold({
     hidden: document.hidden,
     onBattery,
-    background: state.settings.background,
+    // running while hidden needs Continuous; before it a hidden tab banks, whatever the save says
+    background: state.settings.background && owned().has("continuous"),
     battery: state.settings.battery,
   });
 }
@@ -661,13 +682,13 @@ if (getBattery) {
 /** Brings auto-eval's bank up to now. */
 function accrueBank(): void {
   const o = owned();
-  accrue(state, now(), state.settings.auto ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, bankCap(o));
+  accrue(state, now(), state.settings.auto ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, bankCap(o, laneCount(o)));
 }
 
 /**
  * Auto-eval's next click for this lane, from its bank, when it may run one. It clicks as the player
  * does, with as many evaluations as a click of theirs, so an evaluation pays the same either way: at
- * one evaluation every 5 s and 4 a click, that is one click every 20 s.
+ * one evaluation every 5 s and 2 a click (where Auto-eval comes), that is one click every 10 s.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
@@ -1050,7 +1071,7 @@ function render(): void {
   if (s.consent || s.stats.firstRecords || s.queue.some((q) => q.phase === "ready" && q.tier === "open"))
     reveal(s, "consent", "log");
   if (s.rpEarned > 0) reveal(s, "points", "upgrades");
-  if (o.has("queue3")) reveal(s, "queue");
+  if (queueSize(o) > 1) reveal(s, "queue");
   if (o.has("auto1") || o.has("lanes2")) reveal(s, "lanes");
 
   // totals
@@ -1089,7 +1110,8 @@ function render(): void {
   renderQueue(o);
   renderLanes(o);
   renderLog();
-  $<HTMLInputElement>("t-bg").checked = s.settings.background;
+  show("t-bg-box", o.has("continuous"));
+  $<HTMLInputElement>("t-bg").checked = s.settings.background && o.has("continuous");
   $<HTMLInputElement>("t-battery").checked = s.settings.battery;
 }
 
@@ -1116,7 +1138,7 @@ function renderProblem(p: ProblemState | undefined): void {
   else note = "No record exists. Any valid packing is a new record.";
   text("t-problem-note", note);
   // before the queue, one problem at a time: the next one is earned by evaluations (or this one is spent)
-  const single = !owned().has("queue3");
+  const single = queueSize(owned()) <= 1;
   show("t-next", single && evolvable(p));
   if (single && evolvable(p)) {
     const left = evalsToDeal();
@@ -1284,59 +1306,23 @@ function renderPoints(): void {
   );
 }
 
-let cardsSig = "";
-function renderUpgrades(o: ReadonlySet<UpgradeId>): void {
+const shop = new ShopRenderer($("t-cards"), $("t-shop-summary"), (id) => onBuy(id));
+function renderUpgrades(o: Owned): void {
   show("t-upgrades", revealed(state, "upgrades"));
-  const list = available(o);
-  const box = $("t-cards");
-  const sig = list.map((u) => u.id).join(",");
-  if (sig !== cardsSig) {
-    cardsSig = sig;
-    if (!list.length) {
-      const p = document.createElement("p");
-      p.className = "note";
-      p.textContent = "Every upgrade of this version is yours. The rest of the tree comes later.";
-      box.replaceChildren(p);
-      return;
-    }
-    box.replaceChildren(
-      ...list.map((u) => {
-        const card = document.createElement("div");
-        card.className = "t-card";
-        card.dataset.id = u.id;
-        const h = document.createElement("h3");
-        h.textContent = `${u.name} · ${fmtInt(u.cost)} RP`;
-        const p = document.createElement("p");
-        p.textContent = `${u.effect[0].toUpperCase()}${u.effect.slice(1)}. Real: ${u.real}.`;
-        const row = document.createElement("div");
-        row.className = "t-card-row";
-        const bar = document.createElement("progress");
-        bar.max = u.cost;
-        bar.setAttribute("aria-label", `${u.name}: points toward its cost`);
-        const btn = document.createElement("button");
-        btn.textContent = "Buy";
-        btn.setAttribute("aria-label", `Buy ${u.name} for ${u.cost} record points`);
-        btn.addEventListener("click", () => onBuy(u.id));
-        row.append(bar, btn);
-        card.append(h, p, row);
-        return card;
-      }),
-    );
-  }
-  for (const card of Array.from(box.children) as HTMLElement[]) {
-    const id = card.dataset.id as UpgradeId | undefined;
-    if (!id) continue;
-    card.querySelector("progress")!.value = Math.min(state.rp, upgrade(id).cost);
-    card.querySelector("button")!.disabled = !canBuy(o, state.rp, id).ok;
-  }
+  if (!revealed(state, "upgrades")) return;
+  const funds = { rp: state.rp, standing: state.standing.points };
+  shop.render(shopView(o, funds), funds);
 }
 
 function onBuy(id: UpgradeId): void {
   accrueBank();
+  // a lane past the CPU's cores would add nothing
+  if (id === "lanesx" && lanesMaxed(owned())) return;
   if (!buy(state, id)) return;
   const u = upgrade(id);
-  log(state, now(), `Bought ${u.name}: ${u.effect}.`);
-  say(`${u.name}: ${u.effect}.`);
+  const l = u.levels ? ` (level ${level(owned(), id)})` : "";
+  log(state, now(), `Bought ${u.name}${l}: ${u.effect}.`);
+  say(`${u.name}${l}: ${u.effect}.`);
   ensureLanes();
   persist();
   render();
@@ -1439,9 +1425,13 @@ function onDrop(key: string): void {
 }
 
 let lanesSig = "";
-function renderLanes(o: ReadonlySet<UpgradeId>): void {
+function renderLanes(o: Owned): void {
   show("t-lanes", revealed(state, "lanes"));
   if (!revealed(state, "lanes")) return;
+  text(
+    "t-lanes-heading",
+    lanes.length > 1 ? `Lanes · ${lanes.length} of at most ${Math.max(2, cores() - 1)} on this CPU` : "Lanes",
+  );
   const list = $("t-lane-list");
   const sig = `${lanes.length}`;
   if (sig !== lanesSig) {
@@ -1480,7 +1470,7 @@ function renderLanes(o: ReadonlySet<UpgradeId>): void {
     "t-bank-note",
     rate === null
       ? ""
-      : `Auto-eval's bank: ${evals(Math.floor(state.bank))} waiting to run, at most ${evals(Math.floor(bankCap(o)))} (${awayHours(o)} h).`,
+      : `Auto-eval's bank: ${evals(Math.floor(state.bank))} waiting to run, at most ${evals(Math.floor(bankCap(o, laneCount(o))))} (${fmtHours(awayHours(o))} of every lane's auto-eval).`,
   );
 }
 

@@ -858,7 +858,9 @@ export function canBuy(o: Owned, funds: Funds | number, id: UpgradeId): BuyCheck
 export type CardState = "owned" | "buyable" | "dear" | "locked" | "mystery";
 
 export function cardState(o: Owned, funds: Funds, id: UpgradeId): CardState {
-  if (!isRevealed(o, id)) return "mystery";
+  // owned comes first: after a reset an upgrade may be kept while its prerequisites are not
+  if (o.has(id) && costOf(o, id) === null) return "owned";
+  if (!o.has(id) && !isRevealed(o, id)) return "mystery";
   const c = canBuy(o, funds, id);
   if (c.ok) return "buyable";
   return c.reason === "owned" ? "owned" : c.reason === "locked" ? "locked" : "dear";
@@ -949,4 +951,16 @@ export function dealerChoices(o: Owned): number {
 /** Offers the player picks from (0: the dealer deals on its own). */
 export function offerCount(o: Owned): number {
   return o.has("pick5") ? 5 : o.has("pick3") ? 3 : 0;
+}
+
+// ---------- the shop's view of levels (appended by the shop work) ----------
+
+/** Levels of Another lane that still add a lane on this CPU (laneCount stops at the cores less one). */
+export function laneLevelsUseful(coreCount = cores()): number {
+  return Math.max(0, Math.max(2, coreCount - 1) - 2);
+}
+
+/** Another lane is owned to every level this CPU can use: buying more would add nothing. */
+export function lanesMaxed(o: Owned, coreCount = cores()): boolean {
+  return o.has("lanes2") && level(o, "lanesx") >= laneLevelsUseful(coreCount);
 }
