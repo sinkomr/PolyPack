@@ -477,6 +477,9 @@ describe("registered basin hopping", () => {
     ).rejects.toThrow("unknown parameter");
   });
 
+  // This test and two below (no worse than a penalty solve, the five-square target) have budgets
+  // counted in evaluations, so their results do not depend on speed: their 120 s limits only catch
+  // a hang. A slow CI runner (2026-10-21) took 30 to 39 s, against earlier limits of 30 to 45 s.
   it("returns valid random problems and never worsens a valid start", async () => {
     await fc.assert(
       fc.asyncProperty(
@@ -496,7 +499,7 @@ describe("registered basin hopping", () => {
       ),
       { numRuns: 16, seed: 228 },
     );
-  }, 40000);
+  }, 120000);
 
   it("repairs a complete overlapping start", async () => {
     const start: PackingConfig = {
@@ -556,7 +559,7 @@ describe("registered basin hopping", () => {
         expect(hopped.score!).toBeLessThanOrEqual(base.score! + 1e-9);
       }
     }
-  }, 30000);
+  }, 120000);
 
   it("reaches the five-square target on independent seeds at 10000 evaluations", async () => {
     const scores: number[] = [];
@@ -572,7 +575,7 @@ describe("registered basin hopping", () => {
     // budget the old and new defaults measured 14/20 and 15/20 (3,000: 5/20 and 7/20), so the
     // guard is the new measured rate, not a claimed regression.
     expect(scores.filter((score) => score <= 2.7072).length).toBeGreaterThanOrEqual(11);
-  }, 45000);
+  }, 120000);
 
   it("reproduces optimization bits and spends the method budget exactly", async () => {
     for (const evals of [1, 2, 7, 35, 200]) {
