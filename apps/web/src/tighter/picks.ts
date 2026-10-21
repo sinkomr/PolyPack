@@ -112,6 +112,22 @@ export function normalizePicks(v: unknown): PicksState {
 }
 
 /**
+ * Whether an offer can still be taken: the filters and the cycle's rule allow it (`allowed`), and the
+ * tree still reaches it (a retake needs Retake; a site record or published value its tier and size
+ * ring). Purchases, filters and resets change these after an offer was drawn.
+ */
+export function offerFits(
+  x: Offer,
+  tree: { retake: boolean; tiers: ReadonlySet<Tier>; ringMin: number },
+  allowed: (x: Offer) => boolean,
+): boolean {
+  if (!allowed(x)) return false;
+  if (x.retake) return tree.retake;
+  if (x.tier === "open") return true;
+  return tree.tiers.has(x.tier) && x.N + x.M + x.P >= tree.ringMin;
+}
+
+/**
  * A problem left the queue: the learning dealer learns, in the bucket it was dealt under, how far
  * what it paid per evaluation was from the prior. Returns whether it learned anything.
  */

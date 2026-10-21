@@ -79,7 +79,7 @@ import {
   pause,
   recordSend,
 } from "./pacer";
-import { Offer, addRetake } from "./picks";
+import { Offer, addRetake, offerFits } from "./picks";
 import { CONTEST, FLOOR, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
 import {
   Candidate,
@@ -1329,10 +1329,16 @@ function dealtNote(p: ProblemState): string {
 /** Your pick: offers wait for the player; otherwise the dealer deals on its own. */
 const picking = (o: ReadonlySet<UpgradeId>) => offerCount(o) > 0 && state.dealer.dealt > 0;
 
+/** An offer the tree, the filters and the cycle's rule still allow (they may have changed since it was drawn). */
+const offerAllowed = (o: Owned, x: Offer): boolean =>
+  offerFits(x, { retake: o.has("retake"), tiers: contestedTiers(o), ringMin: ringMin(o) }, allowed);
+
 async function dealTick(): Promise<void> {
   if (!ownsGame || dealing || now() < dealPausedUntil) return;
   const o = owned();
   if (picking(o)) {
+    if (state.picks.offers.some((x) => !offerAllowed(o, x)))
+      state.picks.offers = state.picks.offers.filter((x) => offerAllowed(o, x));
     if (!mayDeal() || (state.picks.offers.length >= offerCount(o) && !autoTakes(o))) return;
     dealing = true;
     try {
@@ -1421,6 +1427,12 @@ function offerStands(info: ProblemInfo | null, x: Offer): boolean {
 
 /** Takes an offer into the queue (the player's pick, or Auto-advance's). */
 async function takeOffer(x: Offer, auto = false): Promise<void> {
+  if (!offerAllowed(owned(), x)) {
+    state.picks.offers = state.picks.offers.filter((y) => y !== x);
+    say(`${problemTitle(x)} is no longer within your reach, filters or rule; the offer is gone.`);
+    persist();
+    return;
+  }
   if (!mayDeal()) {
     say(`Every slot is full: the next one frees after ${evals(evalsToDeal())}, or drop a problem.`);
     return;
@@ -2287,7 +2299,7 @@ function renderStanding(o: Owned): void {
     "t-st-preview",
     pv.gain > 0
       ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}: all points ×${standingMultiplier(st).toFixed(1)} → ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)}. The next point comes at ${fmtInt(pv.nextAt)} RP this cycle.`
-      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in the cycle: ${fmtInt(Math.ceil(pv.short))} to go. It gives √(cycle RP / 250,000) + records held / 50 standing.`,
+      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in the cycle and confirmed by the server: ${fmtInt(Math.ceil(pv.short))} to go. It gives √(cycle RP / 250,000) + records held / 50 standing.`,
   );
   const btn = $<HTMLButtonElement>("t-st-reset");
   btn.disabled = pv.gain <= 0 || !ownsGame;

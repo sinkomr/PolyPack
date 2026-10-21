@@ -588,6 +588,8 @@ export function applyAnswer(
     // another entry got there first: nothing paid since the last confirmation was a record
     takenBack = takeBack(s, p, carried + p.unconfirmed);
     p.unconfirmed = 0;
+    // a record of ours it overtook is lost now: no rent for it from its last check on
+    if (p.ourId !== null) forgetHeld(s.economy, p.key);
     p.ourId = null;
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
