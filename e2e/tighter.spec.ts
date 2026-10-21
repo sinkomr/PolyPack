@@ -317,7 +317,7 @@ test("tighter: auto-eval banks one evaluation every 5 s, at most an hour, runs i
   expect(s1.evaluations - s0.evaluations).toBe(Math.round((s1.evaluations - s0.evaluations) / 4) * 4);
   // auto-eval's evaluations are not the player's clicks
   expect(s1.clicks).toBe(s0.clicks);
-  await expect(page.locator("#t-bank-note")).toContainText("at most 720 evaluations (1 h)");
+  await expect(page.locator("#t-bank-note")).toContainText("at most 720 evaluations (1 h of every lane's auto-eval)");
 
   // away for half an hour with auto-eval on: the page saves as it goes (pagehide), and nothing else is
   // written afterwards, so the reload reads exactly that save

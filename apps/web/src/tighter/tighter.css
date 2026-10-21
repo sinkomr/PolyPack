@@ -327,7 +327,8 @@
   overflow-wrap: anywhere;
 }
 .t-real {
-  opacity: 0.8;
+  /* muted text keeps its contrast; opacity would take it below 4.5:1 */
+  color: var(--muted);
 }
 .t-level {
   color: var(--accent) !important;
