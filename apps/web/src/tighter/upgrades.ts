@@ -620,7 +620,8 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Transfers",
     cost: 50000,
     requires: ["lattice", "wide"],
-    effect: "a new problem starts from the best packing of a neighbour with fewer pieces, the rest placed in the gaps",
+    effect:
+      "a new problem starts from the best packing of a neighbour with fewer pieces, the rest placed in the gaps, when that is clearly smaller than Load all",
     real: "a known packing plus findFreeSpot",
     row: "runs",
     mystery: true,
@@ -761,7 +762,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Head start II",
     3,
     ["head1"],
-    "each new cycle also begins with the queue of 3, 2 seeds, auto-eval at 1 a second and Basin hopping",
+    "each new cycle also begins with Basin hopping and what it needs (up to 10 evaluations per click, auto-eval at 1 a second), the queue of 3 and 2 seeds",
     "more of the tree, owned at once",
   ),
   standingRung(

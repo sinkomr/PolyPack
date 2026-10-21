@@ -22,7 +22,10 @@ import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { normalizeStanding } from "./standing";
-import { EvolveMethod, UpgradeId, isUpgradeId, methods, owning, upgrade } from "./upgrades";
+import { EvolveMethod, UPGRADES, UpgradeId, isUpgradeId, methods, owning, upgrade } from "./upgrades";
+
+/** Every method of the tree: a pipeline keeps its stages while a reset has taken a method away. */
+const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
 
 /**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
@@ -327,7 +330,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     standing: normalizeStanding(save.standing, now),
     economy: normalizeEconomy(save.economy),
     picks: normalizePicks(save.picks),
-    runplan: normalizeRunPlan(save.runplan, ["mc_compress", ...allMethods]),
+    runplan: normalizeRunPlan(save.runplan, ALL_METHODS),
   };
 }
 

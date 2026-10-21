@@ -295,16 +295,27 @@ export interface ResetPreview {
   loses: UpgradeId[];
 }
 
+/**
+ * Record points of this cycle that the server has confirmed: points paid per click count once the
+ * submission carrying them is answered, so a reset never turns points that may be taken back into
+ * standing that cannot.
+ */
+export function confirmedCycleEarned(s: GameState): number {
+  const waiting = s.queue.reduce((t, p) => t + p.unconfirmed + (p.sending?.rp ?? 0), 0);
+  return Math.max(0, s.standing.cycleEarned - waiting);
+}
+
 export function resetPreview(s: GameState): ResetPreview {
   const held = heldCount(s);
-  const gain = standingGain(s.standing.cycleEarned, held);
+  const earned = confirmedCycleEarned(s);
+  const gain = standingGain(earned, held);
   const bonus = s.standing.rule ? ruleBonus(gain) : 0;
   const next = nextCycleTree(s).owned;
   return {
     gain: gain + bonus,
     ruleBonus: bonus,
-    short: gain > 0 ? 0 : Math.max(0, RESET_MIN - s.standing.cycleEarned),
-    nextAt: nextStandingAt(s.standing.cycleEarned, held),
+    short: gain > 0 ? 0 : Math.max(0, RESET_MIN - earned),
+    nextAt: nextStandingAt(earned, held),
     held,
     keeps: next,
     loses: s.owned.filter((id) => !next.includes(id)),
@@ -313,7 +324,8 @@ export function resetPreview(s: GameState): ResetPreview {
 
 /**
  * Resets the cycle, when it can (Standing owned, the gain at least one): standing gained, the rule
- * finished, the tree as nextCycleTree says, record points back to zero, the bank kept only with Keep
+ * finished, the tree as nextCycleTree says, record points back to zero (less any still waiting for
+ * the server, which carry over), the bank kept only with Keep
  * the bank (and within the new cap), the next cycle begun under the rule chosen for it. Records,
  * collections, rent, the queue and every lifetime count stay. Returns the standing gained, or 0.
  */
@@ -337,17 +349,24 @@ export function resetCycle(s: GameState, now: number): number {
   st.total += preview.gain;
   st.resets++;
   const keepBank = s.owned.includes("keepBank");
+  // points still waiting for the server are not traded for standing: they carry into the next
+  // cycle, where a confirmation keeps them and a take-back takes them from there
+  const waiting = st.cycleEarned - confirmedCycleEarned(s);
   const tree = nextCycleTree(s);
   s.owned = tree.owned;
   s.levels = tree.levels;
-  s.rp = 0;
-  st.cycleEarned = 0;
+  s.rp = Math.min(s.rp, waiting);
+  st.cycleEarned = waiting;
   st.cycleStartedAt = now;
   st.rule = s.owned.includes("rules") ? st.nextRule : null;
   st.nextRule = null;
   st.marks = {};
   const o = owning(s.owned, s.levels, st.rule, st.rulesDone);
   s.bank = keepBank ? Math.min(s.bank, bankCap(o, laneCount(o))) : 0;
+  // offers were drawn for the old tree; the new cycle draws its own (lost records stay owed a retake)
+  const retakes = s.picks.offers.filter((x) => x.retake).map((x) => `${x.N}/${x.M}/${x.P}`);
+  s.picks.retake = [...retakes, ...s.picks.retake.filter((k) => !retakes.includes(k))];
+  s.picks.offers = [];
   s.bankAt = now;
   if (!s.owned.includes("auto1") || st.rule === "clicks") s.settings.auto = false;
   markProgress(s, now);
