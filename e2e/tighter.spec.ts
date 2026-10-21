@@ -362,6 +362,7 @@ test("tighter: auto-eval banks a click every 5 s, at most an hour, runs it when 
   expect(bank).toBeLessThan(1446);
   await expect(page.locator("#status")).toContainText(/While you were away, auto-eval earned 1,44\d evaluations/);
   const s2 = await stats(page);
+  const drainStart = Date.now();
   await page.click("#t-auto");
   await expect(page.locator("#status")).toContainText("banked while it was away run first");
   await expect
@@ -369,10 +370,12 @@ test("tighter: auto-eval banks a click every 5 s, at most an hour, runs it when 
       timeout: 120_000,
     })
     .toBe(true);
+  const drainSeconds = (Date.now() - drainStart) / 1000;
   const ran = (await stats(page)).evaluations - s2.evaluations;
-  // the bank in clicks of 4, and the new run's start (a reload closes runs)
+  // the bank in clicks of 4, and the new run's start (a reload closes runs); auto-eval keeps earning
+  // a click of 4 every 5 s while the bank runs, which takes longer on a slower machine
   expect(ran).toBeGreaterThanOrEqual(1436);
-  expect(ran).toBeLessThanOrEqual(1452);
+  expect(ran).toBeLessThanOrEqual(bank + 0.8 * drainSeconds + 8);
   expect(errors).toEqual([]);
 });
 
