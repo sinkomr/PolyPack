@@ -2,8 +2,11 @@ import { presetParams, tuningLevels } from "./presets";
 
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
- * each upgrade adds a little. Evaluations per click climb one at a time; Auto-eval starts at one
- * evaluation every 5 s and is sped up step by step; methods come well after, one at a time, each
+ * each upgrade adds a little. Evaluations per click climb one at a time; Auto-eval clicks for the
+ * player, starting at a click every 5 s, each as many evaluations as the player's own, so every click
+ * upgrade speeds it up too, and its own rungs speed it up step by step [CALC, balance/autosim.mts:
+ * about 20 % of an active player's evaluations when bought, 50 % by 10 per click, 100 % by Basin
+ * hopping, and more with lanes]; methods come well after, one at a time, each
  * dearer than the last; seeds and method settings are bought too. Every finite ladder ends in a
  * levelled upgrade that can be bought again and again at a growing price, so nothing has a last rung.
  *
@@ -214,7 +217,10 @@ const CLICK: Partial<Record<UpgradeId, number>> = {
   click9: 9,
   click10: 10,
 };
-/** Auto-eval's evaluations per second, by upgrade. */
+/**
+ * Auto-eval's clicks per second (per lane), by upgrade. Each of its clicks runs as many evaluations as
+ * one of the player's, so every evaluations-per-click upgrade speeds auto-eval up too.
+ */
 const AUTO: Partial<Record<UpgradeId, number>> = {
   auto1: 1 / 5,
   auto2: 1 / 4,
@@ -226,6 +232,8 @@ const AUTO: Partial<Record<UpgradeId, number>> = {
   auto8: 5,
   auto9: 10,
 };
+/** Faster auto-eval: auto-eval's clicks a second grow by this much a level. */
+export const AUTOX_GROWTH = 1.3;
 /** Hours of auto-eval kept while the player is away, by upgrade (1 with Auto-eval I). */
 const AWAY: Partial<Record<UpgradeId, number>> = { auto1: 1, away2: 4, away3: 12, away4: 24, away5: 72, away6: 168 };
 /** Seeds (runs) per problem, by upgrade (1 without any). */
@@ -265,7 +273,9 @@ const RING: Partial<Record<UpgradeId, number>> = {
 };
 
 const per = (n: number) => `${n} evaluation${n === 1 ? "" : "s"}`;
-const every = (r: number) => (r < 1 ? `one evaluation every ${Math.round(1 / r)} s` : `${per(r)} a second`);
+/** A number as the shop writes it: whole, or to one decimal ("2.5"). */
+const number = (x: number) => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
+const seconds = (x: number) => `${number(x)} s`;
 const hours = (h: number) => (h < 48 ? `${h} hour${h === 1 ? "" : "s"}` : h === 168 ? "a week" : `${h / 24} days`);
 
 function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
@@ -281,18 +291,22 @@ function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
   };
 }
 
+/** Auto-eval's pace in clicks: "a click every 5 s", "2 clicks a second". */
+const clicksEvery = (c: number) =>
+  c < 1 ? `a click every ${seconds(1 / c)}` : `${number(c)} click${c === 1 ? "" : "s"} a second`;
+
 function autoRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
-  const r = AUTO[id]!;
+  const c = AUTO[id]!;
   return {
     id,
-    name: id === "auto1" ? "Auto-eval" : `Auto-eval: ${r < 1 ? `every ${Math.round(1 / r)} s` : `${r} a second`}`,
+    name: id === "auto1" ? "Auto-eval" : `Auto-eval: ${c < 1 ? `every ${seconds(1 / c)}` : `${number(c)} a second`}`,
     cost,
     requires,
     effect:
       id === "auto1"
-        ? `${every(r)} while it is on, beside your clicks; it keeps earning while you are away (up to 1 hour) and runs what it earned when you are back`
-        : `auto-eval runs ${every(r)}`,
-    real: "the same run(), one evaluation at a time",
+        ? `while it is on, auto-eval clicks for you, ${clicksEvery(c)}, beside your own clicks, each as many evaluations as yours; it keeps earning while you are away (up to 1 hour) and runs what it earned when you are back`
+        : `auto-eval clicks ${clicksEvery(c)}, each as many evaluations as yours`,
+    real: "the same run(), one click's evaluations at a time",
     row: "auto",
   };
 }
@@ -435,7 +449,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "runs",
   },
   clickRung("click10", 1700, ["click9"]),
-  autoRung("auto4", 1900, ["auto3"]),
+  autoRung("auto4", 1450, ["auto3"]),
   {
     id: "clickx",
     name: "One more evaluation per click",
@@ -695,7 +709,7 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Faster auto-eval",
     cost: 150000,
     requires: ["auto9"],
-    effect: "each level makes auto-eval a quarter faster",
+    effect: `each level makes auto-eval ${Math.round((AUTOX_GROWTH - 1) * 100)} % faster`,
     real: "the same run(), more evaluations a second, up to what the CPU can do",
     row: "auto",
     levels: { max: 100, growth: 1.4 },
@@ -762,7 +776,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Head start II",
     3,
     ["head1"],
-    "each new cycle also begins with Basin hopping and what it needs (up to 10 evaluations per click, auto-eval at 1 a second), the queue of 3 and 2 seeds",
+    "each new cycle also begins with Basin hopping and what it needs (up to 10 evaluations per click, auto-eval at a click a second), the queue of 3 and 2 seeds",
     "more of the tree, owned at once",
   ),
   standingRung(
@@ -912,11 +926,28 @@ export const COMPACT_EVALS = 100;
 /** Evaluations a run may do in all before it ends and the next seed takes over. */
 export const RUN_BUDGET = 100_000;
 
-/** Auto-eval's evaluations per second (per lane), or null without it. */
-export function autoPerSecond(o: Owned): number | null {
+/** Auto-eval's clicks per second (per lane), or null without it. */
+export function autoClicksPerSecond(o: Owned): number | null {
   // the "clicks only" cycle rule: no auto-eval in this cycle
   if (!o.has("auto1") || o.rule === "clicks") return null;
-  return highest(o, AUTO, 0, (a, b) => a > b) * Math.pow(1.25, level(o, "autox"));
+  return highest(o, AUTO, 0, (a, b) => a > b) * Math.pow(AUTOX_GROWTH, level(o, "autox"));
+}
+
+/** Auto-eval's evaluations per second (per lane): its clicks a second, each of the player's click size. */
+export function autoPerSecond(o: Owned): number | null {
+  const c = autoClicksPerSecond(o);
+  return c === null ? null : c * evalsPerClick(o);
+}
+
+/**
+ * Auto-eval's pace as the page shows it, from its evaluations a second (all lanes): "a click of 4
+ * every 5 s", "2 clicks of 10 a second"; with one evaluation a click, in evaluations.
+ */
+export function autoRateText(o: Owned, perSecond: number): string {
+  const k = evalsPerClick(o);
+  const c = perSecond / k;
+  if (k === 1) return c < 1 ? `1 evaluation every ${seconds(1 / c)}` : `${number(c)} evaluations a second`;
+  return c < 1 ? `a click of ${k} every ${seconds(1 / c)}` : `${number(c)} click${c === 1 ? "" : "s"} of ${k} a second`;
 }
 
 /** Hours of auto-eval earned while away, at most. */

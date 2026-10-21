@@ -120,6 +120,7 @@ import {
   RUN_BUDGET,
   UpgradeId,
   autoPerSecond,
+  autoRateText,
   awayHours,
   bankCap,
   cores,
@@ -165,8 +166,8 @@ const fmtChange = (before: number, after: number) =>
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
 /** Hours as the bank note says them: "4 h", "3 days", "a week". */
 const fmtHours = (h: number) => (h < 48 ? `${h} h` : h === 168 ? "a week" : `${h / 24} days`);
-/** Auto-eval's pace: "1 evaluation every 5 s", "2 evaluations a second". */
-const fmtRate = (r: number) => (r < 1 ? `1 evaluation every ${Math.round(1 / r)} s` : `${evals(r)} a second`);
+/** Auto-eval's pace from its evaluations a second, in its clicks: "a click of 4 every 5 s". */
+const fmtRate = (r: number) => autoRateText(owned(), r);
 
 // ---------- state and saving ----------
 
@@ -883,8 +884,8 @@ function accrueBank(): void {
 
 /**
  * Auto-eval's next click for this lane, from its bank, when it may run one. It clicks as the player
- * does, with as many evaluations as a click of theirs, so an evaluation pays the same either way: at
- * one evaluation every 5 s and 2 a click (where Auto-eval comes), that is one click every 10 s.
+ * does, with as many evaluations as a click of theirs (its rate is in clicks, so it earns k evaluations
+ * a click), and an evaluation pays the same either way.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();

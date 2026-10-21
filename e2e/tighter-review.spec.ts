@@ -431,10 +431,10 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
   await expect(page.locator("#t-hold")).toContainText("battery");
   const bank = () => page.evaluate(() => (window as any).tighter.state.bank);
   const evaluations = async () => (await state(page)).stats.evaluations;
-  // a minute's earnings (12 evaluations) wait in the bank on battery
+  // a minute's earnings (a click of 4 every 5 s: 48 evaluations) wait in the bank on battery
   const e0 = await evaluations();
   await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
-  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(11);
+  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(47);
   await sleep(3000);
   expect(await evaluations()).toBe(e0);
   // a click on battery still runs, 4 evaluations
@@ -448,7 +448,7 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
   await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
   await expect.poll(() => idle(page)).toBe(true);
   const e1 = await evaluations();
-  expect(e1 - (e0 + 4)).toBeGreaterThanOrEqual(8);
+  expect(e1 - (e0 + 4)).toBeGreaterThanOrEqual(44);
 
   // a hidden tab banks too
   await page.evaluate(() => {
@@ -457,7 +457,7 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
     document.dispatchEvent(new Event("visibilitychange"));
   });
   await page.evaluate(() => ((window as any).tighter.state.bankAt -= 60_000));
-  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(11);
+  await expect.poll(bank, { timeout: 10_000 }).toBeGreaterThanOrEqual(47);
   await sleep(3000);
   const e2 = await evaluations();
   expect(e2).toBe(e1);
@@ -576,7 +576,7 @@ test("a sustained session: Load all, Compact, consent, clicks, upgrades, auto-ev
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes of auto-eval earned at once (1 evaluation every 2 s on each of two lanes: 1,200),
+  // twenty minutes of auto-eval earned at once (a click of 10 every 2 s on each of two lanes: 12,000),
   // two lanes, Auto-advance compacting the new problems
   await page.evaluate(() => ((window as any).tighter.state.bankAt -= 20 * 60_000));
   let twoBusy = false;
@@ -656,7 +656,7 @@ test("a sustained session: Load all, Compact, consent, clicks, upgrades, auto-ev
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(1200);
+  expect(conserved).toBeGreaterThanOrEqual(12_000);
   expect(twoBusy).toBe(true);
   expect(s2.settings.auto).toBe(false);
   expect(s2.owned).toHaveLength(path.length);
