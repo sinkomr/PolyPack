@@ -243,7 +243,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
   };
 }
 
-export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels);
+export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels, s.standing.rule);
 
 export function log(s: GameState, now: number, text: string): void {
   s.log.push({ t: now, text });

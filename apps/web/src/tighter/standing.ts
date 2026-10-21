@@ -1,3 +1,6 @@
+import type { ProblemKey } from "./frontier";
+import type { EvolveMethod } from "./upgrades";
+
 /**
  * Standing: the reset currency (plan §5). Owned by the economy work: resets, what they keep, the
  * standing gained, cycle rules and their rewards. This base holds the state and its defaults.
@@ -53,3 +56,20 @@ export function normalizeStanding(v: unknown, now: number): StandingState {
 
 /** The multiplier standing puts on every record point: 1 + 0.1 per point of standing ever earned. */
 export const standingMultiplier = (s: StandingState): number => 1 + 0.1 * s.total;
+
+/**
+ * Whether the cycle's rule lets the dealer deal or offer this problem (circles only, small problems
+ * only, ...). The dealer calls it on every candidate. Stub: every problem (the economy work fills it).
+ */
+export function ruleAllowsProblem(s: StandingState, p: ProblemKey): boolean {
+  void s;
+  void p;
+  return true;
+}
+
+/** Whether the cycle's rule lets a run use this method (one method only, ...). Stub: every method. */
+export function ruleAllowsMethod(s: StandingState, method: EvolveMethod): boolean {
+  void s;
+  void method;
+  return true;
+}

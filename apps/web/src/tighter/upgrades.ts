@@ -165,13 +165,17 @@ export interface Upgrade {
 /** Levels bought of levelled upgrades (an owned levelled upgrade has level 1 or more). */
 export type Levels = Readonly<Partial<Record<UpgradeId, number>>>;
 
-/** What the player owns: the upgrade ids, and the levels of levelled ones. */
-export type Owned = ReadonlySet<UpgradeId> & { readonly levels?: Levels };
+/**
+ * What the player owns: the upgrade ids, the levels of levelled ones, and the cycle rule played
+ * under (a standing rule can take something away, such as auto-eval or seeds).
+ */
+export type Owned = ReadonlySet<UpgradeId> & { readonly levels?: Levels; readonly rule?: string | null };
 
-/** An Owned from ids and levels. */
-export function owning(ids: Iterable<UpgradeId>, levels: Levels = {}): Owned {
-  const set = new Set(ids) as Set<UpgradeId> & { levels?: Levels };
+/** An Owned from ids, levels and the cycle's rule. */
+export function owning(ids: Iterable<UpgradeId>, levels: Levels = {}, rule: string | null = null): Owned {
+  const set = new Set(ids) as Set<UpgradeId> & { levels?: Levels; rule?: string | null };
   set.levels = levels;
+  set.rule = rule;
   return set;
 }
 
