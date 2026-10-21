@@ -211,7 +211,8 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   await expect(page.locator("#t-lanes")).toBeVisible();
-  await expect(page.locator("#t-bank-note")).toContainText("at most 720 evaluations (1 h");
+  // one click of 2 every 5 s: an hour away banks 1,440 evaluations
+  await expect(page.locator("#t-bank-note")).toContainText("at most 1,440 evaluations (1 h");
   expect(await game(page, (s) => s.rp)).toBeCloseTo(0, 6);
 });
 
