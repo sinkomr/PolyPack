@@ -7,10 +7,12 @@ import {
   applyAnswer,
   applyLoadAll,
   applyStep,
+  hasUnsent,
   newGame,
   newProblem,
   ownedSet,
   pay,
+  submitTarget,
 } from "../src/tighter/game";
 import { settleRent } from "../src/tighter/economy";
 import { Offer, offerFits } from "../src/tighter/picks";
@@ -223,5 +225,26 @@ describe("Tighter seams", () => {
     expect(r.state.picks).toMatchObject({ offers: [], filters: null, dealt: {}, bandit: {}, retake: [] });
     expect(r.state.runplan).toEqual({ auto: false, pipeline: [], bandit: {}, draws: 0 });
     expect(r.state.levels).toEqual({});
+  });
+});
+
+describe("Tighter published values", () => {
+  it("send a board only once it beats the published value, not a small gain on the published packing", () => {
+    const p = newProblem({ N: 4, M: 4, P: 30 }, "published", 0);
+    p.phase = "ready";
+    p.board = { N: 4, M: 4, P: 30, pieces: [], container_phi: 0 };
+    p.run = { method: "mc_compress", params: {}, seed: 1, budget: { evals: 10 } };
+    p.published = 6.0;
+    p.floor = 6.2;
+    p.leader = null;
+    // better than the start (the published coordinates), not better than the value
+    p.best = 6.1;
+    expect(hasUnsent(p)).toBe(false);
+    expect(submitTarget(p, null)).toBe(6.0);
+    p.best = 5.99;
+    expect(hasUnsent(p)).toBe(true);
+    // with a site leader above the value, the value still decides
+    expect(submitTarget(p, 6.3)).toBe(6.0);
+    expect(submitTarget(p, 5.995)).toBe(5.995);
   });
 });

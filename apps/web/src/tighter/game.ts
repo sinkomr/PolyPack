@@ -386,9 +386,14 @@ function pushTrace(p: ProblemState): void {
     p.trace = [p.trace[0], ...p.trace.slice(1, -1).filter((_, i) => i % 2 === 1), p.trace.at(-1)!];
 }
 
-/** The score a submission must beat: the leader read just before, or without one the free floor. */
+/**
+ * The score a submission must beat: the leader read just before, or without one the free floor; on a
+ * problem with a published value, never above that value.
+ */
 export function submitTarget(p: ProblemState, leaderScore: number | null): number | null {
-  return leaderScore ?? p.floor;
+  const target = leaderScore ?? p.floor;
+  if (p.published === null) return target;
+  return target === null ? p.published : Math.min(target, p.published);
 }
 
 // ---------- points ----------
@@ -544,6 +549,9 @@ export function markSending(
 export function hasUnsent(p: ProblemState): boolean {
   if (p.closed || p.phase !== "ready" || p.best === null || !p.run) return false;
   if (p.refused && p.refused.score === p.best) return false;
+  // a problem with a published value sends only a board that beats it: a small gain on the published
+  // packing itself would otherwise go out under the player's name
+  if (p.published !== null && !improvesOn(p.best, p.published)) return false;
   const sPrev = previousScore(p);
   return sPrev === null || improvesOn(p.best, sPrev);
 }

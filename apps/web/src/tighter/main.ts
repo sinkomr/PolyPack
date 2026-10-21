@@ -262,6 +262,8 @@ document.addEventListener("visibilitychange", () => {
 
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
+/** A problem's points as earned, before standing and collections multiply them: what method match learns from. */
+const basePoints = (p: ProblemState) => state.economy.base[p.key] ?? p.rp;
 /** A method the player owns and the cycle's rule allows. */
 const allowedMethod = (o: Owned, m: EvolveMethod): boolean =>
   methods(o).includes(m) && ruleAllowsMethod(state.standing, m);
@@ -618,7 +620,8 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): W
 function finishRun(run: OpenRunView | null): void {
   if (!run || run.mode === "compact") return;
   const p = problem(state, run.key);
-  if (p) observeRun(state.runplan, run.kind, run.method, run.level, p.rp - run.rpAt, run.evaluations - run.evalsAt);
+  if (p)
+    observeRun(state.runplan, run.kind, run.method, run.level, basePoints(p) - run.rpAt, run.evaluations - run.evalsAt);
 }
 
 /** Opens a run on the problem (closing whatever the lane held), with its next seed. */
@@ -663,7 +666,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     seed,
     evaluations: a.state.evaluations,
     kind: problemKind(p),
-    rpAt: p.rp,
+    rpAt: basePoints(p),
     evalsAt: 0,
   };
   // the start's own scoring (with the container's best turn) may already beat the board
@@ -706,7 +709,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     } else if (r.mode !== want.mode) {
       // from here on the run is the method's own: what it pays is measured from now
       r.mode = want.mode;
-      r.rpAt = p.rp;
+      r.rpAt = basePoints(p);
       r.evalsAt = r.evaluations;
     }
     const run = lv.run!;
