@@ -138,7 +138,8 @@
 
         <section id="t-upgrades" aria-labelledby="t-upgrades-heading" hidden>
           <h2 id="t-upgrades-heading">Upgrades</h2>
-          <div id="t-cards" class="t-cards"></div>
+          <p id="t-shop-summary" class="note"></p>
+          <div id="t-cards" class="t-shop"></div>
         </section>
 
         <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
@@ -160,7 +161,9 @@
 
         <section id="t-settings" aria-labelledby="t-settings-heading">
           <h2 id="t-settings-heading">Settings</h2>
-          <label class="t-check"><input id="t-bg" type="checkbox" /> Keep running while this tab is hidden</label>
+          <label id="t-bg-box" class="t-check" hidden
+            ><input id="t-bg" type="checkbox" /> Keep running while this tab is hidden</label
+          >
           <label id="t-battery-box" class="t-check" hidden
             ><input id="t-battery" type="checkbox" /> Keep running on battery power</label
           >
