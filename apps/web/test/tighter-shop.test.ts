@@ -27,8 +27,8 @@ describe("Tighter shop", () => {
     expect(v.total).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
     // the first card can be worked toward; the rest are locked or mysteries
     expect(card(v, "trace")).toMatchObject({ state: "dear", price: "5 RP", needs: [] });
-    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Side-length trace"], price: "150 RP" });
-    expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Side-length trace");
+    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
+    expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");
   });
 
@@ -67,7 +67,7 @@ describe("Tighter shop", () => {
     const clicks: UpgradeId[] = ["trace", "click2", "click3"];
     const v = shopView(owning(clicks), { rp: 400, standing: 0 }, 8);
     // a ladder folds to where it stands
-    expect(row(v, "clicks").owned).toEqual(["Side-length trace", "2 to 3 evaluations per click"]);
+    expect(row(v, "clicks").owned).toEqual(["Trace detail", "2 to 3 evaluations per click"]);
     expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
@@ -162,5 +162,49 @@ describe("Tighter shop chips", () => {
     expect(chipName("Method: basin_hopping")).toBe("basin_hopping");
     expect(chipName("Dealer: best of 4")).toBe("best of 4");
     expect(chipName("Auto-advance")).toBe("Auto-advance");
+  });
+});
+
+describe("Tighter tech tree", () => {
+  it("shows every upgrade as a node with its state, owned ones included, the Standing row once Standing is owned", async () => {
+    const { treeView, MYSTERY: M } = await import("../src/tighter/shop");
+    const funds = { rp: 200, standing: 0 };
+    const v = treeView(owning(["trace"]), funds, 8);
+    const node = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!;
+    expect(v.nodes.length).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
+    expect(node("trace").state).toBe("owned");
+    expect(node("click2")).toMatchObject({ state: "buyable", price: "150 RP" });
+    expect(node("click3").state).toBe("locked");
+    expect(node("harden")).toMatchObject({ state: "mystery", name: M });
+    expect(v.buyable).toBe(1);
+    // nothing affordable: the next upgrade to save for is the cheapest one whose prerequisites are owned
+    const poor = treeView(owning(["trace"]), { rp: 10, standing: 0 }, 8);
+    expect(poor.buyable).toBe(0);
+    expect(poor.next?.id).toBe("click2");
+    const st = treeView(owning(["standing"]), funds, 8);
+    expect(st.rows.map((r) => r.id)).toContain("standing");
+    expect(st.nodes.find((n) => n.id === "head1")!.state).toBe("dear");
+  });
+
+  it("lays every node out to the right of its prerequisites, without two nodes in one place", async () => {
+    const { treeView, treeLayout, TREE } = await import("../src/tighter/shop");
+    const v = treeView(owning(["standing"]), { rp: 0, standing: 0 }, 8);
+    const l = treeLayout(v.rows, v.nodes);
+    expect(l.at.size).toBe(v.nodes.length);
+    const seen = new Set<string>();
+    for (const n of v.nodes) {
+      const a = l.at.get(n.id)!;
+      expect(seen.has(`${a.x},${a.y}`)).toBe(false);
+      seen.add(`${a.x},${a.y}`);
+      for (const r of UPGRADES.find((u) => u.id === n.id)!.requires) {
+        const b = l.at.get(r);
+        if (b) expect(b.x + TREE.nodeW).toBeLessThan(a.x);
+      }
+      expect(a.x + TREE.nodeW).toBeLessThanOrEqual(l.width);
+      expect(a.y + TREE.nodeH).toBeLessThanOrEqual(l.height);
+    }
+    // a band per row, one after another
+    expect(l.bands.map((b) => b.id)).toEqual(v.rows.map((r) => r.id));
+    l.bands.slice(1).forEach((b, i) => expect(b.y).toBe(l.bands[i].y + l.bands[i].h));
   });
 });

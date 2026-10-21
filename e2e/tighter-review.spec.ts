@@ -47,18 +47,22 @@ async function fresh(page: Page, seed: number): Promise<void> {
 }
 
 async function firstRecord(page: Page): Promise<void> {
-  await page.click("#t-loadall");
-  await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
-  await page.click("#t-compact");
+  // a new problem is placed at once; the first Evolve click compacts it (100 evaluations)
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
+  await page.click("#t-evolve");
   await expect
     .poll(async () => (await focus(page)).phase === "ready" && (await idle(page)), { timeout: 120_000 })
     .toBe(true);
 }
 
+/** The name form: in the first record's pop-up while it is up, else in Settings (closed again after). */
 async function consent(page: Page, name: string, agree = true): Promise<void> {
+  if (!(await page.locator("#t-name").isVisible())) await page.click("#t-open-settings");
   await page.fill("#t-name", name);
   await page.setChecked("#t-agree", agree);
   await page.click("#t-consent-save");
+  if (await page.locator("#t-settings").evaluate((d) => (d as HTMLDialogElement).open))
+    await page.click("#t-settings-close");
 }
 
 /** One Evolve click, waited until it has run; returns its time in ms. */
@@ -85,13 +89,33 @@ const grant = (page: Page, points: number) =>
     s.rpEarned += n;
   }, points);
 
+/** The tech tree's tab, opened: the upgrades live there. */
+async function openTree(page: Page): Promise<void> {
+  const tab = page.locator("#t-tab-tree");
+  await expect(tab).toBeVisible({ timeout: 10_000 });
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+}
+
+/** The board's tab, back in front (the trace and the score are drawn on it). */
+async function openBoard(page: Page): Promise<void> {
+  const tab = page.locator("#t-tab-board");
+  if ((await tab.isVisible()) && (await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+}
+
+/** The game's log (kept in the save; the page shows the latest important line on the notice line). */
+const logText = (page: Page): Promise<string> =>
+  page.evaluate(() => (window as any).tighter.state.log.map((l: { text: string }) => l.text).join("\n"));
+
+/** Buys upgrades from the tech tree: pressing a node you can afford buys it. */
 async function buyAll(page: Page, ids: string[]): Promise<void> {
+  await openTree(page);
   for (const id of ids) {
-    const btn = page.locator(`.t-card[data-id="${id}"] button`);
-    await expect(btn).toBeEnabled({ timeout: 10_000 });
-    await btn.click();
+    const node = page.locator(`.t-card[data-id="${id}"]`);
+    await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
+    await node.locator("button").click();
     await expect.poll(async () => (await state(page)).owned.includes(id)).toBe(true);
   }
+  await openBoard(page);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -177,9 +201,9 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   );
   await consent(page, "Refused Player");
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
-  await expect(page.locator("#t-log")).toContainText("name is required");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("name is required");
   // the refused send's points are taken back
-  await expect(page.locator("#t-log")).toContainText("taken back");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("taken back");
   const best0 = (await focus(page)).best;
   await clickUntilBetter(page, best0);
   const b1 = (await focus(page)).best;
@@ -214,8 +238,8 @@ test("owner rule: points the server does not confirm are taken back", async ({ p
   // consent paid the record at once
   expect((await state(page)).rp).toBeGreaterThan(5);
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
-  await expect(page.locator("#t-log")).toContainText("Another entry got there first");
-  await expect(page.locator("#t-log")).toContainText("taken back");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("Another entry got there first");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("taken back");
   const s = await state(page);
   const q = s.queue.find((x: any) => x.key === p.key);
   expect(s.rp).toBeLessThan(1e-6);
@@ -267,7 +291,7 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   expect(after.sending).toBeNull();
   expect(after.unconfirmed).toBe(0);
   expect(s.rp).toBeCloseTo(paid, 9);
-  await expect(page.locator("#t-log")).toContainText("its answer had not arrived");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("its answer had not arrived");
 });
 
 test("server errors do not cause retry storms: 429, 500, network failure, failed leader check, 409, 422", async ({
@@ -416,8 +440,11 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
     (navigator as any).getBattery = () => Promise.resolve(battery);
   });
   await fresh(page, 27);
+  // the battery setting is in Settings
+  await page.click("#t-open-settings");
   await expect(page.locator("#t-battery-box")).toBeVisible();
-  // a manual Compact and clicks on battery power: they run
+  await page.click("#t-settings-close");
+  // the first click's Compact and the clicks after it, on battery power: they run
   await firstRecord(page);
   expect((await state(page)).stats.evaluations).toBe(101);
   await click(page);
@@ -442,8 +469,9 @@ test("hidden tab and battery: auto-eval banks instead of running, clicks always 
   expect(await evaluations()).toBe(e0 + 4);
   const onBattery = await page.locator("#t-hold").textContent();
   // allowing battery use runs the bank, in clicks of 4
-  await page.locator("#t-settings").scrollIntoViewIfNeeded();
+  await page.click("#t-open-settings");
   await page.check("#t-battery");
+  await page.click("#t-settings-close");
   await expect(page.locator("#t-hold")).toHaveText("");
   await expect.poll(bank, { timeout: 20_000 }).toBeLessThan(4);
   await expect.poll(() => idle(page)).toBe(true);
@@ -492,17 +520,17 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
     log: [{ t: 1, text: "<img src=y onerror=window.__xss=2>" }],
   };
   const str = `tighter:2:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
-  await page.locator("#t-settings summary").click();
+  await page.click("#t-open-settings");
   await page.fill("#t-save-text", str);
   page.once("dialog", (d) => d.accept());
   await page.click("#t-import");
   await expect(page.locator("#t-save-note")).toHaveText("Save imported.");
   await sleep(1500);
   expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
-  expect(await page.locator("#t-log img, #t-consent b").count()).toBe(0);
+  expect(await page.locator("#t-notice img, #t-consent b").count()).toBe(0);
 });
 
-test("a sustained session: Load all, Compact, consent, clicks, upgrades, auto-eval on two lanes, Stop, reload", async ({
+test("a sustained session: the first click compacts, consent, clicks, upgrades, auto-eval on two lanes, Stop, reload", async ({
   page,
 }) => {
   test.setTimeout(900_000);
@@ -523,17 +551,16 @@ test("a sustained session: Load all, Compact, consent, clicks, upgrades, auto-ev
   await fresh(page, 31);
   await shot("01-bare-board");
   endPhase("open and deal");
-  await page.click("#t-loadall");
-  await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
-  await shot("02-load-all");
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
+  await shot("02-placed");
   const tc = Date.now();
-  await page.click("#t-compact");
+  await page.click("#t-evolve");
   await expect
     .poll(async () => (await focus(page)).phase === "ready" && (await idle(page)), { timeout: 120_000 })
     .toBe(true);
   const compactMs = Date.now() - tc;
   await shot("03-first-record-consent");
-  endPhase("Load all and Compact");
+  endPhase("placed and compacted");
   await consent(page, "Review Player");
   const p0 = await focus(page);
   await expect.poll(async () => (await siteBest(page, p0))?.name, { timeout: 20_000 }).toBe("Review Player");

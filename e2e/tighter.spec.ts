@@ -44,11 +44,11 @@ async function fresh(page: Page, seed: number): Promise<void> {
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
-/** Load all, then Compact: the first record (a run of 100 evaluations that stays open). */
+/** The first record: the first Evolve click compacts the placed board (a run of 100 evaluations that stays open). */
 async function firstRecord(page: Page): Promise<void> {
-  await page.click("#t-loadall");
-  await expect(page.locator("#t-compact")).toBeEnabled({ timeout: 30_000 });
-  await page.click("#t-compact");
+  // a new problem is placed at once; the first Evolve click compacts it (100 evaluations)
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
+  await page.click("#t-evolve");
   await expect
     .poll(async () => (await focused(page)).phase === "ready" && (await idle(page)), { timeout: 60_000 })
     .toBe(true);
@@ -77,16 +77,36 @@ const grant = (page: Page, points: number) =>
     s.rpEarned += n;
   }, points);
 
-async function buyAll(page: Page, ids: string[]): Promise<void> {
-  for (const id of ids) {
-    const btn = page.locator(`.t-card[data-id="${id}"] button`);
-    await expect(btn).toBeEnabled({ timeout: 10_000 });
-    await btn.click();
-    await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
-  }
+/** The tech tree's tab, opened: the upgrades live there. */
+async function openTree(page: Page): Promise<void> {
+  const tab = page.locator("#t-tab-tree");
+  await expect(tab).toBeVisible({ timeout: 10_000 });
+  if ((await tab.getAttribute("aria-selected")) !== "true") await tab.click();
 }
 
-test("tighter: Load all, Compact, the first record is sent, clicks improve it and pay at once, upgrades are bought", async ({
+/** The board's tab, back in front (the trace and the score are drawn on it). */
+async function openBoard(page: Page): Promise<void> {
+  const tab = page.locator("#t-tab-board");
+  if ((await tab.isVisible()) && (await tab.getAttribute("aria-selected")) !== "true") await tab.click();
+}
+
+/** The game's log (kept in the save; the page shows the latest important line on the notice line). */
+const logText = (page: Page): Promise<string> =>
+  page.evaluate(() => (window as any).tighter.state.log.map((l: { text: string }) => l.text).join("\n"));
+
+/** Buys upgrades from the tech tree: pressing a node you can afford buys it. */
+async function buyAll(page: Page, ids: string[]): Promise<void> {
+  await openTree(page);
+  for (const id of ids) {
+    const node = page.locator(`.t-card[data-id="${id}"]`);
+    await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
+    await node.locator("button").click();
+    await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
+  }
+  await openBoard(page);
+}
+
+test("tighter: placed at once, the first click compacts, the first record is sent, clicks improve it and pay at once, upgrades are bought", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -100,24 +120,21 @@ test("tighter: Load all, Compact, the first record is sent, clicks improve it an
 
   await fresh(page, 7);
 
-  // the bare board: a dealt open problem, Load all and a disabled Compact
+  // a dealt open problem is placed at once (pieces on rings around the centre): the free floor, never sent
   await expect(page.locator("#t-problem-note")).toHaveText("No record exists. Any valid packing is a new record.");
-  await expect(page.locator("#t-compact")).toBeDisabled();
   await expect(page.locator("#t-stop")).toBeVisible();
-  await expect(page.locator("#t-score")).toBeHidden();
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
+  await expect(page.locator("#t-score")).toBeVisible();
+  await expect(page.locator("#t-trace-empty")).toBeVisible();
   let p = await focused(page);
   expect(await siteBest(page, p)).toBeNull();
-
-  // Load all: the free floor, never sent
-  await page.click("#t-loadall");
-  await expect(page.locator("#t-compact")).toBeEnabled();
-  p = await focused(page);
   expect(p.phase).toBe("loaded");
   expect(p.board!.pieces).toHaveLength(p.P);
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
 
-  // Compact: one press, 100 evaluations of a real mc_compress run (seed 1) that stays open, and the first record
-  await page.click("#t-compact");
+  // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (seed 1) that
+  // stays open, and the first record
+  await page.click("#t-evolve");
   await expect
     .poll(async () => (await focused(page)).phase === "ready" && (await idle(page)), { timeout: 60_000 })
     .toBe(true);
@@ -140,11 +157,13 @@ test("tighter: Load all, Compact, the first record is sent, clicks improve it an
   await page.waitForTimeout(1500);
   expect(await siteBest(page, p)).toBeNull();
   expect(await rp(page)).toBe(0);
-  await expect(page.locator("#t-consent")).toBeVisible();
+  // the first record asks for a name in a pop-up over the board
+  await expect(page.locator("#t-welcome #t-consent")).toBeVisible();
 
   await page.fill("#t-name", "E2E Tighter");
   await page.check("#t-agree");
   await page.click("#t-consent-save");
+  await expect(page.locator("#t-welcome")).toBeHidden();
 
   // consent pays the record so far at once; the first record goes at once, with its provenance
   await expect(page.locator("#t-points")).toBeVisible();
@@ -172,7 +191,8 @@ test("tighter: Load all, Compact, the first record is sent, clicks improve it an
   // everything paid so far (consent's payment, and the container's turn before the send) is confirmed
   const confirmed = await rp(page);
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
-  await expect(page.locator("#t-log")).toContainText(`${confirmed.toFixed(1)} RP confirmed`);
+  await expect.poll(() => logText(page)).toContain(`${confirmed.toFixed(1)} RP confirmed`);
+  await expect(page.locator("#t-notice")).toContainText("RP confirmed");
   await expect(page.locator("#t-held")).toHaveText("1");
 
   // Evolve: each click is one more evaluation of the same run; an improving click pays at once
@@ -209,11 +229,13 @@ test("tighter: Load all, Compact, the first record is sent, clicks improve it an
   await expect(page.locator("#t-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // an upgrade: Side-length trace, 5 RP
-  const before = await rp(page);
-  await expect(page.locator('.t-card[data-id="trace"] button')).toBeEnabled();
-  await page.click('.t-card[data-id="trace"] button');
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (5 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
+  await expect(page.locator("#t-trace text")).toHaveCount(0);
+  const before = await rp(page);
+  await buyAll(page, ["trace"]);
+  await openBoard(page);
+  await expect(page.locator("#t-trace text")).toHaveCount(1);
   expect(await rp(page)).toBeCloseTo(before - 5, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
@@ -239,7 +261,7 @@ test("tighter: Load all, Compact, the first record is sent, clicks improve it an
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×3");
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace", "click2", "click3"]);
   expect((await focused(page)).best).toBe(saved.best);
-  await expect(page.locator("#t-trace")).toBeVisible();
+  await expect(page.locator("#t-trace text")).toHaveCount(1);
   // after a reload the next click opens a run with the next seed
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
@@ -272,7 +294,7 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   expect(ran).toBeGreaterThanOrEqual(1);
   expect(ran).toBeLessThan(15);
   const p = await focused(page);
-  // the board is a strict packing smaller than Load all, and nothing was sent
+  // the board is a strict packing smaller than its placed start, and nothing was sent
   expect(p.best!).toBeLessThan(p.floor!);
   expect(findOverlaps(p.N, p.board!.pieces, strictTolerance(p.board!))).toEqual([]);
   expect((await stats(page)).submissions).toBe(0);

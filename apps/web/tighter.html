@@ -17,6 +17,7 @@
         <a href="/tighter.html" aria-current="page">Tighter</a>
       </nav>
       <span id="t-hold" class="t-hold" role="status" aria-live="polite"></span>
+      <button id="t-open-settings" class="t-settings-btn" type="button" aria-haspopup="dialog">Settings</button>
     </header>
 
     <section id="t-elsewhere" class="t-elsewhere" aria-labelledby="t-elsewhere-text" hidden>
@@ -37,17 +38,24 @@
     </section>
 
     <main class="layout">
-      <section class="stage" aria-label="Board">
+      <section class="stage" aria-label="Game">
+        <div id="t-problem" class="t-head" role="group" aria-label="Problem">
+          <div class="t-head-main">
+            <h2 id="t-title" class="t-title">Dealing a problem…</h2>
+            <p id="t-problem-note" class="t-head-note"></p>
+          </div>
+          <div class="t-head-side">
+            <p class="t-held-box">Records held <strong id="t-held">0</strong></p>
+            <button id="t-next" hidden>Next problem</button>
+          </div>
+        </div>
         <div class="toolbar" role="toolbar" aria-label="Game">
           <button
-            id="t-loadall"
+            id="t-evolve"
             class="primary"
-            title="Place every piece on rings around the centre (the board's Add all)"
+            disabled
+            title="Runs one evaluation of the open solver run on this board"
           >
-            Load all
-          </button>
-          <button id="t-compact" disabled title="mc_compress, 100 evaluations of a run from the board">Compact</button>
-          <button id="t-evolve" class="primary" hidden title="Runs one evaluation of the open solver run on this board">
             Evolve
           </button>
           <span id="t-method-box" class="t-method" hidden>
@@ -58,64 +66,78 @@
           <button id="t-stop" title="Stop every run and switch auto-eval off">Stop</button>
           <span id="t-runinfo" class="t-runinfo"></span>
         </div>
+        <div id="t-views" class="t-views" hidden>
+          <div class="t-tabs" role="tablist" aria-label="View">
+            <button id="t-tab-board" role="tab" aria-selected="true" aria-controls="t-board-view">Board</button>
+            <button id="t-tab-tree" role="tab" aria-selected="false" aria-controls="t-upgrades" tabindex="-1">
+              Tech tree<span id="t-tab-count" class="t-tab-count" hidden></span>
+            </button>
+          </div>
+          <p id="t-next-up" class="t-next-up"></p>
+        </div>
         <p id="t-banner" class="t-banner" hidden></p>
-        <canvas id="board" tabindex="0" role="img" aria-label="The board of the current problem"></canvas>
+        <div id="t-board-view" class="t-boardwrap" role="tabpanel" aria-labelledby="t-tab-board">
+          <canvas id="board" tabindex="0" role="img" aria-label="The board of the current problem"></canvas>
+          <figure id="t-pip" class="t-pip t-overlay">
+            <svg
+              id="t-trace"
+              class="t-trace"
+              viewBox="0 0 300 100"
+              role="img"
+              aria-label="Side after each improvement"
+              hidden
+            ></svg>
+            <figcaption id="t-trace-empty" class="t-trace-empty">
+              The side after each improvement shows here.
+            </figcaption>
+          </figure>
+          <section id="t-score" class="t-scorebox t-overlay" aria-label="Board score" hidden>
+            <dl class="t-score-list">
+              <dt id="t-side-label">Side s</dt>
+              <dd id="t-side" class="t-score-big">—</dd>
+              <dt>Last step</dt>
+              <dd id="t-delta">—</dd>
+              <dt>Area bound</dt>
+              <dd id="t-bound">—</dd>
+              <dt>Gap</dt>
+              <dd id="t-gap">—</dd>
+              <dt>Density</dt>
+              <dd id="t-density">—</dd>
+              <dt>Record</dt>
+              <dd id="t-record">—</dd>
+            </dl>
+          </section>
+          <dialog id="t-welcome" class="t-pop" aria-labelledby="t-welcome-title">
+            <h2 id="t-welcome-title">A new record</h2>
+            <p class="note">
+              Your board is a record no one has beaten. To send it to PolyPack and earn its points, put a name on your
+              records. You can change this later in Settings.
+            </p>
+            <div id="t-welcome-slot"></div>
+            <div class="row wrap t-pop-actions">
+              <button id="t-welcome-later" type="button">Not now</button>
+            </div>
+          </dialog>
+        </div>
+        <section id="t-upgrades" class="t-treewrap" role="tabpanel" aria-labelledby="t-tab-tree" hidden>
+          <div class="t-tree-head">
+            <p id="t-shop-summary" class="note"></p>
+            <p class="t-tree-legend note" aria-hidden="true">
+              <span class="t-key" data-state="buyable">to buy</span>
+              <span class="t-key" data-state="dear">saving up</span>
+              <span class="t-key" data-state="locked">needs another first</span>
+              <span class="t-key" data-state="mystery">??????</span>
+              <span class="t-key" data-state="owned">owned</span>
+            </p>
+          </div>
+          <div id="t-cards" class="t-tree"></div>
+          <div id="t-tree-detail" class="t-tree-detail" aria-live="polite"></div>
+        </section>
         <p id="status" class="status" role="status" aria-live="polite"></p>
+        <p id="t-notice" class="t-notice" role="status" aria-live="polite" hidden></p>
       </section>
 
       <aside class="panel" aria-label="Game panels">
-        <section id="t-problem" aria-labelledby="t-problem-heading">
-          <h2 id="t-problem-heading">Problem</h2>
-          <p id="t-title" class="t-title">Dealing a problem…</p>
-          <p id="t-problem-note" class="note"></p>
-          <dl class="stats t-held-row">
-            <dt>Records held</dt>
-            <dd id="t-held" class="big">0</dd>
-          </dl>
-          <button id="t-next" class="wide" hidden>Next problem</button>
-        </section>
-
-        <section id="t-score" aria-labelledby="t-score-heading" hidden>
-          <h2 id="t-score-heading">Board score</h2>
-          <dl class="stats">
-            <dt id="t-side-label">Container side s</dt>
-            <dd id="t-side" class="big">—</dd>
-            <dt>Last step</dt>
-            <dd id="t-delta">—</dd>
-            <dt>Area lower bound</dt>
-            <dd id="t-bound">—</dd>
-            <dt>Gap to area bound</dt>
-            <dd id="t-gap">—</dd>
-            <dt>Density</dt>
-            <dd id="t-density">—</dd>
-            <dt>Record</dt>
-            <dd id="t-record">—</dd>
-          </dl>
-          <svg
-            id="t-trace"
-            class="t-trace"
-            viewBox="0 0 300 100"
-            role="img"
-            aria-label="Side after each improvement"
-            hidden
-          ></svg>
-        </section>
-
-        <section id="t-consent" aria-labelledby="t-consent-heading" hidden>
-          <h2 id="t-consent-heading">Your name on records</h2>
-          <form id="t-consent-form" class="t-consent">
-            <div class="row">
-              <label for="t-name">Display name</label>
-              <input id="t-name" maxlength="40" autocomplete="nickname" placeholder="display name" />
-            </div>
-            <label class="t-check"
-              ><input id="t-agree" type="checkbox" /> Send my records to PolyPack under this name</label
-            >
-            <button id="t-consent-save" type="submit" class="primary">Save</button>
-          </form>
-          <p id="t-consent-note" class="note">Nothing has been sent yet; your record is kept here until you send it.</p>
-        </section>
-
         <section id="t-points" aria-labelledby="t-points-heading" hidden>
           <h2 id="t-points-heading">Record points</h2>
           <dl class="stats">
@@ -130,13 +152,16 @@
             <dt>Clicks</dt>
             <dd id="t-clicks">0</dd>
           </dl>
-          <p class="note">
-            Every click that improves your record by more than the 10<sup>−9</sup> floor pays at once: w·c·[1 + decades
-            above the floor] plus its size and gap terms. Your best goes to the server within the minute; points it does
-            not confirm are taken back.
-          </p>
+          <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
+          <details class="t-points-how">
+            <summary>How points are paid</summary>
+            <p class="note">
+              Every click that improves your record by more than the 10<sup>−9</sup> floor pays at once: w·c·[1 +
+              decades above the floor] plus its size and gap terms. Your best goes to the server within the minute;
+              points it does not confirm are taken back.
+            </p>
+          </details>
         </section>
-
         <section id="t-standing" aria-labelledby="t-standing-heading" hidden>
           <h2 id="t-standing-heading">Standing</h2>
           <dl id="t-st-stats" class="stats"></dl>
@@ -161,20 +186,12 @@
             <ol id="t-st-history" class="t-st-history"></ol>
           </details>
         </section>
-
         <section id="t-records" aria-labelledby="t-records-heading" hidden>
           <h2 id="t-records-heading">Records</h2>
           <dl id="t-rc-stats" class="stats"></dl>
           <ul id="t-rc-sets" class="t-rc-sets" aria-label="Collections"></ul>
           <p id="t-rc-note" class="note"></p>
         </section>
-
-        <section id="t-upgrades" aria-labelledby="t-upgrades-heading" hidden>
-          <h2 id="t-upgrades-heading">Upgrades</h2>
-          <p id="t-shop-summary" class="note"></p>
-          <div id="t-cards" class="t-shop"></div>
-        </section>
-
         <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
           <h2 id="t-queue-heading">Queue</h2>
           <ol id="t-queue-list" class="t-queue"></ol>
@@ -216,50 +233,70 @@
             <p id="t-filter-note" class="note" role="status"></p>
           </details>
         </section>
-
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
           <h2 id="t-lanes-heading">Lanes</h2>
           <ul id="t-lane-list" class="t-lanes"></ul>
           <p id="t-bank-note" class="note"></p>
         </section>
-
         <section id="t-runs" aria-labelledby="t-runs-heading" hidden>
           <h2 id="t-runs-heading">Runs</h2>
           <div id="t-runs-body" class="t-runs"></div>
         </section>
+      </aside>
+    </main>
 
-        <section id="t-events" aria-labelledby="t-events-heading" hidden>
-          <h2 id="t-events-heading">Log</h2>
-          <ol id="t-log" class="t-log"></ol>
-        </section>
-
-        <section id="t-settings" aria-labelledby="t-settings-heading">
-          <h2 id="t-settings-heading">Settings</h2>
+    <dialog id="t-settings" class="t-dialog" aria-labelledby="t-settings-heading">
+      <div class="t-dialog-head">
+        <h2 id="t-settings-heading">Settings</h2>
+        <button id="t-settings-close" type="button" aria-label="Close settings">Close</button>
+      </div>
+      <div class="t-dialog-body">
+        <div id="t-settings-slot">
+          <section id="t-consent" aria-labelledby="t-consent-heading">
+            <h3 id="t-consent-heading">Your name on records</h3>
+            <form id="t-consent-form" class="t-consent">
+              <div class="row">
+                <label for="t-name">Display name</label>
+                <input id="t-name" maxlength="40" autocomplete="nickname" placeholder="display name" />
+              </div>
+              <label class="t-check"
+                ><input id="t-agree" type="checkbox" /> Send my records to PolyPack under this name</label
+              >
+              <button id="t-consent-save" type="submit" class="primary">Save</button>
+            </form>
+            <p id="t-consent-note" class="note">
+              Nothing has been sent yet; your record is kept here until you send it.
+            </p>
+          </section>
+        </div>
+        <section aria-labelledby="t-run-heading">
+          <h3 id="t-run-heading">Running</h3>
           <label id="t-bg-box" class="t-check" hidden
             ><input id="t-bg" type="checkbox" /> Keep running while this tab is hidden</label
           >
           <label id="t-battery-box" class="t-check" hidden
             ><input id="t-battery" type="checkbox" /> Keep running on battery power</label
           >
-          <details class="t-save">
-            <summary>Save</summary>
-            <p class="note">The game lives in this browser. Copy the save string to keep it or move it.</p>
-            <div class="row wrap">
-              <button id="t-export" type="button">Export</button>
-              <button id="t-import" type="button">Import</button>
-            </div>
-            <label for="t-save-text" class="t-sr">Save string</label>
-            <textarea id="t-save-text" rows="3" spellcheck="false" placeholder="tighter:1:…"></textarea>
-            <p id="t-save-note" class="note" role="status"></p>
-          </details>
-          <p class="note">
-            Every click runs real evaluations of a real solver run in this browser, and every record is checked by the
-            server. Plays best in Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
-            <a href="/">Board</a> offers all of it, unrestricted.
-          </p>
+          <p id="t-run-note" class="note"></p>
         </section>
-      </aside>
-    </main>
+        <section class="t-save" aria-labelledby="t-save-heading">
+          <h3 id="t-save-heading">Save</h3>
+          <p class="note">The game lives in this browser. Copy the save string to keep it or move it.</p>
+          <div class="row wrap">
+            <button id="t-export" type="button">Export</button>
+            <button id="t-import" type="button">Import</button>
+          </div>
+          <label for="t-save-text" class="t-sr">Save string</label>
+          <textarea id="t-save-text" rows="3" spellcheck="false" placeholder="tighter:2:…"></textarea>
+          <p id="t-save-note" class="note" role="status"></p>
+        </section>
+        <p class="note">
+          Every click runs real evaluations of a real solver run in this browser, and every record is checked by the
+          server. Plays best in Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
+          <a href="/">Board</a> offers all of it, unrestricted.
+        </p>
+      </div>
+    </dialog>
     <script type="module" src="/src/tighter/main.ts"></script>
   </body>
 </html>

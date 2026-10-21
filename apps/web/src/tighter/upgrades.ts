@@ -387,10 +387,11 @@ function standingRung(
 export const UPGRADES: readonly Upgrade[] = [
   {
     id: "trace",
-    name: "Side-length trace",
+    name: "Trace detail",
     cost: 5,
     requires: [],
-    effect: "every improvement on a trace of the side",
+    effect:
+      "the trace in the board's corner gains its labels: the side at the start and now, the count of improvements and the evaluations between, with a mark at each improvement",
     real: "the Solve panel's trace",
     row: "clicks",
   },

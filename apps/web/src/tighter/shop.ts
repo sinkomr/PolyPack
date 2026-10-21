@@ -26,8 +26,10 @@ import {
  * is itself an unrevealed mystery reading ?????? too. The Standing row (paid in standing) shows only
  * once Standing is owned.
  *
- * `shopView` is pure (the tests read it); `ShopRenderer` puts it on the page and rebuilds the DOM
- * only when the view's shape changes, so it can run every second and on every click.
+ * `shopView` and `treeView` are pure (the tests read them); `TreeRenderer` draws the tree in its
+ * own pane, as columns of upgrades with lines from each prerequisite (the tech-tree concept,
+ * PolyPack-ideas/idle-games/tighter/techtree.html), building the DOM once per layout and updating
+ * states, prices and progress in place, so it can run every second and on every click.
  */
 
 export const MYSTERY = "??????";
@@ -136,7 +138,7 @@ function levelLine(o: Owned, u: Upgrade, coreCount: number): string | null {
   return u.levels.max >= 100 ? `Level ${l}` : `Level ${l} of ${u.levels.max}`;
 }
 
-function card(o: Owned, u: Upgrade, state: CardView["state"], coreCount: number): CardView {
+export function card(o: Owned, u: Upgrade, state: CardView["state"], coreCount: number): CardView {
   const needs = u.requires.filter((r) => !o.has(r)).map((r) => shownName(o, r));
   const currency = currencyOf(u);
   const l = level(o, u.id);
@@ -226,23 +228,6 @@ export function shopView(o: Owned, funds: Funds, coreCount = cores()): ShopView 
   return { rows, total, owned: ownedTotal, mysteries };
 }
 
-// ---------- on the page ----------
-
-/** A card whose prerequisites are owned: shown in full, with its progress and Buy button. */
-const reachable = (c: CardView) => c.state === "buyable" || c.state === "dear";
-
-/** The DOM shape of the view: rebuilt only when it changes (prices reached or not only enable buttons). */
-function signature(v: ShopView, selected: ReadonlyMap<Row, UpgradeId>): string {
-  return v.rows
-    .map(
-      (r) =>
-        `${r.id}:${selected.get(r.id) ?? ""}:${r.owned.join(",")}|${r.cards
-          .map((c) => `${c.id}.${c.state === "buyable" ? "dear" : c.state}.${c.cost}.${c.level}.${c.levelText}`)
-          .join(",")}`,
-    )
-    .join(";");
-}
-
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, textContent?: string) => {
   const e = document.createElement(tag);
   if (className) e.className = className;
@@ -267,162 +252,352 @@ export function chipName(name: string): string {
     .replace(/^Reach: /, "");
 }
 
-/** A price as a chip shows it: the number, its unit in the details. */
-const chipPrice = (c: CardView) => (c.cost === null ? null : fmtInt(c.cost));
+// ---------- the tree ----------
+
+/** One upgrade in the tree: a card's view, or an owned upgrade. */
+export interface NodeView extends Omit<CardView, "state"> {
+  state: CardState;
+  row: Row;
+  /** Its column: the longest chain of prerequisites before it. */
+  depth: number;
+}
+
+export interface TreeView {
+  rows: { id: Row; title: string }[];
+  nodes: NodeView[];
+  total: number;
+  owned: number;
+  mysteries: number;
+  /** Upgrades that can be bought now. */
+  buyable: number;
+  /** The cheapest upgrade in record points whose prerequisites are owned but that is not affordable yet. */
+  next: NodeView | null;
+}
+
+const DEPTH = new Map<UpgradeId, number>();
+for (const u of UPGRADES)
+  DEPTH.set(u.id, u.requires.length ? 1 + Math.max(...u.requires.map((r) => DEPTH.get(r) ?? 0)) : 0);
+
+/** The tree's view: every upgrade, owned ones included, with its state; the Standing row once Standing is owned. */
+export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView {
+  const nodes: NodeView[] = [];
+  let owned = 0;
+  let mysteries = 0;
+  const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
+  for (const { id: row } of rows)
+    for (const u of UPGRADES.filter((x) => x.row === row)) {
+      const done = u.id === "lanesx" && lanesMaxed(o, coreCount);
+      const state: CardState = done ? "owned" : cardState(o, funds, u.id);
+      const depth = DEPTH.get(u.id) ?? 0;
+      if (o.has(u.id)) owned++;
+      if (state === "mystery") mysteries++;
+      if (state === "owned") {
+        const name = done && !o.has(u.id) ? `${u.name}: no core left on this CPU` : ownedName(o, u, coreCount);
+        nodes.push({
+          ...card(o, u, "locked", coreCount),
+          state,
+          row,
+          depth,
+          name: u.name,
+          price: null,
+          cost: null,
+          needs: [],
+          levelText: u.levels ? levelLine(o, u, coreCount) : null,
+          label: `${name}: owned`,
+        });
+        continue;
+      }
+      nodes.push({ ...card(o, u, state, coreCount), state, row, depth });
+    }
+  const buyable = nodes.filter((n) => n.state === "buyable").length;
+  const dear = nodes.filter((n) => n.state === "dear" && n.currency === "rp" && n.cost !== null);
+  dear.sort((a, b) => a.cost! - b.cost!);
+  return {
+    rows,
+    nodes,
+    total: nodes.length,
+    owned,
+    mysteries,
+    buyable,
+    next: dear[0] ?? null,
+  };
+}
+
+/** Sizes of the tree's layout, in CSS pixels. */
+export const TREE = { nodeW: 136, nodeH: 62, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
+
+export interface TreeLayout {
+  width: number;
+  height: number;
+  /** Each node's top-left corner. */
+  at: Map<UpgradeId, { x: number; y: number }>;
+  /** Each row's band. */
+  bands: { id: Row; title: string; y: number; h: number }[];
+}
 
 /**
- * The shop on the page. Per row: the owned line, the cards that can be worked toward in full, and the
- * rest of the row (locked upgrades and mysteries) as compact chips; a chip pressed shows its details
- * under the row, so the whole tree stays in view without burying the other panels.
+ * Where each node goes: its column by depth (every prerequisite is to its left), its band by row,
+ * nodes of one row and column stacked in the order of their price.
  */
-export class ShopRenderer {
-  private sig = "";
-  /** Rows the player folded or unfolded (kept while the page is open). */
-  private open = new Map<Row, boolean>();
-  /** The chip whose details are shown, per row. */
-  private selected = new Map<Row, UpgradeId>();
-  private view: ShopView | null = null;
+export function treeLayout(rows: readonly { id: Row; title: string }[], nodes: readonly NodeView[]): TreeLayout {
+  const at = new Map<UpgradeId, { x: number; y: number }>();
+  const bands: TreeLayout["bands"] = [];
+  let y = 0;
+  let maxDepth = 0;
+  for (const r of rows) {
+    const list = nodes.filter((n) => n.row === r.id);
+    const byDepth = new Map<number, NodeView[]>();
+    for (const n of list) byDepth.set(n.depth, [...(byDepth.get(n.depth) ?? []), n]);
+    let stack = 1;
+    for (const [d, group] of byDepth) {
+      maxDepth = Math.max(maxDepth, d);
+      stack = Math.max(stack, group.length);
+      group
+        .sort((a, b) => upgrade(a.id).cost - upgrade(b.id).cost)
+        .forEach((n, k) =>
+          at.set(n.id, {
+            x: TREE.left + d * (TREE.nodeW + TREE.colGap),
+            y: y + TREE.label + k * (TREE.nodeH + TREE.subGap),
+          }),
+        );
+    }
+    const h = TREE.label + stack * (TREE.nodeH + TREE.subGap) + TREE.pad;
+    bands.push({ id: r.id, title: r.title, y, h });
+    y += h;
+  }
+  return { width: TREE.left * 2 + (maxDepth + 1) * (TREE.nodeW + TREE.colGap) - TREE.colGap, height: y, at, bands };
+}
+
+/** The line a node's state draws: what the bar under it shows, and its button's word. */
+function nodeAct(n: NodeView, touch: boolean): string {
+  if (n.state === "buyable") return touch ? "Details" : "Buy";
+  return "Details";
+}
+
+/**
+ * The tech tree on the page. A node is a card with one button: on a device with a pointer that
+ * hovers, pressing a node you can afford buys it, and hovering or focusing any node shows its
+ * details below the tree; on a touch screen a tap shows the details, which hold the Buy button.
+ */
+export class TreeRenderer {
+  private layoutSig = "";
+  private nodes = new Map<UpgradeId, HTMLElement>();
+  private edges: { from: UpgradeId; to: UpgradeId; path: SVGPathElement }[] = [];
+  private view: TreeView | null = null;
   private funds: Funds = { rp: 0, standing: 0 };
+  /** The node whose details are shown (pressed, or under the pointer or focus). */
+  private selected: UpgradeId | null = null;
+  private preview: UpgradeId | null = null;
+  private detailSig = "";
+  private readonly touch: boolean;
 
   constructor(
     private readonly box: HTMLElement,
     private readonly summary: HTMLElement,
+    private readonly detail: HTMLElement,
     private readonly onBuy: (id: UpgradeId) => void,
-  ) {}
+    /** Whether the upgrade can be bought this moment (the view may be a second old). */
+    private readonly canBuyNow: (id: UpgradeId) => boolean,
+  ) {
+    this.touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
+  }
 
-  render(view: ShopView, funds: Funds): void {
+  render(view: TreeView, funds: Funds): void {
     this.view = view;
     this.funds = funds;
     const summary =
       `${fmtInt(view.owned)} of ${fmtInt(view.total)} upgrades owned` +
-      (view.mysteries ? ` · ${fmtInt(view.mysteries)} still ${MYSTERY}` : "");
+      (view.mysteries ? ` · ${fmtInt(view.mysteries)} still ${MYSTERY}` : "") +
+      (view.buyable ? ` · ${fmtInt(view.buyable)} to buy now` : "");
     if (this.summary.textContent !== summary) this.summary.textContent = summary;
-    // a chip whose upgrade became reachable (or was bought) no longer has details to show
-    for (const [row, id] of this.selected) {
-      const c = view.rows.find((r) => r.id === row)?.cards.find((x) => x.id === id);
-      if (!c || reachable(c)) this.selected.delete(row);
+    const sig = view.nodes.map((n) => n.id).join(",");
+    if (sig !== this.layoutSig) {
+      this.layoutSig = sig;
+      this.build(view);
     }
-    const sig = signature(view, this.selected);
-    if (sig !== this.sig) {
-      this.sig = sig;
-      this.box.replaceChildren(...view.rows.map((r) => this.row(r)));
+    for (const n of view.nodes) this.update(n);
+    const byId = new Map(view.nodes.map((n) => [n.id, n] as const));
+    for (const e of this.edges) {
+      const to = byId.get(e.to);
+      const from = byId.get(e.from);
+      const cls = `t-edge${from?.state === "owned" ? " on" : ""}${to?.state === "mystery" ? " mystery" : ""}`;
+      if (e.path.getAttribute("class") !== cls) e.path.setAttribute("class", cls);
     }
-    // every render: how far the points go toward each price, and which can be bought now
-    const byId = new Map(view.rows.flatMap((r) => r.cards.map((c) => [c.id, c] as const)));
-    for (const node of Array.from(this.box.querySelectorAll<HTMLElement>(".t-card[data-id]"))) {
-      const c = byId.get(node.dataset.id as UpgradeId);
-      if (!c || c.cost === null) continue;
-      const have = c.currency === "rp" ? funds.rp : funds.standing;
-      const bar = node.querySelector("progress");
-      if (bar) bar.value = Math.min(have, c.cost);
-      const btn = node.querySelector("button");
-      if (btn) btn.disabled = c.state !== "buyable";
-      node.dataset.state = c.state;
-    }
+    this.renderDetail();
   }
 
-  private row(r: RowView): HTMLElement {
-    const head = (into: HTMLElement) => {
-      into.append(el("span", "t-row-title", r.title), el("span", "t-row-count", `${r.ownedCount} of ${r.total}`));
-    };
-    const ownedLine = () => {
-      const p = el("p", "t-owned");
-      p.append(el("span", "t-owned-label", "Owned: "), r.owned.join(" · "));
-      return p;
-    };
-    if (!r.cards.length) {
-      // nothing left to buy: one line
-      const div = el("div", "t-row t-row-done");
-      div.dataset.row = r.id;
-      const h = el("div", "t-row-head");
-      head(h);
-      div.append(h, ownedLine());
-      return div;
-    }
-    const d = el("details", "t-row");
-    d.dataset.row = r.id;
-    d.open = this.open.get(r.id) ?? true;
-    d.addEventListener("toggle", () => this.open.set(r.id, d.open));
-    const s = el("summary");
-    head(s);
-    d.append(s);
-    if (r.owned.length) d.append(ownedLine());
-    const full = r.cards.filter(reachable);
-    if (full.length) {
-      const list = el("div", "t-row-cards");
-      list.append(...full.map((c) => this.card(c)));
-      d.append(list);
-    }
-    const later = r.cards.filter((c) => !reachable(c));
-    if (later.length) {
-      const chips = el("div", "t-chips");
-      chips.setAttribute("aria-label", `${r.title}: later upgrades`);
-      chips.append(...later.map((c) => this.chip(r.id, c)));
-      d.append(chips);
-      const sel = later.find((c) => c.id === this.selected.get(r.id));
-      if (sel) d.append(this.detail(sel));
-    }
-    return d;
+  /** The first column worth looking at: the leftmost node that can be bought or saved toward. */
+  scrollToFrontier(): void {
+    const v = this.view;
+    if (!v) return;
+    const open = v.nodes.filter((n) => n.state === "buyable" || n.state === "dear");
+    const first = open.length ? Math.min(...open.map((n) => n.depth)) : 0;
+    this.box.scrollLeft = Math.max(0, (first - 1) * (TREE.nodeW + TREE.colGap));
   }
 
-  private chip(row: Row, c: CardView): HTMLElement {
-    const b = el("button", "t-chip");
-    b.type = "button";
-    b.dataset.id = c.id;
-    b.dataset.state = c.state;
-    const open = this.selected.get(row) === c.id;
-    b.setAttribute("aria-expanded", String(open));
-    b.setAttribute(
-      "aria-label",
-      c.state === "mystery" ? c.label : `${c.name}, ${c.price}: needs ${c.needs.join(", ")}; press for details`,
+  private build(view: TreeView): void {
+    const layout = treeLayout(view.rows, view.nodes);
+    const canvas = el("div", "t-tree-canvas");
+    canvas.style.width = `${layout.width}px`;
+    canvas.style.height = `${layout.height}px`;
+    for (const b of layout.bands) {
+      const band = el("div", "t-band");
+      band.dataset.row = b.id;
+      band.style.top = `${b.y}px`;
+      band.style.height = `${b.h}px`;
+      band.append(el("span", "t-band-title", b.title));
+      canvas.append(band);
+    }
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("class", "t-edges");
+    svg.setAttribute("width", String(layout.width));
+    svg.setAttribute("height", String(layout.height));
+    svg.setAttribute("aria-hidden", "true");
+    this.edges = [];
+    for (const n of view.nodes) {
+      const to = layout.at.get(n.id)!;
+      for (const r of upgrade(n.id).requires) {
+        const from = layout.at.get(r);
+        if (!from) continue;
+        const x1 = from.x + TREE.nodeW,
+          y1 = from.y + TREE.nodeH / 2,
+          x2 = to.x,
+          y2 = to.y + TREE.nodeH / 2;
+        const dx = Math.max(10, (x2 - x1) / 2);
+        const path = document.createElementNS(NS, "path");
+        path.setAttribute("d", `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`);
+        path.setAttribute("class", "t-edge");
+        svg.append(path);
+        this.edges.push({ from: r, to: n.id, path });
+      }
+    }
+    canvas.append(svg);
+    this.nodes.clear();
+    for (const n of view.nodes) {
+      const pos = layout.at.get(n.id)!;
+      const node = el("div", "t-node t-card");
+      node.dataset.id = n.id;
+      node.style.left = `${pos.x}px`;
+      node.style.top = `${pos.y}px`;
+      const name = el("h3", "t-node-name");
+      const foot = el("p", "t-node-foot");
+      foot.append(el("span", "t-node-price"), el("span", "t-level"));
+      const bar = el("span", "t-node-bar");
+      const btn = el("button", "t-node-act");
+      btn.type = "button";
+      btn.addEventListener("click", () => this.press(n.id));
+      btn.addEventListener("focus", () => this.hover(n.id));
+      btn.addEventListener("blur", () => this.hover(null));
+      node.addEventListener("mouseenter", () => this.hover(n.id));
+      node.addEventListener("mouseleave", () => this.hover(null));
+      node.append(name, foot, bar, btn);
+      canvas.append(node);
+      this.nodes.set(n.id, node);
+    }
+    const focused = document.activeElement?.closest<HTMLElement>(".t-node")?.dataset.id;
+    this.box.replaceChildren(canvas);
+    if (focused)
+      this.nodes
+        .get(focused as UpgradeId)
+        ?.querySelector("button")
+        ?.focus();
+  }
+
+  private update(n: NodeView): void {
+    const node = this.nodes.get(n.id);
+    if (!node) return;
+    if (node.dataset.state !== n.state) node.dataset.state = n.state;
+    const set = (sel: string, value: string) => {
+      const e = node.querySelector(sel)!;
+      if (e.textContent !== value) e.textContent = value;
+    };
+    set(".t-node-name", n.state === "mystery" ? MYSTERY : n.state === "owned" ? n.name : chipName(n.name));
+    set(
+      ".t-node-price",
+      n.state === "owned" ? "✓ owned" : n.state === "mystery" ? MYSTERY : n.price!.replace(/^next level /, "next "),
     );
-    b.append(el("span", "t-chip-name", c.state === "mystery" ? c.name : chipName(c.name)));
-    const price = chipPrice(c);
-    if (price) b.append(el("span", "t-chip-price", price));
-    b.addEventListener("click", () => {
-      if (this.selected.get(row) === c.id) this.selected.delete(row);
-      else this.selected.set(row, c.id);
-      if (this.view) this.render(this.view, this.funds);
-    });
-    return b;
+    set(".t-level", n.levelText ? (n.max && n.max < 100 ? `${n.level}/${n.max}` : `L${n.level}`) : "");
+    const have = n.currency === "rp" ? this.funds.rp : this.funds.standing;
+    const p = n.cost ? Math.max(0, Math.min(1, have / n.cost)) : n.state === "owned" ? 1 : 0;
+    const bar = node.querySelector<HTMLElement>(".t-node-bar")!;
+    const width = `${(p * 100).toFixed(1)}%`;
+    if (bar.style.width !== width) bar.style.width = width;
+    const btn = node.querySelector("button")!;
+    const word = nodeAct(n, this.touch);
+    if (btn.textContent !== word) btn.textContent = word;
+    const label = n.state === "buyable" && !this.touch ? n.label : `${n.label}; details`;
+    if (btn.getAttribute("aria-label") !== label) btn.setAttribute("aria-label", label);
+    const sel = this.selected === n.id ? "true" : "false";
+    if (btn.getAttribute("aria-expanded") !== sel) btn.setAttribute("aria-expanded", sel);
   }
 
-  private detail(c: CardView): HTMLElement {
-    const p = el("p", "t-chip-detail");
-    p.setAttribute("role", "note");
-    if (c.state === "mystery") {
-      p.append(el("strong", undefined, MYSTERY), ` · needs ${c.needs.join(", ")}.`);
-      return p;
+  private press(id: UpgradeId): void {
+    const n = this.view?.nodes.find((x) => x.id === id);
+    if (!n) return;
+    if (!this.touch && this.canBuyNow(id)) {
+      this.onBuy(id);
+      return;
     }
-    p.append(el("strong", undefined, c.name), ` · ${c.price}. ${sentence(c.effect)} `);
-    if (c.real) p.append(el("span", "t-real", `Real: ${c.real}. `));
-    if (c.levelText) p.append(`${c.levelText}. `);
-    p.append(el("em", undefined, `Needs ${c.needs.join(", ")}.`));
-    return p;
+    this.selected = this.selected === id ? null : id;
+    if (this.view) this.render(this.view, this.funds);
   }
 
-  private card(c: CardView): HTMLElement {
-    const node = el("div", "t-card");
-    node.dataset.id = c.id;
-    node.dataset.state = c.state;
-    const top = el("div", "t-card-head");
-    top.append(el("h3", undefined, c.name));
-    if (c.price) top.append(el("span", "t-price", c.price));
-    node.append(top);
-    const p = el("p", undefined, sentence(c.effect));
-    if (c.real) p.append(" ", el("span", "t-real", `Real: ${c.real}.`));
-    node.append(p);
-    if (c.levelText) node.append(el("p", "t-level", c.levelText));
-    const row = el("div", "t-card-row");
-    const bar = el("progress");
-    bar.max = c.cost!;
-    bar.setAttribute("aria-label", `${c.name}: ${c.currency === "rp" ? "points" : "standing"} toward its price`);
-    const btn = el("button", undefined, "Buy");
-    btn.setAttribute("aria-label", c.label);
-    btn.disabled = c.state !== "buyable";
-    btn.addEventListener("click", () => this.onBuy(c.id));
-    row.append(bar, btn);
-    node.append(row);
-    return node;
+  private hover(id: UpgradeId | null): void {
+    if (this.preview === id) return;
+    this.preview = id;
+    this.renderDetail();
+  }
+
+  /** The details of the node pressed, or else of the one under the pointer or focus. */
+  private renderDetail(): void {
+    const id = this.preview ?? this.selected;
+    const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
+    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.name}|${this.selected}` : "";
+    if (sig === this.detailSig) {
+      const buy = this.detail.querySelector<HTMLButtonElement>(".t-detail-buy");
+      if (buy && n) buy.disabled = n.state !== "buyable";
+      return;
+    }
+    this.detailSig = sig;
+    if (!n) {
+      this.detail.replaceChildren(
+        el(
+          "p",
+          "note",
+          this.touch
+            ? "Tap an upgrade for its details."
+            : "Point at an upgrade for its details; press one you can afford to buy it.",
+        ),
+      );
+      return;
+    }
+    const h = el("h3", undefined, n.state === "mystery" ? MYSTERY : n.name);
+    const status = el(
+      "p",
+      "t-detail-status",
+      n.state === "owned"
+        ? `Owned${n.levelText ? ` · ${n.levelText}` : ""}.`
+        : n.state === "mystery"
+          ? `Needs ${n.needs.join(", ")}.`
+          : n.state === "locked"
+            ? `${n.price} · needs ${n.needs.join(", ")}.`
+            : `${n.price}${n.levelText ? ` · ${n.levelText}` : ""}${n.state === "dear" ? " · saving up" : ""}.`,
+    );
+    const parts: HTMLElement[] = [h, status];
+    if (n.state !== "mystery") {
+      const p = el("p", undefined, sentence(n.effect));
+      if (n.real) p.append(" ", el("span", "t-real", `Real: ${n.real}.`));
+      parts.push(p);
+    }
+    if (n.state === "buyable" || n.state === "dear") {
+      const buy = el("button", "t-detail-buy primary", `Buy for ${n.price!.replace(/^next level /, "")}`);
+      buy.type = "button";
+      buy.disabled = n.state !== "buyable";
+      buy.setAttribute("aria-label", n.label);
+      buy.addEventListener("click", () => this.onBuy(n.id));
+      parts.push(buy);
+    }
+    this.detail.replaceChildren(...parts);
   }
 }

@@ -93,7 +93,7 @@ import {
 } from "./rank";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
-import { ShopRenderer, shopView } from "./shop";
+import { TreeRenderer, treeView } from "./shop";
 import {
   MARKS,
   RESET_MIN,
@@ -122,6 +122,7 @@ import {
   autoPerSecond,
   awayHours,
   bankCap,
+  canBuy,
   cores,
   dealerChoices,
   evalsPerClick,
@@ -283,6 +284,19 @@ const statusEl = $("status");
 const say = (text: string) => {
   statusEl.textContent = text;
 };
+const noticeEl = $("t-notice");
+/**
+ * Something that happened: kept in the save's log, and when it matters to the player (the server
+ * confirmed, refused or took back points, a record was lost, a reset) shown on the notice line under
+ * the board until the next one. The page has no log panel.
+ */
+function event(text: string, notice = true): void {
+  log(state, now(), text);
+  if (!notice) return;
+  const d = new Date(now());
+  noticeEl.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} · ${text}`;
+  noticeEl.hidden = false;
+}
 const board = new Board();
 const view = new BoardView($<HTMLCanvasElement>("board"), board, () => {});
 view.readOnly = true;
@@ -300,9 +314,10 @@ function ghost(p: ProblemState, around: Container | null): Container {
 }
 
 let shown = "";
-/** Puts the focused problem's board on the canvas, when it changed. */
+/** Puts the focused problem's board on the canvas, when it changed; a new problem is placed at once. */
 function showFocus(force = false): void {
   const p = focused();
+  if (p && p.phase === "bare" && ownsGame && !loading.has(p.key)) void loadAll(p).then(() => showFocus());
   const sig = p ? `${p.key}|${p.phase}|${p.best}` : "";
   if (!force && sig === shown) return;
   const refit = !p || !shown.startsWith(`${p.key}|`) || force;
@@ -335,11 +350,23 @@ function fitView(c: Container | null): void {
   if (!c || !(c.size > 0) || !w || !h) return;
   // distance from the centre to a vertex (polygon) or the rim (circle)
   const reach = c.M === 0 ? c.size : c.size / (2 * Math.sin(Math.PI / c.M));
-  const zoom = (0.42 * Math.min(w, h)) / reach;
-  if (zoom < view.cam.zoom) {
-    view.cam.zoom = zoom;
-    view.requestDraw();
-  }
+  let zoom = (0.42 * Math.min(w, h)) / reach;
+  // the trace and the score sit in the canvas's bottom corners: beside the packing when there is
+  // room, otherwise the packing is fitted above them
+  const inset = overlayInset(w, 0.42 * Math.min(w, h));
+  if (inset > 0) zoom = Math.min(zoom, (0.42 * Math.min(w, Math.max(h * 0.45, h - inset))) / reach);
+  if (zoom < view.cam.zoom) view.cam.zoom = zoom;
+  if (inset > 0) view.cam.y = c.cy - Math.min(inset, h * 0.55) / 2 / view.cam.zoom;
+  view.requestDraw();
+}
+
+/** Height the corner overlays take at the bottom of the canvas, when a packing this wide (half, in pixels) would run under them. */
+function overlayInset(w: number, halfWidth: number): number {
+  const boxes = [$("t-pip"), $("t-score")].filter((e) => !e.hidden && e.offsetWidth > 0);
+  if (!boxes.length) return 0;
+  const ow = Math.max(...boxes.map((e) => e.offsetWidth));
+  if (w / 2 - halfWidth >= ow + 12) return 0;
+  return Math.max(...boxes.map((e) => e.offsetHeight)) + 12;
 }
 // The canvas changes size when the banner comes and goes (and with the window): fit again.
 let canvasSize = "";
@@ -513,18 +540,18 @@ async function loadAll(p: ProblemState): Promise<boolean> {
       say(
         start.transferred
           ? `Transfer: the best packing of ${transfer!.from} pieces, with ${p.P - transfer!.from} more placed around it. ` +
-              `Side ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound (Load all: ${show6(e.score)}). ` +
+              `Side ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound (pieces on rings: ${show6(e.score)}). ` +
               (p.floor! < start.score
                 ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
-                : "This is the free floor: a transfer is never sent unimproved. Press Compact.")
-          : `Load all: ${p.P} pieces on rings around the centre. Side ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
+                : "This is the free floor: a transfer is never sent unimproved. Press Evolve: the first click compacts it.")
+          : `${p.P} pieces placed on rings around the centre. Side ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
               (p.floor! < e.score
                 ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
-                : "This is the free floor: Load all is never sent. Press Compact."),
+                : "This start is the free floor and is never sent. Press Evolve: the first click compacts it."),
       );
     }
     if (start.transferred)
-      log(state, now(), `Transfer on ${problemTitle(p)}: started from the packing of ${transfer!.from} pieces.`);
+      event(`Transfer on ${problemTitle(p)}: started from the packing of ${transfer!.from} pieces.`, false);
     persist();
     return true;
   } finally {
@@ -533,12 +560,24 @@ async function loadAll(p: ProblemState): Promise<boolean> {
   }
 }
 
-/** Queues a press on the focused problem: Compact (100 evaluations) or Evolve (a click's). */
-function press(compact: boolean): void {
+/** A Compact of the problem is queued or running (the player's first click, or Auto-advance's). */
+const compacting = (key: string) =>
+  lanes.some((l) => (l.current?.key === key && l.current.compact) || l.jobs.some((j) => j.key === key && j.compact));
+/** The next Evolve click on the problem compacts it first: its board is the start, not yet a run's. */
+const compactsFirst = (p: ProblemState) => p.phase === "loaded" && !p.run && !compacting(p.key);
+
+/**
+ * Queues an Evolve click on the focused problem. The first click on a board that has only been
+ * placed (a new problem is placed at once when it is shown) is Compact: 100 evaluations of
+ * mc_compress, as one press. Clicks pressed while that Compact runs queue behind it as Evolve clicks.
+ */
+function press(): void {
   const p = focused();
   if (!p || !ownsGame || p.leaving || p.closed) return;
+  stopped = false;
   const o = owned();
-  if (compact ? p.phase !== "loaded" || !!p.run || laneOn(p.key) : !evolvable(p)) return;
+  const compact = compactsFirst(p);
+  if (!compact && !evolvable(p) && !compacting(p.key)) return;
   if (!compact && spent(p, seedsPerProblem(o))) {
     say(spentText(p));
     return;
@@ -770,23 +809,21 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
           ? `New record ${show6(p.best!)} · no one had packed ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
           : `New best ${show6(p.best!)} on ${problemTitle(p)}.`,
     };
-    log(
-      state,
-      now(),
+    event(
       `New record ${show6(p.best!)} on ${problemTitle(p)}${state.consent ? "" : " (not sent: no name yet)"}.`,
+      false,
     );
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (st.ended && !st.closed && !st.error) {
     const left = spent(p, seedsPerProblem(owned()));
-    log(
-      state,
-      now(),
+    event(
       `The run with seed ${run.seed} on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}.` +
         (left ? " Its seeds are spent." : ` The next click starts one with a new seed${nextStageText(p)}.`),
     );
   }
-  if (job.click && p.key === state.focus) say(stepMessage(p, change, run, job, done));
+  // after Stop, the click that was already running does not write over "Stopped"
+  if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done));
   persist();
   scheduleRender();
   void submitTick();
@@ -826,7 +863,11 @@ function spentText(p: ProblemState): string {
   return `Every seed on ${problemTitle(p)} has run until it stopped improving (${n} of ${n}). Take the next problem${n < 16 ? ", or buy more seeds" : ""}.`;
 }
 
+/** Stop was pressed and no click since: the status line keeps saying so. */
+let stopped = false;
+
 function stopAll(): void {
+  stopped = true;
   state.settings.auto = false;
   for (const l of lanes) l.jobs = l.jobs.filter((j) => j.compact && j.click);
   say("Stopped: auto-eval is off and queued clicks are dropped. What auto-eval earned stays in its bank.");
@@ -966,10 +1007,9 @@ function orient(p: ProblemState): void {
   p.best = e.score;
   const points = pay(state, p);
   if (points)
-    log(
-      state,
-      now(),
+    event(
       `Turning the container on ${problemTitle(p)} gained ${fmtChange(p.best / (1 - points.delta), p.best)} (+${fmtRP(points.total)} RP).`,
+      false,
     );
 }
 
@@ -980,12 +1020,12 @@ async function submit(p: ProblemState): Promise<void> {
   if (problem(state, p.key) !== p || !ownsGame) return;
   if (!info) {
     state.pacer = pause(state.pacer, now(), OFFLINE_BACKOFF_MS);
-    log(state, now(), "The server cannot be reached; sending waits half a minute.");
+    event("The server cannot be reached; sending waits half a minute.");
     return;
   }
   if (!info.accepts_submissions) {
     p.closed = true;
-    log(state, now(), `${problemTitle(p)} is closed: its optimum is proven. It leaves the queue.`);
+    event(`${problemTitle(p)} is closed: its optimum is proven. It leaves the queue.`);
     leave(state, p.key, now());
     return;
   }
@@ -1020,45 +1060,37 @@ async function submit(p: ProblemState): Promise<void> {
   switch (outcome.kind) {
     case "leader":
       reveal(state, "points", "upgrades");
-      log(
-        state,
-        now(),
+      event(
         `Verified: ${show6(outcome.score)} is the record for ${title}${a.confirmed > 0 ? ` (${fmtRP(a.confirmed)} RP confirmed)` : ""}.`,
       );
-      if (outcome.pending) log(state, now(), "It beats a published value and waits for an administrator's review.");
+      if (outcome.pending) event("It beats a published value and waits for an administrator's review.");
       break;
     case "behind":
-      log(
-        state,
-        now(),
+      event(
         `Another entry got there first on ${title}: the record is ${show6(outcome.leaderScore ?? 0)}.` +
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : "") +
           (a.points ? ` Your board still beats it: +${fmtRP(a.points.total)} RP.` : ""),
       );
       break;
     case "closed":
-      log(
-        state,
-        now(),
+      event(
         `${title} is closed: ${outcome.reasons.join("; ")}. It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
       );
       leave(state, p.key, now());
       break;
     case "rate-limited":
       state.pacer = pause(state.pacer, now(), RATE_LIMITED_BACKOFF_MS);
-      log(state, now(), "The server asks to wait a minute; sending pauses.");
+      event("The server asks to wait a minute; sending pauses.");
       break;
     case "refused":
-      log(
-        state,
-        now(),
+      event(
         `The server refused the entry on ${title} (${outcome.status}): ${outcome.reasons.join("; ")}.` +
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""),
       );
       break;
     case "offline":
       state.pacer = pause(state.pacer, now(), OFFLINE_BACKOFF_MS);
-      log(state, now(), "The server cannot be reached; sending waits half a minute.");
+      event("The server cannot be reached; sending waits half a minute.");
       break;
   }
   if (p.leaving && !hasUnsent(p)) leave(state, p.key, now());
@@ -1316,7 +1348,7 @@ function dealt(p: ProblemState, r: { bucket: string; prior: number }, retake = f
   takeToken(state.dealer);
   addToQueue(state, p);
   state.picks.dealt[p.key] = { bucket: r.bucket, prior: r.prior };
-  log(state, now(), `${retake ? "Retake" : "Dealt"}: ${problemTitle(p)}${dealtNote(p)}.`);
+  event(`${retake ? "Retake" : "Dealt"}: ${problemTitle(p)}${dealtNote(p)}.`, false);
   persist();
   showFocus();
 }
@@ -1450,14 +1482,14 @@ async function takeOffer(x: Offer, auto = false): Promise<void> {
   const title = problemTitle(x);
   if (!offerStands(info, x)) {
     skipped.add(keyOf(x));
-    log(state, now(), `${title} changed since it was offered (someone took it, or its record moved); it is gone.`);
+    event(`${title} changed since it was offered (someone took it, or its record moved); it is gone.`);
     persist();
     return;
   }
   const p = await materialize(x);
   if (!p || problem(state, p.key)) {
     skipped.add(keyOf(x));
-    log(state, now(), `${title} could not be loaded; it is gone.`);
+    event(`${title} could not be loaded; it is gone.`);
     persist();
     return;
   }
@@ -1498,9 +1530,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
   const r = applyLeader(p, leader, state, now());
   if (r.reconciled && leader) {
     reveal(state, "points", "upgrades");
-    log(
-      state,
-      now(),
+    event(
       `Verified: ${show6(leader.score)} is the record for ${problemTitle(p)}` +
         `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}; its answer had not arrived.`,
     );
@@ -1508,9 +1538,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     // Retake: a record lost after it left the queue is offered again first
     const retake = owned().has("retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
-    log(
-      state,
-      now(),
+    event(
       `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.` +
         (retake ? " It will be offered again first." : ""),
     );
@@ -1627,9 +1655,15 @@ function render(): void {
   showFocus();
 
   // reveals: a panel once shown stays
-  if (s.queue.some((q) => q.phase !== "bare") || s.past.length) reveal(s, "score");
-  if (s.consent || s.stats.firstRecords || s.queue.some((q) => q.phase === "ready" && q.tier === "open"))
-    reveal(s, "consent", "log");
+  if (s.consent || s.stats.firstRecords || s.queue.some((q) => q.phase === "ready" && q.tier === "open")) {
+    reveal(s, "consent");
+    // the first record asks once for a name, in a pop-up over the board; after that, Settings holds it
+    if (!revealed(s, "asked") && ownsGame) {
+      reveal(s, "asked");
+      if (!s.consent) openWelcome();
+      persist();
+    }
+  }
   if (s.rpEarned > 0) reveal(s, "points", "upgrades");
   if (queueSize(o) > 1) reveal(s, "queue");
   if (o.has("auto1") || o.has("lanes2")) reveal(s, "lanes");
@@ -1670,10 +1704,15 @@ function render(): void {
   renderQueue(o);
   renderLanes(o);
   renderRuns(o);
-  renderLog();
   show("t-bg-box", o.has("continuous"));
   $<HTMLInputElement>("t-bg").checked = s.settings.background && o.has("continuous");
   $<HTMLInputElement>("t-battery").checked = s.settings.battery;
+  text(
+    "t-run-note",
+    o.has("continuous")
+      ? "Without the first, a hidden tab banks auto-eval's evaluations and runs them when you are back."
+      : "A hidden tab banks auto-eval's evaluations and runs them when you are back (Continuous, in the tech tree, lets it run instead).",
+  );
   renderStanding(o);
   renderRecords(o);
 }
@@ -1725,15 +1764,24 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const lv = p ? laneOn(p.key) : undefined;
   const canEvolve = !!p && evolvable(p);
   const seeds = seedsPerProblem(o);
-  show("t-loadall", !canEvolve);
-  $<HTMLButtonElement>("t-loadall").disabled = !p || p.phase !== "bare" || loading.has(p.key);
-  show("t-compact", !canEvolve);
-  $<HTMLButtonElement>("t-compact").disabled = !p || p.phase !== "loaded" || !!p.run || !!lv;
-  show("t-evolve", canEvolve);
+  // one button: the first click on a board that has only been placed compacts it (100 evaluations)
+  const first = !!p && compactsFirst(p);
   const k = evalsPerClick(o);
-  text("t-evolve", k === 1 ? "Evolve" : `Evolve ×${k}`);
-  $<HTMLButtonElement>("t-evolve").disabled = !canEvolve || !!p?.leaving || !!p?.closed || (!!p && spent(p, seeds));
-  $("t-evolve").title = `Runs ${evals(k)} of the open solver run on this board`;
+  text("t-evolve", first ? "Evolve (compacts first)" : k === 1 ? "Evolve" : `Evolve ×${k}`);
+  $<HTMLButtonElement>("t-evolve").disabled =
+    !p ||
+    p.phase === "bare" ||
+    p.leaving ||
+    p.closed ||
+    (!first && !canEvolve && !compacting(p.key)) ||
+    (canEvolve && spent(p, seeds));
+  $("t-evolve").title = !p
+    ? "No problem yet"
+    : p.phase === "bare"
+      ? "Placing the pieces…"
+      : first
+        ? `The first click compacts the board: ${evals(COMPACT_EVALS)} of mc_compress, as one press; then each click runs ${evals(k)}`
+        : `Runs ${evals(k)} of the open solver run on this board`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
   const canAuto = o.has("methodMatch") || o.has("autoTune");
@@ -1779,7 +1827,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     if (queued) info += ` · ${evals(queued)} queued`;
     if (o.has("seeds")) info += ` · ${seedsText(p, seeds)}`;
   } else if (p) {
-    info = p.phase === "bare" ? "0 pieces placed" : `${p.P} pieces placed`;
+    info = p.phase === "bare" ? "Placing the pieces…" : `${p.P} pieces placed`;
     if (lv?.current?.compact) info = `Compact · mc_compress · ${evals(lv.progress?.evaluations ?? 0)}`;
     if (o.has("seeds") && p.runs) info += ` · ${seedsText(p, seeds)}`;
   }
@@ -1797,9 +1845,10 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
 }
 
 function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): void {
-  show("t-score", revealed(state, "score") && !!p);
+  show("t-score", !!p);
+  show("t-pip", !!p);
   if (!p) return;
-  text("t-side-label", p.M === 0 ? "Container radius r" : "Container side s");
+  text("t-side-label", p.M === 0 ? "Radius r" : "Side s");
   const b = areaLowerBound(p.N, p.M, p.P);
   text("t-bound", show6(b));
   if (p.best === null || p.phase === "bare") {
@@ -1825,13 +1874,16 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
         ? `${show6(p.leader.score)} by ${p.leader.name}`
         : "none yet",
   );
-  // the trace: the side after each improvement on this problem, by evaluations run here
+  // the trace, always in the board's corner: the side after each improvement here, by evaluations run
+  // here; Trace detail adds its labels and a mark at each improvement
   const svg = $("t-trace") as unknown as SVGSVGElement;
   const tr = p.trace;
-  const visible = o.has("trace") && tr.length >= 2;
+  const visible = tr.length >= 2;
   svg.toggleAttribute("hidden", !visible);
+  show("t-trace-empty", !visible);
   if (!visible) return;
-  const sig = `${p.key}|${tr.length}|${tr[tr.length - 1][1]}`;
+  const detail = o.has("trace");
+  const sig = `${p.key}|${tr.length}|${tr[tr.length - 1][1]}|${detail}`;
   if (svg.dataset.sig === sig) return;
   svg.dataset.sig = sig;
   const sides = tr.map(([, v]) => v);
@@ -1841,18 +1893,36 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
   const e0 = tr[0][0],
     e1 = tr[tr.length - 1][0];
   const span = e1 - e0 || 1;
-  const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+  const bottom = detail ? 72 : 88;
+  const pt = ([e, v]: [number, number]) =>
+    [10 + (280 * (e - e0)) / span, 10 + ((bottom - 10) * (high - v)) / range] as const;
+  const NS = "http://www.w3.org/2000/svg";
+  const line = document.createElementNS(NS, "polyline");
   line.setAttribute(
     "points",
     tr
-      .map(([e, v]) => `${(10 + (280 * (e - e0)) / span).toFixed(1)},${(10 + (65 * (high - v)) / range).toFixed(2)}`)
+      .map(pt)
+      .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(2)}`)
       .join(" "),
   );
-  const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-  label.setAttribute("x", "10");
-  label.setAttribute("y", "92");
-  label.textContent = `${show6(sides[0])} → ${show6(sides[sides.length - 1])} · ${evals(e1 - e0)}`;
-  svg.replaceChildren(line, label);
+  const parts: SVGElement[] = [line];
+  if (detail) {
+    // a mark at each improvement (the last 60), and the labels
+    for (const q of tr.slice(-60)) {
+      const [x, y] = pt(q);
+      const dot = document.createElementNS(NS, "circle");
+      dot.setAttribute("cx", x.toFixed(1));
+      dot.setAttribute("cy", y.toFixed(2));
+      dot.setAttribute("r", "2.2");
+      parts.push(dot);
+    }
+    const label = document.createElementNS(NS, "text");
+    label.setAttribute("x", "10");
+    label.setAttribute("y", "92");
+    label.textContent = `${show6(sides[0])} → ${show6(sides[sides.length - 1])} · ${fmtInt(tr.length)} improvements · ${evals(e1 - e0)}`;
+    parts.push(label);
+  }
+  svg.replaceChildren(...parts);
   svg.setAttribute(
     "aria-label",
     `Side after each improvement, from ${show6(sides[0])} to ${show6(sides[sides.length - 1])} over ${evals(e1 - e0)}`,
@@ -1860,7 +1930,6 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
 }
 
 function renderConsent(): void {
-  show("t-consent", revealed(state, "consent"));
   const name = $<HTMLInputElement>("t-name");
   const agree = $<HTMLInputElement>("t-agree");
   if (document.activeElement !== name && !name.dataset.edited) name.value = state.name;
@@ -1870,7 +1939,7 @@ function renderConsent(): void {
     state.consent
       ? `Your records go to PolyPack as “${state.name}”, at most one per problem a minute and six a minute in all. Untick and save to stop.`
       : state.stats.submissions
-        ? "Sending is off. Your records stay here until you send them, and earn no points meanwhile."
+        ? `Sending is off. New records stay in this browser and earn nothing until you send them${owned().has("rent") ? "; records already on the server keep paying rent" : ""}.`
         : "Nothing has been sent yet. Records earn points once they go to PolyPack under your name.",
   );
 }
@@ -1884,6 +1953,7 @@ function renderPoints(): void {
   const waiting = unconfirmedPoints(state);
   let unpaid = 0;
   if (!state.consent) for (const q of state.queue) unpaid += pendingPoints(q, state.name, state)?.total ?? 0;
+  show("t-name-nudge", !state.consent && revealed(state, "asked"));
   text(
     "t-pending",
     !state.consent && unpaid > 0
@@ -1894,12 +1964,50 @@ function renderPoints(): void {
   );
 }
 
-const shop = new ShopRenderer($("t-cards"), $("t-shop-summary"), (id) => onBuy(id));
+const tree = new TreeRenderer(
+  $("t-cards"),
+  $("t-shop-summary"),
+  $("t-tree-detail"),
+  (id) => onBuy(id),
+  (id) => canBuy(owned(), { rp: state.rp, standing: state.standing.points }, id).ok,
+);
+/** The tech tree is the view in place of the board (kept while the page is open). */
+let treeOpen = false;
 function renderUpgrades(o: Owned): void {
-  show("t-upgrades", revealed(state, "upgrades"));
-  if (!revealed(state, "upgrades")) return;
+  const on = revealed(state, "upgrades");
+  show("t-views", on);
+  if (!on) treeOpen = false;
+  show("t-board-view", !treeOpen);
+  show("t-upgrades", treeOpen);
   const funds = { rp: state.rp, standing: state.standing.points };
-  shop.render(shopView(o, funds), funds);
+  const v = treeView(o, funds);
+  if (treeOpen) tree.render(v, funds);
+  // near the board, always: what can be bought now, else the next upgrade to save for
+  const count = $("t-tab-count");
+  show("t-tab-count", v.buyable > 0);
+  text("t-tab-count", ` ${fmtInt(v.buyable)}`);
+  count.setAttribute("aria-label", `${fmtInt(v.buyable)} to buy`);
+  text(
+    "t-next-up",
+    v.buyable > 0
+      ? `${fmtInt(v.buyable)} upgrade${v.buyable === 1 ? "" : "s"} to buy in the tech tree`
+      : v.next
+        ? `Next: ${v.next.name} at ${v.next.price}`
+        : "",
+  );
+  $("t-next-up").dataset.ready = String(v.buyable > 0);
+}
+
+function setView(toTree: boolean): void {
+  if (treeOpen === toTree) return;
+  treeOpen = toTree;
+  $("t-tab-board").setAttribute("aria-selected", String(!toTree));
+  $("t-tab-tree").setAttribute("aria-selected", String(toTree));
+  $("t-tab-board").tabIndex = toTree ? -1 : 0;
+  $("t-tab-tree").tabIndex = toTree ? 0 : -1;
+  render();
+  if (toTree) tree.scrollToFrontier();
+  else fitView(board.container ?? view.ghost);
 }
 
 function onBuy(id: UpgradeId): void {
@@ -1909,7 +2017,7 @@ function onBuy(id: UpgradeId): void {
   if (!buy(state, id)) return;
   const u = upgrade(id);
   const l = u.levels ? ` (level ${level(owned(), id)})` : "";
-  log(state, now(), `Bought ${u.name}${l}: ${u.effect}.`);
+  event(`Bought ${u.name}${l}: ${u.effect}.`, false);
   say(`${u.name}${l}: ${u.effect}.`);
   ensureLanes();
   persist();
@@ -2104,7 +2212,7 @@ function onSaveFilters(e: Event): void {
       ? "No filters: the dealer draws from everything you have reached."
       : "Filters saved. The dealer draws only what they allow; if nothing fits, nothing is dealt.",
   );
-  log(state, now(), none ? "Dealer filters cleared." : "Dealer filters saved.");
+  event(none ? "Dealer filters cleared." : "Dealer filters saved.", false);
   persist();
   render();
   void dealTick();
@@ -2123,7 +2231,7 @@ function onDrop(key: string): void {
     }
   }
   const left = drop(state, key, now());
-  log(state, now(), left ? `Dropped ${problemTitle(p)}.` : `Dropping ${problemTitle(p)} once its best has been sent.`);
+  event(left ? `Dropped ${problemTitle(p)}.` : `Dropping ${problemTitle(p)} once its best has been sent.`, false);
   persist();
   showFocus();
   render();
@@ -2198,23 +2306,6 @@ function renderRuns(o: Owned): void {
       persist();
       render();
     },
-  );
-}
-
-let logSig = "";
-function renderLog(): void {
-  show("t-events", revealed(state, "log"));
-  const lines = state.log.slice(-12).reverse();
-  const sig = lines.map((l) => `${l.t}${l.text}`).join("|");
-  if (sig === logSig) return;
-  logSig = sig;
-  $("t-log").replaceChildren(
-    ...lines.map((l) => {
-      const li = document.createElement("li");
-      const d = new Date(l.t);
-      li.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} ${l.text}`;
-      return li;
-    }),
   );
 }
 
@@ -2432,9 +2523,7 @@ async function doReset(): Promise<void> {
   if (gain > 0) {
     const st = state.standing;
     const next = ruleById(st.rule);
-    log(
-      state,
-      now(),
+    event(
       `Reset for ${fmtInt(gain)} standing${rule ? `, the cycle finished under ${rule.name} (for good: ${rule.reward})` : ""}. All points ×${standingMultiplier(st).toFixed(1)}.`,
     );
     say(
@@ -2448,6 +2537,61 @@ async function doReset(): Promise<void> {
   void dealTick();
 }
 
+// ---------- dialogs: the first record's pop-up, and Settings ----------
+
+const welcome = $<HTMLDialogElement>("t-welcome");
+const settingsDialog = $<HTMLDialogElement>("t-settings");
+
+/** The name-and-consent form lives in Settings; the first record's pop-up borrows it. */
+function placeConsent(into: "welcome" | "settings"): void {
+  const slot = $(into === "welcome" ? "t-welcome-slot" : "t-settings-slot");
+  const form = $("t-consent");
+  if (form.parentElement !== slot) slot.append(form);
+}
+
+/** The first record found: a pop-up over the board asks for a name (it does not stop the game). */
+function openWelcome(): void {
+  if (settingsDialog.open) return;
+  placeConsent("welcome");
+  renderConsent();
+  if (!welcome.open) welcome.show();
+  $("t-name").focus();
+}
+
+function closeWelcome(): void {
+  if (welcome.open) welcome.close();
+  placeConsent("settings");
+}
+
+function openSettings(focusName = false): void {
+  closeWelcome();
+  renderConsent();
+  if (!settingsDialog.open) settingsDialog.showModal();
+  if (focusName) $("t-name").focus();
+}
+
+$("t-open-settings").addEventListener("click", () => openSettings());
+$("t-settings-close").addEventListener("click", () => settingsDialog.close());
+// a press on the backdrop closes Settings
+settingsDialog.addEventListener("click", (e) => {
+  if (e.target === settingsDialog) settingsDialog.close();
+});
+$("t-name-nudge").addEventListener("click", () => openSettings(true));
+$("t-welcome-later").addEventListener("click", () => {
+  closeWelcome();
+  say("Your record stays in this browser. You can put your name on your records any time in Settings.");
+});
+$("t-tab-board").addEventListener("click", () => setView(false));
+$("t-tab-tree").addEventListener("click", () => setView(true));
+// the tabs as a tab list: the arrow keys move between them
+for (const id of ["t-tab-board", "t-tab-tree"])
+  $(id).addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    setView(!treeOpen);
+    $(treeOpen ? "t-tab-tree" : "t-tab-board").focus();
+  });
+
 // ---------- controls ----------
 
 $("t-filter-form").addEventListener("submit", onSaveFilters);
@@ -2459,12 +2603,7 @@ $("t-f-clear").addEventListener("click", () => {
   for (const t of TIERS) $<HTMLInputElement>(`t-f-tier-${t}`).checked = true;
   $<HTMLFormElement>("t-filter-form").requestSubmit();
 });
-$("t-loadall").addEventListener("click", () => {
-  const p = focused();
-  if (p) void loadAll(p).then(() => showFocus());
-});
-$("t-compact").addEventListener("click", () => press(true));
-$("t-evolve").addEventListener("click", () => press(false));
+$("t-evolve").addEventListener("click", () => press());
 $("t-method").addEventListener("change", () => {
   const o = owned();
   const v = $<HTMLSelectElement>("t-method").value;
@@ -2529,7 +2668,8 @@ $("t-consent-form").addEventListener("submit", (e) => {
       ? `Your records will be sent to PolyPack as “${name}”.${paid > 0 ? ` +${fmtRP(paid)} RP for your records so far.` : ""}`
       : `Nothing will be sent. Your records stay in this browser.${withdrawn > 0 ? ` ${fmtRP(withdrawn)} RP not yet confirmed by the server were taken back; they pay again when you send.` : ""}`,
   );
-  log(state, now(), agree ? `Sending records as “${name}”.` : "Sending is off.");
+  event(agree ? `Sending records as “${name}”.` : "Sending is off.", false);
+  closeWelcome();
   persist();
   render();
   void submitTick();
