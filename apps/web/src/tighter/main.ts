@@ -16,7 +16,7 @@ import {
   openDealable,
   takeToken,
 } from "./dealer";
-import { FRONTIER, STARTER, keyOf, problemTitle } from "./frontier";
+import { FRONTIER, STARTER, keyOf, parseKey, problemTitle, shapeName } from "./frontier";
 import {
   GameState,
   Leader,
@@ -55,6 +55,17 @@ import {
   submitTarget,
   unconfirmedPoints,
 } from "./game";
+import {
+  RENT_CHECK_MS,
+  collections,
+  collectionsBonus,
+  nextRentCheck,
+  rentRate,
+  rentWaiting,
+  settleRent,
+  syncEconomy,
+  tidyRent,
+} from "./economy";
 import { Lane } from "./lanes";
 import type { RunState } from "./open-run";
 import {
@@ -68,6 +79,20 @@ import {
 import { FLOOR, gapOf, show6 } from "./points";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import {
+  MARKS,
+  RESET_MIN,
+  RULES,
+  bestMark,
+  markProgress,
+  resetCycle,
+  resetPreview,
+  ruleAllowsMethod,
+  ruleAllowsProblem,
+  ruleById,
+  ruleOpenProblems,
+  standingMultiplier,
+} from "./standing";
 import { RunRecord, classifyAnswer, shouldSubmit, submissionBody } from "./submission";
 import { sanitizeName } from "./names";
 import {
@@ -87,7 +112,10 @@ import {
   queueSize,
   seedsPerProblem,
   upgrade,
+  UPGRADES,
+  costOf,
 } from "./upgrades";
+import type { Owned } from "./upgrades";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -158,6 +186,8 @@ function initialState(): GameState {
 }
 
 let state = initialState();
+// collections and the first cycle's earnings, for a save from before records were an economy
+syncEconomy(state);
 /**
  * While the page was closed, auto-eval (if it was on) kept earning evaluations into its bank, up to
  * the hours the player's upgrades keep. Then it is off: compute starts only on a press, and the
@@ -206,7 +236,9 @@ document.addEventListener("visibilitychange", () => {
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
 const chosenMethod = (o: ReadonlySet<UpgradeId>): EvolveMethod =>
-  methods(o).includes(state.settings.method) ? state.settings.method : "mc_compress";
+  methods(o).includes(state.settings.method) && ruleAllowsMethod(state.standing, state.settings.method)
+    ? state.settings.method
+    : "mc_compress";
 
 // ---------- board ----------
 
@@ -672,7 +704,7 @@ function accrueBank(): void {
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
   const k = evalsPerClick(o);
-  if (!o.has("auto1") || !state.settings.auto || holdReason() || state.bank < k) return null;
+  if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || state.bank < k) return null;
   const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
   const target = autoTarget({
     lane: lanes.indexOf(lv),
@@ -892,11 +924,16 @@ async function deal(d: DealerState): Promise<ProblemState | null> {
     const loose = await dealLoose(d, exclude);
     if (loose) return loose;
   }
-  // the first problem comes from the starter corner while any of it is left open
-  for (const list of d.dealt === 0 ? [STARTER, FRONTIER] : [FRONTIER]) {
+  // a cycle rule may need problems of its own (circles); the first problem comes from the starter corner
+  const ruled = ruleOpenProblems(state.standing);
+  for (const list of ruled ? [ruled] : d.dealt === 0 ? [STARTER, FRONTIER] : [FRONTIER]) {
     for (let attempt = 0; attempt < 6; attempt++) {
       const k = drawProblem(d, list, exclude);
       if (!k) break;
+      if (!ruleAllowsProblem(state.standing, k)) {
+        exclude.add(keyOf(k));
+        continue;
+      }
       const info = await api.getProblem(k.N, k.M, k.P);
       if (!info) {
         dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
@@ -919,7 +956,9 @@ async function dealLoose(d: DealerState, exclude: Set<string>): Promise<ProblemS
     const { N, M } = drawLoosePair(d);
     const records = await api.getRecords(N, M);
     if (!records) return null;
-    const candidates = looseCandidates(records, exclude);
+    const candidates = looseCandidates(records, exclude).filter((c) =>
+      ruleAllowsProblem(state.standing, { N, M, P: c.P }),
+    );
     if (!candidates.length) continue;
     const c = candidates[Math.floor(nextRandom(d) * candidates.length)];
     const info = await api.getProblem(N, M, c.P);
@@ -1012,9 +1051,43 @@ async function refreshHeld(): Promise<void> {
       ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
       : null;
     noteLeader(p, leader);
+    payRent(p);
     persist();
     render();
     await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
+// ---------- rent: one record checked at a time ----------
+
+let rentChecking = false;
+let rentCheckedAt = 0;
+
+/** A check found the record still ours (or not): pays the rent it is owed since its last check. */
+function payRent(p: ProblemState | PastProblem): void {
+  if (settleRent(state, owned(), p, now()) > 0) reveal(state, "points", "upgrades");
+}
+
+/** With Rent: the record checked longest ago is checked, at most one every 10 s. */
+async function rentTick(): Promise<void> {
+  const o = owned();
+  if (!ownsGame || rentChecking || now() - rentCheckedAt < RENT_CHECK_MS) return;
+  tidyRent(state, o, now());
+  const p = nextRentCheck(state, o, now());
+  if (!p || inFlight.has(p.key) || ("sending" in p && p.sending)) return;
+  rentChecking = true;
+  rentCheckedAt = now();
+  try {
+    const info = await api.getProblem(p.N, p.M, p.P);
+    if (!info || inFlight.has(p.key) || !ownsGame) return;
+    const leader = info.site_best
+      ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
+      : null;
+    noteLeader(p, leader);
+    payRent(p);
+    persist();
+  } finally {
+    rentChecking = false;
   }
 }
 
@@ -1091,6 +1164,8 @@ function render(): void {
   renderLog();
   $<HTMLInputElement>("t-bg").checked = s.settings.background;
   $<HTMLInputElement>("t-battery").checked = s.settings.battery;
+  renderStanding(o);
+  renderRecords(o);
 }
 
 function renderProblem(p: ProblemState | undefined): void {
@@ -1155,7 +1230,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   if (select.value !== state.settings.method && ms.includes(state.settings.method))
     select.value = state.settings.method;
   if (!ms.includes(state.settings.method)) state.settings.method = "mc_compress";
-  show("t-auto", o.has("auto1"));
+  show("t-auto", autoPerSecond(o) !== null);
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));
   text("t-auto", state.settings.auto ? "Auto-eval: on" : "Auto-eval: off");
@@ -1273,7 +1348,7 @@ function renderPoints(): void {
   text("t-clicks", fmtInt(state.stats.clicks));
   const waiting = unconfirmedPoints(state);
   let unpaid = 0;
-  if (!state.consent) for (const q of state.queue) unpaid += pendingPoints(q, state.name)?.total ?? 0;
+  if (!state.consent) for (const q of state.queue) unpaid += pendingPoints(q, state.name, state)?.total ?? 0;
   text(
     "t-pending",
     !state.consent && unpaid > 0
@@ -1501,6 +1576,236 @@ function renderLog(): void {
   );
 }
 
+// ---------- standing and records ----------
+
+/** A span of time as the Standing panel shows it: "0:42", "3 h 05 min", "2 d 4 h". */
+function fmtSpan(ms: number): string {
+  const m = Math.floor(Math.max(0, ms) / 60_000);
+  if (m < 60) return `${m}:${String(Math.floor((Math.max(0, ms) % 60_000) / 1000)).padStart(2, "0")}`;
+  if (m < 24 * 60) return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
+  return `${Math.floor(m / 1440)} d ${Math.floor((m % 1440) / 60)} h`;
+}
+const fmtAgo = (ms: number) => (ms < 60_000 ? "just now" : `${fmtSpan(ms)} ago`);
+const titleOf = (key: string) => {
+  const k = parseKey(key);
+  return k ? problemTitle(k) : key;
+};
+
+/** Rebuilds a stats list when its labels change, and updates its values. */
+function setStats(id: string, rows: [string, string][]): void {
+  const dl = $(id);
+  const sig = rows.map(([label]) => label).join("|");
+  if (dl.dataset.sig !== sig) {
+    dl.dataset.sig = sig;
+    dl.replaceChildren(
+      ...rows.flatMap(([label]) => {
+        const dt = document.createElement("dt");
+        dt.textContent = label;
+        return [dt, document.createElement("dd")];
+      }),
+    );
+  }
+  rows.forEach(([, value], i) => {
+    const dd = dl.children[2 * i + 1] as HTMLElement;
+    if (dd.textContent !== value) dd.textContent = value;
+  });
+}
+
+/** Rebuilds a list when its lines change. */
+function setLines(id: string, lines: string[]): void {
+  const el = $(id);
+  const sig = lines.join("\n");
+  if (el.dataset.sig === sig) return;
+  el.dataset.sig = sig;
+  el.replaceChildren(
+    ...lines.map((line) => {
+      const li = document.createElement("li");
+      li.textContent = line;
+      return li;
+    }),
+  );
+}
+
+let confirmingReset = false;
+let rulesSig = "";
+
+function renderStanding(o: Owned): void {
+  const st = state.standing;
+  markProgress(state, now());
+  const visible = o.has("standing");
+  show("t-bar-standing-box", visible || st.total > 0);
+  text("t-bar-standing", `${fmtInt(st.points)} · ×${standingMultiplier(st).toFixed(1)}`);
+  show("t-standing", visible);
+  if (!visible) return;
+  setStats("t-st-stats", [
+    ["Standing to spend", fmtInt(st.points)],
+    ["Earned in all", fmtInt(st.total)],
+    ["On all points", `×${standingMultiplier(st).toFixed(1)}`],
+    [`Cycle ${fmtInt(st.resets + 1)}`, `${fmtRP(st.cycleEarned)} RP in ${fmtSpan(now() - st.cycleStartedAt)}`],
+    ["Rule", st.rule ? ruleById(st.rule)!.name : "none"],
+  ]);
+  // the sense of speed: when this cycle reached each milestone, against the best cycle before
+  setLines(
+    "t-st-marks",
+    MARKS.filter((m) => st.marks[m.id] !== undefined || bestMark(st, m.id) !== null).map((m) => {
+      const t = st.marks[m.id];
+      const best = bestMark(st, m.id);
+      const reached = t === undefined ? "not yet" : t < 1000 ? "at the start" : `in ${fmtSpan(t)}`;
+      return `${m.label}: ${reached}${best !== null ? ` · best ${best < 1000 ? "at the start" : fmtSpan(best)}` : ""}`;
+    }),
+  );
+  const pv = resetPreview(state);
+  const rule = ruleById(st.rule);
+  text(
+    "t-st-preview",
+    pv.gain > 0
+      ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}: all points ×${standingMultiplier(st).toFixed(1)} → ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)}. The next point comes at ${fmtInt(pv.nextAt)} RP this cycle.`
+      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in the cycle: ${fmtInt(Math.ceil(pv.short))} to go. It gives √(cycle RP / 250,000) + records held / 50 standing.`,
+  );
+  const btn = $<HTMLButtonElement>("t-st-reset");
+  btn.disabled = pv.gain <= 0 || !ownsGame;
+  show("t-st-reset", !confirmingReset);
+  show("t-st-confirm", confirmingReset && pv.gain > 0);
+  if (confirmingReset) {
+    const kept = [
+      pv.held === 1 ? "1 record held and its rent" : `${fmtInt(pv.held)} records held and their rent`,
+      `collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
+      "Standing and every standing upgrade",
+      o.has("keepAuto") ? "the auto-eval and away upgrades" : "",
+      o.has("keepMethods") ? "your methods" : "",
+      o.has("keepBank") ? "auto-eval's bank" : "",
+      "the queue, the dealer's learning and every count",
+    ].filter(Boolean);
+    const next = ruleById(st.nextRule);
+    text(
+      "t-st-confirm-text",
+      `${fmtInt(pv.gain)} standing for ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
+        `Kept: ${kept.join(", ")}. The next cycle begins with ${fmtInt(pv.keeps.length)} upgrades` +
+        (next ? ` under the rule ${next.name}: ${next.limit}.` : "."),
+    );
+  }
+  // cycle rules: the next cycle's, chosen here
+  show("t-st-rules", o.has("rules"));
+  if (o.has("rules")) {
+    const select = $<HTMLSelectElement>("t-st-rule");
+    const sig = st.rulesDone.join(",");
+    if (rulesSig !== sig || !select.options.length) {
+      rulesSig = sig;
+      select.replaceChildren(
+        new Option("No rule", ""),
+        ...RULES.map((r) => new Option(`${r.name}${st.rulesDone.includes(r.id) ? " (finished)" : ""}`, r.id)),
+      );
+    }
+    if (select.value !== (st.nextRule ?? "")) select.value = st.nextRule ?? "";
+    const chosen = ruleById(st.nextRule);
+    text(
+      "t-st-rule-note",
+      (chosen
+        ? `${chosen.name}: ${chosen.limit}. Finish the cycle under it (reach a reset) for half again the standing, at least one more, and for good: ${chosen.reward}.`
+        : "A rule limits one cycle; finishing the cycle under it pays extra standing and a reward of its own, for good.") +
+        (st.rulesDone.length
+          ? ` Finished: ${st.rulesDone.map((id) => `${ruleById(id)!.name} (${ruleById(id)!.reward})`).join("; ")}.`
+          : ""),
+    );
+  }
+  // what only standing buys
+  const left = UPGRADES.filter((u) => u.currency === "standing" && costOf(o, u.id) !== null);
+  text(
+    "t-st-only",
+    left.length
+      ? `Only standing buys: ${left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`).join(", ")}. They are in the shop's Standing row and stay through resets.`
+      : "You own every standing upgrade.",
+  );
+  show("t-st-history-box", st.history.length > 0);
+  setLines(
+    "t-st-history",
+    st.history
+      .map(
+        (h, i) =>
+          `Cycle ${i + 1 + Math.max(0, st.resets - st.history.length)}: ${fmtSpan(h.endedAt - h.startedAt)}, ${fmtRP(h.earned)} RP, +${fmtInt(h.gain)} standing${h.rule ? `, under ${ruleById(h.rule)?.name ?? h.rule}` : ""}`,
+      )
+      .reverse(),
+  );
+}
+
+function renderRecords(o: Owned): void {
+  const rent = o.has("rent");
+  const col = o.has("collections");
+  show("t-records", rent || col);
+  if (!rent && !col) return;
+  const rows: [string, string][] = [["Records held", fmtInt(recordsHeld(state))]];
+  if (rent) {
+    rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
+    rows.push(["Waiting for a check", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
+    rows.push(["Rent paid", `${fmtRP(state.economy.rentPaid)} RP`]);
+  }
+  const c = collections(state.economy);
+  if (col) rows.push(["Collections", `+${fmtPct(c.bonus, 0)} on all points`]);
+  setStats("t-rc-stats", rows);
+  const last = state.economy.lastRent;
+  text(
+    "t-rc-note",
+    rent
+      ? `Each record you lead is checked in turn, one every 10 s; when it is still yours, the rent since its last check is paid (a week of it at most). A record lost pays nothing for the time since its check.` +
+          (last ? ` Last: +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.` : "")
+      : "",
+  );
+  if (!col) {
+    setLines("t-rc-sets", []);
+    return;
+  }
+  const lines = [
+    `Frontier pairs with a record on all 9 piece counts: ${fmtInt(c.pairs)} (+2 % each)` +
+      (c.nearest.length
+        ? `. Nearest: ${c.nearest.map((n) => `${problemTitle({ N: n.N, M: n.M, P: 0 }).replace(/, 0 pieces$/, "")} ${n.have} of 9`).join("; ")}`
+        : ""),
+    `Piece shapes at 10, 30 and 100 records: ${fmtInt(c.milestones)} milestones (+1 % each)` +
+      (c.shapes.length
+        ? `. ${c.shapes
+            .slice(0, 3)
+            .map((x) => `${shapeName(x.N, true)} ${fmtInt(x.count)}`)
+            .join("; ")}`
+        : ""),
+    `First records by tier: ${c.tiers.length ? c.tiers.join(", ") : "none yet"} (+5 % each)`,
+  ];
+  setLines("t-rc-sets", lines);
+}
+
+/** Resets the cycle for standing: lanes stop and start again with the next cycle's tree. */
+async function doReset(): Promise<void> {
+  confirmingReset = false;
+  if (!ownsGame || resetPreview(state).gain <= 0) return render();
+  for (const l of lanes) {
+    l.jobs = [];
+    l.lane.terminate();
+  }
+  lanes.length = 0;
+  // let the stopped jobs settle first (an auto-eval job hands its evaluations back to the bank)
+  await new Promise((r) => setTimeout(r, 0));
+  const rule = ruleById(state.standing.rule);
+  const gain = resetCycle(state, now());
+  ensureLanes();
+  lastChange.clear();
+  banner = null;
+  if (gain > 0) {
+    const st = state.standing;
+    const next = ruleById(st.rule);
+    log(
+      state,
+      now(),
+      `Reset for ${fmtInt(gain)} standing${rule ? `, the cycle finished under ${rule.name} (for good: ${rule.reward})` : ""}. All points ×${standingMultiplier(st).toFixed(1)}.`,
+    );
+    say(
+      `Cycle ${fmtInt(st.resets + 1)} begins with ${fmtInt(state.owned.length)} upgrades${next ? `, under the rule ${next.name}: ${next.limit}` : ""}. Your records stand and keep paying.`,
+    );
+  }
+  saveNow();
+  showFocus(true);
+  render();
+  kickLanes();
+  void dealTick();
+}
+
 // ---------- controls ----------
 
 $("t-loadall").addEventListener("click", () => {
@@ -1517,7 +1822,7 @@ $("t-method").addEventListener("change", () => {
 });
 $("t-auto").addEventListener("click", () => {
   const o = owned();
-  if (!o.has("auto1")) return;
+  if (autoPerSecond(o) === null) return;
   // earnings start now: nothing is owed for the time it was off
   accrueBank();
   state.settings.auto = !state.settings.auto;
@@ -1582,6 +1887,23 @@ $("t-battery").addEventListener("change", () => {
   persist();
   applyHold();
 });
+$("t-st-reset").addEventListener("click", () => {
+  if (resetPreview(state).gain <= 0) return;
+  confirmingReset = true;
+  render();
+  $("t-st-no").focus();
+});
+$("t-st-no").addEventListener("click", () => {
+  confirmingReset = false;
+  render();
+});
+$("t-st-yes").addEventListener("click", () => void doReset());
+$("t-st-rule").addEventListener("change", () => {
+  const v = $<HTMLSelectElement>("t-st-rule").value;
+  state.standing.nextRule = ruleById(v) ? v : null;
+  persist();
+  render();
+});
 $("t-export").addEventListener("click", async () => {
   const area = $<HTMLTextAreaElement>("t-save-text");
   area.value = await exportString(state);
@@ -1603,6 +1925,7 @@ $("t-import").addEventListener("click", async () => {
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
   state = r.state;
+  syncEconomy(state);
   welcomeBack(state);
   lastChange.clear();
   banner = null;
@@ -1657,6 +1980,7 @@ function start(): void {
   ticker = window.setInterval(() => {
     void dealTick();
     void submitTick();
+    void rentTick();
     autoTick();
     render();
   }, 1000);

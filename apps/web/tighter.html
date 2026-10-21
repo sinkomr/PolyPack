@@ -33,6 +33,7 @@
       <div id="t-bar-auto-box" hidden><span>Auto-eval</span><strong id="t-bar-auto">off</strong></div>
       <div id="t-bar-bank-box" hidden><span>Banked evaluations</span><strong id="t-bar-bank">0</strong></div>
       <div id="t-bar-lanes-box" hidden><span>Lanes</span><strong id="t-bar-lanes">1</strong></div>
+      <div id="t-bar-standing-box" hidden><span>Standing</span><strong id="t-bar-standing">0</strong></div>
     </section>
 
     <main class="layout">
@@ -134,6 +135,38 @@
             above the floor] plus its size and gap terms. Your best goes to the server within the minute; points it does
             not confirm are taken back.
           </p>
+        </section>
+
+        <section id="t-standing" aria-labelledby="t-standing-heading" hidden>
+          <h2 id="t-standing-heading">Standing</h2>
+          <dl id="t-st-stats" class="stats"></dl>
+          <ul id="t-st-marks" class="t-st-marks" aria-label="This cycle's milestones"></ul>
+          <p id="t-st-preview" class="note"></p>
+          <div id="t-st-rules" class="t-st-rules" hidden>
+            <label for="t-st-rule">Rule for the next cycle</label>
+            <select id="t-st-rule"></select>
+            <p id="t-st-rule-note" class="note"></p>
+          </div>
+          <button id="t-st-reset" class="wide" disabled>Reset for standing</button>
+          <div id="t-st-confirm" class="t-st-confirm" role="group" aria-labelledby="t-st-confirm-text" hidden>
+            <p id="t-st-confirm-text"></p>
+            <div class="row wrap">
+              <button id="t-st-yes" class="primary">Reset now</button>
+              <button id="t-st-no">Cancel</button>
+            </div>
+          </div>
+          <p id="t-st-only" class="note"></p>
+          <details id="t-st-history-box" class="t-st-history-box" hidden>
+            <summary>Past cycles</summary>
+            <ol id="t-st-history" class="t-st-history"></ol>
+          </details>
+        </section>
+
+        <section id="t-records" aria-labelledby="t-records-heading" hidden>
+          <h2 id="t-records-heading">Records</h2>
+          <dl id="t-rc-stats" class="stats"></dl>
+          <ul id="t-rc-sets" class="t-rc-sets" aria-label="Collections"></ul>
+          <p id="t-rc-note" class="note"></p>
         </section>
 
         <section id="t-upgrades" aria-labelledby="t-upgrades-heading" hidden>

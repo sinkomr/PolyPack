@@ -6,7 +6,7 @@ import { PacerState, newPacer } from "./pacer";
 import { Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
-import { EconomyState, newEconomy } from "./economy";
+import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, newPicks } from "./picks";
 import { RunPlanState, newRunPlan } from "./runplan";
 import { StandingState, newStanding } from "./standing";
@@ -243,7 +243,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
   };
 }
 
-export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels, s.standing.rule);
+export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone);
 
 export function log(s: GameState, now: number, text: string): void {
   s.log.push({ t: now, text });
@@ -414,20 +414,44 @@ function pointsFor(p: ProblemState, name: string): Points | null {
   });
 }
 
-/** Points the board would pay now (shown while no name is given; paid as one event on consent). */
-export function pendingPoints(p: ProblemState, name: string): Points | null {
-  return pointsFor(p, name);
+/**
+ * Points as paid: the improvement's own points (`base`, design §5) times the multiplier of the
+ * moment (standing, collections, rules finished); `total` is what was paid, and what a take-back takes.
+ */
+export interface PaidPoints extends Points {
+  base: number;
+  multiplier: number;
+}
+
+/** The points multiplier on the problem now (for the method of the run that found its board). */
+export const multiplierFor = (s: GameState, p: ProblemState): number =>
+  pointsMultiplier(s, ownedSet(s), p, p.run?.method ?? null);
+
+function withMultiplier(points: Points, multiplier: number): PaidPoints {
+  return { ...points, base: points.total, multiplier, total: points.total * multiplier };
+}
+
+/**
+ * Points the board would pay now (shown while no name is given; paid as one event on consent), with
+ * the game state's multiplier when it is given.
+ */
+export function pendingPoints(p: ProblemState, name: string, s?: GameState): PaidPoints | null {
+  const points = pointsFor(p, name);
+  return points ? withMultiplier(points, s ? multiplierFor(s, p) : 1) : null;
 }
 
 /** Pays the board's improvement since the last payment, as one event. Nothing without consent. */
-export function pay(s: GameState, p: ProblemState): Points | null {
+export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   if (!s.consent) return null;
-  const points = pointsFor(p, s.name);
-  if (!points) return null;
+  const own = pointsFor(p, s.name);
+  if (!own) return null;
+  const points = withMultiplier(own, multiplierFor(s, p));
   s.rp += points.total;
   s.rpEarned += points.total;
+  s.standing.cycleEarned += points.total;
   p.rp += points.total;
   p.unconfirmed += points.total;
+  addBase(s.economy, p.key, points.base);
   p.paidTo = p.best;
   if (points.beatBonus) p.beatPaid = true;
   return points;
@@ -459,8 +483,10 @@ export function withdrawConsent(s: GameState): number {
 /** Takes back points the server did not confirm. Spent points are not owed: the balance stops at zero. */
 function takeBack(s: GameState, p: ProblemState, rp: number): number {
   if (!(rp > 0)) return 0;
+  takeBase(s.economy, p.key, rp, p.rp);
   s.rp = Math.max(0, s.rp - rp);
   s.rpEarned = Math.max(0, s.rpEarned - rp);
+  s.standing.cycleEarned = Math.max(0, s.standing.cycleEarned - rp);
   p.rp = Math.max(0, p.rp - rp);
   return rp;
 }
@@ -544,6 +570,8 @@ export function applyAnswer(
     p.ourId = outcome.id;
     p.leader = { score: outcome.score, name: sanitizeName(s.name), id: outcome.id };
     p.refused = null;
+    // it counts for collections, and with Rent its rent runs
+    noteRecorded(s, ownedSet(s), p, now);
   } else if (outcome.kind === "behind") {
     // another entry got there first: nothing paid since the last confirmation was a record
     takenBack = takeBack(s, p, carried + p.unconfirmed);
@@ -571,7 +599,6 @@ export function applyAnswer(
     p.sending = null;
     if (outcome.kind !== "rate-limited") s.stats.submissions++;
   }
-  void now;
   return { outcome, confirmed, takenBack, points };
 }
 
@@ -612,6 +639,8 @@ export function applyLeader(
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;
   const lost = held && !ours;
   if (!ours) p.ourId = null;
+  // a record lost pays no rent, not even for the time since its last check
+  if (lost && s) forgetHeld(s.economy, p.key);
   if ("leader" in p) p.leader = leader;
   return { lost, reconciled: false, confirmed: 0 };
 }
