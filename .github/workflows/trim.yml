@@ -12,7 +12,8 @@ concurrency: trim-down
 jobs:
   trim:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    # runs take 1 to 7 minutes; a stuck run should not use up the month's Actions minutes
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
