@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { Browser, Page, devices, expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
 
 // Tighter on phones and tablets (the "phone" project runs this file on a Pixel 7; the iPhone and iPad
 // tests launch WebKit themselves). The mechanics are the desktop's; what is checked here is that the
@@ -84,11 +85,24 @@ async function axeClean(page: Page): Promise<void> {
   expect(a11y.violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
 }
 
+/**
+ * Whether Playwright's WebKit is installed. CI installs Chromium only, so there the WebKit tests are
+ * skipped (they run wherever `npx playwright install webkit` has been run, as on the developer's Mac).
+ */
+function hasWebkit(playwright: { webkit: { executablePath(): string } }): boolean {
+  try {
+    return existsSync(playwright.webkit.executablePath());
+  } catch {
+    return false;
+  }
+}
+
 /** Opens a context on a device in WebKit (Safari's engine). */
 async function webkitPage(
-  playwright: { webkit: { launch(): Promise<Browser> } },
+  playwright: { webkit: { launch(): Promise<Browser>; executablePath(): string } },
   device: string,
 ): Promise<{ browser: Browser; page: Page }> {
+  test.skip(!hasWebkit(playwright), "WebKit is not installed here (CI installs Chromium only)");
   const browser = await playwright.webkit.launch();
   const page = await (await browser.newContext({ ...devices[device] })).newPage();
   return { browser, page };
