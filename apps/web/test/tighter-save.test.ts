@@ -142,7 +142,7 @@ describe("Tighter saves", () => {
     raw.economy = { recorded: ["1/2/3", "bad", 4], rentPaid: -1 };
     const t = readSave(raw, T0);
     expect(t.ok && t.state.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
-    expect(t.ok && t.state.economy).toEqual({ recorded: ["1/2/3"], rentPaid: 0 });
+    expect(t.ok && t.state.economy).toMatchObject({ recorded: ["1/2/3"], rentPaid: 0, checks: {}, lastRent: null });
   });
 
   it("round-trip through an export string", async () => {

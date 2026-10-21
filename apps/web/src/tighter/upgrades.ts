@@ -166,16 +166,31 @@ export interface Upgrade {
 export type Levels = Readonly<Partial<Record<UpgradeId, number>>>;
 
 /**
- * What the player owns: the upgrade ids, the levels of levelled ones, and the cycle rule played
- * under (a standing rule can take something away, such as auto-eval or seeds).
+ * What the player owns: the upgrade ids, the levels of levelled ones, the cycle rule played under (a
+ * standing rule can take something away, such as auto-eval or seeds), and the rules finished (whose
+ * rewards hold for good).
  */
-export type Owned = ReadonlySet<UpgradeId> & { readonly levels?: Levels; readonly rule?: string | null };
+export type Owned = ReadonlySet<UpgradeId> & {
+  readonly levels?: Levels;
+  readonly rule?: string | null;
+  readonly rewards?: readonly string[];
+};
 
-/** An Owned from ids, levels and the cycle's rule. */
-export function owning(ids: Iterable<UpgradeId>, levels: Levels = {}, rule: string | null = null): Owned {
-  const set = new Set(ids) as Set<UpgradeId> & { levels?: Levels; rule?: string | null };
+/** An Owned from ids, levels, the cycle's rule and the rules finished. */
+export function owning(
+  ids: Iterable<UpgradeId>,
+  levels: Levels = {},
+  rule: string | null = null,
+  rewards: readonly string[] = [],
+): Owned {
+  const set = new Set(ids) as Set<UpgradeId> & {
+    levels?: Levels;
+    rule?: string | null;
+    rewards?: readonly string[];
+  };
   set.levels = levels;
   set.rule = rule;
+  set.rewards = rewards;
   return set;
 }
 
@@ -874,9 +889,9 @@ const highest = <T>(o: Owned, table: Partial<Record<UpgradeId, T>>, base: T, bet
   return v;
 };
 
-/** Evaluations of one Evolve click. */
+/** Evaluations of one Evolve click (one more for good after a cycle played under "clicks only"). */
 export function evalsPerClick(o: Owned): number {
-  return highest(o, CLICK, 1, (a, b) => a > b) + level(o, "clickx");
+  return highest(o, CLICK, 1, (a, b) => a > b) + level(o, "clickx") + (o.rewards?.includes("clicks") ? 1 : 0);
 }
 
 /** Evaluations of Compact: one press that compacts the Load-all board (design §3). */
@@ -887,7 +902,8 @@ export const RUN_BUDGET = 100_000;
 
 /** Auto-eval's evaluations per second (per lane), or null without it. */
 export function autoPerSecond(o: Owned): number | null {
-  if (!o.has("auto1")) return null;
+  // the "clicks only" cycle rule: no auto-eval in this cycle
+  if (!o.has("auto1") || o.rule === "clicks") return null;
   return highest(o, AUTO, 0, (a, b) => a > b) * Math.pow(1.25, level(o, "autox"));
 }
 
@@ -901,8 +917,10 @@ export function bankCap(o: Owned, lanes = 1): number {
   return Math.max(1, (autoPerSecond(o) ?? 0) * lanes * awayHours(o) * 3600);
 }
 
+/** Seeds per problem: one under the "one seed" cycle rule, twice as many for good once a cycle finished under it. */
 export function seedsPerProblem(o: Owned): number {
-  return highest(o, SEEDS, 1, (a, b) => a > b);
+  if (o.rule === "seed") return 1;
+  return highest(o, SEEDS, 1, (a, b) => a > b) * (o.rewards?.includes("seed") ? 2 : 1);
 }
 
 /** The methods the player may run, mc_compress first, then in the order they unlock. */
