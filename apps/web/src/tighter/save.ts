@@ -175,6 +175,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     tier: tier(v.tier),
     dealtAt: num(v.dealtAt, now),
     floor: posOrNull(v.floor),
+    published: posOrNull(v.published),
     phase,
     board: phase === "bare" ? null : b,
     best: phase === "bare" ? null : best,

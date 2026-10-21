@@ -1,9 +1,9 @@
-import { areaLowerBound, closedToSubmissions } from "@polypack/geometry";
+import { MAX_PIECES, areaLowerBound, closedToSubmissions } from "@polypack/geometry";
 import type { ProblemInfo } from "@polypack/geometry";
 import type { RecordsResponse } from "../api";
 import { ProblemKey, keyOf } from "./frontier";
 import type { Tier } from "./points";
-import type { UpgradeId } from "./upgrades";
+import { Candidate, LOOSE_WEAKNESS, NEIGHBOURS } from "./rank";
 
 /**
  * The dealer: which problem the player gets next, and how often (design.md §5, §6).
@@ -14,14 +14,14 @@ import type { UpgradeId } from "./upgrades";
  * in for a server-side limit on new problems per address. Every problem is checked with
  * GET /api/problems just before it is dealt.
  *
+ * What is dealt (plan 2026-10-20 §3): open problems of the frontier (and, with Wider frontier, of
+ * every side from 21 to 100), and contested problems (N, M <= 20) from the site's records, by tier
+ * (loose, batch, published) and down to the player's size ring. rank.ts judges the candidates.
+ *
  * Pure apart from the random draws, which come from a seeded generator kept in the save, so a game
  * started with the same seed is dealt the same candidates.
  */
 export const DEAL_CLICKS = 300;
-/** A loose record is a site record of N, M <= 20 whose gap to the area bound is above this. */
-export const LOOSE_GAP = 0.12;
-/** Shapes of loose records: circles and 3 to 20 sides. */
-export const LOOSE_SIDES: readonly number[] = [0, ...Array.from({ length: 18 }, (_, i) => i + 3)];
 
 export interface DealerState {
   /** Seed of the dealer's draws. */
@@ -94,15 +94,6 @@ export function takeToken(d: DealerState): void {
   d.dealt++;
 }
 
-/**
- * The tier of the next deal. Before Reach: loose records, always the open frontier; after it, two
- * loose records for every open problem, as the design's model draws them.
- */
-export function drawTier(d: DealerState, owned: ReadonlySet<UpgradeId>): Tier {
-  if (!owned.has("reach2")) return "open";
-  return nextRandom(d) < 2 / 3 ? "loose" : "open";
-}
-
 /** A random problem of `list` not in `exclude`, or null after `attempts` draws found none. */
 export function drawProblem(
   d: DealerState,
@@ -126,46 +117,170 @@ export function openDealable(info: ProblemInfo | null): boolean {
   return !!info && info.accepts_submissions && !info.site_best && !info.literature;
 }
 
-export interface LooseCandidate {
-  P: number;
-  score: number;
-  gap: number;
-  id: number;
-  name: string;
+// ---------- the wider frontier ----------
+
+/** The wider frontier (Wider frontier): every side from 21 to 100 and from 40 to 500 pieces. */
+export const WIDE = { minSide: 21, maxSide: 100, minP: 40, maxP: MAX_PIECES } as const;
+
+/** A random problem of the wider frontier, the player's filters and `allow` permitting, not in `exclude`. */
+export function drawWide(
+  d: DealerState,
+  exclude: ReadonlySet<string>,
+  allow: (p: ProblemKey) => boolean = () => true,
+  attempts = 24,
+): ProblemKey | null {
+  const span = (a: number, b: number) => a + Math.floor(nextRandom(d) * (b - a + 1));
+  for (let i = 0; i < attempts; i++) {
+    const p = {
+      N: span(WIDE.minSide, WIDE.maxSide),
+      M: span(WIDE.minSide, WIDE.maxSide),
+      P: span(WIDE.minP, WIDE.maxP),
+    };
+    if (!exclude.has(keyOf(p)) && allow(p)) return p;
+  }
+  return null;
+}
+
+// ---------- contested problems: site records and published values (N, M <= 20) ----------
+
+/** Shapes of contested problems: circles and 3 to 20 sides (the site's own range). */
+export const CONTESTED_SIDES: readonly number[] = [0, ...Array.from({ length: 18 }, (_, i) => i + 3)];
+
+/**
+ * A random (N, M) pair of contested shapes, the pieces among `pieces` and the container among
+ * `containers` when given (the player's filters); null when no contested shape is allowed.
+ */
+export function drawContestedPair(
+  d: DealerState,
+  pieces: readonly number[] | null = null,
+  containers: readonly number[] | null = null,
+): { N: number; M: number } | null {
+  const ns = pieces ? CONTESTED_SIDES.filter((n) => pieces.includes(n)) : CONTESTED_SIDES;
+  const ms = containers ? CONTESTED_SIDES.filter((n) => containers.includes(n)) : CONTESTED_SIDES;
+  if (!ns.length || !ms.length) return null;
+  const N = ns[Math.floor(nextRandom(d) * ns.length)];
+  const M = ms[Math.floor(nextRandom(d) * ms.length)];
+  return { N, M };
+}
+
+/** Gap to the area bound, s / b − 1. */
+const gap = (N: number, M: number, P: number, score: number) => score / areaLowerBound(N, M, P) - 1;
+
+function median(xs: number[]): number {
+  const v = [...xs].sort((a, b) => a - b);
+  const m = v.length >> 1;
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
 }
 
 /**
- * Loose records of one (N, M) from GET /api/records: site leaders with a gap above LOOSE_GAP,
- * not awaiting review, on problems without a published value and not already seen.
+ * How much weaker each site record of one pair is than its neighbours: its gap less the median gap
+ * of the pair's records at P − 3 … P + 3 (not P itself, nor records awaiting review). The area bound
+ * is loose for few pieces, so raw gaps are not comparable across sizes; neighbours of similar size
+ * are. Zero when a record has fewer than 2 neighbours.
  */
-export function looseCandidates(records: RecordsResponse, exclude: ReadonlySet<string>): LooseCandidate[] {
+export function weaknesses(records: RecordsResponse): Map<number, number> {
   const { N, M } = records;
-  const published = new Set(records.literature.map((r) => r.P));
-  const out: LooseCandidate[] = [];
-  for (const e of records.site) {
-    if (published.has(e.P) || e.verification === "pending" || e.P < 2) continue;
-    if (exclude.has(keyOf({ N, M, P: e.P }))) continue;
-    const gap = e.score / areaLowerBound(N, M, e.P) - 1;
-    if (gap > LOOSE_GAP) out.push({ P: e.P, score: e.score, gap, id: e.id, name: e.name });
+  const gaps = new Map<number, number>();
+  for (const e of records.site) if (e.verification !== "pending" && e.P >= 2) gaps.set(e.P, gap(N, M, e.P, e.score));
+  const out = new Map<number, number>();
+  for (const [P, g] of gaps) {
+    const near: number[] = [];
+    for (let q = P - NEIGHBOURS; q <= P + NEIGHBOURS; q++) if (q !== P && gaps.has(q)) near.push(gaps.get(q)!);
+    out.set(P, near.length >= 2 ? g - median(near) : 0);
   }
   return out;
 }
 
-/** Whether a loose record is still the same open leader just before it is dealt. */
-export function looseDealable(info: ProblemInfo | null, c: LooseCandidate): boolean {
-  return (
-    !!info &&
-    info.accepts_submissions &&
-    !closedToSubmissions(info.literature) &&
-    !info.literature &&
-    info.site_best?.id === c.id &&
-    info.site_best.verification !== "pending"
-  );
+/** The score a record must beat to beat a published value, as the server judges it (beatsLiterature). */
+export const publishedTarget = (lit: { value: number; display_precision: number }) =>
+  lit.value - Math.pow(10, -lit.display_precision);
+
+export interface ContestedOptions {
+  /** Smallest N+M+P dealt (the player's size rings). */
+  ringMin: number;
+  /** Tiers the player may be dealt (of loose, batch and published). */
+  tiers: ReadonlySet<Tier>;
+  /** Problems never to deal again (dealt before, in the queue, or found taken). */
+  exclude: ReadonlySet<string>;
+  /** Filters and the cycle's rule. */
+  allow?: (c: Candidate) => boolean;
 }
 
-/** A random (N, M) pair of loose-record shapes. */
-export function drawLoosePair(d: DealerState): { N: number; M: number } {
-  const pick = () => LOOSE_SIDES[Math.floor(nextRandom(d) * LOOSE_SIDES.length)];
-  const N = pick();
-  return { N, M: pick() };
+/**
+ * The contested candidates of one (N, M) pair, from GET /api/records: its site records, each loose
+ * (clearly weaker than its neighbours) or batch, and its best-known published values. Problems with
+ * a published value are only ever published candidates; proven ones (closed) and records awaiting
+ * review are never candidates. A published value is a candidate only when there is a packing to
+ * start from: its coordinates, or a site record.
+ */
+export function contestedCandidates(records: RecordsResponse, opts: ContestedOptions): Candidate[] {
+  const { N, M } = records;
+  const weak = weaknesses(records);
+  const lit = new Map(records.literature.map((r) => [r.P, r]));
+  const site = new Map(records.site.map((e) => [e.P, e]));
+  const out: Candidate[] = [];
+  const consider = (c: Candidate) => {
+    if (N + M + c.P < opts.ringMin || !opts.tiers.has(c.tier) || opts.exclude.has(keyOf(c))) return;
+    if (opts.allow && !opts.allow(c)) return;
+    out.push(c);
+  };
+  for (const e of records.site) {
+    if (e.verification === "pending" || e.P < 2 || lit.has(e.P)) continue;
+    const weakness = weak.get(e.P) ?? 0;
+    consider({
+      N,
+      M,
+      P: e.P,
+      tier: weakness >= LOOSE_WEAKNESS ? "loose" : "batch",
+      weakness,
+      leader: { score: e.score, name: e.name, id: e.id },
+      target: null,
+      source: null,
+      retake: false,
+    });
+  }
+  for (const r of records.literature) {
+    // proven (closed) values are never dealt
+    if (r.status !== "best_known" || r.P < 2) continue;
+    const e = site.get(r.P);
+    if (e?.verification === "pending") continue;
+    if (!r.has_coordinates && !e) continue;
+    consider({
+      N,
+      M,
+      P: r.P,
+      tier: "published",
+      weakness: null,
+      leader: e ? { score: e.score, name: e.name, id: e.id } : null,
+      target: publishedTarget(r),
+      source: `${r.display} (${r.source_name})`,
+      retake: false,
+    });
+  }
+  return out;
+}
+
+/**
+ * Whether a contested candidate is still as it was found, from GET /api/problems just before it is
+ * dealt: open to submissions, the same leader (none, for a published value without a site record),
+ * not awaiting review; a site record has no published value, a published value is still best known.
+ */
+export function contestedDealable(info: ProblemInfo | null, c: Candidate): boolean {
+  if (!info || !info.accepts_submissions || closedToSubmissions(info.literature)) return false;
+  if (info.site_best?.verification === "pending") return false;
+  const sameLeader = c.leader ? info.site_best?.id === c.leader.id : !info.site_best;
+  if (!sameLeader) return false;
+  if (c.tier === "published") return info.literature?.status === "best_known";
+  return !info.literature;
+}
+
+/**
+ * The tier of a problem whose record the player lost (Retake): on contested shapes, classified as
+ * any site record; on the frontier (a side above 20), a loose record [SPEC]: someone has been there
+ * once, so there is room left.
+ */
+export function retakeTier(N: number, M: number, P: number, records: RecordsResponse | null): Tier {
+  if (N > 20 || M > 20 || !records) return "loose";
+  if (records.literature.some((r) => r.P === P)) return "published";
+  return (weaknesses(records).get(P) ?? 0) >= LOOSE_WEAKNESS ? "loose" : "batch";
 }
