@@ -284,7 +284,7 @@
   font-variant-numeric: tabular-nums;
 }
 .t-row-done {
-  opacity: 0.85;
+  color: var(--muted);
 }
 .t-owned {
   margin: 0;
@@ -344,7 +344,9 @@
   border-color: var(--accent);
 }
 .t-card[data-state="locked"] {
-  opacity: 0.72;
+  /* dimmed by colour and border, not opacity, so its text keeps 4.5:1 contrast */
+  color: var(--muted);
+  border-style: dotted;
 }
 .t-card[data-state="mystery"] {
   border-style: dashed;
@@ -383,7 +385,6 @@
 .t-chip-price {
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
-  opacity: 0.8;
 }
 .t-chip[data-state="mystery"] {
   border-style: dashed;
@@ -569,5 +570,5 @@
 }
 .t-refused {
   text-decoration: line-through;
-  opacity: 0.6;
+  color: var(--muted);
 }
