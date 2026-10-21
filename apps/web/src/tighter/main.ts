@@ -1,27 +1,30 @@
 import { MAX_PIECES, areaLowerBound, evaluate } from "@polypack/geometry";
-import type { Container, LeaderboardEvent, PackingConfig } from "@polypack/geometry";
+import type { Container, LeaderboardEvent, PackingConfig, ProblemInfo } from "@polypack/geometry";
 import * as api from "../api";
 import { Board } from "../board";
 import { BoardView } from "../view";
 import {
   DealerState,
   canDeal,
-  drawLoosePair,
+  contestedCandidates,
+  contestedDealable,
+  drawContestedPair,
   drawProblem,
-  drawTier,
+  drawWide,
   evalsToNextDeal,
-  looseCandidates,
-  looseDealable,
   nextRandom,
   openDealable,
+  publishedTarget,
+  retakeTier,
   takeToken,
 } from "./dealer";
-import { FRONTIER, STARTER, keyOf, problemTitle } from "./frontier";
+import { FRONTIER, ProblemKey, STARTER, keyOf, parseKey, problemTitle } from "./frontier";
 import {
   GameState,
   Leader,
   PastProblem,
   ProblemState,
+  STALE_EVALS,
   StepChange,
   accrue,
   addToQueue,
@@ -65,7 +68,19 @@ import {
   pause,
   recordSend,
 } from "./pacer";
-import { FLOOR, gapOf, show6 } from "./points";
+import { Offer, addRetake } from "./picks";
+import { CONTEST, FLOOR, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
+import {
+  Candidate,
+  Ranked,
+  collectorTargets,
+  formatShapes,
+  msPerEval,
+  parseShapes,
+  passes,
+  rankCandidates,
+} from "./rank";
+import { ruleAllowsProblem } from "./standing";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { ShopRenderer, shopView } from "./shop";
@@ -81,13 +96,16 @@ import {
   awayHours,
   bankCap,
   cores,
+  dealerChoices,
   evalsPerClick,
   laneCount,
   lanesMaxed,
   level,
   methodParams,
   methods,
+  offerCount,
   queueSize,
+  ringMin,
   seedsPerProblem,
   upgrade,
 } from "./upgrades";
@@ -874,8 +892,41 @@ let dealing = false;
 let dealPausedUntil = 0;
 /** Problems found taken or published during this session, besides those already dealt. */
 const skipped = new Set<string>();
+/** GET /api/records answers of this session, by pair, kept for 10 minutes. */
+const recordsCache = new Map<string, { at: number; records: api.RecordsResponse }>();
+const RECORDS_TTL_MS = 600_000;
+/** Most GETs one deal (or one filling of the offers) makes before it gives up for a while. */
+const DEAL_GETS = 30;
 
-/** Whether the dealer may deal now: a token earned by evaluations, or an empty queue. */
+/** The GETs of one deal: how many went, and whether the server could not be reached. */
+interface DealIo {
+  gets: number;
+  offline: boolean;
+}
+const spentIo = (io: DealIo) => io.offline || io.gets >= DEAL_GETS;
+
+async function problemInfo(io: DealIo, k: ProblemKey): Promise<ProblemInfo | null> {
+  io.gets++;
+  const info = await api.getProblem(k.N, k.M, k.P);
+  if (!info) io.offline = true;
+  return info;
+}
+
+async function pairRecords(io: DealIo, N: number, M: number): Promise<api.RecordsResponse | null> {
+  const key = `${N}/${M}`;
+  const cached = recordsCache.get(key);
+  if (cached && Math.abs(now() - cached.at) < RECORDS_TTL_MS) return cached.records;
+  io.gets++;
+  const records = await api.getRecords(N, M);
+  if (!records) {
+    io.offline = true;
+    return null;
+  }
+  recordsCache.set(key, { at: now(), records });
+  return records;
+}
+
+/** Whether a deal is due: a slot free and a token earned by evaluations, or an empty queue. */
 function mayDeal(): boolean {
   const o = owned();
   const slots = queueSize(o);
@@ -885,80 +936,357 @@ function mayDeal(): boolean {
   return filled === 0 || canDeal(state.dealer, slots, state.stats.evaluations, evalsPerClick(o));
 }
 
+/** The tiers of contested problems the player may be dealt. */
+function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
+  const t = new Set<Tier>();
+  if (o.has("reach2")) t.add("loose");
+  if (o.has("batch")) t.add("batch");
+  if (o.has("published")) t.add("published");
+  return t;
+}
+
+const dealerFilters = () => (owned().has("filters") ? state.picks.filters : null);
+/** The player's filters and the cycle's rule allow a candidate. */
+const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleAllowsProblem(state.standing, c);
+
+const openCandidateOf = (k: ProblemKey): Candidate => ({
+  N: k.N,
+  M: k.M,
+  P: k.P,
+  tier: "open",
+  weakness: null,
+  leader: null,
+  target: null,
+  source: null,
+  retake: false,
+});
+
+/** An open problem of the frontier (or the wider frontier), checked with GET just before. */
+async function openCandidate(io: DealIo, d: DealerState, exclude: Set<string>, list?: readonly ProblemKey[]) {
+  const o = owned();
+  const pass = (p: ProblemKey) => allowed({ ...p, tier: "open" });
+  const k =
+    !list && o.has("wide") && nextRandom(d) < 0.5
+      ? drawWide(d, exclude, pass)
+      : drawProblem(d, (list ?? FRONTIER).filter(pass), exclude);
+  if (!k) return null;
+  const info = await problemInfo(io, k);
+  if (!info) return null;
+  if (openDealable(info)) return openCandidateOf(k);
+  skipped.add(keyOf(k));
+  exclude.add(keyOf(k));
+  return null;
+}
+
+/** A site record or published value of a random contested pair, in the player's tiers and size ring. */
+async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<string>): Promise<Candidate | null> {
+  const o = owned();
+  const f = dealerFilters();
+  const pair = drawContestedPair(d, f?.pieces ?? null, f?.containers ?? null);
+  if (!pair) return null;
+  const records = await pairRecords(io, pair.N, pair.M);
+  if (!records) return null;
+  const list = contestedCandidates(records, { ringMin: ringMin(o), tiers: contestedTiers(o), exclude, allow: allowed });
+  if (!list.length) return null;
+  const c = list[Math.floor(nextRandom(d) * list.length)];
+  const info = await problemInfo(io, c);
+  if (!info) return null;
+  if (contestedDealable(info, c)) return c;
+  // the pair's records changed since they were read
+  recordsCache.delete(`${pair.N}/${pair.M}`);
+  exclude.add(keyOf(c));
+  return null;
+}
+
+/** The first record the player lost that can be taken back, started from its new leader (Retake). */
+async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
+  while (state.picks.retake.length && !spentIo(io)) {
+    const key = state.picks.retake[0];
+    const k = parseKey(key);
+    if (!k || problem(state, key) || state.picks.offers.some((x) => keyOf(x) === key)) {
+      state.picks.retake.shift();
+      continue;
+    }
+    const info = await problemInfo(io, k);
+    if (!info) return null;
+    state.picks.retake.shift();
+    const lead = info.site_best;
+    // nothing to take back: closed, no leader, in review, or the player's own name leads again
+    if (!info.accepts_submissions || !lead || lead.verification === "pending") continue;
+    if (state.name && sanitizeName(lead.name) === sanitizeName(state.name)) continue;
+    if (!ruleAllowsProblem(state.standing, k)) continue;
+    const records = k.N <= 20 && k.M <= 20 ? await pairRecords(io, k.N, k.M) : null;
+    const tier = retakeTier(k.N, k.M, k.P, records);
+    const lit = info.literature?.status === "best_known" ? info.literature : null;
+    return {
+      ...k,
+      tier: lit ? "published" : tier === "published" ? "batch" : tier,
+      weakness: null,
+      leader: { score: lead.score, name: lead.name, id: lead.id },
+      target: lit ? publishedTarget(lit) : null,
+      source: lit ? `${lit.display} (${lit.source_name})` : null,
+      retake: true,
+    };
+  }
+  return null;
+}
+
+/** A missing problem of the player's nearest-to-complete collection, still open (Collector). */
+async function collectorCandidate(io: DealIo, exclude: Set<string>): Promise<Candidate | null> {
+  const targets = collectorTargets(new Set(state.economy.recorded), exclude).filter((k) =>
+    allowed({ ...k, tier: "open" }),
+  );
+  for (const k of targets.slice(0, 6)) {
+    const info = await problemInfo(io, k);
+    if (!info) return null;
+    if (openDealable(info)) return openCandidateOf(k);
+    skipped.add(keyOf(k));
+    exclude.add(keyOf(k));
+  }
+  return null;
+}
+
+/**
+ * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
+ * one deal in three a collection's missing problem (Collector), then draws, two in three of them
+ * contested once the player reaches site records. `forced` is a candidate that must go first.
+ */
+async function gatherCandidates(
+  d: DealerState,
+  want: number,
+  exclude: Set<string>,
+): Promise<{ list: Candidate[]; forced: Candidate | null; offline: boolean }> {
+  const io: DealIo = { gets: 0, offline: false };
+  const o = owned();
+  const list: Candidate[] = [];
+  let forced: Candidate | null = null;
+  const add = (c: Candidate | null) => {
+    if (!c || list.some((x) => keyOf(x) === keyOf(c))) return;
+    list.push(c);
+    exclude.add(keyOf(c));
+  };
+  if (o.has("retake")) forced = await retakeCandidate(io);
+  if (!forced && o.has("collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
+  if (forced) exclude.add(keyOf(forced));
+  const contested = Number.isFinite(ringMin(o)) && contestedTiers(o).size > 0;
+  const room = want - (forced ? 1 : 0);
+  for (let attempt = 0; list.length < room && attempt < Math.max(6, room * 3) && !spentIo(io); attempt++)
+    add(
+      contested && nextRandom(d) < 2 / 3
+        ? await contestedCandidate(io, d, exclude)
+        : await openCandidate(io, d, exclude),
+    );
+  return { list, forced, offline: io.offline };
+}
+
+/** The candidates in order, best first: the learning dealer's draws once owned, else the prior. */
+function rank(d: DealerState, list: readonly Candidate[]): Ranked[] {
+  return rankCandidates(list, owned().has("learning") ? state.picks.bandit : null, () => nextRandom(d));
+}
+
+/** A ranking for a candidate dealt without one (the first deal, a forced one). */
+function plainRanked(c: Candidate): Ranked {
+  return rankCandidates([c], null, () => 0.5)[0];
+}
+
+/**
+ * The problem a candidate becomes: an open problem starts bare; a site record, a retake or a
+ * published value starts from a packing the server keeps (the leader's, or the best drawable one
+ * for a published value) and must be improved on. Null when that packing cannot be read.
+ */
+async function materialize(c: Candidate): Promise<ProblemState | null> {
+  if (c.tier === "open" && !c.retake) return newProblem(c, "open", now());
+  let config: PackingConfig | null = null;
+  let score: number | null = null;
+  if (c.tier === "published") {
+    // the best drawable packing: a site record at least as good as the value, else its coordinates
+    const atlas = await api.getAtlas(c.N, c.M, c.P, c.P);
+    const tile = atlas?.tiles.find((t) => t.P === c.P);
+    if (tile) {
+      const cfg: PackingConfig = { N: c.N, M: c.M, P: c.P, pieces: tile.pieces, container_phi: tile.container_phi };
+      const e = evaluate(cfg, { autoOrient: true });
+      if (e.valid && e.container && e.score !== null) {
+        config = { ...cfg, container_phi: e.container.phi };
+        score = e.score;
+      }
+    }
+  } else if (c.leader) {
+    // 404 when the entry is no longer kept (only the leader of a problem is)
+    const entry = await api.getSubmission(c.leader.id);
+    if (entry && entry.N === c.N && entry.M === c.M && entry.P === c.P) {
+      config = { N: c.N, M: c.M, P: c.P, pieces: entry.pieces, container_phi: entry.container_phi };
+      score = c.leader.score;
+    }
+  }
+  if (!config || score === null || new Board().load(config, false)) return null;
+  const p = newProblem(c, c.tier, now());
+  p.phase = "ready";
+  p.board = config;
+  p.best = score;
+  p.floor = c.leader ? Math.min(score, c.leader.score) : score;
+  p.leader = c.leader ? { ...c.leader } : null;
+  p.published = c.target;
+  // a retaken problem comes back from the past
+  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  return p;
+}
+
+/** A problem dealt: into the queue, with what the learning dealer will learn from. */
+function dealt(p: ProblemState, r: { bucket: string; prior: number }, retake = false): void {
+  takeToken(state.dealer);
+  addToQueue(state, p);
+  state.picks.dealt[p.key] = { bucket: r.bucket, prior: r.prior };
+  log(state, now(), `${retake ? "Retake" : "Dealt"}: ${problemTitle(p)}${dealtNote(p)}.`);
+  persist();
+  showFocus();
+}
+
+/** What a dealt problem is, after its title in the log. */
+function dealtNote(p: ProblemState): string {
+  if (p.tier === "open") return "";
+  if (p.tier === "published")
+    return `, a published value to beat${p.leader ? ` (site record by ${p.leader.name})` : ""}`;
+  return `, a ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "another name"}`;
+}
+
+/** Your pick: offers wait for the player; otherwise the dealer deals on its own. */
+const picking = (o: ReadonlySet<UpgradeId>) => offerCount(o) > 0 && state.dealer.dealt > 0;
+
 async function dealTick(): Promise<void> {
-  if (!ownsGame || dealing || now() < dealPausedUntil || !mayDeal()) return;
+  if (!ownsGame || dealing || now() < dealPausedUntil) return;
+  const o = owned();
+  if (picking(o)) {
+    if (!mayDeal() || (state.picks.offers.length >= offerCount(o) && !autoTakes(o))) return;
+    dealing = true;
+    try {
+      await offerTick(o);
+    } finally {
+      dealing = false;
+      render();
+    }
+    return;
+  }
+  if (!mayDeal()) return;
   dealing = true;
   try {
-    const p = await deal(state.dealer);
-    if (p) {
-      takeToken(state.dealer);
-      addToQueue(state, p);
-      log(
-        state,
-        now(),
-        `Dealt: ${problemTitle(p)}${p.tier === "loose" ? `, a loose record by ${p.leader?.name}` : ""}.`,
-      );
-      persist();
-      showFocus();
-    }
+    const r = await deal(state.dealer);
+    if (r) dealt(r.p, r.ranked, r.ranked.candidate.retake);
   } finally {
     dealing = false;
     render();
   }
 }
 
-async function deal(d: DealerState): Promise<ProblemState | null> {
-  const exclude = new Set([...seenKeys(state), ...skipped]);
-  if (drawTier(d, owned()) === "loose") {
-    const loose = await dealLoose(d, exclude);
-    if (loose) return loose;
-  }
-  // the first problem comes from the starter corner while any of it is left open
-  for (const list of d.dealt === 0 ? [STARTER, FRONTIER] : [FRONTIER]) {
-    for (let attempt = 0; attempt < 6; attempt++) {
-      const k = drawProblem(d, list, exclude);
-      if (!k) break;
-      const info = await api.getProblem(k.N, k.M, k.P);
-      if (!info) {
-        dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
-        $("t-title").textContent = "The server cannot be reached; the game needs it to deal a problem. Retrying…";
-        return null;
-      }
-      if (openDealable(info)) return newProblem(k, "open", now());
-      skipped.add(keyOf(k));
-      exclude.add(keyOf(k));
-    }
-  }
-  // everything drawn was taken: ask again in a while rather than every second
+/** Offline or nothing found: ask again in a while rather than every second. */
+function pauseDealing(offline: boolean): void {
   dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
+  if (offline && !state.queue.length)
+    $("t-title").textContent = "The server cannot be reached; the game needs it to deal a problem. Retrying…";
+}
+
+async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked } | null> {
+  const exclude = new Set([...seenKeys(state), ...skipped]);
+  if (d.dealt === 0) {
+    // the first problem comes from the starter corner while any of it is left open
+    const io: DealIo = { gets: 0, offline: false };
+    for (const list of [STARTER, FRONTIER])
+      for (let attempt = 0; attempt < 6 && !spentIo(io); attempt++) {
+        const c = await openCandidate(io, d, exclude, list);
+        if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };
+      }
+    pauseDealing(io.offline);
+    return null;
+  }
+  const { list, forced, offline } = await gatherCandidates(d, dealerChoices(owned()), exclude);
+  const order = [...(forced ? [plainRanked(forced)] : []), ...rank(d, list)];
+  for (const r of order) {
+    const p = await materialize(r.candidate);
+    if (p) return { p, ranked: r };
+    skipped.add(keyOf(r.candidate));
+  }
+  pauseDealing(offline);
   return null;
 }
 
-/** A loose record: a site leader of N, M <= 20 with a gap above 12 %, started from its own packing. */
-async function dealLoose(d: DealerState, exclude: Set<string>): Promise<ProblemState | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { N, M } = drawLoosePair(d);
-    const records = await api.getRecords(N, M);
-    if (!records) return null;
-    const candidates = looseCandidates(records, exclude);
-    if (!candidates.length) continue;
-    const c = candidates[Math.floor(nextRandom(d) * candidates.length)];
-    const info = await api.getProblem(N, M, c.P);
-    if (!looseDealable(info, c)) continue;
-    // 404 when the entry is no longer kept (only the leader of a problem is)
-    const entry = await api.getSubmission(c.id);
-    if (!entry || entry.N !== N || entry.M !== M || entry.P !== c.P) continue;
-    const config: PackingConfig = { N, M, P: c.P, pieces: entry.pieces, container_phi: entry.container_phi };
-    if (new Board().load(config, false)) continue;
-    const p = newProblem({ N, M, P: c.P }, "loose", now());
-    p.phase = "ready";
-    p.board = config;
-    p.best = c.score;
-    p.floor = c.score;
-    p.leader = { score: c.score, name: c.name, id: c.id };
-    return p;
+/** A lane would have nothing to do: fewer problems still paying than lanes (Auto-advance takes an offer). */
+function autoTakes(o: ReadonlySet<UpgradeId>): boolean {
+  if (!o.has("advance") || !state.settings.auto || autoPerSecond(o) === null) return false;
+  const seeds = seedsPerProblem(o);
+  const paying = slotted(state).filter((p) => !p.closed && !spent(p, seeds) && p.sinceGain < STALE_EVALS);
+  return paying.length < laneCount(o);
+}
+
+/** Your pick: fills the offers when a deal is due; Auto-advance takes the best when a lane would idle. */
+async function offerTick(o: ReadonlySet<UpgradeId>): Promise<void> {
+  const d = state.dealer;
+  const count = offerCount(o);
+  if (state.picks.offers.length < count) {
+    const exclude = new Set([...seenKeys(state), ...skipped, ...state.picks.offers.map((x) => keyOf(x))]);
+    const { list, forced, offline } = await gatherCandidates(d, count - state.picks.offers.length, exclude);
+    const ranked = [...(forced ? [plainRanked(forced)] : []), ...rank(d, list)];
+    for (const r of ranked)
+      if (state.picks.offers.length < count)
+        state.picks.offers.push({ ...r.candidate, score: r.score, prior: r.prior, bucket: r.bucket, at: now() });
+    state.picks.offers.sort((a, b) => Number(b.retake) - Number(a.retake) || b.score - a.score);
+    if (!ranked.length) pauseDealing(offline);
+    persist();
   }
-  return null;
+  if (state.picks.offers.length && autoTakes(o)) await takeOffer(state.picks.offers[0], true);
+}
+
+/** Whether an offer is still as it was, from GET /api/problems just before it is taken. */
+function offerStands(info: ProblemInfo | null, x: Offer): boolean {
+  if (!info) return false;
+  if (x.tier === "open" && !x.retake) return openDealable(info);
+  return contestedDealable(info, x);
+}
+
+/** Takes an offer into the queue (the player's pick, or Auto-advance's). */
+async function takeOffer(x: Offer, auto = false): Promise<void> {
+  if (!mayDeal()) {
+    say(`Every slot is full: the next one frees after ${evals(evalsToDeal())}, or drop a problem.`);
+    return;
+  }
+  const info = await api.getProblem(x.N, x.M, x.P);
+  if (!info) {
+    pauseDealing(true);
+    say("The server cannot be reached; the offer stays until it can be checked.");
+    return;
+  }
+  state.picks.offers = state.picks.offers.filter((y) => y !== x);
+  const title = problemTitle(x);
+  if (!offerStands(info, x)) {
+    skipped.add(keyOf(x));
+    log(state, now(), `${title} changed since it was offered (someone took it, or its record moved); it is gone.`);
+    persist();
+    return;
+  }
+  const p = await materialize(x);
+  if (!p || problem(state, p.key)) {
+    skipped.add(keyOf(x));
+    log(state, now(), `${title} could not be loaded; it is gone.`);
+    persist();
+    return;
+  }
+  dealt(p, x, x.retake);
+  if (!auto) {
+    state.focus = p.key;
+    showFocus();
+  }
+  say(`${auto ? "Auto-advance took" : "Taken"}: ${title}.`);
+}
+
+async function onTakeOffer(key: string): Promise<void> {
+  const x = state.picks.offers.find((y) => keyOf(y) === key);
+  if (!x || dealing || !ownsGame) return;
+  dealing = true;
+  try {
+    await takeOffer(x);
+  } finally {
+    dealing = false;
+    render();
+    kickLanes();
+  }
 }
 
 /** Evaluations until the next deal (0: one is due). */
@@ -983,12 +1311,17 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
       `Verified: ${show6(leader.score)} is the record for ${problemTitle(p)}` +
         `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}; its answer had not arrived.`,
     );
-  } else if (r.lost)
+  } else if (r.lost) {
+    // Retake: a record lost after it left the queue is offered again first
+    const retake = owned().has("retake") && !problem(state, p.key);
+    if (retake) addRetake(state.picks, p.key);
     log(
       state,
       now(),
-      `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.`,
+      `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.` +
+        (retake ? " It will be offered again first." : ""),
     );
+  }
 }
 
 function onLeaderEvent(e: LeaderboardEvent): void {
@@ -1119,7 +1452,8 @@ function renderProblem(p: ProblemState | undefined): void {
   const s = state;
   text("t-held", fmtInt(recordsHeld(s)));
   if (!p) {
-    if (!dealing && now() >= dealPausedUntil) text("t-title", "Dealing a problem…");
+    if (picking(owned()) && s.picks.offers.length) text("t-title", "Pick a problem from the offers in the queue.");
+    else if (!dealing && now() >= dealPausedUntil) text("t-title", "Dealing a problem…");
     text("t-problem-note", "");
     show("t-next", false);
     return;
@@ -1130,9 +1464,18 @@ function renderProblem(p: ProblemState | undefined): void {
   if (p.closed) note = "Closed: the server takes no more entries for this problem.";
   else if (p.leaving) note = "Sending your best before it leaves the queue…";
   else if (spent(p, seeds)) note = spentText(p);
-  else if (p.ourId !== null) note = `You hold this record: ${show6(p.verified!)}.`;
-  else if (p.leader && p.tier === "loose" && !p.run)
-    note = `Loose record: ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapOf(p.N, p.M, p.P, p.leader.score))} above the area bound. Contest weight 3.`;
+  else if (p.ourId !== null)
+    note =
+      `You hold this record: ${show6(p.verified!)}.` +
+      (p.published !== null && p.verified! > p.published
+        ? ` The published value is still ahead: below ${show6(p.published)} pays ${CONTEST.published}×.`
+        : "");
+  else if (p.tier === "published")
+    note =
+      `Published value: beat ${show6(p.published!)} for ${CONTEST.published}× the points; a record below it waits for an administrator's review.` +
+      (p.leader ? ` Site record: ${show6(p.leader.score)} by ${p.leader.name}.` : "");
+  else if (p.leader && p.tier !== "open" && !p.run)
+    note = `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)}: ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapOf(p.N, p.M, p.P, p.leader.score))} above the area bound. Contest weight ${CONTEST[p.tier]}.`;
   else if (p.leader) note = `Record: ${show6(p.leader.score)} by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
   else note = "No record exists. Any valid packing is a new record.";
@@ -1357,11 +1700,13 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
           ? " · leaving"
           : p.ourId !== null
             ? " · yours"
-            : p.tier === "loose"
-              ? ` · loose record by ${p.leader?.name ?? "?"}`
-              : p.phase === "bare"
-                ? " · no record yet"
-                : "";
+            : p.tier === "published"
+              ? " · published value"
+              : p.tier !== "open"
+                ? ` · ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
+                : p.phase === "bare"
+                  ? " · no record yet"
+                  : "";
         li.append(
           `${problemTitle(p)}${gap}${status}${spent(p, seeds) ? " · seeds spent" : ""}${busy.has(p.key) ? " · running" : ""}`,
         );
@@ -1393,14 +1738,131 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   }
   const free = slots - slotted(state).length;
   const left = evalsToDeal();
+  const offers = state.picks.offers.length;
   text(
     "t-deal",
-    free > 0
-      ? left === 0
-        ? "Dealing a problem…"
-        : `The next problem is dealt after ${evals(left)} more.`
-      : `Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations; drop a problem to take it.`,
+    picking(o)
+      ? offers && mayDeal()
+        ? `Pick a problem: ${offers} offered below.`
+        : offers
+          ? `The offers wait for a free slot: ${free > 0 ? `the next one after ${evals(left)}` : "every slot is full; drop a problem to take one"}.`
+          : free > 0 && left > 0
+            ? `New offers come after ${evals(left)} more.`
+            : free > 0
+              ? "Drawing offers…"
+              : "Every slot is full. Drop a problem to take a new one."
+      : free > 0
+        ? left === 0
+          ? "Dealing a problem…"
+          : `The next problem is dealt after ${evals(left)} more.`
+        : `Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations; drop a problem to take it.`,
   );
+  renderOffers(o);
+  renderFilters(o);
+}
+
+let offersSig = "";
+/** Your pick: the offers, best first, each with what it is expected to pay and a Take button. */
+function renderOffers(o: ReadonlySet<UpgradeId>): void {
+  const box = $("t-offers");
+  show("t-offers", picking(o) && state.picks.offers.length > 0);
+  if (box.hidden) return;
+  const due = mayDeal();
+  const sig = `${state.picks.offers.map((x) => `${keyOf(x)}|${x.score}`).join(";")}|${due}|${dealing}`;
+  if (sig === offersSig) return;
+  offersSig = sig;
+  $("t-offer-list").replaceChildren(
+    ...state.picks.offers.map((x, i) => {
+      const li = document.createElement("li");
+      li.className = "t-offer";
+      const title = problemTitle(x);
+      const h = document.createElement("strong");
+      h.textContent = title;
+      const what =
+        x.tier === "open"
+          ? "open: any packing is a record"
+          : x.tier === "published"
+            ? `published value ${x.source ?? ""}: beat ${show6(x.target!)}`.replace(/\s+:/, ":")
+            : `${TIER_LABEL[x.tier]} ${show6(x.leader!.score)} by ${x.leader!.name}, gap ${fmtPct(gapOf(x.N, x.M, x.P, x.leader!.score))}` +
+              (x.weakness !== null && x.weakness > 0 ? `, ${fmtPct(x.weakness)} weaker than its neighbours` : "");
+      const meta = document.createElement("span");
+      meta.className = "note";
+      // what the dealer knows, not a promise: the ranking itself is an estimate
+      meta.textContent =
+        `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · contest weight ${CONTEST[x.tier]}` +
+        ` · about ${msPerEval(x.N + x.M + x.P).toFixed(1)} ms an evaluation`;
+      const btn = document.createElement("button");
+      btn.textContent = "Take";
+      btn.disabled = !due || dealing;
+      btn.setAttribute("aria-label", `Take ${title}`);
+      btn.addEventListener("click", () => void onTakeOffer(keyOf(x)));
+      li.append(h, meta, btn);
+      return li;
+    }),
+  );
+}
+
+let filtersShown = "";
+/** Dealer filters: the form shows the saved filters (until the player edits it). */
+function renderFilters(o: ReadonlySet<UpgradeId>): void {
+  show("t-filters", o.has("filters"));
+  if (!o.has("filters")) return;
+  const f = state.picks.filters;
+  const sig = JSON.stringify(f);
+  if (sig === filtersShown) return;
+  filtersShown = sig;
+  $<HTMLInputElement>("t-f-pieces").value = formatShapes(f?.pieces ?? null);
+  $<HTMLInputElement>("t-f-containers").value = formatShapes(f?.containers ?? null);
+  $<HTMLInputElement>("t-f-minp").value = String(f?.minP ?? 1);
+  $<HTMLInputElement>("t-f-maxp").value = String(f?.maxP ?? 500);
+  for (const t of TIERS) $<HTMLInputElement>(`t-f-tier-${t}`).checked = !f?.tiers || f.tiers.includes(t);
+}
+
+function onSaveFilters(e: Event): void {
+  e.preventDefault();
+  const pieces = parseShapes($<HTMLInputElement>("t-f-pieces").value);
+  const containers = parseShapes($<HTMLInputElement>("t-f-containers").value);
+  for (const [label, v] of [
+    ["Piece shapes", pieces],
+    ["Containers", containers],
+  ] as const)
+    if (v && !Array.isArray(v)) {
+      text("t-filter-note", `${label}: ${v.error}.`);
+      return;
+    }
+  const minP = Math.round(Number($<HTMLInputElement>("t-f-minp").value) || 1);
+  const maxP = Math.round(Number($<HTMLInputElement>("t-f-maxp").value) || 500);
+  if (!(minP >= 1 && maxP <= 500 && minP <= maxP)) {
+    text("t-filter-note", "Pieces: a range from 1 to 500, the first no larger than the second.");
+    return;
+  }
+  const tiers = TIERS.filter((t) => $<HTMLInputElement>(`t-f-tier-${t}`).checked);
+  if (!tiers.length) {
+    text("t-filter-note", "Keep at least one tier.");
+    return;
+  }
+  const filters = {
+    pieces: pieces as number[] | null,
+    containers: containers as number[] | null,
+    minP,
+    maxP,
+    tiers: tiers.length === TIERS.length ? null : tiers,
+  };
+  const none = !filters.pieces && !filters.containers && minP === 1 && maxP === 500 && !filters.tiers;
+  state.picks.filters = none ? null : filters;
+  // offers drawn under the old filters make way for new ones
+  state.picks.offers = state.picks.offers.filter((x) => passes(state.picks.filters, x));
+  filtersShown = "";
+  text(
+    "t-filter-note",
+    none
+      ? "No filters: the dealer draws from everything you have reached."
+      : "Filters saved. The dealer draws only what they allow; if nothing fits, nothing is dealt.",
+  );
+  log(state, now(), none ? "Dealer filters cleared." : "Dealer filters saved.");
+  persist();
+  render();
+  void dealTick();
 }
 
 function onDrop(key: string): void {
@@ -1493,6 +1955,15 @@ function renderLog(): void {
 
 // ---------- controls ----------
 
+$("t-filter-form").addEventListener("submit", onSaveFilters);
+$("t-f-clear").addEventListener("click", () => {
+  $<HTMLInputElement>("t-f-pieces").value = "";
+  $<HTMLInputElement>("t-f-containers").value = "";
+  $<HTMLInputElement>("t-f-minp").value = "1";
+  $<HTMLInputElement>("t-f-maxp").value = "500";
+  for (const t of TIERS) $<HTMLInputElement>(`t-f-tier-${t}`).checked = true;
+  $<HTMLFormElement>("t-filter-form").requestSubmit();
+});
 $("t-loadall").addEventListener("click", () => {
   const p = focused();
   if (p) void loadAll(p).then(() => showFocus());

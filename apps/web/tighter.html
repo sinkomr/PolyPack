@@ -146,6 +146,42 @@
           <h2 id="t-queue-heading">Queue</h2>
           <ol id="t-queue-list" class="t-queue"></ol>
           <p id="t-deal" class="note"></p>
+          <div id="t-offers" class="t-offers" hidden>
+            <h3>Offers</h3>
+            <ol id="t-offer-list" class="t-offer-list" aria-label="Problems offered, best first"></ol>
+          </div>
+          <details id="t-filters" class="t-filters" hidden>
+            <summary>Dealer filters</summary>
+            <form id="t-filter-form">
+              <div class="row">
+                <label for="t-f-pieces">Piece shapes</label>
+                <input id="t-f-pieces" placeholder="all, or e.g. 0, 3-6, 21-100" autocomplete="off" />
+              </div>
+              <div class="row">
+                <label for="t-f-containers">Containers</label>
+                <input id="t-f-containers" placeholder="all, or e.g. 4, 6" autocomplete="off" />
+              </div>
+              <div class="row">
+                <label for="t-f-minp">Pieces from</label>
+                <input id="t-f-minp" type="number" min="1" max="500" step="1" />
+                <label for="t-f-maxp">to</label>
+                <input id="t-f-maxp" type="number" min="1" max="500" step="1" />
+              </div>
+              <fieldset class="t-f-tiers">
+                <legend>Tiers</legend>
+                <label class="t-check"><input id="t-f-tier-open" type="checkbox" /> open problems</label>
+                <label class="t-check"><input id="t-f-tier-loose" type="checkbox" /> loose records</label>
+                <label class="t-check"><input id="t-f-tier-batch" type="checkbox" /> site records</label>
+                <label class="t-check"><input id="t-f-tier-published" type="checkbox" /> published values</label>
+              </fieldset>
+              <p class="note">Shapes: 0 is the circle, then the number of sides. Empty means all.</p>
+              <div class="row wrap">
+                <button type="submit" class="primary">Save filters</button>
+                <button id="t-f-clear" type="button">Clear</button>
+              </div>
+            </form>
+            <p id="t-filter-note" class="note" role="status"></p>
+          </details>
         </section>
 
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>

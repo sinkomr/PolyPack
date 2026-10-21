@@ -7,7 +7,7 @@ import { Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
 import { EconomyState, newEconomy } from "./economy";
-import { PicksState, newPicks } from "./picks";
+import { PicksState, learnOnLeave, newPicks } from "./picks";
 import { RunPlanState, newRunPlan } from "./runplan";
 import { StandingState, newStanding } from "./standing";
 import { EvolveMethod, Owned, UpgradeId, canBuy, costOf, currencyOf, level, owning, upgrade } from "./upgrades";
@@ -52,6 +52,11 @@ export interface ProblemState extends ProblemKey {
    * larger). Loose records: the record when it was dealt. Null until known.
    */
   floor: number | null;
+  /**
+   * A problem with a published value: the score a record must beat before it pays (the value less
+   * its printed precision, as the server judges a record below it). Null for other problems.
+   */
+  published: number | null;
   phase: Phase;
   /** The best strict board found here (after Load all: the Load-all board), and its score. */
   board: PackingConfig | null;
@@ -218,6 +223,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     tier,
     dealtAt: now,
     floor: null,
+    published: null,
     phase: "bare",
     board: null,
     best: null,
@@ -395,8 +401,14 @@ export function previousScore(p: ProblemState): number | null {
   return p.leader?.score ?? p.verified ?? p.floor;
 }
 
-/** What the next payment is measured from: the last score paid, else the score to beat. */
-const payBase = (p: ProblemState): number | null => p.paidTo ?? previousScore(p);
+/**
+ * What the next payment is measured from: the last score paid, else the score to beat; on a problem
+ * with a published value, never above the published value (nothing pays until the board beats it).
+ */
+const payBase = (p: ProblemState): number | null => {
+  const base = p.paidTo ?? previousScore(p);
+  return base !== null && p.published !== null ? Math.min(base, p.published) : base;
+};
 
 function pointsFor(p: ProblemState, name: string): Points | null {
   if (p.phase !== "ready" || p.best === null || !p.run || p.closed) return null;
@@ -679,6 +691,8 @@ export function leave(s: GameState, key: string, now: number): void {
   const i = s.queue.findIndex((q) => q.key === key);
   if (i < 0) return;
   const [p] = s.queue.splice(i, 1);
+  // the learning dealer learns what the problem paid per evaluation
+  learnOnLeave(s.picks, p);
   s.past.push({
     N: p.N,
     M: p.M,

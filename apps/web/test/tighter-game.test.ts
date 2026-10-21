@@ -57,7 +57,7 @@ import {
   seedsPerProblem,
   upgrade,
 } from "../src/tighter/upgrades";
-import { drawProblem, looseCandidates, newDealer, openDealable } from "../src/tighter/dealer";
+import { drawProblem, newDealer, openDealable } from "../src/tighter/dealer";
 
 const T0 = 1_000_000;
 const board = (P: number, shift = 0): PackingConfig => ({
@@ -806,32 +806,7 @@ describe("Tighter dealer", () => {
     expect(drawProblem(a, STARTER, all)).toEqual({ N: 36, M: 36, P: 80 });
   });
 
-  it("finds loose records: gap above 12 %, no published value, not pending", () => {
-    const b = (P: number) => areaLowerBound(7, 7, P);
-    const entry = (P: number, score: number, verification: "none" | "pending" = "none") => ({
-      P,
-      id: P,
-      name: "Bob",
-      found_with: null,
-      agent_note: "",
-      score,
-      created_at: "",
-      verification,
-    });
-    const records = {
-      N: 7,
-      M: 7,
-      literature: [{ P: 12 } as never],
-      site: [
-        entry(10, b(10) * 1.2),
-        entry(11, b(11) * 1.05),
-        entry(12, b(12) * 1.3),
-        entry(13, b(13) * 1.3, "pending"),
-      ],
-    };
-    expect(looseCandidates(records, new Set()).map((c) => c.P)).toEqual([10]);
-    expect(looseCandidates(records, new Set(["7/7/10"]))).toEqual([]);
-  });
+  // contested records (loose, batch, published) are tested in tighter-dealer.test.ts
 });
 
 describe("Tighter auto-eval", () => {

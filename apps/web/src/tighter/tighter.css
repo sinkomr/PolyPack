@@ -400,4 +400,83 @@
   background: var(--panel);
   font-size: 12.5px;
   overflow-wrap: anywhere;
+
+/* ---- dealer ---- */
+.t-offers h3 {
+  margin: 10px 0 4px;
+  font-size: 14px;
+}
+.t-offer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.t-offer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: var(--bg);
+}
+.t-offer strong {
+  font-size: 13.5px;
+}
+.t-offer .note {
+  grid-column: 1;
+  margin: 0;
+  font-size: 12.5px;
+}
+.t-offer button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-height: 30px;
+}
+.t-filters {
+  margin-top: 10px;
+}
+.t-filters summary {
+  cursor: pointer;
+  font-size: 13.5px;
+}
+.t-filters form {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.t-filters .row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  align-items: center;
+}
+.t-filters .row label {
+  font-size: 13px;
+}
+.t-filters input:not([type="checkbox"]) {
+  min-width: 0;
+  flex: 1 1 140px;
+}
+.t-filters input[type="number"] {
+  flex: 0 1 80px;
+}
+.t-f-tiers {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px 6px;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+}
+.t-f-tiers legend {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.t-f-tiers .t-check {
+  font-size: 13px;
 }

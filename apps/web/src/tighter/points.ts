@@ -14,9 +14,22 @@ import { SCORE_TIE, areaLowerBound, improvesOn } from "@polypack/geometry";
 /** The floor F: the smallest relative improvement that counts, equal to the server's tie tolerance. */
 export const FLOOR = SCORE_TIE;
 
-/** Contest weight c of a tier (design.md §6). The MVP deals open frontier problems and loose records. */
-export const CONTEST = { open: 1, loose: 3 } as const;
+/**
+ * Contest weight c of a tier (design.md §6, plan 2026-10-20 §3): open problems (no entry yet), loose
+ * site records (clearly weaker than their neighbours in P), every other site record without a
+ * published value, and problems with a best-known published value, which a record must beat.
+ */
+export const CONTEST = { open: 1, loose: 3, batch: 10, published: 100 } as const;
 export type Tier = keyof typeof CONTEST;
+export const TIERS = Object.keys(CONTEST) as Tier[];
+
+/** How the game names a tier to the player. */
+export const TIER_LABEL: Record<Tier, string> = {
+  open: "open problem",
+  loose: "loose record",
+  batch: "site record",
+  published: "published value",
+};
 
 /** Points per unit of ln(s_prev / s_new) and of ln(g_prev / g_new). */
 export const SIZE_WEIGHT = 100;
