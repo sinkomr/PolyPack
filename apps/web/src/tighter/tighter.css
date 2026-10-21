@@ -525,3 +525,49 @@
   margin-top: 8px;
   font-size: 13px;
 }
+
+/* ---- runs ---- */
+.t-runs h3 {
+  margin: 10px 0 4px;
+  font-size: 13px;
+}
+.t-runs h3:first-child {
+  margin-top: 0;
+}
+.t-pipeline {
+  margin: 0 0 6px;
+  padding-left: 0;
+  list-style: none;
+}
+.t-pipeline li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 13px;
+}
+.t-pipeline .t-q-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+}
+.t-pipeline button,
+.t-pipeline-add button {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+.t-pipeline-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+.t-pipeline-add select {
+  min-width: 0;
+  max-width: 100%;
+}
+.t-refused {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
