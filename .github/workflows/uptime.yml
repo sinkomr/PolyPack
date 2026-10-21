@@ -1,8 +1,8 @@
 name: Uptime
 # Asks the live site whether it is healthy. A failed run is reported by GitHub's usual
 # notification for failed workflows, to whoever last changed this schedule.
-# Every 6 hours: each run bills a whole Actions minute for about 9 seconds of work, from a
-# budget shared by all private repos. A free external monitor can check more often.
+# Every 6 hours: each run takes about 9 seconds but would bill a whole Actions minute if the
+# repository were private. A free external monitor can check more often.
 on:
   schedule:
     - cron: "7 */6 * * *"

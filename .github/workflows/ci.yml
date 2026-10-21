@@ -1,7 +1,6 @@
 name: CI
-# Actions minutes are a monthly budget shared by all private repos: pushes to other branches run
-# nothing (their pull request runs once instead of twice), and a newer commit on the same ref
-# cancels the older run.
+# Pushes to other branches run nothing (their pull request runs once instead of twice), and a
+# newer commit on the same ref cancels the older run.
 on:
   push:
     branches: [main]
