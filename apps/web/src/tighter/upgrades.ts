@@ -1,3 +1,5 @@
+import { presetParams, tuningLevels } from "./presets";
+
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
  * each upgrade adds a little. Evaluations per click climb one at a time; Auto-eval starts at one
@@ -320,12 +322,21 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     name: `${method} tuning`,
     cost,
     requires,
-    effect: `each level gives ${method} a setting that searches more per evaluation`,
-    real: `${method}'s parameters`,
+    effect: `each level gives ${method} a setting that searches more per evaluation (measured to pay at least as much per click)`,
+    real: `${method}'s parameters: ${tuningSummary(method)}`,
     row: "runs",
     mystery,
-    levels: { max: 3, growth: 3 },
+    // as many levels as the method has presets that passed the bench (presets.ts)
+    levels: { max: Math.max(1, tuningLevels(method)), growth: 3 },
   };
+}
+
+/** The settings a tuning upgrade's levels set, for its card: "sweepsPerEvaluation 15, 20, 30". */
+function tuningSummary(method: EvolveMethod): string {
+  const n = tuningLevels(method);
+  const levels = Array.from({ length: n }, (_, i) => presetParams(method, i + 1, true));
+  const keys = [...new Set(levels.flatMap((l) => Object.keys(l)))];
+  return keys.map((k) => `${k} ${levels.map((l) => String(l[k] ?? "–")).join(", ")}`).join("; ");
 }
 
 function ringRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
@@ -914,10 +925,14 @@ export function tuningLevel(o: Owned, method: EvolveMethod): number {
   return id ? level(o, id) : 0;
 }
 
-/** The method's parameters as the player's upgrades set them (the solver's defaults otherwise). */
-export function methodParams(o: Owned, method: EvolveMethod): Record<string, unknown> {
-  if (method === "mc_compress") return { sweepsPerEvaluation: o.has("sweeps10") ? 10 : 5 };
-  return {};
+/**
+ * The method's parameters as the player's upgrades set them: the preset of its tuning level (the
+ * owned level, or a lower one that Auto-tune chose), the solver's defaults otherwise.
+ */
+export function methodParams(o: Owned, method: EvolveMethod, tuning?: number): Record<string, unknown> {
+  const owned = tuningLevel(o, method);
+  const l = tuning === undefined ? owned : Math.max(0, Math.min(owned, tuning));
+  return presetParams(method, l, o.has("sweeps10"));
 }
 
 /** CPU cores the browser reports (4 when it does not say). */

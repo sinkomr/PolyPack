@@ -69,10 +69,15 @@ import { FLOOR, gapOf, show6 } from "./points";
 import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { RunRecord, classifyAnswer, shouldSubmit, submissionBody } from "./submission";
+import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
+import { renderRunsPanel } from "./runs-ui";
+import { ruleAllowsMethod } from "./standing";
+import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
 import {
   COMPACT_EVALS,
   EvolveMethod,
+  Owned,
   RUN_BUDGET,
   UpgradeId,
   autoPerSecond,
@@ -86,6 +91,7 @@ import {
   methods,
   queueSize,
   seedsPerProblem,
+  tuningLevel,
   upgrade,
 } from "./upgrades";
 
@@ -205,8 +211,18 @@ document.addEventListener("visibilitychange", () => {
 
 const owned = () => ownedSet(state);
 const focused = () => problem(state, state.focus);
-const chosenMethod = (o: ReadonlySet<UpgradeId>): EvolveMethod =>
-  methods(o).includes(state.settings.method) ? state.settings.method : "mc_compress";
+/** A method the player owns and the cycle's rule allows. */
+const allowedMethod = (o: Owned, m: EvolveMethod): boolean =>
+  methods(o).includes(m) && ruleAllowsMethod(state.standing, m);
+/** The select's method, or when the rule refuses it the first owned method it allows. */
+const chosenMethod = (o: Owned): EvolveMethod =>
+  allowedMethod(o, state.settings.method)
+    ? state.settings.method
+    : (methods(o).find((m) => allowedMethod(o, m)) ?? "mc_compress");
+/** Method match is on: "Auto" chosen, and Method match or Auto-tune owned. */
+const autoMethods = (o: Owned): boolean => state.runplan.auto && (o.has("methodMatch") || o.has("autoTune"));
+/** The pipeline decides each new run's method: Pipelines owned and at least one stage. */
+const piped = (o: Owned): boolean => o.has("pipeline") && state.runplan.pipeline.length > 0;
 
 // ---------- board ----------
 
@@ -300,13 +316,24 @@ interface Job {
 interface OpenRunView {
   key: string;
   method: EvolveMethod;
+  /** The tuning level its parameters are the preset of. */
+  level: number;
+  /** Who chose the method (a change of mode starts a new run). */
+  mode: RunMode;
   /** The parameters asked for (an upgrade that changes them starts a new run), and as resolved. */
   asked: string;
   params: Record<string, unknown>;
   seed: number;
   /** Evaluations the run has done, its start's scoring included. */
   evaluations: number;
+  /** For the bandit: the kind of problem, the problem's RP and the run's evaluations when it opened. */
+  kind: string;
+  rpAt: number;
+  evalsAt: number;
 }
+
+/** Who chose a run's method: Compact, the select, Method match or the pipeline. */
+type RunMode = "compact" | "select" | "auto" | "pipeline";
 
 interface LaneView {
   lane: Lane;
@@ -362,7 +389,36 @@ function laneFor(key: string): LaneView {
 
 const loading = new Set<string>();
 
-/** Load all: the board's Add all from the centre. Its score is the free floor and is never sent. */
+/**
+ * Transfers: the best known packing of a neighbour with fewer pieces (same N and M), grown to this
+ * problem's pieces. The player's own boards in the queue first, then the site's records of the
+ * closest neighbours (one GET each, and one for the packing). Null when there is none.
+ */
+async function findTransfer(p: ProblemState): Promise<TransferStart | null> {
+  const own = state.queue
+    .filter((q) => q !== p && q.N === p.N && q.M === p.M && q.P < p.P && q.board && q.phase !== "bare" && !!q.run)
+    .sort((a, b) => b.P - a.P)[0];
+  let best = own?.board ? scoredTransfer(own.board, p) : null;
+  for (const P2 of neighbourPs(p.P, owned().has("wide"))) {
+    if (best && best.from >= P2) break;
+    const info = await api.getProblem(p.N, p.M, P2);
+    const lead = info?.site_best;
+    if (!lead || lead.verification === "pending") continue;
+    // 404 when the entry is no longer kept (only the leader of a problem is)
+    const entry = await api.getSubmission(lead.id);
+    if (!entry || entry.N !== p.N || entry.M !== p.M || entry.P !== P2) continue;
+    const t = scoredTransfer({ N: p.N, M: p.M, P: P2, pieces: entry.pieces, container_phi: entry.container_phi }, p);
+    if (t && (!best || t.score < best.score)) best = t;
+    if (best) break;
+  }
+  return best;
+}
+
+/**
+ * Load all: the board's Add all from the centre. Its score is the free floor and is never sent. With
+ * Transfers, a neighbour's packing grown to this problem starts it instead when that is clearly smaller; the
+ * free floor is then the smallest of the two (and of the trim floor), so neither is sent unimproved.
+ */
 async function loadAll(p: ProblemState): Promise<boolean> {
   if (p.phase !== "bare") return true;
   if (loading.has(p.key) || !ownsGame) return false;
@@ -381,18 +437,28 @@ async function loadAll(p: ProblemState): Promise<boolean> {
     // A record for P + 1 minus any one piece packs P pieces in no more room: it is part of the floor.
     const next = p.P < MAX_PIECES ? await api.getProblem(p.N, p.M, p.P + 1) : null;
     const trim = next?.site_best && next.site_best.verification !== "pending" ? next.site_best.score : null;
+    const transfer = owned().has("transfer") ? await findTransfer(p) : null;
     if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
-    applyLoadAll(p, config, e.score, trim);
+    const start = chooseStart({ board: config, score: e.score }, trim, transfer);
+    applyLoadAll(p, start.board, start.score, trim);
     reveal(state, "score");
     if (p.key === state.focus) {
       const b0 = areaLowerBound(p.N, p.M, p.P);
       say(
-        `Load all: ${p.P} pieces on rings around the centre. Side ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
-          (p.floor! < e.score
-            ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
-            : "This is the free floor: Load all is never sent. Press Compact."),
+        start.transferred
+          ? `Transfer: the best packing of ${transfer!.from} pieces, with ${p.P - transfer!.from} more placed around it. ` +
+              `Side ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound (Load all: ${show6(e.score)}). ` +
+              (p.floor! < start.score
+                ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
+                : "This is the free floor: a transfer is never sent unimproved. Press Compact.")
+          : `Load all: ${p.P} pieces on rings around the centre. Side ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
+              (p.floor! < e.score
+                ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
+                : "This is the free floor: Load all is never sent. Press Compact."),
       );
     }
+    if (start.transferred)
+      log(state, now(), `Transfer on ${problemTitle(p)}: started from the packing of ${transfer!.from} pieces.`);
     persist();
     return true;
   } finally {
@@ -441,15 +507,68 @@ async function pump(lv: LaneView): Promise<void> {
   }
 }
 
+/** A run's method, tuning level and who chose them. */
+type WantedRun = RunChoice & { mode: RunMode };
+
+const levelFits = (o: Owned, r: OpenRunView) =>
+  o.has("autoTune") && state.runplan.auto ? r.level <= tuningLevel(o, r.method) : r.level === tuningLevel(o, r.method);
+
+/**
+ * The run a job on `p` wants: Compact's (mc_compress); else the pipeline's stage for the problem's
+ * next seed; else Method match's choice; else the select's method. A run already open in the same
+ * mode is kept while its choice still holds, so the bandit draws only when a new run opens.
+ */
+function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): WantedRun {
+  if (compact) return { method: "mc_compress", level: tuningLevel(o, "mc_compress"), mode: "compact" };
+  const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
+  const tune = o.has("autoTune") && state.runplan.auto;
+  const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
+    chooseRun(state.runplan, {
+      kind: problemKind(p),
+      methods: ms,
+      levelOf: (m) => tuningLevel(o, m),
+      tune: withLevels,
+      allowed: (m) => allowedMethod(o, m),
+      rand: planRandom(state.runplan, state.dealer.seed),
+    });
+  if (piped(o)) {
+    const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m));
+    if (stage) {
+      if (r && r.mode === "pipeline" && r.method === stage.method && levelFits(o, r))
+        return { method: r.method, level: r.level, mode: "pipeline" };
+      const level = tune ? (draw([stage.method], true)?.level ?? 0) : tuningLevel(o, stage.method);
+      return { method: stage.method, level, mode: "pipeline" };
+    }
+  }
+  if (autoMethods(o)) {
+    if (r && r.mode === "auto" && allowedMethod(o, r.method) && levelFits(o, r))
+      return { method: r.method, level: r.level, mode: "auto" };
+    const c = draw(methods(o), tune);
+    if (c) return { ...c, mode: "auto" };
+  }
+  const m = chosenMethod(o);
+  return { method: m, level: tuningLevel(o, m), mode: "select" };
+}
+
+/** A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's excepted). */
+function finishRun(run: OpenRunView | null): void {
+  if (!run || run.mode === "compact") return;
+  const p = problem(state, run.key);
+  if (p) observeRun(state.runplan, run.kind, run.method, run.level, p.rp - run.rpAt, run.evaluations - run.evalsAt);
+}
+
 /** Opens a run on the problem (closing whatever the lane held), with its next seed. */
-async function openRun(lv: LaneView, p: ProblemState, method: EvolveMethod, job: Job): Promise<boolean> {
-  const params = methodParams(owned(), method);
+async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job): Promise<boolean> {
+  const { method, level } = want;
+  const params = methodParams(owned(), method, level);
   // a problem's run lives in one lane: a run on it elsewhere closes first
   for (const other of lanes)
     if (other !== lv && other.run?.key === p.key) {
+      finishRun(other.run);
       other.run = null;
       void other.lane.close();
     }
+  finishRun(lv.run);
   lv.run = null;
   if (lv.lane.open) await lv.lane.close();
   const seed = p.nextSeed;
@@ -473,10 +592,15 @@ async function openRun(lv: LaneView, p: ProblemState, method: EvolveMethod, job:
   lv.run = {
     key: p.key,
     method,
+    level,
+    mode: want.mode,
     asked: JSON.stringify(params),
     params: a.params,
     seed,
     evaluations: a.state.evaluations,
+    kind: problemKind(p),
+    rpAt: p.rp,
+    evalsAt: 0,
   };
   // the start's own scoring (with the container's best turn) may already beat the board
   settle(lv.run, p, { ...job, click: false }, a.state, a.state.evaluations, 0);
@@ -499,16 +623,32 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     p = problem(state, job.key);
     if (!p || !p.board || (job.compact ? p.phase !== "loaded" : !evolvable(p))) return false;
     const o = owned();
-    const method: EvolveMethod = job.compact ? "mc_compress" : chosenMethod(o);
-    const asked = JSON.stringify(methodParams(o, method));
+    const want = wantedRun(p, o, lv, job.compact);
+    const asked = JSON.stringify(methodParams(o, want.method, want.level));
     const r = lv.run;
-    if (!r || !lv.lane.open || r.key !== p.key || r.method !== method || r.asked !== asked) {
+    // Compact's run goes on under the select's method when that is the same method and setting
+    const sameMode = !!r && (r.mode === want.mode || (r.mode === "compact" && want.mode === "select"));
+    if (
+      !r ||
+      !lv.lane.open ||
+      r.key !== p.key ||
+      r.method !== want.method ||
+      r.level !== want.level ||
+      r.asked !== asked ||
+      !sameMode
+    ) {
       if (!job.compact && spent(p, seedsPerProblem(o))) return false;
-      if (!(await openRun(lv, p, method, job))) return false;
+      if (!(await openRun(lv, p, want, job))) return false;
+    } else if (r.mode !== want.mode) {
+      // from here on the run is the method's own: what it pays is measured from now
+      r.mode = want.mode;
+      r.rpAt = p.rp;
+      r.evalsAt = r.evaluations;
     }
     const run = lv.run!;
     const t = await lv.lane.step(job.evals);
     if (!t.ok) {
+      finishRun(run);
       lv.run = null;
       say(`The run on ${problemTitle(p)} stopped: ${t.message}.`);
       return false;
@@ -522,6 +662,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       return true;
     }
     settle(run, p, job, t.state, done, t.ms);
+    if (t.state.ended) finishRun(run);
     return true;
   } finally {
     lv.current = null;
@@ -575,7 +716,7 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
       state,
       now(),
       `The run with seed ${run.seed} on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}.` +
-        (left ? " Its seeds are spent." : " The next click starts one with a new seed."),
+        (left ? " Its seeds are spent." : ` The next click starts one with a new seed${nextStageText(p)}.`),
     );
   }
   if (job.click && p.key === state.focus) say(stepMessage(p, change, run, job, done));
@@ -599,6 +740,14 @@ function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job,
   text += c.points ? ` · +${fmtRP(c.points.total)} RP.` : ".";
   if (c.counted && !state.consent) text += " Put your name on your records to send them and earn their points.";
   return text;
+}
+
+/** With a pipeline: ", running <method>" for the next stage on the problem; otherwise nothing. */
+function nextStageText(p: ProblemState): string {
+  const o = owned();
+  if (!piped(o)) return "";
+  const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m));
+  return stage ? `, running ${stage.method} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})` : "";
 }
 
 /** Runs that ran to their end here, of the seeds per problem the player has. */
@@ -1088,6 +1237,7 @@ function render(): void {
   renderUpgrades(o);
   renderQueue(o);
   renderLanes(o);
+  renderRuns(o);
   renderLog();
   $<HTMLInputElement>("t-bg").checked = s.settings.background;
   $<HTMLInputElement>("t-battery").checked = s.settings.battery;
@@ -1139,22 +1289,36 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   text("t-evolve", k === 1 ? "Evolve" : `Evolve ×${k}`);
   $<HTMLButtonElement>("t-evolve").disabled = !canEvolve || !!p?.leaving || !!p?.closed || (!!p && spent(p, seeds));
   $("t-evolve").title = `Runs ${evals(k)} of the open solver run on this board`;
+  // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
-  show("t-method-box", ms.length > 1);
+  const canAuto = o.has("methodMatch") || o.has("autoTune");
+  const values = [...(canAuto ? ["auto"] : []), ...ms];
+  show("t-method-box", values.length > 1);
   const select = $<HTMLSelectElement>("t-method");
-  if (select.options.length !== ms.length) {
+  const optionsSig = values
+    .map((v) => `${v}:${v === "auto" || ruleAllowsMethod(state.standing, v as EvolveMethod)}`)
+    .join(",");
+  if (select.dataset.sig !== optionsSig) {
+    select.dataset.sig = optionsSig;
     select.replaceChildren(
-      ...ms.map((m) => {
+      ...values.map((m) => {
         const opt = document.createElement("option");
         opt.value = m;
-        opt.textContent = m;
+        opt.textContent =
+          m === "auto" ? (o.has("autoTune") ? "Auto (methods and settings)" : "Auto (method match)") : m;
+        opt.disabled = m !== "auto" && !ruleAllowsMethod(state.standing, m as EvolveMethod);
         return opt;
       }),
     );
   }
-  if (select.value !== state.settings.method && ms.includes(state.settings.method))
-    select.value = state.settings.method;
   if (!ms.includes(state.settings.method)) state.settings.method = "mc_compress";
+  const selected = canAuto && state.runplan.auto ? "auto" : state.settings.method;
+  if (select.value !== selected) select.value = selected;
+  select.title = piped(o)
+    ? "The pipeline chooses each new run's method (Runs panel); Auto still chooses its setting with Auto-tune"
+    : canAuto && state.runplan.auto
+      ? "The game chooses each new run's method from what has paid on problems like this one"
+      : "The method of the next run";
   show("t-auto", o.has("auto1"));
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));
@@ -1164,7 +1328,8 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const run = lv?.run && p && lv.run.key === p.key ? lv.run : null;
   if (p && run) {
     const going = lv?.progress?.evaluations ?? run.evaluations;
-    info = `${run.method}${o.has("seeds") ? ` · seed ${run.seed}` : ""} · run at ${evals(going)}`;
+    const how = run.mode === "auto" ? " (auto)" : run.mode === "pipeline" ? " (pipeline)" : "";
+    info = `${run.method}${run.level ? ` · setting ${run.level}` : ""}${how}${o.has("seeds") ? ` · seed ${run.seed}` : ""} · run at ${evals(going)}`;
     const queued = lv!.jobs.filter((j) => j.click).reduce((t, j) => t + j.evals, 0);
     if (queued) info += ` · ${evals(queued)} queued`;
     if (o.has("seeds")) info += ` · ${seedsText(p, seeds)}`;
@@ -1484,6 +1649,26 @@ function renderLanes(o: ReadonlySet<UpgradeId>): void {
   );
 }
 
+function renderRuns(o: Owned): void {
+  const p = focused();
+  renderRunsPanel(
+    $("t-runs"),
+    $("t-runs-body"),
+    {
+      plan: state.runplan,
+      owned: o,
+      methods: methods(o),
+      allowed: (m) => allowedMethod(o, m),
+      focusKind: p ? problemKind(p) : null,
+    },
+    (next) => {
+      state.runplan.pipeline = next;
+      persist();
+      render();
+    },
+  );
+}
+
 let logSig = "";
 function renderLog(): void {
   show("t-events", revealed(state, "log"));
@@ -1510,8 +1695,14 @@ $("t-loadall").addEventListener("click", () => {
 $("t-compact").addEventListener("click", () => press(true));
 $("t-evolve").addEventListener("click", () => press(false));
 $("t-method").addEventListener("change", () => {
-  const m = $<HTMLSelectElement>("t-method").value as EvolveMethod;
-  if (methods(owned()).includes(m)) state.settings.method = m;
+  const o = owned();
+  const v = $<HTMLSelectElement>("t-method").value;
+  if (v === "auto") {
+    if (o.has("methodMatch") || o.has("autoTune")) state.runplan.auto = true;
+  } else if (methods(o).includes(v as EvolveMethod)) {
+    state.settings.method = v as EvolveMethod;
+    state.runplan.auto = false;
+  }
   persist();
   render();
 });
