@@ -1,10 +1,16 @@
 name: CI
+# Pushes to other branches run nothing (their pull request runs once instead of twice), and a
+# newer commit on the same ref cancels the older run.
 on:
   push:
+    branches: [main]
   pull_request:
 jobs:
   test:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
