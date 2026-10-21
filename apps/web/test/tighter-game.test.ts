@@ -39,7 +39,10 @@ import {
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
+  AUTOX_GROWTH,
+  autoClicksPerSecond,
   autoPerSecond,
+  autoRateText,
   available,
   awayHours,
   bankCap,
@@ -195,6 +198,10 @@ describe("Tighter upgrades", () => {
     // auto-eval comes early, right after 2 evaluations per click, and cheap
     expect(upgrade("auto1").requires).toEqual(["click2"]);
     expect(cost("auto1")).toBeLessThan(cost("click3"));
+    // auto-eval keeps pace with the click ladder: a click every 2 s (half an active player) before 10
+    // per click, a click a second (as many as the player) before Basin hopping
+    expect(cost("auto4")).toBeLessThan(cost("click10"));
+    expect(cost("auto5")).toBeLessThan(cost("basin"));
   });
 
   it("are gated by their prerequisites and by points", () => {
@@ -248,13 +255,26 @@ describe("Tighter upgrades", () => {
     expect(evalsPerClick(o("click10"))).toBe(10);
     expect(COMPACT_EVALS).toBe(100);
     expect(RUN_BUDGET).toBe(100_000);
-    // auto-eval starts at one evaluation every 5 s and speeds up step by step
+    // auto-eval starts at a click every 5 s and speeds up step by step (one evaluation a click here)
     expect(autoPerSecond(none)).toBeNull();
     expect(autoPerSecond(o("auto2"))).toBeNull();
     expect(autoPerSecond(o("auto1"))).toBe(0.2);
     expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(0.5);
     expect(autoPerSecond(o("auto1", "auto5"))).toBe(1);
     expect(autoPerSecond(o("auto1", "auto9"))).toBe(10);
+    // its rate is in clicks: each auto click runs the player's click size, so click upgrades speed it up
+    expect(autoClicksPerSecond(o("click2", "auto1"))).toBe(0.2);
+    expect(autoPerSecond(o("click2", "auto1"))).toBeCloseTo(0.4, 12);
+    expect(autoPerSecond(o("click10", "auto1", "auto4"))).toBe(5);
+    expect(
+      autoPerSecond(owning(["click10", "clickx", "auto1", "auto9", "autox"], { clickx: 2, autox: 2 })),
+    ).toBeCloseTo(12 * 10 * AUTOX_GROWTH ** 2, 9);
+    // and none at all under the "clicks only" rule
+    expect(autoPerSecond(owning(["click2", "auto1"], {}, "clicks"))).toBeNull();
+    expect(autoRateText(o("click2", "auto1"), 0.4)).toBe("a click of 2 every 5 s");
+    expect(autoRateText(o("click4", "auto1"), 1.6)).toBe("a click of 4 every 2.5 s");
+    expect(autoRateText(o("click10", "auto5"), 20)).toBe("2 clicks of 10 a second");
+    expect(autoRateText(o("auto1"), 0.2)).toBe("1 evaluation every 5 s");
     // away: an hour with auto-eval, more with upgrades; the bank holds the rate over those hours
     expect(awayHours(none)).toBe(0);
     expect(awayHours(o("auto1"))).toBe(1);
@@ -264,6 +284,8 @@ describe("Tighter upgrades", () => {
     expect(bankCap(o("auto1"))).toBeCloseTo(720, 9);
     expect(bankCap(o("auto1", "away2"))).toBeCloseTo(2880, 9);
     expect(bankCap(o("auto1", "auto5", "away3"))).toBeCloseTo(43_200, 9);
+    // the bank is in evaluations: an hour of auto clicks of 4, on 2 lanes
+    expect(bankCap(o("click4", "auto1"), 2)).toBeCloseTo(0.2 * 4 * 2 * 3600, 9);
     expect(seedsPerProblem(none)).toBe(1);
     expect(seedsPerProblem(o("seeds2"))).toBe(2);
     expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);

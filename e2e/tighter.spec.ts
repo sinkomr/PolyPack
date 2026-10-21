@@ -302,7 +302,7 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   await click(page);
 });
 
-test("tighter: auto-eval banks one evaluation every 5 s, at most an hour, runs it when on, and earns while away", async ({
+test("tighter: auto-eval banks a click every 5 s, at most an hour, runs it when on, and earns while away", async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -322,24 +322,25 @@ test("tighter: auto-eval banks one evaluation every 5 s, at most an hour, runs i
 
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  await expect(page.locator("#t-bar-auto")).toHaveText("1 evaluation every 5 s");
-  // two hours on: the bank holds one hour (720 evaluations) and runs it, in clicks of 4, beside the player
+  await expect(page.locator("#t-bar-auto")).toHaveText("a click of 4 every 5 s");
+  // two hours on: the bank holds one hour (a click of 4 every 5 s: 2,880 evaluations) and runs it, in
+  // clicks of 4, beside the player
   const s0 = await stats(page);
   await page.evaluate(() => ((window as any).tighter.state.bankAt -= 2 * 3600_000));
   await expect
     .poll(async () => (await stats(page)).evaluations - s0.evaluations, { timeout: 120_000 })
-    .toBeGreaterThanOrEqual(716);
+    .toBeGreaterThanOrEqual(2876);
   await expect
     .poll(async () => (await page.evaluate(() => (window as any).tighter.state.bank)) < 4 && (await idle(page)), {
       timeout: 30_000,
     })
     .toBe(true);
   const s1 = await stats(page);
-  expect(s1.evaluations - s0.evaluations).toBeLessThanOrEqual(740);
+  expect(s1.evaluations - s0.evaluations).toBeLessThanOrEqual(2900);
   expect(s1.evaluations - s0.evaluations).toBe(Math.round((s1.evaluations - s0.evaluations) / 4) * 4);
   // auto-eval's evaluations are not the player's clicks
   expect(s1.clicks).toBe(s0.clicks);
-  await expect(page.locator("#t-bank-note")).toContainText("at most 720 evaluations (1 h of every lane's auto-eval)");
+  await expect(page.locator("#t-bank-note")).toContainText("at most 2,880 evaluations (1 h of every lane's auto-eval)");
 
   // away for half an hour with auto-eval on: the page saves as it goes (pagehide), and nothing else is
   // written afterwards, so the reload reads exactly that save
@@ -356,9 +357,10 @@ test("tighter: auto-eval banks one evaluation every 5 s, at most an hour, runs i
   // compute starts only on a press: auto-eval is off, and what it earned waits in its bank
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   const bank = await page.evaluate(() => (window as any).tighter.state.bank);
-  expect(bank).toBeGreaterThanOrEqual(359);
-  expect(bank).toBeLessThan(366);
-  await expect(page.locator("#status")).toContainText(/While you were away, auto-eval earned 36\d evaluations/);
+  // half an hour of a click of 4 every 5 s: 1,440 evaluations
+  expect(bank).toBeGreaterThanOrEqual(1439);
+  expect(bank).toBeLessThan(1446);
+  await expect(page.locator("#status")).toContainText(/While you were away, auto-eval earned 1,44\d evaluations/);
   const s2 = await stats(page);
   await page.click("#t-auto");
   await expect(page.locator("#status")).toContainText("banked while it was away run first");
@@ -369,8 +371,8 @@ test("tighter: auto-eval banks one evaluation every 5 s, at most an hour, runs i
     .toBe(true);
   const ran = (await stats(page)).evaluations - s2.evaluations;
   // the bank in clicks of 4, and the new run's start (a reload closes runs)
-  expect(ran).toBeGreaterThanOrEqual(356);
-  expect(ran).toBeLessThanOrEqual(372);
+  expect(ran).toBeGreaterThanOrEqual(1436);
+  expect(ran).toBeLessThanOrEqual(1452);
   expect(errors).toEqual([]);
 });
 
