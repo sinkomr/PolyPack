@@ -358,7 +358,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   const paid = await game(page, (s) => s.economy.rentPaid);
   // 1 % of what the record earned, an hour, times the collections bonus (+5 %)
   expect(paid).toBeCloseTo(0.01 * rate * 1.05, 3);
-  await expect(page.locator("#t-rc-note")).toContainText("Last: +");
+  await expect(page.locator("#t-rc-note")).toContainText("The last check paid +");
 
   // a reset for standing, the next cycle under One method, with Head start I
   await give(page, ["standing", "rules", "head1"]);
@@ -374,7 +374,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect(page.locator("#t-st-rule-note")).toContainText("One method");
   await page.click("#t-st-reset");
   await expect(page.locator("#t-st-confirm")).toBeVisible();
-  await expect(page.locator("#t-st-confirm-text")).toContainText("Kept: 1 record held and its rent");
+  await expect(page.locator("#t-st-confirm-text")).toContainText("You keep the 1 record you hold and its rent");
   await page.click("#t-st-yes");
   await expect.poll(() => game(page, (s) => s.standing.resets)).toBe(1);
   const after = await game(page, (s) => ({

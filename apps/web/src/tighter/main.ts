@@ -18,7 +18,7 @@ import {
   retakeTier,
   takeToken,
 } from "./dealer";
-import { FRONTIER, ProblemKey, STARTER, keyOf, parseKey, problemTitle, shapeName } from "./frontier";
+import { FRONTIER, FRONTIER_P, ProblemKey, STARTER, keyOf, parseKey, problemTitle, shapeName } from "./frontier";
 import {
   AdvancePlan,
   GameState,
@@ -61,7 +61,11 @@ import {
   submitTarget,
 } from "./game";
 import {
+  PAIR_BONUS,
   RENT_CHECK_MS,
+  SHAPE_BONUS,
+  SHAPE_MILESTONES,
+  TIER_BONUS,
   collections,
   collectionsBonus,
   nextRentCheck,
@@ -82,7 +86,9 @@ import {
   recordSend,
 } from "./pacer";
 import { Offer, addRetake, offerFits } from "./picks";
-import { CONTEST, FLOOR, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
+import { CONTEST, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
+import { HELP, MIN_STEP, andList, lowerFirst, superscript } from "./help";
+import { renderHow } from "./how";
 import {
   Candidate,
   Ranked,
@@ -97,6 +103,7 @@ import { autoHold, autoTarget } from "./scheduler";
 import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
+  HELD_PER_STANDING,
   MARKS,
   RESET_MIN,
   RULES,
@@ -173,7 +180,17 @@ const fmtCompute = (ms: number) =>
 /** A relative change as the trace and status show it: "−0.0607 %". */
 const fmtChange = (before: number, after: number) =>
   `${after < before ? "−" : "+"}${(Math.abs(1 - after / before) * 100).toFixed(4)} %`;
+/** A relative improvement as the status line shows it: "1.2 × 10⁻⁴", or from a hundredth up "3.1 %". */
+function fmtRelative(x: number): string {
+  if (x >= 0.01) return `${(x * 100).toPrecision(2)} %`;
+  let e = Math.floor(Math.log10(x));
+  let m = (x / 10 ** e).toFixed(1);
+  if (m === "10.0") [m, e] = ["1.0", e + 1];
+  return `${m} × 10${superscript(e)}`;
+}
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
+/** "side", or "radius" for a circle container. */
+const sideWord = (p: ProblemKey) => (p.M === 0 ? "radius" : "side");
 /** Auto-eval's pace from its evaluations a second, in its clicks: "a click of 4 every 5 s". */
 const fmtRate = (r: number) => autoRateText(owned(), r);
 
@@ -198,7 +215,7 @@ function initialState(): GameState {
   try {
     text = localStorage.getItem(STORAGE_KEY);
   } catch {
-    startNote = "This browser does not let the page keep a save; the game lasts until the tab is closed.";
+    startNote = "This browser does not let the page keep a save, so the game lasts only until you close the tab.";
   }
   if (text) {
     const r = fromJson(text, now());
@@ -206,7 +223,7 @@ function initialState(): GameState {
     if (/newer version/.test(r.error)) {
       // never overwrite a save this version cannot read
       savesDisabled = true;
-      startNote = `Your save is from a newer version of Tighter, so this page will not touch it. Playing without saving.`;
+      startNote = `Your save is from a newer version of Tighter, so this page leaves it untouched and plays without saving.`;
     } else {
       try {
         localStorage.setItem(`${STORAGE_KEY}.unreadable.${Date.now()}`, text);
@@ -520,7 +537,7 @@ async function loadAll(p: ProblemState): Promise<boolean> {
     const config = b.toConfig();
     const e = evaluate(config, { autoOrient: true });
     if (!e.valid || !e.container || e.score === null) {
-      say(`Load all did not give a valid board: ${e.reasons.join("; ")}`);
+      say(`Placing the pieces did not give a valid board (${e.reasons.join(", ")}).`);
       return false;
     }
     config.container_phi = e.container.phi;
@@ -534,21 +551,24 @@ async function loadAll(p: ProblemState): Promise<boolean> {
     reveal(state, "score");
     if (p.key === state.focus) {
       const b0 = areaLowerBound(p.N, p.M, p.P);
+      const side = sideWord(p);
+      // the starting score: what the first record must beat (the code's free floor)
+      const startingScore =
+        p.floor! < start.score
+          ? `The record for ${p.P + 1} pieces, with one piece taken out, packs ${p.P} pieces in less room (${show6(p.floor!)}). ` +
+            "That is the starting score your first record must beat."
+          : `This ${side} is the starting score your first record must beat, and this board is never sent as it is. Your first press of Evolve compacts it.`;
       say(
         start.transferred
-          ? `Transfer: the best packing of ${transfer!.from} pieces, with ${p.P - transfer!.from} more placed around it. ` +
-              `Side ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound (pieces on rings: ${show6(e.score)}). ` +
-              (p.floor! < start.score
-                ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
-                : "This is the free floor: a transfer is never sent unimproved. Press Evolve: the first click compacts it.")
-          : `${p.P} pieces placed on rings around the centre. Side ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
-              (p.floor! < e.score
-                ? `The record for ${p.P + 1} pieces, less one, is smaller (${show6(p.floor!)}): that is the free floor.`
-                : "This start is the free floor and is never sent. Press Evolve: the first click compacts it."),
+          ? `This problem starts from the best packing of ${transfer!.from} pieces, with ${p.P - transfer!.from} more placed around it (Transfers). ` +
+              `Its ${side} is ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound. Every piece on rings around the centre would give ${show6(e.score)}. ` +
+              startingScore
+          : `${p.P} pieces placed on rings around the centre. The ${side} is ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
+              startingScore,
       );
     }
     if (start.transferred)
-      event(`Transfer on ${problemTitle(p)}: started from the packing of ${transfer!.from} pieces.`, false);
+      event(`${problemTitle(p)} started from the best packing of ${transfer!.from} pieces (Transfers).`, false);
     persist();
     return true;
   } finally {
@@ -688,7 +708,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     return false;
   }
   if (!a.ok) {
-    say(`A run on ${problemTitle(p)} could not start: ${a.message}.`);
+    say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
   }
   openedRun(state, p, seed, now());
@@ -753,7 +773,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     if (!t.ok) {
       finishRun(run);
       lv.run = null;
-      say(`The run on ${problemTitle(p)} stopped: ${t.message}.`);
+      say(`The run on ${problemTitle(p)} stopped (${t.message}).`);
       return false;
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
@@ -803,20 +823,24 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
       key: p.key,
       text:
         p.tier === "open"
-          ? `New record ${show6(p.best!)} · no one had packed ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
+          ? `New record ${show6(p.best!)} · No one had sent a packing of ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
           : `New best ${show6(p.best!)} on ${problemTitle(p)}.`,
     };
     event(
-      `New record ${show6(p.best!)} on ${problemTitle(p)}${state.consent ? "" : " (not sent: no name yet)"}.`,
+      `New record ${show6(p.best!)} on ${problemTitle(p)}.${state.consent ? "" : " It is not sent until you put your name on your records."}`,
       false,
     );
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (st.ended && !st.closed && !st.error) {
-    const left = spent(p, seedsPerProblem(owned()));
+    const seeds = seedsPerProblem(owned());
     event(
       `The run with seed ${run.seed} on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}.` +
-        (left ? " Its seeds are spent." : ` The next click starts one with a new seed${nextStageText(p)}.`),
+        (spent(p, seeds)
+          ? seeds === 1
+            ? " This problem's one seed has now run."
+            : ` All ${fmtInt(seeds)} of your seeds per problem have now run here.`
+          : ` The next click starts a new run with the next seed${nextStageText(p)}.`),
     );
   }
   // after Stop, the click that was already running does not write over "Stopped"
@@ -830,16 +854,17 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
 function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job, done: number): string {
   const o = owned();
   const what =
-    `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} · ${run.method}` +
-    `${o.has("seeds") ? ` · seed ${run.seed}` : ""} · ${evals(done)}: `;
-  if (!c.improved || c.before === null || c.after === null) return `${what}no improvement on ${show6(p.best ?? 0)}.`;
-  const decades = Math.log10((1 - c.after / c.before) / FLOOR);
-  const tail = c.counted
-    ? `${decades.toFixed(1)} decades above the floor`
-    : `below the 10⁻⁹ floor, so it is not an event`;
-  let text = `${what}${show6(c.before)} → ${show6(c.after)} (${fmtChange(c.before, c.after)}, ${tail})`;
-  text += c.points ? ` · +${fmtRP(c.points.total)} RP.` : ".";
-  if (c.counted && !state.consent) text += " Put your name on your records to send them and earn their points.";
+    `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${run.method}` +
+    `${o.has("seeds") ? ` with seed ${run.seed}` : ""}.`;
+  if (!c.improved || c.before === null || c.after === null) return `${what} No improvement on ${show6(p.best ?? 0)}.`;
+  // the relative improvement of this one step (the step term of its points), never a measure of the record
+  let text =
+    `${what} The ${sideWord(p)} went from ${show6(c.before)} to ${show6(c.after)}, ` +
+    `an improvement of ${fmtRelative(1 - c.after / c.before)}`;
+  if (!c.counted)
+    return `${text}. That is less than the smallest improvement that counts (${MIN_STEP}), so it pays with the next one that does.`;
+  text += c.points ? `, worth +${fmtRP(c.points.total)} RP.` : ".";
+  if (!state.consent) text += " Put your name on your records to send them and earn their points.";
   return text;
 }
 
@@ -848,16 +873,20 @@ function nextStageText(p: ProblemState): string {
   const o = owned();
   if (!piped(o)) return "";
   const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m));
-  return stage ? `, running ${stage.method} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})` : "";
+  return stage ? `, using ${stage.method} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})` : "";
 }
 
 /** Runs that ran to their end here, of the seeds per problem the player has. */
 const seedsText = (p: ProblemState, seeds: number) =>
-  `${fmtInt(Math.min(p.endedRuns, seeds))} of ${fmtInt(seeds)} seed${seeds === 1 ? "" : "s"} spent`;
+  `${fmtInt(Math.min(p.endedRuns, seeds))} of ${fmtInt(seeds)} seed${seeds === 1 ? "" : "s"} used`;
 
 function spentText(p: ProblemState): string {
-  const n = seedsPerProblem(owned());
-  return `Every seed on ${problemTitle(p)} has run until it stopped improving (${n} of ${n}). Take the next problem${n < 16 ? ", or buy more seeds" : ""}.`;
+  const o = owned();
+  const n = seedsPerProblem(o);
+  return (
+    `${n === 1 ? "Your one seed" : `All ${fmtInt(n)} of your seeds`} on ${problemTitle(p)} ran until ${n === 1 ? "its run" : "their runs"} stopped improving. ` +
+    `Move on to the next problem${o.has("seeds32") || o.rule === "seed" ? "" : ", or buy more seeds per problem in the tech tree"}.`
+  );
 }
 
 /** Stop was pressed and no click since: the status line keeps saying so. */
@@ -867,7 +896,7 @@ function stopAll(): void {
   stopped = true;
   state.settings.auto = false;
   for (const l of lanes) l.jobs = l.jobs.filter((j) => j.compact && j.click);
-  say("Stopped: auto-eval is off and queued clicks are dropped.");
+  say("Stopped. Auto-eval is off, and the clicks still waiting to run were dropped.");
   persist();
   render();
 }
@@ -1066,7 +1095,7 @@ function orient(p: ProblemState): void {
   const points = pay(state, p);
   if (points)
     event(
-      `Turning the container on ${problemTitle(p)} gained ${fmtChange(p.best / (1 - points.delta), p.best)} (+${fmtRP(points.total)} RP).`,
+      `Turning the container to its best angle on ${problemTitle(p)} gained ${fmtChange(p.best / (1 - points.delta), p.best)} (+${fmtRP(points.total)} RP).`,
       false,
     );
 }
@@ -1084,7 +1113,9 @@ async function submit(p: ProblemState): Promise<void> {
   if (!info.accepts_submissions) {
     sendingWorks();
     p.closed = true;
-    event(`${problemTitle(p)} is closed: its optimum is proven. It leaves the queue.`);
+    event(
+      `The server takes no more entries for ${problemTitle(p)}, because its optimum is proven. It leaves the queue.`,
+    );
     leave(state, p.key, now());
     return;
   }
@@ -1138,20 +1169,20 @@ async function submit(p: ProblemState): Promise<void> {
     case "leader":
       reveal(state, "points", "upgrades");
       event(
-        `Verified: ${show6(outcome.score)} is the record for ${title}${a.confirmed > 0 ? ` (${fmtRP(a.confirmed)} RP confirmed)` : ""}.`,
+        `The server made ${show6(outcome.score)} the record for ${title}${a.confirmed > 0 ? ` (${fmtRP(a.confirmed)} RP confirmed)` : ""}.`,
       );
-      if (outcome.pending) event("It beats a published value and waits for an administrator's review.");
+      if (outcome.pending) event("It beats a published value, so it waits for an administrator's review.");
       break;
     case "behind":
       event(
-        `Another entry got there first on ${title}: the record is ${show6(outcome.leaderScore ?? 0)}.` +
+        `Another entry got there first on ${title}, and the record is now ${show6(outcome.leaderScore ?? 0)}.` +
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : "") +
-          (a.points ? ` Your board still beats it: +${fmtRP(a.points.total)} RP.` : ""),
+          (a.points ? ` Your board still beats it, which pays +${fmtRP(a.points.total)} RP.` : ""),
       );
       break;
     case "closed":
       event(
-        `${title} is closed: ${outcome.reasons.join("; ")}. It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
+        `The server takes no more entries for ${title} (${outcome.reasons.join(", ")}). It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
       );
       leave(state, p.key, now());
       break;
@@ -1525,7 +1556,8 @@ async function dealTick(): Promise<void> {
 function pauseDealing(offline: boolean): void {
   dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
   if (offline && !state.queue.length)
-    $("t-title").textContent = "The server cannot be reached; the game needs it to deal a problem. Retrying…";
+    $("t-title").textContent =
+      `The server cannot be reached, and the game needs it to deal you a problem. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`;
 }
 
 async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked } | null> {
@@ -1671,16 +1703,16 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
   if (r.reconciled && leader) {
     reveal(state, "points", "upgrades");
     event(
-      `Verified: ${show6(leader.score)} is the record for ${problemTitle(p)}` +
-        `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}; its answer had not arrived.`,
+      `The server made ${show6(leader.score)} the record for ${problemTitle(p)}` +
+        `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}. The game recognised your entry from the current record, because its answer had not arrived.`,
     );
   } else if (r.lost) {
     // Retake: a record lost after it left the queue is offered again first
     const retake = owned().has("retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
     event(
-      `Your record on ${problemTitle(p)} was beaten${leader ? `: ${show6(leader.score)} by ${leader.name}` : ""}.` +
-        (retake ? " It will be offered again first." : ""),
+      `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
+        (retake ? " It will be the first problem offered to you again (Retake)." : ""),
     );
   }
 }
@@ -1827,9 +1859,9 @@ function render(): void {
   text(
     "t-hold",
     auto && hold === "hidden"
-      ? "Auto-eval is paused while the tab is hidden"
+      ? "Auto-eval is paused because this tab is hidden."
       : auto && hold === "battery"
-        ? "Auto-eval is paused: on battery power (allow it in Settings)"
+        ? "Auto-eval is paused on battery power. You can allow it in Settings."
         : "",
   );
 
@@ -1848,8 +1880,8 @@ function render(): void {
   text(
     "t-run-note",
     o.has("continuous")
-      ? "Without the first, auto-eval pauses while this tab is hidden."
-      : "Auto-eval pauses while this tab is hidden (Continuous, in the tech tree, lets it run instead).",
+      ? "Unless the first box is ticked, auto-eval pauses while this tab is hidden."
+      : "Auto-eval pauses while this tab is hidden. The Continuous upgrade in the tech tree lets it keep running.",
   );
   renderStanding(o);
   renderRecords(o);
@@ -1871,24 +1903,27 @@ function renderProblem(p: ProblemState | undefined): void {
   text("t-problem-count", countText(p));
   let note: string;
   const seeds = seedsPerProblem(owned());
-  if (p.closed) note = "Closed: the server takes no more entries for this problem.";
-  else if (p.leaving) note = "Sending your best before it leaves the queue…";
+  if (p.closed) note = "This problem is closed. The server takes no more entries for it.";
+  else if (p.leaving) note = "This problem leaves the queue once your best board has been sent.";
   else if (spent(p, seeds)) note = spentText(p);
   else if (p.ourId !== null)
     note =
-      `You hold this record: ${show6(p.verified!)}.` +
+      `You hold the record for this problem, ${show6(p.verified!)}.` +
       (p.published !== null && p.verified! > p.published
-        ? ` The published value is still ahead: below ${show6(p.published)} pays ${CONTEST.published}×.`
+        ? ` The published value ${show6(p.published)} is still smaller, and nothing more pays until your board beats it.`
         : "");
   else if (p.tier === "published")
     note =
-      `Published value: beat ${show6(p.published!)} for ${CONTEST.published}× the points; a record below it waits for an administrator's review.` +
-      (p.leader ? ` Site record: ${show6(p.leader.score)} by ${p.leader.name}.` : "");
+      `To earn points here, beat the published value ${show6(p.published!)}. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and a record waits for an administrator's review.` +
+      (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
-    note = `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)}: ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapOf(p.N, p.M, p.P, p.leader.score))} above the area bound. Contest weight ${CONTEST[p.tier]}.`;
-  else if (p.leader) note = `Record: ${show6(p.leader.score)} by ${p.leader.name}.`;
+    note =
+      `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapOf(p.N, p.M, p.P, p.leader.score))} above the area bound. ` +
+      `Improvements here pay ${CONTEST[p.tier]} times as much as on an open problem.`;
+  else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
-  else note = "No record exists. Any valid packing is a new record.";
+  else
+    note = "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.";
   text("t-problem-note", note);
   // before the queue, one problem at a time: the next one is earned by evaluations (or this one is spent)
   const single = queueSize(owned()) <= 1;
@@ -1917,12 +1952,12 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     (!first && !canEvolve && !compacting(p.key)) ||
     (canEvolve && spent(p, seeds));
   $("t-evolve").title = !p
-    ? "No problem yet"
+    ? "There is no problem on the board yet."
     : p.phase === "bare"
-      ? "Placing the pieces…"
+      ? "The pieces are being placed."
       : first
-        ? `The first click compacts the board: ${evals(COMPACT_EVALS)} of mc_compress, as one press; then each click runs ${evals(k)}`
-        : `Runs ${evals(k)} of the open solver run on this board`;
+        ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
+        : `Each click runs ${evals(k)} of the solver on this board.`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
   const canAuto = o.has("methodMatch") || o.has("autoTune");
@@ -1949,10 +1984,10 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const selected = canAuto && state.runplan.auto ? "auto" : state.settings.method;
   if (select.value !== selected) select.value = selected;
   select.title = piped(o)
-    ? "The pipeline chooses each new run's method (Runs panel); Auto still chooses its setting with Auto-tune"
+    ? "Your pipeline in the Runs panel chooses the method of each new run."
     : canAuto && state.runplan.auto
-      ? "The game chooses each new run's method from what has paid on problems like this one"
-      : "The method of the next run";
+      ? "The game chooses each new run's method from what has paid best on problems like this one."
+      : "The solver method your clicks run. Changing it starts a new run.";
   show("t-auto", autoPerSecond(o) !== null);
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));
@@ -2078,10 +2113,10 @@ function renderConsent(): void {
   text(
     "t-consent-note",
     state.consent
-      ? `Your records go to PolyPack as “${state.name}”, at most one per problem a minute and six a minute in all. Untick and save to stop.`
+      ? `Your records are sent to PolyPack as “${state.name}”. To stop sending, untick the box and save.`
       : state.stats.submissions
-        ? `Sending is off. New records stay in this browser and earn nothing until you send them${owned().has("rent") ? "; records already on the server keep paying rent" : ""}.`
-        : "Nothing has been sent yet. Records earn points once they go to PolyPack under your name.",
+        ? `Sending is off. New records stay in this browser and pay no points until you send them.${owned().has("rent") ? " Records already on the server keep paying rent." : ""}`
+        : "Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.",
   );
 }
 
@@ -2122,7 +2157,7 @@ function renderUpgrades(o: Owned): void {
     v.buyable > 0
       ? `${fmtInt(v.buyable)} upgrade${v.buyable === 1 ? "" : "s"} to buy in the tech tree`
       : v.next
-        ? `Next: ${v.next.name} at ${v.next.price}`
+        ? `Save up for ${v.next.name} (${v.next.price})`
         : "",
   );
   $("t-next-up").dataset.ready = String(v.buyable > 0);
@@ -2572,7 +2607,7 @@ function renderLanes(o: Owned): void {
       msg =
         `Lane ${i + 1}: ${problemTitle(q)} · ${lv.run.method}${o.has("seeds") ? ` · seed ${lv.run.seed}` : ""} · ` +
         `run at ${evals(lv.progress?.evaluations ?? lv.run.evaluations)}`;
-      if (lv.jobs.length) msg += ` · ${lv.jobs.length} queued`;
+      if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
     if (rate !== null)
       msg += state.settings.auto
@@ -2606,10 +2641,12 @@ function renderRuns(o: Owned): void {
 
 // ---------- standing and records ----------
 
-/** A span of time as the Standing panel shows it: "0:42", "3 h 05 min", "2 d 4 h". */
+/** A span of time as the Standing panel shows it: "42 s", "3 min 05 s", "3 h 05 min", "2 d 4 h". */
 function fmtSpan(ms: number): string {
   const m = Math.floor(Math.max(0, ms) / 60_000);
-  if (m < 60) return `${m}:${String(Math.floor((Math.max(0, ms) % 60_000) / 1000)).padStart(2, "0")}`;
+  const s = Math.floor((Math.max(0, ms) % 60_000) / 1000);
+  if (m === 0) return `${s} s`;
+  if (m < 60) return `${m} min ${String(s).padStart(2, "0")} s`;
   if (m < 24 * 60) return `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`;
   return `${Math.floor(m / 1440)} d ${Math.floor((m % 1440) / 60)} h`;
 }
@@ -2667,10 +2704,10 @@ function renderStanding(o: Owned): void {
   if (!visible) return;
   setStats("t-st-stats", [
     ["Standing to spend", fmtInt(st.points)],
-    ["Earned in all", fmtInt(st.total)],
-    ["On all points", `×${standingMultiplier(st).toFixed(1)}`],
-    [`Cycle ${fmtInt(st.resets + 1)}`, `${fmtRP(st.cycleEarned)} RP in ${fmtSpan(now() - st.cycleStartedAt)}`],
-    ["Rule", st.rule ? ruleById(st.rule)!.name : "none"],
+    ["Standing earned in all", fmtInt(st.total)],
+    ["Multiplier on all points", `×${standingMultiplier(st).toFixed(1)}`],
+    [`Cycle ${fmtInt(st.resets + 1)} so far`, `${fmtRP(st.cycleEarned)} RP in ${fmtSpan(now() - st.cycleStartedAt)}`],
+    ["Rule this cycle", st.rule ? ruleById(st.rule)!.name : "none"],
   ]);
   // the sense of speed: when this cycle reached each milestone, against the best cycle before
   setLines(
@@ -2678,8 +2715,13 @@ function renderStanding(o: Owned): void {
     MARKS.filter((m) => st.marks[m.id] !== undefined || bestMark(st, m.id) !== null).map((m) => {
       const t = st.marks[m.id];
       const best = bestMark(st, m.id);
-      const reached = t === undefined ? "not yet" : t < 1000 ? "at the start" : `in ${fmtSpan(t)}`;
-      return `${m.label}: ${reached}${best !== null ? ` · best ${best < 1000 ? "at the start" : fmtSpan(best)}` : ""}`;
+      const reached =
+        t === undefined
+          ? "not yet this cycle"
+          : t < 1000
+            ? "at the start of this cycle"
+            : `after ${fmtSpan(t)} this cycle`;
+      return `${m.label}: ${reached}${best !== null ? ` (fastest earlier cycle ${best < 1000 ? "at the start" : fmtSpan(best)})` : ""}`;
     }),
   );
   const pv = resetPreview(state);
@@ -2687,8 +2729,11 @@ function renderStanding(o: Owned): void {
   text(
     "t-st-preview",
     pv.gain > 0
-      ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}: all points ×${standingMultiplier(st).toFixed(1)} → ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)}. The next point comes at ${fmtInt(pv.nextAt)} RP this cycle.`
-      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in the cycle and confirmed by the server: ${fmtInt(Math.ceil(pv.short))} to go. It gives √(cycle RP / 250,000) + records held / 50 standing.`,
+      ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}. ` +
+          `All points would then pay ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)} instead of ×${standingMultiplier(st).toFixed(1)}. ` +
+          `The next point of standing comes at ${fmtInt(pv.nextAt)} confirmed RP in this cycle.`
+      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in this cycle and confirmed by the server, so ${fmtInt(Math.ceil(pv.short))} more to go. ` +
+          `It then gives ⌊√(cycle RP / ${fmtInt(RESET_MIN)}) + records held / ${HELD_PER_STANDING}⌋ standing.`,
   );
   const btn = $<HTMLButtonElement>("t-st-reset");
   btn.disabled = pv.gain <= 0 || !ownsGame;
@@ -2696,19 +2741,19 @@ function renderStanding(o: Owned): void {
   show("t-st-confirm", confirmingReset && pv.gain > 0);
   if (confirmingReset) {
     const kept = [
-      pv.held === 1 ? "1 record held and its rent" : `${fmtInt(pv.held)} records held and their rent`,
-      `collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
+      pv.held === 1 ? "the 1 record you hold and its rent" : `the ${fmtInt(pv.held)} records you hold and their rent`,
+      `your collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
       "Standing and every standing upgrade",
-      o.has("keepAuto") ? "the auto-eval upgrades" : "",
+      o.has("keepAuto") ? "the Auto-eval upgrades" : "",
       o.has("keepMethods") ? "your methods" : "",
-      "the queue, the dealer's learning and every count",
+      "the queue, what the dealer has learned and every count",
     ].filter(Boolean);
     const next = ruleById(st.nextRule);
     text(
       "t-st-confirm-text",
-      `${fmtInt(pv.gain)} standing for ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
-        `Kept: ${kept.join(", ")}. The next cycle begins with ${fmtInt(pv.keeps.length)} upgrades` +
-        (next ? ` under the rule ${next.name}: ${next.limit}.` : "."),
+      `You get ${fmtInt(pv.gain)} standing and give up ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
+        `You keep ${andList(kept)}. The next cycle begins with ${fmtInt(pv.keeps.length)} upgrades` +
+        (next ? ` and is played under ${next.name}. ${next.limit}` : "."),
     );
   }
   // cycle rules: the next cycle's, chosen here
@@ -2728,11 +2773,12 @@ function renderStanding(o: Owned): void {
     text(
       "t-st-rule-note",
       (chosen
-        ? `${chosen.name}: ${chosen.limit}. Finish the cycle under it (reach a reset) for half again the standing, at least one more, and for good: ${chosen.reward}.`
-        : "A rule limits one cycle; finishing the cycle under it pays extra standing and a reward of its own, for good.") +
-        (st.rulesDone.length
-          ? ` Finished: ${st.rulesDone.map((id) => `${ruleById(id)!.name} (${ruleById(id)!.reward})`).join("; ")}.`
-          : ""),
+        ? `${chosen.name}. ${chosen.limit} Finishing a cycle under it gives half again the standing (at least 1 more)` +
+          (st.rulesDone.includes(chosen.id)
+            ? ". You have finished it before, so its reward already holds."
+            : `, and from then on ${lowerFirst(chosen.reward)}`)
+        : "No rule chosen. A rule limits the next cycle, and finishing a cycle under it pays extra standing and a reward that stays for good.") +
+        (st.rulesDone.length ? ` Finished so far: ${andList(st.rulesDone.map((id) => ruleById(id)!.name))}.` : ""),
     );
   }
   // what only standing buys
@@ -2740,7 +2786,7 @@ function renderStanding(o: Owned): void {
   text(
     "t-st-only",
     left.length
-      ? `Only standing buys: ${left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`).join(", ")}. They are in the shop's Standing row and stay through resets.`
+      ? `Standing buys ${andList(left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`))}. They are in the tech tree's Standing row, and every reset keeps them.`
       : "You own every standing upgrade.",
   );
   show("t-st-history-box", st.history.length > 0);
@@ -2749,7 +2795,7 @@ function renderStanding(o: Owned): void {
     st.history
       .map(
         (h, i) =>
-          `Cycle ${i + 1 + Math.max(0, st.resets - st.history.length)}: ${fmtSpan(h.endedAt - h.startedAt)}, ${fmtRP(h.earned)} RP, +${fmtInt(h.gain)} standing${h.rule ? `, under ${ruleById(h.rule)?.name ?? h.rule}` : ""}`,
+          `Cycle ${i + 1 + Math.max(0, st.resets - st.history.length)} lasted ${fmtSpan(h.endedAt - h.startedAt)} and earned ${fmtRP(h.earned)} RP and ${fmtInt(h.gain)} standing${h.rule ? `, under ${ruleById(h.rule)?.name ?? h.rule}` : ""}.`,
       )
       .reverse(),
   );
@@ -2763,7 +2809,7 @@ function renderRecords(o: Owned): void {
   const rows: [string, string][] = [["Records held", fmtInt(recordsHeld(state))]];
   if (rent) {
     rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
-    rows.push(["Waiting for a check", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
+    rows.push(["Rent waiting for a check", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
     rows.push(["Rent paid", `${fmtRP(state.economy.rentPaid)} RP`]);
   }
   const c = collections(state.economy);
@@ -2773,27 +2819,27 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? `Each record you lead is checked in turn, one every 10 s; when it is still yours, the rent since its last check is paid (a week of it at most). A record lost pays nothing for the time since its check.` +
-          (last ? ` Last: +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.` : "")
+      ? "Each record you hold is checked in turn and paid the rent it built up since its last check." +
+          (last
+            ? ` The last check paid +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
+            : "")
       : "",
   );
   if (!col) {
     setLines("t-rc-sets", []);
     return;
   }
+  const pairName = (n: { N: number; M: number }) => problemTitle({ ...n, P: 0 }).replace(/, 0 pieces$/, "");
   const lines = [
-    `Frontier pairs with a record on all 9 piece counts: ${fmtInt(c.pairs)} (+2 % each)` +
+    `${fmtInt(c.pairs)} complete frontier pair${c.pairs === 1 ? "" : "s"}, with a record on all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
       (c.nearest.length
-        ? `. Nearest: ${c.nearest.map((n) => `${problemTitle({ N: n.N, M: n.M, P: 0 }).replace(/, 0 pieces$/, "")} ${n.have} of 9`).join("; ")}`
+        ? ` The closest to complete ${c.nearest.length === 1 ? "is" : "are"} ${andList(c.nearest.map((n) => `${pairName(n)} (${n.have} of ${FRONTIER_P.length})`))}.`
         : ""),
-    `Piece shapes at 10, 30 and 100 records: ${fmtInt(c.milestones)} milestones (+1 % each)` +
+    `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
-        ? `. ${c.shapes
-            .slice(0, 3)
-            .map((x) => `${shapeName(x.N, true)} ${fmtInt(x.count)}`)
-            .join("; ")}`
+        ? ` Your most recorded pieces are ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
         : ""),
-    `First records by tier: ${c.tiers.length ? c.tiers.join(", ") : "none yet"} (+5 % each)`,
+    `First records by tier: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
   ];
   setLines("t-rc-sets", lines);
 }
@@ -2818,10 +2864,13 @@ async function doReset(): Promise<void> {
     const st = state.standing;
     const next = ruleById(st.rule);
     event(
-      `Reset for ${fmtInt(gain)} standing${rule ? `, the cycle finished under ${rule.name} (for good: ${rule.reward})` : ""}. All points ×${standingMultiplier(st).toFixed(1)}.`,
+      `Reset for ${fmtInt(gain)} standing. All points now pay ×${standingMultiplier(st).toFixed(1)}.` +
+        (rule ? ` You finished a cycle under ${rule.name}, and its reward holds for good.` : ""),
     );
     say(
-      `Cycle ${fmtInt(st.resets + 1)} begins with ${fmtInt(state.owned.length)} upgrades${next ? `, under the rule ${next.name}: ${next.limit}` : ""}. Your records stand and keep paying.`,
+      `Cycle ${fmtInt(st.resets + 1)} begins with ${fmtInt(state.owned.length)} upgrades.` +
+        (next ? ` It is played under ${next.name}. ${next.limit}` : "") +
+        " Your records stay on the server and keep paying rent.",
     );
   }
   saveNow();
@@ -2873,7 +2922,9 @@ settingsDialog.addEventListener("click", (e) => {
 $("t-name-nudge").addEventListener("click", () => openSettings(true));
 $("t-welcome-later").addEventListener("click", () => {
   closeWelcome();
-  say("Your record stays in this browser. You can put your name on your records any time in Settings.");
+  say(
+    "Your record stays in this browser and pays no points until you send it. You can add your name at any time in Settings.",
+  );
 });
 $("t-tab-board").addEventListener("click", () => setView(false));
 $("t-tab-tree").addEventListener("click", () => setView(true));
@@ -2931,8 +2982,8 @@ $("t-auto").addEventListener("click", () => {
   accrueAuto();
   say(
     state.settings.auto
-      ? `Auto-eval on: ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))} on the problem on the board, beside your clicks.`
-      : "Auto-eval off.",
+      ? `Auto-eval is on. It clicks for you at ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))} in all, beside your own clicks.`
+      : "Auto-eval is off.",
   );
   persist();
   render();
@@ -2970,10 +3021,10 @@ $("t-consent-form").addEventListener("submit", (e) => {
   if (agree && !name) {
     say(
       typed.trim()
-        ? "That name is empty once cleaned as PolyPack stores names (no angle brackets or control characters). Choose another."
-        : "Enter a display name first: records go to PolyPack under it.",
+        ? "That name is empty once cleaned the way PolyPack stores names, which removes angle brackets and control characters. Choose another name."
+        : "Enter a display name first. Records are sent to PolyPack under that name.",
     );
-    text("t-consent-note", "No name, so nothing is sent.");
+    text("t-consent-note", "Nothing is sent until you enter a name.");
     $("t-name").focus();
     return;
   }
@@ -2986,8 +3037,8 @@ $("t-consent-form").addEventListener("submit", (e) => {
   const paid = agree ? payAll(state) : 0;
   say(
     agree
-      ? `Your records will be sent to PolyPack as “${name}”.${paid > 0 ? ` +${fmtRP(paid)} RP for your records so far.` : ""}`
-      : `Nothing will be sent. Your records stay in this browser.${withdrawn > 0 ? ` ${fmtRP(withdrawn)} RP not yet confirmed by the server were taken back; they pay again when you send.` : ""}`,
+      ? `Your records will be sent to PolyPack as “${name}”.${paid > 0 ? ` Your improvements so far paid +${fmtRP(paid)} RP.` : ""}`
+      : `Nothing will be sent, and your records stay in this browser.${withdrawn > 0 ? ` The ${fmtRP(withdrawn)} RP the server had not confirmed yet were taken back. They are paid again when you send again.` : ""}`,
   );
   event(agree ? `Sending records as “${name}”.` : "Sending is off.", false);
   closeWelcome();
@@ -3030,16 +3081,17 @@ $("t-export").addEventListener("click", async () => {
     await navigator.clipboard.writeText(area.value);
     text("t-save-note", "Save string copied to the clipboard.");
   } catch {
-    text("t-save-note", "Copy the save string above.");
+    text("t-save-note", "The browser did not allow copying, so copy the save string above yourself.");
   }
 });
 $("t-import").addEventListener("click", async () => {
   const r = await importString($<HTMLTextAreaElement>("t-save-text").value, now());
   if (!r.ok) {
-    text("t-save-note", `Import failed: ${r.error}.`);
+    text("t-save-note", `The save could not be imported (${r.error}).`);
     return;
   }
-  if (!confirm("Replace this game with the imported save?")) return;
+  if (!confirm("Replace your current game with this save? Your current game is lost unless you exported it first."))
+    return;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
   state = r.state;
@@ -3054,6 +3106,14 @@ $("t-import").addEventListener("click", async () => {
   text("t-save-note", "Save imported.");
   render();
 });
+
+// ---------- "How it works" ----------
+
+// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the text
+for (const d of document.querySelectorAll<HTMLElement>("details[data-how]")) {
+  const how = HELP[d.dataset.how ?? ""];
+  if (how) for (const h of Array.isArray(how) ? how : [how]) d.append(renderHow(h));
+}
 
 // ---------- start ----------
 
@@ -3117,8 +3177,8 @@ function standBy(takenOver: boolean): void {
   text(
     "t-elsewhere-text",
     takenOver
-      ? "Tighter was opened in another tab, which now runs the game. Nothing runs here."
-      : "Tighter is open in another tab. One tab runs the game at a time, so nothing runs here.",
+      ? "Tighter was opened in another tab, which now runs the game. Nothing runs in this tab."
+      : "Tighter is open in another tab. Only one tab runs the game at a time, so nothing runs in this tab.",
   );
   $("t-elsewhere").hidden = false;
   document.body.classList.add("standby");

@@ -116,48 +116,50 @@ export const standingMultiplier = (s: StandingState): number => 1 + 0.1 * s.tota
 export interface Rule {
   id: string;
   name: string;
-  /** What the rule takes away for one cycle. */
+  /** What the rule takes away for one cycle, as one or two sentences. */
   limit: string;
-  /** What finishing a cycle under it gives, for good. */
+  /** What finishing a cycle under it gives for good, as a sentence that reads after "Once finished, ". */
   reward: string;
 }
+
+/** Problems small enough for the "small problems" rule and its reward: N+M+P at most this. */
+export const SMALL_TOTAL = 120;
 
 export const RULES: readonly Rule[] = [
   {
     id: "circles",
     name: "Circles only",
-    limit: "only problems with circle pieces or a circle container are dealt",
-    reward: "×1.5 points on every problem with circles",
+    limit:
+      "Only problems with circle pieces or a circle container are dealt. The open ones are circles in a polygon, or polygons in a circle, of 21 to 100 sides.",
+    reward: "Every problem with circle pieces or a circle container pays 1.5 times the points.",
   },
   {
     id: "small",
     name: "Small problems only",
-    limit: "only problems with N+M+P at most 120 are dealt",
-    reward: "×1.5 points on every problem with N+M+P at most 120",
+    limit: `Only problems with N + M + P at most ${SMALL_TOTAL} are dealt, where N and M are the sides of the piece and of the container (0 for a circle) and P is the number of pieces.`,
+    reward: `Every problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
   },
   {
     id: "seed",
     name: "One seed",
-    limit: "one seed per problem",
-    reward: "twice the seeds per problem",
+    limit: "Each problem gets one seed, so it allows one run that ends by itself.",
+    reward: "You get twice as many seeds per problem.",
   },
   {
     id: "clicks",
     name: "Clicks only",
-    limit: "no auto-eval: every evaluation is a click",
-    reward: "one more evaluation per click",
+    limit: "Auto-eval does not run, so every evaluation comes from your own clicks.",
+    reward: "Every click runs one more evaluation.",
   },
   {
     id: "method",
     name: "One method",
-    limit: "mc_compress only",
-    reward: "×1.5 points on improvements found by mc_compress",
+    limit: "Only mc_compress runs. Other methods are greyed out, and pipeline stages that use them are skipped.",
+    reward: "Points on boards found by mc_compress are multiplied by 1.5.",
   },
 ];
 export const ruleById = (id: string | null) => RULES.find((r) => r.id === id) ?? null;
 
-/** Problems small enough for the "small problems" rule and its reward: N+M+P at most this. */
-export const SMALL_TOTAL = 120;
 const hasCircles = (p: ProblemKey) => p.N === 0 || p.M === 0;
 const isSmall = (p: ProblemKey) => p.N + p.M + p.P <= SMALL_TOTAL;
 
@@ -374,12 +376,12 @@ export function resetCycle(s: GameState, now: number): number {
 
 /** Milestones timed in each cycle. */
 export const MARKS: readonly { id: string; label: string }[] = [
-  { id: "click2", label: "2 per click" },
+  { id: "click2", label: "2 evaluations per click" },
   { id: "auto1", label: "Auto-eval" },
-  { id: "click10", label: "10 per click" },
+  { id: "click10", label: "10 evaluations per click" },
   { id: "basin", label: "Basin hopping" },
   { id: "advance", label: "Auto-advance" },
-  { id: "ready", label: "a reset" },
+  { id: "ready", label: `${RESET_MIN.toLocaleString("en-US")} RP earned` },
 ];
 
 /** Times the milestones of the cycle reached by now (an upgrade owned, or a reset possible). */

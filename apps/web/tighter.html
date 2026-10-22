@@ -26,14 +26,34 @@
     </section>
 
     <section id="t-bar" class="t-bar" aria-label="Totals" hidden>
-      <div><span>Record points</span><strong id="t-bar-rp">0</strong></div>
-      <div><span>Earned</span><strong id="t-bar-earned">0</strong></div>
-      <div><span>Records held</span><strong id="t-bar-held">0</strong></div>
-      <div><span>Evaluations run</span><strong id="t-bar-evals">0</strong></div>
-      <div><span>Compute</span><strong id="t-bar-cpu">0 s</strong></div>
-      <div id="t-bar-auto-box" hidden><span>Auto-eval</span><strong id="t-bar-auto">off</strong></div>
-      <div id="t-bar-lanes-box" hidden><span>Lanes</span><strong id="t-bar-lanes">1</strong></div>
-      <div id="t-bar-standing-box" hidden><span>Standing</span><strong id="t-bar-standing">0</strong></div>
+      <div title="Record points (RP) you can spend in the tech tree.">
+        <span>Record points</span><strong id="t-bar-rp">0</strong>
+      </div>
+      <div title="Every record point you have earned, less any taken back.">
+        <span>Earned</span><strong id="t-bar-earned">0</strong>
+      </div>
+      <div title="Problems where your entry is the current record on PolyPack.">
+        <span>Records held</span><strong id="t-bar-held">0</strong>
+      </div>
+      <div title="Evaluations run in all, by your clicks and by auto-eval.">
+        <span>Evaluations run</span><strong id="t-bar-evals">0</strong>
+      </div>
+      <div title="Time the solver has spent on your evaluations, added up over all lanes.">
+        <span>Compute</span><strong id="t-bar-cpu">0 s</strong>
+      </div>
+      <div id="t-bar-auto-box" title="How fast auto-eval clicks for you, over all lanes." hidden>
+        <span>Auto-eval</span><strong id="t-bar-auto">off</strong>
+      </div>
+      <div id="t-bar-lanes-box" title="Solver workers running at once, each on its own problem." hidden>
+        <span>Lanes</span><strong id="t-bar-lanes">1</strong>
+      </div>
+      <div
+        id="t-bar-standing-box"
+        title="Standing to spend, and the multiplier your standing puts on all points."
+        hidden
+      >
+        <span>Standing</span><strong id="t-bar-standing">0</strong>
+      </div>
     </section>
 
     <main class="layout">
@@ -54,7 +74,7 @@
             id="t-evolve"
             class="primary"
             disabled
-            title="Runs one evaluation of the open solver run on this board"
+            title="Each click runs 1 evaluation of the solver on this board."
           >
             Evolve
           </button>
@@ -62,8 +82,15 @@
             <label for="t-method">Method</label>
             <select id="t-method"></select>
           </span>
-          <button id="t-auto" aria-pressed="false" hidden>Auto-eval</button>
-          <button id="t-stop" title="Stop every run and switch auto-eval off">Stop</button>
+          <button
+            id="t-auto"
+            aria-pressed="false"
+            title="Switches auto-eval on or off. While on, it clicks for you."
+            hidden
+          >
+            Auto-eval
+          </button>
+          <button id="t-stop" title="Switches auto-eval off and drops the clicks still waiting to run.">Stop</button>
           <span id="t-runinfo" class="t-runinfo"></span>
         </div>
         <div id="t-views" class="t-views" hidden>
@@ -88,30 +115,38 @@
               hidden
             ></svg>
             <figcaption id="t-trace-empty" class="t-trace-empty">
-              The side after each improvement shows here.
+              A graph of the side after each improvement appears here.
             </figcaption>
           </figure>
           <section id="t-score" class="t-scorebox t-overlay" aria-label="Board score" hidden>
             <dl class="t-score-list">
-              <dt id="t-side-label">Side s</dt>
+              <dt
+                id="t-side-label"
+                title="Your container's side (its radius, for a circle), in units where each piece has side 1."
+              >
+                Side s
+              </dt>
               <dd id="t-side" class="t-score-big">—</dd>
-              <dt>Last step</dt>
+              <dt title="How much the last click shrank the side, and the RP it paid.">Last step</dt>
               <dd id="t-delta">—</dd>
-              <dt>Area bound</dt>
+              <dt title="The side the container would have if the pieces filled it completely. No packing is smaller.">
+                Area bound
+              </dt>
               <dd id="t-bound">—</dd>
-              <dt>Gap</dt>
+              <dt title="How far your side is above the area bound.">Gap</dt>
               <dd id="t-gap">—</dd>
-              <dt>Density</dt>
+              <dt title="The share of the container's area that the pieces cover.">Density</dt>
               <dd id="t-density">—</dd>
-              <dt>Record</dt>
+              <dt title="The current record for this problem on PolyPack, as last seen.">Record</dt>
               <dd id="t-record">—</dd>
             </dl>
           </section>
           <dialog id="t-welcome" class="t-pop" aria-labelledby="t-welcome-title">
             <h2 id="t-welcome-title">A new record</h2>
             <p class="note">
-              Your board is a record no one has beaten. To send it to PolyPack and earn its points, put a name on your
-              records. You can change this later in Settings.
+              No one has sent PolyPack a packing for this problem, so your board is a new record. Points are paid only
+              for records sent to PolyPack, and records are sent under a display name. Enter a name, tick the box and
+              save to send this one. You can change this later in Settings.
             </p>
             <div id="t-welcome-slot"></div>
             <div class="row wrap t-pop-actions">
@@ -123,10 +158,10 @@
           <div class="t-tree-head">
             <p id="t-shop-summary" class="note"></p>
             <p class="t-tree-legend note" aria-hidden="true">
-              <span class="t-key" data-state="buyable">to buy</span>
-              <span class="t-key" data-state="dear">saving up</span>
-              <span class="t-key" data-state="locked">needs another first</span>
-              <span class="t-key" data-state="mystery">??????</span>
+              <span class="t-key" data-state="buyable">can buy now</span>
+              <span class="t-key" data-state="dear">not enough to buy yet</span>
+              <span class="t-key" data-state="locked">needs another upgrade first</span>
+              <span class="t-key" data-state="mystery">?????? not yet revealed</span>
               <span class="t-key" data-state="owned">owned</span>
             </p>
           </div>
@@ -151,13 +186,11 @@
             <dd id="t-clicks">0</dd>
           </dl>
           <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
-          <details class="t-points-how">
+          <details class="t-how-more t-points-how" data-how="points">
             <summary>How points are paid</summary>
-            <p class="note">
-              Every click that improves your record by more than the 10<sup>−9</sup> floor pays at once: w·c·[1 +
-              decades above the floor] plus its size and gap terms. Your best goes to the server within the minute;
-              points it does not confirm are taken back.
-            </p>
+          </details>
+          <details class="t-how-more" data-how="counts">
+            <summary>How clicks, evaluations and runs work</summary>
           </details>
         </section>
         <section id="t-standing" aria-labelledby="t-standing-heading" hidden>
@@ -165,10 +198,16 @@
           <dl id="t-st-stats" class="stats"></dl>
           <ul id="t-st-marks" class="t-st-marks" aria-label="This cycle's milestones"></ul>
           <p id="t-st-preview" class="note"></p>
+          <details class="t-how-more" data-how="standing">
+            <summary>How standing and resets work</summary>
+          </details>
           <div id="t-st-rules" class="t-st-rules" hidden>
             <label for="t-st-rule">Rule for the next cycle</label>
             <select id="t-st-rule"></select>
             <p id="t-st-rule-note" class="note"></p>
+            <details class="t-how-more" data-how="rules">
+              <summary>How cycle rules work</summary>
+            </details>
           </div>
           <button id="t-st-reset" class="wide" disabled>Reset for standing</button>
           <div id="t-st-confirm" class="t-st-confirm" role="group" aria-labelledby="t-st-confirm-text" hidden>
@@ -189,6 +228,9 @@
           <dl id="t-rc-stats" class="stats"></dl>
           <ul id="t-rc-sets" class="t-rc-sets" aria-label="Collections"></ul>
           <p id="t-rc-note" class="note"></p>
+          <details class="t-how-more" data-how="records">
+            <summary>How rent and collections work</summary>
+          </details>
         </section>
         <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
           <h2 id="t-queue-heading">Queue</h2>
@@ -263,6 +305,9 @@
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
           <h2 id="t-lanes-heading">Lanes</h2>
           <ul id="t-lane-list" class="t-lanes"></ul>
+          <details class="t-how-more" data-how="auto">
+            <summary>How auto-eval and lanes work</summary>
+          </details>
         </section>
         <section id="t-runs" aria-labelledby="t-runs-heading" hidden>
           <h2 id="t-runs-heading">Runs</h2>
@@ -316,23 +361,32 @@
               <button id="t-consent-save" type="submit" class="primary">Save</button>
             </form>
             <p id="t-consent-note" class="note">
-              Nothing has been sent yet; your record is kept here until you send it.
+              Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.
             </p>
+            <details class="t-how-more" data-how="sending">
+              <summary>What is sent, and how often</summary>
+            </details>
           </section>
         </div>
         <section aria-labelledby="t-run-heading">
           <h3 id="t-run-heading">Running</h3>
           <label id="t-bg-box" class="t-check" hidden
-            ><input id="t-bg" type="checkbox" /> Keep running while this tab is hidden</label
+            ><input id="t-bg" type="checkbox" /> Let auto-eval run while this tab is hidden</label
           >
           <label id="t-battery-box" class="t-check" hidden
-            ><input id="t-battery" type="checkbox" /> Keep running on battery power</label
+            ><input id="t-battery" type="checkbox" /> Let auto-eval run on battery power</label
           >
           <p id="t-run-note" class="note"></p>
+          <details class="t-how-more" data-how="running">
+            <summary>When auto-eval pauses</summary>
+          </details>
         </section>
         <section class="t-save" aria-labelledby="t-save-heading">
           <h3 id="t-save-heading">Save</h3>
-          <p class="note">The game lives in this browser. Copy the save string to keep it or move it.</p>
+          <p class="note">
+            Your game is saved in this browser only. Export gives you a save string that holds the whole game, to keep
+            or to paste into Import in another browser. Importing replaces the game in this browser.
+          </p>
           <div class="row wrap">
             <button id="t-export" type="button">Export</button>
             <button id="t-import" type="button">Import</button>
@@ -342,9 +396,10 @@
           <p id="t-save-note" class="note" role="status"></p>
         </section>
         <p class="note">
-          Every click runs real evaluations of a real solver run in this browser, and every record is checked by the
-          server. Plays best in Chrome; other browsers may freeze a hidden tab, and then the game simply waits. The
-          <a href="/">Board</a> offers all of it, unrestricted.
+          Every click runs the PolyPack solver in this browser, and the server checks every record you send before it
+          counts. The game plays best in Chrome. Other browsers may pause a hidden tab, and the game then waits until
+          you come back. On the <a href="/">Board</a> page you can use the same solver directly, with every method and
+          setting.
         </p>
       </div>
     </dialog>

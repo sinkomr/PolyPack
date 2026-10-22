@@ -121,7 +121,9 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await fresh(page, 7);
 
   // a dealt open problem is placed at once (pieces on rings around the centre): the free floor, never sent
-  await expect(page.locator("#t-problem-note")).toHaveText("No record exists. Any valid packing is a new record.");
+  await expect(page.locator("#t-problem-note")).toHaveText(
+    "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.",
+  );
   await expect(page.locator("#t-stop")).toBeVisible();
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
   await expect(page.locator("#t-score")).toBeVisible();
