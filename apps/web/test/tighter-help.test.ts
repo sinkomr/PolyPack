@@ -67,9 +67,31 @@ describe("Tighter's explanations", () => {
     expect(text).toContain("Its rate is in evaluations a second");
     expect(text).toContain("do not speed auto-eval up");
     expect(text).toContain("The rate is a target.");
-    expect(text).toContain("r = min(250, a × 1.3x)");
-    expect(text).toContain("e = r × L");
+    expect(text).toContain("r = min(20, a + x)");
     expect(text).not.toMatch(/clicks Evolve for you|its clicks|speeds it up too|clicks a second/);
+  });
+
+  it("say that the lanes share auto-eval's rate, and add no evaluations", () => {
+    const auto = HELP.auto as How;
+    const text = [...prose(auto), ...(auto.math ?? []).map(plain)].join(" ");
+    expect(text).toContain("rlane = r / L");
+    expect(text).toContain("The lanes share auto-eval's rate");
+    expect(text).toContain("they add no evaluations");
+    expect(text).toContain("max(100, 60 × r)");
+    expect(text).not.toMatch(/in every lane|in each lane|e = r × L|per lane/);
+  });
+
+  it("count the work that earns a new problem in clicks, auto-eval's evaluations 10 to the click", () => {
+    const counts = HELP.counts as How;
+    const text = [...prose(counts), ...(counts.math ?? []).map(plain)].join(" ");
+    expect(text).toContain("cdeal = 300 / q");
+    expect(text).toContain("c = eyou / k + eauto / 10");
+    expect(text).toContain("Auto-eval's evaluations count 10 to the click");
+    expect(text).not.toMatch(/300 × k|clicks' worth/);
+  });
+
+  it("call no part of the game the frontier", () => {
+    for (const [id, hows] of all) for (const t of hows.flatMap(prose)) expect(t, id).not.toMatch(/frontier/i);
   });
 
   it("format the numbers they share", () => {

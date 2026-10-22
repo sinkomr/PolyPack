@@ -1,5 +1,5 @@
 import { areaLowerBound } from "@polypack/geometry";
-import { DEAL_CLICKS } from "./dealer";
+import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   PAIR_BONUS,
   RENT_CHECK_MS,
@@ -37,15 +37,7 @@ import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
 import { HELD_PER_STANDING, RESET_MIN, RULES } from "./standing";
 import { CLIENT_TAG } from "./submission";
 import { MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "./transfer";
-import {
-  AUTOX_GROWTH,
-  AUTO_JOB_SECONDS,
-  AUTO_MAX,
-  AUTO_RATES,
-  AUTO_SLACK_SECONDS,
-  COMPACT_EVALS,
-  RUN_BUDGET,
-} from "./upgrades";
+import { AUTO_JOB_SECONDS, AUTO_MAX, AUTO_RATES, AUTO_SLACK_SECONDS, COMPACT_EVALS, RUN_BUDGET } from "./upgrades";
 
 /**
  * The "How it works" explanations outside the tech tree, in the shared format of how.ts: the points
@@ -192,15 +184,22 @@ const COUNTS: How = {
     `A run is one session of a solver method on one problem. Its seed is the number that fixes its random choices, so the same seed always gives the same run. A run stays open between clicks. It ends by itself when its method stops improving, or after ${int(RUN_BUDGET)} evaluations, and the next click starts a new run with the next seed. A problem allows as many runs that end by themselves as you have seeds per problem. Changing the method or its settings also starts a new run, which takes a new seed without using up one of yours.`,
     "Evaluations run counts every evaluation, yours and auto-eval's, including the one that scores a run's starting board. Clicks counts your own presses of Evolve that ran, not auto-eval's. Compute is the time the solver spent on those evaluations, added up over every lane, so with two lanes busy it grows twice as fast as the clock.",
     "Records held counts the problems where your entry is the current record on PolyPack, as far as the game has seen. Earned counts every record point you have earned, less any taken back, and spending does not lower it.",
+    `New problems are earned by work, counted in clicks. Each Evolve click of yours counts as one click, whatever its evaluations, and Compact's ${int(COMPACT_EVALS)} evaluations count as ${int(COMPACT_EVALS)} / k clicks. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click, whatever your evaluations per click.`,
   ],
-  math: [`<var>e</var><sub>deal</sub> = ${DEAL_CLICKS} × <var>k</var> / <var>q</var>`],
+  math: [
+    `<var>c</var><sub>deal</sub> = ${DEAL_CLICKS} / <var>q</var>`,
+    `<var>c</var> = <var>e</var><sub>you</sub> / <var>k</var> + <var>e</var><sub>auto</sub> / ${AUTO_CLICK_EVALS}`,
+  ],
   vars: [
     [
-      "<var>e</var><sub>deal</sub>",
-      "the evaluations that earn you one new problem, which the game deals (gives you) once a slot of your queue is free",
+      "<var>c</var><sub>deal</sub>",
+      "the clicks that earn you one new problem, which the game deals (gives you) once a slot of your queue is free",
     ],
-    ["<var>k</var>", "your evaluations per click"],
     ["<var>q</var>", "the slots in your queue (1 at the start)"],
+    ["<var>c</var>", "the clicks a stretch of work counts as"],
+    ["<var>e</var><sub>you</sub>", "the evaluations of your own clicks in it"],
+    ["<var>e</var><sub>auto</sub>", "auto-eval's evaluations in it"],
+    ["<var>k</var>", "your evaluations per click"],
   ],
 };
 
@@ -275,7 +274,7 @@ const RECORDS: How[] = [
   {
     text: [
       "Collections count every problem where the server confirmed a record of yours, even one beaten later. Once you own Collections they add to all your points, and they stay through resets.",
-      `A frontier pair is one piece shape with one container shape, each with ${FRONTIER_SIDES.slice(0, -1).join(", ")} or ${FRONTIER_SIDES.at(-1)} sides. It is complete when you have a confirmed record for each of its ${FRONTIER_P.length} piece counts, ${andList(FRONTIER_P.map(String))}.`,
+      `A shape pair is one piece shape in one container shape, each with ${FRONTIER_SIDES.slice(0, -1).join(", ")} or ${FRONTIER_SIDES.at(-1)} sides. It is complete when you have a confirmed record for each of its ${FRONTIER_P.length} piece counts, ${andList(FRONTIER_P.map(String))}.`,
       `A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece. A tier first is your first confirmed record in each tier, that is ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}.`,
     ],
     math: [
@@ -284,7 +283,7 @@ const RECORDS: How[] = [
     ],
     vars: [
       ["<var>C</var>", "the collections bonus (0.05 means +5 %)"],
-      ["<var>A</var>", "your complete frontier pairs"],
+      ["<var>A</var>", "your complete shape pairs"],
       ["<var>K</var>", "the milestones your piece shapes have reached, added over every shape"],
       ["<var>Q</var>", "the tiers with a first record (0 to 4)"],
     ],
@@ -296,31 +295,31 @@ const RECORDS: How[] = [
 const AUTO: How = {
   text: [
     "Auto-eval runs evaluations for you while it is on, at its own rate, beside your own clicks. Its rate is in evaluations a second, set by the Auto-eval upgrades and Faster auto-eval. Upgrades of evaluations per click make your own clicks larger but do not speed auto-eval up. Its evaluations pay exactly as yours do.",
-    "A lane is one solver worker in your browser, holding one open run. Auto-eval runs at its rate in every lane, each lane on a different problem, because one run cannot be split. Without Auto-advance, lane 1 works on the problem on the board and each other lane on another problem in the queue that already has a record. Auto-advance moves on from problems that stopped improving. Problems whose seeds are all spent are skipped.",
+    "A lane is one solver worker in your browser, holding one open run. The lanes share auto-eval's rate, so with L lanes each one runs r / L evaluations a second. Each lane works on a different problem, because one run cannot be split. More lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board and each other lane on another problem in the queue that already has a record. Auto-advance moves on from problems that stopped improving. Problems whose seeds are all spent are skipped.",
     "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and while the device runs on battery, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks are never paused.",
-    `Auto-eval hands a lane its due evaluations in batches of at most ${AUTO_JOB_SECONDS} s worth of the lane's rate, and at least 1 evaluation, so that a lane's worker gets only a few messages a second at any rate. A click of yours waits behind at most the batch that is running.`,
-    `The rate is a target. When the solver is slower than that, because one evaluation takes longer than 1 / r seconds, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped.`,
+    `Auto-eval hands a lane its due evaluations in batches of at most ${AUTO_JOB_SECONDS} s worth of the lane's share, and at least 1 evaluation, so that a lane's worker gets only a few messages a second at any rate. A click of yours waits behind at most the batch that is running.`,
+    `The rate is a target. When the solver is slower than that, because one evaluation takes longer than L / r seconds, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. The rate stops at ${AUTO_MAX} evaluations a second, so that auto-eval stays light on your computer.`,
   ],
   math: [
-    `<var>r</var> = min(${AUTO_MAX}, <var>a</var> × ${AUTOX_GROWTH}<sup><var>x</var></sup>)`,
-    `<var>e</var> = <var>r</var> × <var>L</var>`,
-    `<var>b</var> = min(⌊<var>D</var>⌋, max(1, ⌈${AUTO_JOB_SECONDS} × <var>r</var>⌉))`,
-    `<var>D</var><sub>max</sub> = max(${COMPACT_EVALS}, ${AUTO_SLACK_SECONDS} × <var>e</var>)`,
+    `<var>r</var> = min(${AUTO_MAX}, <var>a</var> + <var>x</var>)`,
+    `<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>`,
+    `<var>b</var> = min(⌊<var>D</var>⌋, max(1, ⌈${AUTO_JOB_SECONDS} × <var>r</var><sub>lane</sub>⌉))`,
+    `<var>D</var><sub>max</sub> = max(${COMPACT_EVALS}, ${AUTO_SLACK_SECONDS} × <var>r</var>)`,
   ],
   vars: [
-    ["<var>r</var>", "auto-eval's target in each lane, in evaluations a second"],
+    ["<var>r</var>", "auto-eval's target in all lanes together, in evaluations a second"],
     [
       "<var>a</var>",
       `the evaluations a second of the fastest Auto-eval upgrade you own, from ${AUTO_RATES[0]} to ${AUTO_RATES.at(-1)}`,
     ],
-    ["<var>x</var>", "your level of Faster auto-eval (0 without it)"],
+    ["<var>x</var>", "your level of Faster auto-eval (0 without it), which adds 1 evaluation a second a level"],
     ["<var>L</var>", "your lanes"],
-    ["<var>e</var>", "auto-eval's target in all lanes, in evaluations a second"],
+    ["<var>r</var><sub>lane</sub>", "each lane's share, in evaluations a second"],
     ["<var>b</var>", "the evaluations of a lane's next batch"],
     ["<var>D</var>", "the evaluations auto-eval is due now, all lanes together"],
     ["<var>D</var><sub>max</sub>", "the most evaluations auto-eval can be behind at once"],
   ],
-  note: "The totals bar shows the target e, as in “up to 10 evaluations a second” for r = 5 and L = 2. Your computer may run fewer.",
+  note: "The totals bar shows the target r, as in “up to 10 evaluations a second”. With L = 2, each lane then runs up to 5 of them. Your computer may run fewer.",
 };
 
 const RUNNING: How = {
@@ -411,7 +410,7 @@ export const METHOD_MATCH: How = {
 export const TRANSFERS: How = {
   text: [
     "With Transfers, a new open problem can start from the best known packing of the same piece and container with fewer pieces, instead of every piece on rings around the centre.",
-    `The game looks first at your own boards in the queue with fewer pieces, then at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. With Wider frontier those are P − 1, P − 2 and P − 3, then the frontier's piece counts below P. The missing pieces are placed in free space around the packing, and when 6 or fewer are missing, each goes where it grows the container least.`,
+    `The game looks first at your own boards in the queue with fewer pieces, then at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the piece counts below P among ${andList(FRONTIER_P.map(String))}, and with More open problems first P − 1, P − 2 and P − 3. The missing pieces are placed in free space around the packing, and when 6 or fewer are missing, each goes where it grows the container least.`,
     `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the sides below, so the transferred board is never sent unless you improve it.`,
   ],
   math: [

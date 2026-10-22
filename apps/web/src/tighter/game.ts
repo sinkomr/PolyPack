@@ -1,6 +1,6 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
-import { DealerState, canDeal, newDealer } from "./dealer";
+import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { ProblemKey, keyOf } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
 import { FLOOR, Points, Tier, recordPoints } from "./points";
@@ -10,7 +10,18 @@ import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMult
 import { PicksState, learnOnLeave, newPicks } from "./picks";
 import { RunPlanState, newRunPlan } from "./runplan";
 import { StandingState, newStanding } from "./standing";
-import { EvolveMethod, Owned, UpgradeId, canBuy, costOf, currencyOf, level, owning, upgrade } from "./upgrades";
+import {
+  EvolveMethod,
+  Owned,
+  UpgradeId,
+  canBuy,
+  costOf,
+  currencyOf,
+  evalsPerClick,
+  level,
+  owning,
+  upgrade,
+} from "./upgrades";
 
 /**
  * The game state and the rules that change it. No DOM, no network, no workers: the page (main.ts)
@@ -330,6 +341,15 @@ export function applyLoadAll(p: ProblemState, board: PackingConfig, score: numbe
   p.phase = "loaded";
 }
 
+/**
+ * Evaluations run, the player's (`click`) or auto-eval's: they count in all, and earn the dealer's
+ * credit in clicks, the player's at the player's click size and auto-eval's at a fixed one (dealer.ts).
+ */
+export function countEvaluations(s: GameState, evaluations: number, click: boolean): void {
+  s.stats.evaluations += evaluations;
+  earn(s.dealer, creditOf(evaluations, click ? evalsPerClick(ownedSet(s)) : null));
+}
+
 /** A run opened on the problem: it uses the next seed. */
 export function openedRun(s: GameState, p: ProblemState, seed: number, now: number): void {
   s.stats.runs++;
@@ -379,7 +399,7 @@ export interface StepChange {
  * from its own best. With τ = 10⁻⁹ every improvement that counts is progress, as it always was.
  */
 export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: number): StepChange {
-  s.stats.evaluations += o.evaluations;
+  countEvaluations(s, o.evaluations, o.click);
   s.stats.computeMs += Math.round(o.ms);
   if (o.click) s.stats.clicks++;
   p.evaluations += o.evaluations;
@@ -817,11 +837,11 @@ export interface AdvancePlan {
 
 /**
  * Auto-advance's move (with auto-eval on). A problem due to leave goes only once a new one can take
- * its slot, a deal earned by evaluations (dealer.ts), so the queue never runs short and the lanes
+ * its slot, a deal earned by work (dealer.ts), so the queue never runs short and the lanes
  * keep to the other problems meanwhile. When nothing in the queue is left to run, its spent problems
  * leave at once instead (an empty queue is dealt a problem on credit).
  */
-export function advancePlan(s: GameState, o: { seeds: number; slots: number; perClick: number }): AdvancePlan {
+export function advancePlan(s: GameState, o: { seeds: number; slots: number }): AdvancePlan {
   const queue = slotted(s);
   const due = queue
     .map((p) => ({ p, why: leaveReason(s, p, o.seeds) }))
@@ -830,6 +850,6 @@ export function advancePlan(s: GameState, o: { seeds: number; slots: number; per
     .map((x) => x.p);
   const runnable = queue.some((p) => !p.closed && !spent(p, o.seeds));
   const now = runnable ? [] : due.filter((p) => spent(p, o.seeds));
-  const earned = due.length > 0 && !now.length && canDeal(s.dealer, o.slots, s.stats.evaluations, o.perClick);
+  const earned = due.length > 0 && !now.length && canDeal(s.dealer, o.slots);
   return { now, replace: earned ? due[0] : null, due: due[0] ?? null };
 }

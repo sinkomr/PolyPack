@@ -44,7 +44,7 @@
           <div title="Time the solver has spent on your evaluations, added up over all lanes.">
             <span>Compute</span><strong id="t-bar-cpu">0 s</strong>
           </div>
-          <div id="t-bar-auto-box" title="Auto-eval's target in evaluations a second, over all lanes." hidden>
+          <div id="t-bar-auto-box" title="Auto-eval's target in evaluations a second, shared by all lanes." hidden>
             <span>Auto-eval</span><strong id="t-bar-auto">off</strong>
           </div>
           <div id="t-bar-lanes-box" title="Solver workers running at once, each on its own problem." hidden>
@@ -284,6 +284,7 @@
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
           <h2 id="t-lanes-heading">Lanes</h2>
           <ul id="t-lane-list" class="t-lanes"></ul>
+          <p id="t-lanes-note" class="note" hidden></p>
           <details class="t-how-more" data-how="auto">
             <summary>How auto-eval and lanes work</summary>
           </details>

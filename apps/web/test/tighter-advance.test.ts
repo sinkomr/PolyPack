@@ -8,6 +8,7 @@ import {
   advancePlan,
   applyLoadAll,
   applyStep,
+  countEvaluations,
   drop,
   leaveReason,
   newGame,
@@ -16,7 +17,7 @@ import {
   slotted,
   stallAfter,
 } from "../src/tighter/game";
-import { dealEvals, drawProblem, takeToken } from "../src/tighter/dealer";
+import { drawProblem, takeToken } from "../src/tighter/dealer";
 import { autoTarget } from "../src/tighter/scheduler";
 import type { UpgradeId } from "../src/tighter/upgrades";
 
@@ -169,7 +170,7 @@ describe("Tighter Auto-advance", () => {
     s.dealer.dealt = 3;
     return { s, q };
   }
-  const o = { seeds: 1, slots: 3, perClick: 1 };
+  const o = { seeds: 1, slots: 3 };
 
   it("drops a problem that ran its patience without progress, once a new one can take its slot", () => {
     const { s, q } = full();
@@ -178,10 +179,13 @@ describe("Tighter Auto-advance", () => {
     q[0].sinceGain = 1000;
     // due, but the next deal is not earned yet: it stays, and the lanes keep to the others
     expect(advancePlan(s, o)).toEqual({ now: [], replace: null, due: q[0] });
-    // a slot earns a problem per 300 clicks' worth of evaluations: three slots, one every 100 here
-    s.stats.evaluations += dealEvals(1) / 3 - 1;
+    // a slot earns a problem per 300 clicks: three slots, one every 100 here, or every 1,000
+    // evaluations of auto-eval
+    countEvaluations(s, 99, true);
     expect(advancePlan(s, o).replace).toBeNull();
-    s.stats.evaluations += 1;
+    countEvaluations(s, 9, false);
+    expect(advancePlan(s, o).replace).toBeNull();
+    countEvaluations(s, 1, false);
     expect(advancePlan(s, o).replace).toBe(q[0]);
     // the page deals the replacement, then drops the problem as Drop does: the queue stays full
     const next = drawProblem(s.dealer, [q[0], { N: 30, M: 30, P: 60 }], seenKeys(s))!;

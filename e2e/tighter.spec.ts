@@ -152,9 +152,9 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await stats(page)).toMatchObject({ evaluations: 101, clicks: 1, runs: 1 });
   expect(p).toMatchObject({ runs: 1, nextSeed: 2 });
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at 101 evaluations");
-  // the next problem is earned by work: 300 clicks of one evaluation
+  // the next problem is earned by work: 300 clicks, whatever their size (Compact counts its 100 evaluations)
   await expect(page.locator("#t-next")).toBeDisabled();
-  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ evaluations$/);
+  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
   // nothing is sent and nothing is paid before the player consents
   await page.waitForTimeout(1500);
   expect(await siteBest(page, p)).toBeNull();
@@ -306,7 +306,7 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   await click(page);
 });
 
-test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a minute behind, and owes nothing for time off", async ({
+test("tighter: auto-eval runs live, an evaluation a second while on, at most a minute behind, and owes nothing for time off", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -324,11 +324,11 @@ test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a 
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
 
-  // live: an evaluation every 2 s while it is on, beside the player, whatever the click size (4 here):
+  // live: an evaluation a second while it is on, beside the player, whatever the click size (4 here):
   // its rate is in evaluations, so the clicks of 4 do not make it 4 times as fast
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  await expect(page.locator("#t-bar-auto")).toHaveText("up to 1 evaluation every 2 s");
+  await expect(page.locator("#t-bar-auto")).toHaveText("up to 1 evaluation a second");
   const s0 = await stats(page);
   const t0 = Date.now();
   await expect
@@ -337,7 +337,7 @@ test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a 
   await expect.poll(() => idle(page)).toBe(true);
   const s1 = await stats(page);
   const live = s1.evaluations - s0.evaluations;
-  expect(live).toBeLessThanOrEqual(0.5 * ((Date.now() - t0) / 1000) + 4);
+  expect(live).toBeLessThanOrEqual((Date.now() - t0) / 1000 + 4);
   // auto-eval's evaluations are not the player's clicks
   expect(s1.clicks).toBe(s0.clicks);
 
@@ -351,7 +351,7 @@ test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a 
   // one evaluation at a time at this rate: idle, less than one is due
   await expect.poll(async () => (await due()) < 1 && (await idle(page)), { timeout: 30_000 }).toBe(true);
   const caught = (await stats(page)).evaluations - s1.evaluations;
-  expect(caught).toBeLessThanOrEqual(100 + 0.5 * ((Date.now() - t1) / 1000) + 4);
+  expect(caught).toBeLessThanOrEqual(100 + (Date.now() - t1) / 1000 + 4);
 
   // closed for half an hour with auto-eval on: the page saves as it goes (pagehide), and nothing else
   // is written afterwards, so the reload reads exactly that save
@@ -379,7 +379,7 @@ test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a 
   await expect.poll(() => idle(page)).toBe(true);
   const ran = (await stats(page)).evaluations - s2.evaluations;
   // the live rate from the press on, and the new run's start (a reload closes runs)
-  expect(ran).toBeLessThanOrEqual(0.5 * ((Date.now() - t2) / 1000) + 4);
+  expect(ran).toBeLessThanOrEqual((Date.now() - t2) / 1000 + 4);
   expect(errors).toEqual([]);
 });
 

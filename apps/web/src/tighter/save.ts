@@ -1,6 +1,6 @@
 import { parseConfig } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
-import { DealerState, newDealer } from "./dealer";
+import { DealerState, creditOf, newDealer } from "./dealer";
 import { keyOf, parseKey } from "./frontier";
 import {
   DEFAULT_PATIENCE,
@@ -26,7 +26,17 @@ import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { normalizeStanding } from "./standing";
-import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, isUpgradeId, methods, owning, upgrade } from "./upgrades";
+import {
+  EvolveMethod,
+  UPGRADES,
+  UpgradeId,
+  currencyOf,
+  evalsPerClick,
+  isUpgradeId,
+  methods,
+  owning,
+  upgrade,
+} from "./upgrades";
 
 /** Every method of the tree: a pipeline keeps its stages while a reset has taken a method away. */
 const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
@@ -45,11 +55,17 @@ const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
   ["keepBank", { cost: 2, currency: "standing" }],
 ]);
 /**
- * Levelled upgrades whose range shrank, with the old maximum: Faster auto-eval had 100 levels while
- * auto-eval's rate was in clicks, and has 3 since it is in evaluations a second (capped). Levels
- * past the new maximum are refunded; none past the old one could have been bought.
+ * Levelled upgrades whose range shrank, with the old maximum and the old list price (level j + 1
+ * cost `cost` × `growth`^j). Faster auto-eval had 100 levels at 150,000 RP × 1.4 a level while
+ * auto-eval's rate was in clicks, and 3 at that price while it multiplied a rate in evaluations a
+ * second by 1.3. Now it adds one evaluation a second a level, 10 levels at a new price.
+ * Levels past the new maximum are refunded at the price they were bought at; none past the old
+ * maximum could have been bought. A save loaded while the maximum was 3 kept 3 levels and had the
+ * rest refunded then, so nothing is refunded twice: the levels a save still has are kept.
  */
-const SHRUNK = new Map<UpgradeId, number>([["autox", 100]]);
+const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>([
+  ["autox", { max: 100, cost: 150_000, growth: 1.4 }],
+]);
 
 /**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
@@ -248,16 +264,22 @@ function pastProblem(v: unknown, now: number): PastProblem | null {
   };
 }
 
-function dealer(v: unknown, evaluations: number): DealerState {
+/**
+ * The dealer, its work since the last refill in clicks. A save from when it counted evaluations
+ * (`evalsAt`, the evaluations run at its last refill) has the evaluations since then counted as the
+ * clicks they were then, at the save's click size `perClick`.
+ */
+function dealer(v: unknown, evaluations: number, perClick: number): DealerState {
   const d = newDealer(Math.floor(Math.random() * 0xffffffff));
-  if (!isObj(v)) return { ...d, evalsAt: evaluations };
+  if (!isObj(v)) return d;
+  const since = evaluations - Math.min(int(v.evalsAt, evaluations), evaluations);
   return {
     seed: int(v.seed, d.seed, 0, 0xffffffff),
     draws: int(v.draws, 0),
     dealt: int(v.dealt, 0),
     // in debt after a problem dealt on credit
     tokens: num(v.tokens, 1, -100, 100),
-    evalsAt: Math.min(int(v.evalsAt, evaluations), evaluations),
+    credit: num(v.credit, 0, 0, 1e9) + creditOf(since, perClick),
   };
 }
 
@@ -299,21 +321,26 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
+  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 5 evaluations a second). Faster
+  // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
+  if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
   const refund = { rp: 0, standing: 0 };
   for (const id of new Set(Array.isArray(save.owned) ? save.owned : [])) {
     const r = typeof id === "string" ? RETIRED.get(id) : undefined;
     if (r) refund[r.currency] += r.cost;
   }
   // levels of levelled upgrades that are owned, within their range. Levels bought above a range that
-  // shrank (SHRUNK) are refunded at their list price, once: the save keeps only the range.
+  // shrank (SHRUNK) are refunded at the list price they were bought at, once: the save keeps only the range.
   const levels: Partial<Record<UpgradeId, number>> = {};
   if (isObj(save.levels))
     for (const [id, l] of Object.entries(save.levels)) {
       const u = isUpgradeId(id) && owned.includes(id) ? upgrade(id) : null;
       if (!u?.levels || !Number.isSafeInteger(l) || (l as number) < 1) continue;
       levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
-      for (let j = u.levels.max; j < Math.min(l as number, SHRUNK.get(id as UpgradeId) ?? 0); j++)
-        refund[currencyOf(u)] += Math.round(u.cost * Math.pow(u.levels.growth, j));
+      const old = SHRUNK.get(id as UpgradeId);
+      if (old)
+        for (let j = u.levels.max; j < Math.min(l as number, old.max); j++)
+          refund[currencyOf(u)] += Math.round(old.cost * Math.pow(old.growth, j));
     }
   const standing = normalizeStanding(save.standing, now);
   standing.points += refund.standing;
@@ -354,7 +381,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     // auto-eval runs live: nothing is due from before the page was opened
     autoDue: 0,
     autoAt: now,
-    dealer: dealer(save.dealer, evaluations),
+    dealer: dealer(save.dealer, evaluations, evalsPerClick(owning(owned, levels, standing.rule, standing.rulesDone))),
     pacer: pacer(save.pacer),
     queue,
     focus,

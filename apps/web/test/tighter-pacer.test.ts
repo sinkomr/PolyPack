@@ -10,7 +10,18 @@ import {
   recordSend,
   sentLastMinute,
 } from "../src/tighter/pacer";
-import { DEAL_CLICKS, canDeal, dealEvals, evalsToNextDeal, newDealer, refill, takeToken } from "../src/tighter/dealer";
+import {
+  AUTO_CLICK_EVALS,
+  DEAL_CLICKS,
+  canDeal,
+  clicksToNextDeal,
+  creditOf,
+  earn,
+  newDealer,
+  refill,
+  takeToken,
+} from "../src/tighter/dealer";
+import { countEvaluations, newGame } from "../src/tighter/game";
 
 const T0 = 1_000_000;
 
@@ -71,53 +82,94 @@ describe("Tighter submission pacing", () => {
 });
 
 describe("Tighter deal rate", () => {
-  it("deals one problem per slot per 300 clicks' worth of evaluations, at most one per slot waiting", () => {
+  it("deals one problem per slot per 300 clicks, at most one per slot waiting", () => {
     expect(DEAL_CLICKS).toBe(300);
-    expect(dealEvals(1)).toBe(300);
-    // more evaluations a click: still 300 clicks
-    expect(dealEvals(4)).toBe(1200);
-    expect(dealEvals(0)).toBe(300);
     const d = newDealer(7);
-    expect(canDeal(d, 1, 0, 1)).toBe(true);
+    expect(canDeal(d, 1)).toBe(true);
     takeToken(d);
-    expect(evalsToNextDeal(d, 1, 150, 1)).toBe(150);
-    expect(canDeal(d, 1, 299, 1)).toBe(false);
-    expect(canDeal(d, 1, 300, 1)).toBe(true);
-    d.tokens = 0;
-    expect(evalsToNextDeal(d, 1, 300, 4)).toBe(1200);
+    earn(d, 150);
+    expect(clicksToNextDeal(d, 1)).toBe(150);
+    earn(d, 149);
+    expect(canDeal(d, 1)).toBe(false);
+    earn(d, 1);
+    expect(canDeal(d, 1)).toBe(true);
     // a long session fills the bucket to the number of slots, no further
-    refill(d, 3, 100_000, 1);
+    earn(d, 100_000);
+    refill(d, 3);
     expect(d.tokens).toBe(3);
     takeToken(d);
     takeToken(d);
     takeToken(d);
-    expect(canDeal(d, 3, 100_000, 1)).toBe(false);
+    expect(canDeal(d, 3)).toBe(false);
     // three slots earn three times as fast
-    expect(evalsToNextDeal(d, 3, 100_000, 1)).toBe(100);
+    expect(clicksToNextDeal(d, 3)).toBe(100);
     expect(d.dealt).toBe(4);
-    // evaluations are counted once: an older count changes nothing
-    refill(d, 3, 50_000, 1);
-    expect(d.evalsAt).toBe(100_000);
+    // work is counted once: a refill spends the credit
+    expect(d.credit).toBe(0);
+    refill(d, 3);
     expect(d.tokens).toBe(0);
+    // nothing earns but work
+    earn(d, -5);
+    earn(d, 0);
+    expect(d.credit).toBe(0);
   });
 
-  it("deals on credit when the queue is empty, and the next evaluations repay the debt", () => {
+  it("counts a click of the player's as one click, whatever its size, and auto-eval's evaluations 10 to the click", () => {
+    expect(AUTO_CLICK_EVALS).toBe(10);
+    // a click of k evaluations is one click; Compact's 100 at k = 4 are 25
+    expect(creditOf(4, 4)).toBe(1);
+    expect(creditOf(40, 40)).toBe(1);
+    expect(creditOf(100, 4)).toBe(25);
+    expect(creditOf(3, 0)).toBe(3);
+    // auto-eval's at a fixed size, whatever the player's click size
+    expect(creditOf(10, null)).toBe(1);
+    expect(creditOf(100, null)).toBe(10);
+    // in the game: the player's evaluations at the player's click size, auto-eval's at 10 to the click
+    const s = newGame(T0, 7);
+    s.owned = ["trace", "click2", "click3", "click4"];
+    countEvaluations(s, 4, true);
+    countEvaluations(s, 30, false);
+    expect(s.stats.evaluations).toBe(34);
+    expect(s.dealer.credit).toBeCloseTo(1 + 3, 12);
+    // 40 evaluations a click: auto-eval earns deals just as fast as at 4
+    s.owned.push("click5", "click6", "click7", "click8", "click9", "click10", "clickx");
+    s.levels.clickx = 30;
+    countEvaluations(s, 40, true);
+    countEvaluations(s, 30, false);
+    expect(s.dealer.credit).toBeCloseTo(4 + 1 + 3, 12);
+    s.dealer.tokens = 0;
+    // 300 clicks of one slot's deal less the 8 done: 292 clicks, or 2,920 evaluations of auto-eval
+    expect(clicksToNextDeal(s.dealer, 1)).toBe(292);
+    countEvaluations(s, 2920, false);
+    expect(canDeal(s.dealer, 1)).toBe(true);
+  });
+
+  it("deals on credit when the queue is empty, and the next work repays the debt", () => {
     const d = newDealer(7);
     takeToken(d);
     takeToken(d);
     expect(d.tokens).toBe(-1);
-    expect(canDeal(d, 1, 300, 1)).toBe(false);
-    expect(evalsToNextDeal(d, 1, 300, 1)).toBe(300);
-    expect(canDeal(d, 1, 600, 1)).toBe(true);
+    earn(d, 300);
+    expect(canDeal(d, 1)).toBe(false);
+    expect(clicksToNextDeal(d, 1)).toBe(300);
+    earn(d, 300);
+    expect(canDeal(d, 1)).toBe(true);
   });
 
-  it("counts the evaluations left exactly, whatever the rounding in the bucket", () => {
+  it("counts the clicks left exactly, whatever the rounding in the bucket", () => {
     const d = newDealer(7);
     takeToken(d);
-    expect(evalsToNextDeal(d, 1, 100, 1)).toBe(200);
+    earn(d, 100);
+    expect(clicksToNextDeal(d, 1)).toBe(200);
     const e = newDealer(7);
-    refill(e, 3, 0, 1);
+    refill(e, 3);
     takeToken(e);
-    expect(evalsToNextDeal(e, 3, 70, 1)).toBe(30);
+    earn(e, 70);
+    expect(clicksToNextDeal(e, 3)).toBe(30);
+    // tenths of a click from auto-eval add up without showing a click too many
+    const f = newDealer(7);
+    takeToken(f);
+    for (let i = 0; i < 1000; i++) earn(f, creditOf(1, null));
+    expect(clicksToNextDeal(f, 1)).toBe(200);
   });
 });

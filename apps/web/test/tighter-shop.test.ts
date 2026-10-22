@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
+import { AUTO_CLICK_EVALS, DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
 import {
   PAIR_BONUS,
   RENT_GROWTH,
@@ -83,7 +83,7 @@ describe("Tighter shop", () => {
     expect(harden.needs).toEqual(["Method: seed"]);
     // a prerequisite that is itself an unrevealed mystery reads ?????? too
     expect(card(v, "morph")!.needs).toEqual([MYSTERY]);
-    expect(card(v, "transfer")!.needs).toEqual(["Method: seed", "Wider frontier"]);
+    expect(card(v, "transfer")!.needs).toEqual(["Method: seed", "More open problems"]);
     expect(harden.label).not.toMatch(/harden/i);
     expect(v.mysteries).toBe(UPGRADES.filter((u) => u.mystery && u.row !== "standing").length);
     // owning the prerequisite reveals it
@@ -174,11 +174,11 @@ describe("Tighter shop owned line", () => {
     expect(
       foldOwned([
         "Auto-eval",
-        "Auto-eval: 1 evaluation a second",
-        "Auto-eval: 15 evaluations a second",
+        "Auto-eval: 2 evaluations a second",
+        "Auto-eval: 5 evaluations a second",
         "Faster auto-eval (level 2)",
       ]),
-    ).toEqual(["Auto-eval", "Auto-eval: 15 evaluations a second", "Faster auto-eval (level 2)"]);
+    ).toEqual(["Auto-eval", "Auto-eval: 5 evaluations a second", "Faster auto-eval (level 2)"]);
     expect(foldOwned(["2 evaluations per click"])).toEqual(["2 evaluations per click"]);
     expect(foldOwned(["Problem queue: 3", "Auto-advance", "Problem queue: 4"])).toEqual([
       "Problem queue: 4",
@@ -192,7 +192,7 @@ describe("Tighter shop chips", () => {
     const { chipName } = await import("../src/tighter/shop");
     expect(chipName("7 evaluations per click")).toBe("7 a click");
     expect(chipName("Auto-eval: 1 evaluation a second")).toBe("Auto: 1/s");
-    expect(chipName("Auto-eval: 120 evaluations a second")).toBe("Auto: 120/s");
+    expect(chipName("Auto-eval: 10 evaluations a second")).toBe("Auto: 10/s");
     expect(chipName("Seeds: 16 per problem")).toBe("Seeds: 16");
     expect(chipName("Problem sets: N+M+P ≥ 120")).toBe("Size ≥ 120");
     expect(chipName("Method: basin_hopping")).toBe("basin_hopping");
@@ -315,18 +315,22 @@ describe("Tighter upgrade texts", () => {
     const u = (id: UpgradeId) => UPGRADES.find((x) => x.id === id)!;
     expect(u("click3").effect).toBe("Each Evolve click runs 3 evaluations instead of 2.");
     expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>a</var> + <var>r</var>"]);
-    expect(u("auto1").effect).toBe("Auto-eval runs 1 evaluation every 2 s for you while it is switched on.");
-    expect(u("auto3").how.math).toEqual(["<var>e</var> = 2 × <var>L</var>"]);
-    expect(u("auto2").effect).toBe("Auto-eval runs 1 evaluation a second in each lane instead of 0.5.");
-    expect(u("auto6").effect).toBe("Auto-eval runs 30 evaluations a second in each lane instead of 15.");
-    expect(u("auto9").name).toBe("Auto-eval: 120 evaluations a second");
-    expect(u("autox").effect).toBe(
-      "Each level raises auto-eval's rate by 30 %, up to 250 evaluations a second in each lane.",
-    );
-    expect(u("autox").how.math).toEqual([
-      "<var>r</var> = min(250, 120 × 1.3<sup><var>a</var></sup>)",
-      "<var>e</var> = <var>r</var> × <var>L</var>",
+    expect(u("auto1").effect).toBe("Auto-eval runs 1 evaluation a second for you while it is switched on.");
+    expect(u("auto3").how.math).toEqual([
+      "<var>r</var> = 3",
+      "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
+    expect(u("auto2").effect).toBe("Auto-eval runs 2 evaluations a second in all instead of 1.");
+    expect(u("auto6").effect).toBe("Auto-eval runs 6 evaluations a second in all instead of 5.");
+    expect(u("auto9").name).toBe("Auto-eval: 9 evaluations a second");
+    expect(u("auto10").name).toBe("Auto-eval: 10 evaluations a second");
+    expect(u("autox").effect).toBe("Each level adds 1 evaluation a second to auto-eval, up to 20 in all.");
+    expect(u("autox").how.math).toEqual([
+      "<var>r</var> = min(20, 10 + <var>a</var>)",
+      "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
+    ]);
+    expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
+    expect(u("wide").name).toBe("More open problems");
     expect(u("seeds8").effect).toBe("Each problem gets up to 8 runs, each with its own seed, instead of 4.");
     expect(u("queue4").effect).toBe("The queue holds 4 problems, and the dealer earns a new one every 75 clicks.");
     expect(u("ring80").how.math).toEqual(["<var>N</var> + <var>M</var> + <var>P</var> ≥ 80"]);
@@ -344,18 +348,48 @@ describe("Tighter upgrade texts", () => {
       expect(text(id)).toContain("whatever your evaluations per click");
     expect(text("click5")).toContain("Auto-eval keeps its own rate in evaluations a second");
     expect(text("clickx")).toContain("Auto-eval keeps its own rate in evaluations a second");
-    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms)
-    expect(text("autox")).toContain("keep about 44 % of that core busy");
-    expect(text("autox")).toContain("Levels 1, 2 and 3 give 156, about 203 and 250 evaluations a second in each lane.");
-    expect(text("head1")).toContain("Auto-eval at 1 evaluation every 2 s");
-    expect(text("head2")).toContain("Auto-eval up to 15 evaluations a second");
+    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms) and 180 (7.35 ms)
+    expect(text("autox")).toContain("keep about 3.5 % of one core busy there, and about 15 % at N + M + P = 180");
+    expect(text("autox")).toContain("Only from about N + M + P = 490 up does an evaluation take 50 ms or more");
+    expect(text("autox")).toContain("so level 10 reaches the limit of 20 a second");
+    expect(text("head1")).toContain("Auto-eval at 1 evaluation a second");
+    expect(text("head2")).toContain("the Auto-eval upgrades up to 5 evaluations a second");
+  });
+
+  it("say that the lanes share auto-eval's rate, and never that each lane runs it", () => {
+    for (const u of UPGRADES) expect(all(u).join(" "), u.id).not.toMatch(/in each lane|in every lane|per lane/);
+    const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
+    for (const id of ["auto1", "auto5", "auto10", "lanes2", "lanesx"] as UpgradeId[])
+      expect(text(id), id).toMatch(/The lanes share (it|auto-eval's rate)/);
+    expect(text("lanesx")).toContain("adds no evaluations");
+    expect(text("autox")).toContain("the lanes share it");
+  });
+
+  it("count the work that earns a new problem in clicks, auto-eval's evaluations 10 to the click", () => {
+    const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
+    expect(text("queue3")).toContain(
+      "With 3 slots that is one deal per 100 clicks, or per 1,000 evaluations of auto-eval.",
+    );
+    expect(text("queue3")).toContain(
+      "<var>c</var> = <var>e</var><sub>you</sub> / <var>k</var> + <var>e</var><sub>auto</sub> / 10",
+    );
+    expect(text("click5")).toContain("Auto-eval's evaluations count 10 to the click.");
+    expect(text("advance")).toContain("10 evaluations of auto-eval count as one click");
+    for (const u of UPGRADES) expect(all(u).join(" "), u.id).not.toMatch(/clicks' worth|300 × /);
+  });
+
+  it("call no part of the game the frontier, and name each piece shape in a container shape a shape pair", () => {
+    for (const u of UPGRADES) expect([u.name, u.effect, ...all(u)].join(" "), u.id).not.toMatch(/frontier/i);
+    const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
+    expect(text("collections")).toContain("A shape pair is one piece shape in one container shape");
+    expect(text("collector")).toContain("A collection here is a shape pair");
   });
 
   // The texts are written in numbers; these are the game's constants they quote.
   it("quote the game's own constants", () => {
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    expect(DEAL_CLICKS).toBe(300);
-    expect(text("queue3")).toContain("300 × <var>k</var>");
+    expect([DEAL_CLICKS, AUTO_CLICK_EVALS]).toEqual([300, 10]);
+    expect(text("queue3")).toContain("<var>q</var> × <var>c</var> / 300");
     expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
     expect(text("advance")).toContain("100 evaluations of mc_compress");
     expect(text("seeds2")).toContain("100,000 evaluations");

@@ -87,7 +87,7 @@ function played(): GameState {
   s.autoDue = 12.75;
   s.autoAt = T0 + 4000;
   s.dealer.tokens = -0.5;
-  s.dealer.evalsAt = 50;
+  s.dealer.credit = 12.5;
   s.reveal.push("score", "points");
   s.log.push({ t: T0, text: "New record 6.500000" });
   s.past.push({
@@ -130,7 +130,7 @@ describe("Tighter saves", () => {
     expect(r.state).toMatchObject({ version: 2 });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
-    expect(r.state.dealer).toMatchObject({ tokens: -0.5, evalsAt: 50, seed: 1234 });
+    expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
     expect(r.state.levels).toEqual({ clickx: 2 });
   });
 
@@ -167,31 +167,93 @@ describe("Tighter saves", () => {
     expect(t.ok && t.state.economy).toMatchObject({ recorded: ["1/2/3"], rentPaid: 0, checks: {}, lastRent: null });
   });
 
-  it("read a save from when auto-eval's rate was in clicks: its upgrades as they are, at the new rates", () => {
+  const rungs = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"];
+  /** The game a save document loads as. */
+  const load = (raw: unknown): GameState => {
+    const r = readSave(raw, T0);
+    if (!r.ok) throw new Error(r.error);
+    return r.state;
+  };
+
+  it("read a save from before the ladder of one evaluation a second a rung: each rung at its new rate", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));
-    const rungs = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"];
+    // auto5 ran 15 evaluations a second in each lane: it now runs 5 in all
+    raw.owned = ["trace", "click10", ...rungs.slice(0, 5), "queue3", "lanes2"];
+    raw.levels = {};
+    const t = load(raw);
+    expect(t.owned).toEqual(raw.owned);
+    expect(autoPerSecond(owning(t.owned))).toBe(5);
+    // the ids are kept, so nothing is refunded
+    expect(t.rp).toBe(s.rp);
+    for (let i = 1; i <= rungs.length; i++) expect(autoPerSecond(owning(rungs.slice(0, i)))).toBe(i);
+  });
+
+  it("read a save with Faster auto-eval's old levels: auto10 given, the levels kept as one evaluation a second each", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    // the last era: 3 levels of × 1.3 on 120 a second in each lane, after auto9
     raw.owned = ["trace", "click10", "clickx", ...rungs, "autox"];
-    // Faster auto-eval had 100 levels then: past the limit they add nothing, so the last one is kept
-    raw.levels = { clickx: 30, autox: 9 };
+    raw.levels = { clickx: 30, autox: 3 };
     raw.autoDue = 4321.5;
     const r = readSave(raw, T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.owned).toEqual(raw.owned);
+    // Faster auto-eval comes after auto10 now: the save is given it, just before
+    expect(r.state.owned).toEqual(["trace", "click10", "clickx", ...rungs, "auto10", "autox"]);
     expect(r.state.levels).toEqual({ clickx: 30, autox: 3 });
     const o = owning(r.state.owned, r.state.levels);
     expect(evalsPerClick(o)).toBe(40);
-    expect(autoPerSecond(o)).toBe(AUTO_MAX);
+    expect(autoPerSecond(o)).toBe(13);
     // nothing due from before the load, whatever unit it was counted in
     expect(r.state.autoDue).toBe(0);
     expect(r.state.autoAt).toBe(T0);
-    // levels 4 to 9 are refunded at their list price (150,000 RP × 1.4 per level bought before), once
+    // within the new range of 10 levels: nothing refunded, now or at the next load
+    expect(r.state.rp).toBe(s.rp);
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.owned).toEqual(r.state.owned);
+    expect(again.ok && again.state.levels).toEqual({ clickx: 30, autox: 3 });
+    expect(again.ok && again.state.rp).toBe(s.rp);
+  });
+
+  it("refund Faster auto-eval's levels past its 10, once, at the price they were bought at", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    // a save from when auto-eval's rate was in clicks and Faster auto-eval had 100 levels
+    raw.owned = ["trace", "click10", ...rungs, "autox"];
+    raw.levels = { autox: 14 };
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.levels).toEqual({ autox: 10 });
+    expect(autoPerSecond(owning(r.state.owned, r.state.levels))).toBe(AUTO_MAX);
+    // levels 11 to 14 at their list price then, 150,000 RP × 1.4 a level, not at today's price
     let refund = 0;
-    for (let j = 3; j < 9; j++) refund += Math.round(150000 * 1.4 ** j);
+    for (let j = 10; j < 14; j++) refund += Math.round(150000 * 1.4 ** j);
     expect(r.state.rp).toBe(s.rp + refund);
     const again = readSave(JSON.parse(toJson(r.state)), T0);
     expect(again.ok && again.state.rp).toBe(s.rp + refund);
+    // a save that kept 3 levels (and had the rest refunded when the maximum was 3) gets nothing more
+    raw.levels = { autox: 3 };
+    expect(load(raw).rp).toBe(s.rp);
+  });
+
+  it("read the dealer of a save that counted evaluations: what ran since its last refill, as the clicks it was", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    // 600 evaluations since the last refill, at 4 evaluations a click: 150 clicks
+    raw.owned = ["trace", "click2", "click3", "click4"];
+    raw.stats.evaluations = 1000;
+    raw.dealer = { seed: 5, draws: 2, dealt: 1, tokens: 0.25, evalsAt: 400 };
+    const s1 = load(raw);
+    expect(s1.dealer).toEqual({ seed: 5, draws: 2, dealt: 1, tokens: 0.25, credit: 150 });
+    // the next save has no evaluations count: its credit is kept, and nothing is counted twice
+    expect(load(JSON.parse(toJson(s1))).dealer).toEqual(s1.dealer);
+    // a count past the evaluations run gives nothing, nor does a credit below zero
+    raw.dealer.evalsAt = 5000;
+    expect(load(raw).dealer.credit).toBe(0);
+    raw.dealer = { seed: 5, tokens: 0, credit: -3 };
+    expect(load(raw).dealer.credit).toBe(0);
   });
 
   it("round-trip through an export string", async () => {
@@ -270,10 +332,10 @@ describe("Tighter saves", () => {
       firstRecords: 0,
       verifiedImprovements: 0,
     });
-    // auto-eval is due nothing from a save, and the dealer never counts evaluations not run
+    // auto-eval is due nothing from a save, and the dealer keeps its work not yet turned into deals
     expect(s.autoDue).toBe(0);
     expect(s.autoAt).toBe(T0);
-    expect(s.dealer).toMatchObject({ tokens: 1, evalsAt: 0, seed: 1234 });
+    expect(s.dealer).toMatchObject({ tokens: 1, credit: 12.5, seed: 1234 });
     // an unreadable board takes its problem back to the start; duplicates and junk are dropped
     expect(s.queue).toHaveLength(1);
     expect(s.queue[0]).toMatchObject({
@@ -438,8 +500,8 @@ describe("Tighter saves of version 1", () => {
     expect(s.owned).toEqual(["trace", "click2", "queue3", "auto1", "seeds", "click3"]);
     expect(s).toMatchObject({ rp: 40, rpEarned: 100, autoDue: 0, consent: true });
     expect(s.stats).toMatchObject({ evaluations: 900, runs: 12, clicks: 12 });
-    // the dealer counts evaluations from those already run
-    expect(s.dealer).toMatchObject({ seed: 9, draws: 4, dealt: 2, tokens: 0.4, evalsAt: 900 });
+    // the dealer counts its work from the evaluations already run: none is owed from before
+    expect(s.dealer).toMatchObject({ seed: 9, draws: 4, dealt: 2, tokens: 0.4, credit: 0 });
     const [p, q] = s.queue;
     expect(p).toMatchObject({
       paidTo: 6.5,

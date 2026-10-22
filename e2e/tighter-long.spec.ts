@@ -199,7 +199,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(errors).toEqual([]);
 });
 
-test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP", async ({ page }) => {
+test("long game: auto-eval comes right after 2 evaluations per click, for 90 RP", async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 22);
   await firstRecord(page);
@@ -208,11 +208,11 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP
   await buy(page, "trace");
   await grant(page, 150);
   await buy(page, "click2");
-  // the next card along is Auto-eval at 100 RP, before 3 evaluations per click (320)
+  // the next card along is Auto-eval at 90 RP, before 3 evaluations per click (320)
   const card = page.locator('.t-card[data-id="auto1"]');
-  await expect(card).toContainText("100 RP");
+  await expect(card).toContainText("90 RP");
   await expect(card).toHaveAttribute("data-state", "dear");
-  await grant(page, 100);
+  await grant(page, 90);
   await buy(page, "auto1");
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
@@ -527,7 +527,7 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   await page.evaluate((key) => {
     const s = (window as any).tighter.state;
     s.dealer.tokens = 0;
-    s.dealer.evalsAt = s.stats.evaluations;
+    s.dealer.credit = 0;
     s.queue.find((p: { key: string }) => p.key === key).sinceGain = 5000;
   }, first.key);
   await page.click("#t-auto");
@@ -597,9 +597,14 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
   await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
-  // auto-eval at 15 evaluations a second in each lane: every new problem gets its Compact, although a
-  // lane with a problem to work takes each job as it comes due (a Compact owes the rest)
-  await page.evaluate(() => (window as any).tighter.state.owned.push("auto2", "auto3", "auto4", "auto5"));
+  // auto-eval at its limit of 20 evaluations a second, shared by the two lanes: every new problem gets
+  // its Compact, although a lane with a problem to work takes each job as it comes due (a Compact owes
+  // the rest)
+  await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.owned.push("auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10", "autox");
+    s.levels.autox = 10;
+  });
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
   await expect

@@ -4,14 +4,16 @@ import * as api from "../api";
 import { Board } from "../board";
 import { BoardView } from "../view";
 import {
+  AUTO_CLICK_EVALS,
+  DEAL_CLICKS,
   DealerState,
   canDeal,
+  clicksToNextDeal,
   contestedCandidates,
   contestedDealable,
   drawContestedPair,
   drawProblem,
   drawWide,
-  evalsToNextDeal,
   nextRandom,
   openDealable,
   publishedTarget,
@@ -36,6 +38,7 @@ import {
   applyLoadAll,
   applyStep,
   buy,
+  countEvaluations,
   density,
   drop,
   evolvable,
@@ -193,7 +196,7 @@ const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
 /** "side", or "radius" for a circle container. */
 const sideWord = (p: ProblemKey) => (p.M === 0 ? "radius" : "side");
 /**
- * Auto-eval's target from its evaluations a second: "up to 1 evaluation every 2 s", "up to 240
+ * Auto-eval's target from its evaluations a second: "up to 1 evaluation a second", "up to 2.5
  * evaluations a second". A target, never a claim: a computer that cannot keep up runs fewer.
  */
 const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
@@ -785,7 +788,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
       // the problem left the queue meanwhile; the work still counts as done
-      state.stats.evaluations += done;
+      countEvaluations(state, done, job.click);
       return true;
     }
     settle(run, p, job, t.state, done, t.ms);
@@ -961,20 +964,28 @@ let autoRan = false;
 function accrueAuto(): void {
   const o = owned();
   const runs = autoRuns(o);
-  accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, autoCap(o, laneCount(o)));
+  // the rate is all lanes' together: they share it
+  accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) : 0, autoCap(o));
   autoRan = runs;
   // a Compact's debt stays: switching auto-eval off and on does not cancel it
   if (!runs) state.autoDue = Math.min(0, state.autoDue);
 }
 
 /**
+ * The lane offered auto-eval's next job first: the one after the lane that took the last. The lanes
+ * share one rate, and at a slow one less than a job a lane is due at each tick, so a fixed order
+ * would hand every job to lane 1.
+ */
+let autoTurn = 0;
+
+/**
  * Auto-eval's next job for this lane, from what it is due, when it may run one. Its rate is in
- * evaluations, whatever the player's click size: a job is what is due, at most a quarter second of the
- * lane's rate (autoJobEvals), and an evaluation pays the same as a click's.
+ * evaluations, whatever the player's click size, and the lanes share it: a job is what is due, at most
+ * a quarter second of the lane's share (autoJobEvals), and an evaluation pays the same as a click's.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
-  const n = autoJobEvals(o, state.autoDue);
+  const n = autoJobEvals(o, state.autoDue, laneCount(o));
   if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || n < 1) return null;
   const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
   const target = autoTarget({
@@ -989,6 +1000,7 @@ function autoJob(lv: LaneView): Job | null {
     stall: stallAfter(state),
   });
   if (!target) return null;
+  autoTurn = lanes.indexOf(lv) + 1;
   if (target.action === "compact") {
     // A Compact is one press of 100 evaluations. It starts once a job's worth is due and the rest is
     // owed (autoDue below zero), repaid before any lane's next job: waiting for 100 due at once never
@@ -1000,11 +1012,15 @@ function autoJob(lv: LaneView): Job | null {
   return { key: target.key, evals: n, click: false, compact: false };
 }
 
-/** Starts every idle lane that has work, auto-eval's or queued clicks. */
+/** Starts every idle lane that has work, auto-eval's or queued clicks, in turn from autoTurn. */
 function kickLanes(): void {
   if (!ownsGame) return;
   ensureLanes();
-  for (const lv of lanes) if (!lv.pumping) void pump(lv);
+  const first = autoTurn;
+  for (let i = 0; i < lanes.length; i++) {
+    const lv = lanes[(first + i) % lanes.length];
+    if (!lv.pumping) void pump(lv);
+  }
 }
 
 function autoTick(): void {
@@ -1269,14 +1285,14 @@ async function pairRecords(io: DealIo, N: number, M: number): Promise<api.Record
   return records;
 }
 
-/** Whether a deal is due: a slot free and a token earned by evaluations, or an empty queue. */
+/** Whether a deal is due: a slot free and a token earned by work, or an empty queue. */
 function mayDeal(): boolean {
   const o = owned();
   const slots = queueSize(o);
   const filled = slotted(state).length;
   if (filled >= slots) return false;
   // with nothing to work on, nothing would earn the next problem: one is dealt on credit
-  return filled === 0 || canDeal(state.dealer, slots, state.stats.evaluations, evalsPerClick(o));
+  return filled === 0 || canDeal(state.dealer, slots);
 }
 
 /** The tiers of contested problems the player may be dealt. */
@@ -1508,13 +1524,13 @@ const advancing = (o: ReadonlySet<UpgradeId>): boolean =>
 /** Auto-advance's move now (game.ts advancePlan), or null without it. */
 function plan(o: ReadonlySet<UpgradeId>): AdvancePlan | null {
   if (!advancing(o)) return null;
-  return advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o), perClick: evalsPerClick(o) });
+  return advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o) });
 }
 
-/** A deal is earned by evaluations (a token), whether or not a slot is free. */
+/** A deal is earned by work (a token), whether or not a slot is free. */
 function dealEarned(): boolean {
   const o = owned();
-  return canDeal(state.dealer, queueSize(o), state.stats.evaluations, evalsPerClick(o));
+  return canDeal(state.dealer, queueSize(o));
 }
 
 /**
@@ -1643,7 +1659,7 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
       say(
         slotted(state).length >= queueSize(owned())
           ? "Every slot is full. Drop a problem to make room for this one."
-          : `The next problem is earned after ${fmtInt(evalsToDeal())} more evaluations.`,
+          : `The next problem is earned after ${workText(clicksToDeal())}.`,
       );
     return;
   }
@@ -1691,10 +1707,15 @@ async function onTakeOffer(key: string): Promise<void> {
   }
 }
 
-/** Evaluations until the next deal (0: one is due). */
-function evalsToDeal(): number {
-  const o = owned();
-  return evalsToNextDeal(state.dealer, queueSize(o), state.stats.evaluations, evalsPerClick(o));
+/** Clicks until the next deal (0: one is due), auto-eval's evaluations counting AUTO_CLICK_EVALS to one. */
+function clicksToDeal(): number {
+  return clicksToNextDeal(state.dealer, queueSize(owned()));
+}
+
+/** The work that earns `clicks` clicks: "120 more clicks", with auto-eval "or 1,200 evaluations of auto-eval". */
+function workText(clicks: number, more = true): string {
+  const own = `${fmtInt(clicks)}${more ? " more" : ""} click${clicks === 1 ? "" : "s"}`;
+  return autoPerSecond(owned()) === null ? own : `${own} or ${evals(clicks * AUTO_CLICK_EVALS)} of auto-eval`;
 }
 
 // ---------- records held: live leader changes ----------
@@ -1854,7 +1875,8 @@ function render(): void {
   text("t-bar-cpu", fmtCompute(s.stats.computeMs));
   const rate = autoPerSecond(o);
   show("t-bar-auto-box", rate !== null);
-  text("t-bar-auto", rate !== null && s.settings.auto ? fmtRate(rate * laneCount(o)) : "off");
+  // the rate is all lanes' together: they share it
+  text("t-bar-auto", rate !== null && s.settings.auto ? fmtRate(rate) : "off");
   show("t-bar-lanes-box", o.has("lanes2"));
   text("t-bar-lanes", `${laneCount(o)}`);
 
@@ -1930,14 +1952,15 @@ function renderProblem(p: ProblemState | undefined): void {
   else
     note = "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.";
   text("t-problem-note", note);
-  // before the queue, one problem at a time: the next one is earned by evaluations (or this one is spent)
+  // before the queue, one problem at a time: the next one is earned by work (or this one is spent)
   const single = queueSize(owned()) <= 1;
   show("t-next", single && evolvable(p));
   if (single && evolvable(p)) {
-    const left = evalsToDeal();
+    const left = clicksToDeal();
     const ready = left === 0 || spent(p, seeds);
     $<HTMLButtonElement>("t-next").disabled = !ready || dealing;
-    text("t-next", ready ? "Next problem" : `Next problem after ${evals(left)}`);
+    text("t-next", ready ? "Next problem" : `Next problem after ${fmtInt(left)} click${left === 1 ? "" : "s"}`);
+    $("t-next").title = ready ? "" : `The next problem is earned after ${workText(left)}.`;
   }
 }
 
@@ -2383,8 +2406,8 @@ function countText(p: ProblemState): string {
 /** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
 function dealText(o: Owned): string {
   const free = queueSize(o) - slotted(state).length;
-  const left = evalsToDeal();
-  const more = `${fmtInt(left)} more evaluation${left === 1 ? "" : "s"}`;
+  const left = clicksToDeal();
+  const more = workText(left);
   const offers = state.picks.offers.length;
   const line = picking(o)
     ? offers && mayDeal()
@@ -2402,11 +2425,9 @@ function dealText(o: Owned): string {
       ? left === 0
         ? "Dealing a problem…"
         : `The next problem is dealt after ${more}.`
-      : "Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations. Drop a problem to take one.";
+      : `Every slot is full. Each slot earns a new problem per ${workText(DEAL_CLICKS, false)}. Drop a problem to take one.`;
   // with auto-eval off nothing leaves, but the line still says which problem waits and why
-  const due = o.has("advance")
-    ? advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o), perClick: evalsPerClick(o) }).due
-    : null;
+  const due = o.has("advance") ? advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o) }).due : null;
   if (!due) return line;
   const why = spent(due, seedsPerProblem(o))
     ? `Every seed on ${problemTitle(due)} is spent.`
@@ -2628,6 +2649,16 @@ function renderLanes(o: Owned): void {
     } else msg = `Lane ${i + 1}: no open run`;
     if (line.textContent !== msg) line.textContent = msg;
   });
+  // the lanes share auto-eval's rate
+  const rate = autoPerSecond(o);
+  show("t-lanes-note", rate !== null);
+  if (rate !== null)
+    text(
+      "t-lanes-note",
+      lanes.length > 1
+        ? `The ${lanes.length} lanes share auto-eval's rate of ${fmtRate(rate)}, so each one runs ${fmtRate(rate / lanes.length)}.`
+        : `Auto-eval runs ${fmtRate(rate)} in this lane.`,
+    );
 }
 
 function renderRuns(o: Owned): void {
@@ -2842,7 +2873,7 @@ function renderRecords(o: Owned): void {
   }
   const pairName = (n: { N: number; M: number }) => problemTitle({ ...n, P: 0 }).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.pairs)} complete frontier pair${c.pairs === 1 ? "" : "s"}, with a record on all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
+    `${fmtInt(c.pairs)} complete shape pair${c.pairs === 1 ? "" : "s"}, with a record on all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
       (c.nearest.length
         ? ` The closest to complete ${c.nearest.length === 1 ? "is" : "are"} ${andList(c.nearest.map((n) => `${pairName(n)} (${n.have} of ${FRONTIER_P.length})`))}.`
         : ""),
@@ -2993,7 +3024,7 @@ $("t-auto").addEventListener("click", () => {
   accrueAuto();
   say(
     state.settings.auto
-      ? `Auto-eval is on. It runs evaluations for you beside your own clicks, ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))}${laneCount(o) > 1 ? ` over ${laneCount(o)} lanes` : ""}.`
+      ? `Auto-eval is on. It runs evaluations for you beside your own clicks, ${fmtRate(autoPerSecond(o) ?? 0)}${laneCount(o) > 1 ? `, shared by ${laneCount(o)} lanes` : ""}.`
       : "Auto-eval is off.",
   );
   persist();
@@ -3019,7 +3050,7 @@ $("t-patience").addEventListener("change", () => {
 });
 $("t-next").addEventListener("click", () => {
   const p = focused();
-  if (!p || (evalsToDeal() > 0 && !spent(p, seedsPerProblem(owned())))) return;
+  if (!p || (clicksToDeal() > 0 && !spent(p, seedsPerProblem(owned())))) return;
   onDrop(p.key);
 });
 for (const id of ["t-name", "t-agree"]) $(id).addEventListener("input", () => ($(id).dataset.edited = "1"));
