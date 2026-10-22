@@ -2097,8 +2097,8 @@ function onBuy(id: UpgradeId): void {
   if (!buy(state, id)) return;
   const u = upgrade(id);
   const l = u.levels ? ` (level ${level(owned(), id)})` : "";
-  event(`Bought ${u.name}${l}: ${u.effect}.`, false);
-  say(`${u.name}${l}: ${u.effect}.`);
+  event(`Bought ${u.name}${l}. ${u.effect}`, false);
+  say(`Bought ${u.name}${l}. ${u.effect}`);
   ensureLanes();
   persist();
   render();
