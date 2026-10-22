@@ -570,3 +570,53 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   expect(await axe(page)).toEqual([]);
   expect(errors).toEqual([]);
 });
+
+test("long game: with Your pick and two lanes, Auto-advance compacts every new problem and replaces stalled ones", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 31);
+  await firstRecord(page);
+  await consent(page, "E2E Lanes");
+  await give(page, [...CLICK_LADDER, "queue3", "queue4", "queue6", "rank2", "pick3", "advance", "auto1", "lanes2"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 6));
+  // five offers taken by hand: a full queue of six, five of them never compacted
+  const offers = page.locator("#t-offer-list > li");
+  for (let i = 0; i < 5; i++) {
+    const n = await game(page, (s) => s.queue.length);
+    await expect(offers.first()).toBeVisible({ timeout: 30_000 });
+    await offers.first().locator("button").click();
+    await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 30_000 }).toBe(n + 1);
+  }
+  // a problem past its patience with auto-eval off waits, and the queue says what it waits for
+  await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
+  await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
+  await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
+  // auto-eval at 1 click of 10 evaluations a second in each lane: every new problem gets its Compact,
+  // although a lane with a problem to work takes each click as it comes due (a Compact owes the rest)
+  await page.evaluate(() => (window as any).tighter.state.owned.push("auto2", "auto3", "auto4", "auto5"));
+  await page.click("#t-auto");
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
+  await expect
+    .poll(() => game(page, (s) => s.queue.filter((p: { phase: string }) => p.phase !== "ready").length), {
+      timeout: 90_000,
+    })
+    .toBe(0);
+  // two stall: both are replaced as deals are earned, and the queue stays full
+  const stalled = await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.dealer.tokens = 2;
+    return s.queue.slice(0, 2).map((p: { key: string; sinceGain: number }) => ((p.sinceGain = 1500), p.key));
+  });
+  await expect
+    .poll(() => game(page, (s) => s.past.map((p: { key: string }) => p.key)), { timeout: 90_000 })
+    .toEqual(expect.arrayContaining(stalled));
+  expect(await game(page, (s) => s.queue.filter((p: { leaving: boolean }) => !p.leaving).length)).toBe(6);
+  expect(await logText(page)).toMatch(
+    /Auto-advance (dropped|is dropping) .* without progress, and .* takes its slot\./,
+  );
+  await page.click("#t-auto");
+  expect(errors).toEqual([]);
+});
