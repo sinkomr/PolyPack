@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type PowerSupply,
   onBattery,
@@ -107,22 +107,48 @@ describe("Linux /sys/class/power_supply", () => {
   });
 });
 
+// With fake timers: each poll happens when the test moves the clock, not when the machine gets to it.
 describe("watching the battery", () => {
-  it("reports each change, starting from AC", async () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("checks at once and every interval, and reports each change, starting from AC", async () => {
     const answers = [false, true, true, false];
     const changes: boolean[] = [];
     let calls = 0;
     const w = watchBattery(
       async () => answers[Math.min(calls++, answers.length - 1)],
       (b) => changes.push(b),
-      5,
+      30_000,
     );
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.advanceTimersByTimeAsync(0);
+    expect([calls, changes]).toEqual([1, []]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect([calls, changes]).toEqual([2, [true]]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect([calls, changes]).toEqual([4, [true, false]]);
     w.stop();
-    expect(changes).toEqual([true, false]);
-    const after = calls;
-    await new Promise((r) => setTimeout(r, 30));
-    expect(calls).toBe(after); // stopped
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(calls).toBe(4); // stopped
+  });
+
+  it("does not start a check while one is running", async () => {
+    let calls = 0;
+    let finish: (b: boolean) => void = () => {};
+    const w = watchBattery(
+      () => {
+        calls++;
+        return new Promise<boolean>((r) => (finish = r));
+      },
+      () => {},
+      1000,
+    );
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toBe(1);
+    finish(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    w.stop();
   });
 
   it("counts a failing check as AC", async () => {
@@ -130,9 +156,9 @@ describe("watching the battery", () => {
     const w = watchBattery(
       () => Promise.reject(new Error("no pmset")),
       (b) => changes.push(b),
-      5,
+      30_000,
     );
-    await new Promise((r) => setTimeout(r, 30));
+    await vi.advanceTimersByTimeAsync(90_000);
     w.stop();
     expect(changes).toEqual([]);
   });

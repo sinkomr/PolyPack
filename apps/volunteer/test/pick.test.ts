@@ -6,6 +6,7 @@ import {
   eligibleTargets,
   noteSearch,
   pickTarget,
+  pruneRecent,
   recentFromHistory,
   searchedRecently,
   weightedDraw,
@@ -177,5 +178,25 @@ describe("recently searched problems", () => {
     expect(
       pickTarget(list, { filters: noFilters, recent, skip: new Set(), now: NOW, random: sequence(0.5) }),
     ).toBeNull();
+  });
+
+  // Fix 6: a dry run must not keep a real run away from a problem for a week.
+  it("from a dry run skip later dry runs only", () => {
+    const dry = { ...line(4, 4, 5, NOW - 60_000, 17, 17), dry_run: true };
+    expect(searchedRecently(target(4, 4, 5, 1, 17), recentFromHistory([dry], false), NOW)).toBe(false);
+    expect(searchedRecently(target(4, 4, 5, 1, 17), recentFromHistory([dry], true), NOW)).toBe(true);
+    // lines written before dry_run was recorded
+    const legacy = { ...line(4, 4, 5, NOW - 60_000, 17, 17), decision: "dry run: would submit" };
+    expect(searchedRecently(target(4, 4, 5, 1, 17), recentFromHistory([legacy], false), NOW)).toBe(false);
+    const recent = new Map();
+    noteSearch(recent, dry);
+    expect(recent.size).toBe(0);
+  });
+
+  it("are forgotten once they no longer skip anything", () => {
+    const recent = recentFromHistory([line(4, 4, 5, NOW - RECENT_MS - 1, 17, 17), line(4, 4, 6, NOW - 60_000, 17, 17)]);
+    expect(recent.size).toBe(2);
+    pruneRecent(recent, NOW);
+    expect([...recent.keys()]).toEqual(["4-4-6"]);
   });
 });

@@ -11,8 +11,8 @@ Labels: [EST] established, with its source; [CALC] measured or computed here; [S
 For each problem it:
 
 1. Reads the work list, `GET /api/targets`, and keeps it for 10 minutes. The list ranks open problems: unsolved ones, those whose site leader is missing or worse than the published value, sawteeth, and the rest by their distance from the area bound.
-2. Leaves out problems that do not match `--N`, `--M` or `--max-P`. It also leaves out problems this machine searched in the last 7 days, unless their leader has changed since. From the 50 highest priorities left, it draws one at random, weighted by priority. Machines that read the same list therefore spread over different problems, and the most promising problems still come up most often.
-3. Reads the problem (`GET /api/problems/{N}/{M}/{P}`): the leader, the published value with its coordinates if it has any, whether the problem still takes submissions, and the area bound.
+2. Leaves out problems that do not match `--N`, `--M` or `--max-P`. It also leaves out problems this machine searched in the last 7 days, unless their leader has changed since. A dry run's searches count only for later dry runs: a real run searches the problem again. From the 50 highest priorities left, it draws one at random, weighted by priority. Machines that read the same list therefore spread over different problems, and the most promising problems still come up most often.
+3. Reads the problem (`GET /api/problems/{N}/{M}/{P}`): the leader, the published value with its coordinates if it has any, whether the problem still takes submissions, and the area bound. A problem whose answer cannot be read, or is malformed, is skipped for 10 minutes. So is a problem whose processing fails in any unexpected way: the client logs the error and goes on.
 4. Starts from the best packing it can get: the leader's coordinates (`GET /api/submissions/{id}`), or the published ones when they are better or there is no leader.
 5. Runs the search engine for at most `--minutes-per-problem` of active time. Time paused on battery power does not count. The engine chooses the methods, parameters, seeds and budgets, and may stop early when further work looks unlikely to pay.
 6. Reads the leader again, then submits the best strict packing only if all of these hold:
@@ -21,11 +21,11 @@ For each problem it:
    - there is no leader, or the packing beats the leader by more than the server's tie tolerance (`score < leader * (1 - 1e-9)`). An equal score never replaces an earlier entry. [EST] `improvesOn` in `packages/geometry/src/protocol.ts`.
 7. Writes one line to its history and prints one line about the problem.
 
-The best strict packing this machine has found for each problem is also kept on disk (see [State directory](#state-directory)). When the problem comes up again, that packing is offered alongside the new search's best. A submission lost to a network failure is therefore not lost for good.
+The best strict packing this machine has found for each problem is also kept on disk (see [State directory](#state-directory)), in a dry run too. When the problem comes up again, that packing is offered alongside the new search's best. A submission that failed, or a packing found in a dry run, is therefore not lost for good.
 
 ## Getting it and running it
 
-You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 360 kB. It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 400 kB. It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
 
 Until the file is published for download, build it from the repository:
 
@@ -58,27 +58,27 @@ In development, the same program runs from the sources with `npx tsx apps/volunt
 
 ## Options
 
-| Option                    | Default                    | Meaning                                                                                                                                 |
-| ------------------------- | -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `--name NAME`             | none                       | Display name shown with your entries, at most 40 characters. Without it nothing is submitted: the client says so and runs as a dry run. |
-| `--base URL`              | `https://polypack.fly.dev` | The PolyPack server.                                                                                                                    |
-| `--cores K`               | all cores but one          | Number of search threads. One job runs on each.                                                                                         |
-| `--hours H`               | never                      | Stop after H hours of wall-clock time. The current problem's best is still submitted if it qualifies.                                   |
-| `--minutes-per-problem T` | 10                         | The most active minutes the engine spends on one problem. Fractions are allowed.                                                        |
-| `--N LIST`, `--M LIST`    | all                        | Piece and container shapes, for example `0,3-6` (0 is the circle).                                                                      |
-| `--max-P K`               | all                        | Only problems with at most K pieces.                                                                                                    |
-| `--dry-run`               | off                        | Search, but never submit, even with `--name`. It still says what it would have submitted.                                               |
-| `--state DIR`             | `~/.polypack-volunteer`    | Where the client keeps its state.                                                                                                       |
-| `--note TEXT`             | none                       | Free text shown with your entries, at most 200 characters.                                                                              |
-| `--no-battery-pause`      | off                        | Keep searching on battery power.                                                                                                        |
-| `--priority low\|normal`  | `low`                      | CPU priority of the search threads.                                                                                                     |
-| `--once`                  | off                        | Search one problem, then exit. Meant for testing.                                                                                       |
-| `--help`, `--version`     |                            |                                                                                                                                         |
+| Option                    | Default                    | Meaning                                                                                                                                                                                                                         |
+| ------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--name NAME`             | none                       | Display name shown with your entries, at most 40 characters. Without it nothing is submitted: the client says so and runs as a dry run.                                                                                         |
+| `--base URL`              | `https://polypack.fly.dev` | The PolyPack server.                                                                                                                                                                                                            |
+| `--cores K`               | all cores but one          | Number of search threads. One job runs on each.                                                                                                                                                                                 |
+| `--hours H`               | never                      | Stop after H hours by the wall clock, so that time asleep counts. The current problem's best is still submitted if it qualifies. No problem starts with less than 2 minutes left (or the time per problem, if that is smaller). |
+| `--minutes-per-problem T` | 10                         | The most active minutes the engine spends on one problem. Fractions are allowed.                                                                                                                                                |
+| `--N LIST`, `--M LIST`    | all                        | Piece and container shapes, for example `0,3-6` (0 is the circle).                                                                                                                                                              |
+| `--max-P K`               | all                        | Only problems with at most K pieces.                                                                                                                                                                                            |
+| `--dry-run`               | off                        | Search, but never submit, even with `--name`. It still says what it would have submitted, and keeps that packing for a later real run.                                                                                          |
+| `--state DIR`             | `~/.polypack-volunteer`    | Where the client keeps its state.                                                                                                                                                                                               |
+| `--note TEXT`             | none                       | Free text shown with your entries, at most 200 characters.                                                                                                                                                                      |
+| `--no-battery-pause`      | off                        | Keep searching on battery power.                                                                                                                                                                                                |
+| `--priority low\|normal`  | `low`                      | CPU priority of the search threads.                                                                                                                                                                                             |
+| `--once`                  | off                        | Search one problem, then exit. Meant for testing.                                                                                                                                                                               |
+| `--help`, `--version`     |                            |                                                                                                                                                                                                                                 |
 
 Exit codes:
 
 - 0: normal end (`--once`, `--hours`, or Ctrl-C).
-- 1: the server has no work list, another copy is using the state directory, or (with `--once`) the work list cannot be read.
+- 1: the server has no work list; another copy is using the state directory; the search threads cannot start; or, with `--once`, the work list cannot be read or its problem could not be searched.
 - 2: wrong options.
 - 130: a second Ctrl-C.
 
@@ -99,20 +99,26 @@ Exit codes:
   - the `method`, `seed` and `budget` of the job that produced the packing;
   - the method's resolved parameters as `method_params`, when they fit the server's 4096-byte limit;
   - `software: "polypack-volunteer/<version>"`.
+- **What the provenance does not hold.** It describes the last job only. Many jobs start from a packing: the leader's or the published one ("warm"), the engine's own best so far ("iterate"), or the best for a final "polish". Their entries record that last job's method, seed and budget but not its starting packing, so they cannot be replayed from their provenance alone.
 - **On the board.** The entry shows your name and "PolyPack optimizer". The full record is at `GET /api/submissions/{id}`. [EST] `apps/server/src/docs.ts`.
-- **Older servers.** A server older than this client refuses `software` with optimizer entries and answers 400 with `software needs found_with "external"`. On exactly that answer the client sends the packing once more without `software`.
+- **Older servers.** A server from before 2026-10-22 refuses `software` with optimizer entries and answers 400 with `software needs found_with "external"`. On exactly that answer the client sends the packing once more without `software`.
 - **No score is trusted.** The server checks every packing and computes its score itself. [EST] `apps/server/src/docs.ts`.
 - **Your address.** Your IP address reaches the server as with any web request. The server limits each address to 120 submissions a minute. [EST] `apps/server/src/docs.ts`.
 
 How it treats the server's answers:
 
-| Answer                      | What the client does                                                                                                           |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 429 (rate limit)            | Waits 65 s and tries again, at most 3 times. It also never sends more than 6 submissions a minute.                             |
-| 409 (the problem is closed) | Skips the problem.                                                                                                             |
-| 400 or 422                  | Logs the reasons and does not retry.                                                                                           |
-| Network error or 5xx        | Backs off from 2 s, doubling to 60 s, and keeps going. A submission that still fails stays on disk and is offered again later. |
-| 404 on `/api/targets`       | Explains that the server is older than the client and exits with code 1.                                                       |
+| Answer                                          | What the client does                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 429 (rate limit)                                | Waits 65 s and tries again, at most 3 times. It also never sends more than 6 submissions a minute.                                                                                                                                                                                                                                                                            |
+| 409 (the problem is closed)                     | Skips the problem.                                                                                                                                                                                                                                                                                                                                                            |
+| 400 or 422                                      | Logs the reasons and does not retry.                                                                                                                                                                                                                                                                                                                                          |
+| Network error, timeout (30 s) or 5xx, on a read | Backs off from 2 s, doubling to 60 s, and gives up after 10 attempts, about 6 minutes. The client then tries again later, and keeps going.                                                                                                                                                                                                                                    |
+| The same, on a submission                       | Never sends it again blindly: the server may have stored it. It reads the problem first. If the leader has this name and this score, the submission counts as accepted. If the packing is not there and could still lead, it sends it again, at most 3 times in all, reading before each. Otherwise, or when the problem cannot be read, it stops; the packing stays on disk. |
+| A malformed answer                              | The problem is skipped for 10 minutes. A malformed published value, published packing or leader's packing is only left out: the search starts without it.                                                                                                                                                                                                                     |
+| An answer over 16 MB                            | Refused, like a network error.                                                                                                                                                                                                                                                                                                                                                |
+| 404 on `/api/targets`                           | Explains that the server is older than the client and exits with code 1.                                                                                                                                                                                                                                                                                                      |
+
+Names, reasons and other text from the server are printed without control characters or terminal escape sequences.
 
 ## CPU and battery
 
@@ -127,6 +133,7 @@ How it treats the server's answers:
   - **Linux:** it reads `/sys/class/power_supply/*/type` and `online`. The machine is on battery when it has a battery and external supplies, and none of those supplies is online.
   - **Elsewhere:** Windows and the BSDs, and any machine whose state cannot be read, count as on AC power.
 - **A stuck thread.** A thread that gives no answer within `time_s * 3 + 60` s of active time, or within 10 s of being told to stop, is replaced. Its job counts as crashed.
+- **A thread that dies.** It is started again after 0.5 s, doubling up to 60 s while it keeps dying, and each restart is logged. If threads die 5 times before any job has finished, the file or the Node version is at fault: the client stops with an error and exit code 1. A problem whose every job lost its thread does not count as searched.
 
 ## Stopping it
 
@@ -140,7 +147,7 @@ How it treats the server's answers:
   All of this takes at most about 30 s; any work still unfinished then is abandoned. [CALC] In the bundle's test, the client exited within a fraction of a second of the signal, after submitting.
 
 - **Second Ctrl-C.** The client exits at once with code 130.
-- **`--hours`.** When the limit is reached, the client stops in the same way as after the first Ctrl-C.
+- **`--hours`.** When the limit is reached, the client stops in the same way as after the first Ctrl-C. It checks the wall clock every 10 s and before each problem, so after the machine wakes from sleep it stops within seconds.
 
 A problem interrupted this way does not count as searched: it may come up again.
 
@@ -148,12 +155,12 @@ A problem interrupted this way does not count as searched: it may come up again.
 
 The client keeps its state in `--state`, by default `~/.polypack-volunteer`:
 
-| File              | Contents                                                                                                                                                                                                                                            |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lock`            | The running copy's process id, host name and start time. A second copy refuses to use the same directory. A lock left by a copy on this machine that no longer runs is taken over. A lock from another machine, on a shared home directory, is not. |
-| `memory.json`     | What the engine learned across problems, for example which methods found bests. It is rewritten after each problem.                                                                                                                                 |
-| `history.jsonl`   | One JSON line per problem. See below.                                                                                                                                                                                                               |
-| `best/N-M-P.json` | The best strict packing this machine found for the problem, with the method, resolved parameters, seed, budget and time that produced it.                                                                                                           |
+| File              | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lock`            | The running copy's process id, host name and start time. A second copy refuses to use the same directory. Some locks are stale and are taken over: one left by a copy on this machine that no longer runs, and one with this process's own id that it does not hold (in a container every start has process id 1). Two copies cannot both take over the same stale lock: takeovers go one at a time through `lock.takeover`. A lock from another machine, on a shared home directory, is never taken over. |
+| `memory.json`     | What the engine learned across problems, for example which methods found bests. It is rewritten after each problem.                                                                                                                                                                                                                                                                                                                                                                                        |
+| `history.jsonl`   | One JSON line per problem; see below. It is cut back to its last 20,000 lines, months of searching.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `best/N-M-P.json` | The best strict packing this machine found for the problem, with the method, resolved parameters, seed, budget and time that produced it.                                                                                                                                                                                                                                                                                                                                                                  |
 
 Each `history.jsonl` line holds:
 
@@ -163,19 +170,21 @@ Each `history.jsonl` line holds:
 - the best packing offered, and where it came from;
 - the number of jobs, how the search stopped, and its active seconds;
 - the engine's seed;
-- whether the client submitted, and why or why not;
-- the server's answer.
+- whether it was a dry run;
+- whether the client sent a submission, and why or why not;
+- the server's answer. When an answer was lost but a re-read found the packing stored, the line records it as the leader, with its id.
 
-Whole files are written to a temporary file and then renamed, so an interruption leaves either the old file or the new one, never half of one. Deleting the directory resets everything: the 7-day skip list, the engine's memory and the kept packings.
+Whole files are written to a temporary file and then renamed, so an interruption leaves either the old file or the new one, never half of one. Temporary files that a crash left behind are removed at the next start. Deleting the directory resets everything: the 7-day skip list, the engine's memory and the kept packings.
 
 ## Known limitations
 
-- **No work list yet.** [CALC] On 2026-10-21 the live server answered `GET /api/targets` with 404. Until the server is updated, the client explains this and exits with code 1.
-- **One extra request per submission.** Until another change is deployed, the live server refuses `software` with optimizer entries, so each submission is sent twice, the second time without it.
+- **No work list yet.** [CALC] On 2026-10-21 the live server answered `GET /api/targets` with 404. Until a server with the work list is deployed, the client explains this and exits with code 1.
+- **One extra request per submission on older servers.** A server from before 2026-10-22 refuses `software` with optimizer entries, so each submission is sent twice, the second time without it.
 - **Battery detection** covers macOS and Linux only. Some Linux laptops list no external power supply at all, and they count as on AC power.
 - **Priority on macOS.** A low priority lowers the whole process and lasts until it exits.
 - **Locks.** A stale lock whose process id now belongs to another program blocks the start. So does a lock from another machine. If no other copy runs, delete the `lock` file.
-- **Lost submissions.** A packing whose submission failed is offered again only when its problem comes up again. That happens after 7 days, or sooner when the problem's leader changes.
+- **Lost submissions.** A packing whose submission failed is offered again only when its problem comes up again. That happens after 7 days, or sooner when the problem's leader changes. When an answer is lost and the problem cannot be read again, the client cannot tell whether the packing was stored, and does not send it again.
+- **Replaying an entry.** Provenance records the last job only; see [What it sends](#what-it-sends-and-under-which-name).
 - **Updates.** The client does not update itself. Download or build the new file.
 - **Shared addresses.** Several copies behind one address share the server's limit of 120 submissions a minute. [SPEC] That should not matter at a few submissions an hour per copy.
-- **Sleep.** [SPEC] While the machine sleeps, the process is suspended, and the problem's active clock should not advance. `--hours`, however, counts wall-clock time, sleep included.
+- **Sleep.** [SPEC] While the machine sleeps, the process is suspended, and the problem's active clock should not advance. `--hours` counts sleep, since it goes by the wall clock.

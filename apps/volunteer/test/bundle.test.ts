@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildBundle } from "../build";
-import { type FakeServer, startFakeServer } from "./fake-server";
+import { type FakeServer, LOOSE_SQUARES, startFakeServer } from "./fake-server";
 
 let dir: string;
 let bundle: string;
@@ -56,9 +56,10 @@ describe("the single-file bundle", () => {
     expect(readFileSync(bundle, "utf8").startsWith("#!/usr/bin/env node")).toBe(true);
   });
 
-  // Real solver work in the bundle's own threads, for up to 3 s.
+  // Real solver work in the bundle's own threads, for up to 3 s. Whether the engine finds a packing
+  // in that time depends on the machine, so either ending is accepted: what matters is that the
+  // threads ran and that nothing was sent.
   it("searches one problem in a dry run", { timeout: 60_000 }, async () => {
-    const { LOOSE_SQUARES } = await import("./fake-server");
     const server = await startFakeServer({ problems: [LOOSE_SQUARES] });
     try {
       const { code, output } = await runBundle([
@@ -68,46 +69,36 @@ describe("the single-file bundle", () => {
         "0.05",
       ]);
       expect(code, output).toBe(0);
-      expect(output).toMatch(/Finished N=4 M=4 P=3 .*dry run: would submit/);
+      expect(output).toMatch(/Finished N=4 M=4 P=3 .*[1-9]\d* job\(s\): .*(dry run: would submit|nothing to submit)/);
       expect(server.submissions).toEqual([]);
     } finally {
       await server.close();
     }
   });
 
-  // Real solver work: a problem that keeps asc busy for its whole 30 s budget, stopped by SIGINT
-  // after 2 s. The client must abort the jobs, submit the best so far and exit 0 well within 30 s.
-  it("on SIGINT, submits the best so far and exits 0", { timeout: 60_000 }, async () => {
-    const server = await startFakeServer({
-      problems: [
-        {
-          N: 5,
-          M: 5,
-          P: 20,
-          // any valid packing is a leader to beat: twenty pentagons in a row
-          leader: {
-            name: "Someone",
-            container_phi: 0,
-            pieces: Array.from({ length: 20 }, (_, i) => ({ x: 2 * i, y: 0, theta: 0 })),
-          },
-        },
-      ],
-    });
+  // Real solver work: the engine on three squares for up to a minute, stopped by SIGINT as soon as
+  // it reports a best. The client must abort the jobs, submit that best and exit 0, well within the
+  // 30 s it allows itself.
+  it("on SIGINT, submits the best so far and exits 0", { timeout: 120_000 }, async () => {
+    const server = await startFakeServer({ problems: [LOOSE_SQUARES] });
     try {
-      let signalled = 0;
-      const started = Date.now();
+      let signalledAt = 0;
       const { code, output } = await runBundle(
-        [...commonArgs(server, join(dir, "state-signal")), "--name", "Signal test", "--minutes-per-problem", "0.5"],
+        [...commonArgs(server, join(dir, "state-signal")), "--name", "Signal test", "--minutes-per-problem", "1"],
         (line, child) => {
-          if (/Searching N=5 M=5 P=20/.test(line) && !signalled++) setTimeout(() => child.kill("SIGINT"), 2000);
+          if (/best so far/.test(line) && !signalledAt) {
+            signalledAt = Date.now();
+            child.kill("SIGINT");
+          }
         },
       );
       expect(code, output).toBe(0);
-      expect(Date.now() - started).toBeLessThan(20_000);
+      expect(signalledAt).toBeGreaterThan(0);
+      expect(Date.now() - signalledAt).toBeLessThan(30_000);
       expect(output).toMatch(/SIGINT: stopping/);
-      expect(output).toMatch(/Finished N=5 M=5 P=20 .*\(aborted\).*submitted: HTTP 200, the new leader/);
+      expect(output).toMatch(/Finished N=4 M=4 P=3 .*\(aborted\).*submitted: HTTP 200, the new leader/);
       expect(server.submissions).toHaveLength(1);
-      expect(server.leaderOf(5, 5, 20)!.name).toBe("Signal test");
+      expect(server.leaderOf(4, 4, 3)!.name).toBe("Signal test");
       const line = JSON.parse(readFileSync(join(dir, "state-signal", "history.jsonl"), "utf8").trim());
       expect(line).toMatchObject({ stopped: "aborted", submitted: true, status: 200 });
     } finally {

@@ -34,6 +34,13 @@ export interface FakeServerOptions {
   noTargets?: boolean;
   /** Refuse `software` with optimizer entries, like the live server before its update. */
   refuseSoftware?: boolean;
+  /** Rewrites the body of a GET answer before it is sent, to serve malformed answers. */
+  mangle?: (path: string, body: unknown) => unknown;
+  /**
+   * Replaces the answer to the `n`-th POST /api/submit (from 0) after it was processed and stored:
+   * "drop" closes the connection without an answer, as when an answer is lost on the way.
+   */
+  afterSubmit?: (n: number, answer: SubmitResponse) => { status: number; body: unknown } | "drop" | undefined;
 }
 
 export interface Recorded {
@@ -49,6 +56,8 @@ export interface FakeServer {
   submissions: Record<string, unknown>[];
   /** The current leader of a problem. */
   leaderOf(N: number, M: number, P: number): { id: number; score: number; name: string } | null;
+  /** Valid submissions the server processed (each one an entry stored, if only for a moment). */
+  stored(): number;
   close(): Promise<void>;
 }
 
@@ -93,6 +102,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
   const areaBound = (p: FakeProblem) => Math.sqrt(p.P); // any positive number serves the client
   const requests: Recorded[] = [];
   const submissions: Record<string, unknown>[] = [];
+  let stored = 0;
 
   const server: Server = createServer((req, res) => {
     let raw = "";
@@ -110,6 +120,8 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(value));
       };
+      // a GET answer may be rewritten by the test
+      const answer = (value: unknown) => send(200, o.mangle ? o.mangle(url.pathname, value) : value);
       const parts = url.pathname.split("/").filter(Boolean);
 
       if (req.method === "GET" && url.pathname === "/api/targets") {
@@ -131,7 +143,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
               area_bound: areaBound(p),
             };
           });
-        return send(200, { generated_at: new Date().toISOString(), targets });
+        return answer({ generated_at: new Date().toISOString(), targets });
       }
 
       if (req.method === "GET" && parts[0] === "api" && parts[1] === "problems" && parts.length === 5) {
@@ -159,13 +171,13 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
             : null,
           accepts_submissions: !p.closed,
         };
-        return send(200, info);
+        return answer(info);
       }
 
       if (req.method === "GET" && parts[0] === "api" && parts[1] === "submissions" && parts.length === 3) {
         const e = entries.get(Number(parts[2]));
         if (!e) return send(404, { error: "no such submission" });
-        return send(200, { ...e, agent_note: "", found_with: "hand" });
+        return answer({ ...e, agent_note: "", found_with: "hand" });
       }
 
       if (req.method === "POST" && url.pathname === "/api/submit") {
@@ -201,11 +213,12 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
         const before = leaderOf(N, M, P);
         const leads = !before || improvesOn(score, before.score);
         const id = leads ? nextId++ : null;
+        stored++;
         if (leads) {
           entries.set(id!, { id: id!, N, M, P, name: b.name, score, pieces, container_phi });
           leaders.set(key(N, M, P), id!);
         }
-        return send(200, {
+        const result: SubmitResponse = {
           valid: true,
           reasons: [],
           score,
@@ -216,7 +229,11 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
           container: null,
           pending_verification: false,
           strict_check: null,
-        } satisfies SubmitResponse);
+        };
+        const replaced = o.afterSubmit?.(submissions.length - 1, result);
+        if (replaced === "drop") return res.destroy();
+        if (replaced) return send(replaced.status, replaced.body);
+        return send(200, result);
       }
 
       send(404, { error: "not found" });
@@ -229,6 +246,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
     requests,
     submissions,
     leaderOf,
+    stored: () => stored,
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

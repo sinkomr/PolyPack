@@ -7,6 +7,7 @@ import {
   type PackingConfig,
   type Pose,
   type ProblemInfo,
+  SCORE_TIE,
   improvesOn,
   utf8Length,
 } from "@polypack/geometry";
@@ -122,4 +123,38 @@ export const SOFTWARE_REFUSAL = 'software needs found_with "external"';
 export function isSoftwareRefusal(status: number, body: unknown): boolean {
   const reasons = (body as { reasons?: unknown } | null)?.reasons;
   return status === 400 && Array.isArray(reasons) && reasons.includes(SOFTWARE_REFUSAL);
+}
+
+/** A display name as the server stores it (apps/server/src/limits.ts, sanitizeText). */
+export function storedName(name: string): string {
+  return name
+    .normalize("NFC")
+    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069<>]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40)
+    .trim();
+}
+
+/**
+ * What a re-read of the problem says after a POST that got no clear answer (a network error, a
+ * timeout, a 5xx): the server may have stored the packing or not. "ours": the leader has our name
+ * and our score within the tie tolerance, so it was stored. "beaten": another leader is at least
+ * as good, so sending again cannot lead. "closed": the problem no longer takes submissions.
+ * "absent": not stored, and sending again may still lead.
+ */
+export type SubmitCheck =
+  | { state: "ours"; id: number; score: number }
+  | { state: "beaten"; leader: number }
+  | { state: "closed" }
+  | { state: "absent" };
+
+export function checkStored(info: ProblemInfo, name: string, score: number): SubmitCheck {
+  if (!info.accepts_submissions) return { state: "closed" };
+  const b = info.site_best;
+  if (!b) return { state: "absent" };
+  const sameScore = Math.abs(b.score - score) <= SCORE_TIE * Math.max(b.score, score);
+  if (sameScore && storedName(b.name) === storedName(name)) return { state: "ours", id: b.id, score: b.score };
+  if (!improvesOn(score, b.score)) return { state: "beaten", leader: b.score };
+  return { state: "absent" };
 }

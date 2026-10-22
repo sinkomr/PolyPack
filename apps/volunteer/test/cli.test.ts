@@ -1,13 +1,20 @@
 /**
- * End to end: the client's main loop with --once against the in-process fake server, with real
- * worker threads and the engine of src/engine. Nothing here talks to a real server.
+ * End to end: the client's main loop against the in-process fake server, with real worker
+ * threads. Nothing here talks to a real server.
+ *
+ * Most tests stand in a small engine that runs one real solver job capped by evaluations, so that
+ * the outcome is the same on a fast machine and on a loaded CI runner; one test runs the real
+ * engine and asserts only what does not depend on speed.
  */
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
+import { Worker } from "node:worker_threads";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type MainDeps, main } from "../src/main";
 import type { HistoryLine } from "../src/state";
+import type { Candidate, Job, JobResult, SearchProblem } from "../src/types";
 import { SOFTWARE } from "../src/version";
 import { type FakeProblem, type FakeServer, LOOSE_SQUARES, scoreOf, startFakeServer } from "./fake-server";
 
@@ -23,11 +30,15 @@ afterEach(async () => {
 });
 
 /**
- * Runs the client in this process; its output is collected instead of printed. Unless `deps`
- * gives a battery check, the battery is not watched.
+ * Runs the client in this process; its output is collected instead of printed, and `onLine` sees
+ * each line as it comes. Unless `deps` gives a battery check, the battery is not watched.
  */
-async function clientWith(argv: string[], deps: MainDeps = {}) {
+async function clientWith(argv: string[], deps: MainDeps = {}, onLine?: (line: string) => void) {
   const lines: string[] = [];
+  const take = (l: string) => {
+    lines.push(l);
+    onLine?.(l);
+  };
   const code = await main(
     [
       "--base",
@@ -43,13 +54,72 @@ async function clientWith(argv: string[], deps: MainDeps = {}) {
       ...(deps.checkBattery ? [] : ["--no-battery-pause"]),
       ...argv,
     ],
-    { out: (l) => lines.push(l), err: (l) => lines.push(l), signals: false, ...deps },
+    { out: take, err: take, signals: false, searchProblem: oneJob, ...deps },
   );
   return { code, output: lines.join("\n") };
 }
 const client = (...argv: string[]) => clientWith(argv);
 
-/** A problem that keeps asc busy for its whole budget, with an easy leader to beat. */
+const history = (): HistoryLine[] =>
+  readFileSync(join(dir, "state", "history.jsonl"), "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l));
+
+const candidateOf = (r: JobResult, job: Job): Candidate | null =>
+  r.valid && r.strict && r.best && r.score !== null
+    ? { config: r.best, score: r.score, strict: true, job, params: r.params }
+    : null;
+
+/**
+ * A stand-in engine: one real asc job through the real pool, ended by its evaluation cap or by
+ * completing (the time budget is only a ceiling), so that its result does not depend on speed.
+ */
+const oneJob: SearchProblem = async (input, runJob, control) => {
+  const job: Job = {
+    problem: input.problem,
+    method: "asc",
+    seed: 1,
+    budget: { time_s: 300, evals: 20_000 },
+    kind: "fresh",
+  };
+  const r = await runJob(job, control);
+  const best = candidateOf(r, job);
+  input.onResult?.(r, best);
+  return { best, jobs: 1, stopped: control.aborted ? "aborted" : "time", memory: input.memory ?? null };
+};
+
+/** One job as above, then nothing until the host aborts the search. */
+const bestThenWait: SearchProblem = async (input, runJob, control) => {
+  const first = await oneJob(input, runJob, control);
+  while (!control.aborted) await delay(20);
+  return { ...first, stopped: "aborted" };
+};
+
+/** An engine that finds nothing. */
+const nothing: SearchProblem = async (input) => ({
+  best: null,
+  jobs: 0,
+  stopped: "time",
+  memory: input.memory ?? null,
+});
+
+/** Two problems with easy leaders: three squares (side 2.5, best 2) and two circles (radius 2.5, best 2). */
+const TWO_CIRCLES: FakeProblem = {
+  N: 0,
+  M: 0,
+  P: 2,
+  leader: {
+    name: "Someone",
+    container_phi: 0,
+    pieces: [
+      { x: -1.5, y: 0, theta: 0 },
+      { x: 1.5, y: 0, theta: 0 },
+    ],
+  },
+};
+
+/** A problem that keeps asc busy for its whole budget. */
 const PENTAGONS: FakeProblem = {
   N: 5,
   M: 5,
@@ -61,14 +131,8 @@ const PENTAGONS: FakeProblem = {
   },
 };
 
-const history = (): HistoryLine[] =>
-  readFileSync(join(dir, "state", "history.jsonl"), "utf8")
-    .trim()
-    .split("\n")
-    .map((l) => JSON.parse(l));
-
 describe("the client, end to end", () => {
-  // Real solver work on two threads for up to 3 s of search, plus building the thread bundle.
+  // Real solver work: one evaluation-capped job on two threads, plus building the thread bundle.
   it("searches one problem and submits a result that beats the leader", { timeout: 60_000 }, async () => {
     server = await startFakeServer({ problems: [LOOSE_SQUARES], refuseSoftware: true });
     const before = server.leaderOf(4, 4, 3)!;
@@ -96,34 +160,39 @@ describe("the client, end to end", () => {
       name: "Test volunteer",
       agent_note: "e2e",
       found_with: "optimizer",
-      method: expect.any(String),
-      seed: expect.any(Number),
-      budget: { time_s: expect.any(Number) },
+      method: "asc",
+      seed: 1,
+      budget: { time_s: 300, evals: 20_000 },
     });
-    const sent = scoreOf(second as never)!;
-    expect(sent).toBeLessThan(2.1);
-    expect(server.leaderOf(4, 4, 3)!.name).toBe("Test volunteer");
+    expect(scoreOf(second as never)!).toBeLessThan(2.1);
+    const after = server.leaderOf(4, 4, 3)!;
+    expect(after.name).toBe("Test volunteer");
 
-    // the state directory
     const state = join(dir, "state");
     expect(readdirSync(state).sort()).toEqual(["best", "history.jsonl", "memory.json"]); // the lock is gone
     const best = JSON.parse(readFileSync(join(state, "best", "4-4-3.json"), "utf8"));
-    expect(best).toMatchObject({ N: 4, M: 4, P: 3, strict: true, method: second.method, seed: second.seed });
+    expect(best).toMatchObject({ N: 4, M: 4, P: 3, strict: true, method: "asc", seed: 1 });
     const [line] = history();
     expect(line).toMatchObject({
       N: 4,
       M: 4,
       P: 3,
       leader_before: { id: before.id, score: before.score },
+      leader_after: { id: after.id },
+      dry_run: false,
       submitted: true,
       decision: "better than the leader",
       status: 200,
-      response: { valid: true, leader: true },
+      response: { valid: true, leader: true, id: after.id },
     });
-    expect(line.leader_after?.id).toBe(server.leaderOf(4, 4, 3)!.id);
     expect(output).toMatch(/Searching N=4 M=4 P=3/);
     expect(output).toMatch(/sending again without it/);
-    expect(output).toMatch(/Finished N=4 M=4 P=3 .*submitted: HTTP 200, the new leader/);
+    // fix 8: compared with the leader before the search, not with the new entry
+    expect(output).toMatch(
+      new RegExp(
+        `Finished N=4 M=4 P=3 .*vs leader 2\\.500000 \\(-2\\d\\.\\d{3}%\\); submitted: HTTP 200, the new leader \\(#${after.id}\\)`,
+      ),
+    );
   });
 
   // Real solver work, as above.
@@ -134,7 +203,7 @@ describe("the client, end to end", () => {
     expect(output).toMatch(/dry run: nothing is submitted, because no --name was given/);
     expect(output).toMatch(/dry run: would submit/);
     expect(server.submissions).toEqual([]);
-    expect(history()[0]).toMatchObject({ submitted: false, decision: "dry run: would submit" });
+    expect(history()[0]).toMatchObject({ submitted: false, dry_run: true, decision: "dry run: would submit" });
   });
 
   // Real solver work, as above.
@@ -163,49 +232,273 @@ describe("the client, end to end", () => {
     expect(history()).toHaveLength(1);
   });
 
-  // Real solver work: the engine on twenty pentagons for 1.8 s of active time, with a 1 s battery
-  // pause. How far it gets before the pause depends on the machine, so the lines are matched loosely.
+  // Real solver work: two 2 s jobs (active time) on twenty pentagons, paused for about 1 s once
+  // the search has started. The pause is triggered by the client's own output, not by a clock.
   it("pauses on battery power, without counting the pause, and prints status lines", { timeout: 60_000 }, async () => {
     server = await startFakeServer({ problems: [PENTAGONS] });
+    const twoJobs: SearchProblem = async (input, runJob, control) => {
+      const jobs: Job[] = [1, 2].map((seed) => ({
+        problem: input.problem,
+        method: "asc",
+        seed,
+        budget: { time_s: 2 },
+        kind: "fresh",
+      }));
+      const results = await Promise.all(jobs.map((job) => runJob(job, control)));
+      for (const r of results) input.onResult?.(r, null);
+      return { best: null, jobs: 2, stopped: "time", memory: null };
+    };
+    let pauseFrom = Infinity;
+    const checkBattery = async () => Date.now() >= pauseFrom && Date.now() < pauseFrom + 1000;
     const t0 = Date.now();
-    // on battery from 0.8 s to 1.8 s after the start
-    const checkBattery = async () => Date.now() - t0 > 800 && Date.now() - t0 < 1800;
-    const { code, output } = await clientWith(["--once", "--minutes-per-problem", "0.03"], {
-      checkBattery,
-      batteryEveryMs: 50,
-      statusEveryMs: 300,
-    });
+    const { code, output } = await clientWith(
+      ["--once"],
+      { checkBattery, batteryEveryMs: 20, statusEveryMs: 50, searchProblem: twoJobs },
+      (line) => {
+        if (/Searching N=5 M=5 P=20/.test(line)) pauseFrom = Date.now() + 200;
+      },
+    );
     const wall = (Date.now() - t0) / 1000;
     expect(code, output).toBe(0);
     expect(output).toMatch(/On battery power: paused/);
     expect(output).toMatch(/On AC power: resuming/);
     expect(output).toMatch(
-      /Status: N=5 M=5 P=20, \d+s of 2s; best .* vs leader \d+\.\d{6}.*; \d+ job\(s\) run; threads 0 busy, 2 paused, 0 idle; 0 submission\(s\) accepted; paused on battery power/,
+      /Status: N=5 M=5 P=20, \d+s of 3s; best none yet vs leader \d+\.\d{6}; 0 job\(s\) run; threads 0 busy, 2 paused, 0 idle; 0 submission\(s\) accepted; paused on battery power/,
     );
     expect(output).toMatch(/Status: N=5 M=5 P=20, .*threads 2 busy, 0 paused, 0 idle/);
-    const [line] = history();
-    // the engine's time excludes the pause: the search took about 1.8 s of active time
-    expect(line.active_s).toBeLessThan(wall - 0.7);
-    expect(wall).toBeGreaterThan(2.5);
+    // the host's active clock left the pause out
+    expect(history()[0].active_s).toBeLessThan(wall - 0.8);
   });
 
-  // Real solver work: the --hours limit (about 1 s) ends a search that would take 60 s.
-  it("stops at the --hours limit and submits what it has", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [PENTAGONS] });
-    const t0 = Date.now();
-    const { code, output } = await client(
-      "--name",
-      "Test volunteer",
-      "--minutes-per-problem",
-      "1",
-      "--hours",
-      "0.0003",
+  // Real solver work, as above (one evaluation-capped job per problem).
+  it(
+    "in a dry run, keeps its best for the real run and does not keep the real run away (fix 6)",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+      const dry = await client("--once");
+      expect(dry.code, dry.output).toBe(0);
+      expect(dry.output).toMatch(/dry run: would submit/);
+      expect(server.submissions).toEqual([]);
+
+      // the real run searches the same problem at once; its engine finds nothing, so the dry run's
+      // kept packing is what it submits
+      const real = await clientWith(["--once", "--name", "Test volunteer"], { searchProblem: nothing });
+      expect(real.code, real.output).toBe(0);
+      expect(real.output).not.toMatch(/Nothing to search/);
+      expect(real.output).toMatch(/from an earlier search\) vs leader 2\.500000 .*submitted: HTTP 200, the new leader/);
+      expect(server.submissions).toHaveLength(1);
+      expect(history().map((l) => l.dry_run)).toEqual([true, false]);
+      expect(history()[1].best).toMatchObject({ from: "file", method: "asc", seed: 1 });
+    },
+  );
+
+  // Real solver work: one evaluation-capped job per problem.
+  it(
+    "stops at the --hours limit by the wall clock, also after the machine slept (fix 3)",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [LOOSE_SQUARES, TWO_CIRCLES] });
+      // the wall clock jumps two hours once the first problem is done, as after a sleep: timers do
+      // not see that, the wall clock does
+      let offset = 0;
+      const { code, output } = await clientWith(
+        ["--name", "Test volunteer", "--hours", "1", "--minutes-per-problem", "1"],
+        { now: () => Date.now() + offset },
+        (line) => {
+          if (/^\[.*\] Finished/.test(line)) offset += 2 * 3600_000;
+        },
+      );
+      expect(code, output).toBe(0);
+      expect(output).toMatch(/The --hours limit \(1 h\) is reached: stopping/);
+      expect(history()).toHaveLength(1);
+      expect(server.submissions).toHaveLength(1);
+    },
+  );
+
+  it("does not start a problem with too little of --hours left (fix 3)", { timeout: 30_000 }, async () => {
+    server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+    const { code, output } = await client("--name", "Test volunteer", "--hours", "0.03", "--minutes-per-problem", "10");
+    expect(code, output).toBe(0);
+    expect(output).toMatch(/Only 1m48s of the --hours limit \(0.03 h\) is left, too little for another problem/);
+    expect(server.requests).toEqual([]);
+  });
+
+  // Real solver work: one evaluation-capped job, then a search that only an abort ends.
+  it("aborts a running search at the --hours limit and submits what it has (fix 3)", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+    let offset = 0;
+    const { code, output } = await clientWith(
+      ["--name", "Test volunteer", "--hours", "1", "--minutes-per-problem", "50"],
+      { now: () => Date.now() + offset, deadlineCheckMs: 20, searchProblem: bestThenWait },
+      (line) => {
+        if (/best so far/.test(line)) offset += 2 * 3600_000;
+      },
     );
     expect(code, output).toBe(0);
-    expect(Date.now() - t0).toBeLessThan(15_000);
-    expect(output).toMatch(/The --hours limit \(0.0003 h\) is reached: stopping/);
-    expect(history()).toHaveLength(1);
+    expect(output).toMatch(/The --hours limit \(1 h\) is reached: stopping\. The search is aborted/);
+    expect(history()).toMatchObject([{ stopped: "aborted", submitted: true, status: 200 }]);
     expect(server.submissions).toHaveLength(1);
+  });
+
+  // Fix 1. Real solver work: one evaluation-capped job.
+  for (const lost of ["drop", 502] as const) {
+    it(
+      `does not send again when an answer is lost (${lost}) but the packing was stored`,
+      { timeout: 60_000 },
+      async () => {
+        server = await startFakeServer({
+          problems: [LOOSE_SQUARES],
+          afterSubmit: (n) => (n === 0 ? (lost === "drop" ? "drop" : { status: 502, body: "Bad Gateway" }) : undefined),
+        });
+        const { code, output } = await client("--once", "--name", "Test volunteer");
+        expect(code, output).toBe(0);
+        expect(server.submissions).toHaveLength(1);
+        expect(server.stored()).toBe(1);
+        const leader = server.leaderOf(4, 4, 3)!;
+        expect(leader.name).toBe("Test volunteer");
+        expect(output).toMatch(
+          new RegExp(`no answer came \\(.*\\), but the problem now shows it as the leader \\(#${leader.id}\\)`),
+        );
+        expect(history()[0]).toMatchObject({
+          submitted: true,
+          status: null,
+          response: { valid: true, leader: true, id: leader.id },
+          leader_after: { id: leader.id },
+        });
+      },
+    );
+  }
+
+  // Fix 2. Real solver work where a search runs: one evaluation-capped job.
+  it("skips a problem whose answer is malformed, without crashing", { timeout: 60_000 }, async () => {
+    for (const site_best of [
+      { id: 1, name: "x" },
+      { id: 1, name: "x", score: "2.5" },
+    ]) {
+      server = await startFakeServer({
+        problems: [LOOSE_SQUARES],
+        mangle: (path, body) => (path.startsWith("/api/problems/") ? { ...(body as object), site_best } : body),
+      });
+      const { code, output } = await client("--once", "--name", "Test volunteer");
+      expect(code, output).toBe(1); // --once: its problem could not be searched
+      expect(output).toMatch(/Could not read N=4 M=4 P=3 \(malformed answer\); skipping it for 10 minutes/);
+      expect(server.submissions).toEqual([]);
+      await server.close();
+    }
+    server = null;
+  });
+
+  it(
+    "searches on when only the published value or the leader's packing is malformed",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({
+        problems: [LOOSE_SQUARES],
+        mangle: (path, body) => {
+          const b = body as Record<string, unknown>;
+          if (path.startsWith("/api/problems/"))
+            return { ...b, literature: { value: "2.1", pieces: "none", display: "2.1", status: "best_known" } };
+          if (path.startsWith("/api/submissions/")) return { ...b, pieces: [null, null, null] };
+          return body;
+        },
+      });
+      const { code, output } = await client("--once", "--name", "Test volunteer");
+      expect(code, output).toBe(0);
+      expect(output).toMatch(/Could not read the leader's packing #\d+ \(malformed answer\)/);
+      expect(output).toMatch(/published none.*starting from nothing/);
+      expect(server.submissions).toHaveLength(1);
+    },
+  );
+
+  it("contains an unexpected error to its problem and goes on (fix 2)", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [{ ...LOOSE_SQUARES, priority: 100 }, TWO_CIRCLES] });
+    // the engine breaks the contract on one problem: a "best" without a packing
+    const broken: SearchProblem = async (input, runJob, control) =>
+      input.problem.P === 3
+        ? { best: { score: 1, strict: true } as Candidate, jobs: 0, stopped: "time", memory: null }
+        : oneJob(input, runJob, control);
+    const once = await clientWith(["--once", "--name", "Test volunteer"], { searchProblem: broken, random: () => 0 });
+    expect(once.code, once.output).toBe(1);
+    expect(once.output).toMatch(/Skipping N=4 M=4 P=3 for 10 minutes after an unexpected error: TypeError/);
+
+    // without --once the client carries on with the other problem; a fake clock that sleeps
+    // instantly lets the --hours limit end the run
+    let offset = 0;
+    const run = await clientWith(["--name", "Test volunteer", "--hours", "1"], {
+      searchProblem: broken,
+      random: () => 0,
+      now: () => Date.now() + offset,
+      sleep: async (ms, signal) => {
+        if (signal?.aborted) throw new Error("aborted");
+        offset += ms;
+      },
+    });
+    expect(run.code, run.output).toBe(0);
+    expect(run.output).toMatch(/Skipping N=4 M=4 P=3 for 10 minutes/);
+    expect(run.output).toMatch(/Finished N=0 M=0 P=2 .*submitted: HTTP 200/);
+    expect(server.leaderOf(0, 0, 2)!.name).toBe("Test volunteer");
+  });
+
+  // Fix 7: threads that die as they start stop the client with an error instead of respawning forever.
+  it("stops with exit code 1 when its search threads cannot start", { timeout: 30_000 }, async () => {
+    server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+    let spawned = 0;
+    const pool = {
+      spawn: () => {
+        spawned++;
+        return new Worker("process.exit(3)", { eval: true });
+      },
+      respawnDelayMs: () => 5,
+    };
+    const { code, output } = await clientWith(["--name", "Test volunteer"], { pool });
+    expect(code, output).toBe(1);
+    expect(output).toMatch(/exited with code 3; starting a new one in 0\.005 s/);
+    expect(output).toMatch(/Stopped with an error: the search threads stopped 5 times before finishing any job/);
+    expect(spawned).toBeLessThanOrEqual(6);
+    expect(server.submissions).toEqual([]);
+
+    // with --once, a problem whose jobs all lost their thread was not searched: exit code 1 too
+    const once = await clientWith(["--once", "--name", "Test volunteer"], { pool });
+    expect(once.code, once.output).toBe(1);
+    expect(once.output).toMatch(/Every job of N=4 M=4 P=3 lost its search thread|Stopped with an error/);
+  });
+
+  // Fix 8. Real solver work: one evaluation-capped job.
+  it("says when the leader stays, with six decimals, and when there was no leader", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({
+      problems: [{ ...TWO_CIRCLES, leader: null }],
+      afterSubmit: (_n, answer) => ({
+        status: 200,
+        body: { ...answer, leader: false, rank: 2, id: null, leader_score: 1.9999999999123 },
+      }),
+    });
+    const { code, output } = await client("--once", "--name", "Test volunteer");
+    expect(code, output).toBe(0);
+    expect(output).toMatch(
+      /Finished N=0 M=0 P=2 .*vs no leader; submitted: HTTP 200, accepted, but the leader stays at 2\.000000$/m,
+    );
+  });
+
+  it("does not repeat itself when it has nothing to submit (fix 8)", { timeout: 30_000 }, async () => {
+    server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+    const { code, output } = await clientWith(["--once", "--name", "Test volunteer"], { searchProblem: nothing });
+    expect(code, output).toBe(0);
+    expect(output).toMatch(/: no strict packing; nothing to submit$/m);
+    expect(output).not.toMatch(/no strict packing; no strict packing/);
+  });
+
+  // The real engine, on two threads for 3 s of search: only what does not depend on speed.
+  it("runs the real engine", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [LOOSE_SQUARES] });
+    const { code, output } = await clientWith(["--once", "--name", "Test volunteer"], { searchProblem: undefined });
+    expect(code, output).toBe(0);
+    const [line] = history();
+    expect(line.stopped).not.toBe("error");
+    expect(line.engine_seed).toBeGreaterThanOrEqual(0);
+    // whatever it found, anything it sent was valid and better than the leader
+    for (const body of server.submissions) expect(scoreOf(body as never)!).toBeLessThan(2.5);
+    expect(server.submissions.length).toBe(line.submitted ? 1 : 0);
   });
 
   it("explains a server without a work list and exits non-zero", { timeout: 30_000 }, async () => {
@@ -218,17 +511,17 @@ describe("the client, end to end", () => {
 
   it("refuses to share its state directory with a running copy", { timeout: 30_000 }, async () => {
     server = await startFakeServer({ problems: [LOOSE_SQUARES] });
-    const { StateDir } = await import("../src/state");
-    const other = StateDir.open(join(dir, "state"));
-    try {
-      const { code, output } = await client("--once");
-      expect(code).toBe(1);
-      expect(output).toMatch(/Another copy of the client is using/);
-      expect(server.requests).toEqual([]);
-    } finally {
-      other.close();
-    }
-    expect(existsSync(join(dir, "state", "lock"))).toBe(false);
+    // another copy on this machine: our parent process, which is alive
+    const state = join(dir, "state");
+    mkdirSync(state, { recursive: true });
+    const other = { pid: process.ppid, hostname: hostname(), started: "2026-10-21T00:00:00Z", token: "other" };
+    writeFileSync(join(state, "lock"), JSON.stringify(other));
+    const { code, output } = await client("--once");
+    expect(code).toBe(1);
+    expect(output).toMatch(/Another copy of the client is using/);
+    expect(server.requests).toEqual([]);
+    expect(existsSync(join(state, "lock"))).toBe(true);
+    expect(JSON.parse(readFileSync(join(state, "lock"), "utf8")).token).toBe("other");
   });
 
   it("refuses bad options with exit code 2", async () => {
