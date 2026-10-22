@@ -342,25 +342,25 @@ Counting reads every problem, so it is done at most once a minute: the answer ma
 <h3 id="targets"><code>GET /api/targets?limit=&amp;N=&amp;M=&amp;max_P=</code></h3>
 <p>The work list of volunteer searches: <a href="#closed">open</a> problems ranked by how much a long search could gain on them, highest <code>priority</code> first, then smaller <code>P</code>, <code>N</code> and <code>M</code>.
 Listed are every open problem that has a site <a href="#leader">leader</a> or a published value, and every problem of the core box (<code>N</code> and <code>M</code> in ${UNSOLVED_SHAPES.join(", ")}, <code>P</code> up to ${UNSOLVED_MAX_P}) that has neither.
-All parameters are optional, and are plain decimal integers:</p>
+All parameters are optional, and each may be given once:</p>
 <table>
 <tr><th scope="row"><code>limit</code></th><td>Most targets returned: from 1 to ${limits.targetsMaxLimit}, ${limits.targetsDefaultLimit} by default.</td></tr>
 <tr><th scope="row"><code>N</code>, <code>M</code></th><td>Only these piece or container shapes: a comma-separated list of shape codes and ranges, such as <code>0,3-6</code>. The ends of a range are shape codes, and a range leaves out 1 and 2.</td></tr>
 <tr><th scope="row"><code>max_P</code></th><td>Only problems with at most this many pieces: from 1 to ${MAX_PIECES}.</td></tr>
 </table>
-<p>Any other value is a 400 with an <code>error</code>. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>:</p>
+<p>Any other value, a repeated parameter or an unknown one is a 400 with an <code>error</code>. Answers over 1 KB are compressed (gzip or deflate) for clients that send <code>Accept-Encoding</code>:</p>
 <pre><code>${esc(TARGETS)}</code></pre>
 <table>
 <tr><th scope="row"><code>leader</code>, <code>leader_id</code></th><td>The leader's score and submission id, or <code>null</code>.</td></tr>
 <tr><th scope="row"><code>published</code></th><td>The published value, or <code>null</code>. <code>published_coordinates</code> says whether <code>/api/problems/{N}/{M}/{P}</code> carries its coordinates.</td></tr>
 <tr><th scope="row"><code>area_bound</code></th><td>The area lower bound, as in the problem description.</td></tr>
-<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 10 minutes old, from leaders read at most a minute before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be a few minutes behind the latest entries.</td></tr>
+<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 10 minutes old, from leaders read at most a minute before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be up to about 11 minutes behind the latest entries.</td></tr>
 </table>
 <p id="priority"><code>priority</code> estimates the fraction by which a problem's record could still shrink, discounted by how likely a long search is to get there and how much the site gains when it does.
 It is comparable within one answer only. Several estimates can apply to one problem; the largest is its priority, and <code>reason</code> names it:</p>
 <table>
 <tr><th scope="col"><code>reason</code></th><th scope="col">Estimate</th></tr>
-<tr><td><code>unsolved</code></td><td>No leader and no published value: any valid packing becomes the record and its first drawing. A fixed ${W.unsolved}, above any other estimate in practice.</td></tr>
+<tr><td><code>unsolved</code></td><td>No leader and no published value: any valid packing becomes the record and its first drawing. A fixed ${W.unsolved}. On the site's data of 2026-10-21 no other estimate reached it [CALC]; a leader far behind its published value would.</td></tr>
 <tr><td><code>behind_published</code></td><td>The leader is missing or does not reach the published value (to the precision the source prints): the gap <code>(leader − published) / leader</code>, or ${W.missingLeaderGap} without a leader.
 Times ${W.drawnPublished} when the published value has coordinates: the records page already draws that packing, so catching up with it only fills in the site's own entry.</td></tr>
 <tr><td><code>tooth</code></td><td>A leader without a published value that is less dense than its neighbours in <code>P</code>: the fraction by which its container would shrink at the second-highest density among the <code>P</code> within max(3, 4%) on either side (the batch runner's <code>--order teeth</code>). Times the likelihood below.</td></tr>

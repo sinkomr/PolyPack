@@ -1669,6 +1669,14 @@ describe("GET /api/targets", () => {
       "M=101",
       "M=a",
       "M=1000",
+      // a repeated parameter, even with the same value, and misspelt or unknown ones
+      "N=3&N=x",
+      "N=3&N=3",
+      "limit=5&limit=0",
+      "n=3",
+      "max_p=1",
+      "maxP=1",
+      "limit=5&page=2",
     ]) {
       const r = await targets(`?${bad}`);
       expect([bad, r.status]).toEqual([bad, 400]);

@@ -67,7 +67,7 @@ Problem set
                         problems with neither a site leader nor a published value, then those whose
                         leader is missing or worse than the published value, then the rest. teeth:
                         the deepest sawteeth first, problems whose site record is least dense
-                        against their neighbours' (see toothDepth in batch-search/lib.ts)
+                        against their neighbours' (see toothDepth in packages/geometry)
   --top K               search only the first K problems in that order
   --skip-existing       leave out problems that already have an entry on the site, so that
                         several machines can fill gaps without repeating each other

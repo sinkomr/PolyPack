@@ -186,7 +186,7 @@ export interface Target {
 
 /** Answer of GET /api/targets, highest priority first. */
 export interface TargetsResponse {
-  /** When the ranking was computed (ISO 8601); it may be a few minutes behind the entries. */
+  /** When the ranking was computed (ISO 8601); it may be up to about 11 minutes behind the entries. */
   generated_at: string;
   targets: Target[];
 }

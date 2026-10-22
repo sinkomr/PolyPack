@@ -311,21 +311,29 @@ export function createApp(opts: AppOptions): Hono {
     entriesVersion++;
     if (leaders) leaders.current = false;
   };
-  const readLeaders = async (): Promise<LeadersReading> => {
-    if (leaders && (leaders.current || Date.now() - leaders.at < holdersRefreshMs)) return leaders;
-    const version = entriesVersion;
-    const all = await store.leaders();
-    const ranked = new Float64Array(5 * all.length);
-    for (const [i, e] of all.entries()) {
-      ranked[5 * i] = e.N;
-      ranked[5 * i + 1] = e.M;
-      ranked[5 * i + 2] = e.P;
-      ranked[5 * i + 3] = e.id;
-      ranked[5 * i + 4] = e.score;
-    }
-    // an entry that changed while this was read may be missing from it
-    leaders = { holders: countHolders(all), ranked, at: Date.now(), current: version === entriesVersion };
-    return leaders;
+  // With a store that answers asynchronously, requests that arrive during a reading share it
+  // rather than each starting their own.
+  let reading: Promise<LeadersReading> | null = null;
+  const readLeaders = (): Promise<LeadersReading> => {
+    if (leaders && (leaders.current || Date.now() - leaders.at < holdersRefreshMs)) return Promise.resolve(leaders);
+    reading ??= (async () => {
+      const version = entriesVersion;
+      const all = await store.leaders();
+      const ranked = new Float64Array(5 * all.length);
+      for (const [i, e] of all.entries()) {
+        ranked[5 * i] = e.N;
+        ranked[5 * i + 1] = e.M;
+        ranked[5 * i + 2] = e.P;
+        ranked[5 * i + 3] = e.id;
+        ranked[5 * i + 4] = e.score;
+      }
+      // an entry that changed while this was read may be missing from it
+      leaders = { holders: countHolders(all), ranked, at: Date.now(), current: version === entriesVersion };
+      return leaders;
+    })().finally(() => {
+      reading = null;
+    });
+    return reading;
   };
 
   app.get("/api/holders", async (c) =>
@@ -356,6 +364,13 @@ export function createApp(opts: AppOptions): Hono {
   app.use("/api/targets", compress());
   app.get("/api/targets", async (c) => {
     const errors: string[] = [];
+    // each parameter at most once and by its own name, so that a misspelt or repeated filter is
+    // refused rather than silently ignored
+    for (const [name, values] of Object.entries(c.req.queries())) {
+      if (!["limit", "N", "M", "max_P"].includes(name))
+        errors.push(`unknown parameter ${name}: the parameters are limit, N, M and max_P`);
+      else if (values.length > 1) errors.push(`${name} is given more than once`);
+    }
     const limitText = c.req.query("limit");
     const limit = limitText === undefined ? TARGETS_DEFAULT_LIMIT : decimalInteger(limitText);
     if (!(limit >= 1 && limit <= TARGETS_MAX_LIMIT))
