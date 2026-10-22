@@ -50,7 +50,6 @@ import {
   pay,
   payAll,
   withdrawConsent,
-  pendingPoints,
   problem,
   recordsHeld,
   reveal,
@@ -60,7 +59,6 @@ import {
   spent,
   stallAfter,
   submitTarget,
-  unconfirmedPoints,
 } from "./game";
 import {
   RENT_CHECK_MS,
@@ -112,7 +110,15 @@ import {
   ruleOpenProblems,
   standingMultiplier,
 } from "./standing";
-import { RunRecord, classifyAnswer, shouldSubmit, submissionBody } from "./submission";
+import {
+  RunRecord,
+  Trouble,
+  answerTrouble,
+  classifyAnswer,
+  shouldSubmit,
+  submissionBody,
+  troubleText,
+} from "./submission";
 import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
 import { renderRunsPanel } from "./runs-ui";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
@@ -280,7 +286,10 @@ const noticeEl = $("t-notice");
  */
 function event(text: string, notice = true): void {
   log(state, now(), text);
-  if (!notice) return;
+  if (notice) showNotice(text);
+}
+/** Puts a line on the notice line, with the time it happened. */
+function showNotice(text: string): void {
   const d = new Date(now());
   noticeEl.textContent = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")} · ${text}`;
   noticeEl.hidden = false;
@@ -975,6 +984,50 @@ function autoTick(): void {
 let submitting = false;
 /** Problems whose submission is on its way. */
 const inFlight = new Set<string>();
+/**
+ * Longest a submission's GET or POST is waited for. Sends go one at a time, so a request that never
+ * ends would hold back every other send; past this it counts as unanswered, as when the server
+ * cannot be reached, and a late answer is recognised by the next read of the leader.
+ */
+const SEND_TIMEOUT_MS = 30_000;
+
+/** A request's answer, or `late` once `ms` pass without one (the request itself goes on). */
+function within<T>(ms: number, request: Promise<T>, late: T): Promise<{ answer: T; timedOut: boolean }> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve({ answer: late, timedOut: true }), ms);
+    const done = (answer: T) => {
+      clearTimeout(timer);
+      resolve({ answer, timedOut: false });
+    };
+    request.then(done, () => done(late));
+  });
+}
+
+/**
+ * The notice of what went wrong with sending, while it lasts. Points waiting for the server's
+ * answer are not shown; a notice appears only when sending goes wrong, and goes once it works again.
+ */
+let trouble: string | null = null;
+
+/** Says on the notice line what went wrong with sending and what the game does next (logged once while it lasts). */
+function sendTrouble(t: Trouble): void {
+  const text = troubleText(t);
+  if (text !== trouble) log(state, now(), text);
+  trouble = text;
+  showNotice(text);
+}
+
+/** Sending works again: the notice of its trouble goes, unless another notice has taken its place. */
+function sendingWorks(): void {
+  if (trouble !== null && noticeEl.textContent?.endsWith(` · ${trouble}`)) noticeEl.hidden = true;
+  trouble = null;
+}
+
+/** Pauses all sending after the server could not be reached, failed, or asked to wait, and says so. */
+function pauseSending(t: Trouble): void {
+  state.pacer = pause(state.pacer, now(), t.kind === "rate-limited" ? RATE_LIMITED_BACKOFF_MS : OFFLINE_BACKOFF_MS);
+  sendTrouble(t);
+}
 
 /** Sends at most one improvement per call, when consent, the pacer and the server allow. */
 async function submitTick(): Promise<void> {
@@ -1021,14 +1074,15 @@ function orient(p: ProblemState): void {
 async function submit(p: ProblemState): Promise<void> {
   const name = state.name;
   // the leader just before: the server's exact check decides
-  const info = await api.getProblem(p.N, p.M, p.P);
+  const read = await within(SEND_TIMEOUT_MS, api.getProblem(p.N, p.M, p.P), null);
+  const info = read.answer;
   if (problem(state, p.key) !== p || !ownsGame) return;
   if (!info) {
-    state.pacer = pause(state.pacer, now(), OFFLINE_BACKOFF_MS);
-    event("The server cannot be reached; sending waits half a minute.");
+    pauseSending(read.timedOut ? { kind: "timeout", waitedMs: SEND_TIMEOUT_MS } : { kind: "unreachable" });
     return;
   }
   if (!info.accepts_submissions) {
+    sendingWorks();
     p.closed = true;
     event(`${problemTitle(p)} is closed: its optimum is proven. It leaves the queue.`);
     leave(state, p.key, now());
@@ -1040,7 +1094,11 @@ async function submit(p: ProblemState): Promise<void> {
   noteLeader(p, leaderBefore);
   orient(p);
   const best = p.best!;
-  if (!shouldSubmit(best, submitTarget(p, leaderBefore?.score ?? null))) return;
+  if (!shouldSubmit(best, submitTarget(p, leaderBefore?.score ?? null))) {
+    // the server answered, and the board does not go: sending has nothing wrong left to report
+    sendingWorks();
+    return;
+  }
   // The player may have withdrawn consent or changed the name while the leader was read: what goes
   // to the server is decided now, immediately before the POST.
   if (!ownsGame || !state.consent || state.name !== name || !name) return;
@@ -1052,16 +1110,30 @@ async function submit(p: ProblemState): Promise<void> {
   saveNow();
   // the server announces a new leader before it answers: that event is this entry, not a rival's
   inFlight.add(p.key);
-  let answer: Awaited<ReturnType<typeof api.postSubmission>>;
+  let posted: { answer: { status: number | null; body: unknown }; timedOut: boolean };
   try {
-    answer = await api.postSubmission(submissionBody(board0, name, run));
+    posted = await within(SEND_TIMEOUT_MS, api.postSubmission(submissionBody(board0, name, run)), {
+      status: null,
+      body: null,
+    });
   } finally {
     inFlight.delete(p.key);
   }
+  const answer = posted.answer;
   const outcome = classifyAnswer(answer.status, answer.body);
   if (problem(state, p.key) !== p) return;
   const a = applyAnswer(state, p, leaderBefore, best, outcome, now());
   const title = problemTitle(p);
+  const wrong = answerTrouble(
+    outcome,
+    answer.status,
+    posted.timedOut ? SEND_TIMEOUT_MS : null,
+    title,
+    a.takenBack > 0 ? fmtRP(a.takenBack) : null,
+  );
+  if (!wrong) sendingWorks();
+  else if (outcome.kind === "refused") sendTrouble(wrong);
+  else pauseSending(wrong);
   switch (outcome.kind) {
     case "leader":
       reveal(state, "points", "upgrades");
@@ -1083,22 +1155,42 @@ async function submit(p: ProblemState): Promise<void> {
       );
       leave(state, p.key, now());
       break;
-    case "rate-limited":
-      state.pacer = pause(state.pacer, now(), RATE_LIMITED_BACKOFF_MS);
-      event("The server asks to wait a minute; sending pauses.");
-      break;
-    case "refused":
-      event(
-        `The server refused the entry on ${title} (${outcome.status}): ${outcome.reasons.join("; ")}.` +
-          (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""),
-      );
-      break;
-    case "offline":
-      state.pacer = pause(state.pacer, now(), OFFLINE_BACKOFF_MS);
-      event("The server cannot be reached; sending waits half a minute.");
-      break;
   }
   if (p.leaving && !hasUnsent(p)) leave(state, p.key, now());
+}
+
+/**
+ * A send whose answer never came is settled by its problem's next send, a minute later, which
+ * reads the record first. One still unsettled after this long (sending was switched off, or the
+ * board no longer goes) is settled by reading its record here.
+ */
+const LOST_ANSWER_MS = 120_000;
+let lostChecking = false;
+let lostCheckAfter = 0;
+
+/** Reads the record of the oldest send left without an answer, once it is LOST_ANSWER_MS old. */
+async function settleLost(): Promise<void> {
+  if (!ownsGame || submitting || lostChecking || now() < lostCheckAfter || now() < state.pacer.pausedUntil) return;
+  const p = state.queue.find((q) => q.sending && !inFlight.has(q.key) && now() - q.sending.at >= LOST_ANSWER_MS);
+  if (!p) return;
+  lostChecking = true;
+  try {
+    const { answer: info } = await within(SEND_TIMEOUT_MS, api.getProblem(p.N, p.M, p.P), null);
+    if (problem(state, p.key) !== p || !p.sending || inFlight.has(p.key) || !ownsGame) return;
+    if (!info) {
+      lostCheckAfter = now() + OFFLINE_BACKOFF_MS;
+      sendTrouble({ kind: "lost", title: problemTitle(p) });
+      return;
+    }
+    sendingWorks();
+    // ours: its points are confirmed; not ours: they wait for the board's next send
+    const lead = info.site_best;
+    noteLeader(p, lead ? { score: lead.score, name: lead.name, id: lead.id } : null);
+    persist();
+    render();
+  } finally {
+    lostChecking = false;
+  }
 }
 
 // ---------- dealing ----------
@@ -1999,18 +2091,7 @@ function renderPoints(): void {
   text("t-earned", fmtRP(state.rpEarned));
   text("t-evals", fmtInt(state.stats.evaluations));
   text("t-clicks", fmtInt(state.stats.clicks));
-  const waiting = unconfirmedPoints(state);
-  let unpaid = 0;
-  if (!state.consent) for (const q of state.queue) unpaid += pendingPoints(q, state.name, state)?.total ?? 0;
   show("t-name-nudge", !state.consent && revealed(state, "asked"));
-  text(
-    "t-pending",
-    !state.consent && unpaid > 0
-      ? `${fmtRP(unpaid)} (needs your name)`
-      : waiting > 0
-        ? `${fmtRP(waiting)} (sent within the minute)`
-        : "—",
-  );
 }
 
 const tree = new TreeRenderer(
@@ -2804,6 +2885,18 @@ for (const id of ["t-tab-board", "t-tab-tree"])
     setView(!treeOpen);
     $(treeOpen ? "t-tab-tree" : "t-tab-board").focus();
   });
+// Cheats for local playtesting, in Settings: a production build leaves the module out
+if (import.meta.env.DEV)
+  void import("./cheats").then(({ mountCheats }) =>
+    mountCheats(settingsDialog.querySelector<HTMLElement>(".t-dialog-body")!, {
+      state: () => state,
+      canChange: () => ownsGame,
+      changed: () => {
+        persist();
+        render();
+      },
+    }),
+  );
 
 // ---------- controls ----------
 
@@ -3005,6 +3098,7 @@ function start(): void {
   ticker = window.setInterval(() => {
     void dealTick();
     void submitTick();
+    void settleLost();
     void rentTick();
     autoTick();
     render();

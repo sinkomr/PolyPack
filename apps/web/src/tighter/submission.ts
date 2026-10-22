@@ -1,5 +1,6 @@
 import { MAX_METHOD_PARAMS_BYTES, improvesOn, utf8Length } from "@polypack/geometry";
 import type { PackingConfig, RunBudget, SubmitResponse } from "@polypack/geometry";
+import { OFFLINE_BACKOFF_MS, RATE_LIMITED_BACKOFF_MS } from "./pacer";
 
 /**
  * What Tighter sends and how it reads the answers. The server's exact check of each new record is
@@ -88,4 +89,80 @@ export function classifyAnswer(status: number | null, body: unknown): SubmitOutc
   }
   if (status >= 500) return { kind: "offline" };
   return { kind: "refused", status, reasons: reasons.length ? reasons : [`the server answered ${status}`] };
+}
+
+/**
+ * What went wrong with sending, for the notice line under the board. Points waiting for the
+ * server's answer are not shown (with one POST per problem a minute, most points wait for one):
+ * only trouble is, with what the game does next.
+ */
+export type Trouble =
+  /** No answer at all (the network, or the server down), to the leader's GET or to the POST. */
+  | { kind: "unreachable" }
+  /** No answer within the game's wait for one. */
+  | { kind: "timeout"; waitedMs: number }
+  /** The server failed (5xx). */
+  | { kind: "error"; status: number }
+  /** 429: too many submissions from this address. */
+  | { kind: "rate-limited" }
+  /** The server refused the board (400, 413, 422); `takenBack` is the points it had paid, as shown. */
+  | { kind: "refused"; title: string; reasons: string[]; takenBack: string | null }
+  /** A send whose answer never came could not be checked, since the server cannot be reached. */
+  | { kind: "lost"; title: string };
+
+/** A wait as the notices say it: "30 seconds", "a minute". */
+const span = (ms: number) => (ms === 60_000 ? "a minute" : `${Math.round(ms / 1000)} seconds`);
+
+/** The notice of a trouble: what happened, then what the game does next, in plain sentences. */
+export function troubleText(t: Trouble): string {
+  const again = (ms: number) => ` Sending will try again in ${span(ms)}.`;
+  switch (t.kind) {
+    case "unreachable":
+      return "The server cannot be reached." + again(OFFLINE_BACKOFF_MS);
+    case "timeout":
+      return `The server did not answer within ${span(t.waitedMs)}.` + again(OFFLINE_BACKOFF_MS);
+    case "error":
+      return `The server answered with an error (${t.status}).` + again(OFFLINE_BACKOFF_MS);
+    case "rate-limited":
+      return "The server says too many submissions came from your address." + again(RATE_LIMITED_BACKOFF_MS);
+    case "refused": {
+      // the server may list up to 20 overlaps: the first two say enough
+      const more = t.reasons.length - 2;
+      const why = t.reasons.slice(0, 2).join(", ") + (more > 0 ? ` and ${more} more` : "");
+      return (
+        `The server refused your board on ${t.title} (${why}).` +
+        (t.takenBack ? ` The ${t.takenBack} RP it paid were taken back.` : "") +
+        " Your next better board will be sent as usual."
+      );
+    }
+    case "lost":
+      return (
+        `The server never answered your board on ${t.title}, and it cannot be reached to check whether the board arrived.` +
+        ` The game checks again in ${span(OFFLINE_BACKOFF_MS)}.`
+      );
+  }
+}
+
+/**
+ * The trouble of a POST's answer, if any: no answer (or none in time), a 5xx, a 429, or a refusal.
+ * `takenBack` is the points the refusal took back, as the notice shows them (null: none).
+ */
+export function answerTrouble(
+  outcome: SubmitOutcome,
+  status: number | null,
+  timedOutAfter: number | null,
+  title: string,
+  takenBack: string | null,
+): Trouble | null {
+  switch (outcome.kind) {
+    case "offline":
+      if (timedOutAfter !== null) return { kind: "timeout", waitedMs: timedOutAfter };
+      return status === null ? { kind: "unreachable" } : { kind: "error", status };
+    case "rate-limited":
+      return { kind: "rate-limited" };
+    case "refused":
+      return { kind: "refused", title, reasons: outcome.reasons, takenBack };
+    default:
+      return null;
+  }
 }
