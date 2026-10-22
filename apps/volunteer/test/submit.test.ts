@@ -102,13 +102,14 @@ describe("the request body", () => {
     expect(SOFTWARE).toMatch(/^polypack-volunteer\/\d+\.\d+\.\d+$/);
   });
 
-  it("is what the server's own provenance check accepts once `software` is dropped", () => {
-    const { software: _s, ...body } = submissionBody(candidate(2), { name: "Ada", note: "", software: SOFTWARE });
-    expect(parseProvenance(body, ["harden"])).toMatchObject({ ok: true });
-    // and what the server refuses today with it: the case the client retries
+  it("is what the server's own provenance check accepts, with `software` and without it", () => {
     const withSoftware = submissionBody(candidate(2), { name: "Ada", note: "", software: SOFTWARE });
-    const refused = parseProvenance(withSoftware, ["harden"]);
-    expect(refused).toEqual({ ok: false, errors: [SOFTWARE_REFUSAL] });
+    expect(parseProvenance(withSoftware, ["harden"])).toMatchObject({ ok: true });
+    const { software: _s, ...body } = withSoftware;
+    expect(parseProvenance(body, ["harden"])).toMatchObject({ ok: true });
+    // servers from before 2026-10-22 refused `software` on optimizer entries with these words
+    expect(isSoftwareRefusal(400, { reasons: [SOFTWARE_REFUSAL] })).toBe(true);
+    expect(SOFTWARE_REFUSAL).toBe('software needs found_with "external"');
   });
 
   it("leaves out an empty note, the software when asked, and a budget without evals keeps time_s only", () => {
