@@ -1,0 +1,13 @@
+{
+  "name": "@polypack/volunteer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@polypack/geometry": "*",
+    "@polypack/solver": "*"
+  }
+}
