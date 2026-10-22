@@ -86,7 +86,13 @@ Exit codes:
 
 [CALC] With the default of all cores but one, 10 minutes on an 8-core machine is 70 core-minutes per problem. That is about six times the 12 core-minutes of the batch runner's sawtooth run in `docs/AUTOMATION.md` (2 methods, 3 seeds, 120 s each). It still leaves time for about 6 problems an hour.
 
-[SPEC] The site's leaders already come from such short searches, so a volunteer helps most by searching deeper than they did. Hours on one problem would cover the work list too slowly, and an interruption would lose more. The engine may also stop earlier when it judges more time unlikely to help. These are judgements, not measurements: if the engine's statistics later show where improvements come from, the default should follow them.
+[SPEC] The site's leaders already come from such short searches, so a volunteer helps most by searching deeper than they did. Hours on one problem would cover the work list too slowly, and an interruption would lose more. These are judgements, not measurements: if the engine's statistics later show where improvements come from, the default should follow them.
+
+### When the engine stops early
+
+The engine stops before the limit when more time looks unlikely to pay. It counts as progress any strict packing that improves by more than a relative 1e-9 on either of two things: the score to beat (the leader's, until the search beats it), or the best of the search's own line. The own line means the packings it built itself, from scratch and from its own results, rather than from the leader's packing. So a search that has not yet caught up with the leader keeps going while it is still getting closer.
+
+It stops once it has made no progress for the longer of two spans. One is half the time it has run so far, so it gets as much time again as it took to find its last improvement. The other is a quarter of `--minutes-per-problem` (2.5 minutes at the default), or four of the engine's shortest jobs when that is longer. After that quarter, its own line counts only while it is within 1% of the score to beat. [CALC] In the engine's calibration runs, two doublings of the run length gained 0.09% to 0.4%, so a line still more than 1% behind is unlikely to catch up in the remaining time. The constants are in `apps/volunteer/src/engine/policy.ts`.
 
 ## What it sends, and under which name
 
