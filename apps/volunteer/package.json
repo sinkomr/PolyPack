@@ -3,8 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "bin": {
+    "polypack-volunteer": "dist/polypack-volunteer.mjs"
+  },
   "scripts": {
-    "typecheck": "tsc -p . --noEmit"
+    "typecheck": "tsc -p . --noEmit",
+    "build": "tsx build.ts",
+    "dev": "tsx src/cli.ts"
   },
   "dependencies": {
     "@polypack/geometry": "*",
