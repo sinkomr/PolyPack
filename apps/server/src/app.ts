@@ -1,6 +1,8 @@
 import {
   AtlasResponse,
   AtlasTile,
+  Holder,
+  HoldersResponse,
   LeaderboardEntry,
   LeaderboardEvent,
   LiteratureRecord,
@@ -17,6 +19,7 @@ import {
   parseConfig,
   MAX_SOFTWARE_LENGTH,
   parseProvenance,
+  reachesLiterature,
   strictVerify,
 } from "@polypack/geometry";
 import { Context, Hono } from "hono";
@@ -84,8 +87,7 @@ export function atlasSource(
   lit: LiteratureRecord | undefined,
   pending?: { score: number },
 ): "verified" | "literature" | "pending" | null {
-  if (verified && (!lit || verified.score <= lit.value + Math.max(Math.pow(10, -lit.display_precision), 1e-9)))
-    return "verified";
+  if (verified && (!lit || reachesLiterature(verified.score, lit))) return "verified";
   if (lit?.pieces) return "literature";
   if (verified) return "verified";
   return pending ? "pending" : null;
@@ -210,6 +212,43 @@ export function createApp(opts: AppOptions): Hono {
     const site_verified = awaiting.size ? (await store.bestPerP(N, M, true)).filter((e) => awaiting.has(e.P)) : [];
     const body = JSON.stringify({ N, M, literature: lit, site, site_verified });
     keepRecords(key, body);
+    return c.body(body, 200, { "content-type": "application/json" });
+  });
+
+  // Who holds how many records: the leader of every open problem, counted by the exact name it was
+  // submitted with. It reads every problem, so the answer is kept until any entry changes; an
+  // answer computed while one changed is not kept.
+  let holdersBody: string | null = null;
+  let holdersVersion = 0;
+  /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
+  const entriesChanged = (key?: string) => {
+    forgetRecords(key);
+    holdersBody = null;
+    holdersVersion++;
+  };
+  app.get("/api/holders", async (c) => {
+    if (holdersBody !== null) return c.body(holdersBody, 200, { "content-type": "application/json" });
+    const version = holdersVersion;
+    const byName = new Map<string, Holder>();
+    for (const e of await store.leaders()) {
+      const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
+      if (closedToSubmissions(lit)) continue;
+      let h = byName.get(e.name);
+      if (!h) byName.set(e.name, (h = { name: e.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }));
+      h.site_bests++;
+      // until a claim is reviewed, the published value it claims to beat is still the record
+      if (e.verification === "pending") h.pending++;
+      else if (!lit || reachesLiterature(e.score, lit)) {
+        h.records++;
+        if (lit && beatsLiterature(e.score, lit)) h.beat_published++;
+      }
+    }
+    const holders = [...byName.values()].sort(
+      (a, b) =>
+        b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+    );
+    const body = JSON.stringify({ holders } satisfies HoldersResponse);
+    if (version === holdersVersion) holdersBody = body;
     return c.body(body, 200, { "content-type": "application/json" });
   });
 
@@ -393,7 +432,7 @@ export function createApp(opts: AppOptions): Hono {
     // entry may already be among the deleted.
     const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
     // after the insert and the prune, so that no answer computed in between is kept
-    forgetRecords(`${config.N}/${config.M}`);
+    entriesChanged(`${config.N}/${config.M}`);
     if (beats) {
       log(
         `[review] submission ${id} by "${name}" for N=${config.N} M=${config.M} P=${config.P}: ` +
@@ -479,7 +518,7 @@ export function createApp(opts: AppOptions): Hono {
       return c.json({ error: 'body must be {"id": number, "decision": "confirmed" | "rejected"}' }, 400);
     }
     const ok = await store.review(body.id as number, body.decision);
-    if (ok) forgetRecords();
+    if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} marked ${body.decision}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such pending submission" }, 404);
   });
@@ -491,7 +530,7 @@ export function createApp(opts: AppOptions): Hono {
     const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
     const ok = await store.remove(body.id as number);
-    if (ok) forgetRecords();
+    if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} removed`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
@@ -532,7 +571,7 @@ export function createApp(opts: AppOptions): Hono {
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
     const ok = await store.edit(body.id as number, changes);
-    if (ok) forgetRecords();
+    if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });

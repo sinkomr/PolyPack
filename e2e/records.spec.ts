@@ -120,3 +120,40 @@ test("the records page puts the chart above the atlas and the complete table", a
   await expect(page.locator("#m-select")).toHaveValue("4");
   await expect(page).toHaveURL(/\/browse\.html#0,4$/);
 });
+
+test("the record holders page counts the leads of each name", async ({ page, request }) => {
+  // two pentagons in a nine-sided container: a problem without a published value that no other test enters
+  const sent = await request.post("/api/submit", {
+    data: {
+      N: 5,
+      M: 9,
+      P: 2,
+      container_phi: 0,
+      name: "Holders test",
+      pieces: [
+        { x: 0, y: 0, theta: 0 },
+        { x: 3, y: 0, theta: 0 },
+      ],
+    },
+  });
+  expect((await sent.json()).leader).toBe(true);
+  await page.goto("/browse.html#4,4");
+  await page.getByRole("navigation", { name: "Records" }).getByRole("link", { name: "Record holders" }).click();
+  await expect(page).toHaveURL(/\/holders\.html$/);
+  await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Records" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  // place, name, records, beat published, site bests, awaiting review
+  await expect(page.locator("#rows tr", { hasText: "Holders test" }).locator("td")).toHaveText([
+    /^\d+$/,
+    "Holders test",
+    "1",
+    "0",
+    "1",
+    "0",
+  ]);
+  await expect(page.locator("#note")).toContainText(
+    /leads? [\d,]+ problems?; [\d,]+ of these (is a record|are records)\./,
+  );
+});

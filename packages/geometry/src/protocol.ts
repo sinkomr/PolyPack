@@ -136,6 +136,28 @@ export interface AtlasResponse {
   tiles: AtlasTile[];
 }
 
+/**
+ * One name of GET /api/holders: what the leading entries submitted under exactly that name hold,
+ * over the problems that are open. A claim awaiting review counts in `site_bests` and `pending`
+ * only, since until it is reviewed the published value still stands.
+ */
+export interface Holder {
+  name: string;
+  /** Leading entries that are the record: at least as good as the published value (see reachesLiterature), or without one. */
+  records: number;
+  /** Of `records`, those below the published value (see beatsLiterature). */
+  beat_published: number;
+  /** Leading entries, whatever their value. */
+  site_bests: number;
+  /** Of `site_bests`, claims awaiting review. */
+  pending: number;
+}
+
+/** Answer of GET /api/holders, most records first. */
+export interface HoldersResponse {
+  holders: Holder[];
+}
+
 /** Sent to all viewers when a problem gets a new leader; `id`, `score` and `name` are the leader's. */
 export interface LeaderboardEvent {
   N: number;
@@ -182,4 +204,13 @@ export function isProven(status: RecordStatus): boolean {
 /** True when a score is below the published value by more than the source's display precision. */
 export function beatsLiterature(score: number, rec: LiteratureRecord): boolean {
   return score < rec.value - Math.pow(10, -rec.display_precision);
+}
+
+/**
+ * True when a score is at least as good as the published value, to the precision the source
+ * prints. Never finer than 1e-9, so that a re-derived optimum such as 3.0000000000000004 still
+ * reaches 3.
+ */
+export function reachesLiterature(score: number, rec: LiteratureRecord): boolean {
+  return score <= rec.value + Math.max(Math.pow(10, -rec.display_precision), 1e-9);
 }

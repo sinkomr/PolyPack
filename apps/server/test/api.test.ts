@@ -557,8 +557,19 @@ describe("store: the leader per problem", () => {
       created_at: "2026-10-12T00:00:00.000Z",
       verification: "none",
     });
-    // the single-problem query agrees
+    // the single-problem query agrees, and so does the listing of every problem
     for (const e of await store.bestPerP(4, 4)) expect((await store.leader(4, 4, e.P))!.id).toBe(e.id);
+    expect(await store.leaders()).toEqual([
+      ...(await store.bestPerP(4, 4)).map(({ P, name, score, verification }) => ({
+        N: 4,
+        M: 4,
+        P,
+        name,
+        score,
+        verification,
+      })),
+      { N: 4, M: 5, P: 2, name: "P2", score: 1.5, verification: "none" },
+    ]);
     expect((await store.leader(4, 5, 2))!.id).toBe(id["x"]);
     expect(await store.leader(4, 4, 8)).toBeNull();
     expect(await store.bestPerP(3, 3)).toEqual([]);
@@ -1352,6 +1363,127 @@ describe("GET /api/atlas", () => {
     const html = await (await app.request("/api")).text();
     expect(html).toContain("GET /api/atlas?N=&amp;M=&amp;from=&amp;to=");
     expect(html).toContain(`at most ${ATLAS_MAX_SPAN} values`);
+  });
+});
+
+describe("GET /api/holders", () => {
+  const rec = (
+    P: number,
+    value: number,
+    display_precision: number,
+    status: LiteratureRecord["status"] = "best_known",
+  ) => ({
+    ...fakeRecord,
+    P,
+    value,
+    display: value.toFixed(display_precision),
+    display_precision,
+    status,
+  });
+  const entry = (
+    M: number,
+    P: number,
+    score: number,
+    name: string,
+    verification: NewSubmission["verification"] = "none",
+  ): NewSubmission => ({
+    N: 4,
+    M,
+    P,
+    score,
+    name,
+    agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00.000Z",
+    verification,
+    literature_value: null,
+    strict_check: null,
+  });
+  const holders = async () => (await get("/api/holders")).body.holders;
+
+  it("counts the leader of every open problem by its exact name", async () => {
+    const store = new SqliteStore(":memory:");
+    // squares in a square: 2 proven, 3 published as 5.00, 4 as 3.5, 6 as 4, 7 as 5.00
+    const records = [rec(2, 2, 6, "proven"), fakeRecord, rec(4, 3.5, 6), rec(6, 4, 6), rec(7, 5, 2)];
+    for (const e of [
+      // no published value: the lead is the record
+      entry(4, 1, 1, "ann"),
+      // a closed problem is left out
+      entry(4, 2, 2, "ann"),
+      // reaches 3.5 to the six printed decimals
+      entry(4, 4, 3.5000000001, "ann"),
+      // below 5.00 by more than its precision, and confirmed
+      entry(4, 3, 4.9, "bob", "confirmed"),
+      entry(4, 5, 6, "bob"),
+      // worse than the published 4: a site best, not a record
+      entry(4, 6, 4.5, "cat"),
+      // a claim awaiting review, with the reviewed entry kept behind it, which leads nothing
+      entry(4, 7, 5.5, "eve"),
+      entry(4, 7, 4, "dan", "pending"),
+      // another case is another name
+      entry(3, 1, 1, "Ann"),
+      // equal scores: the earlier entry leads
+      entry(5, 1, 1, "fay"),
+      entry(5, 1, 1, "gus"),
+    ])
+      await store.insert(e);
+    app = createApp({ store, records, adminToken: "secret", clientIp: () => ip, log: (m) => logs.push(m) });
+    const row = (name: string, records: number, beat_published: number, site_bests: number, pending = 0) => ({
+      name,
+      records,
+      beat_published,
+      site_bests,
+      pending,
+    });
+    // most records first, then most site bests, then by name, capitals first
+    expect(await holders()).toEqual([
+      row("ann", 2, 0, 2),
+      row("bob", 2, 1, 2),
+      row("Ann", 1, 0, 1),
+      row("fay", 1, 0, 1),
+      row("cat", 0, 0, 1),
+      row("dan", 0, 0, 1, 1),
+    ]);
+  });
+
+  it("follows every change although answers are kept", async () => {
+    const admin = (path: string, body: object) =>
+      app.request(path, {
+        method: "POST",
+        headers: { authorization: "Bearer secret", "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const names = async () =>
+      (await holders()).map((h: { name: string; site_bests: number }) => `${h.name}:${h.site_bests}`);
+    expect(await holders()).toEqual([]);
+    const two = await submit(squares(2, { name: "ann" }));
+    await submit(squares(4, { name: "ann" }));
+    expect(await names()).toEqual(["ann:2"]);
+    // a lead taken in another pair of shapes
+    await submit({ ...squares(2, { name: "bob" }), M: 5 });
+    expect(await names()).toEqual(["ann:2", "bob:1"]);
+    // a pending claim (three squares against the made-up 5.00) is a site best, not yet a record
+    const claim = await submit(squares(3, { name: "bob" }));
+    expect(claim.body.pending_verification).toBe(true);
+    expect((await holders())[1]).toEqual({ name: "bob", records: 1, beat_published: 0, site_bests: 2, pending: 1 });
+    expect((await admin("/api/admin/review", { id: claim.body.id, decision: "confirmed" })).status).toBe(200);
+    // level with ann now, and after her by name
+    expect((await holders())[1]).toEqual({ name: "bob", records: 2, beat_published: 1, site_bests: 2, pending: 0 });
+    expect((await admin("/api/admin/edit", { id: two.body.id, name: "Ann" })).status).toBe(200);
+    expect(await names()).toEqual(["bob:2", "Ann:1", "ann:1"]);
+    expect((await admin("/api/admin/remove", { id: two.body.id })).status).toBe(200);
+    expect(await names()).toEqual(["bob:2", "ann:1"]);
+  });
+
+  it("is documented", async () => {
+    expect(await (await app.request("/api")).text()).toContain("GET /api/holders");
   });
 });
 

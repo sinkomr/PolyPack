@@ -6,7 +6,7 @@ import { openProblem, pieces } from "./helpers";
 for (const scheme of ["light", "dark"] as const) {
   test(`no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
-    for (const path of ["/", "/browse.html#0,4", "/api", "/admin.html"]) {
+    for (const path of ["/", "/browse.html#0,4", "/holders.html", "/api", "/admin.html"]) {
       // the default problem has no published record, so the board is checked on one that does
       if (path === "/") await openProblem(page, 4, 4, 5);
       else await page.goto(path);
@@ -16,7 +16,9 @@ for (const scheme of ["light", "dark"] as const) {
       }
       await page.waitForTimeout(300);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-      expect(results.violations.map((v) => `${path}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
+      expect(
+        results.violations.map((v) => `${path}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
+      ).toEqual([]);
     }
   });
 }

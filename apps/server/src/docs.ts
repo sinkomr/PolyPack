@@ -303,6 +303,16 @@ Fields that were not given are <code>null</code>. 404 for unknown, rejected and 
 Where that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.
 Closed problems appear in <code>literature</code> only.</p>
 
+<h3><code>GET /api/holders</code></h3>
+<p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
+(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first:</p>
+<table>
+<tr><th scope="row"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>
+<tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>
+<tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
+<tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
+</table>
+
 <h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)
 that has something to draw, <code>tiles</code> holds one configuration: <code>{P, source, score, pieces, container_phi}</code>, chosen in this order:</p>

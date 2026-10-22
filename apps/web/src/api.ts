@@ -1,5 +1,6 @@
 import {
   AtlasResponse,
+  HoldersResponse,
   LeaderboardEntry,
   LeaderboardEvent,
   LiteratureRecord,
@@ -35,6 +36,9 @@ export interface RecordsResponse {
   site_verified?: (LeaderboardEntry & { P: number })[];
 }
 export const getRecords = (N: number, M: number) => getJson<RecordsResponse>(`/api/records?N=${N}&M=${M}`);
+
+/** Every name that leads a problem, with how many it leads and how many of those are records. */
+export const getHolders = () => getJson<HoldersResponse>("/api/holders");
 
 /** Drawable packings for P in [from, to]; `next` in the answer says where a shortened answer stopped. */
 export const getAtlas = (N: number, M: number, from: number, to: number) =>
