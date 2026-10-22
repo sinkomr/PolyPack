@@ -73,15 +73,18 @@ describe("every path that sends a board to POST /api/submit", () => {
 
   it("on the board turns the container first, and the server then scores what the board shows", async () => {
     const handler = between(source("apps/web/src/main.ts"), '$("submit").addEventListener', "\n});\n");
-    expect(handler.indexOf("board.autoOrient()")).toBeGreaterThan(0);
-    expect(handler.indexOf("board.autoOrient()")).toBeLessThan(handler.indexOf("api.submit("));
+    // the turn joins the latest undo step (false), so Undo after Submit undoes the last edit
+    expect(handler.indexOf("board.autoOrient(false)")).toBeGreaterThan(0);
+    expect(handler.indexOf("board.autoOrient(false)")).toBeLessThan(handler.indexOf("api.submit("));
     expect(handler).toContain("...board.toConfig(),");
 
     const app = server();
     const board = new Board();
     expect(board.load(compact(7, 9, 12, 0.4), false)).toBeNull();
     const shown = board.container!.size;
-    expect(board.autoOrient()).toBe(true);
+    const undoable = board.canUndo;
+    expect(board.autoOrient(false)).toBe(true);
+    expect(board.canUndo).toBe(undoable);
     expect(board.container!.size).toBeLessThan(shown);
     expect(board.container!.size).toBe(evaluate(board.toConfig(), { autoOrient: true }).score);
     // nothing better is left to find, and the server's score is the board's, to the bit
