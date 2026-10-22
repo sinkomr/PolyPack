@@ -3,7 +3,7 @@
  *
  *   lock            the running copy's pid, host and start time; a second copy refuses to start
  *   memory.json     the engine's memory, rewritten atomically after each problem
- *   history.jsonl   one line per problem searched (HistoryLine)
+ *   history.jsonl   one line per problem searched (HistoryLine), kept to the last 20,000
  *   best/N-M-P.json the best strict packing this machine found for a problem, with its provenance
  *
  * Every whole-file write goes to a temporary file that is then renamed over the target, so that an
@@ -13,14 +13,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import {
   appendFileSync,
   closeSync,
-  existsSync,
   fsyncSync,
   linkSync,
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
   writeSync,
 } from "node:fs";
@@ -29,6 +30,7 @@ import { join } from "node:path";
 import type { PackingConfig } from "@polypack/geometry";
 import { problemKey } from "./format";
 import type { Candidate, Problem } from "./types";
+import { isFiniteNumber, readPieces } from "./validate";
 
 /** Writes `data` to `path` through a temporary file in the same directory and a rename. */
 export function writeFileAtomic(path: string, data: string): void {
@@ -48,6 +50,11 @@ export function writeFileAtomic(path: string, data: string): void {
   }
 }
 
+/** Blocks the thread for `ms`: the lock is taken synchronously, before anything else runs. */
+function sleepSync(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 // ---------- the lock ----------
 
 export interface LockInfo {
@@ -62,11 +69,13 @@ export class LockHeld extends Error {
   constructor(
     readonly path: string,
     readonly holder: LockInfo | null,
+    detail?: string,
   ) {
     super(
-      holder
-        ? `${path} is held by process ${holder.pid} on ${holder.hostname}, started ${holder.started}`
-        : `${path} exists and cannot be read`,
+      detail ??
+        (holder
+          ? `${path} is held by process ${holder.pid} on ${holder.hostname}, started ${holder.started}`
+          : `${path} exists and cannot be read`),
     );
   }
 }
@@ -91,63 +100,132 @@ function readLock(path: string): LockInfo | null {
   }
 }
 
+/** Tokens of the locks this process holds. A lock with this process's pid is stale unless listed. */
+const heldHere = new Set<string>();
+
 export class Lock {
   private released = false;
   constructor(
     readonly path: string,
     readonly info: LockInfo,
-  ) {}
+  ) {
+    heldHere.add(info.token);
+  }
 
   /** Removes the lock file if it is still this copy's. Safe to call more than once. */
   release(): void {
     if (this.released) return;
     this.released = true;
+    heldHere.delete(this.info.token);
     if (readLock(this.path)?.token === this.info.token) rmSync(this.path, { force: true });
   }
 }
 
+export interface LockOptions {
+  alive?: (pid: number) => boolean;
+  /** This copy's pid and host name; tests stand in rival copies with their own. */
+  pid?: number;
+  hostname?: string;
+  /** Called between finding a stale lock and taking it over; tests run a rival copy there. */
+  beforeTakeover?: () => void;
+  /** Age after which a takeover file is itself left over from a crash; default 10 s. */
+  takeoverStaleMs?: number;
+  /** How long to wait for another copy's takeover; default 2 s. */
+  takeoverWaitMs?: number;
+}
+
 /**
- * Takes the lock at `path`, or throws LockHeld. The lock file is written complete under a
- * temporary name and then hard-linked to `path`, which fails when `path` exists: two copies
- * starting together cannot both succeed, and nobody reads a half-written lock. A lock left by a
- * copy on this machine that no longer runs is stale and is taken over. One from another machine
- * (a shared home directory) cannot be checked and counts as held.
+ * Takes the lock at `path`, or throws LockHeld.
+ *
+ * The lock file is written complete under a temporary name and then hard-linked to `path`, which
+ * fails when `path` exists: two copies starting together cannot both succeed, and nobody reads a
+ * half-written lock.
+ *
+ * A lock is stale when it comes from this machine and its process no longer runs, or carries this
+ * process's own pid without being held here (in a container every start is pid 1 on the same
+ * host name). Removing a stale lock and linking a new one is not atomic, so takeovers go one at a
+ * time through `path`.takeover, created exclusively: under it the lock is read again, and replaced
+ * only if it is still the stale one. A takeover file older than 10 s was left by a crash and is
+ * removed. A lock from another machine (a shared home directory) cannot be checked and counts as
+ * held.
  */
-export function acquireLock(path: string, alive: (pid: number) => boolean = pidAlive): Lock {
+export function acquireLock(path: string, o: LockOptions = {}): Lock {
+  const alive = o.alive ?? pidAlive;
   const info: LockInfo = {
-    pid: process.pid,
-    hostname: hostname(),
+    pid: o.pid ?? process.pid,
+    hostname: o.hostname ?? hostname(),
     started: new Date().toISOString(),
     token: randomUUID(),
   };
+  const text = JSON.stringify(info) + "\n";
+  const stale = (h: LockInfo | null): h is LockInfo =>
+    h !== null && h.hostname === info.hostname && (h.pid === info.pid ? !heldHere.has(h.token) : !alive(h.pid));
   const tmp = `${path}.${info.token}.tmp`;
-  writeFileSync(tmp, JSON.stringify(info) + "\n");
-  try {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  writeFileSync(tmp, text);
+  /** Links the lock into place; false when a lock is already there. */
+  const link = (): boolean => {
+    try {
+      linkSync(tmp, path);
+      return true;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "EEXIST") return false;
+      // a file system without hard links: an exclusive create is nearly as good
+      if (code !== "EPERM" && code !== "ENOTSUP" && code !== "EOPNOTSUPP") throw error;
       try {
-        linkSync(tmp, path);
-        return new Lock(path, info);
-      } catch (error) {
-        const code = (error as NodeJS.ErrnoException).code;
-        if (code !== "EEXIST") {
-          // a file system without hard links: an exclusive create is nearly as good
-          if (code === "EPERM" || code === "ENOTSUP" || code === "EOPNOTSUPP") {
-            try {
-              writeFileSync(path, JSON.stringify(info) + "\n", { flag: "wx" });
-              return new Lock(path, info);
-            } catch (inner) {
-              if ((inner as NodeJS.ErrnoException).code !== "EEXIST") throw inner;
-            }
-          } else throw error;
-        }
+        writeFileSync(path, text, { flag: "wx" });
+        return true;
+      } catch (inner) {
+        if ((inner as NodeJS.ErrnoException).code === "EEXIST") return false;
+        throw inner;
       }
+    }
+  };
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (link()) return new Lock(path, info);
       const holder = readLock(path);
-      if (!holder || holder.hostname !== info.hostname || alive(holder.pid)) throw new LockHeld(path, holder);
-      rmSync(path, { force: true });
+      if (!stale(holder)) throw new LockHeld(path, holder);
+      o.beforeTakeover?.();
+      if (takeOver(path, holder.token, link, o)) return new Lock(path, info);
+      // another copy replaced the stale lock first: look at its lock
     }
     throw new LockHeld(path, readLock(path));
   } finally {
     rmSync(tmp, { force: true });
+  }
+}
+
+/** Replaces the stale lock `staleToken` under the takeover file; false when it was replaced already. */
+function takeOver(path: string, staleToken: string, link: () => boolean, o: LockOptions): boolean {
+  const guard = `${path}.takeover`;
+  const staleMs = o.takeoverStaleMs ?? 10_000;
+  const deadline = Date.now() + (o.takeoverWaitMs ?? 2000);
+  for (;;) {
+    try {
+      writeFileSync(guard, `${process.pid}\n`, { flag: "wx" });
+      break;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+    let age: number;
+    try {
+      age = Date.now() - statSync(guard).mtimeMs;
+    } catch {
+      continue; // gone meanwhile: try again
+    }
+    if (age > staleMs) rmSync(guard, { force: true });
+    else if (Date.now() >= deadline)
+      throw new LockHeld(path, null, `another copy is taking over the stale lock ${path}`);
+    else sleepSync(50);
+  }
+  try {
+    const now = readLock(path);
+    if (now && now.token !== staleToken) return false;
+    rmSync(path, { force: true });
+    return link();
+  } finally {
+    rmSync(guard, { force: true });
   }
 }
 
@@ -188,6 +266,9 @@ export interface HistoryLine {
   active_s: number;
   /** Seed of the engine's own choices. */
   engine_seed: number;
+  /** Whether the client ran without submitting (--dry-run, or no --name). */
+  dry_run?: boolean;
+  /** Whether a POST was actually made. */
   submitted: boolean;
   decision: string;
   /** The server's answer to the submission. */
@@ -252,23 +333,53 @@ export function candidateOf(f: BestFile): Candidate {
   };
 }
 
+/** Lines history.jsonl is cut back to: at a few problems an hour, months of searches. */
+export const MAX_HISTORY_LINES = 20_000;
+/** Temporary files older than this are left over from a crash. */
+const STALE_TMP_MS = 10 * 60_000;
+
+function parseHistory(text: string): { lines: HistoryLine[]; count: number } {
+  const lines: HistoryLine[] = [];
+  let count = 0;
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    count++;
+    try {
+      const v = JSON.parse(line);
+      if (Number.isInteger(v?.N) && Number.isInteger(v?.M) && Number.isInteger(v?.P)) lines.push(v);
+    } catch {
+      // a line cut short by a crash
+    }
+  }
+  return { lines, count };
+}
+
 export class StateDir {
+  /** history.jsonl as it was read when the directory was opened, oldest first. */
+  readonly initialHistory: HistoryLine[];
+  private historyCount: number;
+
   private constructor(
     readonly dir: string,
     readonly lock: Lock,
-  ) {}
+    private readonly maxHistory: number,
+  ) {
+    this.removeStaleTemporaryFiles();
+    const { lines, count } = this.loadHistory();
+    this.initialHistory = lines;
+    this.historyCount = count;
+  }
 
   /** Creates the directory if needed and takes its lock; throws LockHeld when another copy runs. */
-  static open(dir: string): StateDir {
+  static open(dir: string, o: { lock?: LockOptions; maxHistory?: number } = {}): StateDir {
     mkdirSync(join(dir, "best"), { recursive: true });
-    const state = new StateDir(dir, acquireLock(join(dir, "lock")));
-    // a line cut short by a crash must not swallow the next one
-    const history = state.historyPath;
-    if (existsSync(history)) {
-      const text = readFileSync(history, "utf8");
-      if (text.length && !text.endsWith("\n")) appendFileSync(history, "\n");
+    const lock = acquireLock(join(dir, "lock"), o.lock);
+    try {
+      return new StateDir(dir, lock, o.maxHistory ?? MAX_HISTORY_LINES);
+    } catch (error) {
+      lock.release();
+      throw error;
     }
-    return state;
   }
 
   get memoryPath(): string {
@@ -279,6 +390,49 @@ export class StateDir {
   }
   bestPath(p: Problem): string {
     return join(this.dir, "best", `${problemKey(p)}.json`);
+  }
+
+  /** Removes *.tmp files that a crash left behind; a fresh one may be another copy's lock in progress. */
+  private removeStaleTemporaryFiles(): void {
+    for (const sub of [this.dir, join(this.dir, "best")]) {
+      let names: string[];
+      try {
+        names = readdirSync(sub);
+      } catch {
+        continue;
+      }
+      for (const name of names) {
+        if (!name.endsWith(".tmp")) continue;
+        try {
+          const path = join(sub, name);
+          if (Date.now() - statSync(path).mtimeMs > STALE_TMP_MS) rmSync(path, { force: true });
+        } catch {
+          // gone meanwhile
+        }
+      }
+    }
+  }
+
+  /** Reads history.jsonl once: mends a line cut short by a crash and cuts the file back when long. */
+  private loadHistory(): { lines: HistoryLine[]; count: number } {
+    let text: string;
+    try {
+      text = readFileSync(this.historyPath, "utf8");
+    } catch {
+      return { lines: [], count: 0 };
+    }
+    const parsed = parseHistory(text);
+    if (parsed.count > this.maxHistory) return this.compact(parsed.lines);
+    // a line cut short by a crash must not swallow the next one
+    if (text.length && !text.endsWith("\n")) appendFileSync(this.historyPath, "\n");
+    return parsed;
+  }
+
+  /** Keeps the last maxHistory readable lines. */
+  private compact(lines: HistoryLine[]): { lines: HistoryLine[]; count: number } {
+    const kept = lines.slice(-this.maxHistory);
+    writeFileAtomic(this.historyPath, kept.map((l) => JSON.stringify(l) + "\n").join(""));
+    return { lines: kept, count: kept.length };
   }
 
   /** The engine's memory, or undefined when there is none or it cannot be read. */
@@ -296,40 +450,45 @@ export class StateDir {
 
   appendHistory(line: HistoryLine): void {
     appendFileSync(this.historyPath, JSON.stringify(line) + "\n");
+    // cut back now and then while running, not after every line
+    if (++this.historyCount > this.maxHistory + Math.max(1, Math.floor(this.maxHistory / 20)))
+      this.historyCount = this.compact(this.readHistory()).count;
   }
 
   /** Every readable line of history.jsonl, oldest first. */
   readHistory(): HistoryLine[] {
-    let text: string;
     try {
-      text = readFileSync(this.historyPath, "utf8");
+      return parseHistory(readFileSync(this.historyPath, "utf8")).lines;
     } catch {
       return [];
     }
-    const out: HistoryLine[] = [];
-    for (const line of text.split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        const v = JSON.parse(line);
-        if (Number.isInteger(v?.N) && Number.isInteger(v?.M) && Number.isInteger(v?.P)) out.push(v);
-      } catch {
-        // a line cut short by a crash
-      }
-    }
-    return out;
   }
 
+  /** The kept packing of a problem, or null when there is none or it does not fit the problem. */
   readBest(p: Problem): BestFile | null {
     try {
       const f = JSON.parse(readFileSync(this.bestPath(p), "utf8")) as BestFile;
+      const c = f?.config;
+      const b = f?.budget;
       const ok =
         f.N === p.N &&
         f.M === p.M &&
         f.P === p.P &&
+        c?.N === p.N &&
+        c.M === p.M &&
+        c.P === p.P &&
+        readPieces(c.pieces, p.P) !== null &&
+        isFiniteNumber(c.container_phi) &&
         f.strict === true &&
-        Number.isFinite(f.score) &&
+        isFiniteNumber(f.score) &&
+        f.score > 0 &&
         typeof f.method === "string" &&
-        Array.isArray(f.config?.pieces);
+        typeof f.kind === "string" &&
+        Number.isSafeInteger(f.seed) &&
+        f.seed >= 0 &&
+        isFiniteNumber(b?.time_s) &&
+        b.time_s > 0 &&
+        (b.evals === undefined || (Number.isSafeInteger(b.evals) && b.evals > 0));
       return ok ? f : null;
     } catch {
       return null;

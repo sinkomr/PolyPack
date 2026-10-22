@@ -2,35 +2,41 @@
  * The volunteer client's main loop: take a problem from the server's work list, search it with the
  * engine on the worker pool, submit the best only when it beats the site's leader, and move on.
  *
- * `main` returns the exit code instead of exiting, and takes its network, output, engine and
- * battery from `deps`, so that test/cli.test.ts runs it end to end against an in-process server.
+ * `main` returns the exit code instead of exiting, and takes its network, output, engine, clock
+ * and battery from `deps`, so that test/cli.test.ts runs it end to end against an in-process server.
  */
 import { randomInt } from "node:crypto";
 import os from "node:os";
-import {
-  type ProblemInfo,
-  type SubmitResponse,
-  type Target,
-  type TargetsResponse,
-  improvesOn,
-} from "@polypack/geometry";
+import { type ProblemInfo, type Target, type TargetsResponse, improvesOn } from "@polypack/geometry";
 import { onBattery, watchBattery } from "./battery";
 import { ActiveClock } from "./clock";
 import { searchProblem as engineSearch } from "./engine/index";
 import { formatDuration, formatScore, problemKey, problemLabel, relativePercent, timestamp } from "./format";
-import { type Answer, Api, type Sleep, compactList, realSleep } from "./http";
+import { type Answer, Api, type Sleep, type SubmitOutcome, compactList, realSleep } from "./http";
 import { type Machine, OptionError, type Options, helpText, parseOptions } from "./options";
-import { type Recent, noteSearch, pickTarget, recentFromHistory } from "./pick";
-import { WorkerPool } from "./pool";
+import { type Recent, noteSearch, pickTarget, pruneRecent, recentFromHistory } from "./pick";
+import { type PoolOptions, WorkerPool } from "./pool";
 import { type HistoryLine, type LeaderRef, LockHeld, StateDir, bestFileOf, candidateOf } from "./state";
-import { type Decision, type StoredEntry, better, buildKnown, decideSubmission, submissionBody } from "./submit";
+import {
+  type Decision,
+  type StoredEntry,
+  type SubmitCheck,
+  better,
+  buildKnown,
+  checkStored,
+  decideSubmission,
+  submissionBody,
+} from "./submit";
 import type { Candidate, Control, Problem, SearchInput, SearchOutcome, SearchProblem } from "./types";
+import { cleanText, readProblemInfo, readStoredEntry, readSubmitResponse, readTarget } from "./validate";
 import { SOFTWARE, VERSION } from "./version";
 
-/** The work list is read again after this long. */
+/** The work list is read again after this long; a problem that could not be read is skipped as long. */
 export const TARGETS_TTL_MS = 10 * 60_000;
 /** After the first signal (or the end of --hours), the most the client waits before it exits. */
 export const STOP_GRACE_MS = 30_000;
+/** No problem starts with less of --hours left than this, or than the time per problem if smaller. */
+export const MIN_PROBLEM_SECONDS = 120;
 
 export interface MainDeps {
   fetch?: typeof fetch;
@@ -49,6 +55,12 @@ export interface MainDeps {
   statusEveryMs?: number;
   machine?: Partial<Machine>;
   sleep?: Sleep;
+  /** Wall-clock milliseconds; default Date.now. Tests move it on to stand in for a machine that slept. */
+  now?: () => number;
+  /** How often the --hours limit is checked, in ms; default 10 s. */
+  deadlineCheckMs?: number;
+  /** Worker pool options, for tests (a thread that dies at start). */
+  pool?: Partial<PoolOptions>;
 }
 
 export async function main(argv: readonly string[], deps: MainDeps = {}): Promise<number> {
@@ -83,42 +95,28 @@ interface Current {
   jobs: number;
   best: Candidate | null;
   leader: number | null;
+  /** Jobs that ended because their thread was lost. */
+  crashed: number;
 }
 
-const isTarget = (t: unknown): t is Target => {
-  const v = t as Target;
-  return Number.isInteger(v?.N) && Number.isInteger(v?.M) && Number.isInteger(v?.P) && typeof v.priority === "number";
-};
-
-const isProblemInfo = (body: unknown, p: Problem): body is ProblemInfo => {
-  const v = body as ProblemInfo;
-  return (
-    v?.N === p.N &&
-    v.M === p.M &&
-    v.P === p.P &&
-    typeof v.accepts_submissions === "boolean" &&
-    typeof v.area_bound === "number"
-  );
-};
-
-const isStoredEntry = (body: unknown): body is StoredEntry => {
-  const v = body as StoredEntry;
-  return typeof v?.score === "number" && Array.isArray(v.pieces);
-};
-
-/** "HTTP 422: overlap of pieces 3 and 7" or "no answer". */
+/** "HTTP 422: overlap of pieces 3 and 7" or "no answer", safe to print. */
 function describeAnswer(a: Answer | null): string {
   if (!a) return "no answer from the server";
   const body = a.body as { reasons?: unknown; error?: unknown } | null;
   const why = Array.isArray(body?.reasons)
-    ? body.reasons.join("; ")
+    ? body.reasons
+        .slice(0, 5)
+        .map((r) => cleanText(r))
+        .join("; ")
     : typeof body?.error === "string"
-      ? body.error
+      ? cleanText(body.error)
       : typeof a.body === "string"
-        ? a.body.slice(0, 200)
+        ? cleanText(a.body)
         : "";
   return `HTTP ${a.status}${why ? `: ${why}` : ""}`;
 }
+
+const errorText = (error: unknown) => cleanText((error as Error)?.stack ?? String(error), 2000);
 
 class Volunteer {
   private readonly clock = new ActiveClock();
@@ -133,6 +131,8 @@ class Volunteer {
   private readonly sleep: Sleep;
   private readonly search: SearchProblem;
   private readonly random: () => number;
+  /** Wall-clock milliseconds. */
+  private readonly now: () => number;
   private pool: WorkerPool | null = null;
   private state!: StateDir;
   private memory: unknown;
@@ -144,9 +144,12 @@ class Volunteer {
   private filterOnServer = true;
   private paused = false;
   private stopReason: string | null = null;
+  /** Set when the client cannot go on (its threads do not start): it exits with code 1. */
+  private fatal: string | null = null;
   private hardTimer: NodeJS.Timeout | null = null;
   private current: Current | null = null;
-  private readonly started = Date.now();
+  private readonly started: number;
+  private readonly deadline: number;
   private readonly counts = { problems: 0, sent: 0, accepted: 0, leading: 0 };
 
   constructor(
@@ -154,9 +157,13 @@ class Volunteer {
     private readonly deps: MainDeps,
     private readonly out: (line: string) => void,
   ) {
+    this.now = deps.now ?? Date.now;
+    this.started = this.now();
+    this.deadline = this.started + o.hours * 3600_000;
     const http = {
       fetch: deps.fetch,
       sleep: deps.sleep,
+      now: this.now,
       log: (m: string) => this.log(m),
       userAgent: `${SOFTWARE} (Node ${process.version})`,
     };
@@ -191,11 +198,20 @@ class Volunteer {
     const release = () => this.state.close();
     process.on("exit", release);
     this.memory = this.state.readMemory();
-    this.recent = recentFromHistory(this.state.readHistory());
+    this.recent = recentFromHistory(this.state.initialHistory, this.o.dryRun);
     const cleanups: (() => void)[] = [];
     try {
       this.banner();
-      this.pool = await WorkerPool.create({ size: this.o.cores, priority: this.o.priority, log: (m) => this.log(m) });
+      this.pool = await WorkerPool.create({
+        size: this.o.cores,
+        priority: this.o.priority,
+        log: (m) => this.log(m),
+        onFatal: (message) => {
+          this.fatal = message;
+          this.requestStop("The search threads cannot run");
+        },
+        ...this.deps.pool,
+      });
       if (this.o.batteryPause) {
         const watcher = watchBattery(
           this.deps.checkBattery ?? (() => onBattery()),
@@ -205,17 +221,27 @@ class Volunteer {
         cleanups.push(() => watcher.stop());
       }
       if (this.deps.signals !== false) cleanups.push(this.installSignals());
-      if (Number.isFinite(this.o.hours)) cleanups.push(this.armDeadline());
+      if (Number.isFinite(this.o.hours)) {
+        // a timer alone would be late after the machine sleeps: its clock stops, the wall clock does not
+        const deadlineTimer = setInterval(() => this.checkDeadline(false), this.deps.deadlineCheckMs ?? 10_000);
+        deadlineTimer.unref();
+        cleanups.push(() => clearInterval(deadlineTimer));
+      }
       const ticker = setInterval(() => this.status(), this.deps.statusEveryMs ?? 60_000);
       ticker.unref();
       cleanups.push(() => clearInterval(ticker));
       const code = await this.loop();
+      if (this.fatal)
+        this.log(
+          `Stopped with an error: ${this.fatal}. The file may be incomplete, or this Node version too old ` +
+            "(24 or newer is needed).",
+        );
       this.log(
-        `Stopped after ${formatDuration((Date.now() - this.started) / 1000)}: ${this.counts.problems} problem(s) ` +
+        `Stopped after ${formatDuration((this.now() - this.started) / 1000)}: ${this.counts.problems} problem(s) ` +
           `searched, ${this.counts.sent} submission(s) sent, ${this.counts.accepted} accepted, ` +
           `${this.counts.leading} took the lead. State is in ${this.o.stateDir}.`,
       );
-      return code;
+      return this.fatal ? 1 : code;
     } finally {
       for (const cleanup of cleanups) cleanup();
       if (this.hardTimer) clearTimeout(this.hardTimer);
@@ -290,18 +316,25 @@ class Volunteer {
     this.hardTimer.unref();
   }
 
-  private armDeadline(): () => void {
-    const end = this.started + this.o.hours * 3600_000;
-    let timer: NodeJS.Timeout | undefined;
-    const arm = () => {
-      const left = end - Date.now();
-      if (left <= 0) return this.requestStop(`The --hours limit (${this.o.hours} h) is reached`);
-      // setTimeout takes at most about 24.8 days
-      timer = setTimeout(arm, Math.min(left, 2 ** 31 - 1));
-      timer.unref();
-    };
-    arm();
-    return () => clearTimeout(timer);
+  /**
+   * Stops at the --hours limit, by the wall clock. Before a new problem (`starting`), it also stops
+   * when less than MIN_PROBLEM_SECONDS (or the time per problem, if smaller) is left. True when stopping.
+   */
+  private checkDeadline(starting: boolean): boolean {
+    if (!Number.isFinite(this.o.hours) || this.stopReason !== null) return this.stopReason !== null;
+    const left = (this.deadline - this.now()) / 1000;
+    if (left <= 0) {
+      this.requestStop(`The --hours limit (${this.o.hours} h) is reached`);
+      return true;
+    }
+    const least = Math.min(MIN_PROBLEM_SECONDS, this.o.minutesPerProblem * 60);
+    if (starting && left < least) {
+      this.requestStop(
+        `Only ${formatDuration(left)} of the --hours limit (${this.o.hours} h) is left, too little for another problem`,
+      );
+      return true;
+    }
+    return false;
   }
 
   private onBatteryChange(battery: boolean): void {
@@ -339,6 +372,12 @@ class Volunteer {
     }
   }
 
+  /** Forgets skips and searches that no longer matter, so that a long run does not grow. */
+  private prune(now: number): void {
+    for (const [key, until] of this.skipUntil) if (until <= now) this.skipUntil.delete(key);
+    pruneRecent(this.recent, now);
+  }
+
   // ---------- the loop ----------
 
   private async loop(): Promise<number> {
@@ -346,7 +385,7 @@ class Volunteer {
     while (!this.stopped) {
       // nothing new starts on battery power
       while (this.paused && !this.stopped) await this.wait(1000);
-      if (this.stopped) break;
+      if (this.stopped || this.checkDeadline(true)) break;
       const list = await this.readTargets();
       if (this.stopped) break;
       if (list === "missing") {
@@ -365,38 +404,49 @@ class Volunteer {
         continue;
       }
       failures = 0;
-      const now = Date.now();
-      const skip = new Set([...this.skipUntil].filter(([, until]) => until > now).map(([key]) => key));
+      const now = this.now();
+      this.prune(now);
       const target = pickTarget(list, {
         filters: { N: this.o.N, M: this.o.M, maxP: this.o.maxP },
         recent: this.recent,
-        skip,
+        skip: new Set(this.skipUntil.keys()),
         now,
         random: this.random,
       });
       if (!target) {
         const wait = Math.max(60_000, this.targets!.at + TARGETS_TTL_MS - now);
+        const again = this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`;
         this.log(
           list.length
             ? `Nothing to search: the work list's ${list.length} problem(s) are filtered out, closed, or were ` +
-                "searched here in the last 7 days with the same leader." +
-                (this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`)
-            : "The work list is empty." + (this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`),
+                `searched here in the last 7 days with the same leader.${again}`
+            : `The work list is empty.${again}`,
         );
         if (this.o.once) return 0;
         await this.wait(wait);
         continue;
       }
-      await this.searchOne(target);
-      if (this.o.once) break;
+      let searched: boolean;
+      try {
+        searched = await this.searchOne(target);
+      } catch (error) {
+        // a bug or an answer nobody foresaw: skip the problem, keep the client
+        this.current = null;
+        const key = problemKey(target);
+        this.log(`Skipping ${problemLabel(target)} for 10 minutes after an unexpected error: ${errorText(error)}`);
+        this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+        searched = false;
+      }
+      if (this.fatal) return 1;
+      if (this.o.once) return searched || this.stopped ? 0 : 1;
     }
     return 0;
   }
 
   /** The work list, from the cache while it is fresh; "missing" on 404; null when unreachable. */
   private async readTargets(): Promise<Target[] | "missing" | null> {
-    const now = Date.now();
-    if (this.targets && now - this.targets.at < TARGETS_TTL_MS) return this.targets.list;
+    const now = this.now();
+    if (this.targets && now - this.targets.at < TARGETS_TTL_MS && now >= this.targets.at) return this.targets.list;
     const query = this.filterOnServer ? this.targetsQuery() : "";
     let answer = await this.reader.targets(query);
     if (answer?.status === 400 && query) {
@@ -412,10 +462,12 @@ class Volunteer {
       this.log(`Unexpected answer to GET /api/targets: ${describeAnswer(answer)}`);
       return null;
     }
-    const list = body.targets.filter(isTarget);
+    const list = body.targets.map(readTarget).filter((t): t is Target => t !== null);
     this.targets = { at: now, list };
     this.log(
-      `Read the work list: ${list.length} problem(s)` + (body.generated_at ? `, ranked at ${body.generated_at}` : ""),
+      `Read the work list: ${list.length} problem(s)` +
+        (body.generated_at ? `, ranked at ${cleanText(body.generated_at, 40)}` : "") +
+        (list.length < body.targets.length ? `; ${body.targets.length - list.length} malformed entries left out` : ""),
     );
     return list;
   }
@@ -431,14 +483,13 @@ class Volunteer {
 
   private maxSeconds(): number {
     let s = Math.max(1, this.o.minutesPerProblem * 60);
-    if (Number.isFinite(this.o.hours))
-      s = Math.min(s, Math.max(1, (this.started + this.o.hours * 3600_000 - Date.now()) / 1000));
+    if (Number.isFinite(this.o.hours)) s = Math.min(s, Math.max(1, (this.deadline - this.now()) / 1000));
     return s;
   }
 
   private async readProblem(api: Api, p: Problem): Promise<{ info: ProblemInfo | null; answer: Answer | null }> {
     const answer = await api.problem(p);
-    return { info: answer?.status === 200 && isProblemInfo(answer.body, p) ? answer.body : null, answer };
+    return { info: answer?.status === 200 ? readProblemInfo(answer.body, p) : null, answer };
   }
 
   /** Resolves with `promise`, or with null once the grace period after a stop is over. */
@@ -463,35 +514,41 @@ class Volunteer {
 
   // ---------- one problem ----------
 
-  private async searchOne(t: Target): Promise<void> {
+  /** Searches one problem and submits its best if it qualifies. False when it could not be searched. */
+  private async searchOne(t: Target): Promise<boolean> {
     const p: Problem = { N: t.N, M: t.M, P: t.P };
     const key = problemKey(p);
     const label = problemLabel(p);
 
     const { info, answer } = await this.readProblem(this.reader, p);
-    if (this.stopped) return;
+    if (this.stopped) return false;
     if (!info) {
-      this.log(`Could not read ${label} (${describeAnswer(answer)}); skipping it for 10 minutes`);
-      this.skipUntil.set(key, Date.now() + TARGETS_TTL_MS);
-      return;
+      this.log(
+        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it for 10 minutes`,
+      );
+      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+      return false;
     }
     if (!info.accepts_submissions) {
       this.log(`${label} is closed: its published optimum is proven. Skipping it.`);
       this.skipUntil.set(key, Infinity);
-      return;
+      return false;
     }
     const site = info.site_best;
     const leader: LeaderRef | null = site ? { id: site.id, score: site.score, name: site.name } : null;
     const published = info.literature?.value ?? null;
     // the leader's coordinates are read only when they are the better start
     let stored: StoredEntry | null = null;
-    const publishedStart = published !== null && info.literature?.pieces?.length === p.P;
+    const publishedStart = published !== null && info.literature?.pieces !== undefined;
     if (leader && !(publishedStart && published < leader.score)) {
       const a = await this.reader.entry(leader.id!);
-      if (a?.status === 200 && isStoredEntry(a.body)) stored = a.body;
-      else if (!this.stopped) this.log(`Could not read the leader's packing #${leader.id} (${describeAnswer(a)})`);
+      stored = a?.status === 200 ? readStoredEntry(a.body, p.P) : null;
+      if (!stored && !this.stopped)
+        this.log(
+          `Could not read the leader's packing #${leader.id} (${a?.status === 200 ? "malformed answer" : describeAnswer(a)})`,
+        );
     }
-    if (this.stopped) return;
+    if (this.stopped) return false;
     const known = buildKnown(info, stored);
 
     const maxSeconds = this.maxSeconds();
@@ -505,11 +562,12 @@ class Volunteer {
       jobs: 0,
       best: null,
       leader: leader?.score ?? null,
+      crashed: 0,
     };
     this.current = cur;
     this.log(
       `Searching ${label} (${t.reason}): leader ` +
-        (leader ? `${formatScore(leader.score)} by "${leader.name}"` : "none") +
+        (leader ? `${formatScore(leader.score)} by "${cleanText(leader.name, 60)}"` : "none") +
         `, published ${published === null ? "none" : formatScore(published)}, area bound ${formatScore(info.area_bound)}; ` +
         `starting from ${known ? (known.source === "site" ? "the leader's packing" : "the published packing") : "nothing"}; ` +
         `up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
@@ -525,8 +583,9 @@ class Volunteer {
       seed: engineSeed,
       memory: this.memory,
       now: () => this.clock.now(),
-      onResult: (_result, best) => {
+      onResult: (result, best) => {
         cur.jobs++;
+        if (result.termination === "crashed") cur.crashed++;
         if (best && best.strict && (!cur.best || best.score < cur.best.score)) {
           cur.best = best;
           this.log(
@@ -543,8 +602,15 @@ class Volunteer {
       outcome = await this.untilHardStop(this.search(input, this.pool!.runJob, control));
       stopped = outcome ? outcome.stopped : "interrupted";
     } catch (error) {
-      this.log(`The search of ${label} failed: ${(error as Error)?.stack ?? String(error)}`);
+      this.log(`The search of ${label} failed: ${errorText(error)}`);
       stopped = "error";
+    }
+    // a search whose every job lost its thread searched nothing: it is not a search to skip for a week
+    const allCrashed = cur.jobs > 0 && cur.crashed === cur.jobs;
+    if (allCrashed) {
+      stopped = "crashed";
+      this.log(`Every job of ${label} lost its search thread; skipping it for 10 minutes`);
+      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
     }
     const activeSeconds = this.clock.now() - cur.startedAt;
     this.current = null;
@@ -559,20 +625,17 @@ class Volunteer {
     const saved = file ? candidateOf(file) : null;
     if (found && (!saved || improvesOn(found.score, saved.score))) {
       try {
-        this.state.writeBest(bestFileOf(found, VERSION));
+        this.state.writeBest(bestFileOf(found, VERSION, new Date(this.now())));
       } catch (error) {
         this.log(`Could not save the best packing: ${(error as Error).message}`);
       }
     }
-    // an earlier search's best still counts: its submission may have failed
+    // an earlier search's best still counts: its submission may have failed, or it was a dry run
     const offer = better(found, saved);
 
     let decision: Decision = { submit: false, reason: "no strict packing" };
     let leaderAfter: LeaderRef | null = null;
-    let status: number | null = null;
-    let response: HistoryLine["response"] = null;
-    let submitted = false;
-    let outcomeText = "";
+    let sent: SubmitOutcome | null = null;
     if (offer) {
       // the leader is read again just before submitting: it may have changed during the search
       const fresh = await this.readProblem(this.submitter, p);
@@ -591,44 +654,22 @@ class Volunteer {
         });
       }
       if (decision.submit) {
-        submitted = true;
-        this.counts.sent++;
-        const body = submissionBody(offer, { name: this.o.name!, note: this.o.note, software: SOFTWARE });
-        const { answer: a } = await this.submitter.submit(body);
-        status = a?.status ?? null;
-        const r = (a?.body ?? null) as Partial<SubmitResponse> | null;
-        if (a && typeof r === "object" && r !== null && typeof r.valid === "boolean")
-          response = {
-            valid: r.valid,
-            leader: r.leader ?? false,
-            score: r.score ?? null,
-            leader_score: r.leader_score ?? null,
-            id: r.id ?? null,
-            pending_verification: r.pending_verification ?? false,
-            reasons: Array.isArray(r.reasons) ? r.reasons.slice(0, 5) : [],
-          };
-        if (!a) outcomeText = `not sent: no answer from the server; the packing stays in ${this.state.bestPath(p)}`;
-        else if (a.status === 200 && response?.valid) {
-          this.counts.accepted++;
-          if (response.leader) {
-            this.counts.leading++;
-            leaderAfter = { id: response.id, score: response.score ?? offer.score, name: this.o.name! };
-          }
-          outcomeText =
-            `submitted: HTTP 200, ` +
-            (response.leader
-              ? `the new leader (#${response.id})${response.pending_verification ? ", pending verification" : ""}`
-              : `accepted, but the leader stays at ${response.leader_score}`);
-        } else {
-          if (a.status === 409) this.skipUntil.set(key, Infinity);
-          outcomeText = `refused: ${describeAnswer(a)}`;
-        }
+        const name = this.o.name!;
+        const body = submissionBody(offer, { name, note: this.o.note, software: SOFTWARE });
+        // after a POST without an answer: is the packing stored?
+        const check = async (): Promise<SubmitCheck | null> => {
+          const again = await this.readProblem(this.submitter, p);
+          return again.info ? checkStored(again.info, name, offer.score) : null;
+        };
+        sent = await this.submitter.submit(body, check);
+        if (sent.requests > 0) this.counts.sent++;
       }
     }
-    if (!outcomeText) outcomeText = decision.reason;
+    const result = this.interpret(p, offer, sent);
+    if (result.leaderAfter !== undefined) leaderAfter = result.leaderAfter;
 
     const line: HistoryLine = {
-      time: new Date().toISOString(),
+      time: new Date(this.now()).toISOString(),
       ...p,
       reason: t.reason ?? null,
       priority: t.priority ?? null,
@@ -649,10 +690,11 @@ class Volunteer {
       stopped,
       active_s: Math.round(activeSeconds * 1000) / 1000,
       engine_seed: engineSeed,
-      submitted,
-      decision: decision.reason,
-      status,
-      response,
+      dry_run: this.o.dryRun,
+      submitted: (sent?.requests ?? 0) > 0,
+      decision: result.decision ?? decision.reason,
+      status: sent?.answer?.status ?? null,
+      response: result.response,
       version: VERSION,
     };
     try {
@@ -660,21 +702,111 @@ class Volunteer {
     } catch (error) {
       this.log(`Could not write the history: ${(error as Error).message}`);
     }
-    noteSearch(this.recent, line);
+    noteSearch(this.recent, line, this.o.dryRun);
     this.counts.problems++;
 
-    const reference = leaderAfter?.score ?? leader?.score ?? null;
+    // compared with the leader the search started against, not with an entry it just made
     const vs =
       offer === null
         ? "no strict packing"
         : `best ${formatScore(offer.score)} (${offer.job.method}, seed ${offer.job.seed}` +
           `${offer === found ? "" : ", from an earlier search"}) vs ` +
-          (reference === null
+          (leader === null
             ? "no leader"
-            : `leader ${formatScore(reference)} (${relativePercent(offer.score, reference)})`);
+            : `leader ${formatScore(leader.score)} (${relativePercent(offer.score, leader.score)})`);
+    const what = result.text ?? (offer === null ? "nothing to submit" : decision.reason);
     this.log(
-      `Finished ${label} after ${formatDuration(activeSeconds)} (${stopped}), ${line.jobs} job(s): ${vs}; ${outcomeText}`,
+      `Finished ${label} after ${formatDuration(activeSeconds)} (${stopped}), ${line.jobs} job(s): ${vs}; ${what}`,
     );
+    return !allCrashed;
+  }
+
+  /**
+   * What a submission came to: the text for the end-of-problem line, the history's `response` and
+   * `decision` when they differ from the plain answer, and the leader after it when it is known.
+   */
+  private interpret(
+    p: Problem,
+    offer: Candidate | null,
+    sent: SubmitOutcome | null,
+  ): {
+    text?: string;
+    decision?: string;
+    response: HistoryLine["response"];
+    leaderAfter?: LeaderRef | null;
+  } {
+    if (!sent || !offer) return { response: null };
+    const key = problemKey(p);
+    const kept = `the packing stays in ${this.state.bestPath(p)}`;
+    const a = sent.answer;
+    if (a) {
+      const response = readSubmitResponse(a.body);
+      if (a.status === 200 && response?.valid) {
+        this.counts.accepted++;
+        if (response.leader) {
+          this.counts.leading++;
+          return {
+            text:
+              `submitted: HTTP 200, the new leader (#${response.id})` +
+              (response.pending_verification ? ", pending verification" : ""),
+            response,
+            leaderAfter: { id: response.id, score: response.score ?? offer.score, name: this.o.name! },
+          };
+        }
+        const stays = response.leader_score === null ? "unchanged" : formatScore(response.leader_score);
+        return { text: `submitted: HTTP 200, accepted, but the leader stays at ${stays}`, response };
+      }
+      if (a.status === 409) this.skipUntil.set(key, Infinity);
+      return { text: `refused: ${describeAnswer(a)}`, response };
+    }
+    const failure = cleanText(sent.failure ?? "no answer");
+    if (sent.requests === 0)
+      return { text: `not sent (${failure}); ${kept}`, decision: `not sent: ${failure}`, response: null };
+    const c = sent.check;
+    if (c?.state === "ours") {
+      // the POST was stored although its answer was lost
+      this.counts.accepted++;
+      this.counts.leading++;
+      return {
+        text: `submitted: no answer came (${failure}), but the problem now shows it as the leader (#${c.id})`,
+        decision: "no answer, but a re-read found it stored as the leader",
+        response: {
+          valid: true,
+          leader: true,
+          score: c.score,
+          leader_score: c.score,
+          id: c.id,
+          pending_verification: false,
+          reasons: [],
+        },
+        leaderAfter: { id: c.id, score: c.score, name: this.o.name! },
+      };
+    }
+    if (c?.state === "closed") {
+      this.skipUntil.set(key, Infinity);
+      return {
+        text: `no answer came (${failure}), and the problem is now closed`,
+        decision: "no answer; closed",
+        response: null,
+      };
+    }
+    if (c?.state === "beaten")
+      return {
+        text: `no answer came (${failure}); the leader is now ${formatScore(c.leader)}, at least as good: not sent again`,
+        decision: "no answer; beaten meanwhile",
+        response: null,
+      };
+    if (c?.state === "absent")
+      return {
+        text: `sent ${sent.requests} time(s) without an answer (${failure}), and not stored; ${kept}`,
+        decision: "no answer; not stored",
+        response: null,
+      };
+    return {
+      text: `sent, but no answer came (${failure}) and the problem could not be read again: it may be stored or not; ${kept}`,
+      decision: "no answer; unknown whether stored",
+      response: null,
+    };
   }
 
   private status(): void {

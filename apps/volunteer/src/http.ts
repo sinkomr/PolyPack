@@ -1,12 +1,17 @@
 /**
- * The client's side of the PolyPack HTTP API. Every request has a 30 s timeout; network failures
- * and 5xx answers are retried with exponential backoff (2 s doubling to 60 s), and 429 answers
- * after a 65 s wait, at most three times. Submissions are paced. fetch, sleep and the clock are
- * injected, so that test/http.test.ts runs it against a fake server with a fake clock.
+ * The client's side of the PolyPack HTTP API. Every request has a 30 s timeout and an answer of at
+ * most 16 MB. A 429 is retried after a 65 s wait, at most three times. A GET is also retried after
+ * network failures, timeouts and 5xx answers, with exponential backoff (2 s doubling to 60 s), and
+ * gives up after 10 failed attempts.
+ *
+ * A POST is never sent again blindly: after such a failure the server may have stored it. submit()
+ * reads the problem first, and sends again only when the packing is not there (see SubmitCheck).
+ * Submissions are paced. fetch, sleep and the clock are injected, so that test/http.test.ts runs
+ * it against a fake server with a fake clock.
  */
 import { setTimeout as delay } from "node:timers/promises";
+import { type SubmitCheck, isSoftwareRefusal } from "./submit";
 import type { Problem } from "./types";
-import { isSoftwareRefusal } from "./submit";
 
 export interface Answer {
   status: number;
@@ -22,6 +27,9 @@ export const RATE_LIMIT_WAIT_MS = 65_000;
 export const RATE_LIMIT_RETRIES = 3;
 export const MAX_BACKOFF_MS = 60_000;
 export const SUBMISSIONS_PER_MINUTE = 6;
+export const MAX_ANSWER_BYTES = 16 * 1024 * 1024;
+/** POSTs of one submission whose fate stayed unknown, each followed by a re-read of the problem. */
+export const MAX_SUBMIT_ATTEMPTS = 3;
 
 export interface HttpOptions {
   fetch?: typeof fetch;
@@ -32,10 +40,28 @@ export interface HttpOptions {
   /** Aborts every request and every wait: the client is shutting down. */
   signal?: AbortSignal;
   userAgent?: string;
-  /** Failed attempts (network errors, 5xx) after which a request gives up: 10 is about 6 minutes. */
+  /** Failed attempts (network errors, 5xx) after which a GET gives up: 10 is about 6 minutes. */
   maxFailures?: number;
   timeoutMs?: number;
+  maxAnswerBytes?: number;
 }
+
+/** How one submission went. */
+export interface SubmitOutcome {
+  /** The server's answer to the last POST, when one came. */
+  answer: Answer | null;
+  /** POST requests actually made (none when the client stopped first). */
+  requests: number;
+  /** Whether `software` was dropped for a server that refuses it. */
+  withoutSoftware: boolean;
+  /** Why the last POST got no answer. */
+  failure: string | null;
+  /** What the re-read found after the last POST without an answer; null when it was not read. */
+  check: SubmitCheck | null;
+}
+
+/** One request's result: an answer below 500, or a failure and whether the request went out. */
+type Attempt = { kind: "answer"; answer: Answer } | { kind: "failed"; why: string; sent: boolean };
 
 /**
  * Keeps the rate of submissions at or below `limit` per `windowMs`, over a sliding window;
@@ -84,6 +110,30 @@ const describe = (error: unknown) => {
   return `${e?.message ?? String(error)}${cause ? ` (${cause})` : ""}`;
 };
 
+/** The body as text, refusing more than `max` bytes. */
+async function readCapped(response: Response, max: number): Promise<string> {
+  const tooLarge = () => new Error(`the answer is larger than ${Math.round(max / 1048576)} MB`);
+  if (Number(response.headers.get("content-length")) > max) {
+    await response.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  if (!response.body) return "";
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString("utf8");
+}
+
 export class Api {
   readonly pacer: Pacer;
   private readonly fetch: typeof fetch;
@@ -93,6 +143,7 @@ export class Api {
   private readonly userAgent: string;
   private readonly maxFailures: number;
   private readonly timeoutMs: number;
+  private readonly maxAnswerBytes: number;
 
   constructor(
     readonly base: string,
@@ -105,65 +156,75 @@ export class Api {
     this.userAgent = o.userAgent ?? "polypack-volunteer";
     this.maxFailures = o.maxFailures ?? 10;
     this.timeoutMs = o.timeoutMs ?? 30_000;
+    this.maxAnswerBytes = o.maxAnswerBytes ?? MAX_ANSWER_BYTES;
     this.pacer = new Pacer(SUBMISSIONS_PER_MINUTE, 60_000, o.now ?? Date.now, (ms) => this.sleep(ms, this.signal));
   }
 
-  /**
-   * One request, retried as described above. Returns the server's answer (any status below 500,
-   * or the 429 that remains after three waits), or null when every attempt failed or the client
-   * is shutting down. Never throws.
-   */
-  async request(method: "GET" | "POST", path: string, body?: unknown): Promise<Answer | null> {
-    const url = this.base + path;
-    const text = body === undefined ? undefined : JSON.stringify(body);
+  /** One request, never retried here. */
+  private async attempt(method: "GET" | "POST", path: string, body?: unknown): Promise<Attempt> {
+    if (this.signal?.aborted) return { kind: "failed", why: "the client is stopping", sent: false };
     const headers: Record<string, string> = { "user-agent": this.userAgent, accept: "application/json" };
-    if (text !== undefined) headers["content-type"] = "application/json";
+    if (body !== undefined) headers["content-type"] = "application/json";
+    try {
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const response = await this.fetch(this.base + path, {
+        method,
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: this.signal ? AbortSignal.any([this.signal, timeout]) : timeout,
+      });
+      const raw = await readCapped(response, this.maxAnswerBytes);
+      if (response.status >= 500)
+        return { kind: "failed", why: `HTTP ${response.status} from ${method} ${path}`, sent: true };
+      let parsed: unknown = raw;
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // not JSON: keep the text
+      }
+      return { kind: "answer", answer: { status: response.status, body: parsed } };
+    } catch (error) {
+      return { kind: "failed", why: `${method} ${path} failed: ${describe(error)}`, sent: true };
+    }
+  }
+
+  private rateLimited(method: string, path: string, retry: number): string {
+    return (
+      `HTTP 429 (rate limit) from ${method} ${path}: waiting ${RATE_LIMIT_WAIT_MS / 1000} s ` +
+      `(retry ${retry} of ${RATE_LIMIT_RETRIES})`
+    );
+  }
+
+  /**
+   * A GET, retried as described above. Returns the server's answer (any status below 500, or the
+   * 429 that remains after three waits), or null when every attempt failed or the client is
+   * shutting down. Never throws.
+   */
+  async get(path: string): Promise<Answer | null> {
     let failures = 0;
     let limited = 0;
     for (;;) {
       if (this.signal?.aborted) return null;
-      let problem: string;
-      try {
-        // every POST is a submission, and every attempt counts against the server's limit
-        if (method === "POST") await this.pacer.acquire();
-        const timeout = AbortSignal.timeout(this.timeoutMs);
-        const response = await this.fetch(url, {
-          method,
-          headers,
-          body: text,
-          signal: this.signal ? AbortSignal.any([this.signal, timeout]) : timeout,
-        });
-        const raw = await response.text();
-        let parsed: unknown = raw;
+      const a = await this.attempt("GET", path);
+      if (a.kind === "answer") {
+        if (a.answer.status !== 429 || limited >= RATE_LIMIT_RETRIES) return a.answer;
+        limited++;
+        this.log(this.rateLimited("GET", path, limited));
         try {
-          parsed = JSON.parse(raw);
+          await this.sleep(RATE_LIMIT_WAIT_MS, this.signal);
         } catch {
-          // not JSON: keep the text
+          return null;
         }
-        if (response.status === 429 && limited < RATE_LIMIT_RETRIES) {
-          limited++;
-          this.log(
-            `HTTP 429 (rate limit) from ${method} ${path}: waiting ${RATE_LIMIT_WAIT_MS / 1000} s ` +
-              `(retry ${limited} of ${RATE_LIMIT_RETRIES})`,
-          );
-          // a POST waits through the pacer, so that every submission is held back
-          if (method === "POST") this.pacer.block(RATE_LIMIT_WAIT_MS);
-          else await this.sleep(RATE_LIMIT_WAIT_MS, this.signal);
-          continue;
-        }
-        if (response.status < 500) return { status: response.status, body: parsed };
-        problem = `HTTP ${response.status} from ${method} ${path}`;
-      } catch (error) {
-        if (this.signal?.aborted) return null;
-        problem = `${method} ${path} failed: ${describe(error)}`;
+        continue;
       }
+      if (this.signal?.aborted) return null;
       failures++;
       if (failures >= this.maxFailures) {
-        this.log(`${problem}; giving up after ${failures} attempts`);
+        this.log(`${a.why}; giving up after ${failures} attempts`);
         return null;
       }
       const wait = Math.min(MAX_BACKOFF_MS, 2000 * 2 ** (failures - 1));
-      this.log(`${problem}; retrying in ${wait / 1000} s`);
+      this.log(`${a.why}; retrying in ${wait / 1000} s`);
       try {
         await this.sleep(wait, this.signal);
       } catch {
@@ -172,29 +233,94 @@ export class Api {
     }
   }
 
+  /**
+   * One POST through the pacer. A 429 means nothing was stored: it is sent again after 65 s, at
+   * most three times, and every submission waits with it. Any other failure is returned as it is.
+   */
+  async post(
+    path: string,
+    body: unknown,
+  ): Promise<{ answer: Answer | null; failure: string | null; requests: number }> {
+    let limited = 0;
+    let requests = 0;
+    for (;;) {
+      try {
+        await this.pacer.acquire();
+      } catch {
+        return { answer: null, failure: "the client is stopping", requests };
+      }
+      const a = await this.attempt("POST", path, body);
+      if (a.kind === "failed") return { answer: null, failure: a.why, requests: requests + (a.sent ? 1 : 0) };
+      requests++;
+      if (a.answer.status !== 429 || limited >= RATE_LIMIT_RETRIES)
+        return { answer: a.answer, failure: null, requests };
+      limited++;
+      this.log(this.rateLimited("POST", path, limited));
+      this.pacer.block(RATE_LIMIT_WAIT_MS);
+    }
+  }
+
   targets(query = ""): Promise<Answer | null> {
-    return this.request("GET", `/api/targets${query}`);
+    return this.get(`/api/targets${query}`);
   }
 
   problem(p: Problem): Promise<Answer | null> {
-    return this.request("GET", `/api/problems/${p.N}/${p.M}/${p.P}`);
+    return this.get(`/api/problems/${p.N}/${p.M}/${p.P}`);
   }
 
   entry(id: number): Promise<Answer | null> {
-    return this.request("GET", `/api/submissions/${id}`);
+    return this.get(`/api/submissions/${id}`);
   }
 
   /**
-   * POST /api/submit. A server that does not yet accept `software` with found_with "optimizer"
-   * refuses the body with exactly one known 400; the body is then sent once more without it.
+   * POST /api/submit. A server older than the client refuses `software` with found_with
+   * "optimizer" with exactly one known 400; the body is then sent once more without it.
+   *
+   * When a POST goes out but no answer comes back (a network error, a timeout, a 5xx), the server
+   * may have stored the packing. `check` then reads the problem, and the POST is sent again, after
+   * a backoff, only when the packing is not there and could still lead: at most
+   * MAX_SUBMIT_ATTEMPTS POSTs in all.
    */
-  async submit(body: Record<string, unknown>): Promise<{ answer: Answer | null; withoutSoftware: boolean }> {
-    const answer = await this.request("POST", "/api/submit", body);
-    if (!answer || !("software" in body) || !isSoftwareRefusal(answer.status, answer.body))
-      return { answer, withoutSoftware: false };
-    this.log('the server does not take "software" with optimizer entries yet: sending again without it');
-    const { software: _software, ...rest } = body;
-    return { answer: await this.request("POST", "/api/submit", rest), withoutSoftware: true };
+  async submit(body: Record<string, unknown>, check: () => Promise<SubmitCheck | null>): Promise<SubmitOutcome> {
+    let current = body;
+    let withoutSoftware = false;
+    let requests = 0;
+    let checked: SubmitCheck | null = null;
+    for (let attempt = 1; ;) {
+      const r = await this.post("/api/submit", current);
+      requests += r.requests;
+      if (r.answer) {
+        if (withoutSoftware || !("software" in current) || !isSoftwareRefusal(r.answer.status, r.answer.body))
+          return { answer: r.answer, requests, withoutSoftware, failure: null, check: null };
+        this.log('the server does not take "software" with optimizer entries yet: sending again without it');
+        const { software: _software, ...rest } = current;
+        current = rest;
+        withoutSoftware = true;
+        continue;
+      }
+      const outcome = (): SubmitOutcome => ({
+        answer: null,
+        requests,
+        withoutSoftware,
+        failure: r.failure,
+        check: checked,
+      });
+      // nothing went out, or the client is stopping and can no longer read the problem
+      if (r.requests === 0 || this.signal?.aborted) return outcome();
+      this.log(`${r.failure}: the server may have stored the packing; reading the problem before sending it again`);
+      checked = await check();
+      if (!checked || checked.state !== "absent" || attempt >= MAX_SUBMIT_ATTEMPTS) return outcome();
+      attempt++;
+      const wait = Math.min(MAX_BACKOFF_MS, 2000 * 2 ** (attempt - 2));
+      this.log(
+        `It was not stored: sending it again in ${wait / 1000} s (attempt ${attempt} of ${MAX_SUBMIT_ATTEMPTS})`,
+      );
+      try {
+        await this.sleep(wait, this.signal);
+      } catch {
+        return outcome();
+      }
+    }
   }
 }
 

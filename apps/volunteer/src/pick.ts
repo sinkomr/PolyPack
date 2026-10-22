@@ -31,9 +31,14 @@ export interface Filters {
  * problem may come back. One that failed does count, so that a failure is not repeated at once.
  * The leader after the search is usually this machine's own new entry; the list the server ranks
  * may still show the leader from before for a few minutes, so both count as seen.
+ *
+ * A dry run's search counts for later dry runs only: a real run must still search the problem and
+ * submit, and the dry run's best packing, kept in best/, is offered then.
  */
-export function noteSearch(recent: Map<string, Recent>, line: HistoryLine): void {
-  if (line.stopped === "aborted" || line.stopped === "interrupted") return;
+export function noteSearch(recent: Map<string, Recent>, line: HistoryLine, dryRun = false): void {
+  if (line.stopped === "aborted" || line.stopped === "interrupted" || line.stopped === "crashed") return;
+  // lines written before `dry_run` was recorded say so in their decision
+  if (!dryRun && (line.dry_run === true || line.decision === "dry run: would submit")) return;
   const time = Date.parse(line.time);
   if (!Number.isFinite(time)) return;
   const key = problemKey(line);
@@ -44,10 +49,15 @@ export function noteSearch(recent: Map<string, Recent>, line: HistoryLine): void
   recent.set(key, { time, leaders });
 }
 
-export function recentFromHistory(lines: Iterable<HistoryLine>): Map<string, Recent> {
+export function recentFromHistory(lines: Iterable<HistoryLine>, dryRun = false): Map<string, Recent> {
   const recent = new Map<string, Recent>();
-  for (const line of lines) noteSearch(recent, line);
+  for (const line of lines) noteSearch(recent, line, dryRun);
   return recent;
+}
+
+/** Forgets searches older than RECENT_MS, which no longer skip anything. */
+export function pruneRecent(recent: Map<string, Recent>, now: number): void {
+  for (const [key, r] of recent) if (now - r.time >= RECENT_MS) recent.delete(key);
 }
 
 /** True when this machine searched the problem within RECENT_MS and its leader is one it saw then. */

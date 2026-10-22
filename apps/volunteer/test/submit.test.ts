@@ -4,8 +4,10 @@ import {
   SOFTWARE_REFUSAL,
   better,
   buildKnown,
+  checkStored,
   decideSubmission,
   isSoftwareRefusal,
+  storedName,
   submissionBody,
 } from "../src/submit";
 import type { Candidate } from "../src/types";
@@ -189,5 +191,42 @@ describe("the starting packing", () => {
   it("is nothing without coordinates, or with the wrong number of pieces", () => {
     expect(buildKnown(info(lit(2.0, false)), null)).toBeUndefined();
     expect(buildKnown(info(null), { ...leaderEntry, pieces: pieces.slice(1) })).toBeUndefined();
+  });
+});
+
+// Fix 1: after a POST without an answer, the re-read decides whether it was stored.
+describe("recognising our own stored entry", () => {
+  const info = (site_best: { id: number; name: string; score: number } | null, open = true): ProblemInfo => ({
+    ...problem,
+    conventions: {},
+    area_bound: Math.SQRT2,
+    literature: null,
+    site_best: site_best && {
+      ...site_best,
+      found_with: "optimizer",
+      agent_note: "",
+      created_at: "2026-10-21T00:00:00Z",
+      verification: "none",
+    },
+    accepts_submissions: open,
+  });
+
+  it("finds it by name and score within the tie tolerance", () => {
+    expect(checkStored(info({ id: 9, name: "Ada", score: 2 * (1 + SCORE_TIE / 2) }), "Ada", 2)).toEqual({
+      state: "ours",
+      id: 9,
+      score: 2 * (1 + SCORE_TIE / 2),
+    });
+    // the server stores names cleaned: control characters and angle brackets become spaces
+    expect(checkStored(info({ id: 9, name: "Ada L", score: 2 }), "  Ada\u0007<L> ", 2).state).toBe("ours");
+    expect(storedName("a\tb  <c>")).toBe("a b c");
+  });
+
+  it("is not ours with another name or another score", () => {
+    expect(checkStored(info({ id: 9, name: "Bob", score: 2 }), "Ada", 2)).toEqual({ state: "beaten", leader: 2 });
+    expect(checkStored(info({ id: 9, name: "Ada", score: 1.9 }), "Ada", 2)).toEqual({ state: "beaten", leader: 1.9 });
+    expect(checkStored(info({ id: 9, name: "Ada", score: 2.5 }), "Ada", 2)).toEqual({ state: "absent" });
+    expect(checkStored(info(null), "Ada", 2)).toEqual({ state: "absent" });
+    expect(checkStored(info(null, false), "Ada", 2)).toEqual({ state: "closed" });
   });
 });

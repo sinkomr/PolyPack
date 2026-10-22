@@ -9,6 +9,9 @@
  *  - A watchdog replaces a thread that has not answered within time_s * 3 + 60 s of active time
  *    (pauses excluded), or within 10 s of being aborted, and the job resolves as "crashed". So
  *    does a job whose thread dies.
+ *  - A thread that dies is started again after a backoff (0.5 s doubling to 60 s while it keeps
+ *    dying). If threads die five times before any job has finished, the pool gives up: something
+ *    is wrong with the thread's code or the machine, and starting it again will not help.
  *
  * Control flags are plain objects shared with the engine, so a 100 ms tick forwards their changes
  * to the threads.
@@ -27,12 +30,19 @@ export interface PoolOptions {
   /** Milliseconds an aborted job may take to answer; default 10 s. */
   abortGraceMs?: number;
   tickMs?: number;
+  /** Milliseconds before a lane's thread is started again after its `failures`-th death in a row. */
+  respawnDelayMs?: (failures: number) => number;
+  /** Thread deaths before any job finished after which the pool gives up; default 5. */
+  maxStartupFailures?: number;
+  /** Called once when the pool gives up; every job then resolves as crashed. */
+  onFatal?: (message: string) => void;
   /** Makes a thread; tests use it to stand in a thread that never answers. */
   spawn?: (data: WorkerData) => Worker;
   log?: (message: string) => void;
 }
 
 export const defaultWatchdogSeconds = (job: Job) => job.budget.time_s * 3 + 60;
+export const defaultRespawnDelayMs = (failures: number) => Math.min(60_000, 500 * 2 ** Math.max(0, failures - 1));
 
 /** A result for a job that produced nothing. */
 export function emptyResult(job: Job, termination: string, reason: string): JobResult {
@@ -65,8 +75,12 @@ interface Running extends Queued {
 }
 
 interface Lane {
-  worker: Worker;
+  /** Null while a dead thread waits to be started again. */
+  worker: Worker | null;
   running: Running | null;
+  /** Deaths of this lane's thread since it last finished a job. */
+  failures: number;
+  respawn: NodeJS.Timeout | null;
 }
 
 export interface PoolStats {
@@ -85,11 +99,18 @@ export class WorkerPool {
   private paused = false;
   private stopping = false;
   private closed = false;
+  /** Why the pool gave up, or null. */
+  private fatal: string | null = null;
+  /** Whether any thread has finished a job; until then deaths count as startup failures. */
+  private succeeded = false;
+  private startupFailures = 0;
   private nextId = 1;
   private lastTick = performance.now();
   private readonly timer: NodeJS.Timeout;
   private readonly watchdogSeconds: (job: Job) => number;
   private readonly abortGraceMs: number;
+  private readonly respawnDelayMs: (failures: number) => number;
+  private readonly maxStartupFailures: number;
   private readonly log: (message: string) => void;
 
   private constructor(
@@ -98,9 +119,11 @@ export class WorkerPool {
   ) {
     this.watchdogSeconds = options.watchdogSeconds ?? defaultWatchdogSeconds;
     this.abortGraceMs = options.abortGraceMs ?? 10_000;
+    this.respawnDelayMs = options.respawnDelayMs ?? defaultRespawnDelayMs;
+    this.maxStartupFailures = options.maxStartupFailures ?? 5;
     this.log = options.log ?? (() => {});
     for (let i = 0; i < Math.max(1, options.size); i++) {
-      const lane: Lane = { worker: undefined as unknown as Worker, running: null };
+      const lane: Lane = { worker: null, running: null, failures: 0, respawn: null };
       this.lanes.push(lane);
       this.spawn(lane);
     }
@@ -115,9 +138,18 @@ export class WorkerPool {
     return this.lanes.length;
   }
 
+  /** Why the pool gave up, or null while it works. */
+  get failure(): string | null {
+    return this.fatal;
+  }
+
   /** The engine's RunJob. Never rejects. */
   readonly runJob: RunJob = (job, control) =>
     new Promise<JobResult>((resolve) => {
+      if (this.fatal) {
+        resolve(emptyResult(job, "crashed", this.fatal));
+        return;
+      }
       if (this.closed || this.stopping || control.aborted) {
         resolve(emptyResult(job, "aborted", "aborted before it started"));
         return;
@@ -163,9 +195,11 @@ export class WorkerPool {
     this.closed = true;
     clearInterval(this.timer);
     for (const q of this.queue.splice(0)) q.resolve(emptyResult(q.job, "aborted", "the client stopped"));
-    for (const lane of this.lanes)
+    for (const lane of this.lanes) {
+      if (lane.respawn) clearTimeout(lane.respawn);
       if (lane.running) this.settle(lane, emptyResult(lane.running.job, "aborted", "the client stopped"));
-    await Promise.all(this.lanes.map((lane) => lane.worker.terminate().catch(() => 0)));
+    }
+    await Promise.all(this.lanes.map((lane) => lane.worker?.terminate().catch(() => 0)));
   }
 
   private spawn(lane: Lane): void {
@@ -178,6 +212,8 @@ export class WorkerPool {
     worker.on("message", (m: FromWorker) => {
       const r = lane.running;
       if (worker !== lane.worker || !r || m?.type !== "result" || m.id !== r.id) return;
+      this.succeeded = true;
+      lane.failures = 0;
       // the engine gets its own Job object back, not the copy that travelled to the thread
       this.settle(lane, { ...m.result, job: r.job });
     });
@@ -185,23 +221,50 @@ export class WorkerPool {
     worker.on("exit", (code) => this.lost(lane, worker, `the search thread exited with code ${code}`));
   }
 
-  /** A thread died: its job resolves as crashed and, unless the pool is closed, a new thread takes its lane. */
+  /**
+   * A thread died: its job resolves as crashed, and a new thread takes the lane after a backoff,
+   * unless threads keep dying before any job has finished.
+   */
   private lost(lane: Lane, worker: Worker, why: string): void {
-    if (worker !== lane.worker || this.closed) return;
-    // the new thread first: settling dispatches the next job to the lane's thread
-    this.spawn(lane);
-    if (lane.running) {
-      this.log(`${why}; started a new one`);
-      this.settle(lane, emptyResult(lane.running.job, "crashed", why));
-    } else this.dispatch();
+    if (worker !== lane.worker || this.closed || this.fatal) return;
+    lane.worker = null;
+    lane.failures++;
+    if (!this.succeeded) this.startupFailures++;
+    if (lane.running) this.settle(lane, emptyResult(lane.running.job, "crashed", why));
+    if (!this.succeeded && this.startupFailures >= this.maxStartupFailures) {
+      this.giveUp(`the search threads stopped ${this.startupFailures} times before finishing any job (last: ${why})`);
+      return;
+    }
+    const delay = this.respawnDelayMs(lane.failures);
+    this.log(`${why}; starting a new one in ${delay / 1000} s`);
+    lane.respawn = setTimeout(() => {
+      lane.respawn = null;
+      if (this.closed || this.fatal) return;
+      this.spawn(lane);
+      this.dispatch();
+    }, delay);
   }
 
-  /** Replaces a stuck thread. */
+  /** Every job ends as crashed, now and later. */
+  private giveUp(message: string): void {
+    this.fatal = message;
+    this.log(`Giving up: ${message}`);
+    for (const q of this.queue.splice(0)) q.resolve(emptyResult(q.job, "crashed", message));
+    for (const lane of this.lanes) {
+      if (lane.respawn) clearTimeout(lane.respawn);
+      lane.respawn = null;
+      if (lane.running) this.settle(lane, emptyResult(lane.running.job, "crashed", message));
+    }
+    this.options.onFatal?.(message);
+  }
+
+  /** Replaces a stuck thread at once: it did start, so there is nothing to back off from. */
   private replace(lane: Lane, why: string): void {
     const stuck = lane.worker;
     this.log(`${why}: replacing the search thread`);
+    // the new thread first: settling dispatches the next job to the lane's thread
     this.spawn(lane);
-    void stuck.terminate().catch(() => 0);
+    void stuck?.terminate().catch(() => 0);
     if (lane.running) this.settle(lane, emptyResult(lane.running.job, "crashed", why));
     else this.dispatch();
   }
@@ -219,7 +282,7 @@ export class WorkerPool {
 
   private post(lane: Lane, message: ToWorker): void {
     try {
-      lane.worker.postMessage(message);
+      lane.worker?.postMessage(message);
     } catch {
       // the thread is gone: its exit event settles the job
     }
@@ -241,7 +304,7 @@ export class WorkerPool {
   }
 
   private dispatch(): void {
-    if (this.closed) return;
+    if (this.closed || this.fatal) return;
     // jobs aborted while queued end at once
     this.queue = this.queue.filter((q) => {
       if (!this.stopping && !q.control.aborted) return true;
@@ -249,7 +312,7 @@ export class WorkerPool {
       return false;
     });
     for (const lane of this.lanes) {
-      if (lane.running) continue;
+      if (lane.running || !lane.worker) continue;
       const i = this.queue.findIndex((q) => !this.isPaused(q));
       if (i < 0) return;
       const [q] = this.queue.splice(i, 1);
