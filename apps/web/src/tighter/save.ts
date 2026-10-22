@@ -26,7 +26,7 @@ import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { normalizeStanding } from "./standing";
-import { EvolveMethod, UPGRADES, UpgradeId, isUpgradeId, methods, owning, upgrade } from "./upgrades";
+import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, isUpgradeId, methods, owning, upgrade } from "./upgrades";
 
 /** Every method of the tree: a pipeline keeps its stages while a reset has taken a method away. */
 const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
@@ -44,6 +44,12 @@ const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
   ["away6", { cost: 1_500_000, currency: "rp" }],
   ["keepBank", { cost: 2, currency: "standing" }],
 ]);
+/**
+ * Levelled upgrades whose range shrank, with the old maximum: Faster auto-eval had 100 levels while
+ * auto-eval's rate was in clicks, and has 3 since it is in evaluations a second (capped). Levels
+ * past the new maximum are refunded; none past the old one could have been bought.
+ */
+const SHRUNK = new Map<UpgradeId, number>([["autox", 100]]);
 
 /**
  * Saves. The game lives in the browser: a versioned JSON document in localStorage, and the same
@@ -298,16 +304,19 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     const r = typeof id === "string" ? RETIRED.get(id) : undefined;
     if (r) refund[r.currency] += r.cost;
   }
-  const standing = normalizeStanding(save.standing, now);
-  standing.points += refund.standing;
-  // levels of levelled upgrades that are owned, within their range
+  // levels of levelled upgrades that are owned, within their range. Levels bought above a range that
+  // shrank (SHRUNK) are refunded at their list price, once: the save keeps only the range.
   const levels: Partial<Record<UpgradeId, number>> = {};
   if (isObj(save.levels))
     for (const [id, l] of Object.entries(save.levels)) {
       const u = isUpgradeId(id) && owned.includes(id) ? upgrade(id) : null;
-      if (u?.levels && Number.isSafeInteger(l) && (l as number) >= 1)
-        levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
+      if (!u?.levels || !Number.isSafeInteger(l) || (l as number) < 1) continue;
+      levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
+      for (let j = u.levels.max; j < Math.min(l as number, SHRUNK.get(id as UpgradeId) ?? 0); j++)
+        refund[currencyOf(u)] += Math.round(u.cost * Math.pow(u.levels.growth, j));
     }
+  const standing = normalizeStanding(save.standing, now);
+  standing.points += refund.standing;
   const evaluations = int(stats.evaluations, 0);
   const allMethods = methods(owning(owned, levels));
   const method = allMethods.find((m) => m === settings.method) ?? "mc_compress";

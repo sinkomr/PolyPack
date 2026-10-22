@@ -186,6 +186,12 @@ describe("Tighter saves", () => {
     // nothing due from before the load, whatever unit it was counted in
     expect(r.state.autoDue).toBe(0);
     expect(r.state.autoAt).toBe(T0);
+    // levels 4 to 9 are refunded at their list price (150,000 RP × 1.4 per level bought before), once
+    let refund = 0;
+    for (let j = 3; j < 9; j++) refund += Math.round(150000 * 1.4 ** j);
+    expect(r.state.rp).toBe(s.rp + refund);
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.rp).toBe(s.rp + refund);
   });
 
   it("round-trip through an export string", async () => {
