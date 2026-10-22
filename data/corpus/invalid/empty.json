@@ -8,5 +8,6 @@
   },
   "expected_score": null,
   "expected_valid": false,
+  "oriented_score": null,
   "auto_oriented_phi": 0
 }

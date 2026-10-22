@@ -1,4 +1,4 @@
-import { Container, Pose, pieceVertices } from "./shapes";
+import { Container, Pose, circumradius, inradius, pieceVertices } from "./shapes";
 
 /**
  * What an enclosing computation needs to know about an arrangement: the convex hull
@@ -153,6 +153,11 @@ export function enclosingPolygon(set: PointSet, M: number, phi: number): Contain
   if (set.pts.length === 0) return { M, cx: 0, cy: 0, phi, size: 0 };
   const h = new Float64Array(M);
   supports(set, M, phi, h);
+  return polygonFromSupports(h, M, phi);
+}
+
+/** The smallest regular M-gon at orientation phi from the supports h along its edge normals. */
+function polygonFromSupports(h: Float64Array, M: number, phi: number): Container {
   const { a, i, j, k } = solveDual(h, M);
   const step = (2 * Math.PI) / M;
   const ang = (n: number) => phi - Math.PI / 2 + n * step;
@@ -261,8 +266,92 @@ export function encloseSet(set: PointSet, M: number, phi: number): Container {
   return M === 0 ? enclosingCircle(set) : enclosingPolygon(set, M, phi);
 }
 
-/** Smallest enclosing container of N-gon (or circle) pieces at the given poses. */
+/** Unit roundoff of a double. */
+const EPS = 2 ** -53;
+/** Most candidate pieces along one normal before candidateSupports leaves the support to the hull. */
+const MAX_CANDIDATES = 8;
+
+/**
+ * The supports h_j that `supports` finds on the hull of all the vertices, the same doubles, found
+ * from the vertices of a few pieces, without the hull; false (h unusable) when that cannot be
+ * vouched for. Polygon pieces (N >= 3) and container (M >= 3) only.
+ *
+ * Candidates: along a normal u, a piece reaches at most c.u + R and at least c.u + r, so only the
+ * pieces whose centre lies within R - r of the highest centre can attain the support; a margin
+ * of 1e-12 C, C bounding every vertex coordinate, covers rounding. Their vertices are computed
+ * exactly as extremePoints computes them, and h_j is the largest x ux + y uy among them.
+ *
+ * Why it is the kernel's value: that largest vertex q must also lie on the kernel's hull, whose
+ * points `supports` takes the largest of. The monotone chain drops q only when a cross product
+ * (q - o) x (b - o) rounds to <= 0, with o before q and b after it in the sort (by x); the exact
+ * cross product is then below 3.02 eps (|A_x B_y| + |A_y B_x|), A = q - o, B = b - o, in the pass
+ * that keeps the points extreme along u (the lower one when u_y < 0). If every other vertex is
+ * lower along u by T, the segment ob passes q by T along u at q's abscissa, which makes the exact
+ * cross product at least T |B_x| / |u_y|, while |A_x B_y| + |A_y B_x| <= 2 D |B_x| (D the diameter,
+ * below 2.9 C): so T > 17.1 eps C keeps q. (With u_y = 0, q is the first or the last point of the
+ * sort, which is never dropped.) The check below asks the largest value to beat the second by
+ * 64 eps C, which leaves 8 eps C for the rounding of the dot products and still more than a factor
+ * of 3; the vertices of other pieces are lower by at least the margin. When the check fails (two
+ * vertices level with the support, as when an edge lies along a container side exactly), the hull
+ * decides.
+ */
+function candidateSupports(N: number, poses: readonly Pose[], M: number, phi: number, h: Float64Array): boolean {
+  const R = circumradius(N);
+  const r = inradius(N);
+  let maxAbs = 0;
+  for (const p of poses) maxAbs = Math.max(maxAbs, Math.abs(p.x), Math.abs(p.y));
+  const C = maxAbs + R;
+  const reach = R - r + 1e-12 * C;
+  const tie = 64 * EPS * C;
+  const step = (2 * Math.PI) / M;
+  const vertices = new Map<number, Float64Array>();
+  for (let j = 0; j < M; j++) {
+    // the normal exactly as `supports` computes it
+    const ang = phi - Math.PI / 2 + j * step;
+    const ux = Math.cos(ang);
+    const uy = Math.sin(ang);
+    let top = -Infinity;
+    for (const p of poses) {
+      const d = p.x * ux + p.y * uy;
+      if (d > top) top = d;
+    }
+    // Many pieces level with the highest (a row along a container side) nearly always tie: the
+    // hull decides at once, before their vertices are computed for nothing.
+    let count = 0;
+    for (const p of poses) if (p.x * ux + p.y * uy >= top - reach && ++count > MAX_CANDIDATES) return false;
+    let first = -Infinity;
+    let second = -Infinity;
+    for (let i = 0; i < poses.length; i++) {
+      const p = poses[i];
+      if (p.x * ux + p.y * uy < top - reach) continue;
+      let v = vertices.get(i);
+      if (!v) vertices.set(i, (v = pieceVertices(N, p, 1, new Float64Array(2 * N))));
+      for (let k = 0; k < v.length; k += 2) {
+        const d = v[k] * ux + v[k + 1] * uy;
+        if (d > first) {
+          second = first;
+          first = d;
+        } else if (d > second) second = d;
+      }
+    }
+    if (!(first - second > tie)) return false;
+    // + 0 as `supports` adds its pad, which also makes a support of -0 the kernel's +0
+    h[j] = first + 0;
+  }
+  return true;
+}
+
+/**
+ * Smallest enclosing container of N-gon (or circle) pieces at the given poses. For polygon pieces
+ * in a polygon container the supports come from a few candidate pieces (candidateSupports), the
+ * same doubles as from the hull of all N P vertices at a small part of the cost; the hull is built
+ * only when they cannot be vouched for.
+ */
 export function enclose(N: number, poses: readonly Pose[], M: number, phi: number): Container {
+  if (N >= 3 && M >= 3 && poses.length > 0) {
+    const h = new Float64Array(M);
+    if (candidateSupports(N, poses, M, phi, h)) return polygonFromSupports(h, M, phi);
+  }
   return encloseSet(extremePoints(N, poses), M, phi);
 }
 

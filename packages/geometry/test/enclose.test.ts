@@ -225,6 +225,31 @@ describe("evaluate and strict verification", () => {
     expect(e.reasons).toHaveLength(2);
   });
 
+  it("with stopWhenInvalid, returns the same verdict, reasons and overlaps, and leaves valid packings as they were", () => {
+    fc.assert(
+      fc.property(
+        fc.constantFrom(0, 3, 4, 6, 12, 60),
+        fc.constantFrom(0, 3, 4, 7),
+        fc.array(poseArb(3), { maxLength: 12 }),
+        fc.integer({ min: -1, max: 1 }),
+        fc.double({ min: -4, max: 4, noNaN: true }),
+        (N, M, pieces, extra, phi) => {
+          const config = { N, M, P: Math.max(1, pieces.length + extra), pieces, container_phi: phi };
+          for (const opts of [{}, { autoOrient: true, maxOverlaps: 3 }]) {
+            const full = evaluate(config, opts);
+            const early = evaluate(config, { ...opts, stopWhenInvalid: true });
+            expect(early.valid).toBe(full.valid);
+            expect(early.reasons).toEqual(full.reasons);
+            expect(early.overlaps).toEqual(full.overlaps);
+            if (full.valid) expect(early).toEqual(full);
+            else expect([early.container, early.score]).toEqual([null, null]);
+          }
+        },
+      ),
+      { numRuns: 1000 },
+    );
+  });
+
   it("the area bound holds for valid packings", () => {
     const pieces = [{ x: 0, y: 0, theta: 0 }, { x: 3, y: 0.1, theta: 1 }, { x: 0.2, y: 3, theta: 2 }];
     for (const M of [0, 3, 4, 6]) {

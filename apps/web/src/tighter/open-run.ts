@@ -209,7 +209,8 @@ export class OpenRun {
   }
 
   private end(r: Result | null, error?: string): void {
-    // the final auto-orientation is free and server-equivalent: it may lower the score
+    // the final auto-orientation is free and is what the server will score (at the phi sent): it may
+    // lower the score
     if (r?.valid && r.strict && r.best && r.score !== null && (this.score === null || r.score < this.score)) {
       this.best = structuredClone(r.best);
       this.score = r.score;

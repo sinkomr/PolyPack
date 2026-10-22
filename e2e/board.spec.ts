@@ -1,12 +1,15 @@
 import { expect, test } from "@playwright/test";
-import { findOverlaps, pieceSeparation } from "@polypack/geometry";
+import { evaluate, findOverlaps, pieceSeparation } from "@polypack/geometry";
 import { openProblem, pieceCentre, pieces } from "./helpers";
 
 test("build a packing, submit it, and a second browser sees the leaderboard update", async ({ page, browser }) => {
   // squares in a nine-sided container: a problem with no published record, used by no other test
   // a second visitor already watching the same problem
   const other = await (await browser.newContext()).newPage();
+  // it follows the live changes of its own problem only
+  const follows = other.waitForRequest((r) => decodeURIComponent(r.url()).endsWith("/api/events?keys=4/9/3"));
   await openProblem(other, 4, 9, 3);
+  await follows;
   await expect(other.locator("#leaderboard-note")).toContainText("No entries yet");
   await expect(other.locator("#live")).toHaveClass(/on/);
 
@@ -89,6 +92,30 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   await other.goto("/browse.html#4,9");
   await expect(other.locator("#rows tr")).toContainText("Playwright (by hand)");
   await expect(other.locator("#rows")).not.toContainText("Latecomer");
+});
+
+test("the board turns the container to its best orientation before it submits", async ({ page, request }) => {
+  // squares in a ten-sided container: a problem with no published record, used by no other test
+  await openProblem(page, 4, 10, 3);
+  await page.click("#add-all");
+  await expect(page.locator("#count")).toContainText("3 / 3");
+  // the container turned away from its best orientation
+  await page.fill("#phi", "13");
+  await page.locator("#phi").blur();
+  const shown = Number(await page.textContent("#score"));
+  await page.fill("#name", "Playwright orientation");
+  const [sent] = await Promise.all([page.waitForRequest("**/api/submit"), page.click("#submit")]);
+  const body = sent.postDataJSON();
+  // the server scores the container at the phi it is sent, so the board sends its best one
+  const atSent = evaluate(body).score!;
+  expect(atSent).toBe(evaluate(body, { autoOrient: true }).score);
+  expect(atSent).toBeLessThan(shown);
+  await expect(page.locator("#status")).toContainText("Turned the container to its best orientation before submitting");
+  await expect(page.locator("#submit-result")).toContainText("Accepted");
+  const lb = await (await request.get("/api/leaderboard/4/10/3")).json();
+  expect(lb.entries[0].score).toBe(atSent);
+  // the board shows the orientation it sent
+  await expect(page.locator("#score")).toHaveText(atSent.toFixed(6));
 });
 
 test("a link to an entry that is no longer kept says why it cannot be loaded", async ({ page, request }) => {

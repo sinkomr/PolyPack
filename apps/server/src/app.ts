@@ -6,6 +6,7 @@ import {
   LeaderboardEntry,
   LeaderboardEvent,
   LiteratureRecord,
+  MAX_EVENT_KEYS,
   MAX_PIECES,
   MAX_SIDES,
   ProblemInfo,
@@ -31,10 +32,16 @@ import {
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REPORTED_OVERLAPS,
+  OVERLOAD_DELAY_MS,
+  OVERLOAD_RETRY_S,
   RateLimiter,
   SUBMISSIONS_PER_MINUTE,
+  TimeBudget,
+  VERIFY_MS_PER_MINUTE,
+  addressKey,
   sanitizeText,
 } from "./limits";
+import { LoadStats } from "./load";
 import { EntryEdit, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
@@ -45,11 +52,20 @@ export interface AppOptions {
   records: LiteratureRecord[];
   /** Admin routes are disabled when this is empty. */
   adminToken?: string;
-  /** Address used for rate limiting. */
+  /** Address used for rate limiting; IPv6 addresses are limited by their /64 (see addressKey). */
   clientIp?: (c: Context) => string;
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
-  limits?: { perIp?: number; windowMs?: number };
+  /**
+   * `perIp` submissions per `windowMs` from one address, and `verifyMsPerMinute` milliseconds of
+   * verification a minute; `overloadDelayMs` is the event-loop delay above which submissions are
+   * refused (0: never).
+   */
+  limits?: { perIp?: number; windowMs?: number; verifyMsPerMinute?: number; overloadDelayMs?: number };
+  /** The current event-loop delay in ms (see LoopDelay); without it submissions are never refused as overload. */
+  loopDelay?: () => number;
+  /** Receives a line per submission and the counts for a line a minute (see LoadStats). */
+  stats?: LoadStats;
   /** Least age at which /api/holders is computed again after an entry changed; HOLDERS_REFRESH_MS by default. */
   holdersRefreshMs?: number;
 }
@@ -63,7 +79,8 @@ const CONVENTIONS = {
   score: "container side length s (polygon) or radius r (circle); smaller is better",
   shapes: `N and M are 0 for a circle or an integer from 3 to ${MAX_SIDES}; P is from 1 to ${MAX_PIECES}`,
   validity: `pieces may touch; two pieces overlap when their separation is below -${TOL}`,
-  scoring: "the server scores at container_phi and at its own auto-oriented phi and keeps the smaller",
+  scoring:
+    "the server scores the container at the container_phi sent (0 when it is missing) and does not search for a better orientation: turn the container to its best orientation before submitting",
 };
 
 /** Most values of P that one /api/atlas request may cover. */
@@ -72,8 +89,8 @@ export const ATLAS_MAX_SPAN = 100;
 export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
-/** How far /api/holders may lag behind the entries: it is computed again at most once a minute. */
-export const HOLDERS_REFRESH_MS = 60_000;
+/** How far /api/holders may lag behind the entries: it is computed again at most once every 15 minutes. */
+export const HOLDERS_REFRESH_MS = 900_000;
 
 /**
  * Which packing the atlas draws for one P.
@@ -97,6 +114,26 @@ export function atlasSource(
   return pending ? "pending" : null;
 }
 
+/**
+ * The keys of GET /api/events?keys=...: comma-separated "N/M/P" (one problem) or "N/M/*" (every P
+ * of a pair), at most MAX_EVENT_KEYS, written back in one form ("04/4/11" is "4/4/11"); an empty
+ * list follows nothing. A message when the text is not such a list.
+ */
+export function parseEventKeys(text: string): string[] | string {
+  const keys = new Set<string>();
+  for (const part of text === "" ? [] : text.split(",")) {
+    const m = /^(\d{1,3})\/(\d{1,3})\/(\d{1,3}|\*)$/.exec(part);
+    const N = Number(m?.[1]);
+    const M = Number(m?.[2]);
+    const P = m?.[3] === "*" ? "*" : Number(m?.[3]);
+    if (!isShapeCode(N) || !isShapeCode(M) || (P !== "*" && !(P >= 1 && P <= MAX_PIECES)))
+      return `keys must be N/M/P or N/M/*, separated by commas, with N and M 0 or 3 to ${MAX_SIDES} and P 1 to ${MAX_PIECES}; "${part.slice(0, 20)}" is not`;
+    keys.add(`${N}/${M}/${P}`);
+  }
+  if (keys.size > MAX_EVENT_KEYS) return `at most ${MAX_EVENT_KEYS} keys`;
+  return [...keys];
+}
+
 /** A query value that is a plain decimal integer; anything else (empty, "0x10", "1e2", "1.5") is NaN. */
 function decimalInteger(text: string | undefined): number {
   return text !== undefined && /^\d{1,9}$/.test(text) ? Number(text) : NaN;
@@ -115,6 +152,9 @@ export function createApp(opts: AppOptions): Hono {
   const app = new Hono();
   const windowMs = opts.limits?.windowMs ?? 60_000;
   const ipLimit = new RateLimiter(opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE, windowMs);
+  const verifyBudget = new TimeBudget(opts.limits?.verifyMsPerMinute ?? VERIFY_MS_PER_MINUTE);
+  const overloadDelayMs = opts.limits?.overloadDelayMs ?? OVERLOAD_DELAY_MS;
+  const loopDelay = opts.loopDelay ?? (() => 0);
   const clientIp = opts.clientIp ?? (() => "unknown");
   const log = opts.log ?? ((msg: string) => console.log(msg));
 
@@ -127,7 +167,34 @@ export function createApp(opts: AppOptions): Hono {
    */
   const closed = (N: number, M: number, P: number) => closedToSubmissions(literature.get(`${N}/${M}/${P}`));
 
-  const listeners = new Set<(e: LeaderboardEvent) => void>();
+  // Live updates go to the streams that follow the problem, by "N/M/P" or "N/M/*", and to those that
+  // follow every problem, so that each change costs a write per interested stream only.
+  type Listener = (e: LeaderboardEvent) => void;
+  const followAll = new Set<Listener>();
+  const followers = new Map<string, Set<Listener>>();
+  const follow = (fn: Listener, keys: string[] | null) => {
+    if (!keys) return void followAll.add(fn);
+    for (const k of keys) {
+      const set = followers.get(k);
+      if (set) set.add(fn);
+      else followers.set(k, new Set([fn]));
+    }
+  };
+  const unfollow = (fn: Listener, keys: string[] | null) => {
+    if (!keys) return void followAll.delete(fn);
+    for (const k of keys) {
+      const set = followers.get(k);
+      set?.delete(fn);
+      if (set?.size === 0) followers.delete(k);
+    }
+  };
+  const announce = (e: LeaderboardEvent) => {
+    for (const fn of followAll) fn(e);
+    const one = followers.get(`${e.N}/${e.M}/${e.P}`);
+    const pair = followers.get(`${e.N}/${e.M}/*`);
+    for (const fn of one ?? []) fn(e);
+    for (const fn of pair ?? []) if (!one?.has(fn)) fn(e);
+  };
 
   /** Reads N, M, P from the path; null when out of range. */
   const problemOf = (c: Context): { N: number; M: number; P: number } | null => {
@@ -359,22 +426,39 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   app.post("/api/submit", async (c) => {
-    const reject = (status: 400 | 409 | 413 | 422 | 429, reasons: string[]) => {
-      const body: SubmitResponse = {
-        valid: false,
-        reasons,
-        score: null,
-        rank: null,
-        leader: false,
-        leader_score: null,
-        id: null,
-        container: null,
-        pending_verification: false,
-        strict_check: null,
-      };
-      return c.json(body, status);
+    const started = performance.now();
+    // what the log line says about this submission, filled in as the body is read
+    let problem: string | null = null;
+    let verifyMs: number | null = null;
+    const answer = (body: SubmitResponse, status: 200 | 400 | 409 | 413 | 422 | 429 | 503, retryAfter?: number) => {
+      opts.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
+      return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    if (!ipLimit.allow(clientIp(c))) return reject(429, ["too many submissions from this address; wait a minute"]);
+    const reject = (status: 400 | 409 | 413 | 422 | 429 | 503, reasons: string[], retryAfter?: number) =>
+      answer(
+        {
+          valid: false,
+          reasons,
+          score: null,
+          rank: null,
+          leader: false,
+          leader_score: null,
+          id: null,
+          container: null,
+          pending_verification: false,
+          strict_check: null,
+        },
+        status,
+        retryAfter,
+      );
+    // While the event loop lags, work is queuing: submissions, the costly requests, are refused
+    // until it catches up.
+    if (overloadDelayMs > 0 && loopDelay() > overloadDelayMs)
+      return reject(503, ["the server is busy; try again in a few seconds"], OVERLOAD_RETRY_S);
+    const address = addressKey(clientIp(c));
+    if (!ipLimit.allow(address)) return reject(429, ["too many submissions from this address; wait a minute"]);
+    const wait = verifyBudget.wait(address);
+    if (wait > 0) return reject(429, [`too much verification work from this address; wait ${wait} s`], wait);
     if (Number(c.req.header("content-length") ?? 0) > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
     const text = await c.req.text();
     if (text.length > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
@@ -394,25 +478,31 @@ export function createApp(opts: AppOptions): Hono {
       return reject(400, [...(parsed.ok ? [] : parsed.errors), ...(found && !found.ok ? found.errors : [])]);
     const config = parsed.config;
     const provenance = found.provenance;
-    const lit = literature.get(`${config.N}/${config.M}/${config.P}`);
+    problem = `${config.N}/${config.M}/${config.P}`;
+    const lit = literature.get(problem);
     // decided before the packing is looked at: nothing can improve on a proven optimum
     if (closedToSubmissions(lit))
       return reject(409, [`this problem is closed: its optimum ${lit!.display} is proven (${lit!.source_name})`]);
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
 
-    // The score is always recomputed here. Any container or score fields in the body were
-    // already dropped by parseConfig.
-    const result = evaluate(config, { autoOrient: true, maxOverlaps: MAX_REPORTED_OVERLAPS });
-    if (!result.valid || !result.container) return reject(422, result.reasons);
-    const container = result.container;
+    // The score is always recomputed here: the smallest container at the container_phi sent (0
+    // when none was). The server does not search for a better orientation; clients turn their
+    // boards before sending (decided 2026-10-21, see CONVENTIONS.scoring). Any container or score
+    // fields in the body were already dropped by parseConfig. The time it takes is charged to the
+    // address.
+    const verifyStart = performance.now();
+    const result = evaluate(config, { maxOverlaps: MAX_REPORTED_OVERLAPS, stopWhenInvalid: true });
+    const container = result.valid ? result.container : null;
+    const beats = !!container && !!lit && beatsLiterature(container.size, lit);
+    const strict = container && beats ? strictVerify(config.N, config.pieces, container) : null;
+    verifyMs = performance.now() - verifyStart;
+    verifyBudget.charge(address, verifyMs);
+    if (!container) return reject(422, result.reasons);
     const score = container.size;
 
-    const beats = !!lit && beatsLiterature(score, lit);
-    const strict = beats ? strictVerify(config.N, config.pieces, container) : null;
-
-    const before = await store.leader(config.N, config.M, config.P);
-    const id = await store.insert({
+    // the insert, the leader and rank it gives, and the prune, in one transaction
+    const { id, before, leader, position, kept } = await store.submit({
       N: config.N,
       M: config.M,
       P: config.P,
@@ -430,16 +520,11 @@ export function createApp(opts: AppOptions): Hono {
     });
     // The leader is the earliest entry among the equally good ones, so an entry that only ties the
     // smallest score is not rank 1 although nothing is strictly ahead of it.
-    const [leader, position] = await Promise.all([
-      store.leader(config.N, config.M, config.P),
-      store.rank(config.N, config.M, config.P, id),
-    ]);
     const leads = leader?.id === id;
     const rank = leads ? 1 : Math.max(2, position);
-    // A problem keeps only its leader (and, behind a pending leader, the record it displaced); this
-    // entry may already be among the deleted.
-    const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
-    // after the insert and the prune, so that no answer computed in between is kept
+    // A problem keeps only its leader (and, behind a pending leader, the record it displaced): the
+    // entry may already have been deleted (`kept` is false). After the insert and the prune, so that
+    // no answer computed in between is kept:
     entriesChanged(`${config.N}/${config.M}`);
     if (beats) {
       log(
@@ -460,7 +545,8 @@ export function createApp(opts: AppOptions): Hono {
         rank: 1,
         name: leader.name,
       };
-      for (const fn of listeners) fn(event);
+      opts.stats?.leaderChanged();
+      announce(event);
     }
     const body: SubmitResponse = {
       valid: true,
@@ -474,40 +560,57 @@ export function createApp(opts: AppOptions): Hono {
       pending_verification: beats,
       strict_check: strict,
     };
-    return c.json(body);
+    return answer(body, 200);
   });
 
-  // Live updates: one "leaderboard" event whenever a problem gets a new leader.
-  app.get("/api/events", (c) =>
-    streamSSE(c, async (stream) => {
+  // Live updates: one "leaderboard" event whenever a problem the stream follows gets a new leader.
+  // `keys` lists the problems; without it the stream follows every problem. A client that follows
+  // other problems opens a new stream; an EventSource that reconnects asks for the same keys.
+  app.get("/api/events", (c) => {
+    const text = c.req.query("keys");
+    const keys = text === undefined ? null : parseEventKeys(text);
+    if (typeof keys === "string") return c.json({ error: keys }, 400);
+    return streamSSE(c, async (stream) => {
       const queue: LeaderboardEvent[] = [];
       let wake: (() => void) | null = null;
       const listener = (e: LeaderboardEvent) => {
         queue.push(e);
         wake?.();
       };
-      listeners.add(listener);
+      follow(listener, keys);
+      opts.stats?.stream(1, keys);
+      let open = true;
+      const close = () => {
+        if (!open) return;
+        open = false;
+        unfollow(listener, keys);
+        opts.stats?.stream(-1, keys);
+      };
       stream.onAbort(() => {
-        listeners.delete(listener);
+        close();
         wake?.();
       });
-      await stream.writeSSE({ event: "hello", data: "{}" });
-      while (!stream.aborted) {
-        while (queue.length) await stream.writeSSE({ event: "leaderboard", data: JSON.stringify(queue.shift()) });
-        // wake on the next event, or after 20 s to send a keep-alive comment
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 20_000);
-          wake = () => {
-            clearTimeout(timer);
-            resolve();
-          };
-        });
-        wake = null;
-        if (!queue.length && !stream.aborted) await stream.writeSSE({ event: "ping", data: "{}" });
+      try {
+        await stream.writeSSE({ event: "hello", data: JSON.stringify(keys ? { keys } : { all: true }) });
+        while (!stream.aborted) {
+          while (queue.length) await stream.writeSSE({ event: "leaderboard", data: JSON.stringify(queue.shift()) });
+          // wake on the next event, or after 20 s to send a keep-alive comment
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 20_000);
+            wake = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+          wake = null;
+          if (!queue.length && !stream.aborted) await stream.writeSSE({ event: "ping", data: "{}" });
+        }
+      } finally {
+        // also when a write fails on a connection that is gone
+        close();
       }
-      listeners.delete(listener);
-    }),
-  );
+    });
+  });
 
   const admin = (c: Context): Response | null => {
     if (!opts.adminToken) return c.json({ error: "admin access is not configured" }, 503);

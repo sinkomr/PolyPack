@@ -1,4 +1,4 @@
-import { MAX_PIECES, areaLowerBound, evaluate } from "@polypack/geometry";
+import { MAX_PIECES, areaLowerBound, evaluate, eventKeys } from "@polypack/geometry";
 import type { Container, LeaderboardEvent, PackingConfig, ProblemInfo } from "@polypack/geometry";
 import * as api from "../api";
 import { Board } from "../board";
@@ -42,6 +42,7 @@ import {
   density,
   drop,
   evolvable,
+  followed,
   hasUnsent,
   leave,
   log,
@@ -125,6 +126,7 @@ import {
   Trouble,
   answerTrouble,
   classifyAnswer,
+  orientBoard,
   shouldSubmit,
   submissionBody,
   troubleText,
@@ -1104,15 +1106,16 @@ async function submitTick(): Promise<void> {
 }
 
 /**
- * Before a board is sent, its container is turned to its best angle, as the server scores it. The
- * runs score fixed angles between turns, so this often gains a little: an improvement like any other.
+ * Before a board is sent, its container is turned to its best angle: the server scores it at the
+ * angle sent and does not search for a better one. The runs score fixed angles between turns, so
+ * this often gains a little: an improvement like any other.
  */
 function orient(p: ProblemState): void {
   if (!p.board || p.best === null) return;
-  const e = evaluate(p.board, { autoOrient: true });
-  if (!e.valid || !e.container || e.score === null || !(e.score < p.best)) return;
-  p.board = { ...p.board, container_phi: e.container.phi };
-  p.best = e.score;
+  const turned = orientBoard(p.board, p.best);
+  if (!turned) return;
+  p.board = turned.board;
+  p.best = turned.score;
   const points = pay(state, p);
   if (points)
     event(
@@ -1753,19 +1756,14 @@ function onLeaderEvent(e: LeaderboardEvent): void {
   persist();
   render();
 }
+/**
+ * Live leader changes, of the problems in the queue and the records held only (see followed). The
+ * stream follows them as they change, checked every second; without it, records held are checked
+ * when the game next looks at each problem.
+ */
+const feed = new api.LiveFeed(onLeaderEvent);
 function listen(): void {
-  try {
-    const source = new EventSource("/api/events");
-    source.addEventListener("leaderboard", (e) => {
-      try {
-        onLeaderEvent(JSON.parse((e as MessageEvent).data));
-      } catch {
-        // a malformed event is ignored
-      }
-    });
-  } catch {
-    // no live updates: records held are checked when the game next looks at each problem
-  }
+  feed.follow(eventKeys(followed(state)));
 }
 
 /**
@@ -3198,6 +3196,7 @@ function start(): void {
   void dealTick();
   void refreshHeld();
   ticker = window.setInterval(() => {
+    listen();
     void dealTick();
     void submitTick();
     void settleLost();
@@ -3212,6 +3211,7 @@ function standBy(takenOver: boolean): void {
   if (ownsGame) {
     ownsGame = false;
     clearInterval(ticker);
+    feed.close();
     clearTimeout(saveTimer);
     state.settings.auto = false;
     for (const l of lanes) l.lane.terminate();

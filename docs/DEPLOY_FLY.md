@@ -80,6 +80,10 @@ fly volumes list
 fly volumes snapshots list <volume id>
 ```
 
+The server logs one line per submission, with its status, problem and time, in all and for the geometry check (`[submit] 200 4/4/11 1.32 ms, verification 0.87 ms`; never a name or an address). In every minute with a submission or an open live-update stream it adds one line with the counts by status, the percentiles of verification time, the leader changes, the open streams and the longest event-loop delay (`[load] last minute: …`). `fly logs | grep '\[load\]'` follows the load.
+
+Each address may cause 2 s of verification a minute (`VERIFY_MS_PER_MINUTE` in `apps/server/src/limits.ts`); IPv6 addresses count by their /64. While the event loop lags by more than 250 ms, submissions are answered 503 with `Retry-After`. The setting `OVERLOAD_DELAY_MS` changes that threshold, and `0` switches the refusal off.
+
 Fly takes a daily snapshot of the volume and keeps it for a few days; see <https://fly.io/docs/volumes/snapshots/>. The volume lives on one server, so the snapshots are the only copy on Fly.
 
 For a copy of your own on a Mac, `deploy/fly/backup-to-mac.sh` streams the database to the Mac and keeps it gzip-compressed, the newest four by default. On the server, `backup-dump.cjs` reads one consistent snapshot (a single read transaction, while the server goes on writing) and sends it gzipped over `fly ssh`; nothing is written to the server's disk. On the Mac, `backup-rebuild.mjs` rebuilds the database from the stream, refuses a stream that was cut short or whose row counts differ from the dump's own, and checks the result before it is kept:

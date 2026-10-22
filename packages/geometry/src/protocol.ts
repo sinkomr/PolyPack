@@ -170,6 +170,36 @@ export interface LeaderboardEvent {
   name: string;
 }
 
+/**
+ * Most keys one live-update stream may follow (GET /api/events?keys=...). A key is "N/M/P" for one
+ * problem or "N/M/*" for every P of one pair of shapes.
+ */
+export const MAX_EVENT_KEYS = 100;
+
+/**
+ * The keys of a live-update stream that follows `problems`, given in order of importance: one
+ * "N/M/P" each while they fit in `max`. Beyond that the pairs with the most problems are followed
+ * whole ("N/M/*", which follows more than asked but nothing less), and if that is still too many,
+ * the least important problems are left out.
+ */
+export function eventKeys(problems: readonly { N: number; M: number; P: number }[], max = MAX_EVENT_KEYS): string[] {
+  const keys = [...new Set(problems.map((p) => `${p.N}/${p.M}/${p.P}`))];
+  const pairOf = (key: string) => key.slice(0, key.lastIndexOf("/"));
+  const count = new Map<string, number>();
+  for (const k of keys) count.set(pairOf(k), (count.get(pairOf(k)) ?? 0) + 1);
+  const whole = new Set<string>();
+  let size = keys.length;
+  for (const [pair, n] of [...count].sort((a, b) => b[1] - a[1])) {
+    if (size <= max || n < 2) break;
+    whole.add(pair);
+    size -= n - 1;
+  }
+  // a pair followed whole takes the place of its most important problem
+  const out = new Set<string>();
+  for (const k of keys) out.add(whole.has(pairOf(k)) ? `${pairOf(k)}/*` : k);
+  return [...out].slice(0, max);
+}
+
 /** Number of leaderboard rows shown per problem: only the leader. */
 export const LEADERBOARD_SIZE = 1;
 
