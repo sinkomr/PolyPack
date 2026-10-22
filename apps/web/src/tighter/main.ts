@@ -137,6 +137,7 @@ import {
   RUN_BUDGET,
   UpgradeId,
   autoCap,
+  autoJobEvals,
   autoPerSecond,
   autoRateText,
   canBuy,
@@ -191,8 +192,11 @@ function fmtRelative(x: number): string {
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
 /** "side", or "radius" for a circle container. */
 const sideWord = (p: ProblemKey) => (p.M === 0 ? "radius" : "side");
-/** Auto-eval's pace from its evaluations a second, in its clicks: "a click of 4 every 5 s". */
-const fmtRate = (r: number) => autoRateText(owned(), r);
+/**
+ * Auto-eval's target from its evaluations a second: "up to 1 evaluation every 2 s", "up to 240
+ * evaluations a second". A target, never a claim: a computer that cannot keep up runs fewer.
+ */
+const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
 
 // ---------- state and saving ----------
 
@@ -964,14 +968,14 @@ function accrueAuto(): void {
 }
 
 /**
- * Auto-eval's next click for this lane, from what it is due, when it may run one. It clicks as the player
- * does, with as many evaluations as a click of theirs (its rate is in clicks, so it earns k evaluations
- * a click), and an evaluation pays the same either way.
+ * Auto-eval's next job for this lane, from what it is due, when it may run one. Its rate is in
+ * evaluations, whatever the player's click size: a job is what is due, at most a quarter second of the
+ * lane's rate (autoJobEvals), and an evaluation pays the same as a click's.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
-  const k = evalsPerClick(o);
-  if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || state.autoDue < k) return null;
+  const n = autoJobEvals(o, state.autoDue);
+  if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || n < 1) return null;
   const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
   const target = autoTarget({
     lane: lanes.indexOf(lv),
@@ -986,14 +990,14 @@ function autoJob(lv: LaneView): Job | null {
   });
   if (!target) return null;
   if (target.action === "compact") {
-    // A Compact is one press of 100 evaluations. It starts once a click's worth is due and the rest
-    // is owed (autoDue below zero), repaid before any lane's next click: waiting for 100 due at once
-    // never ended while another lane took each click as it came due, so new problems sat uncompacted.
+    // A Compact is one press of 100 evaluations. It starts once a job's worth is due and the rest is
+    // owed (autoDue below zero), repaid before any lane's next job: waiting for 100 due at once never
+    // ended while another lane took each job as it came due, so new problems sat uncompacted.
     state.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
-  state.autoDue -= k;
-  return { key: target.key, evals: k, click: false, compact: false };
+  state.autoDue -= n;
+  return { key: target.key, evals: n, click: false, compact: false };
 }
 
 /** Starts every idle lane that has work, auto-eval's or queued clicks. */
@@ -2989,7 +2993,7 @@ $("t-auto").addEventListener("click", () => {
   accrueAuto();
   say(
     state.settings.auto
-      ? `Auto-eval is on. It clicks for you at ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))} in all, beside your own clicks.`
+      ? `Auto-eval is on. It runs evaluations for you beside your own clicks, ${fmtRate((autoPerSecond(o) ?? 0) * laneCount(o))}${laneCount(o) > 1 ? ` over ${laneCount(o)} lanes` : ""}.`
       : "Auto-eval is off.",
   );
   persist();

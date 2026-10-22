@@ -306,7 +306,7 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   await click(page);
 });
 
-test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute behind, and owes nothing for time off", async ({
+test("tighter: auto-eval runs live, an evaluation every 2 s while on, at most a minute behind, and owes nothing for time off", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -324,33 +324,34 @@ test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
 
-  // live: a click of 4 every 5 s while it is on, beside the player
+  // live: an evaluation every 2 s while it is on, beside the player, whatever the click size (4 here):
+  // its rate is in evaluations, so the clicks of 4 do not make it 4 times as fast
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  await expect(page.locator("#t-bar-auto")).toHaveText("a click of 4 every 5 s");
+  await expect(page.locator("#t-bar-auto")).toHaveText("up to 1 evaluation every 2 s");
   const s0 = await stats(page);
   const t0 = Date.now();
   await expect
-    .poll(async () => (await stats(page)).evaluations - s0.evaluations, { timeout: 30_000 })
+    .poll(async () => (await stats(page)).evaluations - s0.evaluations, { timeout: 40_000 })
     .toBeGreaterThanOrEqual(8);
   await expect.poll(() => idle(page)).toBe(true);
   const s1 = await stats(page);
   const live = s1.evaluations - s0.evaluations;
-  expect(live).toBeLessThanOrEqual(0.8 * ((Date.now() - t0) / 1000) + 8);
-  expect(live).toBe(Math.round(live / 4) * 4);
+  expect(live).toBeLessThanOrEqual(0.5 * ((Date.now() - t0) / 1000) + 4);
   // auto-eval's evaluations are not the player's clicks
   expect(s1.clicks).toBe(s0.clicks);
 
   // two hours between ticks (a hidden tab's timers can sleep): it catches up at most a minute, or a
-  // Compact's 100 evaluations, whichever is more; never the two hours (5,760)
+  // Compact's 100 evaluations, whichever is more; never the two hours (3,600)
   const t1 = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 2 * 3600_000));
   await expect
     .poll(async () => (await stats(page)).evaluations - s1.evaluations, { timeout: 60_000 })
     .toBeGreaterThanOrEqual(96);
-  await expect.poll(async () => (await due()) < 4 && (await idle(page)), { timeout: 30_000 }).toBe(true);
+  // one evaluation at a time at this rate: idle, less than one is due
+  await expect.poll(async () => (await due()) < 1 && (await idle(page)), { timeout: 30_000 }).toBe(true);
   const caught = (await stats(page)).evaluations - s1.evaluations;
-  expect(caught).toBeLessThanOrEqual(100 + 0.8 * ((Date.now() - t1) / 1000) + 8);
+  expect(caught).toBeLessThanOrEqual(100 + 0.5 * ((Date.now() - t1) / 1000) + 4);
 
   // closed for half an hour with auto-eval on: the page saves as it goes (pagehide), and nothing else
   // is written afterwards, so the reload reads exactly that save
@@ -378,7 +379,7 @@ test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute
   await expect.poll(() => idle(page)).toBe(true);
   const ran = (await stats(page)).evaluations - s2.evaluations;
   // the live rate from the press on, and the new run's start (a reload closes runs)
-  expect(ran).toBeLessThanOrEqual(0.8 * ((Date.now() - t2) / 1000) + 8);
+  expect(ran).toBeLessThanOrEqual(0.5 * ((Date.now() - t2) / 1000) + 4);
   expect(errors).toEqual([]);
 });
 

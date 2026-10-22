@@ -280,7 +280,7 @@ describe("Tighter lanes with Auto-advance", () => {
   });
 
   it("do not go in circles among problems that stopped making progress", () => {
-    // every problem stalled, Never: one lane, a click of 10 evaluations a job, no progress anywhere
+    // every problem stalled, Never: one lane, jobs of 10 evaluations, no progress anywhere
     const q = queue([1000, 1000, 1000]);
     let current: string | null = null;
     let moves = 0;

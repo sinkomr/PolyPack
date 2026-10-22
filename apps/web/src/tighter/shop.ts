@@ -240,8 +240,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
 export function chipName(name: string): string {
   return name
     .replace(/^(\d+) evaluations per click$/, "$1 a click")
-    .replace(/^Auto-eval: every (\d+) s$/, "Auto: $1 s")
-    .replace(/^Auto-eval: (\d+) a second$/, "Auto: $1/s")
+    .replace(/^Auto-eval: ([\d,.]+) evaluations? a second$/, "Auto: $1/s")
     .replace(/^Seeds: (\d+) per problem$/, "Seeds: $1")
     .replace(/^Problem queue: /, "Queue: ")
     .replace(/^Problem sets: N\+M\+P ≥ /, "Size ≥ ")

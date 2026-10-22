@@ -597,8 +597,8 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
   await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
-  // auto-eval at 1 click of 10 evaluations a second in each lane: every new problem gets its Compact,
-  // although a lane with a problem to work takes each click as it comes due (a Compact owes the rest)
+  // auto-eval at 15 evaluations a second in each lane: every new problem gets its Compact, although a
+  // lane with a problem to work takes each job as it comes due (a Compact owes the rest)
   await page.evaluate(() => (window as any).tighter.state.owned.push("auto2", "auto3", "auto4", "auto5"));
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");

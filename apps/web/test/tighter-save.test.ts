@@ -25,6 +25,7 @@ import {
   readSave,
   toJson,
 } from "../src/tighter/save";
+import { AUTO_MAX, autoPerSecond, evalsPerClick, owning } from "../src/tighter/upgrades";
 
 const T0 = 1_700_000_000_000;
 
@@ -164,6 +165,27 @@ describe("Tighter saves", () => {
     const t = readSave(raw, T0);
     expect(t.ok && t.state.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
     expect(t.ok && t.state.economy).toMatchObject({ recorded: ["1/2/3"], rentPaid: 0, checks: {}, lastRent: null });
+  });
+
+  it("read a save from when auto-eval's rate was in clicks: its upgrades as they are, at the new rates", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    const rungs = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"];
+    raw.owned = ["trace", "click10", "clickx", ...rungs, "autox"];
+    // Faster auto-eval had 100 levels then: past the limit they add nothing, so the last one is kept
+    raw.levels = { clickx: 30, autox: 9 };
+    raw.autoDue = 4321.5;
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.owned).toEqual(raw.owned);
+    expect(r.state.levels).toEqual({ clickx: 30, autox: 3 });
+    const o = owning(r.state.owned, r.state.levels);
+    expect(evalsPerClick(o)).toBe(40);
+    expect(autoPerSecond(o)).toBe(AUTO_MAX);
+    // nothing due from before the load, whatever unit it was counted in
+    expect(r.state.autoDue).toBe(0);
+    expect(r.state.autoAt).toBe(T0);
   });
 
   it("round-trip through an export string", async () => {

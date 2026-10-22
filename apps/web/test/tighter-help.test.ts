@@ -61,6 +61,17 @@ describe("Tighter's explanations", () => {
     expect(steps).toEqual(["1", "4", "7", "8"]);
   });
 
+  it("give auto-eval's rate as a target in evaluations a second, which evaluations per click do not change", () => {
+    const auto = HELP.auto as How;
+    const text = [...prose(auto), ...(auto.math ?? []).map(plain)].join(" ");
+    expect(text).toContain("Its rate is in evaluations a second");
+    expect(text).toContain("do not speed auto-eval up");
+    expect(text).toContain("The rate is a target.");
+    expect(text).toContain("r = min(250, a × 1.3x)");
+    expect(text).toContain("e = r × L");
+    expect(text).not.toMatch(/clicks Evolve for you|its clicks|speeds it up too|clicks a second/);
+  });
+
   it("format the numbers they share", () => {
     expect(MIN_STEP).toBe("10⁻⁹");
     expect(superscript(-12)).toBe("⁻¹²");
