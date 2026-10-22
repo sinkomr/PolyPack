@@ -74,7 +74,7 @@ export interface Evaluation {
   /** Human-readable reasons when not valid. */
   reasons: string[];
   overlaps: Overlap[];
-  /** Smallest enclosing container found; null when there are no pieces. */
+  /** Smallest enclosing container found; null when there are no pieces, or with `stopWhenInvalid` when not valid. */
   container: Container | null;
   /** container.size, the score. Only meaningful as a record when valid. */
   score: number | null;
@@ -85,8 +85,14 @@ export interface Evaluation {
  * With `autoOrient` the container is computed at the given phi and at the auto-oriented phi,
  * and the smaller one is kept. With `maxOverlaps`, at most that many overlapping pairs are found
  * and reported (the server's guard against slow, deliberately invalid submissions).
+ * With `stopWhenInvalid`, a configuration found invalid (wrong piece count, overlaps) returns at
+ * once, with the same reasons and overlaps but no container or score. The server passes it: its
+ * refusal carries the reasons only, and the container is the costly part for large hulls.
  */
-export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean; maxOverlaps?: number } = {}): Evaluation {
+export function evaluate(
+  config: PackingConfig,
+  opts: { autoOrient?: boolean; maxOverlaps?: number; stopWhenInvalid?: boolean } = {},
+): Evaluation {
   const { N, M, P, pieces } = config;
   const reasons: string[] = [];
   if (pieces.length !== P) reasons.push(`expected exactly ${P} pieces, got ${pieces.length}`);
@@ -100,6 +106,7 @@ export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean; ma
         `penetration ${(-worst.sep).toExponential(3)} (tolerance ${TOL})`,
     );
   }
+  if (opts.stopWhenInvalid && reasons.length) return { valid: false, reasons, overlaps, container: null, score: null };
   let container: Container | null = null;
   if (pieces.length > 0) {
     const set = extremePoints(N, pieces);

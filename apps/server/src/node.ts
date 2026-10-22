@@ -5,6 +5,8 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { LiteratureRecord } from "@polypack/geometry";
 import { HOLDERS_REFRESH_MS, createApp } from "./app";
+import { OVERLOAD_DELAY_MS } from "./limits";
+import { LoadStats, LoopDelay } from "./load";
 import { SqliteStore } from "./sqlite-store";
 
 // Node entry point: local development and any always-on host.
@@ -44,12 +46,23 @@ store.startPiecesMigration({
   log: (msg) => console.log(msg),
 });
 
+// One log line per submission and one a minute with the counts and verification times, so that
+// the load in production can be read from the log.
+const delay = new LoopDelay();
+const stats = new LoadStats((line) => console.log(line));
+setInterval(() => stats.flush(delay.takePeak()), 60_000).unref();
+
 const app = createApp({
   store,
   records,
   adminToken,
   // the end-to-end tests set 0, so that the record holders page shows each entry at once
   holdersRefreshMs: wholeNumber("HOLDERS_REFRESH_MS", HOLDERS_REFRESH_MS),
+  // 0 never refuses submissions as overload; the end-to-end tests set it, since a test machine
+  // under load delays the event loop without the server being overloaded
+  limits: { overloadDelayMs: wholeNumber("OVERLOAD_DELAY_MS", OVERLOAD_DELAY_MS) },
+  loopDelay: () => delay.ms(),
+  stats,
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.
   clientIp: (c) =>

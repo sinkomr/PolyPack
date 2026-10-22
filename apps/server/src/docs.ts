@@ -6,7 +6,7 @@ import {
   SCORE_TIE,
   TOL,
 } from "@polypack/geometry";
-import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
+import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 
 const PYTHON = `import json, math, urllib.request
 
@@ -265,7 +265,9 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
-<tr><td>429</td><td>Rate limit: 120 submissions per minute per address. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
+<tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
+IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.</td></tr>
+<tr><td>503</td><td>The server is busy. Nothing was examined or stored; send again after the seconds in <code>Retry-After</code>.</td></tr>
 </table>
 <table id="submit-fields">
 <tr><th scope="col">Field</th><th scope="col">Meaning</th></tr>

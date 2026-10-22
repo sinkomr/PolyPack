@@ -31,10 +31,16 @@ import {
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_REPORTED_OVERLAPS,
+  OVERLOAD_DELAY_MS,
+  OVERLOAD_RETRY_S,
   RateLimiter,
   SUBMISSIONS_PER_MINUTE,
+  TimeBudget,
+  VERIFY_MS_PER_MINUTE,
+  addressKey,
   sanitizeText,
 } from "./limits";
+import { LoadStats } from "./load";
 import { EntryEdit, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
@@ -45,11 +51,20 @@ export interface AppOptions {
   records: LiteratureRecord[];
   /** Admin routes are disabled when this is empty. */
   adminToken?: string;
-  /** Address used for rate limiting. */
+  /** Address used for rate limiting; IPv6 addresses are limited by their /64 (see addressKey). */
   clientIp?: (c: Context) => string;
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
-  limits?: { perIp?: number; windowMs?: number };
+  /**
+   * `perIp` submissions per `windowMs` from one address, and `verifyMsPerMinute` milliseconds of
+   * verification a minute; `overloadDelayMs` is the event-loop delay above which submissions are
+   * refused (0: never).
+   */
+  limits?: { perIp?: number; windowMs?: number; verifyMsPerMinute?: number; overloadDelayMs?: number };
+  /** The current event-loop delay in ms (see LoopDelay); without it submissions are never refused as overload. */
+  loopDelay?: () => number;
+  /** Receives a line per submission and the counts for a line a minute (see LoadStats). */
+  stats?: LoadStats;
   /** Least age at which /api/holders is computed again after an entry changed; HOLDERS_REFRESH_MS by default. */
   holdersRefreshMs?: number;
 }
@@ -115,6 +130,9 @@ export function createApp(opts: AppOptions): Hono {
   const app = new Hono();
   const windowMs = opts.limits?.windowMs ?? 60_000;
   const ipLimit = new RateLimiter(opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE, windowMs);
+  const verifyBudget = new TimeBudget(opts.limits?.verifyMsPerMinute ?? VERIFY_MS_PER_MINUTE);
+  const overloadDelayMs = opts.limits?.overloadDelayMs ?? OVERLOAD_DELAY_MS;
+  const loopDelay = opts.loopDelay ?? (() => 0);
   const clientIp = opts.clientIp ?? (() => "unknown");
   const log = opts.log ?? ((msg: string) => console.log(msg));
 
@@ -359,22 +377,39 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   app.post("/api/submit", async (c) => {
-    const reject = (status: 400 | 409 | 413 | 422 | 429, reasons: string[]) => {
-      const body: SubmitResponse = {
-        valid: false,
-        reasons,
-        score: null,
-        rank: null,
-        leader: false,
-        leader_score: null,
-        id: null,
-        container: null,
-        pending_verification: false,
-        strict_check: null,
-      };
-      return c.json(body, status);
+    const started = performance.now();
+    // what the log line says about this submission, filled in as the body is read
+    let problem: string | null = null;
+    let verifyMs: number | null = null;
+    const answer = (body: SubmitResponse, status: 200 | 400 | 409 | 413 | 422 | 429 | 503, retryAfter?: number) => {
+      opts.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
+      return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    if (!ipLimit.allow(clientIp(c))) return reject(429, ["too many submissions from this address; wait a minute"]);
+    const reject = (status: 400 | 409 | 413 | 422 | 429 | 503, reasons: string[], retryAfter?: number) =>
+      answer(
+        {
+          valid: false,
+          reasons,
+          score: null,
+          rank: null,
+          leader: false,
+          leader_score: null,
+          id: null,
+          container: null,
+          pending_verification: false,
+          strict_check: null,
+        },
+        status,
+        retryAfter,
+      );
+    // While the event loop lags, work is queuing: submissions, the costly requests, are refused
+    // until it catches up.
+    if (overloadDelayMs > 0 && loopDelay() > overloadDelayMs)
+      return reject(503, ["the server is busy; try again in a few seconds"], OVERLOAD_RETRY_S);
+    const address = addressKey(clientIp(c));
+    if (!ipLimit.allow(address)) return reject(429, ["too many submissions from this address; wait a minute"]);
+    const wait = verifyBudget.wait(address);
+    if (wait > 0) return reject(429, [`too much verification work from this address; wait ${wait} s`], wait);
     if (Number(c.req.header("content-length") ?? 0) > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
     const text = await c.req.text();
     if (text.length > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
@@ -394,7 +429,8 @@ export function createApp(opts: AppOptions): Hono {
       return reject(400, [...(parsed.ok ? [] : parsed.errors), ...(found && !found.ok ? found.errors : [])]);
     const config = parsed.config;
     const provenance = found.provenance;
-    const lit = literature.get(`${config.N}/${config.M}/${config.P}`);
+    problem = `${config.N}/${config.M}/${config.P}`;
+    const lit = literature.get(problem);
     // decided before the packing is looked at: nothing can improve on a proven optimum
     if (closedToSubmissions(lit))
       return reject(409, [`this problem is closed: its optimum ${lit!.display} is proven (${lit!.source_name})`]);
@@ -402,14 +438,20 @@ export function createApp(opts: AppOptions): Hono {
     if (!name) return reject(400, ["name is required"]);
 
     // The score is always recomputed here. Any container or score fields in the body were
-    // already dropped by parseConfig.
-    const result = evaluate(config, { autoOrient: true, maxOverlaps: MAX_REPORTED_OVERLAPS });
-    if (!result.valid || !result.container) return reject(422, result.reasons);
-    const container = result.container;
+    // already dropped by parseConfig. The time it takes is charged to the address.
+    const verifyStart = performance.now();
+    const result = evaluate(config, {
+      autoOrient: true,
+      maxOverlaps: MAX_REPORTED_OVERLAPS,
+      stopWhenInvalid: true,
+    });
+    const container = result.valid ? result.container : null;
+    const beats = !!container && !!lit && beatsLiterature(container.size, lit);
+    const strict = container && beats ? strictVerify(config.N, config.pieces, container) : null;
+    verifyMs = performance.now() - verifyStart;
+    verifyBudget.charge(address, verifyMs);
+    if (!container) return reject(422, result.reasons);
     const score = container.size;
-
-    const beats = !!lit && beatsLiterature(score, lit);
-    const strict = beats ? strictVerify(config.N, config.pieces, container) : null;
 
     const before = await store.leader(config.N, config.M, config.P);
     const id = await store.insert({
@@ -460,6 +502,7 @@ export function createApp(opts: AppOptions): Hono {
         rank: 1,
         name: leader.name,
       };
+      opts.stats?.leaderChanged();
       for (const fn of listeners) fn(event);
     }
     const body: SubmitResponse = {
@@ -474,7 +517,7 @@ export function createApp(opts: AppOptions): Hono {
       pending_verification: beats,
       strict_check: strict,
     };
-    return c.json(body);
+    return answer(body, 200);
   });
 
   // Live updates: one "leaderboard" event whenever a problem gets a new leader.
@@ -487,25 +530,37 @@ export function createApp(opts: AppOptions): Hono {
         wake?.();
       };
       listeners.add(listener);
-      stream.onAbort(() => {
+      opts.stats?.stream(1);
+      let open = true;
+      const close = () => {
+        if (!open) return;
+        open = false;
         listeners.delete(listener);
+        opts.stats?.stream(-1);
+      };
+      stream.onAbort(() => {
+        close();
         wake?.();
       });
-      await stream.writeSSE({ event: "hello", data: "{}" });
-      while (!stream.aborted) {
-        while (queue.length) await stream.writeSSE({ event: "leaderboard", data: JSON.stringify(queue.shift()) });
-        // wake on the next event, or after 20 s to send a keep-alive comment
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, 20_000);
-          wake = () => {
-            clearTimeout(timer);
-            resolve();
-          };
-        });
-        wake = null;
-        if (!queue.length && !stream.aborted) await stream.writeSSE({ event: "ping", data: "{}" });
+      try {
+        await stream.writeSSE({ event: "hello", data: "{}" });
+        while (!stream.aborted) {
+          while (queue.length) await stream.writeSSE({ event: "leaderboard", data: JSON.stringify(queue.shift()) });
+          // wake on the next event, or after 20 s to send a keep-alive comment
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, 20_000);
+            wake = () => {
+              clearTimeout(timer);
+              resolve();
+            };
+          });
+          wake = null;
+          if (!queue.length && !stream.aborted) await stream.writeSSE({ event: "ping", data: "{}" });
+        }
+      } finally {
+        // also when a write fails on a connection that is gone
+        close();
       }
-      listeners.delete(listener);
     }),
   );
 
