@@ -4,7 +4,10 @@ import {
   MAX_SIDES,
   MAX_SOFTWARE_LENGTH,
   SCORE_TIE,
+  TARGET_WEIGHTS,
   TOL,
+  UNSOLVED_MAX_P,
+  UNSOLVED_SHAPES,
 } from "@polypack/geometry";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
 
@@ -40,6 +43,8 @@ curl -s "https://YOUR-SITE/api/records?N=4&M=4"
 
 curl -s "https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20"
 
+curl -s --compressed "https://YOUR-SITE/api/targets?N=0,3-6&max_P=100&limit=50"
+
 curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://YOUR-SITE/api/admin/pending`;
 
 const SCHEMA = `{
@@ -53,7 +58,7 @@ const SCHEMA = `{
   "method_params": {"...": "the run's resolved parameters"},
   "seed": 1,
   "budget": {"evals": 20000, "time_s": 20},
-  "software": "name of your own tool"
+  "software": "name/version of the program"
 }`;
 
 const RESPONSE = `{
@@ -67,6 +72,18 @@ const RESPONSE = `{
   "container": {"M": 4, "cx": 0.5, "cy": 0.0, "phi": 0.0, "size": 2.0000000000000004},
   "pending_verification": false,
   "strict_check": null
+}`;
+
+const TARGETS = `{
+  "generated_at": "2026-10-21T12:00:00.000Z",
+  "targets": [
+    {"N": 3, "M": 3, "P": 40, "reason": "behind_published", "priority": 0.0642,
+     "leader": 6.9459, "leader_id": 123456, "published": 6.5, "published_coordinates": false,
+     "area_bound": 6.3246},
+    {"N": 3, "M": 3, "P": 85, "reason": "tooth", "priority": 0.0487,
+     "leader": 9.9071, "leader_id": 234567, "published": null, "published_coordinates": false,
+     "area_bound": 9.2195}
+  ]
 }`;
 
 const PROBLEM = `{
@@ -167,10 +184,17 @@ npx tsx examples/solve-and-submit.ts --N 4 --M 4 --P 11 --method basin_hopping \
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** API documentation page served at /api. The atlas limits are owned by the route and passed in. */
+/** API documentation page served at /api. The atlas and targets limits are owned by the routes and passed in. */
 export function docsPage(
-  limits: { atlasMaxSpan: number; atlasMaxPieces: number } = { atlasMaxSpan: 100, atlasMaxPieces: 6000 },
+  limits: { atlasMaxSpan: number; atlasMaxPieces: number; targetsDefaultLimit: number; targetsMaxLimit: number } = {
+    atlasMaxSpan: 100,
+    atlasMaxPieces: 6000,
+    targetsDefaultLimit: 500,
+    targetsMaxLimit: 2000,
+  },
 ): string {
+  const W = TARGET_WEIGHTS;
+  const percent = (x: number) => `${+(100 * x).toFixed(6)}%`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -277,9 +301,10 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td><code>method_params</code></td><td>Optional JSON object: the method's resolved parameters (<code>Result.params</code>), at most ${MAX_METHOD_PARAMS_BYTES} bytes as JSON.</td></tr>
 <tr><td><code>seed</code></td><td>Optional non-negative integer: the run's seed.</td></tr>
 <tr><td><code>budget</code></td><td>Optional <code>{"evals": positive integer, "time_s": positive number}</code>, at least one of the two: the run's budget.</td></tr>
-<tr><td><code>software</code></td><td>Optional name of your own tool, at most ${MAX_SOFTWARE_LENGTH} characters; only with <code>"external"</code>.</td></tr>
+<tr><td><code>software</code></td><td>Optional name and version of the program that produced the packing, at most ${MAX_SOFTWARE_LENGTH} characters: your own tool with <code>"external"</code>,
+or the client that ran the PolyPack search method with <code>"optimizer"</code> and <code>"optimizer_edited"</code>, for example <code>"polypack-volunteer/1.0"</code>.</td></tr>
 </table>
-<p><code>method</code>, <code>method_params</code>, <code>seed</code> and <code>budget</code> are accepted only with <code>"optimizer"</code> or <code>"optimizer_edited"</code>, and <code>software</code> only with <code>"external"</code>; anything else, a wrong type or an unknown method is a 400.
+<p><code>method</code>, <code>method_params</code>, <code>seed</code> and <code>budget</code> are accepted only with <code>"optimizer"</code> or <code>"optimizer_edited"</code>, and <code>software</code> only with those two and <code>"external"</code>, never with <code>"hand"</code> or without <code>found_with</code>; anything else, a wrong type or an unknown method is a 400.
 They are stored so that a result can be reproduced, and returned by <code>/api/submissions/{id}</code>; the board and the listings show only <code>found_with</code>.
 Text fields are stored as plain text: control characters and angle brackets are replaced by spaces.</p>
 <p>The field <code>agent</code> (<code>"human"</code> or <code>"ai"</code>) is deprecated. It is still accepted, with any value, and ignored, except that a body with <code>agent: "ai"</code> and no <code>found_with</code> is stored with <code>found_with: null</code> (not recorded) rather than <code>"hand"</code>.
@@ -303,7 +328,7 @@ Fields that were not given are <code>null</code>. 404 for unknown, rejected and 
 Where that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.
 Closed problems appear in <code>literature</code> only.</p>
 
-<h3><code>GET /api/holders</code></h3>
+<h3 id="holders"><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
 (names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first.
 Counting reads every problem, so it is done at most once a minute: the answer may be up to a minute behind the latest entries.</p>
@@ -313,6 +338,37 @@ Counting reads every problem, so it is done at most once a minute: the answer ma
 <tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
 <tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
 </table>
+
+<h3 id="targets"><code>GET /api/targets?limit=&amp;N=&amp;M=&amp;max_P=</code></h3>
+<p>The work list of volunteer searches: <a href="#closed">open</a> problems ranked by how much a long search could gain on them, highest <code>priority</code> first, then smaller <code>P</code>, <code>N</code> and <code>M</code>.
+Listed are every open problem that has a site <a href="#leader">leader</a> or a published value, and every problem of the core box (<code>N</code> and <code>M</code> in ${UNSOLVED_SHAPES.join(", ")}, <code>P</code> up to ${UNSOLVED_MAX_P}) that has neither.
+All parameters are optional, and are plain decimal integers:</p>
+<table>
+<tr><th scope="row"><code>limit</code></th><td>Most targets returned: from 1 to ${limits.targetsMaxLimit}, ${limits.targetsDefaultLimit} by default.</td></tr>
+<tr><th scope="row"><code>N</code>, <code>M</code></th><td>Only these piece or container shapes: a comma-separated list of shape codes and ranges, such as <code>0,3-6</code>. The ends of a range are shape codes, and a range leaves out 1 and 2.</td></tr>
+<tr><th scope="row"><code>max_P</code></th><td>Only problems with at most this many pieces: from 1 to ${MAX_PIECES}.</td></tr>
+</table>
+<p>Any other value is a 400 with an <code>error</code>. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>:</p>
+<pre><code>${esc(TARGETS)}</code></pre>
+<table>
+<tr><th scope="row"><code>leader</code>, <code>leader_id</code></th><td>The leader's score and submission id, or <code>null</code>.</td></tr>
+<tr><th scope="row"><code>published</code></th><td>The published value, or <code>null</code>. <code>published_coordinates</code> says whether <code>/api/problems/{N}/{M}/{P}</code> carries its coordinates.</td></tr>
+<tr><th scope="row"><code>area_bound</code></th><td>The area lower bound, as in the problem description.</td></tr>
+<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 10 minutes old, from leaders read at most a minute before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be a few minutes behind the latest entries.</td></tr>
+</table>
+<p id="priority"><code>priority</code> estimates the fraction by which a problem's record could still shrink, discounted by how likely a long search is to get there and how much the site gains when it does.
+It is comparable within one answer only. Several estimates can apply to one problem; the largest is its priority, and <code>reason</code> names it:</p>
+<table>
+<tr><th scope="col"><code>reason</code></th><th scope="col">Estimate</th></tr>
+<tr><td><code>unsolved</code></td><td>No leader and no published value: any valid packing becomes the record and its first drawing. A fixed ${W.unsolved}, above any other estimate in practice.</td></tr>
+<tr><td><code>behind_published</code></td><td>The leader is missing or does not reach the published value (to the precision the source prints): the gap <code>(leader − published) / leader</code>, or ${W.missingLeaderGap} without a leader.
+Times ${W.drawnPublished} when the published value has coordinates: the records page already draws that packing, so catching up with it only fills in the site's own entry.</td></tr>
+<tr><td><code>tooth</code></td><td>A leader without a published value that is less dense than its neighbours in <code>P</code>: the fraction by which its container would shrink at the second-highest density among the <code>P</code> within max(3, 4%) on either side (the batch runner's <code>--order teeth</code>). Times the likelihood below.</td></tr>
+<tr><td><code>slack</code></td><td>The record's distance from the area bound, <code>1 − area_bound / record</code>, of which a search is expected to recover ${W.siteSlackShare} (${percent(W.siteSlackShare)}) for a record found on this site, and ${W.publishedSlackShare} once a published value exists. Times the likelihood below.</td></tr>
+</table>
+<p>The likelihood <code>P² / (P² + ${W.likelyHalfP}²)</code> discounts small problems, where few pieces leave little to find and density differs from one <code>P</code> to the next for want of pieces rather than of searching.
+Closed problems are never listed. The slack share and the likelihood were set from 20 pairs of shapes of the core box on 2026-10-21 [CALC]: where there are published values, the leaders found on this site from <code>P</code> = 20 on were a median 0.06% to 0.4% above them, against a median distance from the area bound of about 8% for records without one;
+below <code>P</code> = 20 they were a median of at most 0.01% above. The other weights are judgements [SPEC].</p>
 
 <h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)

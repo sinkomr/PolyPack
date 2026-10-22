@@ -80,15 +80,18 @@ export function parseProvenance(input: Record<string, unknown>, methods: readonl
       errors.push(`software must be at most ${MAX_SOFTWARE_LENGTH} characters`);
   }
 
-  // The run fields describe a PolyPack optimizer run and the software field one's own tool; each
-  // contradicts any other declaration, so it is refused rather than silently dropped.
+  // The run fields describe a PolyPack optimizer run, and the software field the program that
+  // produced the packing: one's own tool, or the client that ran a PolyPack optimizer (such as
+  // "polypack-volunteer/1.0"). Each contradicts any other declaration, a packing made by hand
+  // included, so it is refused rather than silently dropped.
   if (found !== null || o.found_with === undefined) {
     const stray = RUN_FIELDS.filter((k) => o[k] !== undefined);
     if (!run && stray.length)
       errors.push(
         `${stray.join(", ")} describe a PolyPack optimizer run: they need found_with "optimizer" or "optimizer_edited"`,
       );
-    if (found !== "external" && o.software !== undefined) errors.push('software needs found_with "external"');
+    if (!run && found !== "external" && o.software !== undefined)
+      errors.push('software needs found_with "external", "optimizer" or "optimizer_edited"');
   }
 
   if (errors.length) return { ok: false, errors };

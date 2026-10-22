@@ -11,6 +11,8 @@ import {
   ProblemInfo,
   SubmitResponse,
   TOL,
+  TargetRanking,
+  TargetsResponse,
   areaLowerBound,
   beatsLiterature,
   closedToSubmissions,
@@ -19,6 +21,7 @@ import {
   parseConfig,
   MAX_SOFTWARE_LENGTH,
   parseProvenance,
+  rankTargets,
   reachesLiterature,
   strictVerify,
 } from "@polypack/geometry";
@@ -35,7 +38,7 @@ import {
   SUBMISSIONS_PER_MINUTE,
   sanitizeText,
 } from "./limits";
-import { EntryEdit, Store, StoredSubmission } from "./store";
+import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
 const METHOD_NAMES = SOLVER_METHODS.map(([name]) => name);
@@ -50,8 +53,13 @@ export interface AppOptions {
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
   limits?: { perIp?: number; windowMs?: number };
-  /** Least age at which /api/holders is computed again after an entry changed; HOLDERS_REFRESH_MS by default. */
+  /**
+   * Least age at which the leaders of every problem are read again after an entry changed, for
+   * /api/holders and /api/targets; HOLDERS_REFRESH_MS by default.
+   */
   holdersRefreshMs?: number;
+  /** Least age at which /api/targets is ranked again after an entry changed; TARGETS_REFRESH_MS by default. */
+  targetsRefreshMs?: number;
 }
 
 const CONVENTIONS = {
@@ -72,8 +80,17 @@ export const ATLAS_MAX_SPAN = 100;
 export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
-/** How far /api/holders may lag behind the entries: it is computed again at most once a minute. */
+/**
+ * How far /api/holders may lag behind the entries: it is computed again at most once a minute. The
+ * leaders it is computed from are read at most that often for /api/targets as well.
+ */
 export const HOLDERS_REFRESH_MS = 60_000;
+/** How far /api/targets may lag behind the entries: the problems are ranked again at most every 10 minutes. */
+export const TARGETS_REFRESH_MS = 600_000;
+/** Targets one /api/targets answer holds without a `limit`. */
+export const TARGETS_DEFAULT_LIMIT = 500;
+/** Largest `limit` of /api/targets. */
+export const TARGETS_MAX_LIMIT = 2000;
 
 /**
  * Which packing the atlas draws for one P.
@@ -100,6 +117,24 @@ export function atlasSource(
 /** A query value that is a plain decimal integer; anything else (empty, "0x10", "1e2", "1.5") is NaN. */
 function decimalInteger(text: string | undefined): number {
   return text !== undefined && /^\d{1,9}$/.test(text) ? Number(text) : NaN;
+}
+
+/**
+ * A query value that lists shape codes, such as "0,3-6": plain decimal integers and ranges a-b
+ * whose ends are shape codes, separated by commas. A range leaves out 1 and 2, which are not.
+ * Null for anything else, an empty item or a reversed range included.
+ */
+function shapeList(text: string): number[] | null {
+  const out = new Set<number>();
+  for (const item of text.split(",")) {
+    const m = /^(\d{1,3})(?:-(\d{1,3}))?$/.exec(item);
+    if (!m) return null;
+    const lo = Number(m[1]);
+    const hi = m[2] === undefined ? lo : Number(m[2]);
+    if (!isShapeCode(lo) || !isShapeCode(hi) || hi < lo) return null;
+    for (let v = lo; v <= hi; v++) if (isShapeCode(v)) out.add(v);
+  }
+  return [...out];
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -143,7 +178,16 @@ export function createApp(opts: AppOptions): Hono {
       400,
     );
 
-  app.get("/api", (c) => c.html(docsPage({ atlasMaxSpan: ATLAS_MAX_SPAN, atlasMaxPieces: ATLAS_MAX_PIECES })));
+  app.get("/api", (c) =>
+    c.html(
+      docsPage({
+        atlasMaxSpan: ATLAS_MAX_SPAN,
+        atlasMaxPieces: ATLAS_MAX_PIECES,
+        targetsDefaultLimit: TARGETS_DEFAULT_LIMIT,
+        targetsMaxLimit: TARGETS_MAX_LIMIT,
+      }),
+    ),
+  );
   app.get("/api/health", (c) => c.json({ ok: true }));
 
   app.get("/api/problems/:N/:M/:P", async (c) => {
@@ -220,24 +264,10 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   // Who holds how many records: the leader of every open problem, counted by the exact name it was
-  // submitted with. It reads every problem, which blocked the live server for about 0.9 s with
-  // 180,000 of them (2026-10-21) while entries arrived every few seconds. So an answer is kept
-  // until an entry changes, and after a change still until it is holdersRefreshMs old.
-  const holdersRefreshMs = opts.holdersRefreshMs ?? HOLDERS_REFRESH_MS;
-  let holders: { body: string; at: number; current: boolean } | null = null;
-  let holdersVersion = 0;
-  /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
-  const entriesChanged = (key?: string) => {
-    forgetRecords(key);
-    holdersVersion++;
-    if (holders) holders.current = false;
-  };
-  app.get("/api/holders", async (c) => {
-    if (holders && (holders.current || Date.now() - holders.at < holdersRefreshMs))
-      return c.body(holders.body, 200, { "content-type": "application/json" });
-    const version = holdersVersion;
+  // submitted with. The answer of /api/holders for one reading of the leaders (below).
+  const countHolders = (all: ProblemLeader[]): string => {
     const byName = new Map<string, Holder>();
-    for (const e of await store.leaders()) {
+    for (const e of all) {
       const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
       if (closedToSubmissions(lit)) continue;
       let h = byName.get(e.name);
@@ -254,10 +284,104 @@ export function createApp(opts: AppOptions): Hono {
       (a, b) =>
         b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     );
-    const body = JSON.stringify({ holders: list } satisfies HoldersResponse);
-    // an entry that changed while this was computed may be missing from it
-    holders = { body, at: Date.now(), current: version === holdersVersion };
-    return c.body(body, 200, { "content-type": "application/json" });
+    return JSON.stringify({ holders: list } satisfies HoldersResponse);
+  };
+
+  // The leader of every problem, which /api/holders and /api/targets are computed from. Reading it
+  // blocked the live server for about 0.9 s with 180,000 problems (2026-10-21) while entries
+  // arrived every few seconds. So one reading serves both routes: it is kept until an entry
+  // changes, and after a change still until it is holdersRefreshMs old. Only a request reads it
+  // again, never a timer. What the routes need is drawn from it at once: the holders' answer, and
+  // for the ranking each leader's problem, id and score, five numbers per leader in one array
+  // (7 MB for 180,000) rather than objects that keep their names.
+  const holdersRefreshMs = opts.holdersRefreshMs ?? HOLDERS_REFRESH_MS;
+  interface LeadersReading {
+    holders: string;
+    /** N, M, P, id and score of each leader in turn. */
+    ranked: Float64Array;
+    at: number;
+    /** False once an entry has changed since the reading. */
+    current: boolean;
+  }
+  let leaders: LeadersReading | null = null;
+  let entriesVersion = 0;
+  /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
+  const entriesChanged = (key?: string) => {
+    forgetRecords(key);
+    entriesVersion++;
+    if (leaders) leaders.current = false;
+  };
+  const readLeaders = async (): Promise<LeadersReading> => {
+    if (leaders && (leaders.current || Date.now() - leaders.at < holdersRefreshMs)) return leaders;
+    const version = entriesVersion;
+    const all = await store.leaders();
+    const ranked = new Float64Array(5 * all.length);
+    for (const [i, e] of all.entries()) {
+      ranked[5 * i] = e.N;
+      ranked[5 * i + 1] = e.M;
+      ranked[5 * i + 2] = e.P;
+      ranked[5 * i + 3] = e.id;
+      ranked[5 * i + 4] = e.score;
+    }
+    // an entry that changed while this was read may be missing from it
+    leaders = { holders: countHolders(all), ranked, at: Date.now(), current: version === entriesVersion };
+    return leaders;
+  };
+
+  app.get("/api/holders", async (c) =>
+    c.body((await readLeaders()).holders, 200, { "content-type": "application/json" }),
+  );
+
+  // The work list of volunteer searches: every open problem, ranked by rankTargets. Ranking 200,000
+  // problems took about 0.2 s on an Apple M1 Pro (2026-10-21), more on the live server's shared
+  // CPU, so the ranking is kept until an entry changes, and after a change it is built again, from
+  // the latest reading of the leaders, only once it is targetsRefreshMs old. Each request filters
+  // the ranking and takes the first `limit`.
+  const targetsRefreshMs = opts.targetsRefreshMs ?? TARGETS_REFRESH_MS;
+  let targets: { ranking: TargetRanking; at: number; from: LeadersReading } | null = null;
+  const currentTargets = async () => {
+    // a ranking whose reading is still current is up to date, however old
+    if (targets && (targets.from.current || Date.now() - targets.at < targetsRefreshMs)) return targets;
+    const from = await readLeaders();
+    if (targets?.from !== from) {
+      const { ranked } = from;
+      const each = function* () {
+        for (let i = 0; i < ranked.length; i += 5)
+          yield { N: ranked[i], M: ranked[i + 1], P: ranked[i + 2], id: ranked[i + 3], score: ranked[i + 4] };
+      };
+      targets = { ranking: rankTargets(each(), opts.records), at: Date.now(), from };
+    }
+    return targets;
+  };
+  app.use("/api/targets", compress());
+  app.get("/api/targets", async (c) => {
+    const errors: string[] = [];
+    const limitText = c.req.query("limit");
+    const limit = limitText === undefined ? TARGETS_DEFAULT_LIMIT : decimalInteger(limitText);
+    if (!(limit >= 1 && limit <= TARGETS_MAX_LIMIT))
+      errors.push(`limit must be an integer from 1 to ${TARGETS_MAX_LIMIT}`);
+    const maxPText = c.req.query("max_P");
+    const maxP = maxPText === undefined ? MAX_PIECES : decimalInteger(maxPText);
+    if (!(maxP >= 1 && maxP <= MAX_PIECES)) errors.push(`max_P must be an integer from 1 to ${MAX_PIECES}`);
+    const shapes = (name: "N" | "M") => {
+      const text = c.req.query(name);
+      if (text === undefined) return undefined;
+      const list = shapeList(text);
+      if (!list)
+        errors.push(
+          `${name} must be a comma-separated list of shape codes (0, or 3 to ${MAX_SIDES}) and ranges such as 0,3-6`,
+        );
+      return list ?? undefined;
+    };
+    const N = shapes("N");
+    const M = shapes("M");
+    if (errors.length) return c.json({ error: errors.join("; ") }, 400);
+    const { ranking, at } = await currentTargets();
+    const body: TargetsResponse = {
+      generated_at: new Date(at).toISOString(),
+      targets: ranking.select({ N, M, maxP, limit }),
+    };
+    return c.json(body);
   });
 
   // The drawings of the records page: for each P in [from, to], the one best packing that can be

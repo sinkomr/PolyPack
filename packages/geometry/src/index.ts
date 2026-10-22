@@ -6,3 +6,4 @@ export * from "./motion";
 export * from "./protocol";
 export * from "./provenance";
 export * from "./penalty";
+export * from "./targets";

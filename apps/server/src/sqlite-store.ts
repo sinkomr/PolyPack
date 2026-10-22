@@ -335,6 +335,7 @@ export class SqliteStore implements Store {
           N: leader.n as number,
           M: leader.m as number,
           P: leader.p as number,
+          id: leader.id as number,
           name: leader.name as string,
           score: leader.score as number,
           verification: leader.verification as ProblemLeader["verification"],

@@ -54,6 +54,8 @@ export interface ProblemLeader {
   N: number;
   M: number;
   P: number;
+  /** Submission id of the leading entry. */
+  id: number;
   name: string;
   score: number;
   verification: Verification;
