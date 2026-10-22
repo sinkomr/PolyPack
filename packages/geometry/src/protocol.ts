@@ -51,7 +51,7 @@ export interface RunBudget {
 
 /**
  * How a stored entry was found, as GET /api/submissions/{id} returns it. The method fields are
- * set only for found_with "optimizer" and "optimizer_edited", `software` only for "external".
+ * set only for found_with "optimizer" and "optimizer_edited"; `software` for those and "external".
  */
 export interface Provenance {
   found_with: FoundWith | null;
@@ -61,7 +61,7 @@ export interface Provenance {
   method_params: Record<string, unknown> | null;
   seed: number | null;
   budget: RunBudget | null;
-  /** Name of the submitter's own tool. */
+  /** Name of the submitter's own tool, or of the program that ran the optimizer (such as the volunteer client). */
   software: string | null;
 }
 
@@ -167,10 +167,10 @@ export interface Target {
   M: number;
   P: number;
   /**
-   * Why it is listed: "unsolved", no site entry and no published value; "behind_published", the
-   * site leader is missing or worse than the published value; "tooth", the leader is less dense
-   * than its neighbours in P (see the batch runner's --order teeth); "slack", anything else
-   * ranked by its distance from the area bound.
+   * Which estimate gave the priority (see rankTargets): "unsolved", no site entry and no published
+   * value; "behind_published", the site leader is missing or worse than the published value;
+   * "tooth", the leader is less dense than its neighbours in P (see the batch runner's --order
+   * teeth); "slack", the record's distance from the area bound.
    */
   reason: "unsolved" | "behind_published" | "tooth" | "slack";
   /** Larger is more worth searching. Comparable within one answer only. */
