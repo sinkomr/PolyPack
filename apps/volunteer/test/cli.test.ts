@@ -163,7 +163,8 @@ describe("the client, end to end", () => {
     expect(history()).toHaveLength(1);
   });
 
-  // Real solver work: asc on twenty pentagons for 1.8 s of active time, with a 1 s battery pause.
+  // Real solver work: the engine on twenty pentagons for 1.8 s of active time, with a 1 s battery
+  // pause. How far it gets before the pause depends on the machine, so the lines are matched loosely.
   it("pauses on battery power, without counting the pause, and prints status lines", { timeout: 60_000 }, async () => {
     server = await startFakeServer({ problems: [PENTAGONS] });
     const t0 = Date.now();
@@ -179,7 +180,7 @@ describe("the client, end to end", () => {
     expect(output).toMatch(/On battery power: paused/);
     expect(output).toMatch(/On AC power: resuming/);
     expect(output).toMatch(
-      /Status: N=5 M=5 P=20, \d+s of 2s; best none yet vs leader \d+\.\d{6}; 0 job\(s\) run; threads 0 busy, 2 paused, 0 idle; 0 submission\(s\) accepted; paused on battery power/,
+      /Status: N=5 M=5 P=20, \d+s of 2s; best .* vs leader \d+\.\d{6}.*; \d+ job\(s\) run; threads 0 busy, 2 paused, 0 idle; 0 submission\(s\) accepted; paused on battery power/,
     );
     expect(output).toMatch(/Status: N=5 M=5 P=20, .*threads 2 busy, 0 paused, 0 idle/);
     const [line] = history();
