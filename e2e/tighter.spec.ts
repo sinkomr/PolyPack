@@ -205,7 +205,9 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   const afterClicks = await rp(page);
   expect(p.unconfirmed).toBeCloseTo(afterClicks - confirmed, 9);
   expect(afterClicks).toBeGreaterThan(confirmed);
-  await expect(page.locator("#t-pending")).toContainText("sent within the minute");
+  // points waiting for the problem's next send are not shown: only trouble with sending is, as a notice
+  await expect(page.locator("#t-pending")).toHaveCount(0);
+  await expect(page.locator("#t-notice")).not.toContainText("Sending will try again");
   // the problem's next submission waits for its minute
   await page.waitForTimeout(2500);
   expect((await siteBest(page, p)).score).toBe(first.score);

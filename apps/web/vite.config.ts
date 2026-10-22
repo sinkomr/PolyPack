@@ -11,7 +11,7 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         browse: resolve(import.meta.dirname, "browse.html"),
         admin: resolve(import.meta.dirname, "admin.html"),
-        // reachable by URL only: no page links to it yet
+        // the idle game, linked from every page's nav
         tighter: resolve(import.meta.dirname, "tighter.html"),
       },
     },

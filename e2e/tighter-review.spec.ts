@@ -333,11 +333,14 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
   const beforeConsent = log.length;
   await consent(page, "Error Player");
   await measure("429 first 10 s", 10_000, beforeConsent);
+  // trouble with sending is told on the notice line, with when sending tries again
+  await expect(page.locator("#t-notice")).toContainText("too many submissions came from your address");
   await page.evaluate(() => (window as any).tighter.skipAhead(61_000));
   await measure("429 after a game minute, 10 s", 10_000);
   await answer(500);
   await page.evaluate(() => (window as any).tighter.skipAhead(61_000));
   await measure("500, 10 s", 10_000);
+  await expect(page.locator("#t-notice")).toContainText("The server answered with an error (500)");
   await answer("abort");
   await page.evaluate(() => (window as any).tighter.skipAhead(31_000));
   await measure("network error, 10 s", 10_000);
@@ -345,6 +348,7 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
   await page.route(`**/api/problems/${p.N}/${p.M}/${p.P}`, (route) => route.abort());
   await page.evaluate(() => (window as any).tighter.skipAhead(31_000));
   await measure("leader GET fails, 10 s", 10_000);
+  await expect(page.locator("#t-notice")).toContainText("The server cannot be reached. Sending will try again");
   await page.unroute(`**/api/problems/${p.N}/${p.M}/${p.P}`);
   await answer(422);
   await page.evaluate(() => (window as any).tighter.skipAhead(31_000));
