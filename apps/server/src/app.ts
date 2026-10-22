@@ -78,7 +78,8 @@ const CONVENTIONS = {
   score: "container side length s (polygon) or radius r (circle); smaller is better",
   shapes: `N and M are 0 for a circle or an integer from 3 to ${MAX_SIDES}; P is from 1 to ${MAX_PIECES}`,
   validity: `pieces may touch; two pieces overlap when their separation is below -${TOL}`,
-  scoring: "the server scores at container_phi and at its own auto-oriented phi and keeps the smaller",
+  scoring:
+    "the server scores the container at the container_phi sent (0 when it is missing) and does not search for a better orientation: turn the container to its best orientation before submitting",
 };
 
 /** Most values of P that one /api/atlas request may cover. */
@@ -87,8 +88,8 @@ export const ATLAS_MAX_SPAN = 100;
 export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
-/** How far /api/holders may lag behind the entries: it is computed again at most once a minute. */
-export const HOLDERS_REFRESH_MS = 60_000;
+/** How far /api/holders may lag behind the entries: it is computed again at most once every 15 minutes. */
+export const HOLDERS_REFRESH_MS = 900_000;
 
 /**
  * Which packing the atlas draws for one P.
@@ -437,14 +438,13 @@ export function createApp(opts: AppOptions): Hono {
     const name = sanitizeText(config.name ?? "", MAX_NAME_LENGTH);
     if (!name) return reject(400, ["name is required"]);
 
-    // The score is always recomputed here. Any container or score fields in the body were
-    // already dropped by parseConfig. The time it takes is charged to the address.
+    // The score is always recomputed here: the smallest container at the container_phi sent (0
+    // when none was). The server does not search for a better orientation; clients turn their
+    // boards before sending (decided 2026-10-21, see CONVENTIONS.scoring). Any container or score
+    // fields in the body were already dropped by parseConfig. The time it takes is charged to the
+    // address.
     const verifyStart = performance.now();
-    const result = evaluate(config, {
-      autoOrient: true,
-      maxOverlaps: MAX_REPORTED_OVERLAPS,
-      stopWhenInvalid: true,
-    });
+    const result = evaluate(config, { maxOverlaps: MAX_REPORTED_OVERLAPS, stopWhenInvalid: true });
     const container = result.valid ? result.container : null;
     const beats = !!container && !!lit && beatsLiterature(container.size, lit);
     const strict = container && beats ? strictVerify(config.N, config.pieces, container) : null;
@@ -453,8 +453,8 @@ export function createApp(opts: AppOptions): Hono {
     if (!container) return reject(422, result.reasons);
     const score = container.size;
 
-    const before = await store.leader(config.N, config.M, config.P);
-    const id = await store.insert({
+    // the insert, the leader and rank it gives, and the prune, in one transaction
+    const { id, before, leader, position, kept } = await store.submit({
       N: config.N,
       M: config.M,
       P: config.P,
@@ -472,16 +472,11 @@ export function createApp(opts: AppOptions): Hono {
     });
     // The leader is the earliest entry among the equally good ones, so an entry that only ties the
     // smallest score is not rank 1 although nothing is strictly ahead of it.
-    const [leader, position] = await Promise.all([
-      store.leader(config.N, config.M, config.P),
-      store.rank(config.N, config.M, config.P, id),
-    ]);
     const leads = leader?.id === id;
     const rank = leads ? 1 : Math.max(2, position);
-    // A problem keeps only its leader (and, behind a pending leader, the record it displaced); this
-    // entry may already be among the deleted.
-    const kept = !(await store.prune(config.N, config.M, config.P)).includes(id);
-    // after the insert and the prune, so that no answer computed in between is kept
+    // A problem keeps only its leader (and, behind a pending leader, the record it displaced): the
+    // entry may already have been deleted (`kept` is false). After the insert and the prune, so that
+    // no answer computed in between is kept:
     entriesChanged(`${config.N}/${config.M}`);
     if (beats) {
       log(

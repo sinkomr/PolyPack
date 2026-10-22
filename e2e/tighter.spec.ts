@@ -174,8 +174,9 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 15_000 }).toBe("E2E Tighter");
   const first = await siteBest(page, p);
   p = await focused(page);
-  // the board was turned to its best angle before it went: the server's score is the board's
-  expect(first.score).toBeCloseTo(p.best!, 12);
+  // the board was turned to its best angle before it went, and the server scores the angle sent:
+  // its score is the board's, to the bit
+  expect(first.score).toBe(p.best!);
   const entry = await (await page.request.get(`/api/submissions/${first.id}`)).json();
   expect(entry).toMatchObject({
     found_with: "optimizer",

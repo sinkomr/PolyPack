@@ -69,7 +69,9 @@ So at φ = 0 the container has a horizontal bottom edge. A circle container is g
 
 ## Scoring rule
 
-The server recomputes everything from the submitted poses. It scores at the submitted `container_phi` and at its own auto-oriented φ and keeps the smaller size (decided 2026-10-07).
+The server recomputes everything from the submitted poses. It scores the smallest container at the submitted `container_phi` (0 when it is missing) and does not search for a better orientation (decided 2026-10-21). Clients turn the container to its best orientation before they submit, with the same geometry code: the board does it when Submit is pressed, Tighter before every send, and the solver's result is oriented at the end of each run. The server's score is then exactly the score the client computed.
+
+This reverses the rule of 2026-10-07, under which the server also ran its own orientation search and kept the smaller size. That search was most of the verification time on large problems: 41.5 ms of 43.5 ms per board on average over Tighter's frontier (containers of 21 to 100 sides), against 2 ms for the check itself. Scoring at the orientation sent is sound, because the server still computes the container itself, so a client only chooses which valid container it is scored by. Entries stored before 2026-10-21 keep the scores they were given; a new entry must be oriented to compete with them.
 
 ## Leaderboard rule
 
@@ -89,7 +91,7 @@ N and M: 0 (circle) or 3 to 100. P: 1 to 500. Coordinates: |x|, |y| ≤ 1e6.
 
 ## Solver foundation
 
-**[EST]** `packages/solver` (`@polypack/solver`) is consumed as TypeScript source and typechecks without DOM or Node ambient types. All scoring and validity use shared geometry; trials may request fixed orientation, while the final result receives server-equivalent auto-orientation. Source: `packages/solver/src/`, `tsconfig.core.json`.
+**[EST]** `packages/solver` (`@polypack/solver`) is consumed as TypeScript source and typechecks without DOM or Node ambient types. All scoring and validity use shared geometry; trials may request fixed orientation, while the final result is auto-oriented, so that it is ready to submit: the server scores it at its `container_phi`. Source: `packages/solver/src/`, `tsconfig.core.json`.
 
 **[CALC]** Orchestration and float64 contact SQP/Newton stay in TypeScript so they can run unchanged in browser Workers, Node and Cloudflare Workers. A structural runtime adapter supplies performance measurements, MessageChannel yields and fallback timers. Framework methods share budgets, seeded randomness, pause/stop controls and progress; a synchronous geometry operation remains an atomic boundary that cannot be preempted. See [the solver README](../packages/solver/README.md) and [SOLVER_FRAMEWORK.md](SOLVER_FRAMEWORK.md).
 

@@ -2,7 +2,7 @@
 
 **[EST]** `geometry_reference.py` uses Python's standard library: vertex SAT, a primal three-variable enclosure LP, exhaustive support circles, and its own orientation search. Conventions follow [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md#conventions); touching uses the shared `1e-9` tolerance. It does not call TypeScript or consume its exported orientation. The polygon LP precomputes inverses for primal bases and checks every candidate against all inequalities. Orientation search samples at least 512 angles per period, refines every sampled local minimum with golden-section search, and includes the submitted phi. This numerical search is not a proof of a global orientation minimum.
 
-`test_corpus.py` checks every JSON file recursively under `data/corpus`, including invalid inputs, by calling `evaluate(config)` with independent auto-orientation. Validity must match exactly; score agreement uses absolute `1e-9` and relative `1e-10` tolerances. Use `evaluate(config, auto_orient=False)` for a fixed-phi comparison.
+`test_corpus.py` checks every JSON file recursively under `data/corpus`, including invalid inputs, twice. `evaluate(config, auto_orient=False)` at the configuration's own `container_phi` must give `expected_score`: that is how the server scores a submission (since 2026-10-21 it does not search for a better orientation). `evaluate(config)`, with its independent orientation search, must give `oriented_score`: what a client gets by turning the container before submitting. Validity must match exactly; score agreement uses absolute `1e-9` and relative `1e-10` tolerances.
 
 Run the standard-library corpus check from the repository root:
 

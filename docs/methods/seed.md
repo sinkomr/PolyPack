@@ -169,7 +169,7 @@ score assessments use `ctx.evaluate`. No decisions use clocks or `Math.random`.
 The framework supplies best/start/starts and performs the final optional polish;
 this method needs no custom polish or nested optimizer. Set `finalPolish:false`
 to measure the generators themselves. The framework still performs its ordinary
-final server-equivalent orientation assessment.
+final orientation assessment, which the server reproduces from the result.
 
 [CALC] Evaluate a complete first round before emitting one seed per applicable
 generator, up to `poolLimit`. This gives a diverse pool even when later rounds

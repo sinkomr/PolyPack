@@ -451,6 +451,15 @@ $("submit").addEventListener("click", async () => {
   }
   out.className = "note";
   out.textContent = "Submitting…";
+  // The server scores the container at the orientation it is sent and does not search for a
+  // better one, so the container is turned to its best orientation first, as Auto-orient does.
+  const unturned = board.container?.size ?? 0;
+  if (board.autoOrient()) {
+    say(
+      `Turned the container to its best orientation before submitting: ${unturned.toFixed(6)} → ${board.container!.size.toFixed(6)}.`,
+    );
+    view.fit();
+  }
   // The note is the user's own text; how the board was found is sent in its own fields.
   const note = $<HTMLInputElement>("agent-note").value.trim();
   const r = await api.submit({

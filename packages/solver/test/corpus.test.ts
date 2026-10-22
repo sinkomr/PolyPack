@@ -14,11 +14,17 @@ describe("cross-language corpus reference", () => {
   for (const file of files(resolve(import.meta.dirname, "../../../data/corpus"))) {
     it(file.split("data/corpus/")[1], () => {
       const saved = JSON.parse(readFileSync(file, "utf8"));
+      // the server's rule: the container at the configuration's own container_phi
+      const sent = evaluate(saved.config);
+      expect(sent.valid).toBe(saved.expected_valid);
+      if (sent.score === null) expect(saved.expected_score).toBeNull();
+      else expect(sent.score).toBeCloseTo(saved.expected_score, 9);
+      // after an orientation search, as a client does before submitting
       const result = evaluate(saved.config, { autoOrient: true });
       expect(result.valid).toBe(saved.expected_valid);
       expect(result.container?.phi ?? 0).toBe(saved.auto_oriented_phi);
-      if (result.score === null) expect(saved.expected_score).toBeNull();
-      else expect(result.score).toBeCloseTo(saved.expected_score, 9);
+      if (result.score === null) expect(saved.oriented_score).toBeNull();
+      else expect(result.score).toBeCloseTo(saved.oriented_score, 9);
       const fixed = evaluate({ ...saved.config, container_phi: saved.auto_oriented_phi });
       expect(fixed.valid).toBe(result.valid);
       if (fixed.score !== null) expect(fixed.score).toBeCloseTo(result.score!, 9);

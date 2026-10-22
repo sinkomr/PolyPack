@@ -153,6 +153,8 @@ let status: number;
 let answer: SubmitResponse;
 try {
   // The rate limits count per minute, so a refusal for that reason is retried after one.
+  // result.best comes oriented (a run ends with an orientation search), and the server scores the
+  // container at the container_phi sent: its answer is result.score.
   for (let attempt = 0; ; attempt++) {
     const response = await fetch(`${base}/api/submit`, {
       method: "POST",

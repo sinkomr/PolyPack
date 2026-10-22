@@ -53,6 +53,10 @@ if not problem["accepts_submissions"]:
 # horizontal and vertical, so centres one unit apart touch.
 pieces = [{"x": float(i % 4), "y": float(i // 4), "theta": math.pi / 4} for i in range(P)]
 
+# The server scores the container at container_phi as sent and does not search for a better
+# orientation, so orient a board before submitting it. This grid is axis-aligned: 0 is already
+# its best orientation.
+
 result = post(
     "/api/submit",
     {

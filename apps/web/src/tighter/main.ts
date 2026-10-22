@@ -122,6 +122,7 @@ import {
   Trouble,
   answerTrouble,
   classifyAnswer,
+  orientBoard,
   shouldSubmit,
   submissionBody,
   troubleText,
@@ -1088,15 +1089,16 @@ async function submitTick(): Promise<void> {
 }
 
 /**
- * Before a board is sent, its container is turned to its best angle, as the server scores it. The
- * runs score fixed angles between turns, so this often gains a little: an improvement like any other.
+ * Before a board is sent, its container is turned to its best angle: the server scores it at the
+ * angle sent and does not search for a better one. The runs score fixed angles between turns, so
+ * this often gains a little: an improvement like any other.
  */
 function orient(p: ProblemState): void {
   if (!p.board || p.best === null) return;
-  const e = evaluate(p.board, { autoOrient: true });
-  if (!e.valid || !e.container || e.score === null || !(e.score < p.best)) return;
-  p.board = { ...p.board, container_phi: e.container.phi };
-  p.best = e.score;
+  const turned = orientBoard(p.board, p.best);
+  if (!turned) return;
+  p.board = turned.board;
+  p.best = turned.score;
   const points = pay(state, p);
   if (points)
     event(

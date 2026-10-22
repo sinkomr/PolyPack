@@ -449,3 +449,66 @@ describe("pieces as BLOBs, and the migration of older rows", () => {
     expect(new SqliteStore(path).piecesMigrated()).toBe(true);
   });
 });
+
+describe("a submission", () => {
+  const entry = (score: number) => ({
+    N: 4,
+    M: 4,
+    P: 1,
+    score,
+    name: "a",
+    agent_note: "",
+    found_with: "hand" as const,
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [{ x: 0, y: 0, theta: 0 }],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00Z",
+    verification: "none" as const,
+    literature_value: null,
+    strict_check: null,
+  });
+
+  it("is stored, counted, ranked and pruned in one transaction, one commit", async () => {
+    const store = new SqliteStore(":memory:");
+    const db = (store as unknown as { db: DatabaseSync }).db;
+    const statements: string[] = [];
+    const exec = db.exec.bind(db);
+    db.exec = ((sql: string) => {
+      statements.push(sql);
+      return exec(sql);
+    }) as typeof db.exec;
+    const first = await store.submit(entry(2));
+    expect(first).toMatchObject({ before: null, position: 1, kept: true });
+    expect(first.leader?.id).toBe(first.id);
+    const worse = await store.submit(entry(3));
+    expect(worse).toMatchObject({ position: 2, kept: false });
+    expect(worse.before?.id).toBe(first.id);
+    expect(worse.leader?.id).toBe(first.id);
+    const better = await store.submit(entry(1));
+    expect(better).toMatchObject({ position: 1, kept: true });
+    expect(better.before?.id).toBe(first.id);
+    expect(better.leader?.id).toBe(better.id);
+    expect(statements).toEqual(Array(3).fill(["BEGIN IMMEDIATE", "COMMIT"]).flat());
+    expect(await store.count(4, 4, 1)).toBe(3);
+    // the leader it overtook was deleted in the same transaction
+    expect(await store.get(first.id)).toBeNull();
+  });
+
+  it("leaves nothing behind when it fails part way", async () => {
+    const store = new SqliteStore(":memory:");
+    await store.submit(entry(2));
+    const db = (store as unknown as { db: DatabaseSync }).db;
+    // the prune's delete fails after the insert and the count went in
+    db.exec("CREATE TRIGGER fail BEFORE DELETE ON submissions BEGIN SELECT RAISE(ABORT, 'no'); END");
+    await expect(store.submit(entry(1))).rejects.toThrow("no");
+    db.exec("DROP TRIGGER fail");
+    expect(await store.count(4, 4, 1)).toBe(1);
+    expect((await store.leader(4, 4, 1))?.score).toBe(2);
+    // and the store goes on
+    expect((await store.submit(entry(1))).kept).toBe(true);
+  });
+});

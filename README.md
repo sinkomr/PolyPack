@@ -4,7 +4,7 @@ Pack P congruent regular polygons or circles into the smallest regular polygon o
 
 - The board: drag and rotate pieces that can never overlap; the smallest enclosing container and its size are computed live.
 - Records: published values with sources, and one live leader per problem: the earliest of the best entries. Problems with a proven optimum are closed to entries.
-- API: everything is scriptable; see `/api` on the running site, `examples/submit.py` and, for running an optimizer and submitting its result, `examples/solve-and-submit.ts`.
+- API: everything is scriptable; see `/api` on the running site, `examples/submit.py` and, for running an optimizer and submitting its result, `examples/solve-and-submit.ts`. The server scores a packing at the container orientation it is sent (`container_phi`, 0 when missing) and does not search for a better one, so turn the container to its best orientation before submitting; the board, Tighter and the optimizers do so themselves.
 - Automated search: seven optimizers, seed generators and a contact polish, in the browser or as a TypeScript library.
 
 Problems are written (N, M, P): P pieces with N sides in a container with M sides, 0 meaning a circle. Polygon pieces have side 1 and circle pieces radius 1; the score is the container's side length, or its radius for a circle. The exact conventions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#conventions). Documentation labels claims **[EST]** (established, with a source), **[CALC]** (computed here) or **[SPEC]** (speculation).

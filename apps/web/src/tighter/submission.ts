@@ -1,4 +1,4 @@
-import { MAX_METHOD_PARAMS_BYTES, improvesOn, utf8Length } from "@polypack/geometry";
+import { MAX_METHOD_PARAMS_BYTES, evaluate, improvesOn, utf8Length } from "@polypack/geometry";
 import type { PackingConfig, RunBudget, SubmitResponse } from "@polypack/geometry";
 import { OFFLINE_BACKOFF_MS, RATE_LIMITED_BACKOFF_MS } from "./pacer";
 
@@ -28,6 +28,18 @@ export interface RunRecord {
 export function shouldSubmit(best: number, leaderScore: number | null): boolean {
   if (!(best > 0) || !Number.isFinite(best)) return false;
   return leaderScore === null || improvesOn(best, leaderScore);
+}
+
+/**
+ * The board with its container turned to the best orientation the search finds, and its score
+ * there, when that beats `best` (its score as it is); null otherwise. The server scores a board at
+ * the container_phi it is sent and does not search for a better one, so every board is turned
+ * before it is sent: the server's score is then exactly this score.
+ */
+export function orientBoard(board: PackingConfig, best: number): { board: PackingConfig; score: number } | null {
+  const e = evaluate(board, { autoOrient: true });
+  if (!e.valid || !e.container || e.score === null || !(e.score < best)) return null;
+  return { board: { ...board, container_phi: e.container.phi }, score: e.score };
 }
 
 /**

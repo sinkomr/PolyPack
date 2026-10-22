@@ -16,8 +16,9 @@ describe("trimTo", () => {
       expect(t.score).toBeLessThanOrEqual(donor + 1e-12);
       expect(findOverlaps(4, t.pieces)).toEqual([]);
       for (const p of t.pieces) expect(grid).toContainEqual(p);
+      // the server scores the container at the phi sent: the score at the phi returned is the score
       const again = evaluate({ N: 4, M: 4, P, pieces: t.pieces, container_phi: t.container_phi });
-      expect(again.score).toBeCloseTo(t.score, 9);
+      expect(again.score).toBe(t.score);
     }
     // one square is the trivial optimum
     expect(trimTo(4, 4, grid, 0, 1).score).toBeCloseTo(1, 9);
@@ -49,6 +50,8 @@ describe("growByStrip", () => {
       expect(g.pieces).toHaveLength(9);
       expect(g.score).toBeCloseTo(3, 9);
       expect(findOverlaps(3, g.pieces)).toEqual([]);
+      // oriented, as the server scores it: at the phi returned
+      expect(evaluate({ N: 3, M: 3, P: 9, pieces: g.pieces, container_phi: g.container_phi }).score).toBe(g.score);
     }
   });
 

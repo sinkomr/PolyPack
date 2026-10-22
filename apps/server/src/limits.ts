@@ -108,19 +108,20 @@ export function sanitizeText(raw: string, maxLength: number): string {
 export const SUBMISSIONS_PER_MINUTE = 120;
 /**
  * Milliseconds of verification (the geometry check of submissions) one address may cause a
- * minute, saved up to a minute's worth. 2 s is 3% of a core's minute. Tighter sends at most 6
- * boards a minute; on its largest problems they take 44 ms each on average and 0.25 s at most
- * (measured 2026-10-21). Boards of contested problems take under 1 ms, so scripts sending at the
- * count limit stay far below it too.
+ * minute, saved up to a minute's worth. 2 s is 3% of a core's minute. Checking a valid board at
+ * the orientation sent took 15 ms at most (500 100-gons on a ring, the largest hull a valid board
+ * can have; 2 ms on average over Tighter's largest problems; measured 2026-10-21), so even 120
+ * boards a minute, all the count limit lets through, stay below it. Boards of contested problems
+ * take under 1 ms.
  */
 export const VERIFY_MS_PER_MINUTE = 2000;
 /**
  * Event-loop delay (ms) above which new submissions are answered 503 with Retry-After. Ordinary
- * requests hold the loop for a few milliseconds at a time, so a longer delay means that work is
- * queuing or the host is throttling the CPU. Refusing the costly requests then keeps pages, live
- * updates and the health check (which fails after 5 s) answering. A few tasks take longer on their
- * own (the record holders count; verifying a large board with a 100-gon container) and may refuse
- * submissions for about two seconds after them.
+ * requests hold the loop for a few milliseconds at a time (a verification for 15 ms at most here,
+ * two to three times that on a shared host CPU), so a longer delay means that work is queuing or
+ * the host is throttling the CPU. Refusing the costly requests then keeps pages, live updates and
+ * the health check (which fails after 5 s) answering. The record holders count, at most every
+ * HOLDERS_REFRESH_MS, takes longer on its own and may refuse submissions for about two seconds.
  */
 export const OVERLOAD_DELAY_MS = 250;
 /** Retry-After (s) of the answer to a submission refused while the server is overloaded. */

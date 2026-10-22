@@ -249,12 +249,20 @@ export class Board {
     this.changed();
   }
 
-  autoOrient(): void {
+  /**
+   * Turns the container to the best orientation the search finds, as one undoable step, when that
+   * makes it smaller; returns whether it did. The server scores a submission at the orientation it
+   * is sent, so the board is turned before every submission.
+   */
+  autoOrient(): boolean {
     const s = this.state;
-    if (!s.pieces.length || s.M === 0) return;
+    if (!s.pieces.length || s.M === 0 || !this.container) return false;
+    const best = autoOrient(s.N, s.pieces, s.M, s.phi);
+    if (!(best.size < this.container.size)) return false;
     this.step(() => {
-      s.phi = autoOrient(s.N, s.pieces, s.M, s.phi).phi;
+      s.phi = best.phi;
     });
+    return true;
   }
 
   toConfig(): PackingConfig {
