@@ -17,12 +17,14 @@ export default defineConfig({
   webServer: [
     {
       command: "npx tsx apps/server/src/node.ts",
-      env: { PORT: "8788", DATABASE_PATH: ":memory:", ADMIN_TOKEN: "e2e-token" },
+      env: { PORT: "8788", DATABASE_PATH: ":memory:", ADMIN_TOKEN: "e2e-token", HOLDERS_REFRESH_MS: "0" },
       url: "http://localhost:8788/api/health",
       reuseExistingServer: false,
     },
     {
-      command: production ? "npx vite preview apps/web --port 5174 --strictPort" : "npx vite apps/web --port 5174 --strictPort",
+      command: production
+        ? "npx vite preview apps/web --port 5174 --strictPort"
+        : "npx vite apps/web --port 5174 --strictPort",
       env: { POLYPACK_API: "http://localhost:8788" },
       url: "http://localhost:5174",
       reuseExistingServer: false,
