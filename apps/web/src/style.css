@@ -428,6 +428,35 @@ body.scroll {
 .table-wrap {
   overflow-x: auto;
 }
+/* the pages of the records section: records across P and record holders */
+.subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: 14px;
+}
+.subnav a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+.holders .num {
+  text-align: right;
+}
+/* on a phone the table scrolls sideways rather than break a name over several lines */
+.holders .name {
+  min-width: 10em;
+}
+.terms {
+  margin-top: 16px;
+}
+.terms dt {
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 8px;
+}
+.terms dd {
+  margin: 2px 0 0;
+}
 figure {
   margin: 12px 0;
 }

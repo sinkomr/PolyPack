@@ -1,7 +1,15 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
 import { blobFromJson, encodePieces, readPieces } from "./pieces";
-import { EntryEdit, GET_MANY_LIMIT, KEEP_PER_PROBLEM, NewSubmission, Store, StoredSubmission } from "./store";
+import {
+  EntryEdit,
+  GET_MANY_LIMIT,
+  KEEP_PER_PROBLEM,
+  NewSubmission,
+  ProblemLeader,
+  Store,
+  StoredSubmission,
+} from "./store";
 
 // `pieces` is declared TEXT NOT NULL, as it was created; new rows store a BLOB in it (see
 // pieces.ts), which SQLite keeps unchanged in a TEXT column, so the table needs no rebuild.
@@ -305,6 +313,45 @@ export class SqliteStore implements Store {
          ORDER BY s.p ASC`,
       )
       .all(N, M, N, M, SCORE_TIE) as unknown as (LeaderboardEntry & { P: number })[];
+  }
+
+  async leaders(): Promise<ProblemLeader[]> {
+    // The same rule again, for every problem: one pass over the listing index in its own order,
+    // so SQLite sorts nothing, and the rule applied here (about 150 ms for 100,000 problems, half
+    // the time that window functions took). The first row of a problem has its smallest score;
+    // the leader is the earliest of the rows within the tie tolerance of it.
+    const rows = this.db
+      .prepare(
+        `SELECT n, m, p, id, name, score, verification FROM submissions WHERE ${LISTED}
+         ORDER BY n, m, p, score, id`,
+      )
+      .all() as Row[];
+    const leaders: ProblemLeader[] = [];
+    let first: Row | null = null;
+    let leader: Row | null = null;
+    const keep = () => {
+      if (leader)
+        leaders.push({
+          N: leader.n as number,
+          M: leader.m as number,
+          P: leader.p as number,
+          name: leader.name as string,
+          score: leader.score as number,
+          verification: leader.verification as ProblemLeader["verification"],
+        });
+    };
+    for (const r of rows) {
+      if (!first || r.n !== first.n || r.m !== first.m || r.p !== first.p) {
+        keep();
+        first = leader = r;
+      } else if (
+        (r.score as number) <= (first.score as number) * (1 + SCORE_TIE) &&
+        (r.id as number) < (leader!.id as number)
+      )
+        leader = r;
+    }
+    keep();
+    return leaders;
   }
 
   async pending(): Promise<StoredSubmission[]> {

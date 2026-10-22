@@ -49,6 +49,16 @@ export interface StoredSubmission extends NewSubmission {
   id: number;
 }
 
+/** The leader of one problem, as `leaders` lists it. */
+export interface ProblemLeader {
+  N: number;
+  M: number;
+  P: number;
+  name: string;
+  score: number;
+  verification: Verification;
+}
+
 /**
  * Persistence used by the API. Async so that the same routes can run on a hosted SQL service
  * (for example Cloudflare D1) as well as on local SQLite.
@@ -84,6 +94,8 @@ export interface Store {
    * reviewed or unremarkable entries.
    */
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
+  /** The leader of every problem that has a listed entry, by N, then M, then P. */
+  leaders(): Promise<ProblemLeader[]>;
   pending(): Promise<StoredSubmission[]>;
   /**
    * Decides on an entry that is pending or was confirmed, then prunes its problem. A rejected entry
