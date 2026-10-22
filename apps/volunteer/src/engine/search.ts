@@ -26,10 +26,17 @@
  *    measured rate, so that most jobs end on evaluations and are reproducible.
  * 5. Stopping. No job starts when control.aborted is set ("aborted"), when the best is within
  *    1e-9 of the area bound ("bound"), when less than T0 / 2 is left before maxSeconds minus the
- *    polish reserve ("time"), or when the best has not improved by more than 1e-9 relative for
- *    max(floor, elapsed / 2) seconds ("stagnation"). The search then waits for the jobs in
- *    flight; if one of them improves the best, stagnation no longer holds and jobs start again.
- *    It ends when nothing is in flight and no job may start.
+ *    polish reserve ("time"), or when there has been no progress for max(floor, elapsed / 2)
+ *    seconds ("stagnation"). Progress is a strict result that improves by more than 1e-9
+ *    relative either the score to beat (the best, or input.known before the best beats it) or
+ *    the best of the search's own line. The own line is every packing not derived from
+ *    input.known: fresh results, and iterated results from such packings; warm results, and
+ *    iterated ones from them, belong to the known packing's line. So a warm search that cannot
+ *    beat its start yet goes on while its own packings keep getting better. The floor is the fair
+ *    share, a quarter of maxSeconds (at least 4 T0); after it, the own line counts only while it
+ *    is within 1% of the score to beat, so a search that cannot even approach the leader stops.
+ *    When no job may start, the search waits for the jobs in flight; if one of them makes
+ *    progress, jobs start again. It ends when nothing is in flight and no job may start.
  * 6. Final polish. Unless aborted, method "polish" from the best packing, for at most the time
  *    left (the reserve is kept for it) and 60 s.
  * 7. Memory. Each arm's share of the problem's reward and each method's evaluation rate are
@@ -84,6 +91,8 @@ interface Flight {
   /** Absent for the final polish, which belongs to no arm. */
   state?: ArmState;
   level: number;
+  /** Whether its start is input.known or derived from it, so its packing is not the own line's. */
+  fromKnown: boolean;
   startedAt: number;
   done: Promise<{ id: number; result: JobResult }>;
 }
@@ -128,7 +137,14 @@ class Search {
   private best: Candidate | null = null;
   /** The best valid packing that is not strict: a start, never the best. */
   private fallback: { config: PackingConfig; score: number } | null = null;
-  private lastImprovement = 0;
+  /** Whether the best and the fallback derive from input.known. */
+  private bestFromKnown = false;
+  private fallbackFromKnown = false;
+  /** Score of the best strict packing of the search's own line (not derived from input.known). */
+  private ownBest = Infinity;
+  /** Elapsed seconds when the score to beat, and the own line's best, last improved. */
+  private lastBeaten = 0;
+  private lastOwn = 0;
   private jobs = 0;
 
   constructor(
@@ -207,7 +223,7 @@ class Search {
           stop = next;
           break;
         }
-        this.launch(next.job, next.state);
+        this.launch(next.job, next.state, next.fromKnown);
       }
       if (this.flights.size === 0) break;
       const { id, result } = await Promise.race(Array.from(this.flights.values(), (flight) => flight.done));
@@ -225,20 +241,31 @@ class Search {
   }
 
   /** The next job, or why none may start. */
-  private decide(): { job: Job; state: ArmState } | Stop {
+  private decide(): { job: Job; state: ArmState; fromKnown: boolean } | Stop {
     if (this.control.aborted) return "aborted";
     if (this.atBound()) return "bound";
     if (this.jobs >= POLICY.maxJobs) return "stagnation";
     const t = this.elapsed();
     const available = this.maxSeconds - this.plan.polishReserve - t;
     if (available < this.plan.minJob) return "time";
-    if (t - this.lastImprovement >= Math.max(this.plan.stagnationFloor, POLICY.stagnationShare * t))
+    if (t - this.lastProgress(t) >= Math.max(this.plan.stagnationFloor, POLICY.stagnationShare * t))
       return "stagnation";
     const state = this.order.find((s) => !s.explored && this.eligible(s)) ?? this.sample(available);
     // Every arm failed for good
     if (!state) return "stagnation";
     state.explored = true;
-    return { job: this.makeJob(state, Math.min(levelSeconds(this.plan, state.level), available)), state };
+    const job = this.makeJob(state, Math.min(levelSeconds(this.plan, state.level), available));
+    return { job, state, fromKnown: this.startFromKnown(state.arm) };
+  }
+
+  /**
+   * Elapsed seconds at the last progress: the score to beat improved, or the own line did while
+   * it counts, which is before the fair share or while it is within approachGap of that score.
+   */
+  private lastProgress(t: number): number {
+    const target = Math.min(this.best?.score ?? Infinity, this.known?.score ?? Infinity);
+    const counts = t < this.plan.stagnationFloor || this.ownBest <= target * (1 + POLICY.approachGap);
+    return counts ? Math.max(this.lastBeaten, this.lastOwn) : this.lastBeaten;
   }
 
   private atBound(): boolean {
@@ -250,6 +277,13 @@ class Search {
     if (arm.start === "warm") return this.known?.config;
     if (arm.start === "iterate") return this.best?.config ?? this.fallback?.config;
     return undefined;
+  }
+
+  /** Whether an arm's start is input.known or derived from it. */
+  private startFromKnown(arm: Arm): boolean {
+    if (arm.start === "warm") return true;
+    if (arm.start === "iterate") return this.best ? this.bestFromKnown : this.fallbackFromKnown;
+    return false;
   }
 
   private eligible(state: ArmState): boolean {
@@ -299,11 +333,11 @@ class Search {
     return job;
   }
 
-  private launch(job: Job, state: ArmState | undefined): Flight {
+  private launch(job: Job, state: ArmState | undefined, fromKnown: boolean): Flight {
     const id = this.jobs++;
     const startedAt = this.elapsed();
     const done = settle(this.runJob, job, this.control).then((result) => ({ id, result }));
-    const flight: Flight = { id, job, state, level: state?.level ?? 0, startedAt, done };
+    const flight: Flight = { id, job, state, level: state?.level ?? 0, fromKnown, startedAt, done };
     this.flights.set(id, flight);
     return flight;
   }
@@ -312,7 +346,7 @@ class Search {
   private absorb(flight: Flight, result: JobResult): void {
     const t = this.elapsed();
     const seconds = Math.max(0, t - flight.startedAt);
-    const gain = this.consider(result, flight.job, t);
+    const gain = this.consider(result, flight, t);
     const failed = result.termination === "error" || result.termination === "crashed";
     const state = flight.state;
     if (state) {
@@ -348,25 +382,40 @@ class Search {
     }
   }
 
-  /** Takes a job's packing as the best or as a start, and returns the job's reward. */
-  private consider(result: JobResult, job: Job, t: number): number {
+  /**
+   * Takes a job's packing as the best or as a start, records progress (see the stopping rule)
+   * and returns the job's reward.
+   */
+  private consider(result: JobResult, flight: Flight, t: number): number {
     const { best: config, score } = result;
     if (result.valid !== true || typeof score !== "number" || !Number.isFinite(score) || !(score > 0)) return 0;
     if (!fitsProblem(config, this.problem)) return 0;
+    const { job, fromKnown } = flight;
     if (result.strict !== true) {
-      if (!this.fallback || score < this.fallback.score) this.fallback = { config, score };
+      if (!this.fallback || score < this.fallback.score) {
+        this.fallback = { config, score };
+        this.fallbackFromKnown = fromKnown;
+      }
       return 0;
     }
     // The score to beat: the best so far, or the known packing before there is one
     const before = Math.min(this.best?.score ?? Infinity, this.known?.score ?? Infinity);
-    if (!this.best || score < this.best.score) this.best = { config, score, strict: true, job, params: result.params };
-    if (!Number.isFinite(before) || (before - score) / before > POLICY.minImprovement) this.lastImprovement = t;
+    if (!this.best || score < this.best.score) {
+      this.best = { config, score, strict: true, job, params: result.params };
+      this.bestFromKnown = fromKnown;
+    }
+    if (!Number.isFinite(before) || (before - score) / before > POLICY.minImprovement) this.lastBeaten = t;
+    if (!fromKnown && score < this.ownBest * (1 - POLICY.minImprovement)) {
+      this.ownBest = score;
+      this.lastOwn = t;
+    }
     return reward(before, score);
   }
 
   /** The final polish of the best packing (or of the best valid one when none is strict). */
   private async polish(): Promise<void> {
     const target = this.best ?? this.fallback;
+    const fromKnown = this.best ? this.bestFromKnown : this.fallbackFromKnown;
     const seconds = Math.min(this.maxSeconds - this.elapsed(), POLICY.polishMaxSeconds);
     if (!target || !(seconds >= 0.05)) return;
     const job: Job = {
@@ -378,7 +427,7 @@ class Search {
       finalPolish: false,
       kind: "polish",
     };
-    const flight = this.launch(job, undefined);
+    const flight = this.launch(job, undefined, fromKnown);
     const { result } = await flight.done;
     this.flights.delete(flight.id);
     this.absorb(flight, result);

@@ -148,17 +148,34 @@ export const POLICY = {
   /** A relative improvement of the best above this counts; below it is rounding. */
   minImprovement: 1e-9,
   /**
-   * Stagnation: stop when the time since the last improvement reaches this share of the elapsed
-   * time. With 0.5 the search gets as much time again as it took to find its last improvement;
-   * if improvements arrived like the records of a random sequence, the next doubling of time would
-   * hold one with probability 1/2 [SPEC].
+   * Stagnation: stop when the time since the last progress reaches this share of the elapsed
+   * time. With 0.5 the search gets as much time again as it took to make its last progress; if
+   * progress arrived like the records of a random sequence, the next doubling of time would hold
+   * some with probability 1/2 [SPEC]. Progress is an improvement by more than minImprovement
+   * relative of the best, or of the search's own line (search.ts), within approachGap.
    */
   stagnationShare: 0.5,
-  /** The stagnation span is at least maxSeconds/12, clamped to [30 s, 300 s], and 4 T0. */
-  stagnationFloorShare: 1 / 12,
-  stagnationFloorMin: 30,
-  stagnationFloorMax: 300,
+  /**
+   * The fair share of maxSeconds, which is also the stagnation floor: before it the search never
+   * stops for stagnation and its own line counts as progress however far behind it is. A quarter,
+   * and at least 4 T0 for the exploration round. [CALC] At docs/VOLUNTEER.md's default, 10
+   * minutes on all cores but one of 8, a quarter is 17.5 core-minutes, about 1.5 times the 12
+   * core-minutes of the batch runner's sawtooth run (2 methods, 3 seeds, 120 s), the kind of short
+   * search behind the site's leaders. A search that has spent more than that without coming near
+   * the leader is unlikely to beat it [SPEC], and stopping then leaves three quarters of the
+   * problem's time to the next problems. At 60 minutes the floor is 15 minutes: proportional to
+   * what the volunteer grants a problem rather than capped.
+   */
+  fairShare: 0.25,
   stagnationFloorBases: 4,
+  /**
+   * After the fair share, the search's own line counts as progress only while it is within this
+   * relative distance of the score to beat. [CALC] calibrate.ts `length`: two doublings of run
+   * length gained 0.09% to 0.4%. What is left of maxSeconds after its first quarter is two
+   * doublings of elapsed time, so a line more than 1% behind, 2.5 times the largest gain seen,
+   * is unlikely to catch up.
+   */
+  approachGap: 0.01,
   /**
    * Time kept for the final polish: 2% of maxSeconds within [2 s, 60 s], at most a quarter of
    * maxSeconds. [CALC] Polishing a 5 s `asc` result took 0.2 s for 30 squares but 10 to 60 s for
@@ -182,7 +199,7 @@ export interface Plan {
   maxLevel: number;
   /** Seconds kept for the final polish. */
   polishReserve: number;
-  /** Shortest stagnation span, seconds. */
+  /** Shortest stagnation span, and the fair share of maxSeconds, seconds. */
   stagnationFloor: number;
   /** No job shorter than this is started. */
   minJob: number;
@@ -204,10 +221,7 @@ export function makePlan(maxSeconds: number, lanes: number, arms: number, evalua
   const base = Math.max(0.5, Math.min(bySize, byShare));
   const cap = Math.max(base, Math.min(POLICY.capShare * T, POLICY.capMaxSeconds));
   const maxLevel = Math.max(0, Math.floor(Math.log2(cap / base) + 1e-9));
-  const floor = Math.max(
-    POLICY.stagnationFloorBases * base,
-    clamp(POLICY.stagnationFloorShare * T, POLICY.stagnationFloorMin, POLICY.stagnationFloorMax),
-  );
+  const floor = Math.max(POLICY.stagnationFloorBases * base, POLICY.fairShare * T);
   return { base, cap, maxLevel, polishReserve, stagnationFloor: Math.min(T, floor), minJob: base / 2 };
 }
 

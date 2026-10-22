@@ -358,25 +358,26 @@ describe("engine: best and polish", () => {
 });
 
 describe("engine: stopping", () => {
-  it("stops on stagnation after the floor when nothing ever improves", async () => {
+  it("stops on stagnation after the floor, a quarter of maxSeconds, when nothing ever improves", async () => {
     const sim = new Sim(() => ({ score: 5 }));
-    const outcome = await search(sim, { maxSeconds: 36000 });
+    const outcome = await search(sim, { maxSeconds: 3600 });
     expect(outcome.stopped).toBe("stagnation");
-    const plan = planFor(36000, 4);
+    const plan = planFor(3600, 4);
+    expect(plan.stagnationFloor).toBe(900);
     const firstEnd = Math.min(...sim.finished.map((r) => r.end));
     const lastStart = Math.max(...sim.jobs.filter((r) => r.job.kind !== "polish").map((r) => r.at));
     // The first result is the only improvement; nothing starts once the floor has passed
     expect(lastStart - firstEnd).toBeLessThan(plan.stagnationFloor);
     expect(lastStart).toBeGreaterThan(plan.stagnationFloor / 2);
-    expect(sim.clock).toBeLessThan(2000);
+    expect(sim.clock).toBeLessThan(1800);
   });
 
   it("gives the search as much time again as it took to find its last improvement", async () => {
-    // Improvements until about 3000 s, then none
+    // Improvements until about 3000 s, then none; past half of maxSeconds, elapsed / 2 exceeds the floor
     const sim = new Sim((_job, index, s) => ({ score: s.clock < 3000 ? 5 * (1 - 1e-6) ** index : 5 }));
-    const outcome = await search(sim, { maxSeconds: 100000 });
+    const outcome = await search(sim, { maxSeconds: 10000 });
     expect(outcome.stopped).toBe("stagnation");
-    const floor = planFor(100000, 4).stagnationFloor;
+    const floor = planFor(10000, 4).stagnationFloor;
     // Replay the improvements in delivery order and check every start against the rule
     const improvements: number[] = [0];
     let best = Infinity;
@@ -403,15 +404,70 @@ describe("engine: stopping", () => {
     const sim = new Sim((job, index) => {
       if (longJob < 0 && index >= 20) {
         longJob = index;
-        return { score: 4, seconds: 800 };
+        return { score: 4, seconds: 1200 };
       }
       return { score: 5 };
     });
-    const outcome = await search(sim, { maxSeconds: 36000, lanes: 2 });
+    const outcome = await search(sim, { maxSeconds: 3600, lanes: 2 });
     const end = sim.jobs[longJob].end;
+    // Stagnation (900 s after the first result) came before the long job ended
+    expect(end).toBeGreaterThan(planFor(3600, 2).stagnationFloor + 100);
+    const waiting = sim.jobs.filter((r) => r.at > end - 200 && r.at < end);
+    expect(waiting).toHaveLength(0);
     expect(sim.jobs.some((r) => r.at >= end && r.job.kind !== "polish")).toBe(true);
     expect(outcome.best?.score).toBe(4);
     expect(outcome.stopped).toBe("stagnation");
+  });
+
+  // The reviewer's case: warm from the site leader, 10 minutes, 3 lanes. The old rule stopped at
+  // its floor, max(4 T0, clamp(600 / 12, 30, 300)) = 50 s, because nothing beat the leader.
+  const leader = { config: packing(SQUARES, "leader"), score: 5, source: "site" as const };
+  /**
+   * Fresh packings behind the leader by `gap` plus a shrinking amount, so they improve at every
+   * job; warm and iterated jobs only reproduce their start.
+   */
+  const behind = (gap: number) => {
+    let fresh = 0;
+    const scores = new Map<PackingConfig, number>([[leader.config, leader.score]]);
+    return (job: Job): Answer => {
+      const score = job.kind === "fresh" ? 5 * (1 + gap + 0.005 * 0.97 ** fresh++) : scores.get(job.start!)!;
+      const config = packing(job.problem, `${job.kind} ${score}`);
+      scores.set(config, score);
+      return { score, config };
+    };
+  };
+  const lastStart = (sim: Sim) => Math.max(...sim.jobs.filter((r) => r.job.kind !== "polish").map((r) => r.at));
+
+  it("keeps a warm search going while its own packings improve, though none beats the start", async () => {
+    const sim = new Sim(behind(0));
+    const outcome = await search(sim, { known: leader, maxSeconds: 600, lanes: 3 });
+    expect(outcome.stopped).toBe("time");
+    expect(lastStart(sim)).toBeGreaterThan(500);
+    expect(outcome.best?.score).toBe(5);
+    // The best stayed in the leader's line: the last iterated jobs started from a reproduction of it
+    expect(sim.jobs.filter((r) => r.job.kind === "iterate").at(-1)!.job.start?.name).toMatch(/^(warm|iterate) 5$/);
+    // The budgets grew well past the base, which the old 50 s stop never reached
+    expect(Math.max(...sim.jobs.map((r) => r.job.budget.time_s))).toBeGreaterThanOrEqual(40);
+  });
+
+  it("stops a warm search whose own packings improve but stay far behind, at the fair share", async () => {
+    const sim = new Sim(behind(0.05));
+    const outcome = await search(sim, { known: leader, maxSeconds: 600, lanes: 3 });
+    expect(outcome.stopped).toBe("stagnation");
+    const floor = planFor(600, 3, true).stagnationFloor;
+    expect(floor).toBe(150);
+    expect(lastStart(sim)).toBeGreaterThan(floor - 20);
+    expect(lastStart(sim)).toBeLessThan(floor);
+  });
+
+  it("stops a warm search on stagnation when nothing at all improves", async () => {
+    const sim = new Sim(() => ({ score: 5 }));
+    const outcome = await search(sim, { known: leader, maxSeconds: 600, lanes: 3 });
+    expect(outcome.stopped).toBe("stagnation");
+    // The first own packing is the only progress
+    const firstFresh = Math.min(...sim.finished.filter((r) => r.job.kind === "fresh").map((r) => r.end));
+    expect(lastStart(sim)).toBeLessThan(firstFresh + 150);
+    expect(lastStart(sim)).toBeGreaterThan(100);
   });
 
   it("aborts: starts nothing more, waits for the running jobs and skips the polish", async () => {
