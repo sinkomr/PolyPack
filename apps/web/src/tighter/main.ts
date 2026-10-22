@@ -959,7 +959,8 @@ function accrueAuto(): void {
   const runs = autoRuns(o);
   accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) * laneCount(o) : 0, autoCap(o, laneCount(o)));
   autoRan = runs;
-  if (!runs) state.autoDue = 0;
+  // a Compact's debt stays: switching auto-eval off and on does not cancel it
+  if (!runs) state.autoDue = Math.min(0, state.autoDue);
 }
 
 /**
@@ -979,15 +980,15 @@ function autoJob(lv: LaneView): Job | null {
     busy,
     owned: o,
     seeds: seedsPerProblem(o),
-    // a Compact waits until auto-eval is due its 100 evaluations; meanwhile runs go on elsewhere
-    canCompact: state.autoDue >= COMPACT_EVALS,
     // with Auto-advance a lane keeps to its run's problem until that problem stalls
     current: lv.run?.key ?? null,
     stall: stallAfter(state),
   });
   if (!target) return null;
   if (target.action === "compact") {
-    if (state.autoDue < COMPACT_EVALS) return null;
+    // A Compact is one press of 100 evaluations. It starts once a click's worth is due and the rest
+    // is owed (autoDue below zero), repaid before any lane's next click: waiting for 100 due at once
+    // never ended while another lane took each click as it came due, so new problems sat uncompacted.
     state.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
@@ -2389,11 +2390,15 @@ function dealText(o: Owned): string {
         ? "Dealing a problem…"
         : `The next problem is dealt after ${more}.`
       : "Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations. Drop a problem to take one.";
-  const due = plan(o)?.due;
+  // with auto-eval off nothing leaves, but the line still says which problem waits and why
+  const due = o.has("advance")
+    ? advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o), perClick: evalsPerClick(o) }).due
+    : null;
   if (!due) return line;
   const why = spent(due, seedsPerProblem(o))
     ? `Every seed on ${problemTitle(due)} is spent.`
     : `${problemTitle(due)} has run ${evals(due.sinceGain)} without progress.`;
+  if (!advancing(o)) return `${line} ${why} Auto-advance replaces it once you switch auto-eval on.`;
   return `${line} ${why} Auto-advance replaces it ${left > 0 ? `when the next problem is earned, after ${more}` : "as soon as a new problem is found"}.`;
 }
 
