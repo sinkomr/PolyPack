@@ -167,8 +167,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await page.click("#t-consent-save");
   await expect(page.locator("#t-welcome")).toBeHidden();
 
-  // consent pays the record so far at once; the first record goes at once, with its provenance
-  await expect(page.locator("#t-points")).toBeVisible();
+  // consent pays the record so far at once (the totals appear); the first record goes at once, with its provenance
+  await expect(page.locator("#t-bar")).toBeVisible();
   const paid = await rp(page);
   expect(paid).toBeGreaterThanOrEqual(5);
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 15_000 }).toBe("E2E Tighter");

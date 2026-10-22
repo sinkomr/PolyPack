@@ -189,14 +189,15 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await page.locator("#t-dock-queue").tap();
   await expect(page.locator("#t-queue")).toBeVisible();
   await expect(page.locator("#t-lanes")).toBeVisible();
-  await expect(page.locator("#t-points")).toBeHidden();
+  await expect(page.locator("#t-points-help")).toBeHidden();
   await expect(page.locator("#t-upgrades")).toBeHidden();
   await axeClean(page);
 
-  // the points: the points, standing and records, without the queue
+  // the points: the totals in full (wrapped, not scrolled), how points are paid, without the queue
   await page.locator("#t-dock-points").tap();
-  await expect(page.locator("#t-points")).toBeVisible();
+  await expect(page.locator("#t-points-help")).toBeVisible();
   await expect(page.locator("#t-queue")).toBeHidden();
+  expect(await page.locator("#t-bar").evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
 
   // back to the board, which is fitted again
   await page.locator("#t-dock-board").tap();

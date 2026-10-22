@@ -1866,6 +1866,7 @@ function render(): void {
   );
 
   renderProblem(p);
+  problemTip();
   renderToolbar(p, o);
   renderScore(p, o);
   renderConsent();
@@ -1890,7 +1891,6 @@ function render(): void {
 
 function renderProblem(p: ProblemState | undefined): void {
   const s = state;
-  text("t-held", fmtInt(recordsHeld(s)));
   if (!p) {
     if (picking(owned()) && s.picks.offers.length) text("t-title", "Pick a problem from the offers in the queue.");
     else if (!dealing && now() >= dealPausedUntil) text("t-title", "Dealing a problem…");
@@ -1934,6 +1934,13 @@ function renderProblem(p: ProblemState | undefined): void {
     $<HTMLButtonElement>("t-next").disabled = !ready || dealing;
     text("t-next", ready ? "Next problem" : `Next problem after ${evals(left)}`);
   }
+}
+
+/** The problem's title and note in full on hover: the top row may cut them short. */
+function problemTip(): void {
+  const tip = [$("t-title").textContent, $("t-problem-note").textContent].filter(Boolean).join("\n");
+  const box = $("t-problem-text");
+  if (box.title !== tip) box.title = tip;
 }
 
 function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): void {
@@ -2120,13 +2127,14 @@ function renderConsent(): void {
   );
 }
 
+/** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
-  show("t-points", revealed(state, "points"));
-  text("t-rp", fmtRP(state.rp));
-  text("t-earned", fmtRP(state.rpEarned));
-  text("t-evals", fmtInt(state.stats.evaluations));
-  text("t-clicks", fmtInt(state.stats.clicks));
+  show("t-points-help", revealed(state, "points"));
   show("t-name-nudge", !state.consent && revealed(state, "asked"));
+  // the clicks: in the evaluations' tooltip
+  const evals = $("t-bar-evals-box");
+  const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
+  if (evals.title !== tip) evals.title = tip;
 }
 
 const tree = new TreeRenderer(
@@ -2182,7 +2190,8 @@ function setView(toTree: boolean): void {
 
 /**
  * On a phone the screen shows one view at a time between the problem and the action dock: the
- * board, the tech tree, the queue (offers, filters, lanes, runs) or the points (standing, records).
+ * board, the tech tree, the queue (offers, filters, lanes, runs) or the points (the totals in full,
+ * standing, records, and how points are paid).
  * The dock's tabs choose it; on wider screens the dock is not shown and the panel stays beside the
  * board (the view chosen only matters to the phone layout's CSS).
  */
@@ -2209,7 +2218,7 @@ function panesOpen(): Record<Pane, boolean> {
     board: true,
     tree: !$("t-views").hidden,
     queue: any("t-queue", "t-lanes", "t-runs"),
-    points: any("t-points", "t-standing", "t-records"),
+    points: any("t-points-help", "t-standing", "t-records"),
   };
 }
 
@@ -2597,7 +2606,6 @@ function renderLanes(o: Owned): void {
       }),
     );
   }
-  const rate = autoPerSecond(o);
   lanes.forEach((lv, i) => {
     const li = list.children[i] as HTMLElement;
     const line = li.querySelector(".t-lane-line") as HTMLElement;
@@ -2609,12 +2617,6 @@ function renderLanes(o: Owned): void {
         `run at ${evals(lv.progress?.evaluations ?? lv.run.evaluations)}`;
       if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
-    if (rate !== null)
-      msg += state.settings.auto
-        ? holdReason()
-          ? " · auto-eval paused"
-          : ` · auto-eval ${fmtRate(rate)}`
-        : " · auto-eval off";
     if (line.textContent !== msg) line.textContent = msg;
   });
 }
@@ -2702,10 +2704,9 @@ function renderStanding(o: Owned): void {
   text("t-bar-standing", `${fmtInt(st.points)} · ×${standingMultiplier(st).toFixed(1)}`);
   show("t-standing", visible);
   if (!visible) return;
+  // the standing to spend and its multiplier are in the totals
   setStats("t-st-stats", [
-    ["Standing to spend", fmtInt(st.points)],
     ["Standing earned in all", fmtInt(st.total)],
-    ["Multiplier on all points", `×${standingMultiplier(st).toFixed(1)}`],
     [`Cycle ${fmtInt(st.resets + 1)} so far`, `${fmtRP(st.cycleEarned)} RP in ${fmtSpan(now() - st.cycleStartedAt)}`],
     ["Rule this cycle", st.rule ? ruleById(st.rule)!.name : "none"],
   ]);
@@ -2806,7 +2807,8 @@ function renderRecords(o: Owned): void {
   const col = o.has("collections");
   show("t-records", rent || col);
   if (!rent && !col) return;
-  const rows: [string, string][] = [["Records held", fmtInt(recordsHeld(state))]];
+  // the records held are in the totals
+  const rows: [string, string][] = [];
   if (rent) {
     rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
     rows.push(["Rent waiting for a check", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
