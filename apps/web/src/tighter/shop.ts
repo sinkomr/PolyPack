@@ -412,14 +412,15 @@ function focusVisible(e: Element): boolean {
 
 /**
  * The tech tree on the page. A node is a card with one button: on a device with a pointer that
- * hovers, pressing a node you can afford buys it, and hovering or focusing any node shows its
- * details below the tree and its explanation in a card beside it; on a touch screen a tap shows the
- * details, which hold the Buy button and the explanation behind "How it works". In the phone's list
- * each upgrade also shows its effect and "How it works" itself. A mystery shows no explanation.
+ * hovers, pressing a node you can afford buys it, and hovering or focusing any node shows a card
+ * beside it with its details and explanation (a mystery's card says only what it needs). On a touch
+ * screen, and in the phone's list, a tap shows the details below the tree instead, which hold the
+ * Buy button and the explanation behind "How it works"; the list's upgrades also show their effect
+ * and "How it works" themselves. A mystery shows no explanation.
  *
- * Nothing that shows on hover moves a node: the details below the tree have a fixed height, and the
- * card beside the node is fixed to the window, placed clear of the node and transparent to the
- * pointer, so it takes no click.
+ * Nothing that shows on hover moves a node: the card is fixed to the window, placed clear of the
+ * node and transparent to the pointer, so it takes no click, and the details below the tree (where
+ * they show) have a fixed height.
  */
 export class TreeRenderer {
   private layoutSig = "";
@@ -454,8 +455,10 @@ export class TreeRenderer {
     this.touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
     const phone = typeof matchMedia === "function" ? matchMedia(PHONE_QUERY) : null;
     this.list = !!phone?.matches;
+    this.showDetail();
     phone?.addEventListener("change", () => {
       this.list = phone.matches;
+      this.showDetail();
       this.layoutSig = "";
       if (this.view) this.render(this.view, this.funds);
     });
@@ -700,6 +703,11 @@ export class TreeRenderer {
     this.renderDetail();
   }
 
+  /** The details below the tree are for taps: with a pointer that hovers, the card beside the node holds them. */
+  private showDetail(): void {
+    this.detail.hidden = !this.touch && !this.list;
+  }
+
   /** The details of the node under the pointer or focus, or else of the one pressed. */
   private renderDetail(): void {
     this.renderTip();
@@ -752,28 +760,28 @@ export class TreeRenderer {
 
   /**
    * The card beside the node under the pointer or focus, on the canvas with a pointer that hovers:
-   * its name, price or standing, effect and explanation. The node's button names it as its
-   * description while it shows. None for a mystery.
+   * its name, price or standing, effect and explanation, or for a mystery only what it needs. The
+   * node's button names it as its description while it shows.
    */
   private renderTip(): void {
     const id = this.touch || this.list ? null : (this.pointed ?? (this.keyboardFocus ? this.focused : null));
     const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
-    const how = n && n.state !== "mystery" ? n.how : null;
-    const sig = n && how ? `${n.id}|${n.state}|${n.price}|${n.levelText}` : "";
+    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.needs.join()}` : "";
     if (sig !== this.tipSig) {
       this.tipSig = sig;
       this.box.querySelectorAll(`[aria-describedby="${TIP_ID}"]`).forEach((b) => b.removeAttribute("aria-describedby"));
-      this.tipFor = n && how ? n.id : null;
-      if (!n || !how) {
+      this.tipFor = n ? n.id : null;
+      if (!n) {
         this.tip.hidden = true;
         this.tip.replaceChildren();
         return;
       }
+      const mystery = n.state === "mystery";
       this.tip.replaceChildren(
-        el("p", "t-tree-tip-name", n.name),
+        el("p", "t-tree-tip-name", mystery ? MYSTERY : n.name),
         el("p", "t-detail-status", statusText(n)),
-        el("p", "t-tree-tip-effect", n.effect),
-        renderHow(how),
+        ...(mystery ? [] : [el("p", "t-tree-tip-effect", n.effect)]),
+        ...(!mystery && n.how ? [renderHow(n.how)] : []),
       );
       this.tip.hidden = false;
       this.nodes.get(n.id)?.querySelector("button")?.setAttribute("aria-describedby", TIP_ID);

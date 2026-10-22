@@ -195,7 +195,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
   await expect.poll(() => logText(page)).toContain(`${confirmed.toFixed(1)} RP confirmed`);
   await expect(page.locator("#t-notice")).toContainText("RP confirmed");
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
 
   // Evolve: each click is one more evaluation of the same run; an improving click pays at once
   const s0 = await stats(page);
@@ -230,7 +230,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect((await page.request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 15_000 }).toBe(second.id);
   await expect.poll(async () => (await focused(page)).unconfirmed).toBe(0);
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
   // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (5 RP), labels it

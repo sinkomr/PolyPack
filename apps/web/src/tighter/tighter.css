@@ -916,6 +916,9 @@ body.tighter[data-pane="tree"] .t-banner {
   background: var(--panel);
   font-size: 13.5px;
 }
+.t-tree-detail[hidden] {
+  display: none;
+}
 .t-tree-detail h3 {
   margin: 0 0 2px;
   font-size: 15px;

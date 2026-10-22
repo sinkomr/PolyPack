@@ -280,13 +280,13 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   const s = await state(page);
   console.log(
     `lost answer: server leader ${server?.name} id ${server?.id}; game verified ${after.verified} ourId ${after.ourId} ` +
-      `held ${await page.locator("#t-held").textContent()} rp ${s.rp} POSTs ${posts(log).length}`,
+      `held ${await page.locator("#t-bar-held").textContent()} rp ${s.rp} POSTs ${posts(log).length}`,
   );
   await page.screenshot({ path: `${SHOTS}/r2-lost-answer-after-reload.png`, fullPage: true });
   expect(server?.name).toBe("Reload Player");
   expect(posts(log)).toHaveLength(1);
   // the game knows it holds this record, and the points it paid before the send are confirmed, once
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(after.ourId).toBe(server.id);
   expect(after.sending).toBeNull();
   expect(after.unconfirmed).toBe(0);

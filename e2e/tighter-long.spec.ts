@@ -150,7 +150,10 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(harden).toHaveAttribute("data-state", "mystery");
   await expect(harden.locator(".t-node-name")).toHaveText("??????");
   await harden.locator("button").click();
-  await expect(page.locator("#t-tree-detail")).toContainText("Needs Method: seed.");
+  // with a pointer that hovers, the card beside the node holds the details and the pane below is gone
+  await expect(page.locator("#t-tree-tip")).toContainText("Needs Method: seed.");
+  await expect(page.locator("#t-tree-tip")).toContainText("??????");
+  await expect(page.locator("#t-tree-detail")).toBeHidden();
   await expect(page.locator('.t-node[data-id="click3"] .t-node-name')).toHaveText("3 a click");
   expect(await axe(page)).toEqual([]);
 
