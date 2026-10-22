@@ -868,6 +868,48 @@
   color: var(--muted);
 }
 
+/* "How it works" (how.ts): prose, formulas, then each variable defined */
+.t-how p {
+  margin: 0 0 6px;
+}
+.t-math {
+  margin: 4px 0 6px;
+  padding: 4px 10px;
+  border-left: 3px solid var(--border);
+  font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", Georgia, serif;
+  font-size: 15px;
+}
+.t-math p {
+  margin: 2px 0;
+}
+.t-how var,
+.t-vars var {
+  font-style: italic;
+}
+.t-where {
+  color: var(--muted);
+}
+.t-vars {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 10px;
+  margin: 0 0 6px;
+}
+.t-vars dt {
+  font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", Georgia, serif;
+  white-space: nowrap;
+}
+.t-vars dd {
+  margin: 0;
+}
+.t-how-note {
+  color: var(--muted);
+}
+.t-how-more > summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
 /* the phone's tree: rows of the same nodes in a list (shop.ts builds it under PHONE_QUERY) */
 .t-tree-list {
   padding: 0 10px 12px;
