@@ -1,3 +1,4 @@
+import { How, howDisclosure, renderHow } from "./how";
 import {
   CardState,
   Currency,
@@ -21,10 +22,10 @@ import {
 
 /**
  * The shop: the whole tech tree, row by row. Owned upgrades fold into one line per row; the rest
- * show as cards, buyable or not yet. A mystery upgrade shows as ?????? (its name, its effect and its
- * price) until every prerequisite is owned; its card still says what it needs, a prerequisite that
- * is itself an unrevealed mystery reading ?????? too. The Standing row (paid in standing) shows only
- * once Standing is owned.
+ * show as cards, buyable or not yet. A mystery upgrade shows as ?????? (its name, its effect, its
+ * explanation and its price) until every prerequisite is owned; its card still says what it needs,
+ * a prerequisite that is itself an unrevealed mystery reading ?????? too. The Standing row (paid in
+ * standing) shows only once Standing is owned.
  *
  * `shopView` and `treeView` are pure (the tests read them); `TreeRenderer` draws the tree in its
  * own pane, as columns of upgrades with lines from each prerequisite (the tech-tree concept,
@@ -39,9 +40,10 @@ export interface CardView {
   /** Never "owned": owned upgrades fold into the row's line (a levelled one with levels left stays a card). */
   state: Exclude<CardState, "owned">;
   name: string;
-  /** What it does and the real feature behind it; ?????? for a mystery. */
+  /** What it does, in a sentence; ?????? for a mystery. */
   effect: string;
-  real: string | null;
+  /** What exactly happens (How it works); null for a mystery. */
+  how: How | null;
   /** The price of the upgrade or of its next level; null for a mystery. */
   cost: number | null;
   currency: Currency;
@@ -148,7 +150,7 @@ export function card(o: Owned, u: Upgrade, state: CardView["state"], coreCount: 
       state,
       name: MYSTERY,
       effect: MYSTERY,
-      real: null,
+      how: null,
       cost: null,
       currency,
       price: null,
@@ -168,7 +170,7 @@ export function card(o: Owned, u: Upgrade, state: CardView["state"], coreCount: 
     state,
     name: u.name,
     effect: u.effect,
-    real: u.real,
+    how: u.how,
     cost,
     currency,
     price: u.levels && l > 0 ? `next level ${price}` : price,
@@ -233,8 +235,6 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   if (textContent !== undefined) e.textContent = textContent;
   return e;
 };
-
-const sentence = (t: string) => `${t[0].toUpperCase()}${t.slice(1)}.`;
 
 /** A short label for a chip ("2 evaluations per click" → "2 a click"); the full name is in its details. */
 export function chipName(name: string): string {
@@ -390,10 +390,36 @@ function nodeAct(n: NodeView, touch: boolean): string {
   return "Details";
 }
 
+/** A node's price or standing, as its details say it: "1,000 RP · needs Trace detail." */
+function statusText(n: NodeView): string {
+  if (n.state === "owned") return `Owned${n.levelText ? ` · ${n.levelText}` : ""}.`;
+  if (n.state === "mystery") return `Needs ${n.needs.join(", ")}.`;
+  if (n.state === "locked") return `${n.price} · needs ${n.needs.join(", ")}.`;
+  return `${n.price}${n.levelText ? ` · ${n.levelText}` : ""}${n.state === "dear" ? " · saving up" : ""}.`;
+}
+
+/** The id of the floating explanation, which the node it explains names as its description. */
+const TIP_ID = "t-tree-tip";
+
+/** Whether the element's focus shows as the keyboard's (false where the browser cannot tell). */
+function focusVisible(e: Element): boolean {
+  try {
+    return e.matches(":focus-visible");
+  } catch {
+    return false;
+  }
+}
+
 /**
  * The tech tree on the page. A node is a card with one button: on a device with a pointer that
  * hovers, pressing a node you can afford buys it, and hovering or focusing any node shows its
- * details below the tree; on a touch screen a tap shows the details, which hold the Buy button.
+ * details below the tree and its explanation in a card beside it; on a touch screen a tap shows the
+ * details, which hold the Buy button and the explanation behind "How it works". In the phone's list
+ * each upgrade also shows its effect and "How it works" itself. A mystery shows no explanation.
+ *
+ * Nothing that shows on hover moves a node: the details below the tree have a fixed height, and the
+ * card beside the node is fixed to the window, placed clear of the node and transparent to the
+ * pointer, so it takes no click.
  */
 export class TreeRenderer {
   private layoutSig = "";
@@ -403,8 +429,16 @@ export class TreeRenderer {
   private funds: Funds = { rp: 0, standing: 0 };
   /** The node whose details are shown (pressed, or under the pointer or focus). */
   private selected: UpgradeId | null = null;
-  private preview: UpgradeId | null = null;
+  private pointed: UpgradeId | null = null;
+  private focused: UpgradeId | null = null;
+  /** The focus came from the keyboard (a click focuses a button too, and then the card follows the pointer). */
+  private keyboardFocus = false;
   private detailSig = "";
+  private detailId: UpgradeId | null = null;
+  /** The explanation beside the node under the pointer or focus (the canvas, with a pointer that hovers). */
+  private readonly tip: HTMLElement;
+  private tipSig = "";
+  private tipFor: UpgradeId | null = null;
   private readonly touch: boolean;
   /** A list instead of the canvas: the phone layout. */
   private list: boolean;
@@ -425,6 +459,14 @@ export class TreeRenderer {
       this.layoutSig = "";
       if (this.view) this.render(this.view, this.funds);
     });
+    // in the tree's pane, so it hides with it
+    this.tip = el("div", "t-tree-tip");
+    this.tip.id = TIP_ID;
+    this.tip.setAttribute("role", "tooltip");
+    this.tip.hidden = true;
+    (box.parentElement ?? box).append(this.tip);
+    box.addEventListener("scroll", () => this.placeTip(), { passive: true });
+    addEventListener("resize", () => this.placeTip());
   }
 
   render(view: TreeView, funds: Funds): void {
@@ -440,6 +482,8 @@ export class TreeRenderer {
     const sig = `${this.list ? "list" : "tree"}|${view.nodes.map((n) => n.id).join(",")}|${owned.join(",")}`;
     if (sig !== this.layoutSig) {
       this.layoutSig = sig;
+      // new buttons: the tip names itself on the new one
+      this.tipSig = "";
       if (this.list) this.buildList(view);
       else this.build(view);
     }
@@ -472,6 +516,10 @@ export class TreeRenderer {
 
   /** The phone's tree: each row's upgrades as a list of the same nodes, without the lines. */
   private buildList(view: TreeView): void {
+    // explanations left open stay open when the list is built again (after a purchase)
+    const open = new Set(
+      Array.from(this.box.querySelectorAll(".t-list-how[open]"), (d) => d.closest<HTMLElement>(".t-node")?.dataset.id),
+    );
     const list = el("div", "t-tree-list");
     this.edges = [];
     this.nodes.clear();
@@ -482,7 +530,12 @@ export class TreeRenderer {
       row.dataset.row = r.id;
       row.setAttribute("aria-label", r.title);
       const grid = el("div", "t-list-nodes");
-      for (const n of nodes) grid.append(this.node(n));
+      for (const n of nodes) {
+        const node = this.node(n);
+        const how = node.querySelector<HTMLDetailsElement>(".t-list-how");
+        if (how && open.has(n.id)) how.open = true;
+        grid.append(node);
+      }
       row.append(el("h3", "t-list-title", r.title), grid);
       list.append(row);
     }
@@ -506,18 +559,43 @@ export class TreeRenderer {
     const btn = el("button", "t-node-act");
     btn.type = "button";
     btn.addEventListener("click", () => this.press(n.id));
-    btn.addEventListener("focus", () => this.hover(n.id));
-    btn.addEventListener("blur", () => this.hover(null));
+    btn.addEventListener("focus", () => {
+      this.keyboardFocus = focusVisible(btn);
+      this.hover("focused", n.id);
+    });
+    btn.addEventListener("blur", () => this.hover("focused", null));
     // On a touch screen a tap selects, and hovering is left out: iOS takes a first tap on an element
     // whose mouseenter changes the page for a hover and sends no click, and the emulated mouseleave
     // of the next tap (on Buy, below) would take the details away under the finger.
     if (!this.touch) {
-      node.addEventListener("mouseenter", () => this.hover(n.id));
-      node.addEventListener("mouseleave", () => this.hover(null));
+      node.addEventListener("mouseenter", () => this.hover("pointed", n.id));
+      node.addEventListener("mouseleave", () => this.hover("pointed", null));
     }
     node.append(name, foot, bar, btn);
     this.nodes.set(n.id, node);
+    this.explain(node, n);
     return node;
+  }
+
+  /**
+   * In the phone's list: the upgrade's effect under its name, the button's description, and its
+   * explanation behind "How it works" (none for a mystery, and none on the canvas).
+   */
+  private explain(node: HTMLElement, n: NodeView): void {
+    const want = this.list && n.state !== "mystery" && !!n.how;
+    if (want === (node.dataset.how === "1")) return;
+    node.querySelectorAll(".t-list-effect, .t-list-how").forEach((e) => e.remove());
+    const btn = node.querySelector("button")!;
+    btn.removeAttribute("aria-describedby");
+    delete node.dataset.how;
+    if (!want) return;
+    const effect = el("p", "t-list-effect", n.effect);
+    effect.id = `t-effect-${n.id}`;
+    const how = howDisclosure(n.how!);
+    how.classList.add("t-list-how");
+    node.append(effect, how);
+    btn.setAttribute("aria-describedby", effect.id);
+    node.dataset.how = "1";
   }
 
   private build(view: TreeView): void {
@@ -601,6 +679,8 @@ export class TreeRenderer {
     if (btn.getAttribute("aria-label") !== label) btn.setAttribute("aria-label", label);
     const sel = this.selected === n.id ? "true" : "false";
     if (btn.getAttribute("aria-expanded") !== sel) btn.setAttribute("aria-expanded", sel);
+    // a mystery revealed without a new layout
+    this.explain(node, n);
   }
 
   private press(id: UpgradeId): void {
@@ -614,15 +694,16 @@ export class TreeRenderer {
     if (this.view) this.render(this.view, this.funds);
   }
 
-  private hover(id: UpgradeId | null): void {
-    if (this.preview === id) return;
-    this.preview = id;
+  private hover(by: "pointed" | "focused", id: UpgradeId | null): void {
+    if (this[by] === id) return;
+    this[by] = id;
     this.renderDetail();
   }
 
-  /** The details of the node pressed, or else of the one under the pointer or focus. */
+  /** The details of the node under the pointer or focus, or else of the one pressed. */
   private renderDetail(): void {
-    const id = this.preview ?? this.selected;
+    this.renderTip();
+    const id = this.pointed ?? this.focused ?? this.selected;
     const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
     const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.name}|${this.selected}` : "";
     if (sig === this.detailSig) {
@@ -631,6 +712,9 @@ export class TreeRenderer {
       return;
     }
     this.detailSig = sig;
+    // an explanation opened on a touch screen stays open while the same upgrade's details change
+    const wasOpen = !!this.detail.querySelector<HTMLDetailsElement>(".t-detail-how")?.open && this.detailId === id;
+    this.detailId = n ? n.id : null;
     if (!n) {
       this.detail.replaceChildren(
         el(
@@ -638,29 +722,16 @@ export class TreeRenderer {
           "note",
           this.touch
             ? "Tap an upgrade for its details."
-            : "Point at an upgrade for its details; press one you can afford to buy it.",
+            : "Point at an upgrade to see what it does. Press one you can afford to buy it.",
         ),
       );
       return;
     }
-    const h = el("h3", undefined, n.state === "mystery" ? MYSTERY : n.name);
-    const status = el(
-      "p",
-      "t-detail-status",
-      n.state === "owned"
-        ? `Owned${n.levelText ? ` · ${n.levelText}` : ""}.`
-        : n.state === "mystery"
-          ? `Needs ${n.needs.join(", ")}.`
-          : n.state === "locked"
-            ? `${n.price} · needs ${n.needs.join(", ")}.`
-            : `${n.price}${n.levelText ? ` · ${n.levelText}` : ""}${n.state === "dear" ? " · saving up" : ""}.`,
-    );
-    const parts: HTMLElement[] = [h, status];
-    if (n.state !== "mystery") {
-      const p = el("p", undefined, sentence(n.effect));
-      if (n.real) p.append(" ", el("span", "t-real", `Real: ${n.real}.`));
-      parts.push(p);
-    }
+    const parts: HTMLElement[] = [
+      el("h3", undefined, n.state === "mystery" ? MYSTERY : n.name),
+      el("p", "t-detail-status", statusText(n)),
+    ];
+    if (n.state !== "mystery") parts.push(el("p", "t-detail-effect", n.effect));
     if (n.state === "buyable" || n.state === "dear") {
       const buy = el("button", "t-detail-buy primary", `Buy for ${n.price!.replace(/^next level /, "")}`);
       buy.type = "button";
@@ -669,6 +740,73 @@ export class TreeRenderer {
       buy.addEventListener("click", () => this.onBuy(n.id));
       parts.push(buy);
     }
+    // with no hover there is no card beside the node: the explanation is here (the list has its own)
+    if (this.touch && !this.list && n.state !== "mystery" && n.how) {
+      const how = howDisclosure(n.how);
+      how.classList.add("t-detail-how");
+      how.open = wasOpen;
+      parts.push(how);
+    }
     this.detail.replaceChildren(...parts);
+  }
+
+  /**
+   * The card beside the node under the pointer or focus, on the canvas with a pointer that hovers:
+   * its name, price or standing, effect and explanation. The node's button names it as its
+   * description while it shows. None for a mystery.
+   */
+  private renderTip(): void {
+    const id = this.touch || this.list ? null : (this.pointed ?? (this.keyboardFocus ? this.focused : null));
+    const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
+    const how = n && n.state !== "mystery" ? n.how : null;
+    const sig = n && how ? `${n.id}|${n.state}|${n.price}|${n.levelText}` : "";
+    if (sig !== this.tipSig) {
+      this.tipSig = sig;
+      this.box.querySelectorAll(`[aria-describedby="${TIP_ID}"]`).forEach((b) => b.removeAttribute("aria-describedby"));
+      this.tipFor = n && how ? n.id : null;
+      if (!n || !how) {
+        this.tip.hidden = true;
+        this.tip.replaceChildren();
+        return;
+      }
+      this.tip.replaceChildren(
+        el("p", "t-tree-tip-name", n.name),
+        el("p", "t-detail-status", statusText(n)),
+        el("p", "t-tree-tip-effect", n.effect),
+        renderHow(how),
+      );
+      this.tip.hidden = false;
+      this.nodes.get(n.id)?.querySelector("button")?.setAttribute("aria-describedby", TIP_ID);
+    }
+    this.placeTip();
+  }
+
+  /**
+   * The card to the right of its node, or to the left where the window has more room there; never
+   * over it. As narrow as reads well, and wider where a long explanation would not fit the window's
+   * height.
+   */
+  private placeTip(): void {
+    const node = this.tipFor ? this.nodes.get(this.tipFor) : undefined;
+    if (!node || this.tip.hidden) return;
+    const r = node.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const gap = 10;
+    const margin = 8;
+    const right = vw - r.right - gap - margin;
+    const left = r.left - gap - margin;
+    const room = Math.max(0, right, left);
+    const fit = (w: number) => {
+      const px = `${Math.round(w)}px`;
+      if (this.tip.style.width !== px) this.tip.style.width = px;
+      return Math.round(w);
+    };
+    let width = fit(Math.min(420, room));
+    if (this.tip.scrollHeight > this.tip.clientHeight + 1 && room > width) width = fit(Math.min(640, room));
+    const x = right >= width ? r.right + gap : r.left - gap - width;
+    const y = Math.max(margin, Math.min(r.top, vh - margin - this.tip.offsetHeight));
+    this.tip.style.left = `${Math.round(x)}px`;
+    this.tip.style.top = `${Math.round(y)}px`;
   }
 }

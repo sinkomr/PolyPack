@@ -1,6 +1,43 @@
 import { describe, expect, it } from "vitest";
+import { DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
+import {
+  PAIR_BONUS,
+  RENT_GROWTH,
+  RENT_RECHECK_MS,
+  RENT_SHARE,
+  RENT_WINDOW_MS,
+  SHAPE_BONUS,
+  SHAPE_MILESTONES,
+  TIER_BONUS,
+} from "../src/tighter/economy";
+import { resolvedParams } from "../src/tighter/open-run";
+import { CONTEST } from "../src/tighter/points";
+import {
+  LEARN_MIN_EVALS,
+  LOOSE_WEAKNESS,
+  MAX_RATIO,
+  NEIGHBOURS,
+  RP_PER_EVAL,
+  msPerEval,
+  room,
+} from "../src/tighter/rank";
+import { MAX_STAGES, MIN_OBSERVED_EVALS } from "../src/tighter/runplan";
+import { HELD_PER_STANDING, RESET_MIN, standingMultiplier } from "../src/tighter/standing";
+import { GREEDY_BUDGET, MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "../src/tighter/transfer";
 import { MYSTERY, shopView } from "../src/tighter/shop";
-import { UPGRADES, UpgradeId, laneCount, lanesMaxed, owning } from "../src/tighter/upgrades";
+import {
+  AUTO_SLACK_SECONDS,
+  COMPACT_EVALS,
+  RUN_BUDGET,
+  TUNED_DEFAULTS,
+  UPGRADES,
+  EvolveMethod,
+  UpgradeId,
+  laneCount,
+  lanesMaxed,
+  owning,
+  rpCostFactor,
+} from "../src/tighter/upgrades";
 
 const broke = { rp: 0, standing: 0 };
 const card = (v: ReturnType<typeof shopView>, id: UpgradeId) => v.rows.flatMap((r) => r.cards).find((c) => c.id === id);
@@ -32,7 +69,7 @@ describe("Tighter shop", () => {
     expect(row(v, "clicks").cards[0].id).toBe("trace");
   });
 
-  it("hides a mystery's name, effect and price until its prerequisites are owned", () => {
+  it("hides a mystery's name, effect, explanation and price until its prerequisites are owned", () => {
     const v = shopView(owning([]), broke, 8);
     const harden = card(v, "harden")!;
     expect(harden).toMatchObject({
@@ -41,7 +78,7 @@ describe("Tighter shop", () => {
       effect: MYSTERY,
       cost: null,
       price: null,
-      real: null,
+      how: null,
     });
     expect(harden.needs).toEqual(["Method: seed"]);
     // a prerequisite that is itself an unrevealed mystery reads ?????? too
@@ -57,6 +94,7 @@ describe("Tighter shop", () => {
       price: "30,000 RP",
       needs: [],
     });
+    expect(card(w, "harden")!.how).toBe(UPGRADES.find((u) => u.id === "harden")!.how);
     expect(card(w, "morph")!.needs).toEqual(["Method: harden"]);
     // mysteries sort after what can be worked toward
     const methods = row(w, "methods").cards.map((c) => c.state);
@@ -219,5 +257,104 @@ describe("Tighter tech tree", () => {
     expect(PHONE_QUERY).toBe(
       "(max-width: 759px), (max-height: 500px) and (orientation: landscape) and (max-width: 1023px)",
     );
+  });
+});
+
+describe("Tighter upgrade texts", () => {
+  const vars = (markup: string) => [...markup.matchAll(/<var>(.*?)<\/var>/g)].map((m) => m[1]);
+  const all = (u: (typeof UPGRADES)[number]) => [
+    ...(typeof u.how.text === "string" ? [u.how.text] : u.how.text),
+    ...(u.how.math ?? []),
+    ...(u.how.vars ?? []).flat(),
+    u.how.note ?? "",
+  ];
+
+  it("explain every upgrade, defining every variable their formulas use", () => {
+    for (const u of UPGRADES) {
+      const text = typeof u.how.text === "string" ? [u.how.text] : u.how.text;
+      expect(text.length, u.id).toBeGreaterThan(0);
+      for (const t of text) expect(t.trim().length, u.id).toBeGreaterThan(20);
+      const defined = new Set((u.how.vars ?? []).flatMap(([sym]) => vars(sym)));
+      for (const line of u.how.math ?? []) for (const v of vars(line)) expect(defined, `${u.id}: ${v}`).toContain(v);
+      // the variables' meanings and the prose are plain text; formulas keep to how.ts's tags
+      for (const [, meaning] of u.how.vars ?? []) expect(meaning, u.id).not.toMatch(/<[a-z]/);
+      for (const t of text) expect(t, u.id).not.toMatch(/<[a-z]/);
+      for (const line of [...(u.how.math ?? []), ...(u.how.vars ?? []).map(([sym]) => sym)])
+        for (const tag of line.matchAll(/<\/?([a-z]+)/g)) expect(["var", "sub", "sup", "code"], u.id).toContain(tag[1]);
+    }
+  });
+
+  it("say what each upgrade gives in one short sentence, without the old labels", () => {
+    for (const u of UPGRADES) {
+      expect(u.effect, u.id).toMatch(/^[A-Za-z].*\.$/);
+      expect(u.effect.split(/\s+/).length, u.id).toBeLessThanOrEqual(20);
+      expect(u.effect, u.id).not.toMatch(/[;—]|\. \S/);
+      for (const t of all(u)) expect(t, u.id).not.toMatch(/Real:|—|free floor/);
+    }
+  });
+
+  it("state each tuning level's parameters from the solver's own defaults", () => {
+    for (const [m, params] of Object.entries(TUNED_DEFAULTS) as [EvolveMethod, Record<string, number>][]) {
+      const defaults = resolvedParams(m, {});
+      for (const [k, v] of Object.entries(params)) expect(defaults[k], `${m}.${k}`).toBe(v);
+    }
+    const tune = UPGRADES.find((u) => u.id === "tuneMc")!;
+    expect(tune.how.math).toEqual([
+      "<code>sweepsPerEvaluation</code> = 10, 15, 20, 30",
+      "<code>stagnationEvals</code> = 500, 500, 1000, 2000",
+      "<code>maxRestarts</code> = 0, 0, 0, 2",
+    ]);
+  });
+
+  it("give each rung of a ladder its own numbers", () => {
+    const u = (id: UpgradeId) => UPGRADES.find((x) => x.id === id)!;
+    expect(u("click3").effect).toBe("Each Evolve click runs 3 evaluations instead of 2.");
+    expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>a</var> + <var>r</var>"]);
+    expect(u("auto1").effect).toBe("Auto-eval clicks Evolve for you every 5 s while it is switched on.");
+    expect(u("auto3").how.math).toEqual(["<var>e</var> = <var>k</var> × <var>L</var> / 3"]);
+    expect(u("auto6").effect).toBe("Auto-eval clicks 2 times a second in each lane instead of once a second.");
+    expect(u("seeds8").effect).toBe("Each problem gets up to 8 runs, each with its own seed, instead of 4.");
+    expect(u("queue4").effect).toBe("The queue holds 4 problems, and the dealer earns a new one every 75 clicks.");
+    expect(u("ring80").how.math).toEqual(["<var>N</var> + <var>M</var> + <var>P</var> ≥ 80"]);
+    expect(u("rank4").effect).toBe("The dealer draws 4 problems instead of 2 and deals the best one.");
+  });
+
+  // The texts are written in numbers; these are the game's constants they quote.
+  it("quote the game's own constants", () => {
+    const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
+    expect(DEAL_CLICKS).toBe(300);
+    expect(text("queue3")).toContain("300 × <var>k</var>");
+    expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
+    expect(text("advance")).toContain("100 evaluations of mc_compress");
+    expect(text("seeds2")).toContain("100,000 evaluations");
+    expect(text("auto2")).toContain("60 s");
+    expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
+      0.01, 1.5, 168, 10,
+    ]);
+    expect(text("rent")).toContain("0.01 × <var>B</var> × 1.5<sup>");
+    expect(text("rent")).toContain("10 minutes");
+    expect(CONTEST).toEqual({ open: 1, loose: 3, batch: 10, published: 100 });
+    expect([room("open", null), room("loose", 1), room("batch", null), room("published", null)]).toEqual([
+      1, 1, 0.1, 0.004,
+    ]);
+    expect(room("loose", 0.01)).toBeCloseTo(0.3 + 25 * 0.01, 12);
+    expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([0.5, 0.005, 3, 1.77]);
+    expect(text("rank2")).toContain("× 0.5 ×");
+    expect(text("reach2")).toContain("≥ 0.005");
+    expect([LEARN_MIN_EVALS, MAX_RATIO, MIN_OBSERVED_EVALS, MAX_STAGES]).toEqual([200, 20, 20, 9]);
+    expect(text("learning")).toContain("at least 200 evaluations");
+    expect(text("methodMatch")).toContain("at least 20 evaluations");
+    expect(text("pipeline")).toContain("up to 9 methods");
+    expect([PAIR_BONUS, SHAPE_BONUS, TIER_BONUS, [...SHAPE_MILESTONES]]).toEqual([0.02, 0.01, 0.05, [10, 30, 100]]);
+    expect(text("collections")).toContain("1 + 0.02 × <var>a</var> + 0.01 × <var>b</var> + 0.05 × <var>t</var>");
+    expect([TRANSFER_MARGIN, MAX_NEIGHBOUR_LOOKUPS]).toEqual([0.98, 4]);
+    // 6 missing pieces fit the greedy placement's budget (33 spots tried each), 7 do not
+    expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
+    expect(text("transfer")).toContain("6 or fewer");
+    expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
+    expect([RESET_MIN, HELD_PER_STANDING]).toEqual([250_000, 50]);
+    expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
+    expect(text("standing")).toContain("250,000");
+    expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
 });

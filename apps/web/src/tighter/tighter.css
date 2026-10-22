@@ -909,6 +909,43 @@
 .t-detail-status {
   color: var(--muted);
 }
+.t-detail-how {
+  margin-top: 6px;
+}
+/* The explanation beside the node under the pointer or the keyboard's focus (shop.ts places it):
+   fixed to the window, so it changes no layout; beside its node, never over it; and transparent to
+   the pointer, so a click goes to whatever node lies beneath. */
+.t-tree-tip {
+  position: fixed;
+  z-index: 5;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  padding: 8px 12px 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.2);
+  font-size: 13px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.t-tree-tip[hidden] {
+  display: none;
+}
+.t-tree-tip > p {
+  margin: 0 0 4px;
+}
+.t-tree-tip-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+.t-tree-tip-effect {
+  font-weight: 600;
+}
+.t-tree-tip .t-math {
+  font-size: 14px;
+}
 
 /* "How it works" (how.ts): prose, formulas, then each variable defined */
 .t-how p {
@@ -981,9 +1018,10 @@
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+/* wide enough for an upgrade's effect and its explanation: one column on a phone */
 .t-list-nodes {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr));
   gap: 6px;
 }
 .t-tree-list .t-node {
@@ -999,6 +1037,24 @@
 }
 .t-tree-list .t-node[data-state="owned"] .t-node-foot {
   font-size: 11px;
+}
+/* each upgrade's effect, then its explanation behind "How it works": positioned and later in the
+   node than its button, so it lies above the button and a tap there opens it instead of selecting */
+.t-list-effect {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+.t-list-how {
+  position: relative;
+  font-size: 12.5px;
+}
+.t-list-how > summary {
+  padding: 4px 0 2px;
+}
+.t-list-how .t-math {
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 /* ---- touch ---- */
