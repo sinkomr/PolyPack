@@ -481,3 +481,92 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   expect((await stats(page)).evaluations).toBe(e0 + 5);
   expect(errors).toEqual([]);
 });
+
+test("long game: Auto-advance's tolerance and patience; a problem that stops making progress is replaced once a deal is earned", async ({
+  page,
+}) => {
+  test.setTimeout(180_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 27);
+  await firstRecord(page);
+  await consent(page, "E2E Advance");
+  const first = await focused(page);
+  // the board counts the problem's evaluations, and those since its last progress
+  const count = /^[\d,]+ evaluations? · [\d,]+ since progress$/;
+  await expect(page.locator("#t-problem-count")).toHaveText(count);
+  // three slots filled, each with a first record
+  await give(page, ["queue3", "auto1", "advance"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 3));
+  await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 60_000 }).toBe(3);
+  const keys = await game(page, (s) => s.queue.map((p: { key: string }) => p.key));
+  for (const key of keys.filter((k: string) => k !== first.key)) {
+    await page.evaluate((k) => ((window as any).tighter.state.focus = k), key);
+    await firstRecord(page);
+  }
+  // every row of the queue counts too, in place
+  const rows = page.locator("#t-queue-list .t-q-count");
+  await expect(rows).toHaveCount(3);
+  for (const t of await rows.allTextContents()) expect(t).toMatch(count);
+
+  // the settings, once Auto-advance is owned: labelled, the defaults chosen
+  await expect(page.locator("#t-advance")).toBeVisible();
+  await expect(page.getByLabel("Tolerance", { exact: true })).toHaveValue("1e-6");
+  await expect(page.getByLabel("Patience", { exact: true })).toHaveValue("1000");
+  await page.getByLabel("Tolerance", { exact: true }).selectOption("1e-3");
+  await page.getByLabel("Patience", { exact: true }).selectOption("250");
+  expect(await game(page, (s) => [s.settings.tolerance, s.settings.patience])).toEqual([1e-3, 250]);
+  await expect(page.locator("#t-advance-note")).toContainText("at least 0.1 % smaller");
+  await expect(page.locator("#t-advance-note")).toContainText("After 250 evaluations without progress");
+  expect(await axe(page)).toEqual([]);
+
+  // the first problem stops making progress while no deal is earned: it stays, and the queue says why
+  await page.evaluate((key) => {
+    const s = (window as any).tighter.state;
+    s.dealer.tokens = 0;
+    s.dealer.evalsAt = s.stats.evaluations;
+    s.queue.find((p: { key: string }) => p.key === key).sinceGain = 5000;
+  }, first.key);
+  await page.click("#t-auto");
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
+  await expect(page.locator("#t-deal")).toContainText("has run 5,000 evaluations without progress");
+  await page.waitForTimeout(2000);
+  expect(await game(page, (s) => s.queue.filter((p: { leaving: boolean }) => !p.leaving).length)).toBe(3);
+  // a deal earned: a new problem is dealt, and the stalled one leaves as if dropped
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 1));
+  await expect
+    .poll(() => game(page, (s) => s.queue.filter((p: { leaving: boolean }) => !p.leaving).map((p: any) => p.key)), {
+      timeout: 60_000,
+    })
+    .not.toContain(first.key);
+  expect(await game(page, (s) => s.queue.filter((p: { leaving: boolean }) => !p.leaving).length)).toBe(3);
+  await expect
+    .poll(() => logText(page))
+    .toMatch(
+      /Auto-advance (dropped|is dropping) .* after 5,0\d\d evaluations without progress, and .* takes its slot\./,
+    );
+  // it is never dealt straight back
+  await expect
+    .poll(() => game(page, (s) => s.past.map((p: { key: string }) => p.key)), { timeout: 60_000 })
+    .toContain(first.key);
+
+  // Never: nothing leaves, however long it goes without progress
+  await page.getByLabel("Patience", { exact: true }).selectOption("never");
+  const second = keys.find((k: string) => k !== first.key)!;
+  await page.evaluate((key) => {
+    const s = (window as any).tighter.state;
+    s.dealer.tokens = 3;
+    s.queue.find((p: { key: string }) => p.key === key).sinceGain = 50_000;
+  }, second);
+  await expect(page.locator("#t-advance-note")).toContainText("Auto-advance keeps every problem in the queue");
+  await page.waitForTimeout(3000);
+  expect(await game(page, (s) => s.queue.map((p: { key: string }) => p.key))).toContain(second);
+  await expect(page.locator("#t-deal")).not.toContainText("without progress");
+  await page.click("#t-auto");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await dockView(page, "queue");
+  await page.waitForTimeout(300);
+  expect(await noOverflow(page)).toBe(true);
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});

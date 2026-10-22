@@ -3,14 +3,18 @@ import type { PackingConfig } from "@polypack/geometry";
 import { DealerState, newDealer } from "./dealer";
 import { keyOf, parseKey } from "./frontier";
 import {
+  DEFAULT_PATIENCE,
+  DEFAULT_TOLERANCE,
   GameState,
   LOG_LIMIT,
   Leader,
+  PATIENCES,
   PAST_LIMIT,
   PastProblem,
   PendingSend,
   Phase,
   ProblemState,
+  TOLERANCES,
   TRACE_LIMIT,
   newGame,
 } from "./game";
@@ -186,6 +190,9 @@ function problemState(v: unknown, now: number): ProblemState | null {
     isObj(v.refused) && posOrNull(v.refused.score) !== null && Array.isArray(v.refused.reasons)
       ? { score: v.refused.score as number, reasons: v.refused.reasons.map(String).slice(0, 20) }
       : null;
+  // the best at the last progress is never below the best; a save from before it was kept starts from the best
+  const mark = posOrNull(v.progressBest);
+  const progressBest = phase !== "ready" ? null : mark !== null && mark >= best! ? mark : best;
   return {
     ...k,
     key,
@@ -211,6 +218,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     trace: phase === "bare" ? [] : trace,
     evaluations: int(v.evaluations, 0),
     sinceGain: int(v.sinceGain, 0),
+    progressBest,
     runs: int(v.runs, 0),
     endedRuns: int(v.endedRuns, 0),
     lastRunAt: num(v.lastRunAt, 0),
@@ -320,6 +328,10 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       method: method as EvolveMethod,
       background: bool(settings.background, false),
       battery: bool(settings.battery, false),
+      // one of the choices, else the default; a saved null is Never
+      tolerance: TOLERANCES.find((t) => t === settings.tolerance) ?? DEFAULT_TOLERANCE,
+      patience:
+        settings.patience === null ? null : (PATIENCES.find((w) => w === settings.patience) ?? DEFAULT_PATIENCE),
     },
     stats: {
       evaluations,

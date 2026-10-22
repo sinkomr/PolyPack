@@ -225,7 +225,14 @@ describe("Tighter saves", () => {
     expect(s.rp).toBe(0);
     // no consent without a name
     expect(s.consent).toBe(false);
-    expect(s.settings).toEqual({ auto: false, method: "mc_compress", background: false, battery: false });
+    expect(s.settings).toEqual({
+      auto: false,
+      method: "mc_compress",
+      background: false,
+      battery: false,
+      tolerance: 1e-6,
+      patience: 1000,
+    });
     expect(s.stats).toEqual({
       evaluations: 0,
       clicks: 0,
@@ -267,6 +274,45 @@ describe("Tighter saves", () => {
       [1, 6.5],
       [3, 6.3],
     ]);
+  });
+
+  it("keep Auto-advance's tolerance and patience when they are among the choices, Never included", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.settings.tolerance = 1e-4;
+    raw.settings.patience = null;
+    expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-4, patience: null });
+    // Never survives a save (JSON keeps null)
+    const r = fromJson(toJson(normalize(raw, T0)), T0);
+    expect(r.ok && r.state.settings.patience).toBeNull();
+    raw.settings.tolerance = 0.5;
+    raw.settings.patience = 1234;
+    expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+    raw.settings.tolerance = "1e-3";
+    raw.settings.patience = "never";
+    expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+    // a save from before Auto-advance's settings takes the defaults
+    delete raw.settings.tolerance;
+    delete raw.settings.patience;
+    expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+  });
+
+  it("keep each problem's counters, and its best at the last progress or else its best", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.queue[0].evaluations = 12345;
+    raw.queue[0].sinceGain = 830;
+    expect(normalize(raw, T0).queue[0]).toMatchObject({ evaluations: 12345, sinceGain: 830 });
+    // a save from before progress was measured starts from the best
+    delete raw.queue[0].progressBest;
+    expect(normalize(raw, T0).queue[0].progressBest).toBe(6.4 + 1e-13);
+    raw.queue[0].progressBest = 6.5;
+    expect(normalize(raw, T0).queue[0].progressBest).toBe(6.5);
+    // never below the best, and nothing before the first record
+    raw.queue[0].progressBest = 6;
+    expect(normalize(raw, T0).queue[0].progressBest).toBe(6.4 + 1e-13);
+    raw.queue[0].evaluations = -3;
+    raw.queue[0].sinceGain = 1.5;
+    raw.queue[0].phase = "bare";
+    expect(normalize(raw, T0).queue[0]).toMatchObject({ evaluations: 0, sinceGain: 0, progressBest: null });
   });
 
   it("refuse a board that belongs to another problem", () => {

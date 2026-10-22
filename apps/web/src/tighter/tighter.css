@@ -134,6 +134,36 @@
   padding: 1px 8px;
   font-size: 12.5px;
 }
+/* each problem's evaluations, updated in place while it runs */
+.t-queue .t-q-count {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+/* Auto-advance's tolerance and patience */
+.t-advance {
+  margin: 10px 0 0;
+  padding: 4px 8px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.t-advance[hidden] {
+  display: none;
+}
+.t-advance legend {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.t-advance .row > label:first-child {
+  flex-basis: 76px;
+  font-size: 13px;
+}
+.t-advance .note {
+  margin: 0;
+  font-size: 12.5px;
+}
 .t-lanes {
   list-style: none;
   padding-left: 0;
@@ -385,6 +415,18 @@
   color: var(--muted);
   font-size: 13.5px;
   overflow-wrap: anywhere;
+}
+/* the problem's evaluations: one line that keeps its height, so nothing below it moves as it counts */
+.t-head-count {
+  min-height: 1.4em;
+  margin: 1px 0 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .t-head-side {
   display: flex;
@@ -1389,6 +1431,10 @@ html {
   }
   .tighter .t-head-note {
     -webkit-line-clamp: 1;
+  }
+  /* no room in the column for the counters: the queue's rows have them */
+  .tighter .t-head-count {
+    display: none;
   }
   .tighter .t-banner {
     margin: 0;

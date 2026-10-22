@@ -20,14 +20,17 @@ import {
 } from "./dealer";
 import { FRONTIER, ProblemKey, STARTER, keyOf, parseKey, problemTitle, shapeName } from "./frontier";
 import {
+  AdvancePlan,
   GameState,
   Leader,
+  PATIENCES,
   PastProblem,
   ProblemState,
-  STALE_EVALS,
   StepChange,
+  TOLERANCES,
   accrue,
   addToQueue,
+  advancePlan,
   applyAnswer,
   applyLeader,
   applyLoadAll,
@@ -55,6 +58,7 @@ import {
   seenKeys,
   slotted,
   spent,
+  stallAfter,
   submitTarget,
   unconfirmedPoints,
 } from "./game";
@@ -939,6 +943,9 @@ function autoJob(lv: LaneView): Job | null {
     seeds: seedsPerProblem(o),
     // a Compact waits until auto-eval is due its 100 evaluations; meanwhile runs go on elsewhere
     canCompact: state.autoDue >= COMPACT_EVALS,
+    // with Auto-advance a lane keeps to its run's problem until that problem stalls
+    current: lv.run?.key ?? null,
+    stall: stallAfter(state),
   });
   if (!target) return null;
   if (target.action === "compact") {
@@ -1366,27 +1373,56 @@ const picking = (o: ReadonlySet<UpgradeId>) => offerCount(o) > 0 && state.dealer
 const offerAllowed = (o: Owned, x: Offer): boolean =>
   offerFits(x, { retake: o.has("retake"), tiers: contestedTiers(o), ringMin: ringMin(o) }, allowed);
 
+/** Auto-advance moves on: owned, with auto-eval switched on. */
+const advancing = (o: ReadonlySet<UpgradeId>): boolean =>
+  o.has("advance") && state.settings.auto && autoPerSecond(o) !== null;
+
+/** Auto-advance's move now (game.ts advancePlan), or null without it. */
+function plan(o: ReadonlySet<UpgradeId>): AdvancePlan | null {
+  if (!advancing(o)) return null;
+  return advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o), perClick: evalsPerClick(o) });
+}
+
+/** A deal is earned by evaluations (a token), whether or not a slot is free. */
+function dealEarned(): boolean {
+  const o = owned();
+  return canDeal(state.dealer, queueSize(o), state.stats.evaluations, evalsPerClick(o));
+}
+
+/**
+ * Deals into a free slot when one is due. With Auto-advance, a problem that stopped making
+ * progress is replaced as soon as a deal is earned: its replacement is found first (the dealer's,
+ * or with Your pick the best offer), then it leaves as if dropped, so the queue never runs short.
+ */
 async function dealTick(): Promise<void> {
   if (!ownsGame || dealing || now() < dealPausedUntil) return;
   const o = owned();
+  const move = plan(o);
+  for (const p of move?.now ?? []) autoDrop(p);
   if (picking(o)) {
     if (state.picks.offers.some((x) => !offerAllowed(o, x)))
       state.picks.offers = state.picks.offers.filter((x) => offerAllowed(o, x));
-    if (!mayDeal() || (state.picks.offers.length >= offerCount(o) && !autoTakes(o))) return;
+    const out = move?.replace ?? null;
+    if (!out && (!mayDeal() || (state.picks.offers.length >= offerCount(o) && !autoTakes(o)))) return;
     dealing = true;
     try {
-      await offerTick(o);
+      await offerTick(o, out);
     } finally {
       dealing = false;
       render();
     }
     return;
   }
-  if (!mayDeal()) return;
+  // a free slot is filled first; a problem that stopped making progress waits for the next deal
+  const out = mayDeal() ? null : (move?.replace ?? null);
+  if (!out && !mayDeal()) return;
   dealing = true;
   try {
     const r = await deal(state.dealer);
-    if (r) dealt(r.p, r.ranked, r.ranked.candidate.retake);
+    if (r) {
+      if (out) autoDrop(out, r.p);
+      dealt(r.p, r.ranked, r.ranked.candidate.retake);
+    }
   } finally {
     dealing = false;
     render();
@@ -1425,16 +1461,20 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked }
   return null;
 }
 
-/** A lane would have nothing to do: fewer problems still paying than lanes (Auto-advance takes an offer). */
+/** A free slot and a lane that would have nothing to do: fewer problems still making progress than lanes (Auto-advance takes an offer). */
 function autoTakes(o: ReadonlySet<UpgradeId>): boolean {
-  if (!o.has("advance") || !state.settings.auto || autoPerSecond(o) === null) return false;
+  if (!advancing(o) || !mayDeal()) return false;
   const seeds = seedsPerProblem(o);
-  const paying = slotted(state).filter((p) => !p.closed && !spent(p, seeds) && p.sinceGain < STALE_EVALS);
-  return paying.length < laneCount(o);
+  const stall = stallAfter(state);
+  const moving = slotted(state).filter((p) => !p.closed && !spent(p, seeds) && p.sinceGain < stall);
+  return moving.length < laneCount(o);
 }
 
-/** Your pick: fills the offers when a deal is due; Auto-advance takes the best when a lane would idle. */
-async function offerTick(o: ReadonlySet<UpgradeId>): Promise<void> {
+/**
+ * Your pick: fills the offers when a deal is due (or a problem waits to be replaced, `out`).
+ * Auto-advance takes the best offer into a free slot when a lane would idle, or in place of `out`.
+ */
+async function offerTick(o: ReadonlySet<UpgradeId>, out: ProblemState | null): Promise<void> {
   const d = state.dealer;
   const count = offerCount(o);
   if (state.picks.offers.length < count) {
@@ -1448,7 +1488,10 @@ async function offerTick(o: ReadonlySet<UpgradeId>): Promise<void> {
     if (!ranked.length) pauseDealing(offline);
     persist();
   }
-  if (state.picks.offers.length && autoTakes(o)) await takeOffer(state.picks.offers[0], true);
+  const best = state.picks.offers[0];
+  if (!best) return;
+  if (autoTakes(o)) await takeOffer(best, true);
+  else if (out) await takeOffer(best, true, out);
 }
 
 /** Whether an offer is still as it was, from GET /api/problems just before it is taken. */
@@ -1458,45 +1501,52 @@ function offerStands(info: ProblemInfo | null, x: Offer): boolean {
   return contestedDealable(info, x);
 }
 
-/** Takes an offer into the queue (the player's pick, or Auto-advance's). */
-async function takeOffer(x: Offer, auto = false): Promise<void> {
+/** Takes an offer into the queue (the player's pick, or Auto-advance's, in place of `out` when given). */
+async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null): Promise<void> {
   if (!offerAllowed(owned(), x)) {
     state.picks.offers = state.picks.offers.filter((y) => y !== x);
-    say(`${problemTitle(x)} is no longer within your reach, filters or rule; the offer is gone.`);
+    say(`The offer of ${problemTitle(x)} is gone, because your reach, filters or rule no longer allow it.`);
     persist();
     return;
   }
-  if (!mayDeal()) {
-    say(`Every slot is full: the next one frees after ${evals(evalsToDeal())}, or drop a problem.`);
+  if (out ? !dealEarned() : !mayDeal()) {
+    if (!auto)
+      say(
+        slotted(state).length >= queueSize(owned())
+          ? "Every slot is full. Drop a problem to make room for this one."
+          : `The next problem is earned after ${fmtInt(evalsToDeal())} more evaluations.`,
+      );
     return;
   }
   const info = await api.getProblem(x.N, x.M, x.P);
   if (!info) {
     pauseDealing(true);
-    say("The server cannot be reached; the offer stays until it can be checked.");
+    say("The server cannot be reached. The offer stays until it can be checked.");
     return;
   }
   state.picks.offers = state.picks.offers.filter((y) => y !== x);
   const title = problemTitle(x);
   if (!offerStands(info, x)) {
     skipped.add(keyOf(x));
-    event(`${title} changed since it was offered (someone took it, or its record moved); it is gone.`);
+    event(`${title} changed since it was offered, so the offer is gone. Someone took it, or its record moved.`);
     persist();
     return;
   }
   const p = await materialize(x);
   if (!p || problem(state, p.key)) {
     skipped.add(keyOf(x));
-    event(`${title} could not be loaded; it is gone.`);
+    event(`${title} could not be loaded, so the offer is gone.`);
     persist();
     return;
   }
+  // the replacement is in hand: the problem it replaces leaves now
+  if (out) autoDrop(out, p);
   dealt(p, x, x.retake);
   if (!auto) {
     state.focus = p.key;
     showFocus();
   }
-  say(`${auto ? "Auto-advance took" : "Taken"}: ${title}.`);
+  if (!out) say(auto ? `Auto-advance took ${title}, the best offer.` : `You took ${title}.`);
 }
 
 async function onTakeOffer(key: string): Promise<void> {
@@ -1721,10 +1771,12 @@ function renderProblem(p: ProblemState | undefined): void {
     if (picking(owned()) && s.picks.offers.length) text("t-title", "Pick a problem from the offers in the queue.");
     else if (!dealing && now() >= dealPausedUntil) text("t-title", "Dealing a problem…");
     text("t-problem-note", "");
+    text("t-problem-count", "");
     show("t-next", false);
     return;
   }
   text("t-title", problemTitle(p));
+  text("t-problem-count", countText(p));
   let note: string;
   const seeds = seedsPerProblem(owned());
   if (p.closed) note = "Closed: the server takes no more entries for this problem.";
@@ -2140,6 +2192,7 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                 : p.phase === "bare"
                   ? " · no record yet"
                   : "";
+        li.dataset.key = p.key;
         li.append(
           `${problemTitle(p)}${gap}${status}${spent(p, seeds) ? " · seeds spent" : ""}${busy.has(p.key) ? " · running" : ""}`,
         );
@@ -2164,34 +2217,92 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
           dropBtn.addEventListener("click", () => onDrop(p.key));
           actions.append(dropBtn);
         }
-        li.append(actions);
+        const count = document.createElement("span");
+        count.className = "t-q-count";
+        li.append(actions, count);
         return li;
       }),
     );
   }
-  const free = slots - slotted(state).length;
-  const left = evalsToDeal();
-  const offers = state.picks.offers.length;
-  text(
-    "t-deal",
-    picking(o)
-      ? offers && mayDeal()
-        ? `Pick a problem: ${offers} offered below.`
-        : offers
-          ? `The offers wait for a free slot: ${free > 0 ? `the next one after ${evals(left)}` : "every slot is full; drop a problem to take one"}.`
-          : free > 0 && left > 0
-            ? `New offers come after ${evals(left)} more.`
-            : free > 0
-              ? "Drawing offers…"
-              : "Every slot is full. Drop a problem to take a new one."
-      : free > 0
-        ? left === 0
-          ? "Dealing a problem…"
-          : `The next problem is dealt after ${evals(left)} more.`
-        : `Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations; drop a problem to take it.`,
-  );
+  // the counters change with every step: they are written in place, so the rows (and their buttons
+  // under the pointer) are rebuilt only when the signature above changes
+  for (const li of list.children as HTMLCollectionOf<HTMLElement>) {
+    const p = problem(state, li.dataset.key ?? null);
+    const count = li.querySelector(".t-q-count");
+    const value = p ? countText(p) : "";
+    if (count && count.textContent !== value) count.textContent = value;
+  }
+  text("t-deal", dealText(o));
+  renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** Evaluations a long step under way on the problem has done that its counters do not have yet. */
+function stepping(p: ProblemState): number {
+  const lv = lanes.find((l) => l.current?.key === p.key && l.run?.key === p.key);
+  return lv?.progress && lv.run ? Math.max(0, lv.progress.evaluations - lv.run.evaluations) : 0;
+}
+
+/** A problem's counters, live: "12,345 evaluations · 830 since progress". */
+function countText(p: ProblemState): string {
+  const going = stepping(p);
+  return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress`;
+}
+
+/** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
+function dealText(o: Owned): string {
+  const free = queueSize(o) - slotted(state).length;
+  const left = evalsToDeal();
+  const more = `${fmtInt(left)} more evaluation${left === 1 ? "" : "s"}`;
+  const offers = state.picks.offers.length;
+  const line = picking(o)
+    ? offers && mayDeal()
+      ? `Pick a problem from the ${offers === 1 ? "offer" : `${offers} offers`} below.`
+      : offers
+        ? free > 0
+          ? `The offers wait for a free slot. The next one is earned after ${more}.`
+          : "The offers wait for a free slot. Every slot is full, so drop a problem to take one."
+        : free > 0 && left > 0
+          ? `New offers come after ${more}.`
+          : free > 0
+            ? "Drawing offers…"
+            : "Every slot is full. Drop a problem to take a new one."
+    : free > 0
+      ? left === 0
+        ? "Dealing a problem…"
+        : `The next problem is dealt after ${more}.`
+      : "Every slot is full. Each slot earns a new problem per 300 clicks' worth of evaluations. Drop a problem to take one.";
+  const due = plan(o)?.due;
+  if (!due) return line;
+  const why = spent(due, seedsPerProblem(o))
+    ? `Every seed on ${problemTitle(due)} is spent.`
+    : `${problemTitle(due)} has run ${evals(due.sinceGain)} without progress.`;
+  return `${line} ${why} Auto-advance replaces it ${left > 0 ? `when the next problem is earned, after ${more}` : "as soon as a new problem is found"}.`;
+}
+
+/** The percentage a tolerance is: 10⁻⁶ is "0.0001 %". */
+const fmtTolerance = (t: number) => `${(t * 100).toFixed(Math.max(0, Math.round(-Math.log10(t)) - 2))} %`;
+
+/** Auto-advance's settings, once it is owned: the tolerance and the patience, and what they mean now. */
+function renderAdvance(o: Owned): void {
+  show("t-advance", o.has("advance"));
+  if (!o.has("advance")) return;
+  const { tolerance, patience } = state.settings;
+  const tol = $<HTMLSelectElement>("t-tolerance");
+  const pat = $<HTMLSelectElement>("t-patience");
+  const tv = `1e${Math.round(Math.log10(tolerance))}`;
+  const pv = patience === null ? "never" : String(patience);
+  if (tol.value !== tv) tol.value = tv;
+  if (pat.value !== pv) pat.value = pv;
+  text(
+    "t-advance-note",
+    `A problem makes progress when its best is at least ${fmtTolerance(tolerance)} smaller than at its last progress. ` +
+      (patience === null
+        ? "Auto-advance keeps every problem in the queue, and the lanes go first to problems that are making progress."
+        : `After ${evals(patience)} without progress, Auto-advance drops it as soon as a new problem can take its slot.`) +
+      (state.settings.auto ? "" : " Auto-advance moves on only while auto-eval is on."),
+  );
 }
 
 let offersSig = "";
@@ -2298,11 +2409,11 @@ function onSaveFilters(e: Event): void {
   void dealTick();
 }
 
-function onDrop(key: string): void {
-  const p = problem(state, key);
-  if (!p) return;
-  const unsent = p.phase === "ready" && !!p.run && hasUnsent(p) && !state.consent;
-  if (unsent && !confirm(`Your best on ${problemTitle(p)} has not been sent. Drop it anyway?`)) return;
+/**
+ * Takes a problem out of the queue (Drop, or Auto-advance): runs on it close and clicks queued for it
+ * go. With an unsent best it stays, marked leaving, until that has been sent. Returns whether it left now.
+ */
+function dropProblem(key: string): boolean {
   for (const lv of lanes) {
     lv.jobs = lv.jobs.filter((j) => j.key !== key);
     if (lv.run?.key === key) {
@@ -2310,13 +2421,42 @@ function onDrop(key: string): void {
       void lv.lane.close();
     }
   }
-  const left = drop(state, key, now());
+  return drop(state, key, now());
+}
+
+function onDrop(key: string): void {
+  const p = problem(state, key);
+  if (!p) return;
+  const unsent = p.phase === "ready" && !!p.run && hasUnsent(p) && !state.consent;
+  if (unsent && !confirm(`Your best on ${problemTitle(p)} has not been sent. Drop it anyway?`)) return;
+  const left = dropProblem(key);
   event(left ? `Dropped ${problemTitle(p)}.` : `Dropping ${problemTitle(p)} once its best has been sent.`, false);
   persist();
   showFocus();
   render();
   void submitTick();
   void dealTick();
+}
+
+/**
+ * Auto-advance drops a problem exactly as Drop does, and says why; `next` is the problem dealt in
+ * its place (none when nothing in the queue was left to run).
+ */
+function autoDrop(p: ProblemState, next?: ProblemKey): void {
+  if (problem(state, p.key) !== p || p.leaving) return;
+  const why = spent(p, seedsPerProblem(owned()))
+    ? "because every seed on it has run until it stopped improving"
+    : `after ${evals(p.sinceGain)} without progress`;
+  const instead = next ? `, and ${problemTitle(next)} takes its slot` : "";
+  const left = dropProblem(p.key);
+  const message = left
+    ? `Auto-advance dropped ${problemTitle(p)} ${why}${instead}.`
+    : `Auto-advance is dropping ${problemTitle(p)} ${why}${instead}. It leaves the queue once its best has been sent.`;
+  event(message, false);
+  say(message);
+  persist();
+  scheduleRender();
+  void submitTick();
 }
 
 let lanesSig = "";
@@ -2706,6 +2846,22 @@ $("t-auto").addEventListener("click", () => {
   kickLanes();
 });
 $("t-stop").addEventListener("click", stopAll);
+$("t-tolerance").addEventListener("change", () => {
+  const t = Number($<HTMLSelectElement>("t-tolerance").value);
+  if (!TOLERANCES.includes(t)) return;
+  state.settings.tolerance = t;
+  persist();
+  render();
+});
+$("t-patience").addEventListener("change", () => {
+  const v = $<HTMLSelectElement>("t-patience").value;
+  const w = v === "never" ? null : Number(v);
+  if (!PATIENCES.includes(w)) return;
+  state.settings.patience = w;
+  persist();
+  render();
+  void dealTick();
+});
 $("t-next").addEventListener("click", () => {
   const p = focused();
   if (!p || (evalsToDeal() > 0 && !spent(p, seedsPerProblem(owned())))) return;

@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MAX_METHOD_PARAMS_BYTES, areaLowerBound, parseProvenance } from "@polypack/geometry";
 import type { PackingConfig, ProblemInfo } from "@polypack/geometry";
 import {
+  DEFAULT_PATIENCE,
   GameState,
   ProblemState,
-  STALE_EVALS,
   StepOutcome,
   TRACE_LIMIT,
   accrue,
@@ -862,20 +862,22 @@ describe("Tighter auto-eval", () => {
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toBeNull();
   });
 
-  it("moves on when evaluations stop paying, and compacts fresh problems, with Auto-advance", () => {
+  it("moves on when evaluations stop making progress, and compacts fresh problems, with Auto-advance", () => {
     const q = queue();
     const owned = new Set<UpgradeId>(["auto1", "advance"]);
-    q[0].sinceGain = STALE_EVALS;
+    q[0].sinceGain = DEFAULT_PATIENCE;
     q[1].sinceGain = 300;
     q[2].sinceGain = 10;
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
-    // spent problems are skipped, however fresh their last gain
+    // a lane on a problem that has stalled moves to the one with the fewest evaluations since progress
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned, current: q[0].key })?.key).toBe("27/27/80");
+    // spent problems are skipped, however fresh their last progress
     q[2].endedRuns = 1;
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
     q[2].endedRuns = 0;
-    q[2].sinceGain = STALE_EVALS;
-    q[1].sinceGain = STALE_EVALS;
-    // everything has stopped paying: the least stale one still runs
+    q[2].sinceGain = DEFAULT_PATIENCE;
+    q[1].sinceGain = DEFAULT_PATIENCE;
+    // everything has stalled: the one stalled least still runs
     q[0].lastRunAt = 5;
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
     q.push(newProblem({ N: 30, M: 30, P: 60 }, "open", T0));

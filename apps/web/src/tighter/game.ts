@@ -1,9 +1,9 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
-import { DealerState, newDealer } from "./dealer";
+import { DealerState, canDeal, newDealer } from "./dealer";
 import { ProblemKey, keyOf } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
-import { Points, Tier, recordPoints } from "./points";
+import { FLOOR, Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
@@ -85,9 +85,14 @@ export interface ProblemState extends ProblemKey {
   unconfirmed: number;
   /** The board's score after each counted improvement, by evaluations run here (thinned when long). */
   trace: [number, number][];
-  /** Evaluations run on this problem, and since its last improvement above the floor. */
+  /**
+   * Evaluations run on this problem (clicks' and auto-eval's), and since its last progress: an
+   * improvement on `progressBest` by the tolerance (see applyStep).
+   */
   evaluations: number;
   sinceGain: number;
+  /** The best at the last progress; null before the first record (a dealt record starts from its own). */
+  progressBest: number | null;
   /** Runs opened here (seeds used). */
   runs: number;
   /**
@@ -120,6 +125,10 @@ export interface Settings {
   background: boolean;
   /** Keep running on battery power (where the browser tells). */
   battery: boolean;
+  /** Auto-advance: the smallest relative improvement that counts as progress (one of TOLERANCES). */
+  tolerance: number;
+  /** Auto-advance: evaluations without progress before a problem leaves the queue (one of PATIENCES; null: never). */
+  patience: number | null;
 }
 
 export interface Stats {
@@ -175,8 +184,15 @@ export interface GameState {
 export const TRACE_LIMIT = 400;
 export const LOG_LIMIT = 40;
 export const PAST_LIMIT = 3000;
-/** A problem that has run this many evaluations without an improvement above the floor stops paying (Auto-advance). */
-export const STALE_EVALS = 1500;
+/**
+ * Auto-advance's settings: the tolerance, the smallest relative improvement that counts as progress
+ * (10⁻⁹ is the floor, any improvement that counts at all), and the patience, the evaluations without
+ * progress before a problem leaves the queue (null: never).
+ */
+export const TOLERANCES: readonly number[] = [1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3];
+export const PATIENCES: readonly (number | null)[] = [250, 500, 1000, 2000, 5000, 10000, 20000, null];
+export const DEFAULT_TOLERANCE = 1e-6;
+export const DEFAULT_PATIENCE = 1000;
 
 export function newGame(now: number, seed: number): GameState {
   return {
@@ -188,7 +204,14 @@ export function newGame(now: number, seed: number): GameState {
     levels: {},
     name: "",
     consent: false,
-    settings: { auto: false, method: "mc_compress", background: false, battery: false },
+    settings: {
+      auto: false,
+      method: "mc_compress",
+      background: false,
+      battery: false,
+      tolerance: DEFAULT_TOLERANCE,
+      patience: DEFAULT_PATIENCE,
+    },
     stats: {
       evaluations: 0,
       clicks: 0,
@@ -242,6 +265,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     trace: [],
     evaluations: 0,
     sinceGain: 0,
+    progressBest: null,
     runs: 0,
     endedRuns: 0,
     lastRunAt: 0,
@@ -250,6 +274,12 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
 }
 
 export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone);
+
+/** The tolerance progress is measured with: the player's with Auto-advance, else any improvement that counts. */
+export const progressTolerance = (s: GameState): number => (ownedSet(s).has("advance") ? s.settings.tolerance : FLOOR);
+
+/** Evaluations without progress after which a problem has stalled, for the lanes' order: the patience, or with Never its default. */
+export const stallAfter = (s: GameState): number => s.settings.patience ?? DEFAULT_PATIENCE;
 
 export function log(s: GameState, now: number, text: string): void {
   s.log.push({ t: now, text });
@@ -342,6 +372,11 @@ export interface StepChange {
  * A step of a run on problem `p`. Its best becomes the board only when it is strict, valid and
  * smaller than the board: the side never grows. Every step counts toward the effort counters, and
  * an improvement above the floor pays at once (with consent).
+ *
+ * Progress (Auto-advance's): the best s beats the best at the last progress s_ref by the tolerance
+ * τ, s < s_ref · (1 − τ). Then s_ref becomes s and the count since progress starts again; otherwise
+ * the count grows by the step's evaluations. The first record sets s_ref, and a dealt record starts
+ * from its own best. With τ = 10⁻⁹ every improvement that counts is progress, as it always was.
  */
 export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: number): StepChange {
   s.stats.evaluations += o.evaluations;
@@ -372,7 +407,14 @@ export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: nu
     // a Compact that did not beat a trim floor: the board is still a run's, and Evolve may go on
     p.run = structuredClone(o.run);
   }
-  p.sinceGain = counted ? 0 : p.sinceGain + o.evaluations;
+  const ref = p.progressBest ?? (wasReady ? before : null);
+  if (firstRecord || (smaller && ref !== null && p.phase === "ready" && p.best! < ref * (1 - progressTolerance(s)))) {
+    p.progressBest = p.best;
+    p.sinceGain = 0;
+  } else {
+    if (p.phase === "ready") p.progressBest = ref;
+    p.sinceGain += o.evaluations;
+  }
   if (counted && p.phase === "ready") pushTrace(p);
   const points = counted ? pay(s, p) : null;
   return { before, after: smaller ? p.best : before, improved: smaller, counted, firstRecord, points };
@@ -746,4 +788,48 @@ export function leave(s: GameState, key: string, now: number): void {
   });
   if (s.past.length > PAST_LIMIT) s.past.splice(0, s.past.length - PAST_LIMIT);
   if (s.focus === key) s.focus = slotted(s)[0]?.key ?? null;
+}
+
+// ---------- Auto-advance: problems that stopped making progress leave ----------
+
+/**
+ * Why Auto-advance takes a problem out of the queue, or null while it stays: every seed on it is
+ * spent (nothing is left to run), or it ran the player's patience of evaluations without progress.
+ * A best that cannot be sent (no name on records yet) is never dropped this way, nor anything with
+ * the patience at Never.
+ */
+export function leaveReason(s: GameState, p: ProblemState, seeds: number): "spent" | "stalled" | null {
+  const patience = s.settings.patience;
+  if (patience === null || p.leaving || p.closed) return null;
+  if (!s.consent && hasUnsent(p)) return null;
+  if (spent(p, seeds)) return "spent";
+  return p.sinceGain >= patience ? "stalled" : null;
+}
+
+export interface AdvancePlan {
+  /** Problems that leave now: nothing in the queue is left to run, so no evaluation would earn their replacements. */
+  now: ProblemState[];
+  /** The problem that leaves for the next deal, which is earned (null: none due, or no deal earned yet). */
+  replace: ProblemState | null;
+  /** The problem due to leave next, spent ones first, then the longest without progress. */
+  due: ProblemState | null;
+}
+
+/**
+ * Auto-advance's move (with auto-eval on). A problem due to leave goes only once a new one can take
+ * its slot, a deal earned by evaluations (dealer.ts), so the queue never runs short and the lanes
+ * keep to the other problems meanwhile. When nothing in the queue is left to run, its spent problems
+ * leave at once instead (an empty queue is dealt a problem on credit).
+ */
+export function advancePlan(s: GameState, o: { seeds: number; slots: number; perClick: number }): AdvancePlan {
+  const queue = slotted(s);
+  const due = queue
+    .map((p) => ({ p, why: leaveReason(s, p, o.seeds) }))
+    .filter((x) => x.why !== null)
+    .sort((a, b) => Number(b.why === "spent") - Number(a.why === "spent") || b.p.sinceGain - a.p.sinceGain)
+    .map((x) => x.p);
+  const runnable = queue.some((p) => !p.closed && !spent(p, o.seeds));
+  const now = runnable ? [] : due.filter((p) => spent(p, o.seeds));
+  const earned = due.length > 0 && !now.length && canDeal(s.dealer, o.slots, s.stats.evaluations, o.perClick);
+  return { now, replace: earned ? due[0] : null, due: due[0] ?? null };
 }
