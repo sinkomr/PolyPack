@@ -110,9 +110,9 @@ export const SUBMISSIONS_PER_MINUTE = 120;
  * Milliseconds of verification (the geometry check of submissions) one address may cause a
  * minute, saved up to a minute's worth. 2 s is 3% of a core's minute. Checking a valid board at
  * the orientation sent took 15 ms at most (500 100-gons on a ring, the largest hull a valid board
- * can have; 2 ms on average over Tighter's largest problems; measured 2026-10-21), so even 120
- * boards a minute, all the count limit lets through, stay below it. Boards of contested problems
- * take under 1 ms.
+ * can have, when the hull of all its vertices has to be built; 1.5 ms otherwise) and 0.4 ms on
+ * average over Tighter's largest problems (measured 2026-10-21), so even 120 boards a minute, all
+ * the count limit lets through, stay below it. Boards of contested problems take under 1 ms.
  */
 export const VERIFY_MS_PER_MINUTE = 2000;
 /**

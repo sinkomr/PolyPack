@@ -1,4 +1,4 @@
-import { autoOrientSet, encloseSet, extremePoints } from "./enclose";
+import { autoOrientSet, enclose, encloseSet, extremePoints } from "./enclose";
 import { Overlap, TOL, findOverlaps } from "./overlap";
 import { Container, MAX_COORD, MAX_PIECES, MAX_SIDES, Pose, isShapeCode } from "./shapes";
 
@@ -108,13 +108,14 @@ export function evaluate(
   }
   if (opts.stopWhenInvalid && reasons.length) return { valid: false, reasons, overlaps, container: null, score: null };
   let container: Container | null = null;
-  if (pieces.length > 0) {
+  if (pieces.length > 0 && opts.autoOrient && M !== 0) {
     const set = extremePoints(N, pieces);
     container = encloseSet(set, M, config.container_phi);
-    if (opts.autoOrient && M !== 0) {
-      const best = autoOrientSet(set, M, config.container_phi);
-      if (best.size < container.size) container = best;
-    }
+    const best = autoOrientSet(set, M, config.container_phi);
+    if (best.size < container.size) container = best;
+  } else if (pieces.length > 0) {
+    // at one orientation the hull of all the vertices is rarely needed (see `enclose`)
+    container = enclose(N, pieces, M, config.container_phi);
   }
   return { valid: reasons.length === 0, reasons, overlaps, container, score: container ? container.size : null };
 }

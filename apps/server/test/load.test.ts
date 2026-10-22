@@ -185,8 +185,9 @@ describe("refusals of invalid boards", () => {
 describe("valid boards", () => {
   it("are verified quickly even with the largest hull a valid board can have", async () => {
     // 500 100-gons on one ring, neighbours a bounding diameter apart and each turned differently,
-    // so that many vertices lie on the hull: 0.25 to 0.42 s while the server searched orientations
-    // itself, 8 to 14 ms at the phi sent (measured 2026-10-21)
+    // so that many vertices lie on the hull: 0.2 to 0.4 s while the server searched orientations
+    // itself, 7 to 14 ms at the phi sent from the hull of all vertices, 1 to 1.5 ms from the
+    // candidate pieces (measured 2026-10-21)
     const R = circumradius(100);
     const rho = (500 * 2 * R) / (2 * Math.PI);
     const ring = {
