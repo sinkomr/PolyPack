@@ -4,7 +4,7 @@ import { getConnInfo } from "@hono/node-server/conninfo";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { LiteratureRecord } from "@polypack/geometry";
-import { createApp } from "./app";
+import { HOLDERS_REFRESH_MS, createApp } from "./app";
 import { SqliteStore } from "./sqlite-store";
 
 // Node entry point: local development and any always-on host.
@@ -48,6 +48,8 @@ const app = createApp({
   store,
   records,
   adminToken,
+  // the end-to-end tests set 0, so that the record holders page shows each entry at once
+  holdersRefreshMs: wholeNumber("HOLDERS_REFRESH_MS", HOLDERS_REFRESH_MS),
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.
   clientIp: (c) =>

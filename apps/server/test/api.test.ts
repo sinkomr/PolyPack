@@ -15,8 +15,8 @@ import {
   isProven,
 } from "@polypack/geometry";
 import { registry } from "@polypack/solver";
-import { beforeEach, describe, expect, it } from "vitest";
-import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, atlasSource, createApp } from "../src/app";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, HOLDERS_REFRESH_MS, atlasSource, createApp } from "../src/app";
 import { SOLVER_METHODS } from "../src/docs";
 import { SqliteStore } from "../src/sqlite-store";
 import { GET_MANY_LIMIT, NewSubmission } from "../src/store";
@@ -1453,7 +1453,36 @@ describe("GET /api/holders", () => {
     ]);
   });
 
+  it("is counted again at most once a minute while entries keep changing", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(Date.parse("2026-10-21T12:00:00Z"));
+      expect(await holders()).toEqual([]);
+      await submit(squares(2, { name: "ann" }));
+      vi.setSystemTime(Date.now() + HOLDERS_REFRESH_MS - 1);
+      expect(await holders()).toEqual([]);
+      vi.setSystemTime(Date.now() + 1);
+      expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann"]);
+      // without a change the answer stands however old it is, and the first change after a
+      // minute shows at once
+      vi.setSystemTime(Date.now() + 10 * HOLDERS_REFRESH_MS);
+      await submit(squares(4, { name: "bob" }));
+      expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann", "bob"]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("follows every change although answers are kept", async () => {
+    // counted again after every change
+    app = createApp({
+      store: new SqliteStore(":memory:"),
+      records: [fakeRecord],
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: (m) => logs.push(m),
+      holdersRefreshMs: 0,
+    });
     const admin = (path: string, body: object) =>
       app.request(path, {
         method: "POST",

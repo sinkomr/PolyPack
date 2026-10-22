@@ -305,7 +305,8 @@ Closed problems appear in <code>literature</code> only.</p>
 
 <h3><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
-(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first:</p>
+(names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first.
+Counting reads every problem, so it is done at most once a minute: the answer may be up to a minute behind the latest entries.</p>
 <table>
 <tr><th scope="row"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>
 <tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>

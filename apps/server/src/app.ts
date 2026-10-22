@@ -50,6 +50,8 @@ export interface AppOptions {
   /** Called for submissions that beat the literature. */
   log?: (msg: string) => void;
   limits?: { perIp?: number; windowMs?: number };
+  /** Least age at which /api/holders is computed again after an entry changed; HOLDERS_REFRESH_MS by default. */
+  holdersRefreshMs?: number;
 }
 
 const CONVENTIONS = {
@@ -70,6 +72,8 @@ export const ATLAS_MAX_SPAN = 100;
 export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
+/** How far /api/holders may lag behind the entries: it is computed again at most once a minute. */
+export const HOLDERS_REFRESH_MS = 60_000;
 
 /**
  * Which packing the atlas draws for one P.
@@ -216,18 +220,21 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   // Who holds how many records: the leader of every open problem, counted by the exact name it was
-  // submitted with. It reads every problem, so the answer is kept until any entry changes; an
-  // answer computed while one changed is not kept.
-  let holdersBody: string | null = null;
+  // submitted with. It reads every problem, which blocked the live server for about 0.9 s with
+  // 180,000 of them (2026-10-21) while entries arrived every few seconds. So an answer is kept
+  // until an entry changes, and after a change still until it is holdersRefreshMs old.
+  const holdersRefreshMs = opts.holdersRefreshMs ?? HOLDERS_REFRESH_MS;
+  let holders: { body: string; at: number; current: boolean } | null = null;
   let holdersVersion = 0;
   /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
   const entriesChanged = (key?: string) => {
     forgetRecords(key);
-    holdersBody = null;
     holdersVersion++;
+    if (holders) holders.current = false;
   };
   app.get("/api/holders", async (c) => {
-    if (holdersBody !== null) return c.body(holdersBody, 200, { "content-type": "application/json" });
+    if (holders && (holders.current || Date.now() - holders.at < holdersRefreshMs))
+      return c.body(holders.body, 200, { "content-type": "application/json" });
     const version = holdersVersion;
     const byName = new Map<string, Holder>();
     for (const e of await store.leaders()) {
@@ -243,12 +250,13 @@ export function createApp(opts: AppOptions): Hono {
         if (lit && beatsLiterature(e.score, lit)) h.beat_published++;
       }
     }
-    const holders = [...byName.values()].sort(
+    const list = [...byName.values()].sort(
       (a, b) =>
         b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     );
-    const body = JSON.stringify({ holders } satisfies HoldersResponse);
-    if (version === holdersVersion) holdersBody = body;
+    const body = JSON.stringify({ holders: list } satisfies HoldersResponse);
+    // an entry that changed while this was computed may be missing from it
+    holders = { body, at: Date.now(), current: version === holdersVersion };
     return c.body(body, 200, { "content-type": "application/json" });
   });
 
