@@ -159,7 +159,10 @@ function link(text: string, href: string): HTMLAnchorElement {
 async function loadEntry(id: number, who: string): Promise<void> {
   const cfg = await api.getSubmission(id);
   // the server keeps only the best entry of each problem, so a link to one since overtaken is dead
-  if (!cfg) return say("That entry could not be loaded. It may have been overtaken: only the best entry of each problem is kept.");
+  if (!cfg)
+    return say(
+      "That entry could not be loaded. It may have been overtaken: only the best entry of each problem is kept.",
+    );
   const err = board.load({ N: cfg.N, M: cfg.M, P: cfg.P, pieces: cfg.pieces, container_phi: cfg.container_phi });
   if (err) return say(`That entry could not be loaded: ${err}.`);
   view.fit();
@@ -466,7 +469,7 @@ $("submit").addEventListener("click", async () => {
   // The server scores the container at the orientation it is sent and does not search for a
   // better one, so the container is turned to its best orientation first, as Auto-orient does.
   const unturned = board.container?.size ?? 0;
-  if (board.autoOrient()) {
+  if (board.autoOrient(false)) {
     say(
       `Turned the container to its best orientation before submitting: ${unturned.toFixed(6)} → ${board.container!.size.toFixed(6)}.`,
     );
