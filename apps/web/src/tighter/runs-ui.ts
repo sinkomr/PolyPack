@@ -1,4 +1,7 @@
+import { METHOD_MATCH, PIPELINE, TRANSFERS, andList } from "./help";
+import { How, howDisclosure } from "./how";
 import { RunPlanState, addStage, learned, moveStage, removeStage, runsObserved } from "./runplan";
+import { TRANSFER_MARGIN } from "./transfer";
 import type { EvolveMethod, Owned } from "./upgrades";
 
 /**
@@ -65,6 +68,18 @@ export function renderRunsPanel(
   if (body.dataset.sig === sig) return;
   body.dataset.sig = sig;
   const parts: HTMLElement[] = [];
+  // the explanations a rebuild would close stay open
+  const opened = new Set(
+    Array.from(body.querySelectorAll<HTMLDetailsElement>("details[data-how]"))
+      .filter((d) => d.open)
+      .map((d) => d.dataset.how),
+  );
+  const how = (id: string, h: How): HTMLDetailsElement => {
+    const d = howDisclosure(h);
+    d.dataset.how = id;
+    d.open = opened.has(id);
+    return d;
+  };
 
   if (pipes) {
     parts.push(el("h3", "Pipeline"));
@@ -72,7 +87,7 @@ export function renderRunsPanel(
     plan.pipeline.forEach((m, i) => {
       const li = el("li");
       const name = el("span", `${i + 1}. ${m}`, input.allowed(m) ? undefined : "t-refused");
-      if (!input.allowed(m)) name.title = "This cycle's rule does not allow this method: the stage is skipped";
+      if (!input.allowed(m)) name.title = "This cycle's rule does not allow this method, so this stage is skipped.";
       const n = plan.pipeline.length;
       const actions = el("span", undefined, "t-q-actions");
       actions.append(
@@ -110,10 +125,11 @@ export function renderRunsPanel(
       el(
         "p",
         plan.pipeline.length
-          ? "Each new seed on a problem runs the next stage, in a loop: a stage moves on when its run stops improving by itself. While the pipeline has stages, it chooses the method, not the toolbar."
-          : "No stages: the toolbar's method runs. Add methods in the order you want successive seeds to run them.",
+          ? "Each new run on a problem uses the next stage, in a loop. While the pipeline has stages, it chooses the method instead of the toolbar."
+          : "With no stages, your clicks run the toolbar's method. Add methods in the order you want the runs on a problem to use them.",
         "note",
       ),
+      how("pipeline", PIPELINE),
     );
   }
 
@@ -121,23 +137,24 @@ export function renderRunsPanel(
     parts.push(el("h3", o.has("autoTune") ? "Method match and Auto-tune" : "Method match"));
     const runs = runsObserved(plan);
     const lines: string[] = [
-      `Learned from ${runs.toLocaleString("en-US")} run${runs === 1 ? "" : "s"}, in RP earned per evaluation. ` +
+      `It has learned from ${runs.toLocaleString("en-US")} run${runs === 1 ? "" : "s"} so far, as RP earned per evaluation. ` +
         (plan.auto
-          ? `Auto is on: it picks the ${o.has("autoTune") ? "method and setting" : "method"} of each new run.`
-          : `Choose Auto in the toolbar to let it pick${o.has("autoTune") ? " methods and settings" : ""}.`),
+          ? `Auto is on, so it picks the ${o.has("autoTune") ? "method and setting" : "method"} of each new run.`
+          : `Choose Auto in the toolbar to let it pick the ${o.has("autoTune") ? "method and setting" : "method"} of each new run.`),
     ];
     if (input.focusKind)
       lines.push(
         top.length
-          ? `On problems like this one: ${top
-              .map(
+          ? `On problems like this one, the best so far ${top.length === 1 ? "is" : "are"} ${andList(
+              top.map(
                 (t) =>
-                  `${t.method}${t.level ? ` (setting ${t.level})` : ""} ${fmt(t.mean)} (${t.runs} run${t.runs === 1 ? "" : "s"})`,
-              )
-              .join("; ")}.`
-          : "Nothing learned yet on problems like this one.",
+                  `${t.method}${t.level ? ` at setting ${t.level}` : ""} with ${fmt(t.mean)} RP an evaluation (${t.runs} run${t.runs === 1 ? "" : "s"})`,
+              ),
+            )}.`
+          : "It has learned nothing yet on problems like this one.",
       );
     for (const l of lines) parts.push(el("p", l, "note"));
+    parts.push(how("match", METHOD_MATCH));
   }
 
   if (transfer) {
@@ -145,9 +162,10 @@ export function renderRunsPanel(
     parts.push(
       el(
         "p",
-        "A new problem starts from the best known packing of a neighbour with fewer pieces (yours in the queue, or the site's record), the rest placed around it, when that is at least 2 % smaller than Load all. It is never sent unimproved.",
+        `A new open problem starts from the best known packing with fewer pieces, the rest placed around it, when that is more than ${Math.round((1 - TRANSFER_MARGIN) * 100)} % smaller than the usual start.`,
         "note",
       ),
+      how("transfers", TRANSFERS),
     );
   }
   body.replaceChildren(...parts);

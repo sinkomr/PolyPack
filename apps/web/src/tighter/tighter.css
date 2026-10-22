@@ -909,6 +909,18 @@
   cursor: pointer;
   color: var(--accent);
 }
+/* help.ts's explanations in the panels, Settings and the first record's pop-up: never wider than the panel */
+:is(.panel, .t-dialog, .t-pop) .t-how-more {
+  margin: 6px 0;
+  font-size: 13px;
+}
+:is(.panel, .t-dialog, .t-pop) .t-how-more > .t-how {
+  margin-top: 4px;
+}
+:is(.panel, .t-dialog, .t-pop) .t-how-more .t-math {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
 
 /* the phone's tree: rows of the same nodes in a list (shop.ts builds it under PHONE_QUERY) */
 .t-tree-list {
