@@ -1,15 +1,19 @@
 import type { How } from "./how";
 import { presetParams, tuningLevels } from "./presets";
+import { msPerEval } from "./rank";
 
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
- * each upgrade adds a little. Evaluations per click climb one at a time; Auto-eval clicks for the
- * player, starting at a click every 5 s, each as many evaluations as the player's own, so every click
- * upgrade speeds it up too, and its own rungs speed it up step by step [CALC, balance/autosim.mts:
- * about 20 % of an active player's evaluations when bought, 50 % by 10 per click, 100 % by Basin
- * hopping, and more with lanes]; methods come well after, one at a time, each
+ * each upgrade adds a little. Evaluations per click climb one at a time; Auto-eval runs evaluations
+ * for the player at its own rate in evaluations a second, starting at one every 2 s, and only its own
+ * rungs (and Faster auto-eval) speed it up: evaluations-per-click upgrades do not. Its rungs keep the
+ * pace auto-eval had when it clicked with the player's click size, at the click size a player has
+ * when buying each rung [EST, buying the cheapest card first: 2, 3, 5, 8, 12, 17, 22, 24 and 28
+ * evaluations per click], up to 120 a second; Faster auto-eval then stops at 250 a second a lane,
+ * about 44 % of a core at N+M+P = 85 (rank.ts) [CALC]. Methods come well after, one at a time, each
  * dearer than the last; seeds and method settings are bought too. Every finite ladder ends in a
- * levelled upgrade that can be bought again and again at a growing price, so nothing has a last rung.
+ * levelled upgrade that can be bought again and again at a growing price, so nothing has a last rung
+ * (Faster auto-eval excepted: a core's speed tops it out).
  *
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
  * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
@@ -216,22 +220,34 @@ const CLICK: Partial<Record<UpgradeId, number>> = {
   click10: 10,
 };
 /**
- * Auto-eval's clicks per second (per lane), by upgrade. Each of its clicks runs as many evaluations as
- * one of the player's, so every evaluations-per-click upgrade speeds auto-eval up too.
+ * Auto-eval's evaluations per second (per lane), by upgrade. The rate is in evaluations, not clicks:
+ * evaluations-per-click upgrades leave it as it is. Each rung is about what auto-eval ran when it
+ * clicked with the player's click size, over the time the rung is the fastest owned (its clicks a
+ * second, 0.2 to 10, times the click size from when it is bought to when the next rung is) [EST].
  */
 const AUTO: Partial<Record<UpgradeId, number>> = {
-  auto1: 1 / 5,
-  auto2: 1 / 4,
-  auto3: 1 / 3,
-  auto4: 1 / 2,
-  auto5: 1,
-  auto6: 2,
-  auto7: 3,
-  auto8: 5,
-  auto9: 10,
+  auto1: 0.5,
+  auto2: 1,
+  auto3: 2,
+  auto4: 5,
+  auto5: 15,
+  auto6: 30,
+  auto7: 50,
+  auto8: 80,
+  auto9: 120,
 };
-/** Faster auto-eval: auto-eval's clicks a second grow by this much a level. */
+/** The Auto-eval rungs' evaluations a second, slowest first. */
+export const AUTO_RATES: readonly number[] = Object.values(AUTO).sort((a, b) => a - b);
+/** Faster auto-eval: auto-eval's evaluations a second grow by this much a level. */
 export const AUTOX_GROWTH = 1.3;
+/**
+ * The most evaluations a second auto-eval asks of a lane (each lane is a worker on a core of its
+ * own): 250 keep about 44 % of a core busy at N+M+P = 85 (1.77 ms an evaluation, rank.ts) and all of
+ * it from about N+M+P = 130 up, where the computer sets the pace [CALC].
+ */
+export const AUTO_MAX = 250;
+/** Levels of Faster auto-eval up to AUTO_MAX: 3, the last one stopped at the limit. */
+const AUTOX_LEVELS = Math.ceil(Math.log(AUTO_MAX / AUTO.auto9!) / Math.log(AUTOX_GROWTH));
 /** Seeds (runs) per problem, by upgrade (1 without any). */
 const SEEDS: Partial<Record<UpgradeId, number>> = { seeds2: 2, seeds4: 4, seeds8: 8, seeds16: 16, seeds32: 32 };
 /** Problem slots, by upgrade (1 without any). */
@@ -306,7 +322,7 @@ function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
     how: {
       text: [
         `An Evolve click asks the open run on the problem for more evaluations. ${EVALUATION} Between two evaluations the method moves the pieces, so each evaluation is one more step of its search.`,
-        `With this upgrade a click runs ${n} evaluations of the same run, one after another. Auto-eval's clicks are as large as yours, so it speeds up by the same factor.`,
+        `With this upgrade a click runs ${n} evaluations of the same run, one after another. Auto-eval keeps its own rate in evaluations a second, which this upgrade does not change.`,
       ],
       math: CLICK_MATH(String(n)),
       vars: CLICK_VARS,
@@ -316,45 +332,57 @@ function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
   };
 }
 
-/** Auto-eval's pace: "every 5 s", "once a second", "2 times a second". */
-const pace = (c: number) =>
-  c < 1 ? `every ${seconds(1 / c)}` : c === 1 ? "once a second" : `${number(c)} times a second`;
 const AUTO_VARS: readonly Var[] = [
-  [sym("e"), "auto-eval's evaluations per second, all lanes together"],
-  VAR_K,
+  [sym("e"), "auto-eval's target in evaluations a second, all lanes together"],
   [sym("L"), "lanes, the solver workers that run at once (1 until Second lane)"],
 ];
 const AUTO_NOTE =
-  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can, and at most 60 s of its clicks (at least 100 evaluations) wait to be run.";
-/** Auto-eval's evaluations a second at `c` clicks a second per lane. */
-const autoMath = (c: number) =>
-  c < 1
-    ? `${sym("e")} = ${K} × ${sym("L")} / ${number(1 / c)}`
-    : `${sym("e")} = ${c === 1 ? "" : `${number(c)} × `}${K} × ${sym("L")}`;
+  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can, and at most 60 s of its evaluations (at least 100) wait to be run.";
+const AUTO_RATE =
+  "Its rate is in evaluations a second, whatever your evaluations per click. Upgrades of evaluations per click make your own clicks larger, and only the Auto-eval upgrades and Faster auto-eval speed auto-eval up.";
+/** "a, b and c". */
+const and = (xs: readonly string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
+/** Faster auto-eval's levels: "Levels 1, 2 and 3 give 156, about 203 and 250 evaluations a second in each lane." */
+const AUTOX_STEPS = (() => {
+  const rates = Array.from({ length: AUTOX_LEVELS }, (_, l) =>
+    Math.min(AUTO_MAX, AUTO.auto9! * AUTOX_GROWTH ** (l + 1)),
+  );
+  const levels = and(rates.map((_, l) => String(l + 1)));
+  const each = and(rates.map((x) => (Math.abs(x - Math.round(x)) < 1e-9 ? "" : "about ") + Math.round(x)));
+  return `Level${rates.length === 1 ? "" : "s"} ${levels} give${rates.length === 1 ? "s" : ""} ${each} evaluations a second in each lane.`;
+})();
+/** The smallest N+M+P at which one evaluation takes at least a second's share of `perSecond` (rank.ts's table). */
+function coreBound(perSecond: number): number {
+  let t = 2;
+  while (msPerEval(t) < 1000 / perSecond) t++;
+  return t;
+}
 
 function autoRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
-  const c = AUTO[id]!;
-  const prev = Math.max(0, ...Object.values(AUTO).filter((x) => x < c));
+  const r = AUTO[id]!;
+  const prev = Math.max(0, ...Object.values(AUTO).filter((x) => x < r));
   const first = id === "auto1";
   return {
     id,
-    name: first ? "Auto-eval" : `Auto-eval: ${c < 1 ? `every ${seconds(1 / c)}` : `${number(c)} a second`}`,
+    name: first ? "Auto-eval" : `Auto-eval: ${autoRateText(r)}`,
     cost,
     requires,
     effect: first
-      ? `Auto-eval clicks Evolve for you ${pace(c)} while it is switched on.`
-      : `Auto-eval clicks ${pace(c)} in each lane instead of ${pace(prev)}.`,
+      ? `Auto-eval runs ${autoRateText(r)} for you while it is switched on.`
+      : `Auto-eval runs ${autoRateText(r)} in each lane instead of ${number(prev)}.`,
     how: {
       text: first
         ? [
-            `Auto-eval presses Evolve for you ${pace(c)}, beside your own clicks. Each of its clicks runs as many evaluations as one of yours, so every evaluations-per-click upgrade speeds it up too. ${EVALUATION}`,
+            `Auto-eval runs evaluations on a problem's open run for you, beside your own clicks, at a rate of ${autoRateText(r)}. ${EVALUATION}`,
+            AUTO_RATE,
             "It runs while its switch is on and this page is open. It pauses in a hidden tab unless Continuous lets it go on, and on battery power (where the browser reports it) unless you allow that in Settings. Nothing builds up while it is paused or off.",
             "Without Auto-advance it works only on problems you have already compacted (your first click on a new problem). The first lane works on the problem on the board, and any other lane on the next problems in the queue.",
           ]
         : [
-            `In each lane auto-eval now clicks ${pace(c)}, and each of its clicks runs as many evaluations as one of yours. A lane is a solver worker that runs one problem at a time.`,
+            `In each lane auto-eval now runs ${autoRateText(r)} instead of ${autoRateText(prev)}. A lane is a solver worker that runs one problem at a time.`,
+            AUTO_RATE,
           ],
-      math: [autoMath(c)],
+      math: [`${sym("e")} = ${r === 1 ? "" : `${number(r)} × `}${sym("L")}`],
       vars: AUTO_VARS,
       note: AUTO_NOTE,
     },
@@ -759,7 +787,7 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
     how: {
       text: [
         `When a deal is due, the dealer draws ${k} candidate problems, checks each with the server, and ranks them by the value V below. It deals the best one, or the next if that one's packing cannot be read. A lost record waiting for Retake and Collector's pick come before the ranked candidates.`,
-        "V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. 0.5 is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits.",
+        "V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. 0.5 is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits on larger problems.",
       ],
       math: [
         `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × 0.5 × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
@@ -818,7 +846,7 @@ const LANE_VARS: readonly Var[] = [
   [sym("C"), "your CPU's cores, as the browser reports them (4 when it does not say)"],
 ];
 const LANE_TEXT =
-  "A lane is a solver worker, a thread of the browser that holds one open run. Two lanes never work on the same problem, since one run's evaluations cannot be split. Auto-eval clicks at its pace in every lane, so each lane adds as many evaluations per second as the first.";
+  "A lane is a solver worker, a thread of the browser that holds one open run. Two lanes never work on the same problem, since one run's evaluations cannot be split. Auto-eval runs at its rate in every lane, so each lane adds as many evaluations a second as the first.";
 
 function standingRung(
   id: UpgradeId,
@@ -916,10 +944,10 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "One more evaluation per click",
     cost: 2000,
     requires: ["click10"],
-    effect: "Each level adds one evaluation to every click, yours and auto-eval's.",
+    effect: "Each level adds one evaluation to every Evolve click of yours.",
     how: {
       text: [
-        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval's clicks grow with yours. ${EVALUATION}`,
+        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, which this does not change. ${EVALUATION}`,
       ],
       math: CLICK_MATH("10"),
       vars: CLICK_VARS,
@@ -987,7 +1015,7 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
-        "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours or of auto-eval), the game updates both as below. The queue shows the count, as in “830 since progress”.",
+        "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”.",
         "While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per 300 clicks' worth of evaluations) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. A problem whose seeds are all spent is replaced first, before stalled ones. While your records have no name, a problem with an unsent best is never dropped.",
         "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
       ],
@@ -1082,7 +1110,7 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "Without this upgrade, auto-eval pauses while the tab is hidden. With it, Settings gets a box, off until you tick it, that keeps auto-eval running in a hidden tab.",
-        "Browsers slow down the timers of a hidden tab, and may wake them only once a minute. Up to 60 s of auto-eval's clicks wait to be run, so such a tab still loses nothing. Nothing runs once the page is closed.",
+        "Browsers slow down the timers of a hidden tab, and may wake them only once a minute. Up to 60 s of auto-eval's evaluations wait to be run, so such a tab still loses nothing. Nothing runs once the page is closed.",
       ],
     },
     row: "queue",
@@ -1309,24 +1337,25 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Faster auto-eval",
     cost: 150000,
     requires: ["auto9"],
-    effect: `Each level makes auto-eval click ${Math.round((AUTOX_GROWTH - 1) * 100)} % more often.`,
+    effect: `Each level raises auto-eval's rate by ${Math.round((AUTOX_GROWTH - 1) * 100)} %, up to ${AUTO_MAX} evaluations a second in each lane.`,
     how: {
       text: [
-        `Each level multiplies auto-eval's clicks per second by ${AUTOX_GROWTH}, starting from the ${number(AUTO.auto9!)} a second of the last Auto-eval rung. Level 1 gives ${number(AUTO.auto9! * AUTOX_GROWTH)} clicks a second in each lane, level 5 about ${Math.round(AUTO.auto9! * AUTOX_GROWTH ** 5)} and level 10 about ${Math.round(AUTO.auto9! * AUTOX_GROWTH ** 10)}.`,
+        `Each level multiplies auto-eval's evaluations a second by ${AUTOX_GROWTH}, starting from the ${number(AUTO.auto9!)} a second of the last Auto-eval rung, and stops at ${AUTO_MAX} a second in each lane. ${AUTOX_STEPS}`,
+        `The limit keeps auto-eval within what one core can run on the problems the game deals. One mc_compress evaluation took about ${msPerEval(85)} ms at N + M + P = 85 on the machine it was measured on, so ${AUTO_MAX} evaluations a second keep about ${Math.round((AUTO_MAX * msPerEval(85)) / 10)} % of that core busy. From about N + M + P = ${Math.round(coreBound(AUTO_MAX) / 10) * 10} up, an evaluation takes ${number(1000 / AUTO_MAX)} ms or more, so a core runs fewer and your computer sets the pace.`,
       ],
       math: [
-        `${sym("c")} = ${number(AUTO.auto9!)} × ${AUTOX_GROWTH}<sup>${sym("a")}</sup>`,
-        `${sym("e")} = ${sym("c")} × ${K} × ${sym("L")}`,
+        `${sym("r")} = min(${AUTO_MAX}, ${number(AUTO.auto9!)} × ${AUTOX_GROWTH}<sup>${sym("a")}</sup>)`,
+        `${sym("e")} = ${sym("r")} × ${sym("L")}`,
       ],
       vars: [
-        [sym("c"), "auto-eval's clicks per second in each lane"],
-        [sym("a"), "levels of Faster auto-eval"],
+        [sym("r"), "auto-eval's target in evaluations a second in each lane"],
+        [sym("a"), `levels of Faster auto-eval, 0 to ${AUTOX_LEVELS}`],
         ...AUTO_VARS,
       ],
-      note: `${AUTO_NOTE} Once an evaluation takes longer than the pace allows, more levels add nothing. Each level costs 1.4 times the one before.`,
+      note: `${AUTO_NOTE} Each level costs 1.4 times the one before.`,
     },
     row: "auto",
-    levels: { max: 100, growth: 1.4 },
+    levels: { max: AUTOX_LEVELS, growth: 1.4 },
   },
   ringRung("ring80", 150000, ["ring120"], true),
   tuneRung("tuneAsc", "asc", 150000, ["asc"], true),
@@ -1427,7 +1456,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle starts with 2 to 5 evaluations per click and Auto-eval.",
     {
       text: [
-        "At every reset, the next cycle begins owning Trace detail, 2, 3, 4 and 5 evaluations per click, and Auto-eval at a click every 5 s.",
+        `At every reset, the next cycle begins owning Trace detail, 2, 3, 4 and 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO.auto1!)}.`,
       ],
     },
   ),
@@ -1439,7 +1468,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Basin hopping, the queue of 3 and 2 seeds.",
     {
       text: [
-        "At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), Auto-eval up to a click a second, Problem queue: 3, the Seed counter and Seeds: 2 per problem.",
+        `At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), Auto-eval up to ${autoRateText(AUTO.auto5!)}, Problem queue: 3, the Seed counter and Seeds: 2 per problem.`,
       ],
     },
   ),
@@ -1636,28 +1665,41 @@ export const COMPACT_EVALS = 100;
 /** Evaluations a run may do in all before it ends and the next seed takes over. */
 export const RUN_BUDGET = 100_000;
 
-/** Auto-eval's clicks per second (per lane), or null without it. */
-export function autoClicksPerSecond(o: Owned): number | null {
+/**
+ * Auto-eval's target in evaluations per second (per lane), or null without it: its fastest rung,
+ * times Faster auto-eval's levels, at most AUTO_MAX. Evaluations per click do not change it.
+ */
+export function autoPerSecond(o: Owned): number | null {
   // the "clicks only" cycle rule: no auto-eval in this cycle
   if (!o.has("auto1") || o.rule === "clicks") return null;
-  return highest(o, AUTO, 0, (a, b) => a > b) * Math.pow(AUTOX_GROWTH, level(o, "autox"));
-}
-
-/** Auto-eval's evaluations per second (per lane): its clicks a second, each of the player's click size. */
-export function autoPerSecond(o: Owned): number | null {
-  const c = autoClicksPerSecond(o);
-  return c === null ? null : c * evalsPerClick(o);
+  return Math.min(AUTO_MAX, highest(o, AUTO, 0, (a, b) => a > b) * Math.pow(AUTOX_GROWTH, level(o, "autox")));
 }
 
 /**
- * Auto-eval's pace as the page shows it, from its evaluations a second (all lanes): "a click of 4
- * every 5 s", "2 clicks of 10 a second"; with one evaluation a click, in evaluations.
+ * Evaluations a second as the page writes them: "1 evaluation every 2 s" below one a second, else
+ * "1 evaluation a second", "2.5 evaluations a second", "1,750 evaluations a second".
  */
-export function autoRateText(o: Owned, perSecond: number): string {
-  const k = evalsPerClick(o);
-  const c = perSecond / k;
-  if (k === 1) return c < 1 ? `1 evaluation every ${seconds(1 / c)}` : `${number(c)} evaluations a second`;
-  return c < 1 ? `a click of ${k} every ${seconds(1 / c)}` : `${number(c)} click${c === 1 ? "" : "s"} of ${k} a second`;
+export function autoRateText(perSecond: number): string {
+  if (perSecond < 1) return `1 evaluation every ${seconds(1 / perSecond)}`;
+  const n = perSecond >= 100 ? Math.round(perSecond).toLocaleString("en-US") : number(perSecond);
+  return `${n} evaluation${n === "1" ? "" : "s"} a second`;
+}
+
+/**
+ * Auto-eval hands a lane at most this many seconds of the lane's rate at once: a few worker messages a
+ * second a lane, whatever the rate, and a click of the player's waits behind little.
+ */
+export const AUTO_JOB_SECONDS = 0.25;
+
+/**
+ * The evaluations of auto-eval's next job in a lane, from the evaluations due (all lanes'): what is due,
+ * at most AUTO_JOB_SECONDS of a lane's rate and at least 1, or 0 while less than one is due.
+ */
+export function autoJobEvals(o: Owned, due: number): number {
+  // a hair either way, so that a rounding error (156.00000000000003 a second, or a sum of fractions
+  // just short of 1 due) does not change a job's size
+  const most = Math.max(1, Math.ceil((autoPerSecond(o) ?? 0) * AUTO_JOB_SECONDS - 1e-9));
+  return Math.max(0, Math.min(most, Math.floor(due + 1e-9)));
 }
 
 /**

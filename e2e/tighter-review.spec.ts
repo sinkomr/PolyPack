@@ -465,7 +465,7 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   await expect(page.locator("#t-hold")).toContainText("battery");
   const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
   const evaluations = async () => (await state(page)).stats.evaluations;
-  // on battery, a minute held (a click of 4 every 5 s would be 48 evaluations) earns nothing
+  // on battery, a minute held (an evaluation every 2 s would be 30 evaluations) earns nothing
   const e0 = await evaluations();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 60_000));
   await sleep(3000);
@@ -475,16 +475,17 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   await click(page);
   expect(await evaluations()).toBe(e0 + 4);
   const onBattery = await page.locator("#t-hold").textContent();
-  // allowing battery use runs it live from then on, in clicks of 4, with nothing owed for the minute held
+  // allowing battery use runs it live from then on, an evaluation every 2 s whatever the click size, with
+  // nothing owed for the minute held
   const t1 = Date.now();
   await page.click("#t-open-settings");
   await page.check("#t-battery");
   await page.click("#t-settings-close");
   await expect(page.locator("#t-hold")).toHaveText("");
-  await expect.poll(evaluations, { timeout: 20_000 }).toBeGreaterThanOrEqual(e0 + 8);
+  await expect.poll(evaluations, { timeout: 30_000 }).toBeGreaterThanOrEqual(e0 + 8);
   await expect.poll(() => idle(page)).toBe(true);
   const e1 = await evaluations();
-  expect(e1 - (e0 + 4)).toBeLessThanOrEqual(0.8 * ((Date.now() - t1) / 1000) + 4);
+  expect(e1 - (e0 + 4)).toBeLessThanOrEqual(0.5 * ((Date.now() - t1) / 1000) + 4);
 
   // a hidden tab pauses it too
   await page.evaluate(() => {
@@ -511,7 +512,7 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   // back: live again, nothing owed for the time hidden
   const after = (await evaluations()) - e2;
   console.log(`battery: "${onBattery}"; hidden: "${hidden}"; ran after: ${after}`);
-  expect(after).toBeLessThanOrEqual(0.8 * ((Date.now() - t2) / 1000) + 4);
+  expect(after).toBeLessThanOrEqual(0.5 * ((Date.now() - t2) / 1000) + 4);
   expect(onBattery).toContain("battery");
   expect(hidden).toContain("hidden");
 });
@@ -617,7 +618,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes between ticks: auto-eval catches up at most a minute (a click of 10 every 2 s on
+  // twenty minutes between ticks: auto-eval catches up at most a minute (5 evaluations a second on
   // each of two lanes: 600), then runs live, two lanes, Auto-advance compacting the new problems
   const autoStart = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));

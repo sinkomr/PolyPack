@@ -15,7 +15,8 @@ import { CONTEST, TIERS, Tier, shapeWeight } from "./points";
  * weakness leave to gain, correction the learning dealer's draw for the candidate's bucket (1
  * without it), and speed √(cost of an evaluation at N+M+P = 85 / cost at the candidate's size).
  * The square root splits the difference between a clicking player (a click is one click whatever
- * the cost of its evaluation) and auto-eval (which runs as many evaluations as the CPU allows).
+ * the cost of its evaluation) and auto-eval (which runs as many evaluations as the CPU allows, up
+ * to its target).
  * Room and RP_PER_EVAL are [SPEC]; the cost table is measured [CALC].
  */
 

@@ -174,7 +174,7 @@ describe("Tighter cycle rules", () => {
     expect(seedsPerProblem(ownedSet(s))).toBe(4);
     s.standing.rule = "seed";
     expect(seedsPerProblem(ownedSet(s))).toBe(1);
-    expect(autoPerSecond(ownedSet(s))).toBe(0.2);
+    expect(autoPerSecond(ownedSet(s))).toBe(0.5);
     s.standing.rule = "clicks";
     expect(autoPerSecond(ownedSet(s))).toBeNull();
     s.standing.rule = null;
