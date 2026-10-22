@@ -6,6 +6,7 @@ import {
   LeaderboardEntry,
   LeaderboardEvent,
   LiteratureRecord,
+  MAX_EVENT_KEYS,
   MAX_PIECES,
   MAX_SIDES,
   ProblemInfo,
@@ -113,6 +114,26 @@ export function atlasSource(
   return pending ? "pending" : null;
 }
 
+/**
+ * The keys of GET /api/events?keys=...: comma-separated "N/M/P" (one problem) or "N/M/*" (every P
+ * of a pair), at most MAX_EVENT_KEYS, written back in one form ("04/4/11" is "4/4/11"); an empty
+ * list follows nothing. A message when the text is not such a list.
+ */
+export function parseEventKeys(text: string): string[] | string {
+  const keys = new Set<string>();
+  for (const part of text === "" ? [] : text.split(",")) {
+    const m = /^(\d{1,3})\/(\d{1,3})\/(\d{1,3}|\*)$/.exec(part);
+    const N = Number(m?.[1]);
+    const M = Number(m?.[2]);
+    const P = m?.[3] === "*" ? "*" : Number(m?.[3]);
+    if (!isShapeCode(N) || !isShapeCode(M) || (P !== "*" && !(P >= 1 && P <= MAX_PIECES)))
+      return `keys must be N/M/P or N/M/*, separated by commas, with N and M 0 or 3 to ${MAX_SIDES} and P 1 to ${MAX_PIECES}; "${part.slice(0, 20)}" is not`;
+    keys.add(`${N}/${M}/${P}`);
+  }
+  if (keys.size > MAX_EVENT_KEYS) return `at most ${MAX_EVENT_KEYS} keys`;
+  return [...keys];
+}
+
 /** A query value that is a plain decimal integer; anything else (empty, "0x10", "1e2", "1.5") is NaN. */
 function decimalInteger(text: string | undefined): number {
   return text !== undefined && /^\d{1,9}$/.test(text) ? Number(text) : NaN;
@@ -146,7 +167,34 @@ export function createApp(opts: AppOptions): Hono {
    */
   const closed = (N: number, M: number, P: number) => closedToSubmissions(literature.get(`${N}/${M}/${P}`));
 
-  const listeners = new Set<(e: LeaderboardEvent) => void>();
+  // Live updates go to the streams that follow the problem, by "N/M/P" or "N/M/*", and to those that
+  // follow every problem, so that each change costs a write per interested stream only.
+  type Listener = (e: LeaderboardEvent) => void;
+  const followAll = new Set<Listener>();
+  const followers = new Map<string, Set<Listener>>();
+  const follow = (fn: Listener, keys: string[] | null) => {
+    if (!keys) return void followAll.add(fn);
+    for (const k of keys) {
+      const set = followers.get(k);
+      if (set) set.add(fn);
+      else followers.set(k, new Set([fn]));
+    }
+  };
+  const unfollow = (fn: Listener, keys: string[] | null) => {
+    if (!keys) return void followAll.delete(fn);
+    for (const k of keys) {
+      const set = followers.get(k);
+      set?.delete(fn);
+      if (set?.size === 0) followers.delete(k);
+    }
+  };
+  const announce = (e: LeaderboardEvent) => {
+    for (const fn of followAll) fn(e);
+    const one = followers.get(`${e.N}/${e.M}/${e.P}`);
+    const pair = followers.get(`${e.N}/${e.M}/*`);
+    for (const fn of one ?? []) fn(e);
+    for (const fn of pair ?? []) if (!one?.has(fn)) fn(e);
+  };
 
   /** Reads N, M, P from the path; null when out of range. */
   const problemOf = (c: Context): { N: number; M: number; P: number } | null => {
@@ -498,7 +546,7 @@ export function createApp(opts: AppOptions): Hono {
         name: leader.name,
       };
       opts.stats?.leaderChanged();
-      for (const fn of listeners) fn(event);
+      announce(event);
     }
     const body: SubmitResponse = {
       valid: true,
@@ -515,30 +563,35 @@ export function createApp(opts: AppOptions): Hono {
     return answer(body, 200);
   });
 
-  // Live updates: one "leaderboard" event whenever a problem gets a new leader.
-  app.get("/api/events", (c) =>
-    streamSSE(c, async (stream) => {
+  // Live updates: one "leaderboard" event whenever a problem the stream follows gets a new leader.
+  // `keys` lists the problems; without it the stream follows every problem. A client that follows
+  // other problems opens a new stream; an EventSource that reconnects asks for the same keys.
+  app.get("/api/events", (c) => {
+    const text = c.req.query("keys");
+    const keys = text === undefined ? null : parseEventKeys(text);
+    if (typeof keys === "string") return c.json({ error: keys }, 400);
+    return streamSSE(c, async (stream) => {
       const queue: LeaderboardEvent[] = [];
       let wake: (() => void) | null = null;
       const listener = (e: LeaderboardEvent) => {
         queue.push(e);
         wake?.();
       };
-      listeners.add(listener);
-      opts.stats?.stream(1);
+      follow(listener, keys);
+      opts.stats?.stream(1, keys);
       let open = true;
       const close = () => {
         if (!open) return;
         open = false;
-        listeners.delete(listener);
-        opts.stats?.stream(-1);
+        unfollow(listener, keys);
+        opts.stats?.stream(-1, keys);
       };
       stream.onAbort(() => {
         close();
         wake?.();
       });
       try {
-        await stream.writeSSE({ event: "hello", data: "{}" });
+        await stream.writeSSE({ event: "hello", data: JSON.stringify(keys ? { keys } : { all: true }) });
         while (!stream.aborted) {
           while (queue.length) await stream.writeSSE({ event: "leaderboard", data: JSON.stringify(queue.shift()) });
           // wake on the next event, or after 20 s to send a keep-alive comment
@@ -556,8 +609,8 @@ export function createApp(opts: AppOptions): Hono {
         // also when a write fails on a connection that is gone
         close();
       }
-    }),
-  );
+    });
+  });
 
   const admin = (c: Context): Response | null => {
     if (!opts.adminToken) return c.json({ error: "admin access is not configured" }, 503);

@@ -6,7 +6,10 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   // squares in a nine-sided container: a problem with no published record, used by no other test
   // a second visitor already watching the same problem
   const other = await (await browser.newContext()).newPage();
+  // it follows the live changes of its own problem only
+  const follows = other.waitForRequest((r) => decodeURIComponent(r.url()).endsWith("/api/events?keys=4/9/3"));
   await openProblem(other, 4, 9, 3);
+  await follows;
   await expect(other.locator("#leaderboard-note")).toContainText("No entries yet");
   await expect(other.locator("#live")).toHaveClass(/on/);
 

@@ -368,12 +368,14 @@ describe("the log", () => {
     stats.flush(12.345);
     expect(out).toEqual([
       "[load] last minute: 101 submissions (200: 100, 429: 1); verification p50 50.0 ms, p90 90.0 ms, p99 99.0 ms, " +
-        "max 100.0 ms, 5050.0 ms in all over 100 boards; 1 leader change; 1 live stream; event loop delay up to 12.3 ms",
+        "max 100.0 ms, 5050.0 ms in all over 100 boards; 1 leader change; " +
+        "1 live stream (1 following every problem, the others 0 keys); event loop delay up to 12.3 ms",
     ]);
     // an open stream keeps the line coming, with the counts started again
     stats.flush(1);
     expect(out[1]).toBe(
-      "[load] last minute: 0 submissions; no verification; 0 leader changes; 1 live stream; event loop delay up to 1.00 ms",
+      "[load] last minute: 0 submissions; no verification; 0 leader changes; " +
+        "1 live stream (1 following every problem, the others 0 keys); event loop delay up to 1.00 ms",
     );
     stats.stream(-1);
     stats.flush(1);

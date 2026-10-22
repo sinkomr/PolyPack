@@ -107,10 +107,22 @@ function currentRecord(): RecordChoice | null {
   return null;
 }
 
+// Live updates for the problem on the board only; it follows the board from problem to problem.
+const live = new api.LiveFeed(
+  (e) => {
+    const s = board.state;
+    if (e.N !== s.N || e.M !== s.M || e.P !== s.P) return;
+    if (e.rank === 1) say(`New best for this problem: ${e.score.toFixed(6)} by ${e.name}.`);
+    refreshProblem();
+  },
+  () => refreshProblem(),
+);
+
 async function refreshProblem(): Promise<void> {
   const { N, M, P } = board.state;
   const key = `${N}/${M}/${P}`;
   requestedKey = key;
+  live.follow([key]);
   const [problem, lb] = await Promise.all([api.getProblem(N, M, P), api.getLeaderboard(N, M, P)]);
   const s = board.state;
   if (`${s.N}/${s.M}/${s.P}` !== key) return; // the problem changed while loading
@@ -522,16 +534,8 @@ $("share").addEventListener("click", async () => {
 
 // ---------- live updates ----------
 
-const isLive = api.subscribe(
-  (e) => {
-    const s = board.state;
-    if (e.N !== s.N || e.M !== s.M || e.P !== s.P) return;
-    if (e.rank === 1) say(`New best for this problem: ${e.score.toFixed(6)} by ${e.name}.`);
-    refreshProblem();
-  },
-  () => refreshProblem(),
-);
-setInterval(() => $("live").classList.toggle("on", isLive()), 1500);
+// (the feed is created with the records above, and follows the problem refreshProblem reads)
+setInterval(() => $("live").classList.toggle("on", live.isLive()), 1500);
 
 // ---------- start ----------
 

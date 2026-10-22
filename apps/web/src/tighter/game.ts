@@ -714,6 +714,18 @@ export function recordsHeld(s: GameState): number {
   return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 }
 
+/**
+ * The problems whose leader changes the game listens for, most important first: the queue, the
+ * focused problem first, then the records held among the problems that left it, the most recently
+ * left first. The live-update stream follows as many as fit (eventKeys); the rest are checked
+ * when the game reads them (Rent, and the page opening).
+ */
+export function followed(s: GameState): ProblemKey[] {
+  const queue = [...s.queue].sort((a, b) => Number(b.key === s.focus) - Number(a.key === s.focus));
+  const held = s.past.filter((p) => p.ourId !== null).sort((a, b) => b.leftAt - a.leftAt);
+  return [...queue, ...held].map(({ N, M, P }) => ({ N, M, P }));
+}
+
 // ---------- auto-eval's pace ----------
 
 /**

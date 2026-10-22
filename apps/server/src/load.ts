@@ -82,6 +82,9 @@ export class LoadStats {
   private verifyTotal = 0;
   private leaderChanges = 0;
   private streams = 0;
+  /** Of the open streams, those that follow every problem, and the keys the others follow. */
+  private streamsAll = 0;
+  private streamKeys = 0;
 
   constructor(private write: (line: string) => void) {}
 
@@ -104,9 +107,20 @@ export class LoadStats {
     this.leaderChanges++;
   }
 
-  /** A live-update stream opened (+1) or closed (-1). */
-  stream(change: 1 | -1): void {
+  /** A live-update stream opened (+1) or closed (-1); `keys` is what it follows, null for every problem. */
+  stream(change: 1 | -1, keys: readonly string[] | null = null): void {
     this.streams += change;
+    if (keys) this.streamKeys += change * keys.length;
+    else this.streamsAll += change;
+  }
+
+  /** The open streams, as the minute's line gives them. */
+  private streamsText(): string {
+    const n = this.streams;
+    return (
+      `${n} live stream${n === 1 ? "" : "s"}` +
+      (n ? ` (${this.streamsAll} following every problem, the others ${this.streamKeys} keys)` : "")
+    );
   }
 
   /**
@@ -129,7 +143,7 @@ export class LoadStats {
         : "no verification";
       this.write(
         `[load] last minute: ${count} submission${count === 1 ? "" : "s"}${count ? ` (${byStatus})` : ""}; ${times}; ` +
-          `${this.leaderChanges} leader change${this.leaderChanges === 1 ? "" : "s"}; ${this.streams} live stream${this.streams === 1 ? "" : "s"}; ` +
+          `${this.leaderChanges} leader change${this.leaderChanges === 1 ? "" : "s"}; ${this.streamsText()}; ` +
           `event loop delay up to ${fmtMs(delayMs)}`,
       );
     }

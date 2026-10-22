@@ -1,4 +1,5 @@
 import {
+  MAX_EVENT_KEYS,
   MAX_METHOD_PARAMS_BYTES,
   MAX_PIECES,
   MAX_SIDES,
@@ -331,10 +332,12 @@ that has something to draw, <code>tiles</code> holds one configuration: <code>{P
 <p>For a closed problem only the published coordinates are drawn. Rejected entries never appear. A response carries at most about ${limits.atlasMaxPieces} pieces: when the range holds more, <code>next</code> is the first <code>P</code> left out (ask again with <code>from=next</code>), and <code>null</code> otherwise.
 Values of <code>P</code> with no coordinates at all are simply absent. The answer is gzip-compressed for clients that send <code>Accept-Encoding</code>.</p>
 
-<h3><code>GET /api/events</code></h3>
-<p>Server-sent events. A <code>hello</code> event opens the stream and a <code>ping</code> event follows every 20 s without news.
-A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.
-Submissions that do not change the leader send nothing.</p>
+<h3 id="events"><code>GET /api/events?keys=N/M/P,N/M/*</code></h3>
+<p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem the stream follows gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.
+Submissions that do not change the leader send nothing. A <code>hello</code> event opens the stream, with the keys it follows (<code>{"keys": [...]}</code>, or <code>{"all": true}</code>), and a <code>ping</code> event follows every 20 s without news.</p>
+<p><code>keys</code> says which problems to follow, separated by commas: <code>N/M/P</code> for one problem, <code>N/M/*</code> for every <code>P</code> of a pair of shapes, at most ${MAX_EVENT_KEYS} keys (400 otherwise). To follow other problems, open a new stream with the new keys and close the old one; an <code>EventSource</code> that reconnects asks for the same keys again.
+Events that happen while no stream is open are not sent later, so read what you show again after (re)opening. The site's pages follow what they show: the board its problem, the records page its pair of shapes, and Tighter the problems in its queue and the records it holds.</p>
+<p>Without <code>keys</code> the stream follows every problem on the site. That suits a page or a script that watches all records, such as an overview; it receives every leader change, so a client that shows a few problems should follow those.</p>
 
 <h3><code>GET /api/health</code></h3>
 <p><code>{"ok": true}</code> while the server is running.</p>
