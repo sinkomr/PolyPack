@@ -1,5 +1,5 @@
 import { sym } from "../how";
-import type { MethodGame, RunProblem } from "./types";
+import type { MethodGame, RunProblem, RunView } from "./types";
 
 // asc, from packages/solver/src/methods/asc.ts (its defaults and update rules).
 //
@@ -73,6 +73,17 @@ const later = (xs: number[]) => {
 const ASC_TEXT =
   "asc (adaptive shrinking container) is a Monte Carlo search with the container as a variable. A sweep tries P moves of single pieces, moves of the container (shift, turn, shrink), and strains that move all centres at once. A strain squeezes the centres along a random axis (and may stretch them across it, keeping the area), squeezes them within a sector, or pulls them all inward while the container shrinks. The pieces never change shape.";
 
+/** The step note while the run has not beaten the board it opened from: why a click found nothing. */
+export function ascStepNote(v: RunView): string | null {
+  if (v.evaluations >= v.budget) return null;
+  if (v.found !== null && v.startScore !== null && v.found < v.startScore) return null;
+  const why =
+    "This asc run loosens the packing before it squeezes it, so it seldom beats your best in its first few hundred evaluations.";
+  const best = v.problemBest ?? v.startScore;
+  if (v.last === null || best === null || !(v.last > best)) return why;
+  return `${why} Its latest score is ${v.last.toFixed(6)}, ${((v.last / best - 1) * 100).toFixed(3)} % above your best.`;
+}
+
 export const ascGame: MethodGame = {
   effect: "You can run asc, a search that loosens the packing and squeezes it again, so tight boards can still shrink.",
   how: (select) => ({
@@ -115,6 +126,7 @@ export const ascGame: MethodGame = {
   runParams: ascRunParams,
   runBudget: ascRunBudget,
   runEnds: `An asc run ends after one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps, which is ${int(LEVEL_BUDGETS[0])} evaluations at first and fewer with asc tuning.`,
+  stepNote: ascStepNote,
   endedText: (v, title) =>
     v.evaluations >= v.budget
       ? `The asc run on ${title} finished its cooling cycle of ${int(v.budget)} evaluations.`

@@ -14,6 +14,7 @@ import {
   ascGame,
   ascRunBudget,
   ascRunParams,
+  ascStepNote,
 } from "../src/tighter/methods/asc";
 import { OpenRun, resolvedParams } from "../src/tighter/open-run";
 import { presetParams, tuningLevels } from "../src/tighter/presets";
@@ -155,6 +156,21 @@ describe("Tighter's asc runs", () => {
       "The asc run on 21-gons in a 24-gon, 40 pieces finished its cooling cycle of 2,000 evaluations.",
     );
     expect(ascGame.endedText!(view({ evaluations: 1210 }), title)).toBeNull();
+  });
+
+  it("say why a click found nothing while the run is still loose", () => {
+    expect(ascStepNote(view())).toBe(
+      "This asc run loosens the packing before it squeezes it, so it seldom beats your best in its first few hundred evaluations. Its latest score is 6.341000, 0.137 % above your best.",
+    );
+    expect(ascStepNote(view({ last: null }))).toBe(
+      "This asc run loosens the packing before it squeezes it, so it seldom beats your best in its first few hundred evaluations.",
+    );
+    // once the run has beaten its start, or at its end, nothing is added
+    expect(ascStepNote(view({ found: 6.33, runBest: 6.33 }))).toBeNull();
+    expect(ascStepNote(view({ evaluations: 2000 }))).toBeNull();
+    expect(ascGame.stepNote).toBe(ascStepNote);
+    // the run line already says where the run is in its budget
+    expect(ascStepNote(view())).not.toMatch(/of 2,000/);
   });
 
   it("explain the warm start and the cycle on the card, the help and the tuning card", () => {
