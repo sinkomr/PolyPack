@@ -262,8 +262,8 @@ describe("Tighter's methods table", () => {
     expect(warmIn(722, 722, 732)).toBe(0);
     expect(warmIn(722, 800, 810)).toBe(0);
     expect(warmIn(0, 0, 10)).toBe(0);
-    // no method has one yet; one reads the run's resolved parameters, its defaults when a text asks
-    for (const m of ALL) expect(warmupOf(m, resolvedParams(m, {})), m).toBe(0);
+    // only morph has one; it reads the run's resolved parameters, its defaults when a text asks
+    for (const m of ALL) expect(warmupOf(m, resolvedParams(m, {})), m).toBe(m === "morph" ? 722 : 0);
     const morph = {
       warmup: (q: Record<string, unknown>) =>
         2 + ((q.innerIterations as number) ?? 120) * ((q.outerIterations as number) ?? 6),
@@ -303,8 +303,10 @@ describe("Tighter's methods table", () => {
   });
 
   it("say in Auto-advance's How which runs have a warm-up, read from the table", () => {
-    // no method has one yet: the card says nothing of it
-    expect(advanceHow([])).toEqual(upgrade("advance").how);
+    // morph's is on the card, and without any the card says nothing of it
+    expect(upgrade("advance").how).toEqual(advanceHow([{ label: "morph", evals: 722, runs: "on polygon pieces" }]));
+    expect(advanceHow([]).text[1]).toMatch(/“830 since progress”\.$/);
+    expect(advanceHow([]).math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var>");
     const how = advanceHow([{ label: "morph", evals: 722 }]);
     expect(how.text[1]).toMatch(
       /The first 722 evaluations of every morph run are its warm-up, and they do not add to the count\.$/,
