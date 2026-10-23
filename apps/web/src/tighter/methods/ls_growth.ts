@@ -32,15 +32,17 @@ export const lsGrowthGame: MethodGame = {
     note: select,
   }),
   /**
-   * Bench (presets.ts), 150 evaluations: interval 16 −6.61 / −4.74 / −0.10 %; 24: −8.52 / −6.99 /
-   * −1.09; 32: −8.89 / −7.51 / −4.40; 48: −8.96 / −7.78 / −6.70. Time up to 5×: its slowest setting
-   * runs 0.3 to 0.7 s an evaluation on 40 to 80 pieces.
+   * One growth per run (`runs: 1`, the solver's default is 4): in the report's M1 the 3 restarts from
+   * the run's best took 69 % of a run's evaluations and added 0.054 %. The tuning bench (presets.ts)
+   * stopped at 150 evaluations, before any jam (500 to 590 evaluations at level 0): interval 16
+   * −6.61 / −4.74 / −0.10 %; 24: −8.52 / −6.99 / −1.09; 32: −8.89 / −7.51 / −4.40; 48: −8.96 / −7.78 /
+   * −6.70. The levels reach as good a jam in fewer evaluations and the same time (M5).
    */
   presets: [
-    {},
-    { evaluationInterval: 24, stagnationEvaluations: 192 },
-    { evaluationInterval: 32, stagnationEvaluations: 256 },
-    { evaluationInterval: 48, stagnationEvaluations: 384 },
+    { runs: 1 },
+    { runs: 1, evaluationInterval: 24, stagnationEvaluations: 192 },
+    { runs: 1, evaluationInterval: 32, stagnationEvaluations: 256 },
+    { runs: 1, evaluationInterval: 48, stagnationEvaluations: 384 },
   ],
   tunedDefaults: { evaluationInterval: 16, stagnationEvaluations: 128 },
   tunedMeaning: {
