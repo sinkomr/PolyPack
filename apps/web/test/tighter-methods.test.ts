@@ -245,7 +245,9 @@ describe("Tighter's methods table", () => {
     expect(text(PIPELINE)).toContain(stallRule());
     expect(text(PIPELINE)).toContain("or the game ended it at a stall");
     // a method's own sentence on when its runs end goes with them, in the table's order
-    expect(runEndRules()).toBe("");
+    for (const g of Object.values(METHOD_GAMES)) if (g.runEnds) expect(runEndRules()).toContain(g.runEnds);
+    expect(text(HELP.counts as How)).toContain(runEndRules());
+    expect(text(PIPELINE)).toContain(runEndRules());
     expect(
       runEndRules({
         basin_hopping: { runEnds: "A basin_hopping run ends after 1,000 evaluations." },
