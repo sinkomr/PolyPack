@@ -108,7 +108,18 @@ describe("Tighter shop", () => {
     expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
-    const auto: UpgradeId[] = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10"];
+    const auto: UpgradeId[] = [
+      "auto1",
+      "auto2",
+      "auto3",
+      "auto4",
+      "auto5",
+      "auto6",
+      "auto7",
+      "auto8",
+      "auto9",
+      "auto10",
+    ];
     const w = shopView(owning([...auto, "autox"], { autox: 10 }), broke, 8);
     expect(row(w, "auto").cards).toEqual([]);
     expect(row(w, "auto").owned).toEqual([

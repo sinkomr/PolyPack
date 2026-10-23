@@ -98,7 +98,8 @@ describe("Tighter's explanations", () => {
   });
 
   it("say nothing of seeds per problem, spent seeds, the Seed counter or a run's seed number", () => {
-    const retired = /seeds? (are |is )?spent|seeds per problem|of your seeds|Seed counter|One seed|with seed \d|with seed \$|· seed /i;
+    const retired =
+      /seeds? (are |is )?spent|seeds per problem|of your seeds|Seed counter|One seed|with seed \d|with seed \$|· seed /i;
     for (const [id, hows] of all) for (const t of hows.flatMap(prose)) expect(t, id).not.toMatch(retired);
     for (const r of RULES) expect(`${r.name} ${r.limit} ${r.reward}`).not.toMatch(retired);
     for (const u of UPGRADES)

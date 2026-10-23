@@ -1,3 +1,5 @@
+import type { PackingConfig } from "@polypack/geometry";
+import type { ProblemState } from "../game";
 import type { EvolveMethod } from "../upgrades";
 import { ascGame } from "./asc";
 import { basinHoppingGame } from "./basin_hopping";
@@ -8,9 +10,11 @@ import { morphGame } from "./morph";
 import { penaltyGame } from "./penalty";
 import { seedGame } from "./seed";
 import { shrinkRepairGame } from "./shrink_repair";
+import { RUN_BUDGET } from "./types";
 import type { MethodGame } from "./types";
 
-export type { MethodGame } from "./types";
+export type { MethodGame, RunProblem, RunStage, RunView } from "./types";
+export { RUN_BUDGET } from "./types";
 
 /**
  * Every solver method the game runs, by its solver name (the name the server records, which a game
@@ -30,3 +34,28 @@ export const METHOD_GAMES: Readonly<Record<EvolveMethod, MethodGame>> = {
 
 /** How the game uses a method (its file in this folder); a name the game does not know gets every default. */
 export const methodGame = (m: EvolveMethod): MethodGame => METHOD_GAMES[m] ?? {};
+
+/** How player text names a method (its label, else its solver name). */
+export const methodLabel = (m: string): string => methodGame(m as EvolveMethod).label ?? m;
+
+/** Whether the player can choose the method: the Method list, Method match and the pipeline editor. */
+export const isSelectable = (m: EvolveMethod): boolean => methodGame(m).selectable !== false;
+
+/** What a new run of a method opens with: its parameters, its budget and its start. */
+export interface RunSetup {
+  params: Record<string, unknown>;
+  budget: number;
+  start: PackingConfig;
+}
+
+/**
+ * A new run of `m` on `p`, from the player's parameters `base` (methodParams): the method's
+ * runParams, runBudget and startFrom, or the defaults (`base`, RUN_BUDGET, the problem's board).
+ */
+export function runSetup(m: EvolveMethod, base: Record<string, unknown>, p: ProblemState): RunSetup {
+  const g = methodGame(m);
+  const params = g.runParams ? g.runParams(base, { N: p.N, M: p.M, P: p.P, score: p.best }) : base;
+  const budget = g.runBudget ? g.runBudget(params) : RUN_BUDGET;
+  const start = g.startFrom ? g.startFrom(p) : p.board!;
+  return { params, budget: Math.max(1, Math.floor(budget)), start };
+}

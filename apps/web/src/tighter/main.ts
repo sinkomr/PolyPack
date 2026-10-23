@@ -80,6 +80,8 @@ import {
   tidyRent,
 } from "./economy";
 import { Lane } from "./lanes";
+import { methodGame, methodLabel, runSetup } from "./methods";
+import type { RunStage, RunView } from "./methods";
 import type { RunState } from "./open-run";
 import {
   OFFLINE_BACKOFF_MS,
@@ -91,7 +93,7 @@ import {
 } from "./pacer";
 import { Offer, addRetake, offerFits } from "./picks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
-import { HELP, MIN_STEP, andList, lowerFirst, superscript } from "./help";
+import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { renderHow } from "./how";
 import {
   Candidate,
@@ -434,16 +436,54 @@ interface OpenRunView {
   level: number;
   /** Who chose the method (a change of mode starts a new run). */
   mode: RunMode;
-  /** The parameters asked for (an upgrade that changes them starts a new run), and as resolved. */
+  /**
+   * The player's parameters (methodParams: an upgrade that changes them starts a new run), and the
+   * run's as the solver resolved them, after the method's runParams.
+   */
   asked: string;
   params: Record<string, unknown>;
   seed: number;
+  /** Evaluations the run may do in all (the method's runBudget). */
+  budget: number;
   /** Evaluations the run has done, its start's scoring included. */
   evaluations: number;
+  /** After its latest step: its latest valid score, its best, what its method found and its latest sub-run (RunState). */
+  last: number | null;
+  runBest: number | null;
+  found: number | null;
+  stage?: RunStage;
+  /** The board it opened from (the method's startFrom), and the problem's best then. */
+  origin: PackingConfig;
+  startScore: number | null;
   /** For the bandit: the kind of problem, the problem's RP and the run's evaluations when it opened. */
   kind: string;
   rpAt: number;
   evalsAt: number;
+}
+
+/** The run's counters from a state the worker sent (after a step). */
+function track(run: OpenRunView, st: RunState): void {
+  run.evaluations = st.evaluations;
+  run.last = st.last;
+  run.runBest = st.score;
+  run.found = st.found;
+  run.stage = st.stage;
+}
+
+/** The run as its method's texts see it (methods/types.ts), with a long step's live state when one goes. */
+function runView(run: OpenRunView, p: ProblemState | undefined, live?: RunState | null): RunView {
+  const st = live ?? null;
+  return {
+    evaluations: st?.evaluations ?? run.evaluations,
+    budget: run.budget,
+    params: run.params,
+    last: st ? st.last : run.last,
+    runBest: st ? st.score : run.runBest,
+    found: st ? st.found : run.found,
+    stage: st ? st.stage : run.stage,
+    startScore: run.startScore,
+    problemBest: p?.best ?? null,
+  };
 }
 
 /** Who chose a run's method: Compact, the select, Method match or the pipeline. */
@@ -712,13 +752,16 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   finishRun(lv.run);
   lv.run = null;
   if (lv.lane.open) await lv.lane.close();
+  // the method's own settings for the run, its budget and its start (methods/)
+  const setup = runSetup(method, params, p);
+  const startScore = p.best;
   const a = await lv.lane.openRun({
     problem: { N: p.N, M: p.M, P: p.P },
     method,
-    params,
-    budget: { evals: RUN_BUDGET },
+    params: setup.params,
+    budget: { evals: setup.budget },
     seed,
-    start: structuredClone(p.board!),
+    start: structuredClone(setup.start),
   });
   if (problem(state, p.key) !== p) {
     void lv.lane.close();
@@ -737,7 +780,14 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     asked: JSON.stringify(params),
     params: a.params,
     seed,
+    budget: setup.budget,
     evaluations: a.state.evaluations,
+    last: a.state.last,
+    runBest: a.state.score,
+    found: a.state.found,
+    stage: a.state.stage,
+    origin: setup.start,
+    startScore,
     kind: problemKind(p),
     rpAt: basePoints(p),
     evalsAt: 0,
@@ -794,7 +844,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
     observeSpeed(p, done, t.ms);
-    run.evaluations = t.state.evaluations;
+    track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
       // the problem left the queue meanwhile; the work still counts as done
@@ -849,11 +899,14 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
     );
   }
   if (change.points) reveal(state, "points", "upgrades");
-  if (st.ended && !st.closed && !st.error)
-    event(
-      `The run on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}. ` +
-        `The next click starts a new run${nextStageText(p)}.`,
-    );
+  if (st.ended && !st.closed && !st.error) {
+    const title = problemTitle(p);
+    const ended =
+      methodGame(run.method).endedText?.(runView(run, p), title) ??
+      `The run on ${title} stopped improving after ${evals(st.evaluations)}.`;
+    const smaller = smallerText(sideWord(p), run.startScore, st.score);
+    event(`${ended}${smaller ? ` ${smaller}` : ""} The next click starts a new run${nextStageText(p)}.`);
+  }
   // after Stop, the click that was already running does not write over "Stopped"
   if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done));
   persist();
@@ -863,8 +916,11 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
 }
 
 function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job, done: number): string {
-  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${run.method}.`;
-  if (!c.improved || c.before === null || c.after === null) return `${what} No improvement on ${show6(p.best ?? 0)}.`;
+  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${methodLabel(run.method)}.`;
+  if (!c.improved || c.before === null || c.after === null) {
+    const note = methodGame(run.method).stepNote?.(runView(run, p));
+    return `${what} No improvement on ${show6(p.best ?? 0)}.${note ? ` ${note}` : ""}`;
+  }
   // the relative improvement of this one step (the step term of its points), never a measure of the record
   let text =
     `${what} The ${sideWord(p)} went from ${show6(c.before)} to ${show6(c.after)}, ` +
@@ -881,8 +937,14 @@ function nextStageText(p: ProblemState): string {
   const o = owned();
   if (!piped(o)) return "";
   const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m));
-  return stage ? `, using ${stage.method} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})` : "";
+  return stage
+    ? `, using ${methodLabel(stage.method)} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})`
+    : "";
 }
+
+/** The run's place in its budget, as the run line says it: "300 evaluations", or "300 of 1,000 evaluations" for a short run. */
+const runAt = (run: OpenRunView, going: number) =>
+  run.budget < RUN_BUDGET ? `${fmtInt(going)} of ${evals(run.budget)}` : evals(going);
 
 /** Stop was pressed and no click since: the status line keeps saying so. */
 let stopped = false;
@@ -1973,11 +2035,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const k = evalsPerClick(o);
   text("t-evolve", first ? "Evolve (compacts first)" : k === 1 ? "Evolve" : `Evolve ×${k}`);
   $<HTMLButtonElement>("t-evolve").disabled =
-    !p ||
-    p.phase === "bare" ||
-    p.leaving ||
-    p.closed ||
-    (!first && !canEvolve && !compacting(p.key));
+    !p || p.phase === "bare" || p.leaving || p.closed || (!first && !canEvolve && !compacting(p.key));
   $("t-evolve").title = !p
     ? "There is no problem on the board yet."
     : p.phase === "bare"
@@ -2001,7 +2059,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
         const opt = document.createElement("option");
         opt.value = m;
         opt.textContent =
-          m === "auto" ? (o.has("autoTune") ? "Auto (methods and settings)" : "Auto (method match)") : m;
+          m === "auto" ? (o.has("autoTune") ? "Auto (methods and settings)" : "Auto (method match)") : methodLabel(m);
         opt.disabled = m !== "auto" && !ruleAllowsMethod(state.standing, m as EvolveMethod);
         return opt;
       }),
@@ -2025,7 +2083,8 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   if (p && run) {
     const going = lv?.progress?.evaluations ?? run.evaluations;
     const how = run.mode === "auto" ? " (auto)" : run.mode === "pipeline" ? " (pipeline)" : "";
-    info = `${run.method}${run.level ? ` · setting ${run.level}` : ""}${how} · run at ${evals(going)}`;
+    const note = methodGame(run.method).runNote?.(runView(run, p, lv?.progress)) ?? "";
+    info = `${methodLabel(run.method)}${run.level ? ` · setting ${run.level}` : ""}${how} · run at ${runAt(run, going)}${note}`;
     const queued = lv!.jobs.filter((j) => j.click).reduce((t, j) => t + j.evals, 0);
     if (queued) info += ` · ${evals(queued)} queued`;
   } else if (p) {
@@ -2625,9 +2684,10 @@ function renderLanes(o: Owned): void {
     const q = lv.run ? problem(state, lv.run.key) : undefined;
     let msg: string;
     if (q && lv.run) {
+      const note = methodGame(lv.run.method).runNote?.(runView(lv.run, q, lv.progress)) ?? "";
       msg =
-        `Lane ${i + 1}: ${problemTitle(q)} · ${lv.run.method} · ` +
-        `run at ${evals(lv.progress?.evaluations ?? lv.run.evaluations)}`;
+        `Lane ${i + 1}: ${problemTitle(q)} · ${methodLabel(lv.run.method)} · ` +
+        `run at ${runAt(lv.run, lv.progress?.evaluations ?? lv.run.evaluations)}${note}`;
       if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
     if (line.textContent !== msg) line.textContent = msg;

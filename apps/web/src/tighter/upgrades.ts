@@ -1,7 +1,7 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import { sym } from "./how";
 import type { How, Var } from "./how";
-import { METHOD_GAMES, methodGame } from "./methods";
+import { METHOD_GAMES, isSelectable, methodGame, methodLabel } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { msPerEval } from "./rank";
@@ -133,8 +133,7 @@ export type UpgradeId =
   | "autoTune";
 
 /** The shop's rows, in the order they are shown. */
-export type Row =
-  "clicks" | "auto" | "queue" | "methods" | "runs" | "problems" | "dealer" | "records" | "standing";
+export type Row = "clicks" | "auto" | "queue" | "methods" | "runs" | "problems" | "dealer" | "records" | "standing";
 
 export const ROWS: readonly { id: Row; title: string }[] = [
   { id: "clicks", title: "Clicks" },
@@ -287,6 +286,9 @@ const RING: Partial<Record<UpgradeId, number>> = {
   ringAll: 0,
 };
 
+/** "a, b and c". */
+const listed = (xs: readonly string[]) =>
+  xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 /** A number as the shop writes it: whole, or to one decimal ("2.5"). */
 const number = (x: number) => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
 const seconds = (x: number) => `${number(x)} s`;
@@ -431,7 +433,8 @@ const SELECT = "Choose it in the Method list beside Evolve, and your next click 
 function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const m = METHOD[id]!;
   const g = methodGame(m);
-  return { id, name: `Method: ${m}`, cost, requires, effect: g.effect!, how: g.how!(SELECT), row: "methods", mystery };
+  const name = g.name ?? `Method: ${methodLabel(m)}`;
+  return { id, name, cost, requires, effect: g.effect!, how: g.how!(SELECT), row: "methods", mystery };
 }
 
 /**
@@ -452,20 +455,21 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     ...presetParams(method, l, true),
   }));
   const g = methodGame(method);
+  const m = methodLabel(method);
   const keys = Object.keys(TUNED_DEFAULTS[method] ?? {});
   const time = g.tunedTime;
   return {
     id,
-    name: `${method} tuning`,
+    name: `${m} tuning`,
     cost,
     requires,
     effect:
       n === 1
-        ? `Gives ${method} a setting that paid more per evaluation in tests.`
-        : `Each level gives ${method} a setting that does more search per evaluation.`,
+        ? `Gives ${m} a setting that paid more per evaluation in tests.`
+        : `Each level gives ${m} a setting that does more search per evaluation.`,
     how: {
       text: [
-        `${n === 1 ? "The level sets" : `Each level sets`} ${method}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
+        `${n === 1 ? "The level sets" : `Each level sets`} ${m}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
         g.tuneNote ??
           `A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon).${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
       ],
@@ -1218,7 +1222,7 @@ export const UPGRADES: readonly Upgrade[] = [
   ),
   standingRung("keepMethods", "Keep methods", 10, ["keepAuto"], "The methods you own survive resets.", {
     text: [
-      "At a reset, every Method upgrade you own stays owned (basin_hopping, shrink_repair, penalty, seed, harden, morph, asc and ls_growth). Their tuning upgrades go back to zero. Under the One method rule only mc_compress runs in that cycle.",
+      `At a reset, every Method upgrade you own stays owned (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule only mc_compress runs in that cycle.`,
     ],
   }),
   standingRung(
@@ -1328,8 +1332,8 @@ export function evalsPerClick(o: Owned): number {
 /** Evaluations of Compact: one press that compacts the Load-all board (design §3). */
 export const COMPACT_EVALS = 100;
 
-/** Evaluations a run may do in all before it ends by itself and the next run takes over. */
-export const RUN_BUDGET = 100_000;
+/** Evaluations a run may do in all before it ends by itself and the next run takes over (methods/types.ts). */
+export { RUN_BUDGET } from "./methods";
 
 /**
  * Auto-eval's target in evaluations per second, all lanes together (they share it), or null without
@@ -1385,9 +1389,14 @@ export function autoCap(o: Owned): number {
   return Math.max(COMPACT_EVALS, (autoPerSecond(o) ?? 0) * AUTO_SLACK_SECONDS);
 }
 
-/** The methods the player may run, mc_compress first, then in the order they unlock. */
+/**
+ * The methods the player may choose, mc_compress first, then in the order they unlock: the Method
+ * list, Method match's choices and the pipeline editor. A method that is not selectable (its file in
+ * methods/) is left out, though its card may be owned.
+ */
 export function methods(o: Owned): EvolveMethod[] {
-  return ["mc_compress", ...UPGRADES.filter((u) => o.has(u.id) && METHOD[u.id]).map((u) => METHOD[u.id]!)];
+  const owned = UPGRADES.filter((u) => o.has(u.id) && METHOD[u.id] && isSelectable(METHOD[u.id]!));
+  return ["mc_compress", ...owned.map((u) => METHOD[u.id]!)];
 }
 
 /** The tuning level owned for a method (0 to 3). */

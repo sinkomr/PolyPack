@@ -39,8 +39,11 @@ import {
   upgrade,
 } from "./upgrades";
 
-/** Every method of the tree: a pipeline keeps its stages while a reset has taken a method away. */
-const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
+/**
+ * Every method of the tree the player can choose: a pipeline keeps its stages while a reset has taken
+ * a method away, and drops a stage whose method is no longer selectable (methods/).
+ */
+const treeMethods = () => methods(owning(UPGRADES.map((u) => u.id)));
 
 /**
  * Upgrades taken out of the tree, at their list price: a save that owns one gets the price back once
@@ -494,7 +497,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     standing,
     economy: normalizeEconomy(save.economy),
     picks: normalizePicks(save.picks),
-    runplan: normalizeRunPlan(save.runplan, ALL_METHODS),
+    runplan: normalizeRunPlan(save.runplan, treeMethods()),
   };
 }
 

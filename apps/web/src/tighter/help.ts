@@ -1,4 +1,4 @@
-import { areaLowerBound } from "@polypack/geometry";
+import { areaLowerBound, improvesOn } from "@polypack/geometry";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   PAIR_BONUS,
@@ -84,6 +84,17 @@ const minutes = (ms: number) => `${Math.round(ms / 60_000)} minute${Math.round(m
 export const andList = (xs: readonly string[]) =>
   xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 export const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/**
+ * What a run that ended did to the board, for its end's event: "It made the side 0.494 % smaller.",
+ * from the board's score when it opened (`before`) to the run's best (`after`), or "" when it did not
+ * beat it by more than the smallest improvement that counts. `side` is "side", or "radius" for a
+ * circle container.
+ */
+export function smallerText(side: string, before: number | null, after: number | null): string {
+  if (before === null || after === null || !improvesOn(after, before)) return "";
+  return `It made the ${side} ${((1 - after / before) * 100).toFixed(3)} % smaller.`;
+}
 
 // ---------- how points are paid ----------
 
