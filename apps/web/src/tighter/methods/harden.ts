@@ -1,7 +1,27 @@
 import { sym } from "../how";
-import type { MethodGame } from "./types";
+import type { MethodGame, RunView } from "./types";
 
 // harden, from packages/solver/src/methods/harden.ts (its defaults and update rules).
+
+/**
+ * How much larger the run's latest packing is than your board: s_last / s − 1. Null until the run
+ * has scored a packing of its own (its first evaluation is your board itself).
+ */
+export function hardenLarger(v: RunView): number | null {
+  const board = v.problemBest ?? v.startScore;
+  if (v.evaluations <= 1 || v.last === null || board === null || !(board > 0)) return null;
+  return v.last / board - 1;
+}
+
+const count = (n: number) => n.toLocaleString("en-US");
+const evals = (n: number) => `${count(n)} evaluation${n === 1 ? "" : "s"}`;
+
+/** "its latest packing is 3.8 % larger than your board", or as small as it once below 0.005 %. */
+function largerText(x: number): string {
+  const pct = 100 * x;
+  if (pct < 0.005) return "its latest packing is as small as your board";
+  return `its latest packing is ${pct.toFixed(pct >= 1 ? 1 : 2)} % larger than your board`;
+}
 
 export const hardenGame: MethodGame = {
   effect: "You can run harden, which packs discs and hardens them into the true pieces.",
@@ -35,4 +55,13 @@ export const hardenGame: MethodGame = {
   tunedDefaults: { evaluationInterval: 32 },
   tunedMeaning: { evaluationInterval: "momentum steps between two evaluations" },
   tunedTime: "up to 4 times as long",
+  runNote: (v) => {
+    const x = hardenLarger(v);
+    return x === null ? "" : ` · ${largerText(x)}`;
+  },
+  stepNote: (v) => {
+    const x = hardenLarger(v);
+    const at = `The run is at ${count(v.evaluations)} of ${evals(v.budget)}`;
+    return x === null ? `${at}.` : `${at}, and ${largerText(x)}.`;
+  },
 };
