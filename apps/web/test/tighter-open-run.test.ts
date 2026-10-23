@@ -75,6 +75,79 @@ describe("Tighter open runs", () => {
     expect(closed.score).toBe(replay.score);
   });
 
+  it("report the latest score, and the best the method found itself, its start's scoring left out", async () => {
+    const req = request();
+    const r = new OpenRun(req);
+    let s = await r.step(0);
+    // the start's scoring is the latest so far, and the method has found nothing yet
+    const start = evaluate(req.start, { autoOrient: true }).score!;
+    expect(s).toMatchObject({ evaluations: 1, last: start, found: null, score: start });
+    expect(s.stage).toBeUndefined();
+    let lastSeen = s.last;
+    for (let i = 0; i < 30; i++) {
+      s = await r.step(1);
+      expect(s.last).not.toBeNull();
+      // the latest is where the search is now, never below the best (mc_compress keeps strict moves only)
+      expect(s.last!).toBeGreaterThanOrEqual(s.score!);
+      // the best is the better of the start and of what the method found
+      expect(s.found).not.toBeNull();
+      expect(s.score).toBe(Math.min(start, s.found!));
+      if (s.last !== lastSeen) lastSeen = s.last;
+    }
+    // the latest moves with the search
+    expect(lastSeen).not.toBe(start);
+    // mc_compress starts no sub-runs
+    expect(s.stage).toBeUndefined();
+    await r.close();
+  });
+
+  it("report what the method found even when it never beats its start", async () => {
+    // a start already compacted far: the next 5 evaluations of a new run (5 % wider first) find
+    // larger packings, which the board never takes, but which the run did find
+    const first = new OpenRun(request({ budget: { evals: 400 } }));
+    const compacted = await first.step(300);
+    await first.close();
+    const r = new OpenRun(request({ start: compacted.best!, seed: 2 }));
+    const s = await r.step(5);
+    expect(s.found).not.toBeNull();
+    expect(s.found!).toBeGreaterThan(s.score!);
+    expect(s.score).toBe(evaluate(compacted.best!, { autoOrient: true }).score);
+    await r.close();
+  });
+
+  it("report the latest sub-run the method started, how many of its kind, and when", async () => {
+    const small = { N: 4, M: 4, P: 9 };
+    const pieces: Pose[] = [];
+    for (let k = 0; k < small.P; k++) pieces.push(findFreeSpot(small.N, pieces, 0, 0));
+    const r = new OpenRun(
+      request({
+        problem: small,
+        method: "basin_hopping",
+        params: { seedEvals: 1, poolLimit: 0 },
+        budget: { evals: 400 },
+        start: { ...small, pieces, container_phi: 0 },
+      }),
+    );
+    const seen: { method: string; count: number; at: number }[] = [];
+    let s = await r.step(0);
+    while (!s.ended && s.evaluations < 400) {
+      s = await r.step(1);
+      if (s.stage && (seen.at(-1)?.method !== s.stage.method || seen.at(-1)?.count !== s.stage.count))
+        seen.push(s.stage);
+    }
+    // a lattice build first, then the penalty solves that repair each hop, counted from 1
+    expect(seen[0]).toMatchObject({ method: "seed", count: 1, at: 1 });
+    const penalty = seen.filter((x) => x.method === "penalty");
+    expect(penalty.length).toBeGreaterThanOrEqual(2);
+    expect(penalty[0].count).toBe(1);
+    for (let i = 1; i < penalty.length; i++) {
+      expect(penalty[i].count).toBeGreaterThan(penalty[i - 1].count);
+      expect(penalty[i].at).toBeGreaterThan(penalty[i - 1].at);
+    }
+    expect(penalty.at(-1)!.at).toBeLessThan(s.evaluations);
+    await r.close();
+  });
+
   it("answer at once once they have ended by themselves", async () => {
     const r = new OpenRun(request({ budget: { evals: 30 } }));
     const s = await r.step(100);
