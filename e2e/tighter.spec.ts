@@ -184,7 +184,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(entry).toMatchObject({
     found_with: "optimizer",
     method: "mc_compress",
-    seed: 1,
+    seed: p.run!.seed,
     budget: { evals: 101 },
     agent_note: "tighter/0.1",
   });
@@ -200,6 +200,10 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect.poll(() => logText(page)).toContain(`${confirmed.toFixed(1)} RP confirmed`);
   await expect(page.locator("#t-notice")).toContainText("RP confirmed");
   await expect(page.locator("#t-bar-held")).toHaveText("1");
+  // the board's box counts what this problem has paid, which is everything paid so far
+  await expect(page.locator("#t-prob-rp")).toHaveText(
+    confirmed < 100 ? confirmed.toFixed(1) : Math.round(confirmed).toLocaleString("en-US"),
+  );
 
   // Evolve: each click is one more evaluation of the same run; an improving click pays at once
   const s0 = await stats(page);
