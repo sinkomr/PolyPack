@@ -91,6 +91,8 @@ export interface MethodGame {
   tuneNote?: string;
   /** What the tuning card calls level 0. Default: "the solver's defaults". */
   tuneBase?: string;
+  /** The tuning card's effect, in place of the shared "Each level gives … more search per evaluation." */
+  tuneEffect?: string;
   /**
    * false: the method is left out of the Method list, Method match's choices and the pipeline editor
    * (upgrades.ts methods). It stays a method for saves and run records, and a saved choice of it

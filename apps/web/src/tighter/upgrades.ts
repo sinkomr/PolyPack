@@ -464,9 +464,10 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     cost,
     requires,
     effect:
-      n === 1
+      g.tuneEffect ??
+      (n === 1
         ? `Gives ${m} a setting that paid more per evaluation in tests.`
-        : `Each level gives ${m} a setting that does more search per evaluation.`,
+        : `Each level gives ${m} a setting that does more search per evaluation.`),
     how: {
       text: [
         `${n === 1 ? "The level sets" : `Each level sets`} ${m}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
