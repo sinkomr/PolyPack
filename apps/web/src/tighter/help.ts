@@ -198,6 +198,17 @@ const POINTS: How[] = [
 
 // ---------- clicks, evaluations and runs ----------
 
+/** The methods' own sentences on when their runs end (runEnds, in each method's file), in the table's order. */
+export function runEndRules(games: Readonly<Record<string, MethodGame>> = METHOD_GAMES): string {
+  return Object.values(games)
+    .map((g) => g.runEnds)
+    .filter((t): t is string => !!t)
+    .join(" ");
+}
+
+/** The sentences after a run's general rule: the methods' own rules, then the stall rule, or "". */
+const runRules = () => [runEndRules(), stallRule()].filter(Boolean).join(" ");
+
 /**
  * The sentences on the runs the game ends at a stall (each method's restartAfter, in its file in
  * methods/), or "" when no method has one: "The game also ends a stalled run of mc_compress. Once
@@ -225,7 +236,7 @@ const COUNTS: How = {
   text: [
     "An evaluation is one scoring of your whole packing by the solver, which checks every overlap and how tightly the container fits. Between two evaluations the solver moves pieces, so each evaluation is one more step of search.",
     `A click is one press of Evolve. Each click runs as many evaluations as you have per click. A new open problem starts with every piece placed on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it, and the starting board is never sent. Your first click on it is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress in one press.`,
-    `A run is one session of a solver method on one problem, from the problem's best board. Each run starts with a new random seed, the number that fixes its random choices, so each run searches differently. A run stays open between clicks. It ends by itself when its method stops improving, or after ${int(RUN_BUDGET)} evaluations, and the next click starts a new run. ${stallRule()}${stallRule() ? " " : ""}A problem allows any number of runs. Changing the method or its settings also starts a new run.`,
+    `A run is one session of a solver method on one problem, from the problem's best board. Each run starts with a new random seed, the number that fixes its random choices, so each run searches differently. A run stays open between clicks. It ends by itself when its method stops improving, or after ${int(RUN_BUDGET)} evaluations, and the next click starts a new run. ${runRules()}${runRules() ? " " : ""}A problem allows any number of runs. Changing the method or its settings also starts a new run.`,
     "Evaluations run counts every evaluation, yours and auto-eval's, including the one that scores a run's starting board. Clicks counts your own presses of Evolve that ran, not auto-eval's. Compute is the time the solver spent on those evaluations, added up over every lane, so with two lanes busy it grows twice as fast as the clock.",
     "Records held counts the problems where your entry is the current record on PolyPack, as far as the game has seen. Earned counts every record point you have earned, less any taken back, and spending does not lower it.",
     `New problems are earned by work, counted in clicks. Each Evolve click of yours counts as one click, whatever its evaluations, and Compact's ${int(COMPACT_EVALS)} evaluations count as ${int(COMPACT_EVALS)} / k clicks. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click, whatever your evaluations per click.`,
@@ -417,7 +428,7 @@ const SENDING: How = {
 export const PIPELINE: How = {
   text: [
     `A pipeline is a list of methods that the runs on a problem follow in turn. Each time a run ends by itself, because its method stopped improving, it reached ${int(RUN_BUDGET)} evaluations${stallRule() ? " or the game ended it at a stall" : ""}, the next run on that problem uses the next stage. After the last stage it starts again at the first.`,
-    ...(stallRule() ? [stallRule()] : []),
+    ...(runRules() ? [runRules()] : []),
     "A run that the game closes early does not move the pipeline on. That happens when its lane moves to another problem or the page reloads. The next run then repeats the same stage with a new random seed.",
     "Stages whose method this cycle's rule does not allow are skipped. While the pipeline has at least one stage, it chooses the method of every new run, and the toolbar's method is not used. With Auto-tune and Auto chosen, the game still picks the setting of each stage's method.",
   ],

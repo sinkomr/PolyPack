@@ -114,6 +114,11 @@ export interface MethodGame {
    */
   restartAfter?: number | null;
   /**
+   * One plain sentence on when a run of this method ends by itself, for the help on runs and on
+   * pipelines, after the rule every run has: "A harden run ends after its last step." Default: none.
+   */
+  runEnds?: string;
+  /**
    * The run's warm-up: its first evaluations, which the method spends before its boards can beat
    * the problem's (morph's disc stage, for one). They do not add to the problem's evaluations since
    * progress (Auto-advance's patience, and restartAfter's count), and a run closed within them

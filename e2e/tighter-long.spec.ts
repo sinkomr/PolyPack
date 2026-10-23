@@ -487,7 +487,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   await expect(page.locator("#t-standing")).toBeHidden();
   const e0 = (await stats(page)).evaluations;
   await click(page);
-  // after a reload the click opens a run with the next seed: its start's scoring, then 4 evaluations
+  // after a reload the click opens a new run, with a new seed: its start's scoring, then 4 evaluations
   expect((await stats(page)).evaluations).toBe(e0 + 5);
   expect(errors).toEqual([]);
 });

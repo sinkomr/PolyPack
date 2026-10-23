@@ -11,7 +11,7 @@ import {
   newProblem,
   stallEnds,
 } from "../src/tighter/game";
-import { HELP, PIPELINE, smallerText, stallRule } from "../src/tighter/help";
+import { HELP, PIPELINE, runEndRules, smallerText, stallRule } from "../src/tighter/help";
 import type { How } from "../src/tighter/how";
 import {
   METHOD_GAMES,
@@ -244,6 +244,15 @@ describe("Tighter's methods table", () => {
     expect(text(HELP.counts as How)).toContain(stallRule());
     expect(text(PIPELINE)).toContain(stallRule());
     expect(text(PIPELINE)).toContain("or the game ended it at a stall");
+    // a method's own sentence on when its runs end goes with them, in the table's order
+    expect(runEndRules()).toBe("");
+    expect(
+      runEndRules({
+        basin_hopping: { runEnds: "A basin_hopping run ends after 1,000 evaluations." },
+        harden: { runEnds: "A harden run ends after its last step." },
+        asc: {},
+      }),
+    ).toBe("A basin_hopping run ends after 1,000 evaluations. A harden run ends after its last step.");
   });
 
   it("keep a run's warm-up out of the evaluations since progress", () => {
