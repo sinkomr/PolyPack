@@ -2180,6 +2180,7 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
       if (delta.textContent !== chip.textContent) delta.replaceChildren(chip);
     } else text("t-delta", c ? "no change" : "—");
   }
+  text("t-prob-rp", fmtRP(p.rp));
   text(
     "t-record",
     p.ourId !== null
