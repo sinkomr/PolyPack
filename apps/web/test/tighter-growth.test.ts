@@ -3,8 +3,9 @@ import { findFreeSpot } from "@polypack/geometry";
 import type { PackingConfig, Pose } from "@polypack/geometry";
 import { addToQueue, applyLoadAll, applyStep, newGame, newProblem } from "../src/tighter/game";
 import type { GameState, ProblemState, RunRecord } from "../src/tighter/game";
-import { runSetup } from "../src/tighter/methods";
-import { GROWTH_BASES, growthStart } from "../src/tighter/methods/ls_growth";
+import { methodGame, runSetup } from "../src/tighter/methods";
+import type { RunView } from "../src/tighter/methods";
+import { GROWTH_BASES, growthLarger, growthStart, largerText } from "../src/tighter/methods/ls_growth";
 import { OpenRun, resolvedParams } from "../src/tighter/open-run";
 import { presetParams } from "../src/tighter/presets";
 import { RUN_BUDGET, methodParams, owning } from "../src/tighter/upgrades";
@@ -31,6 +32,18 @@ function improve(s: GameState, p: ProblemState, method: string, to: PackingConfi
   applyStep(s, p, { evaluations: 10, best: to, score, run: record(method), ms: 1, ended: false, click: true }, 2_000);
   expect(p.best).toBe(score);
 }
+
+const view = (over: Partial<RunView>): RunView => ({
+  evaluations: 200,
+  budget: RUN_BUDGET,
+  params: {},
+  last: null,
+  runBest: 6.5,
+  found: null,
+  startScore: 6,
+  problemBest: 6,
+  ...over,
+});
 
 describe("Tighter ls_growth: one growth a run", () => {
   it("runs one growth at every tuning level, with the solver's other defaults", () => {
@@ -137,5 +150,36 @@ describe("Tighter ls_growth: a series starts every run from one board", () => {
       improve(x.s, x.p, "ls_growth", board(21, 24, 11, 0.01), 9);
       expect(growthStart(x.p)).toBe(x.base);
     }
+  });
+});
+
+describe("Tighter ls_growth: the countdown to the board", () => {
+  const g = methodGame("ls_growth");
+
+  it("says how much larger the growing packing is than the board, until the run beats it", () => {
+    expect(growthLarger(view({ last: null }))).toBeNull();
+    expect(growthLarger(view({ last: 6.6, problemBest: null }))).toBeNull();
+    expect(growthLarger(view({ last: 6.192, found: 6.192 }))).toBeCloseTo(0.032, 12);
+    // the latest at or below the board: nothing
+    expect(growthLarger(view({ last: 6, found: 6.01 }))).toBeNull();
+    expect(growthLarger(view({ last: 5.99, found: 5.99 }))).toBeNull();
+    // once the run has found the board, the board is its own: nothing, even when its latest is above it
+    expect(growthLarger(view({ last: 6.001, found: 6 }))).toBeNull();
+    expect(largerText(0.032)).toBe("3.2 %");
+    expect(largerText(0.2216)).toBe("22.2 %");
+    expect(largerText(0.001)).toBe("0.1 %");
+    expect(largerText(0.0004)).toBe("less than 0.1 %");
+  });
+
+  it("adds the countdown to the run line and to a click's message, in plain sentences", () => {
+    const v = view({ last: 6.192, found: 6.25 });
+    expect(g.runNote!(v)).toBe(" · 3.2 % larger than your board");
+    expect(g.stepNote!(v)).toBe("The growing packing is 3.2 % larger than your board.");
+    for (const t of [g.runNote!(v), g.stepNote!(v)!]) expect(t).not.toMatch(/[;:—]/);
+    // nothing once the board is improving
+    const past = view({ last: 5.9, found: 5.9, problemBest: 5.9 });
+    expect(g.runNote!(past)).toBe("");
+    expect(g.stepNote!(past)).toBeNull();
+    expect(g.runNote!(view({}))).toBe("");
   });
 });

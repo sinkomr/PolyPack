@@ -1,7 +1,7 @@
 import type { PackingConfig } from "@polypack/geometry";
 import type { ProblemState } from "../game";
 import { sym } from "../how";
-import type { MethodGame } from "./types";
+import type { MethodGame, RunView } from "./types";
 
 // ls_growth, from packages/solver/src/methods/ls_growth.ts (its defaults and update rules).
 
@@ -28,6 +28,27 @@ export function growthStart(p: ProblemState): PackingConfig {
   bases.set(p.key, p.board!);
   while (bases.size > GROWTH_BASES) bases.delete(bases.keys().next().value!);
   return p.board!;
+}
+
+// ---------- the countdown: how much larger the growing packing is than the board ----------
+
+/**
+ * d = s / b − 1: how much larger the run's latest scored packing (s, RunView.last) is than the
+ * problem's best (b). null when either is unknown, when d ≤ 0, or once the run itself has found a
+ * packing as small as the board (the board is then the run's own, and the run has nothing to catch up).
+ */
+export function growthLarger(v: Pick<RunView, "last" | "found" | "problemBest">): number | null {
+  const b = v.problemBest;
+  if (v.last === null || b === null || !(b > 0)) return null;
+  if (v.found !== null && v.found <= b) return null;
+  const d = v.last / b - 1;
+  return d > 0 ? d : null;
+}
+
+/** d as the texts show it: "3.2 %", or "less than 0.1 %". */
+export function largerText(d: number): string {
+  const pct = d * 100;
+  return pct >= 0.1 ? `${pct.toFixed(1)} %` : "less than 0.1 %";
 }
 
 export const lsGrowthGame: MethodGame = {
@@ -78,4 +99,12 @@ export const lsGrowthGame: MethodGame = {
   },
   tunedTime: "up to 5 times as long",
   startFrom: growthStart,
+  runNote: (v) => {
+    const d = growthLarger(v);
+    return d === null ? "" : ` · ${largerText(d)} larger than your board`;
+  },
+  stepNote: (v) => {
+    const d = growthLarger(v);
+    return d === null ? null : `The growing packing is ${largerText(d)} larger than your board.`;
+  },
 };
