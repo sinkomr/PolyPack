@@ -11,7 +11,7 @@ import { penaltyGame } from "./penalty";
 import { seedGame } from "./seed";
 import { shrinkRepairGame } from "./shrink_repair";
 import { RUN_BUDGET } from "./types";
-import type { MethodGame } from "./types";
+import type { MethodGame, RunProblem } from "./types";
 
 export type { MethodGame, RunProblem, RunStage, RunView } from "./types";
 export { RUN_BUDGET } from "./types";
@@ -42,8 +42,8 @@ export const methodLabel = (m: string): string => methodGame(m as EvolveMethod).
 export const isSelectable = (m: EvolveMethod): boolean => methodGame(m).selectable !== false;
 
 /** The evaluations of a run's warm-up (its method's warmup), a whole number, 0 without one. */
-export function warmupOf(m: EvolveMethod, params: Record<string, unknown>): number {
-  const w = methodGame(m).warmup?.(params) ?? 0;
+export function warmupOf(m: EvolveMethod, params: Record<string, unknown>, p?: RunProblem): number {
+  const w = methodGame(m).warmup?.(params, p) ?? 0;
   return Number.isFinite(w) && w > 0 ? Math.floor(w) : 0;
 }
 

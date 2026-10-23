@@ -23,6 +23,8 @@ export interface RunView {
   budget: number;
   /** Its parameters as the solver resolved them (the defaults, then those asked). */
   params: Record<string, unknown>;
+  /** Its warm-up (the method's warmup for these parameters and the run's problem), 0 without one. */
+  warmup: number;
   /** The score of its latest valid evaluation (RunState.last), null before any. */
   last: number | null;
   /** Its best score, its start's included (RunState.score). */
@@ -124,9 +126,14 @@ export interface MethodGame {
    * progress (Auto-advance's patience, and restartAfter's count), and a run closed within them
    * teaches Method match nothing. `params` are the run's as the solver resolved them; the shop's
    * texts call it with the level-0 preset alone, so read a missing parameter as its solver default.
-   * Default: 0.
+   * `p` is the run's problem, absent in the shop's texts. Default: 0.
    */
-  warmup?: (params: Record<string, unknown>) => number;
+  warmup?: (params: Record<string, unknown>, p?: RunProblem) => number;
+  /**
+   * Which of the method's runs have the warm-up, as Auto-advance's How says it after "every morph
+   * run": "on polygon pieces". Default: every run.
+   */
+  warmupRuns?: string;
   /**
    * The board a run opens from. It may keep a memory of its own (ls_growth's series). Default: the
    * problem's best board, `p.board`.

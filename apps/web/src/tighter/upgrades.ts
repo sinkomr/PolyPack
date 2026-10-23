@@ -624,12 +624,18 @@ const RENT_VARS: readonly Var[] = [
 export interface Warmup {
   label: string;
   evals: number;
+  /** Which of its runs have it, after "every morph run" (methods/ warmupRuns): "on polygon pieces". */
+  runs?: string;
 }
 
 /** The methods whose runs begin with a warm-up, in the table's order. */
 function warmups(): Warmup[] {
   return (Object.keys(METHOD_GAMES) as EvolveMethod[])
-    .map((m) => ({ label: methodLabel(m), evals: warmupOf(m, presetParams(m, 0, true)) }))
+    .map((m) => ({
+      label: methodLabel(m),
+      evals: warmupOf(m, presetParams(m, 0, true)),
+      ...(methodGame(m).warmupRuns ? { runs: methodGame(m).warmupRuns } : {}),
+    }))
     .filter((w) => w.evals > 0);
 }
 
@@ -640,7 +646,8 @@ function warmups(): Warmup[] {
 export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   const firsts = listed(
     warm.map(
-      (w, i) => `the first ${w.evals.toLocaleString("en-US")}${i === 0 ? " evaluations" : ""} of every ${w.label} run`,
+      (w, i) =>
+        `the first ${w.evals.toLocaleString("en-US")}${i === 0 ? " evaluations" : ""} of every ${w.label} run${w.runs ? ` ${w.runs}` : ""}`,
     ),
   );
   const n = sym("n");
