@@ -17,6 +17,7 @@ interface ProblemView {
   ourId: number | null;
   runs: number;
   endedRuns: number;
+  lattice: { score: number | null; at: number } | null;
 }
 const focused = (page: Page): Promise<ProblemView> =>
   page.evaluate(() => {
@@ -151,13 +152,13 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(harden.locator(".t-node-name")).toHaveText("??????");
   await harden.locator("button").click();
   // with a pointer that hovers, the card beside the node holds the details and the pane below is gone
-  await expect(page.locator("#t-tree-tip")).toContainText("Needs Method: seed.");
+  await expect(page.locator("#t-tree-tip")).toContainText("Needs Lattice.");
   await expect(page.locator("#t-tree-tip")).toContainText("??????");
   await expect(page.locator("#t-tree-detail")).toBeHidden();
   await expect(page.locator('.t-node[data-id="click3"] .t-node-name')).toHaveText("3 a click");
   expect(await axe(page)).toEqual([]);
 
-  // a mystery revealed: Method: seed bought, Method: harden shows as itself
+  // a mystery revealed: Lattice bought, Method: harden shows as itself
   const before = CLICK_LADDER.concat(["auto1", "auto2", "auto3", "auto4", "basin", "shrink", "penalty"]);
   await give(page, before);
   await grant(page, 21_000);
@@ -300,31 +301,52 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await select.selectOption("mc_compress");
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
 
-  // a pipeline of two stages: lattice starts (a run of about 45 evaluations), then mc_compress
-  await give(page, ["lattice", "standing", "pipeline"]);
+  // Lattice is owned, but the game runs its build by itself: it is neither in the Method list nor a stage
+  await give(page, ["lattice", "standing", "pipeline", "clickx"]);
   await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
+  await expect(select.locator('option[value="seed"]')).toHaveCount(0);
+  await expect(page.locator('#t-pipeline-method option[value="seed"]')).toHaveCount(0);
+  // a pipeline of two stages, mc_compress and then basin_hopping. At 110 evaluations a click the
+  // mc_compress run is soon long enough for the game to end it at a stall (500 evaluations in the
+  // run and 500 without progress), and that moves the pipeline on.
+  await page.evaluate(() => ((window as any).tighter.state.levels.clickx = 100));
   const add = async (m: string) => {
     await page.selectOption("#t-pipeline-method", m);
     await page.getByRole("button", { name: "Add the chosen method as the pipeline's last stage" }).click();
   };
-  await add("seed");
   await add("mc_compress");
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["seed", "mc_compress"]);
+  await add("basin_hopping");
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress", "basin_hopping"]);
   await expect(page.locator(".t-pipeline li")).toHaveCount(2);
   const ended0 = (await focused(page)).endedRuns;
   await click(page);
-  await expect(page.locator("#t-runinfo")).toContainText("seed ");
-  for (let i = 0; i < 30 && (await focused(page)).endedRuns === ended0; i++) await click(page);
-  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
-  await expect.poll(() => logText(page)).toContain("stopped improving");
-  await expect(page.locator("#t-notice")).toContainText("stopped improving");
-  await click(page);
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress ");
+  // 600 evaluations without progress: below the patience of 1,000, so only the run's own length decides
+  const stalled = () =>
+    page.evaluate(() => {
+      const s = (window as any).tighter.state;
+      s.queue.find((p: { key: string }) => p.key === s.focus).sinceGain = 600;
+    });
+  for (let i = 0; i < 12 && (await focused(page)).endedRuns === ended0; i++) {
+    await stalled();
+    await click(page);
+  }
+  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
+  await expect.poll(() => logText(page)).toContain("made no progress in its last 500 evaluations");
+  await expect(page.locator("#t-notice")).toContainText(/made no progress|Lattice packed/);
+  // a run on the problem has ended by itself, so its one Lattice build ran in that same click,
+  // and the build moved the pipeline no further
+  await expect.poll(() => logText(page)).toContain("Lattice packed ");
+  await expect(page.locator("#status")).toContainText("evaluations of lattice.");
+  expect((await focused(page)).lattice).not.toBeNull();
+  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
+  await click(page);
+  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping ");
   // a stage can be moved and removed
-  await page.getByRole("button", { name: "Move stage 2, mc_compress, up" }).click();
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress", "seed"]);
-  await page.getByRole("button", { name: "Remove stage 2, seed" }).click();
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress"]);
+  await page.getByRole("button", { name: "Move stage 2, basin_hopping, up" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["basin_hopping", "mc_compress"]);
+  await page.getByRole("button", { name: "Remove stage 2, mc_compress" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["basin_hopping"]);
   await page.setViewportSize({ width: 390, height: 844 });
   await dockView(page, "queue");
   await page.waitForTimeout(300);
