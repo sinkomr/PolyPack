@@ -162,7 +162,62 @@ describe("Tighter shrink_repair runs, as the site's solver replays them", () => 
   });
 });
 
-describe("Tighter shrink_repair's stop rule in the texts", () => {
+describe("Tighter shrink_repair's setting and texts", () => {
+  it("runs the game setting at every tuning level, with more work per scoring at each", () => {
+    expect(tuningLevels("shrink_repair")).toBe(3);
+    expect(presetParams("shrink_repair", 0)).toEqual(SHRINK_BASE);
+    const work = [0, 1, 2, 3].map((l) => {
+      const p = presetParams("shrink_repair", l);
+      expect(p).toMatchObject(SHRINK_BASE);
+      return resolvedParams("shrink_repair", p).evaluationWork;
+    });
+    expect(work).toEqual([4000, 6000, 9000, 14000]);
+    // the card's solver numbers are the solver's
+    for (const [k, v] of Object.entries(SHRINK_SOLVER)) expect(shrinkRepairMethod.defaults[k], k).toBe(v);
+    expect(methodGame("shrink_repair").tunedDefaults).toEqual({
+      evaluationWork: shrinkRepairMethod.defaults.evaluationWork,
+    });
+  });
+
+  it("quote the setting and the stop rule on the method card", () => {
+    const card = upgrade("shrink");
+    const how = all(card.how);
+    expect(card.effect).toBe(
+      "You can run shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
+    );
+    expect(how).toContain("A run ends by itself after 1,000 evaluations without progress.");
+    expect(how).toContain("Progress is a score at least 10⁻⁵ (relative) below the reference score.");
+    expect(how).toContain(`(1 − 10<sup>−5</sup>) × <var>s</var><sub>ref</sub>`);
+    expect(how).toContain(`the run ends when <var>n</var> = 1,000`);
+    expect([SHRINK_BASE.shrinkRatio, SHRINK_BASE.maxShrinkRatio, SHRINK_BASE.minShrinkRatio]).toEqual([
+      0.001, 0.004, 0.0001,
+    ]);
+    expect(how).toContain("the shrink ratio, 0.1 % at first");
+    expect(how).toContain("up to 0.4 %");
+    expect(how).toContain(`min(0.004, 1.25 × <var>r</var>)`);
+    expect(how).toContain("Once r is below 0.01 %");
+    expect([SHRINK_BASE.patience, SHRINK_BASE.explorePatience, SHRINK_BASE.strikes]).toEqual([6, 12, 1]);
+    expect(how).toContain("after 6 rounds in a row that do not lower the overlap by 0.1 %, or after 24 rounds in all");
+    expect(how).toContain("fails the same way after 12 rounds in a row, or 48 in all");
+    expect(how).toContain("the best of 72 sampled spots");
+    expect(how).toContain("4,000 at first");
+    // the old setting's rules are gone
+    expect(how).not.toMatch(/100,000|restarts from random|5 %/);
+  });
+
+  it("call level 0 of the tuning card the card's setting, and keep the other cards' wording", () => {
+    expect(text(upgrade("tuneShrink").how)).toContain(
+      "from level 0 (the setting on the shrink_repair card) to level 3.",
+    );
+    expect(upgrade("tuneShrink").how.math).toEqual(["<code>evaluationWork</code> = 4000, 6000, 9000, 14000"]);
+    expect(text(upgrade("tuneMc").how)).toContain("from level 0 (the solver's defaults)");
+    // its bench was run on worked boards, the others' on Compact boards
+    expect(text(upgrade("tuneShrink").how)).toContain("boards that mc_compress had worked for 8,000 evaluations");
+    expect(text(upgrade("tuneShrink").how)).toContain("An evaluation takes up to 2.8 times as long at the top level");
+    expect(text(upgrade("tuneShrink").how)).not.toContain("three test problems");
+    expect(text(upgrade("tuneMc").how)).toContain("three test problems");
+  });
+
   it("say when a run ends, in the help and in the run-end event", () => {
     const g = methodGame("shrink_repair");
     expect(g.runEnds).toBe(
