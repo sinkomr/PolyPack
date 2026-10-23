@@ -155,6 +155,9 @@ export const lsGrowthGame: MethodGame = {
   },
   tunedTime: TOP_TIME,
   tuneNote: `Each level runs more steps in each evaluation. In tests on 40 21-gons in a 24-gon, the top level reached as good a jam in ${TOP_SHARE} of the evaluations, each taking ${TOP_TIME}, so a click goes ${TOP_FACTOR} as far. A second of compute does the same work at every level, so once your computer limits auto-eval the levels give it nothing. In tests one lane ran ${range(GROWTH_RATE)} evaluations of ls_growth a second at level 0 on 40 and 60 pieces.`,
+  tuneBase: "the solver's defaults, with one growth a run",
+  runEnds:
+    "An ls_growth run ends when its pieces jam. Each run of a series starts from the board the series began on, not from the problem's best.",
   startFrom: growthStart,
   runNote: (v) => {
     const d = growthLarger(v);
