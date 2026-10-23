@@ -87,7 +87,31 @@ function largerText(x: number): string {
 const SETTLE_SHARE = Math.round((100 * HARDEN_SETTLE) / HARDEN_STEPS);
 const PATH_SHARE = 100 - SETTLE_SHARE;
 
-const LEVEL0 = hardenRunBudget({});
+/**
+ * The tuning levels: momentum steps per evaluation. Bench (presets.ts), 150 evaluations: 32 steps
+ * −0.06 / −0.00 / −0.10 %; 48: −5.95 / −0.00 / −3.65; 64: −9.84 / −7.52 / −8.63; 96: −10.67 /
+ * −8.43 / −9.38. That bench stopped before level 0's pass ended (at 361 evaluations), so it measured
+ * how far each pass had got, not a better search. With one pass a run, every level makes the same
+ * 11,520 steps and ends with the same packing for a seed (harden report M6, 2026-10-22: identical
+ * bits at I = 32 and 96 on 21-gons in a 24-gon), in 361, 241, 181 or 121 evaluations. A level only
+ * scores fewer of the packings on the way, each evaluation taking up to 3 times as long.
+ */
+const PRESETS: readonly Record<string, unknown>[] = [
+  {},
+  { evaluationInterval: 48 },
+  { evaluationInterval: 64 },
+  { evaluationInterval: 96 },
+];
+/** Steps per evaluation and evaluations per run at each level, level 0 first. */
+const INTERVALS = PRESETS.map(interval);
+const BUDGETS = PRESETS.map(hardenRunBudget);
+const LEVEL0 = BUDGETS[0];
+/** How many times longer an evaluation takes at the top level, at most: I steps and one scoring. */
+const SLOWER = INTERVALS[INTERVALS.length - 1] / INTERVALS[0];
+
+/** "a, b, c or d" */
+const orList = (xs: readonly string[]) =>
+  xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}`;
 
 export const hardenGame: MethodGame = {
   effect: `You can run harden, which squeezes your board in runs of ${count(LEVEL0)} evaluations, with the gains near the end.`,
@@ -106,7 +130,7 @@ export const hardenGame: MethodGame = {
       `${sym("μ")} = 0.16 × ${sym("D")}`,
       `${sym("S")} = ${sym("I")} × ⌈${count(HARDEN_STEPS)} / ${sym("I")}⌉ = ${count(hardenRunSteps({}))}`,
       `evaluations per run = ${sym("S")} / ${sym("I")} + 1`,
-      `the latest packing is ${sym("s", "last")} / ${sym("s")} − 1 larger than your board`,
+      `the run's line shows ${sym("s", "last")} / ${sym("s")} − 1, as a percentage`,
     ],
     vars: [
       [sym("E"), "the energy the steps lower"],
@@ -130,15 +154,12 @@ export const hardenGame: MethodGame = {
     ],
     note: `The 1 in the evaluations per run is the scoring of your board when the run starts. ${select}`,
   }),
-  /**
-   * Bench (presets.ts), 150 evaluations: 32 steps −0.06 / −0.00 / −0.10 % (its first schedule ends
-   * after about 360 evaluations); 48: −5.95 / −0.00 / −3.65; 64: −9.84 / −7.52 / −8.63; 96: −10.67 /
-   * −8.43 / −9.38. Time up to 4×.
-   */
-  presets: [{}, { evaluationInterval: 48 }, { evaluationInterval: 64 }, { evaluationInterval: 96 }],
+  presets: PRESETS,
   tunedDefaults: { evaluationInterval: HARDEN_INTERVAL },
   tunedMeaning: { evaluationInterval: "momentum steps between two evaluations" },
-  tunedTime: "up to 4 times as long",
+  // an evaluation is I steps and one scoring, so 96 steps take less than 3 times as long as 32
+  tunedTime: `up to ${SLOWER} times as long`,
+  tuneNote: `Every level makes the same ${count(hardenRunSteps({}))} momentum steps in a harden run and scores its packing every ${orList(INTERVALS.map(count))} steps, so a run takes ${orList(BUDGETS.map(count))} evaluations. A level changes only how often the packing is scored, not the moves, so the run ends with the packing it would end with at level 0. An evaluation takes up to ${SLOWER} times as long at the top level, which matters only when your computer limits auto-eval.`,
   runParams: hardenRunParams,
   runBudget: hardenRunBudget,
   runEnds: `A harden run ends after its ${count(hardenRunSteps({}))} momentum steps, ${evals(LEVEL0)} without harden tuning.`,

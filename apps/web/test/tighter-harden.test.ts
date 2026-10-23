@@ -134,6 +134,13 @@ describe("harden in Tighter", () => {
     );
     // the old texts of a compress phase and of many passes a run are gone
     expect(prose(how)).not.toMatch(/compress|repeats it|100,000/i);
+    // the tuning card's second paragraph is harden's own
+    const tune = upgrade("tuneHarden").how;
+    expect((tune.text as string[])[1]).toBe(hardenGame.tuneNote);
+    expect(hardenGame.tuneNote).toContain("every 32, 48, 64 or 96 steps");
+    expect(hardenGame.tuneNote).toContain("361, 241, 181 or 121 evaluations");
+    expect(hardenGame.tuneNote).toContain("up to 3 times as long");
+    expect(tune.math).toEqual(["<code>evaluationInterval</code> = 32, 48, 64, 96"]);
     // the help on runs and on pipelines says when a harden run ends
     expect(hardenGame.runEnds).toBe(
       "A harden run ends after its 11,520 momentum steps, 361 evaluations without harden tuning.",
@@ -162,7 +169,7 @@ describe("harden in Tighter", () => {
       "The harden run on 21-gons in a 24-gon, 40 pieces ended after its last step, at 361 evaluations.",
     );
     // plain sentences, and never a seed
-    for (const t of [g.runNote!(view()), g.stepNote!(view()), g.endedText!(view(), "T"), g.runEnds!])
+    for (const t of [g.runNote!(view()), g.stepNote!(view()), g.endedText!(view(), "T"), g.runEnds!, g.tuneNote!])
       expect(t).not.toMatch(/[;—]|seed/i);
   });
 
