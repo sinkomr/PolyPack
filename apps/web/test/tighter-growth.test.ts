@@ -5,10 +5,18 @@ import { addToQueue, applyLoadAll, applyStep, newGame, newProblem } from "../src
 import type { GameState, ProblemState, RunRecord } from "../src/tighter/game";
 import { methodGame, runSetup } from "../src/tighter/methods";
 import type { RunView } from "../src/tighter/methods";
-import { GROWTH_BASES, growthLarger, growthStart, largerText } from "../src/tighter/methods/ls_growth";
+import {
+  GROWTH_BASES,
+  GROWTH_DEFAULTS,
+  GROWTH_RUN,
+  GROWTH_SILENT,
+  growthLarger,
+  growthStart,
+  largerText,
+} from "../src/tighter/methods/ls_growth";
 import { OpenRun, resolvedParams } from "../src/tighter/open-run";
 import { presetParams } from "../src/tighter/presets";
-import { RUN_BUDGET, methodParams, owning } from "../src/tighter/upgrades";
+import { RUN_BUDGET, methodParams, owning, upgrade } from "../src/tighter/upgrades";
 
 const board = (N: number, M: number, P: number, shift = 0): PackingConfig => {
   const pieces: Pose[] = [];
@@ -57,6 +65,8 @@ describe("Tighter ls_growth: one growth a run", () => {
     }
     // without the tuning card too
     expect(methodParams(owning(["growth"]), "ls_growth")).toEqual({ runs: 1 });
+    // the How quotes the solver's own defaults
+    expect(defaults).toMatchObject(GROWTH_DEFAULTS);
   });
 
   it(
@@ -181,5 +191,22 @@ describe("Tighter ls_growth: the countdown to the board", () => {
     expect(g.runNote!(past)).toBe("");
     expect(g.stepNote!(past)).toBeNull();
     expect(g.runNote!(view({}))).toBe("");
+  });
+});
+
+describe("Tighter ls_growth: texts", () => {
+  it("say what a run does and costs, with the measured numbers and the tuning's own note", () => {
+    const card = upgrade("growth");
+    expect(card.effect.split(/\s+/).length).toBeLessThanOrEqual(20);
+    const text = (card.how.text as string[]).join(" ");
+    expect(text).toContain(`${GROWTH_SILENT[0]} to ${GROWTH_SILENT[1]} evaluations`);
+    expect(text).toContain(`a whole run took ${GROWTH_RUN[0]} to ${GROWTH_RUN[1]}`);
+    expect(text).toContain("Each run grows the pieces once");
+    expect(text).not.toMatch(/4 growth runs|0\.95/);
+    const tune = upgrade("tuneGrowth");
+    expect((tune.how.text as string[])[1]).toBe(methodGame("ls_growth").tuneNote);
+    expect((tune.how.text as string[])[1]).toContain("each taking about 3 times as long");
+    // the tuning card lists only the tuned parameters, not the one growth a run
+    expect(tune.how.math!.join(" ")).not.toContain("runs");
   });
 });
