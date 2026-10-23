@@ -160,7 +160,9 @@ export class OpenRun {
     return {
       ...def,
       execute: (ctx) => {
+        // a sub-run's start has just been scored: count it before the sub-run's first step
         if (!this.top) this.enter(ctx);
+        else this.count();
         return def.execute({
           ...ctx,
           evaluate: async (c, o) => this.seen(c, await ctx.evaluate(c, o)),
