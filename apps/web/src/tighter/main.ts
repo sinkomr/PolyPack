@@ -210,6 +210,9 @@ const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
 
 let savesDisabled = false;
 let startNote: string | null = null;
+/** What a save from before version 4's points and prices was given, said once as it is read (save.ts). */
+const rescaleNote = (f: number) =>
+  `Record points now pay mostly for how much smaller a board gets, and every price went up with them. Your points were multiplied by ${f.toFixed(1)}, so they buy what they bought before.`;
 /** What a save from before auto-eval's lower prices was given back, said once as it is read. */
 const refundNote = (rp: number) =>
   `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
@@ -240,7 +243,11 @@ function initialState(): GameState {
   if (text) {
     const r = fromJson(text, now());
     if (r.ok) {
-      const notes = [r.refunded ? refundNote(r.refunded) : "", r.retired ? retiredNote(r.retired) : ""];
+      const notes = [
+        r.rescaled ? rescaleNote(r.rescaled) : "",
+        r.refunded ? refundNote(r.refunded) : "",
+        r.retired ? retiredNote(r.retired) : "",
+      ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
     }
@@ -3242,7 +3249,8 @@ $("t-import").addEventListener("click", async () => {
   ensureLanes();
   saveNow();
   showFocus(true);
-  text("t-save-note", r.refunded ? `Save imported. ${refundNote(r.refunded)}` : "Save imported.");
+  const notes = [r.rescaled ? rescaleNote(r.rescaled) : "", r.refunded ? refundNote(r.refunded) : ""].filter(Boolean);
+  text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
 });
 

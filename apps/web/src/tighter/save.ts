@@ -75,13 +75,17 @@ export interface RetiredRefund {
   groups: string[];
 }
 
-/** The refund of the retired upgrades a save's `owned` list holds, each counted once. */
-export function retiredRefund(owned: unknown): RetiredRefund {
+/**
+ * The refund of the retired upgrades a save's `owned` list holds, each counted once. Their prices are
+ * in the record points of their time: `scale` turns them into today's (pointsScale, for a save of
+ * version 3 or older). Standing keeps its value.
+ */
+export function retiredRefund(owned: unknown, scale = 1): RetiredRefund {
   const out: RetiredRefund = { rp: 0, standing: 0, groups: [] };
   const ids = new Set(Array.isArray(owned) ? owned : []);
   for (const [id, r] of RETIRED)
     if (ids.has(id)) {
-      out[r.currency] += r.cost;
+      out[r.currency] += r.currency === "rp" ? Math.round(r.cost * scale) : r.cost;
       if (!out.groups.includes(r.group)) out.groups.push(r.group);
     }
   return out;
@@ -111,7 +115,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -152,21 +156,82 @@ export const MIGRATIONS: Record<number, Migration> = {
    */
   2: (save) => {
     const ids = (Array.isArray(save.owned) ? save.owned : []).filter(isUpgradeId);
-    const levels: Partial<Record<UpgradeId, number>> = {};
-    if (isObj(save.levels))
-      for (const [id, l] of Object.entries(save.levels)) {
-        const u = isUpgradeId(id) ? upgrade(id) : null;
-        if (u?.levels && Number.isSafeInteger(l) && (l as number) >= 1)
-          levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
-      }
-    const refund = autoPriceRefund(ids, levels);
+    const refund = autoPriceRefund(ids, savedLevels(save.levels));
     return { ...save, rp: num(save.rp, 0, 0) + refund, autoRefund: refund };
+  },
+  /**
+   * Version 4 pays mostly for how much smaller a board gets (points.ts: the size and gap weights went
+   * from 100 to 10,000), and every price went up with it (upgrades.ts). A save's record points are in
+   * the old points, so each amount is multiplied by pointsScale, the new prices over the old of what
+   * the save could buy next. Its bank then buys what it bought before, and its earnings, its records'
+   * rent and the points still waiting for the server keep their place against the new prices.
+   * Method match's arms learned what paid under the old points, so they start over. `pointsScale`
+   * stays on the migrated save for the refunds read after it (retired upgrades, SHRUNK) and the page.
+   */
+  3: (save) => {
+    const ids = (Array.isArray(save.owned) ? save.owned : []).filter(isUpgradeId);
+    const f = pointsScale(ids, savedLevels(save.levels));
+    const x = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v * f : v);
+    const each = (list: unknown, scale: (q: Record<string, unknown>) => Record<string, unknown>) =>
+      Array.isArray(list) ? list.map((q) => (isObj(q) ? scale(q) : q)) : list;
+    const queue = each(save.queue, (q) => ({
+      ...q,
+      rp: x(q.rp),
+      unconfirmed: x(q.unconfirmed),
+      sending: isObj(q.sending) ? { ...q.sending, rp: x(q.sending.rp) } : q.sending,
+    }));
+    const past = each(save.past, (q) => ({ ...q, rp: x(q.rp) }));
+    const st = isObj(save.standing) ? save.standing : null;
+    const ec = isObj(save.economy) ? save.economy : null;
+    const base: Record<string, unknown> = {};
+    if (ec && isObj(ec.base)) for (const [k, v] of Object.entries(ec.base)) base[k] = x(v);
+    return {
+      ...save,
+      rp: x(save.rp),
+      rpEarned: x(save.rpEarned),
+      queue,
+      past,
+      ...(st
+        ? {
+            standing: {
+              ...st,
+              cycleEarned: x(st.cycleEarned),
+              history: each(st.history, (h) => ({ ...h, earned: x(h.earned) })),
+            },
+          }
+        : {}),
+      ...(ec
+        ? {
+            economy: {
+              ...ec,
+              base,
+              rentPaid: x(ec.rentPaid),
+              lastRent: isObj(ec.lastRent) ? { ...ec.lastRent, rp: x(ec.lastRent.rp) } : ec.lastRent,
+            },
+          }
+        : {}),
+      ...(isObj(save.runplan) ? { runplan: { ...save.runplan, bandit: {} } } : {}),
+      ...(save.autoRefund !== undefined ? { autoRefund: x(save.autoRefund) } : {}),
+      pointsScale: f,
+    };
   },
 };
 
+/** A save's levels of levelled upgrades, as the migrations read them: whole, at least 1, within range. */
+function savedLevels(v: unknown): Partial<Record<UpgradeId, number>> {
+  const levels: Partial<Record<UpgradeId, number>> = {};
+  if (isObj(v))
+    for (const [id, l] of Object.entries(v)) {
+      const u = isUpgradeId(id) ? upgrade(id) : null;
+      if (u?.levels && Number.isSafeInteger(l) && (l as number) >= 1)
+        levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
+    }
+  return levels;
+}
+
 /**
- * The list price of every record-point upgrade before 2026-10-22, when the size and gap weights were
- * 100 (points.ts). Levelled upgrades grew by the same factor a level then as now.
+ * The list price of every record-point upgrade before version 4 (2026-10-22), when the size and gap
+ * weights were 100. Levelled upgrades grew by the same factor a level then as now.
  */
 const PRICE_BEFORE_V4: Partial<Record<UpgradeId, number>> = {
   trace: 5,
@@ -242,6 +307,34 @@ const PRICE_BEFORE_V4: Partial<Record<UpgradeId, number>> = {
 };
 
 /**
+ * What a record point of a save from before version 4 is worth now: the new list prices over the old
+ * of the upgrades it could buy next (the record-point upgrades it does not own whose prerequisites it
+ * owns, and the next level of each levelled one it owns), so that its bank buys what it bought before.
+ * A save that could buy nothing more takes the whole tree's ratio. Quick study discounts both prices
+ * alike, so it leaves the ratio as it is.
+ */
+export function pointsScale(ids: readonly UpgradeId[], levels: Partial<Record<UpgradeId, number>>): number {
+  const owned = new Set(ids);
+  let now = 0;
+  let before = 0;
+  let allNow = 0;
+  let allBefore = 0;
+  for (const u of UPGRADES) {
+    const old = PRICE_BEFORE_V4[u.id];
+    if (currencyOf(u) !== "rp" || old === undefined) continue;
+    allNow += u.cost;
+    allBefore += old;
+    // the level the save would buy next: the first for an upgrade it does not own
+    const next = !owned.has(u.id) ? 0 : u.levels ? Math.max(1, levels[u.id] ?? 1) : null;
+    if (next === null || (u.levels && next >= u.levels.max) || !u.requires.every((r) => owned.has(r))) continue;
+    const g = u.levels ? Math.pow(u.levels.growth, next) : 1;
+    now += u.cost * g;
+    before += old * g;
+  }
+  return before > 0 ? now / before : allNow / allBefore;
+}
+
+/**
  * The lowest list price each Auto-eval rung had before version 3: what it cost from 2026-10-21
  * (it cost more before that). Faster auto-eval's level j + 1 had the lower of 100,000 × 1.6^j (from
  * 2026-10-21, 10 levels) and 150,000 × 1.4^j (before, 100 levels).
@@ -262,9 +355,10 @@ const autoxBefore = (j: number) => Math.min(100_000 * Math.pow(1.6, j), 150_000 
 
 /**
  * What a save gets back for auto-eval's lower prices: for each Auto-eval rung and each Faster
- * auto-eval level it owns, the price before (AUTO_BEFORE) less its price in version 3 (PRICE_BEFORE_V4,
- * since the prices of 2026-10-22 are in other points), at the save's Quick study discount. The rungs its head starts give it each cycle cost nothing, and get nothing back;
- * Faster auto-eval's levels past its 10 are SHRUNK's, refunded whole when the save is read. Never more
+ * auto-eval level it owns, the price before (AUTO_BEFORE) less its price in version 3 (PRICE_BEFORE_V4),
+ * at the save's Quick study discount, in the record points of version 3 (version 4's step scales
+ * them). The rungs its head starts give it each cycle cost nothing, and get nothing back; Faster
+ * auto-eval's levels past its 10 are SHRUNK's, refunded whole when the save is read. Never more
  * than the save paid: the prices before are the lowest they ever were, and Quick study only grows.
  */
 export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Record<UpgradeId, number>>): number {
@@ -287,11 +381,14 @@ export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Recor
 }
 
 /**
- * A save read, the record points it was given back for auto-eval's lower prices as it was read (none
- * if it was already current), and what its retired upgrades paid back (none if it owned none).
+ * A save read; the factor its record points were multiplied by for version 4's points and prices
+ * (none if it was already of version 4); the record points it was given back for auto-eval's lower
+ * prices as it was read (none if it was already of version 3); and what its retired upgrades paid back
+ * (none if it owned none). Every amount is in today's points.
  */
 export type LoadResult =
-  { ok: true; state: GameState; refunded?: number; retired?: RetiredRefund } | { ok: false; error: string };
+  | { ok: true; state: GameState; rescaled?: number; refunded?: number; retired?: RetiredRefund }
+  | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): number =>
@@ -501,7 +598,9 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
   // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 10 evaluations a second). Faster
   // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
   if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
-  const retired = retiredRefund(save.owned);
+  // a save migrated from version 3 or older: the old prices refunded below are in the points of their time
+  const scale = num(save.pointsScale, 1, 0);
+  const retired = retiredRefund(save.owned, scale);
   const refund = { rp: retired.rp, standing: retired.standing };
   // levels of levelled upgrades that are owned, within their range. Levels bought above a range that
   // shrank (SHRUNK) are refunded at the list price they were bought at, once: the save keeps only the range.
@@ -514,7 +613,9 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       const old = SHRUNK.get(id as UpgradeId);
       if (old)
         for (let j = u.levels.max; j < Math.min(l as number, old.max); j++)
-          refund[currencyOf(u)] += Math.round(old.cost * Math.pow(old.growth, j));
+          refund[currencyOf(u)] += Math.round(
+            old.cost * Math.pow(old.growth, j) * (currencyOf(u) === "rp" ? scale : 1),
+          );
     }
   const standing = normalizeStanding(save.standing, now);
   standing.points += refund.standing;
@@ -583,11 +684,13 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   if (!isObj(raw)) return { ok: false, error: "not a Tighter save" };
   const m = migrate(raw, migrations);
   if (!m.ok) return m;
-  const refunded = (raw.version as number) < 3 ? num(m.save.autoRefund, 0, 0) : 0;
-  const retired = retiredRefund(m.save.owned);
+  const refunded = (raw.version as number) < 3 ? Math.round(num(m.save.autoRefund, 0, 0)) : 0;
+  const rescaled = (raw.version as number) < 4 ? num(m.save.pointsScale, 0, 0) : 0;
+  const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0));
   return {
     ok: true,
     state: normalize(m.save, now),
+    ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
   };
