@@ -275,10 +275,16 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace", "click2", "click3"]);
   expect((await focused(page)).best).toBe(saved.best);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  // after a reload the next click opens a new run, with a new seed
+  // after a reload the next click opens a new run, with a new seed (the open run's: the board keeps
+  // the old run's until the new one beats it, which its first few evaluations rarely do)
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
-  expect((await focused(page)).run!.seed).not.toBe(seed);
+  const open = await page.evaluate(() => {
+    const t = (window as any).tighter;
+    return t.runs.find((r: { key: string }) => r.key === t.state.focus) ?? null;
+  });
+  expect(open).toMatchObject({ method: "mc_compress" });
+  expect(open.seed).not.toBe(seed);
 
   const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(a11y.violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);

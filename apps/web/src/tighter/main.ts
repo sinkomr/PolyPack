@@ -3297,6 +3297,10 @@ window.tighter = {
   get busy() {
     return lanes.some((l) => l.pumping || l.jobs.length);
   },
+  /** The runs open in the lanes: their problem, method and seed (for the tests). */
+  get runs() {
+    return lanes.flatMap((l) => (l.run ? [{ key: l.run.key, method: l.run.method, seed: l.run.seed }] : []));
+  },
 };
 
 if (startNote) say(startNote);
