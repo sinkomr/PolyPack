@@ -1,5 +1,8 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
-import type { How } from "./how";
+import { sym } from "./how";
+import type { How, Var } from "./how";
+import { METHOD_GAMES, methodGame } from "./methods";
+import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { msPerEval } from "./rank";
 
@@ -300,11 +303,8 @@ const seconds = (x: number) => `${number(x)} s`;
 
 // ---------- the explanations (How, how.ts) ----------
 // Every number below is read from the code that implements the upgrade: the tables above, the
-// dealer and the economy, and the solver's methods (packages/solver/src/methods).
-
-/** A variable in How markup: sym("s", "ref") is s with the subscript "ref". */
-const sym = (name: string, sub?: string) => `<var>${name}</var>${sub === undefined ? "" : `<sub>${sub}</sub>`}`;
-type Var = readonly [string, string];
+// dealer and the economy, and the solver's methods (packages/solver/src/methods, whose texts are in
+// each method's file in methods/).
 
 const K = sym("k");
 const VAR_K: Var = [K, "evaluations per click"];
@@ -466,260 +466,23 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
 }
 
 const SELECT = "Choose it in the Method list beside Evolve, and your next click opens a run with it.";
-function methodRung(
-  id: UpgradeId,
-  cost: number,
-  requires: UpgradeId[],
-  effect: string,
-  how: How,
-  mystery = false,
-): Upgrade {
+/** A method's card: its name, effect and How come from its file in methods/. */
+function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const m = METHOD[id]!;
-  return { id, name: `Method: ${m}`, cost, requires, effect, how, row: "methods", mystery };
+  const g = methodGame(m);
+  return { id, name: `Method: ${m}`, cost, requires, effect: g.effect!, how: g.how!(SELECT), row: "methods", mystery };
 }
 
-// The methods, from packages/solver/src/methods/*.ts (their defaults and update rules).
-
-const MC_COMPRESS_TEXT: readonly string[] = [
-  "mc_compress is a Monte Carlo compression. A sweep tries P moves. Each move picks a random piece and shifts it by up to its step in x and y, or for half the moves on polygons turns it by up to its turning step. A move is kept only when the piece stays inside the container and overlaps nothing.",
-  "Every 2 sweeps it tries to shrink. It pulls every centre toward the container's centre by the fraction f and fits the container tightly around them, and then it tries the wall alone at (1 − f) times its side. A change is kept only when nothing overlaps and the side does not grow. Every 10 sweeps it also tries a new angle for the container, and every 20 sweeps the steps and f adapt so that about 30 % of tries succeed.",
-  "The packing is scored once every n sweeps, which is one evaluation. A run ends after 500 evaluations without progress, which is a fall of more than 10⁻⁹ (relative) in the score or the container's side.",
-];
-const MC_COMPRESS_MATH: readonly string[] = [
-  `${sym("c", "i")} ← ${sym("c", "0")} + (1 − ${sym("f")})(${sym("c", "i")} − ${sym("c", "0")})`,
-  `${sym("s")} ← (1 − ${sym("f")}) × ${sym("s")}`,
-  `1 evaluation per ${sym("n")} sweeps of ${sym("P")} moves`,
-];
-const MC_COMPRESS_VARS = (n: string): readonly Var[] => [
-  [sym("c", "i"), "the centre of piece i"],
-  [sym("c", "0"), "the container's centre"],
-  [sym("f"), "the shrink fraction, 1 % at first, adapting up to 5 %"],
-  [sym("s"), "the container's side"],
-  [sym("n"), `sweeps per evaluation, ${n}`],
-  [sym("P"), "pieces"],
-];
-
-const BASIN_HOW: How = {
-  text: [
-    "basin_hopping jumps from one local optimum to the next. Each hop changes the current packing with one of several moves, chosen by how often each has paid. The main move, a kick, shifts 40 % of the pieces (at least one) by up to m in x and y and turns them by up to 90°. The others swap pieces, move a cluster, take a piece out and put it back elsewhere, or start afresh.",
-    "A short penalty solve of at most 150 evaluations then repairs the overlaps and squeezes the container. Its best packing becomes the current one when it is smaller, or else with the probability below. After each kick, m grows if the hop was accepted and shrinks if not, so that about half the kicks are accepted.",
-    "It has no rule to stop early. The hops go on until 3,000 evaluations of the run's budget of 100,000 are left, and a long penalty solve then refines the best packing.",
-  ],
-  math: [
-    `accept when ${sym("s")}′ &lt; ${sym("s")}, else with probability exp(−(${sym("s")}′ − ${sym("s")}) / ${sym("T")})`,
-    `${sym("m")} ← ${sym("m")} × exp(0.15 × (${sym("a")} − 0.5))`,
-  ],
-  vars: [
-    [sym("s"), "the side of the current packing"],
-    [`${sym("s")}′`, "the side after the hop"],
-    [sym("T"), "the temperature, 0.04 (in piece sides)"],
-    [
-      sym("m"),
-      "the kick size in piece sides, 0.35 at first (0.25 with basin_hopping tuning), kept between 0.001 and 10",
-    ],
-    [sym("a"), "1 if the hop was accepted, else 0"],
-  ],
-  note: SELECT,
-};
-
-const PENALTY_TEXT =
-  "penalty treats the container's side and every piece's position and angle as variables. It minimises the side plus a penalty for overlaps and for pieces that stick out of the container, with L-BFGS, a quasi-Newton method that estimates the curvature from its last 12 steps.";
-const PENALTY_HOW: How = {
-  text: [
-    PENALTY_TEXT,
-    "After each accepted L-BFGS step it pushes the pieces apart until nothing overlaps and scores that packing, which is one evaluation. Each solve takes at most I steps. Between solves each term's multiplier λ is updated, and the weight w is multiplied by 4 when the largest violation did not at least halve (an augmented Lagrangian). The run ends after 10 solves.",
-  ],
-  math: [
-    `${sym("F")} = ${sym("s")} + Σ<sub>${sym("k")}</sub> (max(0, ${sym("λ", "k")} + 2${sym("w")}${sym("g", "k")})<sup>2</sup> − ${sym("λ", "k")}<sup>2</sup>) / (4${sym("w")})`,
-    `${sym("λ", "k")} ← max(0, ${sym("λ", "k")} + 2${sym("w")}${sym("g", "k")})`,
-    `evaluations per run ≈ 10 × (${sym("I")} + 1)`,
-  ],
-  vars: [
-    [sym("F"), "what L-BFGS minimises"],
-    [sym("s"), "the container's side"],
-    [sym("k"), "one term, for a pair of pieces or for a piece and a wall"],
-    [
-      sym("g", "k"),
-      "its violation, which is how deep the two pieces overlap or how far the piece sticks out (negative when clear)",
-    ],
-    [sym("λ", "k"), "its multiplier, 0 at first"],
-    [sym("w"), "the penalty weight, 10 at first"],
-    [sym("I"), "L-BFGS steps at most per solve, 200 at first (more with penalty tuning)"],
-  ],
-  note: SELECT,
-};
-
-const SHRINK_HOW: How = {
-  text: [
-    "shrink_repair shrinks the container's side by the ratio r and scales the centres into it, which makes pieces overlap. It then repairs the overlaps at that fixed size. The repair lowers F below with L-BFGS, moves each piece still in conflict to the best of 72 sampled spots, and raises the weights of pairs that keep overlapping.",
-    "When the repaired packing scores smaller, r grows by a quarter, up to 5 %. Otherwise r halves. Once r falls below 0.02 %, it explores instead. It scatters or turns a group of nearby pieces and repairs 1 to 4 times 0.02 % below the current side. After 40 failed explorations it restarts from random positions 2 % larger than the best.",
-    "Every repaired packing is scored, and the working packing is also scored after every W × P units of work. Each scoring is one evaluation. It has no rule to stop early, so a run uses its whole budget of 100,000 evaluations.",
-  ],
-  math: [
-    `${sym("s")} ← (1 − ${sym("r")}) × ${sym("s")}`,
-    `${sym("F")} = Σ ${sym("w", "ij")} ${sym("d", "ij")}<sup>2</sup> + Σ ${sym("v", "i")} ${sym("p", "ik")}<sup>2</sup>`,
-    `${sym("r")} ← min(0.05, 1.25 × ${sym("r")}) after a gain, else ${sym("r")} ← ${sym("r")} / 2`,
-    `a scoring every ${sym("W")} × ${sym("P")} units of work, a test of two pieces costing 2${sym("N")} units`,
-  ],
-  vars: [
-    [sym("s"), "the container's side"],
-    [sym("r"), "the shrink ratio, 1 % at first"],
-    [sym("F"), "what the repair lowers to 0"],
-    [sym("w", "ij"), "the weight of pieces i and j, raised while they keep overlapping"],
-    [sym("d", "ij"), "how deep pieces i and j overlap"],
-    [sym("v", "i"), "the weight of piece i against the walls"],
-    [sym("p", "ik"), "how far piece i sticks out past wall k"],
-    [sym("W"), "units of work per piece between two scorings, 4,000 at first (more with shrink_repair tuning)"],
-    [sym("P"), "pieces"],
-    [sym("N"), "sides of a piece (1 unit per test for circles)"],
-  ],
-  note: SELECT,
-};
-
-const SEED_HOW: How = {
-  text: [
-    "seed builds new boards from scratch instead of improving the current one. Its generators are a square lattice, a hexagonal lattice, a double lattice for pentagons, rows, and rings along the container's edge (when the container's symmetry allows and P ≤ 100). They take turns, and each makes up to 12 boards with different offsets and angles.",
-    "A lattice is scaled until neighbouring pieces just touch, and seed keeps the P sites that need the smallest container centred on the origin. Each board is one evaluation. The problem's board changes only when one of them is smaller than your best. The run ends when every generator is done, after a few dozen evaluations.",
-  ],
-  math: [
-    `keep the ${sym("P")} sites ${sym("x")} with the smallest max<sub>${sym("j")}</sub> (${sym("x")} · ${sym("u", "j")} + ${sym("h")}(${sym("u", "j")}))`,
-  ],
-  vars: [
-    [sym("P"), "pieces"],
-    [sym("x"), "a lattice site, where a piece's centre goes"],
-    [sym("j"), "an edge of the container"],
-    [sym("u", "j"), "the outward unit normal of edge j"],
-    [`${sym("h")}(${sym("u", "j")})`, "how far a piece reaches past its centre in that direction"],
-  ],
-  note: SELECT,
-};
-
-const HARDEN_HOW: How = {
-  text: [
-    "harden is Nakajima's soft-to-rigid method. Each piece starts as the disc inscribed in it and turns into its true polygon over the run, while momentum descent pushes the container in. A schedule has three phases. Compress squeezes the discs under 3 times the pressure μ, morph turns the discs into polygons, and settle relaxes the true shapes without noise as the pressure falls.",
-    "Every I momentum steps, the pieces are moved apart from their mean centre until nothing overlaps, and that packing is scored, which is one evaluation. A full schedule takes about 11,500 steps, and a run of 100,000 evaluations repeats it many times.",
-  ],
-  math: [
-    `${sym("E")} = Σ ${sym("d")}<sup>2</sup> + Σ ${sym("p")}<sup>2</sup> + ${sym("μ")} × ${sym("L")}`,
-    `${sym("v")} ← 0.85 × ${sym("v")} − 0.04 × ∇${sym("E")}, then each pose moves by ${sym("v")} plus noise`,
-    `evaluations per schedule = ⌈11,500 / ${sym("I")}⌉`,
-  ],
-  vars: [
-    [sym("E"), "the energy the descent lowers"],
-    [sym("d"), "how deep two soft pieces overlap"],
-    [sym("p"), "how far a corner of a piece sticks out past a wall"],
-    [sym("μ"), "the pressure, 0.16"],
-    [sym("L"), "the container's size (its side, or its apothem for 7 or more sides)"],
-    [sym("v"), "the velocity of a piece (or of L)"],
-    [sym("I"), "momentum steps per evaluation, 32 at first (more with harden tuning)"],
-  ],
-  note: SELECT,
-};
-
-const MORPH_HOW: How = {
-  text: [
-    "morph solves a chain of easier problems. It replaces each piece by a soft shape S(t), the polygon shrunk by t and rounded by a disc, which goes from the inscribed disc at t = 0 to the true polygon at t = 1 in 7 steps.",
-    "At each step it scales the packing to first contact and runs a penalty solve on the soft shapes, with the objective of the penalty method. After each accepted step of that solve it turns the soft packing back into true pieces, spreading the centres until nothing overlaps, and scores it, which is one evaluation. When a step ends with an overlap or a protrusion above 0.02 piece sides, it halves the next step, at most twice between two planned steps. The run ends after the last step.",
-  ],
-  math: [
-    `${sym("S")}(${sym("t")}) = ${sym("t")} × polygon ⊕ (1 − ${sym("t")}) × ${sym("ρ")} × disc`,
-    `${sym("t", "j")} = ${sym("j")} / 6, for ${sym("j")} = 0, 1, …, 6`,
-  ],
-  vars: [
-    [`${sym("S")}(${sym("t")})`, "the soft shape at t"],
-    [sym("t"), "how far along the path, from 0 to 1"],
-    [sym("ρ"), "the radius of the disc inscribed in the piece"],
-    [sym("j"), "the step"],
-  ],
-  note: `⊕ adds two shapes point by point (a Minkowski sum). ${SELECT}`,
-};
-
-const ASC_TEXT =
-  "asc (adaptive shrinking container) is a Monte Carlo search with the container as a variable. A sweep tries P moves of single pieces, moves of the container (shift, turn, shrink), and strains that move all centres at once. A strain squeezes the centres along a random axis (and may stretch them across it, keeping the area), squeezes them within a sector, or pulls them all inward while the container shrinks. The pieces never change shape.";
-const ASC_HOW: How = {
-  text: [
-    ASC_TEXT,
-    "A move is kept only when no piece overlaps another or leaves the container and the side does not grow. The packing is scored once every n sweeps, which is one evaluation. A run ends after 2,000 sweeps without a gain.",
-  ],
-  math: [
-    `${sym("x")} ← (1 − ${sym("a")}) × ${sym("x")}, ${sym("y")} ← ${sym("y")} / (1 − ${sym("a")})`,
-    `${sym("s")} ← (1 − ${sym("a")}) × ${sym("s")}`,
-    `1 evaluation per ${sym("n")} sweeps`,
-  ],
-  vars: [
-    [sym("x"), "a centre's coordinate along the random axis, from the container's centre"],
-    [sym("y"), "its coordinate across the axis"],
-    [sym("a"), "the move's size, which adapts"],
-    [sym("s"), "the container's side"],
-    [sym("n"), "sweeps per evaluation, 10 at first (more with asc tuning)"],
-  ],
-  note: SELECT,
-};
-
-const GROWTH_HOW: How = {
-  text: [
-    "ls_growth is Lubachevsky–Stillinger growth. The container stays fixed at the tight fit of the start. The pieces shrink to 0.8 of their size, get random velocities, and then grow at a steady rate while they fly and bounce off each other and the walls, until they jam.",
-    "Every I collisions or steps, the pieces are scaled back to their true size and the packing is scored, which is one evaluation. A growth run ends at a jam or after S evaluations without a gain. A run of the method makes 4 growth runs, each from the best packing so far at 0.95 of its size.",
-  ],
-  math: [
-    `${sym("σ")} ← ${sym("σ")} + ${sym("g")} × Δ${sym("t")}`,
-    `${sym("u")}′ = 4${sym("g")} − ${sym("u")}`,
-    `${sym("s")} ≤ ${sym("L")} / ${sym("σ")}`,
-  ],
-  vars: [
-    [sym("σ"), "the pieces' size as a fraction of their true size"],
-    [sym("g"), "the growth rate, 0.01 per unit of time"],
-    [`Δ${sym("t")}`, "the time step"],
-    [
-      sym("u"),
-      "two discs' relative speed along the line between them, positive when they part (polygons bounce approximately)",
-    ],
-    [`${sym("u")}′`, "the same after they collide"],
-    [sym("s"), "the side scored"],
-    [sym("L"), "the container's fixed side"],
-    [sym("I"), "collisions or steps per evaluation, 16 at first (more with ls_growth tuning)"],
-    [sym("S"), "evaluations without a gain before a growth run ends, 128 at first (more with ls_growth tuning)"],
-  ],
-  note: SELECT,
-};
-
 /**
- * The tuned parameters at the solver's defaults (level 0), for the tuning cards; a test checks them
- * against the solver's own defaults. mc_compress's level 0 is 10 sweeps: its tuning needs "10 sweeps
- * per evaluation".
+ * The tuned parameters at the solver's defaults (level 0), for the tuning cards, from each method's
+ * file; a test checks them against the solver's own defaults. mc_compress's level 0 is 10 sweeps: its
+ * tuning needs "10 sweeps per evaluation".
  */
-export const TUNED_DEFAULTS: Partial<Record<EvolveMethod, Record<string, number>>> = {
-  mc_compress: { sweepsPerEvaluation: 10, stagnationEvals: 500, maxRestarts: 0 },
-  basin_hopping: { kickMagnitude: 0.35 },
-  shrink_repair: { evaluationWork: 4000 },
-  penalty: { innerIterations: 200 },
-  harden: { evaluationInterval: 32 },
-  asc: { sweepsPerEvaluation: 10, stagnationSweeps: 2000 },
-  ls_growth: { evaluationInterval: 16, stagnationEvaluations: 128 },
-};
-/** What each tuned parameter sets, by method. */
-const TUNED_MEANING: Record<string, string> = {
-  "mc_compress.sweepsPerEvaluation": "sweeps of P moves between two evaluations",
-  "mc_compress.stagnationEvals": "evaluations without progress before the run ends or restarts",
-  "mc_compress.maxRestarts": "restarts, each from the packing spread 15 % wider, before the run ends",
-  "basin_hopping.kickMagnitude": "the kick size at the start of a run, in piece sides",
-  "shrink_repair.evaluationWork": "units of work per piece between two scorings of the working packing",
-  "penalty.innerIterations": "L-BFGS steps at most per solve (a run makes 10 solves)",
-  "harden.evaluationInterval": "momentum steps between two evaluations",
-  "asc.sweepsPerEvaluation": "sweeps between two evaluations",
-  "asc.stagnationSweeps": "sweeps without a gain before the run ends",
-  "ls_growth.evaluationInterval": "collisions or steps between two evaluations",
-  "ls_growth.stagnationEvaluations": "evaluations without a gain before a growth run ends",
-};
-/** How much longer an evaluation takes at the top level, from the bench (presets.ts). */
-const TUNED_TIME: Partial<Record<EvolveMethod, string>> = {
-  mc_compress: "up to 30 % longer",
-  shrink_repair: "up to 2.5 times as long",
-  penalty: "up to 3 times as long",
-  harden: "up to 4 times as long",
-  asc: "10 to 30 % longer",
-  ls_growth: "up to 5 times as long",
-};
+export const TUNED_DEFAULTS: Partial<Record<EvolveMethod, Record<string, number>>> = Object.fromEntries(
+  (Object.entries(METHOD_GAMES) as [EvolveMethod, (typeof METHOD_GAMES)[EvolveMethod]][])
+    .filter(([, g]) => g.tunedDefaults)
+    .map(([m, g]) => [m, g.tunedDefaults!]),
+);
 
 function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const n = Math.max(1, tuningLevels(method));
@@ -727,8 +490,9 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     ...TUNED_DEFAULTS[method],
     ...presetParams(method, l, true),
   }));
+  const g = methodGame(method);
   const keys = Object.keys(TUNED_DEFAULTS[method] ?? {});
-  const time = TUNED_TIME[method];
+  const time = g.tunedTime;
   return {
     id,
     name: `${method} tuning`,
@@ -740,11 +504,12 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
         : `Each level gives ${method} a setting that does more search per evaluation.`,
     how: {
       text: [
-        `${n === 1 ? "The level sets" : `Each level sets`} ${method}'s parameters as below, from level 0 (the solver's defaults) to level ${n}. Runs use the new setting from your next click.`,
-        `A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon).${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
+        `${n === 1 ? "The level sets" : `Each level sets`} ${method}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
+        g.tuneNote ??
+          `A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon).${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
       ],
       math: keys.map((k) => `<code>${k}</code> = ${levels.map((l) => String(l[k as keyof typeof l])).join(", ")}`),
-      vars: keys.map((k) => [`<code>${k}</code>`, `${TUNED_MEANING[`${method}.${k}`]}, at levels 0 to ${n}`]),
+      vars: keys.map((k) => [`<code>${k}</code>`, `${g.tunedMeaning?.[k]}, at levels 0 to ${n}`]),
       note: `${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
     },
     row: "runs",
@@ -978,13 +743,7 @@ export const UPGRADES: readonly Upgrade[] = [
   autoRung("auto5", 250, ["auto4", "click10"]),
   dealerRung("rank2", 3000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
-  methodRung(
-    "basin",
-    5000,
-    ["click10", "auto4"],
-    "You can run basin_hopping, which kicks the packing out of a local optimum and repairs it.",
-    BASIN_HOW,
-  ),
+  methodRung("basin", 5000, ["click10", "auto4"]),
   {
     id: "reach2",
     name: "Reach: site records",
@@ -1017,13 +776,7 @@ export const UPGRADES: readonly Upgrade[] = [
   autoRung("auto6", 450, ["auto5", "basin"]),
   tuneRung("tuneMc", "mc_compress", 8000, ["sweeps10", "basin"]),
   dealerRung("rank4", 9000, ["rank2", "reach2"]),
-  methodRung(
-    "shrink",
-    10000,
-    ["basin"],
-    "You can run shrink_repair, which shrinks the container and then repairs the overlaps.",
-    SHRINK_HOW,
-  ),
+  methodRung("shrink", 10000, ["basin"]),
   {
     id: "advance",
     name: "Auto-advance",
@@ -1055,13 +808,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "queue",
   },
   pickRung("pick3", 14000, ["rank2", "advance"]),
-  methodRung(
-    "penalty",
-    15000,
-    ["shrink"],
-    "You can run penalty, which squeezes the container with a smooth overlap penalty and L-BFGS.",
-    PENALTY_HOW,
-  ),
+  methodRung("penalty", 15000, ["shrink"]),
   {
     id: "lanes2",
     name: "Second lane",
@@ -1094,13 +841,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "dealer",
   },
   tuneRung("tuneBasin", "basin_hopping", 20000, ["basin", "tuneMc"]),
-  methodRung(
-    "lattice",
-    21000,
-    ["penalty"],
-    "You can run seed, which builds new boards from lattices, rows and rings.",
-    SEED_HOW,
-  ),
+  methodRung("lattice", 21000, ["penalty"]),
   autoRung("auto7", 900, ["auto6", "lanes2"]),
   {
     id: "rent",
@@ -1135,14 +876,7 @@ export const UPGRADES: readonly Upgrade[] = [
   },
   seedRung("seeds8", 28000, ["seeds4", "lattice"]),
   dealerRung("rank8", 30000, ["rank4", "ring200"]),
-  methodRung(
-    "harden",
-    30000,
-    ["lattice"],
-    "You can run harden, which packs discs and hardens them into the true pieces.",
-    HARDEN_HOW,
-    true,
-  ),
+  methodRung("harden", 30000, ["lattice"], true),
   tuneRung("tuneShrink", "shrink_repair", 30000, ["shrink", "tuneMc"]),
   {
     id: "wide",
@@ -1196,14 +930,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "problems",
   },
   tuneRung("tunePenalty", "penalty", 40000, ["penalty", "tuneMc"]),
-  methodRung(
-    "morph",
-    45000,
-    ["harden"],
-    "You can run morph, which solves with rounded pieces and sharpens them step by step.",
-    MORPH_HOW,
-    true,
-  ),
+  methodRung("morph", 45000, ["harden"], true),
   {
     id: "retake",
     name: "Retake",
@@ -1279,14 +1006,7 @@ export const UPGRADES: readonly Upgrade[] = [
     levels: { max: 50, growth: 1.6 },
   },
   ringRung("ring120", 60000, ["ring200", "batch"]),
-  methodRung(
-    "asc",
-    60000,
-    ["morph"],
-    "You can run asc, a Monte Carlo search that also strains and shrinks the whole packing.",
-    ASC_HOW,
-    true,
-  ),
+  methodRung("asc", 60000, ["morph"], true),
   pickRung("pick5", 70000, ["pick3", "rank8"]),
   seedRung("seeds16", 75000, ["seeds8", "asc"]),
   {
@@ -1343,14 +1063,7 @@ export const UPGRADES: readonly Upgrade[] = [
     mystery: true,
   },
   queueRung("queue6", 120000, ["queue4", "collections"]),
-  methodRung(
-    "growth",
-    120000,
-    ["asc"],
-    "You can run ls_growth, which grows the pieces inside a fixed container until they jam.",
-    GROWTH_HOW,
-    true,
-  ),
+  methodRung("growth", 120000, ["asc"], true),
   {
     id: "autox",
     name: "Faster auto-eval",

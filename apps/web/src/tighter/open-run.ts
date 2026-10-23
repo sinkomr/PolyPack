@@ -2,19 +2,7 @@ import { findOverlaps } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import { MethodRegistry, strictTolerance } from "@polypack/solver";
 import type { MethodContext, MethodDefinition, Problem, Result } from "@polypack/solver";
-// The solver's method definitions, registered as packages/solver/src/index.ts registers them. The
-// package exports only its finished registry, whose definitions are private, so they are imported
-// from its source (see kernel-requests.md: an evaluation hook on run() would make this unneeded).
-import { identityMethod, polishMethod } from "../../../../packages/solver/src/methods";
-import { ascMethod } from "../../../../packages/solver/src/methods/asc";
-import { basinHoppingMethod } from "../../../../packages/solver/src/methods/basin_hopping";
-import { hardenMethod } from "../../../../packages/solver/src/methods/harden";
-import { lsGrowthMethod } from "../../../../packages/solver/src/methods/ls_growth";
-import { mcCompressMethod } from "../../../../packages/solver/src/methods/mc_compress";
-import { morphMethod } from "../../../../packages/solver/src/methods/morph";
-import { penaltyMethod } from "../../../../packages/solver/src/methods/penalty";
-import { seedMethod } from "../../../../packages/solver/src/methods/seed";
-import { shrinkRepairMethod } from "../../../../packages/solver/src/methods/shrink_repair";
+import { METHODS } from "./methods/worker";
 
 /**
  * An open run: one real solver run() that stays open between clicks and does exactly the
@@ -26,20 +14,6 @@ import { shrinkRepairMethod } from "../../../../packages/solver/src/methods/shri
  * One evaluation is the solver's counted unit: one scoring of the whole packing (overlaps and the
  * container fit). The start's scoring is the run's first evaluation and is done when it opens.
  */
-
-const METHODS: readonly MethodDefinition[] = [
-  identityMethod,
-  polishMethod,
-  seedMethod,
-  penaltyMethod,
-  basinHoppingMethod,
-  mcCompressMethod,
-  morphMethod,
-  ascMethod,
-  lsGrowthMethod,
-  hardenMethod,
-  shrinkRepairMethod,
-];
 
 /** A method's parameters as the framework resolves them (defaults, then the given values). */
 export function resolvedParams(method: string, params: Record<string, unknown>): Record<string, unknown> {
