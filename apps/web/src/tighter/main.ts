@@ -57,6 +57,7 @@ import {
   problem,
   recordsHeld,
   reveal,
+  reserveSeed,
   revealed,
   seenKeys,
   slotted,
@@ -695,10 +696,12 @@ function finishRun(run: OpenRunView | null): void {
     observeRun(state.runplan, run.kind, run.method, run.level, basePoints(p) - run.rpAt, run.evaluations - run.evalsAt);
 }
 
-/** Opens a run on the problem (closing whatever the lane held), with its next seed. */
+/** Opens a run on the problem (closing whatever the lane held), with a new random seed. */
 async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job): Promise<boolean> {
   const { method, level } = want;
   const params = methodParams(owned(), method, level);
+  // drawn before anything awaits, so that two runs opening at once on one problem never share a seed
+  const seed = reserveSeed(state, p);
   // a problem's run lives in one lane: a run on it elsewhere closes first
   for (const other of lanes)
     if (other !== lv && other.run?.key === p.key) {
@@ -709,7 +712,6 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   finishRun(lv.run);
   lv.run = null;
   if (lv.lane.open) await lv.lane.close();
-  const seed = p.nextSeed;
   const a = await lv.lane.openRun({
     problem: { N: p.N, M: p.M, P: p.P },
     method,
@@ -726,7 +728,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
   }
-  openedRun(state, p, seed, now());
+  openedRun(state, p, now());
   lv.run = {
     key: p.key,
     method,

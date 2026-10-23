@@ -74,7 +74,11 @@ export interface ProblemState extends ProblemKey {
   best: number | null;
   /** The run that produced `board`; null for Load all and for a dealt site record. */
   run: RunRecord | null;
-  /** Seed of the next run. Compact's run uses seed 1; seeds are never repeated on a problem. */
+  /**
+   * The index of the next run on this problem, 1 for its first (Compact's). A run's seed is drawn
+   * from it (runSeed): a random 32-bit number, a new one for every run, the same in a game replayed
+   * from the same dealer's seed. The name is the save's from when seeds were numbered 1, 2, 3.
+   */
   nextSeed: number;
   /** The problem's leader as last seen (null: none). */
   leader: Leader | null;
@@ -347,12 +351,50 @@ export function countEvaluations(s: GameState, evaluations: number, click: boole
   earn(s.dealer, creditOf(evaluations, click ? evalsPerClick(ownedSet(s)) : null));
 }
 
-/** A run opened on the problem: it uses the next seed. */
-export function openedRun(s: GameState, p: ProblemState, seed: number, now: number): void {
+/** The finalizer of MurmurHash3: every bit of a 32-bit number moves every bit of the result. */
+function fmix32(h: number): number {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** FNV-1a of a text, 32 bits. */
+function hash32(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * The seed of run `index` on the problem `key`, in a game whose dealer has the seed `dealerSeed`: a
+ * pseudo-random 32-bit number (0 to 2³² − 1, the solver's range), so that the runs on one problem
+ * start their random choices apart, and a game started with the same dealer's seed (?seed=n, the
+ * tests) draws the same seeds.
+ */
+export function runSeed(dealerSeed: number, key: string, index: number): number {
+  let h = fmix32((dealerSeed ^ 0x2545f491) >>> 0);
+  h = fmix32((h ^ hash32(key)) >>> 0);
+  return fmix32((h + Math.imul(index >>> 0, 0x9e3779b9)) >>> 0);
+}
+
+/**
+ * The seed of the next run on the problem, taking its index. Call it before anything awaits: two
+ * runs opening at once on one problem then never share a seed.
+ */
+export function reserveSeed(s: GameState, p: ProblemState): number {
+  const index = p.nextSeed;
+  p.nextSeed = Math.min(0xffffffff, index + 1);
+  return runSeed(s.dealer.seed, p.key, index);
+}
+
+/** A run opened on the problem (its seed reserved before, reserveSeed). */
+export function openedRun(s: GameState, p: ProblemState, now: number): void {
   s.stats.runs++;
   p.runs++;
   p.lastRunAt = now;
-  if (seed >= p.nextSeed) p.nextSeed = seed + 1;
 }
 
 /** One step of an open run: the evaluations it did and the run's best strict packing so far. */

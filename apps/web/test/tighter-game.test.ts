@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_METHOD_PARAMS_BYTES, areaLowerBound, parseProvenance } from "@polypack/geometry";
+import { seededRandom } from "@polypack/solver";
 import type { PackingConfig, ProblemInfo } from "@polypack/geometry";
 import {
   DEFAULT_PATIENCE,
@@ -25,6 +26,8 @@ import {
   payAll,
   pendingPoints,
   recordsHeld,
+  reserveSeed,
+  runSeed,
   submitTarget,
   unconfirmedPoints,
   withdrawConsent,
@@ -342,7 +345,8 @@ describe("Tighter runs on the board", () => {
     expect(p.phase).toBe("loaded");
     expect(p.floor).toBe(10);
     expect(hasUnsent(p)).toBe(false);
-    openedRun(s, p, 1, T0);
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     expect(p.nextSeed).toBe(2);
     // a step that returns the start unchanged is no record
     let c = applyStep(s, p, step(10, 1, { evaluations: 100 }), T0);
@@ -437,18 +441,52 @@ describe("Tighter runs on the board", () => {
   it("counts the runs that end by themselves, and allows any number of them", () => {
     const { s, p } = game();
     applyLoadAll(p, board(3), 10, null);
-    openedRun(s, p, 1, T0);
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     applyStep(s, p, step(9.5), T0);
     expect(p.endedRuns).toBe(0);
     applyStep(s, p, step(9.4, 1, { ended: true }), T0);
     expect(p.endedRuns).toBe(1);
     // the next run opens as before, and its end counts too: nothing stops a problem's runs
-    openedRun(s, p, 2, T0);
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     expect(p.runs).toBe(2);
     expect(p.nextSeed).toBe(3);
     applyStep(s, p, step(null, 2, { ended: true }), T0);
     expect(p.endedRuns).toBe(2);
     expect(evolvable(p)).toBe(true);
+  });
+
+  it("give every run a random 32-bit seed, a new one each time, the same in a game with the same dealer's seed", () => {
+    const { s, p } = game();
+    const q = newProblem({ N: 24, M: 30, P: 60 }, "open", T0);
+    addToQueue(s, q);
+    // drawn at once, before the run is opened: two runs opening together on one problem never share one
+    const seeds = Array.from({ length: 200 }, () => reserveSeed(s, p));
+    expect(new Set(seeds).size).toBe(200);
+    expect(p.nextSeed).toBe(201);
+    for (const x of seeds) {
+      expect(Number.isSafeInteger(x)).toBe(true);
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(0xffffffff);
+      // the solver's own check of a seed
+      expect(() => seededRandom(x)).not.toThrow();
+    }
+    // spread over the whole range, not 1, 2, 3
+    expect(Math.max(...seeds)).toBeGreaterThan(2 ** 31);
+    expect(Math.min(...seeds)).toBeLessThan(2 ** 31);
+    // another problem draws other seeds
+    const other = Array.from({ length: 200 }, () => reserveSeed(s, q));
+    expect(other.filter((x) => seeds.includes(x))).toEqual([]);
+    // the same dealer's seed, problem and run index give the same seed: a ?seed=n game replays
+    const again = game();
+    expect(again.s.dealer.seed).toBe(s.dealer.seed);
+    expect(Array.from({ length: 200 }, () => reserveSeed(again.s, again.p))).toEqual(seeds);
+    expect(runSeed(s.dealer.seed, p.key, 1)).toBe(seeds[0]);
+    // another dealer's seed draws others
+    expect(runSeed(s.dealer.seed + 1, p.key, 1)).not.toBe(seeds[0]);
+    // a save keeps the index, so a reload goes on with new seeds
+    expect(runSeed(s.dealer.seed, p.key, p.nextSeed)).not.toBe(seeds.at(-1));
   });
 });
 

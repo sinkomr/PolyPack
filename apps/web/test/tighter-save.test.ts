@@ -13,6 +13,7 @@ import {
   newProblem,
   openedRun,
   pendingPoints,
+  reserveSeed,
 } from "../src/tighter/game";
 import { recordSend } from "../src/tighter/pacer";
 import {
@@ -49,7 +50,8 @@ function played(): GameState {
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
   applyLoadAll(p, b, 7, null);
-  openedRun(s, p, 1, T0 + 500);
+  reserveSeed(s, p);
+  openedRun(s, p, T0 + 500);
   // strict "results": the Load-all board shifted, with smaller made-up scores (the save does not judge)
   const best = { ...b, pieces: b.pieces.map((q) => ({ ...q, x: q.x + 0.1 })), container_phi: 0.3 };
   const record = (evals: number) => ({

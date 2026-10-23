@@ -23,6 +23,7 @@ interface ProblemView {
   ourId: number | null;
   runs: number;
   nextSeed: number;
+  run: { method: string; seed: number } | null;
   unconfirmed: number;
   sending: unknown;
 }
@@ -134,8 +135,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(p.board!.pieces).toHaveLength(p.P);
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
 
-  // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (seed 1) that
-  // stays open, and the first record
+  // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (with a random
+  // seed) that stays open, and the first record
   await page.click("#t-evolve");
   await expect
     .poll(async () => (await focused(page)).phase === "ready" && (await idle(page)), { timeout: 60_000 })
@@ -148,9 +149,11 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(findOverlaps(p.N, p.board!.pieces, strictTolerance(p.board!))).toEqual([]);
   // the run scores the container at fixed angles between turns: the server's best angle is no worse
   expect(evaluate(p.board!, { autoOrient: true }).score!).toBeLessThanOrEqual(p.best!);
-  // the start's scoring and Compact's 100 evaluations, in one run with seed 1
+  // the start's scoring and Compact's 100 evaluations, in one run, its seed a random 32-bit number
   expect(await stats(page)).toMatchObject({ evaluations: 101, clicks: 1, runs: 1 });
   expect(p).toMatchObject({ runs: 1, nextSeed: 2 });
+  const seed = p.run!.seed;
+  expect(Number.isSafeInteger(seed) && seed >= 0 && seed <= 0xffffffff).toBe(true);
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at 101 evaluations");
   // the next problem is earned by work: 300 clicks, whatever their size (Compact counts its 100 evaluations)
   await expect(page.locator("#t-next")).toBeDisabled();
@@ -224,8 +227,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   const second = await siteBest(page, p);
   expect(second.name).toBe("E2E Tighter");
   const secondEntry = await (await page.request.get(`/api/submissions/${second.id}`)).json();
-  // the same run (seed 1), as far as it had gone when it found the board
-  expect(secondEntry).toMatchObject({ found_with: "optimizer", method: "mc_compress", seed: 1 });
+  // the same run (the same seed), as far as it had gone when it found the board
+  expect(secondEntry).toMatchObject({ found_with: "optimizer", method: "mc_compress", seed });
   expect(secondEntry.budget.evals).toBeGreaterThan(101);
   // the server keeps only the leader: the overtaken first record is gone, and the game holds one record
   expect((await page.request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
@@ -267,9 +270,10 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace", "click2", "click3"]);
   expect((await focused(page)).best).toBe(saved.best);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  // after a reload the next click opens a run with the next seed
+  // after a reload the next click opens a new run, with a new seed
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
+  expect((await focused(page)).run!.seed).not.toBe(seed);
 
   const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(a11y.violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
