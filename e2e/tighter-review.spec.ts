@@ -534,7 +534,7 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
     name: "<b onmouseover=alert(1)>x</b>",
     log: [{ t: 1, text: "<img src=y onerror=window.__xss=2>" }],
   };
-  const str = `tighter:2:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
+  const str = `tighter:3:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
   await page.click("#t-open-settings");
   await page.fill("#t-save-text", str);
   page.once("dialog", (d) => d.accept());

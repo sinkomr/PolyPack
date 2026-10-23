@@ -205,6 +205,9 @@ const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
 
 let savesDisabled = false;
 let startNote: string | null = null;
+/** What a save from before auto-eval's lower prices was given back, said once as it is read. */
+const refundNote = (rp: number) =>
+  `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
 
 function randomSeed(): number {
   const a = new Uint32Array(1);
@@ -226,7 +229,10 @@ function initialState(): GameState {
   }
   if (text) {
     const r = fromJson(text, now());
-    if (r.ok) return r.state;
+    if (r.ok) {
+      if (r.refunded) startNote = refundNote(r.refunded);
+      return r.state;
+    }
     if (/newer version/.test(r.error)) {
       // never overwrite a save this version cannot read
       savesDisabled = true;
@@ -3161,7 +3167,7 @@ $("t-import").addEventListener("click", async () => {
   ensureLanes();
   saveNow();
   showFocus(true);
-  text("t-save-note", "Save imported.");
+  text("t-save-note", r.refunded ? `Save imported. ${refundNote(r.refunded)}` : "Save imported.");
   render();
 });
 

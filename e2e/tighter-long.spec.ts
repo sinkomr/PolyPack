@@ -436,6 +436,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   const old = await page.evaluate(() => {
     const save = JSON.parse(localStorage.getItem("tighter.save")!);
     for (const k of ["levels", "standing", "economy", "picks", "runplan"]) delete save[k];
+    save.version = 2;
     save.owned = ["trace", "click2", "click3", "click4", "auto1", "seeds"];
     save.settings.auto = true;
     save.bank = 700;
@@ -465,7 +466,9 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     autoDue: st.autoDue,
     auto: st.settings.auto,
   }));
-  expect(s).toMatchObject({ version: 2, rp: 123.5, levels: {}, picks: 0, pipeline: [] });
+  // read as version 3, which pays back what Auto-eval cost over its price now (90 - 9 RP), once
+  expect(s).toMatchObject({ version: 3, rp: 123.5 + 81, levels: {}, picks: 0, pipeline: [] });
+  await expect(page.locator("#status")).toContainText("81 RP of what you paid for yours came back");
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
   expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1", "seeds"]);
   // the record it held is counted for collections; auto-eval is off and owes nothing for the hour away
