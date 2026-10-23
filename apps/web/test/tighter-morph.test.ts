@@ -137,6 +137,29 @@ describe("Tighter's morph", () => {
       expect(t).not.toMatch(/seeds? of the problem|one of the problem's seeds|with seed \d|[;—]/);
       expect(t).not.toMatch(/\b(\d+|7) steps\b|halves the next step/);
     }
+    // when a run ends, in the help on runs and on pipelines
+    expect(morph.runEnds).toBe(
+      "A morph run ends after its last stage, within 1,442 evaluations, or 2,882 with the halfway stages.",
+    );
+    expect(prose(HELP.counts as How).join(" ")).toContain(morph.runEnds);
+    expect(prose(PIPELINE).join(" ")).toContain(morph.runEnds);
+    expect(morph.endedText!(view(1442), "24-gons in a 27-gon, 40 pieces")).toBe(
+      "The morph run on 24-gons in a 27-gon, 40 pieces ended after its last stage, at 1,442 evaluations.",
+    );
+  });
+
+  it("says on a click without improvement, and on the run line, that the run is still in its warm-up", () => {
+    const note =
+      "morph's disc stage ends by evaluation 722 of this run. Its boards rarely beat a board packed tight before the second stage.";
+    expect(morph.stepNote!(view(1))).toBe(note);
+    expect(morph.stepNote!(view(721))).toBe(note);
+    expect(morph.stepNote!(view(722))).toBeNull();
+    expect(morph.stepNote!(view(1300))).toBeNull();
+    // circle pieces have no warm-up
+    expect(morph.stepNote!(view(300, 0))).toBeNull();
+    expect(morph.runNote!(view(300))).toBe(" · warm-up until 722");
+    expect(morph.runNote!(view(722))).toBe("");
+    expect(morph.runNote!(view(300, 0))).toBe("");
   });
 
   it("opens a 2-stage run that ends by itself within 1,442 evaluations", async () => {

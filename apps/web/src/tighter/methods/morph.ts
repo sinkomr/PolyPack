@@ -1,5 +1,5 @@
 import { sym } from "../how";
-import type { MethodGame, RunProblem } from "./types";
+import type { MethodGame, RunProblem, RunView } from "./types";
 
 // morph, from packages/solver/src/methods/morph.ts (its defaults and update rules). The game runs it
 // in 2 stages instead of the solver's 7: the disc stage, then the true pieces. It has no tuning
@@ -56,6 +56,9 @@ export function morphWarmup(params: Record<string, unknown>, p?: RunProblem): nu
   return MORPH_START + param(params, "innerIterations") * param(params, "outerIterations");
 }
 
+/** Whether a run at `v` is still in its warm-up, before its last evaluation. */
+const warming = (v: RunView) => v.warmup > 0 && v.evaluations < v.warmup;
+
 export const morphGame: MethodGame = {
   effect: "You can run morph, which repacks your board as discs and then as the true pieces.",
   how: (select) => ({
@@ -86,4 +89,12 @@ export const morphGame: MethodGame = {
   presets: [MORPH_PRESET],
   warmup: morphWarmup,
   warmupRuns: "on polygon pieces",
+  runEnds: `A morph run ends after its last stage, within ${int(MORPH_RUN)} evaluations, or ${int(MORPH_LONGEST)} with the halfway stages.`,
+  runNote: (v) => (warming(v) ? ` · warm-up until ${int(v.warmup)}` : ""),
+  stepNote: (v) =>
+    warming(v)
+      ? `morph's disc stage ends by evaluation ${int(v.warmup)} of this run. Its boards rarely beat a board packed tight before the second stage.`
+      : null,
+  endedText: (v, title) =>
+    `The morph run on ${title} ended after its last stage, at ${int(v.evaluations)} evaluations.`,
 };
