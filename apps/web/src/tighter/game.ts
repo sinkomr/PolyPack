@@ -425,6 +425,11 @@ export interface StepOutcome {
   click: boolean;
   /** Compact's step (its 100 evaluations from the Load-all board). */
   compact?: boolean;
+  /**
+   * The step's evaluations within its run's warm-up (methods/ warmup): they count everywhere but in
+   * the evaluations since progress. 0 when left out.
+   */
+  warm?: number;
 }
 
 export interface StepChange {
@@ -448,8 +453,9 @@ export interface StepChange {
  *
  * Progress (Auto-advance's): the best s beats the best at the last progress s_ref by the tolerance
  * τ, s < s_ref · (1 − τ). Then s_ref becomes s and the count since progress starts again; otherwise
- * the count grows by the step's evaluations. The first record sets s_ref, and a dealt record starts
- * from its own best. With τ = 10⁻⁹ every improvement that counts is progress, as it always was.
+ * the count grows by the step's evaluations, less those within its run's warm-up. The first record
+ * sets s_ref, and a dealt record starts from its own best. With τ = 10⁻⁹ every improvement that
+ * counts is progress, as it always was.
  */
 export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: number): StepChange {
   countEvaluations(s, o.evaluations, o.click);
@@ -486,7 +492,7 @@ export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: nu
     p.sinceGain = 0;
   } else {
     if (p.phase === "ready") p.progressBest = ref;
-    p.sinceGain += o.evaluations;
+    p.sinceGain += o.evaluations - Math.min(o.evaluations, Math.max(0, o.warm ?? 0));
   }
   if (counted && p.phase === "ready") pushTrace(p);
   const points = counted ? pay(s, p) : null;

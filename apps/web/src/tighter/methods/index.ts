@@ -41,6 +41,19 @@ export const methodLabel = (m: string): string => methodGame(m as EvolveMethod).
 /** Whether the player can choose the method: the Method list, Method match and the pipeline editor. */
 export const isSelectable = (m: EvolveMethod): boolean => methodGame(m).selectable !== false;
 
+/** The evaluations of a run's warm-up (its method's warmup), a whole number, 0 without one. */
+export function warmupOf(m: EvolveMethod, params: Record<string, unknown>): number {
+  const w = methodGame(m).warmup?.(params) ?? 0;
+  return Number.isFinite(w) && w > 0 ? Math.floor(w) : 0;
+}
+
+/**
+ * The evaluations of a step, from the run's `before` to `after` evaluations, that lie within the
+ * run's first `warmup`: max(0, min(after, W) − min(before, W)).
+ */
+export const warmIn = (warmup: number, before: number, after: number): number =>
+  Math.max(0, Math.min(after, warmup) - Math.min(before, warmup));
+
 /** What a new run of a method opens with: its parameters, its budget and its start. */
 export interface RunSetup {
   params: Record<string, unknown>;

@@ -82,7 +82,7 @@ import {
   tidyRent,
 } from "./economy";
 import { Lane } from "./lanes";
-import { methodGame, methodLabel, runSetup } from "./methods";
+import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import type { RunStage, RunView } from "./methods";
 import type { RunState } from "./open-run";
 import {
@@ -445,8 +445,9 @@ interface OpenRunView {
   asked: string;
   params: Record<string, unknown>;
   seed: number;
-  /** Evaluations the run may do in all (the method's runBudget). */
+  /** Evaluations the run may do in all (the method's runBudget), and its first that are its warm-up (warmup). */
   budget: number;
+  warmup: number;
   /** Evaluations the run has done, its start's scoring included. */
   evaluations: number;
   /** After its latest step: its latest valid score, its best, what its method found and its latest sub-run (RunState). */
@@ -730,9 +731,12 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): W
   return { method: m, level: tuningLevel(o, m), mode: "select" };
 }
 
-/** A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's excepted). */
+/**
+ * A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's excepted,
+ * and a run closed within its warm-up, which has had no chance to pay).
+ */
 function finishRun(run: OpenRunView | null): void {
-  if (!run || run.mode === "compact") return;
+  if (!run || run.mode === "compact" || run.evaluations < run.warmup) return;
   const p = problem(state, run.key);
   if (p)
     observeRun(state.runplan, run.kind, run.method, run.level, basePoints(p) - run.rpAt, run.evaluations - run.evalsAt);
@@ -783,6 +787,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     params: a.params,
     seed,
     budget: setup.budget,
+    warmup: warmupOf(method, a.params),
     evaluations: a.state.evaluations,
     last: a.state.last,
     runBest: a.state.score,
@@ -914,6 +919,7 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
       ended: st.ended && !st.closed && !st.error,
       click: job.click,
       compact: job.compact && done > 1,
+      warm: warmIn(run.warmup, st.evaluations - done, st.evaluations),
     },
     now(),
   );

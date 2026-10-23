@@ -114,6 +114,15 @@ export interface MethodGame {
    */
   restartAfter?: number | null;
   /**
+   * The run's warm-up: its first evaluations, which the method spends before its boards can beat
+   * the problem's (morph's disc stage, for one). They do not add to the problem's evaluations since
+   * progress (Auto-advance's patience, and restartAfter's count), and a run closed within them
+   * teaches Method match nothing. `params` are the run's as the solver resolved them; the shop's
+   * texts call it with the level-0 preset alone, so read a missing parameter as its solver default.
+   * Default: 0.
+   */
+  warmup?: (params: Record<string, unknown>) => number;
+  /**
    * The board a run opens from. It may keep a memory of its own (ls_growth's series). Default: the
    * problem's best board, `p.board`.
    */

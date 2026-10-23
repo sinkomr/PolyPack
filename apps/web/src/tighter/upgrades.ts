@@ -1,7 +1,7 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import { sym } from "./how";
 import type { How, Var } from "./how";
-import { METHOD_GAMES, isSelectable, methodGame, methodLabel } from "./methods";
+import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { msPerEval } from "./rank";
@@ -620,6 +620,61 @@ const RENT_VARS: readonly Var[] = [
   [sym("Δ"), "hours since the record's last check (168 hours is a week)"],
 ];
 
+/** A method whose runs have a warm-up (methods/ warmup), with its evaluations at tuning level 0. */
+export interface Warmup {
+  label: string;
+  evals: number;
+}
+
+/** The methods whose runs begin with a warm-up, in the table's order. */
+function warmups(): Warmup[] {
+  return (Object.keys(METHOD_GAMES) as EvolveMethod[])
+    .map((m) => ({ label: methodLabel(m), evals: warmupOf(m, presetParams(m, 0, true)) }))
+    .filter((w) => w.evals > 0);
+}
+
+/**
+ * Auto-advance's How. With methods whose runs have a warm-up (`warm`, from the table by default), it
+ * says that those evaluations do not add to the count, and the formula takes them out.
+ */
+export function advanceHow(warm: readonly Warmup[] = warmups()): How {
+  const firsts = listed(
+    warm.map(
+      (w, i) => `the first ${w.evals.toLocaleString("en-US")}${i === 0 ? " evaluations" : ""} of every ${w.label} run`,
+    ),
+  );
+  const n = sym("n");
+  const e = sym("e");
+  return {
+    text: [
+      "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
+      "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”." +
+        (warm.length
+          ? ` ${firsts.charAt(0).toUpperCase()}${firsts.slice(1)} ${warm.length === 1 ? "are its" : "are their"} warm-up, and they do not add to the count.`
+          : ""),
+      `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. While your records have no name, a problem with an unsent best is never dropped.`,
+      "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
+    ],
+    math: [
+      `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${n} ← 0`,
+      warm.length ? `otherwise ${n} ← ${n} + ${e} − ${sym("e", "warm")}` : `otherwise ${n} ← ${n} + ${e}`,
+      `replaced once ${n} ≥ ${sym("W")} and a deal is earned`,
+    ],
+    vars: [
+      [sym("s"), "the problem's best side now"],
+      [sym("s", "ref"), "its best side at its last progress"],
+      [sym("τ"), "the tolerance, 10⁻⁹ to 10⁻³ (10⁻⁶ at first)"],
+      [n, "evaluations run on it since its last progress"],
+      [e, "the evaluations just run on it"],
+      ...(warm.length
+        ? [[sym("e", "warm"), `the evaluations among e in a run's warm-up, ${firsts} (0 for other runs)`] as const]
+        : []),
+      [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
+    ],
+    note: "With the patience at Never nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself.",
+  };
+}
+
 /** The tree, in an order where every prerequisite comes before the upgrades that need it. */
 export const UPGRADES: readonly Upgrade[] = [
   {
@@ -731,28 +786,7 @@ export const UPGRADES: readonly Upgrade[] = [
     cost: 11000,
     requires: ["reach2", "queue3"],
     effect: "Problems that stop making progress are replaced, and auto-eval compacts new problems first.",
-    how: {
-      text: [
-        "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
-        "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”.",
-        `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. While your records have no name, a problem with an unsent best is never dropped.`,
-        "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
-      ],
-      math: [
-        `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${sym("n")} ← 0`,
-        `otherwise ${sym("n")} ← ${sym("n")} + ${sym("e")}`,
-        `replaced once ${sym("n")} ≥ ${sym("W")} and a deal is earned`,
-      ],
-      vars: [
-        [sym("s"), "the problem's best side now"],
-        [sym("s", "ref"), "its best side at its last progress"],
-        [sym("τ"), "the tolerance, 10⁻⁹ to 10⁻³ (10⁻⁶ at first)"],
-        [sym("n"), "evaluations run on it since its last progress"],
-        [sym("e"), "the evaluations just run on it"],
-        [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
-      ],
-      note: "With the patience at Never nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself.",
-    },
+    how: advanceHow(),
     row: "queue",
   },
   pickRung("pick3", 14000, ["rank2", "advance"]),

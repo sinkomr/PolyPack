@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { findFreeSpot } from "@polypack/geometry";
 import type { PackingConfig, Pose } from "@polypack/geometry";
-import { addToQueue, applyLoadAll, endRunAtStall, newGame, newProblem, stallEnds } from "../src/tighter/game";
+import {
+  StepOutcome,
+  addToQueue,
+  applyLoadAll,
+  applyStep,
+  endRunAtStall,
+  newGame,
+  newProblem,
+  stallEnds,
+} from "../src/tighter/game";
 import { HELP, PIPELINE, smallerText, stallRule } from "../src/tighter/help";
 import type { How } from "../src/tighter/how";
-import { METHOD_GAMES, isSelectable, methodGame, methodLabel, runSetup } from "../src/tighter/methods";
+import {
+  METHOD_GAMES,
+  isSelectable,
+  methodGame,
+  methodLabel,
+  runSetup,
+  warmIn,
+  warmupOf,
+} from "../src/tighter/methods";
 import type { MethodGame } from "../src/tighter/methods";
 import { METHODS } from "../src/tighter/methods/worker";
 import { resolvedParams } from "../src/tighter/open-run";
@@ -15,6 +32,7 @@ import {
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
+  advanceHow,
   methodParams,
   methods,
   owning,
@@ -224,6 +242,74 @@ describe("Tighter's methods table", () => {
     expect(text(HELP.counts as How)).toContain(stallRule());
     expect(text(PIPELINE)).toContain(stallRule());
     expect(text(PIPELINE)).toContain("or the game ended it at a stall");
+  });
+
+  it("keep a run's warm-up out of the evaluations since progress", () => {
+    // the evaluations of a step that fall within the run's first W
+    expect(warmIn(722, 0, 10)).toBe(10);
+    expect(warmIn(722, 720, 730)).toBe(2);
+    expect(warmIn(722, 722, 732)).toBe(0);
+    expect(warmIn(722, 800, 810)).toBe(0);
+    expect(warmIn(0, 0, 10)).toBe(0);
+    // no method has one yet; one reads the run's resolved parameters, its defaults when a text asks
+    for (const m of ALL) expect(warmupOf(m, resolvedParams(m, {})), m).toBe(0);
+    const morph = {
+      warmup: (q: Record<string, unknown>) =>
+        2 + ((q.innerIterations as number) ?? 120) * ((q.outerIterations as number) ?? 6),
+    };
+    withHooks("morph", morph, () => {
+      expect(warmupOf("morph", resolvedParams("morph", {}))).toBe(722);
+      expect(warmupOf("morph", { innerIterations: 10, outerIterations: 2 })).toBe(22);
+    });
+    // a warm-up that is not a whole positive number is none
+    for (const w of [-5, Number.NaN, Infinity])
+      withHooks("morph", { warmup: () => w }, () => expect(warmupOf("morph", {})).toBe(0));
+    withHooks("morph", { warmup: () => 9.7 }, () => expect(warmupOf("morph", {})).toBe(9));
+    // a step's warm evaluations count everywhere but in the count since progress
+    const { s, p } = loaded(21, 24, 12);
+    const step = (evaluations: number, warm?: number): StepOutcome => ({
+      evaluations,
+      best: null,
+      score: null,
+      run: { method: "morph", params: {}, seed: 7, budget: { evals: 1 } },
+      ms: 1,
+      ended: false,
+      click: false,
+      ...(warm === undefined ? {} : { warm }),
+    });
+    p.sinceGain = 100;
+    applyStep(s, p, step(10, 10), 0);
+    expect(p).toMatchObject({ sinceGain: 100, evaluations: 10 });
+    applyStep(s, p, step(10, 4), 0);
+    expect(p).toMatchObject({ sinceGain: 106, evaluations: 20 });
+    applyStep(s, p, step(10), 0);
+    expect(p).toMatchObject({ sinceGain: 116, evaluations: 30 });
+    // never more than the step's own evaluations, never fewer than none
+    applyStep(s, p, step(10, 50), 0);
+    applyStep(s, p, step(10, -3), 0);
+    expect(p).toMatchObject({ sinceGain: 126, evaluations: 50 });
+    expect(s.stats.evaluations).toBe(50);
+  });
+
+  it("say in Auto-advance's How which runs have a warm-up, read from the table", () => {
+    // no method has one yet: the card says nothing of it
+    expect(advanceHow([])).toEqual(upgrade("advance").how);
+    const how = advanceHow([{ label: "morph", evals: 722 }]);
+    expect(how.text[1]).toMatch(
+      /The first 722 evaluations of every morph run are its warm-up, and they do not add to the count\.$/,
+    );
+    expect(how.math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var> − <var>e</var><sub>warm</sub>");
+    expect(how.vars!.map(([v]) => v)).toContain("<var>e</var><sub>warm</sub>");
+    const two = advanceHow([
+      { label: "morph", evals: 722 },
+      { label: "lattice", evals: 1_500 },
+    ]);
+    expect(two.text[1]).toContain(
+      "The first 722 evaluations of every morph run and the first 1,500 of every lattice run are their warm-up, and they do not add to the count.",
+    );
+    expect(two.vars!.find(([v]) => v.includes("warm"))![1]).toBe(
+      "the evaluations among e in a run's warm-up, the first 722 evaluations of every morph run and the first 1,500 of every lattice run (0 for other runs)",
+    );
   });
 
   it("say at a run's end how much smaller it made the side, only when that counts", () => {
