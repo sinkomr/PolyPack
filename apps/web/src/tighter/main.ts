@@ -40,6 +40,7 @@ import {
   buy,
   countEvaluations,
   density,
+  endRunAtStall,
   drop,
   evolvable,
   followed,
@@ -62,6 +63,7 @@ import {
   seenKeys,
   slotted,
   stallAfter,
+  stallEnds,
   submitTarget,
 } from "./game";
 import {
@@ -813,20 +815,32 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     p = problem(state, job.key);
     if (!p || !p.board || (job.compact ? p.phase !== "loaded" : !evolvable(p))) return false;
     const o = owned();
-    const want = wantedRun(p, o, lv, job.compact);
-    const asked = JSON.stringify(methodParams(o, want.method, want.level));
-    const r = lv.run;
-    // Compact's run goes on under the select's method when that is the same method and setting
-    const sameMode = !!r && (r.mode === want.mode || (r.mode === "compact" && want.mode === "select"));
+    let want = wantedRun(p, o, lv, job.compact);
+    let asked = JSON.stringify(methodParams(o, want.method, want.level));
+    // the open run goes on when it is on the problem with the method, setting and mode wanted; Compact's
+    // run goes on under the select's method when that is the same method and setting
+    const goesOn = (r: OpenRunView | null): r is OpenRunView =>
+      !!r &&
+      lv.lane.open &&
+      r.key === p!.key &&
+      r.method === want.method &&
+      r.level === want.level &&
+      r.asked === asked &&
+      (r.mode === want.mode || (r.mode === "compact" && want.mode === "select"));
+    // a run that goes on but has stalled ends as if by itself: the next one is the pipeline's next
+    // stage, Method match's new draw, or the same method with a new seed
     if (
-      !r ||
-      !lv.lane.open ||
-      r.key !== p.key ||
-      r.method !== want.method ||
-      r.level !== want.level ||
-      r.asked !== asked ||
-      !sameMode
+      !job.compact &&
+      goesOn(lv.run) &&
+      stallEnds(methodGame(lv.run.method).restartAfter, lv.run.evaluations, p.sinceGain)
     ) {
+      await endStalledRun(lv, p, lv.run);
+      if (problem(state, job.key) !== p) return false;
+      want = wantedRun(p, o, lv, false);
+      asked = JSON.stringify(methodParams(o, want.method, want.level));
+    }
+    const r = lv.run;
+    if (!goesOn(r)) {
       if (!(await openRun(lv, p, want, job))) return false;
     } else if (r.mode !== want.mode) {
       // from here on the run is the method's own: what it pays is measured from now
@@ -858,6 +872,26 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     lv.current = null;
     lv.progress = null;
   }
+}
+
+/**
+ * The game ends a problem's run at a stall (game.ts stallEnds): it counts as a run that ended by
+ * itself, Method match learns from it, and the lane's worker closes it.
+ */
+async function endStalledRun(lv: LaneView, p: ProblemState, run: OpenRunView): Promise<void> {
+  const limit = methodGame(run.method).restartAfter!;
+  endRunAtStall(p);
+  finishRun(run);
+  lv.run = null;
+  const title = problemTitle(p);
+  const smaller = smallerText(sideWord(p), run.startScore, run.runBest);
+  event(
+    `The run on ${title} made no progress in its last ${evals(limit)}, so the game ended it.` +
+      `${smaller ? ` ${smaller}` : ""} A new run starts from the best board${nextStageText(p)}.`,
+    p.key === state.focus,
+  );
+  persist();
+  await lv.lane.close();
 }
 
 /** A step's result applied to the game: the board, the counters, the points, the messages. */

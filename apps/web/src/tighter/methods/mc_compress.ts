@@ -44,4 +44,11 @@ export const mcCompressGame: MethodGame = {
     maxRestarts: "restarts, each from the packing spread 15 % wider, before the run ends",
   },
   tunedTime: "up to 30 % longer",
+  /**
+   * The solver's own rule ends a run after 500 evaluations without a gain of 10⁻⁹, which a stalled
+   * run's tiny gains keep resetting: 1 natural end in 17 runs and 43,000 evaluations (seeds report,
+   * 2026-10-22). A new seed at a stall rescues a run stuck in a poor packing (0.053 to 0.076 %), and
+   * the end lets Pipelines and Method match move on to another method.
+   */
+  restartAfter: 500,
 };

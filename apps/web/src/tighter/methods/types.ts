@@ -106,6 +106,14 @@ export interface MethodGame {
   /** The evaluations a run may do in all, from the parameters it opens with. Default: RUN_BUDGET. */
   runBudget?: (params: Record<string, unknown>) => number;
   /**
+   * R: the game ends the problem's run once the run has done R evaluations (its start's scoring
+   * included) and the problem has gone R evaluations without progress (ProblemState.sinceGain). The
+   * run counts as ended by itself: the pipeline moves on, Method match learns from it, and the next
+   * run opens from the problem's best board with a new seed. Default: null, only the method's own
+   * rule or the budget ends a run.
+   */
+  restartAfter?: number | null;
+  /**
    * The board a run opens from. It may keep a memory of its own (ls_growth's series). Default: the
    * problem's best board, `p.board`.
    */

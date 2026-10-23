@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { findFreeSpot } from "@polypack/geometry";
 import type { PackingConfig, Pose } from "@polypack/geometry";
-import { addToQueue, applyLoadAll, newGame, newProblem } from "../src/tighter/game";
-import { smallerText } from "../src/tighter/help";
+import { addToQueue, applyLoadAll, endRunAtStall, newGame, newProblem, stallEnds } from "../src/tighter/game";
+import { HELP, PIPELINE, smallerText, stallRule } from "../src/tighter/help";
+import type { How } from "../src/tighter/how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, runSetup } from "../src/tighter/methods";
 import type { MethodGame } from "../src/tighter/methods";
 import { METHODS } from "../src/tighter/methods/worker";
@@ -185,6 +186,44 @@ describe("Tighter's methods table", () => {
     const r = readSave(JSON.parse(toJson(save)), 2_000);
     expect(r.ok && r.state.settings.method).toBe("seed");
     expect(r.ok && r.state.runplan.pipeline).toEqual(["seed", "mc_compress", "seed"]);
+  });
+
+  it("end a stalled run of mc_compress after 500 evaluations without progress, as a run that ended by itself", () => {
+    const R = methodGame("mc_compress").restartAfter!;
+    expect(R).toBe(500);
+    for (const m of ALL.filter((x) => x !== "mc_compress")) expect(methodGame(m).restartAfter ?? null, m).toBeNull();
+    // the run must have done R evaluations, and the problem gone R without progress
+    expect(stallEnds(R, 500, 500)).toBe(true);
+    expect(stallEnds(R, 1200, 800)).toBe(true);
+    expect(stallEnds(R, 499, 5000)).toBe(false);
+    expect(stallEnds(R, 5000, 499)).toBe(false);
+    // a method without the rule never ends this way
+    expect(stallEnds(null, 1e6, 1e6)).toBe(false);
+    expect(stallEnds(undefined, 1e6, 1e6)).toBe(false);
+    expect(stallEnds(0, 1e6, 1e6)).toBe(false);
+    // it counts as a run that ended by itself: the pipeline goes on to its next stage
+    const { p } = loaded(21, 24, 12);
+    const pipeline: EvolveMethod[] = ["mc_compress", "asc", "harden"];
+    expect(pipelineMethod(pipeline, p.endedRuns, () => true)).toEqual({ method: "mc_compress", stage: 0 });
+    endRunAtStall(p);
+    expect(p.endedRuns).toBe(1);
+    expect(pipelineMethod(pipeline, p.endedRuns, () => true)).toEqual({ method: "asc", stage: 1 });
+  });
+
+  it("explain the stall rule from the table, every limit named", () => {
+    expect(stallRule()).toBe(
+      "The game also ends a stalled run of mc_compress. Once the run has done 500 evaluations and its problem has gone 500 evaluations without progress, it counts as ended by itself.",
+    );
+    const two = { mc_compress: { restartAfter: 500 }, asc: { restartAfter: 1500 }, harden: {} };
+    expect(stallRule(two)).toBe(
+      "The game also ends a stalled run of mc_compress or asc. Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. R is 500 for mc_compress and 1,500 for asc.",
+    );
+    expect(stallRule({ harden: {}, asc: { restartAfter: null } })).toBe("");
+    // the help on runs and on pipelines says it
+    const text = (h: How) => (typeof h.text === "string" ? h.text : h.text.join(" "));
+    expect(text(HELP.counts as How)).toContain(stallRule());
+    expect(text(PIPELINE)).toContain(stallRule());
+    expect(text(PIPELINE)).toContain("or the game ended it at a stall");
   });
 
   it("say at a run's end how much smaller it made the side, only when that counts", () => {

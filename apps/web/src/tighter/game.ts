@@ -390,6 +390,20 @@ export function reserveSeed(s: GameState, p: ProblemState): number {
   return runSeed(s.dealer.seed, p.key, index);
 }
 
+/**
+ * Whether the game ends a problem's open run at a stall: its method's `restartAfter` R is set, the run
+ * has done R evaluations (its start's scoring included), and the problem has gone R evaluations
+ * without progress.
+ */
+export function stallEnds(restartAfter: number | null | undefined, runEvaluations: number, sinceGain: number): boolean {
+  return restartAfter != null && restartAfter > 0 && runEvaluations >= restartAfter && sinceGain >= restartAfter;
+}
+
+/** The game ended the problem's run at a stall (stallEnds): it counts as a run that ended by itself. */
+export function endRunAtStall(p: ProblemState): void {
+  p.endedRuns++;
+}
+
 /** A run opened on the problem (its seed reserved before, reserveSeed). */
 export function openedRun(s: GameState, p: ProblemState, now: number): void {
   s.stats.runs++;
