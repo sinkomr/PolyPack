@@ -15,7 +15,8 @@ import type { EvolveMethod } from "./upgrades";
  * scratchpad runs/presets-bench*.mts]. Each method's file gives its side reduction from the Compact
  * board, per problem in that order.
  *
- * Methods without a tuning upgrade (seed, morph) keep their defaults.
+ * Methods without a tuning upgrade keep one setting: seed its defaults, morph 2 stages instead of 7
+ * (methods/morph.ts).
  */
 
 /** Most tuning levels a method has. */
