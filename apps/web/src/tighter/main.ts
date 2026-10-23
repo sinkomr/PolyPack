@@ -207,6 +207,9 @@ const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
 
 let savesDisabled = false;
 let startNote: string | null = null;
+/** What a save from before auto-eval's lower prices was given back, said once as it is read. */
+const refundNote = (rp: number) =>
+  `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
 
 function randomSeed(): number {
   const a = new Uint32Array(1);
@@ -228,7 +231,10 @@ function initialState(): GameState {
   }
   if (text) {
     const r = fromJson(text, now());
-    if (r.ok) return r.state;
+    if (r.ok) {
+      if (r.refunded) startNote = refundNote(r.refunded);
+      return r.state;
+    }
     if (/newer version/.test(r.error)) {
       // never overwrite a save this version cannot read
       savesDisabled = true;
@@ -786,6 +792,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       return false;
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
+    observeSpeed(p, done, t.ms);
     run.evaluations = t.state.evaluations;
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
@@ -974,6 +981,18 @@ function accrueAuto(): void {
 }
 
 /**
+ * How many times slower than the machine of rank.ts's cost table this device runs an evaluation: a
+ * moving average over the steps run here, 1 until one is measured. Auto-eval's jobs are sized with it.
+ */
+let slowness = 1;
+
+function observeSpeed(p: ProblemKey, done: number, ms: number): void {
+  if (!(done > 0) || !(ms > 0)) return;
+  const ratio = ms / done / msPerEval(p.N + p.M + p.P);
+  slowness = 0.8 * slowness + 0.2 * Math.min(100, Math.max(0.01, ratio));
+}
+
+/**
  * The lane offered auto-eval's next job first: the one after the lane that took the last. The lanes
  * share one rate, and at a slow one less than a job a lane is due at each tick, so a fixed order
  * would hand every job to lane 1.
@@ -983,7 +1002,8 @@ let autoTurn = 0;
 /**
  * Auto-eval's next job for this lane, from what it is due, when it may run one. Its rate is in
  * evaluations, whatever the player's click size, and the lanes share it: a job is what is due, at most
- * a quarter second of the lane's share (autoJobEvals), and an evaluation pays the same as a click's.
+ * a quarter second of the lane's share and a quarter second of this device's time on the problem
+ * (autoJobEvals), and an evaluation pays the same as a click's.
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
@@ -1010,8 +1030,10 @@ function autoJob(lv: LaneView): Job | null {
     state.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
-  state.autoDue -= n;
-  return { key: target.key, evals: n, click: false, compact: false };
+  const tp = problem(state, target.key);
+  const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msPerEval(tp.N + tp.M + tp.P) * slowness) : n;
+  state.autoDue -= evals;
+  return { key: target.key, evals, click: false, compact: false };
 }
 
 /** Starts every idle lane that has work, auto-eval's or queued clicks, in turn from autoTurn. */
@@ -3143,7 +3165,7 @@ $("t-import").addEventListener("click", async () => {
   ensureLanes();
   saveNow();
   showFocus(true);
-  text("t-save-note", "Save imported.");
+  text("t-save-note", r.refunded ? `Save imported. ${refundNote(r.refunded)}` : "Save imported.");
   render();
 });
 

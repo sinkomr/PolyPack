@@ -207,7 +207,7 @@ export const DEFAULT_PATIENCE = 1000;
 
 export function newGame(now: number, seed: number): GameState {
   return {
-    version: 2,
+    version: 3,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
