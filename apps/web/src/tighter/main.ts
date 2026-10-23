@@ -107,7 +107,7 @@ import {
   passes,
   rankCandidates,
 } from "./rank";
-import { autoHold, autoTarget } from "./scheduler";
+import { Speeds, autoHold, autoTarget } from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
@@ -862,7 +862,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       return false;
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
-    observeSpeed(p, done, t.ms);
+    observeSpeed(run, p, done, t.ms);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
@@ -1062,15 +1062,27 @@ function accrueAuto(): void {
 }
 
 /**
- * How many times slower than the machine of rank.ts's cost table this device runs an evaluation: a
- * moving average over the steps run here, 1 until one is measured. Auto-eval's jobs are sized with it.
+ * How many times slower than the machine of rank.ts's cost table this device runs an evaluation, for
+ * each method at each tuning level (scheduler.ts Speeds). Auto-eval's jobs are sized with it.
  */
-let slowness = 1;
+const speeds = new Speeds();
+/** The kind of run a speed is kept for: its method at its tuning level. */
+const speedKey = (method: EvolveMethod, level: number) => `${method}@${level}`;
 
-function observeSpeed(p: ProblemKey, done: number, ms: number): void {
-  if (!(done > 0) || !(ms > 0)) return;
-  const ratio = ms / done / msPerEval(p.N + p.M + p.P);
-  slowness = 0.8 * slowness + 0.2 * Math.min(100, Math.max(0.01, ratio));
+function observeSpeed(run: OpenRunView, p: ProblemKey, done: number, ms: number): void {
+  speeds.observe(speedKey(run.method, run.level), msPerEval(p.N + p.M + p.P), done, ms);
+}
+
+/**
+ * The kind of run a job of auto-eval on `p` in this lane goes to: the lane's open run on it, else the
+ * method a new run would likely take (the pipeline's stage, or the select's), or null when Method
+ * match will draw it.
+ */
+function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
+  if (lv.run && lv.lane.open && lv.run.key === p.key) return speedKey(lv.run.method, lv.run.level);
+  const stage = piped(o) ? pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m)) : null;
+  const m = stage ? stage.method : autoMethods(o) ? null : chosenMethod(o);
+  return m ? speedKey(m, tuningLevel(o, m)) : null;
 }
 
 /**
@@ -1111,7 +1123,9 @@ function autoJob(lv: LaneView): Job | null {
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
   const tp = problem(state, target.key);
-  const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msPerEval(tp.N + tp.M + tp.P) * slowness) : n;
+  // at most a quarter second of this device's time on that problem, with that run's method
+  const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), msPerEval(tp.N + tp.M + tp.P)) : 0;
+  const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msEach) : n;
   state.autoDue -= evals;
   return { key: target.key, evals, click: false, compact: false };
 }

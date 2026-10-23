@@ -27,12 +27,14 @@ import { METHODS } from "../src/tighter/methods/worker";
 import { resolvedParams } from "../src/tighter/open-run";
 import { chooseRun, newRunPlan, pipelineMethod } from "../src/tighter/runplan";
 import { readSave, toJson } from "../src/tighter/save";
+import { Speeds } from "../src/tighter/scheduler";
 import {
   EvolveMethod,
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
   advanceHow,
+  autoJobEvals,
   methodParams,
   methods,
   owning,
@@ -310,6 +312,35 @@ describe("Tighter's methods table", () => {
     expect(two.vars!.find(([v]) => v.includes("warm"))![1]).toBe(
       "the evaluations among e in a run's warm-up, the first 722 evaluations of every morph run and the first 1,500 of every lattice run (0 for other runs)",
     );
+  });
+
+  it("size auto-eval's jobs by each method's own speed on this device", () => {
+    const speeds = new Speeds();
+    // nothing measured: the cost table as it is
+    expect(speeds.msEach("mc_compress@0", 2)).toBe(2);
+    expect(speeds.msEach(null, 2)).toBe(2);
+    // mc_compress runs at the table's speed here, harden 6 times slower
+    for (let i = 0; i < 20; i++) speeds.observe("mc_compress@0", 2, 10, 20);
+    speeds.observe("harden@0", 2, 10, 120);
+    expect(speeds.slowness("mc_compress@0")).toBeCloseTo(1, 12);
+    expect(speeds.slowness("harden@0")).toBeCloseTo(6, 12);
+    // harden's steps leave mc_compress's jobs as they were: 150 a second, a quarter second's worth
+    const top = owning([..."auto1 auto2 auto3 auto4 auto5 auto6 auto7 auto8 auto9 auto10".split(" ")] as UpgradeId[]);
+    expect(autoJobEvals(top, 1000, 1, speeds.msEach("mc_compress@0", 2))).toBe(38);
+    // and harden's own jobs keep to a quarter second of its slower evaluations: 250 / 12 ms
+    expect(autoJobEvals(top, 1000, 1, speeds.msEach("harden@0", 2))).toBe(20);
+    // the average moves a fifth of the way at each step
+    speeds.observe("harden@0", 2, 10, 20);
+    expect(speeds.slowness("harden@0")).toBeCloseTo(0.8 * 6 + 0.2 * 1, 12);
+    // a kind not measured yet, or a run Method match has still to draw, is taken as the slowest so far
+    expect(speeds.slowness("asc@1")).toBeCloseTo(0.8 * 6 + 0.2 * 1, 12);
+    expect(speeds.slowness(null)).toBeCloseTo(0.8 * 6 + 0.2 * 1, 12);
+    // steps without evaluations or time teach nothing, and a ratio is kept within 0.01 and 100
+    speeds.observe("asc@1", 2, 0, 50);
+    speeds.observe("asc@1", 2, 5, 0);
+    expect(speeds.slowness("asc@1")).toBeCloseTo(0.8 * 6 + 0.2 * 1, 12);
+    speeds.observe("ls_growth@0", 1, 1, 1e9);
+    expect(speeds.slowness("ls_growth@0")).toBe(100);
   });
 
   it("say at a run's end how much smaller it made the side, only when that counts", () => {
