@@ -60,7 +60,6 @@ import {
   revealed,
   seenKeys,
   slotted,
-  spent,
   stallAfter,
   submitTarget,
 } from "./game";
@@ -104,7 +103,7 @@ import {
   rankCandidates,
 } from "./rank";
 import { autoHold, autoTarget } from "./scheduler";
-import { STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
   HELD_PER_STANDING,
@@ -157,7 +156,6 @@ import {
   offerCount,
   queueSize,
   ringMin,
-  seedsPerProblem,
   tuningLevel,
   upgrade,
   UPGRADES,
@@ -210,6 +208,11 @@ let startNote: string | null = null;
 /** What a save from before auto-eval's lower prices was given back, said once as it is read. */
 const refundNote = (rp: number) =>
   `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
+/** What a save's retired upgrades paid back (save.ts RETIRED), said once as it is read. */
+function retiredNote(r: RetiredRefund): string {
+  const paid = [r.rp > 0 ? `${fmtInt(r.rp)} RP` : "", r.standing > 0 ? `${fmtInt(r.standing)} standing` : ""];
+  return `The ${andList(r.groups)} upgrades have left the tech tree, so the ${andList(paid.filter(Boolean))} they cost came back.`;
+}
 
 function randomSeed(): number {
   const a = new Uint32Array(1);
@@ -232,7 +235,8 @@ function initialState(): GameState {
   if (text) {
     const r = fromJson(text, now());
     if (r.ok) {
-      if (r.refunded) startNote = refundNote(r.refunded);
+      const notes = [r.refunded ? refundNote(r.refunded) : "", r.retired ? retiredNote(r.retired) : ""];
+      if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
     }
     if (/newer version/.test(r.error)) {
@@ -610,10 +614,6 @@ function press(): void {
   const o = owned();
   const compact = compactsFirst(p);
   if (!compact && !evolvable(p) && !compacting(p.key)) return;
-  if (!compact && spent(p, seedsPerProblem(o))) {
-    say(spentText(p));
-    return;
-  }
   const lv = laneFor(p.key);
   if (lv.jobs.filter((j) => j.click).length >= MAX_QUEUED_CLICKS) return;
   lv.jobs.push({ key: p.key, evals: compact ? COMPACT_EVALS : evalsPerClick(o), click: true, compact });
@@ -652,7 +652,7 @@ const levelFits = (o: Owned, r: OpenRunView) =>
 
 /**
  * The run a job on `p` wants: Compact's (mc_compress); else the pipeline's stage for the problem's
- * next seed; else Method match's choice; else the select's method. A run already open in the same
+ * next run; else Method match's choice; else the select's method. A run already open in the same
  * mode is kept while its choice still holds, so the bandit draws only when a new run opens.
  */
 function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): WantedRun {
@@ -775,7 +775,6 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       r.asked !== asked ||
       !sameMode
     ) {
-      if (!job.compact && spent(p, seedsPerProblem(o))) return false;
       if (!(await openRun(lv, p, want, job))) return false;
     } else if (r.mode !== want.mode) {
       // from here on the run is the method's own: what it pays is measured from now
@@ -848,17 +847,11 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
     );
   }
   if (change.points) reveal(state, "points", "upgrades");
-  if (st.ended && !st.closed && !st.error) {
-    const seeds = seedsPerProblem(owned());
+  if (st.ended && !st.closed && !st.error)
     event(
-      `The run with seed ${run.seed} on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}.` +
-        (spent(p, seeds)
-          ? seeds === 1
-            ? " This problem's one seed has now run."
-            : ` All ${fmtInt(seeds)} of your seeds per problem have now run here.`
-          : ` The next click starts a new run with the next seed${nextStageText(p)}.`),
+      `The run on ${problemTitle(p)} stopped improving after ${evals(st.evaluations)}. ` +
+        `The next click starts a new run${nextStageText(p)}.`,
     );
-  }
   // after Stop, the click that was already running does not write over "Stopped"
   if (job.click && p.key === state.focus && !stopped) say(stepMessage(p, change, run, job, done));
   persist();
@@ -868,10 +861,7 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
 }
 
 function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job, done: number): string {
-  const o = owned();
-  const what =
-    `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${run.method}` +
-    `${o.has("seeds") ? ` with seed ${run.seed}` : ""}.`;
+  const what = `${job.compact ? "Compact" : `Click ${fmtInt(state.stats.clicks)}`} ran ${evals(done)} of ${run.method}.`;
   if (!c.improved || c.before === null || c.after === null) return `${what} No improvement on ${show6(p.best ?? 0)}.`;
   // the relative improvement of this one step (the step term of its points), never a measure of the record
   let text =
@@ -890,19 +880,6 @@ function nextStageText(p: ProblemState): string {
   if (!piped(o)) return "";
   const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m));
   return stage ? `, using ${stage.method} (stage ${stage.stage + 1} of ${state.runplan.pipeline.length})` : "";
-}
-
-/** Runs that ran to their end here, of the seeds per problem the player has. */
-const seedsText = (p: ProblemState, seeds: number) =>
-  `${fmtInt(Math.min(p.endedRuns, seeds))} of ${fmtInt(seeds)} seed${seeds === 1 ? "" : "s"} used`;
-
-function spentText(p: ProblemState): string {
-  const o = owned();
-  const n = seedsPerProblem(o);
-  return (
-    `${n === 1 ? "Your one seed" : `All ${fmtInt(n)} of your seeds`} on ${problemTitle(p)} ran until ${n === 1 ? "its run" : "their runs"} stopped improving. ` +
-    `Move on to the next problem${o.has("seeds32") || o.rule === "seed" ? "" : ", or buy more seeds per problem in the tech tree"}.`
-  );
 }
 
 /** Stop was pressed and no click since: the status line keeps saying so. */
@@ -1016,7 +993,6 @@ function autoJob(lv: LaneView): Job | null {
     focus: state.focus,
     busy,
     owned: o,
-    seeds: seedsPerProblem(o),
     // with Auto-advance a lane keeps to its run's problem until that problem stalls
     current: lv.run?.key ?? null,
     stall: stallAfter(state),
@@ -1549,7 +1525,7 @@ const advancing = (o: ReadonlySet<UpgradeId>): boolean =>
 /** Auto-advance's move now (game.ts advancePlan), or null without it. */
 function plan(o: ReadonlySet<UpgradeId>): AdvancePlan | null {
   if (!advancing(o)) return null;
-  return advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o) });
+  return advancePlan(state, { slots: queueSize(o) });
 }
 
 /** A deal is earned by work (a token), whether or not a slot is free. */
@@ -1567,7 +1543,6 @@ async function dealTick(): Promise<void> {
   if (!ownsGame || dealing || now() < dealPausedUntil) return;
   const o = owned();
   const move = plan(o);
-  for (const p of move?.now ?? []) autoDrop(p);
   if (picking(o)) {
     if (state.picks.offers.some((x) => !offerAllowed(o, x)))
       state.picks.offers = state.picks.offers.filter((x) => offerAllowed(o, x));
@@ -1634,9 +1609,8 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked }
 /** A free slot and a lane that would have nothing to do: fewer problems still making progress than lanes (Auto-advance takes an offer). */
 function autoTakes(o: ReadonlySet<UpgradeId>): boolean {
   if (!advancing(o) || !mayDeal()) return false;
-  const seeds = seedsPerProblem(o);
   const stall = stallAfter(state);
-  const moving = slotted(state).filter((p) => !p.closed && !spent(p, seeds) && p.sinceGain < stall);
+  const moving = slotted(state).filter((p) => !p.closed && p.sinceGain < stall);
   return moving.length < laneCount(o);
 }
 
@@ -1949,10 +1923,8 @@ function renderProblem(p: ProblemState | undefined): void {
   text("t-title", problemTitle(p));
   text("t-problem-count", countText(p));
   let note: string;
-  const seeds = seedsPerProblem(owned());
   if (p.closed) note = "This problem is closed. The server takes no more entries for it.";
   else if (p.leaving) note = "This problem leaves the queue once your best board has been sent.";
-  else if (spent(p, seeds)) note = spentText(p);
   else if (p.ourId !== null)
     note =
       `You hold the record for this problem, ${show6(p.verified!)}.` +
@@ -1972,12 +1944,12 @@ function renderProblem(p: ProblemState | undefined): void {
   else
     note = "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.";
   text("t-problem-note", note);
-  // before the queue, one problem at a time: the next one is earned by work (or this one is spent)
+  // before the queue, one problem at a time: the next one is earned by work
   const single = queueSize(owned()) <= 1;
   show("t-next", single && evolvable(p));
   if (single && evolvable(p)) {
     const left = clicksToDeal();
-    const ready = left === 0 || spent(p, seeds);
+    const ready = left === 0;
     $<HTMLButtonElement>("t-next").disabled = !ready || dealing;
     text("t-next", ready ? "Next problem" : `Next problem after ${fmtInt(left)} click${left === 1 ? "" : "s"}`);
     $("t-next").title = ready ? "" : `The next problem is earned after ${workText(left)}.`;
@@ -1994,7 +1966,6 @@ function problemTip(): void {
 function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): void {
   const lv = p ? laneOn(p.key) : undefined;
   const canEvolve = !!p && evolvable(p);
-  const seeds = seedsPerProblem(o);
   // one button: the first click on a board that has only been placed compacts it (100 evaluations)
   const first = !!p && compactsFirst(p);
   const k = evalsPerClick(o);
@@ -2004,8 +1975,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     p.phase === "bare" ||
     p.leaving ||
     p.closed ||
-    (!first && !canEvolve && !compacting(p.key)) ||
-    (canEvolve && spent(p, seeds));
+    (!first && !canEvolve && !compacting(p.key));
   $("t-evolve").title = !p
     ? "There is no problem on the board yet."
     : p.phase === "bare"
@@ -2053,14 +2023,12 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   if (p && run) {
     const going = lv?.progress?.evaluations ?? run.evaluations;
     const how = run.mode === "auto" ? " (auto)" : run.mode === "pipeline" ? " (pipeline)" : "";
-    info = `${run.method}${run.level ? ` · setting ${run.level}` : ""}${how}${o.has("seeds") ? ` · seed ${run.seed}` : ""} · run at ${evals(going)}`;
+    info = `${run.method}${run.level ? ` · setting ${run.level}` : ""}${how} · run at ${evals(going)}`;
     const queued = lv!.jobs.filter((j) => j.click).reduce((t, j) => t + j.evals, 0);
     if (queued) info += ` · ${evals(queued)} queued`;
-    if (o.has("seeds")) info += ` · ${seedsText(p, seeds)}`;
   } else if (p) {
     info = p.phase === "bare" ? "Placing the pieces…" : `${p.P} pieces placed`;
     if (lv?.current?.compact) info = `Compact · mc_compress · ${evals(lv.progress?.evaluations ?? 0)}`;
-    if (o.has("seeds") && p.runs) info += ` · ${seedsText(p, seeds)}`;
   }
   text("t-runinfo", info);
   const b = banner && p && banner.key === p.key ? banner.text : "";
@@ -2339,11 +2307,10 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   text("t-queue-heading", `Queue · ${slots} slots`);
   const list = $("t-queue-list");
   const busy = new Set(lanes.flatMap(laneKeys));
-  const seeds = seedsPerProblem(o);
   const sig = state.queue
     .map(
       (p) =>
-        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${busy.has(p.key)}|${p.key === state.focus}|${spent(p, seeds)}`,
+        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${busy.has(p.key)}|${p.key === state.focus}`,
     )
     .join(";");
   if (sig !== queueSig) {
@@ -2366,9 +2333,7 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                   ? " · no record yet"
                   : "";
         li.dataset.key = p.key;
-        li.append(
-          `${problemTitle(p)}${gap}${status}${spent(p, seeds) ? " · seeds spent" : ""}${busy.has(p.key) ? " · running" : ""}`,
-        );
+        li.append(`${problemTitle(p)}${gap}${status}${busy.has(p.key) ? " · running" : ""}`);
         const actions = document.createElement("span");
         actions.className = "t-q-actions";
         if (p.key !== state.focus && !p.leaving) {
@@ -2447,11 +2412,9 @@ function dealText(o: Owned): string {
         : `The next problem is dealt after ${more}.`
       : `Every slot is full. Each slot earns a new problem per ${workText(DEAL_CLICKS, false)}. Drop a problem to take one.`;
   // with auto-eval off nothing leaves, but the line still says which problem waits and why
-  const due = o.has("advance") ? advancePlan(state, { seeds: seedsPerProblem(o), slots: queueSize(o) }).due : null;
+  const due = o.has("advance") ? advancePlan(state, { slots: queueSize(o) }).due : null;
   if (!due) return line;
-  const why = spent(due, seedsPerProblem(o))
-    ? `Every seed on ${problemTitle(due)} is spent.`
-    : `${problemTitle(due)} has run ${evals(due.sinceGain)} without progress.`;
+  const why = `${problemTitle(due)} has run ${evals(due.sinceGain)} without progress.`;
   if (!advancing(o)) return `${line} ${why} Auto-advance replaces it once you switch auto-eval on.`;
   return `${line} ${why} Auto-advance replaces it ${left > 0 ? `when the next problem is earned, after ${more}` : "as soon as a new problem is found"}.`;
 }
@@ -2615,13 +2578,11 @@ function onDrop(key: string): void {
 
 /**
  * Auto-advance drops a problem exactly as Drop does, and says why; `next` is the problem dealt in
- * its place (none when nothing in the queue was left to run).
+ * its place.
  */
 function autoDrop(p: ProblemState, next?: ProblemKey): void {
   if (problem(state, p.key) !== p || p.leaving) return;
-  const why = spent(p, seedsPerProblem(owned()))
-    ? "because every seed on it has run until it stopped improving"
-    : `after ${evals(p.sinceGain)} without progress`;
+  const why = `after ${evals(p.sinceGain)} without progress`;
   const instead = next ? `, and ${problemTitle(next)} takes its slot` : "";
   const left = dropProblem(p.key);
   const message = left
@@ -2663,7 +2624,7 @@ function renderLanes(o: Owned): void {
     let msg: string;
     if (q && lv.run) {
       msg =
-        `Lane ${i + 1}: ${problemTitle(q)} · ${lv.run.method}${o.has("seeds") ? ` · seed ${lv.run.seed}` : ""} · ` +
+        `Lane ${i + 1}: ${problemTitle(q)} · ${lv.run.method} · ` +
         `run at ${evals(lv.progress?.evaluations ?? lv.run.evaluations)}`;
       if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
@@ -3070,7 +3031,7 @@ $("t-patience").addEventListener("change", () => {
 });
 $("t-next").addEventListener("click", () => {
   const p = focused();
-  if (!p || (clicksToDeal() > 0 && !spent(p, seedsPerProblem(owned())))) return;
+  if (!p || clicksToDeal() > 0) return;
   onDrop(p.key);
 });
 for (const id of ["t-name", "t-agree"]) $(id).addEventListener("input", () => ($(id).dataset.edited = "1"));

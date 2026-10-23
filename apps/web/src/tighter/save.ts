@@ -43,18 +43,46 @@ import {
 const ALL_METHODS = methods(owning(UPGRADES.map((u) => u.id)));
 
 /**
- * Upgrades taken out of the tree, at their price: a save that owns one gets the price back once
- * (the next save no longer owns it). 2026-10-21: auto-eval's bank went, and with it the Away
- * upgrades and Keep the bank; auto-eval runs only while the page is open.
+ * Upgrades taken out of the tree, at their list price: a save that owns one gets the price back once
+ * (the next save no longer owns it), and the page says so by the row's name, `group`.
+ * - 2026-10-21: auto-eval's bank went, and with it the Away upgrades and Keep the bank; auto-eval
+ *   runs only while the page is open.
+ * - 2026-10-22: the Seeds row went (the Seed counter and Seeds: 2 to 32 per problem). Every run
+ *   takes a random seed, and a problem allows any number of runs.
  */
-const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
-  ["away2", { cost: 1200, currency: "rp" }],
-  ["away3", { cost: 12000, currency: "rp" }],
-  ["away4", { cost: 42000, currency: "rp" }],
-  ["away5", { cost: 250000, currency: "rp" }],
-  ["away6", { cost: 1_500_000, currency: "rp" }],
-  ["keepBank", { cost: 2, currency: "standing" }],
+const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing"; group: string }>([
+  ["away2", { cost: 1200, currency: "rp", group: "Away" }],
+  ["away3", { cost: 12000, currency: "rp", group: "Away" }],
+  ["away4", { cost: 42000, currency: "rp", group: "Away" }],
+  ["away5", { cost: 250000, currency: "rp", group: "Away" }],
+  ["away6", { cost: 1_500_000, currency: "rp", group: "Away" }],
+  ["keepBank", { cost: 2, currency: "standing", group: "Away" }],
+  ["seeds", { cost: 300, currency: "rp", group: "Seeds" }],
+  ["seeds2", { cost: 2000, currency: "rp", group: "Seeds" }],
+  ["seeds4", { cost: 7000, currency: "rp", group: "Seeds" }],
+  ["seeds8", { cost: 28000, currency: "rp", group: "Seeds" }],
+  ["seeds16", { cost: 75000, currency: "rp", group: "Seeds" }],
+  ["seeds32", { cost: 400000, currency: "rp", group: "Seeds" }],
 ]);
+
+/** What a save's retired upgrades pay back (RETIRED), and the rows they were in, in RETIRED's order. */
+export interface RetiredRefund {
+  rp: number;
+  standing: number;
+  groups: string[];
+}
+
+/** The refund of the retired upgrades a save's `owned` list holds, each counted once. */
+export function retiredRefund(owned: unknown): RetiredRefund {
+  const out: RetiredRefund = { rp: 0, standing: 0, groups: [] };
+  const ids = new Set(Array.isArray(owned) ? owned : []);
+  for (const [id, r] of RETIRED)
+    if (ids.has(id)) {
+      out[r.currency] += r.cost;
+      if (!out.groups.includes(r.group)) out.groups.push(r.group);
+    }
+  return out;
+}
 /**
  * Levelled upgrades whose range shrank, with the old maximum and the old list price (level j + 1
  * cost `cost` × `growth`^j). Faster auto-eval had 100 levels at 150,000 RP × 1.4 a level while
@@ -178,8 +206,12 @@ export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Recor
   return Math.round(refund * rpCostFactor(owning(ids, levels)));
 }
 
-/** A save read, and the record points it was given back as it was read (none if it was already current). */
-export type LoadResult = { ok: true; state: GameState; refunded?: number } | { ok: false; error: string };
+/**
+ * A save read, the record points it was given back for auto-eval's lower prices as it was read (none
+ * if it was already current), and what its retired upgrades paid back (none if it owned none).
+ */
+export type LoadResult =
+  { ok: true; state: GameState; refunded?: number; retired?: RetiredRefund } | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): number =>
@@ -389,11 +421,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
   // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 10 evaluations a second). Faster
   // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
   if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
-  const refund = { rp: 0, standing: 0 };
-  for (const id of new Set(Array.isArray(save.owned) ? save.owned : [])) {
-    const r = typeof id === "string" ? RETIRED.get(id) : undefined;
-    if (r) refund[r.currency] += r.cost;
-  }
+  const retired = retiredRefund(save.owned);
+  const refund = { rp: retired.rp, standing: retired.standing };
   // levels of levelled upgrades that are owned, within their range. Levels bought above a range that
   // shrank (SHRUNK) are refunded at the list price they were bought at, once: the save keeps only the range.
   const levels: Partial<Record<UpgradeId, number>> = {};
@@ -475,7 +504,13 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const m = migrate(raw, migrations);
   if (!m.ok) return m;
   const refunded = (raw.version as number) < 3 ? num(m.save.autoRefund, 0, 0) : 0;
-  return { ok: true, state: normalize(m.save, now), ...(refunded > 0 ? { refunded } : {}) };
+  const retired = retiredRefund(m.save.owned);
+  return {
+    ok: true,
+    state: normalize(m.save, now),
+    ...(refunded > 0 ? { refunded } : {}),
+    ...(retired.groups.length ? { retired } : {}),
+  };
 }
 
 export function toJson(state: GameState): string {

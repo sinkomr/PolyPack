@@ -39,7 +39,7 @@ async function midGame(page: Page): Promise<void> {
     const s = (window as any).tighter.state;
     s.rp = 5000;
     s.rpEarned = 9000;
-    for (const id of ["trace", "click2", "auto1", "click3", "seeds", "auto2", "click4", "click5", "queue3"])
+    for (const id of ["trace", "click2", "auto1", "click3", "auto2", "click4", "click5", "queue3"])
       if (!s.owned.includes(id)) s.owned.push(id);
     s.reveal.push("score", "points", "upgrades", "queue", "lanes");
   });

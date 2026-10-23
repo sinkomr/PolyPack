@@ -25,7 +25,6 @@ import {
   payAll,
   pendingPoints,
   recordsHeld,
-  spent,
   submitTarget,
   unconfirmedPoints,
   withdrawConsent,
@@ -60,7 +59,6 @@ import {
   methodParams,
   methods,
   queueSize,
-  seedsPerProblem,
   upgrade,
 } from "../src/tighter/upgrades";
 import { drawProblem, newDealer, openDealable } from "../src/tighter/dealer";
@@ -193,7 +191,6 @@ describe("Tighter upgrades", () => {
     ladder(["click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"]);
     ladder(["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10", "autox"]);
     ladder(["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"]);
-    ladder(["seeds2", "seeds4", "seeds8", "seeds16"]);
     // methods come well after the click ladder and a faster auto-eval
     expect(upgrade("basin").requires).toEqual(expect.arrayContaining(["click10", "auto4"]));
     expect(cost("basin")).toBeGreaterThan(cost("click10"));
@@ -313,10 +310,6 @@ describe("Tighter upgrades", () => {
     // a minute of 5 evaluations a second, however many lanes share them
     expect(autoCap(o("auto1", "auto4"))).toBe(5 * 60);
     expect(autoCap(o("click10", "auto1", "auto4", "lanes2", "lanesx"))).toBe(5 * 60);
-    expect(seedsPerProblem(none)).toBe(1);
-    expect(seedsPerProblem(o("seeds2"))).toBe(2);
-    expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);
-    expect(seedsPerProblem(o("seeds16"))).toBe(16);
     // methods in the order they unlock, mc_compress first
     expect(methods(none)).toEqual(["mc_compress"]);
     expect(methods(o("shrink", "basin"))).toEqual(["mc_compress", "basin_hopping", "shrink_repair"]);
@@ -441,24 +434,21 @@ describe("Tighter runs on the board", () => {
     for (let i = 1; i < p.trace.length; i++) expect(p.trace[i][0]).toBeGreaterThan(p.trace[i - 1][0]);
   });
 
-  it("spends a problem's seeds as its runs end by themselves", () => {
+  it("counts the runs that end by themselves, and allows any number of them", () => {
     const { s, p } = game();
     applyLoadAll(p, board(3), 10, null);
     openedRun(s, p, 1, T0);
     applyStep(s, p, step(9.5), T0);
-    expect(spent(p, 1)).toBe(false);
+    expect(p.endedRuns).toBe(0);
     applyStep(s, p, step(9.4, 1, { ended: true }), T0);
     expect(p.endedRuns).toBe(1);
-    expect(spent(p, 1)).toBe(true);
-    expect(spent(p, 2)).toBe(false);
-    // the next seed opens a new run; when it ends too, two seeds are spent
+    // the next run opens as before, and its end counts too: nothing stops a problem's runs
     openedRun(s, p, 2, T0);
     expect(p.runs).toBe(2);
     expect(p.nextSeed).toBe(3);
-    expect(spent(p, 2)).toBe(false);
     applyStep(s, p, step(null, 2, { ended: true }), T0);
-    expect(spent(p, 2)).toBe(true);
-    expect(spent(p, 4)).toBe(false);
+    expect(p.endedRuns).toBe(2);
+    expect(evolvable(p)).toBe(true);
   });
 });
 
@@ -976,7 +966,7 @@ describe("Tighter auto-eval", () => {
       return p;
     });
   }
-  const base = { busy: new Set<string>(), seeds: 1 };
+  const base = { busy: new Set<string>() };
 
   it("keeps lane 1 on the board's problem and lane 2 on another, without Auto-advance", () => {
     const q = queue();
@@ -993,10 +983,9 @@ describe("Tighter auto-eval", () => {
     expect(
       autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", busy: new Set(["21/21/40"]), owned }),
     ).toBeNull();
-    // a problem whose seeds are spent has nothing left to give
-    q[1].endedRuns = 1;
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toBeNull();
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned, seeds: 2 })?.key).toBe("21/21/40");
+    // runs that ended by themselves never take a problem out of auto-eval's hands
+    q[1].endedRuns = 7;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })?.key).toBe("21/21/40");
     // a problem without a record is left to the player
     q[1].endedRuns = 0;
     q[1].phase = "bare";
@@ -1012,9 +1001,9 @@ describe("Tighter auto-eval", () => {
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
     // a lane on a problem that has stalled moves to the one with the fewest evaluations since progress
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned, current: q[0].key })?.key).toBe("27/27/80");
-    // spent problems are skipped, however fresh their last progress
-    q[2].endedRuns = 1;
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
+    // runs that ended there change nothing
+    q[2].endedRuns = 3;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
     q[2].endedRuns = 0;
     q[2].sinceGain = DEFAULT_PATIENCE;
     q[1].sinceGain = DEFAULT_PATIENCE;

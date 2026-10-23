@@ -140,7 +140,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const rows = await page
     .locator("#t-cards .t-band")
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.row));
-  expect(rows).toEqual(["clicks", "auto", "seeds", "queue", "methods", "runs", "problems", "dealer", "records"]);
+  expect(rows).toEqual(["clicks", "auto", "queue", "methods", "runs", "problems", "dealer", "records"]);
   await expect(page.locator("#t-shop-summary")).toHaveText(
     /^0 of \d+ upgrades owned · \d+ still \?\?\?\?\?\? · 1 to buy now$/,
   );
@@ -301,7 +301,7 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
 
   // a pipeline of two stages: lattice starts (a run of about 45 evaluations), then mc_compress
-  await give(page, ["lattice", "seeds", "seeds2", "seeds4", "standing", "pipeline"]);
+  await give(page, ["lattice", "standing", "pipeline"]);
   await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
   const add = async (m: string) => {
     await page.selectOption("#t-pipeline-method", m);
@@ -466,11 +466,15 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     autoDue: st.autoDue,
     auto: st.settings.auto,
   }));
-  // read as version 3, which pays back what Auto-eval cost over its price now (90 - 9 RP), once
-  expect(s).toMatchObject({ version: 3, rp: 123.5 + 81, levels: {}, picks: 0, pipeline: [] });
+  // read as version 3, which pays back what Auto-eval cost over its price now (90 - 9 RP), once, and
+  // the Seed counter's list price (300 RP), now that the Seeds row is gone
+  expect(s).toMatchObject({ version: 3, rp: 123.5 + 81 + 300, levels: {}, picks: 0, pipeline: [] });
   await expect(page.locator("#status")).toContainText("81 RP of what you paid for yours came back");
+  await expect(page.locator("#status")).toContainText(
+    "The Seeds upgrades have left the tech tree, so the 300 RP they cost came back.",
+  );
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
-  expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1", "seeds"]);
+  expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1"]);
   // the record it held is counted for collections; auto-eval is off and owes nothing for the hour away
   expect(s.recorded).toContain(p.key);
   expect(s).toMatchObject({ autoDue: 0, auto: false });

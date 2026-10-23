@@ -4,6 +4,7 @@ import { HELP, METHOD_MATCH, MIN_STEP, PIPELINE, TRANSFERS, andList, superscript
 import type { How } from "../src/tighter/how";
 import { plain } from "../src/tighter/how";
 import { MARKS, RULES } from "../src/tighter/standing";
+import { UPGRADES } from "../src/tighter/upgrades";
 
 const all: [string, How[]][] = [
   ...Object.entries(HELP).map(([id, h]): [string, How[]] => [id, Array.isArray(h) ? h : [h]]),
@@ -94,6 +95,17 @@ describe("Tighter's explanations", () => {
 
   it("call no part of the game the frontier", () => {
     for (const [id, hows] of all) for (const t of hows.flatMap(prose)) expect(t, id).not.toMatch(/frontier/i);
+  });
+
+  it("say nothing of seeds per problem, spent seeds, the Seed counter or a run's seed number", () => {
+    const retired = /seeds? (are |is )?spent|seeds per problem|of your seeds|Seed counter|One seed|with seed \d|with seed \$|· seed /i;
+    for (const [id, hows] of all) for (const t of hows.flatMap(prose)) expect(t, id).not.toMatch(retired);
+    for (const r of RULES) expect(`${r.name} ${r.limit} ${r.reward}`).not.toMatch(retired);
+    for (const u of UPGRADES)
+      for (const t of [u.name, u.effect, ...prose(u.how), ...(u.how.math ?? [])]) expect(t, u.id).not.toMatch(retired);
+    // the page's own messages too, read from its source
+    const main = readFileSync(new URL("../src/tighter/main.ts", import.meta.url), "utf8");
+    expect(main).not.toMatch(retired);
   });
 
   it("format the numbers they share", () => {

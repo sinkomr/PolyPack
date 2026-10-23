@@ -15,7 +15,7 @@ import { msPerEval } from "./rank";
  * no evaluations. Faster auto-eval adds 10 a second a level up to 250, a target the player's CPU
  * caps where it cannot keep up: about 44 % of a core at N+M+P = 85, a whole core from about
  * N+M+P = 130 up (rank.ts), where more lanes spread it over more cores [CALC]. Methods come well
- * after, one at a time, each dearer than the last; seeds and method settings are bought too. Every
+ * after, one at a time, each dearer than the last; method settings are bought too. Every
  * finite ladder ends in a levelled upgrade that can be bought again and again at a growing price, so
  * nothing has a last rung (Faster auto-eval excepted: its limit tops it out).
  *
@@ -67,13 +67,6 @@ export type UpgradeId =
   | "auto9"
   | "auto10"
   | "autox"
-  // seeds
-  | "seeds"
-  | "seeds2"
-  | "seeds4"
-  | "seeds8"
-  | "seeds16"
-  | "seeds32"
   // queue and lanes
   | "queue3"
   | "queue4"
@@ -141,12 +134,11 @@ export type UpgradeId =
 
 /** The shop's rows, in the order they are shown. */
 export type Row =
-  "clicks" | "auto" | "seeds" | "queue" | "methods" | "runs" | "problems" | "dealer" | "records" | "standing";
+  "clicks" | "auto" | "queue" | "methods" | "runs" | "problems" | "dealer" | "records" | "standing";
 
 export const ROWS: readonly { id: Row; title: string }[] = [
   { id: "clicks", title: "Clicks" },
   { id: "auto", title: "Auto-eval" },
-  { id: "seeds", title: "Seeds" },
   { id: "queue", title: "Queue and lanes" },
   { id: "methods", title: "Methods" },
   { id: "runs", title: "Runs" },
@@ -186,8 +178,8 @@ export type Levels = Readonly<Partial<Record<UpgradeId, number>>>;
 
 /**
  * What the player owns: the upgrade ids, the levels of levelled ones, the cycle rule played under (a
- * standing rule can take something away, such as auto-eval or seeds), and the rules finished (whose
- * rewards hold for good).
+ * standing rule can take something away, such as auto-eval), and the rules finished (whose rewards
+ * hold for good).
  */
 export type Owned = ReadonlySet<UpgradeId> & {
   readonly levels?: Levels;
@@ -261,8 +253,6 @@ export const AUTO_MAX = 250;
 export const AUTOX_STEP = 10;
 /** Levels of Faster auto-eval, from the last rung up to AUTO_MAX: 10. */
 const AUTOX_LEVELS = (AUTO_MAX - AUTO.auto10!) / AUTOX_STEP;
-/** Seeds (runs) per problem, by upgrade (1 without any). */
-const SEEDS: Partial<Record<UpgradeId, number>> = { seeds2: 2, seeds4: 4, seeds8: 8, seeds16: 16, seeds32: 32 };
 /** Problem slots, by upgrade (1 without any). */
 const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
 /** Methods in the order they unlock, by upgrade. */
@@ -393,35 +383,6 @@ function autoRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
       note: AUTO_NOTE,
     },
     row: "auto",
-  };
-}
-
-const SEED_TEXT =
-  "A run is one search by one method on one problem, from the problem's best board. A seed is the whole number that starts the run's random choices, so each seed searches differently.";
-
-function seedRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
-  const n = SEEDS[id]!;
-  const prev = Math.max(1, ...Object.values(SEEDS).filter((x) => x < n));
-  return {
-    id,
-    name: `Seeds: ${n} per problem`,
-    cost,
-    requires,
-    effect: `Each problem gets up to ${n} runs, each with its own seed, instead of ${prev}.`,
-    how: {
-      text: [
-        SEED_TEXT,
-        "A run ends by itself when its method stops improving, or after its budget of 100,000 evaluations. Each run that ends so spends one of the problem's seeds, and your next click opens a new run with the next seed. When every seed is spent, Evolve does nothing more on that problem and auto-eval passes it by.",
-        "A run that the game closes (for another problem, another method or a reload) spends no seed, and the next run there still takes a new seed.",
-      ],
-      math: [`${sym("S")} = ${n} × ${sym("d")}`],
-      vars: [
-        [sym("S"), "seeds per problem, the runs that may end by themselves on it"],
-        [sym("d"), "2 once you have finished a cycle under the One seed rule, else 1"],
-      ],
-      note: "Under the One seed rule, S = 1 for that cycle.",
-    },
-    row: "seeds",
   };
 }
 
@@ -680,21 +641,6 @@ export const UPGRADES: readonly Upgrade[] = [
   clickRung("click2", 150, ["trace"]),
   autoRung("auto1", 9, ["click2"]),
   clickRung("click3", 320, ["click2"]),
-  {
-    id: "seeds",
-    name: "Seed counter",
-    cost: 300,
-    requires: ["auto1"],
-    effect: "You see each run's seed and how many of a problem's seeds are spent.",
-    how: {
-      text: [
-        SEED_TEXT,
-        "On each problem the seeds go 1, 2, 3 and so on and are never repeated. Compact, your first click on a new problem, uses seed 1. With the Seed counter, the toolbar and the Lanes panel show each run's seed, and the toolbar shows how many of the problem's seeds are spent.",
-        "A seed is spent when its run ends by itself, because its method stopped improving or it used its budget of 100,000 evaluations. Without a Seeds upgrade a problem has one seed.",
-      ],
-    },
-    row: "seeds",
-  },
   autoRung("auto2", 35, ["auto1", "click3"]),
   clickRung("click4", 500, ["click3"]),
   clickRung("click5", 780, ["click4"]),
@@ -739,7 +685,6 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "clicks",
     levels: { max: 990, growth: 1.25 },
   },
-  seedRung("seeds2", 2000, ["seeds", "click7"]),
   autoRung("auto5", 250, ["auto4", "click10"]),
   dealerRung("rank2", 3000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
@@ -772,7 +717,6 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "problems",
   },
-  seedRung("seeds4", 7000, ["seeds2", "basin"]),
   autoRung("auto6", 450, ["auto5", "basin"]),
   tuneRung("tuneMc", "mc_compress", 8000, ["sweeps10", "basin"]),
   dealerRung("rank4", 9000, ["rank2", "reach2"]),
@@ -787,7 +731,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
         "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”.",
-        `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. A problem whose seeds are all spent is replaced first, before stalled ones. While your records have no name, a problem with an unsent best is never dropped.`,
+        `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. While your records have no name, a problem with an unsent best is never dropped.`,
         "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
       ],
       math: [
@@ -874,7 +818,6 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "queue",
   },
-  seedRung("seeds8", 28000, ["seeds4", "lattice"]),
   dealerRung("rank8", 30000, ["rank4", "ring200"]),
   methodRung("harden", 30000, ["lattice"], true),
   tuneRung("tuneShrink", "shrink_repair", 30000, ["shrink", "tuneMc"]),
@@ -1008,7 +951,6 @@ export const UPGRADES: readonly Upgrade[] = [
   ringRung("ring120", 60000, ["ring200", "batch"]),
   methodRung("asc", 60000, ["morph"], true),
   pickRung("pick5", 70000, ["pick3", "rank8"]),
-  seedRung("seeds16", 75000, ["seeds8", "asc"]),
   {
     id: "collector",
     name: "Collector",
@@ -1122,7 +1064,6 @@ export const UPGRADES: readonly Upgrade[] = [
   },
   tuneRung("tuneGrowth", "ls_growth", 300000, ["growth"], true),
   ringRung("ring50", 400000, ["ring80"], true),
-  seedRung("seeds32", 400000, ["seeds16", "growth"]),
   {
     id: "published",
     name: "Reach: published values",
@@ -1190,10 +1131,10 @@ export const UPGRADES: readonly Upgrade[] = [
     "Head start II",
     3,
     ["head1"],
-    "Each new cycle also starts with Basin hopping, the queue of 3 and 2 seeds.",
+    "Each new cycle also starts with Basin hopping and the queue of 3.",
     {
       text: [
-        `At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), the Auto-eval upgrades up to ${autoRateText(AUTO.auto5!)}, Problem queue: 3, the Seed counter and Seeds: 2 per problem.`,
+        `At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), the Auto-eval upgrades up to ${autoRateText(AUTO.auto5!)} and Problem queue: 3.`,
       ],
     },
   ),
@@ -1206,7 +1147,7 @@ export const UPGRADES: readonly Upgrade[] = [
     {
       text: [
         "Before a reset, you can choose a rule for the next cycle in the Standing panel. The cycle is played under it, and the reset that ends that cycle pays extra standing and gives the rule's reward for good.",
-        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. One seed allows one seed per problem, for twice the seeds per problem. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
+        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
       ],
       math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
       vars: [
@@ -1221,7 +1162,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Pipelines",
     4,
     ["standing"],
-    "You order your methods, and each new seed on a problem runs the next one.",
+    "You order your methods, and each new run on a problem uses the next one.",
     {
       text: [
         "In the Runs panel you list up to 9 methods in order. Each time a run on a problem ends by itself, the next run there uses the next method in the list, and after the last it starts again at the first. A method the cycle's rule forbids is skipped. A run the game closed (for another problem, or a reload) opens again with the same method.",
@@ -1387,7 +1328,7 @@ export function evalsPerClick(o: Owned): number {
 /** Evaluations of Compact: one press that compacts the Load-all board (design §3). */
 export const COMPACT_EVALS = 100;
 
-/** Evaluations a run may do in all before it ends and the next seed takes over. */
+/** Evaluations a run may do in all before it ends by itself and the next run takes over. */
 export const RUN_BUDGET = 100_000;
 
 /**
@@ -1442,12 +1383,6 @@ export const AUTO_SLACK_SECONDS = 60;
 /** Most evaluations auto-eval may be due at once: a minute of its rate (all lanes'), and at least a Compact. */
 export function autoCap(o: Owned): number {
   return Math.max(COMPACT_EVALS, (autoPerSecond(o) ?? 0) * AUTO_SLACK_SECONDS);
-}
-
-/** Seeds per problem: one under the "one seed" cycle rule, twice as many for good once a cycle finished under it. */
-export function seedsPerProblem(o: Owned): number {
-  if (o.rule === "seed") return 1;
-  return highest(o, SEEDS, 1, (a, b) => a > b) * (o.rewards?.includes("seed") ? 2 : 1);
 }
 
 /** The methods the player may run, mc_compress first, then in the order they unlock. */

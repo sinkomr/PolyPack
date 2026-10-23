@@ -104,12 +104,12 @@ export interface ProblemState extends ProblemKey {
   sinceGain: number;
   /** The best at the last progress; null before the first record (a dealt record starts from its own). */
   progressBest: number | null;
-  /** Runs opened here (seeds used). */
+  /** Runs opened here. */
   runs: number;
   /**
-   * Runs that ended by themselves here (their method stopped improving, or their budget ran out). A
-   * run closed by the game (another problem, another method, a reload) does not count: the next one
-   * takes a new seed but not one of the player's seeds per problem.
+   * Runs that ended by themselves here (their method stopped improving, or their budget ran out): a
+   * pipeline moves on to its next stage at each. A run closed by the game (another problem, another
+   * method, a reload) does not count. A problem allows any number of runs.
    */
   endedRuns: number;
   lastRunAt: number;
@@ -328,9 +328,6 @@ export function density(p: ProblemKey, s: number): number {
  */
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
-/** As many runs as the player has seeds per problem have run to their end here: nothing is left to give. */
-export const spent = (p: ProblemState, seeds: number): boolean => p.endedRuns >= seeds;
-
 /** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
 export function applyLoadAll(p: ProblemState, board: PackingConfig, score: number, trimFloor: number | null): void {
   if (p.phase !== "bare") return;
@@ -366,7 +363,7 @@ export interface StepOutcome {
   /** The run as a board it found records it (budget: the evaluations the run had done). */
   run: RunRecord;
   ms: number;
-  /** The run ended by itself (not closed by the game): it uses up one of the player's seeds here. */
+  /** The run ended by itself (not closed by the game): the problem's pipeline moves on a stage. */
   ended: boolean;
   /** A click of the player's (true) or auto-eval's evaluations. */
   click: boolean;
@@ -825,43 +822,33 @@ export function leave(s: GameState, key: string, now: number): void {
 // ---------- Auto-advance: problems that stopped making progress leave ----------
 
 /**
- * Why Auto-advance takes a problem out of the queue, or null while it stays: every seed on it is
- * spent (nothing is left to run), or it ran the player's patience of evaluations without progress.
- * A best that cannot be sent (no name on records yet) is never dropped this way, nor anything with
- * the patience at Never.
+ * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
+ * patience of evaluations without progress. A best that cannot be sent (no name on records yet) is
+ * never dropped this way, nor anything with the patience at Never.
  */
-export function leaveReason(s: GameState, p: ProblemState, seeds: number): "spent" | "stalled" | null {
+export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
   const patience = s.settings.patience;
   if (patience === null || p.leaving || p.closed) return null;
   if (!s.consent && hasUnsent(p)) return null;
-  if (spent(p, seeds)) return "spent";
   return p.sinceGain >= patience ? "stalled" : null;
 }
 
 export interface AdvancePlan {
-  /** Problems that leave now: nothing in the queue is left to run, so no evaluation would earn their replacements. */
-  now: ProblemState[];
   /** The problem that leaves for the next deal, which is earned (null: none due, or no deal earned yet). */
   replace: ProblemState | null;
-  /** The problem due to leave next, spent ones first, then the longest without progress. */
+  /** The problem due to leave next, the longest without progress. */
   due: ProblemState | null;
 }
 
 /**
  * Auto-advance's move (with auto-eval on). A problem due to leave goes only once a new one can take
- * its slot, a deal earned by work (dealer.ts), so the queue never runs short and the lanes
- * keep to the other problems meanwhile. When nothing in the queue is left to run, its spent problems
- * leave at once instead (an empty queue is dealt a problem on credit).
+ * its slot, a deal earned by work (dealer.ts), so the queue never runs short and the lanes keep to
+ * the other problems meanwhile.
  */
-export function advancePlan(s: GameState, o: { seeds: number; slots: number }): AdvancePlan {
-  const queue = slotted(s);
-  const due = queue
-    .map((p) => ({ p, why: leaveReason(s, p, o.seeds) }))
-    .filter((x) => x.why !== null)
-    .sort((a, b) => Number(b.why === "spent") - Number(a.why === "spent") || b.p.sinceGain - a.p.sinceGain)
-    .map((x) => x.p);
-  const runnable = queue.some((p) => !p.closed && !spent(p, o.seeds));
-  const now = runnable ? [] : due.filter((p) => spent(p, o.seeds));
-  const earned = due.length > 0 && !now.length && canDeal(s.dealer, o.slots);
-  return { now, replace: earned ? due[0] : null, due: due[0] ?? null };
+export function advancePlan(s: GameState, o: { slots: number }): AdvancePlan {
+  const due = slotted(s)
+    .filter((p) => leaveReason(s, p) !== null)
+    .sort((a, b) => b.sinceGain - a.sinceGain);
+  const earned = due.length > 0 && canDeal(s.dealer, o.slots);
+  return { replace: earned ? due[0] : null, due: due[0] ?? null };
 }

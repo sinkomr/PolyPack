@@ -86,8 +86,8 @@ export function priceText(cost: number, currency: Currency): string {
 }
 
 /**
- * The owned line, with each ladder folded to where it stands: "2 to 10 evaluations per click",
- * "Seeds: up to 8 per problem", the fastest auto-eval owned.
+ * The owned line, with each ladder folded to where it stands: "2 to 10 evaluations per click", the
+ * fastest auto-eval owned, the largest queue.
  */
 export function foldOwned(names: readonly string[]): string[] {
   const out: string[] = [];
@@ -106,9 +106,7 @@ export function foldOwned(names: readonly string[]): string[] {
       const k = Number(m[1]);
       clickLow = Math.min(clickLow, k);
       put("click", clickLow === k ? n : `${clickLow} to ${k} evaluations per click`);
-    } else if ((m = /^Seeds: (\d+) per problem$/.exec(n)))
-      put("seeds", m[1] === "2" ? n : `Seeds: up to ${m[1]} per problem`);
-    else if (/^Auto-eval: /.test(n)) put("auto", n);
+    } else if (/^Auto-eval: /.test(n)) put("auto", n);
     else if (/^Problem queue: /.test(n)) put("queue", n);
     else out.push(n);
   }
@@ -241,7 +239,6 @@ export function chipName(name: string): string {
   return name
     .replace(/^(\d+) evaluations per click$/, "$1 a click")
     .replace(/^Auto-eval: ([\d,.]+) evaluations? a second$/, "Auto: $1/s")
-    .replace(/^Seeds: (\d+) per problem$/, "Seeds: $1")
     .replace(/^Problem queue: /, "Queue: ")
     .replace(/^Problem sets: N\+M\+P ≥ /, "Size ≥ ")
     .replace(/^Problem sets: every size$/, "Every size")

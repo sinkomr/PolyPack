@@ -49,7 +49,6 @@ describe("Tighter shop", () => {
     expect(v.rows.map((r) => r.id)).toEqual([
       "clicks",
       "auto",
-      "seeds",
       "queue",
       "methods",
       "runs",
@@ -109,11 +108,15 @@ describe("Tighter shop", () => {
     expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
-    const seeds: UpgradeId[] = ["seeds", "seeds2", "seeds4", "seeds8", "seeds16", "seeds32"];
-    const w = shopView(owning(seeds), broke, 8);
-    expect(row(w, "seeds").cards).toEqual([]);
-    expect(row(w, "seeds").owned).toEqual(["Seed counter", "Seeds: up to 32 per problem"]);
-    expect(w.owned).toBe(6);
+    const auto: UpgradeId[] = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10"];
+    const w = shopView(owning([...auto, "autox"], { autox: 10 }), broke, 8);
+    expect(row(w, "auto").cards).toEqual([]);
+    expect(row(w, "auto").owned).toEqual([
+      "Auto-eval",
+      "Auto-eval: 150 evaluations a second",
+      "Faster auto-eval (level 10, the last)",
+    ]);
+    expect(w.owned).toBe(11);
   });
 
   it("shows a levelled upgrade's level and the next level's price", () => {
@@ -193,7 +196,6 @@ describe("Tighter shop chips", () => {
     expect(chipName("7 evaluations per click")).toBe("7 a click");
     expect(chipName("Auto-eval: 1 evaluation a second")).toBe("Auto: 1/s");
     expect(chipName("Auto-eval: 10 evaluations a second")).toBe("Auto: 10/s");
-    expect(chipName("Seeds: 16 per problem")).toBe("Seeds: 16");
     expect(chipName("Problem sets: N+M+P ≥ 120")).toBe("Size ≥ 120");
     expect(chipName("Method: basin_hopping")).toBe("basin_hopping");
     expect(chipName("Dealer: best of 4")).toBe("best of 4");
@@ -331,7 +333,6 @@ describe("Tighter upgrade texts", () => {
     ]);
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
     expect(u("wide").name).toBe("More open problems");
-    expect(u("seeds8").effect).toBe("Each problem gets up to 8 runs, each with its own seed, instead of 4.");
     expect(u("queue4").effect).toBe("The queue holds 4 problems, and the dealer earns a new one every 75 clicks.");
     expect(u("ring80").how.math).toEqual(["<var>N</var> + <var>M</var> + <var>P</var> ≥ 80"]);
     expect(u("rank4").effect).toBe("The dealer draws 4 problems instead of 2 and deals the best one.");
@@ -394,7 +395,7 @@ describe("Tighter upgrade texts", () => {
     expect(text("queue3")).toContain("<var>q</var> × <var>c</var> / 300");
     expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
     expect(text("advance")).toContain("100 evaluations of mc_compress");
-    expect(text("seeds2")).toContain("100,000 evaluations");
+    expect(text("shrink")).toContain("100,000 evaluations");
     expect(text("auto2")).toContain("60 s");
     expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
       0.01, 1.5, 168, 10,

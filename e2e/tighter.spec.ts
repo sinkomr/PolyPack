@@ -384,7 +384,7 @@ test("tighter: auto-eval runs live, an evaluation a second while on, at most a m
   expect(errors).toEqual([]);
 });
 
-test("tighter: a method change opens a new run with the next seed", async ({ page }) => {
+test("tighter: a method change opens a new run", async ({ page }) => {
   test.setTimeout(180_000);
   await fresh(page, 9);
   await firstRecord(page);
@@ -396,7 +396,6 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
     "click4",
     "auto1",
     "click5",
-    "seeds",
     "auto2",
     "click6",
     "click7",
@@ -410,13 +409,13 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
   await buyAll(page, ["basin"]);
   await expect(page.locator("#t-method-box")).toBeVisible();
   expect(await focused(page)).toMatchObject({ runs: 1, nextSeed: 2 });
-  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · seed 1");
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at");
   const runs0 = (await stats(page)).runs;
 
   await page.selectOption("#t-method", "basin_hopping");
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
-  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping · seed 2");
+  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping · run at");
   // the same run goes on with the next click
   await click(page);
   expect((await focused(page)).runs).toBe(2);
@@ -425,7 +424,7 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
   await page.selectOption("#t-method", "mc_compress");
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 3, nextSeed: 4 });
-  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · seed 3");
-  // none of these runs ended by itself, so the problem's one seed is not spent
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at");
+  // a problem allows any number of runs
   await expect(page.locator("#t-evolve")).toBeEnabled();
 });

@@ -158,17 +158,12 @@ test("owner rule: a problem's best is POSTed at most once a minute, also when it
   // the next problem is earned by work (300 clicks, whatever their size), not yet
   await expect(page.locator("#t-next")).toBeDisabled();
   await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
-  // a problem whose seeds are spent (its one run ended by itself) can be left at once
-  await page.evaluate(() => {
-    const s = (window as any).tighter.state;
-    s.queue.find((q: any) => q.key === s.focus).endedRuns = 1;
-  });
+  // once the next problem is earned (a deal given here), the problem can be left at once
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 1));
   await expect(page.locator("#t-next")).toBeEnabled({ timeout: 5_000 });
   await expect(page.locator("#t-next")).toHaveText("Next problem");
-  await expect(page.locator("#t-problem-note")).toContainText("seed");
-  await expect(page.locator("#t-evolve")).toBeDisabled();
   await page.click("#t-next");
-  // the next problem is dealt at once (on credit: there was nothing left to work on)
+  // the next problem is dealt at once
   await expect.poll(async () => (await state(page)).queue.some((q: any) => !q.leaving), { timeout: 20_000 }).toBe(true);
   await sleep(5000);
   const mine = posts(log);
@@ -593,7 +588,6 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
     "click4",
     "auto1",
     "click5",
-    "seeds",
     "auto2",
     "click6",
     "queue3",

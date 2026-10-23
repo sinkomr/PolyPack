@@ -1,4 +1,4 @@
-import { DEFAULT_PATIENCE, ProblemState, evolvable, spent } from "./game";
+import { DEFAULT_PATIENCE, ProblemState, evolvable } from "./game";
 import type { UpgradeId } from "./upgrades";
 
 /**
@@ -13,7 +13,7 @@ import type { UpgradeId } from "./upgrades";
  * progress): moving opens a new run, so lanes that hopped to whichever problem was a click behind
  * would go in circles, restarting a run each click. Once every problem has stalled, a lane keeps to
  * its own until another is a whole patience fresher (stalled problems leave the queue meanwhile,
- * game.ts advancePlan). Problems whose seeds are spent are skipped.
+ * game.ts advancePlan).
  */
 export type AutoAction = "compact" | "evolve";
 
@@ -30,8 +30,6 @@ export function autoTarget(opts: {
   focus: string | null;
   busy: ReadonlySet<string>;
   owned: ReadonlySet<UpgradeId>;
-  /** Seeds the player may use per problem. */
-  seeds: number;
   /** Auto-eval is due a Compact's evaluations (otherwise fresh problems wait and runs go on elsewhere). */
   canCompact?: boolean;
   /** The problem the lane's open run is on (null: none). */
@@ -39,8 +37,8 @@ export function autoTarget(opts: {
   /** Evaluations without progress after which a problem has stalled (game.ts stallAfter). */
   stall?: number;
 }): AutoTarget | null {
-  const { lane, queue, focus, busy, owned, seeds } = opts;
-  const free = queue.filter((p) => workable(p, busy) && !spent(p, seeds));
+  const { lane, queue, focus, busy, owned } = opts;
+  const free = queue.filter((p) => workable(p, busy));
   if (!owned.has("advance")) {
     const ready = free.filter(evolvable);
     const pick = lane === 0 ? ready.find((p) => p.key === focus) : ready.find((p) => p.key !== focus);

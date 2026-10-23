@@ -155,6 +155,55 @@ describe("Tighter saves", () => {
     expect(again.ok && again.state.standing.points).toBe(s.standing.points + 2);
   });
 
+  it("give back the list price of every Seeds card, once, and say which row went", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    const seeds = ["seeds", "seeds2", "seeds4", "seeds8", "seeds16", "seeds32"];
+    raw.owned = [...raw.owned, ...seeds];
+    raw.rp = 100;
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const list = 300 + 2000 + 7000 + 28000 + 75000 + 400000;
+    expect(r.state.owned).toEqual(s.owned);
+    expect(r.state.rp).toBe(100 + list);
+    expect(r.retired).toEqual({ rp: list, standing: 0, groups: ["Seeds"] });
+    // the next save owns them no more: a reload gives nothing back, and says nothing
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.rp).toBe(100 + list);
+    expect(again.ok && again.retired).toBeUndefined();
+    // a save without them is read as it is
+    const none = readSave(JSON.parse(toJson(s)), T0);
+    expect(none.ok && none.retired).toBeUndefined();
+    expect(none.ok && none.state.rp).toBe(s.rp);
+    // the Seed counter and Seeds: 2 per problem alone, as Head start II gave them
+    const head = JSON.parse(toJson(s));
+    head.owned = [...head.owned, "seeds", "seeds2"];
+    const h = readSave(head, T0);
+    expect(h.ok && h.retired).toEqual({ rp: 2300, standing: 0, groups: ["Seeds"] });
+  });
+
+  it("read a cycle played under the One seed rule as a cycle without a rule, its reward forgotten", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    raw.standing = {
+      ...raw.standing,
+      rule: "seed",
+      nextRule: "seed",
+      rulesDone: ["seed", "clicks"],
+      history: [{ startedAt: T0 - 10, endedAt: T0 - 5, earned: 300000, gain: 3, rule: "seed", marks: {} }],
+    };
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.standing).toMatchObject({ rule: null, nextRule: null, rulesDone: ["clicks"] });
+    expect(r.state.standing.history[0]).toMatchObject({ rule: null, gain: 3, earned: 300000 });
+    // the rules finished otherwise keep their rewards: Clicks only's one more evaluation per click
+    const o = owning(r.state.owned, r.state.levels, r.state.standing.rule, r.state.standing.rulesDone);
+    expect(evalsPerClick(o)).toBe(evalsPerClick(owning(s.owned, s.levels)) + 1);
+    expect(o.rule).toBeNull();
+  });
+
   it("keep levels only for owned levelled upgrades, within their range", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));
@@ -500,10 +549,12 @@ describe("Tighter saves of version 1", () => {
     if (!r.ok) return;
     const s = r.state;
     expect(s.version).toBe(SAVE_VERSION);
-    expect(s.owned).toEqual(["trace", "click2", "queue3", "auto1", "seeds", "click3"]);
-    // and on through version 3, which pays back what Auto-eval cost over its price now: 90 - 9 RP
+    expect(s.owned).toEqual(["trace", "click2", "queue3", "auto1", "click3"]);
+    // and on through version 3, which pays back what Auto-eval cost over its price now: 90 - 9 RP,
+    // and the Seed counter's list price, now that the Seeds row is gone
     expect(r.refunded).toBe(81);
-    expect(s).toMatchObject({ rp: 40 + 81, rpEarned: 100, autoDue: 0, consent: true });
+    expect(r.retired).toEqual({ rp: 300, standing: 0, groups: ["Seeds"] });
+    expect(s).toMatchObject({ rp: 40 + 81 + 300, rpEarned: 100, autoDue: 0, consent: true });
     expect(s.stats).toMatchObject({ evaluations: 900, runs: 12, clicks: 12 });
     // the dealer counts its work from the evaluations already run: none is owed from before
     expect(s.dealer).toMatchObject({ seed: 9, draws: 4, dealt: 2, tokens: 0.4, credit: 0 });
@@ -543,7 +594,7 @@ describe("Tighter saves of version 1", () => {
   it("migrate through a save string too", async () => {
     const text = `tighter:1:j:${btoa(JSON.stringify(v1())).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
     const r = await importString(text, T0 + 1000);
-    expect(r.ok && r.state.owned).toEqual(["trace", "click2", "queue3", "auto1", "seeds", "click3"]);
+    expect(r.ok && r.state.owned).toEqual(["trace", "click2", "queue3", "auto1", "click3"]);
   });
 });
 
