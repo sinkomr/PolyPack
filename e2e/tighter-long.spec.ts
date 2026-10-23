@@ -130,7 +130,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 21);
-  await grant(page, 5);
+  await grant(page, 400);
   // the tech tree is a pane of its own, beside the board; its tab counts what can be bought
   await expect(page.locator("#t-tab-count")).toHaveText("1");
   await expect(page.locator("#t-next-up")).toHaveText("1 upgrade to buy in the tech tree");
@@ -161,21 +161,21 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   // a mystery revealed: Lattice bought, Method: harden shows as itself
   const before = CLICK_LADDER.concat(["auto1", "auto2", "auto3", "auto4", "basin", "shrink", "penalty"]);
   await give(page, before);
-  await grant(page, 21_000);
+  await grant(page, 168_000);
   await buy(page, "lattice");
   await expect(page.locator('.t-card[data-id="harden"] h3')).toHaveText("harden");
-  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("30,000 RP");
+  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("240,000 RP");
 
   // a levelled upgrade bought twice: one more evaluation per click a level, the price growing
-  await grant(page, 4500);
+  await grant(page, 15_000 + 18_750);
   await buy(page, "clickx");
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 2,500 RP");
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 18,750 RP");
   await expect(page.locator('.t-card[data-id="clickx"] .t-level')).toHaveText("L1");
   const rp = await game(page, (s) => s.rp);
   await page.click('.t-card[data-id="clickx"] button');
   await expect.poll(() => game(page, (s) => s.levels.clickx)).toBe(2);
-  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 2500, 6);
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 3,125 RP");
+  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 18_750, 6);
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 23,438 RP");
   await expect(page.locator("#t-evolve")).toBeAttached();
 
   // Standing: its row appears once Standing is owned, priced in standing
@@ -200,20 +200,20 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(errors).toEqual([]);
 });
 
-test("long game: auto-eval comes right after 2 evaluations per click, for 9 RP", async ({ page }) => {
+test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP", async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 22);
   await firstRecord(page);
   await expect(page.locator("#t-auto")).toBeHidden();
-  await grant(page, 5);
+  await grant(page, 400);
   await buy(page, "trace");
-  await grant(page, 150);
+  await grant(page, 1500);
   await buy(page, "click2");
-  // the next card along is Auto-eval at 9 RP, before 3 evaluations per click (320)
+  // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (1,800)
   const card = page.locator('.t-card[data-id="auto1"]');
-  await expect(card).toContainText(/(^|\D)9 RP/);
+  await expect(card).toContainText(/(^|\D)80 RP/);
   await expect(card).toHaveAttribute("data-state", "dear");
-  await grant(page, 9);
+  await grant(page, 80);
   await buy(page, "auto1");
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
@@ -389,9 +389,9 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await give(page, ["standing", "rules", "head1"]);
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
-    s.standing.cycleEarned = 300_000;
-    s.rp += 300_000;
-    s.rpEarned += 300_000;
+    s.standing.cycleEarned = 2_400_000;
+    s.rp += 2_400_000;
+    s.rpEarned += 2_400_000;
   });
   await expect(page.locator("#t-standing")).toBeVisible();
   await expect(page.locator("#t-st-preview")).toContainText("Reset now for 1 standing");
@@ -488,12 +488,17 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     autoDue: st.autoDue,
     auto: st.settings.auto,
   }));
-  // read as version 3, which pays back what Auto-eval cost over its price now (90 - 9 RP), once, and
-  // the Seed counter's list price (300 RP), now that the Seeds row is gone
-  expect(s).toMatchObject({ version: 3, rp: 123.5 + 81 + 300, levels: {}, picks: 0, pipeline: [] });
-  await expect(page.locator("#status")).toContainText("81 RP of what you paid for yours came back");
+  // read as version 4. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
+  // and the Seed counter's list price (300 RP), now that the Seeds row is gone. Version 4 multiplies every
+  // amount by what the save could buy next costs now over then: Auto-eval: 2 a second and 5 evaluations
+  // per click, 2,900 RP now and 815 then
+  const f = 2900 / 815;
+  expect(s).toMatchObject({ version: 4, levels: {}, picks: 0, pipeline: [] });
+  expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
+  await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
+  await expect(page.locator("#status")).toContainText(`${Math.round(81 * f)} RP of what you paid for yours came back`);
   await expect(page.locator("#status")).toContainText(
-    "The Seeds upgrades have left the tech tree, so the 300 RP they cost came back.",
+    `The Seeds upgrades have left the tech tree, so the ${Math.round(300 * f).toLocaleString("en-US")} RP they cost came back.`,
   );
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
   expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1"]);

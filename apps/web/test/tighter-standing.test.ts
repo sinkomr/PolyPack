@@ -36,8 +36,8 @@ function lateGame(extra: UpgradeId[] = []): GameState {
   for (const id of want) add(id);
   s.levels = { rentx: 3, lanesx: 2, clickx: 5 };
   s.rp = 123_456;
-  s.rpEarned = 2_000_000;
-  s.standing.cycleEarned = 1_000_000;
+  s.rpEarned = 16_000_000;
+  s.standing.cycleEarned = 8_000_000;
   s.autoDue = 50;
   s.settings.auto = true;
   const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
@@ -51,13 +51,14 @@ describe("Tighter standing", () => {
   it("is earned from the cycle's points and the records held, never from records alone", () => {
     expect(standingGain(RESET_MIN - 1, 1000)).toBe(0);
     expect(standingGain(RESET_MIN, 0)).toBe(1);
-    expect(standingGain(1_000_000, 0)).toBe(2);
-    expect(standingGain(1_000_000, 100)).toBe(4);
-    expect(standingGain(25_000_000, 0)).toBe(10);
-    // the next point: √(c / 250,000) = 3 at 2.25 M
-    expect(nextStandingAt(1_000_000, 0)).toBe(2_250_000);
+    expect(RESET_MIN).toBe(2_000_000);
+    expect(standingGain(8_000_000, 0)).toBe(2);
+    expect(standingGain(8_000_000, 100)).toBe(4);
+    expect(standingGain(200_000_000, 0)).toBe(10);
+    // the next point: √(c / 2,000,000) = 3 at 18 M
+    expect(nextStandingAt(8_000_000, 0)).toBe(18_000_000);
     expect(nextStandingAt(0, 0)).toBe(RESET_MIN);
-    expect(standingGain(nextStandingAt(1_000_000, 25), 25)).toBe(3);
+    expect(standingGain(nextStandingAt(8_000_000, 25), 25)).toBe(3);
     expect(ruleBonus(0)).toBe(0);
     expect(ruleBonus(1)).toBe(1);
     expect(ruleBonus(5)).toBe(3);
@@ -82,7 +83,7 @@ describe("Tighter standing", () => {
     expect(gain).toBe(2);
     expect(s.standing).toMatchObject({ points: 2, total: 2, resets: 1, cycleEarned: 0, cycleStartedAt: T0 + 90 * MIN });
     expect(s.rp).toBe(0);
-    expect(s.rpEarned).toBe(2_000_000);
+    expect(s.rpEarned).toBe(16_000_000);
     expect(s.owned.sort()).toEqual(["collections", "rent", "rentx", "standing"].sort());
     expect(s.levels).toEqual({ rentx: 3 });
     expect(s.queue).toBe(queue);
@@ -91,7 +92,7 @@ describe("Tighter standing", () => {
     expect(s.autoDue).toBe(0);
     expect(s.settings.auto).toBe(false);
     expect(s.standing.history).toHaveLength(1);
-    expect(s.standing.history[0]).toMatchObject({ startedAt: T0, endedAt: T0 + 90 * MIN, earned: 1_000_000, gain: 2 });
+    expect(s.standing.history[0]).toMatchObject({ startedAt: T0, endedAt: T0 + 90 * MIN, earned: 8_000_000, gain: 2 });
     // the history keeps when the cycle reached its milestones
     expect(Object.keys(s.standing.history[0].marks)).toEqual(
       expect.arrayContaining(["click2", "auto1", "basin", "ready"]),

@@ -241,18 +241,18 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (5 RP), labels it
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (400 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
   await openBoard(page);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  expect(await rp(page)).toBeCloseTo(before - 5, 9);
+  expect(await rp(page)).toBeCloseTo(before - 400, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
-  // evaluations per click: 2 per click, then 3
-  await grant(page, 1000);
+  // evaluations per click: 2 per click (1,500 RP), then 3 (1,800 RP)
+  await grant(page, 3300);
   await buyAll(page, ["click2"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×2");
   let e = (await stats(page)).evaluations;
@@ -326,7 +326,7 @@ test("tighter: auto-eval runs live, an evaluation a second while on, at most a m
   await page.fill("#t-name", "Idle Player");
   await page.check("#t-agree");
   await page.click("#t-consent-save");
-  await grant(page, 5000);
+  await grant(page, 6000);
   await expect(page.locator("#t-auto")).toBeHidden();
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×4");
@@ -396,7 +396,7 @@ test("tighter: a method change opens a new run", async ({ page }) => {
   test.setTimeout(180_000);
   await fresh(page, 9);
   await firstRecord(page);
-  await grant(page, 50_000);
+  await grant(page, 100_000);
   await buyAll(page, [
     "trace",
     "click2",

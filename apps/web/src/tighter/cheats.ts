@@ -117,7 +117,9 @@ export function mountCheats(dialogBody: HTMLElement, host: CheatHost): HTMLEleme
   section.append(
     heading,
     intro,
-    amountForm("t-cheat-rp", "Record points", 10_000, "any", "Add RP", (n) => apply({ rp: n, earned: earned.checked })),
+    amountForm("t-cheat-rp", "Record points", 100_000, "any", "Add RP", (n) =>
+      apply({ rp: n, earned: earned.checked }),
+    ),
     earnedLabel,
     amountForm("t-cheat-standing", "Standing", 10, "1", "Add standing", (n) => apply({ standing: n })),
     note,

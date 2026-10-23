@@ -453,7 +453,7 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   expect((await state(page)).stats.evaluations).toBe(102);
   await expect(page.locator("#t-hold")).toHaveText("");
 
-  await grant(page, 5000);
+  await grant(page, 6000);
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
@@ -580,7 +580,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   endPhase("consent and 60 manual clicks");
 
   // grant points through the page's handle, then buy the path to the second lane through the cards
-  await grant(page, 200_000);
+  await grant(page, 400_000);
   const path = [
     "trace",
     "click2",

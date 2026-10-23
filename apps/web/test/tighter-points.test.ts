@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { SCORE_TIE, improvesOn } from "@polypack/geometry";
-import { FLOOR, gapOf, recordPoints, shapeWeight } from "../src/tighter/points";
+import { FLOOR, GAP_WEIGHT, SIZE_WEIGHT, gapOf, recordPoints, shapeWeight } from "../src/tighter/points";
 
-// The worked examples of design.md §5 (balance/results/points-examples.txt), at F = 1e-9.
+// The worked examples of design.md §5 (balance/results/points-examples.txt), at F = 1e-9, with the size
+// and gap weights of 2026-10-22 (10,000 each, 100 times design.md's): the step term and the bonuses are
+// as they were, the size and gap terms 100 times.
 const P33 = { N: 33, M: 47, P: 197 };
 
 describe("Tighter record points", () => {
@@ -18,23 +20,27 @@ describe("Tighter record points", () => {
     expect(shapeWeight(100, 100)).toBeCloseTo(0.04, 12);
   });
 
+  it("weighs the size and gap terms 10,000 each", () => {
+    expect([SIZE_WEIGHT, GAP_WEIGHT]).toEqual([10_000, 10_000]);
+  });
+
   it("reproduces (a), the first record of 33-gons in a 47-gon, P 197", () => {
     const p = recordPoints({ ...P33, sPrev: 12.524084913326904, sNew: 11.887296419456838, tier: "open", first: true })!;
     expect(p.nibble).toBeCloseTo(8.71, 2);
-    expect(p.size).toBeCloseTo(5.22, 2);
-    expect(p.gap).toBeCloseTo(27.17, 2);
+    expect(p.size).toBeCloseTo(521.83, 2);
+    expect(p.gap).toBeCloseTo(2716.64, 2);
     expect(p.bonus).toBe(10);
     expect(p.firstBonus).toBe(true);
-    expect(p.total).toBeCloseTo(13.18, 2);
+    expect(p.total).toBeCloseTo(840.02, 2);
   });
 
   it("reproduces (b), one Evolve click, and (d), basin hopping's jump", () => {
     expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 11.863522, tier: "open" })!.total).toBeCloseTo(
-      2.24,
+      37.28,
       2,
     );
     expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 10.834199, tier: "open" })!.total).toBeCloseTo(
-      23.43,
+      2114.18,
       2,
     );
   });
@@ -45,7 +51,50 @@ describe("Tighter record points", () => {
     const p = recordPoints({ N: 7, M: 7, P: 197, sPrev: s, sNew: s * (1 - 5e-4), tier: "loose", beatOther: true })!;
     expect(p.c).toBe(3);
     expect(p.beatBonus).toBe(true);
-    expect(p.total / 3).toBeCloseTo(12.23, 2);
+    expect(p.total / 3).toBeCloseTo(65.12, 2);
+  });
+
+  it("pays the size and gap terms by where a run ends, however many steps it takes", () => {
+    const s0 = 11.887296419456838;
+    const s1 = s0 * (1 - 0.003);
+    const one = recordPoints({ ...P33, sPrev: s0, sNew: s1, tier: "open" })!;
+    let size = 0;
+    let gap = 0;
+    let prev = s0;
+    for (let i = 1; i <= 50; i++) {
+      const next = s0 * (1 - (0.003 * i) / 50);
+      const p = recordPoints({ ...P33, sPrev: prev, sNew: next, tier: "open" })!;
+      size += p.size;
+      gap += p.gap;
+      prev = next;
+    }
+    expect(size).toBeCloseTo(one.size, 6);
+    expect(gap).toBeCloseTo(one.gap, 6);
+  });
+
+  it("pays for how much smaller a board gets, while every improving step still pays its step term", () => {
+    // the shrink_repair report's worked board (21-gons in a 24-gon, 40 pieces, after mc_compress ended):
+    // in 1,000 evaluations paid in 10-evaluation clicks, mc_compress improved 65 clicks for 0.008 % in all,
+    // shrink_repair 37 clicks for 0.494 %. With weights of 100 mc_compress earned more (204 RP against 159).
+    const s0 = 6.332331689937728;
+    const run = (clicks: number, cut: number) => {
+      let total = 0;
+      let steps = 0;
+      let prev = s0;
+      for (let i = 1; i <= clicks; i++) {
+        const next = s0 * (1 - (cut * i) / clicks);
+        total += recordPoints({ N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.total;
+        steps += recordPoints({ N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.nibble;
+        prev = next;
+      }
+      return { total, steps };
+    };
+    const mc = run(65, 0.00008);
+    const shrink = run(37, 0.00494);
+    expect(shrink.total).toBeGreaterThan(2 * mc.total);
+    // each of mc_compress's nibbles of about 1.2e-6 still pays its step term of about 4
+    expect(mc.steps / 65).toBeGreaterThan(4);
+    expect(mc.total).toBeGreaterThan(0.75 * mc.steps * shapeWeight(21, 24));
   });
 
   it("pays nothing at or below the floor, and one point just above it", () => {

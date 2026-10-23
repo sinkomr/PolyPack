@@ -20,6 +20,7 @@ import {
   SAVE_VERSION,
   autoPriceRefund,
   exportString,
+  pointsScale,
   fromJson,
   importString,
   migrate,
@@ -130,7 +131,7 @@ describe("Tighter saves", () => {
       [101, 6.4 + 1e-13],
     ]);
     expect(a).toMatchObject({ evaluations: 101, sinceGain: 0, runs: 1, endedRuns: 0, nextSeed: 2, unconfirmed: 0 });
-    expect(r.state).toMatchObject({ version: 3 });
+    expect(r.state).toMatchObject({ version: 4 });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
@@ -313,7 +314,7 @@ describe("Tighter saves", () => {
   it("round-trip through an export string", async () => {
     const s = played();
     const text = await exportString(s);
-    expect(text).toMatch(/^tighter:3:[zj]:[A-Za-z0-9_-]+$/);
+    expect(text).toMatch(/^tighter:4:[zj]:[A-Za-z0-9_-]+$/);
     const r = await importString(text, T0 + 5000);
     expect(r.ok && r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // whitespace from a copy and paste is ignored
@@ -552,11 +553,17 @@ describe("Tighter saves of version 1", () => {
     const s = r.state;
     expect(s.version).toBe(SAVE_VERSION);
     expect(s.owned).toEqual(["trace", "click2", "queue3", "auto1", "click3"]);
-    // and on through version 3, which pays back what Auto-eval cost over its price now: 90 - 9 RP,
-    // and the Seed counter's list price, now that the Seeds row is gone
-    expect(r.refunded).toBe(81);
-    expect(r.retired).toEqual({ rp: 300, standing: 0, groups: ["Seeds"] });
-    expect(s).toMatchObject({ rp: 40 + 81 + 300, rpEarned: 100, autoDue: 0, consent: true });
+    // and on through version 3, which pays back what Auto-eval cost over its price then: 90 - 9 RP,
+    // and the Seed counter's list price, now that the Seeds row is gone; and through version 4, which
+    // multiplies every amount by what the next upgrades cost now over what they cost then
+    const f = pointsScale(["trace", "click2", "queue3", "auto1", "click3"], {});
+    expect(r.rescaled).toBe(f);
+    expect(r.refunded).toBe(Math.round(81 * f));
+    expect(r.retired).toEqual({ rp: Math.round(300 * f), standing: 0, groups: ["Seeds"] });
+    expect(s).toMatchObject({ autoDue: 0, consent: true });
+    expect(s.rp).toBeCloseTo((40 + 81) * f + Math.round(300 * f), 9);
+    expect(s.rpEarned).toBeCloseTo(100 * f, 9);
+    expect(s.queue[0].rp).toBeCloseTo(30 * f, 9);
     expect(s.stats).toMatchObject({ evaluations: 900, runs: 12, clicks: 12 });
     // the dealer counts its work from the evaluations already run: none is owed from before
     expect(s.dealer).toMatchObject({ seed: 9, draws: 4, dealt: 2, tokens: 0.4, credit: 0 });
@@ -641,10 +648,13 @@ describe("Tighter saves of version 2", () => {
     // the rungs at 90 % of what they cost (a tenth is today's price): 0.9 × 107,590
     const ladder = 0.9 * (90 + 350 + 800 + 1350 + 2500 + 4500 + 9000 + 16000 + 28000 + 45000);
     expect(ladder).toBeCloseTo(96_831, 6);
-    // Faster auto-eval's three levels: 100,000, 160,000 and 256,000 then, 10,000, 16,000 and 25,600 now
+    // Faster auto-eval's three levels: 100,000, 160,000 and 256,000 then, 10,000, 16,000 and 25,600 in
+    // version 3; all of it in version 3's points, which version 4 multiplies by the save's scale
     const faster = 90_000 + 144_000 + 230_400;
-    expect(r.refunded).toBe(96_831 + faster);
-    expect(r.state.rp).toBe(s.rp + 96_831 + faster);
+    const f = pointsScale([...clicks, ...rungs, "autox"], { autox: 3 });
+    expect(r.rescaled).toBe(f);
+    expect(r.refunded).toBe(Math.round((96_831 + faster) * f));
+    expect(r.state.rp).toBeCloseTo((s.rp + 96_831 + faster) * f, 6);
     expect(r.state.version).toBe(SAVE_VERSION);
     expect(r.state.levels).toEqual({ autox: 3 });
     expect("autoRefund" in r.state).toBe(false);
@@ -672,11 +682,13 @@ describe("Tighter saves of version 2", () => {
     let kept = 0;
     for (let j = 0; j < 10; j++)
       kept += Math.max(0, Math.min(100_000 * 1.6 ** j, 150_000 * 1.4 ** j) - 10_000 * 1.6 ** j);
-    let past = 0;
-    for (let j = 10; j < 14; j++) past += Math.round(150_000 * 1.4 ** j);
     const rungsBack = 0.9 * (90 + 350 + 800 + 1350 + 2500 + 4500 + 9000 + 16000 + 28000);
-    expect(r.refunded).toBe(Math.round(rungsBack + kept));
-    expect(r.state.rp).toBe(s.rp + Math.round(rungsBack + kept) + past);
+    const f = pointsScale([...clicks, ...rungs.slice(0, 9), "autox"], { autox: 10 });
+    expect(r.refunded).toBe(Math.round(Math.round(rungsBack + kept) * f));
+    // the levels past 10, refunded as the save is read, in the points of their time too
+    let pastNow = 0;
+    for (let j = 10; j < 14; j++) pastNow += Math.round(150_000 * 1.4 ** j * f);
+    expect(r.state.rp).toBeCloseTo((s.rp + Math.round(rungsBack + kept)) * f + pastNow, 6);
     // auto10, given to a save with Faster auto-eval from before it, was never paid for
     expect(r.state.owned).toContain("auto10");
     expect(r.state.levels).toEqual({ autox: 10 });
@@ -686,13 +698,104 @@ describe("Tighter saves of version 2", () => {
     const standing: UpgradeId[] = ["standing", "head1", "head2"];
     // Head start I and II give Auto-eval up to 10 a second (auto1 to auto5): only auto6 and auto7 were paid for
     const r = readSave(v2([...clicks, ...rungs.slice(0, 7), ...standing]), T0);
-    expect(r.ok && r.refunded).toBe(4050 + 8100);
+    const f = pointsScale([...clicks, ...rungs.slice(0, 7), ...standing], {});
+    expect(r.ok && r.refunded).toBe(Math.round((4050 + 8100) * f));
     // two levels of Quick study: everything was 19 % cheaper, and so is what comes back
     const study = autoPriceRefund(["auto1", "auto2", "auto3", "standing", "study"], { study: 2 });
     expect(study).toBe(Math.round((81 + 315 + 720) * 0.81));
     // a save of version 2 without auto-eval gets nothing, and says so
     const none = readSave(v2(["trace", "click2"]), T0);
     expect(none.ok && none.refunded).toBeUndefined();
-    expect(none.ok && none.state.rp).toBe(played().rp);
+    expect(none.ok && none.state.rp).toBeCloseTo(played().rp * pointsScale(["trace", "click2"], {}), 9);
+  });
+});
+
+describe("Tighter saves of version 3", () => {
+  /** A save as version 3 wrote it, its record points in the points of the weights of 100. */
+  const v3 = (owned: string[]) => {
+    const raw = JSON.parse(toJson(played()));
+    return {
+      ...raw,
+      version: 3,
+      owned,
+      levels: {},
+      rp: 160,
+      rpEarned: 1000,
+      standing: {
+        ...raw.standing,
+        cycleEarned: 800,
+        history: [{ startedAt: 0, endedAt: 1, earned: 5000, gain: 1, rule: null, marks: {} }],
+      },
+      economy: {
+        ...raw.economy,
+        base: { "24/30/40": 50 },
+        rentPaid: 12.5,
+        lastRent: { key: "24/30/40", rp: 2, at: T0 },
+      },
+    };
+  };
+
+  it("value a point by the new prices over the old of what the save could buy next", () => {
+    // nothing owned: Trace detail, 400 RP now and 5 then
+    expect(pointsScale([], {})).toBe(80);
+    // 3 evaluations per click is all it can buy next: 1,800 now, 320 then
+    expect(pointsScale(["trace", "click2", "auto1"], {})).toBe(1800 / 320);
+    // Auto-eval: 2 a second, 4 evaluations per click and Dealer: best of 2
+    expect(pointsScale(["trace", "click2", "queue3", "auto1", "click3"], {})).toBe(
+      (100 + 2200 + 20000) / (35 + 500 + 3000),
+    );
+    // a levelled upgrade counts its next level, which grows by the same factor then and now
+    const ladder: UpgradeId[] = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8"];
+    const next = pointsScale([...ladder, "click9", "click10", "clickx", "sweeps10", "queue3", "rank2"], { clickx: 2 });
+    expect(next).toBeGreaterThan(6);
+    expect(next).toBeLessThan(8);
+    // a save past Basin hopping buys at 8 times the old prices
+    const past: UpgradeId[] = [...ladder, "click9", "click10", "auto1", "auto2", "auto3", "auto4", "auto5"];
+    expect(
+      pointsScale([...past, "basin", "auto6", "sweeps10", "queue3", "rank2", "clickx"], { clickx: 990 }),
+    ).toBeCloseTo(8, 9);
+  });
+
+  it("multiply every record point by that scale, once, and start Method match over", () => {
+    const raw = v3(["trace", "click2", "auto1"]);
+    raw.runplan = { ...raw.runplan, bandit: { "open|mc_compress": { n: 4, mean: 2, m2: 0.1 } } };
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const f = 1800 / 320;
+    expect(r.rescaled).toBe(f);
+    // the bank buys what it bought before: half of 3 evaluations per click then, and now
+    expect(r.state.rp).toBeCloseTo(900, 9);
+    expect(r.state.rpEarned).toBeCloseTo(1000 * f, 9);
+    expect(r.state.standing.cycleEarned).toBeCloseTo(800 * f, 9);
+    expect(r.state.standing.history[0].earned).toBeCloseTo(5000 * f, 9);
+    expect(r.state.economy.base["24/30/40"]).toBeCloseTo(50 * f, 9);
+    expect(r.state.economy.rentPaid).toBeCloseTo(12.5 * f, 9);
+    expect(r.state.economy.lastRent!.rp).toBeCloseTo(2 * f, 9);
+    const before = played();
+    const [a, b] = [r.state.queue[0], before.queue[0]];
+    expect(a.rp).toBeCloseTo(b.rp * f, 9);
+    expect(a.unconfirmed).toBeCloseTo(b.unconfirmed * f, 9);
+    expect(a.sending!.rp).toBeGreaterThan(0);
+    expect(a.sending!.rp).toBeCloseTo(b.sending!.rp * f, 9);
+    expect(r.state.past[0].rp).toBeCloseTo(3 * f, 9);
+    // what Method match learned measured the old points; the dealer's ratios have no unit and stay
+    expect(r.state.runplan.bandit).toEqual({});
+    expect(r.state.picks.bandit).toEqual(before.picks.bandit);
+    // the save it writes is of version 4: read again, nothing changes
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.rescaled).toBeUndefined();
+    expect(again.ok && again.state.rp).toBe(r.state.rp);
+    expect(again.ok && again.state.standing.cycleEarned).toBe(r.state.standing.cycleEarned);
+  });
+
+  it("give back a retired upgrade's list price in today's points", () => {
+    const r = readSave(v3(["trace", "click2", "auto1", "seeds"]), T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const f = 1800 / 320;
+    expect(r.retired).toEqual({ rp: Math.round(300 * f), standing: 0, groups: ["Seeds"] });
+    expect(r.state.rp).toBeCloseTo(160 * f + Math.round(300 * f), 9);
+    expect(r.state.owned).toEqual(["trace", "click2", "auto1"]);
   });
 });

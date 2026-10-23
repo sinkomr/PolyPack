@@ -214,7 +214,8 @@ export const DEFAULT_PATIENCE = 1000;
 
 export function newGame(now: number, seed: number): GameState {
   return {
-    version: 3,
+    // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
+    version: 4,
     createdAt: now,
     rp: 0,
     rpEarned: 0,

@@ -1,4 +1,5 @@
 import { FRONTIER, FRONTIER_P, FRONTIER_SIDES, ProblemKey } from "./frontier";
+import { RESET_MIN } from "./points";
 import type { GameState } from "./game";
 import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
@@ -206,8 +207,8 @@ export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string
 
 // ---------- resets ----------
 
-/** Record points a cycle must earn before it can be reset [SPEC]. */
-export const RESET_MIN = 250_000;
+/** Record points a cycle must earn before it can be reset (points.ts, beside the weights it scales with). */
+export { RESET_MIN } from "./points";
 /** Records held per point of standing at a reset [SPEC]. */
 export const HELD_PER_STANDING = 50;
 
@@ -216,7 +217,7 @@ export const heldCount = (s: GameState) =>
   s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 
 /**
- * Standing a reset gives now [SPEC]: √(cycle RP / 250,000) + records held / 50, floored; nothing
+ * Standing a reset gives now [SPEC]: √(cycle RP / RESET_MIN) + records held / 50, floored; nothing
  * before the cycle has earned RESET_MIN, so held records alone never pay for a reset.
  */
 export function standingGain(cycleEarned: number, held: number): number {

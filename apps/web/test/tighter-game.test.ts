@@ -162,11 +162,11 @@ describe("Tighter upgrades", () => {
   it("level up again and again at a growing price; Quick study makes record-point prices cheaper", () => {
     const s = newGame(T0, 1);
     s.owned = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"];
-    expect(costOf(ownedSet(s), "clickx")).toBe(2000);
-    s.rp = 2000 + 2500;
+    expect(costOf(ownedSet(s), "clickx")).toBe(15000);
+    s.rp = 15000 + 18750;
     expect(buy(s, "clickx")).toBe(true);
     expect(level(ownedSet(s), "clickx")).toBe(1);
-    expect(costOf(ownedSet(s), "clickx")).toBe(2500);
+    expect(costOf(ownedSet(s), "clickx")).toBe(18750);
     expect(buy(s, "clickx")).toBe(true);
     expect(s.rp).toBe(0);
     expect(evalsPerClick(ownedSet(s))).toBe(12);
@@ -175,7 +175,7 @@ describe("Tighter upgrades", () => {
     s.standing.points = 2;
     expect(buy(s, "study")).toBe(true);
     expect(s.standing.points).toBe(0);
-    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(2000 * 1.25 ** 2 * 0.9));
+    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(15000 * 1.25 ** 2 * 0.9));
     expect(costOf(ownedSet(s), "study")).toBe(Math.round(2 * 1.6));
     expect(laneCount(owning(["lanes2"]), 16)).toBe(2);
     expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 5 }), 16)).toBe(7);
@@ -207,44 +207,29 @@ describe("Tighter upgrades", () => {
     expect(upgrade("auto4").requires).toEqual(["auto3", "click7"]);
     expect(upgrade("auto5").requires).toEqual(["auto4", "click10"]);
     expect(upgrade("auto6").requires).toEqual(["auto5", "basin"]);
-    // a tenth of what each rung cost when the rungs ran 1 to 10 evaluations a second, and Faster
-    // auto-eval's first level a tenth of its old one too
-    const tenth = {
-      auto1: 90,
-      auto2: 350,
-      auto3: 800,
-      auto4: 1350,
-      auto5: 2500,
-      auto6: 4500,
-      auto7: 9000,
-      auto8: 16000,
-      auto9: 28000,
-      auto10: 45000,
-      autox: 100000,
+    // auto-eval keeps the tenth of 2026-10-22: each rung costs at most a sixth of the upgrade that gates
+    // it, so it is bought as soon as its gate opens
+    const gates: Partial<Record<UpgradeId, UpgradeId>> = {
+      auto1: "click2",
+      auto2: "click3",
+      auto3: "click4",
+      auto4: "click7",
+      auto5: "click10",
+      auto6: "basin",
+      auto7: "lanes2",
+      auto9: "asc",
     };
-    for (const [id, was] of Object.entries(tenth)) expect(cost(id as UpgradeId), id).toBe(was / 10);
-    // each rung costs less than the rung of the same id did when the rungs ran 0.5 to 120
-    // evaluations a second in each lane, and Faster auto-eval's first level less than its old one
-    const old = {
-      auto1: 100,
-      auto2: 400,
-      auto3: 900,
-      auto4: 1450,
-      auto5: 2800,
-      auto6: 8000,
-      auto7: 24000,
-      auto8: 38000,
-      auto9: 90000,
-      autox: 150000,
-    };
-    for (const [id, was] of Object.entries(old)) expect(cost(id as UpgradeId), id).toBeLessThan(was);
+    for (const [id, gate] of Object.entries(gates)) {
+      expect(upgrade(id as UpgradeId).requires, id).toContain(gate);
+      expect(cost(id as UpgradeId), id).toBeLessThanOrEqual(cost(gate!) / 6);
+    }
   });
 
   it("are gated by their prerequisites and by points", () => {
     const owned = new Set<UpgradeId>();
     expect(available(owned).map((u) => u.id)).toEqual(["trace"]);
-    expect(canBuy(owned, 4.99, "trace")).toEqual({ ok: false, reason: "points" });
-    expect(canBuy(owned, 5, "trace")).toEqual({ ok: true });
+    expect(canBuy(owned, cost("trace") - 0.01, "trace")).toEqual({ ok: false, reason: "points" });
+    expect(canBuy(owned, cost("trace"), "trace")).toEqual({ ok: true });
     expect(canBuy(owned, 1e6, "click2")).toEqual({ ok: false, reason: "locked" });
     owned.add("trace");
     expect(canBuy(owned, 1e6, "trace")).toEqual({ ok: false, reason: "owned" });
@@ -276,9 +261,9 @@ describe("Tighter upgrades", () => {
 
   it("spend points, and turn into game parameters", () => {
     const s = newGame(T0, 1);
-    s.rp = 4;
+    s.rp = cost("trace") - 1;
     expect(buy(s, "trace")).toBe(false);
-    s.rp = cost("click2") + 5;
+    s.rp = cost("click2") + cost("trace");
     expect(buy(s, "trace")).toBe(true);
     expect(buy(s, "trace")).toBe(false);
     expect(buy(s, "click2")).toBe(true);
