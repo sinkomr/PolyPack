@@ -138,9 +138,10 @@ describe("Tighter's methods table", () => {
 
   it("opens a run with the player's parameters, the run budget and the problem's board, unless the method says otherwise", () => {
     const { p, board } = loaded(21, 24, 12);
-    const o = owning(["harden", "tuneHarden"], { tuneHarden: 2 });
+    const o = owning(["harden", "tuneHarden", "sweeps10", "tuneMc"], { tuneHarden: 2, tuneMc: 1 });
+    const mc = methodParams(o, "mc_compress");
+    expect(runSetup("mc_compress", mc, p)).toEqual({ params: mc, budget: RUN_BUDGET, start: board });
     const base = methodParams(o, "harden");
-    expect(runSetup("harden", base, p)).toEqual({ params: base, budget: RUN_BUDGET, start: board });
     // the method's own run settings, from the player's and the problem's
     const other: PackingConfig = { ...board, pieces: board.pieces.map((q) => ({ ...q, x: q.x + 1 })) };
     const seen: unknown[] = [];
@@ -245,7 +246,7 @@ describe("Tighter's methods table", () => {
     expect(text(PIPELINE)).toContain(stallRule());
     expect(text(PIPELINE)).toContain("or the game ended it at a stall");
     // a method's own sentence on when its runs end goes with them, in the table's order
-    expect(runEndRules()).toBe("");
+    expect(runEndRules()).toContain(methodGame("harden").runEnds!);
     expect(
       runEndRules({
         basin_hopping: { runEnds: "A basin_hopping run ends after 1,000 evaluations." },
