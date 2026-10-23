@@ -175,21 +175,22 @@ describe("Tighter saves", () => {
     return r.state;
   };
 
-  it("read a save from before the ladder of one evaluation a second a rung: each rung at its new rate", () => {
+  it("read a save from an earlier ladder: each rung at its new rate", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));
-    // auto5 ran 15 evaluations a second in each lane: it now runs 5 in all
+    // auto5 ran 15 evaluations a second in each lane, then 5 in all: it now runs 10 in all
     raw.owned = ["trace", "click10", ...rungs.slice(0, 5), "queue3", "lanes2"];
     raw.levels = {};
     const t = load(raw);
     expect(t.owned).toEqual(raw.owned);
-    expect(autoPerSecond(owning(t.owned))).toBe(5);
+    expect(autoPerSecond(owning(t.owned))).toBe(10);
     // the ids are kept, so nothing is refunded
     expect(t.rp).toBe(s.rp);
-    for (let i = 1; i <= rungs.length; i++) expect(autoPerSecond(owning(rungs.slice(0, i)))).toBe(i);
+    const rates = [1, 2, 3, 5, 10, 20, 35, 60, 100];
+    for (let i = 1; i <= rungs.length; i++) expect(autoPerSecond(owning(rungs.slice(0, i)))).toBe(rates[i - 1]);
   });
 
-  it("read a save with Faster auto-eval's old levels: auto10 given, the levels kept as one evaluation a second each", () => {
+  it("read a save with Faster auto-eval's old levels: auto10 given, the levels kept at 10 evaluations a second each", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));
     // the last era: 3 levels of × 1.3 on 120 a second in each lane, after auto9
@@ -204,7 +205,8 @@ describe("Tighter saves", () => {
     expect(r.state.levels).toEqual({ clickx: 30, autox: 3 });
     const o = owning(r.state.owned, r.state.levels);
     expect(evalsPerClick(o)).toBe(40);
-    expect(autoPerSecond(o)).toBe(13);
+    // 150 a second of auto10 and 10 more a level: 180
+    expect(autoPerSecond(o)).toBe(180);
     // nothing due from before the load, whatever unit it was counted in
     expect(r.state.autoDue).toBe(0);
     expect(r.state.autoAt).toBe(T0);

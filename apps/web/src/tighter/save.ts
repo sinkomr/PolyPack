@@ -58,7 +58,8 @@ const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
  * Levelled upgrades whose range shrank, with the old maximum and the old list price (level j + 1
  * cost `cost` × `growth`^j). Faster auto-eval had 100 levels at 150,000 RP × 1.4 a level while
  * auto-eval's rate was in clicks, and 3 at that price while it multiplied a rate in evaluations a
- * second by 1.3. Now it adds one evaluation a second a level, 10 levels at a new price.
+ * second by 1.3. Then it added one evaluation a second a level, 10 levels at 100,000 RP × 1.6 a
+ * level, and now 10 a second a level, the same 10 levels at a tenth of that: a level kept is worth more.
  * Levels past the new maximum are refunded at the price they were bought at; none past the old
  * maximum could have been bought. A save loaded while the maximum was 3 kept 3 levels and had the
  * rest refunded then, so nothing is refunded twice: the levels a save still has are kept.
@@ -321,7 +322,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
-  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 5 evaluations a second). Faster
+  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 10 evaluations a second). Faster
   // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
   if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
   const refund = { rp: 0, standing: 0 };

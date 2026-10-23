@@ -321,12 +321,12 @@ describe("Tighter upgrade texts", () => {
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
     expect(u("auto2").effect).toBe("Auto-eval runs 2 evaluations a second in all instead of 1.");
-    expect(u("auto6").effect).toBe("Auto-eval runs 6 evaluations a second in all instead of 5.");
-    expect(u("auto9").name).toBe("Auto-eval: 9 evaluations a second");
-    expect(u("auto10").name).toBe("Auto-eval: 10 evaluations a second");
-    expect(u("autox").effect).toBe("Each level adds 1 evaluation a second to auto-eval, up to 20 in all.");
+    expect(u("auto6").effect).toBe("Auto-eval runs 20 evaluations a second in all instead of 10.");
+    expect(u("auto9").name).toBe("Auto-eval: 100 evaluations a second");
+    expect(u("auto10").name).toBe("Auto-eval: 150 evaluations a second");
+    expect(u("autox").effect).toBe("Each level adds 10 evaluations a second to auto-eval, up to 250 in all.");
     expect(u("autox").how.math).toEqual([
-      "<var>r</var> = min(20, 10 + <var>a</var>)",
+      "<var>r</var> = min(250, 150 + 10 × <var>a</var>)",
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
@@ -348,12 +348,14 @@ describe("Tighter upgrade texts", () => {
       expect(text(id)).toContain("whatever your evaluations per click");
     expect(text("click5")).toContain("Auto-eval keeps its own rate in evaluations a second");
     expect(text("clickx")).toContain("Auto-eval keeps its own rate in evaluations a second");
-    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms) and 180 (7.35 ms)
-    expect(text("autox")).toContain("keep about 3.5 % of one core busy there, and about 15 % at N + M + P = 180");
-    expect(text("autox")).toContain("Only from about N + M + P = 490 up does an evaluation take 50 ms or more");
-    expect(text("autox")).toContain("so level 10 reaches the limit of 20 a second");
+    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms), and where 250 a
+    // second need more than a core (4 ms an evaluation)
+    expect(text("autox")).toContain("so 250 evaluations a second keep about 44.3 % of one core busy there");
+    expect(text("autox")).toContain("From about N + M + P = 130 up an evaluation takes 4 ms or more");
+    expect(text("autox")).toContain("more lanes spread the work over more cores");
+    expect(text("autox")).toContain("so level 10 reaches the limit of 250 a second");
     expect(text("head1")).toContain("Auto-eval at 1 evaluation a second");
-    expect(text("head2")).toContain("the Auto-eval upgrades up to 5 evaluations a second");
+    expect(text("head2")).toContain("the Auto-eval upgrades up to 10 evaluations a second");
   });
 
   it("say that the lanes share auto-eval's rate, and never that each lane runs it", () => {

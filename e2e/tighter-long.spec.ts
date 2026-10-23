@@ -199,7 +199,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(errors).toEqual([]);
 });
 
-test("long game: auto-eval comes right after 2 evaluations per click, for 90 RP", async ({ page }) => {
+test("long game: auto-eval comes right after 2 evaluations per click, for 9 RP", async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 22);
   await firstRecord(page);
@@ -208,11 +208,11 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 90 RP"
   await buy(page, "trace");
   await grant(page, 150);
   await buy(page, "click2");
-  // the next card along is Auto-eval at 90 RP, before 3 evaluations per click (320)
+  // the next card along is Auto-eval at 9 RP, before 3 evaluations per click (320)
   const card = page.locator('.t-card[data-id="auto1"]');
-  await expect(card).toContainText("90 RP");
+  await expect(card).toContainText(/(^|\D)9 RP/);
   await expect(card).toHaveAttribute("data-state", "dear");
-  await grant(page, 90);
+  await grant(page, 9);
   await buy(page, "auto1");
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
@@ -597,7 +597,7 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
   await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
-  // auto-eval at its limit of 20 evaluations a second, shared by the two lanes: every new problem gets
+  // auto-eval at its limit of 250 evaluations a second, shared by the two lanes: every new problem gets
   // its Compact, although a lane with a problem to work takes each job as it comes due (a Compact owes
   // the rest)
   await page.evaluate(() => {
