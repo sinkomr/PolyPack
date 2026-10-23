@@ -62,8 +62,8 @@ describe("Tighter shop", () => {
     expect(v.owned).toBe(0);
     expect(v.total).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
     // the first card can be worked toward; the rest are locked or mysteries
-    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "5 RP", needs: [] });
-    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
+    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "400 RP", needs: [] });
+    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "1,500 RP" });
     expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");
   });
@@ -86,11 +86,11 @@ describe("Tighter shop", () => {
     expect(harden.label).not.toMatch(/harden/i);
     expect(v.mysteries).toBe(UPGRADES.filter((u) => u.mystery && u.row !== "standing").length);
     // owning the prerequisite reveals it
-    const w = shopView(owning(["lattice"]), { rp: 30000, standing: 0 }, 8);
+    const w = shopView(owning(["lattice"]), { rp: 240000, standing: 0 }, 8);
     expect(card(w, "harden")).toMatchObject({
       state: "buyable",
       name: "Method: harden",
-      price: "30,000 RP",
+      price: "240,000 RP",
       needs: [],
     });
     expect(card(w, "harden")!.how).toBe(UPGRADES.find((u) => u.id === "harden")!.how);
@@ -132,17 +132,18 @@ describe("Tighter shop", () => {
 
   it("shows a levelled upgrade's level and the next level's price", () => {
     const o = owning(["click10", "clickx"], { clickx: 2 });
-    const v = shopView(o, { rp: 3125, standing: 0 }, 8);
+    // 15,000 × 1.25²
+    const v = shopView(o, { rp: 23438, standing: 0 }, 8);
     expect(card(v, "clickx")).toMatchObject({
       state: "buyable",
       level: 2,
-      price: "next level 3,125 RP",
+      price: "next level 23,438 RP",
       levelText: "Level 2",
     });
-    expect(card(v, "clickx")!.label).toBe("Buy One more evaluation per click level 3 for 3125 record points");
+    expect(card(v, "clickx")!.label).toBe("Buy One more evaluation per click level 3 for 23438 record points");
     expect(row(v, "clicks").owned).toContain("One more evaluation per click (level 2)");
     const t = shopView(owning(["sweeps10", "basin", "tuneMc"], { tuneMc: 1 }), broke, 8);
-    expect(card(t, "tuneMc")).toMatchObject({ level: 1, levelText: "Level 1 of 3", price: "next level 24,000 RP" });
+    expect(card(t, "tuneMc")).toMatchObject({ level: 1, levelText: "Level 1 of 3", price: "next level 192,000 RP" });
     const full = shopView(owning(["sweeps10", "basin", "tuneMc"], { tuneMc: 3 }), broke, 8);
     expect(card(full, "tuneMc")).toBeUndefined();
     expect(row(full, "runs").owned).toContain("mc_compress tuning (level 3, the last)");
@@ -217,12 +218,12 @@ describe("Tighter shop chips", () => {
 describe("Tighter tech tree", () => {
   it("shows every upgrade as a node with its state, owned ones included, the Standing row once Standing is owned", async () => {
     const { treeView, MYSTERY: M } = await import("../src/tighter/shop");
-    const funds = { rp: 200, standing: 0 };
+    const funds = { rp: 2000, standing: 0 };
     const v = treeView(owning(["trace"]), funds, 8);
     const node = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!;
     expect(v.nodes.length).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
     expect(node("trace").state).toBe("owned");
-    expect(node("click2")).toMatchObject({ state: "buyable", price: "150 RP" });
+    expect(node("click2")).toMatchObject({ state: "buyable", price: "1,500 RP" });
     expect(node("click3").state).toBe("locked");
     expect(node("harden")).toMatchObject({ state: "mystery", name: M });
     expect(v.buyable).toBe(1);
@@ -418,8 +419,9 @@ describe("Tighter upgrade texts", () => {
       1, 1, 0.1, 0.004,
     ]);
     expect(room("loose", 0.01)).toBeCloseTo(0.3 + 25 * 0.01, 12);
-    expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([0.5, 0.005, 3, 1.77]);
-    expect(text("rank2")).toContain("× 0.5 ×");
+    expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([4, 0.005, 3, 1.77]);
+    expect(text("rank2")).toContain("× 4 ×");
+    expect(text("learning")).toContain("(w × c × R × 4)");
     expect(text("reach2")).toContain("≥ 0.005");
     expect([LEARN_MIN_EVALS, MAX_RATIO, MIN_OBSERVED_EVALS, MAX_STAGES]).toEqual([200, 20, 20, 9]);
     expect(text("learning")).toContain("at least 200 evaluations");
@@ -432,9 +434,10 @@ describe("Tighter upgrade texts", () => {
     expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
-    expect([RESET_MIN, HELD_PER_STANDING]).toEqual([250_000, 50]);
+    expect([RESET_MIN, HELD_PER_STANDING]).toEqual([2_000_000, 50]);
     expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
-    expect(text("standing")).toContain("250,000");
+    expect(text("standing")).toContain("earned 2,000,000 record points");
+    expect(text("standing")).toContain("/ 2,000,000)");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
 });

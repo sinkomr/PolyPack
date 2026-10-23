@@ -165,6 +165,83 @@ export const MIGRATIONS: Record<number, Migration> = {
 };
 
 /**
+ * The list price of every record-point upgrade before 2026-10-22, when the size and gap weights were
+ * 100 (points.ts). Levelled upgrades grew by the same factor a level then as now.
+ */
+const PRICE_BEFORE_V4: Partial<Record<UpgradeId, number>> = {
+  trace: 5,
+  click2: 150,
+  auto1: 9,
+  click3: 320,
+  auto2: 35,
+  click4: 500,
+  click5: 780,
+  auto3: 80,
+  click6: 950,
+  queue3: 1000,
+  click7: 1100,
+  click8: 1400,
+  click9: 1550,
+  sweeps10: 1600,
+  click10: 1700,
+  auto4: 135,
+  clickx: 2000,
+  auto5: 250,
+  rank2: 3000,
+  basin: 5000,
+  reach2: 6000,
+  auto6: 450,
+  tuneMc: 8000,
+  rank4: 9000,
+  shrink: 10000,
+  advance: 11000,
+  pick3: 14000,
+  penalty: 15000,
+  lanes2: 18000,
+  ring200: 20000,
+  filters: 20000,
+  tuneBasin: 20000,
+  lattice: 21000,
+  auto7: 900,
+  rent: 25000,
+  queue4: 25000,
+  continuous: 26000,
+  rank8: 30000,
+  harden: 30000,
+  tuneShrink: 30000,
+  wide: 30000,
+  collections: 35000,
+  auto8: 1600,
+  batch: 40000,
+  tunePenalty: 40000,
+  morph: 45000,
+  retake: 45000,
+  transfer: 50000,
+  lanesx: 60000,
+  rentx: 60000,
+  ring120: 60000,
+  asc: 60000,
+  pick5: 70000,
+  collector: 80000,
+  tuneHarden: 80000,
+  auto9: 2800,
+  auto10: 4500,
+  learning: 100_000,
+  queue6: 120_000,
+  growth: 120_000,
+  autox: 10000,
+  ring80: 150_000,
+  tuneAsc: 150_000,
+  methodMatch: 160_000,
+  tuneGrowth: 300_000,
+  ring50: 400_000,
+  published: 500_000,
+  standing: 750_000,
+  ring30: 1_000_000,
+  ringAll: 3_000_000,
+};
+
+/**
  * The lowest list price each Auto-eval rung had before version 3: what it cost from 2026-10-21
  * (it cost more before that). Faster auto-eval's level j + 1 had the lower of 100,000 × 1.6^j (from
  * 2026-10-21, 10 levels) and 150,000 × 1.4^j (before, 100 levels).
@@ -185,8 +262,8 @@ const autoxBefore = (j: number) => Math.min(100_000 * Math.pow(1.6, j), 150_000 
 
 /**
  * What a save gets back for auto-eval's lower prices: for each Auto-eval rung and each Faster
- * auto-eval level it owns, the price before (AUTO_BEFORE) less the price now, at the save's Quick
- * study discount. The rungs its head starts give it each cycle cost nothing, and get nothing back;
+ * auto-eval level it owns, the price before (AUTO_BEFORE) less its price in version 3 (PRICE_BEFORE_V4,
+ * since the prices of 2026-10-22 are in other points), at the save's Quick study discount. The rungs its head starts give it each cycle cost nothing, and get nothing back;
  * Faster auto-eval's levels past its 10 are SHRUNK's, refunded whole when the save is read. Never more
  * than the save paid: the prices before are the lowest they ever were, and Quick study only grows.
  */
@@ -201,11 +278,11 @@ export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Recor
   for (const [h, list] of Object.entries(HEAD_STARTS)) if (owned.has(h as UpgradeId)) list?.forEach(give);
   let refund = 0;
   for (const [id, before] of Object.entries(AUTO_BEFORE) as [UpgradeId, number][])
-    if (owned.has(id) && !free.has(id)) refund += Math.max(0, before - upgrade(id).cost);
+    if (owned.has(id) && !free.has(id)) refund += Math.max(0, before - PRICE_BEFORE_V4[id]!);
   const x = upgrade("autox");
   if (owned.has("autox") && x.levels)
     for (let j = 0; j < Math.min(levels.autox ?? 0, x.levels.max); j++)
-      refund += Math.max(0, autoxBefore(j) - x.cost * Math.pow(x.levels.growth, j));
+      refund += Math.max(0, autoxBefore(j) - PRICE_BEFORE_V4.autox! * Math.pow(x.levels.growth, j));
   return Math.round(refund * rpCostFactor(owning(ids, levels)));
 }
 

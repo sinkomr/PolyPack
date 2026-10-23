@@ -3,12 +3,21 @@ import { SCORE_TIE, areaLowerBound, improvesOn } from "@polypack/geometry";
 /**
  * Record points (RP), design.md §5. For a verified improvement from s_prev to s_new:
  *
- *   RP = w · c · [ (1 + log10(Δ / F)) + 100 ln(s_prev / s_new) + 100 ln(g_prev / g_new) + bonus ]
+ *   RP = w · c · [ (1 + log10(Δ / F)) + W_s ln(s_prev / s_new) + W_g ln(g_prev / g_new) + bonus ]
  *
  * with Δ = 1 − s_new / s_prev, g = s / areaLowerBound − 1, w = d(N) d(M) and c the contest weight
  * of the problem's tier. Only improvements that count are paid: those `improvesOn` accepts, i.e.
  * Δ > F with F = SCORE_TIE = 1e-9 relative, exactly the improvements the server makes leader.
  * Everything here is game-only arithmetic on server-visible numbers.
+ *
+ * The size and gap terms telescope: over a run they add up to W_s ln(s₀/s₁) + W_g ln(g₀/g₁)
+ * whatever path it takes, so they pay for how much smaller the board got. The step term is paid once
+ * for each step that improves. With weights of 100 (until 2026-10-22) the step term was 80 to 99 % of
+ * what methods earned, so points counted improving steps: mc_compress, which improves a hair on
+ * almost every evaluation, out-earned methods that cut the side 10 to 60 times more. At 10,000 each,
+ * the methods' points per evaluation rank as their side cuts do on the method reports' measured runs
+ * (Spearman 0.99 at 40-evaluation jobs, 0.77 at 10-evaluation clicks), and a nibble still pays its
+ * step term of 1 to about 6 points (methods-2026-10-22/economy.md) [CALC].
  */
 
 /** The floor F: the smallest relative improvement that counts, equal to the server's tie tolerance. */
@@ -31,9 +40,20 @@ export const TIER_LABEL: Record<Tier, string> = {
   published: "published value",
 };
 
-/** Points per unit of ln(s_prev / s_new) and of ln(g_prev / g_new). */
-export const SIZE_WEIGHT = 100;
-export const GAP_WEIGHT = 100;
+/**
+ * Points per unit of ln(s_prev / s_new) and of ln(g_prev / g_new). One weight for both: on open
+ * problems the gap term pays (1 + g) / g ≈ 4 to 11 times the size term for the same cut and carries
+ * most of the ranking, and the published values' gaps (median 9.8 %, under 2 % for 1.9 % of them)
+ * keep it from running away near the bound [CALC].
+ */
+export const SIZE_WEIGHT = 10_000;
+export const GAP_WEIGHT = 10_000;
+/**
+ * Record points a cycle must earn before it can be reset [SPEC]: 250,000 at the weights of 100, 8 times
+ * that now, as the prices from Basin hopping on (upgrades.ts). It lives here so the tree's texts
+ * can read it without importing standing.ts, which imports the tree.
+ */
+export const RESET_MIN = 2_000_000;
 /** A first record whose gap beats the free floor's by at least 10 %. */
 export const FIRST_RECORD_BONUS = 10;
 export const FIRST_RECORD_GAP_RATIO = 0.9;

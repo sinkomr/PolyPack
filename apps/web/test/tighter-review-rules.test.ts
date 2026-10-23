@@ -96,9 +96,9 @@ describe("tighter review: points", () => {
       const want =
         shapeWeight(N, M) *
         (tier === "open" ? 1 : 3) *
-        (1 + Math.log10(d / 1e-9) + 100 * Math.log(sPrev / sNew) + 100 * Math.log(gp / gn) + bonus);
+        (1 + Math.log10(d / 1e-9) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn) + bonus);
       expect(pts).not.toBeNull();
-      expect(pts!.total).toBeCloseTo(want, 9);
+      expect(Math.abs(pts!.total - want)).toBeLessThan(1e-12 * Math.max(1, want));
     }
   });
 

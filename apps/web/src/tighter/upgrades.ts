@@ -4,7 +4,8 @@ import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { msPerEval } from "./rank";
+import { RESET_MIN } from "./points";
+import { RP_PER_EVAL, msPerEval } from "./rank";
 
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
@@ -22,18 +23,23 @@ import { msPerEval } from "./rank";
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
  * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
  *
- * Costs: the evaluations-per-click ladder is priced from a simulation of real runs (8 games of one
- * click a second, a new problem per 300 clicks' worth of evaluations; balance/stage1c.mts) at about
- * 85 % of the median points earned between Michael's targets: "2 per click" after about 100 clicks,
- * "3" about 150 clicks later, "4" 200 later, and so on (step n needs about 100·n(n+1)/2
- * evaluations) [CALC]. The Auto-eval rungs cost a tenth of what they did when they ran 1 to 10
- * evaluations a second, and Faster auto-eval's levels a tenth too, so a rung is bought as soon as its
- * gate opens: Auto-eval with 2 per click, then 3 and 4 per click, 7 per click, 10 per click, Basin
- * hopping, the Second lane and asc. Its rates follow the targets of the time when auto-eval clicked
- * at the player's click size [SPEC]: half to three quarters of an active player's evaluations (one
- * click a second) before 10 per click, as many at 10 per click, then more with methods and lanes,
- * near the 120 a second in each lane its ninth rung ran then. This ladder is not simulated yet: the
- * rungs' places come from their gates, and the rest waits for play-testing [SPEC]. The plan:
+ * Costs (2026-10-22, with the size and gap weights at 10,000, points.ts): priced in a pacing model of
+ * real mc_compress runs from Load all (16 games of one click a second, the first problem from the
+ * starter corner and the rest from the frontier, a new problem taken whenever one is earned,
+ * upgrades bought cheapest first; PolyPack-ideas/idle-games/tighter/methods-2026-10-22/economy.md),
+ * so that each upgrade is bought, on average, when it was at the prices of the weights of 100: 2 per
+ * click after about a minute, 5 per click after 8, 10 per click after 42, Basin hopping after about
+ * 72 minutes, Auto-advance after about 2 hours 15 [CALC]. The model earns about 8 times the points
+ * it did at 3 hours, so from Basin hopping on every price is 8 times what it was. The ladder before
+ * it is set by hand to the model's pace [CALC], and the tree past the model's 3 hours keeps the
+ * factor of 8 [SPEC]. A problem's first record (Compact) now pays about 1,000 to 2,900 RP on the
+ * starter corner, so Trace detail costs 400 and the first record goes on toward 2 per click. The
+ * Auto-eval rungs keep their tenth: each still costs a small part of the rung that gates it, so it
+ * is bought as soon as its gate opens: Auto-eval with 2 per click, then 3 and 4 per click, 7 per
+ * click, 10 per click, Basin hopping, the Second lane and asc. Its rates follow the targets of the time when auto-eval
+ * clicked at the player's click size [SPEC]: half to three quarters of an active player's
+ * evaluations (one click a second) before 10 per click, as many at 10 per click, then more with
+ * methods and lanes, near the 120 a second in each lane its ninth rung ran then. The plan:
  * PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
  *
  * The rest of the game reads what the player owns only through the functions below.
@@ -533,10 +539,10 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
     how: {
       text: [
         `When a deal is due, the dealer draws ${k} candidate problems, checks each with the server, and ranks them by the value V below. It deals the best one, or the next if that one's packing cannot be read. A lost record waiting for Retake and Collector's pick come before the ranked candidates.`,
-        "V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. 0.5 is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits on larger problems.",
+        `V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. ${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits on larger problems.`,
       ],
       math: [
-        `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × 0.5 × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
+        `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × ${number(RP_PER_EVAL)} × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
         `${sym("w")} = ${sym("d")}(${sym("N")}) × ${sym("d")}(${sym("M")})`,
         `${sym("d")}(${sym("x")}) = 1 for a circle or ${sym("x")} ≤ 20, else 20 / ${sym("x")}`,
       ],
@@ -680,7 +686,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "trace",
     name: "Trace detail",
-    cost: 5,
+    cost: 400,
     requires: [],
     effect: "The trace in the board's corner gets its labels and a dot at each improvement.",
     how: {
@@ -697,22 +703,22 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "clicks",
   },
   // ---- evaluations per click, about 100, 250, 450, 700, ... clicks in; a slow auto-eval early ----
-  clickRung("click2", 150, ["trace"]),
-  autoRung("auto1", 9, ["click2"]),
-  clickRung("click3", 320, ["click2"]),
-  autoRung("auto2", 35, ["auto1", "click3"]),
-  clickRung("click4", 500, ["click3"]),
-  clickRung("click5", 780, ["click4"]),
-  autoRung("auto3", 80, ["auto2", "click4"]),
-  clickRung("click6", 950, ["click5"]),
-  queueRung("queue3", 1000, ["click5"]),
-  clickRung("click7", 1100, ["click6"]),
-  clickRung("click8", 1400, ["click7"]),
-  clickRung("click9", 1550, ["click8"]),
+  clickRung("click2", 1500, ["trace"]),
+  autoRung("auto1", 80, ["click2"]),
+  clickRung("click3", 1800, ["click2"]),
+  autoRung("auto2", 100, ["auto1", "click3"]),
+  clickRung("click4", 2200, ["click3"]),
+  clickRung("click5", 2800, ["click4"]),
+  autoRung("auto3", 250, ["auto2", "click4"]),
+  clickRung("click6", 3200, ["click5"]),
+  queueRung("queue3", 3500, ["click5"]),
+  clickRung("click7", 6000, ["click6"]),
+  clickRung("click8", 8000, ["click7"]),
+  clickRung("click9", 9500, ["click8"]),
   {
     id: "sweeps10",
     name: "mc_compress: 10 sweeps per evaluation",
-    cost: 1600,
+    cost: 10000,
     requires: ["click7"],
     effect: "mc_compress runs 10 sweeps of moves per evaluation instead of 5.",
     how: {
@@ -725,12 +731,12 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "runs",
   },
-  clickRung("click10", 1700, ["click9"]),
-  autoRung("auto4", 135, ["auto3", "click7"]),
+  clickRung("click10", 11000, ["click9"]),
+  autoRung("auto4", 800, ["auto3", "click7"]),
   {
     id: "clickx",
     name: "One more evaluation per click",
-    cost: 2000,
+    cost: 15000,
     requires: ["click10"],
     effect: "Each level adds one evaluation to every Evolve click of yours.",
     how: {
@@ -744,14 +750,14 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "clicks",
     levels: { max: 990, growth: 1.25 },
   },
-  autoRung("auto5", 250, ["auto4", "click10"]),
-  dealerRung("rank2", 3000, ["queue3"]),
+  autoRung("auto5", 1500, ["auto4", "click10"]),
+  dealerRung("rank2", 20000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
-  methodRung("basin", 5000, ["click10", "auto4"]),
+  methodRung("basin", 40000, ["click10", "auto4"]),
   {
     id: "reach2",
     name: "Reach: site records",
-    cost: 6000,
+    cost: 48000,
     requires: ["basin"],
     effect: "The dealer also deals weak site records, which pay 3 times the points.",
     how: {
@@ -776,25 +782,25 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "problems",
   },
-  autoRung("auto6", 450, ["auto5", "basin"]),
-  tuneRung("tuneMc", "mc_compress", 8000, ["sweeps10", "basin"]),
-  dealerRung("rank4", 9000, ["rank2", "reach2"]),
-  methodRung("shrink", 10000, ["basin"]),
+  autoRung("auto6", 3600, ["auto5", "basin"]),
+  tuneRung("tuneMc", "mc_compress", 64000, ["sweeps10", "basin"]),
+  dealerRung("rank4", 72000, ["rank2", "reach2"]),
+  methodRung("shrink", 80000, ["basin"]),
   {
     id: "advance",
     name: "Auto-advance",
-    cost: 11000,
+    cost: 88000,
     requires: ["reach2", "queue3"],
     effect: "Problems that stop making progress are replaced, and auto-eval compacts new problems first.",
     how: advanceHow(),
     row: "queue",
   },
-  pickRung("pick3", 14000, ["rank2", "advance"]),
-  methodRung("penalty", 15000, ["shrink"]),
+  pickRung("pick3", 112_000, ["rank2", "advance"]),
+  methodRung("penalty", 120_000, ["shrink"]),
   {
     id: "lanes2",
     name: "Second lane",
-    cost: 18000,
+    cost: 144_000,
     requires: ["advance"],
     effect: "Auto-eval works on two problems at once, each in its own solver worker, and they share its rate.",
     how: {
@@ -807,11 +813,11 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "queue",
   },
-  ringRung("ring200", 20000, ["reach2", "rank4"]),
+  ringRung("ring200", 160_000, ["reach2", "rank4"]),
   {
     id: "filters",
     name: "Dealer filters",
-    cost: 20000,
+    cost: 160_000,
     requires: ["pick3"],
     effect: "You choose which piece shapes, containers, piece counts and tiers the dealer may deal.",
     how: {
@@ -822,13 +828,13 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "dealer",
   },
-  tuneRung("tuneBasin", "basin_hopping", 20000, ["basin", "tuneMc"]),
-  methodRung("lattice", 21000, ["penalty"]),
-  autoRung("auto7", 900, ["auto6", "lanes2"]),
+  tuneRung("tuneBasin", "basin_hopping", 160_000, ["basin", "tuneMc"]),
+  methodRung("lattice", 168_000, ["penalty"]),
+  autoRung("auto7", 7200, ["auto6", "lanes2"]),
   {
     id: "rent",
     name: "Records pay rent",
-    cost: 25000,
+    cost: 200_000,
     requires: ["advance"],
     effect: "Every record you still lead pays 1 % of what it earned, every hour.",
     how: {
@@ -841,11 +847,11 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "records",
   },
-  queueRung("queue4", 25000, ["advance", "lanes2"]),
+  queueRung("queue4", 200_000, ["advance", "lanes2"]),
   {
     id: "continuous",
     name: "Continuous",
-    cost: 26000,
+    cost: 208_000,
     requires: ["lanes2"],
     effect: "Auto-eval can keep running while this tab is hidden, once you tick its setting.",
     how: {
@@ -856,13 +862,13 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "queue",
   },
-  dealerRung("rank8", 30000, ["rank4", "ring200"]),
-  methodRung("harden", 30000, ["lattice"], true),
-  tuneRung("tuneShrink", "shrink_repair", 30000, ["shrink", "tuneMc"]),
+  dealerRung("rank8", 240_000, ["rank4", "ring200"]),
+  methodRung("harden", 240_000, ["lattice"], true),
+  tuneRung("tuneShrink", "shrink_repair", 240_000, ["shrink", "tuneMc"]),
   {
     id: "wide",
     name: "More open problems",
-    cost: 30000,
+    cost: 240_000,
     requires: ["queue4"],
     effect: "Half the open problems dealt can have any sides from 21 to 100 and 40 to 500 pieces.",
     how: {
@@ -877,7 +883,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "collections",
     name: "Collections",
-    cost: 35000,
+    cost: 280_000,
     requires: ["queue3", "reach2"],
     effect: "Completed sets of records add to all your points, for good.",
     how: {
@@ -895,11 +901,11 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "records",
   },
-  autoRung("auto8", 1600, ["auto7"]),
+  autoRung("auto8", 12800, ["auto7"]),
   {
     id: "batch",
     name: "Reach: every site record",
-    cost: 40000,
+    cost: 320_000,
     requires: ["ring200"],
     effect: "The dealer also deals site records that are not loose, at 10 times the points.",
     how: {
@@ -910,12 +916,12 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "problems",
   },
-  tuneRung("tunePenalty", "penalty", 40000, ["penalty", "tuneMc"]),
-  methodRung("morph", 45000, ["harden"], true),
+  tuneRung("tunePenalty", "penalty", 320_000, ["penalty", "tuneMc"]),
+  methodRung("morph", 360_000, ["harden"], true),
   {
     id: "retake",
     name: "Retake",
-    cost: 45000,
+    cost: 360_000,
     requires: ["rent"],
     effect: "A record you lose is offered again first, starting from the new leader's packing.",
     how: {
@@ -929,7 +935,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "transfer",
     name: "Transfers",
-    cost: 50000,
+    cost: 400_000,
     requires: ["lattice", "wide"],
     effect: "A new problem can start from the best packing of a neighbour with fewer pieces.",
     how: {
@@ -957,7 +963,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "lanesx",
     name: "Another lane",
-    cost: 60000,
+    cost: 480_000,
     requires: ["lanes2", "continuous"],
     effect: "Each level adds a lane, up to one less than your CPU's cores.",
     how: {
@@ -972,7 +978,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "rentx",
     name: "Higher rent",
-    cost: 60000,
+    cost: 480_000,
     requires: ["rent"],
     effect: "Each level multiplies the rent of every record by 1.5.",
     how: {
@@ -986,13 +992,13 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "records",
     levels: { max: 50, growth: 1.6 },
   },
-  ringRung("ring120", 60000, ["ring200", "batch"]),
-  methodRung("asc", 60000, ["morph"], true),
-  pickRung("pick5", 70000, ["pick3", "rank8"]),
+  ringRung("ring120", 480_000, ["ring200", "batch"]),
+  methodRung("asc", 480_000, ["morph"], true),
+  pickRung("pick5", 560_000, ["pick3", "rank8"]),
   {
     id: "collector",
     name: "Collector",
-    cost: 80000,
+    cost: 640_000,
     requires: ["collections", "pick3"],
     effect: "Every third deal fills a gap in the collection you are closest to completing.",
     how: {
@@ -1006,13 +1012,13 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "dealer",
     mystery: true,
   },
-  tuneRung("tuneHarden", "harden", 80000, ["harden"], true),
-  autoRung("auto9", 2800, ["auto8", "asc"]),
-  autoRung("auto10", 4500, ["auto9"]),
+  tuneRung("tuneHarden", "harden", 640_000, ["harden"], true),
+  autoRung("auto9", 22400, ["auto8", "asc"]),
+  autoRung("auto10", 36000, ["auto9"]),
   {
     id: "learning",
     name: "Learning dealer",
-    cost: 100000,
+    cost: 800_000,
     requires: ["rank8", "collections"],
     effect: "The dealer learns which kinds of problem pay you most, and deals more of them.",
     how: {
@@ -1029,7 +1035,7 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("r"), "what one problem teaches its kind"],
         [sym("G"), "the record points it earned"],
         [sym("E"), "the evaluations it ran"],
-        [sym("p"), "the record points per evaluation the dealer expected (w × c × R × 0.5)"],
+        [sym("p"), `the record points per evaluation the dealer expected (w × c × R × ${number(RP_PER_EVAL)})`],
         [sym("θ"), "the kind's correction for this ranking"],
         [sym("z"), "a random draw from the standard normal distribution"],
         [sym("μ"), "the kind's expected correction, 1 before it has learned anything"],
@@ -1042,12 +1048,12 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "dealer",
     mystery: true,
   },
-  queueRung("queue6", 120000, ["queue4", "collections"]),
-  methodRung("growth", 120000, ["asc"], true),
+  queueRung("queue6", 960_000, ["queue4", "collections"]),
+  methodRung("growth", 960_000, ["asc"], true),
   {
     id: "autox",
     name: "Faster auto-eval",
-    cost: 10000,
+    cost: 80000,
     requires: ["auto10"],
     effect: `Each level adds ${AUTOX_STEP} evaluations a second to auto-eval, up to ${AUTO_MAX} in all.`,
     how: {
@@ -1062,12 +1068,12 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "auto",
     levels: { max: AUTOX_LEVELS, growth: 1.6 },
   },
-  ringRung("ring80", 150000, ["ring120"], true),
-  tuneRung("tuneAsc", "asc", 150000, ["asc"], true),
+  ringRung("ring80", 1_200_000, ["ring120"], true),
+  tuneRung("tuneAsc", "asc", 1_200_000, ["asc"], true),
   {
     id: "methodMatch",
     name: "Method match",
-    cost: 160000,
+    cost: 1_280_000,
     requires: ["learning", "shrink"],
     effect: "With Auto chosen, the game picks each new run's method from what has paid.",
     how: {
@@ -1100,12 +1106,12 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "runs",
     mystery: true,
   },
-  tuneRung("tuneGrowth", "ls_growth", 300000, ["growth"], true),
-  ringRung("ring50", 400000, ["ring80"], true),
+  tuneRung("tuneGrowth", "ls_growth", 2_400_000, ["growth"], true),
+  ringRung("ring50", 3_200_000, ["ring80"], true),
   {
     id: "published",
     name: "Reach: published values",
-    cost: 500000,
+    cost: 4_000_000,
     requires: ["batch", "ring120"],
     effect: "The dealer also deals problems with a published value, at 100 times the points.",
     how: {
@@ -1126,21 +1132,24 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 750000,
+    cost: 6_000_000,
     requires: ["collections", "rent", "ring120"],
     effect: "You can reset the tree for standing, and each point of standing adds 10 % to all points.",
     how: {
       text: [
-        "A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. You can reset once the cycle has earned 250,000 record points that the server has confirmed.",
+        `A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. You can reset once the cycle has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed.`,
         "Your records stay on the server and keep paying rent. Your collection counts, the dealer's learning and the queue stay, and so do the upgrades Records pay rent, Higher rent and Collections. Every point of standing ever earned adds 10 % to all record points, spent or not, and standing buys the Standing row.",
       ],
       math: [
-        `${sym("S")} = ⌊√(${sym("E")} / 250,000) + ${sym("H")} / 50⌋, at least 1`,
+        `${sym("S")} = ⌊√(${sym("E")} / ${RESET_MIN.toLocaleString("en-US")}) + ${sym("H")} / 50⌋, at least 1`,
         `${sym("m", "s")} = 1 + 0.1 × ${sym("S", "all")}`,
       ],
       vars: [
         [sym("S"), "the standing a reset gives"],
-        [sym("E"), "the record points of this cycle that the server has confirmed (at least 250,000)"],
+        [
+          sym("E"),
+          `the record points of this cycle that the server has confirmed (at least ${RESET_MIN.toLocaleString("en-US")})`,
+        ],
         [sym("H"), "the records you hold"],
         [sym("m", "s"), "the multiplier standing puts on every record point"],
         [sym("S", "all"), "the standing you have ever earned"],
@@ -1149,8 +1158,8 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "records",
     mystery: true,
   },
-  ringRung("ring30", 1_000_000, ["ring50"], true),
-  ringRung("ringAll", 3_000_000, ["ring30"], true),
+  ringRung("ring30", 8_000_000, ["ring50"], true),
+  ringRung("ringAll", 24_000_000, ["ring30"], true),
   // ---- standing: paid in standing, kept through resets ----
   standingRung(
     "head1",

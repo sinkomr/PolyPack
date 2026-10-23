@@ -86,8 +86,12 @@ export function room(tier: Tier, weakness: number | null): number {
   }
 }
 
-/** Record points an evaluation earns on a fresh open problem of shape weight 1, roughly [SPEC; stage-one simulation]. */
-export const RP_PER_EVAL = 0.5;
+/**
+ * Record points an evaluation earns on a fresh open problem of shape weight 1, roughly [SPEC; stage-one
+ * simulation]: 0.5 at the size and gap weights of 100, 8 times that at 10,000 (points.ts), as the
+ * prices, so the learning dealer's ratios stay near 1 and under MAX_RATIO.
+ */
+export const RP_PER_EVAL = 4;
 
 /** The prior: expected record points per evaluation. */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null }): number {

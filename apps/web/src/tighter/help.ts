@@ -125,15 +125,16 @@ const POINTS: How[] = [
     text: [
       `You earn record points (RP) each time a click makes your board smaller by more than the smallest improvement that counts, ${MIN_STEP} of its size. The server uses the same rule, so a smaller step would not make a new record there either. The click pays at once, whether you pressed Evolve or auto-eval clicked for you.`,
       "Points are paid only while you send your records under your name. Improvements made before that wait, and each problem pays them in one payment when you put your name on your records.",
-      `Each payment adds three terms and any bonus, then multiplies the sum by the shape weight, the contest weight and your points multiplier. The step term is the size of this one improvement on a log scale. It is 1 for the smallest improvement that counts and grows by 1 for each factor of 10 above it. It measures each step, not the record, so it goes up and down from click to click. The size term pays for how much the side shrank, and the gap term for how much closer it came to the area bound. Both are close to 0 for small steps and large for big ones, such as the first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once).`,
+      `Each payment adds three terms and any bonus, then multiplies the sum by the shape weight, the contest weight and your points multiplier. The size term pays for how much the side shrank, and the gap term for how much closer it came to the area bound. These two pay most of your points. Over a run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.`,
+      `The step term pays a little for every click that improves the board at all. It is 1 for the smallest improvement that counts and grows by 1 for each factor of 10 above it, so it goes up and down from click to click. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
       "The server checks every record you send. A board is usually sent within a minute, and Settings explains when. If the server does not make it the record, for example because another entry got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
     ],
     math: [
       `<var>Δ</var> = 1 − <var>s</var><sub>new</sub> / <var>s</var><sub>prev</sub>, paid only when <var>Δ</var> &gt; <var>F</var>`,
       `RP = <var>m</var> × <var>w</var> × <var>c</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>)`,
       `<var>t</var><sub>step</sub> = 1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>)`,
-      `<var>t</var><sub>size</sub> = ${SIZE_WEIGHT} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
-      `<var>t</var><sub>gap</sub> = ${GAP_WEIGHT} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
+      `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
+      `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = <var>s</var><sub>prev</sub> / <var>b</var> − 1, <var>g</var><sub>new</sub> = <var>s</var><sub>new</sub> / <var>b</var> − 1`,
       `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above`,
       `<var>m</var> = (1 + 0.1 × <var>T</var>) × (1 + <var>C</var>) × <var>R</var>`,
@@ -192,7 +193,7 @@ const POINTS: How[] = [
       exampleLine(1e-3, "= 10<sup>−3</sup>"),
       exampleLine(1e-2, "= 10<sup>−2</sup>"),
     ],
-    note: "The step term depends only on how big the step is. It does not grow as your record gets better, which is why it rises and falls from one click to the next.",
+    note: "The step term depends only on how big the step is. It does not grow as your record gets better, which is why it rises and falls from one click to the next. The size and gap terms of many small steps add up to those of one big step that shrinks the side as much.",
   },
 ];
 

@@ -32,6 +32,7 @@ import {
   normalizeFilters,
   parseShapes,
   passes,
+  RP_PER_EVAL,
   priorPerEval,
   rankCandidates,
   room,
@@ -259,7 +260,8 @@ describe("Tighter ranking", () => {
     expect(room("batch", 0)).toBeLessThan(room("loose", 0.005));
     expect(room("published", null)).toBeLessThan(room("batch", 0));
     const small = priorPerEval(cand({ N: 7, M: 7, P: 300, tier: "batch", weakness: 0 }));
-    expect(small).toBeCloseTo(1 * 1 * CONTEST.batch * room("batch", 0) * 0.5, 12);
+    expect(small).toBeCloseTo(1 * 1 * CONTEST.batch * room("batch", 0) * RP_PER_EVAL, 12);
+    expect(RP_PER_EVAL).toBe(4);
     // a published value is expected to pay less per evaluation than a site record, whatever its weight
     expect(CONTEST.published * room("published", null)).toBeLessThan(CONTEST.batch * room("batch", 0));
     // the shape weight: 100-gons in a 100-gon pay a twenty-fifth of what heptagons do
