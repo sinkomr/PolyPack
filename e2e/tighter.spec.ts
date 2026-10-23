@@ -33,6 +33,8 @@ const focused = (page: Page): Promise<ProblemView> =>
     return structuredClone(s.queue.find((p: { key: string }) => p.key === s.focus));
   });
 const stats = (page: Page) => page.evaluate(() => structuredClone((window as any).tighter.state.stats));
+/** RP as the page writes it: one decimal below 100, whole numbers with commas from 100. */
+const fmtRP = (n: number) => (n < 100 ? n.toFixed(1) : Math.round(n).toLocaleString("en-US"));
 const rp = (page: Page): Promise<number> => page.evaluate(() => (window as any).tighter.state.rp);
 const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
 const siteBest = async (page: Page, p: ProblemView) =>
@@ -197,13 +199,11 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   // everything paid so far (consent's payment, and the container's turn before the send) is confirmed
   const confirmed = await rp(page);
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
-  await expect.poll(() => logText(page)).toContain(`${confirmed.toFixed(1)} RP confirmed`);
+  await expect.poll(() => logText(page)).toContain(`${fmtRP(confirmed)} RP confirmed`);
   await expect(page.locator("#t-notice")).toContainText("RP confirmed");
   await expect(page.locator("#t-bar-held")).toHaveText("1");
   // the board's box counts what this problem has paid, which is everything paid so far
-  await expect(page.locator("#t-prob-rp")).toHaveText(
-    confirmed < 100 ? confirmed.toFixed(1) : Math.round(confirmed).toLocaleString("en-US"),
-  );
+  await expect(page.locator("#t-prob-rp")).toHaveText(fmtRP(confirmed));
 
   // Evolve: each click is one more evaluation of the same run; an improving click pays at once
   const s0 = await stats(page);
@@ -241,14 +241,15 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (400 RP), labels it
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (1,000 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
+  await grant(page, 1000);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
   await openBoard(page);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  expect(await rp(page)).toBeCloseTo(before - 400, 9);
+  expect(await rp(page)).toBeCloseTo(before - 1000, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
   // evaluations per click: 2 per click (1,500 RP), then 3 (1,800 RP)

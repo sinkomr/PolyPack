@@ -645,7 +645,9 @@ describe("Tighter answers from the server", () => {
     const { s, p } = game();
     recordOn(s, p);
     const paid = s.rp;
-    s.rp = paid + 1;
+    // just enough to buy Trace detail, which leaves 1 RP: less than the points about to be taken back
+    s.rp = UPGRADES.find((u) => u.id === "trace")!.cost + 1;
+    expect(paid).toBeGreaterThan(1);
     expect(buy(s, "trace")).toBe(true);
     markSending(p, 9.5, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.0 }, T0);

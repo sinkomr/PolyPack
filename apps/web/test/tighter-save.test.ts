@@ -736,8 +736,8 @@ describe("Tighter saves of version 3", () => {
   };
 
   it("value a point by the new prices over the old of what the save could buy next", () => {
-    // nothing owned: Trace detail, 400 RP now and 5 then
-    expect(pointsScale([], {})).toBe(80);
+    // nothing owned: Trace detail, 1,000 RP now and 5 then
+    expect(pointsScale([], {})).toBe(200);
     // 3 evaluations per click is all it can buy next: 1,800 now, 320 then
     expect(pointsScale(["trace", "click2", "auto1"], {})).toBe(1800 / 320);
     // Auto-eval: 2 a second, 4 evaluations per click and Dealer: best of 2

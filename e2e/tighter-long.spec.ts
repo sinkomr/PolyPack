@@ -130,7 +130,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 21);
-  await grant(page, 400);
+  await grant(page, 1000);
   // the tech tree is a pane of its own, beside the board; its tab counts what can be bought
   await expect(page.locator("#t-tab-count")).toHaveText("1");
   await expect(page.locator("#t-next-up")).toHaveText("1 upgrade to buy in the tech tree");
@@ -205,7 +205,7 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP"
   await fresh(page, 22);
   await firstRecord(page);
   await expect(page.locator("#t-auto")).toBeHidden();
-  await grant(page, 400);
+  await grant(page, 1000);
   await buy(page, "trace");
   await grant(page, 1500);
   await buy(page, "click2");
@@ -382,7 +382,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(0);
   const paid = await game(page, (s) => s.economy.rentPaid);
   // 1 % of what the record earned, an hour, times the collections bonus (+5 %)
-  expect(paid).toBeCloseTo(0.01 * rate * 1.05, 3);
+  // (relative: the second or so the test itself takes adds its share of an hour)
+  expect(paid / (0.01 * rate * 1.05)).toBeCloseTo(1, 2);
   await expect(page.locator("#t-rc-note")).toContainText("The last check paid +");
 
   // a reset for standing, the next cycle under One method, with Head start I

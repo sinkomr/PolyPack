@@ -453,7 +453,7 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   expect((await state(page)).stats.evaluations).toBe(102);
   await expect(page.locator("#t-hold")).toHaveText("");
 
-  await grant(page, 6000);
+  await grant(page, 6600);
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
