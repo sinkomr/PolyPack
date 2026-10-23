@@ -534,7 +534,7 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
     name: "<b onmouseover=alert(1)>x</b>",
     log: [{ t: 1, text: "<img src=y onerror=window.__xss=2>" }],
   };
-  const str = `tighter:2:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
+  const str = `tighter:3:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
   await page.click("#t-open-settings");
   await page.fill("#t-save-text", str);
   page.once("dialog", (d) => d.accept());
@@ -618,8 +618,8 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes between ticks: auto-eval catches up at most a minute (4 evaluations a second,
-  // shared by the two lanes: 240), then runs live, two lanes, Auto-advance compacting the new problems
+  // twenty minutes between ticks: auto-eval catches up at most a minute (5 evaluations a second,
+  // shared by the two lanes: 300), then runs live, two lanes, Auto-advance compacting the new problems
   const autoStart = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));
   let twoBusy = false;
@@ -641,7 +641,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   // more than a minute behind plus its live rate
   const afterAuto = await state(page);
   const conserved = afterAuto.stats.evaluations - e0 + afterAuto.autoDue;
-  const dueAtMost = 240 + 4 * ((Date.now() - autoStart) / 1000) + 40;
+  const dueAtMost = 300 + 5 * ((Date.now() - autoStart) / 1000) + 40;
   endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
@@ -701,7 +701,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(240);
+  expect(conserved).toBeGreaterThanOrEqual(300);
   expect(conserved).toBeLessThanOrEqual(dueAtMost);
   expect(s2.autoDue).toBe(0);
   expect(twoBusy).toBe(true);

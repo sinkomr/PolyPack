@@ -25,7 +25,7 @@ import type { RunRecord } from "./submission";
 import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
-import { normalizeStanding } from "./standing";
+import { HEAD_STARTS, normalizeStanding } from "./standing";
 import {
   EvolveMethod,
   UPGRADES,
@@ -35,6 +35,7 @@ import {
   isUpgradeId,
   methods,
   owning,
+  rpCostFactor,
   upgrade,
 } from "./upgrades";
 
@@ -58,7 +59,8 @@ const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing" }>([
  * Levelled upgrades whose range shrank, with the old maximum and the old list price (level j + 1
  * cost `cost` × `growth`^j). Faster auto-eval had 100 levels at 150,000 RP × 1.4 a level while
  * auto-eval's rate was in clicks, and 3 at that price while it multiplied a rate in evaluations a
- * second by 1.3. Now it adds one evaluation a second a level, 10 levels at a new price.
+ * second by 1.3. Then it added one evaluation a second a level, 10 levels at 100,000 RP × 1.6 a
+ * level, and now 10 a second a level, the same 10 levels at a tenth of that: a level kept is worth more.
  * Levels past the new maximum are refunded at the price they were bought at; none past the old
  * maximum could have been bought. A save loaded while the maximum was 3 kept 3 levels and had the
  * rest refunded then, so nothing is refunded twice: the levels a save still has are kept.
@@ -75,9 +77,10 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * refused rather than read wrongly.
  *
  * Adding a field needs no new version (missing fields take their default). A change that would
- * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS.
+ * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
+ * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -112,9 +115,71 @@ export const MIGRATIONS: Record<number, Migration> = {
     const stats = isObj(save.stats) ? { ...save.stats, clicks: int(save.stats.runs, 0) } : save.stats;
     return { ...save, queue, owned, dealer, stats };
   },
+  /**
+   * Version 3 sells the Auto-eval upgrades at a tenth of their price. What a save owned when they
+   * cost more is paid back once, in record points (autoPriceRefund); `autoRefund` tells the page.
+   */
+  2: (save) => {
+    const ids = (Array.isArray(save.owned) ? save.owned : []).filter(isUpgradeId);
+    const levels: Partial<Record<UpgradeId, number>> = {};
+    if (isObj(save.levels))
+      for (const [id, l] of Object.entries(save.levels)) {
+        const u = isUpgradeId(id) ? upgrade(id) : null;
+        if (u?.levels && Number.isSafeInteger(l) && (l as number) >= 1)
+          levels[id as UpgradeId] = Math.min(l as number, u.levels.max);
+      }
+    const refund = autoPriceRefund(ids, levels);
+    return { ...save, rp: num(save.rp, 0, 0) + refund, autoRefund: refund };
+  },
 };
 
-export type LoadResult = { ok: true; state: GameState } | { ok: false; error: string };
+/**
+ * The lowest list price each Auto-eval rung had before version 3: what it cost from 2026-10-21
+ * (it cost more before that). Faster auto-eval's level j + 1 had the lower of 100,000 × 1.6^j (from
+ * 2026-10-21, 10 levels) and 150,000 × 1.4^j (before, 100 levels).
+ */
+const AUTO_BEFORE: Partial<Record<UpgradeId, number>> = {
+  auto1: 90,
+  auto2: 350,
+  auto3: 800,
+  auto4: 1350,
+  auto5: 2500,
+  auto6: 4500,
+  auto7: 9000,
+  auto8: 16000,
+  auto9: 28000,
+  auto10: 45000,
+};
+const autoxBefore = (j: number) => Math.min(100_000 * Math.pow(1.6, j), 150_000 * Math.pow(1.4, j));
+
+/**
+ * What a save gets back for auto-eval's lower prices: for each Auto-eval rung and each Faster
+ * auto-eval level it owns, the price before (AUTO_BEFORE) less the price now, at the save's Quick
+ * study discount. The rungs its head starts give it each cycle cost nothing, and get nothing back;
+ * Faster auto-eval's levels past its 10 are SHRUNK's, refunded whole when the save is read. Never more
+ * than the save paid: the prices before are the lowest they ever were, and Quick study only grows.
+ */
+export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Record<UpgradeId, number>>): number {
+  const owned = new Set(ids);
+  const free = new Set<UpgradeId>();
+  const give = (id: UpgradeId) => {
+    if (free.has(id)) return;
+    free.add(id);
+    for (const r of upgrade(id).requires) give(r);
+  };
+  for (const [h, list] of Object.entries(HEAD_STARTS)) if (owned.has(h as UpgradeId)) list?.forEach(give);
+  let refund = 0;
+  for (const [id, before] of Object.entries(AUTO_BEFORE) as [UpgradeId, number][])
+    if (owned.has(id) && !free.has(id)) refund += Math.max(0, before - upgrade(id).cost);
+  const x = upgrade("autox");
+  if (owned.has("autox") && x.levels)
+    for (let j = 0; j < Math.min(levels.autox ?? 0, x.levels.max); j++)
+      refund += Math.max(0, autoxBefore(j) - x.cost * Math.pow(x.levels.growth, j));
+  return Math.round(refund * rpCostFactor(owning(ids, levels)));
+}
+
+/** A save read, and the record points it was given back as it was read (none if it was already current). */
+export type LoadResult = { ok: true; state: GameState; refunded?: number } | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const num = (v: unknown, fallback: number, min = -Infinity, max = Infinity): number =>
@@ -321,7 +386,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
-  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 5 evaluations a second). Faster
+  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 10 evaluations a second). Faster
   // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
   if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
   const refund = { rp: 0, standing: 0 };
@@ -409,7 +474,8 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   if (!isObj(raw)) return { ok: false, error: "not a Tighter save" };
   const m = migrate(raw, migrations);
   if (!m.ok) return m;
-  return { ok: true, state: normalize(m.save, now) };
+  const refunded = (raw.version as number) < 3 ? num(m.save.autoRefund, 0, 0) : 0;
+  return { ok: true, state: normalize(m.save, now), ...(refunded > 0 ? { refunded } : {}) };
 }
 
 export function toJson(state: GameState): string {

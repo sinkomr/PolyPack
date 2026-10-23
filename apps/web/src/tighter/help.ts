@@ -37,7 +37,15 @@ import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
 import { HELD_PER_STANDING, RESET_MIN, RULES } from "./standing";
 import { CLIENT_TAG } from "./submission";
 import { MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "./transfer";
-import { AUTO_JOB_SECONDS, AUTO_MAX, AUTO_RATES, AUTO_SLACK_SECONDS, COMPACT_EVALS, RUN_BUDGET } from "./upgrades";
+import {
+  AUTOX_STEP,
+  AUTO_JOB_SECONDS,
+  AUTO_MAX,
+  AUTO_RATES,
+  AUTO_SLACK_SECONDS,
+  COMPACT_EVALS,
+  RUN_BUDGET,
+} from "./upgrades";
 
 /**
  * The "How it works" explanations outside the tech tree, in the shared format of how.ts: the points
@@ -297,13 +305,13 @@ const AUTO: How = {
     "Auto-eval runs evaluations for you while it is on, at its own rate, beside your own clicks. Its rate is in evaluations a second, set by the Auto-eval upgrades and Faster auto-eval. Upgrades of evaluations per click make your own clicks larger but do not speed auto-eval up. Its evaluations pay exactly as yours do.",
     "A lane is one solver worker in your browser, holding one open run. The lanes share auto-eval's rate, so with L lanes each one runs r / L evaluations a second. Each lane works on a different problem, because one run cannot be split. More lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board and each other lane on another problem in the queue that already has a record. Auto-advance moves on from problems that stopped improving. Problems whose seeds are all spent are skipped.",
     "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and while the device runs on battery, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks are never paused.",
-    `Auto-eval hands a lane its due evaluations in batches of at most ${AUTO_JOB_SECONDS} s worth of the lane's share, and at least 1 evaluation, so that a lane's worker gets only a few messages a second at any rate. A click of yours waits behind at most the batch that is running.`,
-    `The rate is a target. When the solver is slower than that, because one evaluation takes longer than L / r seconds, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. The rate stops at ${AUTO_MAX} evaluations a second, so that auto-eval stays light on your computer.`,
+    `Auto-eval hands a lane its due evaluations in batches of at most ${AUTO_JOB_SECONDS} s worth of the lane's share, and at least 1 evaluation, so that a lane's worker gets only a few messages a second at any rate. A batch is also at most about ${AUTO_JOB_SECONDS} s of your computer's time on that problem, judged from how long its evaluations have taken here, so a click of yours waits behind little even on a large problem.`,
+    `The rate is a target. When the solver is slower than that, because one evaluation takes longer than L / r seconds, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. The rate stops at ${AUTO_MAX} evaluations a second. Each lane is a solver worker of its own, so on a large problem more lanes spread the work over more cores.`,
   ],
   math: [
-    `<var>r</var> = min(${AUTO_MAX}, <var>a</var> + <var>x</var>)`,
+    `<var>r</var> = min(${AUTO_MAX}, <var>a</var> + ${AUTOX_STEP} × <var>x</var>)`,
     `<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>`,
-    `<var>b</var> = min(⌊<var>D</var>⌋, max(1, ⌈${AUTO_JOB_SECONDS} × <var>r</var><sub>lane</sub>⌉))`,
+    `<var>b</var> = min(⌊<var>D</var>⌋, max(1, min(⌈${AUTO_JOB_SECONDS} × <var>r</var><sub>lane</sub>⌉, ⌊${AUTO_JOB_SECONDS * 1000} / <var>t</var>⌋)))`,
     `<var>D</var><sub>max</sub> = max(${COMPACT_EVALS}, ${AUTO_SLACK_SECONDS} × <var>r</var>)`,
   ],
   vars: [
@@ -312,10 +320,14 @@ const AUTO: How = {
       "<var>a</var>",
       `the evaluations a second of the fastest Auto-eval upgrade you own, from ${AUTO_RATES[0]} to ${AUTO_RATES.at(-1)}`,
     ],
-    ["<var>x</var>", "your level of Faster auto-eval (0 without it), which adds 1 evaluation a second a level"],
+    [
+      "<var>x</var>",
+      `your level of Faster auto-eval (0 without it), which adds ${AUTOX_STEP} evaluations a second a level`,
+    ],
     ["<var>L</var>", "your lanes"],
     ["<var>r</var><sub>lane</sub>", "each lane's share, in evaluations a second"],
     ["<var>b</var>", "the evaluations of a lane's next batch"],
+    ["<var>t</var>", "the ms one evaluation of the batch's problem is expected to take on your computer"],
     ["<var>D</var>", "the evaluations auto-eval is due now, all lanes together"],
     ["<var>D</var><sub>max</sub>", "the most evaluations auto-eval can be behind at once"],
   ],

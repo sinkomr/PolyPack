@@ -40,6 +40,7 @@ import {
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
+  AUTOX_STEP,
   AUTO_JOB_SECONDS,
   AUTO_MAX,
   AUTO_RATES,
@@ -199,10 +200,29 @@ describe("Tighter upgrades", () => {
     // auto-eval comes early, right after 2 evaluations per click, and cheap
     expect(upgrade("auto1").requires).toEqual(["click2"]);
     expect(cost("auto1")).toBeLessThan(cost("click3"));
-    // auto-eval keeps pace with the click ladder, one evaluation a second a rung: 4 a second before
-    // 10 per click, 5 before Basin hopping
+    // auto-eval is cheap, and its click gates keep it beside the click ladder: 5 a second with 7 per
+    // click, 10 with 10 per click, 20 with Basin hopping
     expect(cost("auto4")).toBeLessThan(cost("click10"));
     expect(cost("auto5")).toBeLessThan(cost("basin"));
+    expect(upgrade("auto4").requires).toEqual(["auto3", "click7"]);
+    expect(upgrade("auto5").requires).toEqual(["auto4", "click10"]);
+    expect(upgrade("auto6").requires).toEqual(["auto5", "basin"]);
+    // a tenth of what each rung cost when the rungs ran 1 to 10 evaluations a second, and Faster
+    // auto-eval's first level a tenth of its old one too
+    const tenth = {
+      auto1: 90,
+      auto2: 350,
+      auto3: 800,
+      auto4: 1350,
+      auto5: 2500,
+      auto6: 4500,
+      auto7: 9000,
+      auto8: 16000,
+      auto9: 28000,
+      auto10: 45000,
+      autox: 100000,
+    };
+    for (const [id, was] of Object.entries(tenth)) expect(cost(id as UpgradeId), id).toBe(was / 10);
     // each rung costs less than the rung of the same id did when the rungs ran 0.5 to 120
     // evaluations a second in each lane, and Faster auto-eval's first level less than its old one
     const old = {
@@ -271,14 +291,14 @@ describe("Tighter upgrades", () => {
     expect(evalsPerClick(o("click10"))).toBe(10);
     expect(COMPACT_EVALS).toBe(100);
     expect(RUN_BUDGET).toBe(100_000);
-    // auto-eval starts at an evaluation a second and speeds up one evaluation a second a rung
+    // auto-eval starts at an evaluation a second and speeds up slowly, then about doubling a rung
     expect(autoPerSecond(none)).toBeNull();
     expect(autoPerSecond(o("auto2"))).toBeNull();
     expect(autoPerSecond(o("auto1"))).toBe(1);
-    expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(4);
-    expect(autoPerSecond(o("auto1", "auto5"))).toBe(5);
-    expect(autoPerSecond(o("auto1", "auto9"))).toBe(9);
-    expect(autoPerSecond(o("auto1", "auto10"))).toBe(10);
+    expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(5);
+    expect(autoPerSecond(o("auto1", "auto5"))).toBe(10);
+    expect(autoPerSecond(o("auto1", "auto9"))).toBe(100);
+    expect(autoPerSecond(o("auto1", "auto10"))).toBe(150);
     // and none at all under the "clicks only" rule
     expect(autoPerSecond(owning(["click2", "auto1"], {}, "clicks"))).toBeNull();
     expect(autoRateText(0.5)).toBe("1 evaluation every 2 s");
@@ -290,9 +310,9 @@ describe("Tighter upgrades", () => {
     // auto-eval runs live: at most a minute of its rate is due at once, and at least a Compact
     expect(autoCap(none)).toBe(COMPACT_EVALS);
     expect(autoCap(o("auto1"))).toBe(COMPACT_EVALS);
-    // a minute of 4 evaluations a second, however many lanes share them
-    expect(autoCap(o("auto1", "auto4"))).toBe(4 * 60);
-    expect(autoCap(o("click10", "auto1", "auto4", "lanes2", "lanesx"))).toBe(4 * 60);
+    // a minute of 5 evaluations a second, however many lanes share them
+    expect(autoCap(o("auto1", "auto4"))).toBe(5 * 60);
+    expect(autoCap(o("click10", "auto1", "auto4", "lanes2", "lanesx"))).toBe(5 * 60);
     expect(seedsPerProblem(none)).toBe(1);
     expect(seedsPerProblem(o("seeds2"))).toBe(2);
     expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);
@@ -712,42 +732,45 @@ describe("Tighter answers from the server", () => {
 describe("Tighter auto-eval's rate", () => {
   const all: UpgradeId[] = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10"];
   const upTo = (id: UpgradeId) => all.slice(0, all.indexOf(id) + 1);
+  const faster = (l: number) => owning([...all, "autox"], { autox: l });
 
-  it("climbs one evaluation a second a rung, then a level of Faster auto-eval, up to the limit", () => {
-    expect(all.map((id) => autoPerSecond(owning(upTo(id))))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(AUTO_RATES).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    expect(AUTO_MAX).toBe(20);
-    const faster = (l: number) => autoPerSecond(owning([...all, "autox"], { autox: l }));
-    expect([1, 2, 5, 9].map(faster)).toEqual([11, 12, 15, 19]);
-    // the last level reaches the limit: about 3.5 % of a core at N+M+P = 85 (1.77 ms an evaluation)
-    expect(faster(10)).toBe(20);
-    expect((20 * msPerEval(85)) / 1000).toBeCloseTo(0.0354, 9);
+  it("climbs slowly, then about doubling a rung, then 10 a second a level of Faster auto-eval, up to the limit", () => {
+    const rates = [1, 2, 3, 5, 10, 20, 35, 60, 100, 150];
+    expect(all.map((id) => autoPerSecond(owning(upTo(id))))).toEqual(rates);
+    expect(AUTO_RATES).toEqual(rates);
+    expect(AUTO_MAX).toBe(250);
+    expect(AUTOX_STEP).toBe(10);
+    expect([1, 2, 5, 9].map((l) => autoPerSecond(faster(l)))).toEqual([160, 170, 200, 240]);
+    // the last level reaches the limit: about 44 % of a core at N+M+P = 85 (1.77 ms an evaluation),
+    // and more than a core from about N+M+P = 130 up (4 ms an evaluation)
+    expect(autoPerSecond(faster(10))).toBe(250);
+    expect((250 * msPerEval(85)) / 1000).toBeCloseTo(0.4425, 9);
+    expect(msPerEval(129)).toBeLessThan(4);
+    expect(msPerEval(131)).toBeGreaterThan(4);
     expect(upgrade("autox").levels).toEqual({ max: 10, growth: 1.6 });
-    expect(costOf(owning([...all, "autox"], { autox: 10 }), "autox")).toBeNull();
+    expect(costOf(faster(10), "autox")).toBeNull();
     // more levels than that never run faster
-    expect(faster(14)).toBe(20);
+    expect(autoPerSecond(faster(14))).toBe(250);
     // the prices grow steeply: the last level costs about 69 times the first
-    expect(costOf(owning([...all, "autox"], { autox: 9 }), "autox")! / costOf(owning(all), "autox")!).toBeCloseTo(
-      1.6 ** 9,
-      3,
-    );
+    expect(costOf(faster(9), "autox")! / costOf(owning(all), "autox")!).toBeCloseTo(1.6 ** 9, 3);
   });
 
   it("is the rate of all lanes together, which they share", () => {
-    const five = owning([...upTo("auto5"), "lanes2"]);
-    // two lanes: 5 evaluations a second in all, 2.5 in each, not 10
-    expect(laneCount(five, 8)).toBe(2);
-    expect(autoPerSecond(five)).toBe(5);
-    expect(autoCap(five)).toBe(5 * 60);
-    // a lane's job is a quarter second of its share: 10 a second over 2 lanes, 2 at a time, over 5, 1
-    const ten = owning(all);
-    expect(autoJobEvals(ten, 1000, 1)).toBe(3);
-    expect(autoJobEvals(ten, 1000, 2)).toBe(2);
-    expect(autoJobEvals(ten, 1000, 5)).toBe(1);
-    expect(autoJobEvals(ten, 1000, 7)).toBe(1);
-    // 20 a second over 5 lanes is 4 each: a job of exactly 1, not 2
-    expect(autoJobEvals(owning([...all, "autox"], { autox: 10 }), 1000, 5)).toBe(1);
-    expect(autoJobEvals(owning([...all, "autox"], { autox: 10 }), 1000, 1)).toBe(5);
+    const ten = owning([...upTo("auto5"), "lanes2"]);
+    // two lanes: 10 evaluations a second in all, 5 in each, not 20
+    expect(laneCount(ten, 8)).toBe(2);
+    expect(autoPerSecond(ten)).toBe(10);
+    expect(autoCap(ten)).toBe(10 * 60);
+    // a lane's job is a quarter second of its share: 150 a second over 1 lane, 38 at a time; over 2,
+    // 19; over 5, 8; over 7, 6
+    const top = owning(all);
+    expect(autoJobEvals(top, 1000, 1)).toBe(38);
+    expect(autoJobEvals(top, 1000, 2)).toBe(19);
+    expect(autoJobEvals(top, 1000, 5)).toBe(8);
+    expect(autoJobEvals(top, 1000, 7)).toBe(6);
+    // 200 a second over 5 lanes is 40 each: a job of exactly 10, not 11
+    expect(autoJobEvals(faster(5), 1000, 5)).toBe(10);
+    expect(autoJobEvals(faster(10), 1000, 1)).toBe(63);
   });
 
   it("does not change with evaluations per click", () => {
@@ -768,8 +791,8 @@ describe("Tighter auto-eval's rate", () => {
     const forty = owning([...ladder, "clickx", ...rungs], { clickx: 30 });
     expect(evalsPerClick(forty)).toBe(40);
     expect(autoPerSecond(forty)).toBe(3);
-    // 40 evaluations a click with the fastest rung: 10 evaluations a second, not 40 × 10 = 400
-    expect(autoPerSecond(owning([...ladder, "clickx", ...all], { clickx: 30 }))).toBe(10);
+    // 40 evaluations a click with the fastest rung: 150 evaluations a second, not 40 × 150
+    expect(autoPerSecond(owning([...ladder, "clickx", ...all], { clickx: 30 }))).toBe(150);
     // the Clicks only reward's extra evaluation a click leaves it as it is too
     expect(autoPerSecond(owning(["auto1"], {}, null, ["clicks"]))).toBe(1);
     // and its jobs do not grow with the click size
@@ -785,14 +808,31 @@ describe("Tighter auto-eval's rate", () => {
     expect(autoJobEvals(o("auto1"), 100)).toBe(1);
     // a sum of fractions a rounding error short of 1 still runs
     expect(autoJobEvals(o("auto1"), 1 - 1e-12)).toBe(1);
-    // 4 a second: 1 at a time; 5: 2; 9: 3; the limit of 20: 5
-    expect(autoJobEvals(o(...upTo("auto4")), 1000)).toBe(1);
-    expect(autoJobEvals(o(...upTo("auto5")), 1000)).toBe(2);
-    expect(autoJobEvals(o(...upTo("auto9")), 1000)).toBe(3);
-    expect(autoJobEvals(owning([...all, "autox"], { autox: 10 }), 1000)).toBe(5);
+    // 5 a second: 2 at a time; 10: 3; 100: 25; the limit of 250: 63
+    expect(autoJobEvals(o(...upTo("auto4")), 1000)).toBe(2);
+    expect(autoJobEvals(o(...upTo("auto5")), 1000)).toBe(3);
+    expect(autoJobEvals(o(...upTo("auto9")), 1000)).toBe(25);
+    expect(autoJobEvals(faster(10), 1000)).toBe(63);
     // never more than is due, and nothing while a Compact's debt is repaid
-    expect(autoJobEvals(owning([...all, "autox"], { autox: 10 }), 3.5)).toBe(3);
+    expect(autoJobEvals(faster(10), 3.5)).toBe(3);
     expect(autoJobEvals(o(...upTo("auto9")), -40)).toBe(0);
+  });
+
+  it("hands a lane at most a quarter second of the solver's time where the CPU cannot keep up", () => {
+    // 250 a second in one lane: 63 at a time where an evaluation is quick (1.77 ms at N+M+P = 85)...
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(85))).toBe(63);
+    // ...but at 22.8 ms (N+M+P = 326) 63 would take 1.4 s: 10 instead, and at 52.3 ms (500) 4
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(326))).toBe(10);
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(500))).toBe(4);
+    // exactly a quarter second's worth, not one more
+    expect(autoJobEvals(faster(10), 1000, 1, 25)).toBe(10);
+    // at least one, however slow, and never more than is due
+    expect(autoJobEvals(faster(10), 1000, 1, 5000)).toBe(1);
+    expect(autoJobEvals(faster(10), 2, 1, 1)).toBe(2);
+    // the share still bounds it where the CPU is fast: 1 a second, one at a time
+    expect(autoJobEvals(owning(["auto1"]), 1000, 1, 0.1)).toBe(1);
+    // without a time, only the share counts
+    expect(autoJobEvals(faster(10), 1000, 1, 0)).toBe(63);
   });
 });
 

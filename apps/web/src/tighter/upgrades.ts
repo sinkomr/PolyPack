@@ -5,16 +5,16 @@ import { msPerEval } from "./rank";
 
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
- * each upgrade adds a little. Evaluations per click climb one at a time, and so does Auto-eval: it
- * runs evaluations for the player at its own rate, 1 a second with its first rung and one more with
- * each of the next nine, and only its own rungs (and Faster auto-eval) speed it up: evaluations-per-
- * click upgrades do not. The rate is auto-eval's in all: the lanes share it, so a lane lets one more
- * problem progress at once but adds no evaluations. Faster auto-eval adds one a second a level up to
- * 20, a conservative limit on the player's CPU [SPEC]: about 3.5 % of a core at N+M+P = 85, and a
- * whole core only from about N+M+P = 490 up (rank.ts) [CALC]. Methods come well after, one at a time,
- * each dearer than the last; seeds and method settings are bought too. Every finite ladder ends in a
- * levelled upgrade that can be bought again and again at a growing price, so nothing has a last rung
- * (Faster auto-eval excepted: the limit on the CPU tops it out).
+ * each upgrade adds a little. Evaluations per click climb one at a time. Auto-eval runs evaluations
+ * for the player at its own rate, 1 a second with its first rung and 150 with its tenth, and only its
+ * own rungs (and Faster auto-eval) speed it up: evaluations-per-click upgrades do not. The rate is
+ * auto-eval's in all: the lanes share it, so a lane lets one more problem progress at once but adds
+ * no evaluations. Faster auto-eval adds 10 a second a level up to 250, a target the player's CPU
+ * caps where it cannot keep up: about 44 % of a core at N+M+P = 85, a whole core from about
+ * N+M+P = 130 up (rank.ts), where more lanes spread it over more cores [CALC]. Methods come well
+ * after, one at a time, each dearer than the last; seeds and method settings are bought too. Every
+ * finite ladder ends in a levelled upgrade that can be bought again and again at a growing price, so
+ * nothing has a last rung (Faster auto-eval excepted: its limit tops it out).
  *
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
  * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
@@ -23,13 +23,15 @@ import { msPerEval } from "./rank";
  * click a second, a new problem per 300 clicks' worth of evaluations; balance/stage1c.mts) at about
  * 85 % of the median points earned between Michael's targets: "2 per click" after about 100 clicks,
  * "3" about 150 clicks later, "4" 200 later, and so on (step n needs about 100·n(n+1)/2
- * evaluations) [CALC]. The Auto-eval rungs each cost less than the rung of the same id did when the
- * rungs ran 0.5 to 120 evaluations a second in each lane. In 6 games of one click a second on real
- * runs, buying the cheapest card first, the first five came at the median clicks 128, 270, 610,
- * 1,177 and 2,671 (the old ones at 133, 302, 719, 1,507 and 2,838), and Basin hopping at 3,545
- * (3,643) [EST]. The later rungs cost 31 to 56 % of the old ones, as each adds only one evaluation
- * a second in all [SPEC]. Everything else is extrapolated and waits for play-testing [SPEC]. The
- * plan: PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
+ * evaluations) [CALC]. The Auto-eval rungs cost a tenth of what they did when they ran 1 to 10
+ * evaluations a second, and Faster auto-eval's levels a tenth too, so a rung is bought as soon as its
+ * gate opens: Auto-eval with 2 per click, then 3 and 4 per click, 7 per click, 10 per click, Basin
+ * hopping, the Second lane and asc. Its rates follow the targets of the time when auto-eval clicked
+ * at the player's click size [SPEC]: half to three quarters of an active player's evaluations (one
+ * click a second) before 10 per click, as many at 10 per click, then more with methods and lanes,
+ * near the 120 a second in each lane its ninth rung ran then. This ladder is not simulated yet: the
+ * rungs' places come from their gates, and the rest waits for play-testing [SPEC]. The plan:
+ * PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
  *
  * The rest of the game reads what the player owns only through the functions below.
  */
@@ -227,32 +229,35 @@ const CLICK: Partial<Record<UpgradeId, number>> = {
   click10: 10,
 };
 /**
- * Auto-eval's evaluations a second, all lanes together, by upgrade: one more a rung. The rate is in
- * evaluations, not clicks: evaluations-per-click upgrades leave it as it is. A save from when the
- * rungs ran 0.5 to 120 a second in each lane keeps its rungs, at these rates (save.ts).
+ * Auto-eval's evaluations a second, all lanes together, by upgrade: slowly while the player's own
+ * clicks are small, then about doubling a rung. The rate is in evaluations, not clicks:
+ * evaluations-per-click upgrades leave it as it is. A save keeps its rungs, at these rates (save.ts).
  */
 const AUTO: Partial<Record<UpgradeId, number>> = {
   auto1: 1,
   auto2: 2,
   auto3: 3,
-  auto4: 4,
-  auto5: 5,
-  auto6: 6,
-  auto7: 7,
-  auto8: 8,
-  auto9: 9,
-  auto10: 10,
+  auto4: 5,
+  auto5: 10,
+  auto6: 20,
+  auto7: 35,
+  auto8: 60,
+  auto9: 100,
+  auto10: 150,
 };
 /** The Auto-eval rungs' evaluations a second, slowest first. */
 export const AUTO_RATES: readonly number[] = Object.values(AUTO).sort((a, b) => a - b);
 /**
- * The most evaluations a second auto-eval asks for, all lanes together: a conservative limit on the
- * player's CPU [SPEC]. 20 keep about 3.5 % of one core busy at N+M+P = 85 (1.77 ms an evaluation,
- * rank.ts), about 15 % at 180, and a whole core only from about N+M+P = 490 up [CALC].
+ * The most evaluations a second auto-eval asks for, all lanes together. It is a target: where the
+ * player's CPU cannot keep up, auto-eval runs as fast as it can [SPEC]. 250 keep about 44 % of one
+ * core busy at N+M+P = 85 (1.77 ms an evaluation, rank.ts) and need a whole core from about
+ * N+M+P = 130 up; there the lanes, each a worker of its own, spread it over more cores [CALC].
  */
-export const AUTO_MAX = 20;
-/** Levels of Faster auto-eval, one evaluation a second each, from the last rung up to AUTO_MAX: 10. */
-const AUTOX_LEVELS = AUTO_MAX - AUTO.auto10!;
+export const AUTO_MAX = 250;
+/** Faster auto-eval's evaluations a second a level. */
+export const AUTOX_STEP = 10;
+/** Levels of Faster auto-eval, from the last rung up to AUTO_MAX: 10. */
+const AUTOX_LEVELS = (AUTO_MAX - AUTO.auto10!) / AUTOX_STEP;
 /** Seeds (runs) per problem, by upgrade (1 without any). */
 const SEEDS: Partial<Record<UpgradeId, number>> = { seeds2: 2, seeds4: 4, seeds8: 8, seeds16: 16, seeds32: 32 };
 /** Problem slots, by upgrade (1 without any). */
@@ -908,7 +913,7 @@ export const UPGRADES: readonly Upgrade[] = [
   },
   // ---- evaluations per click, about 100, 250, 450, 700, ... clicks in; a slow auto-eval early ----
   clickRung("click2", 150, ["trace"]),
-  autoRung("auto1", 90, ["click2"]),
+  autoRung("auto1", 9, ["click2"]),
   clickRung("click3", 320, ["click2"]),
   {
     id: "seeds",
@@ -925,10 +930,10 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "seeds",
   },
-  autoRung("auto2", 350, ["auto1", "click3"]),
+  autoRung("auto2", 35, ["auto1", "click3"]),
   clickRung("click4", 500, ["click3"]),
   clickRung("click5", 780, ["click4"]),
-  autoRung("auto3", 800, ["auto2", "click4"]),
+  autoRung("auto3", 80, ["auto2", "click4"]),
   clickRung("click6", 950, ["click5"]),
   queueRung("queue3", 1000, ["click5"]),
   clickRung("click7", 1100, ["click6"]),
@@ -951,7 +956,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "runs",
   },
   clickRung("click10", 1700, ["click9"]),
-  autoRung("auto4", 1350, ["auto3"]),
+  autoRung("auto4", 135, ["auto3", "click7"]),
   {
     id: "clickx",
     name: "One more evaluation per click",
@@ -970,7 +975,7 @@ export const UPGRADES: readonly Upgrade[] = [
     levels: { max: 990, growth: 1.25 },
   },
   seedRung("seeds2", 2000, ["seeds", "click7"]),
-  autoRung("auto5", 2500, ["auto4"]),
+  autoRung("auto5", 250, ["auto4", "click10"]),
   dealerRung("rank2", 3000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
   methodRung(
@@ -1009,7 +1014,7 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "problems",
   },
   seedRung("seeds4", 7000, ["seeds2", "basin"]),
-  autoRung("auto6", 4500, ["auto5", "basin"]),
+  autoRung("auto6", 450, ["auto5", "basin"]),
   tuneRung("tuneMc", "mc_compress", 8000, ["sweeps10", "basin"]),
   dealerRung("rank4", 9000, ["rank2", "reach2"]),
   methodRung(
@@ -1096,7 +1101,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "You can run seed, which builds new boards from lattices, rows and rings.",
     SEED_HOW,
   ),
-  autoRung("auto7", 9000, ["auto6", "lanes2"]),
+  autoRung("auto7", 900, ["auto6", "lanes2"]),
   {
     id: "rent",
     name: "Records pay rent",
@@ -1175,7 +1180,7 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "records",
   },
-  autoRung("auto8", 16000, ["auto7"]),
+  autoRung("auto8", 1600, ["auto7"]),
   {
     id: "batch",
     name: "Reach: every site record",
@@ -1302,8 +1307,8 @@ export const UPGRADES: readonly Upgrade[] = [
     mystery: true,
   },
   tuneRung("tuneHarden", "harden", 80000, ["harden"], true),
-  autoRung("auto9", 28000, ["auto8", "asc"]),
-  autoRung("auto10", 45000, ["auto9"]),
+  autoRung("auto9", 2800, ["auto8", "asc"]),
+  autoRung("auto10", 4500, ["auto9"]),
   {
     id: "learning",
     name: "Learning dealer",
@@ -1349,15 +1354,15 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "autox",
     name: "Faster auto-eval",
-    cost: 100000,
+    cost: 10000,
     requires: ["auto10"],
-    effect: `Each level adds 1 evaluation a second to auto-eval, up to ${AUTO_MAX} in all.`,
+    effect: `Each level adds ${AUTOX_STEP} evaluations a second to auto-eval, up to ${AUTO_MAX} in all.`,
     how: {
       text: [
-        `Each level adds 1 evaluation a second to auto-eval's rate, on top of the ${number(AUTO.auto10!)} a second of the last Auto-eval upgrade, so level ${AUTOX_LEVELS} reaches the limit of ${AUTO_MAX} a second. Like every Auto-eval upgrade, it raises the rate of all your lanes together, and the lanes share it.`,
-        `The limit keeps auto-eval light on your computer. One mc_compress evaluation took about ${msPerEval(85)} ms at N + M + P = 85 on the machine it was measured on, so ${AUTO_MAX} evaluations a second keep about ${number((AUTO_MAX * msPerEval(85)) / 10)} % of one core busy there, and about ${Math.round((AUTO_MAX * msPerEval(180)) / 10)} % at N + M + P = 180. Only from about N + M + P = ${Math.round(coreBound(AUTO_MAX) / 10) * 10} up does an evaluation take ${number(1000 / AUTO_MAX)} ms or more, so that ${AUTO_MAX} a second would need a whole core.`,
+        `Each level adds ${AUTOX_STEP} evaluations a second to auto-eval's rate, on top of the ${number(AUTO.auto10!)} a second of the last Auto-eval upgrade, so level ${AUTOX_LEVELS} reaches the limit of ${AUTO_MAX} a second. Like every Auto-eval upgrade, it raises the rate of all your lanes together, and the lanes share it.`,
+        `The limit is a target, and your computer sets the real one. One mc_compress evaluation took about ${msPerEval(85)} ms at N + M + P = 85 on the machine it was measured on, so ${AUTO_MAX} evaluations a second keep about ${number((AUTO_MAX * msPerEval(85)) / 10)} % of one core busy there. From about N + M + P = ${Math.round(coreBound(AUTO_MAX) / 10) * 10} up an evaluation takes ${number(1000 / AUTO_MAX)} ms or more, so ${AUTO_MAX} a second need more than one core. Each lane is a solver worker of its own, so more lanes spread the work over more cores, and a lane that cannot keep up runs as fast as its core allows.`,
       ],
-      math: AUTO_MATH(`min(${AUTO_MAX}, ${number(AUTO.auto10!)} + ${sym("a")})`),
+      math: AUTO_MATH(`min(${AUTO_MAX}, ${number(AUTO.auto10!)} + ${AUTOX_STEP} × ${sym("a")})`),
       vars: [AUTO_VARS[0], [sym("a"), `levels of Faster auto-eval, 0 to ${AUTOX_LEVELS}`], ...AUTO_VARS.slice(1)],
       note: `${AUTO_NOTE} Each level costs 1.6 times the one before.`,
     },
@@ -1674,13 +1679,13 @@ export const RUN_BUDGET = 100_000;
 
 /**
  * Auto-eval's target in evaluations per second, all lanes together (they share it), or null without
- * it: its fastest rung, plus one a level of Faster auto-eval, at most AUTO_MAX. Evaluations per click
- * do not change it.
+ * it: its fastest rung, plus AUTOX_STEP a level of Faster auto-eval, at most AUTO_MAX. Evaluations per
+ * click do not change it.
  */
 export function autoPerSecond(o: Owned): number | null {
   // the "clicks only" cycle rule: no auto-eval in this cycle
   if (!o.has("auto1") || o.rule === "clicks") return null;
-  return Math.min(AUTO_MAX, highest(o, AUTO, 0, (a, b) => a > b) + level(o, "autox"));
+  return Math.min(AUTO_MAX, highest(o, AUTO, 0, (a, b) => a > b) + AUTOX_STEP * level(o, "autox"));
 }
 
 /**
@@ -1702,12 +1707,16 @@ export const AUTO_JOB_SECONDS = 0.25;
 /**
  * The evaluations of auto-eval's next job in a lane, from the evaluations due (all lanes'): what is due,
  * at most AUTO_JOB_SECONDS of a lane's share of the rate (the rate over `lanes`) and at least 1, or 0
- * while less than one is due.
+ * while less than one is due. With `msEach`, the expected ms of one evaluation on the job's problem,
+ * also at most AUTO_JOB_SECONDS of the solver's time: where the CPU cannot keep up with the share, a
+ * job that size would keep a click waiting for seconds.
  */
-export function autoJobEvals(o: Owned, due: number, lanes = 1): number {
+export function autoJobEvals(o: Owned, due: number, lanes = 1, msEach = 0): number {
   // a hair either way, so that a rounding error (a share a hair over a whole number of evaluations a
   // quarter second, or a sum of fractions just short of 1 due) does not change a job's size
-  const most = Math.max(1, Math.ceil(((autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9));
+  const share = Math.ceil(((autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9);
+  const timed = msEach > 0 ? Math.floor((AUTO_JOB_SECONDS * 1000) / msEach + 1e-9) : Infinity;
+  const most = Math.max(1, Math.min(share, timed));
   return Math.max(0, Math.min(most, Math.floor(due + 1e-9)));
 }
 
