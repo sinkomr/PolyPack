@@ -197,7 +197,7 @@ describe("Tighter's asc runs", () => {
     expect(prose(HELP.counts as How).join(" ")).toContain(ends);
     expect(prose(PIPELINE).join(" ")).toContain(ends);
     expect(prose(upgrade("tuneAsc").how).join(" ")).toContain(
-      "An evaluation takes up to twice as long at the top level",
+      "An evaluation takes up to 3 times as long at the top level",
     );
   });
 });

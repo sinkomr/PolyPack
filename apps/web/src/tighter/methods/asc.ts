@@ -28,7 +28,12 @@ const MAX_TEMPERATURE = 100;
  * The tuning levels. Bench (presets.ts), 150 evaluations at temperature 0 from Compact boards: 10
  * sweeps −6.85 / −4.92 / −6.82 %; 15: −7.87 / −5.60 / −7.02; 20: −7.97 / −5.72 / −7.18; 30: −8.24
  * / −6.03 / −7.32. Time +10 to +30 % then. Warm, a level also shortens the cycle in evaluations
- * (ascRunBudget); the levels were not benched again warm.
+ * (ascRunBudget). One warm cycle each from the worked board of 40 21-gons in a 24-gon (6.332318,
+ * after mc_compress ended by itself), seed 2: level 0, 2,000 evaluations, −0.199 %, 18.4 ms of CPU
+ * an evaluation; level 3, 667 evaluations, −0.198 %, 44.9 ms (2.4 times, on a heavily loaded
+ * machine, so the ms are rough). The same gain in a third of the evaluations. A warm sweep seldom
+ * scores early, so an evaluation is nearly its full n sweeps: up to 30 / 10 = 3 times as long at the
+ * top level. The levels were not benched again warm on all three problems.
  */
 const PRESETS: readonly Record<string, unknown>[] = [
   {},
@@ -122,7 +127,7 @@ export const ascGame: MethodGame = {
     sweepsPerEvaluation: "sweeps between two evaluations",
     stagnationSweeps: "sweeps without a gain before the run ends",
   },
-  tunedTime: "up to twice as long",
+  tunedTime: "up to 3 times as long",
   runParams: ascRunParams,
   runBudget: ascRunBudget,
   runEnds: `An asc run ends after one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps, which is ${int(LEVEL_BUDGETS[0])} evaluations at first and fewer with asc tuning.`,
