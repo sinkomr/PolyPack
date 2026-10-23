@@ -79,10 +79,10 @@ describe("Tighter shop", () => {
       price: null,
       how: null,
     });
-    expect(harden.needs).toEqual(["Method: seed"]);
+    expect(harden.needs).toEqual(["Lattice"]);
     // a prerequisite that is itself an unrevealed mystery reads ?????? too
     expect(card(v, "morph")!.needs).toEqual([MYSTERY]);
-    expect(card(v, "transfer")!.needs).toEqual(["Method: seed", "More open problems"]);
+    expect(card(v, "transfer")!.needs).toEqual(["Lattice", "More open problems"]);
     expect(harden.label).not.toMatch(/harden/i);
     expect(v.mysteries).toBe(UPGRADES.filter((u) => u.mystery && u.row !== "standing").length);
     // owning the prerequisite reveals it

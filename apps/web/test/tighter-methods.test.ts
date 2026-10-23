@@ -108,15 +108,19 @@ describe("Tighter's methods table", () => {
       const g = methodGame(CARDS[u.id]!);
       expect(g.effect, u.id).toBeTruthy();
       expect(u.effect).toBe(g.effect);
-      // the How is the method's, its note the shared sentence on the Method list
+      // the How is the method's, its note the shared sentence on the Method list for a method chosen there
       const how = g.how!("NOTE");
       expect(u.how.text).toEqual(how.text);
       expect(u.how.math).toEqual(how.math);
       expect(u.how.vars).toEqual(how.vars);
-      expect(how.note).toContain("NOTE");
-      expect(u.how.note).toContain("Method list");
-      expect(u.name).toBe(`Method: ${CARDS[u.id]}`);
+      if (isSelectable(CARDS[u.id]!)) {
+        expect(how.note).toContain("NOTE");
+        expect(u.how.note).toContain("Method list");
+      }
+      expect(u.name).toBe(g.name ?? `Method: ${CARDS[u.id]}`);
     }
+    // Lattice's card has its own name
+    expect(upgrade("lattice").name).toBe("Lattice");
     // mc_compress is owned from the start: it has no card, and its tuning card reads the table too
     expect(methodGame("mc_compress").effect).toBeUndefined();
     expect(upgrade("tuneMc").how.vars!.map(([, v]) => v)).toContain(
@@ -125,12 +129,13 @@ describe("Tighter's methods table", () => {
   });
 
   it("names a method by its label in player text, and the solver's name otherwise", () => {
-    for (const m of ALL) expect(methodLabel(m)).toBe(m);
-    withHooks("seed", { label: "lattice" }, () => {
-      expect(methodLabel("seed")).toBe("lattice");
+    // only seed has a label: player text calls it lattice, and the server still gets "seed"
+    for (const m of ALL) expect(methodLabel(m)).toBe(m === "seed" ? "lattice" : m);
+    withHooks("seed", { label: undefined }, () => {
+      expect(methodLabel("seed")).toBe("seed");
       expect(methodLabel("mc_compress")).toBe("mc_compress");
     });
-    expect(methodLabel("seed")).toBe("seed");
+    expect(methodLabel("seed")).toBe("lattice");
     // a name the game does not know is shown as it is
     expect(methodLabel("identity")).toBe("identity");
     expect(methodGame("identity" as EvolveMethod)).toEqual({});
@@ -167,46 +172,45 @@ describe("Tighter's methods table", () => {
 
   it("leaves a method that cannot be chosen out of the Method list, Method match and the pipelines", () => {
     const o = owning(["basin", "shrink", "penalty", "lattice", "harden"]);
-    expect(methods(o)).toContain("seed");
     const save = newGame(1_000, 3);
     save.owned = ["basin", "shrink", "penalty", "lattice"];
     save.settings.method = "seed";
     save.runplan.pipeline = ["seed", "mc_compress", "seed"];
-    withHooks("seed", { selectable: false }, () => {
-      expect(isSelectable("seed")).toBe(false);
-      expect(methods(o)).toEqual(["mc_compress", "basin_hopping", "shrink_repair", "penalty", "harden"]);
-      // Method match draws only among those
-      const plan = newRunPlan();
-      for (let i = 0; i < 50; i++) {
-        const c = chooseRun(plan, {
-          kind: "open|t80|r",
-          methods: methods(o),
-          levelOf: () => 0,
-          tune: false,
-          allowed: () => true,
-          rand: Math.random,
-        });
-        expect(c!.method).not.toBe("seed");
-      }
-      // a pipeline stage of it is skipped, as a stage the cycle's rule refuses
-      expect(pipelineMethod(["seed", "asc"], 0, (m) => methods(o).includes(m) || m === "asc")).toEqual({
-        method: "asc",
-        stage: 1,
+    // Lattice's "seed" is one: the game runs its build by itself
+    expect(isSelectable("seed")).toBe(false);
+    expect(methods(o)).toEqual(["mc_compress", "basin_hopping", "shrink_repair", "penalty", "harden"]);
+    // Method match draws only among those
+    const plan = newRunPlan();
+    for (let i = 0; i < 50; i++) {
+      const c = chooseRun(plan, {
+        kind: "open|t80|r",
+        methods: methods(o),
+        levelOf: () => 0,
+        tune: false,
+        allowed: () => true,
+        rand: Math.random,
       });
-      // a save that chose it, or put it in its pipeline, falls back: mc_compress, and the stage dropped
-      const r = readSave(JSON.parse(toJson(save)), 2_000);
-      expect(r.ok).toBe(true);
-      if (!r.ok) return;
-      expect(r.state.settings.method).toBe("mc_compress");
-      expect(r.state.runplan.pipeline).toEqual(["mc_compress"]);
-      // the card stays owned, and the method stays a method for run records
-      expect(r.state.owned).toContain("lattice");
-      expect(methodParams(o, "seed")).toEqual({});
+      expect(c!.method).not.toBe("seed");
+    }
+    // a pipeline stage of it is skipped, as a stage the cycle's rule refuses
+    expect(pipelineMethod(["seed", "asc"], 0, (m) => methods(o).includes(m) || m === "asc")).toEqual({
+      method: "asc",
+      stage: 1,
     });
-    // selectable again, the save keeps both
+    // a save that chose it, or put it in its pipeline, falls back: mc_compress, and the stage dropped
     const r = readSave(JSON.parse(toJson(save)), 2_000);
-    expect(r.ok && r.state.settings.method).toBe("seed");
-    expect(r.ok && r.state.runplan.pipeline).toEqual(["seed", "mc_compress", "seed"]);
+    expect(r.ok && r.state.settings.method).toBe("mc_compress");
+    expect(r.ok && r.state.runplan.pipeline).toEqual(["mc_compress"]);
+    // the card stays owned, and the method stays a method for run records
+    expect(r.ok && r.state.owned).toContain("lattice");
+    expect(methodParams(o, "seed")).toEqual({});
+    // a method that can be chosen is in every list, and the save keeps both
+    withHooks("seed", { selectable: true }, () => {
+      expect(methods(o)).toContain("seed");
+      const back = readSave(JSON.parse(toJson(save)), 2_000);
+      expect(back.ok && back.state.settings.method).toBe("seed");
+      expect(back.ok && back.state.runplan.pipeline).toEqual(["seed", "mc_compress", "seed"]);
+    });
   });
 
   it("end a stalled run of mc_compress after 500 evaluations without progress, as a run that ended by itself", () => {

@@ -8,6 +8,7 @@ import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, learnOnLeave, newPicks } from "./picks";
+import type { LatticeResult } from "./methods/lattice";
 import { RunPlanState, newRunPlan } from "./runplan";
 import { StandingState, newStanding } from "./standing";
 import {
@@ -116,6 +117,8 @@ export interface ProblemState extends ProblemKey {
    * method, a reload) does not count. A problem allows any number of runs.
    */
   endedRuns: number;
+  /** Its Lattice build, once it is over (methods/lattice.ts); null before, and it runs once. */
+  lattice: LatticeResult | null;
   lastRunAt: number;
   /** RP earned on this problem. */
   rp: number;
@@ -283,6 +286,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     progressBest: null,
     runs: 0,
     endedRuns: 0,
+    lattice: null,
     lastRunAt: 0,
     rp: 0,
   };
