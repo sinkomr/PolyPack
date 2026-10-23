@@ -406,7 +406,7 @@ describe("Tighter upgrade texts", () => {
     expect(text("queue3")).toContain("<var>q</var> × <var>c</var> / 300");
     expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
     expect(text("advance")).toContain("100 evaluations of mc_compress");
-    expect(text("shrink")).toContain("100,000 evaluations");
+    expect(text("shrink")).toContain("A run ends by itself after 1,000 evaluations without progress.");
     expect(text("auto2")).toContain("60 s");
     expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
       0.01, 1.5, 168, 10,
