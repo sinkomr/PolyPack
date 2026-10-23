@@ -313,7 +313,7 @@ describe("Tighter upgrades", () => {
     // a minute of 5 evaluations a second, however many lanes share them
     expect(autoCap(o("auto1", "auto4"))).toBe(5 * 60);
     expect(autoCap(o("click10", "auto1", "auto4", "lanes2", "lanesx"))).toBe(5 * 60);
-    // methods in the order they unlock, mc_compress first
+    // methods in the order they unlock, mc_compress first; Lattice's "seed" is a build, not a choice
     expect(methods(none)).toEqual(["mc_compress"]);
     expect(methods(o("shrink", "basin"))).toEqual(["mc_compress", "basin_hopping", "shrink_repair"]);
     expect(methods(new Set(ids))).toEqual([
@@ -321,7 +321,6 @@ describe("Tighter upgrades", () => {
       "basin_hopping",
       "shrink_repair",
       "penalty",
-      "seed",
       "harden",
       "morph",
       "asc",

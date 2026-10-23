@@ -25,6 +25,7 @@ import type { RunRecord } from "./submission";
 import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
+import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, normalizeStanding } from "./standing";
 import {
   EvolveMethod,
@@ -343,6 +344,8 @@ function problemState(v: unknown, now: number): ProblemState | null {
     progressBest,
     runs: int(v.runs, 0),
     endedRuns: int(v.endedRuns, 0),
+    // a save from before the build was kept has none: each of its problems gets its one build
+    lattice: phase === "bare" ? null : readLattice(v.lattice),
     lastRunAt: num(v.lastRunAt, 0),
     rp: num(v.rp, 0, 0),
   };

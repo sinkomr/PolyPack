@@ -83,6 +83,7 @@ import {
 } from "./economy";
 import { Lane } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
+import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
 import type { RunState } from "./open-run";
 import {
@@ -489,8 +490,8 @@ function runView(run: OpenRunView, p: ProblemState | undefined, live?: RunState 
   };
 }
 
-/** Who chose a run's method: Compact, the select, Method match or the pipeline. */
-type RunMode = "compact" | "select" | "auto" | "pipeline";
+/** Who chose a run's method: Compact, the select, Method match, the pipeline, or the problem's Lattice build. */
+type RunMode = "compact" | "select" | "auto" | "pipeline" | "lattice";
 
 interface LaneView {
   lane: Lane;
@@ -695,13 +696,18 @@ const levelFits = (o: Owned, r: OpenRunView) =>
   o.has("autoTune") && state.runplan.auto ? r.level <= tuningLevel(o, r.method) : r.level === tuningLevel(o, r.method);
 
 /**
- * The run a job on `p` wants: Compact's (mc_compress); else the pipeline's stage for the problem's
- * next run; else Method match's choice; else the select's method. A run already open in the same
- * mode is kept while its choice still holds, so the bandit draws only when a new run opens.
+ * The run a job of `evals` on `p` wants: Compact's (mc_compress); else the problem's Lattice build
+ * when it is due (methods/lattice.ts); else the pipeline's stage for the problem's next run; else
+ * Method match's choice; else the select's method. A run already open in the same mode is kept while
+ * its choice still holds, so the bandit draws only when a new run opens.
  */
-function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): WantedRun {
+function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, evals: number): WantedRun {
   if (compact) return { method: "mc_compress", level: tuningLevel(o, "mc_compress"), mode: "compact" };
   const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
+  const owns = o.has("lattice");
+  const ruleOk = ruleAllowsMethod(state.standing, "seed");
+  if (latticeDue(p, { owns, ruleOk, stall: stallAfter(state), evals, building: r?.mode === "lattice" }))
+    return { method: "seed", level: 0, mode: "lattice" };
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
     chooseRun(state.runplan, {
@@ -732,11 +738,11 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean): W
 }
 
 /**
- * A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's excepted,
- * and a run closed within its warm-up, which has had no chance to pay).
+ * A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's and a
+ * Lattice build excepted, and a run closed within its warm-up, which has had no chance to pay).
  */
 function finishRun(run: OpenRunView | null): void {
-  if (!run || run.mode === "compact" || run.evaluations < run.warmup) return;
+  if (!run || run.mode === "compact" || run.mode === "lattice" || run.evaluations < run.warmup) return;
   const p = problem(state, run.key);
   if (p)
     observeRun(state.runplan, run.kind, run.method, run.level, basePoints(p) - run.rpAt, run.evaluations - run.evalsAt);
@@ -820,7 +826,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     p = problem(state, job.key);
     if (!p || !p.board || (job.compact ? p.phase !== "loaded" : !evolvable(p))) return false;
     const o = owned();
-    let want = wantedRun(p, o, lv, job.compact);
+    let want = wantedRun(p, o, lv, job.compact, job.evals);
     let asked = JSON.stringify(methodParams(o, want.method, want.level));
     // the open run goes on when it is on the problem with the method, setting and mode wanted; Compact's
     // run goes on under the select's method when that is the same method and setting
@@ -841,7 +847,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     ) {
       await endStalledRun(lv, p, lv.run);
       if (problem(state, job.key) !== p) return false;
-      want = wantedRun(p, o, lv, false);
+      want = wantedRun(p, o, lv, false, job.evals);
       asked = JSON.stringify(methodParams(o, want.method, want.level));
     }
     const r = lv.run;
@@ -916,7 +922,8 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
       score: st.score,
       run: record,
       ms,
-      ended: st.ended && !st.closed && !st.error,
+      // a Lattice build is not one of the problem's runs: it never moves a pipeline on
+      ended: st.ended && !st.closed && !st.error && run.mode !== "lattice",
       click: job.click,
       compact: job.compact && done > 1,
       warm: warmIn(run.warmup, st.evaluations - done, st.evaluations),
@@ -939,7 +946,10 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
     );
   }
   if (change.points) reveal(state, "points", "upgrades");
-  if (st.ended && !st.closed && !st.error) {
+  if (run.mode === "lattice") {
+    const built = latticeStep(p, st, run.startScore, problemTitle(p), sideWord(p));
+    if (built) event(built.text, built.notice);
+  } else if (st.ended && !st.closed && !st.error) {
     const title = problemTitle(p);
     const ended =
       methodGame(run.method).endedText?.(runView(run, p), title) ??
