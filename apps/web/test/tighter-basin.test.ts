@@ -16,6 +16,7 @@ import {
   BASIN_REFINE_EVALS,
   BASIN_RUN_EVALS,
   BASIN_TIE,
+  basinRunNote,
   refineEvals,
 } from "../src/tighter/methods/basin_hopping";
 import { OpenRun, resolvedParams } from "../src/tighter/open-run";
@@ -50,6 +51,7 @@ const view = (evaluations: number, stage?: RunStage, over: Partial<RunView> = {}
   problemBest: 4,
   ...over,
 });
+const penalty = (count: number, at = 2): RunStage => ({ method: "penalty", count, at });
 
 describe("Tighter's basin_hopping", () => {
   it("opens runs of 1,000 evaluations with the game's settings on top of the tuning level's", () => {
@@ -96,7 +98,7 @@ describe("Tighter's basin_hopping", () => {
     expect(refineEvals(1000, 0)).toBe(0);
   });
 
-  it("runs as the solver's own run would, and ends by itself at its budget", async () => {
+  it("runs as the solver's own run would, shows the repair, the hops and the refinement, and ends by itself at its budget", async () => {
     const { p, board, score } = loaded();
     const setup = runSetup("basin_hopping", methodParams(owning(["basin"]), "basin_hopping"), p);
     const budget = 300;
@@ -108,9 +110,12 @@ describe("Tighter's basin_hopping", () => {
       seed: 5,
       start: board,
     });
+    const notes: string[] = [];
     const stages: RunStage[] = [];
     let s = await r.step(0);
     for (;;) {
+      const note = basinRunNote({ ...view(s.evaluations, s.stage), budget, params: r.params });
+      if (notes.at(-1) !== note) notes.push(note);
       if (s.stage) stages.push(s.stage);
       if (s.ended) break;
       s = await r.step(10);
@@ -119,6 +124,13 @@ describe("Tighter's basin_hopping", () => {
     expect(s.error).toBeUndefined();
     expect(s.score!).toBeLessThanOrEqual(score);
     expect(stages.some((x) => x.method === "penalty" && x.count >= 2)).toBe(true);
+    // nothing during the start and the lattice, then the repair, the hops in turn and the refinement
+    expect(notes[0]).toBe("");
+    expect(notes[1]).toBe(" · repairing the start");
+    expect(notes.at(-1)).toBe(" · refining the best");
+    const hops = notes.slice(2, -1);
+    expect(hops.length).toBeGreaterThanOrEqual(1);
+    hops.forEach((n, i) => expect(n).toBe(` · hop ${i + 1}`));
     // the hops' penalty solves are the solver's own: the same seed gives the same run
     const replay = await run(small, {
       method: "basin_hopping",
@@ -131,6 +143,25 @@ describe("Tighter's basin_hopping", () => {
     expect(replay.evaluations).toBe(budget);
     expect(s.score).toBe(replay.score);
   }, 60_000);
+
+  it("says on the run line what the run is doing", () => {
+    expect(methodGame("basin_hopping").runNote).toBe(basinRunNote);
+    // the start's scoring and the lattice come before any penalty solve
+    expect(basinRunNote(view(1))).toBe("");
+    expect(basinRunNote(view(2, { method: "seed", count: 1, at: 1 }))).toBe("");
+    // the first penalty solve repairs the start, and each later one repairs a hop
+    expect(basinRunNote(view(40, penalty(1)))).toBe(" · repairing the start");
+    expect(basinRunNote(view(200, penalty(2, 152)))).toBe(" · hop 1");
+    expect(basinRunNote(view(700, penalty(5, 610)))).toBe(" · hop 4");
+    // the refinement takes the last R evaluations
+    const R = BASIN_REFINE_EVALS;
+    expect(basinRunNote(view(BASIN_RUN_EVALS - R, penalty(6, 760)))).toBe(" · hop 5");
+    expect(basinRunNote(view(BASIN_RUN_EVALS - R + 1, penalty(6, 760)))).toBe(" · refining the best");
+    expect(basinRunNote(view(BASIN_RUN_EVALS, penalty(6, 760)))).toBe(" · refining the best");
+    // a run without a refinement has none to show
+    const none = { params: { ...view(1).params, refinementEvals: 0 } };
+    expect(basinRunNote(view(BASIN_RUN_EVALS, penalty(6, 760), none))).toBe(" · hop 5");
+  });
 
   it("ends its runs with a sentence of its own, and a pipeline moves on after each", () => {
     const g = methodGame("basin_hopping");

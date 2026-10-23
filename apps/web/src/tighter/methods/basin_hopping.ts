@@ -1,6 +1,6 @@
 import { sym } from "../how";
 import type { Var } from "../how";
-import type { MethodGame } from "./types";
+import type { MethodGame, RunView } from "./types";
 
 // basin_hopping, from packages/solver/src/methods/basin_hopping.ts (its defaults and update rules).
 
@@ -96,6 +96,21 @@ function weightsText(): string {
   return `a move's base weight, ${list(groups)}`;
 }
 
+/**
+ * What the run is doing, for the run line: nothing during its first evaluations (the start and the
+ * lattice), then the repair of its start (its first penalty solve), then each hop (each later penalty
+ * solve, counted from 1), and its final refinement once fewer than R evaluations are left. A
+ * reinsert's scorings before its penalty solve still show the hop before it.
+ */
+export function basinRunNote(v: RunView): string {
+  const s = v.stage;
+  if (!s || s.method !== "penalty") return "";
+  const refinement = typeof v.params.refinementEvals === "number" ? v.params.refinementEvals : D.refinementEvals;
+  const r = refineEvals(v.budget, refinement);
+  if (r > 0 && v.evaluations > v.budget - r) return " · refining the best";
+  return s.count === 1 ? " · repairing the start" : ` · hop ${int(s.count - 1)}`;
+}
+
 const VARS = (tuned: number | undefined): readonly Var[] => [
   [sym("s"), "the side of the current packing"],
   [`${sym("s")}′`, "the side of the packing after the hop's repair"],
@@ -147,6 +162,7 @@ export const basinHoppingGame: MethodGame = {
   runParams: (base) => ({ ...base, ...BASIN_GAME_PARAMS }),
   runBudget: () => BASIN_RUN_EVALS,
   runEnds: `A ${LABEL} run ends after ${int(L)} evaluations.`,
+  runNote: basinRunNote,
   endedText: (v, title) =>
     v.evaluations >= v.budget ? `The ${LABEL} run on ${title} ended after its ${int(v.budget)} evaluations.` : null,
 };
