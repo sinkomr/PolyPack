@@ -1,7 +1,34 @@
+import type { PackingConfig } from "@polypack/geometry";
+import type { ProblemState } from "../game";
 import { sym } from "../how";
 import type { MethodGame } from "./types";
 
 // ls_growth, from packages/solver/src/methods/ls_growth.ts (its defaults and update rules).
+
+// ---------- the series: every run of ls_growth on a problem starts from the same board ----------
+
+/** The most problems whose series board is kept in memory: the oldest stored is dropped beyond it. */
+export const GROWTH_BASES = 32;
+
+/** Each problem's series board B, by problem key, oldest stored first. Never saved: a reload starts anew. */
+const bases = new Map<string, PackingConfig>();
+
+/**
+ * The board an ls_growth run opens from (startFrom): the problem's series board B. A series is the
+ * ls_growth runs on a problem since a run of another method last improved its board. While the board
+ * is ls_growth's own (`p.run.method`), B stays as it was, so each run is an independent try from the
+ * same board and the problem keeps the best of them (applyStep takes only a smaller board). Otherwise
+ * the board becomes the new B. A run that finds nothing leaves `p.run` as it was, so the next one
+ * still starts from B. A stored board of another shape than the problem's is never used.
+ */
+export function growthStart(p: ProblemState): PackingConfig {
+  const b = bases.get(p.key);
+  if (p.run?.method === "ls_growth" && b && b.N === p.N && b.M === p.M && b.P === p.P) return b;
+  bases.delete(p.key);
+  bases.set(p.key, p.board!);
+  while (bases.size > GROWTH_BASES) bases.delete(bases.keys().next().value!);
+  return p.board!;
+}
 
 export const lsGrowthGame: MethodGame = {
   effect: "You can run ls_growth, which grows the pieces inside a fixed container until they jam.",
@@ -50,4 +77,5 @@ export const lsGrowthGame: MethodGame = {
     stagnationEvaluations: "evaluations without a gain before a growth run ends",
   },
   tunedTime: "up to 5 times as long",
+  startFrom: growthStart,
 };
