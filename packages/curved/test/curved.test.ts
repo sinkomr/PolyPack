@@ -284,10 +284,13 @@ describe("solver", () => {
     expect(a.validation!.valid).toBe(true);
   });
 
-  it("hyperbolic disk rings: R = 1 + asinh(sinh 1 / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - 1)/6", () => {
+  it("hyperbolic disk rings: R = 1 + asinh(sinh 1 / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - 1)/6", async () => {
     for (const P of [3, 4, 5]) {
+      // the solves are long synchronous runs; let the test worker answer its runner between them
+      await new Promise((resolve) => setImmediate(resolve));
       const r = solve({ N: 0, M: 0, P }, -1, { seed: 2, restarts: 2, hops: 4 });
       expect(r.config!.size).toBeCloseTo(1 + Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P)), 9);
+      await new Promise((resolve) => setImmediate(resolve));
       const e = solve({ N: 0, M: 0, P }, 0, { seed: 2, restarts: 2, hops: 4 });
       const r0 = e.config!.size - 1; // ring radius
       const s = sensitivity({ N: 0, M: 0, P }, 0, e.config!, e.polish);
