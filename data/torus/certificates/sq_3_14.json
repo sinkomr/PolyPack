@@ -1,0 +1,615 @@
+{
+ "family": "sq",
+ "N": 3,
+ "P": 14,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 2482,
+  "bounding_disk_separated": 2246,
+  "explicit_axis_separated": 54,
+  "X1": "0.4506715055",
+  "X2": "0.4506715055"
+ },
+ "min_clearance_lb": "5.7620401e-13",
+ "score_cert_upper": "2.562177826493633020078423",
+ "score_upper_float": 2.5621778264936332,
+ "explicit": [
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.77484e-13"
+  },
+  {
+   "i": 0,
+   "j": 2,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "5.76796e-13"
+  },
+  {
+   "i": 0,
+   "j": 3,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "8.65707e-13"
+  },
+  {
+   "i": 0,
+   "j": 4,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 0,
+   "j": 10,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "8.66028e-13"
+  },
+  {
+   "i": 0,
+   "j": 11,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "8.66261e-13"
+  },
+  {
+   "i": 0,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.76217e-13"
+  },
+  {
+   "i": 0,
+   "j": 13,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "5.77148e-13"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.77431e-13"
+  },
+  {
+   "i": 1,
+   "j": 4,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77296e-13"
+  },
+  {
+   "i": 1,
+   "j": 5,
+   "lam": [
+    1,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 1,
+   "j": 6,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "8.66025e-13"
+  },
+  {
+   "i": 1,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "8.66637e-13"
+  },
+  {
+   "i": 1,
+   "j": 13,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "8.6612e-13"
+  },
+  {
+   "i": 2,
+   "j": 5,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "8.66134e-13"
+  },
+  {
+   "i": 2,
+   "j": 6,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 2,
+   "j": 10,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "5.76917e-13"
+  },
+  {
+   "i": 2,
+   "j": 11,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "5.76815e-13"
+  },
+  {
+   "i": 2,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "8.65506e-13"
+  },
+  {
+   "i": 2,
+   "j": 13,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "8.6542e-13"
+  },
+  {
+   "i": 3,
+   "j": 6,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77694e-13"
+  },
+  {
+   "i": 3,
+   "j": 7,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "8.66315e-13"
+  },
+  {
+   "i": 3,
+   "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.77084e-13"
+  },
+  {
+   "i": 3,
+   "j": 11,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 3,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "5.76204e-13"
+  },
+  {
+   "i": 4,
+   "j": 5,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.77649e-13"
+  },
+  {
+   "i": 4,
+   "j": 7,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "8.65991e-13"
+  },
+  {
+   "i": 4,
+   "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "5.77443e-13"
+  },
+  {
+   "i": 4,
+   "j": 10,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 4,
+   "j": 13,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 5,
+   "j": 6,
+   "lam": [
+    -1,
+    -1
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "8.66364e-13"
+  },
+  {
+   "i": 5,
+   "j": 7,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 5,
+   "j": 8,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "8.66108e-13"
+  },
+  {
+   "i": 5,
+   "j": 9,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 5,
+   "j": 10,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77403e-13"
+  },
+  {
+   "i": 6,
+   "j": 7,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.76815e-13"
+  },
+  {
+   "i": 6,
+   "j": 8,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "8.66351e-13"
+  },
+  {
+   "i": 6,
+   "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "8.66329e-13"
+  },
+  {
+   "i": 6,
+   "j": 11,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 7,
+   "j": 8,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "5.77526e-13"
+  },
+  {
+   "i": 7,
+   "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "5.77614e-13"
+  },
+  {
+   "i": 7,
+   "j": 10,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 7,
+   "j": 11,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 8,
+   "j": 9,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 8,
+   "j": 10,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "5.77416e-13"
+  },
+  {
+   "i": 8,
+   "j": 11,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77217e-13"
+  },
+  {
+   "i": 8,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 8,
+   "j": 13,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "0.0358984"
+  },
+  {
+   "i": 9,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "8.66018e-13"
+  },
+  {
+   "i": 9,
+   "j": 13,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "8.66084e-13"
+  },
+  {
+   "i": 10,
+   "j": 13,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.7728e-13"
+  },
+  {
+   "i": 11,
+   "j": 12,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.76709e-13"
+  },
+  {
+   "i": 12,
+   "j": 13,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "8.66503e-13"
+  }
+ ],
+ "score_cert_checked": 2.5621778264936332
+}

@@ -4,6 +4,8 @@
 
 It is a plain command-line program with no game in it. The Tighter idle game is unrelated.
 
+It can also search the new spaces (polyhedral surfaces, constant curvature, the whole sphere, flat tori), but only when asked to: see [Optional: the new spaces](#optional-the-new-spaces). By default it never asks the server about them.
+
 Labels: [EST] established, with its source; [CALC] measured or computed here; [SPEC] a judgement or expectation not yet measured.
 
 ## What it does
@@ -25,7 +27,7 @@ The best strict packing this machine has found for each problem is also kept on 
 
 ## Getting it and running it
 
-You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 400 kB. It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 612 kB (627,058 bytes on 2026-10-24; the client before the spaces option, built the same way, is 418,719 bytes). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
 
 Download it from the site's volunteer page, https://polypack.fly.dev/volunteer.html, which also shows its version and SHA-256. The site's build makes it from the same sources (`npm run build` writes it to `apps/web/public/downloads/`). Or build it from the repository:
 
@@ -75,7 +77,7 @@ The source code, the published records and these documents are in the public rep
 | `--cores K`               | all cores but one          | Number of search threads. One job runs on each.                                                                                                                                                                                 |
 | `--hours H`               | never                      | Stop after H hours by the wall clock, so that time asleep counts. The current problem's best is still submitted if it qualifies. No problem starts with less than 2 minutes left (or the time per problem, if that is smaller). |
 | `--minutes-per-problem T` | 10                         | The most active minutes the engine spends on one problem. Fractions are allowed.                                                                                                                                                |
-| `--N LIST`, `--M LIST`    | all                        | Piece and container shapes, for example `0,3-6` (0 is the circle).                                                                                                                                                              |
+| `--N LIST`, `--M LIST`    | all                        | Piece and container shapes, for example `0,3-6` (0 is the circle). Polygon problems only: they do not filter the spaces.                                                                                                        |
 | `--max-P K`               | all                        | Only problems with at most K pieces.                                                                                                                                                                                            |
 | `--dry-run`               | off                        | Search, but never submit, even with `--name`. It still says what it would have submitted, and keeps that packing for a later real run.                                                                                          |
 | `--state DIR`             | `~/.polypack-volunteer`    | Where the client keeps its state.                                                                                                                                                                                               |
@@ -83,12 +85,14 @@ The source code, the published records and these documents are in the public rep
 | `--no-battery-pause`      | off                        | Keep searching on battery power.                                                                                                                                                                                                |
 | `--priority low\|normal`  | `low`                      | CPU priority of the search threads.                                                                                                                                                                                             |
 | `--once`                  | off                        | Search one problem, then exit. Meant for testing.                                                                                                                                                                               |
+| `--spaces LIST`           | none                       | Also search problems of the new spaces: `surface`, `curved`, `sphere`, `torus`, comma-separated, or `all`. See [Optional: the new spaces](#optional-the-new-spaces). `--max-P` applies to them too.                             |
+| `--only-spaces`           | off                        | Search only the spaces given with `--spaces`; the polygon work list is not read. It cannot be combined with `--N` or `--M`.                                                                                                     |
 | `--help`, `--version`     |                            |                                                                                                                                                                                                                                 |
 
 Exit codes:
 
 - 0: normal end (`--once`, `--hours`, or Ctrl-C).
-- 1: the server has no work list; another copy is using the state directory; the search threads cannot start; or, with `--once`, the work list cannot be read or its problem could not be searched.
+- 1: the server has no work list (with `--only-spaces`: no work list for the spaces); another copy is using the state directory; the search threads cannot start; or, with `--once`, the work list cannot be read or its problem could not be searched.
 - 2: wrong options.
 - 130: a second Ctrl-C.
 
@@ -104,9 +108,35 @@ The engine stops before the limit when more time looks unlikely to pay. It count
 
 It stops once it has made no progress for the longer of two spans. One is half the time it has run so far, so it gets as much time again as it took to find its last improvement. The other is a quarter of `--minutes-per-problem` (2.5 minutes at the default), or four of the engine's shortest jobs when that is longer. After that quarter, its own line counts only while it is within 1% of the score to beat. [CALC] In the engine's calibration runs, two doublings of the run length gained 0.09% to 0.4%, so a line still more than 1% behind is unlikely to catch up in the remaining time. The constants are in `apps/volunteer/src/engine/policy.ts`.
 
+## Optional: the new spaces
+
+PolyPack also has problems in four other spaces: pieces on the surface of a Platonic solid, at constant curvature, on the whole sphere and on flat tori. The site's spaces page, `/spaces.html`, lists them, and `docs/spaces/*.md` describes each. The client searches them only with `--spaces`:
+
+```sh
+node polypack-volunteer.mjs --name "your name" --spaces all
+node polypack-volunteer.mjs --name "your name" --spaces sphere,torus --only-spaces
+```
+
+- **Off by default.** Without `--spaces` the client never reads the spaces' work list or their problems, and nothing below happens.
+- **Which problem.** It reads `GET /api/spaces/targets?spaces=...&max_P=...&limit=2000` and keeps it for 10 minutes, like the polygon list. It leaves out problems this machine searched in the last 7 days, unless their best has changed since. Then it draws a space, uniformly among the requested spaces that have a problem left, and from that space's 50 highest priorities one problem, weighted by priority. The server scales the priorities so that each space's add up to the same share, so a space with many problems has the smallest ones; a cut of the whole list would leave it out. With both lists in use, each next problem comes from one of them with probability 1/2; when that list has nothing to offer, it takes the other. `--only-spaces` leaves out the polygon list.
+- **The start.** It reads the problem, `GET /api/spaces/<space>/problems/<id>`, and starts from the better of its two configurations: the research record's and the site leader's. Closed problems (a proven value, or no packing at all) are skipped.
+- **The search.** It runs in the same threads, with the same time per problem, pauses on battery and stops on Ctrl-C. Each job is seeded, and once a job's rate is known it also has an evaluation cap. One search per space:
+  - `surface`, fold mode: the fold search of `packages/surface` (penalty compression on the solid, basin hopping, a contact-LP polish). The search stops at four fifths of the job's time; the final tightening and polish get the rest and at most 1.5 s more, and check the flags inside each polish step;
+  - `surface`, nofold mode: every piece stays in one face, so this is a planar problem. The client searches the best packing of the fullest face with its usual engine, then copies it onto every face. The server's work list no longer has nofold problems, since they are planar problems of the main site; the client keeps this search for a server that lists them;
+  - `curved`: the search of `packages/curved` (penalty compression, an LP polish, basin hopping), in rounds that start from the best so far. It checks the stop and pause flags inside each restart, before every L-BFGS iteration, compression step and polish iteration;
+  - `sphere` and `torus`: `searchSphere` and `searchTorus` in their packages. They relax overlaps with a penalty, then find the smallest valid size for the poses by bisection with the space's validator, and hop between basins.
+- **What it submits.** `POST /api/spaces/submit` with `space`, `id`, `config` (in the space's own format), `name`, `agent_note` when given, `software`, `method` and `seed`. It sends a configuration only when all of these hold:
+  - the space's own validator accepts it at its stated size, with PolyPack's tolerance 1e-9, and, when it is below the research record, also with the strict tolerance 1e-11 (the server's rule, `validateSpaceSubmission` in `packages/spaces`). Each job's results and the kept configuration are checked by this rule too, so a configuration it refuses is never offered, now or at a later visit;
+  - the problem is open, and the score is not below the problem's lower bound;
+  - it beats the problem's best, the research record or the site's leader, by more than the tie tolerance (`score < best * (1 - 1e-9)`), re-read just before.
+- **What it means.** The server checks every entry again and keeps one site leader per problem. A site entry is checked in floating point. The research records also carry interval proofs; a site entry does not.
+- **Answers.** As for polygon problems: 429 waits and retries, 409 skips the problem, 400 and 422 are logged, and a submission without an answer is sent again only after a re-read shows it is not stored.
+- **On disk.** The best configuration found for a space problem goes to `best/spaces/<id>.json`, with `/` in the id written as `_`. A history line of a space problem has `space` and `id` instead of `N` and `M`. This client reads older files unchanged. A client older than this option skips space lines when it reads the history, but drops them when it cuts a long history back (above about 21,000 lines), so going back to an older client loses them then.
+- **A server without the spaces** answers 404. With `--only-spaces` the client says so and exits with code 1; with both lists it goes on with the polygon list.
+
 ## What it sends, and under which name
 
-- **Reads.** `GET /api/targets`, `GET /api/problems/{N}/{M}/{P}` and `GET /api/submissions/{id}`. They are public and need no account or key. Every request carries the header `User-Agent: polypack-volunteer/<version> (Node <version>)`.
+- **Reads.** `GET /api/targets`, `GET /api/problems/{N}/{M}/{P}` and `GET /api/submissions/{id}`, and with `--spaces` also `GET /api/spaces/targets` and `GET /api/spaces/<space>/problems/<id>`. They are public and need no account or key. Every request carries the header `User-Agent: polypack-volunteer/<version> (Node <version>)`.
 - **Submissions.** `POST /api/submit`, only with `--name` and without `--dry-run`, and only for a packing that passes the checks above. The body holds:
   - the packing (`N`, `M`, `P`, `pieces`, `container_phi`);
   - `name` from `--name`;
@@ -177,6 +207,7 @@ The client keeps its state in `--state`, by default `~/.polypack-volunteer`:
 | `memory.json`     | What the engine learned across problems, for example which methods found bests. It is rewritten after each problem.                                                                                                                                                                                                                                                                                                                                                                                        |
 | `history.jsonl`   | One JSON line per problem; see below. It is cut back to its last 20,000 lines, months of searching.                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `best/N-M-P.json` | The best strict packing this machine found for the problem, with the method, resolved parameters, seed, budget and time that produced it.                                                                                                                                                                                                                                                                                                                                                                  |
+| `best/spaces/`    | With `--spaces` only: the same for each problem of the new spaces, one file per problem id.                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 Each `history.jsonl` line holds:
 
@@ -202,5 +233,10 @@ Whole files are written to a temporary file and then renamed, so an interruption
 - **Lost submissions.** A packing whose submission failed is offered again only when its problem comes up again. That happens after 7 days, or sooner when the problem's leader changes. When an answer is lost and the problem cannot be read again, the client cannot tell whether the packing was stored, and does not send it again.
 - **Replaying an entry.** Provenance records the last job only; see [What it sends](#what-it-sends-and-under-which-name).
 - **Updates.** The client does not update itself. Download or build the new file.
+- **The spaces' searches** are short local searches from the problem's best. [SPEC] Most research records came from longer searches, so most volunteer runs will not beat them; the spaces mode is offered as an option for that reason.
+- **Stopping in the spaces.** Their searches check the stop and pause flags between small steps. [CALC] Measured on this macOS machine on the largest catalogue problems, as the longest stretch without a check, and the job's length for its budget T:
+  - curved, 29 and 27 triangles in an octagon at K = -1 (fresh jobs, seed 3): at most 0.63 s; T = 30 s and 10 s jobs ended within 0.07 s of T. A real abort at 9 s was answered after 0.07 s, and a pause from 9 s used no CPU over 15 s;
+  - surface fold, 72 to 80 triangles: at most 0.54 s; T = 2, 10 and 30 s jobs ended 1.5 to 1.64 s after T (the final polish's allowance);
+  - sphere and torus, P = 40 and 49: 0.02 s or less.
 - **Shared addresses.** Several copies behind one address share the server's limit of 120 submissions a minute. [SPEC] That should not matter at a few submissions an hour per copy.
 - **Sleep.** [SPEC] While the machine sleeps, the process is suspended, and the problem's active clock should not advance. `--hours` counts sleep, since it goes by the wall clock.

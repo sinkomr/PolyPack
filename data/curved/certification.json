@@ -1,0 +1,3894 @@
+{
+ "generated": "2026-10-24",
+ "certifier": "python/curved/certify.py",
+ "precision_bits": 256,
+ "results": [
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.999600408392073e-12,
+   "min_pair_clearance_lb": 8.078192052392162e-12,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1.225778283313099/3/5/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.831750765755613e-22,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.161180994809301e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.1611915119369275e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.1612057047715605e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.1612047095367723e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.161201880275052e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/0/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.214374545331485e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.152018645424572e-11,
+   "min_pair_clearance_lb": 3.36588840305918e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.312894323703518e-11,
+   "min_pair_clearance_lb": 3.365897651982761e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.3658797919306626e-11,
+   "min_pair_clearance_lb": 3.3658853777927294e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.3658909543945176e-11,
+   "min_pair_clearance_lb": 3.365875548713714e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.7887212629143626e-11,
+   "min_pair_clearance_lb": 3.3658899807912036e-11,
+   "tests": {
+    "axis": 7,
+    "far": 8,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.832995740798599e-11,
+   "min_pair_clearance_lb": 3.3658814590108145e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.943975483928527e-11,
+   "min_pair_clearance_lb": 3.365869136192017e-11,
+   "tests": {
+    "axis": 21,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.987503284812469e-11,
+   "min_pair_clearance_lb": 3.365637729384889e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9997601885952876e-11,
+   "min_pair_clearance_lb": 3.3658725245611725e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/0/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.159923574069537e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999972223131428e-11,
+   "min_pair_clearance_lb": 3.36588617510183e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999771282144406e-11,
+   "min_pair_clearance_lb": 3.3658991126002364e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999963601483343e-11,
+   "min_pair_clearance_lb": 3.365884283859528e-11,
+   "tests": {
+    "axis": 5,
+    "far": 1,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999137975961883e-11,
+   "min_pair_clearance_lb": 3.365883381337752e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999921815246194e-11,
+   "min_pair_clearance_lb": 3.365883637435734e-11,
+   "tests": {
+    "axis": 10,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999948693895225e-11,
+   "min_pair_clearance_lb": 3.365881729628273e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999911199661915e-11,
+   "min_pair_clearance_lb": 3.365876681077816e-11,
+   "tests": {
+    "axis": 21,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999511231453684e-11,
+   "min_pair_clearance_lb": 3.365888023029002e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9984204898723713e-11,
+   "min_pair_clearance_lb": 3.365863366356394e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/3/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000096246961074e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999996742076236e-11,
+   "min_pair_clearance_lb": 3.3658778865531616e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000195585409414e-11,
+   "min_pair_clearance_lb": 3.365886101058511e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999740932168304e-11,
+   "min_pair_clearance_lb": 3.36586777467509e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999999972417036e-11,
+   "min_pair_clearance_lb": 3.365879082589619e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999941045750471e-11,
+   "min_pair_clearance_lb": 3.365889939740308e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999450749271014e-11,
+   "min_pair_clearance_lb": 3.3658941524641474e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000034606096838e-11,
+   "min_pair_clearance_lb": 3.365869039106158e-11,
+   "tests": {
+    "axis": 19,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999954661261583e-11,
+   "min_pair_clearance_lb": 3.365874257686118e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999319122991186e-11,
+   "min_pair_clearance_lb": 3.3658769914562024e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/4/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000001329156684e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999853184342334e-11,
+   "min_pair_clearance_lb": 3.365890226338617e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999846889887384e-11,
+   "min_pair_clearance_lb": 3.3658993679232933e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999971968705055e-11,
+   "min_pair_clearance_lb": 3.3658903402871374e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999775100120594e-11,
+   "min_pair_clearance_lb": 3.3658916914990285e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999861871669515e-11,
+   "min_pair_clearance_lb": 3.3658840047666805e-11,
+   "tests": {
+    "axis": 7,
+    "far": 8,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000013833802195e-11,
+   "min_pair_clearance_lb": 3.365859286907883e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9998396332821485e-11,
+   "min_pair_clearance_lb": 3.3658685962524855e-11,
+   "tests": {
+    "axis": 21,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999742742138957e-11,
+   "min_pair_clearance_lb": 3.365865035423458e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.998175385141745e-11,
+   "min_pair_clearance_lb": 3.365869302817194e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/5/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999901145571624e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000228839219373e-11,
+   "min_pair_clearance_lb": 3.365886207475363e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999982222626636e-11,
+   "min_pair_clearance_lb": 3.3659005027989095e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999979350440109e-11,
+   "min_pair_clearance_lb": 3.365887240714142e-11,
+   "tests": {
+    "axis": 5,
+    "far": 1,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999991099262846e-11,
+   "min_pair_clearance_lb": 3.365881174634358e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999929943825644e-11,
+   "min_pair_clearance_lb": 3.36588722930113e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999687968847265e-11,
+   "min_pair_clearance_lb": 3.365891627174712e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999728440653674e-11,
+   "min_pair_clearance_lb": 3.3658625974206264e-11,
+   "tests": {
+    "axis": 21,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999736430410846e-11,
+   "min_pair_clearance_lb": 3.365879977394201e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000762204585239e-11,
+   "min_pair_clearance_lb": 3.3658625442539396e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/6/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999924907780735e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000014362512739e-11,
+   "min_pair_clearance_lb": 3.365891201338068e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000037981140386e-11,
+   "min_pair_clearance_lb": 3.365877307645222e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999976317994107e-11,
+   "min_pair_clearance_lb": 3.365882272544269e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000005087614089e-11,
+   "min_pair_clearance_lb": 3.365882498873867e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999983288276442e-11,
+   "min_pair_clearance_lb": 3.365875767715699e-11,
+   "tests": {
+    "axis": 7,
+    "far": 8,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999969487195186e-11,
+   "min_pair_clearance_lb": 3.365856572460142e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999886253802556e-11,
+   "min_pair_clearance_lb": 3.365871606074588e-11,
+   "tests": {
+    "axis": 21,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000034065748151e-11,
+   "min_pair_clearance_lb": 3.365884607019187e-11,
+   "tests": {
+    "axis": 20,
+    "far": 16,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9981257089687803e-11,
+   "min_pair_clearance_lb": 3.3658521171178865e-11,
+   "tests": {
+    "axis": 22,
+    "far": 23,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/3/8/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.712044387932341e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.741362195450512e-11,
+   "min_pair_clearance_lb": 3.365905763626405e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9641468134454725e-11,
+   "min_pair_clearance_lb": 3.365896104190554e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999986563336614e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999740692715124e-11,
+   "min_pair_clearance_lb": 3.36590909812563e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/3/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.99996335425265e-11,
+   "min_pair_clearance_lb": 3.365883588423386e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/3/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999982813352261e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.00001726810268e-11,
+   "min_pair_clearance_lb": 3.365912541698999e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/4/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999917559158292e-11,
+   "min_pair_clearance_lb": 3.365907759507598e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/4/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000009348448792e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999961119385742e-11,
+   "min_pair_clearance_lb": 3.365891758013646e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/5/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9997762573712696e-11,
+   "min_pair_clearance_lb": 3.365899561958207e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/5/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000011240200431e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.00000520710912e-11,
+   "min_pair_clearance_lb": 3.365908493964411e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/6/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999895549856277e-11,
+   "min_pair_clearance_lb": 3.3658996871136227e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/6/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000003432498913e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000068928912207e-11,
+   "min_pair_clearance_lb": 3.365892985845122e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999941610062674e-11,
+   "min_pair_clearance_lb": 3.3659015453012406e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/4/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.262591132527121e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.99996081858957e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999975241194134e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999629558626924e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999977672506137e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000061041995366e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/5/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.835433632760751e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999790608404388e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999962538306928e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000149815306176e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999999771273888e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000346240986086e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1/6/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.999902571850589e-11,
+   "min_pair_clearance_lb": 7.999965975178041e-11,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 21,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1e-06/0/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999386744396666e-11,
+   "min_pair_clearance_lb": 3.999940525199564e-11,
+   "tests": {
+    "axis": 4,
+    "far": 6,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/1e-06/4/4/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.999947815693111e-11,
+   "min_pair_clearance_lb": 7.999969640728895e-11,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 21,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1e-06/0/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999956365188635e-11,
+   "min_pair_clearance_lb": 3.999966690119233e-11,
+   "tests": {
+    "axis": 4,
+    "far": 6,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1e-06/4/4/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.800005471481431e-22,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.700812853928697e-11,
+   "min_pair_clearance_lb": 1.4507429971213724e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 1,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.4280119542795876e-11,
+   "min_pair_clearance_lb": 1.4507350442774952e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 3,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.647937598360404e-11,
+   "min_pair_clearance_lb": 1.4507388755246698e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 6,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.997450232915464e-11,
+   "min_pair_clearance_lb": 1.4507346925480947e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 10,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.401589026073881e-11,
+   "min_pair_clearance_lb": 1.4507367729283467e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 15,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0834194119149965e-10,
+   "min_pair_clearance_lb": 1.4507337102987886e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 21,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.2283796505015842e-10,
+   "min_pair_clearance_lb": 1.4507267747624648e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 28,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3744235209154026e-10,
+   "min_pair_clearance_lb": 1.4507314893420078e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 36,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4507176946021432e-10,
+   "min_pair_clearance_lb": 1.4507217162595338e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 45,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5212076522047743e-10,
+   "min_pair_clearance_lb": 1.4507201618716052e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 55,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.6685336994764848e-10,
+   "min_pair_clearance_lb": 1.4507404870024324e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 66,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.8162366562453845e-10,
+   "min_pair_clearance_lb": 1.450744572141951e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 78,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/13"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9642655291333058e-10,
+   "min_pair_clearance_lb": 1.4507265834625782e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 91,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/14"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.112504246674905e-10,
+   "min_pair_clearance_lb": 1.4507343753623757e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 105,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/15"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.2609250033526996e-10,
+   "min_pair_clearance_lb": 1.4507177650353629e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 120,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/16"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.409533985782222e-10,
+   "min_pair_clearance_lb": 1.4507350959802762e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 136,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/17"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.5582397477613807e-10,
+   "min_pair_clearance_lb": 1.450720627582459e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 153,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/18"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.7070538133245886e-10,
+   "min_pair_clearance_lb": 1.450733585448331e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 171,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/19"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.8559535805498864e-10,
+   "min_pair_clearance_lb": 1.450735722968577e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 190,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/20"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.004948041660129e-10,
+   "min_pair_clearance_lb": 1.450728840993267e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 210,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/21"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.153994192343126e-10,
+   "min_pair_clearance_lb": 1.4507248716685923e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 231,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/22"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.3029849097238796e-10,
+   "min_pair_clearance_lb": 1.4507233721860416e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 253,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/23"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.4521945013794256e-10,
+   "min_pair_clearance_lb": 1.450718460012917e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 276,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/24"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.601413503000115e-10,
+   "min_pair_clearance_lb": 1.450727643160056e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 300,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/25"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.75060687494116e-10,
+   "min_pair_clearance_lb": 1.4507260655281973e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 325,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/26"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.841015397805349e-10,
+   "min_pair_clearance_lb": 1.4505486314867398e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 351,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/27"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9087939817960715e-10,
+   "min_pair_clearance_lb": 1.4504048071699288e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 378,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/28"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.04899117140342e-10,
+   "min_pair_clearance_lb": 1.4507106543996107e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 406,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/29"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.198464444904444e-10,
+   "min_pair_clearance_lb": 1.4507232870299149e-10,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 435,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/0/30"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4917956749475076e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.7386612256315247e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.172290242780179e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/0/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.4068435169907297e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.736554848512352e-11,
+   "min_pair_clearance_lb": 4.7007939153522215e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.291913846350844e-11,
+   "min_pair_clearance_lb": 4.700789950044865e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.499872382459298e-11,
+   "min_pair_clearance_lb": 4.7007779017515845e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.6545641846157875e-11,
+   "min_pair_clearance_lb": 4.700791979111693e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.700766656566091e-11,
+   "min_pair_clearance_lb": 4.700786084693892e-11,
+   "tests": {
+    "axis": 15,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.803982484043849e-11,
+   "min_pair_clearance_lb": 4.7007692182832325e-11,
+   "tests": {
+    "axis": 14,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.4467063342734226e-11,
+   "min_pair_clearance_lb": 4.7007740069585724e-11,
+   "tests": {
+    "axis": 16,
+    "far": 12,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.094285309556062e-11,
+   "min_pair_clearance_lb": 4.7007726137221897e-11,
+   "tests": {
+    "axis": 18,
+    "far": 18,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.405247236939639e-11,
+   "min_pair_clearance_lb": 4.70077046444483e-11,
+   "tests": {
+    "axis": 21,
+    "far": 24,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.842706339719565e-11,
+   "min_pair_clearance_lb": 4.700773329220787e-11,
+   "tests": {
+    "axis": 26,
+    "far": 29,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.398393151122136e-11,
+   "min_pair_clearance_lb": 4.700755678627929e-11,
+   "tests": {
+    "axis": 29,
+    "far": 37,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/0/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.7548361270005288e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/3/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.10929087666607e-12,
+   "min_pair_clearance_lb": 2.4786539500739054e-12,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/3/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.855585750724109e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.4390036127452044e-11,
+   "min_pair_clearance_lb": 2.8662935766758877e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.7547224607643347e-11,
+   "min_pair_clearance_lb": 2.0621674793908312e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3959937246853538e-11,
+   "min_pair_clearance_lb": 1.6406111211040543e-11,
+   "tests": {
+    "axis": 5,
+    "far": 1,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3579037640558092e-11,
+   "min_pair_clearance_lb": 1.59585854911932e-11,
+   "tests": {
+    "axis": 8,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.212038388582402e-12,
+   "min_pair_clearance_lb": 7.300741714616973e-12,
+   "tests": {
+    "axis": 9,
+    "far": 6,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9995014964298127e-12,
+   "min_pair_clearance_lb": 2.3502999869318047e-12,
+   "tests": {
+    "axis": 11,
+    "far": 10,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/4/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999676800892895e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.401594667540507e-11,
+   "min_pair_clearance_lb": 3.99758430232276e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.067164661047505e-11,
+   "min_pair_clearance_lb": 3.6045235045995136e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.802586267864066e-11,
+   "min_pair_clearance_lb": 3.293671202793692e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.366414467080779e-11,
+   "min_pair_clearance_lb": 2.7810750371278918e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.8301366068263627e-11,
+   "min_pair_clearance_lb": 2.1507729536237535e-11,
+   "tests": {
+    "axis": 11,
+    "far": 4,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.6460421181472784e-11,
+   "min_pair_clearance_lb": 1.93448251948213e-11,
+   "tests": {
+    "axis": 13,
+    "far": 8,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3954420214771339e-11,
+   "min_pair_clearance_lb": 1.639895131827234e-11,
+   "tests": {
+    "axis": 20,
+    "far": 8,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.2138280341614263e-11,
+   "min_pair_clearance_lb": 1.4265578562409186e-11,
+   "tests": {
+    "axis": 18,
+    "far": 18,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.115906231907917e-11,
+   "min_pair_clearance_lb": 1.3113238698929014e-11,
+   "tests": {
+    "axis": 25,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.788455515945641e-12,
+   "min_pair_clearance_lb": 9.152001006188596e-12,
+   "tests": {
+    "axis": 24,
+    "far": 31,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.6005493183974605e-12,
+   "min_pair_clearance_lb": 6.5812452038678954e-12,
+   "tests": {
+    "axis": 31,
+    "far": 35,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.802428121702573e-12,
+   "min_pair_clearance_lb": 3.2935659713912115e-12,
+   "tests": {
+    "axis": 29,
+    "far": 49,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/5/13"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999989120843024e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999977311115914e-11,
+   "min_pair_clearance_lb": 4.700798327429694e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000018514052578e-11,
+   "min_pair_clearance_lb": 4.700754582896435e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.915878301731133e-11,
+   "min_pair_clearance_lb": 4.601977169756186e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.7365207434347236e-11,
+   "min_pair_clearance_lb": 4.3911806349263594e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.6120804677871474e-11,
+   "min_pair_clearance_lb": 4.2449115687559814e-11,
+   "tests": {
+    "axis": 12,
+    "far": 3,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.6364844963702224e-11,
+   "min_pair_clearance_lb": 3.098416026680737e-11,
+   "tests": {
+    "axis": 18,
+    "far": 3,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.2698179670858833e-11,
+   "min_pair_clearance_lb": 2.6675382623450456e-11,
+   "tests": {
+    "axis": 15,
+    "far": 13,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9612430189377842e-11,
+   "min_pair_clearance_lb": 2.3049333462588243e-11,
+   "tests": {
+    "axis": 23,
+    "far": 13,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.854983788990799e-11,
+   "min_pair_clearance_lb": 2.17996517816449e-11,
+   "tests": {
+    "axis": 25,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.7466728309285203e-11,
+   "min_pair_clearance_lb": 2.0528145254212905e-11,
+   "tests": {
+    "axis": 29,
+    "far": 26,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4459703913258496e-11,
+   "min_pair_clearance_lb": 1.6992797686444026e-11,
+   "tests": {
+    "axis": 29,
+    "far": 37,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.1912035896417796e-11,
+   "min_pair_clearance_lb": 1.3999544882334027e-11,
+   "tests": {
+    "axis": 28,
+    "far": 50,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/13"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0424941425090902e-11,
+   "min_pair_clearance_lb": 1.2251711519161664e-11,
+   "tests": {
+    "axis": 34,
+    "far": 57,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/14"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.458284463280582e-12,
+   "min_pair_clearance_lb": 1.1116548688916886e-11,
+   "tests": {
+    "axis": 34,
+    "far": 71,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/15"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.341145804233406e-12,
+   "min_pair_clearance_lb": 1.097798844690009e-11,
+   "tests": {
+    "axis": 36,
+    "far": 84,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/16"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.503716326946999e-12,
+   "min_pair_clearance_lb": 5.2928767578070196e-12,
+   "tests": {
+    "axis": 40,
+    "far": 96,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/17"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.8155028933360407e-12,
+   "min_pair_clearance_lb": 3.308489232193797e-12,
+   "tests": {
+    "axis": 51,
+    "far": 102,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/18"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.998354120986325e-12,
+   "min_pair_clearance_lb": 2.3492822275034903e-12,
+   "tests": {
+    "axis": 43,
+    "far": 128,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/6/19"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999935242019404e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.99997345041011e-11,
+   "min_pair_clearance_lb": 4.7007977179820835e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.000000080340154e-11,
+   "min_pair_clearance_lb": 4.7008227190492695e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999922568447045e-11,
+   "min_pair_clearance_lb": 4.700799807325821e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999755628973324e-11,
+   "min_pair_clearance_lb": 4.7007637029565504e-11,
+   "tests": {
+    "axis": 10,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000146324369634e-11,
+   "min_pair_clearance_lb": 4.7007964325049904e-11,
+   "tests": {
+    "axis": 14,
+    "far": 1,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999977409885906e-11,
+   "min_pair_clearance_lb": 4.700775937111374e-11,
+   "tests": {
+    "axis": 14,
+    "far": 7,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999961026761452e-11,
+   "min_pair_clearance_lb": 4.700784359997296e-11,
+   "tests": {
+    "axis": 16,
+    "far": 12,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.99999755242435e-11,
+   "min_pair_clearance_lb": 4.7007593151996584e-11,
+   "tests": {
+    "axis": 18,
+    "far": 18,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.748308768923049e-11,
+   "min_pair_clearance_lb": 4.405043775399845e-11,
+   "tests": {
+    "axis": 23,
+    "far": 22,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.25975616379873e-11,
+   "min_pair_clearance_lb": 3.8309132232954906e-11,
+   "tests": {
+    "axis": 25,
+    "far": 30,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.9029547274083403e-11,
+   "min_pair_clearance_lb": 3.411498143364486e-11,
+   "tests": {
+    "axis": 26,
+    "far": 40,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.5743044423261052e-11,
+   "min_pair_clearance_lb": 3.0253958747272545e-11,
+   "tests": {
+    "axis": 33,
+    "far": 45,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/13"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.3482926960024056e-11,
+   "min_pair_clearance_lb": 2.7598868872275103e-11,
+   "tests": {
+    "axis": 39,
+    "far": 52,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/14"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.2025270927149274e-11,
+   "min_pair_clearance_lb": 2.5883525937926566e-11,
+   "tests": {
+    "axis": 39,
+    "far": 66,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/15"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.0487410809825002e-11,
+   "min_pair_clearance_lb": 2.4076850916496244e-11,
+   "tests": {
+    "axis": 44,
+    "far": 76,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/16"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9576771641087582e-11,
+   "min_pair_clearance_lb": 2.3005947942393097e-11,
+   "tests": {
+    "axis": 42,
+    "far": 94,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/17"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.8333211971932187e-11,
+   "min_pair_clearance_lb": 2.1545270336070916e-11,
+   "tests": {
+    "axis": 47,
+    "far": 106,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/18"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5656427054903696e-11,
+   "min_pair_clearance_lb": 1.8399480751384253e-11,
+   "tests": {
+    "axis": 50,
+    "far": 121,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/19"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3384482134846924e-11,
+   "min_pair_clearance_lb": 1.572933420599768e-11,
+   "tests": {
+    "axis": 54,
+    "far": 136,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/20"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.152437508015384e-11,
+   "min_pair_clearance_lb": 1.3540800332887516e-11,
+   "tests": {
+    "axis": 59,
+    "far": 151,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/21"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.042074771718632e-11,
+   "min_pair_clearance_lb": 1.224585933262396e-11,
+   "tests": {
+    "axis": 53,
+    "far": 178,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/22"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 8.82215126908424e-12,
+   "min_pair_clearance_lb": 1.0367077453465446e-11,
+   "tests": {
+    "axis": 61,
+    "far": 192,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/23"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 8.42921905681492e-12,
+   "min_pair_clearance_lb": 9.907148289322452e-12,
+   "tests": {
+    "axis": 67,
+    "far": 209,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/24"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.568924973190092e-12,
+   "min_pair_clearance_lb": 7.720581168958063e-12,
+   "tests": {
+    "axis": 67,
+    "far": 233,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/25"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.421826280055527e-12,
+   "min_pair_clearance_lb": 6.372231980138537e-12,
+   "tests": {
+    "axis": 73,
+    "far": 252,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/26"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.2382683581811296e-12,
+   "min_pair_clearance_lb": 3.808064592677227e-12,
+   "tests": {
+    "axis": 70,
+    "far": 281,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/27"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.2720282737787807e-12,
+   "min_pair_clearance_lb": 2.671479750973648e-12,
+   "tests": {
+    "axis": 74,
+    "far": 304,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/28"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.994743164263816e-12,
+   "min_pair_clearance_lb": 2.34567329851424e-12,
+   "tests": {
+    "axis": 81,
+    "far": 325,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/3/8/29"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.947754367517202e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.043256438266566e-11,
+   "min_pair_clearance_lb": 4.700761554658385e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.23227160459191e-11,
+   "min_pair_clearance_lb": 4.700763890524597e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.062001133229495e-11,
+   "min_pair_clearance_lb": 4.700778267551146e-11,
+   "tests": {
+    "axis": 5,
+    "far": 1,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.85584105720826e-11,
+   "min_pair_clearance_lb": 4.7007651970460885e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.222020451879494e-11,
+   "min_pair_clearance_lb": 4.7007775236683576e-11,
+   "tests": {
+    "axis": 9,
+    "far": 6,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.840090156272062e-11,
+   "min_pair_clearance_lb": 4.7007528549648336e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0725291874146721e-10,
+   "min_pair_clearance_lb": 4.700728436857914e-11,
+   "tests": {
+    "axis": 14,
+    "far": 14,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.1757471043426675e-10,
+   "min_pair_clearance_lb": 4.700686119118201e-11,
+   "tests": {
+    "axis": 16,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.2822017584893464e-10,
+   "min_pair_clearance_lb": 4.700716173321817e-11,
+   "tests": {
+    "axis": 18,
+    "far": 27,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.34622808957964e-10,
+   "min_pair_clearance_lb": 4.7006920240249956e-11,
+   "tests": {
+    "axis": 21,
+    "far": 34,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/11"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4258761717668093e-10,
+   "min_pair_clearance_lb": 4.7007169924068157e-11,
+   "tests": {
+    "axis": 21,
+    "far": 45,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/0/12"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.8555868512201786e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.705760733181103e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3589812296967092e-11,
+   "min_pair_clearance_lb": 1.5970757408349757e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/5/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0401690633881713e-11,
+   "min_pair_clearance_lb": 1.222460012806927e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/5/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.005232155733359e-12,
+   "min_pair_clearance_lb": 1.0583738576372512e-11,
+   "tests": {
+    "axis": 4,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/5/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 6.865500846790983e-12,
+   "min_pair_clearance_lb": 8.068241765870404e-12,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/5/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999442650928695e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.1772155483187073e-11,
+   "min_pair_clearance_lb": 3.7338386001018217e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.497463766542173e-11,
+   "min_pair_clearance_lb": 2.935071379156519e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5730764752958548e-11,
+   "min_pair_clearance_lb": 1.8487358318289163e-11,
+   "tests": {
+    "axis": 2,
+    "far": 4,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.302523783793974e-11,
+   "min_pair_clearance_lb": 1.530756407983902e-11,
+   "tests": {
+    "axis": 7,
+    "far": 3,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.120149730116739e-11,
+   "min_pair_clearance_lb": 1.3164835465603191e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/6/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999852843209295e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999979629622034e-11,
+   "min_pair_clearance_lb": 4.700773620238709e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999982169002704e-11,
+   "min_pair_clearance_lb": 4.7007905894963405e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.8163449245356266e-11,
+   "min_pair_clearance_lb": 4.485010170985854e-11,
+   "tests": {
+    "axis": 6,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.5627093795827807e-11,
+   "min_pair_clearance_lb": 3.011863308526055e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.8665026065749233e-11,
+   "min_pair_clearance_lb": 2.193498058870402e-11,
+   "tests": {
+    "axis": 5,
+    "far": 10,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.7448901693865342e-11,
+   "min_pair_clearance_lb": 2.0506965430186866e-11,
+   "tests": {
+    "axis": 11,
+    "far": 10,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.6289376696213172e-11,
+   "min_pair_clearance_lb": 1.9144163981418626e-11,
+   "tests": {
+    "axis": 8,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5236285009330867e-11,
+   "min_pair_clearance_lb": 1.7906088847369503e-11,
+   "tests": {
+    "axis": 16,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/4/8/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.546161307256827e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 7.602731150066108e-11,
+   "min_pair_clearance_lb": 4.70080546009167e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 8.455679332927847e-11,
+   "min_pair_clearance_lb": 4.7007691538329103e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 8.97276257082225e-11,
+   "min_pair_clearance_lb": 4.7007979895637716e-11,
+   "tests": {
+    "axis": 4,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0993269656090076e-10,
+   "min_pair_clearance_lb": 4.7007655809220716e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.3008016065801873e-10,
+   "min_pair_clearance_lb": 4.700725118853069e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4845833825395138e-10,
+   "min_pair_clearance_lb": 4.700757185741606e-11,
+   "tests": {
+    "axis": 7,
+    "far": 14,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.559097351990888e-10,
+   "min_pair_clearance_lb": 4.700697856161065e-11,
+   "tests": {
+    "axis": 14,
+    "far": 14,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0689473459018384e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.653351505370161e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999839482414313e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.4020189510278415e-11,
+   "min_pair_clearance_lb": 1.6477334567825812e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/6/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9988718095840633e-12,
+   "min_pair_clearance_lb": 2.350516986140771e-12,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/6/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.0000228295806e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.6362555103756624e-11,
+   "min_pair_clearance_lb": 4.2732696663948916e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.185820928483295e-11,
+   "min_pair_clearance_lb": 2.5688329144129096e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5862622263698693e-11,
+   "min_pair_clearance_lb": 1.8641591464496753e-11,
+   "tests": {
+    "axis": 4,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/8/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9993206320913115e-12,
+   "min_pair_clearance_lb": 2.3497268528140908e-12,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/5/8/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 4.168772386383909e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.480568297376098e-11,
+   "min_pair_clearance_lb": 4.700781514368656e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.1370507945645952e-10,
+   "min_pair_clearance_lb": 4.7007384624218365e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.326308603476808e-10,
+   "min_pair_clearance_lb": 4.7006782500514333e-11,
+   "tests": {
+    "axis": 4,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.588067285995326e-10,
+   "min_pair_clearance_lb": 4.7006993956777665e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.818320673894766e-10,
+   "min_pair_clearance_lb": 4.700744046284372e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.0190312535319675e-10,
+   "min_pair_clearance_lb": 4.700704469911596e-11,
+   "tests": {
+    "axis": 12,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.1954100371955285e-10,
+   "min_pair_clearance_lb": 4.700749828085505e-11,
+   "tests": {
+    "axis": 13,
+    "far": 15,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.355381092090035e-10,
+   "min_pair_clearance_lb": 4.700686499832272e-11,
+   "tests": {
+    "axis": 16,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.554072850808946e-10,
+   "min_pair_clearance_lb": 4.700633001139272e-11,
+   "tests": {
+    "axis": 18,
+    "far": 27,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/0/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.999886478388357e-12,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/4/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.9392942348443557e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999929438153523e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.9999581585777445e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.1794019753956026e-11,
+   "min_pair_clearance_lb": 1.3860623657404906e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/8/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.619302173170579e-12,
+   "min_pair_clearance_lb": 4.2554323527990054e-12,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/6/8/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 5.4467362111850266e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.5221812949181517e-10,
+   "min_pair_clearance_lb": 4.700763473639857e-11,
+   "tests": {
+    "axis": 1,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/2"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.824754484316423e-10,
+   "min_pair_clearance_lb": 4.7007025852530644e-11,
+   "tests": {
+    "axis": 3,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/3"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.182657580788199e-10,
+   "min_pair_clearance_lb": 4.700801226475975e-11,
+   "tests": {
+    "axis": 4,
+    "far": 2,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/4"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.572936736862516e-10,
+   "min_pair_clearance_lb": 4.7008190635505536e-11,
+   "tests": {
+    "axis": 5,
+    "far": 5,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/5"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.934784120748198e-10,
+   "min_pair_clearance_lb": 4.700729188437584e-11,
+   "tests": {
+    "axis": 6,
+    "far": 9,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/6"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.392389848273395e-10,
+   "min_pair_clearance_lb": 4.700531407475546e-11,
+   "tests": {
+    "axis": 7,
+    "far": 14,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.8163931817060845e-10,
+   "min_pair_clearance_lb": 4.700540585286664e-11,
+   "tests": {
+    "axis": 8,
+    "far": 20,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/0/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 2.532812194638705e-12,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/5/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.71214276920002e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/6/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 3.999940898027761e-11,
+   "min_pair_clearance_lb": null,
+   "tests": {
+    "axis": 0,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1/8/8/1"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.999852512873102e-12,
+   "min_pair_clearance_lb": 1.2103060402983634e-11,
+   "tests": {
+    "axis": 21,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-1.1892985685754194/3/7/7"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.99941962153661e-12,
+   "min_pair_clearance_lb": 1.4374865728439105e-11,
+   "tests": {
+    "axis": 28,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-2.3365290558829845/3/8/8"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 1.0000329622551136e-11,
+   "min_pair_clearance_lb": 1.6807022060017086e-11,
+   "tests": {
+    "axis": 36,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-3.4413111779836725/3/9/9"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.999233197320773e-12,
+   "min_pair_clearance_lb": 1.939244341509107e-11,
+   "tests": {
+    "axis": 45,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-4.50521902808615/3/10/10"
+  },
+  {
+   "certified": true,
+   "min_container_clearance_lb": 9.99507310630512e-12,
+   "min_pair_clearance_lb": 2.5010244993742878e-11,
+   "tests": {
+    "axis": 66,
+    "far": 0,
+    "disk": 0,
+    "searched": 0
+   },
+   "precision_bits": 256,
+   "id": "curved/-6.519717439579256/3/12/12"
+  }
+ ]
+}

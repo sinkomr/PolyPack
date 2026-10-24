@@ -1,0 +1,153 @@
+{
+ "family": "free",
+ "N": 5,
+ "P": 4,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 280,
+  "bounding_disk_separated": 216,
+  "explicit_axis_separated": 12,
+  "X1": "0.7009748162",
+  "X2": "0.5527864045"
+ },
+ "min_clearance_lb": "1.3758449e-12",
+ "score_cert_upper": "2.733074249753065314518531",
+ "score_upper_float": 2.7330742497530656,
+ "explicit": [
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "1.376e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "1.37609e-12"
+  },
+  {
+   "i": 0,
+   "j": 2,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "1.53888e-12"
+  },
+  {
+   "i": 0,
+   "j": 2,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "1.53888e-12"
+  },
+  {
+   "i": 0,
+   "j": 3,
+   "lam": [
+    -1,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "1.37612e-12"
+  },
+  {
+   "i": 0,
+   "j": 3,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "1.37632e-12"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 4,
+   "clearance_lb": "1.3768e-12"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "1.37584e-12"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 4,
+   "clearance_lb": "1.53899e-12"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 4,
+   "clearance_lb": "1.53877e-12"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 3,
+   "clearance_lb": "1.37588e-12"
+  },
+  {
+   "i": 2,
+   "j": 3,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 3,
+   "clearance_lb": "1.37631e-12"
+  }
+ ],
+ "score_cert_checked": 2.7330742497530656
+}

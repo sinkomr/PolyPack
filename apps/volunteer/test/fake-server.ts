@@ -3,6 +3,11 @@
  * GET /api/problems/{N}/{M}/{P}, GET /api/submissions/{id} and POST /api/submit, which scores a
  * packing with @polypack/geometry and keeps one leader per problem like the real server. It
  * records every request, so that tests can check what the client sent.
+ *
+ * The new spaces' endpoints are served too (packages/spaces/src/types.ts): GET
+ * /api/spaces/targets, GET /api/spaces/:space/problems/<id> and POST /api/spaces/submit, which
+ * checks a configuration with the client's own wrapper of the spaces' validators (as the server
+ * checks it with the same validators) and keeps one site leader per problem.
  */
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -15,7 +20,20 @@ import {
   evaluate,
   improvesOn,
 } from "@polypack/geometry";
+import type { SpaceConfig, SpaceProblemResponse, SpaceSubmitResponse, SpaceTarget } from "@polypack/spaces";
+import { checkSpaceConfig, parseSpaceId } from "../src/spaces/model";
 import { SOFTWARE_REFUSAL } from "../src/submit";
+
+/** A problem of the new spaces. */
+export interface FakeSpaceProblem {
+  id: string;
+  /** The research record; its configuration must be valid at `score`. */
+  certified: { score: number; config: SpaceConfig; status?: "best_known" | "proven" | "infeasible" } | null;
+  /** A site entry that leads from the start. */
+  site?: { config: SpaceConfig; name: string } | null;
+  bound?: number | null;
+  priority?: number;
+}
 
 export interface FakeProblem {
   N: number;
@@ -41,6 +59,13 @@ export interface FakeServerOptions {
    * "drop" closes the connection without an answer, as when an answer is lost on the way.
    */
   afterSubmit?: (n: number, answer: SubmitResponse) => { status: number; body: unknown } | "drop" | undefined;
+  spaces?: FakeSpaceProblem[];
+  /** Answer the spaces' endpoints with 404, like a server without them. */
+  noSpaces?: boolean;
+  /** Answer GET /api/spaces/targets with 400 when it has `spaces` or `max_P`. */
+  refuseSpaceFilters?: boolean;
+  /** As afterSubmit, for the `n`-th POST /api/spaces/submit. */
+  afterSpaceSubmit?: (n: number, answer: SpaceSubmitResponse) => { status: number; body: unknown } | "drop" | undefined;
 }
 
 export interface Recorded {
@@ -54,6 +79,10 @@ export interface FakeServer {
   requests: Recorded[];
   /** The bodies of POST /api/submit, in order. */
   submissions: Record<string, unknown>[];
+  /** The bodies of POST /api/spaces/submit, in order. */
+  spaceSubmissions: Record<string, unknown>[];
+  /** The best of a space problem: the site leader when it leads, else the research record. */
+  spaceBest(id: string): { score: number; site: { id: number; name: string } | null } | null;
   /** The current leader of a problem. */
   leaderOf(N: number, M: number, P: number): { id: number; score: number; name: string } | null;
   /** Valid submissions the server processed (each one an entry stored, if only for a moment). */
@@ -104,6 +133,66 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
   const submissions: Record<string, unknown>[] = [];
   let stored = 0;
 
+  // ---------- the new spaces ----------
+  const spaceProblems = new Map<string, FakeSpaceProblem>();
+  const spaceLeaders = new Map<
+    string,
+    { id: number; score: number; name: string; config: SpaceConfig; created_at: string }
+  >();
+  const spaceSubmissions: Record<string, unknown>[] = [];
+  for (const sp of o.spaces ?? []) {
+    const p = parseSpaceId(sp.id);
+    if (!p) throw new Error(`fixture id ${sp.id} is not a space problem id`);
+    if (
+      sp.certified &&
+      sp.certified.status !== "infeasible" &&
+      !checkSpaceConfig(p.space, p.id, sp.certified.config).valid
+    )
+      throw new Error(`fixture record of ${sp.id} is not valid`);
+    spaceProblems.set(sp.id, sp);
+    if (sp.site) {
+      const c = checkSpaceConfig(p.space, p.id, sp.site.config);
+      if (!c.valid) throw new Error(`fixture site entry of ${sp.id} is not valid`);
+      spaceLeaders.set(sp.id, {
+        id: nextId++,
+        score: c.score!,
+        name: sp.site.name,
+        config: sp.site.config,
+        created_at: "2026-10-01T00:00:00.000Z",
+      });
+    }
+  }
+  const spaceOpen = (sp: FakeSpaceProblem) => !sp.certified || (sp.certified.status ?? "best_known") === "best_known";
+  const spaceBest = (id: string) => {
+    const sp = spaceProblems.get(id);
+    if (!sp) return null;
+    const l = spaceLeaders.get(id);
+    const cert = sp.certified && sp.certified.status !== "infeasible" ? sp.certified.score : null;
+    if (l && (cert === null || l.score < cert)) return { score: l.score, site: { id: l.id, name: l.name } };
+    return cert === null ? null : { score: cert, site: null };
+  };
+  const spaceSummary = (sp: FakeSpaceProblem) => {
+    const p = parseSpaceId(sp.id)!;
+    const l = spaceLeaders.get(sp.id) ?? null;
+    return {
+      space: p.space,
+      id: sp.id,
+      fields: {},
+      P: p.P,
+      certified: sp.certified
+        ? {
+            score: sp.certified.score,
+            display: sp.certified.score.toFixed(6),
+            status: sp.certified.status ?? "best_known",
+          }
+        : null,
+      bound: sp.bound === undefined || sp.bound === null ? null : { value: sp.bound, label: "test bound" },
+      site_best: l ? { id: l.id, score: l.score, name: l.name, created_at: l.created_at } : null,
+      best_score: spaceBest(sp.id)?.score ?? null,
+      accepts_submissions: spaceOpen(sp),
+    };
+  };
+
   const server: Server = createServer((req, res) => {
     let raw = "";
     req.on("data", (chunk) => (raw += chunk));
@@ -123,6 +212,101 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
       // a GET answer may be rewritten by the test
       const answer = (value: unknown) => send(200, o.mangle ? o.mangle(url.pathname, value) : value);
       const parts = url.pathname.split("/").filter(Boolean);
+
+      if (url.pathname.startsWith("/api/spaces")) {
+        if (o.noSpaces) return send(404, { error: "not found" });
+        if (req.method === "GET" && url.pathname === "/api/spaces/targets") {
+          if (o.refuseSpaceFilters && (url.searchParams.has("spaces") || url.searchParams.has("max_P")))
+            return send(400, { error: "unknown parameter" });
+          // as the server: 500 targets without a limit, at most 2000
+          const limit = Math.min(2000, Number(url.searchParams.get("limit") ?? 500));
+          const only = url.searchParams.get("spaces")?.split(",");
+          const maxP = url.searchParams.has("max_P") ? Number(url.searchParams.get("max_P")) : Infinity;
+          const targets: SpaceTarget[] = [...spaceProblems.values()]
+            .filter((sp) => spaceOpen(sp))
+            .map((sp) => {
+              const p = parseSpaceId(sp.id)!;
+              const best = spaceBest(sp.id)!;
+              return {
+                space: p.space,
+                id: sp.id,
+                P: p.P,
+                priority: sp.priority ?? 1,
+                best_score: best.score,
+                bound: sp.bound ?? null,
+                leader: best.site ? ("site" as const) : ("certified" as const),
+                leader_id: best.site?.id ?? null,
+              };
+            })
+            .filter((t) => (!only || only.includes(t.space)) && t.P <= maxP)
+            .slice(0, limit);
+          return answer({ generated_at: new Date().toISOString(), targets });
+        }
+        const m = /^\/api\/spaces\/([a-z]+)\/problems\/(.+)$/.exec(url.pathname);
+        if (req.method === "GET" && m) {
+          const sp = spaceProblems.get(m[2]);
+          if (!sp || !m[2].startsWith(`${m[1]}/`)) return send(404, { error: "no such problem" });
+          const l = spaceLeaders.get(sp.id);
+          const body: SpaceProblemResponse = {
+            ...(spaceSummary(sp) as SpaceProblemResponse),
+            conventions: {},
+            certified_config: sp.certified && sp.certified.status !== "infeasible" ? sp.certified.config : null,
+            site_config: l?.config ?? null,
+          };
+          return answer(body);
+        }
+        if (req.method === "POST" && url.pathname === "/api/spaces/submit") {
+          const b = body as Record<string, unknown>;
+          spaceSubmissions.push(b);
+          const refuse = (status: number, reasons: string[]) =>
+            send(status, {
+              valid: false,
+              reasons,
+              score: null,
+              leader: false,
+              best_score: null,
+              id: null,
+              beats_certified: false,
+            });
+          if (typeof b !== "object" || b === null) return refuse(400, ["body is not valid JSON"]);
+          const sp = spaceProblems.get(String(b.id));
+          const p = parseSpaceId(b.id);
+          if (!sp || !p || p.space !== b.space) return refuse(400, ["no such problem"]);
+          if (!spaceOpen(sp)) return refuse(409, ["this problem is closed"]);
+          if (typeof b.name !== "string" || !b.name) return refuse(400, ["name is required"]);
+          // the server's rule: below the research record, also valid at the strict tolerance
+          const c = checkSpaceConfig(p.space, p.id, b.config, {
+            bound: sp.bound ?? null,
+            certified: sp.certified && sp.certified.status !== "infeasible" ? sp.certified.score : null,
+          });
+          if (!c.valid) return refuse(422, c.reasons.length ? c.reasons : ["invalid configuration"]);
+          const siteBefore = spaceLeaders.get(sp.id);
+          const leads = !siteBefore || improvesOn(c.score!, siteBefore.score);
+          const id = leads ? nextId++ : null;
+          if (leads)
+            spaceLeaders.set(sp.id, {
+              id: id!,
+              score: c.score!,
+              name: b.name,
+              config: b.config as SpaceConfig,
+              created_at: new Date().toISOString(),
+            });
+          const result: SpaceSubmitResponse = {
+            valid: true,
+            reasons: [],
+            score: c.score,
+            leader: leads,
+            best_score: spaceBest(sp.id)?.score ?? null,
+            id,
+            beats_certified: sp.certified !== null && c.score! < sp.certified.score,
+          };
+          const replaced = o.afterSpaceSubmit?.(spaceSubmissions.length - 1, result);
+          if (replaced === "drop") return res.destroy();
+          if (replaced) return send(replaced.status, replaced.body);
+          return send(200, result);
+        }
+        return send(404, { error: "not found" });
+      }
 
       if (req.method === "GET" && url.pathname === "/api/targets") {
         if (o.noTargets) return send(404, { error: "not found" });
@@ -245,6 +429,8 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
     url: `http://127.0.0.1:${port}`,
     requests,
     submissions,
+    spaceSubmissions,
+    spaceBest,
     leaderOf,
     stored: () => stored,
     close: () =>

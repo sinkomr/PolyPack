@@ -42,10 +42,12 @@ import {
   TimeBudget,
   VERIFY_MS_PER_MINUTE,
   addressKey,
+  readBodyWithin,
   sanitizeText,
 } from "./limits";
 import { LoadStats } from "./load";
 import type { SnapshotSource } from "./snapshot";
+import { SpacesOptions, registerSpaceRoutes } from "./spaces";
 import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
@@ -79,6 +81,11 @@ export interface AppOptions {
   targetsRefreshMs?: number;
   /** The nightly records snapshot; without it /api/snapshot answers 404. */
   snapshots?: SnapshotSource;
+  /**
+   * The spaces (surface, curved, sphere, torus): their catalogues and the store of their site
+   * entries. Without it the /api/spaces routes answer 404.
+   */
+  spaces?: SpacesOptions;
 }
 
 const CONVENTIONS = {
@@ -603,8 +610,9 @@ export function createApp(opts: AppOptions): Hono {
     const wait = verifyBudget.wait(address);
     if (wait > 0) return reject(429, [`too much verification work from this address; wait ${wait} s`], wait);
     if (Number(c.req.header("content-length") ?? 0) > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
-    const text = await c.req.text();
-    if (text.length > MAX_BODY_BYTES) return reject(413, ["request body too large"]);
+    // read no further than the limit: a chunked body has no Content-Length to check first
+    const text = await readBodyWithin(c);
+    if (text === null) return reject(413, ["request body too large"]);
     let json: unknown;
     try {
       json = JSON.parse(text);
@@ -857,6 +865,19 @@ export function createApp(opts: AppOptions): Hono {
     if (!opened) return c.json({ error: "no such snapshot file" }, 404);
     return c.body(opened.stream, 200, { ...headers, "content-length": String(opened.bytes) });
   });
+
+  // The spaces share the submission limits of /api/submit: one count and one verification budget per address.
+  if (opts.spaces)
+    registerSpaceRoutes(app, {
+      spaces: opts.spaces,
+      ipLimit,
+      verifyBudget,
+      overloaded: () => overloadDelayMs > 0 && loopDelay() > overloadDelayMs,
+      clientIp,
+      log,
+      stats: opts.stats,
+      admin,
+    });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 

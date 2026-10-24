@@ -8,6 +8,12 @@
     "build": "vite build",
     "typecheck": "tsc -p . --noEmit"
   },
-  "dependencies": { "@polypack/geometry": "*", "@polypack/solver": "*" },
-  "devDependencies": { "vite": "^7.0.0" }
+  "dependencies": {
+    "@polypack/geometry": "*",
+    "@polypack/solver": "*",
+    "@polypack/spaces": "*"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
 }

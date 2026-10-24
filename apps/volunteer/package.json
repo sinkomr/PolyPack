@@ -12,7 +12,12 @@
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@polypack/curved": "*",
     "@polypack/geometry": "*",
-    "@polypack/solver": "*"
+    "@polypack/solver": "*",
+    "@polypack/spaces": "*",
+    "@polypack/sphere": "*",
+    "@polypack/surface": "*",
+    "@polypack/torus": "*"
   }
 }

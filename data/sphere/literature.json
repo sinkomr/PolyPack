@@ -1,0 +1,1431 @@
+{
+ "accessed": "2026-10-24",
+ "tammes": {
+  "source": "H. Cohn, Table of spherical codes, https://spherical-codes.org/ (data archived at https://hdl.handle.net/1721.1/153543), dimension 3; accessed 2026-10-24",
+  "url": "https://spherical-codes.org/",
+  "note": "cosine of the minimal angle, 12 decimals as printed; '*' = marked optimal in the table. n <= 6 is omitted there (Rankin 1955; dimension n with at most 2n points).",
+  "values": {
+   "7": {
+    "cos_min_angle": "0.210138312731",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 . 3 ⁢ x 3 − 9 ⁢ x 2 − 3 ⁢ x + 1"
+   },
+   "8": {
+    "cos_min_angle": "0.261203874964",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 . 7 ⁢ x 2 + 2 ⁢ x − 1"
+   },
+   "9": {
+    "cos_min_angle": "0.333333333334",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 . 3 ⁢ x − 1"
+   },
+   "10": {
+    "cos_min_angle": "0.404394325217",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 ; L. Danzer, Finite point-sets on S 2 with minimum distance as large as possible , Discrete Math. 60 (1986), 3–66, doi: 10.1016/0012-365X(86)90002-6 . 7 ⁢ x 3 − 4 ⁢ x 2 − 2 ⁢ x + 1"
+   },
+   "11": {
+    "cos_min_angle": "0.447213595500",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 ; L. Danzer, Finite point-sets on S 2 with minimum distance as large as possible , Discrete Math. 60 (1986), 3–66, doi: 10.1016/0012-365X(86)90002-6 . 5 ⁢ x 2 − 1"
+   },
+   "12": {
+    "cos_min_angle": "0.447213595500",
+    "marked_optimal": true,
+    "references": "L. Fejes [Tóth], Über eine Abschätzung des kürzesten Abstandes zweier Punkte eines auf einer Kugelfläche liegenden Punktsystems , Jber. Deutsch. Math.-Verein. 53 (1943), 66–68. 5 ⁢ x 2 − 1"
+   },
+   "13": {
+    "cos_min_angle": "0.542636486830",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 ; O. R. Musin and A. S. Tarasov, The strong thirteen spheres problem , Discrete Comput. Geom. 48 (2012), 128–141, doi: 10.1007/s00454-011-9392-2 . x 8 − 24 ⁢ x 7 − 12 ⁢ x 6 + 8 ⁢ x 5 + 38 ⁢ x 4 + 24 ⁢ x 3 − 12 ⁢ x 2 − 8 ⁢ x + 1"
+   },
+   "14": {
+    "cos_min_angle": "0.563950300361",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 ; O. R. Musin and A. S. Tarasov, The Tammes problem for N =14 , Exp. Math. 24 (2015), 460–468, doi: 10.1080/10586458.2015.1022842 . 4 ⁢ x 4 − 2 ⁢ x 3 + 3 ⁢ x 2 − 1"
+   },
+   "15": {
+    "cos_min_angle": "0.592605902926",
+    "marked_optimal": true,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 ; D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ; mt0-svg, The Tammes problem for fifteen points , preprint, 2026, doi: 10.5281/zenodo.23450670 , https://github.com/mt0-svg/tammes-15 . 13 ⁢ x 5 − x 4 + 6 ⁢ x 3 + 2 ⁢ x 2 − 3 ⁢ x − 1"
+   },
+   "16": {
+    "cos_min_angle": "0.612294616483",
+    "marked_optimal": false,
+    "references": "K. Schütte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz? , Math. Ann. 123 (1951), 96–124, doi: 10.1007/BF02054944 . 23 ⁢ x 6 + 6 ⁢ x 5 + 5 ⁢ x 4 + 4 ⁢ x 3 − 3 ⁢ x 2 − 2 ⁢ x − 1"
+   },
+   "17": {
+    "cos_min_angle": "0.628094415071",
+    "marked_optimal": false,
+    "references": "L. Danzer, Finite point-sets on S 2 with minimum distance as large as possible , Discrete Math. 60 (1986), 3–66, doi: 10.1016/0012-365X(86)90002-6 . 4 ⁢ x 10 − 92 ⁢ x 9 + 24 ⁢ x 8 + 128 ⁢ x 7 − 58 ⁢ x 6 − 78 ⁢ x 5 + 35 ⁢ x 4 + 32 ⁢ x 3 − 4 ⁢ x 2 − 6 ⁢ x − 1"
+   },
+   "18": {
+    "cos_min_angle": "0.648695832224",
+    "marked_optimal": false,
+    "references": "T. Tarnai and Zs. Gáspár, Improved packing of equal circles on a sphere and rigidity of its graph , Math. Proc. Cambridge Philos. Soc. 93 (1983), 191–218, doi: 10.1017/S0305004100060485 . 216 ⁢ x 11 + 108 ⁢ x 10 + 118 ⁢ x 9 + 209 ⁢ x 8 − 100 ⁢ x 7 − 160 ⁢ x 6 + 40 ⁢ x 5 + 46 ⁢ x 4 − 20 ⁢ x 3 − 12 ⁢ x 2 + 2 ⁢ x + 1"
+   },
+   "19": {
+    "cos_min_angle": "0.673116887561",
+    "marked_optimal": false,
+    "references": "D. E. Lazić, V. Šenk, and I. Šeškar, Arrangements of points on a sphere which maximize the least distance , Bull. Appl. Math. (Technical University Budapest) 47 (1987), 7–21. Minimal polynomial listed in plain text data"
+   },
+   "20": {
+    "cos_min_angle": "0.676477138130",
+    "marked_optimal": false,
+    "references": "B. L. van der Waerden, Punkte auf der Kugel. Drei Zusätze , Math. Ann. 125 (1952), 213–222, doi: 10.1007/BF01343118 . 21 ⁢ x 3 − 9 ⁢ x 2 − 5 ⁢ x + 1"
+   },
+   "21": {
+    "cos_min_angle": "0.699498431067",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "22": {
+    "cos_min_angle": "0.710306258580",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 . Minimal polynomial listed in plain text data"
+   },
+   "23": {
+    "cos_min_angle": "0.722846984869",
+    "marked_optimal": false,
+    "references": "T. Tarnai and Zs. Gáspár, Arrangement of 23 points on a sphere (on a conjecture of R. M. Robinson) , Proc. Roy. Soc. London Ser. A 433 (1991), 257–267, doi: 10.1098/rspa.1991.0046 ."
+   },
+   "24": {
+    "cos_min_angle": "0.723078468334",
+    "marked_optimal": true,
+    "references": "R. M. Robinson, Arrangements of 24 points on a sphere , Math. Ann. 144 (1961), 17–48, doi: 10.1007/BF01396539 . 7 ⁢ x 3 + x 2 − 3 ⁢ x − 1"
+   },
+   "25": {
+    "cos_min_angle": "0.747398628578",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 . Minimal polynomial listed in plain text data"
+   },
+   "26": {
+    "cos_min_angle": "0.754278177121",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 . Minimal polynomial listed in plain text data"
+   },
+   "27": {
+    "cos_min_angle": "0.758389210777",
+    "marked_optimal": false,
+    "references": "T. Tarnai and Zs. Gáspár, Improved packing of equal circles on a sphere and rigidity of its graph , Math. Proc. Cambridge Philos. Soc. 93 (1983), 191–218, doi: 10.1017/S0305004100060485 . Minimal polynomial listed in plain text data"
+   },
+   "28": {
+    "cos_min_angle": "0.773230262338",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "29": {
+    "cos_min_angle": "0.780281415949",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "30": {
+    "cos_min_angle": "0.781551875095",
+    "marked_optimal": false,
+    "references": "B. W. Clare and D. L. Kepert, The closest packing of equal circles on a sphere , Proc. Roy. Soc. London Ser. A 405 (1986), 329–344, doi: 10.1098/rspa.1986.0056 . Minimal polynomial listed in plain text data"
+   },
+   "31": {
+    "cos_min_angle": "0.791118613299",
+    "marked_optimal": false,
+    "references": "J. Strohmajer, Über die Verteilung von Punkten auf der Kugel , Ann. Univ. Sci. Budapest. Eötvös Sect. Math. 6 (1963), 49–53. Minimal polynomial listed in plain text data"
+   },
+   "32": {
+    "cos_min_angle": "0.793616614872",
+    "marked_optimal": false,
+    "references": "L. Danzer, Finite point-sets on S 2 with minimum distance as large as possible , Discrete Math. 60 (1986), 3–66, doi: 10.1016/0012-365X(86)90002-6 . Minimal polynomial listed in plain text data"
+   },
+   "33": {
+    "cos_min_angle": "0.806397613648",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "34": {
+    "cos_min_angle": "0.810984337204",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "35": {
+    "cos_min_angle": "0.815937771500",
+    "marked_optimal": false,
+    "references": "N. J. A. Sloane, with the collaboration of R. H. Hardin, W. D. Smith, and others, Tables of spherical codes , 1994–1996."
+   },
+   "36": {
+    "cos_min_angle": "0.817248185290",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "37": {
+    "cos_min_angle": "0.824892480240",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "38": {
+    "cos_min_angle": "0.826583259422",
+    "marked_optimal": false,
+    "references": "E. Székely, Sur le problème de Tammes , Annales Universitatis Scientiarum Budapestinensis de Rolando Eötvös Nominatae 17 (1974), 157–175, http://annalesm.elte.hu/annales17-1974/Annales_1974_T-XVII.pdf . 363 ⁢ x 14 + 7685 ⁢ x 12 + 34299 ⁢ x 10 − 77139 ⁢ x 8 + 68985 ⁢ x 6 − 31833 ⁢ x 4 + 6561 ⁢ x 2 − 729"
+   },
+   "39": {
+    "cos_min_angle": "0.833991322411",
+    "marked_optimal": false,
+    "references": "D. A. Kottwitz, The densest packing of equal circles on a sphere , Acta Cryst. Sect. A 47 (1991), 158–165, doi: 10.1107/S0108767390011370 ."
+   },
+   "40": {
+    "cos_min_angle": "0.837162072474",
+    "marked_optimal": false,
+    "references": "B. W. Clare and D. L. Kepert, The closest packing of equal circles on a sphere , Proc. Roy. Soc. London Ser. A 405 (1986), 329–344, doi: 10.1098/rspa.1986.0056 ."
+   }
+  }
+ },
+ "dosv2026": {
+  "source": "F. M. de Oliveira Filho, A. Spomer, F. Vallentin, Bounding the density of spherical polygon packings, arXiv:2604.21451 (23 April 2026), Table 2; https://arxiv.org/abs/2604.21451 (HTML version https://arxiv.org/html/2604.21451), accessed 2026-10-24",
+  "url": "https://arxiv.org/abs/2604.21451",
+  "normalisation": "n congruent regular spherical N-gons on the unit sphere; the table lists the best circumradius (angular radius, rad) found by manifold optimisation, truncated to 6 decimals, and upper bounds on n at that radius. 'Maximal' = no packing with n + 1 copies of that polygon exists. dagger: proven maximal by theta' and another bound; star: by theta' alone; '-': theta' beats the volume and 3-point bounds without proving maximality. 'conjectured' (triangles): theta' valid only if their Conjecture 3.6 holds.",
+  "rows": [
+   {
+    "N": 3,
+    "n": 8,
+    "radius_rad_truncated": "0.955316",
+    "mark": "†",
+    "volume_bound": "8.00000000",
+    "three_point_bound": "9.00000000",
+    "three_point_parenthesis": 9,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "8.00148720"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 9,
+    "radius_rad_truncated": "0.846584",
+    "mark": "",
+    "volume_bound": "10.84079445",
+    "three_point_bound": "12.72238983",
+    "three_point_parenthesis": 12,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "10.43859589"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 10,
+    "radius_rad_truncated": "0.828930",
+    "mark": "⋆",
+    "volume_bound": "11.41373633",
+    "three_point_bound": "13.49278286",
+    "three_point_parenthesis": 12,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "10.97882053"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 11,
+    "radius_rad_truncated": "0.790798",
+    "mark": "",
+    "volume_bound": "12.78772029",
+    "three_point_bound": "15.65588685",
+    "three_point_parenthesis": 15,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "12.31168623"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 12,
+    "radius_rad_truncated": "0.760924",
+    "mark": "-",
+    "volume_bound": "14.01415753",
+    "three_point_bound": "17.34929797",
+    "three_point_parenthesis": 17,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "13.55069849"
+     },
+     {
+      "d": 20,
+      "value": "13.53801952"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 13,
+    "radius_rad_truncated": "0.738005",
+    "mark": "-",
+    "volume_bound": "15.05923710",
+    "three_point_bound": "18.94361211",
+    "three_point_parenthesis": 18,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "14.62806719"
+     }
+    ],
+    "remarks": "conjectured"
+   },
+   {
+    "N": 3,
+    "n": 14,
+    "radius_rad_truncated": "0.719838",
+    "mark": "",
+    "volume_bound": "15.96041040",
+    "three_point_bound": "20.34188158",
+    "three_point_parenthesis": 20,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "15.57438551"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 15,
+    "radius_rad_truncated": "0.699345",
+    "mark": "-",
+    "volume_bound": "17.06344004",
+    "three_point_bound": "21.78736915",
+    "three_point_parenthesis": 20,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "16.77117697"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 16,
+    "radius_rad_truncated": "0.685159",
+    "mark": "",
+    "volume_bound": "17.88615258",
+    "three_point_bound": "23.08083263",
+    "three_point_parenthesis": 22,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "17.67500325"
+     },
+     {
+      "d": 20,
+      "value": "17.62851173"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 17,
+    "radius_rad_truncated": "0.669803",
+    "mark": "",
+    "volume_bound": "18.83686063",
+    "three_point_bound": "24.57551675",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "18.71223464"
+     },
+     {
+      "d": 20,
+      "value": "18.67127997"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 18,
+    "radius_rad_truncated": "0.658112",
+    "mark": "",
+    "volume_bound": "19.60600155",
+    "three_point_bound": "25.66413630",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "19.57509688"
+     },
+     {
+      "d": 20,
+      "value": "19.55107105"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 19,
+    "radius_rad_truncated": "0.652634",
+    "mark": "†",
+    "volume_bound": "19.98080594",
+    "three_point_bound": "26.21183173",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "19.99058786"
+     },
+     {
+      "d": 20,
+      "value": "19.98296276"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 20,
+    "radius_rad_truncated": "0.615479",
+    "mark": "",
+    "volume_bound": "22.79466514",
+    "three_point_bound": "30.43073692",
+    "three_point_parenthesis": 28,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "22.59030673"
+     },
+     {
+      "d": 20,
+      "value": "22.51176943"
+     }
+    ],
+    "remarks": "tetrahedron kissing"
+   },
+   {
+    "N": 3,
+    "n": 20,
+    "radius_rad_truncated": "0.651805",
+    "mark": "†",
+    "volume_bound": "20.03839317",
+    "three_point_bound": "26.29552502",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "20.04764259"
+     },
+     {
+      "d": 20,
+      "value": "20.03822089"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 21,
+    "radius_rad_truncated": "0.604417",
+    "mark": "",
+    "volume_bound": "23.73485658",
+    "three_point_bound": "31.77968284",
+    "three_point_parenthesis": 30,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "23.48417323"
+     },
+     {
+      "d": 20,
+      "value": "23.40372464"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 22,
+    "radius_rad_truncated": "0.587346",
+    "mark": "-",
+    "volume_bound": "25.29181773",
+    "three_point_bound": "34.02763309",
+    "three_point_parenthesis": 32,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "24.99197449"
+     },
+     {
+      "d": 20,
+      "value": "24.90075396"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 23,
+    "radius_rad_truncated": "0.570870",
+    "mark": "",
+    "volume_bound": "26.92948343",
+    "three_point_bound": "36.66255105",
+    "three_point_parenthesis": 34,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "26.59150848"
+     },
+     {
+      "d": 20,
+      "value": "26.48770382"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 3,
+    "n": 24,
+    "radius_rad_truncated": "0.558125",
+    "mark": "-",
+    "volume_bound": "28.29737925",
+    "three_point_bound": "38.71347302",
+    "three_point_parenthesis": 36,
+    "theta_prime": [
+     {
+      "d": 14,
+      "value": "27.93923717"
+     },
+     {
+      "d": 20,
+      "value": "27.82052189"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 3,
+    "radius_rad_truncated": "1.183199",
+    "mark": "†",
+    "volume_bound": "3.70443713",
+    "three_point_bound": "3.00000000",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "3.00000001"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 4,
+    "radius_rad_truncated": "1.063440",
+    "mark": "†",
+    "volume_bound": "4.71541086",
+    "three_point_bound": "4.07790842",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "4.10116100"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 5,
+    "radius_rad_truncated": "0.955316",
+    "mark": "",
+    "volume_bound": "6.00000117",
+    "three_point_bound": "6.00000000",
+    "three_point_parenthesis": 6,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "6.00000044"
+     },
+     {
+      "d": 18,
+      "value": "6.00000026"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 6,
+    "radius_rad_truncated": "0.955316",
+    "mark": "†",
+    "volume_bound": "6.00000000",
+    "three_point_bound": "6.00000000",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 8,
+      "value": "6.00000463"
+     }
+    ],
+    "remarks": "cube tiling"
+   },
+   {
+    "N": 4,
+    "n": 7,
+    "radius_rad_truncated": "0.785398",
+    "mark": "-",
+    "volume_bound": "9.24441273",
+    "three_point_bound": "9.00000000",
+    "three_point_parenthesis": 8,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "8.46487808"
+     },
+     {
+      "d": 18,
+      "value": "8.43452493"
+     }
+    ],
+    "remarks": "octahedron kissing"
+   },
+   {
+    "N": 4,
+    "n": 7,
+    "radius_rad_truncated": "0.812554",
+    "mark": "⋆",
+    "volume_bound": "8.58304028",
+    "three_point_bound": "8.13119410",
+    "three_point_parenthesis": 8,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "7.84845101"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 8,
+    "radius_rad_truncated": "0.777160",
+    "mark": "⋆",
+    "volume_bound": "9.45911352",
+    "three_point_bound": "9.10977817",
+    "three_point_parenthesis": 9,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "8.67678741"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 9,
+    "radius_rad_truncated": "0.737706",
+    "mark": "⋆",
+    "volume_bound": "10.59062399",
+    "three_point_bound": "10.27965041",
+    "three_point_parenthesis": 10,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "9.72908492"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 10,
+    "radius_rad_truncated": "0.701465",
+    "mark": "⋆",
+    "volume_bound": "11.80498479",
+    "three_point_bound": "12.08022888",
+    "three_point_parenthesis": 12,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "10.87300195"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 11,
+    "radius_rad_truncated": "0.665589",
+    "mark": "-",
+    "volume_bound": "13.20988402",
+    "three_point_bound": "13.08564377",
+    "three_point_parenthesis": 12,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "12.36460904"
+     },
+     {
+      "d": 18,
+      "value": "12.24240918"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 12,
+    "radius_rad_truncated": "0.659825",
+    "mark": "⋆",
+    "volume_bound": "13.45739970",
+    "three_point_bound": "13.35693928",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "12.61827032"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 13,
+    "radius_rad_truncated": "0.611102",
+    "mark": "-",
+    "volume_bound": "15.83957294",
+    "three_point_bound": "16.21135247",
+    "three_point_parenthesis": 15,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "14.96350191"
+     },
+     {
+      "d": 18,
+      "value": "14.70525606"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 14,
+    "radius_rad_truncated": "0.598860",
+    "mark": "-",
+    "volume_bound": "16.53186711",
+    "three_point_bound": "16.95237174",
+    "three_point_parenthesis": 16,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "15.70271462"
+     },
+     {
+      "d": 18,
+      "value": "15.36791722"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 15,
+    "radius_rad_truncated": "0.585592",
+    "mark": "-",
+    "volume_bound": "17.33205714",
+    "three_point_bound": "17.82667450",
+    "three_point_parenthesis": 17,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "16.60940922"
+     },
+     {
+      "d": 18,
+      "value": "16.16157960"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 16,
+    "radius_rad_truncated": "0.564943",
+    "mark": "",
+    "volume_bound": "18.69188151",
+    "three_point_bound": "19.54161047",
+    "three_point_parenthesis": 18,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "18.18025701"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 17,
+    "radius_rad_truncated": "0.549177",
+    "mark": "-",
+    "volume_bound": "19.83538800",
+    "three_point_bound": "20.76935334",
+    "three_point_parenthesis": 20,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "19.48304253"
+     },
+     {
+      "d": 18,
+      "value": "18.59577345"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 18,
+    "radius_rad_truncated": "0.537891",
+    "mark": "-",
+    "volume_bound": "20.71669278",
+    "three_point_bound": "21.67448098",
+    "three_point_parenthesis": 20,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "20.53747812"
+     },
+     {
+      "d": 18,
+      "value": "19.43932673"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 19,
+    "radius_rad_truncated": "0.516950",
+    "mark": "-",
+    "volume_bound": "22.50799105",
+    "three_point_bound": "23.89372360",
+    "three_point_parenthesis": 22,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "22.82038760"
+     },
+     {
+      "d": 18,
+      "value": "21.21727058"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 20,
+    "radius_rad_truncated": "0.510062",
+    "mark": "-",
+    "volume_bound": "23.14608098",
+    "three_point_bound": "24.61734992",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "23.66899224"
+     },
+     {
+      "d": 18,
+      "value": "21.84775700"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 21,
+    "radius_rad_truncated": "0.495188",
+    "mark": "-",
+    "volume_bound": "24.61617987",
+    "three_point_bound": "26.24964661",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "25.64625742"
+     },
+     {
+      "d": 18,
+      "value": "23.29803247"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 22,
+    "radius_rad_truncated": "0.485876",
+    "mark": "-",
+    "volume_bound": "25.60629269",
+    "three_point_bound": "27.32759700",
+    "three_point_parenthesis": 26,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "27.00764135"
+     },
+     {
+      "d": 18,
+      "value": "24.26292605"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 23,
+    "radius_rad_truncated": "0.475163",
+    "mark": "-",
+    "volume_bound": "26.81816363",
+    "three_point_bound": "28.70062328",
+    "three_point_parenthesis": 27,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "28.74508182"
+     },
+     {
+      "d": 18,
+      "value": "25.44302605"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 4,
+    "n": 24,
+    "radius_rad_truncated": "0.465337",
+    "mark": "-",
+    "volume_bound": "28.00434523",
+    "three_point_bound": "30.17773550",
+    "three_point_parenthesis": 28,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "30.52343961"
+     },
+     {
+      "d": 18,
+      "value": "26.62321441"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 3,
+    "radius_rad_truncated": "1.107148",
+    "mark": "†",
+    "volume_bound": "4.00000000",
+    "three_point_bound": "3.23606797",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "3.23606979"
+     },
+     {
+      "d": 14,
+      "value": "3.23606992"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 4,
+    "radius_rad_truncated": "1.017221",
+    "mark": "†",
+    "volume_bound": "4.76984107",
+    "three_point_bound": "4.04611156",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "4.06501130"
+     }
+    ],
+    "remarks": "icosahedron kissing"
+   },
+   {
+    "N": 5,
+    "n": 4,
+    "radius_rad_truncated": "1.027058",
+    "mark": "†",
+    "volume_bound": "4.67521434",
+    "three_point_bound": "4.02586260",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "4.00665492"
+     },
+     {
+      "d": 14,
+      "value": "4.00425871"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 5,
+    "radius_rad_truncated": "0.865924",
+    "mark": "⋆",
+    "volume_bound": "6.67214088",
+    "three_point_bound": "6.01513743",
+    "three_point_parenthesis": 6,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "5.95011752"
+     },
+     {
+      "d": 14,
+      "value": "5.94289949"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 6,
+    "radius_rad_truncated": "0.850308",
+    "mark": "†",
+    "volume_bound": "6.92983044",
+    "three_point_bound": "6.05170751",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "6.23338399"
+     },
+     {
+      "d": 14,
+      "value": "6.22491869"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 7,
+    "radius_rad_truncated": "0.756498",
+    "mark": "⋆",
+    "volume_bound": "8.83521938",
+    "three_point_bound": "8.00493858",
+    "three_point_parenthesis": 8,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "8.03932801"
+     },
+     {
+      "d": 14,
+      "value": "7.91739923"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 8,
+    "radius_rad_truncated": "0.731849",
+    "mark": "†",
+    "volume_bound": "9.46296954",
+    "three_point_bound": "8.44605070",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "8.76975807"
+     },
+     {
+      "d": 14,
+      "value": "8.63164917"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 9,
+    "radius_rad_truncated": "0.692196",
+    "mark": "†",
+    "volume_bound": "10.61854972",
+    "three_point_bound": "9.56183171",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "10.10476653"
+     },
+     {
+      "d": 14,
+      "value": "9.99379488"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 10,
+    "radius_rad_truncated": "0.658224",
+    "mark": "",
+    "volume_bound": "11.78061879",
+    "three_point_bound": "11.03162960",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "11.62203944"
+     },
+     {
+      "d": 14,
+      "value": "11.57505633"
+     },
+     {
+      "d": 20,
+      "value": "11.53768330"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 11,
+    "radius_rad_truncated": "0.652358",
+    "mark": "",
+    "volume_bound": "12.00000004",
+    "three_point_bound": "12.00000000",
+    "three_point_parenthesis": 12,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "12.00002213"
+     },
+     {
+      "d": 14,
+      "value": "12.00000393"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 12,
+    "radius_rad_truncated": "0.652358",
+    "mark": "†",
+    "volume_bound": "12.00000510",
+    "three_point_bound": "12.00000001",
+    "three_point_parenthesis": null,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "12.00002878"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 13,
+    "radius_rad_truncated": "0.565329",
+    "mark": "",
+    "volume_bound": "16.10441278",
+    "three_point_bound": "15.26026568",
+    "three_point_parenthesis": 14,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "16.02328802"
+     },
+     {
+      "d": 14,
+      "value": "15.32016393"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 14,
+    "radius_rad_truncated": "0.554476",
+    "mark": "",
+    "volume_bound": "16.75654644",
+    "three_point_bound": "15.89359509",
+    "three_point_parenthesis": 15,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "16.78516545"
+     },
+     {
+      "d": 14,
+      "value": "15.95264213"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 15,
+    "radius_rad_truncated": "0.539673",
+    "mark": "",
+    "volume_bound": "17.71049491",
+    "three_point_bound": "16.83442133",
+    "three_point_parenthesis": 16,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "17.93479927"
+     },
+     {
+      "d": 14,
+      "value": "16.89037273"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 16,
+    "radius_rad_truncated": "0.524729",
+    "mark": "",
+    "volume_bound": "18.75684983",
+    "three_point_bound": "17.87168328",
+    "three_point_parenthesis": 17,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "19.26071663"
+     },
+     {
+      "d": 14,
+      "value": "17.89517658"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 17,
+    "radius_rad_truncated": "0.512308",
+    "mark": "",
+    "volume_bound": "19.69727207",
+    "three_point_bound": "18.91986202",
+    "three_point_parenthesis": 18,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "20.52742197"
+     },
+     {
+      "d": 14,
+      "value": "18.82818266"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 18,
+    "radius_rad_truncated": "0.498146",
+    "mark": "-",
+    "volume_bound": "20.85668953",
+    "three_point_bound": "20.21849698",
+    "three_point_parenthesis": 19,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "22.19285776"
+     },
+     {
+      "d": 14,
+      "value": "19.96762912"
+     },
+     {
+      "d": 20,
+      "value": "19.62178909"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 19,
+    "radius_rad_truncated": "0.480722",
+    "mark": "",
+    "volume_bound": "22.42647447",
+    "three_point_bound": "21.66650360",
+    "three_point_parenthesis": 20,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "24.64563342"
+     },
+     {
+      "d": 14,
+      "value": "21.49920555"
+     },
+     {
+      "d": 20,
+      "value": "21.05564494"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 20,
+    "radius_rad_truncated": "0.476634",
+    "mark": "-",
+    "volume_bound": "22.81997390",
+    "three_point_bound": "22.05813478",
+    "three_point_parenthesis": 21,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "25.30113061"
+     },
+     {
+      "d": 14,
+      "value": "21.88236952"
+     },
+     {
+      "d": 20,
+      "value": "21.39579388"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 21,
+    "radius_rad_truncated": "0.459979",
+    "mark": "-",
+    "volume_bound": "24.53327575",
+    "three_point_bound": "24.03727825",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "28.35052843"
+     },
+     {
+      "d": 14,
+      "value": "23.60037910"
+     },
+     {
+      "d": 20,
+      "value": "22.91769941"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 22,
+    "radius_rad_truncated": "0.451462",
+    "mark": "-",
+    "volume_bound": "25.48362122",
+    "three_point_bound": "24.98748702",
+    "three_point_parenthesis": 24,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "30.21979777"
+     },
+     {
+      "d": 14,
+      "value": "24.58375506"
+     },
+     {
+      "d": 20,
+      "value": "23.81047251"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 23,
+    "radius_rad_truncated": "0.436889",
+    "mark": "-",
+    "volume_bound": "27.24080150",
+    "three_point_bound": "26.77138644",
+    "three_point_parenthesis": 25,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "33.93749530"
+     },
+     {
+      "d": 14,
+      "value": "26.51402878"
+     },
+     {
+      "d": 20,
+      "value": "25.41736863"
+     }
+    ],
+    "remarks": ""
+   },
+   {
+    "N": 5,
+    "n": 24,
+    "radius_rad_truncated": "0.435221",
+    "mark": "-",
+    "volume_bound": "27.45326251",
+    "three_point_bound": "26.98022302",
+    "three_point_parenthesis": 25,
+    "theta_prime": [
+     {
+      "d": 10,
+      "value": "34.40324778"
+     },
+     {
+      "d": 14,
+      "value": "26.75588236"
+     },
+     {
+      "d": 20,
+      "value": "25.61687007"
+     }
+    ],
+    "remarks": ""
+   }
+  ]
+ },
+ "tarnai_gaspar2001": {
+  "source": "T. Tarnai and Zs. Gáspár, Packing of equal regular pentagons on a sphere, Proc. R. Soc. Lond. A 457 (2001) 1043–1058",
+  "note": "values not consulted directly (paywalled); dOSV 2026 report their pentagon radii 'approximate closely those by Tarnai and Gáspár, except for the packing of 9 pentagons', where manifold optimisation gives a significantly larger radius."
+ }
+}

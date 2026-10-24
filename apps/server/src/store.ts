@@ -138,3 +138,71 @@ export interface Store {
    */
   edit(id: number, changes: EntryEdit): Promise<boolean>;
 }
+
+/**
+ * A site entry of one of the spaces (surface, curved, sphere, torus; see @polypack/spaces). These
+ * live in their own table and follow the same rules as the polygon entries: the leader of a problem
+ * is the earliest entry within SCORE_TIE (relative) of the smallest score, and only the leader is
+ * kept (KEEP_PER_PROBLEM). There is no review queue: nothing is pending.
+ */
+export interface NewSpaceEntry {
+  space: string;
+  /** The problem id, e.g. "surface/cube/fold/4/12". */
+  problem: string;
+  score: number;
+  name: string;
+  agent_note: string;
+  software: string | null;
+  method: string | null;
+  seed: number | null;
+  /** The configuration as JSON text, as the server normalised it. */
+  config: string;
+  created_at: string;
+}
+
+export interface StoredSpaceEntry extends NewSpaceEntry {
+  id: number;
+}
+
+/** The leader of one space problem, without its configuration. */
+export interface SpaceLeader {
+  id: number;
+  space: string;
+  problem: string;
+  score: number;
+  name: string;
+  created_at: string;
+}
+
+/** What `spaceSubmit` did with a new entry. */
+export interface SpaceSubmitted {
+  id: number;
+  /** The problem's leader before the entry was added, and after. */
+  before: SpaceLeader | null;
+  leader: SpaceLeader | null;
+  /** False when the prune deleted the entry at once: it does not lead. */
+  kept: boolean;
+}
+
+/** What `spaceEdit` may change. */
+export interface SpaceEntryEdit {
+  name?: string;
+  agent_note?: string;
+}
+
+/** Persistence of the space entries. */
+export interface SpaceStore {
+  /** A new entry, as one transaction: reads the leader, inserts, reads the leader again and prunes the problem to it. */
+  spaceSubmit(e: NewSpaceEntry): Promise<SpaceSubmitted>;
+  spaceGet(id: number): Promise<StoredSpaceEntry | null>;
+  /** The leader of one problem, or null when it has no entry. */
+  spaceLeader(space: string, problem: string): Promise<SpaceLeader | null>;
+  /** The leader of every problem of one space that has an entry, by problem id. */
+  spaceBest(space: string): Promise<SpaceLeader[]>;
+  /** The leader of every space problem that has an entry, by space and problem id. */
+  spaceLeaders(): Promise<SpaceLeader[]>;
+  /** Deletes an entry and prunes its problem; its space and problem, or null when there is no such entry. */
+  spaceRemove(id: number): Promise<{ space: string; problem: string } | null>;
+  /** Corrects an entry's name or note; its space and problem, or null when there is no such entry. */
+  spaceEdit(id: number, changes: SpaceEntryEdit): Promise<{ space: string; problem: string } | null>;
+}

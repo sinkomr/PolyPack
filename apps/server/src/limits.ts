@@ -1,3 +1,6 @@
+import type { Context } from "hono";
+import { bodyLimit } from "hono/body-limit";
+
 /** Fixed-window rate limiter kept in memory. Good for one server process. */
 export class RateLimiter {
   private hits = new Map<string, { count: number; resetAt: number }>();
@@ -88,6 +91,21 @@ export function addressKey(ip: string): string {
 }
 
 export const MAX_BODY_BYTES = 256 * 1024;
+
+/** hono/body-limit at MAX_BODY_BYTES; its answer when the body is larger only marks that case. */
+const limitBody = bodyLimit({ maxSize: MAX_BODY_BYTES, onError: () => new Response(null, { status: 413 }) });
+
+/**
+ * The request body as text, or null when it is larger than MAX_BODY_BYTES. A body sent without a
+ * Content-Length (chunked) is read only up to the limit, so an endless one cannot fill the memory;
+ * with a Content-Length above the limit nothing is read.
+ */
+export async function readBodyWithin(c: Context): Promise<string | null> {
+  const over = await limitBody(c, async () => {});
+  if (over) return null;
+  const text = await c.req.text();
+  return text.length > MAX_BODY_BYTES ? null : text;
+}
 export const MAX_NAME_LENGTH = 40;
 export const MAX_NOTE_LENGTH = 200;
 

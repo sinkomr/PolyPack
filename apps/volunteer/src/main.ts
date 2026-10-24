@@ -2,21 +2,49 @@
  * The volunteer client's main loop: take a problem from the server's work list, search it with the
  * engine on the worker pool, submit the best only when it beats the site's leader, and move on.
  *
+ * With --spaces it also takes problems of the new spaces from their own work list (or only those,
+ * with --only-spaces): each next problem comes from one list or the other with probability 1/2.
+ * Without the option nothing here asks the server about the spaces.
+ *
  * `main` returns the exit code instead of exiting, and takes its network, output, engine, clock
  * and battery from `deps`, so that test/cli.test.ts runs it end to end against an in-process server.
  */
 import { randomInt } from "node:crypto";
 import os from "node:os";
 import { type ProblemInfo, type Target, type TargetsResponse, improvesOn } from "@polypack/geometry";
+import type { SpaceTarget, SpaceTargetsResponse } from "@polypack/spaces";
 import { onBattery, watchBattery } from "./battery";
 import { ActiveClock } from "./clock";
 import { searchProblem as engineSearch } from "./engine/index";
 import { formatDuration, formatScore, problemKey, problemLabel, relativePercent, timestamp } from "./format";
 import { type Answer, Api, type Sleep, type SubmitOutcome, compactList, realSleep } from "./http";
 import { type Machine, OptionError, type Options, helpText, parseOptions } from "./options";
-import { type Recent, noteSearch, pickTarget, pruneRecent, recentFromHistory } from "./pick";
+import { type Recent, noteSearch, pickSpaceTarget, pickTarget, pruneRecent, recentFromHistory } from "./pick";
 import { type PoolOptions, WorkerPool } from "./pool";
-import { type HistoryLine, type LeaderRef, LockHeld, StateDir, bestFileOf, candidateOf } from "./state";
+import { type SpaceCandidate, type SpaceSearchOutcome, searchSpaceProblem } from "./spaces/engine";
+import { type SpaceProblem, type SpaceRule, checkSpaceConfig, parseSpaceId } from "./spaces/model";
+import { type NofoldProblem, faceProblem, surfaceFromFace } from "./spaces/nofold";
+import { type SpaceProblemInfo, readSpaceProblem, readSpaceSubmitResponse, readSpaceTarget } from "./spaces/read";
+import {
+  betterSpace,
+  bestRef,
+  buildSpaceKnown,
+  checkSpaceStored,
+  decideSpaceSubmission,
+  spaceSubmissionBody,
+} from "./spaces/submit";
+import {
+  type HistoryLine,
+  type LeaderRef,
+  LockHeld,
+  type SpaceHistoryLine,
+  type SpaceLeaderRef,
+  StateDir,
+  bestFileOf,
+  candidateOf,
+  spaceBestFileOf,
+  spaceCandidateOf,
+} from "./state";
 import {
   type Decision,
   type StoredEntry,
@@ -46,6 +74,8 @@ export interface MainDeps {
   err?: (line: string) => void;
   /** The engine; default src/engine's searchProblem. */
   searchProblem?: SearchProblem;
+  /** The engine of the spaces; default spaces/engine.ts's searchSpaceProblem. */
+  searchSpace?: typeof searchSpaceProblem;
   /** Install the SIGINT and SIGTERM handlers; default true. */
   signals?: boolean;
   random?: () => number;
@@ -88,16 +118,28 @@ export async function main(argv: readonly string[], deps: MainDeps = {}): Promis
 
 /** The problem being searched, for the status line. */
 interface Current {
-  problem: Problem;
+  /** "N=4 M=4 P=3", or a space problem's id. */
+  label: string;
   control: Control;
   startedAt: number;
   maxSeconds: number;
   jobs: number;
-  best: Candidate | null;
+  best: { score: number } | null;
+  /** The score to beat: the site's leader, or a space problem's best. */
   leader: number | null;
+  /** What `leader` is called in the status line. */
+  against: "leader" | "best";
   /** Jobs that ended because their thread was lost. */
   crashed: number;
 }
+
+/** The next problem: from the polygon work list or the spaces' one; why there is none; or a failure. */
+type Pick =
+  | { kind: "polygon"; target: Target }
+  | { kind: "space"; target: SpaceTarget }
+  | { kind: "none"; message: string }
+  | { kind: "missing"; message: string }
+  | { kind: "unreachable" };
 
 /** "HTTP 422: overlap of pieces 3 and 7" or "no answer", safe to print. */
 function describeAnswer(a: Answer | null): string {
@@ -142,6 +184,11 @@ class Volunteer {
   private targets: { at: number; list: Target[] } | null = null;
   /** Whether to send the filters with GET /api/targets; dropped if the server refuses them. */
   private filterOnServer = true;
+  /** The spaces' work list (--spaces), cached like `targets`. */
+  private spaceTargets: { at: number; list: SpaceTarget[] } | null = null;
+  private spaceFilterOnServer = true;
+  /** Set when the server has no spaces' work list: the polygon list goes on alone. */
+  private spacesGone = false;
   private paused = false;
   private stopReason: string | null = null;
   /** Set when the client cannot go on (its threads do not start): it exits with code 1. */
@@ -198,7 +245,7 @@ class Volunteer {
     const release = () => this.state.close();
     process.on("exit", release);
     this.memory = this.state.readMemory();
-    this.recent = recentFromHistory(this.state.initialHistory, this.o.dryRun);
+    this.recent = recentFromHistory([...this.state.initialHistory, ...this.state.initialSpaceHistory], this.o.dryRun);
     const cleanups: (() => void)[] = [];
     try {
       this.banner();
@@ -280,6 +327,14 @@ class Volunteer {
               .join(", ")}`
           : ""),
     );
+    if (o.spaces)
+      this.log(
+        (o.onlySpaces
+          ? "Searches only problems of the new spaces: "
+          : "Also searches problems of the new spaces, half of the time: ") +
+          `${o.spaces.join(", ")} (--spaces); a result is submitted only when the space's own check accepts it ` +
+          "and it beats the problem's best, the research record or the site's leader",
+      );
   }
 
   // ---------- stopping, pausing ----------
@@ -386,16 +441,13 @@ class Volunteer {
       // nothing new starts on battery power
       while (this.paused && !this.stopped) await this.wait(1000);
       if (this.stopped || this.checkDeadline(true)) break;
-      const list = await this.readTargets();
+      const pick = await this.pickNext();
       if (this.stopped) break;
-      if (list === "missing") {
-        this.log(
-          `The server at ${this.o.base} has no work list: GET /api/targets answered 404, so it runs a version of ` +
-            "PolyPack older than this client. Try again once it is updated, or give --base a server that has it.",
-        );
+      if (pick.kind === "missing") {
+        this.log(pick.message);
         return 1;
       }
-      if (list === null) {
+      if (pick.kind === "unreachable") {
         if (this.o.once) return 1;
         failures++;
         const ms = Math.min(60_000, 2000 * 2 ** failures);
@@ -404,36 +456,27 @@ class Volunteer {
         continue;
       }
       failures = 0;
-      const now = this.now();
-      this.prune(now);
-      const target = pickTarget(list, {
-        filters: { N: this.o.N, M: this.o.M, maxP: this.o.maxP },
-        recent: this.recent,
-        skip: new Set(this.skipUntil.keys()),
-        now,
-        random: this.random,
-      });
-      if (!target) {
-        const wait = Math.max(60_000, this.targets!.at + TARGETS_TTL_MS - now);
+      if (pick.kind === "none") {
+        const now = this.now();
+        const expiries = [this.targets, this.spaceTargets]
+          .filter((c) => c !== null)
+          .map((c) => c!.at + TARGETS_TTL_MS - now);
+        const wait = Math.max(60_000, ...expiries);
         const again = this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`;
-        this.log(
-          list.length
-            ? `Nothing to search: the work list's ${list.length} problem(s) are filtered out, closed, or were ` +
-                `searched here in the last 7 days with the same leader.${again}`
-            : `The work list is empty.${again}`,
-        );
+        this.log(`${pick.message}${again}`);
         if (this.o.once) return 0;
         await this.wait(wait);
         continue;
       }
+      const key = pick.kind === "polygon" ? problemKey(pick.target) : pick.target.id;
+      const label = pick.kind === "polygon" ? problemLabel(pick.target) : pick.target.id;
       let searched: boolean;
       try {
-        searched = await this.searchOne(target);
+        searched = pick.kind === "polygon" ? await this.searchOne(pick.target) : await this.searchSpace(pick.target);
       } catch (error) {
         // a bug or an answer nobody foresaw: skip the problem, keep the client
         this.current = null;
-        const key = problemKey(target);
-        this.log(`Skipping ${problemLabel(target)} for 10 minutes after an unexpected error: ${errorText(error)}`);
+        this.log(`Skipping ${label} for 10 minutes after an unexpected error: ${errorText(error)}`);
         this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
         searched = false;
       }
@@ -441,6 +484,143 @@ class Volunteer {
       if (this.o.once) return searched || this.stopped ? 0 : 1;
     }
     return 0;
+  }
+
+  /**
+   * The next problem. Without --spaces this is the polygon work list's draw alone. With both
+   * lists, one of them is tried first with probability 1/2 (from the same random source as the
+   * draws), and the other when the first has nothing to offer.
+   */
+  private async pickNext(): Promise<Pick> {
+    const polygon = !this.o.onlySpaces;
+    const spaces = this.o.spaces !== null && !this.spacesGone;
+    const order: ("polygon" | "space")[] =
+      polygon && spaces
+        ? this.random() < 0.5
+          ? ["polygon", "space"]
+          : ["space", "polygon"]
+        : polygon
+          ? ["polygon"]
+          : ["space"];
+    const empty: string[] = [];
+    let reached = false;
+    for (const queue of order) {
+      if (queue === "polygon") {
+        const list = await this.readTargets();
+        if (this.stopped) return { kind: "unreachable" };
+        if (list === "missing")
+          return {
+            kind: "missing",
+            message:
+              `The server at ${this.o.base} has no work list: GET /api/targets answered 404, so it runs a version of ` +
+              "PolyPack older than this client. Try again once it is updated, or give --base a server that has it.",
+          };
+        if (list === null) continue;
+        reached = true;
+        const now = this.now();
+        this.prune(now);
+        const target = pickTarget(list, {
+          filters: { N: this.o.N, M: this.o.M, maxP: this.o.maxP },
+          recent: this.recent,
+          skip: new Set(this.skipUntil.keys()),
+          now,
+          random: this.random,
+        });
+        if (target) return { kind: "polygon", target };
+        empty.push(
+          list.length
+            ? `the work list's ${list.length} problem(s) are filtered out, closed, or were searched here in the last 7 days with the same leader`
+            : "the work list is empty",
+        );
+      } else {
+        const list = await this.readSpaceTargets();
+        if (this.stopped) return { kind: "unreachable" };
+        if (list === "missing") {
+          const why =
+            `The server at ${this.o.base} has no work list for the new spaces: GET /api/spaces/targets answered 404, ` +
+            "so it runs a version of PolyPack without them.";
+          if (this.o.onlySpaces)
+            return { kind: "missing", message: `${why} Try again once it is updated, or leave out --only-spaces.` };
+          this.log(`${why} Searching the polygon work list only.`);
+          this.spacesGone = true;
+          continue;
+        }
+        if (list === null) continue;
+        reached = true;
+        const now = this.now();
+        this.prune(now);
+        const target = pickSpaceTarget(list, {
+          filters: { spaces: this.o.spaces!, maxP: this.o.maxP },
+          recent: this.recent,
+          skip: new Set(this.skipUntil.keys()),
+          now,
+          random: this.random,
+        });
+        if (target) return { kind: "space", target };
+        empty.push(
+          list.length
+            ? `the spaces' work list's ${list.length} problem(s) are filtered out, closed, or were searched here in the last 7 days with the same best`
+            : "the spaces' work list is empty",
+        );
+      }
+    }
+    if (!reached) return { kind: "unreachable" };
+    const text = empty.join("; ");
+    return {
+      kind: "none",
+      message:
+        empty.length === 1 && text === "the work list is empty"
+          ? "The work list is empty."
+          : `Nothing to search: ${text}.`,
+    };
+  }
+
+  /** The spaces' work list, from the cache while it is fresh; "missing" on 404; null when unreachable. */
+  private async readSpaceTargets(): Promise<SpaceTarget[] | "missing" | null> {
+    const now = this.now();
+    if (this.spaceTargets && now - this.spaceTargets.at < TARGETS_TTL_MS && now >= this.spaceTargets.at)
+      return this.spaceTargets.list;
+    const query = this.spaceTargetsQuery(this.spaceFilterOnServer);
+    let answer = await this.reader.spaceTargets(query);
+    if (answer?.status === 400 && this.spaceFilterOnServer) {
+      // the filters are applied here as well
+      this.log(`The server refused the spaces' work list filters (${describeAnswer(answer)}); filtering here instead`);
+      this.spaceFilterOnServer = false;
+      answer = await this.reader.spaceTargets(this.spaceTargetsQuery(false));
+    }
+    if (!answer) return null;
+    if (answer.status === 404) return "missing";
+    const body = answer.body as Partial<SpaceTargetsResponse> | null;
+    if (answer.status !== 200 || !Array.isArray(body?.targets)) {
+      this.log(`Unexpected answer to GET /api/spaces/targets: ${describeAnswer(answer)}`);
+      return null;
+    }
+    const list = body.targets.map(readSpaceTarget).filter((t): t is SpaceTarget => t !== null);
+    this.spaceTargets = { at: now, list };
+    this.log(
+      `Read the spaces' work list: ${list.length} problem(s)` +
+        (body.generated_at ? `, ranked at ${cleanText(body.generated_at, 40)}` : "") +
+        (list.length < body.targets.length
+          ? `; ${body.targets.length - list.length} entries left out (malformed or unknown ids)`
+          : ""),
+    );
+    return list;
+  }
+
+  /**
+   * ?spaces=...&max_P=...&limit=2000, the server's largest limit, so that the client draws from
+   * the whole list; only limit=2000 once the server has refused the filters (they then apply
+   * here only).
+   */
+  private spaceTargetsQuery(filters: boolean): string {
+    const q = new URLSearchParams();
+    if (filters) {
+      q.set("spaces", this.o.spaces!.join(","));
+      if (this.o.maxP !== null) q.set("max_P", String(this.o.maxP));
+    }
+    // without it the server answers its default 500, which may leave out every problem of a space
+    q.set("limit", "2000");
+    return `?${q.toString()}`;
   }
 
   /** The work list, from the cache while it is fresh; "missing" on 404; null when unreachable. */
@@ -555,16 +735,19 @@ class Volunteer {
     const engineSeed = randomInt(2 ** 32);
     const control: Control = { aborted: this.stopped, paused: this.paused };
     const cur: Current = {
-      problem: p,
+      label,
       control,
       startedAt: this.clock.now(),
       maxSeconds,
       jobs: 0,
       best: null,
       leader: leader?.score ?? null,
+      against: "leader",
       crashed: 0,
     };
     this.current = cur;
+    /** The best strict packing reported so far. */
+    let seen: Candidate | null = null;
     this.log(
       `Searching ${label} (${t.reason}): leader ` +
         (leader ? `${formatScore(leader.score)} by "${cleanText(leader.name, 60)}"` : "none") +
@@ -588,6 +771,7 @@ class Volunteer {
         if (result.termination === "crashed") cur.crashed++;
         if (best && best.strict && (!cur.best || best.score < cur.best.score)) {
           cur.best = best;
+          seen = best;
           this.log(
             `  best so far ${formatScore(best.score)} (${best.job.method}, ${best.job.kind}, seed ${best.job.seed})` +
               (cur.leader === null ? "" : `, ${relativePercent(best.score, cur.leader)} against the leader`),
@@ -620,7 +804,7 @@ class Volunteer {
     }
 
     // this search's best, kept on disk when it is the best this machine has found for the problem
-    const found = outcome?.best && outcome.best.strict ? outcome.best : (cur.best ?? null);
+    const found = outcome?.best && outcome.best.strict ? outcome.best : seen;
     const file = this.state.readBest(p);
     const saved = file ? candidateOf(file) : null;
     if (found && (!saved || improvesOn(found.score, saved.score))) {
@@ -809,6 +993,384 @@ class Volunteer {
     };
   }
 
+  // ---------- one problem of the new spaces ----------
+
+  private async readSpaceProblem(
+    api: Api,
+    p: SpaceProblem,
+  ): Promise<{ info: SpaceProblemInfo | null; answer: Answer | null }> {
+    const answer = await api.spaceProblem(p.space, p.id);
+    return { info: answer?.status === 200 ? readSpaceProblem(answer.body, p) : null, answer };
+  }
+
+  /**
+   * Searches one space problem and submits its best if it qualifies, as searchOne does for the
+   * polygon problems. False when it could not be searched.
+   */
+  private async searchSpace(t: SpaceTarget): Promise<boolean> {
+    const p = parseSpaceId(t.id);
+    if (!p) throw new Error(`not a space problem id: ${t.id}`);
+    const key = p.id;
+    const label = p.id;
+
+    const { info, answer } = await this.readSpaceProblem(this.reader, p);
+    if (this.stopped) return false;
+    if (!info) {
+      this.log(
+        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it for 10 minutes`,
+      );
+      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+      return false;
+    }
+    if (!info.accepts_submissions) {
+      const why =
+        info.closed_reason ??
+        (info.certified?.status === "infeasible" ? "no packing exists (proved)" : "its value is proven");
+      this.log(`${label} is closed: ${why}. Skipping it.`);
+      this.skipUntil.set(key, Infinity);
+      return false;
+    }
+    const before = bestRef(info);
+    const known = buildSpaceKnown(info);
+    // the server's whole rule: also valid at the strict tolerance when below the research record
+    const rule: SpaceRule = { bound: info.bound, certified: info.certified?.score ?? null };
+    const maxSeconds = this.maxSeconds();
+    const engineSeed = randomInt(2 ** 32);
+    const control: Control = { aborted: this.stopped, paused: this.paused };
+    const cur: Current = {
+      label,
+      control,
+      startedAt: this.clock.now(),
+      maxSeconds,
+      jobs: 0,
+      best: null,
+      leader: info.best_score,
+      against: "best",
+      crashed: 0,
+    };
+    this.current = cur;
+    const nofold = p.space === "surface" && p.mode === "nofold";
+    this.log(
+      `Searching ${label} (priority ${t.priority.toPrecision(3)}): best ` +
+        (before
+          ? `${formatScore(before.score)} (${before.source === "site" ? `site entry by "${cleanText(before.name, 60)}"` : "research record"})`
+          : "none") +
+        `, lower bound ${info.bound === null ? "none" : formatScore(info.bound)}; ` +
+        `starting from ${known ? (known.source === "site" ? "the site's leader" : "the research record") : "nothing"}` +
+        (nofold ? ", as a planar packing of one face" : "") +
+        `; up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
+    );
+    const onBest = (score: number, what: string) => {
+      if (cur.best && !(score < cur.best.score)) return;
+      cur.best = { score };
+      this.log(
+        `  best so far ${formatScore(score)} (${what})` +
+          (cur.leader === null ? "" : `, ${relativePercent(score, cur.leader)} against the best`),
+      );
+    };
+
+    let outcome: { best: SpaceCandidate | null; jobs: number; stopped: string } | null = null;
+    let stopped: string;
+    try {
+      outcome = nofold
+        ? await this.searchNofold(p as NofoldProblem, known, rule, maxSeconds, engineSeed, cur, onBest)
+        : await this.untilHardStop<SpaceSearchOutcome>(
+            (this.deps.searchSpace ?? searchSpaceProblem)(
+              {
+                space: p.space,
+                id: p.id,
+                known,
+                bound: info.bound,
+                certified: rule.certified,
+                maxSeconds,
+                lanes: this.pool!.size,
+                seed: engineSeed,
+                now: () => this.clock.now(),
+                onResult: (result, best) => {
+                  cur.jobs++;
+                  if (result.termination === "crashed") cur.crashed++;
+                  if (best) onBest(best.score, `${best.job.method}, ${best.job.kind}, seed ${best.job.seed}`);
+                },
+              },
+              this.pool!.runSpaceJob,
+              control,
+            ),
+          );
+      stopped = outcome ? outcome.stopped : "interrupted";
+    } catch (error) {
+      this.log(`The search of ${label} failed: ${errorText(error)}`);
+      stopped = "error";
+    }
+    const allCrashed = cur.jobs > 0 && cur.crashed === cur.jobs;
+    if (allCrashed) {
+      stopped = "crashed";
+      this.log(`Every job of ${label} lost its search thread; skipping it for 10 minutes`);
+      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+    }
+    const activeSeconds = this.clock.now() - cur.startedAt;
+    this.current = null;
+
+    // The best this machine has found for the problem stays in best/spaces/. Both it and the
+    // search's best are checked by the server's rule first, with the score the check computes: a
+    // configuration the rule refuses is never offered, so it is not sent again at later visits.
+    const passing = (c: SpaceCandidate | null): SpaceCandidate | null => {
+      if (!c) return null;
+      const v = checkSpaceConfig(p.space, p.id, c.config, rule);
+      return v.valid && v.score !== null ? { ...c, score: v.score } : null;
+    };
+    const found = passing(outcome?.best ?? null);
+    const file = this.state.readSpaceBest(p);
+    const saved = passing(file ? spaceCandidateOf(file) : null);
+    if (file && !saved)
+      this.log(
+        `The configuration kept in ${this.state.spaceBestPath(p.id)} does not pass the check now; it is not offered`,
+      );
+    if (found && (!saved || improvesOn(found.score, saved.score))) {
+      try {
+        this.state.writeSpaceBest(spaceBestFileOf(found, p.P, VERSION, new Date(this.now())));
+      } catch (error) {
+        this.log(`Could not save the best configuration: ${(error as Error).message}`);
+      }
+    }
+    const offer = betterSpace(found, saved);
+
+    let decision = { submit: false, reason: "no valid configuration" };
+    let after: SpaceLeaderRef | null = null;
+    let sent: SubmitOutcome | null = null;
+    if (offer) {
+      // the problem's best is read again just before submitting, and the configuration checked once more
+      const fresh = await this.readSpaceProblem(this.submitter, p);
+      if (!fresh.info)
+        decision = { submit: false, reason: `could not re-read the problem (${describeAnswer(fresh.answer)})` };
+      else {
+        after = bestRef(fresh.info);
+        cur.leader = fresh.info.best_score;
+        if (!fresh.info.accepts_submissions) this.skipUntil.set(key, Infinity);
+        decision = decideSpaceSubmission({
+          best: offer,
+          check: checkSpaceConfig(p.space, p.id, offer.config, {
+            bound: fresh.info.bound ?? info.bound,
+            certified: fresh.info.certified?.score ?? rule.certified,
+          }),
+          open: fresh.info.accepts_submissions,
+          bestScore: fresh.info.best_score,
+          bound: fresh.info.bound ?? info.bound,
+          dryRun: this.o.dryRun,
+        });
+      }
+      if (decision.submit) {
+        const name = this.o.name!;
+        const body = spaceSubmissionBody(p, offer, { name, note: this.o.note, software: SOFTWARE });
+        const check = async (): Promise<SubmitCheck | null> => {
+          const again = await this.readSpaceProblem(this.submitter, p);
+          return again.info ? checkSpaceStored(again.info, name, offer.score) : null;
+        };
+        sent = await this.submitter.submit(body as unknown as Record<string, unknown>, check, "/api/spaces/submit");
+        if (sent.requests > 0) this.counts.sent++;
+      }
+    }
+    const result = this.interpretSpace(p, offer, sent, rule.certified ?? null);
+    if (result.after !== undefined) after = result.after;
+
+    const line: SpaceHistoryLine = {
+      time: new Date(this.now()).toISOString(),
+      space: p.space,
+      id: p.id,
+      P: p.P,
+      priority: t.priority,
+      leader_before: before,
+      leader_after: after ?? (offer ? null : before),
+      bound: info.bound,
+      best: offer
+        ? {
+            score: offer.score,
+            method: offer.job.method,
+            seed: offer.job.seed,
+            kind: offer.job.kind,
+            budget: { ...offer.job.budget },
+            from: offer === found ? "search" : "file",
+          }
+        : null,
+      jobs: outcome?.jobs ?? cur.jobs,
+      stopped,
+      active_s: Math.round(activeSeconds * 1000) / 1000,
+      engine_seed: engineSeed,
+      dry_run: this.o.dryRun,
+      submitted: (sent?.requests ?? 0) > 0,
+      decision: result.decision ?? decision.reason,
+      status: sent?.answer?.status ?? null,
+      response: result.response,
+      version: VERSION,
+    };
+    try {
+      this.state.appendHistory(line);
+    } catch (error) {
+      this.log(`Could not write the history: ${(error as Error).message}`);
+    }
+    noteSearch(this.recent, line, this.o.dryRun);
+    this.counts.problems++;
+
+    const vs =
+      offer === null
+        ? "no valid configuration"
+        : `best ${formatScore(offer.score)} (${offer.job.method}, seed ${offer.job.seed}` +
+          `${offer === found ? "" : ", from an earlier search"}) vs ` +
+          (before === null
+            ? "no best"
+            : `best ${formatScore(before.score)} (${relativePercent(offer.score, before.score)})`);
+    const what = result.text ?? (offer === null ? "nothing to submit" : decision.reason);
+    this.log(
+      `Finished ${label} after ${formatDuration(activeSeconds)} (${stopped}), ${line.jobs} job(s): ${vs}; ${what}`,
+    );
+    return !allCrashed;
+  }
+
+  /**
+   * A surface problem in the nofold mode: the polygon engine searches the planar packing of one
+   * face (spaces/nofold.ts), and its best is copied onto the faces.
+   */
+  private async searchNofold(
+    p: NofoldProblem,
+    known: ReturnType<typeof buildSpaceKnown>,
+    rule: SpaceRule,
+    maxSeconds: number,
+    seed: number,
+    cur: Current,
+    onBest: (score: number, what: string) => void,
+  ): Promise<{ best: SpaceCandidate | null; jobs: number; stopped: string } | null> {
+    const face = faceProblem(p, known?.config);
+    let seen: Candidate | null = null;
+    const input: SearchInput = {
+      problem: face.problem,
+      known: face.known ? { ...face.known, source: known?.source === "site" ? "site" : "literature" } : undefined,
+      leader: null,
+      published: null,
+      areaBound: face.areaBound,
+      maxSeconds,
+      lanes: this.pool!.size,
+      seed,
+      memory: this.memory,
+      now: () => this.clock.now(),
+      onResult: (result, best) => {
+        cur.jobs++;
+        if (result.termination === "crashed") cur.crashed++;
+        if (best && best.strict && (!seen || best.score < seen.score)) {
+          seen = best;
+          onBest(best.score, `${best.job.method} on one face, ${best.job.kind}, seed ${best.job.seed}`);
+        }
+      },
+    };
+    const out = await this.untilHardStop(this.search(input, this.pool!.runJob, cur.control));
+    if (out) {
+      this.memory = out.memory;
+      this.saveMemory();
+    }
+    const best2D = out?.best && out.best.strict ? out.best : seen;
+    let best: SpaceCandidate | null = null;
+    const b = best2D as Candidate | null;
+    const config = b ? surfaceFromFace(p, b.config) : null;
+    if (b && config) {
+      const check = checkSpaceConfig(p.space, p.id, config, rule);
+      if (check.valid && check.score !== null)
+        best = {
+          config,
+          score: check.score,
+          job: {
+            space: "surface",
+            id: p.id,
+            method: `nofold face packing: ${b.job.method}`,
+            seed: b.job.seed,
+            budget: { ...b.job.budget },
+            kind: b.job.kind as SpaceCandidate["job"]["kind"],
+          },
+        };
+    }
+    return out
+      ? { best, jobs: out.jobs, stopped: out.stopped }
+      : best
+        ? { best, jobs: cur.jobs, stopped: "interrupted" }
+        : null;
+  }
+
+  /** What a space submission came to, as interpret() does for the polygon problems. */
+  private interpretSpace(
+    p: SpaceProblem,
+    offer: SpaceCandidate | null,
+    sent: SubmitOutcome | null,
+    certified: number | null,
+  ): { text?: string; decision?: string; response: SpaceHistoryLine["response"]; after?: SpaceLeaderRef | null } {
+    if (!sent || !offer) return { response: null };
+    const kept = `the configuration stays in ${this.state.spaceBestPath(p.id)}`;
+    const a = sent.answer;
+    if (a) {
+      const response = readSpaceSubmitResponse(a.body);
+      if (a.status === 200 && response?.valid) {
+        this.counts.accepted++;
+        if (response.leader) {
+          this.counts.leading++;
+          return {
+            text:
+              `submitted: HTTP 200, the new leader of the site's entries (#${response.id})` +
+              (response.beats_certified ? ", below the research record" : ""),
+            response,
+            after: { id: response.id, score: response.score ?? offer.score, source: "site", name: this.o.name! },
+          };
+        }
+        const stays = response.best_score === null ? "unchanged" : formatScore(response.best_score);
+        return { text: `submitted: HTTP 200, valid, but the best stays at ${stays}`, response };
+      }
+      if (a.status === 409) this.skipUntil.set(p.id, Infinity);
+      return { text: `refused: ${describeAnswer(a)}`, response };
+    }
+    const failure = cleanText(sent.failure ?? "no answer");
+    if (sent.requests === 0)
+      return { text: `not sent (${failure}); ${kept}`, decision: `not sent: ${failure}`, response: null };
+    const c = sent.check;
+    if (c?.state === "ours") {
+      this.counts.accepted++;
+      this.counts.leading++;
+      return {
+        text: `submitted: no answer came (${failure}), but the problem now shows it as the site's leader (#${c.id})`,
+        decision: "no answer, but a re-read found it stored as the leader",
+        response: {
+          valid: true,
+          leader: true,
+          score: c.score,
+          best_score: c.score,
+          id: c.id,
+          beats_certified: certified !== null && improvesOn(c.score, certified),
+          reasons: [],
+        },
+        after: { id: c.id, score: c.score, source: "site", name: this.o.name! },
+      };
+    }
+    if (c?.state === "closed") {
+      this.skipUntil.set(p.id, Infinity);
+      return {
+        text: `no answer came (${failure}), and the problem is now closed`,
+        decision: "no answer; closed",
+        response: null,
+      };
+    }
+    if (c?.state === "beaten")
+      return {
+        text: `no answer came (${failure}); the best is now ${formatScore(c.leader)}, at least as good: not sent again`,
+        decision: "no answer; beaten meanwhile",
+        response: null,
+      };
+    if (c?.state === "absent")
+      return {
+        text: `sent ${sent.requests} time(s) without an answer (${failure}), and not stored; ${kept}`,
+        decision: "no answer; not stored",
+        response: null,
+      };
+    return {
+      text: `sent, but no answer came (${failure}) and the problem could not be read again: it may be stored or not; ${kept}`,
+      decision: "no answer; unknown whether stored",
+      response: null,
+    };
+  }
+
   private status(): void {
     const c = this.current;
     const s = this.pool?.stats();
@@ -823,10 +1385,10 @@ class Volunteer {
     const best = c.best ? formatScore(c.best.score) : "none yet";
     const vs =
       c.leader === null
-        ? "no leader"
-        : `leader ${formatScore(c.leader)}` + (c.best ? ` (${relativePercent(c.best.score, c.leader)})` : "");
+        ? `no ${c.against}`
+        : `${c.against} ${formatScore(c.leader)}` + (c.best ? ` (${relativePercent(c.best.score, c.leader)})` : "");
     this.log(
-      `Status: ${problemLabel(c.problem)}, ${formatDuration(elapsed)} of ${formatDuration(c.maxSeconds)}; ` +
+      `Status: ${c.label}, ${formatDuration(elapsed)} of ${formatDuration(c.maxSeconds)}; ` +
         `best ${best} vs ${vs}; ${c.jobs} job(s) run; ${lanes}; ${subs}${paused}`,
     );
   }

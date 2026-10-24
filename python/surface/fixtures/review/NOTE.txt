@@ -1,0 +1,13 @@
+Fixtures copied (unchanged) from the independent review of the surface certifier (2026-10-24):
+
+- tampered*.json: records whose published fields were altered (score_cert, display, id, missing
+  score_cert, score_float != s), a record without eps, a non-object record, an unknown solid.
+  Each file also holds one untouched control record. cert.py's records mode must report every
+  altered record as FAIL and keep going.
+- threshold_fixtures.json: 14 random wrapped configurations at the reviewer judge's critical edge s*,
+  grouped by binding constraint (cone point, pair overlap, self-overlap, disk vertex, disk loop).
+  Each must be accepted at accept_at (s*(1+1e-7)) and rejected at reject_at (s*(1-1e-7)), eps 1e-9.
+- constructions_records.json: the reviewer's ten one-piece replica constructions (finding D2),
+  each meeting the one-piece lower bound; used as exact fixtures.
+
+Used by python/surface/test_cert.py.

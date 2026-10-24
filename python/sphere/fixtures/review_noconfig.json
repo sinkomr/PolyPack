@@ -1,0 +1,1 @@
+{"records": [{"id": "sphere/4/2", "N": 4, "P": 2, "score_cert": 1.0, "config": {"rho": 1.0, "pieces": [{"q": [1.0, 0, 0, 0]}, {"q": [0.0, 1.0, 0, 0]}]}}, {"id": "sphere/3/7", "N": 3, "P": 7, "score_cert": 0.1, "display": "0.100000", "config": null}, {"id": "sphere/3/8", "N": 3, "P": 8, "score_cert": 0.2}]}

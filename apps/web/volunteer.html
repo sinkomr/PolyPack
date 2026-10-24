@@ -13,6 +13,7 @@
       <nav aria-label="Site">
         <a href="/">Board</a>
         <a href="/browse.html">Records</a>
+        <a href="/spaces.html">Spaces</a>
         <a href="/volunteer.html" aria-current="page">Volunteer</a>
         <a href="/api">API</a>
         <a href="/tighter.html">Tighter</a>
@@ -60,6 +61,26 @@
         <a href="https://github.com/sinkomr/PolyPack/blob/main/docs/VOLUNTEER.md">volunteer guide</a> explains each one,
         what the client sends and what it keeps on disk.
       </p>
+
+      <h3>Optional: the new spaces</h3>
+      <p>
+        The client can also search the <a href="/spaces.html">new spaces</a>: pieces on the surface of a Platonic solid,
+        at constant curvature, on the whole sphere and on flat tori. This is off by default. Without these options the
+        client never asks the server about them.
+      </p>
+      <pre><code>node polypack-volunteer.mjs --name "your name" --spaces all</code></pre>
+      <ul>
+        <li>
+          <code>--spaces</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code> and
+          <code>torus</code>, comma-separated, or <code>all</code>. Each next problem then comes from the polygon work
+          list or from the spaces' list, with probability 1/2 each.
+        </li>
+        <li><code>--only-spaces</code> searches the spaces alone.</li>
+        <li>
+          It starts from the problem's best: the research record or the site's leader. It submits a configuration only
+          when the space's own check accepts it and it beats that best.
+        </li>
+      </ul>
 
       <h3>Your name on the records</h3>
       <p>

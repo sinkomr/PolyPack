@@ -1,0 +1,47 @@
+{
+ "family": "hex",
+ "N": 6,
+ "P": 1,
+ "score": 1.7320508075688779,
+ "params": [
+  1.7320508075688779
+ ],
+ "basis": [
+  [
+   1.7320508075688779,
+   0.0
+  ],
+  [
+   0.8660254037844389,
+   1.5000000000000004
+  ]
+ ],
+ "poses": [
+  [
+   0.0,
+   0.0,
+   -4.9896131413435585e-09
+  ]
+ ],
+ "frac": [
+  [
+   0.0,
+   0.0
+  ]
+ ],
+ "min_sep": 0.0,
+ "density": 0.9999999999999997,
+ "label": "lattice",
+ "seed": 20261024,
+ "budget": {
+  "random_starts": 4,
+  "hops": 10,
+  "time_cap_s": 90.0
+ },
+ "stopped_by": "floor",
+ "elapsed_s": 0.14,
+ "runs": 2,
+ "hops": 0,
+ "lp_crashes_isolated": 0,
+ "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish"
+}

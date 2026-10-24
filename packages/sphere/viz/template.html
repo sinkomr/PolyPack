@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PolyPack sphere packings</title>
+<style>
+:root {
+  --bg: #fbfaf7; --fg: #1d1d1b; --muted: #6b6a66; --line: #d9d6cf; --panel: #ffffff;
+  --globe: #eef1f4; --globe-edge: #9aa3ad; --accent: #2b6cb0; --sel: #fff4d6;
+  --back-alpha: 0.18;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a; --fg: #e8e6e1; --muted: #9b9a95; --line: #33363b; --panel: #1c1f23;
+    --globe: #22272e; --globe-edge: #5b6570; --accent: #7fb3f0; --sel: #3a3322; --back-alpha: 0.25;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171a; --fg: #e8e6e1; --muted: #9b9a95; --line: #33363b; --panel: #1c1f23;
+  --globe: #22272e; --globe-edge: #5b6570; --accent: #7fb3f0; --sel: #3a3322; --back-alpha: 0.25;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.35rem; margin: 0 0 4px; }
+p.lede { margin: 0 0 14px; color: var(--muted); max-width: 70ch; }
+.layout { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.viewer { flex: 1 1 420px; min-width: 0; }
+.side { flex: 1 1 420px; min-width: 0; }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+button, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+canvas { width: 100%; height: auto; display: block; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; touch-action: none; }
+.info { margin-top: 8px; font-size: 0.92rem; }
+.info .big { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.info .muted, .muted { color: var(--muted); }
+.notes { margin: 6px 0 0; padding-left: 18px; font-size: 0.88rem; color: var(--muted); }
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); max-height: 70vh; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; font-variant-numeric: tabular-nums; }
+th, td { padding: 4px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+th { position: sticky; top: 0; background: var(--panel); text-align: right; font-weight: 600; }
+th:first-child, td:first-child { text-align: left; }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: color-mix(in srgb, var(--sel) 50%, transparent); }
+tbody tr.sel { background: var(--sel); }
+.tag { font-size: 0.75rem; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); }
+.tag.proven { border-color: #2f855a; color: #2f855a; }
+.better { color: #2f855a; } .worse { color: #c05621; }
+footer { margin-top: 18px; font-size: 0.82rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Packings on the whole sphere</h1>
+  <p class="lede">P congruent pieces (disks of radius 1 or regular spherical N-gons of side 1) on a sphere of radius &rho;, no container. Smaller &rho; is better. Every listed packing is proven valid by an interval-arithmetic certifier at the displayed radius (rounded up).</p>
+  <div class="layout">
+    <section class="viewer">
+      <div class="controls">
+        <select id="shape" aria-label="piece shape"></select>
+        <button id="vGlobe" aria-pressed="true">Globe</button>
+        <button id="vMap" aria-pressed="false">Two-hemisphere map</button>
+        <button id="spin" aria-pressed="false">Spin</button>
+        <button id="theme" title="toggle light/dark">Theme</button>
+      </div>
+      <canvas id="cv" width="900" height="900" aria-label="packing view"></canvas>
+      <div class="info" id="info"></div>
+    </section>
+    <section class="side">
+      <div class="tablewrap"><table id="tab"><thead></thead><tbody></tbody></table></div>
+    </section>
+  </div>
+  <footer id="foot"></footer>
+</main>
+<script>
+const DATA = __DATA__;
+const names = { 0: "disks", 3: "triangles", 4: "squares", 5: "pentagons", 6: "hexagons", 8: "octagons" };
+const recs = DATA.records;
+let cur = null, view = "globe", spin = false;
+// view rotation (rows of a 3x3 matrix): world -> camera; camera looks along -z, front = z > 0
+let Rv = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+
+const $ = (id) => document.getElementById(id);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+function qmat(q) {
+  const [w, x, y, z] = q, n = w * w + x * x + y * y + z * z;
+  return [[(w*w + x*x - y*y - z*z) / n, 2*(x*y - w*z) / n, 2*(x*z + w*y) / n],
+          [2*(x*y + w*z) / n, (w*w - x*x + y*y - z*z) / n, 2*(y*z - w*x) / n],
+          [2*(x*z - w*y) / n, 2*(y*z + w*x) / n, (w*w - x*x - y*y + z*z) / n]];
+}
+const mv = (M, v) => [M[0][0]*v[0] + M[0][1]*v[1] + M[0][2]*v[2], M[1][0]*v[0] + M[1][1]*v[1] + M[1][2]*v[2], M[2][0]*v[0] + M[2][1]*v[1] + M[2][2]*v[2]];
+const mm = (A, B) => A.map((r) => [0, 1, 2].map((j) => r[0]*B[0][j] + r[1]*B[1][j] + r[2]*B[2][j]));
+const nrm = (v) => { const n = Math.hypot(...v); return [v[0]/n, v[1]/n, v[2]/n]; };
+function rotAxis(ax, t) {
+  const [x, y, z] = nrm(ax), c = Math.cos(t), s = Math.sin(t), C = 1 - c;
+  return [[c + x*x*C, x*y*C - z*s, x*z*C + y*s], [y*x*C + z*s, c + y*y*C, y*z*C - x*s], [z*x*C - y*s, z*y*C + x*s, c + z*z*C]];
+}
+
+/** Boundary of a piece sampled on the unit sphere (world coordinates). */
+function boundary(rec, q) {
+  const M = qmat(q), a = 1 / rec.score_cert, pts = [];
+  if (rec.N === 0) {
+    const n = 96;
+    for (let k = 0; k < n; k++) { const t = 2 * Math.PI * k / n; pts.push(mv(M, [Math.sin(a) * Math.cos(t), Math.sin(a) * Math.sin(t), Math.cos(a)])); }
+    return pts;
+  }
+  const N = rec.N, R = Math.asin(Math.min(1, Math.sin(a / 2) / Math.sin(Math.PI / N)));
+  const V = [];
+  for (let k = 0; k < N; k++) { const p = Math.PI / 2 + 2 * Math.PI * k / N; V.push([Math.sin(R) * Math.cos(p), Math.sin(R) * Math.sin(p), Math.cos(R)]); }
+  const seg = Math.max(6, Math.ceil(48 / N));
+  for (let k = 0; k < N; k++) {
+    const A = V[k], B = V[(k + 1) % N], om = Math.acos(Math.max(-1, Math.min(1, A[0]*B[0] + A[1]*B[1] + A[2]*B[2])));
+    for (let s = 0; s < seg; s++) { // slerp: geodesic edge
+      const t = s / seg, sa = Math.sin((1 - t) * om) / Math.sin(om), sb = Math.sin(t * om) / Math.sin(om);
+      pts.push(mv(M, [sa*A[0] + sb*B[0], sa*A[1] + sb*B[1], sa*A[2] + sb*B[2]]));
+    }
+  }
+  return pts;
+}
+
+function palette(i, P) {
+  const h = (i * 137.508) % 360;
+  const dark = document.documentElement.dataset.theme === "dark" || (document.documentElement.dataset.theme !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+  return dark ? `hsl(${h} 45% 52%)` : `hsl(${h} 55% 62%)`;
+}
+
+const cv = $("cv"), ctx = cv.getContext("2d");
+function draw() {
+  if (!cur) return;
+  const wantH = view === "map" ? 500 : 900;
+  if (cv.height !== wantH) cv.height = wantH;
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const shapes = cur.config.pieces.map((p) => boundary(cur, p.q));
+  const centres = cur.config.pieces.map((p) => mv(qmat(p.q), [0, 0, 1]));
+  if (view === "globe") drawGlobe(shapes, centres, W, H); else drawMap(shapes, centres, W, H);
+}
+
+/** Project a camera-space point to a disk of radius r at (cx, cy); hemisphere sign s: clamp the other side to the rim. */
+function polyPath(pts, proj) {
+  ctx.beginPath();
+  pts.forEach((p, k) => { const [x, y] = proj(p); k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.closePath();
+}
+
+/** Clip a closed loop of unit vectors (camera space) to the hemisphere s z >= 0. The boundary part on
+ *  the rim is the shorter arc of the great circle z = 0 between the exit and entry points (a convex
+ *  piece lies in an open hemisphere, so it meets the rim in one arc shorter than pi). */
+function clipHemi(pts, s) {
+  const n = pts.length, out = [];
+  let any = false, all = true;
+  for (const p of pts) { if (s * p[2] >= 0) any = true; else all = false; }
+  if (!any) return [];
+  if (all) return pts;
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], q = pts[(i + 1) % n], zp = s * p[2], zq = s * q[2];
+    if (zp >= 0) out.push({ p });
+    if ((zp >= 0) !== (zq >= 0)) {
+      const t = zp / (zp - zq), x = [p[0] + t * (q[0] - p[0]), p[1] + t * (q[1] - p[1]), 0], m = Math.hypot(x[0], x[1]) || 1;
+      out.push({ p: [x[0] / m, x[1] / m, 0], kind: zp >= 0 ? "exit" : "entry" });
+    }
+  }
+  const res = [];
+  for (let i = 0; i < out.length; i++) {
+    res.push(out[i].p);
+    if (out[i].kind === "exit") {
+      const e = out[i].p, f = out[(i + 1) % out.length].p;
+      const a0 = Math.atan2(e[1], e[0]);
+      let d = Math.atan2(f[1], f[0]) - a0;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      const m = Math.max(2, Math.ceil(Math.abs(d) / 0.05));
+      for (let k = 1; k < m; k++) res.push([Math.cos(a0 + (d * k) / m), Math.sin(a0 + (d * k) / m), 0]);
+    }
+  }
+  return res;
+}
+
+function drawGlobe(shapes, centres, W, H) {
+  const r = Math.min(W, H) * 0.46, cx = W / 2, cy = H / 2;
+  const cam = (p) => mv(Rv, p);
+  const proj = () => (p) => [cx + r * p[0], cy - r * p[1]];
+  const cs = shapes.map((s) => s.map(cam));
+  const cc = centres.map(cam);
+  // back hemisphere: faint, seen through the globe
+  ctx.lineWidth = 1.2;
+  cs.forEach((s0, i) => {
+    const s = clipHemi(s0, -1);
+    if (!s.length) return;
+    polyPath(s, proj(false));
+    ctx.globalAlpha = parseFloat(css("--back-alpha"));
+    ctx.fillStyle = palette(i); ctx.fill();
+    ctx.globalAlpha = 0.45; ctx.strokeStyle = css("--globe-edge"); ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  });
+  // globe
+  const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.35, r * 0.1, cx, cy, r);
+  g.addColorStop(0, css("--panel")); g.addColorStop(1, css("--globe"));
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI); ctx.globalAlpha = 0.82; ctx.fillStyle = g; ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = css("--globe-edge"); ctx.lineWidth = 1.5; ctx.stroke();
+  // front hemisphere, back-to-front by depth of the centre
+  const order = cs.map((s, i) => i).filter((i) => cs[i].some((p) => p[2] >= 0)).sort((a, b) => cc[a][2] - cc[b][2]);
+  for (const i of order) {
+    polyPath(clipHemi(cs[i], 1), proj(true));
+    const shade = 0.55 + 0.45 * Math.max(0, cc[i][2]);
+    ctx.globalAlpha = shade; ctx.fillStyle = palette(i); ctx.fill(); ctx.globalAlpha = 1;
+    ctx.strokeStyle = css("--fg"); ctx.lineWidth = 1.3; ctx.stroke();
+    if (cc[i][2] > 0.2 && cur.P <= 40) {
+      const [x, y] = proj(true)(cc[i]);
+      ctx.fillStyle = css("--fg"); ctx.font = `${Math.round(r * 0.045)}px system-ui`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.globalAlpha = 0.7; ctx.fillText(String(i), x, y); ctx.globalAlpha = 1;
+    }
+  }
+}
+
+function drawMap(shapes, centres, W, H) {
+  // two Lambert azimuthal equal-area hemispheres: the camera's front (z > 0) and back (z < 0) halves
+  const r = Math.min(W / 4, H / 2) * 0.9, cy = H / 2 - r * 0.06;
+  const discs = [{ cx: W * 0.25, s: 1, label: "front hemisphere" }, { cx: W * 0.75, s: -1, label: "back hemisphere (seen from behind)" }];
+  for (const d of discs) {
+    ctx.beginPath(); ctx.arc(d.cx, cy, r, 0, 2 * Math.PI); ctx.fillStyle = css("--globe"); ctx.fill(); ctx.strokeStyle = css("--globe-edge"); ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = css("--muted"); ctx.font = `${Math.round(r * 0.07)}px system-ui`; ctx.textAlign = "center"; ctx.fillText(d.label, d.cx, cy + r + r * 0.12);
+    const proj = (p) => {
+      let [x, y, z] = p;
+      if (d.s < 0) { x = -x; z = -z; } // view the back half from behind (mirror-free)
+      // azimuthal equal-area about +z: radius 2 sin(dist/2), scaled so the hemisphere rim (dist = pi/2) is r
+      const dist = Math.acos(Math.max(-1, Math.min(1, z)));
+      const rr = Math.min(Math.SQRT2, 2 * Math.sin(Math.min(dist, Math.PI / 2) / 2)) / Math.SQRT2;
+      const n = Math.hypot(x, y) || 1;
+      return [d.cx + r * rr * x / n, cy - r * rr * y / n];
+    };
+    ctx.save(); ctx.beginPath(); ctx.arc(d.cx, cy, r, 0, 2 * Math.PI); ctx.clip();
+    shapes.forEach((s0, i) => {
+      const s = clipHemi(s0.map((p) => mv(Rv, p)), d.s);
+      if (!s.length) return;
+      polyPath(s, proj);
+      ctx.fillStyle = palette(i); ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = css("--fg"); ctx.lineWidth = 1.1; ctx.stroke();
+    });
+    ctx.restore();
+  }
+}
+
+// ---------------------------------------------------------------- interaction
+let drag = null;
+cv.addEventListener("pointerdown", (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); });
+cv.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  const dx = e.clientX - drag[0], dy = e.clientY - drag[1]; drag = [e.clientX, e.clientY];
+  const sc = 3 / cv.getBoundingClientRect().width;
+  if (Math.hypot(dx, dy) > 0) Rv = mm(rotAxis([dy, dx, 0], Math.hypot(dx, dy) * sc), Rv);
+  draw();
+});
+cv.addEventListener("pointerup", () => (drag = null));
+function tick() { if (spin) { Rv = mm(rotAxis([0, 1, 0], 0.006), Rv); draw(); } requestAnimationFrame(tick); }
+requestAnimationFrame(tick);
+
+$("vGlobe").onclick = () => { view = "globe"; $("vGlobe").ariaPressed = "true"; $("vMap").ariaPressed = "false"; draw(); };
+$("vMap").onclick = () => { view = "map"; $("vMap").ariaPressed = "true"; $("vGlobe").ariaPressed = "false"; draw(); };
+$("spin").onclick = () => { spin = !spin; $("spin").ariaPressed = String(spin); };
+$("theme").onclick = () => {
+  const d = document.documentElement, darkNow = d.dataset.theme ? d.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  d.dataset.theme = darkNow ? "light" : "dark"; draw();
+};
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", draw);
+
+// ---------------------------------------------------------------- table
+const Ns = [...new Set(recs.map((r) => r.N))].sort((a, b) => a - b);
+$("shape").innerHTML = Ns.map((n) => `<option value="${n}">${names[n] || n + "-gons"}</option>`).join("");
+$("shape").onchange = () => fill(+$("shape").value);
+const fmt = (x, d = 6) => (x == null ? "" : Number(x).toFixed(d));
+function litCell(r) {
+  const L = r.literature;
+  if (!L) return "";
+  if (L.verdict === "tiling") return `<span title="classical tiling, not listed by dOSV; ${L.source}">${fmt(L.rho_range[1])} (tiling)</span>`;
+  if (L.verdict) {
+    const cls = L.verdict === "better" ? "better" : L.verdict === "worse" ? "worse" : "";
+    return `<span class="${cls}" title="${L.source}">${fmt(L.rho_range[1])} ${L.verdict === "better" ? "(ours better)" : L.verdict === "worse" ? "(ours worse)" : "(=)"}</span>`;
+  }
+  const d = r.score_float - L.rho;
+  return `<span title="${L.source}">${fmt(L.rho)}${Math.abs(d) > 1e-9 * L.rho ? (d > 0 ? ' <span class="worse">(ours worse)</span>' : ' <span class="better">(ours better)</span>') : ""}</span>`;
+}
+function fill(N) {
+  const rows = recs.filter((r) => r.N === N).sort((a, b) => a.P - b.P);
+  $("tab").querySelector("thead").innerHTML = `<tr><th>P</th><th>&rho; (certified)</th><th>lower bound</th><th>gap</th><th>literature &rho;</th><th>status</th></tr>`;
+  const tb = $("tab").querySelector("tbody");
+  tb.innerHTML = rows.map((r) => `<tr data-id="${r.id}"><td>${r.P}</td><td>${r.display}</td><td title="${r.bound ? r.bound.kind : ""}">${r.bound ? fmt(r.bound.value) : ""}</td><td>${r.bound ? ((r.score_float / r.bound.value - 1) * 100).toFixed(2) + "%" : ""}</td><td>${litCell(r)}</td><td><span class="tag ${r.status}">${r.status === "proven" ? "proven" : "best known"}</span></td></tr>`).join("");
+  tb.querySelectorAll("tr").forEach((tr) => (tr.onclick = () => select(recs.find((r) => r.id === tr.dataset.id))));
+  if (!cur || cur.N !== N) select(rows.find((r) => r.P === Math.min(12, rows[rows.length - 1].P)) || rows[0]);
+}
+function select(r) {
+  cur = r;
+  $("shape").value = r.N;
+  document.querySelectorAll("#tab tbody tr").forEach((tr) => tr.classList.toggle("sel", tr.dataset.id === r.id));
+  const L = r.literature;
+  $("info").innerHTML = `<div class="big">${r.P} ${names[r.N] || r.N + "-gons"}: &rho; = ${r.display}</div>
+    <div class="muted">certified at &rho; = ${r.score_cert} (touching limit ${r.score_float}, gap ${r.gap_rel.toExponential(1)}); density ${(100 * r.density_float).toFixed(2)}%;
+    lower bound ${r.bound ? fmt(r.bound.value) + " (" + r.bound.kind.replace(/_/g, " ") + ")" : "none"}${L ? "; literature: " + (L.verdict ? `circumradius ${L.radius} rad (dOSV 2026), ours ${Number(L.our_circumradius).toFixed(6)}: ${L.verdict === "tiling" ? "classical tiling, not listed by dOSV" : L.verdict}` : `&rho; ${fmt(L.rho, 9)} (${L.source.split(",")[0]})`) : ""}</div>
+    ${r.notes && r.notes.length ? `<ul class="notes">${r.notes.map((n) => `<li>${n}</li>`).join("")}</ul>` : ""}`;
+  // turn the view so that piece 0 faces the camera, slightly tilted
+  Rv = mm(rotAxis([1, 0, 0], -0.5), rotAxis([1, 0, 0], 0));
+  draw();
+}
+$("foot").innerHTML = `${recs.length} certified records, generated ${DATA.generated}. Pose: unit quaternion per piece; piece 0 at the north pole. Sources: Cohn, Table of spherical codes (spherical-codes.org); de Oliveira Filho, Spomer, Vallentin, arXiv:2604.21451 (accessed 2026-10-24). Drag the globe to rotate.`;
+fill(Ns.includes(4) ? 4 : Ns[0]);
+</script>
+</body>
+</html>

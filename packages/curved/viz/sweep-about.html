@@ -1,0 +1,42 @@
+<h2 style="margin-top: 0; font-size: 17px">What the pictures show</h2>
+<p>
+  Each problem puts P unit pieces (disks of radius 1, or regular polygons of side 1) into the smallest container on a
+  surface of constant curvature K: the hyperbolic plane for K &lt; 0, the flat plane at K = 0, a sphere of radius 1/√K
+  for K &gt; 0. The size s is the container's side (its radius for a disk container). The plots show the smallest s
+  found at each K, and every configuration that was followed continuously in K.
+</p>
+<ul>
+  <li><b>Branch</b>: one arrangement of the pieces, followed as K changes. Each step re-optimises the previous arrangement at the new K, so the pieces move continuously.</li>
+  <li><b>Thick curve</b>: the lowest branch at each K, which is the ground state found. Its colour is the branch that holds the lead.</li>
+  <li><b>Dashed curve</b>: a branch that is not the lowest there. It is metastable: a local optimum that a slow change of K can still follow. Where a branch stays alive past the point where it lost the lead, the system shows <b>hysteresis</b>: which arrangement you see depends on the direction you came from.</li>
+</ul>
+
+<h2 style="font-size: 17px">Events</h2>
+<ul>
+  <li><b>◆ Crossing</b>: two branches exchange the lead. The best size s*(K) stays continuous, but its slope jumps (a kink), and the optimal arrangement jumps from one configuration to a different one. This is a first-order transition, like a level crossing.</li>
+  <li><b>○ Contact change</b>: along one branch a contact opens or closes, or a piece becomes loose (a rattler). The slope is usually continuous and only the curvature of s(K) changes; it kinks only when the contact forces are not unique.</li>
+  <li><b>Stability change</b>: a symmetric branch stops being a local optimum. A small push lowers s, so the optimum breaks the symmetry. This is the packing version of a pitchfork bifurcation.</li>
+  <li><b>× Fold</b>: the followed branch stops existing. Re-optimising then jumps to another arrangement with a smaller s.</li>
+  <li><b>| End</b>: at negative K the container would have to grow beyond the ideal polygon (s → ∞). At positive K it would leave the open hemisphere.</li>
+</ul>
+
+<h2 style="font-size: 17px">How it works</h2>
+<p>
+  <b>Conformal picture.</b> A point at geodesic distance r from the container centre, in direction φ, is drawn at radius
+  2 tn<sub>K</sub>(r/2), where tn<sub>K</sub>(x) = tan(√K x)/√K for K &gt; 0, tanh(√−K x)/√−K for K &lt; 0, and x at K = 0. This is the Poincaré disk for K &lt; 0
+  and stereographic projection for K &gt; 0, scaled so that it is exact at the centre. Angles are true, circles stay circles,
+  and the picture changes continuously through K = 0. In homogeneous coordinates (v<sub>0</sub>, w) with
+  v<sub>0</sub>² + K|w|² = 1, the drawn point is 2w/(1 + v<sub>0</sub>). The dashed circle is the boundary at infinity (K &lt; 0) or the equator (K &gt; 0).
+  The grey outline is the ideal polygon, which the container approaches as s → ∞. The "Klein / gnomonic" button shows the other chart, where edges are straight but shapes are distorted.
+</p>
+<p>
+  <b>Search.</b> For each problem, seeded multistart searches run every 0.25 in K. They are seeded with the Euclidean record at K = 0 and with the curved records at K = ±1.
+  Every competitive configuration is followed in both directions on a grid of step 1/64, with step halving near trouble.
+  A step is rejected when the configuration jumps and s drops, and below a step of 2<sup>−26</sup> the branch ends in a fold. Refinement rounds then perturb the lowest configuration at every second grid value and follow anything lower.
+  Crossings, contact changes and stability changes are located by bisection in K on polished configurations. Slopes come from one-sided finite differences.
+</p>
+<p>
+  <b>Proof of validity.</b> The ground state every 1/16 in K, and both branches at every crossing (at K<sub>c</sub> and at the grid values on either side), are
+  re-solved with a margin and checked by the independent certifier <code>python/curved/certify.py</code> (256-bit interval arithmetic). Each such size is therefore a proven upper bound for its K.
+  Nothing is claimed optimal. A jump in the best-found curve counts only when both branches were followed through the crossing from both sides.
+</p>

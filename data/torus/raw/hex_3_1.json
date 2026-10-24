@@ -1,0 +1,47 @@
+{
+ "family": "hex",
+ "N": 3,
+ "P": 1,
+ "score": 0.8660254037844541,
+ "params": [
+  0.8660254037844541
+ ],
+ "basis": [
+  [
+   0.8660254037844541,
+   0.0
+  ],
+  [
+   0.43301270189222707,
+   0.7500000000000133
+  ]
+ ],
+ "poses": [
+  [
+   0.8355707428275547,
+   0.34368653417010275,
+   2.6179936899741847
+  ]
+ ],
+ "frac": [
+  [
+   0.7357096304835135,
+   0.45824871222679553
+  ]
+ ],
+ "min_sep": -1.1102230246251565e-16,
+ "density": 0.6666666666666431,
+ "label": "hop:random",
+ "seed": 20261024,
+ "budget": {
+  "random_starts": 4,
+  "hops": 10,
+  "time_cap_s": 90.0
+ },
+ "stopped_by": "count",
+ "elapsed_s": 0.83,
+ "runs": 16,
+ "hops": 10,
+ "lp_crashes_isolated": 0,
+ "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish"
+}

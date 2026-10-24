@@ -20,6 +20,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      # the spaces' interval certifiers need mpmath (python/requirements.txt)
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install -r python/requirements.txt
       - run: npm run test:python
       - run: npm run build
       - run: npx playwright install --with-deps chromium

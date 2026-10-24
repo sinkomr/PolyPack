@@ -1,0 +1,21 @@
+{
+  "name": "@polypack/spaces",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./load": "./src/load.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@polypack/curved": "0.1.0",
+    "@polypack/geometry": "0.1.0",
+    "@polypack/sphere": "0.1.0",
+    "@polypack/surface": "0.1.0",
+    "@polypack/torus": "0.1.0"
+  }
+}

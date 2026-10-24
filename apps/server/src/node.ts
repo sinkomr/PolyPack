@@ -3,7 +3,9 @@ import { resolve } from "node:path";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { compress } from "hono/compress";
 import { LiteratureRecord, closedToSubmissions } from "@polypack/geometry";
+import { loadSpacesIndex } from "@polypack/spaces/load";
 import { HOLDERS_REFRESH_MS, createApp } from "./app";
 import { OVERLOAD_DELAY_MS } from "./limits";
 import { LoadStats, LoopDelay } from "./load";
@@ -27,6 +29,9 @@ if (process.env.ADMIN_TOKEN === "change-me")
   console.warn("ADMIN_TOKEN is still the placeholder; admin access is disabled");
 
 const records: LiteratureRecord[] = JSON.parse(readFileSync(resolve(root, "data/records.json"), "utf8")).records;
+// The research records of the spaces (data/<space>/records.json), each read once into a compact
+// catalogue (about 7 MB of heap); a missing file leaves its space out.
+const spaces = loadSpacesIndex(root, (msg) => console.log(msg));
 
 /** A non-negative integer setting; the default when it is unset or not such a number. */
 function wholeNumber(name: string, fallback: number): number {
@@ -80,6 +85,7 @@ const app = createApp({
   loopDelay: () => delay.ms(),
   stats,
   snapshots: snapshotDir ? snapshotSource(snapshotDir) : undefined,
+  spaces: { index: spaces, store },
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.
   clientIp: (c) =>
@@ -92,6 +98,8 @@ const app = createApp({
 // In production the built web app is served by the same process.
 const dist = resolve(root, "apps/web/dist");
 if (existsSync(dist)) {
+  // the spaces' standalone viewers carry their data inline (the sweep viewer is about 4 MB)
+  app.use("/spaces/*", compress());
   app.use("/*", serveStatic({ root: dist }));
 }
 

@@ -1,0 +1,16 @@
+{
+  "name": "@polypack/torus",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "viz": "tsx viz/build.ts"
+  },
+  "dependencies": {
+    "@polypack/geometry": "0.1.0"
+  }
+}

@@ -1,0 +1,2335 @@
+{
+ "summary": {
+  "records": 166,
+  "certified": 166,
+  "failed": 0,
+  "precision_bits": 256,
+  "certifier": "python/sphere/certify.py (mpmath iv; series from python/curved/rigorous.py)"
+ },
+ "results": [
+  {
+   "index": 0,
+   "id": "sphere/0/2",
+   "rho_cert": 0.6366197723739476,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.934930104465339e-22,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 1,
+   "id": "sphere/0/3",
+   "rho_cert": 0.9549296585609215,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.8137613539197905e-11,
+   "prec": 256,
+   "time_s": 0.001
+  },
+  {
+   "index": 2,
+   "id": "sphere/0/4",
+   "rho_cert": 1.0467733744370677,
+   "certified": true,
+   "stats": {
+    "far": 6,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.8013558557974398e-11,
+   "prec": 256,
+   "time_s": 0.002
+  },
+  {
+   "index": 3,
+   "id": "sphere/0/5",
+   "rho_cert": 1.27323954477336,
+   "certified": true,
+   "stats": {
+    "far": 10,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.4894560954680228e-12,
+   "prec": 256,
+   "time_s": 0.002
+  },
+  {
+   "index": 4,
+   "id": "sphere/0/6",
+   "rho_cert": 1.2732395447478952,
+   "certified": true,
+   "stats": {
+    "far": 15,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.570780035467101e-11,
+   "prec": 256,
+   "time_s": 0.002
+  },
+  {
+   "index": 5,
+   "id": "sphere/0/7",
+   "rho_cert": 1.471583829253703,
+   "certified": true,
+   "stats": {
+    "far": 21,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.3287253587933128e-11,
+   "prec": 256,
+   "time_s": 0.003
+  },
+  {
+   "index": 6,
+   "id": "sphere/0/8",
+   "rho_cert": 1.5307756766349885,
+   "certified": true,
+   "stats": {
+    "far": 28,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.261164076970511e-11,
+   "prec": 256,
+   "time_s": 0.003
+  },
+  {
+   "index": 7,
+   "id": "sphere/0/9",
+   "rho_cert": 1.62474893310502,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.1605604634576387e-11,
+   "prec": 256,
+   "time_s": 0.003
+  },
+  {
+   "index": 8,
+   "id": "sphere/0/10",
+   "rho_cert": 1.7323819283152992,
+   "certified": true,
+   "stats": {
+    "far": 45,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 1.0558864925418521e-11,
+   "prec": 256,
+   "time_s": 0.004
+  },
+  {
+   "index": 9,
+   "id": "sphere/0/11",
+   "rho_cert": 1.8064420505357668,
+   "certified": true,
+   "stats": {
+    "far": 55,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 9.902730257957371e-12,
+   "prec": 256,
+   "time_s": 0.004
+  },
+  {
+   "index": 10,
+   "id": "sphere/0/12",
+   "rho_cert": 1.8064420505357663,
+   "certified": true,
+   "stats": {
+    "far": 66,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 9.902707463250611e-12,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 11,
+   "id": "sphere/0/13",
+   "rho_cert": 2.005568274944426,
+   "certified": true,
+   "stats": {
+    "far": 78,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 8.376535877440057e-12,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 12,
+   "id": "sphere/0/14",
+   "rho_cert": 2.05838666707104,
+   "certified": true,
+   "stats": {
+    "far": 91,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 8.023840453186394e-12,
+   "prec": 256,
+   "time_s": 0.006
+  },
+  {
+   "index": 13,
+   "id": "sphere/0/15",
+   "rho_cert": 2.1355972844574893,
+   "certified": true,
+   "stats": {
+    "far": 105,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 7.54351352596206e-12,
+   "prec": 256,
+   "time_s": 0.006
+  },
+  {
+   "index": 14,
+   "id": "sphere/0/16",
+   "rho_cert": 2.193375143425662,
+   "certified": true,
+   "stats": {
+    "far": 120,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 7.209413590363248e-12,
+   "prec": 256,
+   "time_s": 0.007
+  },
+  {
+   "index": 15,
+   "id": "sphere/0/17",
+   "rho_cert": 2.2429207694664486,
+   "certified": true,
+   "stats": {
+    "far": 136,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 6.93890206281448e-12,
+   "prec": 256,
+   "time_s": 0.007
+  },
+  {
+   "index": 16,
+   "id": "sphere/0/18",
+   "rho_cert": 2.3123344294074757,
+   "certified": true,
+   "stats": {
+    "far": 153,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 6.582783949892122e-12,
+   "prec": 256,
+   "time_s": 0.008
+  },
+  {
+   "index": 17,
+   "id": "sphere/0/19",
+   "rho_cert": 2.4027460664709945,
+   "certified": true,
+   "stats": {
+    "far": 171,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 6.155693467687503e-12,
+   "prec": 256,
+   "time_s": 0.008
+  },
+  {
+   "index": 18,
+   "id": "sphere/0/20",
+   "rho_cert": 2.415961533700987,
+   "certified": true,
+   "stats": {
+    "far": 190,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 6.096834463693027e-12,
+   "prec": 256,
+   "time_s": 0.009
+  },
+  {
+   "index": 19,
+   "id": "sphere/0/21",
+   "rho_cert": 2.512244284110265,
+   "certified": true,
+   "stats": {
+    "far": 210,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 5.6877016129090645e-12,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 20,
+   "id": "sphere/0/22",
+   "rho_cert": 2.5612683557209883,
+   "certified": true,
+   "stats": {
+    "far": 231,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 5.496704427224983e-12,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 21,
+   "id": "sphere/0/23",
+   "rho_cert": 2.6216347029978633,
+   "certified": true,
+   "stats": {
+    "far": 253,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 5.271608121352883e-12,
+   "prec": 256,
+   "time_s": 0.011
+  },
+  {
+   "index": 22,
+   "id": "sphere/0/24",
+   "rho_cert": 2.6227866117548424,
+   "certified": true,
+   "stats": {
+    "far": 276,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 5.267513124851944e-12,
+   "prec": 256,
+   "time_s": 0.012
+  },
+  {
+   "index": 23,
+   "id": "sphere/0/25",
+   "rho_cert": 2.752324770399098,
+   "certified": true,
+   "stats": {
+    "far": 300,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.827790113077545e-12,
+   "prec": 256,
+   "time_s": 0.013
+  },
+  {
+   "index": 24,
+   "id": "sphere/0/26",
+   "rho_cert": 2.792351087773853,
+   "certified": true,
+   "stats": {
+    "far": 325,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.702411910712847e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 25,
+   "id": "sphere/0/27",
+   "rho_cert": 2.817067798917884,
+   "certified": true,
+   "stats": {
+    "far": 351,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.627450658200008e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 26,
+   "id": "sphere/0/28",
+   "rho_cert": 2.911730173890389,
+   "certified": true,
+   "stats": {
+    "far": 378,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.355673717499645e-12,
+   "prec": 256,
+   "time_s": 0.015
+  },
+  {
+   "index": 27,
+   "id": "sphere/0/29",
+   "rho_cert": 2.959978082498404,
+   "certified": true,
+   "stats": {
+    "far": 406,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.225854790040689e-12,
+   "prec": 256,
+   "time_s": 0.016
+  },
+  {
+   "index": 28,
+   "id": "sphere/0/30",
+   "rho_cert": 2.968915065163779,
+   "certified": true,
+   "stats": {
+    "far": 435,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.2026301028434886e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 29,
+   "id": "sphere/0/31",
+   "rho_cert": 3.038771631412307,
+   "certified": true,
+   "stats": {
+    "far": 465,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 4.025855721136924e-12,
+   "prec": 256,
+   "time_s": 0.018
+  },
+  {
+   "index": 30,
+   "id": "sphere/0/32",
+   "rho_cert": 3.0577959902816967,
+   "certified": true,
+   "stats": {
+    "far": 496,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.97960648402668e-12,
+   "prec": 256,
+   "time_s": 0.019
+  },
+  {
+   "index": 31,
+   "id": "sphere/0/33",
+   "rho_cert": 3.1607494679327948,
+   "certified": true,
+   "stats": {
+    "far": 528,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.741607809191677e-12,
+   "prec": 256,
+   "time_s": 0.02
+  },
+  {
+   "index": 32,
+   "id": "sphere/0/34",
+   "rho_cert": 3.200185684792258,
+   "certified": true,
+   "stats": {
+    "far": 561,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.656433197385161e-12,
+   "prec": 256,
+   "time_s": 0.021
+  },
+  {
+   "index": 33,
+   "id": "sphere/0/35",
+   "rho_cert": 3.244399300119991,
+   "certified": true,
+   "stats": {
+    "far": 595,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.563962713174924e-12,
+   "prec": 256,
+   "time_s": 0.022
+  },
+  {
+   "index": 34,
+   "id": "sphere/0/36",
+   "rho_cert": 3.2563918982829696,
+   "certified": true,
+   "stats": {
+    "far": 630,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.53952657996117e-12,
+   "prec": 256,
+   "time_s": 0.022
+  },
+  {
+   "index": 35,
+   "id": "sphere/0/37",
+   "rho_cert": 3.328981487808203,
+   "certified": true,
+   "stats": {
+    "far": 666,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.39606130257789e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 36,
+   "id": "sphere/0/38",
+   "rho_cert": 3.345674412646444,
+   "certified": true,
+   "stats": {
+    "far": 703,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.364516112511969e-12,
+   "prec": 256,
+   "time_s": 0.026
+  },
+  {
+   "index": 37,
+   "id": "sphere/0/39",
+   "rho_cert": 3.421762359014507,
+   "certified": true,
+   "stats": {
+    "far": 741,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.22519207546431e-12,
+   "prec": 256,
+   "time_s": 0.026
+  },
+  {
+   "index": 38,
+   "id": "sphere/0/40",
+   "rho_cert": 3.455887804392393,
+   "certified": true,
+   "stats": {
+    "far": 780,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": 3.165396609677166e-12,
+   "prec": 256,
+   "time_s": 0.027
+  },
+  {
+   "index": 39,
+   "id": "sphere/3/2",
+   "rho_cert": 0.4774648292804607,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": null,
+   "prec": 256,
+   "time_s": 0.004
+  },
+  {
+   "index": 40,
+   "id": "sphere/3/3",
+   "rho_cert": 0.523386687218534,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 3,
+    "fallback": 0
+   },
+   "min_clearance": 1.6546918318713693e-11,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 41,
+   "id": "sphere/3/4",
+   "rho_cert": 0.5233866872185339,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.6546618502532178e-11,
+   "prec": 256,
+   "time_s": 0.006
+  },
+  {
+   "index": 42,
+   "id": "sphere/3/5",
+   "rho_cert": 0.5895794805558335,
+   "certified": true,
+   "stats": {
+    "far": 4,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 9.79268293411437e-12,
+   "prec": 256,
+   "time_s": 0.007
+  },
+  {
+   "index": 43,
+   "id": "sphere/3/6",
+   "rho_cert": 0.6003922856654134,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 9.24928313315904e-12,
+   "prec": 256,
+   "time_s": 0.009
+  },
+  {
+   "index": 44,
+   "id": "sphere/3/7",
+   "rho_cert": 0.6366197723739482,
+   "certified": true,
+   "stats": {
+    "far": 8,
+    "witness": 13,
+    "fallback": 0
+   },
+   "min_clearance": 7.85380482955589e-12,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 45,
+   "id": "sphere/3/8",
+   "rho_cert": 0.6366197723739476,
+   "certified": true,
+   "stats": {
+    "far": 16,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 7.853532556986252e-12,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 46,
+   "id": "sphere/3/9",
+   "rho_cert": 0.7083157784068255,
+   "certified": true,
+   "stats": {
+    "far": 16,
+    "witness": 20,
+    "fallback": 0
+   },
+   "min_clearance": 6.151749094904674e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 47,
+   "id": "sphere/3/10",
+   "rho_cert": 0.7220496899545508,
+   "certified": true,
+   "stats": {
+    "far": 21,
+    "witness": 24,
+    "fallback": 0
+   },
+   "min_clearance": 5.917391648901766e-12,
+   "prec": 256,
+   "time_s": 0.015
+  },
+  {
+   "index": 48,
+   "id": "sphere/3/11",
+   "rho_cert": 0.7538026489222326,
+   "certified": true,
+   "stats": {
+    "far": 26,
+    "witness": 29,
+    "fallback": 0
+   },
+   "min_clearance": 5.445650261762225e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 49,
+   "id": "sphere/3/12",
+   "rho_cert": 0.7715815075388374,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 30,
+    "fallback": 0
+   },
+   "min_clearance": 5.2174434749852796e-12,
+   "prec": 256,
+   "time_s": 0.018
+  },
+  {
+   "index": 50,
+   "id": "sphere/3/13",
+   "rho_cert": 0.8042681715193236,
+   "certified": true,
+   "stats": {
+    "far": 45,
+    "witness": 33,
+    "fallback": 0
+   },
+   "min_clearance": 4.84984130262458e-12,
+   "prec": 256,
+   "time_s": 0.019
+  },
+  {
+   "index": 51,
+   "id": "sphere/3/14",
+   "rho_cert": 0.8208829431589195,
+   "certified": true,
+   "stats": {
+    "far": 49,
+    "witness": 42,
+    "fallback": 0
+   },
+   "min_clearance": 4.684267029973524e-12,
+   "prec": 256,
+   "time_s": 0.022
+  },
+  {
+   "index": 52,
+   "id": "sphere/3/15",
+   "rho_cert": 0.8437005162794908,
+   "certified": true,
+   "stats": {
+    "far": 61,
+    "witness": 44,
+    "fallback": 0
+   },
+   "min_clearance": 4.476943300892008e-12,
+   "prec": 256,
+   "time_s": 0.023
+  },
+  {
+   "index": 53,
+   "id": "sphere/3/16",
+   "rho_cert": 0.8596147603028524,
+   "certified": true,
+   "stats": {
+    "far": 75,
+    "witness": 45,
+    "fallback": 0
+   },
+   "min_clearance": 4.344519214018866e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 54,
+   "id": "sphere/3/17",
+   "rho_cert": 0.8776406312864933,
+   "certified": true,
+   "stats": {
+    "far": 86,
+    "witness": 50,
+    "fallback": 0
+   },
+   "min_clearance": 4.2040749055949865e-12,
+   "prec": 256,
+   "time_s": 0.026
+  },
+  {
+   "index": 55,
+   "id": "sphere/3/18",
+   "rho_cert": 0.8955563939325915,
+   "certified": true,
+   "stats": {
+    "far": 93,
+    "witness": 60,
+    "fallback": 0
+   },
+   "min_clearance": 4.074677602513667e-12,
+   "prec": 256,
+   "time_s": 0.029
+  },
+  {
+   "index": 56,
+   "id": "sphere/3/19",
+   "rho_cert": 0.9023051676845808,
+   "certified": true,
+   "stats": {
+    "far": 90,
+    "witness": 81,
+    "fallback": 0
+   },
+   "min_clearance": 4.028177535043171e-12,
+   "prec": 256,
+   "time_s": 0.035
+  },
+  {
+   "index": 57,
+   "id": "sphere/3/20",
+   "rho_cert": 0.9032210252678825,
+   "certified": true,
+   "stats": {
+    "far": 100,
+    "witness": 90,
+    "fallback": 0
+   },
+   "min_clearance": 4.021449409458356e-12,
+   "prec": 256,
+   "time_s": 0.04
+  },
+  {
+   "index": 58,
+   "id": "sphere/3/21",
+   "rho_cert": 0.9705586756601435,
+   "certified": true,
+   "stats": {
+    "far": 148,
+    "witness": 62,
+    "fallback": 0
+   },
+   "min_clearance": 3.6166486522309263e-12,
+   "prec": 256,
+   "time_s": 0.032
+  },
+  {
+   "index": 59,
+   "id": "sphere/3/22",
+   "rho_cert": 0.9756103890215801,
+   "certified": true,
+   "stats": {
+    "far": 157,
+    "witness": 74,
+    "fallback": 0
+   },
+   "min_clearance": 3.589812784177088e-12,
+   "prec": 256,
+   "time_s": 0.036
+  },
+  {
+   "index": 60,
+   "id": "sphere/3/23",
+   "rho_cert": 1.0029369986296306,
+   "certified": true,
+   "stats": {
+    "far": 174,
+    "witness": 79,
+    "fallback": 0
+   },
+   "min_clearance": 3.452246836364443e-12,
+   "prec": 256,
+   "time_s": 0.038
+  },
+  {
+   "index": 61,
+   "id": "sphere/3/24",
+   "rho_cert": 1.0333945058005563,
+   "certified": true,
+   "stats": {
+    "far": 194,
+    "witness": 82,
+    "fallback": 0
+   },
+   "min_clearance": 3.3117191814107595e-12,
+   "prec": 256,
+   "time_s": 0.041
+  },
+  {
+   "index": 62,
+   "id": "sphere/3/25",
+   "rho_cert": 1.0503491773424891,
+   "certified": true,
+   "stats": {
+    "far": 220,
+    "witness": 80,
+    "fallback": 0
+   },
+   "min_clearance": 3.2391130210006436e-12,
+   "prec": 256,
+   "time_s": 0.04
+  },
+  {
+   "index": 63,
+   "id": "sphere/3/26",
+   "rho_cert": 1.0650892031658037,
+   "certified": true,
+   "stats": {
+    "far": 242,
+    "witness": 83,
+    "fallback": 0
+   },
+   "min_clearance": 3.178436033555309e-12,
+   "prec": 256,
+   "time_s": 0.041
+  },
+  {
+   "index": 64,
+   "id": "sphere/3/27",
+   "rho_cert": 1.1046513639136581,
+   "certified": true,
+   "stats": {
+    "far": 269,
+    "witness": 82,
+    "fallback": 0
+   },
+   "min_clearance": 3.0276895655330844e-12,
+   "prec": 256,
+   "time_s": 0.042
+  },
+  {
+   "index": 65,
+   "id": "sphere/3/28",
+   "rho_cert": 1.1172075353586257,
+   "certified": true,
+   "stats": {
+    "far": 288,
+    "witness": 90,
+    "fallback": 0
+   },
+   "min_clearance": 2.9830609086936603e-12,
+   "prec": 256,
+   "time_s": 0.049
+  },
+  {
+   "index": 66,
+   "id": "sphere/3/29",
+   "rho_cert": 1.1343886786683361,
+   "certified": true,
+   "stats": {
+    "far": 310,
+    "witness": 96,
+    "fallback": 0
+   },
+   "min_clearance": 2.924098601470593e-12,
+   "prec": 256,
+   "time_s": 0.05
+  },
+  {
+   "index": 67,
+   "id": "sphere/3/30",
+   "rho_cert": 1.1454064280157763,
+   "certified": true,
+   "stats": {
+    "far": 337,
+    "witness": 98,
+    "fallback": 0
+   },
+   "min_clearance": 2.8878746422652778e-12,
+   "prec": 256,
+   "time_s": 0.049
+  },
+  {
+   "index": 68,
+   "id": "sphere/4/2",
+   "rho_cert": 0.6366197723739476,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": null,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 69,
+   "id": "sphere/4/3",
+   "rho_cert": 0.7005505412947293,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 3,
+    "fallback": 0
+   },
+   "min_clearance": 1.888332048753117e-11,
+   "prec": 256,
+   "time_s": 0.006
+  },
+  {
+   "index": 70,
+   "id": "sphere/4/4",
+   "rho_cert": 0.7504809466686999,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.3712573998664073e-11,
+   "prec": 256,
+   "time_s": 0.008
+  },
+  {
+   "index": 71,
+   "id": "sphere/4/5",
+   "rho_cert": 0.8123744665525102,
+   "certified": true,
+   "stats": {
+    "far": 2,
+    "witness": 8,
+    "fallback": 0
+   },
+   "min_clearance": 1.0660542326196496e-11,
+   "prec": 256,
+   "time_s": 0.009
+  },
+  {
+   "index": 72,
+   "id": "sphere/4/6",
+   "rho_cert": 0.8123744665525098,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 1.0660276840746663e-11,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 73,
+   "id": "sphere/4/7",
+   "rho_cert": 0.9273540256517567,
+   "certified": true,
+   "stats": {
+    "far": 10,
+    "witness": 11,
+    "fallback": 0
+   },
+   "min_clearance": 7.841392541773435e-12,
+   "prec": 256,
+   "time_s": 0.011
+  },
+  {
+   "index": 74,
+   "id": "sphere/4/8",
+   "rho_cert": 0.963700930628309,
+   "certified": true,
+   "stats": {
+    "far": 14,
+    "witness": 14,
+    "fallback": 0
+   },
+   "min_clearance": 7.277827322403372e-12,
+   "prec": 256,
+   "time_s": 0.012
+  },
+  {
+   "index": 75,
+   "id": "sphere/4/9",
+   "rho_cert": 1.0087750671467726,
+   "certified": true,
+   "stats": {
+    "far": 18,
+    "witness": 18,
+    "fallback": 0
+   },
+   "min_clearance": 6.698148286753067e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 76,
+   "id": "sphere/4/10",
+   "rho_cert": 1.0551672881641185,
+   "certified": true,
+   "stats": {
+    "far": 21,
+    "witness": 24,
+    "fallback": 0
+   },
+   "min_clearance": 6.203303552701358e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 77,
+   "id": "sphere/4/11",
+   "rho_cert": 1.1062540108147336,
+   "certified": true,
+   "stats": {
+    "far": 32,
+    "witness": 23,
+    "fallback": 0
+   },
+   "min_clearance": 5.747241036960267e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 78,
+   "id": "sphere/4/12",
+   "rho_cert": 1.111807759498487,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 30,
+    "fallback": 0
+   },
+   "min_clearance": 5.701991637636359e-12,
+   "prec": 256,
+   "time_s": 0.02
+  },
+  {
+   "index": 79,
+   "id": "sphere/4/13",
+   "rho_cert": 1.1922704881050779,
+   "certified": true,
+   "stats": {
+    "far": 51,
+    "witness": 27,
+    "fallback": 0
+   },
+   "min_clearance": 5.129691135400284e-12,
+   "prec": 256,
+   "time_s": 0.02
+  },
+  {
+   "index": 80,
+   "id": "sphere/4/14",
+   "rho_cert": 1.227024843039719,
+   "certified": true,
+   "stats": {
+    "far": 62,
+    "witness": 29,
+    "fallback": 0
+   },
+   "min_clearance": 4.9208130553821985e-12,
+   "prec": 256,
+   "time_s": 0.022
+  },
+  {
+   "index": 81,
+   "id": "sphere/4/15",
+   "rho_cert": 1.2447222257351522,
+   "certified": true,
+   "stats": {
+    "far": 72,
+    "witness": 33,
+    "fallback": 0
+   },
+   "min_clearance": 4.821252695228646e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 82,
+   "id": "sphere/4/16",
+   "rho_cert": 1.2889780393617551,
+   "certified": true,
+   "stats": {
+    "far": 83,
+    "witness": 37,
+    "fallback": 0
+   },
+   "min_clearance": 4.591209925409382e-12,
+   "prec": 256,
+   "time_s": 0.026
+  },
+  {
+   "index": 83,
+   "id": "sphere/4/17",
+   "rho_cert": 1.3268875812387937,
+   "certified": true,
+   "stats": {
+    "far": 97,
+    "witness": 39,
+    "fallback": 0
+   },
+   "min_clearance": 4.412868798375485e-12,
+   "prec": 256,
+   "time_s": 0.027
+  },
+  {
+   "index": 84,
+   "id": "sphere/4/18",
+   "rho_cert": 1.3601751986733646,
+   "certified": true,
+   "stats": {
+    "far": 109,
+    "witness": 44,
+    "fallback": 0
+   },
+   "min_clearance": 4.268397221881268e-12,
+   "prec": 256,
+   "time_s": 0.03
+  },
+  {
+   "index": 85,
+   "id": "sphere/4/19",
+   "rho_cert": 1.3985804282826302,
+   "certified": true,
+   "stats": {
+    "far": 126,
+    "witness": 45,
+    "fallback": 0
+   },
+   "min_clearance": 4.1143535863434155e-12,
+   "prec": 256,
+   "time_s": 0.031
+  },
+  {
+   "index": 86,
+   "id": "sphere/4/20",
+   "rho_cert": 1.4177758149906678,
+   "certified": true,
+   "stats": {
+    "far": 139,
+    "witness": 51,
+    "fallback": 0
+   },
+   "min_clearance": 4.041513870908543e-12,
+   "prec": 256,
+   "time_s": 0.033
+  },
+  {
+   "index": 87,
+   "id": "sphere/4/21",
+   "rho_cert": 1.452239187750191,
+   "certified": true,
+   "stats": {
+    "far": 159,
+    "witness": 51,
+    "fallback": 0
+   },
+   "min_clearance": 3.9183261165981635e-12,
+   "prec": 256,
+   "time_s": 0.034
+  },
+  {
+   "index": 88,
+   "id": "sphere/4/22",
+   "rho_cert": 1.4835476586990455,
+   "certified": true,
+   "stats": {
+    "far": 178,
+    "witness": 53,
+    "fallback": 0
+   },
+   "min_clearance": 3.813155493816125e-12,
+   "prec": 256,
+   "time_s": 0.036
+  },
+  {
+   "index": 89,
+   "id": "sphere/4/23",
+   "rho_cert": 1.5198168093171438,
+   "certified": true,
+   "stats": {
+    "far": 199,
+    "witness": 54,
+    "fallback": 0
+   },
+   "min_clearance": 3.6987302210105124e-12,
+   "prec": 256,
+   "time_s": 0.036
+  },
+  {
+   "index": 90,
+   "id": "sphere/4/24",
+   "rho_cert": 1.5361930835276536,
+   "certified": true,
+   "stats": {
+    "far": 216,
+    "witness": 60,
+    "fallback": 0
+   },
+   "min_clearance": 3.649391884608947e-12,
+   "prec": 256,
+   "time_s": 0.041
+  },
+  {
+   "index": 91,
+   "id": "sphere/4/25",
+   "rho_cert": 1.5666324062002586,
+   "certified": true,
+   "stats": {
+    "far": 239,
+    "witness": 61,
+    "fallback": 0
+   },
+   "min_clearance": 3.5614336167951605e-12,
+   "prec": 256,
+   "time_s": 0.041
+  },
+  {
+   "index": 92,
+   "id": "sphere/4/26",
+   "rho_cert": 1.5973648506884883,
+   "certified": true,
+   "stats": {
+    "far": 262,
+    "witness": 63,
+    "fallback": 0
+   },
+   "min_clearance": 3.4772481378515438e-12,
+   "prec": 256,
+   "time_s": 0.043
+  },
+  {
+   "index": 93,
+   "id": "sphere/4/27",
+   "rho_cert": 1.6372732227098883,
+   "certified": true,
+   "stats": {
+    "far": 286,
+    "witness": 65,
+    "fallback": 0
+   },
+   "min_clearance": 3.3741300143914425e-12,
+   "prec": 256,
+   "time_s": 0.044
+  },
+  {
+   "index": 94,
+   "id": "sphere/4/28",
+   "rho_cert": 1.6544634148973378,
+   "certified": true,
+   "stats": {
+    "far": 307,
+    "witness": 71,
+    "fallback": 0
+   },
+   "min_clearance": 3.3317740558097163e-12,
+   "prec": 256,
+   "time_s": 0.047
+  },
+  {
+   "index": 95,
+   "id": "sphere/4/29",
+   "rho_cert": 1.6949972999779839,
+   "certified": true,
+   "stats": {
+    "far": 336,
+    "witness": 70,
+    "fallback": 0
+   },
+   "min_clearance": 3.2363105719639635e-12,
+   "prec": 256,
+   "time_s": 0.048
+  },
+  {
+   "index": 96,
+   "id": "sphere/4/30",
+   "rho_cert": 1.7153678935387067,
+   "certified": true,
+   "stats": {
+    "far": 361,
+    "witness": 74,
+    "fallback": 0
+   },
+   "min_clearance": 3.190238769588355e-12,
+   "prec": 256,
+   "time_s": 0.051
+  },
+  {
+   "index": 97,
+   "id": "sphere/5/2",
+   "rho_cert": 0.7957747154674346,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": null,
+   "prec": 256,
+   "time_s": 0.005
+  },
+  {
+   "index": 98,
+   "id": "sphere/5/3",
+   "rho_cert": 0.9032210252678843,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 3,
+    "fallback": 0
+   },
+   "min_clearance": 1.7037353071341385e-11,
+   "prec": 256,
+   "time_s": 0.007
+  },
+  {
+   "index": 99,
+   "id": "sphere/5/4",
+   "rho_cert": 0.9486147732020214,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.4023334870586047e-11,
+   "prec": 256,
+   "time_s": 0.009
+  },
+  {
+   "index": 100,
+   "id": "sphere/5/5",
+   "rho_cert": 1.0771082371732301,
+   "certified": true,
+   "stats": {
+    "far": 4,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 9.861149687017845e-12,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 101,
+   "id": "sphere/5/6",
+   "rho_cert": 1.092883592794643,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 9.544989943763855e-12,
+   "prec": 256,
+   "time_s": 0.013
+  },
+  {
+   "index": 102,
+   "id": "sphere/5/7",
+   "rho_cert": 1.204014116700015,
+   "certified": true,
+   "stats": {
+    "far": 9,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 7.859589677969668e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 103,
+   "id": "sphere/5/8",
+   "rho_cert": 1.2386704928206185,
+   "certified": true,
+   "stats": {
+    "far": 12,
+    "witness": 16,
+    "fallback": 0
+   },
+   "min_clearance": 7.468172828526472e-12,
+   "prec": 256,
+   "time_s": 0.015
+  },
+  {
+   "index": 104,
+   "id": "sphere/5/9",
+   "rho_cert": 1.3002211332698363,
+   "certified": true,
+   "stats": {
+    "far": 18,
+    "witness": 18,
+    "fallback": 0
+   },
+   "min_clearance": 6.875635245437001e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 105,
+   "id": "sphere/5/10",
+   "rho_cert": 1.3594285823043717,
+   "certified": true,
+   "stats": {
+    "far": 25,
+    "witness": 20,
+    "fallback": 0
+   },
+   "min_clearance": 6.399279827327231e-12,
+   "prec": 256,
+   "time_s": 0.018
+  },
+  {
+   "index": 106,
+   "id": "sphere/5/11",
+   "rho_cert": 1.370374264256982,
+   "certified": true,
+   "stats": {
+    "far": 30,
+    "witness": 25,
+    "fallback": 0
+   },
+   "min_clearance": 6.3198025461276675e-12,
+   "prec": 256,
+   "time_s": 0.021
+  },
+  {
+   "index": 107,
+   "id": "sphere/5/12",
+   "rho_cert": 1.370374264256981,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 30,
+    "fallback": 0
+   },
+   "min_clearance": 6.319472832354159e-12,
+   "prec": 256,
+   "time_s": 0.023
+  },
+  {
+   "index": 108,
+   "id": "sphere/5/13",
+   "rho_cert": 1.5581817997425311,
+   "certified": true,
+   "stats": {
+    "far": 54,
+    "witness": 24,
+    "fallback": 0
+   },
+   "min_clearance": 5.233967765157627e-12,
+   "prec": 256,
+   "time_s": 0.021
+  },
+  {
+   "index": 109,
+   "id": "sphere/5/14",
+   "rho_cert": 1.5881806490365813,
+   "certified": true,
+   "stats": {
+    "far": 63,
+    "witness": 28,
+    "fallback": 0
+   },
+   "min_clearance": 5.098050151186093e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 110,
+   "id": "sphere/5/15",
+   "rho_cert": 1.6292729401746877,
+   "certified": true,
+   "stats": {
+    "far": 72,
+    "witness": 33,
+    "fallback": 0
+   },
+   "min_clearance": 4.923954372050855e-12,
+   "prec": 256,
+   "time_s": 0.027
+  },
+  {
+   "index": 111,
+   "id": "sphere/5/16",
+   "rho_cert": 1.6725045915772283,
+   "certified": true,
+   "stats": {
+    "far": 85,
+    "witness": 35,
+    "fallback": 0
+   },
+   "min_clearance": 4.7547887060648865e-12,
+   "prec": 256,
+   "time_s": 0.032
+  },
+  {
+   "index": 112,
+   "id": "sphere/5/17",
+   "rho_cert": 1.7108730564239323,
+   "certified": true,
+   "stats": {
+    "far": 97,
+    "witness": 39,
+    "fallback": 0
+   },
+   "min_clearance": 4.614910921928673e-12,
+   "prec": 256,
+   "time_s": 0.031
+  },
+  {
+   "index": 113,
+   "id": "sphere/5/18",
+   "rho_cert": 1.756290433406617,
+   "certified": true,
+   "stats": {
+    "far": 114,
+    "witness": 39,
+    "fallback": 0
+   },
+   "min_clearance": 4.460938095875716e-12,
+   "prec": 256,
+   "time_s": 0.031
+  },
+  {
+   "index": 114,
+   "id": "sphere/5/19",
+   "rho_cert": 1.8158390503759774,
+   "certified": true,
+   "stats": {
+    "far": 127,
+    "witness": 44,
+    "fallback": 0
+   },
+   "min_clearance": 4.274748053184693e-12,
+   "prec": 256,
+   "time_s": 0.034
+  },
+  {
+   "index": 115,
+   "id": "sphere/5/20",
+   "rho_cert": 1.8321484775470704,
+   "certified": true,
+   "stats": {
+    "far": 140,
+    "witness": 50,
+    "fallback": 0
+   },
+   "min_clearance": 4.2267734347439765e-12,
+   "prec": 256,
+   "time_s": 0.038
+  },
+  {
+   "index": 116,
+   "id": "sphere/5/21",
+   "rho_cert": 1.892502734711598,
+   "certified": true,
+   "stats": {
+    "far": 164,
+    "witness": 46,
+    "fallback": 0
+   },
+   "min_clearance": 4.059019495449245e-12,
+   "prec": 256,
+   "time_s": 0.038
+  },
+  {
+   "index": 117,
+   "id": "sphere/5/22",
+   "rho_cert": 1.9300175326252043,
+   "certified": true,
+   "stats": {
+    "far": 178,
+    "witness": 53,
+    "fallback": 0
+   },
+   "min_clearance": 3.961765236274748e-12,
+   "prec": 256,
+   "time_s": 0.04
+  },
+  {
+   "index": 118,
+   "id": "sphere/5/23",
+   "rho_cert": 1.988588700255407,
+   "certified": true,
+   "stats": {
+    "far": 199,
+    "witness": 54,
+    "fallback": 0
+   },
+   "min_clearance": 3.819672490103119e-12,
+   "prec": 256,
+   "time_s": 0.042
+  },
+  {
+   "index": 119,
+   "id": "sphere/5/24",
+   "rho_cert": 1.996442395439445,
+   "certified": true,
+   "stats": {
+    "far": 216,
+    "witness": 60,
+    "fallback": 0
+   },
+   "min_clearance": 3.8015755763523546e-12,
+   "prec": 256,
+   "time_s": 0.046
+  },
+  {
+   "index": 120,
+   "id": "sphere/5/25",
+   "rho_cert": 2.0667239147596375,
+   "certified": true,
+   "stats": {
+    "far": 243,
+    "witness": 57,
+    "fallback": 0
+   },
+   "min_clearance": 3.646495982436969e-12,
+   "prec": 256,
+   "time_s": 0.044
+  },
+  {
+   "index": 121,
+   "id": "sphere/5/26",
+   "rho_cert": 2.0979105804001676,
+   "certified": true,
+   "stats": {
+    "far": 264,
+    "witness": 61,
+    "fallback": 0
+   },
+   "min_clearance": 3.5822062986176207e-12,
+   "prec": 256,
+   "time_s": 0.048
+  },
+  {
+   "index": 122,
+   "id": "sphere/5/27",
+   "rho_cert": 2.118714600979873,
+   "certified": true,
+   "stats": {
+    "far": 286,
+    "witness": 65,
+    "fallback": 0
+   },
+   "min_clearance": 3.5401865304691608e-12,
+   "prec": 256,
+   "time_s": 0.049
+  },
+  {
+   "index": 123,
+   "id": "sphere/5/28",
+   "rho_cert": 2.1803879490834692,
+   "certified": true,
+   "stats": {
+    "far": 316,
+    "witness": 62,
+    "fallback": 0
+   },
+   "min_clearance": 3.4227760278607155e-12,
+   "prec": 256,
+   "time_s": 0.05
+  },
+  {
+   "index": 124,
+   "id": "sphere/5/29",
+   "rho_cert": 2.2146291504072044,
+   "certified": true,
+   "stats": {
+    "far": 339,
+    "witness": 67,
+    "fallback": 0
+   },
+   "min_clearance": 3.3607784374924997e-12,
+   "prec": 256,
+   "time_s": 0.054
+  },
+  {
+   "index": 125,
+   "id": "sphere/5/30",
+   "rho_cert": 2.2417289302843098,
+   "certified": true,
+   "stats": {
+    "far": 362,
+    "witness": 73,
+    "fallback": 0
+   },
+   "min_clearance": 3.3139274592537547e-12,
+   "prec": 256,
+   "time_s": 0.056
+  },
+  {
+   "index": 126,
+   "id": "sphere/6/2",
+   "rho_cert": 0.9549296585609214,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": null,
+   "prec": 256,
+   "time_s": 0.006
+  },
+  {
+   "index": 127,
+   "id": "sphere/6/3",
+   "rho_cert": 1.0784052161565896,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 3,
+    "fallback": 0
+   },
+   "min_clearance": 1.7957667935825318e-11,
+   "prec": 256,
+   "time_s": 0.008
+  },
+  {
+   "index": 128,
+   "id": "sphere/6/4",
+   "rho_cert": 1.135046304201874,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.461022051548171e-11,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 129,
+   "id": "sphere/6/5",
+   "rho_cert": 1.2900007074875164,
+   "certified": true,
+   "stats": {
+    "far": 4,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.0255031198098297e-11,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 130,
+   "id": "sphere/6/6",
+   "rho_cert": 1.3235635080934367,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 9.692252233699578e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 131,
+   "id": "sphere/6/7",
+   "rho_cert": 1.4715469905389575,
+   "certified": true,
+   "stats": {
+    "far": 9,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 7.895081716939621e-12,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 132,
+   "id": "sphere/6/8",
+   "rho_cert": 1.5175051029502185,
+   "certified": true,
+   "stats": {
+    "far": 12,
+    "witness": 16,
+    "fallback": 0
+   },
+   "min_clearance": 7.485881527790758e-12,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 133,
+   "id": "sphere/6/9",
+   "rho_cert": 1.592875367012912,
+   "certified": true,
+   "stats": {
+    "far": 18,
+    "witness": 18,
+    "fallback": 0
+   },
+   "min_clearance": 6.912824882285385e-12,
+   "prec": 256,
+   "time_s": 0.019
+  },
+  {
+   "index": 134,
+   "id": "sphere/6/10",
+   "rho_cert": 1.6820040523280337,
+   "certified": true,
+   "stats": {
+    "far": 26,
+    "witness": 19,
+    "fallback": 0
+   },
+   "min_clearance": 6.353254437792245e-12,
+   "prec": 256,
+   "time_s": 0.02
+  },
+  {
+   "index": 135,
+   "id": "sphere/6/11",
+   "rho_cert": 1.7671979991760083,
+   "certified": true,
+   "stats": {
+    "far": 30,
+    "witness": 25,
+    "fallback": 0
+   },
+   "min_clearance": 5.907545056141784e-12,
+   "prec": 256,
+   "time_s": 0.023
+  },
+  {
+   "index": 136,
+   "id": "sphere/6/12",
+   "rho_cert": 1.7702506394405704,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 30,
+    "fallback": 0
+   },
+   "min_clearance": 5.8930616206149605e-12,
+   "prec": 256,
+   "time_s": 0.027
+  },
+  {
+   "index": 137,
+   "id": "sphere/6/13",
+   "rho_cert": 1.907932496243669,
+   "certified": true,
+   "stats": {
+    "far": 54,
+    "witness": 24,
+    "fallback": 0
+   },
+   "min_clearance": 5.3073179027007456e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 138,
+   "id": "sphere/6/14",
+   "rho_cert": 1.9533798967481897,
+   "certified": true,
+   "stats": {
+    "far": 64,
+    "witness": 27,
+    "fallback": 0
+   },
+   "min_clearance": 5.1420163579764245e-12,
+   "prec": 256,
+   "time_s": 0.026
+  },
+  {
+   "index": 139,
+   "id": "sphere/6/15",
+   "rho_cert": 2.022033550642387,
+   "certified": true,
+   "stats": {
+    "far": 74,
+    "witness": 31,
+    "fallback": 0
+   },
+   "min_clearance": 4.911966148896405e-12,
+   "prec": 256,
+   "time_s": 0.029
+  },
+  {
+   "index": 140,
+   "id": "sphere/6/16",
+   "rho_cert": 2.072961518943435,
+   "certified": true,
+   "stats": {
+    "far": 88,
+    "witness": 32,
+    "fallback": 0
+   },
+   "min_clearance": 4.755738471623782e-12,
+   "prec": 256,
+   "time_s": 0.03
+  },
+  {
+   "index": 141,
+   "id": "sphere/6/17",
+   "rho_cert": 2.127019229266689,
+   "certified": true,
+   "stats": {
+    "far": 98,
+    "witness": 38,
+    "fallback": 0
+   },
+   "min_clearance": 4.601655328542977e-12,
+   "prec": 256,
+   "time_s": 0.034
+  },
+  {
+   "index": 142,
+   "id": "sphere/6/18",
+   "rho_cert": 2.179621620130294,
+   "certified": true,
+   "stats": {
+    "far": 113,
+    "witness": 40,
+    "fallback": 0
+   },
+   "min_clearance": 4.461723205684966e-12,
+   "prec": 256,
+   "time_s": 0.036
+  },
+  {
+   "index": 143,
+   "id": "sphere/6/19",
+   "rho_cert": 2.250592992751409,
+   "certified": true,
+   "stats": {
+    "far": 129,
+    "witness": 42,
+    "fallback": 0
+   },
+   "min_clearance": 4.286950362548443e-12,
+   "prec": 256,
+   "time_s": 0.039
+  },
+  {
+   "index": 144,
+   "id": "sphere/6/20",
+   "rho_cert": 2.2741480613894995,
+   "certified": true,
+   "stats": {
+    "far": 145,
+    "witness": 45,
+    "fallback": 0
+   },
+   "min_clearance": 4.2319893565892005e-12,
+   "prec": 256,
+   "time_s": 0.04
+  },
+  {
+   "index": 145,
+   "id": "sphere/6/21",
+   "rho_cert": 2.3492789383619,
+   "certified": true,
+   "stats": {
+    "far": 165,
+    "witness": 45,
+    "fallback": 0
+   },
+   "min_clearance": 4.067523014471849e-12,
+   "prec": 256,
+   "time_s": 0.041
+  },
+  {
+   "index": 146,
+   "id": "sphere/6/22",
+   "rho_cert": 2.399463632984058,
+   "certified": true,
+   "stats": {
+    "far": 181,
+    "witness": 50,
+    "fallback": 0
+   },
+   "min_clearance": 3.964735003883461e-12,
+   "prec": 256,
+   "time_s": 0.044
+  },
+  {
+   "index": 147,
+   "id": "sphere/6/23",
+   "rho_cert": 2.445827295787933,
+   "certified": true,
+   "stats": {
+    "far": 199,
+    "witness": 54,
+    "fallback": 0
+   },
+   "min_clearance": 3.874758570483698e-12,
+   "prec": 256,
+   "time_s": 0.047
+  },
+  {
+   "index": 148,
+   "id": "sphere/6/24",
+   "rho_cert": 2.455136290545453,
+   "certified": true,
+   "stats": {
+    "far": 216,
+    "witness": 60,
+    "fallback": 0
+   },
+   "min_clearance": 3.8572197263248374e-12,
+   "prec": 256,
+   "time_s": 0.051
+  },
+  {
+   "index": 149,
+   "id": "sphere/6/25",
+   "rho_cert": 2.5582262878253914,
+   "certified": true,
+   "stats": {
+    "far": 245,
+    "witness": 55,
+    "fallback": 0
+   },
+   "min_clearance": 3.6737658593458004e-12,
+   "prec": 256,
+   "time_s": 0.05
+  },
+  {
+   "index": 150,
+   "id": "sphere/6/26",
+   "rho_cert": 2.5867952084765324,
+   "certified": true,
+   "stats": {
+    "far": 269,
+    "witness": 56,
+    "fallback": 0
+   },
+   "min_clearance": 3.6261912360558733e-12,
+   "prec": 256,
+   "time_s": 0.051
+  },
+  {
+   "index": 151,
+   "id": "sphere/6/27",
+   "rho_cert": 2.6165511178375014,
+   "certified": true,
+   "stats": {
+    "far": 292,
+    "witness": 59,
+    "fallback": 0
+   },
+   "min_clearance": 3.5780597175788494e-12,
+   "prec": 256,
+   "time_s": 0.054
+  },
+  {
+   "index": 152,
+   "id": "sphere/6/28",
+   "rho_cert": 2.6949446247093847,
+   "certified": true,
+   "stats": {
+    "far": 317,
+    "witness": 61,
+    "fallback": 0
+   },
+   "min_clearance": 3.4577581932588405e-12,
+   "prec": 256,
+   "time_s": 0.056
+  },
+  {
+   "index": 153,
+   "id": "sphere/6/29",
+   "rho_cert": 2.7332903701512477,
+   "certified": true,
+   "stats": {
+    "far": 343,
+    "witness": 63,
+    "fallback": 0
+   },
+   "min_clearance": 3.4019581022068943e-12,
+   "prec": 256,
+   "time_s": 0.059
+  },
+  {
+   "index": 154,
+   "id": "sphere/6/30",
+   "rho_cert": 2.746907085927957,
+   "certified": true,
+   "stats": {
+    "far": 366,
+    "witness": 69,
+    "fallback": 0
+   },
+   "min_clearance": 3.3824816595768472e-12,
+   "prec": 256,
+   "time_s": 0.061
+  },
+  {
+   "index": 155,
+   "id": "sphere/8/2",
+   "rho_cert": 1.2732395447478952,
+   "certified": true,
+   "stats": {
+    "far": 1,
+    "witness": 0,
+    "fallback": 0
+   },
+   "min_clearance": null,
+   "prec": 256,
+   "time_s": 0.007
+  },
+  {
+   "index": 156,
+   "id": "sphere/8/3",
+   "rho_cert": 1.4517095954561685,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 3,
+    "fallback": 0
+   },
+   "min_clearance": 1.7668644654872262e-11,
+   "prec": 256,
+   "time_s": 0.01
+  },
+  {
+   "index": 157,
+   "id": "sphere/8/4",
+   "rho_cert": 1.543761454291234,
+   "certified": true,
+   "stats": {
+    "far": 0,
+    "witness": 6,
+    "fallback": 0
+   },
+   "min_clearance": 1.4080499313296213e-11,
+   "prec": 256,
+   "time_s": 0.012
+  },
+  {
+   "index": 158,
+   "id": "sphere/8/5",
+   "rho_cert": 1.7548531461087014,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 7,
+    "fallback": 0
+   },
+   "min_clearance": 1.0136621792125079e-11,
+   "prec": 256,
+   "time_s": 0.014
+  },
+  {
+   "index": 159,
+   "id": "sphere/8/6",
+   "rho_cert": 1.7548531461087018,
+   "certified": true,
+   "stats": {
+    "far": 3,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 1.0136548764874998e-11,
+   "prec": 256,
+   "time_s": 0.017
+  },
+  {
+   "index": 160,
+   "id": "sphere/8/7",
+   "rho_cert": 1.9885389943335032,
+   "certified": true,
+   "stats": {
+    "far": 9,
+    "witness": 12,
+    "fallback": 0
+   },
+   "min_clearance": 7.989282553245862e-12,
+   "prec": 256,
+   "time_s": 0.018
+  },
+  {
+   "index": 161,
+   "id": "sphere/8/8",
+   "rho_cert": 2.0590348219001013,
+   "certified": true,
+   "stats": {
+    "far": 12,
+    "witness": 16,
+    "fallback": 0
+   },
+   "min_clearance": 7.536166971520918e-12,
+   "prec": 256,
+   "time_s": 0.021
+  },
+  {
+   "index": 162,
+   "id": "sphere/8/9",
+   "rho_cert": 2.1642538959028945,
+   "certified": true,
+   "stats": {
+    "far": 18,
+    "witness": 18,
+    "fallback": 0
+   },
+   "min_clearance": 6.961242654118132e-12,
+   "prec": 256,
+   "time_s": 0.024
+  },
+  {
+   "index": 163,
+   "id": "sphere/8/10",
+   "rho_cert": 2.2673163828626945,
+   "certified": true,
+   "stats": {
+    "far": 29,
+    "witness": 16,
+    "fallback": 0
+   },
+   "min_clearance": 6.488508428592368e-12,
+   "prec": 256,
+   "time_s": 0.023
+  },
+  {
+   "index": 164,
+   "id": "sphere/8/11",
+   "rho_cert": 2.3810744413297837,
+   "certified": true,
+   "stats": {
+    "far": 30,
+    "witness": 25,
+    "fallback": 0
+   },
+   "min_clearance": 6.045166167133025e-12,
+   "prec": 256,
+   "time_s": 0.029
+  },
+  {
+   "index": 165,
+   "id": "sphere/8/12",
+   "rho_cert": 2.385525981807115,
+   "certified": true,
+   "stats": {
+    "far": 36,
+    "witness": 30,
+    "fallback": 0
+   },
+   "min_clearance": 6.029452151734561e-12,
+   "prec": 256,
+   "time_s": 0.034
+  }
+ ]
+}

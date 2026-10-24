@@ -1,0 +1,65 @@
+{
+ "family": "sq",
+ "N": 4,
+ "P": 2,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 86,
+  "bounding_disk_separated": 56,
+  "explicit_axis_separated": 4,
+  "X1": "1.0",
+  "X2": "1.0"
+ },
+ "min_clearance_lb": "1.0000479e-12",
+ "score_cert_upper": "1.414213562374509359036996",
+ "score_upper_float": 1.4142135623745096,
+ "explicit": [
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    -1,
+    -1
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "1.00005e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "1.00005e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    0,
+    -1
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "1.00005e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "1.00005e-12"
+  }
+ ],
+ "score_cert_checked": 1.4142135623745096
+}

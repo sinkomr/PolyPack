@@ -1,0 +1,7 @@
+Fixtures for python/sphere/test_certify.py (command-line certifier regressions).
+
+review_noconfig.json, review_junkrec.json, review_configlist.json, review_certlist.json are copied
+unchanged from the independent review of the whole-sphere build (2026-10-24). Each holds a valid-looking first record (minimal, without display or
+status, so it fails the published-record checks too) and a malformed one: config null or missing
+(D1), a non-object record, "config": [1], "certificate": [1, 2] (D2). The certifier must count every
+record, report the failures without a traceback, and exit with status 1.

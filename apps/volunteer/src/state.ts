@@ -3,8 +3,15 @@
  *
  *   lock            the running copy's pid, host and start time; a second copy refuses to start
  *   memory.json     the engine's memory, rewritten atomically after each problem
- *   history.jsonl   one line per problem searched (HistoryLine), kept to the last 20,000
+ *   history.jsonl   one line per problem searched (HistoryLine, or SpaceHistoryLine for a problem
+ *                   of the new spaces), kept to the last 20,000
  *   best/N-M-P.json the best strict packing this machine found for a problem, with its provenance
+ *   best/spaces/<id with / as _>.json
+ *                   the same for a problem of the new spaces (SpaceBestFile), written only when
+ *                   --spaces is used
+ *
+ * A space line has `space` and `id` and no M, so a client older than the spaces option skips it
+ * (it keeps only lines with integer N, M and P), and this one reads older files unchanged.
  *
  * Every whole-file write goes to a temporary file that is then renamed over the target, so that an
  * interruption leaves either the old file or the new one, never half of one.
@@ -28,7 +35,10 @@ import {
 import { hostname } from "node:os";
 import { join } from "node:path";
 import type { PackingConfig } from "@polypack/geometry";
+import { type SpaceConfig, type SpaceName, isSpaceName } from "@polypack/spaces";
 import { problemKey } from "./format";
+import type { SpaceCandidate } from "./spaces/engine";
+import { type SpaceProblem, readSpaceConfig } from "./spaces/model";
 import type { Candidate, Problem } from "./types";
 import { isFiniteNumber, readPieces } from "./validate";
 
@@ -333,20 +343,117 @@ export function candidateOf(f: BestFile): Candidate {
   };
 }
 
+/** The best of a space problem when a search began or ended: the research record or a site entry. */
+export interface SpaceLeaderRef {
+  /** Site entry id; null for the research record. */
+  id: number | null;
+  score: number;
+  source: "certified" | "site";
+  name?: string;
+}
+
+/** One line of history.jsonl: one problem of the new spaces searched. */
+export interface SpaceHistoryLine {
+  time: string;
+  space: SpaceName;
+  /** The problem id, e.g. "sphere/4/12". */
+  id: string;
+  P: number;
+  priority: number | null;
+  leader_before: SpaceLeaderRef | null;
+  leader_after: SpaceLeaderRef | null;
+  bound: number | null;
+  best: HistoryLine["best"];
+  jobs: number;
+  stopped: string;
+  active_s: number;
+  engine_seed: number;
+  dry_run: boolean;
+  submitted: boolean;
+  decision: string;
+  status: number | null;
+  response: {
+    valid: boolean;
+    leader: boolean;
+    score: number | null;
+    best_score: number | null;
+    id: number | null;
+    beats_certified: boolean;
+    reasons: string[];
+  } | null;
+  version: string;
+}
+
+export type AnyHistoryLine = HistoryLine | SpaceHistoryLine;
+
+export const isSpaceLine = (line: AnyHistoryLine): line is SpaceHistoryLine => "space" in line;
+
+/** The key a line's problem has in the skip and recent-search maps: N-M-P, or the space problem id. */
+export const historyKey = (line: AnyHistoryLine) => (isSpaceLine(line) ? line.id : problemKey(line));
+
+/** best/spaces/<id>.json. */
+export interface SpaceBestFile {
+  space: SpaceName;
+  id: string;
+  P: number;
+  score: number;
+  method: string;
+  seed: number;
+  budget: { time_s: number; evals?: number };
+  kind: string;
+  found_at: string;
+  version: string;
+  config: SpaceConfig;
+}
+
+export function spaceBestFileOf(c: SpaceCandidate, P: number, version: string, at = new Date()): SpaceBestFile {
+  return {
+    space: c.job.space,
+    id: c.job.id,
+    P,
+    score: c.score,
+    method: c.job.method,
+    seed: c.job.seed,
+    budget: { ...c.job.budget },
+    kind: c.job.kind,
+    found_at: at.toISOString(),
+    version,
+    config: c.config,
+  };
+}
+
+export function spaceCandidateOf(f: SpaceBestFile): SpaceCandidate {
+  return {
+    config: f.config,
+    score: f.score,
+    job: {
+      space: f.space,
+      id: f.id,
+      method: f.method,
+      seed: f.seed,
+      budget: { ...f.budget },
+      kind: f.kind as SpaceCandidate["job"]["kind"],
+    },
+  };
+}
+
 /** Lines history.jsonl is cut back to: at a few problems an hour, months of searches. */
 export const MAX_HISTORY_LINES = 20_000;
 /** Temporary files older than this are left over from a crash. */
 const STALE_TMP_MS = 10 * 60_000;
 
-function parseHistory(text: string): { lines: HistoryLine[]; count: number } {
-  const lines: HistoryLine[] = [];
+function parseHistory(text: string): { lines: AnyHistoryLine[]; count: number } {
+  const lines: AnyHistoryLine[] = [];
   let count = 0;
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     count++;
     try {
       const v = JSON.parse(line);
-      if (Number.isInteger(v?.N) && Number.isInteger(v?.M) && Number.isInteger(v?.P)) lines.push(v);
+      if (v === null || typeof v !== "object") continue;
+      if ("space" in v) {
+        if (isSpaceName(v.space) && typeof v.id === "string" && Number.isInteger(v.P)) lines.push(v);
+      } else if (Number.isInteger(v.N) && Number.isInteger(v.M) && Number.isInteger(v.P)) lines.push(v);
     } catch {
       // a line cut short by a crash
     }
@@ -354,9 +461,14 @@ function parseHistory(text: string): { lines: HistoryLine[]; count: number } {
   return { lines, count };
 }
 
+const polygonLines = (lines: AnyHistoryLine[]) => lines.filter((l): l is HistoryLine => !isSpaceLine(l));
+const spaceLines = (lines: AnyHistoryLine[]) => lines.filter(isSpaceLine);
+
 export class StateDir {
-  /** history.jsonl as it was read when the directory was opened, oldest first. */
+  /** history.jsonl's polygon lines as they were read when the directory was opened, oldest first. */
   readonly initialHistory: HistoryLine[];
+  /** Its lines of the new spaces, oldest first. */
+  readonly initialSpaceHistory: SpaceHistoryLine[];
   private historyCount: number;
 
   private constructor(
@@ -366,7 +478,8 @@ export class StateDir {
   ) {
     this.removeStaleTemporaryFiles();
     const { lines, count } = this.loadHistory();
-    this.initialHistory = lines;
+    this.initialHistory = polygonLines(lines);
+    this.initialSpaceHistory = spaceLines(lines);
     this.historyCount = count;
   }
 
@@ -391,10 +504,14 @@ export class StateDir {
   bestPath(p: Problem): string {
     return join(this.dir, "best", `${problemKey(p)}.json`);
   }
+  /** The id has passed parseSpaceId, so it holds only letters, digits, ".", "-", "+" and "/". */
+  spaceBestPath(id: string): string {
+    return join(this.dir, "best", "spaces", `${id.replaceAll("/", "_")}.json`);
+  }
 
   /** Removes *.tmp files that a crash left behind; a fresh one may be another copy's lock in progress. */
   private removeStaleTemporaryFiles(): void {
-    for (const sub of [this.dir, join(this.dir, "best")]) {
+    for (const sub of [this.dir, join(this.dir, "best"), join(this.dir, "best", "spaces")]) {
       let names: string[];
       try {
         names = readdirSync(sub);
@@ -414,7 +531,7 @@ export class StateDir {
   }
 
   /** Reads history.jsonl once: mends a line cut short by a crash and cuts the file back when long. */
-  private loadHistory(): { lines: HistoryLine[]; count: number } {
+  private loadHistory(): { lines: AnyHistoryLine[]; count: number } {
     let text: string;
     try {
       text = readFileSync(this.historyPath, "utf8");
@@ -428,8 +545,8 @@ export class StateDir {
     return parsed;
   }
 
-  /** Keeps the last maxHistory readable lines. */
-  private compact(lines: HistoryLine[]): { lines: HistoryLine[]; count: number } {
+  /** Keeps the last maxHistory readable lines, of both kinds. */
+  private compact(lines: AnyHistoryLine[]): { lines: AnyHistoryLine[]; count: number } {
     const kept = lines.slice(-this.maxHistory);
     writeFileAtomic(this.historyPath, kept.map((l) => JSON.stringify(l) + "\n").join(""));
     return { lines: kept, count: kept.length };
@@ -448,20 +565,30 @@ export class StateDir {
     writeFileAtomic(this.memoryPath, (JSON.stringify(memory) ?? "null") + "\n");
   }
 
-  appendHistory(line: HistoryLine): void {
+  appendHistory(line: AnyHistoryLine): void {
     appendFileSync(this.historyPath, JSON.stringify(line) + "\n");
     // cut back now and then while running, not after every line
     if (++this.historyCount > this.maxHistory + Math.max(1, Math.floor(this.maxHistory / 20)))
-      this.historyCount = this.compact(this.readHistory()).count;
+      this.historyCount = this.compact(this.readAllHistory()).count;
   }
 
-  /** Every readable line of history.jsonl, oldest first. */
-  readHistory(): HistoryLine[] {
+  /** Every readable line of history.jsonl, of both kinds, oldest first. */
+  readAllHistory(): AnyHistoryLine[] {
     try {
       return parseHistory(readFileSync(this.historyPath, "utf8")).lines;
     } catch {
       return [];
     }
+  }
+
+  /** Every readable polygon line of history.jsonl, oldest first. */
+  readHistory(): HistoryLine[] {
+    return polygonLines(this.readAllHistory());
+  }
+
+  /** Every readable line of the new spaces, oldest first. */
+  readSpaceHistory(): SpaceHistoryLine[] {
+    return spaceLines(this.readAllHistory());
   }
 
   /** The kept packing of a problem, or null when there is none or it does not fit the problem. */
@@ -497,6 +624,37 @@ export class StateDir {
 
   writeBest(f: BestFile): void {
     writeFileAtomic(this.bestPath(f), JSON.stringify(f, null, 1) + "\n");
+  }
+
+  /** The kept configuration of a space problem, or null when there is none or it does not fit. */
+  readSpaceBest(p: SpaceProblem): SpaceBestFile | null {
+    try {
+      const f = JSON.parse(readFileSync(this.spaceBestPath(p.id), "utf8")) as SpaceBestFile;
+      const b = f?.budget;
+      const config = readSpaceConfig(p, f?.config);
+      const ok =
+        f.space === p.space &&
+        f.id === p.id &&
+        f.P === p.P &&
+        config !== null &&
+        isFiniteNumber(f.score) &&
+        f.score > 0 &&
+        typeof f.method === "string" &&
+        typeof f.kind === "string" &&
+        Number.isSafeInteger(f.seed) &&
+        f.seed >= 0 &&
+        isFiniteNumber(b?.time_s) &&
+        b.time_s >= 0 &&
+        (b.evals === undefined || (Number.isSafeInteger(b.evals) && b.evals > 0));
+      return ok ? { ...f, config } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  writeSpaceBest(f: SpaceBestFile): void {
+    mkdirSync(join(this.dir, "best", "spaces"), { recursive: true });
+    writeFileAtomic(this.spaceBestPath(f.id), JSON.stringify(f, null, 1) + "\n");
   }
 
   close(): void {

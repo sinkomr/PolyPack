@@ -8,6 +8,7 @@ import {
   ProblemInfo,
   SubmitResponse,
 } from "@polypack/geometry";
+import type { SpaceName, SpaceRecordsResponse, SpacesResponse } from "@polypack/spaces";
 
 async function getJson<T>(url: string): Promise<T | null> {
   try {
@@ -43,6 +44,13 @@ export const getHolders = () => getJson<HoldersResponse>("/api/holders");
 /** Drawable packings for P in [from, to]; `next` in the answer says where a shortened answer stopped. */
 export const getAtlas = (N: number, M: number, from: number, to: number) =>
   getJson<AtlasResponse>(`/api/atlas?N=${N}&M=${M}&from=${from}&to=${to}`);
+
+/** The spaces beside polygon-in-polygon packing (surfaces, curvature, sphere, tori) and their exhibits. */
+export const getSpaces = () => getJson<SpacesResponse>("/api/spaces");
+
+/** Every problem of one space, with its research value and site best, without configurations. */
+export const getSpaceRecords = (space: SpaceName) =>
+  getJson<SpaceRecordsResponse>(`/api/spaces/${encodeURIComponent(space)}/records`);
 
 /** POST /api/submit: a configuration with its name, note and how it was found (see submissionFields). */
 export async function submit(

@@ -1,0 +1,16 @@
+free N=4 P=1 score=1.0000000000 dens=1.000000 msep=-2.22e-16 label=random runs=1 hops=0 stop=floor t=0.0
+free N=4 P=2 score=1.4142135624 dens=1.000000 msep=-1.11e-16 label=replicate1 runs=4 hops=0 stop=floor t=1.1
+free N=4 P=3 score=1.7320508076 dens=1.000000 msep=-5.55e-16 label=replicate1 runs=5 hops=0 stop=floor t=5.1
+free N=4 P=4 score=2.0000000000 dens=1.000000 msep=-5.55e-16 label=replicate1 runs=10 hops=0 stop=floor t=2.6
+free N=4 P=5 score=2.2360679775 dens=1.000000 msep=-2.22e-16 label=replicate1 runs=7 hops=0 stop=floor t=2.3
+free N=4 P=6 score=2.4494897428 dens=1.000000 msep=-4.44e-16 label=replicate2 runs=14 hops=0 stop=floor t=3.3
+free N=4 P=7 score=2.6457513111 dens=1.000000 msep=-7.77e-16 label=replicate1 runs=7 hops=0 stop=floor t=4.7
+free N=4 P=8 score=2.8284271247 dens=1.000000 msep=-6.66e-16 label=replicate2 runs=16 hops=0 stop=floor t=4.7
+free N=4 P=9 score=3.0000000000 dens=1.000000 msep=-8.88e-16 label=replicate1 runs=11 hops=0 stop=floor t=4.8
+free N=4 P=10 score=3.1622776602 dens=1.000000 msep=-2.22e-16 label=replicate2 runs=16 hops=0 stop=floor t=3.6
+free N=4 P=11 score=3.3166247904 dens=1.000000 msep=-2.66e-15 label=replicate1 runs=7 hops=0 stop=floor t=6.2
+free N=4 P=12 score=3.4641016151 dens=1.000000 msep=-1.33e-15 label=replicate4 runs=26 hops=0 stop=floor t=11.3
+free N=4 P=13 score=3.6055512755 dens=1.000000 msep=-1.89e-15 label=replicate1 runs=7 hops=0 stop=floor t=26.0
+free N=4 P=14 score=3.7416573868 dens=1.000000 msep=-1.33e-15 label=replicate2 runs=16 hops=0 stop=floor t=13.5
+free N=4 P=15 score=3.8729833462 dens=1.000000 msep=-9.99e-16 label=replicate5 runs=17 hops=0 stop=floor t=22.0
+free N=4 P=16 score=4.0000000000 dens=1.000000 msep=-1.55e-15 label=replicate4 runs=22 hops=0 stop=floor t=9.1

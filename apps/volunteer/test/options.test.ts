@@ -36,6 +36,9 @@ describe("options", () => {
       batteryPause: true,
       priority: "low",
       once: false,
+      // the new spaces are off unless asked for
+      spaces: null,
+      onlySpaces: false,
     } satisfies Options);
   });
 
@@ -86,6 +89,8 @@ describe("options", () => {
       batteryPause: false,
       priority: "normal",
       once: true,
+      spaces: null,
+      onlySpaces: false,
     } satisfies Options);
   });
 

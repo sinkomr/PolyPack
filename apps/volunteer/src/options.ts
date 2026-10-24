@@ -5,6 +5,7 @@
 import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { MAX_PIECES, MAX_SIDES } from "@polypack/geometry";
+import { SPACE_NAMES, type SpaceName } from "@polypack/spaces";
 import { VERSION } from "./version";
 
 export const DEFAULT_BASE = "https://polypack.fly.dev";
@@ -37,6 +38,13 @@ export interface Options {
   batteryPause: boolean;
   priority: "low" | "normal";
   once: boolean;
+  /**
+   * The new spaces whose problems are also searched (--spaces), in the order of SPACE_NAMES; null
+   * when the option is not given: then no space problem is ever fetched or searched.
+   */
+  spaces: SpaceName[] | null;
+  /** --only-spaces: the polygon work list is not used at all. */
+  onlySpaces: boolean;
 }
 
 export type Parsed = { kind: "help" } | { kind: "version" } | { kind: "run"; options: Options };
@@ -67,7 +75,7 @@ Usage: node polypack-volunteer.mjs [options]
   --minutes-per-problem T  most minutes of search per problem, pauses excluded (default ${DEFAULT_MINUTES_PER_PROBLEM})
   --N LIST                 piece shapes, e.g. 0,3-6 (0 = circle; default: all)
   --M LIST                 container shapes, same syntax (default: all)
-  --max-P K                only problems of at most K pieces
+  --max-P K                only problems of at most K pieces (in the spaces too)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most ${MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default ${join(m.homedir, ".polypack-volunteer")})
@@ -76,6 +84,17 @@ Usage: node polypack-volunteer.mjs [options]
   --once                   search one problem, then exit
   --help                   this text
   --version                the version
+
+Optional, off by default: the new spaces (polyhedral surfaces, constant curvature, the whole
+sphere, flat tori; see ${DEFAULT_BASE}/spaces.html).
+Without these options the client never asks for them.
+
+  --spaces LIST            also search problems of these spaces: surface, curved, sphere, torus,
+                           comma-separated, or all; each next problem comes from the polygon work
+                           list or from the spaces' work list with probability 1/2
+  --only-spaces            search only the spaces given with --spaces
+
+--max-P applies to the spaces too; --N and --M filter only the polygon work list.
 
 Stop it with Ctrl-C: it submits the current problem's best if that beats the leader, saves its
 state and exits within about 30 s. A second Ctrl-C exits at once.
@@ -111,6 +130,20 @@ export function parseIntList(
 
 const isShape = (v: number) => v === 0 || (v >= 3 && v <= MAX_SIDES);
 
+/** "surface,torus" or "all" into the named spaces, in the order of SPACE_NAMES. */
+export function parseSpaces(text: string): SpaceName[] {
+  const parts = text.split(",").map((s) => s.trim().toLowerCase());
+  if (parts.some((s) => s === "")) throw new OptionError(`--spaces: empty item in "${text}"`);
+  if (parts.includes("all")) {
+    if (parts.length > 1) throw new OptionError('--spaces: "all" cannot be combined with other names');
+    return [...SPACE_NAMES];
+  }
+  for (const part of parts)
+    if (!(SPACE_NAMES as readonly string[]).includes(part))
+      throw new OptionError(`--spaces: "${part}" is not one of ${SPACE_NAMES.join(", ")} or all`);
+  return SPACE_NAMES.filter((name) => parts.includes(name));
+}
+
 function positiveInteger(name: string, text: string, max: number): number {
   if (!/^\d{1,9}$/.test(text.trim()) || Number(text) < 1 || Number(text) > max)
     throw new OptionError(`--${name} must be an integer from 1 to ${max}`);
@@ -143,6 +176,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
         "no-battery-pause": { type: "boolean", default: false },
         priority: { type: "string", default: "low" },
         once: { type: "boolean", default: false },
+        spaces: { type: "string" },
+        "only-spaces": { type: "boolean", default: false },
         help: { type: "boolean", default: false },
         version: { type: "boolean", default: false },
       },
@@ -166,6 +201,12 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
     throw new OptionError(`--note is limited to ${MAX_NOTE_LENGTH} characters by the server`);
   if (values.priority !== "low" && values.priority !== "normal")
     throw new OptionError('--priority must be "low" or "normal"');
+  const spaces = values.spaces === undefined ? null : parseSpaces(values.spaces);
+  const onlySpaces = values["only-spaces"];
+  if (onlySpaces && spaces === null)
+    throw new OptionError("--only-spaces needs --spaces LIST (for example --spaces all)");
+  if (onlySpaces && (values.N !== undefined || values.M !== undefined))
+    throw new OptionError("--N and --M filter the polygon work list, which --only-spaces leaves out");
 
   let stateDir = values.state ?? join(machine.homedir, ".polypack-volunteer");
   // a quoted or --state=~/... path reaches us unexpanded
@@ -192,6 +233,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
       batteryPause: !values["no-battery-pause"],
       priority: values.priority,
       once: values.once,
+      spaces,
+      onlySpaces,
     },
   };
 }

@@ -1,0 +1,535 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curved PolyPack Viewer</title>
+    <style>
+      :root {
+        --bg: #fbfaf7;
+        --fg: #1d1d1b;
+        --muted: #6b6a66;
+        --line: #d9d6cf;
+        --panel: #ffffff;
+        --piece: #3b6fb6;
+        --piece-fill: rgba(59, 111, 182, 0.22);
+        --cont: #1d1d1b;
+        --accent: #b5532f;
+        --ideal: #a8a49b;
+        --sel: #f0ece3;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #161615;
+          --fg: #ecebe7;
+          --muted: #a09e98;
+          --line: #3a3936;
+          --panel: #1f1f1d;
+          --piece: #7fa8e6;
+          --piece-fill: rgba(127, 168, 230, 0.22);
+          --cont: #ecebe7;
+          --accent: #e08a62;
+          --ideal: #5c5a55;
+          --sel: #2a2926;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #161615;
+        --fg: #ecebe7;
+        --muted: #a09e98;
+        --line: #3a3936;
+        --panel: #1f1f1d;
+        --piece: #7fa8e6;
+        --piece-fill: rgba(127, 168, 230, 0.22);
+        --cont: #ecebe7;
+        --accent: #e08a62;
+        --ideal: #5c5a55;
+        --sel: #2a2926;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          15px/1.45 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        padding: 14px 16px 6px;
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0 0 4px;
+        font-weight: 650;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 16px;
+        padding: 8px 16px 24px;
+      }
+      @media (max-width: 860px) {
+        main {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      label {
+        font-size: 13px;
+        color: var(--muted);
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      select,
+      button,
+      input[type="range"] {
+        font: inherit;
+        font-size: 14px;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px 8px;
+      }
+      button[aria-pressed="true"] {
+        background: var(--sel);
+        border-color: var(--fg);
+      }
+      #view {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        display: block;
+        max-height: 78vh;
+      }
+      .facts {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 3px 10px;
+        font-size: 13px;
+        margin-top: 10px;
+      }
+      .facts dt {
+        color: var(--muted);
+      }
+      .facts dd {
+        margin: 0;
+        font-variant-numeric: tabular-nums;
+        word-break: break-word;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 13px;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 3px 6px;
+        border-bottom: 1px solid var(--line);
+      }
+      tbody tr {
+        cursor: pointer;
+      }
+      tbody tr:hover,
+      tbody tr.sel {
+        background: var(--sel);
+      }
+      .scroll {
+        max-height: 62vh;
+        overflow: auto;
+      }
+      .tag {
+        font-size: 11px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--piece);
+      }
+      .bad {
+        color: var(--accent);
+      }
+      h2 {
+        font-size: 15px;
+        margin: 4px 0 8px;
+      }
+      .note {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Curved PolyPack</h1>
+      <div class="sub">
+        Unit pieces in regular containers at constant curvature K. Every packing listed is certified by interval
+        arithmetic. Pick a problem in the table.
+      </div>
+    </header>
+    <main>
+      <section class="card">
+        <div class="controls">
+          <label
+            >K
+            <select id="selK"></select
+          ></label>
+          <label
+            >pieces
+            <select id="selN"></select
+          ></label>
+          <label
+            >container
+            <select id="selM"></select
+          ></label>
+          <label
+            >P
+            <select id="selP"></select
+          ></label>
+          <span id="modelBtns"></span>
+          <label id="tiltWrap">tilt <input id="tilt" type="range" min="0" max="80" value="0" /></label>
+        </div>
+        <svg id="view" viewBox="-1.08 -1.08 2.16 2.16" role="img" aria-label="packing drawing"></svg>
+        <dl class="facts" id="facts"></dl>
+      </section>
+      <aside class="card">
+        <h2>Records</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>N</th>
+                <th>M</th>
+                <th>P</th>
+                <th>size</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <h2 style="margin-top: 14px">Largest P that fits</h2>
+        <div class="scroll" style="max-height: 30vh">
+          <table>
+            <thead>
+              <tr>
+                <th>K</th>
+                <th>N</th>
+                <th>M</th>
+                <th>found</th>
+                <th>upper bound</th>
+              </tr>
+            </thead>
+            <tbody id="cat"></tbody>
+          </table>
+        </div>
+        <div class="note">
+          N = 0 means disks of radius 1 (pieces) or a disk container (M = 0). Size is the container side s (or radius
+          r), certified and rounded up.
+        </div>
+      </aside>
+    </main>
+    <script id="data" type="application/json">
+      __DATA__
+    </script>
+    <script>
+      "use strict";
+      const DATA = JSON.parse(document.getElementById("data").textContent);
+      const recs = DATA.records.filter((r) => r.config);
+      const NAMES = { 0: "disk", 3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon", 8: "octagon" };
+      const $ = (id) => document.getElementById(id);
+      let model = null;
+
+      // ---- curvature functions (uniform in K) ----
+      function S(t) {
+        if (Math.abs(t) < 1e-8) return 1 - t / 6;
+        const r = Math.sqrt(Math.abs(t));
+        return t > 0 ? Math.sin(r) / r : Math.sinh(r) / r;
+      }
+      function Vf(t) {
+        if (Math.abs(t) < 1e-8) return 0.5 - t / 24;
+        const r = Math.sqrt(Math.abs(t));
+        return t > 0 ? (2 * Math.sin(r / 2) ** 2) / t : (2 * Math.sinh(r / 2) ** 2) / -t;
+      }
+      const cs = (K, x) => 1 - K * x * x * Vf(K * x * x);
+      const sn = (K, x) => x * S(K * x * x);
+      function asn(K, y) {
+        if (K > 0) {
+          const r = Math.sqrt(K);
+          return Math.asin(Math.max(-1, Math.min(1, r * y))) / r;
+        }
+        if (K < 0) {
+          const r = Math.sqrt(-K);
+          return Math.asinh(r * y) / r;
+        }
+        return y;
+      }
+      const tn = (K, x) => sn(K, x) / cs(K, x);
+
+      // homogeneous point v = (v0, v1, v2), Q = v0^2 + K |v|^2
+      function poseApply(K, p, v) {
+        const c = Math.cos(p.theta),
+          s = Math.sin(p.theta);
+        const w0 = v[0],
+          w1 = c * v[1] - s * v[2],
+          w2 = s * v[1] + c * v[2];
+        const D2 = p.x * p.x + p.y * p.y,
+          t = K * D2,
+          Sv = S(t),
+          V = Vf(t),
+          C = 1 - K * D2 * V;
+        const dot = p.x * w1 + p.y * w2;
+        return [C * w0 - K * Sv * dot, Sv * p.x * w0 + w1 - K * V * dot * p.x, Sv * p.y * w0 + w2 - K * V * dot * p.y];
+      }
+      function polar(K, r, a) {
+        return [cs(K, r), sn(K, r) * Math.cos(a), sn(K, r) * Math.sin(a)];
+      }
+      function norm(K, v) {
+        const q = Math.sqrt(v[0] * v[0] + K * (v[1] * v[1] + v[2] * v[2]));
+        return [v[0] / q, v[1] / q, v[2] / q];
+      }
+      // geodesic segment between homogeneous points: straight in the projective chart
+      function segment(K, a, b, n) {
+        const out = [];
+        for (let i = 0; i <= n; i++) {
+          const t = i / n;
+          out.push(norm(K, [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t]));
+        }
+        return out;
+      }
+
+      function pieceOutline(K, N, pose) {
+        if (N === 0) {
+          const pts = [];
+          for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 1, (2 * Math.PI * i) / 96)));
+          return pts;
+        }
+        const R = asn(K, sn(K, 0.5) / Math.sin(Math.PI / N));
+        const vs = [];
+        for (let k = 0; k < N; k++) vs.push(poseApply(K, pose, polar(K, R, Math.PI / 2 + (2 * Math.PI * k) / N)));
+        let pts = [];
+        for (let k = 0; k < N; k++) pts = pts.concat(segment(K, vs[k], vs[(k + 1) % N], 24).slice(0, -1));
+        return pts;
+      }
+      function containerOutline(K, M, size, ideal) {
+        if (M === 0) {
+          const pts = [];
+          for (let i = 0; i < 160; i++) pts.push(polar(K, size, (2 * Math.PI * i) / 160));
+          return pts;
+        }
+        let R;
+        if (ideal) {
+          // ideal vertices sit on the boundary of the Klein disk (chart radius 1/sqrt(-K)); pull them in slightly
+          const vs = [];
+          const k = 0.9999995 / Math.sqrt(-K);
+          for (let j = 0; j < M; j++) {
+            const a = -Math.PI / 2 + Math.PI / M + (2 * Math.PI * j) / M;
+            vs.push([1, k * Math.cos(a), k * Math.sin(a)]);
+          }
+          let pts = [];
+          for (let j = 0; j < M; j++) pts = pts.concat(segment(K, vs[j], vs[(j + 1) % M], 200).slice(0, -1));
+          return pts;
+        }
+        R = asn(K, sn(K, size / 2) / Math.sin(Math.PI / M));
+        const vs = [];
+        for (let k = 0; k < M; k++) vs.push(polar(K, R, -Math.PI / 2 + Math.PI / M + (2 * Math.PI * k) / M));
+        let pts = [];
+        for (let k = 0; k < M; k++) pts = pts.concat(segment(K, vs[k], vs[(k + 1) % M], 64).slice(0, -1));
+        return pts;
+      }
+
+      // display models: each maps a homogeneous point to the plane, with a scale chosen per record
+      const MODELS = {
+        poincare: {
+          name: "Poincare disk",
+          ok: (K) => K < 0,
+          map: (K, v) => {
+            const X0 = v[0],
+              k = Math.sqrt(-K);
+            const q = Math.sqrt(Math.max(1e-300, X0 * X0 + K * (v[1] * v[1] + v[2] * v[2])));
+            const x0 = X0 / q;
+            return [(k * v[1]) / q / (1 + x0), (k * v[2]) / q / (1 + x0)];
+          },
+          unit: true,
+        },
+        klein: {
+          name: "Klein disk",
+          ok: (K) => K < 0,
+          map: (K, v) => {
+            const k = Math.sqrt(-K);
+            return [(k * v[1]) / v[0], (k * v[2]) / v[0]];
+          },
+          unit: true,
+        },
+        globe: {
+          name: "globe",
+          ok: (K) => K > 0,
+          map: (K, v, tilt) => {
+            const k = Math.sqrt(K);
+            const u = norm(K, v);
+            const X = [u[0], k * u[1], k * u[2]];
+            const ct = Math.cos(tilt),
+              st = Math.sin(tilt);
+            const y = X[2] * ct - X[0] * st;
+            const z = X[2] * st + X[0] * ct;
+            return [X[1], y, z];
+          },
+          unit: true,
+        },
+        gnomonic: { name: "gnomonic", ok: (K) => K > 0, map: (K, v) => [v[1] / v[0], v[2] / v[0]], unit: false },
+        flat: { name: "plane", ok: (K) => Math.abs(K) < 1e-3, map: (K, v) => [v[1] / v[0], v[2] / v[0]], unit: false },
+      };
+
+      function pathOf(pts) {
+        return "M" + pts.map((p) => p[0].toFixed(5) + "," + (-p[1]).toFixed(5)).join("L") + "Z";
+      }
+
+      function draw(r) {
+        const svg = $("view");
+        const K = r.K,
+          N = r.N,
+          M = r.M;
+        const avail = Object.keys(MODELS).filter((k) => MODELS[k].ok(K));
+        if (!model || !MODELS[model].ok(K)) model = avail[0];
+        $("modelBtns").innerHTML = avail
+          .map((k) => `<button data-m="${k}" aria-pressed="${k === model}">${MODELS[k].name}</button>`)
+          .join(" ");
+        $("modelBtns")
+          .querySelectorAll("button")
+          .forEach((b) =>
+            b.addEventListener("click", () => {
+              model = b.dataset.m;
+              draw(r);
+            }),
+          );
+        $("tiltWrap").style.display = model === "globe" ? "" : "none";
+        const m = MODELS[model];
+        const tilt = (Number($("tilt").value) * Math.PI) / 180;
+        const map = (v) => m.map(K, v, tilt);
+        const cont = containerOutline(K, M, r.config.size, false).map(map);
+        const pieces = r.config.pieces.map((p) => pieceOutline(K, N, p).map(map));
+        let scale = 1;
+        if (!m.unit) {
+          let ext = 0;
+          for (const p of cont) ext = Math.max(ext, Math.abs(p[0]), Math.abs(p[1]));
+          scale = 1 / ext;
+        }
+        const sc = (pts) => pts.map((p) => [p[0] * scale, p[1] * scale, p[2]]);
+        let html = "";
+        if (m.unit) html += `<circle cx="0" cy="0" r="1" fill="none" stroke="var(--ideal)" stroke-width="0.004"/>`;
+        if (K < 0 && M > 0 && m.unit)
+          html += `<path d="${pathOf(containerOutline(K, M, 0, true).map(map))}" fill="none" stroke="var(--ideal)" stroke-width="0.004" stroke-dasharray="0.02 0.015"/>`;
+        html += `<path d="${pathOf(sc(cont))}" fill="none" stroke="var(--cont)" stroke-width="0.008"/>`;
+        for (const pp of pieces) {
+          const q = sc(pp);
+          const hidden = model === "globe" && q.some((p) => p[2] < 0);
+          html += `<path d="${pathOf(q)}" fill="var(--piece-fill)" stroke="var(--piece)" stroke-width="0.005" ${hidden ? 'opacity="0.35"' : ""}/>`;
+        }
+        svg.innerHTML = html;
+        const f = [
+          ["problem", r.id],
+          ["pieces", `${r.P} unit ${NAMES[N] || N + "-gon"}${r.P > 1 ? "s" : ""}`],
+          ["container", M === 0 ? "disk, radius r" : `regular ${M}-gon, side s`],
+          ["size (certified)", r.display],
+          ["touching limit", r.score_float.toPrecision(12)],
+          [
+            "certified",
+            r.certified ? '<span class="ok">yes</span> (interval arithmetic)' : '<span class="bad">no</span>',
+          ],
+          ["lower bound", `${r.bound.lower.toFixed(6)} (${r.bound.kind})`],
+          [
+            "Euclidean record",
+            r.euclidean_record ? `${r.euclidean_record.value} (${r.euclidean_record.status})` : "none",
+          ],
+          [
+            "ds/dK",
+            r.sensitivity && r.sensitivity.dsdK_envelope != null ? r.sensitivity.dsdK_envelope.toFixed(5) : "n/a",
+          ],
+        ];
+        if (r.notes) f.push(["notes", r.notes]);
+        $("facts").innerHTML = f.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join("");
+        document.querySelectorAll("#rows tr").forEach((tr) => tr.classList.toggle("sel", tr.dataset.id === r.id));
+      }
+
+      function uniq(a) {
+        return [...new Set(a)].sort((x, y) => x - y);
+      }
+      function fill(sel, vals, cur, label) {
+        sel.innerHTML = vals
+          .map((v) => `<option value="${v}" ${v === cur ? "selected" : ""}>${label ? label(v) : v}</option>`)
+          .join("");
+      }
+      let cur = recs.find((r) => r.K === -1 && r.N === 3 && r.M === 4 && r.P === 5) || recs[0];
+      function sync() {
+        const Ks = uniq(recs.map((r) => r.K));
+        fill($("selK"), Ks, cur.K);
+        const Ns = uniq(recs.filter((r) => r.K === cur.K).map((r) => r.N));
+        fill($("selN"), Ns, cur.N, (v) => NAMES[v] || v);
+        const Ms = uniq(recs.filter((r) => r.K === cur.K && r.N === cur.N).map((r) => r.M));
+        fill($("selM"), Ms, cur.M, (v) => (v === 0 ? "disk" : v + "-gon"));
+        const Ps = uniq(recs.filter((r) => r.K === cur.K && r.N === cur.N && r.M === cur.M).map((r) => r.P));
+        fill($("selP"), Ps, cur.P);
+        draw(cur);
+      }
+      function pick(K, N, M, P) {
+        const c = recs.filter((r) => r.K === K && (N == null || r.N === N) && (M == null || r.M === M));
+        cur = c.find((r) => r.P === P) || c[0] || cur;
+        sync();
+      }
+      $("selK").addEventListener("change", (e) => pick(Number(e.target.value), cur.N, cur.M, cur.P));
+      $("selN").addEventListener("change", (e) => pick(cur.K, Number(e.target.value), cur.M, cur.P));
+      $("selM").addEventListener("change", (e) => pick(cur.K, cur.N, Number(e.target.value), cur.P));
+      $("selP").addEventListener("change", (e) => pick(cur.K, cur.N, cur.M, Number(e.target.value)));
+      $("tilt").addEventListener("input", () => draw(cur));
+      $("rows").innerHTML = recs
+        .map(
+          (r) =>
+            `<tr data-id="${r.id}"><td>${r.K}</td><td>${r.N}</td><td>${r.M}</td><td>${r.P}</td><td>${r.display}</td><td>${r.certified ? '<span class="tag">cert</span>' : ""}</td></tr>`,
+        )
+        .join("");
+      $("rows")
+        .querySelectorAll("tr")
+        .forEach((tr) =>
+          tr.addEventListener("click", () => {
+            cur = recs.find((r) => r.id === tr.dataset.id);
+            sync();
+          }),
+        );
+      $("cat").innerHTML = (DATA.catalogue || [])
+        .filter((c) => c.M !== 0)
+        .map(
+          (c) =>
+            `<tr><td>${c.K}</td><td>${c.N}</td><td>${c.M}</td><td>${c.P_max_found}</td><td>${c.P_max_upper == null ? "" : c.P_max_upper}${c.exact ? " (exact)" : ""}</td></tr>`,
+        )
+        .join("");
+      sync();
+    </script>
+  </body>
+</html>

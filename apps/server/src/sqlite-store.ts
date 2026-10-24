@@ -5,9 +5,15 @@ import {
   EntryEdit,
   GET_MANY_LIMIT,
   KEEP_PER_PROBLEM,
+  NewSpaceEntry,
   NewSubmission,
   ProblemLeader,
+  SpaceEntryEdit,
+  SpaceLeader,
+  SpaceStore,
+  SpaceSubmitted,
   Store,
+  StoredSpaceEntry,
   StoredSubmission,
   Submitted,
 } from "./store";
@@ -72,6 +78,30 @@ const ADDED_COLUMNS: [name: string, type: string][] = [
   ["budget", "TEXT"],
   ["software", "TEXT"],
 ];
+
+/**
+ * Site entries of the spaces (see SpaceStore), in a table of their own that leaves the polygon
+ * tables alone; created when missing, so an older database simply gains it. `config` (the
+ * configuration as JSON text, up to tens of kilobytes) comes last and the index holds every column
+ * that leaders and listings read, so those never walk the configurations.
+ */
+const SPACES_SCHEMA = `
+CREATE TABLE IF NOT EXISTS space_entries (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  space TEXT NOT NULL,
+  problem TEXT NOT NULL,
+  score REAL NOT NULL,
+  name TEXT NOT NULL,
+  agent_note TEXT NOT NULL,
+  software TEXT,
+  method TEXT,
+  seed INTEGER,
+  created_at TEXT NOT NULL,
+  config TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS space_entries_listing ON space_entries (space, problem, score, id, name, created_at);
+`;
+const SPACE_LEADER_COLUMNS = "id, space, problem, score, name, created_at";
 
 /** Small settings of the store itself; for now the progress of the pieces migration. */
 const META = `CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);`;
@@ -143,7 +173,7 @@ function toStored(r: Row): StoredSubmission {
 }
 
 /** SQLite store on Node's built-in driver. Pass ":memory:" for tests. */
-export class SqliteStore implements Store {
+export class SqliteStore implements Store, SpaceStore {
   private db: DatabaseSync;
 
   constructor(path: string) {
@@ -171,6 +201,7 @@ export class SqliteStore implements Store {
         .all(KEEP_PER_PROBLEM) as Row[];
       for (const r of crowded) this.pruneSync(r.n as number, r.m as number, r.p as number);
     }
+    this.db.exec(SPACES_SCHEMA);
   }
 
   async submit(s: NewSubmission): Promise<Submitted> {
@@ -440,6 +471,147 @@ export class SqliteStore implements Store {
     // entry kept behind it as the leader; the prune applies the rule to what remains.
     if (r) this.pruneSync(r.n as number, r.m as number, r.p as number);
     return !!r;
+  }
+
+  async spaceSubmit(e: NewSpaceEntry): Promise<SpaceSubmitted> {
+    // one transaction, as `submit`; every call in it is synchronous
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const before = this.spaceLeaderSync(e.space, e.problem);
+      const r = this.db
+        .prepare(
+          `INSERT INTO space_entries (space, problem, score, name, agent_note, software, method, seed, created_at, config)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(e.space, e.problem, e.score, e.name, e.agent_note, e.software, e.method, e.seed, e.created_at, e.config);
+      const id = Number(r.lastInsertRowid);
+      const leader = this.spaceLeaderSync(e.space, e.problem);
+      const kept = !this.spacePruneSync(e.space, e.problem).includes(id);
+      this.db.exec("COMMIT");
+      return { id, before, leader, kept };
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
+  }
+
+  async spaceGet(id: number): Promise<StoredSpaceEntry | null> {
+    const r = this.db.prepare("SELECT * FROM space_entries WHERE id = ?").get(id) as Row | undefined;
+    if (!r) return null;
+    return {
+      id: r.id as number,
+      space: r.space as string,
+      problem: r.problem as string,
+      score: r.score as number,
+      name: r.name as string,
+      agent_note: r.agent_note as string,
+      software: (r.software ?? null) as string | null,
+      method: (r.method ?? null) as string | null,
+      seed: (r.seed ?? null) as number | null,
+      config: r.config as string,
+      created_at: r.created_at as string,
+    };
+  }
+
+  async spaceLeader(space: string, problem: string): Promise<SpaceLeader | null> {
+    return this.spaceLeaderSync(space, problem);
+  }
+
+  /** The earliest entry within the tie tolerance of the problem's smallest score (the rule of `leader`). */
+  private spaceLeaderSync(space: string, problem: string): SpaceLeader | null {
+    const r = this.db
+      .prepare(
+        `SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries WHERE space = ? AND problem = ?
+           AND score <= (SELECT MIN(score) FROM space_entries WHERE space = ? AND problem = ?) * (1 + ?)
+         ORDER BY id ASC LIMIT 1`,
+      )
+      .get(space, problem, space, problem, SCORE_TIE);
+    return (r as unknown as SpaceLeader | undefined) ?? null;
+  }
+
+  /** Deletes every entry of a problem but its leader; returns the ids deleted. */
+  private spacePruneSync(space: string, problem: string): number[] {
+    const leader = this.spaceLeaderSync(space, problem);
+    const rows = this.db
+      .prepare("SELECT id FROM space_entries WHERE space = ? AND problem = ? ORDER BY score, id")
+      .all(space, problem) as Row[];
+    const doomed = rows.map((r) => r.id as number).filter((id) => id !== leader?.id);
+    const drop = this.db.prepare("DELETE FROM space_entries WHERE id = ?");
+    for (const id of doomed) drop.run(id);
+    return doomed;
+  }
+
+  /** The leaders of the rows read in (space, problem, score, id) order: per problem the earliest within the tie tolerance of its first. */
+  private spaceLeadersOf(rows: Row[]): SpaceLeader[] {
+    const out: SpaceLeader[] = [];
+    let first: Row | null = null;
+    let leader: Row | null = null;
+    const keep = () => {
+      if (leader)
+        out.push({
+          id: leader.id as number,
+          space: leader.space as string,
+          problem: leader.problem as string,
+          score: leader.score as number,
+          name: leader.name as string,
+          created_at: leader.created_at as string,
+        });
+    };
+    for (const r of rows) {
+      if (!first || r.space !== first.space || r.problem !== first.problem) {
+        keep();
+        first = leader = r;
+      } else if (
+        (r.score as number) <= (first.score as number) * (1 + SCORE_TIE) &&
+        (r.id as number) < (leader!.id as number)
+      )
+        leader = r;
+    }
+    keep();
+    return out;
+  }
+
+  async spaceBest(space: string): Promise<SpaceLeader[]> {
+    const rows = this.db
+      .prepare(`SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries WHERE space = ? ORDER BY space, problem, score, id`)
+      .all(space) as Row[];
+    return this.spaceLeadersOf(rows);
+  }
+
+  async spaceLeaders(): Promise<SpaceLeader[]> {
+    const rows = this.db
+      .prepare(`SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries ORDER BY space, problem, score, id`)
+      .all() as Row[];
+    return this.spaceLeadersOf(rows);
+  }
+
+  async spaceRemove(id: number): Promise<{ space: string; problem: string } | null> {
+    const r = this.db.prepare("DELETE FROM space_entries WHERE id = ? RETURNING space, problem").get(id) as
+      Row | undefined;
+    if (!r) return null;
+    // only the leader is ever kept, so the problem is normally left without an entry; the prune
+    // applies the rule to whatever remains
+    this.spacePruneSync(r.space as string, r.problem as string);
+    return { space: r.space as string, problem: r.problem as string };
+  }
+
+  async spaceEdit(id: number, changes: SpaceEntryEdit): Promise<{ space: string; problem: string } | null> {
+    const sets: string[] = [];
+    const values: string[] = [];
+    if (changes.name !== undefined) {
+      sets.push("name = ?");
+      values.push(changes.name);
+    }
+    if (changes.agent_note !== undefined) {
+      sets.push("agent_note = ?");
+      values.push(changes.agent_note);
+    }
+    const r = sets.length
+      ? (this.db
+          .prepare(`UPDATE space_entries SET ${sets.join(", ")} WHERE id = ? RETURNING space, problem`)
+          .get(...values, id) as Row | undefined)
+      : (this.db.prepare("SELECT space, problem FROM space_entries WHERE id = ?").get(id) as Row | undefined);
+    return r ? { space: r.space as string, problem: r.problem as string } : null;
   }
 
   private getMeta(key: string): number | null {

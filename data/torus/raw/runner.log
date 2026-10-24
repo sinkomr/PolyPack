@@ -1,0 +1,88 @@
+00:59:36 start A ('free', 0) attempt 0
+00:59:36 start A ('free', 3) attempt 0
+00:59:54 end A ('free', 0) attempt 0 rc 0
+00:59:54 start A ('free', 4) attempt 0
+01:00:04 end A ('free', 3) attempt 0 rc -6
+01:00:04 start A ('free', 3) attempt 1
+01:04:27 start A ('free', 0) attempt 0
+01:04:27 start A ('free', 3) attempt 0
+01:04:31 end A ('free', 0) attempt 0 rc 0
+01:04:31 start A ('free', 4) attempt 0
+01:11:16 start A ('free', 0) attempt 0
+01:11:16 start A ('free', 3) attempt 0
+01:11:20 end A ('free', 0) attempt 0 rc 0
+01:11:20 start A ('free', 4) attempt 0
+01:13:23 end A ('free', 4) attempt 0 rc 0
+01:13:23 start A ('free', 5) attempt 0
+01:18:02 end A ('free', 3) attempt 0 rc 0
+01:18:02 start A ('free', 6) attempt 0
+01:21:15 end A ('free', 6) attempt 0 rc 0
+01:21:15 start A ('free', 7) attempt 0
+01:25:30 end A ('free', 5) attempt 0 rc 0
+01:25:30 start A ('free', 8) attempt 0
+01:48:06 start B ('sq', 0) attempt 0
+01:49:17 end B ('sq', 0) attempt 0 rc 0
+01:49:17 start B ('hex', 0) attempt 0
+01:50:32 end B ('hex', 0) attempt 0 rc 0
+01:50:32 start B ('sq', 3) attempt 0
+01:58:25 end B ('sq', 3) attempt 0 rc 0
+02:06:41 start B ('hex', 3) attempt 0
+02:07:41 start B ('sq', 4) attempt 0
+02:14:18 end B ('sq', 4) attempt 0 rc 0
+02:14:18 start B ('hex', 4) attempt 0
+02:15:55 end B ('hex', 3) attempt 0 rc 0
+02:15:55 start B ('sq', 5) attempt 0
+02:22:53 end B ('hex', 4) attempt 0 rc 0
+02:22:53 start B ('hex', 5) attempt 0
+02:26:44 end B ('sq', 5) attempt 0 rc 0
+02:26:44 start B ('sq', 6) attempt 0
+02:31:09 end B ('hex', 5) attempt 0 rc 0
+02:31:09 start B ('hex', 6) attempt 0
+02:32:35 end B ('sq', 6) attempt 0 rc 0
+02:32:35 start B ('sq', 7) attempt 0
+02:35:30 end B ('hex', 6) attempt 0 rc 0
+02:35:30 start B ('hex', 7) attempt 0
+02:42:00 end B ('sq', 7) attempt 0 rc 0
+02:42:00 start B ('sq', 8) attempt 0
+02:45:45 end B ('hex', 7) attempt 0 rc 0
+02:45:45 start B ('hex', 8) attempt 0
+02:50:40 end B ('sq', 8) attempt 0 rc 0
+02:53:48 end B ('hex', 8) attempt 0 rc 0
+02:53:49 start C ('free', 0) attempt 0
+02:53:49 start C ('free', 3) attempt 0
+02:53:53 handover: old runner stopped, starting S,C
+02:53:53 start S ('sq', 0) attempt 0
+02:53:53 start S ('hex', 0) attempt 0
+02:54:09 end S ('sq', 0) attempt 0 rc 0
+02:54:09 start S ('sq', 3) attempt 0
+02:54:18 end S ('hex', 0) attempt 0 rc 0
+02:54:18 start S ('hex', 3) attempt 0
+02:55:14 end S ('sq', 3) attempt 0 rc 0
+02:55:14 start S ('sq', 4) attempt 0
+02:55:32 end S ('hex', 3) attempt 0 rc 0
+02:55:32 start S ('hex', 4) attempt 0
+02:56:16 end S ('sq', 4) attempt 0 rc 0
+02:56:16 start S ('sq', 5) attempt 0
+02:56:40 end S ('hex', 4) attempt 0 rc 0
+02:56:40 start S ('hex', 5) attempt 0
+02:57:36 end S ('sq', 5) attempt 0 rc 0
+02:57:36 start S ('sq', 6) attempt 0
+02:57:52 end S ('hex', 5) attempt 0 rc 0
+02:57:52 start S ('hex', 6) attempt 0
+02:58:35 end S ('sq', 6) attempt 0 rc 0
+02:58:35 start S ('sq', 7) attempt 0
+02:59:09 end S ('hex', 6) attempt 0 rc 0
+02:59:09 start S ('hex', 7) attempt 0
+02:59:53 end S ('sq', 7) attempt 0 rc 0
+02:59:53 start S ('sq', 8) attempt 0
+03:01:29 end S ('sq', 8) attempt 0 rc 0
+03:01:29 start S ('hex', 8) attempt 0
+03:01:31 end S ('hex', 7) attempt 0 rc 0
+03:02:38 end S ('hex', 8) attempt 0 rc 0
+03:02:38 start C ('free', 3) attempt 0
+03:02:38 start C ('free', 5) attempt 0
+03:04:36 end C ('free', 3) attempt 0 rc 0
+03:04:36 start C ('free', 7) attempt 0
+03:05:00 end C ('free', 5) attempt 0 rc 0
+03:09:23 end C ('free', 7) attempt 0 rc 0
+03:09:23 all done

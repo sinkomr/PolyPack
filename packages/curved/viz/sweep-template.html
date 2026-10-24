@@ -1,0 +1,1393 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Curvature Sweeps</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #fbfaf7;
+        --panel: #ffffff;
+        --fg: #0b0b0b;
+        --fg2: #52514e;
+        --muted: #8a8984;
+        --line: #e2dfd8;
+        --grid: #efede8;
+        --accent: #b5532f;
+        --sel: #f0ece3;
+        --s1: #2a78d6;
+        --s2: #eb6834;
+        --s3: #1baf7a;
+        --s4: #eda100;
+        --s5: #e87ba4;
+        --s6: #008300;
+        --s7: #6250d6;
+        --s8: #e34948;
+        --rattler: #a8a6a0;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          color-scheme: dark;
+          --bg: #141413;
+          --panel: #1a1a19;
+          --fg: #f0efec;
+          --fg2: #c3c2b7;
+          --muted: #8f8d86;
+          --line: #34332f;
+          --grid: #252523;
+          --accent: #e08a62;
+          --sel: #2a2926;
+          --s1: #3987e5;
+          --s2: #d95926;
+          --s3: #199e70;
+          --s4: #c98500;
+          --s5: #d55181;
+          --s6: #008300;
+          --s7: #9085e9;
+          --s8: #e66767;
+          --rattler: #6b6a64;
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #141413;
+        --panel: #1a1a19;
+        --fg: #f0efec;
+        --fg2: #c3c2b7;
+        --muted: #8f8d86;
+        --line: #34332f;
+        --grid: #252523;
+        --accent: #e08a62;
+        --sel: #2a2926;
+        --s1: #3987e5;
+        --s2: #d95926;
+        --s3: #199e70;
+        --s4: #c98500;
+        --s5: #d55181;
+        --s6: #008300;
+        --s7: #9085e9;
+        --s8: #e66767;
+        --rattler: #6b6a64;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px/1.45 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        padding: 14px 16px 4px;
+        display: flex;
+        gap: 12px;
+        align-items: baseline;
+        flex-wrap: wrap;
+      }
+      h1 {
+        font-size: 19px;
+        margin: 0;
+        font-weight: 650;
+      }
+      .sub {
+        color: var(--fg2);
+        font-size: 13px;
+        flex: 1 1 320px;
+      }
+      nav {
+        display: flex;
+        gap: 4px;
+        padding: 4px 16px 8px;
+        flex-wrap: wrap;
+      }
+      button,
+      select {
+        font: inherit;
+        color: var(--fg);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 5px 10px;
+        cursor: pointer;
+        min-height: 32px;
+      }
+      button:hover,
+      select:hover {
+        border-color: var(--muted);
+      }
+      button.on {
+        background: var(--sel);
+        border-color: var(--fg2);
+        font-weight: 600;
+      }
+      .seg {
+        display: inline-flex;
+      }
+      .seg button {
+        border-radius: 0;
+        margin-left: -1px;
+      }
+      .seg button:first-child {
+        border-radius: 7px 0 0 7px;
+        margin-left: 0;
+      }
+      .seg button:last-child {
+        border-radius: 0 7px 7px 0;
+      }
+      section {
+        padding: 0 16px 24px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 6px 0;
+      }
+      .grid2 {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 900px) {
+        .grid2 {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px 12px;
+        min-width: 0;
+      }
+      .card h3 {
+        margin: 0 0 4px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--fg2);
+      }
+      svg.plot {
+        width: 100%;
+        display: block;
+        touch-action: none;
+        user-select: none;
+      }
+      svg text {
+        fill: var(--fg2);
+        font-size: 11px;
+      }
+      .axis line,
+      .axis path {
+        stroke: var(--line);
+      }
+      .gridl {
+        stroke: var(--grid);
+      }
+      canvas#cv {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        display: block;
+        border-radius: 8px;
+      }
+      .info {
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 1px 10px;
+      }
+      .info .k {
+        color: var(--fg2);
+      }
+      input[type="range"] {
+        flex: 1 1 200px;
+        accent-color: var(--accent);
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chips button {
+        font-size: 12px;
+        padding: 3px 8px;
+        min-height: 28px;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+        font-variant-numeric: tabular-nums;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 4px 8px 4px 0;
+        border-bottom: 1px solid var(--line);
+        vertical-align: top;
+      }
+      th {
+        color: var(--fg2);
+        font-weight: 600;
+      }
+      tr.click {
+        cursor: pointer;
+      }
+      tr.click:hover {
+        background: var(--sel);
+      }
+      .tblwrap {
+        overflow-x: auto;
+      }
+      .legend {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 12px;
+        color: var(--fg2);
+      }
+      .legend span.sw {
+        display: inline-block;
+        width: 14px;
+        height: 3px;
+        vertical-align: middle;
+        margin-right: 4px;
+        border-radius: 2px;
+      }
+      .tip {
+        position: fixed;
+        pointer-events: none;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 8px;
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+        display: none;
+        z-index: 10;
+        max-width: 280px;
+      }
+      .muted {
+        color: var(--fg2);
+      }
+      .prose {
+        max-width: 820px;
+      }
+      .prose p,
+      .prose li {
+        color: var(--fg);
+      }
+      .atlas-row {
+        display: grid;
+        grid-template-columns: 54px 1fr;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+      }
+      .atlas-row:hover .lbl {
+        color: var(--accent);
+      }
+      .lbl {
+        font-size: 12px;
+        color: var(--fg2);
+        text-align: right;
+      }
+      kbd {
+        font: 11px ui-monospace, monospace;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Curvature sweeps</h1>
+      <div class="sub" id="sub"></div>
+      <button id="theme" title="Toggle light/dark">Theme</button>
+    </header>
+    <nav class="seg" id="tabs">
+      <button data-tab="explore" class="on">Explore</button><button data-tab="atlas">Atlas</button
+      ><button data-tab="about">How it works</button>
+    </nav>
+
+    <section id="explore">
+      <div class="row">
+        <button id="prev" aria-label="Previous problem">&larr;</button>
+        <select id="prob" aria-label="Problem"></select>
+        <button id="next" aria-label="Next problem">&rarr;</button>
+        <span class="seg" id="metric">
+          <button data-m="s" class="on">size s</button><button data-m="d">density</button><button data-m="r">s / s(0)</button>
+        </span>
+        <span class="seg" id="yscale"><button data-y="lin" class="on">linear</button><button data-y="log">log</button></span>
+        <button id="unzoom" title="Reset the K range (or double-click the plot)">Full K range</button>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h3 id="plotTitle">s(K)</h3>
+          <svg class="plot" id="plotS" viewBox="0 0 640 330"></svg>
+          <div class="legend" id="legend"></div>
+          <h3 style="margin-top: 8px">Slope ds/dK along each branch (finite differences; jumps are kinks)</h3>
+          <svg class="plot" id="plotD" viewBox="0 0 640 170"></svg>
+          <div class="muted" style="font-size: 12px">
+            Drag across a plot to zoom in K, double-click to reset. Click to pick K; click near a thin curve to follow that branch.
+          </div>
+        </div>
+        <div class="card">
+          <h3 id="cfgTitle">Configuration</h3>
+          <canvas id="cv"></canvas>
+          <div class="row">
+            <span class="seg" id="model"><button data-v="conf" class="on">conformal</button><button data-v="klein">Klein / gnomonic</button></span>
+            <span class="seg" id="scaleMode"><button data-sc="fixed" class="on">fixed scale</button><button data-sc="fit">fit</button></span>
+            <label style="font-size: 12px"><input type="checkbox" id="showContacts" checked /> contacts</label>
+          </div>
+          <div class="info" id="info"></div>
+        </div>
+      </div>
+      <div class="card" style="margin-top: 12px">
+        <div class="row">
+          <button id="play" style="min-width: 70px">Play</button>
+          <input type="range" id="kslider" min="0" max="1000" value="500" aria-label="Curvature K" />
+          <span id="kval" style="font-variant-numeric: tabular-nums; min-width: 92px"></span>
+        </div>
+        <div class="row">
+          <span class="muted">Follow</span>
+          <select id="follow" aria-label="Follow"></select>
+          <span class="muted">speed</span>
+          <span class="seg" id="speed"><button data-sp="0.5">slow</button><button data-sp="1" class="on">normal</button><button data-sp="3">fast</button></span>
+          <span class="muted" style="font-size: 12px">Keys: <kbd>&larr;</kbd><kbd>&rarr;</kbd> step K, <kbd>space</kbd> play</span>
+        </div>
+        <div class="row"><span class="muted">Jump to event:</span></div>
+        <div class="chips" id="chips"></div>
+      </div>
+      <div class="card" style="margin-top: 12px">
+        <h3>Events</h3>
+        <div class="tblwrap"><table id="evtable"></table></div>
+        <div class="muted" id="certline" style="margin-top: 6px; font-size: 12px"></div>
+      </div>
+    </section>
+
+    <section id="atlas" style="display: none">
+      <div class="row">
+        <span class="muted">Colour by</span>
+        <span class="seg" id="atlasMode"
+          ><button data-a="branch" class="on">configuration</button><button data-a="family">shell structure</button
+          ><button data-a="sym">symmetry</button></span
+        >
+      </div>
+      <div id="atlasBody"></div>
+    </section>
+
+    <section id="about" style="display: none">
+      <div class="prose card" id="aboutText"></div>
+    </section>
+    <div class="tip" id="tip"></div>
+
+    <script>
+      const DATA = __DATA__;
+      // ---------- curvature functions (entire in t = K x^2; never divide by K) ----------
+      function ser(t, first) {
+        let f = 1;
+        for (let i = 2; i <= first; i++) f *= i;
+        let term = 1 / f,
+          sum = term;
+        for (let k = 0; k < 40; k++) {
+          const a = first + 2 * k + 1;
+          term *= -t / (a * (a + 1));
+          sum += term;
+          if (Math.abs(term) < 1e-17 * Math.abs(sum)) break;
+        }
+        return sum;
+      }
+      const Cf = (t) => (Math.abs(t) < 0.5 ? ser(t, 0) : t > 0 ? Math.cos(Math.sqrt(t)) : Math.cosh(Math.sqrt(-t)));
+      const Sf = (t) => {
+        if (Math.abs(t) < 0.5) return ser(t, 1);
+        const r = Math.sqrt(Math.abs(t));
+        return t > 0 ? Math.sin(r) / r : Math.sinh(r) / r;
+      };
+      const Vf = (t) => {
+        if (Math.abs(t) < 0.5) return ser(t, 2);
+        const r = Math.sqrt(Math.abs(t));
+        const s = t > 0 ? Math.sin(r / 2) : Math.sinh(r / 2);
+        return (2 * s * s) / Math.abs(t);
+      };
+      const sn = (K, x) => x * Sf(K * x * x);
+      const cs = (K, x) => Cf(K * x * x);
+      function asn(K, y) {
+        if (K > 0) {
+          const r = Math.sqrt(K);
+          return Math.asin(Math.max(-1, Math.min(1, r * y))) / r;
+        }
+        if (K < 0) {
+          const r = Math.sqrt(-K);
+          return Math.asinh(r * y) / r;
+        }
+        return y;
+      }
+      // pose action G = T(x, y) R(theta) on a homogeneous point v = (v0, v1, v2), Q = v0^2 + K |w|^2
+      function act(K, p, v) {
+        const c = Math.cos(p[2]),
+          s = Math.sin(p[2]);
+        const w1 = c * v[1] - s * v[2],
+          w2 = s * v[1] + c * v[2];
+        const x = p[0],
+          y = p[1],
+          D2 = x * x + y * y,
+          t = K * D2;
+        const S = Sf(t),
+          V = Vf(t),
+          C = 1 - K * D2 * V,
+          dot = x * w1 + y * w2;
+        return [C * v[0] - K * S * dot, S * x * v[0] + w1 - K * V * dot * x, S * y * v[0] + w2 - K * V * dot * y];
+      }
+      const polar = (K, r, a) => [cs(K, r), sn(K, r) * Math.cos(a), sn(K, r) * Math.sin(a)];
+      // conformal model: a point at distance r from O in direction phi goes to radius 2 tn_K(r/2) = 2|w|/(1+v0)
+      // (Poincare disk for K < 0, stereographic projection for K > 0, scaled to be isometric at O)
+      function mapPt(K, v, model) {
+        const q = Math.sqrt(Math.max(1e-300, v[0] * v[0] + K * (v[1] * v[1] + v[2] * v[2])));
+        const v0 = v[0] / q,
+          w1 = v[1] / q,
+          w2 = v[2] / q;
+        if (model === "klein") return [w1 / v0, w2 / v0];
+        return [(2 * w1) / (1 + v0), (2 * w2) / (1 + v0)];
+      }
+      // geodesic between two points: the projective segment (1-u) a + u b, normalised
+      function geodesic(K, a, b, n, model, out) {
+        for (let i = 0; i <= n; i++) {
+          const u = i / n;
+          out.push(mapPt(K, [(1 - u) * a[0] + u * b[0], (1 - u) * a[1] + u * b[1], (1 - u) * a[2] + u * b[2]], model));
+        }
+      }
+      const pieceR = (N, K) => (N === 0 ? 1 : asn(K, sn(K, 0.5) / Math.sin(Math.PI / N)));
+      function containerVerts(M, K, s) {
+        const Rc = asn(K, sn(K, s / 2) / Math.sin(Math.PI / M));
+        const out = [];
+        for (let j = 0; j < M; j++) out.push(polar(K, Rc, -Math.PI / 2 + ((2 * j + 1) * Math.PI) / M));
+        return out;
+      }
+      function containerImageRadius(P, K, s, model) {
+        if (P.M === 0) return Math.hypot(...mapPt(K, polar(K, s, 0), model));
+        const Rc = asn(K, sn(K, s / 2) / Math.sin(Math.PI / P.M));
+        return Math.hypot(...mapPt(K, polar(K, Rc, 0), model));
+      }
+
+      // ---------- state ----------
+      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+      const SLOTS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7", "--s8"];
+      const slotColor = (slot) => (slot < 0 ? css("--rattler") : css(SLOTS[slot % 8]));
+      const slotDash = (slot) => (slot >= 8 ? "5 3" : null);
+      const st = {
+        pi: 0,
+        K: 0,
+        follow: "ground",
+        metric: "s",
+        ylog: false,
+        model: "conf",
+        scale: "fixed",
+        x0: null,
+        x1: null,
+        playing: false,
+        speed: 1,
+        atlas: "branch",
+      };
+      const $ = (id) => document.getElementById(id);
+      const fmt = (v, d = 6) => (Number.isFinite(v) ? v.toFixed(d) : "–");
+      const prob = () => DATA.problems[st.pi];
+
+      // branch sample at K (linear interpolation of size and poses between neighbouring points)
+      function sampleBranch(P, b, K) {
+        const Ks = b.K;
+        if (K < Ks[0] - 1e-12 || K > Ks[Ks.length - 1] + 1e-12) return null;
+        let lo = 0,
+          hi = Ks.length - 1;
+        while (hi - lo > 1) {
+          const m = (lo + hi) >> 1;
+          if (Ks[m] <= K) lo = m;
+          else hi = m;
+        }
+        const u = hi === lo || Ks[hi] === Ks[lo] ? 0 : Math.max(0, Math.min(1, (K - Ks[lo]) / (Ks[hi] - Ks[lo])));
+        const j = u < 0.5 ? lo : hi;
+        const pa = b.poses[lo],
+          pb = b.poses[hi];
+        const poses = [];
+        for (let i = 0; i < pa.length; i += 3) poses.push([pa[i] + u * (pb[i] - pa[i]), pa[i + 1] + u * (pb[i + 1] - pa[i + 1]), pa[i + 2] + u * (pb[i + 2] - pa[i + 2])]);
+        return {
+          s: b.s[lo] + u * (b.s[hi] - b.s[lo]),
+          d: b.d[lo] + u * (b.d[hi] - b.d[lo]),
+          poses,
+          sym: P.symNames[b.sym[j]],
+          fam: P.famNames[b.fam[j]],
+          nc: b.nc[j],
+          rat: b.rat[j] || [],
+          contacts: b.ct[j] ? b.ct[j].split(" ") : [],
+          idx: j,
+        };
+      }
+      function groundAt(P, K) {
+        const g = P.ground;
+        let best = 0;
+        for (let i = 1; i < g.K.length; i++) if (Math.abs(g.K[i] - K) < Math.abs(g.K[best] - K)) best = i;
+        return { i: best, b: g.b[best], s: g.s[best], K: g.K[best] };
+      }
+      function bestBranchAt(P, K) {
+        // lowest kept branch at K (interpolated), falling back to the nearest ground point's branch
+        let best = null;
+        for (const b of P.branches) {
+          const sm = sampleBranch(P, b, K);
+          if (sm && (!best || sm.s < best.sm.s - 1e-12)) best = { b, sm };
+        }
+        return best;
+      }
+      const branchById = (P, id) => P.branches.find((b) => b.id === id);
+
+      // ---------- plots ----------
+      const PAD = { l: 52, r: 10, t: 10, b: 26 };
+      function niceTicks(a, b, n) {
+        const span = b - a;
+        if (!(span > 0)) return [a];
+        const step0 = span / n,
+          mag = Math.pow(10, Math.floor(Math.log10(step0)));
+        const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= step0) || 10 * mag;
+        const out = [];
+        for (let v = Math.ceil(a / step) * step; v <= b + 1e-9 * span; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : v);
+        return out;
+      }
+      function metricOf(P, b, i) {
+        if (st.metric === "d") return b.d[i];
+        if (st.metric === "r") return b.s[i] / P.s0;
+        return b.s[i];
+      }
+      function yRange(P, x0, x1) {
+        const vals = [];
+        const g = P.ground;
+        for (let i = 0; i < g.K.length; i++) {
+          if (g.K[i] < x0 || g.K[i] > x1) continue;
+          vals.push(st.metric === "d" ? g.d[i] : st.metric === "r" ? g.s[i] / P.s0 : g.s[i]);
+        }
+        if (!vals.length) return [0, 1];
+        vals.sort((a, b) => a - b);
+        let lo = vals[0],
+          hi = vals[vals.length - 1];
+        if (st.metric !== "d" && !st.ylog) {
+          // cut only the steep tail near an asymptote (s -> infinity): at most 1.6 x the 90th-percentile rise
+          const q90 = vals[Math.floor(0.9 * (vals.length - 1))];
+          hi = Math.min(hi, lo + 1.6 * Math.max(q90 - lo, 0.02 * q90));
+        }
+        if (st.ylog && st.metric !== "d") return [Math.log(lo * 0.97), Math.log(hi * 1.03)];
+        const pad = 0.06 * (hi - lo || Math.abs(hi) * 0.05 || 1);
+        return [lo - pad, hi + pad];
+      }
+      function svgEl(tag, attrs, parent) {
+        const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (const k in attrs) if (attrs[k] !== null && attrs[k] !== undefined) e.setAttribute(k, attrs[k]);
+        if (parent) parent.appendChild(e);
+        return e;
+      }
+      function frame(svg, W, H, x0, x1, y0, y1, ylabel, logy) {
+        svg.innerHTML = "";
+        const X = (k) => PAD.l + ((k - x0) / (x1 - x0)) * (W - PAD.l - PAD.r);
+        const Y = (v) => H - PAD.b - ((v - y0) / (y1 - y0)) * (H - PAD.t - PAD.b);
+        const g = svgEl("g", { class: "axis" }, svg);
+        for (const k of niceTicks(x0, x1, 7)) {
+          svgEl("line", { x1: X(k), x2: X(k), y1: PAD.t, y2: H - PAD.b, class: "gridl" }, g);
+          svgEl("text", { x: X(k), y: H - 8, "text-anchor": "middle" }, g).textContent = +k.toFixed(4);
+        }
+        const yt = logy ? niceTicks(Math.exp(y0), Math.exp(y1), 5).filter((v) => v > 0) : niceTicks(y0, y1, 5);
+        for (const v of yt) {
+          const yy = Y(logy ? Math.log(v) : v);
+          if (yy < PAD.t - 1 || yy > H - PAD.b + 1) continue;
+          svgEl("line", { x1: PAD.l, x2: W - PAD.r, y1: yy, y2: yy, class: "gridl" }, g);
+          svgEl("text", { x: PAD.l - 6, y: yy + 4, "text-anchor": "end" }, g).textContent = +v.toPrecision(4);
+        }
+        svgEl("text", { x: W - PAD.r, y: H - 8 - 12, "text-anchor": "end" }, g).textContent = "K";
+        svgEl("text", { x: PAD.l + 4, y: PAD.t + 11 }, g).textContent = ylabel;
+        const clip = svgEl("clipPath", { id: svg.id + "clip" }, svg);
+        svgEl("rect", { x: PAD.l, y: PAD.t, width: W - PAD.l - PAD.r, height: H - PAD.t - PAD.b }, clip);
+        const body = svgEl("g", { "clip-path": `url(#${svg.id}clip)` }, svg);
+        return { X, Y, body };
+      }
+      function pathD(pts) {
+        let d = "";
+        let pen = false;
+        for (const p of pts) {
+          if (!p || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) {
+            pen = false;
+            continue;
+          }
+          d += (pen ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1);
+          pen = true;
+        }
+        return d;
+      }
+      function vlines(P, fr, H) {
+        const add = (K, label, dash) => {
+          const x = fr.X(K);
+          svgEl("line", { x1: x, x2: x, y1: PAD.t, y2: H - PAD.b, stroke: css("--muted"), "stroke-dasharray": dash, "stroke-width": 1 }, fr.body);
+          if (label) svgEl("text", { x: x + 3, y: H - PAD.b - 4 }, fr.body).textContent = label;
+        };
+        add(0, "K = 0", "3 3");
+        for (const m of P.marks || []) add(m.K, m.label, "1 3");
+      }
+      function drawPlots() {
+        const P = prob();
+        const x0 = st.x0 ?? P.Kmin,
+          x1 = st.x1 ?? P.Kmax;
+        // --- main plot
+        const svg = $("plotS");
+        const W = Math.max(300, Math.round(svg.clientWidth || 640)),
+          H = W < 520 ? 250 : 330;
+        svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+        svg.style.height = H + "px";
+        const [y0, y1] = yRange(P, x0, x1);
+        const logy = st.ylog && st.metric !== "d";
+        const tr = (v) => (logy ? Math.log(v) : v);
+        const ylabel = st.metric === "d" ? "density" : st.metric === "r" ? "s / s(0)" : P.M === 0 ? "radius r" : "side s";
+        const fr = frame(svg, W, H, x0, x1, y0, y1, ylabel, logy);
+        vlines(P, fr, H);
+        // metastable (thin) branch curves
+        for (const b of P.branches) {
+          const pts = b.K.map((k, i) => [fr.X(k), fr.Y(tr(metricOf(P, b, i)))]);
+          svgEl(
+            "path",
+            {
+              d: pathD(pts),
+              fill: "none",
+              stroke: slotColor(b.slot),
+              "stroke-width": st.follow === "b" + b.id ? 2.4 : 1.3,
+              "stroke-dasharray": b.slot >= 0 ? slotDash(b.slot) ?? "4 3" : "2 3",
+              opacity: b.slot >= 0 ? 0.9 : 0.75,
+            },
+            fr.body,
+          );
+        }
+        // ground state: thick, coloured by the optimal branch
+        const g = P.ground;
+        let seg = [];
+        let segB = null;
+        const flush = () => {
+          if (seg.length > 0) {
+            const b = branchById(P, segB);
+            svgEl("path", { d: pathD(seg), fill: "none", stroke: slotColor(b ? b.slot : -1), "stroke-width": 3.2, "stroke-linejoin": "round", "stroke-linecap": "round" }, fr.body);
+          }
+        };
+        for (let i = 0; i < g.K.length; i++) {
+          const v = st.metric === "d" ? g.d[i] : st.metric === "r" ? g.s[i] / P.s0 : g.s[i];
+          const pt = [fr.X(g.K[i]), fr.Y(tr(v))];
+          if (g.b[i] !== segB) {
+            // include the crossing point if known, so the coloured pieces meet
+            const ev = P.events.find((e) => e.kind === "crossing" && e.from === segB && e.to === g.b[i] && e.K > g.K[i - 1] - 1e-9 && e.K < g.K[i] + 1e-9);
+            if (ev && segB !== null) {
+              const vc = st.metric === "d" ? ev.d ?? v : st.metric === "r" ? ev.s / P.s0 : ev.s;
+              seg.push([fr.X(ev.K), fr.Y(tr(vc))]);
+            }
+            flush();
+            seg = [];
+            if (ev) seg.push([fr.X(ev.K), fr.Y(tr(st.metric === "d" ? ev.d ?? v : st.metric === "r" ? ev.s / P.s0 : ev.s))]);
+            segB = g.b[i];
+          } else if (i > 0 && g.K[i] - g.K[i - 1] > 1.5 * P.grid) {
+            flush();
+            seg = [];
+          }
+          seg.push(pt);
+        }
+        flush();
+        // event markers
+        for (const e of P.events) {
+          if (!Number.isFinite(e.s)) continue;
+          const v = st.metric === "d" ? e.d : st.metric === "r" ? e.s / P.s0 : e.s;
+          if (!Number.isFinite(v)) continue;
+          const x = fr.X(e.K),
+            y = fr.Y(tr(v));
+          if (e.kind === "crossing") {
+            svgEl("rect", { x: x - 5, y: y - 5, width: 10, height: 10, transform: `rotate(45 ${x} ${y})`, fill: css("--fg"), stroke: css("--panel"), "stroke-width": 2 }, fr.body);
+          } else if (e.kind === "fold") {
+            svgEl("path", { d: `M${x - 5},${y - 5}L${x + 5},${y + 5}M${x - 5},${y + 5}L${x + 5},${y - 5}`, stroke: css("--fg"), "stroke-width": 2 }, fr.body);
+            // hysteresis arrow: the jump of a metastable state at its fold
+            if (Number.isFinite(e.jump) && st.metric === "s" && Math.abs(e.jump) > 1e-4) {
+              const y2 = fr.Y(tr(e.s + e.jump));
+              if (Math.abs(y2 - y) > 8) {
+                const dir = y2 > y ? 1 : -1;
+                svgEl("path", { d: `M${x},${y + 6 * dir}L${x},${y2}M${x - 4},${y2 - 6 * dir}L${x},${y2}L${x + 4},${y2 - 6 * dir}`, fill: "none", stroke: css("--accent"), "stroke-width": 1.6 }, fr.body);
+              }
+            }
+          } else if (e.kind === "contact" || e.kind === "symmetry") {
+            svgEl("circle", { cx: x, cy: y, r: 4, fill: css("--panel"), stroke: css("--fg"), "stroke-width": 1.5 }, fr.body);
+          } else if (e.kind === "kink") {
+            svgEl("rect", { x: x - 4.5, y: y - 4.5, width: 9, height: 9, transform: `rotate(45 ${x} ${y})`, fill: css("--panel"), stroke: css("--fg"), "stroke-width": 1.6 }, fr.body);
+          } else if (e.kind === "stability") {
+            svgEl("path", { d: `M${x},${y - 6}L${x + 5.5},${y + 4}L${x - 5.5},${y + 4}Z`, fill: css("--panel"), stroke: css("--fg"), "stroke-width": 1.5 }, fr.body);
+          } else if (e.kind === "end") {
+            svgEl("path", { d: `M${x},${y - 6}L${x},${y + 6}`, stroke: css("--fg"), "stroke-width": 2.5 }, fr.body);
+          }
+        }
+        // selected K
+        const xs = fr.X(st.K);
+        svgEl("line", { x1: xs, x2: xs, y1: PAD.t, y2: H - PAD.b, stroke: css("--accent"), "stroke-width": 1.5 }, fr.body);
+        const cur = currentSample();
+        if (cur) {
+          const v = st.metric === "d" ? cur.sm.d : st.metric === "r" ? cur.sm.s / P.s0 : cur.sm.s;
+          svgEl("circle", { cx: xs, cy: fr.Y(tr(v)), r: 5, fill: css("--accent"), stroke: css("--panel"), "stroke-width": 2 }, fr.body);
+        }
+        attachPlotEvents(svg, fr, W, H, x0, x1, (px, py) => pickBranch(P, fr, px, py, tr));
+        // --- slope plot
+        const svd = $("plotD");
+        const Hd = W < 520 ? 140 : 170;
+        svd.setAttribute("viewBox", `0 0 ${W} ${Hd}`);
+        svd.style.height = Hd + "px";
+        const slopes = [];
+        for (const b of P.branches) {
+          const arr = [];
+          for (let i = 1; i < b.K.length; i++) {
+            const dk = b.K[i] - b.K[i - 1];
+            if (dk < 1e-7) {
+              arr.push(null);
+              continue;
+            }
+            arr.push([(b.K[i] + b.K[i - 1]) / 2, (b.s[i] - b.s[i - 1]) / dk]);
+          }
+          slopes.push(arr);
+        }
+        const gs = [];
+        for (let i = 1; i < g.K.length; i++)
+          if (g.b[i] === g.b[i - 1] && g.K[i] - g.K[i - 1] < 1.5 * P.grid) gs.push([(g.K[i] + g.K[i - 1]) / 2, (g.s[i] - g.s[i - 1]) / (g.K[i] - g.K[i - 1]), g.b[i]]);
+        const inX = gs.filter((p) => p[0] >= x0 && p[0] <= x1).map((p) => p[1]).sort((a, b) => a - b);
+        let d0 = inX.length ? inX[Math.floor(0.03 * (inX.length - 1))] : -1,
+          d1 = inX.length ? inX[Math.floor(0.97 * (inX.length - 1))] : 1;
+        if (!(d1 > d0)) {
+          d0 -= 0.5;
+          d1 += 0.5;
+        }
+        const pd = 0.15 * (d1 - d0);
+        const frd = frame(svd, W, Hd, x0, x1, d0 - pd, d1 + pd, "ds/dK", false);
+        vlines(P, frd, Hd);
+        P.branches.forEach((b, bi) => {
+          svgEl("path", { d: pathD(slopes[bi].map((p) => (p ? [frd.X(p[0]), frd.Y(p[1])] : null))), fill: "none", stroke: slotColor(b.slot), "stroke-width": 1, opacity: 0.6, "stroke-dasharray": "3 3" }, frd.body);
+        });
+        let run = [],
+          rb = null;
+        const fl = () => {
+          if (run.length) {
+            const b = branchById(P, rb);
+            svgEl("path", { d: pathD(run), fill: "none", stroke: slotColor(b ? b.slot : -1), "stroke-width": 2.4 }, frd.body);
+          }
+        };
+        for (const p of gs) {
+          if (p[2] !== rb || (run.length && frd.X(p[0]) - run[run.length - 1][0] > 30)) {
+            fl();
+            run = [];
+            rb = p[2];
+          }
+          run.push([frd.X(p[0]), frd.Y(p[1])]);
+        }
+        fl();
+        for (const e of P.events)
+          if (e.kind === "crossing") {
+            const x = frd.X(e.K);
+            for (const v of [e.sl, e.sr]) if (Number.isFinite(v)) svgEl("circle", { cx: x, cy: frd.Y(v), r: 3.5, fill: css("--fg"), stroke: css("--panel"), "stroke-width": 1.5 }, frd.body);
+          }
+        svgEl("line", { x1: frd.X(st.K), x2: frd.X(st.K), y1: PAD.t, y2: Hd - PAD.b, stroke: css("--accent"), "stroke-width": 1.5 }, frd.body);
+        attachPlotEvents(svd, frd, W, Hd, x0, x1, null);
+      }
+      function pickBranch(P, fr, px, py, tr) {
+        let best = null;
+        for (const b of P.branches) {
+          const K = fr.X.inv(px);
+          const sm = sampleBranch(P, b, K);
+          if (!sm) continue;
+          const v = st.metric === "d" ? sm.d : st.metric === "r" ? sm.s / P.s0 : sm.s;
+          const dy = Math.abs(fr.Y(tr(v)) - py);
+          if (dy < 9 && (!best || dy < best.dy)) best = { b, dy };
+        }
+        return best ? best.b : null;
+      }
+      function attachPlotEvents(svg, fr, W, H, x0, x1, picker) {
+        fr.X.inv = (px) => x0 + ((px - PAD.l) / (W - PAD.l - PAD.r)) * (x1 - x0);
+        const toLocal = (ev) => {
+          const r = svg.getBoundingClientRect();
+          return [((ev.clientX - r.left) / r.width) * W, ((ev.clientY - r.top) / r.height) * H];
+        };
+        let drag = null,
+          brush = null;
+        svg.onpointerdown = (ev) => {
+          drag = toLocal(ev);
+          svg.setPointerCapture(ev.pointerId);
+        };
+        svg.onpointermove = (ev) => {
+          const p = toLocal(ev);
+          if (drag && Math.abs(p[0] - drag[0]) > 6) {
+            if (!brush) brush = svgEl("rect", { y: PAD.t, height: H - PAD.t - PAD.b, fill: css("--accent"), opacity: 0.12 }, svg);
+            brush.setAttribute("x", Math.min(p[0], drag[0]));
+            brush.setAttribute("width", Math.abs(p[0] - drag[0]));
+          }
+          showTip(ev, fr.X.inv(p[0]));
+        };
+        svg.onpointerleave = () => ($("tip").style.display = "none");
+        svg.onpointerup = (ev) => {
+          const p = toLocal(ev);
+          if (drag && Math.abs(p[0] - drag[0]) > 6) {
+            const a = fr.X.inv(Math.min(p[0], drag[0])),
+              b = fr.X.inv(Math.max(p[0], drag[0]));
+            st.x0 = Math.max(prob().Kmin, a);
+            st.x1 = Math.min(prob().Kmax, b);
+          } else if (drag) {
+            st.K = clampK(fr.X.inv(p[0]));
+            if (picker) {
+              const b = picker(p[0], p[1]);
+              if (b) st.follow = "b" + b.id;
+            }
+            syncFollow();
+          }
+          drag = null;
+          brush = null;
+          renderAll();
+        };
+        svg.ondblclick = () => {
+          st.x0 = st.x1 = null;
+          renderAll();
+        };
+      }
+      function showTip(ev, K) {
+        const P = prob();
+        const tip = $("tip");
+        if (!(K >= P.Kmin && K <= P.Kmax)) {
+          tip.style.display = "none";
+          return;
+        }
+        const g = groundAt(P, K);
+        const gb = branchById(P, g.b);
+        const sm = gb ? sampleBranch(P, gb, g.K) : null;
+        let h = `<b>K = ${fmt(g.K, 5)}</b><br>lowest s* = ${fmt(g.s)}<br>branch ${g.b}${sm ? ` · shells ${sm.fam} · ${sm.sym}` : ""}`;
+        const others = P.branches
+          .map((b) => ({ b, sm: sampleBranch(P, b, g.K) }))
+          .filter((o) => o.sm && o.b.id !== g.b)
+          .sort((a, b) => a.sm.s - b.sm.s)
+          .slice(0, 3);
+        for (const o of others) h += `<br><span class="muted">branch ${o.b.id}: ${fmt(o.sm.s)} (+${((o.sm.s / g.s - 1) * 100).toFixed(2)}%)</span>`;
+        tip.innerHTML = h;
+        tip.style.display = "block";
+        const x = Math.min(ev.clientX + 14, window.innerWidth - 290);
+        tip.style.left = x + "px";
+        tip.style.top = ev.clientY + 14 + "px";
+      }
+      function clampK(K) {
+        const P = prob();
+        return Math.max(P.Kmin, Math.min(P.Kmax, K));
+      }
+
+      // ---------- configuration view ----------
+      function currentSample() {
+        const P = prob();
+        if (st.follow === "ground") {
+          const best = bestBranchAt(P, st.K);
+          return best ? { b: best.b, sm: best.sm, ground: true } : null;
+        }
+        const b = branchById(P, +st.follow.slice(1));
+        if (!b) return null;
+        const sm = sampleBranch(P, b, st.K);
+        return sm ? { b, sm, ground: false } : null;
+      }
+      let viewR = 1;
+      function computeViewR() {
+        const P = prob();
+        const rs = [];
+        for (let i = 0; i < P.ground.K.length; i += 2) rs.push(containerImageRadius(P, P.ground.K[i], P.ground.s[i], st.model));
+        rs.sort((a, b) => a - b);
+        viewR = rs.length ? rs[Math.floor(0.92 * (rs.length - 1))] * 1.06 : 3;
+      }
+      function drawConfig() {
+        const P = prob();
+        const cv = $("cv");
+        const dpr = window.devicePixelRatio || 1;
+        const w = cv.clientWidth;
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(w * dpr);
+        const ctx = cv.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.fillStyle = css("--panel");
+        ctx.fillRect(0, 0, w, w);
+        const cur = currentSample();
+        const K = st.K;
+        const model = st.model;
+        let R = viewR;
+        if (st.scale === "fit" && cur) R = containerImageRadius(P, K, cur.sm.s, model) * 1.08;
+        const sc = (w / 2 - 6) / R;
+        const T = (z) => [w / 2 + z[0] * sc, w / 2 - z[1] * sc];
+        const poly = (pts, close) => {
+          ctx.beginPath();
+          pts.forEach((z, i) => {
+            const p = T(z);
+            i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]);
+          });
+          if (close) ctx.closePath();
+        };
+        // horizon: ideal boundary (K < 0) or the equator, the hemisphere limit (K > 0)
+        if (K !== 0) {
+          const rh = model === "conf" ? 2 / Math.sqrt(Math.abs(K)) : K < 0 ? 1 / Math.sqrt(-K) : null;
+          if (rh && rh < 3 * R) {
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = css("--muted");
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(w / 2, w / 2, rh * sc, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+        }
+        // ideal M-gon (K < 0): vertices on the horizon, straight in the Klein chart
+        if (K < 0 && P.M > 0) {
+          const kr = 1 / Math.sqrt(-K);
+          const pts = [];
+          for (let j = 0; j < P.M; j++) {
+            const a0 = -Math.PI / 2 + ((2 * j + 1) * Math.PI) / P.M,
+              a1 = -Math.PI / 2 + ((2 * j + 3) * Math.PI) / P.M;
+            for (let i = 0; i <= 40; i++) {
+              const u = i / 40;
+              const px = (1 - u) * kr * Math.cos(a0) + u * kr * Math.cos(a1),
+                py = (1 - u) * kr * Math.sin(a0) + u * kr * Math.sin(a1);
+              const q = 1 + K * (px * px + py * py);
+              if (model === "klein") pts.push([px, py]);
+              else if (q <= 1e-12) pts.push([2 * px, 2 * py]);
+              else {
+                const v0 = 1 / Math.sqrt(q);
+                pts.push([(2 * px * v0) / (1 + v0), (2 * py * v0) / (1 + v0)]);
+              }
+            }
+          }
+          ctx.strokeStyle = css("--muted");
+          ctx.lineWidth = 1;
+          poly(pts, true);
+          ctx.stroke();
+        }
+        if (!cur) {
+          ctx.fillStyle = css("--fg2");
+          ctx.font = "13px system-ui";
+          ctx.fillText("no configuration on this branch at this K", 12, 22);
+          return;
+        }
+        const s = cur.sm.s;
+        // container
+        ctx.strokeStyle = css("--fg");
+        ctx.lineWidth = 1.6;
+        if (P.M === 0) {
+          const pts = [];
+          for (let i = 0; i <= 160; i++) pts.push(mapPt(K, polar(K, s, (2 * Math.PI * i) / 160), model));
+          poly(pts, true);
+        } else {
+          const vs = containerVerts(P.M, K, s);
+          const pts = [];
+          for (let j = 0; j < P.M; j++) geodesic(K, vs[j], vs[(j + 1) % P.M], 24, model, pts);
+          poly(pts, true);
+        }
+        ctx.stroke();
+        // pieces
+        const col = slotColor(cur.b.slot);
+        const Rp = pieceR(P.N, K);
+        const centres = [];
+        cur.sm.poses.forEach((p, i) => {
+          const rat = cur.sm.rat.includes(i);
+          const pts = [];
+          if (P.N === 0) {
+            const s1 = sn(K, 1),
+              c1 = cs(K, 1);
+            for (let a = 0; a <= 72; a++) pts.push(mapPt(K, act(K, p, [c1, s1 * Math.cos((2 * Math.PI * a) / 72), s1 * Math.sin((2 * Math.PI * a) / 72)]), model));
+          } else {
+            const vs = [];
+            for (let k = 0; k < P.N; k++) vs.push(act(K, p, polar(K, Rp, Math.PI / 2 + (2 * Math.PI * k) / P.N)));
+            for (let k = 0; k < P.N; k++) geodesic(K, vs[k], vs[(k + 1) % P.N], 10, model, pts);
+          }
+          centres.push(act(K, p, [1, 0, 0]));
+          poly(pts, true);
+          ctx.globalAlpha = rat ? 0.35 : 0.3;
+          ctx.fillStyle = rat ? css("--rattler") : col;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = rat ? css("--rattler") : col;
+          ctx.lineWidth = 1.4;
+          if (rat) ctx.setLineDash([3, 3]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        });
+        if ($("showContacts").checked) {
+          ctx.strokeStyle = css("--fg");
+          ctx.lineWidth = 1;
+          for (const c of cur.sm.contacts) {
+            if (!c.startsWith("p:")) continue;
+            const [i, j] = c.slice(2).split("-").map(Number);
+            if (!centres[i] || !centres[j]) continue;
+            const pts = [];
+            geodesic(K, centres[i], centres[j], 12, model, pts);
+            poly(pts, false);
+            ctx.stroke();
+          }
+          ctx.fillStyle = css("--fg");
+          const walls = new Set(cur.sm.contacts.filter((c) => c[0] !== "p").map((c) => +c.split(":")[1]));
+          for (const i of walls) {
+            if (!centres[i]) continue;
+            const z = T(mapPt(K, centres[i], model));
+            ctx.beginPath();
+            ctx.arc(z[0], z[1], 2.6, 0, 2 * Math.PI);
+            ctx.fill();
+          }
+        }
+      }
+      function drawInfo() {
+        const P = prob();
+        const cur = currentSample();
+        const g = groundAt(P, st.K);
+        const rows = [["K", fmt(st.K, 6)]];
+        if (cur) {
+          const sm = cur.sm;
+          const gs = bestBranchAt(P, st.K);
+          rows.push([P.M === 0 ? "radius r" : "side s", fmt(sm.s)]);
+          rows.push(["density", fmt(sm.d, 4)]);
+          rows.push(["s / s(0)", fmt(sm.s / P.s0, 4)]);
+          rows.push(["branch", `${cur.b.id}${cur.ground ? " (lowest found)" : gs && gs.b.id !== cur.b.id ? ` (+${((sm.s / gs.sm.s - 1) * 100).toFixed(3)}% above branch ${gs.b.id})` : " (lowest found)"}`]);
+          rows.push(["structure", `pieces per shell ${sm.fam} (outer first) · symmetry ${sm.sym}`]);
+          rows.push(["contacts", `${sm.nc} (pairs ${sm.contacts.filter((c) => c[0] === "p").length}, container ${sm.contacts.filter((c) => c[0] !== "p").length})`]);
+          rows.push(["rattlers", sm.rat.length ? sm.rat.join(", ") : "none"]);
+          rows.push(["branch ends", `${cur.b.ends[0]} at ${fmt(cur.b.ends[1], 4)} · ${cur.b.ends[2]} at ${fmt(cur.b.ends[3], 4)}`]);
+        } else rows.push(["", "outside this branch's range"]);
+        $("info").innerHTML = rows.map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join("");
+        $("kval").textContent = "K = " + fmt(st.K, 5);
+        $("cfgTitle").textContent = `Configuration at K = ${fmt(st.K, 4)} (${st.model === "conf" ? "conformal model, isometric at O" : K_label()})`;
+      }
+      const K_label = () => (st.K < 0 ? "Klein chart" : st.K > 0 ? "gnomonic chart" : "flat");
+
+      // ---------- controls ----------
+      function syncFollow() {
+        const P = prob();
+        const sel = $("follow");
+        sel.innerHTML = "";
+        const o = document.createElement("option");
+        o.value = "ground";
+        o.textContent = "lowest branch (ground state found)";
+        sel.appendChild(o);
+        for (const b of P.branches) {
+          const op = document.createElement("option");
+          op.value = "b" + b.id;
+          op.textContent = `branch ${b.id}${b.slot >= 0 ? "" : " (never lowest)"}: K ${fmt(b.K[0], 3)} … ${fmt(b.K[b.K.length - 1], 3)}`;
+          sel.appendChild(op);
+        }
+        sel.value = st.follow;
+        const k = (st.K - P.Kmin) / (P.Kmax - P.Kmin);
+        $("kslider").value = Math.round(1000 * k);
+      }
+      function renderAll() {
+        drawPlots();
+        drawConfig();
+        drawInfo();
+      }
+      function legend() {
+        const P = prob();
+        const el = $("legend");
+        el.innerHTML = "";
+        for (const b of P.branches) {
+          if (b.slot < 0) continue;
+          const sp = document.createElement("span");
+          sp.innerHTML = `<span class="sw" style="background:${slotColor(b.slot)}"></span>branch ${b.id} (${b.label})`;
+          el.appendChild(sp);
+        }
+        const sp = document.createElement("span");
+        sp.innerHTML = `<span class="sw" style="background:${css("--rattler")}"></span>other branches`;
+        el.appendChild(sp);
+        const ky = document.createElement("span");
+        ky.textContent = "thick = lowest found · dashed = metastable · ◆ crossing · ◇ kink · × fold (arrow: the drop) · ○ contact change · △ stability change · | end";
+        el.appendChild(ky);
+      }
+      function chips() {
+        const P = prob();
+        const el = $("chips");
+        el.innerHTML = "";
+        const evs = P.events.filter((e) => ["crossing", "kink", "fold", "contact", "symmetry", "stability", "end", "gap"].includes(e.kind) && e.chip);
+        for (const e of evs) {
+          const bt = document.createElement("button");
+          bt.textContent = `${e.kind} K=${e.K.toFixed(4)}`;
+          bt.title = e.text;
+          bt.onclick = () => gotoEvent(e);
+          el.appendChild(bt);
+        }
+        if (!evs.length) el.innerHTML = '<span class="muted">no events in range</span>';
+      }
+      function gotoEvent(e) {
+        const P = prob();
+        const w = Math.max(0.04, 0.06 * (P.Kmax - P.Kmin));
+        st.x0 = Math.max(P.Kmin, e.K - w);
+        st.x1 = Math.min(P.Kmax, e.K + w);
+        st.K = clampK(e.K);
+        if (e.kind === "fold" || e.kind === "end") st.follow = "b" + e.branch;
+        else if (e.kind === "crossing") st.follow = "ground";
+        else if (e.branch !== undefined) st.follow = "b" + e.branch;
+        syncFollow();
+        renderAll();
+      }
+      function evTable() {
+        const P = prob();
+        const t = $("evtable");
+        let h = "<tr><th>K</th><th>type</th><th>s at K</th><th>slope left | right</th><th>what happens</th><th>certified</th></tr>";
+        for (const e of P.events) {
+          if (!e.table) continue;
+          h += `<tr class="click" data-i="${P.events.indexOf(e)}"><td>${fmt(e.K, 7)}</td><td>${e.kind}</td><td>${fmt(e.s)}</td><td>${fmt(e.sl, 4)} | ${fmt(e.sr, 4)}</td><td>${e.text}</td><td>${e.cert ?? ""}</td></tr>`;
+        }
+        t.innerHTML = h;
+        t.querySelectorAll("tr.click").forEach((tr) => (tr.onclick = () => gotoEvent(P.events[+tr.dataset.i])));
+        $("certline").textContent = P.certLine;
+      }
+      function selectProblem(i) {
+        st.pi = (i + DATA.problems.length) % DATA.problems.length;
+        const P = prob();
+        st.x0 = st.x1 = null;
+        st.follow = "ground";
+        st.K = clampK(0);
+        $("prob").value = st.pi;
+        computeViewR();
+        legend();
+        chips();
+        evTable();
+        syncFollow();
+        renderAll();
+        try {
+          localStorage.setItem("sweep.pi", String(st.pi));
+        } catch (e) {}
+      }
+      function setupSeg(id, attr, fn) {
+        const el = $(id);
+        el.querySelectorAll("button").forEach((b) =>
+          b.addEventListener("click", () => {
+            el.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+            b.classList.add("on");
+            fn(b.dataset[attr]);
+          }),
+        );
+      }
+      let last = 0;
+      function tick(ts) {
+        if (!st.playing) return;
+        const P = prob();
+        const dt = last ? Math.min(0.05, (ts - last) / 1000) : 0;
+        last = ts;
+        let lo = st.x0 ?? P.Kmin,
+          hi = st.x1 ?? P.Kmax;
+        if (st.follow !== "ground") {
+          const b = branchById(P, +st.follow.slice(1));
+          if (b) {
+            lo = Math.max(lo, b.K[0]);
+            hi = Math.min(hi, b.K[b.K.length - 1]);
+          }
+        }
+        st.K += ((hi - lo) / 9) * st.speed * dt * st.dir;
+        if (st.K >= hi) {
+          st.K = hi;
+          st.dir = -1;
+        }
+        if (st.K <= lo) {
+          st.K = lo;
+          st.dir = 1;
+        }
+        $("kslider").value = Math.round((1000 * (st.K - P.Kmin)) / (P.Kmax - P.Kmin));
+        renderAll();
+        requestAnimationFrame(tick);
+      }
+      st.dir = 1;
+      function init() {
+        const sel = $("prob");
+        let grp = null;
+        let og = null;
+        DATA.problems.forEach((P, i) => {
+          if (P.group !== grp) {
+            og = document.createElement("optgroup");
+            og.label = P.group;
+            sel.appendChild(og);
+            grp = P.group;
+          }
+          const o = document.createElement("option");
+          o.value = i;
+          o.textContent = P.title;
+          og.appendChild(o);
+        });
+        sel.onchange = () => selectProblem(+sel.value);
+        $("prev").onclick = () => selectProblem(st.pi - 1);
+        $("next").onclick = () => selectProblem(st.pi + 1);
+        $("unzoom").onclick = () => {
+          st.x0 = st.x1 = null;
+          renderAll();
+        };
+        setupSeg("metric", "m", (v) => {
+          st.metric = v;
+          $("plotTitle").textContent = v === "d" ? "density(K) = P·area(piece) / area(container)" : v === "r" ? "s(K) / s(0)" : "s(K)";
+          renderAll();
+        });
+        setupSeg("yscale", "y", (v) => {
+          st.ylog = v === "log";
+          renderAll();
+        });
+        setupSeg("model", "v", (v) => {
+          st.model = v;
+          computeViewR();
+          renderAll();
+        });
+        setupSeg("scaleMode", "sc", (v) => {
+          st.scale = v;
+          renderAll();
+        });
+        setupSeg("speed", "sp", (v) => (st.speed = +v));
+        setupSeg("atlasMode", "a", (v) => {
+          st.atlas = v;
+          atlas();
+        });
+        $("showContacts").onchange = renderAll;
+        $("follow").onchange = (e) => {
+          st.follow = e.target.value;
+          renderAll();
+        };
+        $("kslider").oninput = (e) => {
+          const P = prob();
+          st.K = P.Kmin + ((P.Kmax - P.Kmin) * +e.target.value) / 1000;
+          renderAll();
+        };
+        $("play").onclick = () => {
+          st.playing = !st.playing;
+          $("play").textContent = st.playing ? "Pause" : "Play";
+          last = 0;
+          if (st.playing) requestAnimationFrame(tick);
+        };
+        document.addEventListener("keydown", (e) => {
+          if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return;
+          const P = prob();
+          if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+            st.K = clampK(st.K + (e.key === "ArrowRight" ? 1 : -1) * P.grid);
+            syncFollow();
+            renderAll();
+            e.preventDefault();
+          } else if (e.key === " ") {
+            $("play").click();
+            e.preventDefault();
+          }
+        });
+        $("theme").onclick = () => {
+          const cur = document.documentElement.getAttribute("data-theme");
+          const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+          document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
+          renderAll();
+          atlas();
+          legend();
+        };
+        document.querySelectorAll("#tabs button").forEach((b) =>
+          b.addEventListener("click", () => {
+            document.querySelectorAll("#tabs button").forEach((x) => x.classList.remove("on"));
+            b.classList.add("on");
+            for (const id of ["explore", "atlas", "about"]) $(id).style.display = id === b.dataset.tab ? "" : "none";
+            if (b.dataset.tab === "atlas") atlas();
+            if (b.dataset.tab === "explore") renderAll();
+          }),
+        );
+        window.addEventListener("resize", () => {
+          renderAll();
+          if ($("atlas").style.display !== "none") atlas();
+        });
+        $("sub").textContent = DATA.subtitle;
+        $("aboutText").innerHTML = DATA.about;
+        let pi = Math.max(0, DATA.problems.findIndex((p) => p.key === DATA.start));
+        try {
+          const v = localStorage.getItem("sweep.pi");
+          if (v !== null && +v < DATA.problems.length) pi = +v;
+        } catch (e) {}
+        selectProblem(pi);
+      }
+
+      // ---------- atlas ----------
+      function atlas() {
+        const body = $("atlasBody");
+        body.innerHTML = "";
+        const groups = [...new Set(DATA.problems.map((p) => p.group))];
+        for (const gname of groups) {
+          const probs = DATA.problems.map((p, i) => [p, i]).filter(([p]) => p.group === gname);
+          const k0 = Math.min(...probs.map(([p]) => p.Kmin)),
+            k1 = Math.max(...probs.map(([p]) => p.Kmax));
+          const card = document.createElement("div");
+          card.className = "card";
+          card.style.marginBottom = "12px";
+          card.innerHTML = `<h3>${gname}</h3>`;
+          // category colours for family / symmetry modes, by frequency within the group
+          const cnt = new Map();
+          for (const [P] of probs)
+            P.ground.K.forEach((_, i) => {
+              const b = branchById(P, P.ground.b[i]);
+              const lab = st.atlas === "family" ? P.ground.fam[i] : st.atlas === "sym" ? P.ground.sym[i] : null;
+              if (lab !== null) cnt.set(lab, (cnt.get(lab) || 0) + 1);
+            });
+          const cats = [...cnt.entries()].sort((a, b) => b[1] - a[1]).map((e) => e[0]);
+          body.appendChild(card);
+          const W = Math.max(240, Math.round(card.clientWidth - 24 - 60));
+          for (const [P, pi] of probs) {
+            const row = document.createElement("div");
+            row.className = "atlas-row";
+            row.innerHTML = `<div class="lbl">P = ${P.P}</div>`;
+            const svg = svgEl("svg", { viewBox: `0 0 ${W} 22`, class: "plot" });
+            svg.style.height = "22px";
+            const X = (k) => ((k - k0) / (k1 - k0)) * W;
+            svgEl("rect", { x: X(P.Kmin), width: X(P.Kmax) - X(P.Kmin), y: 9, height: 4, fill: css("--grid") }, svg);
+            const g = P.ground;
+            for (let i = 0; i < g.K.length; i++) {
+              const b = branchById(P, g.b[i]);
+              let color;
+              if (st.atlas === "branch") color = slotColor(b ? b.slot : -1);
+              else {
+                const lab = st.atlas === "family" ? g.fam[i] : g.sym[i];
+                const ci = cats.indexOf(lab);
+                color = ci >= 0 && ci < 8 ? css(SLOTS[ci]) : css("--rattler");
+              }
+              const xa = X(g.K[i] - P.grid / 2),
+                xb = X(g.K[i] + P.grid / 2);
+              svgEl("rect", { x: xa, width: Math.max(0.6, xb - xa + 0.3), y: 3, height: 16, fill: color }, svg);
+            }
+            for (const e of P.events)
+              if (e.kind === "crossing") svgEl("line", { x1: X(e.K), x2: X(e.K), y1: 0, y2: 22, stroke: css("--fg"), "stroke-width": 1.5 }, svg);
+            svgEl("line", { x1: X(0), x2: X(0), y1: 0, y2: 22, stroke: css("--fg"), "stroke-dasharray": "2 2", "stroke-width": 1 }, svg);
+            row.appendChild(svg);
+            row.onclick = () => {
+              document.querySelector('#tabs button[data-tab="explore"]').click();
+              selectProblem(pi);
+            };
+            row.title = `${P.title}: click to explore`;
+            card.appendChild(row);
+          }
+          const ax = svgEl("svg", { viewBox: `0 0 ${W} 18`, class: "plot" });
+          ax.style.height = "18px";
+          const X = (k) => ((k - k0) / (k1 - k0)) * W;
+          for (const k of niceTicks(k0, k1, 8)) {
+            const x = X(k);
+            svgEl("text", { x, y: 13, "text-anchor": x < 14 ? "start" : x > W - 14 ? "end" : "middle" }, ax).textContent = +k.toFixed(3);
+          }
+          const axrow = document.createElement("div");
+          axrow.className = "atlas-row";
+          axrow.innerHTML = '<div class="lbl">K</div>';
+          axrow.appendChild(ax);
+          card.appendChild(axrow);
+          if (st.atlas !== "branch") {
+            const lg = document.createElement("div");
+            lg.className = "legend";
+            lg.innerHTML = cats
+              .slice(0, 8)
+              .map((c, i) => `<span><span class="sw" style="background:${css(SLOTS[i])}"></span>${c}</span>`)
+              .join("") + (cats.length > 8 ? `<span><span class="sw" style="background:${css("--rattler")}"></span>other</span>` : "");
+            card.appendChild(lg);
+          } else {
+            const lg = document.createElement("div");
+            lg.className = "legend";
+            lg.textContent = "Each colour is one configuration (branch) of that problem; black ticks are crossings (kinks of s*). Dashed line: K = 0.";
+            card.appendChild(lg);
+          }
+        }
+      }
+      init();
+    </script>
+  </body>
+</html>

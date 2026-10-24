@@ -8,5 +8,9 @@
 !data
 data/*
 !data/records.json
+!data/surface/records.json
+!data/curved/records.json
+!data/sphere/records.json
+!data/torus/records.json
 **/node_modules
 **/dist

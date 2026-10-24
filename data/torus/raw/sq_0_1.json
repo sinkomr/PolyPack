@@ -1,0 +1,47 @@
+{
+ "family": "sq",
+ "N": 0,
+ "P": 1,
+ "score": 2.0,
+ "params": [
+  2.0
+ ],
+ "basis": [
+  [
+   2.0,
+   0.0
+  ],
+  [
+   0.0,
+   2.0
+  ]
+ ],
+ "poses": [
+  [
+   0.0,
+   0.0,
+   0.0
+  ]
+ ],
+ "frac": [
+  [
+   0.0,
+   0.0
+  ]
+ ],
+ "min_sep": 0.0,
+ "density": 0.7853981633974483,
+ "label": "lattice",
+ "seed": 20261024,
+ "budget": {
+  "random_starts": 4,
+  "hops": 10,
+  "time_cap_s": 90.0
+ },
+ "stopped_by": "count",
+ "elapsed_s": 0.51,
+ "runs": 16,
+ "hops": 10,
+ "lp_crashes_isolated": 0,
+ "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish"
+}

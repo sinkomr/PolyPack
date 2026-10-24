@@ -1,0 +1,20 @@
+{
+ "family": "free",
+ "N": 0,
+ "P": 9,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 1125,
+  "bounding_disk_separated": 1008,
+  "explicit_axis_separated": 0,
+  "X1": "0.3849001795",
+  "X2": "0.3849001795"
+ },
+ "min_clearance_lb": "1.9991118e-12",
+ "score_cert_upper": "5.58362915461818129965339",
+ "score_upper_float": 5.5836291546181815,
+ "explicit": [],
+ "score_cert_checked": 5.5836291546181815
+}

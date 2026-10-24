@@ -1,0 +1,54 @@
+{
+ "family": "hex",
+ "N": 5,
+ "P": 2,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 86,
+  "bounding_disk_separated": 57,
+  "explicit_axis_separated": 3,
+  "X1": "0.7846634545",
+  "X2": "0.7846634545"
+ },
+ "min_clearance_lb": "1.375988e-12",
+ "score_cert_upper": "2.50361334072313807477447",
+ "score_upper_float": 2.5036133407231382,
+ "explicit": [
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 0,
+   "clearance_lb": "1.37641e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "1.37599e-12"
+  },
+  {
+   "i": 0,
+   "j": 1,
+   "lam": [
+    1,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "1.37623e-12"
+  }
+ ],
+ "score_cert_checked": 2.5036133407231382
+}

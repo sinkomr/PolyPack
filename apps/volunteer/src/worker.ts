@@ -3,6 +3,8 @@
  * engine's inlineRunJob: the pool sends {type: "run"}, and the thread answers {type: "result"}
  * when the job ends. "pause", "resume" and "abort" set the flags of the running job's control,
  * which the solver polls about every 12 ms of its work; messages for another job are ignored.
+ * Space jobs (spaces/run.ts) are synchronous and read the same two flags from the memory the
+ * pool shares with the thread (WorkerData.flags) instead.
  *
  * In the single-file bundle a thread runs the bundle itself, told apart from the main program by
  * its workerData (see cli.ts); in development it runs a bundle of worker-entry.ts (see
@@ -11,6 +13,7 @@
 import os from "node:os";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
 import { inlineRunJob } from "./engine/inline";
+import { type SpaceControl, type SpaceJob, type SpaceJobResult, isSpaceJob, runSpaceJob } from "./spaces/run";
 import type { Control, Job, JobResult } from "./types";
 
 export const WORKER_ROLE = "polypack-volunteer-search";
@@ -18,14 +21,33 @@ export const WORKER_ROLE = "polypack-volunteer-search";
 export interface WorkerData {
   role: typeof WORKER_ROLE;
   priority: "low" | "normal";
+  /** Abort (index 0) and pause (index 1) flags of the running job, written by the pool. */
+  flags?: SharedArrayBuffer;
 }
 
-export type ToWorker = { type: "run"; id: number; job: Job } | { type: "pause" | "resume" | "abort"; id: number };
+export type ToWorker =
+  { type: "run"; id: number; job: Job | SpaceJob } | { type: "pause" | "resume" | "abort"; id: number };
 
 export interface FromWorker {
   type: "result";
   id: number;
-  result: JobResult;
+  result: JobResult | SpaceJobResult;
+}
+
+/** A space job's control: the message flags, or the shared ones the pool writes while the job runs. */
+export function sharedControl(control: Control, flags: Int32Array | null): SpaceControl {
+  return {
+    get aborted() {
+      return control.aborted || (flags !== null && Atomics.load(flags, 0) === 1);
+    },
+    get paused() {
+      return control.paused || (flags !== null && Atomics.load(flags, 1) === 1);
+    },
+    wait(ms: number) {
+      if (flags) Atomics.wait(flags, 1, 1, ms);
+      else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    },
+  };
 }
 
 /** True in a search thread of the pool. */
@@ -47,12 +69,15 @@ export function runSearchThread(): void {
       // not permitted here: run at the normal priority
     }
   }
+  const flags = data.flags ? new Int32Array(data.flags) : null;
   let current: { id: number; control: Control } | null = null;
   port.on("message", async (m: ToWorker) => {
     if (m.type === "run") {
       const control: Control = { aborted: false, paused: false };
       current = { id: m.id, control };
-      const result = await inlineRunJob(m.job, control);
+      const result = isSpaceJob(m.job)
+        ? runSpaceJob(m.job, sharedControl(control, flags))
+        : await inlineRunJob(m.job, control);
       current = null;
       port.postMessage({ type: "result", id: m.id, result } satisfies FromWorker);
       return;

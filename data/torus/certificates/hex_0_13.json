@@ -1,0 +1,20 @@
+{
+ "family": "hex",
+ "N": 0,
+ "P": 13,
+ "eps": 1e-12,
+ "shrink": "pieces scaled by 1 - eps about their centres",
+ "interval_precision_bits": 128,
+ "enumeration": {
+  "candidates": 2028,
+  "bounding_disk_separated": 1859,
+  "explicit_axis_separated": 0,
+  "X1": "0.3202563076",
+  "X2": "0.3202563076"
+ },
+ "min_clearance_lb": "1.9985968e-12",
+ "score_cert_upper": "7.211102550935190240446753",
+ "score_upper_float": 7.21110255093519,
+ "explicit": [],
+ "score_cert_checked": 7.21110255093519
+}

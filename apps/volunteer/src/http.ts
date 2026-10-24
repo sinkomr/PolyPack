@@ -272,8 +272,18 @@ export class Api {
     return this.get(`/api/submissions/${id}`);
   }
 
+  /** GET /api/spaces/targets, the optional work list of the new spaces. */
+  spaceTargets(query = ""): Promise<Answer | null> {
+    return this.get(`/api/spaces/targets${query}`);
+  }
+
+  /** GET /api/spaces/:space/problems/<id>; the id has passed parseSpaceId, so it needs no escaping. */
+  spaceProblem(space: string, id: string): Promise<Answer | null> {
+    return this.get(`/api/spaces/${space}/problems/${id}`);
+  }
+
   /**
-   * POST /api/submit. A server older than the client refuses `software` with found_with
+   * POST /api/submit, or `path` (POST /api/spaces/submit). A server older than the client refuses `software` with found_with
    * "optimizer" with exactly one known 400; the body is then sent once more without it.
    *
    * When a POST goes out but no answer comes back (a network error, a timeout, a 5xx), the server
@@ -281,13 +291,17 @@ export class Api {
    * a backoff, only when the packing is not there and could still lead: at most
    * MAX_SUBMIT_ATTEMPTS POSTs in all.
    */
-  async submit(body: Record<string, unknown>, check: () => Promise<SubmitCheck | null>): Promise<SubmitOutcome> {
+  async submit(
+    body: Record<string, unknown>,
+    check: () => Promise<SubmitCheck | null>,
+    path = "/api/submit",
+  ): Promise<SubmitOutcome> {
     let current = body;
     let withoutSoftware = false;
     let requests = 0;
     let checked: SubmitCheck | null = null;
     for (let attempt = 1; ;) {
-      const r = await this.post("/api/submit", current);
+      const r = await this.post(path, current);
       requests += r.requests;
       if (r.answer) {
         if (withoutSoftware || !("software" in current) || !isSoftwareRefusal(r.answer.status, r.answer.body))

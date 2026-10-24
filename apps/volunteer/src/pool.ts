@@ -14,10 +14,13 @@
  *    is wrong with the thread's code or the machine, and starting it again will not help.
  *
  * Control flags are plain objects shared with the engine, so a 100 ms tick forwards their changes
- * to the threads.
+ * to the threads. Space jobs (spaces/run.ts) run synchronous code that cannot read messages while
+ * it works, so each lane also has two flags in memory shared with its thread, abort and pause,
+ * which the same tick writes and the job polls.
  */
 import { Worker } from "node:worker_threads";
 import { workerScript } from "./bundle";
+import type { SpaceJob, SpaceJobResult } from "./spaces/run";
 import type { Control, Job, JobResult, RunJob } from "./types";
 import { type FromWorker, type ToWorker, WORKER_ROLE, type WorkerData } from "./worker";
 
@@ -26,7 +29,7 @@ export interface PoolOptions {
   size: number;
   priority: "low" | "normal";
   /** Active seconds a job may run without answering; default time_s * 3 + 60. */
-  watchdogSeconds?: (job: Job) => number;
+  watchdogSeconds?: (job: Job | SpaceJob) => number;
   /** Milliseconds an aborted job may take to answer; default 10 s. */
   abortGraceMs?: number;
   tickMs?: number;
@@ -41,11 +44,14 @@ export interface PoolOptions {
   log?: (message: string) => void;
 }
 
-export const defaultWatchdogSeconds = (job: Job) => job.budget.time_s * 3 + 60;
+export const defaultWatchdogSeconds = (job: Job | SpaceJob) => job.budget.time_s * 3 + 60;
 export const defaultRespawnDelayMs = (failures: number) => Math.min(60_000, 500 * 2 ** Math.max(0, failures - 1));
 
-/** A result for a job that produced nothing. */
-export function emptyResult(job: Job, termination: string, reason: string): JobResult {
+/** A result for a job that produced nothing (its fields serve JobResult and SpaceJobResult). */
+export function emptyResult(job: Job, termination: string, reason: string): JobResult;
+export function emptyResult(job: SpaceJob, termination: string, reason: string): SpaceJobResult;
+export function emptyResult(job: Job | SpaceJob, termination: string, reason: string): JobResult | SpaceJobResult;
+export function emptyResult(job: Job | SpaceJob, termination: string, reason: string): JobResult | SpaceJobResult {
   return {
     job,
     score: null,
@@ -55,14 +61,21 @@ export function emptyResult(job: Job, termination: string, reason: string): JobR
     wallTime: 0,
     termination,
     reasons: [reason],
-  };
+  } as JobResult;
 }
+
+type AnyJob = Job | SpaceJob;
+type AnyResult = JobResult | SpaceJobResult;
+
+/** Indices of a lane's shared flags. */
+const ABORT = 0;
+const PAUSE = 1;
 
 interface Queued {
   id: number;
-  job: Job;
+  job: AnyJob;
   control: Control;
-  resolve: (r: JobResult) => void;
+  resolve: (r: AnyResult) => void;
 }
 
 interface Running extends Queued {
@@ -77,6 +90,8 @@ interface Running extends Queued {
 interface Lane {
   /** Null while a dead thread waits to be started again. */
   worker: Worker | null;
+  /** Abort and pause flags shared with the lane's thread, for space jobs. */
+  flags: Int32Array;
   running: Running | null;
   /** Deaths of this lane's thread since it last finished a job. */
   failures: number;
@@ -107,7 +122,7 @@ export class WorkerPool {
   private nextId = 1;
   private lastTick = performance.now();
   private readonly timer: NodeJS.Timeout;
-  private readonly watchdogSeconds: (job: Job) => number;
+  private readonly watchdogSeconds: (job: AnyJob) => number;
   private readonly abortGraceMs: number;
   private readonly respawnDelayMs: (failures: number) => number;
   private readonly maxStartupFailures: number;
@@ -123,7 +138,7 @@ export class WorkerPool {
     this.maxStartupFailures = options.maxStartupFailures ?? 5;
     this.log = options.log ?? (() => {});
     for (let i = 0; i < Math.max(1, options.size); i++) {
-      const lane: Lane = { worker: null, running: null, failures: 0, respawn: null };
+      const lane: Lane = { worker: null, flags: new Int32Array(2), running: null, failures: 0, respawn: null };
       this.lanes.push(lane);
       this.spawn(lane);
     }
@@ -144,8 +159,14 @@ export class WorkerPool {
   }
 
   /** The engine's RunJob. Never rejects. */
-  readonly runJob: RunJob = (job, control) =>
-    new Promise<JobResult>((resolve) => {
+  readonly runJob: RunJob = (job, control) => this.enqueue(job, control) as Promise<JobResult>;
+
+  /** The space engine's RunSpaceJob. Never rejects. */
+  readonly runSpaceJob = (job: SpaceJob, control: Control): Promise<SpaceJobResult> =>
+    this.enqueue(job, control) as Promise<SpaceJobResult>;
+
+  private enqueue(job: AnyJob, control: Control): Promise<AnyResult> {
+    return new Promise<AnyResult>((resolve) => {
       if (this.fatal) {
         resolve(emptyResult(job, "crashed", this.fatal));
         return;
@@ -157,6 +178,7 @@ export class WorkerPool {
       this.queue.push({ id: this.nextId++, job, control, resolve });
       this.dispatch();
     });
+  }
 
   /** Holds the queue and pauses the running jobs, or lets them go on. */
   setPaused(paused: boolean): void {
@@ -203,7 +225,13 @@ export class WorkerPool {
   }
 
   private spawn(lane: Lane): void {
-    const data: WorkerData = { role: WORKER_ROLE, priority: this.options.priority };
+    // a new thread gets new flags: a stuck one that is being terminated keeps its own
+    lane.flags = new Int32Array(new SharedArrayBuffer(8));
+    const data: WorkerData = {
+      role: WORKER_ROLE,
+      priority: this.options.priority,
+      flags: lane.flags.buffer as SharedArrayBuffer,
+    };
     // execArgv: [] keeps tsx's loader flags, if any, out of the thread: its code is plain JavaScript
     const worker = this.options.spawn
       ? this.options.spawn(data)
@@ -215,7 +243,7 @@ export class WorkerPool {
       this.succeeded = true;
       lane.failures = 0;
       // the engine gets its own Job object back, not the copy that travelled to the thread
-      this.settle(lane, { ...m.result, job: r.job });
+      this.settle(lane, { ...m.result, job: r.job } as AnyResult);
     });
     worker.on("error", (error) => this.lost(lane, worker, `the search thread crashed: ${error.message}`));
     worker.on("exit", (code) => this.lost(lane, worker, `the search thread exited with code ${code}`));
@@ -269,7 +297,7 @@ export class WorkerPool {
     else this.dispatch();
   }
 
-  private settle(lane: Lane, result: JobResult): void {
+  private settle(lane: Lane, result: AnyResult): void {
     const r = lane.running!;
     lane.running = null;
     r.resolve(result);
@@ -288,17 +316,21 @@ export class WorkerPool {
     }
   }
 
-  /** Forwards the running job's pause and abort flags to its thread. */
+  /** Forwards the running job's pause and abort flags to its thread, as messages and shared flags. */
   private sync(lane: Lane): void {
     const r = lane.running;
     if (!r) return;
     if ((this.stopping || r.control.aborted) && r.abortSentAt === null) {
       r.abortSentAt = performance.now();
+      Atomics.store(lane.flags, ABORT, 1);
+      Atomics.notify(lane.flags, PAUSE);
       this.post(lane, { type: "abort", id: r.id });
     }
     const paused = this.isPaused(r);
     if (paused !== r.sentPaused) {
       r.sentPaused = paused;
+      Atomics.store(lane.flags, PAUSE, paused ? 1 : 0);
+      Atomics.notify(lane.flags, PAUSE);
       this.post(lane, { type: paused ? "pause" : "resume", id: r.id });
     }
   }
@@ -318,6 +350,8 @@ export class WorkerPool {
       const [q] = this.queue.splice(i, 1);
       const limitMs = this.watchdogSeconds(q.job) * 1000;
       lane.running = { ...q, sentPaused: false, abortSentAt: null, activeMs: 0, limitMs };
+      Atomics.store(lane.flags, ABORT, 0);
+      Atomics.store(lane.flags, PAUSE, 0);
       try {
         lane.worker.postMessage({ type: "run", id: q.id, job: q.job } satisfies ToWorker);
       } catch (error) {

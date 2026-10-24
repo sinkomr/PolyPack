@@ -1239,3 +1239,138 @@ figure {
     transition: none;
   }
 }
+/* the spaces page: surfaces, curvature, sphere and tori */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.spaces .lede {
+  max-width: 76ch;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.section-title {
+  font-size: 17px;
+  font-weight: 650;
+  margin: 28px 0 8px;
+}
+/* focused from a Records link, so that a screen reader goes on from there; it takes no keyboard focus */
+.section-title:focus {
+  outline: none;
+}
+.space-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.space-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-width: 0;
+}
+.space-card h4 {
+  font-size: 15.5px;
+  margin: 0;
+}
+.space-card p {
+  margin: 0;
+}
+.space-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  font-size: 13.5px;
+}
+.space-facts dt {
+  color: var(--muted);
+}
+.space-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.space-facts code,
+.space-table code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.93em;
+}
+.space-card .space-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: auto;
+}
+.space-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 0 4px;
+}
+.space-controls .seg-track {
+  flex-wrap: wrap;
+}
+.space-controls .row {
+  gap: 8px 18px;
+  margin: 0;
+}
+.space-controls .filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* the hidden part of a link's name is placed inside the scrolling table, not beyond the page */
+.spaces .table-wrap {
+  position: relative;
+}
+.space-table th .th-sub {
+  display: block;
+  min-width: 9em;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+.space-table th {
+  vertical-align: bottom;
+}
+.space-table td {
+  vertical-align: top;
+}
+.space-table .num,
+.space-table .state {
+  white-space: nowrap;
+}
+/* a second, smaller line in a cell: what a bound rests on, why a problem is closed */
+.space-table .cell-why {
+  display: block;
+  min-width: 11em;
+  max-width: 20em;
+  white-space: normal;
+  font-size: 12px;
+  color: var(--muted);
+}
+.space-table details.cell-why {
+  padding: 0;
+}
+.space-table details.cell-why > summary {
+  cursor: pointer;
+  color: var(--accent);
+  width: max-content;
+}
+.space-table tr.closed td {
+  color: var(--muted);
+}

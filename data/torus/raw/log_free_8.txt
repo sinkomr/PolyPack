@@ -1,0 +1,12 @@
+free N=8 P=1 score=2.3083386070 dens=0.906164 msep=-4.44e-16 label=hop:random runs=36 hops=26 stop=count t=5.4
+free N=8 P=2 score=3.2644837646 dens=0.906164 msep=-4.44e-16 label=random runs=49 hops=33 stop=count t=19.3
+free N=8 P=3 score=3.9981597485 dens=0.906164 msep=-2.44e-15 label=hop:random runs=59 hops=40 stop=count t=19.4
+free N=8 P=4 score=4.6166772147 dens=0.906164 msep=2.62e-10 label=hop:random runs=73 hops=48 stop=count t=42.9
+free N=8 P=5 score=5.1616020405 dens=0.906164 msep=-8.88e-16 label=random runs=79 hops=56 stop=count t=48.9
+free N=8 P=6 score=5.6542517420 dens=0.906164 msep=3.98e-10 label=hop:random runs=95 hops=63 stop=count t=54.5
+free N=8 P=7 score=6.1072898960 dens=0.906164 msep=-8.88e-16 label=hop:random runs=97 hops=70 stop=count t=55.3
+free N=8 P=8 score=6.5289675300 dens=0.906164 msep=2.30e-10 label=hop:random runs=115 hops=78 stop=count t=91.2
+free N=8 P=9 score=6.9250158217 dens=0.906164 msep=1.62e-10 label=hop:random runs=119 hops=86 stop=count t=116.0
+free N=8 P=10 score=7.2996076096 dens=0.906164 msep=1.16e-10 label=hop:random runs=133 hops=93 stop=count t=137.1
+free N=8 P=11 score=7.6558930491 dens=0.906164 msep=1.22e-10 label=hop:random runs=133 hops=100 stop=count t=244.1
+free N=8 P=12 score=7.9963194973 dens=0.906164 msep=8.76e-11 label=random runs=161 hops=108 stop=count t=253.4

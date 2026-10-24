@@ -1,0 +1,49 @@
+{
+ "family": "free",
+ "N": 5,
+ "P": 1,
+ "score": 1.4509265462923593,
+ "params": [
+  1.5388417685876268,
+  -0.7694208741932707,
+  1.368033988749895
+ ],
+ "basis": [
+  [
+   1.5388417685876268,
+   0.0
+  ],
+  [
+   -0.7694208741932707,
+   1.368033988749895
+  ]
+ ],
+ "poses": [
+  [
+   1.1274385149455433,
+   0.12400038094098995,
+   -4.084070439566188
+  ]
+ ],
+ "frac": [
+  [
+   0.7779746096418095,
+   0.09064130128396963
+  ]
+ ],
+ "min_sep": -1.1102230246251565e-16,
+ "density": 0.8172560023684431,
+ "label": "hop:random",
+ "seed": 20261024,
+ "budget": {
+  "random_starts": 10,
+  "hops": 26,
+  "time_cap_s": 90.0
+ },
+ "stopped_by": "count",
+ "elapsed_s": 3.73,
+ "runs": 36,
+ "hops": 26,
+ "lp_crashes_isolated": 0,
+ "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish"
+}

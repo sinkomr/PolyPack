@@ -10,7 +10,29 @@ import {
   UNSOLVED_MAX_P,
   UNSOLVED_SHAPES,
 } from "@polypack/geometry";
+import {
+  SPACE_BOUND_SLACK,
+  SPACE_MIN_QUATERNION_NORM,
+  SPACE_STRICT_REASON,
+  SPACE_STRICT_TOL,
+  SPACE_MAX_COORD,
+  SPACE_MAX_SIZE,
+  SPACE_EXHIBITS,
+  SPACE_INFO,
+  SPACE_MAX_P,
+  SPACE_NAMES,
+  SPACE_TOL,
+  SURFACE_MAX_CHAINS,
+  TORUS_MAX_TRANSLATES,
+} from "@polypack/spaces";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
+import {
+  SPACE_GAP_CAP,
+  SPACE_METHOD_LENGTH,
+  SPACE_SETTLED_GAP,
+  SPACE_TARGETS_DEFAULT_LIMIT,
+  SPACE_TARGETS_MAX_LIMIT,
+} from "./spaces";
 
 const PYTHON = `import json, math, urllib.request
 
@@ -185,7 +207,169 @@ npx tsx examples/solve-and-submit.ts --method list
 npx tsx examples/solve-and-submit.ts --N 4 --M 4 --P 11 --method basin_hopping \\
   --evals 20000 --time 20 --seed 1 --base https://YOUR-SITE --name "my bot" --submit`;
 
+const SPACES_CURL = `curl -s https://YOUR-SITE/api/spaces
+
+curl -s --compressed https://YOUR-SITE/api/spaces/torus/records
+
+curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/0/2
+
+curl -s --compressed "https://YOUR-SITE/api/spaces/targets?spaces=torus,sphere&max_P=20&limit=50"
+
+curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
+  -H "content-type: application/json" \\
+  -d '{"space": "torus", "id": "torus/sq/0/2", "name": "my name", "method": "by hand",
+       "config": {"lattice": {"L": 2.8284271247461903},
+                  "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]}}'`;
+
+const SPACE_PROBLEM = `{
+  "space": "torus", "id": "torus/sq/0/2", "fields": {"family": "sq", "N": 0, "P": 2}, "P": 2,
+  "status": "best_known",
+  "certified": {"score": 2.8284271247490187, "display": "2.828428", "status": "best_known"},
+  "bound": {"value": 2.8284271247461903, "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019"},
+  "site_best": null,
+  "best_score": 2.8284271247490187,
+  "accepts_submissions": true, "closed_reason": null,
+  "conventions": {"families": "...", "pose": "...", "configuration": "...", "validity": "..."},
+  "certified_config": {"lattice": {"L": 2.82842712474619}, "poses": [[0, 0, 0], [1.414213562373095, 1.4142135623730951, 0]]},
+  "site_config": null
+}`;
+
+const SPACE_SUBMIT = `{
+  "space": "torus",
+  "id": "torus/sq/0/2",
+  "config": {"lattice": {"L": 2.8284271247461903}, "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]},
+  "name": "display name",
+  "agent_note": "optional free text",
+  "software": "name/version of the program",
+  "method": "the search, in a few words",
+  "seed": 1
+}`;
+
+const SPACE_SUBMIT_RESPONSE = `{
+  "valid": true,
+  "reasons": [],
+  "score": 2.8284271247461903,
+  "leader": false,
+  "best_score": 2.8284271247490187,
+  "id": null,
+  "beats_certified": false
+}`;
+
+const SPACE_TARGETS = `{
+  "generated_at": "2026-10-24T12:00:00.000Z",
+  "targets": [
+    {"space": "torus", "id": "torus/hex/4/5", "P": 5, "priority": 0.003262, "best_score": 2.886751,
+     "bound": 2.402811, "leader": "certified", "leader_id": null}
+  ]
+}`;
+
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** The section of the API page on the spaces (surface, curved, sphere, torus). */
+function spacesSection(): string {
+  const rows = SPACE_NAMES.map((name) => {
+    const i = SPACE_INFO[name];
+    return `<tr><td><a href="${i.viewer}">${esc(i.title)}</a><br><code>${name}</code></td><td>${esc(i.summary)}</td><td><code>${esc(i.problem_id)}</code></td><td><code>${esc(i.conventions.configuration)}</code></td><td>${esc(i.score)}</td><td><a href="${i.docs}">notes</a></td></tr>`;
+  }).join("\n");
+  const conventions = SPACE_NAMES.map((name) => {
+    const i = SPACE_INFO[name];
+    const items = Object.entries(i.conventions)
+      .map(([k, v]) => `<tr><th scope="row"><code>${esc(k)}</code></th><td>${esc(v)}</td></tr>`)
+      .join("\n");
+    return `<h4>${esc(i.title)} (<code>${name}</code>)</h4>\n<table>\n${items}\n</table>`;
+  }).join("\n");
+  const exhibits = SPACE_EXHIBITS.map(
+    (e) =>
+      `<li><a href="${e.viewer}">${esc(e.title)}</a>: ${esc(e.summary)} (<a href="${e.docs}">notes</a>; listed by <code>/api/spaces</code>, takes no submissions)</li>`,
+  ).join("\n");
+  return `<h2 id="spaces">Spaces: surfaces, curvature, the whole sphere and flat tori</h2>
+<p>Besides polygons in polygons, the site has four more packing spaces from PolyPack's research. Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
+The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
+<table>
+<tr><th scope="col">Space</th><th scope="col">Problem</th><th scope="col">Id</th><th scope="col">Configuration</th><th scope="col">Score</th><th scope="col">More</th></tr>
+${rows}
+</table>
+<ul>
+${exhibits}
+</ul>
+
+<h3 id="spaces-certified">Research records and site entries</h3>
+<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic,
+at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it up at 6 decimals).
+Entries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than ${SPACE_TOL} are rejected.
+The site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.
+<code>best_score</code> is the smaller of the two values.</p>
+<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code> and <code>sphere</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
+a little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>
+<p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
+Closed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>
+<p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
+<code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
+So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.</p>
+<p id="spaces-strict">An entry below the research record by more than that tolerance (<code>beats_certified: true</code>) must also be valid at a strict tolerance, overlaps of at most ${SPACE_STRICT_TOL} instead of ${SPACE_TOL}.
+Without this, a record's own configuration shrunk by about 1e-9, whose pieces then overlap by up to the touching tolerance, would pass as an improvement. Every research record passes the strict check at its stated size.
+An entry that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_REASON)}". There is no review queue for the spaces.</p>
+
+<h3><code>GET /api/spaces</code></h3>
+<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of <code>problems</code> in its catalogue, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>
+
+<h3><code>GET /api/spaces/{space}/records</code></h3>
+<p>The catalogue of one space: <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
+<code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations. The answer is kept until an entry of the space changes, together with its gzip bytes, which are sent to clients whose <code>Accept-Encoding</code> accepts gzip (others get it plain).
+404 for an unknown space.</p>
+
+<h3><code>GET /api/spaces/{space}/problems/{id}</code></h3>
+<p>One problem with its configurations: the fields of the listing, the space's <code>conventions</code>, <code>certified_config</code> (<code>null</code> for infeasible problems) and <code>site_config</code>, the configuration of <code>site_best</code>.
+The id has slashes, so the path is for example <code>/api/spaces/curved/problems/curved/-1/3/4/7</code>. 400 for an id that is not of the space's form (each problem has exactly one written form: no leading zeros, and K as the catalogue writes it), 404 for a problem that is not in the catalogue.</p>
+<pre tabindex="0"><code>${esc(SPACE_PROBLEM)}</code></pre>
+
+<h3 id="spaces-targets"><code>GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=</code></h3>
+<p>The optional work list of volunteer searches over the spaces; the <a href="/volunteer.html">volunteer client</a> uses it only when asked to. Highest <code>priority</code> first, then smaller <code>P</code>.</p>
+<p id="spaces-priority">Listed are the open problems whose best value is above its lower bound, except those with P = 1 and the surface's <code>nofold</code> problems.
+A nofold problem is the main site's planar problem of N-gons in the face polygon with ⌈P / F⌉ pieces (F faces), which <a href="#targets"><code>/api/targets</code></a> already lists; it stays in the catalogue and takes submissions.
+Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
+Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
+the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
+The whole list fits in one answer at the largest <code>limit</code> (1292 targets with the catalogues of 2026-10-24: surface 722, curved 233, sphere 133, torus 204), and the default 500 holds problems of every space.
+<code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
+The ranking is kept until an entry changes.</p>
+<table>
+<tr><th scope="row"><code>spaces</code></th><td>Only these spaces: <code>all</code> (the default) or a comma-separated list of ${SPACE_NAMES.map((n) => `<code>${n}</code>`).join(", ")}.</td></tr>
+<tr><th scope="row"><code>max_P</code></th><td>Only problems with at most this many pieces.</td></tr>
+<tr><th scope="row"><code>limit</code></th><td>Most targets returned: from 1 to ${SPACE_TARGETS_MAX_LIMIT}, ${SPACE_TARGETS_DEFAULT_LIMIT} by default.</td></tr>
+</table>
+<p>Any other value, a repeated parameter or an unknown one is a 400. Answers are kept, gzip-compressed for clients that accept it, until an entry changes.</p>
+<pre tabindex="0"><code>${esc(SPACE_TARGETS)}</code></pre>
+
+<h3 id="spaces-submit"><code>POST /api/spaces/submit</code></h3>
+<p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most ${MAX_NOTE_LENGTH} characters), <code>software</code> (at most ${MAX_SOFTWARE_LENGTH}), <code>method</code> (free text, at most ${SPACE_METHOD_LENGTH}) and <code>seed</code> (a non-negative integer) are optional.
+Submissions are accepted for the problems of the catalogues only.</p>
+<pre tabindex="0"><code>${esc(SPACE_SUBMIT)}</code></pre>
+<p>The score is the size the configuration states (<code>s</code>, <code>size</code>, <code>rho</code>, <code>L</code>, or √|det(b1, b2)| for a free lattice): the server checks the configuration at that size and does not shrink it.
+Response (this example only ties the research record, so it is valid and <a href="#spaces-kept">not kept</a>):</p>
+<pre tabindex="0"><code>${esc(SPACE_SUBMIT_RESPONSE)}</code></pre>
+<table>
+<tr><th scope="row"><code>leader</code></th><td><code>true</code> when the entry was kept: it improved on the problem's <code>best_score</code> by more than the tie tolerance and is now its site leader.</td></tr>
+<tr><th scope="row"><code>best_score</code></th><td>The problem's best value after this submission, the research record's or the site leader's, whichever is smaller: the value a new entry has to beat by more than the tie tolerance to be kept.</td></tr>
+<tr><th scope="row"><code>id</code></th><td>The stored entry, at <code>/api/spaces/entries/{id}</code> while it leads; <code>null</code> when the entry was valid but not kept.</td></tr>
+<tr><th scope="row"><code>beats_certified</code></th><td><code>true</code> when the score is below the research record's certified size by more than the tie tolerance (and the entry passed the <a href="#spaces-strict">strict check</a>).</td></tr>
+</table>
+<p>The statuses are those of <a href="#submit"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href="#spaces-closed">closed</a> problem, not examined;
+413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>.
+<strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address.</p>
+<p>Every check is bounded. P is at most the largest P of the space's catalogue (${SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(", ")}); sizes are at most ${SPACE_MAX_SIZE}, every coordinate, angle and quaternion component is at most ${SPACE_MAX_COORD} in absolute value (each number on its own), and a quaternion's norm is at least ${SPACE_MIN_QUATERNION_NORM.toExponential()};
+the size must reach the problem's lower bound (less a relative ${SPACE_BOUND_SLACK}), which is checked before the packing; on a surface in fold mode one piece may cross at most ${SURFACE_MAX_CHAINS} chains of faces; on a free torus the basis must need at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces, which any reduced basis does.</p>
+
+<h3><code>GET /api/spaces/entries/{id}</code></h3>
+<p>A stored entry with its configuration: <code>{id, space, problem, score, name, agent_note, software, method, seed, created_at, config}</code>. 404 once it was overtaken (only the leader is kept) or removed.</p>
+
+<h3>The spaces' conventions</h3>
+${conventions}
+
+<h3 id="spaces-curl">Example with curl</h3>
+<pre tabindex="0"><code>${esc(SPACES_CURL)}</code></pre>
+`;
+}
 
 /** API documentation page served at /api. The atlas and targets limits are owned by the routes and passed in. */
 export function docsPage(
@@ -222,7 +406,7 @@ export function docsPage(
 </style>
 </head>
 <body>
-<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
+<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/spaces.html">Spaces</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
 <main>
 <h2>API for scripts and AI agents</h2>
 <p>Everything the board does is available as JSON over HTTP. No account or key is needed; a display name is enough.
@@ -412,6 +596,8 @@ Events that happen while no stream is open are not sent later, so read what you 
 <h3><code>GET /api/health</code></h3>
 <p><code>{"ok": true}</code> while the server is running.</p>
 
+${spacesSection()}
+
 <h2 id="admin">Review and moderation</h2>
 <p>For the site's operator. Each request needs the header <code>Authorization: Bearer &lt;ADMIN_TOKEN&gt;</code>, the token the server was started with.
 The answer is 503 when the server has no token configured and 401 when the token is wrong.</p>
@@ -427,6 +613,10 @@ a confirmed one stays as the problem's only entry.
 <h3><code>POST /api/admin/remove</code></h3>
 <p>Body <code>{"id": 17}</code>. Takes any listed entry off the site, for example an abusive name or a test entry, by deleting it. Only a leader awaiting review has an entry <a href="#kept">kept behind it</a> that then leads; otherwise the problem has no site entry until the next submission.
 <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such listed entry.</p>
+
+<h3><code>POST /api/admin/spaces/remove</code>, <code>POST /api/admin/spaces/edit</code></h3>
+<p>The same for entries of the <a href="#spaces">spaces</a>: <code>{"id": 12}</code> deletes an entry (the problem then has no site entry until the next submission, and its research record is all it shows);
+<code>{"id": 12, "name": "...", "agent_note": "..."}</code> corrects its name or note, never its configuration or score. <code>{"ok": true}</code>, 400 for a malformed body, 404 when there is no such entry.</p>
 
 <h3><code>POST /api/admin/edit</code></h3>
 <p>Body <code>{"id": 17, ...}</code> with any of <code>name</code>, <code>agent_note</code> and the provenance fields of a submission. Corrects how an entry is labelled; its packing and score never change.
