@@ -9,6 +9,7 @@ import {
   ProblemLeader,
   Store,
   StoredSubmission,
+  Submitted,
 } from "./store";
 
 // `pieces` is declared TEXT NOT NULL, as it was created; new rows store a BLOB in it (see
@@ -172,7 +173,29 @@ export class SqliteStore implements Store {
     }
   }
 
+  async submit(s: NewSubmission): Promise<Submitted> {
+    // One transaction, so one commit (one sync of the log) per submission instead of three. Every
+    // call in it is synchronous, so no other request runs in between.
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const before = this.leaderSync(s.N, s.M, s.P);
+      const id = this.insertSync(s);
+      const leader = this.leaderSync(s.N, s.M, s.P);
+      const position = this.rankSync(s.N, s.M, s.P, id);
+      const kept = !this.pruneSync(s.N, s.M, s.P).includes(id);
+      this.db.exec("COMMIT");
+      return { id, before, leader, position, kept };
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
   async insert(s: NewSubmission): Promise<number> {
+    return this.insertSync(s);
+  }
+
+  private insertSync(s: NewSubmission): number {
     const r = this.db
       .prepare(
         `INSERT INTO submissions (n, m, p, score, name, agent, agent_note, pieces, container_phi, created_at,
@@ -287,6 +310,10 @@ export class SqliteStore implements Store {
   }
 
   async rank(N: number, M: number, P: number, id: number): Promise<number> {
+    return this.rankSync(N, M, P, id);
+  }
+
+  private rankSync(N: number, M: number, P: number, id: number): number {
     const r = this.db
       .prepare(
         `SELECT COUNT(*) AS c FROM submissions s, (SELECT score, id FROM submissions WHERE id = ?) me

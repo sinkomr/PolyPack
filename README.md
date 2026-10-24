@@ -4,7 +4,7 @@ Pack P congruent regular polygons or circles into the smallest regular polygon o
 
 - The board: drag and rotate pieces that can never overlap; the smallest enclosing container and its size are computed live.
 - Records: published values with sources, and one live leader per problem: the earliest of the best entries. Problems with a proven optimum are closed to entries.
-- API: everything is scriptable; see `/api` on the running site, `examples/submit.py` and, for running an optimizer and submitting its result, `examples/solve-and-submit.ts`.
+- API: everything is scriptable; see `/api` on the running site, `examples/submit.py` and, for running an optimizer and submitting its result, `examples/solve-and-submit.ts`. The server scores a packing at the container orientation it is sent (`container_phi`, 0 when missing) and does not search for a better one, so turn the container to its best orientation before submitting; the board, Tighter and the optimizers do so themselves.
 - Automated search: seven optimizers, seed generators and a contact polish, in the browser or as a TypeScript library.
 - Volunteer computing: a single-file program that searches in the background on spare cores and submits records under your name. Download it from `/volunteer.html` on the running site; see [docs/VOLUNTEER.md](docs/VOLUNTEER.md).
 - Downloads: every current record with its coordinates, refreshed nightly, in the [records release](https://github.com/sinkomr/PolyPack/releases/tag/records); published values with their sources in `data/records.json`.

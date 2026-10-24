@@ -1,4 +1,4 @@
-import { DEFAULT_PATIENCE, ProblemState, evolvable, spent } from "./game";
+import { DEFAULT_PATIENCE, ProblemState, evolvable } from "./game";
 import type { UpgradeId } from "./upgrades";
 
 /**
@@ -13,7 +13,7 @@ import type { UpgradeId } from "./upgrades";
  * progress): moving opens a new run, so lanes that hopped to whichever problem was a click behind
  * would go in circles, restarting a run each click. Once every problem has stalled, a lane keeps to
  * its own until another is a whole patience fresher (stalled problems leave the queue meanwhile,
- * game.ts advancePlan). Problems whose seeds are spent are skipped.
+ * game.ts advancePlan).
  */
 export type AutoAction = "compact" | "evolve";
 
@@ -30,8 +30,6 @@ export function autoTarget(opts: {
   focus: string | null;
   busy: ReadonlySet<string>;
   owned: ReadonlySet<UpgradeId>;
-  /** Seeds the player may use per problem. */
-  seeds: number;
   /** Auto-eval is due a Compact's evaluations (otherwise fresh problems wait and runs go on elsewhere). */
   canCompact?: boolean;
   /** The problem the lane's open run is on (null: none). */
@@ -39,8 +37,8 @@ export function autoTarget(opts: {
   /** Evaluations without progress after which a problem has stalled (game.ts stallAfter). */
   stall?: number;
 }): AutoTarget | null {
-  const { lane, queue, focus, busy, owned, seeds } = opts;
-  const free = queue.filter((p) => workable(p, busy) && !spent(p, seeds));
+  const { lane, queue, focus, busy, owned } = opts;
+  const free = queue.filter((p) => workable(p, busy));
   if (!owned.has("advance")) {
     const ready = free.filter(evolvable);
     const pick = lane === 0 ? ready.find((p) => p.key === focus) : ready.find((p) => p.key !== focus);
@@ -62,6 +60,41 @@ export function autoTarget(opts: {
           ? own
           : ready[0];
   return { key: pick.key, action: "evolve" };
+}
+
+/**
+ * How many times slower than rank.ts's cost table (one mc_compress evaluation at a problem's
+ * N+M+P) an evaluation runs on this device, kept apart for each kind of run (a method at a tuning
+ * level, as "harden@2"): moving averages over the steps run here. Auto-eval sizes its jobs with them,
+ * so that a slow method's jobs stay near a quarter second and its steps do not shrink every other
+ * lane's jobs: basin_hopping, penalty, harden and asc evaluate 2 to 9 times slower than mc_compress,
+ * ls_growth about 10 times (the method reports of 2026-10-22).
+ */
+export class Speeds {
+  private readonly ratio = new Map<string, number>();
+
+  /** A step of the kind `key` ran `done` evaluations in `ms`, where the table says `tableMs` for one. */
+  observe(key: string, tableMs: number, done: number, ms: number): void {
+    if (!(done > 0) || !(ms > 0) || !(tableMs > 0)) return;
+    const r = Math.min(100, Math.max(0.01, ms / done / tableMs));
+    const before = this.ratio.get(key);
+    // the first step of a kind is its first measure; later ones move the average a fifth of the way
+    this.ratio.set(key, before === undefined ? r : 0.8 * before + 0.2 * r);
+  }
+
+  /**
+   * The ratio for the kind `key`: its own once measured, else (and for null, a kind not known yet)
+   * the slowest measured, so that a first job is small rather than long; 1 before any.
+   */
+  slowness(key: string | null): number {
+    const own = key === null ? undefined : this.ratio.get(key);
+    return own ?? (this.ratio.size ? Math.max(...this.ratio.values()) : 1);
+  }
+
+  /** The expected ms of one evaluation of the kind `key` where the table says `tableMs`. */
+  msEach(key: string | null, tableMs: number): number {
+    return tableMs * this.slowness(key);
+  }
 }
 
 /** Why auto-eval is held back, or null when it may run. Clicks are never held. */

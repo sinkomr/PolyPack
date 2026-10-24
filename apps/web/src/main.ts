@@ -107,10 +107,22 @@ function currentRecord(): RecordChoice | null {
   return null;
 }
 
+// Live updates for the problem on the board only; it follows the board from problem to problem.
+const live = new api.LiveFeed(
+  (e) => {
+    const s = board.state;
+    if (e.N !== s.N || e.M !== s.M || e.P !== s.P) return;
+    if (e.rank === 1) say(`New best for this problem: ${e.score.toFixed(6)} by ${e.name}.`);
+    refreshProblem();
+  },
+  () => refreshProblem(),
+);
+
 async function refreshProblem(): Promise<void> {
   const { N, M, P } = board.state;
   const key = `${N}/${M}/${P}`;
   requestedKey = key;
+  live.follow([key]);
   const [problem, lb] = await Promise.all([api.getProblem(N, M, P), api.getLeaderboard(N, M, P)]);
   const s = board.state;
   if (`${s.N}/${s.M}/${s.P}` !== key) return; // the problem changed while loading
@@ -147,7 +159,10 @@ function link(text: string, href: string): HTMLAnchorElement {
 async function loadEntry(id: number, who: string): Promise<void> {
   const cfg = await api.getSubmission(id);
   // the server keeps only the best entry of each problem, so a link to one since overtaken is dead
-  if (!cfg) return say("That entry could not be loaded. It may have been overtaken: only the best entry of each problem is kept.");
+  if (!cfg)
+    return say(
+      "That entry could not be loaded. It may have been overtaken: only the best entry of each problem is kept.",
+    );
   const err = board.load({ N: cfg.N, M: cfg.M, P: cfg.P, pieces: cfg.pieces, container_phi: cfg.container_phi });
   if (err) return say(`That entry could not be loaded: ${err}.`);
   view.fit();
@@ -451,6 +466,15 @@ $("submit").addEventListener("click", async () => {
   }
   out.className = "note";
   out.textContent = "Submitting…";
+  // The server scores the container at the orientation it is sent and does not search for a
+  // better one, so the container is turned to its best orientation first, as Auto-orient does.
+  const unturned = board.container?.size ?? 0;
+  if (board.autoOrient(false)) {
+    say(
+      `Turned the container to its best orientation before submitting: ${unturned.toFixed(6)} → ${board.container!.size.toFixed(6)}.`,
+    );
+    view.fit();
+  }
   // The note is the user's own text; how the board was found is sent in its own fields.
   const note = $<HTMLInputElement>("agent-note").value.trim();
   const r = await api.submit({
@@ -513,16 +537,8 @@ $("share").addEventListener("click", async () => {
 
 // ---------- live updates ----------
 
-const isLive = api.subscribe(
-  (e) => {
-    const s = board.state;
-    if (e.N !== s.N || e.M !== s.M || e.P !== s.P) return;
-    if (e.rank === 1) say(`New best for this problem: ${e.score.toFixed(6)} by ${e.name}.`);
-    refreshProblem();
-  },
-  () => refreshProblem(),
-);
-setInterval(() => $("live").classList.toggle("on", isLive()), 1500);
+// (the feed is created with the records above, and follows the problem refreshProblem reads)
+setInterval(() => $("live").classList.toggle("on", live.isLive()), 1500);
 
 // ---------- start ----------
 

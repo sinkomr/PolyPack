@@ -8,6 +8,7 @@ import {
   advancePlan,
   applyLoadAll,
   applyStep,
+  countEvaluations,
   drop,
   leaveReason,
   newGame,
@@ -16,7 +17,7 @@ import {
   slotted,
   stallAfter,
 } from "../src/tighter/game";
-import { dealEvals, drawProblem, takeToken } from "../src/tighter/dealer";
+import { drawProblem, takeToken } from "../src/tighter/dealer";
 import { autoTarget } from "../src/tighter/scheduler";
 import type { UpgradeId } from "../src/tighter/upgrades";
 
@@ -169,19 +170,22 @@ describe("Tighter Auto-advance", () => {
     s.dealer.dealt = 3;
     return { s, q };
   }
-  const o = { seeds: 1, slots: 3, perClick: 1 };
+  const o = { slots: 3 };
 
   it("drops a problem that ran its patience without progress, once a new one can take its slot", () => {
     const { s, q } = full();
     q[0].sinceGain = 999;
-    expect(advancePlan(s, o)).toEqual({ now: [], replace: null, due: null });
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: null });
     q[0].sinceGain = 1000;
     // due, but the next deal is not earned yet: it stays, and the lanes keep to the others
-    expect(advancePlan(s, o)).toEqual({ now: [], replace: null, due: q[0] });
-    // a slot earns a problem per 300 clicks' worth of evaluations: three slots, one every 100 here
-    s.stats.evaluations += dealEvals(1) / 3 - 1;
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: q[0] });
+    // a slot earns a problem per 300 clicks: three slots, one every 100 here, or every 1,000
+    // evaluations of auto-eval
+    countEvaluations(s, 99, true);
     expect(advancePlan(s, o).replace).toBeNull();
-    s.stats.evaluations += 1;
+    countEvaluations(s, 9, false);
+    expect(advancePlan(s, o).replace).toBeNull();
+    countEvaluations(s, 1, false);
     expect(advancePlan(s, o).replace).toBe(q[0]);
     // the page deals the replacement, then drops the problem as Drop does: the queue stays full
     const next = drawProblem(s.dealer, [q[0], { N: 30, M: 30, P: 60 }], seenKeys(s))!;
@@ -196,47 +200,41 @@ describe("Tighter Auto-advance", () => {
     expect(drawProblem(s.dealer, [q[0]], seenKeys(s))).toBeNull();
     // the deal is spent: the next problem due waits for the next one
     q[1].sinceGain = 5000;
-    expect(advancePlan(s, o)).toEqual({ now: [], replace: null, due: q[1] });
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: q[1] });
   });
 
-  it("drops a spent problem first, then the one longest without progress", () => {
+  it("drops the problem longest without progress first", () => {
     const { s, q } = full();
     s.dealer.tokens = 1;
     q[1].sinceGain = 3000;
     q[2].sinceGain = 1500;
+    expect(leaveReason(s, q[1])).toBe("stalled");
     expect(advancePlan(s, o).replace).toBe(q[1]);
-    q[0].endedRuns = 1;
-    expect(leaveReason(s, q[0], 1)).toBe("spent");
-    expect(advancePlan(s, o).replace).toBe(q[0]);
-    // with more seeds it is not spent
-    expect(leaveReason(s, q[0], 2)).toBeNull();
   });
 
-  it("lets spent problems go at once when nothing in the queue is left to run", () => {
+  it("never drops a problem for the runs that ended on it: a problem allows any number of runs", () => {
     const { s, q } = full();
-    for (const p of q) p.endedRuns = 1;
-    expect(advancePlan(s, o)).toEqual({ now: q, replace: null, due: q[0] });
-    q[2].endedRuns = 0;
-    expect(advancePlan(s, o).now).toEqual([]);
+    s.dealer.tokens = 3;
+    for (const p of q) p.endedRuns = 50;
+    expect(q.map((p) => leaveReason(s, p))).toEqual([null, null, null]);
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: null });
   });
 
   it("keeps every problem with Never, and a best that could not be sent without a name", () => {
     const { s, q } = full();
     s.dealer.tokens = 3;
     q[0].sinceGain = 1e6;
-    q[1].endedRuns = 1;
     s.settings.patience = null;
-    expect(advancePlan(s, o)).toEqual({ now: [], replace: null, due: null });
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: null });
     // the lanes' order still knows when a problem has stalled
     expect(stallAfter(s)).toBe(1000);
     s.settings.patience = 20000;
     expect(stallAfter(s)).toBe(20000);
-    expect(advancePlan(s, o).replace).toBe(q[1]);
+    expect(advancePlan(s, o).replace).toBe(q[0]);
     // without a name, an unsent best would be lost: it stays
     s.consent = false;
-    q[1].best = 9;
-    expect(leaveReason(s, q[1], 1)).toBeNull();
     q[0].best = 9;
+    expect(leaveReason(s, q[0])).toBeNull();
     expect(advancePlan(s, o).replace).toBeNull();
   });
 
@@ -267,7 +265,7 @@ describe("Tighter lanes with Auto-advance", () => {
     });
   }
   const target = (q: ProblemState[], current: string | null, stall = 1000) =>
-    autoTarget({ lane: 0, queue: q, focus: q[0].key, busy: new Set(), owned, seeds: 1, current, stall })?.key;
+    autoTarget({ lane: 0, queue: q, focus: q[0].key, busy: new Set(), owned, current, stall })?.key;
 
   it("keep a lane on its problem while it makes progress, then go to the freshest", () => {
     const q = queue([500, 0, 200]);
@@ -280,7 +278,7 @@ describe("Tighter lanes with Auto-advance", () => {
   });
 
   it("do not go in circles among problems that stopped making progress", () => {
-    // every problem stalled, Never: one lane, a click of 10 evaluations a job, no progress anywhere
+    // every problem stalled, Never: one lane, jobs of 10 evaluations, no progress anywhere
     const q = queue([1000, 1000, 1000]);
     let current: string | null = null;
     let moves = 0;

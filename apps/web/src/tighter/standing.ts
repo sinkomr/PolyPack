@@ -1,4 +1,5 @@
 import { FRONTIER, FRONTIER_P, FRONTIER_SIDES, ProblemKey } from "./frontier";
+import { RESET_MIN } from "./points";
 import type { GameState } from "./game";
 import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
@@ -10,9 +11,13 @@ import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrad
  * stay too. Every point of standing ever earned adds 10 % to all record points, and standing buys
  * the Standing row: head starts that make the opening of a new cycle a sprint, rows that survive
  * resets, and mechanics that exist nowhere else (Pipelines, Auto-tune). A cycle may be played under
- * a rule (circles only, small problems, one seed, clicks only, one method): finishing it under the
- * rule pays extra standing and a reward of the rule's own, for good. The rules also aim the
- * players' compute at one family of problems.
+ * a rule (circles only, small problems, clicks only, one method): finishing it under the rule pays
+ * extra standing and a reward of the rule's own, for good. The rules also aim the players' compute at
+ * one family of problems.
+ *
+ * The One seed rule (id "seed") was dropped with the Seeds row on 2026-10-22. A save read with it as
+ * the cycle's rule goes on without a rule, and a finished "seed" rule, its reward and its history
+ * entries are forgotten: ruleOrNull knows only the rules below.
  */
 
 /** One cycle, as the history shows it. */
@@ -140,12 +145,6 @@ export const RULES: readonly Rule[] = [
     reward: `Every problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
   },
   {
-    id: "seed",
-    name: "One seed",
-    limit: "Each problem gets one seed, so it allows one run that ends by itself.",
-    reward: "You get twice as many seeds per problem.",
-  },
-  {
     id: "clicks",
     name: "Clicks only",
     limit: "Auto-eval does not run, so every evaluation comes from your own clicks.",
@@ -208,8 +207,8 @@ export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string
 
 // ---------- resets ----------
 
-/** Record points a cycle must earn before it can be reset [SPEC]. */
-export const RESET_MIN = 250_000;
+/** Record points a cycle must earn before it can be reset (points.ts, beside the weights it scales with). */
+export { RESET_MIN } from "./points";
 /** Records held per point of standing at a reset [SPEC]. */
 export const HELD_PER_STANDING = 50;
 
@@ -218,7 +217,7 @@ export const heldCount = (s: GameState) =>
   s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 
 /**
- * Standing a reset gives now [SPEC]: √(cycle RP / 250,000) + records held / 50, floored; nothing
+ * Standing a reset gives now [SPEC]: √(cycle RP / RESET_MIN) + records held / 50, floored; nothing
  * before the cycle has earned RESET_MIN, so held records alone never pay for a reset.
  */
 export function standingGain(cycleEarned: number, held: number): number {
@@ -242,7 +241,7 @@ export const ALWAYS_KEPT: readonly UpgradeId[] = ["standing", "rent", "rentx", "
 /** Head starts: owned at once when a cycle begins (with their prerequisites). */
 export const HEAD_STARTS: Readonly<Partial<Record<UpgradeId, readonly UpgradeId[]>>> = {
   head1: ["trace", "click2", "click3", "click4", "click5", "auto1"],
-  head2: ["queue3", "seeds", "seeds2", "auto2", "auto3", "auto4", "auto5", "basin"],
+  head2: ["queue3", "auto2", "auto3", "auto4", "auto5", "basin"],
   head3: ["reach2", "advance", "lanes2"],
 };
 const METHOD_IDS: readonly UpgradeId[] = ["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"];

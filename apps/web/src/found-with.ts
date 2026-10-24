@@ -34,9 +34,10 @@ export const HAND: Attribution = { found_with: "hand" };
 /**
  * How the board changed: an edit (moving, adding, rotating or removing pieces, changing the
  * problem), a load of a configuration from elsewhere (an entry, a record, an import, a share link),
- * or a step through the undo history (and the restore of the saved board on reload).
+ * a step through the undo history (and the restore of the saved board on reload), or the container
+ * turned to its best orientation (Auto-orient, and before every submission).
  */
-export type BoardChange = "edit" | "load" | "history";
+export type BoardChange = "edit" | "load" | "history" | "orient";
 
 /**
  * Attribution of the board after a change, decided from the board itself and its lineage:
@@ -44,7 +45,9 @@ export type BoardChange = "edit" | "load" | "history";
  *  - an empty board, and a board loaded from elsewhere, are the user's ("hand");
  *  - an edit of an optimizer board, or of an edited one, is "optimizer_edited" with the same run;
  *  - a step through the history returns to what that board was when it was made (`recorded`),
- *    or to "hand" when nothing was recorded for it.
+ *    or to "hand" when nothing was recorded for it;
+ *  - turning the container keeps the attribution: the pieces are as they were found, and the
+ *    server used to choose the orientation itself.
  * `previous` is the attribution before the change, `accepted` the run when the new board is
  * exactly an accepted result.
  */
@@ -58,6 +61,7 @@ export function attributionAfter(opts: {
   if (opts.accepted) return { found_with: "optimizer", run: opts.accepted };
   if (opts.empty || opts.change === "load") return HAND;
   if (opts.change === "history") return opts.recorded ?? HAND;
+  if (opts.change === "orient") return opts.previous;
   return opts.previous.found_with === "hand" ? HAND : { found_with: "optimizer_edited", run: opts.previous.run };
 }
 

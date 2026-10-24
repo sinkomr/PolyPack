@@ -15,7 +15,8 @@ import { CONTEST, TIERS, Tier, shapeWeight } from "./points";
  * weakness leave to gain, correction the learning dealer's draw for the candidate's bucket (1
  * without it), and speed √(cost of an evaluation at N+M+P = 85 / cost at the candidate's size).
  * The square root splits the difference between a clicking player (a click is one click whatever
- * the cost of its evaluation) and auto-eval (which runs as many evaluations as the CPU allows).
+ * the cost of its evaluation) and auto-eval (which runs as many evaluations as the CPU allows, up
+ * to its target).
  * Room and RP_PER_EVAL are [SPEC]; the cost table is measured [CALC].
  */
 
@@ -85,8 +86,12 @@ export function room(tier: Tier, weakness: number | null): number {
   }
 }
 
-/** Record points an evaluation earns on a fresh open problem of shape weight 1, roughly [SPEC; stage-one simulation]. */
-export const RP_PER_EVAL = 0.5;
+/**
+ * Record points an evaluation earns on a fresh open problem of shape weight 1, roughly [SPEC; stage-one
+ * simulation]: 0.5 at the size and gap weights of 100, 8 times that at 10,000 (points.ts), as the
+ * prices, so the learning dealer's ratios stay near 1 and under MAX_RATIO.
+ */
+export const RP_PER_EVAL = 4;
 
 /** The prior: expected record points per evaluation. */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null }): number {

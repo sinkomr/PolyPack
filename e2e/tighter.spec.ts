@@ -23,8 +23,11 @@ interface ProblemView {
   ourId: number | null;
   runs: number;
   nextSeed: number;
+  run: { method: string; seed: number } | null;
   unconfirmed: number;
   sending: unknown;
+  rp: number;
+  rpTrace: [number, number][];
 }
 const focused = (page: Page): Promise<ProblemView> =>
   page.evaluate(() => {
@@ -32,6 +35,8 @@ const focused = (page: Page): Promise<ProblemView> =>
     return structuredClone(s.queue.find((p: { key: string }) => p.key === s.focus));
   });
 const stats = (page: Page) => page.evaluate(() => structuredClone((window as any).tighter.state.stats));
+/** RP as the page writes it: one decimal below 100, whole numbers with commas from 100. */
+const fmtRP = (n: number) => (n < 100 ? n.toFixed(1) : Math.round(n).toLocaleString("en-US"));
 const rp = (page: Page): Promise<number> => page.evaluate(() => (window as any).tighter.state.rp);
 const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
 const siteBest = async (page: Page, p: ProblemView) =>
@@ -134,8 +139,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(p.board!.pieces).toHaveLength(p.P);
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
 
-  // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (seed 1) that
-  // stays open, and the first record
+  // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (with a random
+  // seed) that stays open, and the first record
   await page.click("#t-evolve");
   await expect
     .poll(async () => (await focused(page)).phase === "ready" && (await idle(page)), { timeout: 60_000 })
@@ -148,13 +153,15 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(findOverlaps(p.N, p.board!.pieces, strictTolerance(p.board!))).toEqual([]);
   // the run scores the container at fixed angles between turns: the server's best angle is no worse
   expect(evaluate(p.board!, { autoOrient: true }).score!).toBeLessThanOrEqual(p.best!);
-  // the start's scoring and Compact's 100 evaluations, in one run with seed 1
+  // the start's scoring and Compact's 100 evaluations, in one run, its seed a random 32-bit number
   expect(await stats(page)).toMatchObject({ evaluations: 101, clicks: 1, runs: 1 });
   expect(p).toMatchObject({ runs: 1, nextSeed: 2 });
+  const seed = p.run!.seed;
+  expect(Number.isSafeInteger(seed) && seed >= 0 && seed <= 0xffffffff).toBe(true);
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at 101 evaluations");
-  // the next problem is earned by work: 300 clicks of one evaluation
+  // the next problem is earned by work: 300 clicks, whatever their size (Compact counts its 100 evaluations)
   await expect(page.locator("#t-next")).toBeDisabled();
-  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ evaluations$/);
+  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
   // nothing is sent and nothing is paid before the player consents
   await page.waitForTimeout(1500);
   expect(await siteBest(page, p)).toBeNull();
@@ -167,20 +174,21 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await page.click("#t-consent-save");
   await expect(page.locator("#t-welcome")).toBeHidden();
 
-  // consent pays the record so far at once; the first record goes at once, with its provenance
-  await expect(page.locator("#t-points")).toBeVisible();
+  // consent pays the record so far at once (the totals appear); the first record goes at once, with its provenance
+  await expect(page.locator("#t-bar")).toBeVisible();
   const paid = await rp(page);
   expect(paid).toBeGreaterThanOrEqual(5);
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 15_000 }).toBe("E2E Tighter");
   const first = await siteBest(page, p);
   p = await focused(page);
-  // the board was turned to its best angle before it went: the server's score is the board's
-  expect(first.score).toBeCloseTo(p.best!, 12);
+  // the board was turned to its best angle before it went, and the server scores the angle sent:
+  // its score is the board's, to the bit
+  expect(first.score).toBe(p.best!);
   const entry = await (await page.request.get(`/api/submissions/${first.id}`)).json();
   expect(entry).toMatchObject({
     found_with: "optimizer",
     method: "mc_compress",
-    seed: 1,
+    seed: p.run!.seed,
     budget: { evals: 101 },
     agent_note: "tighter/0.1",
   });
@@ -193,9 +201,11 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   // everything paid so far (consent's payment, and the container's turn before the send) is confirmed
   const confirmed = await rp(page);
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
-  await expect.poll(() => logText(page)).toContain(`${confirmed.toFixed(1)} RP confirmed`);
+  await expect.poll(() => logText(page)).toContain(`${fmtRP(confirmed)} RP confirmed`);
   await expect(page.locator("#t-notice")).toContainText("RP confirmed");
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
+  // the board's box counts what this problem has paid, which is everything paid so far
+  await expect(page.locator("#t-prob-rp")).toHaveText(fmtRP(confirmed));
 
   // Evolve: each click is one more evaluation of the same run; an improving click pays at once
   const s0 = await stats(page);
@@ -223,28 +233,36 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   const second = await siteBest(page, p);
   expect(second.name).toBe("E2E Tighter");
   const secondEntry = await (await page.request.get(`/api/submissions/${second.id}`)).json();
-  // the same run (seed 1), as far as it had gone when it found the board
-  expect(secondEntry).toMatchObject({ found_with: "optimizer", method: "mc_compress", seed: 1 });
+  // the same run (the same seed), as far as it had gone when it found the board
+  expect(secondEntry).toMatchObject({ found_with: "optimizer", method: "mc_compress", seed });
   expect(secondEntry.budget.evals).toBeGreaterThan(101);
   // the server keeps only the leader: the overtaken first record is gone, and the game holds one record
   expect((await page.request.get(`/api/submissions/${first.id}`)).status()).toBe(404);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 15_000 }).toBe(second.id);
   await expect.poll(async () => (await focused(page)).unconfirmed).toBe(0);
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (5 RP), labels it
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (1,000 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
+  // under it, the RP paid here by evaluations, noted only "RP"
+  await expect(page.locator("#t-rp-trace")).toBeVisible();
+  await expect(page.locator("#t-rp-trace text")).toHaveText("RP");
+  const rpTrace = (await focused(page)).rpTrace;
+  expect(rpTrace.length).toBeGreaterThanOrEqual(2);
+  expect(rpTrace.at(-1)![1]).toBeCloseTo((await focused(page)).rp, 9);
+  await page.locator("#t-pip").screenshot({ path: test.info().outputPath("pip.png") });
+  await grant(page, 1000);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
   await openBoard(page);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  expect(await rp(page)).toBeCloseTo(before - 5, 9);
+  expect(await rp(page)).toBeCloseTo(before - 1000, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
-  // evaluations per click: 2 per click, then 3
-  await grant(page, 1000);
+  // evaluations per click: 2 per click (1,500 RP), then 3 (1,800 RP)
+  await grant(page, 3300);
   await buyAll(page, ["click2"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×2");
   let e = (await stats(page)).evaluations;
@@ -266,9 +284,18 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace", "click2", "click3"]);
   expect((await focused(page)).best).toBe(saved.best);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  // after a reload the next click opens a run with the next seed
+  await expect(page.locator("#t-rp-trace")).toBeVisible();
+  expect((await focused(page)).rpTrace).toEqual(saved.rpTrace);
+  // after a reload the next click opens a new run, with a new seed (the open run's: the board keeps
+  // the old run's until the new one beats it, which its first few evaluations rarely do)
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
+  const open = await page.evaluate(() => {
+    const t = (window as any).tighter;
+    return t.runs.find((r: { key: string }) => r.key === t.state.focus) ?? null;
+  });
+  expect(open).toMatchObject({ method: "mc_compress" });
+  expect(open.seed).not.toBe(seed);
 
   const a11y = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(a11y.violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
@@ -306,7 +333,7 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   await click(page);
 });
 
-test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute behind, and owes nothing for time off", async ({
+test("tighter: auto-eval runs live, an evaluation a second while on, at most a minute behind, and owes nothing for time off", async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -317,40 +344,41 @@ test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute
   await page.fill("#t-name", "Idle Player");
   await page.check("#t-agree");
   await page.click("#t-consent-save");
-  await grant(page, 5000);
+  await grant(page, 6000);
   await expect(page.locator("#t-auto")).toBeHidden();
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×4");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
   const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
 
-  // live: a click of 4 every 5 s while it is on, beside the player
+  // live: an evaluation a second while it is on, beside the player, whatever the click size (4 here):
+  // its rate is in evaluations, so the clicks of 4 do not make it 4 times as fast
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  await expect(page.locator("#t-bar-auto")).toHaveText("a click of 4 every 5 s");
+  await expect(page.locator("#t-bar-auto")).toHaveText("up to 1 evaluation a second");
   const s0 = await stats(page);
   const t0 = Date.now();
   await expect
-    .poll(async () => (await stats(page)).evaluations - s0.evaluations, { timeout: 30_000 })
+    .poll(async () => (await stats(page)).evaluations - s0.evaluations, { timeout: 40_000 })
     .toBeGreaterThanOrEqual(8);
   await expect.poll(() => idle(page)).toBe(true);
   const s1 = await stats(page);
   const live = s1.evaluations - s0.evaluations;
-  expect(live).toBeLessThanOrEqual(0.8 * ((Date.now() - t0) / 1000) + 8);
-  expect(live).toBe(Math.round(live / 4) * 4);
+  expect(live).toBeLessThanOrEqual((Date.now() - t0) / 1000 + 4);
   // auto-eval's evaluations are not the player's clicks
   expect(s1.clicks).toBe(s0.clicks);
 
   // two hours between ticks (a hidden tab's timers can sleep): it catches up at most a minute, or a
-  // Compact's 100 evaluations, whichever is more; never the two hours (5,760)
+  // Compact's 100 evaluations, whichever is more; never the two hours (3,600)
   const t1 = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 2 * 3600_000));
   await expect
     .poll(async () => (await stats(page)).evaluations - s1.evaluations, { timeout: 60_000 })
     .toBeGreaterThanOrEqual(96);
-  await expect.poll(async () => (await due()) < 4 && (await idle(page)), { timeout: 30_000 }).toBe(true);
+  // one evaluation at a time at this rate: idle, less than one is due
+  await expect.poll(async () => (await due()) < 1 && (await idle(page)), { timeout: 30_000 }).toBe(true);
   const caught = (await stats(page)).evaluations - s1.evaluations;
-  expect(caught).toBeLessThanOrEqual(100 + 0.8 * ((Date.now() - t1) / 1000) + 8);
+  expect(caught).toBeLessThanOrEqual(100 + (Date.now() - t1) / 1000 + 4);
 
   // closed for half an hour with auto-eval on: the page saves as it goes (pagehide), and nothing else
   // is written afterwards, so the reload reads exactly that save
@@ -378,15 +406,15 @@ test("tighter: auto-eval runs live, a click every 5 s while on, at most a minute
   await expect.poll(() => idle(page)).toBe(true);
   const ran = (await stats(page)).evaluations - s2.evaluations;
   // the live rate from the press on, and the new run's start (a reload closes runs)
-  expect(ran).toBeLessThanOrEqual(0.8 * ((Date.now() - t2) / 1000) + 8);
+  expect(ran).toBeLessThanOrEqual((Date.now() - t2) / 1000 + 4);
   expect(errors).toEqual([]);
 });
 
-test("tighter: a method change opens a new run with the next seed", async ({ page }) => {
+test("tighter: a method change opens a new run", async ({ page }) => {
   test.setTimeout(180_000);
   await fresh(page, 9);
   await firstRecord(page);
-  await grant(page, 50_000);
+  await grant(page, 100_000);
   await buyAll(page, [
     "trace",
     "click2",
@@ -394,7 +422,6 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
     "click4",
     "auto1",
     "click5",
-    "seeds",
     "auto2",
     "click6",
     "click7",
@@ -408,13 +435,13 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
   await buyAll(page, ["basin"]);
   await expect(page.locator("#t-method-box")).toBeVisible();
   expect(await focused(page)).toMatchObject({ runs: 1, nextSeed: 2 });
-  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · seed 1");
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at");
   const runs0 = (await stats(page)).runs;
 
   await page.selectOption("#t-method", "basin_hopping");
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 2, nextSeed: 3 });
-  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping · seed 2");
+  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping · run at");
   // the same run goes on with the next click
   await click(page);
   expect((await focused(page)).runs).toBe(2);
@@ -423,7 +450,7 @@ test("tighter: a method change opens a new run with the next seed", async ({ pag
   await page.selectOption("#t-method", "mc_compress");
   await click(page);
   expect(await focused(page)).toMatchObject({ runs: 3, nextSeed: 4 });
-  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · seed 3");
-  // none of these runs ended by itself, so the problem's one seed is not spent
+  await expect(page.locator("#t-runinfo")).toContainText("mc_compress · run at");
+  // a problem allows any number of runs
   await expect(page.locator("#t-evolve")).toBeEnabled();
 });

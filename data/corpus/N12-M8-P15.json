@@ -82,7 +82,8 @@
   ],
   "container_phi": 0.5828553929459304
  },
- "expected_score": 7.634453483228961,
+ "expected_score": 7.861087198376942,
  "expected_valid": true,
+ "oriented_score": 7.634453483228961,
  "auto_oriented_phi": 0.289692764538227
 }

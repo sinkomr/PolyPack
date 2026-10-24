@@ -109,6 +109,60 @@ export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1)
   return { sep: best, nx, ny };
 }
 
+/** Fewest sides for which pairSeparation prunes the axes: below, the plain loop is as fast (measured 2026-10-21). */
+const PRUNE_FROM_N = 12;
+/** Largest |theta| for which the pruning's margin covers the rounding of the axis angles (see pairSeparation). */
+const PRUNE_MAX_THETA = 1000;
+
+/**
+ * regularPolygonSeparation(N, a, b, scale).sep, the same double (up to the sign of a zero, which
+ * findOverlaps never reports), from far fewer axes for many-sided pieces: about 2 instead of 2N for
+ * pieces near contact.
+ *
+ * Why it is exact: each candidate gap is d.u - r - R cos(delta) with R cos(delta) >= r, so it is
+ * at most |d| cos(alpha) - 2r, alpha being the angle between the axis and the line of centres. The
+ * axes are visited outward from the one nearest that line, on both pieces; the axes s steps away
+ * have alpha >= (s - 1/2) 2 pi / N. Once |d| cos((s - 1/2) 2 pi / N) - 2r is below the best gap
+ * found by more than the margin, no axis left can reach it, and the maximum is the kernel's: the
+ * same expressions, evaluated for a set of axes that holds every one attaining it. The margin,
+ * 1e-11 (|d| + R), covers the rounding of the gaps (about 1e-15 (|d| + R)) and of the axis angles
+ * (a few ulps of |theta| + 2 pi, below 4e-13 rad while |theta| <= PRUNE_MAX_THETA).
+ */
+export function pairSeparation(N: number, a: Pose, b: Pose, scale = 1): number {
+  if (N === 0) return circleSeparation(a, b, scale).sep;
+  if (N < PRUNE_FROM_N || !(Math.abs(a.theta) <= PRUNE_MAX_THETA && Math.abs(b.theta) <= PRUNE_MAX_THETA))
+    return regularPolygonSeparation(N, a, b, scale).sep;
+  const R = circumradius(N) * scale;
+  const r = inradius(N) * scale;
+  const step = (2 * Math.PI) / N;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  // the candidate gaps of the edge normals k of A and of B, exactly as regularPolygonSeparation has them
+  const gapA = (k: number) => {
+    const angA = a.theta + Math.PI / 2 + Math.PI / N + k * step;
+    return dx * Math.cos(angA) + dy * Math.sin(angA) - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
+  };
+  const gapB = (k: number) => {
+    const angB = b.theta + Math.PI / 2 + Math.PI / N + k * step;
+    return (
+      -(dx * Math.cos(angB) + dy * Math.sin(angB)) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step)
+    );
+  };
+  const index = (k: number) => ((k % N) + N) % N;
+  // the normal of A nearest the direction from A to B, and of B nearest the direction from B to A
+  const towardB = Math.atan2(dy, dx);
+  const kA = Math.round((towardB - (a.theta + Math.PI / 2 + Math.PI / N)) / step);
+  const kB = Math.round((towardB + Math.PI - (b.theta + Math.PI / 2 + Math.PI / N)) / step);
+  let best = Math.max(gapA(index(kA)), gapB(index(kB)));
+  const dist = Math.hypot(dx, dy);
+  const margin = 1e-11 * (dist + R);
+  for (let s = 1; s <= N / 2; s++) {
+    if (dist * Math.cos((s - 0.5) * step) - 2 * r < best - margin) break;
+    best = Math.max(best, gapA(index(kA + s)), gapA(index(kA - s)), gapB(index(kB + s)), gapB(index(kB - s)));
+  }
+  return best;
+}
+
 /** Circle-circle separation from the centre distance. Exact in both signs. */
 export function circleSeparation(a: Pose, b: Pose, scale = 1): Contact {
   const dx = a.x - b.x;
@@ -183,7 +237,7 @@ export interface Overlap {
  * All overlapping pairs among congruent pieces.
  * Broad phase: uniform grid with cell size 2R, where R is the bounding radius. Two pieces
  * can only overlap when their centres are closer than 2R, so only the 3x3 block of
- * neighbouring cells needs the exact test.
+ * neighbouring cells needs the exact test, pairSeparation.
  * With `limit`, the search stops once that many pairs are found. Pieces that do not overlap
  * leave only a bounded number of neighbours in each cell, so the cost of a heavily overlapping
  * configuration (say every piece at one point) then stays near that of a valid one.
@@ -208,7 +262,7 @@ export function findOverlaps(N: number, poses: readonly Pose[], tol = TOL, scale
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           if (dx * dx + dy * dy > reach2) continue;
-          const sep = pieceSeparation(N, a, b, scale).sep;
+          const sep = pairSeparation(N, a, b, scale);
           if (sep < -tol && out.push({ i: j, j: i, sep }) >= limit) return out;
         }
       }

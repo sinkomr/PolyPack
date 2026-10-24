@@ -9,19 +9,27 @@ import { Candidate, LOOSE_WEAKNESS, NEIGHBOURS } from "./rank";
  * The dealer: which problem the player gets next, and how often (design.md §5, §6).
  *
  * New problems are earned by work, not time: each queue slot is dealt one problem per DEAL_CLICKS
- * clicks' worth of evaluations (at the evaluations a click does when they run), as a token bucket of
- * `slots` tokens. Clicking faster, or auto-eval, brings the next problem sooner. The rate also stands
- * in for a server-side limit on new problems per address. Every problem is checked with
+ * clicks, as a token bucket of `slots` tokens. Work counts in clicks (creditOf): the player's
+ * evaluations at the player's click size, so an Evolve click is one click whatever its size, and
+ * auto-eval's at AUTO_CLICK_EVALS to the click, so its rate earns problems at one pace whatever the
+ * player's click size. Clicking faster, or auto-eval, brings the next problem sooner. The rate also
+ * stands in for a server-side limit on new problems per address. Every problem is checked with
  * GET /api/problems just before it is dealt.
  *
- * What is dealt (plan 2026-10-20 §3): open problems of the frontier (and, with Wider frontier, of
- * every side from 21 to 100), and contested problems (N, M <= 20) from the site's records, by tier
+ * What is dealt (plan 2026-10-20 §3): open problems of the frontier (and, with More open problems,
+ * of every side from 21 to 100), and contested problems (N, M <= 20) from the site's records, by tier
  * (loose, batch, published) and down to the player's size ring. rank.ts judges the candidates.
  *
  * Pure apart from the random draws, which come from a seeded generator kept in the save, so a game
  * started with the same seed is dealt the same candidates.
  */
 export const DEAL_CLICKS = 300;
+/**
+ * Auto-eval's evaluations earn deals as clicks of this many evaluations (K₀): the end of the click
+ * ladder, about the click size of a player who buys Auto-advance and the lanes, so idle dealing keeps
+ * the pace it had there, and a larger click no longer slows it.
+ */
+export const AUTO_CLICK_EVALS = 10;
 
 export interface DealerState {
   /** Seed of the dealer's draws. */
@@ -32,8 +40,8 @@ export interface DealerState {
   dealt: number;
   /** Deal tokens; a deal takes one. */
   tokens: number;
-  /** The player's evaluations run when `tokens` was last brought up to date. */
-  evalsAt: number;
+  /** Work done since `tokens` was last brought up to date, in clicks (creditOf). */
+  credit: number;
 }
 
 export const newDealer = (seed: number): DealerState => ({
@@ -41,11 +49,20 @@ export const newDealer = (seed: number): DealerState => ({
   draws: 0,
   dealt: 0,
   tokens: 1,
-  evalsAt: 0,
+  credit: 0,
 });
 
-/** Evaluations that earn one slot one problem: DEAL_CLICKS clicks of `perClick` evaluations. */
-export const dealEvals = (perClick: number) => DEAL_CLICKS * Math.max(1, perClick);
+/**
+ * The clicks that `evaluations` count as: the player's at `perClick` evaluations to the click (an
+ * Evolve click is one, Compact's 100 evaluations 100 / perClick), auto-eval's (null) at AUTO_CLICK_EVALS.
+ */
+export const creditOf = (evaluations: number, perClick: number | null) =>
+  evaluations / (perClick === null ? AUTO_CLICK_EVALS : Math.max(1, perClick));
+
+/** Work done, in clicks: the next refill turns it into tokens. */
+export function earn(d: DealerState, clicks: number): void {
+  if (clicks > 0) d.credit += clicks;
+}
 
 /** mulberry32, the solver's generator (seededRandom), one value at a time. */
 export function mulberry32(state: number): number {
@@ -62,27 +79,23 @@ export function nextRandom(d: DealerState): number {
   return value;
 }
 
-/**
- * Brings the tokens up to `evaluations` (the player's evaluations run): `slots` per
- * dealEvals(perClick) evaluations, at most `slots`.
- */
-export function refill(d: DealerState, slots: number, evaluations: number, perClick: number): void {
-  const run = Math.max(0, evaluations - d.evalsAt);
-  d.tokens = Math.min(slots, d.tokens + (run * slots) / dealEvals(perClick));
-  d.evalsAt = Math.max(d.evalsAt, evaluations);
+/** Brings the tokens up to date with the work done: `slots` per DEAL_CLICKS clicks, at most `slots`. */
+export function refill(d: DealerState, slots: number): void {
+  d.tokens = Math.min(slots, d.tokens + (d.credit * slots) / DEAL_CLICKS);
+  d.credit = 0;
 }
 
-export function canDeal(d: DealerState, slots: number, evaluations: number, perClick: number): boolean {
-  refill(d, slots, evaluations, perClick);
+export function canDeal(d: DealerState, slots: number): boolean {
+  refill(d, slots);
   return d.tokens >= 1 - 1e-9;
 }
 
-/** Evaluations still to run before the next token (0 when one is there). */
-export function evalsToNextDeal(d: DealerState, slots: number, evaluations: number, perClick: number): number {
-  refill(d, slots, evaluations, perClick);
+/** Clicks still to do before the next token (0 when one is there), AUTO_CLICK_EVALS of auto-eval's evaluations to one. */
+export function clicksToNextDeal(d: DealerState, slots: number): number {
+  refill(d, slots);
   if (d.tokens >= 1 - 1e-9) return 0;
-  // less a hair, so that a rounding error in the bucket does not show one evaluation too many
-  return Math.ceil(((1 - d.tokens) * dealEvals(perClick)) / slots - 1e-9);
+  // less a hair, so that a rounding error in the bucket does not show one click too many
+  return Math.ceil(((1 - d.tokens) * DEAL_CLICKS) / slots - 1e-9);
 }
 
 /**
@@ -119,7 +132,7 @@ export function openDealable(info: ProblemInfo | null): boolean {
 
 // ---------- the wider frontier ----------
 
-/** The wider frontier (Wider frontier): every side from 21 to 100 and from 40 to 500 pieces. */
+/** The wider frontier (More open problems): every side from 21 to 100 and from 40 to 500 pieces. */
 export const WIDE = { minSide: 21, maxSide: 100, minP: 40, maxP: MAX_PIECES } as const;
 
 /** A random problem of the wider frontier, the player's filters and `allow` permitting, not in `exclude`. */

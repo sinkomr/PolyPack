@@ -25,50 +25,49 @@
       <button id="t-take-over" class="primary">Play here instead</button>
     </section>
 
-    <section id="t-bar" class="t-bar" aria-label="Totals" hidden>
-      <div title="Record points (RP) you can spend in the tech tree.">
-        <span>Record points</span><strong id="t-bar-rp">0</strong>
-      </div>
-      <div title="Every record point you have earned, less any taken back.">
-        <span>Earned</span><strong id="t-bar-earned">0</strong>
-      </div>
-      <div title="Problems where your entry is the current record on PolyPack.">
-        <span>Records held</span><strong id="t-bar-held">0</strong>
-      </div>
-      <div title="Evaluations run in all, by your clicks and by auto-eval.">
-        <span>Evaluations run</span><strong id="t-bar-evals">0</strong>
-      </div>
-      <div title="Time the solver has spent on your evaluations, added up over all lanes.">
-        <span>Compute</span><strong id="t-bar-cpu">0 s</strong>
-      </div>
-      <div id="t-bar-auto-box" title="How fast auto-eval clicks for you, over all lanes." hidden>
-        <span>Auto-eval</span><strong id="t-bar-auto">off</strong>
-      </div>
-      <div id="t-bar-lanes-box" title="Solver workers running at once, each on its own problem." hidden>
-        <span>Lanes</span><strong id="t-bar-lanes">1</strong>
-      </div>
-      <div
-        id="t-bar-standing-box"
-        title="Standing to spend, and the multiplier your standing puts on all points."
-        hidden
-      >
-        <span>Standing</span><strong id="t-bar-standing">0</strong>
-      </div>
-    </section>
-
     <main class="layout">
-      <section class="stage" aria-label="Game">
+      <!-- the totals, and the problem on the far right: one row above the board and the panel -->
+      <div class="t-row">
+        <section id="t-bar" class="t-bar" aria-label="Totals" hidden>
+          <div title="Record points (RP) you can spend in the tech tree.">
+            <span>Record points</span><strong id="t-bar-rp">0</strong>
+          </div>
+          <div title="Every record point you have earned, less any taken back.">
+            <span>Earned</span><strong id="t-bar-earned">0</strong>
+          </div>
+          <div title="Problems where your entry is the current record on PolyPack.">
+            <span>Records held</span><strong id="t-bar-held">0</strong>
+          </div>
+          <div id="t-bar-evals-box" title="Evaluations run in all, by your clicks and by auto-eval.">
+            <span>Evaluations run</span><strong id="t-bar-evals">0</strong>
+          </div>
+          <div title="Time the solver has spent on your evaluations, added up over all lanes.">
+            <span>Compute</span><strong id="t-bar-cpu">0 s</strong>
+          </div>
+          <div id="t-bar-auto-box" title="Auto-eval's target in evaluations a second, shared by all lanes." hidden>
+            <span>Auto-eval</span><strong id="t-bar-auto">off</strong>
+          </div>
+          <div id="t-bar-lanes-box" title="Solver workers running at once, each on its own problem." hidden>
+            <span>Lanes</span><strong id="t-bar-lanes">1</strong>
+          </div>
+          <div
+            id="t-bar-standing-box"
+            title="Standing to spend, and the multiplier your standing puts on all points."
+            hidden
+          >
+            <span>Standing</span><strong id="t-bar-standing">0</strong>
+          </div>
+        </section>
         <div id="t-problem" class="t-head" role="group" aria-label="Problem">
-          <div class="t-head-main">
+          <div id="t-problem-text" class="t-head-main">
             <h2 id="t-title" class="t-title">Dealing a problem…</h2>
             <p id="t-problem-note" class="t-head-note"></p>
             <p id="t-problem-count" class="t-head-count"></p>
           </div>
-          <div class="t-head-side">
-            <p class="t-held-box">Records held <strong id="t-held">0</strong></p>
-            <button id="t-next" hidden>Next problem</button>
-          </div>
+          <button id="t-next" hidden>Next problem</button>
         </div>
+      </div>
+      <section class="stage" aria-label="Game">
         <div class="toolbar" role="toolbar" aria-label="Game">
           <button
             id="t-evolve"
@@ -85,7 +84,7 @@
           <button
             id="t-auto"
             aria-pressed="false"
-            title="Switches auto-eval on or off. While on, it clicks for you."
+            title="Switches auto-eval on or off. While on, it runs evaluations for you."
             hidden
           >
             Auto-eval
@@ -114,6 +113,14 @@
               aria-label="Side after each improvement"
               hidden
             ></svg>
+            <svg
+              id="t-rp-trace"
+              class="t-trace t-rp-trace"
+              viewBox="0 0 300 64"
+              role="img"
+              aria-label="RP earned here"
+              hidden
+            ></svg>
             <figcaption id="t-trace-empty" class="t-trace-empty">
               A graph of the side after each improvement appears here.
             </figcaption>
@@ -139,6 +146,8 @@
               <dd id="t-density">—</dd>
               <dt title="The current record for this problem on PolyPack, as last seen.">Record</dt>
               <dd id="t-record">—</dd>
+              <dt title="The RP this problem has paid you so far, less any that were taken back.">RP earned here</dt>
+              <dd id="t-prob-rp">—</dd>
             </dl>
           </section>
           <dialog id="t-welcome" class="t-pop" aria-labelledby="t-welcome-title">
@@ -173,65 +182,6 @@
       </section>
 
       <aside id="t-panel" class="panel" aria-label="Game panels">
-        <section id="t-points" aria-labelledby="t-points-heading" hidden>
-          <h2 id="t-points-heading">Record points</h2>
-          <dl class="stats">
-            <dt>To spend</dt>
-            <dd id="t-rp" class="big">0</dd>
-            <dt>Earned</dt>
-            <dd id="t-earned">0</dd>
-            <dt>Evaluations run</dt>
-            <dd id="t-evals">0</dd>
-            <dt>Clicks</dt>
-            <dd id="t-clicks">0</dd>
-          </dl>
-          <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
-          <details class="t-how-more t-points-how" data-how="points">
-            <summary>How points are paid</summary>
-          </details>
-          <details class="t-how-more" data-how="counts">
-            <summary>How clicks, evaluations and runs work</summary>
-          </details>
-        </section>
-        <section id="t-standing" aria-labelledby="t-standing-heading" hidden>
-          <h2 id="t-standing-heading">Standing</h2>
-          <dl id="t-st-stats" class="stats"></dl>
-          <ul id="t-st-marks" class="t-st-marks" aria-label="This cycle's milestones"></ul>
-          <p id="t-st-preview" class="note"></p>
-          <details class="t-how-more" data-how="standing">
-            <summary>How standing and resets work</summary>
-          </details>
-          <div id="t-st-rules" class="t-st-rules" hidden>
-            <label for="t-st-rule">Rule for the next cycle</label>
-            <select id="t-st-rule"></select>
-            <p id="t-st-rule-note" class="note"></p>
-            <details class="t-how-more" data-how="rules">
-              <summary>How cycle rules work</summary>
-            </details>
-          </div>
-          <button id="t-st-reset" class="wide" disabled>Reset for standing</button>
-          <div id="t-st-confirm" class="t-st-confirm" role="group" aria-labelledby="t-st-confirm-text" hidden>
-            <p id="t-st-confirm-text"></p>
-            <div class="row wrap">
-              <button id="t-st-yes" class="primary">Reset now</button>
-              <button id="t-st-no">Cancel</button>
-            </div>
-          </div>
-          <p id="t-st-only" class="note"></p>
-          <details id="t-st-history-box" class="t-st-history-box" hidden>
-            <summary>Past cycles</summary>
-            <ol id="t-st-history" class="t-st-history"></ol>
-          </details>
-        </section>
-        <section id="t-records" aria-labelledby="t-records-heading" hidden>
-          <h2 id="t-records-heading">Records</h2>
-          <dl id="t-rc-stats" class="stats"></dl>
-          <ul id="t-rc-sets" class="t-rc-sets" aria-label="Collections"></ul>
-          <p id="t-rc-note" class="note"></p>
-          <details class="t-how-more" data-how="records">
-            <summary>How rent and collections work</summary>
-          </details>
-        </section>
         <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
           <h2 id="t-queue-heading">Queue</h2>
           <ol id="t-queue-list" class="t-queue"></ol>
@@ -302,9 +252,49 @@
             <p id="t-filter-note" class="note" role="status"></p>
           </details>
         </section>
+        <section id="t-standing" aria-labelledby="t-standing-heading" hidden>
+          <h2 id="t-standing-heading">Standing</h2>
+          <dl id="t-st-stats" class="stats"></dl>
+          <ul id="t-st-marks" class="t-st-marks" aria-label="This cycle's milestones"></ul>
+          <p id="t-st-preview" class="note"></p>
+          <details class="t-how-more" data-how="standing">
+            <summary>How standing and resets work</summary>
+          </details>
+          <div id="t-st-rules" class="t-st-rules" hidden>
+            <label for="t-st-rule">Rule for the next cycle</label>
+            <select id="t-st-rule"></select>
+            <p id="t-st-rule-note" class="note"></p>
+            <details class="t-how-more" data-how="rules">
+              <summary>How cycle rules work</summary>
+            </details>
+          </div>
+          <button id="t-st-reset" class="wide" disabled>Reset for standing</button>
+          <div id="t-st-confirm" class="t-st-confirm" role="group" aria-labelledby="t-st-confirm-text" hidden>
+            <p id="t-st-confirm-text"></p>
+            <div class="row wrap">
+              <button id="t-st-yes" class="primary">Reset now</button>
+              <button id="t-st-no">Cancel</button>
+            </div>
+          </div>
+          <p id="t-st-only" class="note"></p>
+          <details id="t-st-history-box" class="t-st-history-box" hidden>
+            <summary>Past cycles</summary>
+            <ol id="t-st-history" class="t-st-history"></ol>
+          </details>
+        </section>
+        <section id="t-records" aria-labelledby="t-records-heading" hidden>
+          <h2 id="t-records-heading">Records</h2>
+          <dl id="t-rc-stats" class="stats"></dl>
+          <ul id="t-rc-sets" class="t-rc-sets" aria-label="Collections"></ul>
+          <p id="t-rc-note" class="note"></p>
+          <details class="t-how-more" data-how="records">
+            <summary>How rent and collections work</summary>
+          </details>
+        </section>
         <section id="t-lanes" aria-labelledby="t-lanes-heading" hidden>
           <h2 id="t-lanes-heading">Lanes</h2>
           <ul id="t-lane-list" class="t-lanes"></ul>
+          <p id="t-lanes-note" class="note" hidden></p>
           <details class="t-how-more" data-how="auto">
             <summary>How auto-eval and lanes work</summary>
           </details>
@@ -312,6 +302,16 @@
         <section id="t-runs" aria-labelledby="t-runs-heading" hidden>
           <h2 id="t-runs-heading">Runs</h2>
           <div id="t-runs-body" class="t-runs"></div>
+        </section>
+        <!-- what the totals above count and how they are paid, and the name that makes records pay -->
+        <section id="t-points-help" aria-label="Points" hidden>
+          <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
+          <details class="t-how-more t-points-how" data-how="points">
+            <summary>How points are paid</summary>
+          </details>
+          <details class="t-how-more" data-how="counts">
+            <summary>How clicks, evaluations and runs work</summary>
+          </details>
         </section>
       </aside>
     </main>

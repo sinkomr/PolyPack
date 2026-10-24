@@ -1,6 +1,6 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
-import { DealerState, canDeal, newDealer } from "./dealer";
+import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { ProblemKey, keyOf } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
 import { FLOOR, Points, Tier, recordPoints } from "./points";
@@ -8,9 +8,21 @@ import type { RunRecord, SubmitOutcome } from "./submission";
 import { sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, learnOnLeave, newPicks } from "./picks";
+import type { LatticeResult } from "./methods/lattice";
 import { RunPlanState, newRunPlan } from "./runplan";
 import { StandingState, newStanding } from "./standing";
-import { EvolveMethod, Owned, UpgradeId, canBuy, costOf, currencyOf, level, owning, upgrade } from "./upgrades";
+import {
+  EvolveMethod,
+  Owned,
+  UpgradeId,
+  canBuy,
+  costOf,
+  currencyOf,
+  evalsPerClick,
+  level,
+  owning,
+  upgrade,
+} from "./upgrades";
 
 /**
  * The game state and the rules that change it. No DOM, no network, no workers: the page (main.ts)
@@ -63,7 +75,11 @@ export interface ProblemState extends ProblemKey {
   best: number | null;
   /** The run that produced `board`; null for Load all and for a dealt site record. */
   run: RunRecord | null;
-  /** Seed of the next run. Compact's run uses seed 1; seeds are never repeated on a problem. */
+  /**
+   * The index of the next run on this problem, 1 for its first (Compact's). A run's seed is drawn
+   * from it (runSeed): a random 32-bit number, a new one for every run, the same in a game replayed
+   * from the same dealer's seed. The name is the save's from when seeds were numbered 1, 2, 3.
+   */
   nextSeed: number;
   /** The problem's leader as last seen (null: none). */
   leader: Leader | null;
@@ -85,6 +101,8 @@ export interface ProblemState extends ProblemKey {
   unconfirmed: number;
   /** The board's score after each counted improvement, by evaluations run here (thinned when long). */
   trace: [number, number][];
+  /** The RP paid here so far (`rp`) after each payment or take-back, by evaluations run here (thinned like `trace`). */
+  rpTrace: [number, number][];
   /**
    * Evaluations run on this problem (clicks' and auto-eval's), and since its last progress: an
    * improvement on `progressBest` by the tolerance (see applyStep).
@@ -93,14 +111,16 @@ export interface ProblemState extends ProblemKey {
   sinceGain: number;
   /** The best at the last progress; null before the first record (a dealt record starts from its own). */
   progressBest: number | null;
-  /** Runs opened here (seeds used). */
+  /** Runs opened here. */
   runs: number;
   /**
-   * Runs that ended by themselves here (their method stopped improving, or their budget ran out). A
-   * run closed by the game (another problem, another method, a reload) does not count: the next one
-   * takes a new seed but not one of the player's seeds per problem.
+   * Runs that ended by themselves here (their method stopped improving, or their budget ran out): a
+   * pipeline moves on to its next stage at each. A run closed by the game (another problem, another
+   * method, a reload) does not count. A problem allows any number of runs.
    */
   endedRuns: number;
+  /** Its Lattice build, once it is over (methods/lattice.ts); null before, and it runs once. */
+  lattice: LatticeResult | null;
   lastRunAt: number;
   /** RP earned on this problem. */
   rp: number;
@@ -129,6 +149,8 @@ export interface Settings {
   tolerance: number;
   /** Auto-advance: evaluations without progress before a problem leaves the queue (one of PATIENCES; null: never). */
   patience: number | null;
+  /** The dealer's switches turned off in the tech tree (upgrades.ts SWITCHES). */
+  off: UpgradeId[];
 }
 
 export interface Stats {
@@ -196,7 +218,8 @@ export const DEFAULT_PATIENCE = 1000;
 
 export function newGame(now: number, seed: number): GameState {
   return {
-    version: 2,
+    // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
+    version: 4,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
@@ -211,6 +234,7 @@ export function newGame(now: number, seed: number): GameState {
       battery: false,
       tolerance: DEFAULT_TOLERANCE,
       patience: DEFAULT_PATIENCE,
+      off: [],
     },
     stats: {
       evaluations: 0,
@@ -263,17 +287,20 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     paidTo: null,
     unconfirmed: 0,
     trace: [],
+    rpTrace: [],
     evaluations: 0,
     sinceGain: 0,
     progressBest: null,
     runs: 0,
     endedRuns: 0,
+    lattice: null,
     lastRunAt: 0,
     rp: 0,
   };
 }
 
-export const ownedSet = (s: GameState): Owned => owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone);
+export const ownedSet = (s: GameState): Owned =>
+  owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone, s.settings.off);
 
 /** The tolerance progress is measured with: the player's with Auto-advance, else any improvement that counts. */
 export const progressTolerance = (s: GameState): number => (ownedSet(s).has("advance") ? s.settings.tolerance : FLOOR);
@@ -317,9 +344,6 @@ export function density(p: ProblemKey, s: number): number {
  */
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
-/** As many runs as the player has seeds per problem have run to their end here: nothing is left to give. */
-export const spent = (p: ProblemState, seeds: number): boolean => p.endedRuns >= seeds;
-
 /** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
 export function applyLoadAll(p: ProblemState, board: PackingConfig, score: number, trimFloor: number | null): void {
   if (p.phase !== "bare") return;
@@ -330,12 +354,73 @@ export function applyLoadAll(p: ProblemState, board: PackingConfig, score: numbe
   p.phase = "loaded";
 }
 
-/** A run opened on the problem: it uses the next seed. */
-export function openedRun(s: GameState, p: ProblemState, seed: number, now: number): void {
+/**
+ * Evaluations run, the player's (`click`) or auto-eval's: they count in all, and earn the dealer's
+ * credit in clicks, the player's at the player's click size and auto-eval's at a fixed one (dealer.ts).
+ */
+export function countEvaluations(s: GameState, evaluations: number, click: boolean): void {
+  s.stats.evaluations += evaluations;
+  earn(s.dealer, creditOf(evaluations, click ? evalsPerClick(ownedSet(s)) : null));
+}
+
+/** The finalizer of MurmurHash3: every bit of a 32-bit number moves every bit of the result. */
+function fmix32(h: number): number {
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/** FNV-1a of a text, 32 bits. */
+function hash32(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * The seed of run `index` on the problem `key`, in a game whose dealer has the seed `dealerSeed`: a
+ * pseudo-random 32-bit number (0 to 2³² − 1, the solver's range), so that the runs on one problem
+ * start their random choices apart, and a game started with the same dealer's seed (?seed=n, the
+ * tests) draws the same seeds.
+ */
+export function runSeed(dealerSeed: number, key: string, index: number): number {
+  let h = fmix32((dealerSeed ^ 0x2545f491) >>> 0);
+  h = fmix32((h ^ hash32(key)) >>> 0);
+  return fmix32((h + Math.imul(index >>> 0, 0x9e3779b9)) >>> 0);
+}
+
+/**
+ * The seed of the next run on the problem, taking its index. Call it before anything awaits: two
+ * runs opening at once on one problem then never share a seed.
+ */
+export function reserveSeed(s: GameState, p: ProblemState): number {
+  const index = p.nextSeed;
+  p.nextSeed = Math.min(0xffffffff, index + 1);
+  return runSeed(s.dealer.seed, p.key, index);
+}
+
+/**
+ * Whether the game ends a problem's open run at a stall: its method's `restartAfter` R is set, the run
+ * has done R evaluations (its start's scoring included), and the problem has gone R evaluations
+ * without progress.
+ */
+export function stallEnds(restartAfter: number | null | undefined, runEvaluations: number, sinceGain: number): boolean {
+  return restartAfter != null && restartAfter > 0 && runEvaluations >= restartAfter && sinceGain >= restartAfter;
+}
+
+/** The game ended the problem's run at a stall (stallEnds): it counts as a run that ended by itself. */
+export function endRunAtStall(p: ProblemState): void {
+  p.endedRuns++;
+}
+
+/** A run opened on the problem (its seed reserved before, reserveSeed). */
+export function openedRun(s: GameState, p: ProblemState, now: number): void {
   s.stats.runs++;
   p.runs++;
   p.lastRunAt = now;
-  if (seed >= p.nextSeed) p.nextSeed = seed + 1;
 }
 
 /** One step of an open run: the evaluations it did and the run's best strict packing so far. */
@@ -346,12 +431,17 @@ export interface StepOutcome {
   /** The run as a board it found records it (budget: the evaluations the run had done). */
   run: RunRecord;
   ms: number;
-  /** The run ended by itself (not closed by the game): it uses up one of the player's seeds here. */
+  /** The run ended by itself (not closed by the game): the problem's pipeline moves on a stage. */
   ended: boolean;
   /** A click of the player's (true) or auto-eval's evaluations. */
   click: boolean;
   /** Compact's step (its 100 evaluations from the Load-all board). */
   compact?: boolean;
+  /**
+   * The step's evaluations within its run's warm-up (methods/ warmup): they count everywhere but in
+   * the evaluations since progress. 0 when left out.
+   */
+  warm?: number;
 }
 
 export interface StepChange {
@@ -375,11 +465,12 @@ export interface StepChange {
  *
  * Progress (Auto-advance's): the best s beats the best at the last progress s_ref by the tolerance
  * τ, s < s_ref · (1 − τ). Then s_ref becomes s and the count since progress starts again; otherwise
- * the count grows by the step's evaluations. The first record sets s_ref, and a dealt record starts
- * from its own best. With τ = 10⁻⁹ every improvement that counts is progress, as it always was.
+ * the count grows by the step's evaluations, less those within its run's warm-up. The first record
+ * sets s_ref, and a dealt record starts from its own best. With τ = 10⁻⁹ every improvement that
+ * counts is progress, as it always was.
  */
 export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: number): StepChange {
-  s.stats.evaluations += o.evaluations;
+  countEvaluations(s, o.evaluations, o.click);
   s.stats.computeMs += Math.round(o.ms);
   if (o.click) s.stats.clicks++;
   p.evaluations += o.evaluations;
@@ -413,19 +504,28 @@ export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: nu
     p.sinceGain = 0;
   } else {
     if (p.phase === "ready") p.progressBest = ref;
-    p.sinceGain += o.evaluations;
+    p.sinceGain += o.evaluations - Math.min(o.evaluations, Math.max(0, o.warm ?? 0));
   }
   if (counted && p.phase === "ready") pushTrace(p);
   const points = counted ? pay(s, p) : null;
   return { before, after: smaller ? p.best : before, improved: smaller, counted, firstRecord, points };
 }
 
+/** Thins the middle of a trace past TRACE_LIMIT, keeping the first and the last points, so the whole history stays drawn. */
+const thinned = (tr: [number, number][]): [number, number][] =>
+  tr.length > TRACE_LIMIT ? [tr[0], ...tr.slice(1, -1).filter((_, i) => i % 2 === 1), tr.at(-1)!] : tr;
+
 function pushTrace(p: ProblemState): void {
   if (p.best === null) return;
   p.trace.push([p.evaluations, p.best]);
-  // thin the middle, keeping the first and the last points, so the whole history stays drawn
-  if (p.trace.length > TRACE_LIMIT)
-    p.trace = [p.trace[0], ...p.trace.slice(1, -1).filter((_, i) => i % 2 === 1), p.trace.at(-1)!];
+  p.trace = thinned(p.trace);
+}
+
+/** The RP paid here, after a payment or a take-back: a second change at the same evaluation replaces the first. */
+function pushRpTrace(p: ProblemState): void {
+  if (p.rpTrace.at(-1)?.[0] === p.evaluations) p.rpTrace.pop();
+  p.rpTrace.push([p.evaluations, p.rp]);
+  p.rpTrace = thinned(p.rpTrace);
 }
 
 /**
@@ -509,6 +609,7 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   s.rpEarned += points.total;
   s.standing.cycleEarned += points.total;
   p.rp += points.total;
+  pushRpTrace(p);
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);
   p.paidTo = p.best;
@@ -547,6 +648,7 @@ function takeBack(s: GameState, p: ProblemState, rp: number): number {
   s.rpEarned = Math.max(0, s.rpEarned - rp);
   s.standing.cycleEarned = Math.max(0, s.standing.cycleEarned - rp);
   p.rp = Math.max(0, p.rp - rp);
+  pushRpTrace(p);
   return rp;
 }
 
@@ -714,6 +816,18 @@ export function recordsHeld(s: GameState): number {
   return s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 }
 
+/**
+ * The problems whose leader changes the game listens for, most important first: the queue, the
+ * focused problem first, then the records held among the problems that left it, the most recently
+ * left first. The live-update stream follows as many as fit (eventKeys); the rest are checked
+ * when the game reads them (Rent, and the page opening).
+ */
+export function followed(s: GameState): ProblemKey[] {
+  const queue = [...s.queue].sort((a, b) => Number(b.key === s.focus) - Number(a.key === s.focus));
+  const held = s.past.filter((p) => p.ourId !== null).sort((a, b) => b.leftAt - a.leftAt);
+  return [...queue, ...held].map(({ N, M, P }) => ({ N, M, P }));
+}
+
 // ---------- auto-eval's pace ----------
 
 /**
@@ -793,43 +907,33 @@ export function leave(s: GameState, key: string, now: number): void {
 // ---------- Auto-advance: problems that stopped making progress leave ----------
 
 /**
- * Why Auto-advance takes a problem out of the queue, or null while it stays: every seed on it is
- * spent (nothing is left to run), or it ran the player's patience of evaluations without progress.
- * A best that cannot be sent (no name on records yet) is never dropped this way, nor anything with
- * the patience at Never.
+ * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
+ * patience of evaluations without progress. A best that cannot be sent (no name on records yet) is
+ * never dropped this way, nor anything with the patience at Never.
  */
-export function leaveReason(s: GameState, p: ProblemState, seeds: number): "spent" | "stalled" | null {
+export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
   const patience = s.settings.patience;
   if (patience === null || p.leaving || p.closed) return null;
   if (!s.consent && hasUnsent(p)) return null;
-  if (spent(p, seeds)) return "spent";
   return p.sinceGain >= patience ? "stalled" : null;
 }
 
 export interface AdvancePlan {
-  /** Problems that leave now: nothing in the queue is left to run, so no evaluation would earn their replacements. */
-  now: ProblemState[];
   /** The problem that leaves for the next deal, which is earned (null: none due, or no deal earned yet). */
   replace: ProblemState | null;
-  /** The problem due to leave next, spent ones first, then the longest without progress. */
+  /** The problem due to leave next, the longest without progress. */
   due: ProblemState | null;
 }
 
 /**
  * Auto-advance's move (with auto-eval on). A problem due to leave goes only once a new one can take
- * its slot, a deal earned by evaluations (dealer.ts), so the queue never runs short and the lanes
- * keep to the other problems meanwhile. When nothing in the queue is left to run, its spent problems
- * leave at once instead (an empty queue is dealt a problem on credit).
+ * its slot, a deal earned by work (dealer.ts), so the queue never runs short and the lanes keep to
+ * the other problems meanwhile.
  */
-export function advancePlan(s: GameState, o: { seeds: number; slots: number; perClick: number }): AdvancePlan {
-  const queue = slotted(s);
-  const due = queue
-    .map((p) => ({ p, why: leaveReason(s, p, o.seeds) }))
-    .filter((x) => x.why !== null)
-    .sort((a, b) => Number(b.why === "spent") - Number(a.why === "spent") || b.p.sinceGain - a.p.sinceGain)
-    .map((x) => x.p);
-  const runnable = queue.some((p) => !p.closed && !spent(p, o.seeds));
-  const now = runnable ? [] : due.filter((p) => spent(p, o.seeds));
-  const earned = due.length > 0 && !now.length && canDeal(s.dealer, o.slots, s.stats.evaluations, o.perClick);
-  return { now, replace: earned ? due[0] : null, due: due[0] ?? null };
+export function advancePlan(s: GameState, o: { slots: number }): AdvancePlan {
+  const due = slotted(s)
+    .filter((p) => leaveReason(s, p) !== null)
+    .sort((a, b) => b.sinceGain - a.sinceGain);
+  const earned = due.length > 0 && canDeal(s.dealer, o.slots);
+  return { replace: earned ? due[0] : null, due: due[0] ?? null };
 }

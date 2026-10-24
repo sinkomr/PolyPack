@@ -51,6 +51,12 @@ describe("found with: the board's attribution", () => {
     expect(after("history", edited, { recorded: edited, empty: true })).toEqual(HAND);
   });
 
+  it("keeps how the board was found when only the container turns", () => {
+    expect(after("orient", optimizer)).toEqual(optimizer);
+    expect(after("orient", edited)).toEqual(edited);
+    expect(after("orient", HAND)).toEqual(HAND);
+  });
+
   it("returns through the history to what each board was", () => {
     expect(after("history", HAND, { recorded: edited })).toEqual(edited);
     expect(after("history", optimizer)).toEqual(HAND);

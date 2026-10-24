@@ -18,6 +18,11 @@ export interface How {
   note?: string;
 }
 
+/** A variable in How markup: sym("s", "ref") is s with the subscript "ref". */
+export const sym = (name: string, sub?: string) => `<var>${name}</var>${sub === undefined ? "" : `<sub>${sub}</sub>`}`;
+/** One entry of How's `vars`: [symbol markup, what it is]. */
+export type Var = readonly [string, string];
+
 const KEPT = new Set(["VAR", "SUB", "SUP", "EM", "STRONG", "CODE", "BR"]);
 
 function copy(from: Node, to: Node): void {

@@ -36,6 +36,14 @@ function selectFromHash(): boolean {
 }
 const validStart = selectFromHash();
 
+// Live updates for the pair of shapes shown, every P of it; refresh follows the selection.
+const live = new api.LiveFeed(
+  (e) => {
+    if (e.N === Number(nSel.value) && e.M === Number(mSel.value)) refresh();
+  },
+  () => refresh(),
+);
+
 /** The atlas keeps its display state in the query string; the problem stays in the hash. */
 const address = (query: string) => `${location.pathname}${query}#${Number(nSel.value)},${Number(mSel.value)}`;
 /** Marks the history entry made by opening a detail panel, so that closing the panel can step back over it. */
@@ -442,6 +450,7 @@ function creditSources(rows: Row[]): void {
 async function refresh(): Promise<void> {
   const N = Number(nSel.value);
   const M = Number(mSel.value);
+  live.follow([`${N}/${M}/*`]);
   const data = await api.getRecords(N, M);
   // the selection changed while the answer was on its way; the newer request draws the page
   if (N !== Number(nSel.value) || M !== Number(mSel.value)) return;
@@ -520,11 +529,5 @@ window.addEventListener("popstate", async () => {
 });
 nSel.addEventListener("change", refresh);
 mSel.addEventListener("change", refresh);
-const isLive = api.subscribe(
-  (e) => {
-    if (e.N === Number(nSel.value) && e.M === Number(mSel.value)) refresh();
-  },
-  () => refresh(),
-);
-setInterval(() => $("live").classList.toggle("on", isLive()), 1500);
+setInterval(() => $("live").classList.toggle("on", live.isLive()), 1500);
 refresh();

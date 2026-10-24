@@ -44,5 +44,6 @@
   },
   "expected_score": 3,
   "expected_valid": true,
+  "oriented_score": 3,
   "auto_oriented_phi": 0
 }

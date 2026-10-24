@@ -121,6 +121,17 @@ test("the records page puts the chart above the atlas and the complete table", a
   await expect(page).toHaveURL(/\/browse\.html#0,4$/);
 });
 
+test("the records page follows the live changes of the pair of shapes it shows", async ({ page }) => {
+  const follows = (pair: string) =>
+    page.waitForRequest((r) => decodeURIComponent(r.url()).endsWith(`/api/events?keys=${pair}/*`));
+  const squares = follows("4/4");
+  await page.goto("/browse.html#4,4");
+  await squares;
+  const circles = follows("0/4");
+  await page.selectOption("#n-select", "0");
+  await circles;
+});
+
 test("the record holders page counts the leads of each name", async ({ page, request }) => {
   // two pentagons in a nine-sided container: a problem without a published value that no other test enters
   const sent = await request.post("/api/submit", {

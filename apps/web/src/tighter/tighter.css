@@ -1,7 +1,6 @@
 /* Tighter: the board page, stripped, with panels that appear as they are earned. */
 /* Until this tab holds the game (and while another tab does), nothing can be pressed. */
-.tighter.standby .layout,
-.tighter.standby .t-bar {
+.tighter.standby .layout {
   display: none;
 }
 .t-elsewhere {
@@ -26,10 +25,7 @@
 .t-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 28px;
-  padding: 8px 16px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+  gap: 6px 24px;
 }
 .t-bar[hidden] {
   display: none;
@@ -190,13 +186,19 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
-@media (max-width: 820px) {
+/* narrower windows: smaller totals, so the problem still fits beside them */
+@media (max-width: 1279px) {
+  .t-row {
+    gap: 4px 20px;
+  }
   .t-bar {
     gap: 4px 18px;
   }
   .t-bar strong {
     font-size: 17px;
   }
+}
+@media (max-width: 820px) {
   .t-runinfo {
     margin-left: 0;
     flex-basis: 100%;
@@ -382,75 +384,90 @@
 }
 
 /* ---- layout ---- */
-/* The stage: the problem's header, the toolbar, the view tabs, then the board (with the trace and
-   the score in its bottom corners) or the tech tree, then the status and notice lines. */
-.tighter .top .t-settings-btn {
-  min-height: 36px;
+/* The site's header on one slim line, then the top row across the page: the totals, and the problem
+   on the far right. Below it the stage: the toolbar, the view tabs, then the board (with the trace
+   and the score in its bottom corners) or the tech tree down to the status and notice lines. */
+.tighter .top {
+  gap: 20px;
+  padding: 3px 16px;
 }
-.t-head {
+.tighter .top h1 {
+  font-size: 17px;
+}
+.tighter .layout {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+.t-row {
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 16px;
+  gap: 4px 28px;
   align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
+  padding: 6px 16px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
 }
-.t-head-main {
-  flex: 1 1 16rem;
+/* The problem: its title, its record and its evaluations, a line each, cut short to fit (whole on
+   hover) rather than wrapped below the totals. Each line keeps its height, empty or not, so the row
+   keeps its own and the toolbar below never moves as the problem changes and counts. */
+.t-head {
+  display: flex;
+  flex: 1 1 10rem;
+  gap: 4px 12px;
+  align-items: center;
+  justify-content: flex-end;
   min-width: 0;
 }
-.t-head .t-title {
-  margin: 0;
-  color: var(--text);
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: 0;
-  text-transform: none;
-  overflow-wrap: break-word;
+.t-head-main {
+  min-width: 0;
+  max-width: 40rem;
+  text-align: right;
 }
-.t-head-note {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
+/* before the totals appear the problem is alone in the row: on the left */
+.t-bar[hidden] + .t-head {
+  justify-content: flex-start;
 }
-/* the problem's evaluations: one line that keeps its height, so nothing below it moves as it counts */
+.t-bar[hidden] + .t-head .t-head-main {
+  max-width: none;
+  text-align: left;
+}
+.t-head .t-title,
+.t-head-note,
 .t-head-count {
-  min-height: 1.4em;
-  margin: 1px 0 0;
+  margin: 0;
   overflow: hidden;
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.t-head-side {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  align-items: center;
-  min-width: 0;
+.t-head .t-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 18px;
+  letter-spacing: 0;
+  text-transform: none;
 }
-.t-head-side #t-next {
-  max-width: 100%;
+.t-head-note,
+.t-head-count {
+  min-height: 15px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 15px;
+}
+.t-head-count {
+  font-variant-numeric: tabular-nums;
+}
+.t-head #t-next {
+  flex: 0 0 auto;
+  max-width: 11rem;
+  padding: 3px 10px;
+  font-size: 13px;
+  line-height: 1.2;
   white-space: normal;
 }
-.t-held-box {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  white-space: nowrap;
-}
-.t-held-box strong {
-  margin-left: 4px;
-  color: var(--text);
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
+/* the tree takes the stage's height; the banner is the board's news */
+body.tighter[data-pane="tree"] .t-banner {
+  display: none;
 }
 .t-views {
   display: flex;
@@ -554,6 +571,15 @@
 .t-trace text {
   fill: var(--text);
   font-size: 10.5px;
+}
+/* the RP paid here, under the side: the same line, noted only "RP" */
+.t-pip .t-rp-trace {
+  margin-top: 4px;
+}
+.t-rp-trace text {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 .t-trace-empty {
   margin: 0;
@@ -888,6 +914,36 @@
 .t-node[data-state="owned"] .t-node-bar {
   display: none;
 }
+/* an owned dealer upgrade with a switch (shop.ts): a badge says on or off, and off it looks unowned */
+.t-node[data-switch] .t-node-name {
+  padding-right: 30px;
+}
+.t-node[data-switch]::after {
+  content: "On";
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--good);
+  color: var(--accent-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.t-node[data-switch="off"] {
+  border-color: var(--border);
+  background: var(--panel);
+}
+.t-node[data-switch="off"]::after {
+  content: "Off";
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted);
+}
+.t-node[data-switch="off"] .t-node-price {
+  color: var(--muted);
+}
 /* a fixed height: a panel that grew with the hovered node's text would shrink the tree and could
    slide the node under the pointer behind the panel */
 .t-tree-detail {
@@ -898,6 +954,9 @@
   border-top: 1px solid var(--border);
   background: var(--panel);
   font-size: 13.5px;
+}
+.t-tree-detail[hidden] {
+  display: none;
 }
 .t-tree-detail h3 {
   margin: 0 0 2px;
@@ -1086,9 +1145,17 @@ html {
 #t-auto,
 #t-stop,
 .t-detail-buy,
+.t-detail-switch,
 .t-offer button,
 .tighter .top .t-settings-btn {
   min-height: 44px;
+}
+/* with a mouse, Settings needs no finger's height, and the header stays slim */
+@media (pointer: fine) {
+  .tighter .top .t-settings-btn {
+    min-height: 28px;
+    padding: 2px 12px;
+  }
 }
 /* a finger leaves a hover state behind: no hover look on touch screens */
 @media (hover: none) {
@@ -1112,7 +1179,7 @@ html {
 }
 
 /* On a touch screen the toolbar sits under the board: in reach of the thumb, and below anything
-   that can appear or grow (the Next problem button, a wrapped note), so Evolve stays put while it is
+   that can appear or grow (the Next problem button, a wrapped top row), so Evolve stays put while it is
    tapped. A mouse keeps it at the top. */
 @media (pointer: coarse) and (min-width: 760px) {
   .tighter .toolbar {
@@ -1147,11 +1214,11 @@ html {
 }
 
 /* ---- phones ---- */
-/* One screen, no page scroll: the page is a grid of named areas (the layout and the stage step
-   aside with display: contents, so their parts place themselves). From the top: the header, the
-   totals, the problem, the view (board, tree, or the panel's sections), the status, the views' tabs,
-   and at the bottom edge, in the thumb zone, the action dock. Nothing below Evolve can appear or
-   grow, so it never moves under a tapping finger. */
+/* One screen, no page scroll: the page is a grid of named areas (the layout, its top row and the
+   stage step aside with display: contents, so their parts place themselves). From the top: the
+   header, the totals, the problem, the view (board, tree, or the panel's sections), the status, the
+   views' tabs, and at the bottom edge, in the thumb zone, the action dock. Nothing below Evolve can
+   appear or grow, so it never moves under a tapping finger. */
 @media (max-width: 759px), (max-height: 500px) and (orientation: landscape) and (max-width: 1023px) {
   html {
     height: 100%;
@@ -1168,6 +1235,7 @@ html {
     grid-template-areas: "top" "away" "bar" "head" "banner" "main" "status" "notice" "dock" "tools";
   }
   .tighter .layout,
+  .tighter .t-row,
   .tighter .stage {
     display: contents;
   }
@@ -1211,6 +1279,8 @@ html {
     flex-wrap: nowrap;
     gap: 0 18px;
     padding: 3px 12px 4px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
     overflow-x: auto;
     overscroll-behavior-x: contain;
     scrollbar-width: none;
@@ -1227,30 +1297,38 @@ html {
   .tighter .t-bar strong {
     font-size: 15px;
   }
+  /* the problem under the totals: its title and note wrap, the note to two lines */
   .tighter .t-head {
     grid-area: head;
     flex-wrap: nowrap;
     gap: 4px 10px;
     padding: 5px 12px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
   }
   .tighter .t-head-main {
     flex: 1 1 auto;
+    text-align: left;
   }
   .tighter .t-head .t-title {
-    font-size: 15px;
+    line-height: 1.3;
+    white-space: normal;
+    overflow-wrap: break-word;
   }
   .tighter .t-head-note {
     display: -webkit-box;
-    overflow: hidden;
-    font-size: 12.5px;
+    min-height: 0;
+    line-height: 1.4;
+    white-space: normal;
+    overflow-wrap: anywhere;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
-  /* records held is in the totals already */
-  .tighter .t-held-box {
-    display: none;
+  .tighter .t-head-count {
+    min-height: 1.4em;
+    line-height: 1.4;
   }
-  .tighter .t-head-side #t-next {
+  .tighter .t-head #t-next {
     min-height: 44px;
     max-width: 9.5rem;
     padding: 4px 10px;
@@ -1421,9 +1499,15 @@ html {
   body.tighter:not([data-pane="queue"]):not([data-pane="points"]) .panel {
     display: none;
   }
-  body.tighter[data-pane="queue"] :is(#t-points, #t-standing, #t-records),
+  body.tighter[data-pane="queue"] :is(#t-points-help, #t-standing, #t-records),
   body.tighter[data-pane="points"] :is(#t-queue, #t-lanes, #t-runs) {
     display: none;
+  }
+  /* the points view begins with the totals in full: their line wraps instead of scrolling */
+  body.tighter[data-pane="points"] .t-bar {
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    overflow-x: visible;
   }
   /* the tech tree as a list, one row of upgrades after another */
   .t-tree-head {

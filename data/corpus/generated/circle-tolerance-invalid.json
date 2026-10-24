@@ -19,5 +19,6 @@
   },
   "expected_score": 1.99999999945,
   "expected_valid": false,
+  "oriented_score": 1.99999999945,
   "auto_oriented_phi": 0
 }

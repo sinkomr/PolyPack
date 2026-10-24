@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAX_METHOD_PARAMS_BYTES, areaLowerBound, parseProvenance } from "@polypack/geometry";
+import { seededRandom } from "@polypack/solver";
 import type { PackingConfig, ProblemInfo } from "@polypack/geometry";
 import {
   DEFAULT_PATIENCE,
@@ -25,12 +26,14 @@ import {
   payAll,
   pendingPoints,
   recordsHeld,
-  spent,
+  reserveSeed,
+  runSeed,
   submitTarget,
   unconfirmedPoints,
   withdrawConsent,
 } from "../src/tighter/game";
 import { FRONTIER, STARTER, problemTitle } from "../src/tighter/frontier";
+import { msPerEval } from "../src/tighter/rank";
 import { autoHold, autoTarget } from "../src/tighter/scheduler";
 import { CLIENT_TAG, classifyAnswer, shouldSubmit, submissionBody } from "../src/tighter/submission";
 import {
@@ -39,8 +42,11 @@ import {
   RUN_BUDGET,
   UPGRADES,
   UpgradeId,
-  AUTOX_GROWTH,
-  autoClicksPerSecond,
+  AUTOX_STEP,
+  AUTO_JOB_SECONDS,
+  AUTO_MAX,
+  AUTO_RATES,
+  autoJobEvals,
   autoPerSecond,
   autoRateText,
   available,
@@ -56,7 +62,6 @@ import {
   methodParams,
   methods,
   queueSize,
-  seedsPerProblem,
   upgrade,
 } from "../src/tighter/upgrades";
 import { drawProblem, newDealer, openDealable } from "../src/tighter/dealer";
@@ -157,11 +162,11 @@ describe("Tighter upgrades", () => {
   it("level up again and again at a growing price; Quick study makes record-point prices cheaper", () => {
     const s = newGame(T0, 1);
     s.owned = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"];
-    expect(costOf(ownedSet(s), "clickx")).toBe(2000);
-    s.rp = 2000 + 2500;
+    expect(costOf(ownedSet(s), "clickx")).toBe(15000);
+    s.rp = 15000 + 18750;
     expect(buy(s, "clickx")).toBe(true);
     expect(level(ownedSet(s), "clickx")).toBe(1);
-    expect(costOf(ownedSet(s), "clickx")).toBe(2500);
+    expect(costOf(ownedSet(s), "clickx")).toBe(18750);
     expect(buy(s, "clickx")).toBe(true);
     expect(s.rp).toBe(0);
     expect(evalsPerClick(ownedSet(s))).toBe(12);
@@ -170,7 +175,7 @@ describe("Tighter upgrades", () => {
     s.standing.points = 2;
     expect(buy(s, "study")).toBe(true);
     expect(s.standing.points).toBe(0);
-    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(2000 * 1.25 ** 2 * 0.9));
+    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(15000 * 1.25 ** 2 * 0.9));
     expect(costOf(ownedSet(s), "study")).toBe(Math.round(2 * 1.6));
     expect(laneCount(owning(["lanes2"]), 16)).toBe(2);
     expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 5 }), 16)).toBe(7);
@@ -187,26 +192,44 @@ describe("Tighter upgrades", () => {
       }
     };
     ladder(["click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"]);
-    ladder(["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9"]);
+    ladder(["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10", "autox"]);
     ladder(["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"]);
-    ladder(["seeds2", "seeds4", "seeds8", "seeds16"]);
     // methods come well after the click ladder and a faster auto-eval
     expect(upgrade("basin").requires).toEqual(expect.arrayContaining(["click10", "auto4"]));
     expect(cost("basin")).toBeGreaterThan(cost("click10"));
     // auto-eval comes early, right after 2 evaluations per click, and cheap
     expect(upgrade("auto1").requires).toEqual(["click2"]);
     expect(cost("auto1")).toBeLessThan(cost("click3"));
-    // auto-eval keeps pace with the click ladder: a click every 2 s (half an active player) before 10
-    // per click, a click a second (as many as the player) before Basin hopping
+    // auto-eval is cheap, and its click gates keep it beside the click ladder: 5 a second with 7 per
+    // click, 10 with 10 per click, 20 with Basin hopping
     expect(cost("auto4")).toBeLessThan(cost("click10"));
     expect(cost("auto5")).toBeLessThan(cost("basin"));
+    expect(upgrade("auto4").requires).toEqual(["auto3", "click7"]);
+    expect(upgrade("auto5").requires).toEqual(["auto4", "click10"]);
+    expect(upgrade("auto6").requires).toEqual(["auto5", "basin"]);
+    // auto-eval keeps the tenth of 2026-10-22: each rung costs at most a sixth of the upgrade that gates
+    // it, so it is bought as soon as its gate opens
+    const gates: Partial<Record<UpgradeId, UpgradeId>> = {
+      auto1: "click2",
+      auto2: "click3",
+      auto3: "click4",
+      auto4: "click7",
+      auto5: "click10",
+      auto6: "basin",
+      auto7: "lanes2",
+      auto9: "asc",
+    };
+    for (const [id, gate] of Object.entries(gates)) {
+      expect(upgrade(id as UpgradeId).requires, id).toContain(gate);
+      expect(cost(id as UpgradeId), id).toBeLessThanOrEqual(cost(gate!) / 6);
+    }
   });
 
   it("are gated by their prerequisites and by points", () => {
     const owned = new Set<UpgradeId>();
     expect(available(owned).map((u) => u.id)).toEqual(["trace"]);
-    expect(canBuy(owned, 4.99, "trace")).toEqual({ ok: false, reason: "points" });
-    expect(canBuy(owned, 5, "trace")).toEqual({ ok: true });
+    expect(canBuy(owned, cost("trace") - 0.01, "trace")).toEqual({ ok: false, reason: "points" });
+    expect(canBuy(owned, cost("trace"), "trace")).toEqual({ ok: true });
     expect(canBuy(owned, 1e6, "click2")).toEqual({ ok: false, reason: "locked" });
     owned.add("trace");
     expect(canBuy(owned, 1e6, "trace")).toEqual({ ok: false, reason: "owned" });
@@ -238,9 +261,9 @@ describe("Tighter upgrades", () => {
 
   it("spend points, and turn into game parameters", () => {
     const s = newGame(T0, 1);
-    s.rp = 4;
+    s.rp = cost("trace") - 1;
     expect(buy(s, "trace")).toBe(false);
-    s.rp = cost("click2") + 5;
+    s.rp = cost("click2") + cost("trace");
     expect(buy(s, "trace")).toBe(true);
     expect(buy(s, "trace")).toBe(false);
     expect(buy(s, "click2")).toBe(true);
@@ -253,37 +276,29 @@ describe("Tighter upgrades", () => {
     expect(evalsPerClick(o("click10"))).toBe(10);
     expect(COMPACT_EVALS).toBe(100);
     expect(RUN_BUDGET).toBe(100_000);
-    // auto-eval starts at a click every 5 s and speeds up step by step (one evaluation a click here)
+    // auto-eval starts at an evaluation a second and speeds up slowly, then about doubling a rung
     expect(autoPerSecond(none)).toBeNull();
     expect(autoPerSecond(o("auto2"))).toBeNull();
-    expect(autoPerSecond(o("auto1"))).toBe(0.2);
-    expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(0.5);
-    expect(autoPerSecond(o("auto1", "auto5"))).toBe(1);
-    expect(autoPerSecond(o("auto1", "auto9"))).toBe(10);
-    // its rate is in clicks: each auto click runs the player's click size, so click upgrades speed it up
-    expect(autoClicksPerSecond(o("click2", "auto1"))).toBe(0.2);
-    expect(autoPerSecond(o("click2", "auto1"))).toBeCloseTo(0.4, 12);
-    expect(autoPerSecond(o("click10", "auto1", "auto4"))).toBe(5);
-    expect(
-      autoPerSecond(owning(["click10", "clickx", "auto1", "auto9", "autox"], { clickx: 2, autox: 2 })),
-    ).toBeCloseTo(12 * 10 * AUTOX_GROWTH ** 2, 9);
+    expect(autoPerSecond(o("auto1"))).toBe(1);
+    expect(autoPerSecond(o("auto1", "auto2", "auto3", "auto4"))).toBe(5);
+    expect(autoPerSecond(o("auto1", "auto5"))).toBe(10);
+    expect(autoPerSecond(o("auto1", "auto9"))).toBe(100);
+    expect(autoPerSecond(o("auto1", "auto10"))).toBe(150);
     // and none at all under the "clicks only" rule
     expect(autoPerSecond(owning(["click2", "auto1"], {}, "clicks"))).toBeNull();
-    expect(autoRateText(o("click2", "auto1"), 0.4)).toBe("a click of 2 every 5 s");
-    expect(autoRateText(o("click4", "auto1"), 1.6)).toBe("a click of 4 every 2.5 s");
-    expect(autoRateText(o("click10", "auto5"), 20)).toBe("2 clicks of 10 a second");
-    expect(autoRateText(o("auto1"), 0.2)).toBe("1 evaluation every 5 s");
-    // auto-eval runs live: at most a minute of every lane's rate is due at once, and at least a Compact
+    expect(autoRateText(0.5)).toBe("1 evaluation every 2 s");
+    expect(autoRateText(0.4)).toBe("1 evaluation every 2.5 s");
+    expect(autoRateText(1)).toBe("1 evaluation a second");
+    expect(autoRateText(2.5)).toBe("2.5 evaluations a second");
+    expect(autoRateText(202.8)).toBe("203 evaluations a second");
+    expect(autoRateText(1750)).toBe("1,750 evaluations a second");
+    // auto-eval runs live: at most a minute of its rate is due at once, and at least a Compact
     expect(autoCap(none)).toBe(COMPACT_EVALS);
     expect(autoCap(o("auto1"))).toBe(COMPACT_EVALS);
-    expect(autoCap(o("auto1", "auto5"))).toBe(COMPACT_EVALS);
-    // a minute of clicks of 10, a click a second, on 2 lanes
-    expect(autoCap(o("click10", "auto1", "auto5"), 2)).toBeCloseTo(10 * 2 * 60, 9);
-    expect(seedsPerProblem(none)).toBe(1);
-    expect(seedsPerProblem(o("seeds2"))).toBe(2);
-    expect(seedsPerProblem(o("seeds2", "seeds4", "seeds8"))).toBe(8);
-    expect(seedsPerProblem(o("seeds16"))).toBe(16);
-    // methods in the order they unlock, mc_compress first
+    // a minute of 5 evaluations a second, however many lanes share them
+    expect(autoCap(o("auto1", "auto4"))).toBe(5 * 60);
+    expect(autoCap(o("click10", "auto1", "auto4", "lanes2", "lanesx"))).toBe(5 * 60);
+    // methods in the order they unlock, mc_compress first; Lattice's "seed" is a build, not a choice
     expect(methods(none)).toEqual(["mc_compress"]);
     expect(methods(o("shrink", "basin"))).toEqual(["mc_compress", "basin_hopping", "shrink_repair"]);
     expect(methods(new Set(ids))).toEqual([
@@ -291,7 +306,6 @@ describe("Tighter upgrades", () => {
       "basin_hopping",
       "shrink_repair",
       "penalty",
-      "seed",
       "harden",
       "morph",
       "asc",
@@ -315,7 +329,8 @@ describe("Tighter runs on the board", () => {
     expect(p.phase).toBe("loaded");
     expect(p.floor).toBe(10);
     expect(hasUnsent(p)).toBe(false);
-    openedRun(s, p, 1, T0);
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     expect(p.nextSeed).toBe(2);
     // a step that returns the start unchanged is no record
     let c = applyStep(s, p, step(10, 1, { evaluations: 100 }), T0);
@@ -407,24 +422,55 @@ describe("Tighter runs on the board", () => {
     for (let i = 1; i < p.trace.length; i++) expect(p.trace[i][0]).toBeGreaterThan(p.trace[i - 1][0]);
   });
 
-  it("spends a problem's seeds as its runs end by themselves", () => {
+  it("counts the runs that end by themselves, and allows any number of them", () => {
     const { s, p } = game();
     applyLoadAll(p, board(3), 10, null);
-    openedRun(s, p, 1, T0);
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     applyStep(s, p, step(9.5), T0);
-    expect(spent(p, 1)).toBe(false);
+    expect(p.endedRuns).toBe(0);
     applyStep(s, p, step(9.4, 1, { ended: true }), T0);
     expect(p.endedRuns).toBe(1);
-    expect(spent(p, 1)).toBe(true);
-    expect(spent(p, 2)).toBe(false);
-    // the next seed opens a new run; when it ends too, two seeds are spent
-    openedRun(s, p, 2, T0);
+    // the next run opens as before, and its end counts too: nothing stops a problem's runs
+    reserveSeed(s, p);
+    openedRun(s, p, T0);
     expect(p.runs).toBe(2);
     expect(p.nextSeed).toBe(3);
-    expect(spent(p, 2)).toBe(false);
     applyStep(s, p, step(null, 2, { ended: true }), T0);
-    expect(spent(p, 2)).toBe(true);
-    expect(spent(p, 4)).toBe(false);
+    expect(p.endedRuns).toBe(2);
+    expect(evolvable(p)).toBe(true);
+  });
+
+  it("give every run a random 32-bit seed, a new one each time, the same in a game with the same dealer's seed", () => {
+    const { s, p } = game();
+    const q = newProblem({ N: 24, M: 30, P: 60 }, "open", T0);
+    addToQueue(s, q);
+    // drawn at once, before the run is opened: two runs opening together on one problem never share one
+    const seeds = Array.from({ length: 200 }, () => reserveSeed(s, p));
+    expect(new Set(seeds).size).toBe(200);
+    expect(p.nextSeed).toBe(201);
+    for (const x of seeds) {
+      expect(Number.isSafeInteger(x)).toBe(true);
+      expect(x).toBeGreaterThanOrEqual(0);
+      expect(x).toBeLessThanOrEqual(0xffffffff);
+      // the solver's own check of a seed
+      expect(() => seededRandom(x)).not.toThrow();
+    }
+    // spread over the whole range, not 1, 2, 3
+    expect(Math.max(...seeds)).toBeGreaterThan(2 ** 31);
+    expect(Math.min(...seeds)).toBeLessThan(2 ** 31);
+    // another problem draws other seeds
+    const other = Array.from({ length: 200 }, () => reserveSeed(s, q));
+    expect(other.filter((x) => seeds.includes(x))).toEqual([]);
+    // the same dealer's seed, problem and run index give the same seed: a ?seed=n game replays
+    const again = game();
+    expect(again.s.dealer.seed).toBe(s.dealer.seed);
+    expect(Array.from({ length: 200 }, () => reserveSeed(again.s, again.p))).toEqual(seeds);
+    expect(runSeed(s.dealer.seed, p.key, 1)).toBe(seeds[0]);
+    // another dealer's seed draws others
+    expect(runSeed(s.dealer.seed + 1, p.key, 1)).not.toBe(seeds[0]);
+    // a save keeps the index, so a reload goes on with new seeds
+    expect(runSeed(s.dealer.seed, p.key, p.nextSeed)).not.toBe(seeds.at(-1));
   });
 });
 
@@ -451,6 +497,11 @@ describe("Tighter points per click", () => {
     const c3 = applyStep(s, p, step(1.19 * B * (1 - 1e-12), 3), T0);
     expect(c3.points).toBeNull();
     expect(p.paidTo).toBe(1.19 * B);
+    // the RP paid here after each payment, by evaluations run here: what the board's RP graph draws
+    expect(p.rpTrace).toEqual([
+      [100, c1.points!.total],
+      [p.evaluations - 1, c1.points!.total + c2.points!.total],
+    ]);
   });
 
   it("pay nothing without a name; on consent, what the board improved pays as one event", () => {
@@ -599,7 +650,9 @@ describe("Tighter answers from the server", () => {
     const { s, p } = game();
     recordOn(s, p);
     const paid = s.rp;
-    s.rp = paid + 1;
+    // just enough to buy Trace detail, which leaves 1 RP: less than the points about to be taken back
+    s.rp = UPGRADES.find((u) => u.id === "trace")!.cost + 1;
+    expect(paid).toBeGreaterThan(1);
     expect(buy(s, "trace")).toBe(true);
     markSending(p, 9.5, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.0 }, T0);
@@ -662,9 +715,13 @@ describe("Tighter answers from the server", () => {
     applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 17, pending: false }, T0);
     const confirmed = s.rp;
     const c = applyStep(s, p, step(9.4, 2), T0);
+    const traced = p.rpTrace.length;
     expect(withdrawConsent(s)).toBeCloseTo(c.points!.total, 12);
     expect(s.consent).toBe(false);
     expect(s.rp).toBeCloseTo(confirmed, 12);
+    // the graph falls back with the points taken, at the same evaluation: the payment's point is replaced
+    expect(p.rpTrace).toHaveLength(traced);
+    expect(p.rpTrace.at(-1)).toEqual([p.evaluations, p.rp]);
     expect(p.paidTo).toBe(9.5);
     // nothing pays while sending is off
     expect(applyStep(s, p, step(9.3, 3), T0).points).toBeNull();
@@ -692,6 +749,113 @@ describe("Tighter answers from the server", () => {
     addToQueue(s, other);
     expect(drop(s, other.key, T0)).toBe(true);
     expect(s.past.map((q) => q.key)).toEqual(["21/21/40"]);
+  });
+});
+
+describe("Tighter auto-eval's rate", () => {
+  const all: UpgradeId[] = ["auto1", "auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10"];
+  const upTo = (id: UpgradeId) => all.slice(0, all.indexOf(id) + 1);
+  const faster = (l: number) => owning([...all, "autox"], { autox: l });
+
+  it("climbs slowly, then about doubling a rung, then 10 a second a level of Faster auto-eval, up to the limit", () => {
+    const rates = [1, 2, 3, 5, 10, 20, 35, 60, 100, 150];
+    expect(all.map((id) => autoPerSecond(owning(upTo(id))))).toEqual(rates);
+    expect(AUTO_RATES).toEqual(rates);
+    expect(AUTO_MAX).toBe(250);
+    expect(AUTOX_STEP).toBe(10);
+    expect([1, 2, 5, 9].map((l) => autoPerSecond(faster(l)))).toEqual([160, 170, 200, 240]);
+    // the last level reaches the limit: about 44 % of a core at N+M+P = 85 (1.77 ms an evaluation),
+    // and more than a core from about N+M+P = 130 up (4 ms an evaluation)
+    expect(autoPerSecond(faster(10))).toBe(250);
+    expect((250 * msPerEval(85)) / 1000).toBeCloseTo(0.4425, 9);
+    expect(msPerEval(129)).toBeLessThan(4);
+    expect(msPerEval(131)).toBeGreaterThan(4);
+    expect(upgrade("autox").levels).toEqual({ max: 10, growth: 1.6 });
+    expect(costOf(faster(10), "autox")).toBeNull();
+    // more levels than that never run faster
+    expect(autoPerSecond(faster(14))).toBe(250);
+    // the prices grow steeply: the last level costs about 69 times the first
+    expect(costOf(faster(9), "autox")! / costOf(owning(all), "autox")!).toBeCloseTo(1.6 ** 9, 3);
+  });
+
+  it("is the rate of all lanes together, which they share", () => {
+    const ten = owning([...upTo("auto5"), "lanes2"]);
+    // two lanes: 10 evaluations a second in all, 5 in each, not 20
+    expect(laneCount(ten, 8)).toBe(2);
+    expect(autoPerSecond(ten)).toBe(10);
+    expect(autoCap(ten)).toBe(10 * 60);
+    // a lane's job is a quarter second of its share: 150 a second over 1 lane, 38 at a time; over 2,
+    // 19; over 5, 8; over 7, 6
+    const top = owning(all);
+    expect(autoJobEvals(top, 1000, 1)).toBe(38);
+    expect(autoJobEvals(top, 1000, 2)).toBe(19);
+    expect(autoJobEvals(top, 1000, 5)).toBe(8);
+    expect(autoJobEvals(top, 1000, 7)).toBe(6);
+    // 200 a second over 5 lanes is 40 each: a job of exactly 10, not 11
+    expect(autoJobEvals(faster(5), 1000, 5)).toBe(10);
+    expect(autoJobEvals(faster(10), 1000, 1)).toBe(63);
+  });
+
+  it("does not change with evaluations per click", () => {
+    const rungs: UpgradeId[] = ["auto1", "auto2", "auto3"];
+    const ladder: UpgradeId[] = [
+      "click2",
+      "click3",
+      "click4",
+      "click5",
+      "click6",
+      "click7",
+      "click8",
+      "click9",
+      "click10",
+    ];
+    expect(autoPerSecond(owning(rungs))).toBe(3);
+    for (let i = 1; i <= ladder.length; i++) expect(autoPerSecond(owning([...ladder.slice(0, i), ...rungs]))).toBe(3);
+    const forty = owning([...ladder, "clickx", ...rungs], { clickx: 30 });
+    expect(evalsPerClick(forty)).toBe(40);
+    expect(autoPerSecond(forty)).toBe(3);
+    // 40 evaluations a click with the fastest rung: 150 evaluations a second, not 40 × 150
+    expect(autoPerSecond(owning([...ladder, "clickx", ...all], { clickx: 30 }))).toBe(150);
+    // the Clicks only reward's extra evaluation a click leaves it as it is too
+    expect(autoPerSecond(owning(["auto1"], {}, null, ["clicks"]))).toBe(1);
+    // and its jobs do not grow with the click size
+    expect(autoJobEvals(forty, 1000)).toBe(autoJobEvals(owning(rungs), 1000));
+  });
+
+  it("hands a lane a quarter second of its share at a time, at least one evaluation, at most what is due", () => {
+    expect(AUTO_JOB_SECONDS).toBe(0.25);
+    const o = (...ids: UpgradeId[]) => owning(["click10", ...ids]);
+    // an evaluation a second: one at a time, once one is due
+    expect(autoJobEvals(o("auto1"), 0.6)).toBe(0);
+    expect(autoJobEvals(o("auto1"), 1)).toBe(1);
+    expect(autoJobEvals(o("auto1"), 100)).toBe(1);
+    // a sum of fractions a rounding error short of 1 still runs
+    expect(autoJobEvals(o("auto1"), 1 - 1e-12)).toBe(1);
+    // 5 a second: 2 at a time; 10: 3; 100: 25; the limit of 250: 63
+    expect(autoJobEvals(o(...upTo("auto4")), 1000)).toBe(2);
+    expect(autoJobEvals(o(...upTo("auto5")), 1000)).toBe(3);
+    expect(autoJobEvals(o(...upTo("auto9")), 1000)).toBe(25);
+    expect(autoJobEvals(faster(10), 1000)).toBe(63);
+    // never more than is due, and nothing while a Compact's debt is repaid
+    expect(autoJobEvals(faster(10), 3.5)).toBe(3);
+    expect(autoJobEvals(o(...upTo("auto9")), -40)).toBe(0);
+  });
+
+  it("hands a lane at most a quarter second of the solver's time where the CPU cannot keep up", () => {
+    // 250 a second in one lane: 63 at a time where an evaluation is quick (1.77 ms at N+M+P = 85)...
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(85))).toBe(63);
+    // ...but at 22.8 ms (N+M+P = 326) 63 would take 1.4 s: 10 instead, and at 52.3 ms (500) 4
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(326))).toBe(10);
+    expect(autoJobEvals(faster(10), 1000, 1, msPerEval(500))).toBe(4);
+    // exactly a quarter second's worth, not one more
+    expect(autoJobEvals(faster(10), 1000, 1, 25)).toBe(10);
+    // at least one, however slow, and never more than is due
+    expect(autoJobEvals(faster(10), 1000, 1, 5000)).toBe(1);
+    expect(autoJobEvals(faster(10), 2, 1, 1)).toBe(2);
+    // the share still bounds it where the CPU is fast: 1 a second, one at a time
+    expect(autoJobEvals(owning(["auto1"]), 1000, 1, 0.1)).toBe(1);
+    // without a time, only the share counts
+    expect(autoJobEvals(faster(10), 1000, 1, 0)).toBe(63);
   });
 });
 
@@ -835,7 +999,7 @@ describe("Tighter auto-eval", () => {
       return p;
     });
   }
-  const base = { busy: new Set<string>(), seeds: 1 };
+  const base = { busy: new Set<string>() };
 
   it("keeps lane 1 on the board's problem and lane 2 on another, without Auto-advance", () => {
     const q = queue();
@@ -852,10 +1016,9 @@ describe("Tighter auto-eval", () => {
     expect(
       autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", busy: new Set(["21/21/40"]), owned }),
     ).toBeNull();
-    // a problem whose seeds are spent has nothing left to give
-    q[1].endedRuns = 1;
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })).toBeNull();
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned, seeds: 2 })?.key).toBe("21/21/40");
+    // runs that ended by themselves never take a problem out of auto-eval's hands
+    q[1].endedRuns = 7;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: "21/21/40", owned })?.key).toBe("21/21/40");
     // a problem without a record is left to the player
     q[1].endedRuns = 0;
     q[1].phase = "bare";
@@ -871,9 +1034,9 @@ describe("Tighter auto-eval", () => {
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
     // a lane on a problem that has stalled moves to the one with the fewest evaluations since progress
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned, current: q[0].key })?.key).toBe("27/27/80");
-    // spent problems are skipped, however fresh their last progress
-    q[2].endedRuns = 1;
-    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
+    // runs that ended there change nothing
+    q[2].endedRuns = 3;
+    expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("27/27/80");
     q[2].endedRuns = 0;
     q[2].sinceGain = DEFAULT_PATIENCE;
     q[1].sinceGain = DEFAULT_PATIENCE;

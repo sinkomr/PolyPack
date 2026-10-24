@@ -1,5 +1,6 @@
 import { METHOD_MATCH, PIPELINE, TRANSFERS, andList } from "./help";
 import { How, howDisclosure } from "./how";
+import { methodLabel } from "./methods";
 import { RunPlanState, addStage, learned, moveStage, removeStage, runsObserved } from "./runplan";
 import { TRANSFER_MARGIN } from "./transfer";
 import type { EvolveMethod, Owned } from "./upgrades";
@@ -84,10 +85,11 @@ export function renderRunsPanel(
   if (pipes) {
     parts.push(el("h3", "Pipeline"));
     const list = el("ol", undefined, "t-pipeline");
-    plan.pipeline.forEach((m, i) => {
+    plan.pipeline.forEach((stage, i) => {
+      const m = methodLabel(stage);
       const li = el("li");
-      const name = el("span", `${i + 1}. ${m}`, input.allowed(m) ? undefined : "t-refused");
-      if (!input.allowed(m)) name.title = "This cycle's rule does not allow this method, so this stage is skipped.";
+      const name = el("span", `${i + 1}. ${m}`, input.allowed(stage) ? undefined : "t-refused");
+      if (!input.allowed(stage)) name.title = "This cycle's rule does not allow this method, so this stage is skipped.";
       const n = plan.pipeline.length;
       const actions = el("span", undefined, "t-q-actions");
       actions.append(
@@ -105,7 +107,7 @@ export function renderRunsPanel(
     const select = el("select");
     select.id = "t-pipeline-method";
     for (const m of input.methods) {
-      const opt = el("option", m);
+      const opt = el("option", methodLabel(m));
       opt.value = m;
       opt.disabled = !input.allowed(m);
       select.append(opt);
@@ -148,7 +150,7 @@ export function renderRunsPanel(
           ? `On problems like this one, the best so far ${top.length === 1 ? "is" : "are"} ${andList(
               top.map(
                 (t) =>
-                  `${t.method}${t.level ? ` at setting ${t.level}` : ""} with ${fmt(t.mean)} RP an evaluation (${t.runs} run${t.runs === 1 ? "" : "s"})`,
+                  `${methodLabel(t.method)}${t.level ? ` at setting ${t.level}` : ""} with ${fmt(t.mean)} RP an evaluation (${t.runs} run${t.runs === 1 ? "" : "s"})`,
               ),
             )}.`
           : "It has learned nothing yet on problems like this one.",

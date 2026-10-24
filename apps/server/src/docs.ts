@@ -1,4 +1,5 @@
 import {
+  MAX_EVENT_KEYS,
   MAX_METHOD_PARAMS_BYTES,
   MAX_PIECES,
   MAX_SIDES,
@@ -9,7 +10,7 @@ import {
   UNSOLVED_MAX_P,
   UNSOLVED_SHAPES,
 } from "@polypack/geometry";
-import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from "./limits";
+import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 
 const PYTHON = `import json, math, urllib.request
 
@@ -19,6 +20,8 @@ BASE = "https://YOUR-SITE"   # or http://localhost:8787
 # At theta = pi/4 a square piece has horizontal and vertical sides.
 pieces = [{"x": i % 4, "y": i // 4, "theta": math.pi / 4} for i in range(11)]
 
+# The score is computed at container_phi as sent: orient a board before submitting it.
+# This grid is axis-aligned, so 0 is already its best orientation.
 body = {"N": 4, "M": 4, "P": 11, "pieces": pieces, "container_phi": 0.0,
         "name": "my name", "found_with": "hand"}
 request = urllib.request.Request(BASE + "/api/submit", data=json.dumps(body).encode(),
@@ -240,8 +243,9 @@ The source is public at <a href="https://github.com/sinkomr/PolyPack">github.com
 At <code>phi = 0</code> the bottom edge is horizontal. A circle container has a centre and a radius <code>r</code>.</td></tr>
 <tr><th scope="row">Score</th><td>The container side <code>s</code> (polygon) or radius <code>r</code> (circle). Smaller is better. In responses it is <code>container.size</code>.</td></tr>
 <tr><th scope="row">Validity</th><td>Exactly <code>P</code> pieces. Pieces may touch; two pieces overlap when their separation is below −${TOL} (in piece units).</td></tr>
-<tr><th scope="row">Orientation</th><td>The server scores at your <code>container_phi</code> and at its own auto-oriented <code>phi</code> and keeps the smaller size.
-The <code>phi</code> it used is returned in <code>container.phi</code>.</td></tr>
+<tr><th scope="row" id="orientation">Orientation</th><td><strong>The score is computed at the <code>container_phi</code> you send</strong> (0 when it is missing): the server finds the smallest container at that orientation and does not search for a better one.
+So turn the container to its best orientation before you submit: <code>autoOrient</code> or <code>evaluate(config, {autoOrient: true})</code> in <code>packages/geometry</code> does it, the board does it when you press Submit, and the optimizers' results come oriented.
+The server's answer is then exactly the score your client computed. <code>container.phi</code> in the answer is the <code>phi</code> it used. (Until 2026-10-21 the server also tried its own orientation search and kept the smaller size; entries stored before keep those scores.)</td></tr>
 </table>
 
 <h2 id="leader">One leader per problem</h2>
@@ -272,12 +276,12 @@ When the published packing has coordinates they are in <code>literature.pieces</
 </table>
 
 <h3 id="submit"><code>POST /api/submit</code></h3>
-<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0; the fields after <code>name</code> are optional (see <a href="#submit-fields">the table below</a>).</p>
+<p>Body: the configuration, a display name and how the packing was found. <code>container_phi</code> defaults to 0, and the score is computed at it: <a href="#orientation">orient your board before submitting</a>. The fields after <code>name</code> are optional (see <a href="#submit-fields">the table below</a>).</p>
 <pre><code>${esc(SCHEMA)}</code></pre>
 <p>Any other fields, including a container or a score, are ignored. Response:</p>
 <pre><code>${esc(RESPONSE)}</code></pre>
 <table>
-<tr><th scope="row"><code>score</code>, <code>container</code></th><td>Computed by the server from the poses.</td></tr>
+<tr><th scope="row"><code>score</code>, <code>container</code></th><td>Computed by the server from the poses, at the <code>container_phi</code> sent.</td></tr>
 <tr><th scope="row"><code>leader</code></th><td><code>true</code> when this entry is now the problem's leader.</td></tr>
 <tr><th scope="row"><code>leader_score</code></th><td>The leader's score after this submission: the value the next entry has to improve on. Equal to <code>score</code> when <code>leader</code> is true.</td></tr>
 <tr><th scope="row"><code>rank</code></th><td><code>1</code> for the leader; otherwise the entry's position among the entries stored for the problem when it arrived (usually just the leader), and never less than 2 (an entry that only ties the leader is 2).</td></tr>
@@ -292,7 +296,9 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
-<tr><td>429</td><td>Rate limit: 120 submissions per minute per address. Wait a minute and send again; a script that submits many results should pace them.</td></tr>
+<tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
+IPv6 addresses count by their /64 prefix. Wait and send again; when the limit is verification time, <code>Retry-After</code> says how many seconds. A script that submits many results should pace them.</td></tr>
+<tr><td>503</td><td>The server is busy. Nothing was examined or stored; send again after the seconds in <code>Retry-After</code>.</td></tr>
 </table>
 <table id="submit-fields">
 <tr><th scope="col">Field</th><th scope="col">Meaning</th></tr>
@@ -334,7 +340,7 @@ Closed problems appear in <code>literature</code> only.</p>
 <h3 id="holders"><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
 (names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first.
-Counting reads every problem, so it is done at most once a minute: the answer may be up to a minute behind the latest entries.</p>
+Counting reads every problem, so it is done at most once every 15 minutes: the answer may be up to 15 minutes behind the latest entries.</p>
 <table>
 <tr><th scope="row"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>
 <tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>
@@ -357,7 +363,7 @@ All parameters are optional, and each may be given once:</p>
 <tr><th scope="row"><code>leader</code>, <code>leader_id</code></th><td>The leader's score and submission id, or <code>null</code>.</td></tr>
 <tr><th scope="row"><code>published</code></th><td>The published value, or <code>null</code>. <code>published_coordinates</code> says whether <code>/api/problems/{N}/{M}/{P}</code> carries its coordinates.</td></tr>
 <tr><th scope="row"><code>area_bound</code></th><td>The area lower bound, as in the problem description.</td></tr>
-<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 10 minutes old, from leaders read at most a minute before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be up to about 11 minutes behind the latest entries.</td></tr>
+<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 30 minutes old, from leaders read at most 15 minutes before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be up to about 45 minutes behind the latest entries.</td></tr>
 </table>
 <p id="priority"><code>priority</code> estimates the fraction by which a problem's record could still shrink, discounted by how likely a long search is to get there and how much the site gains when it does.
 It is comparable within one answer only. Several estimates can apply to one problem; the largest is its priority, and <code>reason</code> names it:</p>
@@ -395,10 +401,12 @@ This route answers the manifest: <code>{format, generated_at, completed_at, reco
 <code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href="#conventions">conventions</a> above and every number at full precision.
 How the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>. A file holds no timestamp, so an unchanged pair keeps the same bytes and SHA-256 from night to night.</p>
 
-<h3><code>GET /api/events</code></h3>
-<p>Server-sent events. A <code>hello</code> event opens the stream and a <code>ping</code> event follows every 20 s without news.
-A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.
-Submissions that do not change the leader send nothing.</p>
+<h3 id="events"><code>GET /api/events?keys=N/M/P,N/M/*</code></h3>
+<p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem the stream follows gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.
+Submissions that do not change the leader send nothing. A <code>hello</code> event opens the stream, with the keys it follows (<code>{"keys": [...]}</code>, or <code>{"all": true}</code>), and a <code>ping</code> event follows every 20 s without news.</p>
+<p><code>keys</code> says which problems to follow, separated by commas: <code>N/M/P</code> for one problem, <code>N/M/*</code> for every <code>P</code> of a pair of shapes, at most ${MAX_EVENT_KEYS} keys (400 otherwise). To follow other problems, open a new stream with the new keys and close the old one; an <code>EventSource</code> that reconnects asks for the same keys again.
+Events that happen while no stream is open are not sent later, so read what you show again after (re)opening. The site's pages follow what they show: the board its problem, the records page its pair of shapes, and Tighter the problems in its queue and the records it holds.</p>
+<p>Without <code>keys</code> the stream follows every problem on the site. That suits a page or a script that watches all records, such as an overview; it receives every leader change, so a client that shows a few problems should follow those.</p>
 
 <h3><code>GET /api/health</code></h3>
 <p><code>{"ok": true}</code> while the server is running.</p>
@@ -434,7 +442,7 @@ Provenance is replaced as a whole, so <code>found_with</code> is required whenev
 <p><code>run(problem, {method, budget: {evals, time_s}, seed, start?, params?})</code> resolves to a <code>Result</code>. The fields that matter for automation:</p>
 <table>
 <tr><th scope="row"><code>best</code></th><td>The best valid configuration found, <code>{N, M, P, pieces, container_phi}</code>; absent when none was found.</td></tr>
-<tr><th scope="row"><code>score</code></th><td>Its size, computed like the server does (auto-oriented); <code>null</code> without a valid configuration.</td></tr>
+<tr><th scope="row"><code>score</code></th><td>Its size at <code>best.container_phi</code>, the orientation a final search chose: the score the server gives <code>best</code> as it is. <code>null</code> without a valid configuration.</td></tr>
 <tr><th scope="row"><code>valid</code></th><td>Whether <code>best</code> is a valid packing. <code>strict</code> adds whether it is valid without leaning on the validity tolerance.</td></tr>
 <tr><th scope="row"><code>evaluations</code>, <code>wallTime</code>, <code>termination</code>, <code>reasons</code></th><td>What the run cost (<code>wallTime</code> in seconds) and why it ended: <code>completed</code>, <code>time</code>, <code>evals</code>, <code>aborted</code> or <code>error</code>.</td></tr>
 </table>

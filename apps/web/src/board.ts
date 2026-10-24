@@ -38,7 +38,7 @@ export class Board {
    * What the latest change was, for listeners that care: "load" when a configuration replaced the
    * board, "history" for undo and redo, "edit" for everything else.
    */
-  lastChange: "edit" | "load" | "history" = "edit";
+  lastChange: "edit" | "load" | "history" | "orient" = "edit";
   private undoStack: string[] = [];
   private redoStack: string[] = [];
   private gestureStart: string | null = null;
@@ -174,7 +174,8 @@ export class Board {
     const s = this.state;
     const d = slideMove(s.N, s.pieces, this.ids, dx, dy);
     if (d.dx !== 0 || d.dy !== 0) {
-      for (const i of this.selection) s.pieces[i] = { ...s.pieces[i], x: s.pieces[i].x + d.dx, y: s.pieces[i].y + d.dy };
+      for (const i of this.selection)
+        s.pieces[i] = { ...s.pieces[i], x: s.pieces[i].x + d.dx, y: s.pieces[i].y + d.dy };
       this.changed();
     }
     return d;
@@ -199,7 +200,8 @@ export class Board {
 
   /** Trial complete collision-constrained snaps; a blocked attempt leaves the board unchanged. */
   magnetSelection(radius: number, mode: SnapMode): MagneticSnap | null {
-    const s = this.state, ids = this.ids;
+    const s = this.state,
+      ids = this.ids;
     const pivot = this.selectionPivot();
     if (!pivot) return null;
     for (const candidate of magneticCandidates(s.N, s.pieces, ids, radius, mode).slice(0, 32)) {
@@ -226,7 +228,8 @@ export class Board {
     const s = this.state;
     const t = snapDistance(s.N, s.pieces, this.ids, ux, uy);
     if (t > 0) {
-      for (const i of this.selection) s.pieces[i] = { ...s.pieces[i], x: s.pieces[i].x + t * ux, y: s.pieces[i].y + t * uy };
+      for (const i of this.selection)
+        s.pieces[i] = { ...s.pieces[i], x: s.pieces[i].x + t * ux, y: s.pieces[i].y + t * uy };
       this.changed();
     }
     return t;
@@ -249,12 +252,27 @@ export class Board {
     this.changed();
   }
 
-  autoOrient(): void {
+  /**
+   * Turns the container to the best orientation the search finds, when that makes it smaller;
+   * returns whether it did. The server scores a submission at the orientation it is sent, so the
+   * board is turned before every submission. Auto-orient's turn is an undo step of its own
+   * (`ownStep`); the turn before a submission joins the latest step, so that Undo after Submit
+   * still undoes the user's last edit.
+   */
+  autoOrient(ownStep = true): boolean {
     const s = this.state;
-    if (!s.pieces.length || s.M === 0) return;
-    this.step(() => {
-      s.phi = autoOrient(s.N, s.pieces, s.M, s.phi).phi;
-    });
+    if (!s.pieces.length || s.M === 0 || !this.container) return false;
+    const best = autoOrient(s.N, s.pieces, s.M, s.phi);
+    if (!(best.size < this.container.size)) return false;
+    const turn = () => {
+      s.phi = best.phi;
+    };
+    if (ownStep) this.step(turn, "orient");
+    else {
+      turn();
+      this.changed("orient");
+    }
+    return true;
   }
 
   toConfig(): PackingConfig {

@@ -80,25 +80,34 @@ for (const [name, config] of [
 ] as const)
   writeFileSync(resolve(invalid, `${name}.json`), JSON.stringify({ config }, null, 2) + "\n");
 
+// Each file records two scores: `expected_score` at the configuration's own container_phi, which is
+// how the server scores a submission (since 2026-10-21), and `oriented_score` after an orientation
+// search, which is what a client gets by turning the container before submitting.
 function exportDirectory(dir: string): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = resolve(dir, entry.name);
     if (entry.isDirectory()) exportDirectory(path);
     else if (entry.name.endsWith(".json")) {
       const saved = JSON.parse(readFileSync(path, "utf8"));
-      const result = evaluate(saved.config, { autoOrient: true });
-      if (
-        saved.expected_score !== undefined &&
-        saved.expected_score !== null &&
-        Math.abs(saved.expected_score - (result.score ?? 0)) > 1e-9
-      ) {
-        throw new Error(`stored score changed: ${path}`);
+      const sent = evaluate(saved.config);
+      const oriented = evaluate(saved.config, { autoOrient: true });
+      for (const [key, result] of [
+        ["expected_score", sent],
+        ["oriented_score", oriented],
+      ] as const) {
+        const stored = saved[key];
+        if (stored !== undefined && stored !== null && Math.abs(stored - (result.score ?? 0)) > 1e-9)
+          throw new Error(`stored ${key} changed: ${path}`);
       }
-      saved.expected_score ??= result.score;
-      saved.expected_valid = result.valid;
-      // Retained only as a TypeScript regression witness; Python computes its own orientation.
-      saved.auto_oriented_phi = result.container?.phi ?? 0;
-      writeFileSync(path, JSON.stringify(saved, null, dir === directory ? 1 : 2) + "\n");
+      const out = {
+        config: saved.config,
+        expected_score: saved.expected_score ?? sent.score,
+        expected_valid: sent.valid,
+        oriented_score: saved.oriented_score ?? oriented.score,
+        // Retained only as a TypeScript regression witness; Python computes its own orientation.
+        auto_oriented_phi: oriented.container?.phi ?? 0,
+      };
+      writeFileSync(path, JSON.stringify(out, null, dir === directory ? 1 : 2) + "\n");
     }
   }
 }

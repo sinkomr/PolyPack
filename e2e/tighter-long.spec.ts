@@ -17,6 +17,7 @@ interface ProblemView {
   ourId: number | null;
   runs: number;
   endedRuns: number;
+  lattice: { score: number | null; at: number } | null;
 }
 const focused = (page: Page): Promise<ProblemView> =>
   page.evaluate(() => {
@@ -129,7 +130,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 21);
-  await grant(page, 5);
+  await grant(page, 1000);
   // the tech tree is a pane of its own, beside the board; its tab counts what can be bought
   await expect(page.locator("#t-tab-count")).toHaveText("1");
   await expect(page.locator("#t-next-up")).toHaveText("1 upgrade to buy in the tech tree");
@@ -140,7 +141,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const rows = await page
     .locator("#t-cards .t-band")
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.row));
-  expect(rows).toEqual(["clicks", "auto", "seeds", "queue", "methods", "runs", "problems", "dealer", "records"]);
+  expect(rows).toEqual(["clicks", "auto", "queue", "methods", "runs", "problems", "dealer", "records"]);
   await expect(page.locator("#t-shop-summary")).toHaveText(
     /^0 of \d+ upgrades owned · \d+ still \?\?\?\?\?\? · 1 to buy now$/,
   );
@@ -150,28 +151,31 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(harden).toHaveAttribute("data-state", "mystery");
   await expect(harden.locator(".t-node-name")).toHaveText("??????");
   await harden.locator("button").click();
-  await expect(page.locator("#t-tree-detail")).toContainText("Needs Method: seed.");
+  // with a pointer that hovers, the card beside the node holds the details and the pane below is gone
+  await expect(page.locator("#t-tree-tip")).toContainText("Needs Lattice.");
+  await expect(page.locator("#t-tree-tip")).toContainText("??????");
+  await expect(page.locator("#t-tree-detail")).toBeHidden();
   await expect(page.locator('.t-node[data-id="click3"] .t-node-name')).toHaveText("3 a click");
   expect(await axe(page)).toEqual([]);
 
-  // a mystery revealed: Method: seed bought, Method: harden shows as itself
+  // a mystery revealed: Lattice bought, Method: harden shows as itself
   const before = CLICK_LADDER.concat(["auto1", "auto2", "auto3", "auto4", "basin", "shrink", "penalty"]);
   await give(page, before);
-  await grant(page, 21_000);
+  await grant(page, 168_000);
   await buy(page, "lattice");
   await expect(page.locator('.t-card[data-id="harden"] h3')).toHaveText("harden");
-  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("30,000 RP");
+  await expect(page.locator('.t-card[data-id="harden"]')).toContainText("240,000 RP");
 
   // a levelled upgrade bought twice: one more evaluation per click a level, the price growing
-  await grant(page, 4500);
+  await grant(page, 15_000 + 18_750);
   await buy(page, "clickx");
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 2,500 RP");
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 18,750 RP");
   await expect(page.locator('.t-card[data-id="clickx"] .t-level')).toHaveText("L1");
   const rp = await game(page, (s) => s.rp);
   await page.click('.t-card[data-id="clickx"] button');
   await expect.poll(() => game(page, (s) => s.levels.clickx)).toBe(2);
-  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 2500, 6);
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 3,125 RP");
+  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 18_750, 6);
+  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 23,438 RP");
   await expect(page.locator("#t-evolve")).toBeAttached();
 
   // Standing: its row appears once Standing is owned, priced in standing
@@ -196,20 +200,20 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(errors).toEqual([]);
 });
 
-test("long game: auto-eval comes right after 2 evaluations per click, for 100 RP", async ({ page }) => {
+test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP", async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 22);
   await firstRecord(page);
   await expect(page.locator("#t-auto")).toBeHidden();
-  await grant(page, 5);
+  await grant(page, 1000);
   await buy(page, "trace");
-  await grant(page, 150);
+  await grant(page, 1500);
   await buy(page, "click2");
-  // the next card along is Auto-eval at 100 RP, before 3 evaluations per click (320)
+  // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (1,800)
   const card = page.locator('.t-card[data-id="auto1"]');
-  await expect(card).toContainText("100 RP");
+  await expect(card).toContainText(/(^|\D)80 RP/);
   await expect(card).toHaveAttribute("data-state", "dear");
-  await grant(page, 100);
+  await grant(page, 80);
   await buy(page, "auto1");
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
@@ -274,6 +278,62 @@ test("long game: offers to pick from, best first; filters saved and applied; dea
   expect(errors).toEqual([]);
 });
 
+test("long game: the dealer's upgrades turn off and on again in the tech tree, and stay so through a reload", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 24);
+  await grant(page, 1);
+  await give(page, ["queue3", "rank2", "rank4", "pick3", "filters"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 3));
+  await expect(page.locator("#t-offer-list > li")).toHaveCount(3, { timeout: 30_000 });
+  await expect(page.locator("#t-filters")).toBeVisible();
+  await openTree(page);
+  const node = (id: string) => page.locator(`.t-node[data-id="${id}"]`);
+  await expect(node("pick3")).toHaveAttribute("data-switch", "on");
+  await expect(node("queue3")).not.toHaveAttribute("data-switch", /./);
+  // the card beside it says what turning it off does
+  await node("pick3").hover();
+  await expect(page.locator("#t-tree-tip")).toContainText("Owned · on. Press it to turn it off.");
+  await expect(page.locator("#t-tree-tip")).toContainText("While it is off, the dealer deals on its own.");
+  // Your pick off: the offers go, and the dealer fills the free slots on its own
+  await node("pick3").locator("button").click();
+  await expect(node("pick3")).toHaveAttribute("data-switch", "off");
+  await expect(page.locator("#t-tree-tip")).toContainText("Owned · off. Press it to turn it on.");
+  expect(await game(page, (s) => s.settings.off)).toEqual(["pick3"]);
+  expect(await game(page, (s) => s.picks.offers.length)).toBe(0);
+  await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 30_000 }).toBe(3);
+  await expect(page.locator("#t-offers")).toBeHidden();
+  expect(await logText(page)).toContain("Turned off Your pick: 3. While it is off, the dealer deals on its own.");
+  // a ladder is one switch: Best of 4 off turns off Best of 2 too
+  await node("rank4").locator("button").click();
+  await expect(node("rank2")).toHaveAttribute("data-switch", "off");
+  await expect(node("rank4")).toHaveAttribute("data-switch", "off");
+  await node("filters").locator("button").click();
+  await expect(page.locator("#t-filters")).toBeHidden();
+  expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3", "filters"]);
+  await page.mouse.move(0, 0);
+  await node("rank4").scrollIntoViewIfNeeded();
+  await page.locator("#t-cards").screenshot({ path: test.info().outputPath("dealer-switches.png") });
+  // still owned: nothing to buy again
+  expect(await game(page, (s) => ["rank2", "rank4", "pick3", "filters"].every((id) => s.owned.includes(id)))).toBe(
+    true,
+  );
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await openTree(page);
+  for (const id of ["rank2", "rank4", "pick3", "filters"]) await expect(node(id)).toHaveAttribute("data-switch", "off");
+  await node("filters").locator("button").click();
+  await expect(node("filters")).toHaveAttribute("data-switch", "on");
+  await expect(page.locator("#t-filters")).toBeVisible();
+  expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3"]);
+  expect(await logText(page)).toContain("Turned on Dealer filters again.");
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test("long game: Auto picks each run's method; a pipeline moves to its next method when a run ends", async ({
   page,
 }) => {
@@ -297,31 +357,52 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await select.selectOption("mc_compress");
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
 
-  // a pipeline of two stages: lattice starts (a run of about 45 evaluations), then mc_compress
-  await give(page, ["lattice", "seeds", "seeds2", "seeds4", "standing", "pipeline"]);
+  // Lattice is owned, but the game runs its build by itself: it is neither in the Method list nor a stage
+  await give(page, ["lattice", "standing", "pipeline", "clickx"]);
   await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
+  await expect(select.locator('option[value="seed"]')).toHaveCount(0);
+  await expect(page.locator('#t-pipeline-method option[value="seed"]')).toHaveCount(0);
+  // a pipeline of two stages, mc_compress and then basin_hopping. At 110 evaluations a click the
+  // mc_compress run is soon long enough for the game to end it at a stall (500 evaluations in the
+  // run and 500 without progress), and that moves the pipeline on.
+  await page.evaluate(() => ((window as any).tighter.state.levels.clickx = 100));
   const add = async (m: string) => {
     await page.selectOption("#t-pipeline-method", m);
     await page.getByRole("button", { name: "Add the chosen method as the pipeline's last stage" }).click();
   };
-  await add("seed");
   await add("mc_compress");
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["seed", "mc_compress"]);
+  await add("basin_hopping");
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress", "basin_hopping"]);
   await expect(page.locator(".t-pipeline li")).toHaveCount(2);
   const ended0 = (await focused(page)).endedRuns;
   await click(page);
-  await expect(page.locator("#t-runinfo")).toContainText("seed ");
-  for (let i = 0; i < 30 && (await focused(page)).endedRuns === ended0; i++) await click(page);
-  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
-  await expect.poll(() => logText(page)).toContain("stopped improving");
-  await expect(page.locator("#t-notice")).toContainText("stopped improving");
-  await click(page);
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress ");
+  // 600 evaluations without progress: below the patience of 1,000, so only the run's own length decides
+  const stalled = () =>
+    page.evaluate(() => {
+      const s = (window as any).tighter.state;
+      s.queue.find((p: { key: string }) => p.key === s.focus).sinceGain = 600;
+    });
+  for (let i = 0; i < 12 && (await focused(page)).endedRuns === ended0; i++) {
+    await stalled();
+    await click(page);
+  }
+  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
+  await expect.poll(() => logText(page)).toContain("made no progress in its last 500 evaluations");
+  await expect(page.locator("#t-notice")).toContainText(/made no progress|Lattice packed/);
+  // a run on the problem has ended by itself, so its one Lattice build ran in that same click,
+  // and the build moved the pipeline no further
+  await expect.poll(() => logText(page)).toContain("Lattice packed ");
+  await expect(page.locator("#status")).toContainText("evaluations of lattice.");
+  expect((await focused(page)).lattice).not.toBeNull();
+  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
+  await click(page);
+  await expect(page.locator("#t-runinfo")).toContainText("basin_hopping ");
   // a stage can be moved and removed
-  await page.getByRole("button", { name: "Move stage 2, mc_compress, up" }).click();
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress", "seed"]);
-  await page.getByRole("button", { name: "Remove stage 2, seed" }).click();
-  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["mc_compress"]);
+  await page.getByRole("button", { name: "Move stage 2, basin_hopping, up" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["basin_hopping", "mc_compress"]);
+  await page.getByRole("button", { name: "Remove stage 2, mc_compress" }).click();
+  await expect.poll(() => game(page, (s) => s.runplan.pipeline)).toEqual(["basin_hopping"]);
   await page.setViewportSize({ width: 390, height: 844 });
   await dockView(page, "queue");
   await page.waitForTimeout(300);
@@ -357,16 +438,17 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(0);
   const paid = await game(page, (s) => s.economy.rentPaid);
   // 1 % of what the record earned, an hour, times the collections bonus (+5 %)
-  expect(paid).toBeCloseTo(0.01 * rate * 1.05, 3);
+  // (relative: the second or so the test itself takes adds its share of an hour)
+  expect(paid / (0.01 * rate * 1.05)).toBeCloseTo(1, 2);
   await expect(page.locator("#t-rc-note")).toContainText("The last check paid +");
 
   // a reset for standing, the next cycle under One method, with Head start I
   await give(page, ["standing", "rules", "head1"]);
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
-    s.standing.cycleEarned = 300_000;
-    s.rp += 300_000;
-    s.rpEarned += 300_000;
+    s.standing.cycleEarned = 2_400_000;
+    s.rp += 2_400_000;
+    s.rpEarned += 2_400_000;
   });
   await expect(page.locator("#t-standing")).toBeVisible();
   await expect(page.locator("#t-st-preview")).toContainText("Reset now for 1 standing");
@@ -433,6 +515,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   const old = await page.evaluate(() => {
     const save = JSON.parse(localStorage.getItem("tighter.save")!);
     for (const k of ["levels", "standing", "economy", "picks", "runplan"]) delete save[k];
+    save.version = 2;
     save.owned = ["trace", "click2", "click3", "click4", "auto1", "seeds"];
     save.settings.auto = true;
     save.bank = 700;
@@ -462,9 +545,20 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     autoDue: st.autoDue,
     auto: st.settings.auto,
   }));
-  expect(s).toMatchObject({ version: 2, rp: 123.5, levels: {}, picks: 0, pipeline: [] });
+  // read as version 4. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
+  // and the Seed counter's list price (300 RP), now that the Seeds row is gone. Version 4 multiplies every
+  // amount by what the save could buy next costs now over then: Auto-eval: 2 a second and 5 evaluations
+  // per click, 2,900 RP now and 815 then
+  const f = 2900 / 815;
+  expect(s).toMatchObject({ version: 4, levels: {}, picks: 0, pipeline: [] });
+  expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
+  await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
+  await expect(page.locator("#status")).toContainText(`${Math.round(81 * f)} RP of what you paid for yours came back`);
+  await expect(page.locator("#status")).toContainText(
+    `The Seeds upgrades have left the tech tree, so the ${Math.round(300 * f).toLocaleString("en-US")} RP they cost came back.`,
+  );
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
-  expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1", "seeds"]);
+  expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1"]);
   // the record it held is counted for collections; auto-eval is off and owes nothing for the hour away
   expect(s.recorded).toContain(p.key);
   expect(s).toMatchObject({ autoDue: 0, auto: false });
@@ -477,7 +571,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   await expect(page.locator("#t-standing")).toBeHidden();
   const e0 = (await stats(page)).evaluations;
   await click(page);
-  // after a reload the click opens a run with the next seed: its start's scoring, then 4 evaluations
+  // after a reload the click opens a new run, with a new seed: its start's scoring, then 4 evaluations
   expect((await stats(page)).evaluations).toBe(e0 + 5);
   expect(errors).toEqual([]);
 });
@@ -524,7 +618,7 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   await page.evaluate((key) => {
     const s = (window as any).tighter.state;
     s.dealer.tokens = 0;
-    s.dealer.evalsAt = s.stats.evaluations;
+    s.dealer.credit = 0;
     s.queue.find((p: { key: string }) => p.key === key).sinceGain = 5000;
   }, first.key);
   await page.click("#t-auto");
@@ -568,5 +662,60 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test("long game: with Your pick and two lanes, Auto-advance compacts every new problem and replaces stalled ones", async ({
+  page,
+}) => {
+  test.setTimeout(240_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 31);
+  await firstRecord(page);
+  await consent(page, "E2E Lanes");
+  await give(page, [...CLICK_LADDER, "queue3", "queue4", "queue6", "rank2", "pick3", "advance", "auto1", "lanes2"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 6));
+  // five offers taken by hand: a full queue of six, five of them never compacted
+  const offers = page.locator("#t-offer-list > li");
+  for (let i = 0; i < 5; i++) {
+    const n = await game(page, (s) => s.queue.length);
+    await expect(offers.first()).toBeVisible({ timeout: 30_000 });
+    await offers.first().locator("button").click();
+    await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 30_000 }).toBe(n + 1);
+  }
+  // a problem past its patience with auto-eval off waits, and the queue says what it waits for
+  await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
+  await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
+  await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
+  // auto-eval at its limit of 250 evaluations a second, shared by the two lanes: every new problem gets
+  // its Compact, although a lane with a problem to work takes each job as it comes due (a Compact owes
+  // the rest)
+  await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.owned.push("auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10", "autox");
+    s.levels.autox = 10;
+  });
+  await page.click("#t-auto");
+  await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
+  await expect
+    .poll(() => game(page, (s) => s.queue.filter((p: { phase: string }) => p.phase !== "ready").length), {
+      timeout: 90_000,
+    })
+    .toBe(0);
+  // two stall: both are replaced as deals are earned, and the queue stays full
+  const stalled = await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.dealer.tokens = 2;
+    return s.queue.slice(0, 2).map((p: { key: string; sinceGain: number }) => ((p.sinceGain = 1500), p.key));
+  });
+  await expect
+    .poll(() => game(page, (s) => s.past.map((p: { key: string }) => p.key)), { timeout: 90_000 })
+    .toEqual(expect.arrayContaining(stalled));
+  expect(await game(page, (s) => s.queue.filter((p: { leaving: boolean }) => !p.leaving).length)).toBe(6);
+  expect(await logText(page)).toMatch(
+    /Auto-advance (dropped|is dropping) .* without progress, and .* takes its slot\./,
+  );
+  await page.click("#t-auto");
   expect(errors).toEqual([]);
 });

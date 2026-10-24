@@ -85,21 +85,89 @@ export async function postSubmission(body: Record<string, unknown>): Promise<{ s
   }
 }
 
+/** Least time between two streams one LiveFeed opens: quick changes of what it follows coalesce. */
+export const FOLLOW_GAP_MS = 1000;
+
+/** EventSource.readyState of an open stream (the constant is not there outside a browser). */
+const OPEN = 1;
+
 /**
- * Live leaderboard updates. Server-sent events are the primary channel. While the event stream
- * is not open, `poll` is called every 10 s as the fallback.
+ * Live leaderboard updates for the problems a page shows (GET /api/events). Server-sent events are
+ * the primary channel; while no stream is open, `poll` is called every 10 s as the fallback.
+ *
+ * `follow` says what to follow: "N/M/P" and "N/M/*" keys (see eventKeys), or null for every
+ * problem. Following other keys opens a new stream in place of the old one, at most one every
+ * FOLLOW_GAP_MS, and the latest wish wins; an event in between can be missed, so a page reads what
+ * it shows again when it follows something new. An EventSource that reconnects by itself asks for
+ * the same keys again. Following no keys at all closes the stream.
  */
-export function subscribe(onEvent: (e: LeaderboardEvent) => void, poll: () => void): () => boolean {
-  let source: EventSource | null = null;
-  try {
-    source = new EventSource("/api/events");
-    source.addEventListener("leaderboard", (e) => onEvent(JSON.parse((e as MessageEvent).data)));
-  } catch {
-    source = null;
+export class LiveFeed {
+  private source: EventSource | null = null;
+  /** The address of the open stream, and of the one wanted ("" for none); undefined before the first follow. */
+  private current: string | undefined;
+  private wanted: string | undefined;
+  private openedAt = -Infinity;
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private poller: ReturnType<typeof setInterval> | null = null;
+
+  constructor(
+    private onEvent: (e: LeaderboardEvent) => void,
+    poll: (() => void) | null = null,
+    private open: (url: string) => EventSource = (url) => new EventSource(url),
+    private now: () => number = () => Date.now(),
+  ) {
+    if (poll)
+      this.poller = setInterval(() => {
+        if (!this.isLive()) poll();
+      }, 10_000);
   }
-  const isLive = () => !!source && source.readyState === EventSource.OPEN;
-  setInterval(() => {
-    if (!isLive()) poll();
-  }, 10000);
-  return isLive;
+
+  /** Follows `keys` from now on, or every problem with null. */
+  follow(keys: readonly string[] | null): void {
+    this.wanted = keys === null ? "/api/events" : keys.length ? `/api/events?keys=${keys.join(",")}` : "";
+    this.apply();
+  }
+
+  private apply(): void {
+    if (this.wanted === undefined || this.wanted === this.current || this.timer) return;
+    const wait = this.openedAt + FOLLOW_GAP_MS - this.now();
+    if (wait > 0) {
+      this.timer = setTimeout(() => {
+        this.timer = null;
+        this.apply();
+      }, wait);
+      return;
+    }
+    this.source?.close();
+    this.source = null;
+    this.current = this.wanted;
+    if (!this.current) return;
+    this.openedAt = this.now();
+    try {
+      this.source = this.open(this.current);
+      this.source.addEventListener("leaderboard", (e) => {
+        try {
+          this.onEvent(JSON.parse((e as MessageEvent).data));
+        } catch {
+          // a malformed event is ignored
+        }
+      });
+    } catch {
+      this.source = null;
+    }
+  }
+
+  isLive(): boolean {
+    return !!this.source && this.source.readyState === OPEN;
+  }
+
+  /** Stops following anything, for good. */
+  close(): void {
+    if (this.timer) clearTimeout(this.timer);
+    if (this.poller) clearInterval(this.poller);
+    this.timer = this.poller = null;
+    this.source?.close();
+    this.source = null;
+    this.current = this.wanted = undefined;
+  }
 }

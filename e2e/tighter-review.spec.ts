@@ -155,20 +155,15 @@ test("owner rule: a problem's best is POSTed at most once a minute, also when it
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 20_000 }).toBe("Leaving Player");
   const first = await siteBest(page, p);
   await clickUntilBetter(page, first.score);
-  // the next problem is earned by evaluations (300 clicks of one), not yet
+  // the next problem is earned by work (300 clicks, whatever their size), not yet
   await expect(page.locator("#t-next")).toBeDisabled();
-  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ evaluations$/);
-  // a problem whose seeds are spent (its one run ended by itself) can be left at once
-  await page.evaluate(() => {
-    const s = (window as any).tighter.state;
-    s.queue.find((q: any) => q.key === s.focus).endedRuns = 1;
-  });
+  await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
+  // once the next problem is earned (a deal given here), the problem can be left at once
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 1));
   await expect(page.locator("#t-next")).toBeEnabled({ timeout: 5_000 });
   await expect(page.locator("#t-next")).toHaveText("Next problem");
-  await expect(page.locator("#t-problem-note")).toContainText("seed");
-  await expect(page.locator("#t-evolve")).toBeDisabled();
   await page.click("#t-next");
-  // the next problem is dealt at once (on credit: there was nothing left to work on)
+  // the next problem is dealt at once
   await expect.poll(async () => (await state(page)).queue.some((q: any) => !q.leaving), { timeout: 20_000 }).toBe(true);
   await sleep(5000);
   const mine = posts(log);
@@ -280,13 +275,13 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   const s = await state(page);
   console.log(
     `lost answer: server leader ${server?.name} id ${server?.id}; game verified ${after.verified} ourId ${after.ourId} ` +
-      `held ${await page.locator("#t-held").textContent()} rp ${s.rp} POSTs ${posts(log).length}`,
+      `held ${await page.locator("#t-bar-held").textContent()} rp ${s.rp} POSTs ${posts(log).length}`,
   );
   await page.screenshot({ path: `${SHOTS}/r2-lost-answer-after-reload.png`, fullPage: true });
   expect(server?.name).toBe("Reload Player");
   expect(posts(log)).toHaveLength(1);
   // the game knows it holds this record, and the points it paid before the send are confirmed, once
-  await expect(page.locator("#t-held")).toHaveText("1");
+  await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(after.ourId).toBe(server.id);
   expect(after.sending).toBeNull();
   expect(after.unconfirmed).toBe(0);
@@ -458,14 +453,14 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   expect((await state(page)).stats.evaluations).toBe(102);
   await expect(page.locator("#t-hold")).toHaveText("");
 
-  await grant(page, 5000);
+  await grant(page, 6600);
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
   await expect(page.locator("#t-hold")).toContainText("battery");
   const due = () => page.evaluate(() => (window as any).tighter.state.autoDue as number);
   const evaluations = async () => (await state(page)).stats.evaluations;
-  // on battery, a minute held (a click of 4 every 5 s would be 48 evaluations) earns nothing
+  // on battery, a minute held (an evaluation a second would be 60 evaluations) earns nothing
   const e0 = await evaluations();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 60_000));
   await sleep(3000);
@@ -475,16 +470,17 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   await click(page);
   expect(await evaluations()).toBe(e0 + 4);
   const onBattery = await page.locator("#t-hold").textContent();
-  // allowing battery use runs it live from then on, in clicks of 4, with nothing owed for the minute held
+  // allowing battery use runs it live from then on, an evaluation a second whatever the click size, with
+  // nothing owed for the minute held
   const t1 = Date.now();
   await page.click("#t-open-settings");
   await page.check("#t-battery");
   await page.click("#t-settings-close");
   await expect(page.locator("#t-hold")).toHaveText("");
-  await expect.poll(evaluations, { timeout: 20_000 }).toBeGreaterThanOrEqual(e0 + 8);
+  await expect.poll(evaluations, { timeout: 30_000 }).toBeGreaterThanOrEqual(e0 + 8);
   await expect.poll(() => idle(page)).toBe(true);
   const e1 = await evaluations();
-  expect(e1 - (e0 + 4)).toBeLessThanOrEqual(0.8 * ((Date.now() - t1) / 1000) + 4);
+  expect(e1 - (e0 + 4)).toBeLessThanOrEqual((Date.now() - t1) / 1000 + 4);
 
   // a hidden tab pauses it too
   await page.evaluate(() => {
@@ -511,7 +507,7 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
   // back: live again, nothing owed for the time hidden
   const after = (await evaluations()) - e2;
   console.log(`battery: "${onBattery}"; hidden: "${hidden}"; ran after: ${after}`);
-  expect(after).toBeLessThanOrEqual(0.8 * ((Date.now() - t2) / 1000) + 4);
+  expect(after).toBeLessThanOrEqual((Date.now() - t2) / 1000 + 4);
   expect(onBattery).toContain("battery");
   expect(hidden).toContain("hidden");
 });
@@ -533,7 +529,7 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
     name: "<b onmouseover=alert(1)>x</b>",
     log: [{ t: 1, text: "<img src=y onerror=window.__xss=2>" }],
   };
-  const str = `tighter:2:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
+  const str = `tighter:3:j:${Buffer.from(JSON.stringify(raw)).toString("base64url")}`;
   await page.click("#t-open-settings");
   await page.fill("#t-save-text", str);
   page.once("dialog", (d) => d.accept());
@@ -584,7 +580,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   endPhase("consent and 60 manual clicks");
 
   // grant points through the page's handle, then buy the path to the second lane through the cards
-  await grant(page, 200_000);
+  await grant(page, 400_000);
   const path = [
     "trace",
     "click2",
@@ -592,7 +588,6 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
     "click4",
     "auto1",
     "click5",
-    "seeds",
     "auto2",
     "click6",
     "queue3",
@@ -617,8 +612,8 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes between ticks: auto-eval catches up at most a minute (a click of 10 every 2 s on
-  // each of two lanes: 600), then runs live, two lanes, Auto-advance compacting the new problems
+  // twenty minutes between ticks: auto-eval catches up at most a minute (5 evaluations a second,
+  // shared by the two lanes: 300), then runs live, two lanes, Auto-advance compacting the new problems
   const autoStart = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));
   let twoBusy = false;
@@ -640,7 +635,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   // more than a minute behind plus its live rate
   const afterAuto = await state(page);
   const conserved = afterAuto.stats.evaluations - e0 + afterAuto.autoDue;
-  const dueAtMost = 600 + 10 * ((Date.now() - autoStart) / 1000) + 40;
+  const dueAtMost = 300 + 5 * ((Date.now() - autoStart) / 1000) + 40;
   endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
@@ -700,7 +695,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(600);
+  expect(conserved).toBeGreaterThanOrEqual(300);
   expect(conserved).toBeLessThanOrEqual(dueAtMost);
   expect(s2.autoDue).toBe(0);
   expect(twoBusy).toBe(true);

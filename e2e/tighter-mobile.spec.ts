@@ -39,7 +39,7 @@ async function midGame(page: Page): Promise<void> {
     const s = (window as any).tighter.state;
     s.rp = 5000;
     s.rpEarned = 9000;
-    for (const id of ["trace", "click2", "auto1", "click3", "seeds", "auto2", "click4", "click5", "queue3"])
+    for (const id of ["trace", "click2", "auto1", "click3", "auto2", "click4", "click5", "queue3"])
       if (!s.owned.includes(id)) s.owned.push(id);
     s.reveal.push("score", "points", "upgrades", "queue", "lanes");
   });
@@ -184,19 +184,33 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await page.locator(".t-detail-buy").tap();
   await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
   await fits(page);
+  // an owned dealer upgrade: its details turn it off, and on again, by touch
+  await page.evaluate(() => (window as any).tighter.state.owned.push("filters"));
+  const filters = page.locator('.t-node[data-id="filters"]');
+  await expect(filters).toHaveAttribute("data-switch", "on");
+  await filters.locator("button").tap();
+  await expect(page.locator(".t-detail-switch")).toHaveText("Turn off");
+  await page.locator(".t-detail-switch").tap();
+  await expect(filters).toHaveAttribute("data-switch", "off");
+  await expect.poll(() => state(page, (s) => s.settings.off)).toEqual(["filters"]);
+  await expect(page.locator(".t-detail-switch")).toHaveText("Turn on");
+  await axeClean(page);
+  await page.locator(".t-detail-switch").tap();
+  await expect.poll(() => state(page, (s) => s.settings.off)).toEqual([]);
 
   // the queue: the queue, its offers and lanes, without the points
   await page.locator("#t-dock-queue").tap();
   await expect(page.locator("#t-queue")).toBeVisible();
   await expect(page.locator("#t-lanes")).toBeVisible();
-  await expect(page.locator("#t-points")).toBeHidden();
+  await expect(page.locator("#t-points-help")).toBeHidden();
   await expect(page.locator("#t-upgrades")).toBeHidden();
   await axeClean(page);
 
-  // the points: the points, standing and records, without the queue
+  // the points: the totals in full (wrapped, not scrolled), how points are paid, without the queue
   await page.locator("#t-dock-points").tap();
-  await expect(page.locator("#t-points")).toBeVisible();
+  await expect(page.locator("#t-points-help")).toBeVisible();
   await expect(page.locator("#t-queue")).toBeHidden();
+  expect(await page.locator("#t-bar").evaluate((e) => e.scrollWidth <= e.clientWidth)).toBe(true);
 
   // back to the board, which is fitted again
   await page.locator("#t-dock-board").tap();

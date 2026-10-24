@@ -638,7 +638,8 @@ export class MethodRegistry {
       if (outcome.record.termination !== "completed") termination = outcome.record.termination;
     }
     closed = true;
-    // Final orientation is server-equivalent and intentionally outside the counted search budget.
+    // The final orientation is intentionally outside the counted search budget. The server scores a
+    // submission at its container_phi and does not search itself, so this makes the result ready to send.
     if (best) {
       const final = evaluate(best, { autoOrient: true });
       if (final.valid && final.container && final.score !== null) {

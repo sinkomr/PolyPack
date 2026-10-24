@@ -2,19 +2,8 @@ import { findOverlaps } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import { MethodRegistry, strictTolerance } from "@polypack/solver";
 import type { MethodContext, MethodDefinition, Problem, Result } from "@polypack/solver";
-// The solver's method definitions, registered as packages/solver/src/index.ts registers them. The
-// package exports only its finished registry, whose definitions are private, so they are imported
-// from its source (see kernel-requests.md: an evaluation hook on run() would make this unneeded).
-import { identityMethod, polishMethod } from "../../../../packages/solver/src/methods";
-import { ascMethod } from "../../../../packages/solver/src/methods/asc";
-import { basinHoppingMethod } from "../../../../packages/solver/src/methods/basin_hopping";
-import { hardenMethod } from "../../../../packages/solver/src/methods/harden";
-import { lsGrowthMethod } from "../../../../packages/solver/src/methods/ls_growth";
-import { mcCompressMethod } from "../../../../packages/solver/src/methods/mc_compress";
-import { morphMethod } from "../../../../packages/solver/src/methods/morph";
-import { penaltyMethod } from "../../../../packages/solver/src/methods/penalty";
-import { seedMethod } from "../../../../packages/solver/src/methods/seed";
-import { shrinkRepairMethod } from "../../../../packages/solver/src/methods/shrink_repair";
+import type { RunStage } from "./methods/types";
+import { METHODS } from "./methods/worker";
 
 /**
  * An open run: one real solver run() that stays open between clicks and does exactly the
@@ -26,20 +15,6 @@ import { shrinkRepairMethod } from "../../../../packages/solver/src/methods/shri
  * One evaluation is the solver's counted unit: one scoring of the whole packing (overlaps and the
  * container fit). The start's scoring is the run's first evaluation and is done when it opens.
  */
-
-const METHODS: readonly MethodDefinition[] = [
-  identityMethod,
-  polishMethod,
-  seedMethod,
-  penaltyMethod,
-  basinHoppingMethod,
-  mcCompressMethod,
-  morphMethod,
-  ascMethod,
-  lsGrowthMethod,
-  hardenMethod,
-  shrinkRepairMethod,
-];
 
 /** A method's parameters as the framework resolves them (defaults, then the given values). */
 export function resolvedParams(method: string, params: Record<string, unknown>): Record<string, unknown> {
@@ -64,6 +39,18 @@ export interface RunState {
   /** The best strict packing seen (the start's included) and its score as the solver scored it. */
   best: PackingConfig | null;
   score: number | null;
+  /**
+   * The score of the latest valid evaluation, the start's included, strict or not: where the run's
+   * search is now, which may be well above its best. Null before any valid evaluation.
+   */
+  last: number | null;
+  /**
+   * The best score of a strict packing the method evaluated itself, the start's scoring excluded:
+   * what the run found, even when it did not beat its start. Null before any.
+   */
+  found: number | null;
+  /** The latest sub-run the run's own method started (none before its first). */
+  stage?: RunStage;
   /** The run has finished (its budget, its own stopping rule, a close or an error): no more steps. */
   ended: boolean;
   /** It ended because it was closed, not by itself. */
@@ -86,6 +73,11 @@ export class OpenRun {
   private error: string | undefined;
   private best: PackingConfig | null = null;
   private score: number | null = null;
+  private last: number | null = null;
+  private found: number | null = null;
+  private stage: RunStage | undefined;
+  /** Sub-runs the run's own method has started, by method. */
+  private stages = new Map<string, number>();
   private top: MethodContext | null = null;
   private waiters: { target: number; resolve: (s: RunState) => void }[] = [];
   private lastProgress = 0;
@@ -152,6 +144,9 @@ export class OpenRun {
       evaluations: this.done,
       best: this.best ? structuredClone(this.best) : null,
       score: this.score,
+      last: this.last,
+      found: this.found,
+      ...(this.stage ? { stage: { ...this.stage } } : {}),
       ended: this.ended,
       closed: this.closedEarly,
       ...(this.error ? { error: this.error } : {}),
@@ -165,12 +160,15 @@ export class OpenRun {
     return {
       ...def,
       execute: (ctx) => {
+        // a sub-run's start has just been scored: count it before the sub-run's first step
         if (!this.top) this.enter(ctx);
+        else this.count();
         return def.execute({
           ...ctx,
           evaluate: async (c, o) => this.seen(c, await ctx.evaluate(c, o)),
           emit: async (c) => this.seen(c, await ctx.emit(c)),
           run: async (...args) => {
+            if (ctx === this.top) this.subRun(args[0]);
             const r = await ctx.run(...args);
             this.count();
             return r;
@@ -185,7 +183,17 @@ export class OpenRun {
     this.top = ctx;
     this.count();
     const e = ctx.initialEvaluation;
-    if (ctx.start && e?.valid && e.container && e.score !== null) this.offer(ctx.start, e.score, e.container.phi);
+    if (e?.valid && e.score !== null) this.last = e.score;
+    if (ctx.start && e?.valid && e.container && e.score !== null && this.better(e.score) && this.strict(ctx.start))
+      this.keep(ctx.start, e.score, e.container.phi);
+  }
+
+  /** The run's own method starts a sub-run of `method`, at the evaluations done so far. */
+  private subRun(method: string): void {
+    const count = (this.stages.get(method) ?? 0) + 1;
+    this.stages.set(method, count);
+    const at = this.top ? this.request.budget.evals - this.top.remaining().evals : this.done;
+    this.stage = { method, count, at };
   }
 
   /** Evaluations done, from the run's own count (sub-runs' starts included). */
@@ -195,21 +203,38 @@ export class OpenRun {
   }
 
   private seen(candidate: PackingConfig, r: Evaluated): Evaluated {
-    if (r?.valid && r.container && r.score !== null) this.offer(candidate, r.score, r.container.phi);
+    if (r?.valid && r.score !== null) {
+      this.last = r.score;
+      const better = !!r.container && this.better(r.score);
+      const finds = this.found === null || r.score < this.found;
+      // the strictness test is the costly part: only for a score that would be kept
+      if ((better || finds) && this.strict(candidate)) {
+        if (finds) this.found = r.score;
+        if (better) this.keep(candidate, r.score, r.container!.phi);
+      }
+    }
     this.count();
     return r;
   }
 
-  private offer(candidate: PackingConfig, score: number, phi: number): void {
-    if (this.score !== null && !(score < this.score)) return;
-    // only a strict packing (no penetration beyond the strict tolerance) is ever kept or sent
-    if (findOverlaps(candidate.N, candidate.pieces, strictTolerance(candidate)).length) return;
+  /** The score beats the run's best. */
+  private better(score: number): boolean {
+    return this.score === null || score < this.score;
+  }
+
+  /** Only a strict packing (no penetration beyond the strict tolerance) is ever kept or sent. */
+  private strict(candidate: PackingConfig): boolean {
+    return findOverlaps(candidate.N, candidate.pieces, strictTolerance(candidate)).length === 0;
+  }
+
+  private keep(candidate: PackingConfig, score: number, phi: number): void {
     this.best = { ...structuredClone(candidate), container_phi: phi };
     this.score = score;
   }
 
   private end(r: Result | null, error?: string): void {
-    // the final auto-orientation is free and server-equivalent: it may lower the score
+    // the final auto-orientation is free and is what the server will score (at the phi sent): it may
+    // lower the score
     if (r?.valid && r.strict && r.best && r.score !== null && (this.score === null || r.score < this.score)) {
       this.best = structuredClone(r.best);
       this.score = r.score;

@@ -14,10 +14,11 @@ import {
   ruleAllowsProblem,
   ruleBonus,
   ruleOpenProblems,
+  ruleRewardFactor,
   standingGain,
   standingMultiplier,
 } from "../src/tighter/standing";
-import { UPGRADES, UpgradeId, autoPerSecond, evalsPerClick, seedsPerProblem, upgrade } from "../src/tighter/upgrades";
+import { UPGRADES, UpgradeId, autoPerSecond, evalsPerClick, upgrade } from "../src/tighter/upgrades";
 import { fromJson, toJson } from "../src/tighter/save";
 
 const T0 = 1_000_000;
@@ -35,8 +36,8 @@ function lateGame(extra: UpgradeId[] = []): GameState {
   for (const id of want) add(id);
   s.levels = { rentx: 3, lanesx: 2, clickx: 5 };
   s.rp = 123_456;
-  s.rpEarned = 2_000_000;
-  s.standing.cycleEarned = 1_000_000;
+  s.rpEarned = 16_000_000;
+  s.standing.cycleEarned = 8_000_000;
   s.autoDue = 50;
   s.settings.auto = true;
   const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
@@ -50,13 +51,14 @@ describe("Tighter standing", () => {
   it("is earned from the cycle's points and the records held, never from records alone", () => {
     expect(standingGain(RESET_MIN - 1, 1000)).toBe(0);
     expect(standingGain(RESET_MIN, 0)).toBe(1);
-    expect(standingGain(1_000_000, 0)).toBe(2);
-    expect(standingGain(1_000_000, 100)).toBe(4);
-    expect(standingGain(25_000_000, 0)).toBe(10);
-    // the next point: √(c / 250,000) = 3 at 2.25 M
-    expect(nextStandingAt(1_000_000, 0)).toBe(2_250_000);
+    expect(RESET_MIN).toBe(2_000_000);
+    expect(standingGain(8_000_000, 0)).toBe(2);
+    expect(standingGain(8_000_000, 100)).toBe(4);
+    expect(standingGain(200_000_000, 0)).toBe(10);
+    // the next point: √(c / 2,000,000) = 3 at 18 M
+    expect(nextStandingAt(8_000_000, 0)).toBe(18_000_000);
     expect(nextStandingAt(0, 0)).toBe(RESET_MIN);
-    expect(standingGain(nextStandingAt(1_000_000, 25), 25)).toBe(3);
+    expect(standingGain(nextStandingAt(8_000_000, 25), 25)).toBe(3);
     expect(ruleBonus(0)).toBe(0);
     expect(ruleBonus(1)).toBe(1);
     expect(ruleBonus(5)).toBe(3);
@@ -81,7 +83,7 @@ describe("Tighter standing", () => {
     expect(gain).toBe(2);
     expect(s.standing).toMatchObject({ points: 2, total: 2, resets: 1, cycleEarned: 0, cycleStartedAt: T0 + 90 * MIN });
     expect(s.rp).toBe(0);
-    expect(s.rpEarned).toBe(2_000_000);
+    expect(s.rpEarned).toBe(16_000_000);
     expect(s.owned.sort()).toEqual(["collections", "rent", "rentx", "standing"].sort());
     expect(s.levels).toEqual({ rentx: 3 });
     expect(s.queue).toBe(queue);
@@ -90,7 +92,7 @@ describe("Tighter standing", () => {
     expect(s.autoDue).toBe(0);
     expect(s.settings.auto).toBe(false);
     expect(s.standing.history).toHaveLength(1);
-    expect(s.standing.history[0]).toMatchObject({ startedAt: T0, endedAt: T0 + 90 * MIN, earned: 1_000_000, gain: 2 });
+    expect(s.standing.history[0]).toMatchObject({ startedAt: T0, endedAt: T0 + 90 * MIN, earned: 8_000_000, gain: 2 });
     // the history keeps when the cycle reached its milestones
     expect(Object.keys(s.standing.history[0].marks)).toEqual(
       expect.arrayContaining(["click2", "auto1", "basin", "ready"]),
@@ -152,9 +154,9 @@ describe("Tighter standing", () => {
 });
 
 describe("Tighter cycle rules", () => {
-  it("limit the problems, the methods, the seeds and auto-eval for one cycle", () => {
+  it("limit the problems, the methods and auto-eval for one cycle", () => {
     const s = newGame(T0, 1);
-    s.owned.push("auto1", "seeds2", "seeds4");
+    s.owned.push("auto1");
     expect(ruleAllowsProblem(s.standing, { N: 40, M: 40, P: 100 })).toBe(true);
     s.standing.rule = "circles";
     expect(ruleAllowsProblem(s.standing, { N: 0, M: 40, P: 100 })).toBe(true);
@@ -171,10 +173,7 @@ describe("Tighter cycle rules", () => {
     expect(ruleAllowsMethod(s.standing, "mc_compress")).toBe(true);
     expect(ruleAllowsMethod(s.standing, "basin_hopping")).toBe(false);
     expect(ruleOpenProblems(s.standing)).toBeNull();
-    expect(seedsPerProblem(ownedSet(s))).toBe(4);
-    s.standing.rule = "seed";
-    expect(seedsPerProblem(ownedSet(s))).toBe(1);
-    expect(autoPerSecond(ownedSet(s))).toBe(0.2);
+    expect(autoPerSecond(ownedSet(s))).toBe(1);
     s.standing.rule = "clicks";
     expect(autoPerSecond(ownedSet(s))).toBeNull();
     s.standing.rule = null;
@@ -182,27 +181,27 @@ describe("Tighter cycle rules", () => {
   });
 
   it("pay extra standing and a reward of their own, for good, once the cycle is finished under them", () => {
-    const s = lateGame(["rules", "seeds4"]);
+    const s = lateGame(["rules"]);
     s.standing.rule = "clicks";
-    s.standing.nextRule = "seed";
+    s.standing.nextRule = "method";
     expect(resetPreview(s)).toMatchObject({ gain: 3, ruleBonus: 1 });
     expect(resetCycle(s, T0)).toBe(3);
     expect(s.standing.rulesDone).toEqual(["clicks"]);
     // the next cycle runs under the rule chosen for it
-    expect(s.standing.rule).toBe("seed");
+    expect(s.standing.rule).toBe("method");
     expect(s.standing.nextRule).toBeNull();
     expect(s.standing.history[0].rule).toBe("clicks");
     // clicks only, finished: one more evaluation per click, for good
     expect(evalsPerClick(ownedSet(s))).toBe(2);
-    expect(seedsPerProblem(ownedSet(s))).toBe(1);
-    // one seed, finished: twice the seeds (after its cycle)
+    expect(ruleAllowsMethod(s.standing, "basin_hopping")).toBe(false);
+    // one method, finished: 1.5 times the points on mc_compress's boards (after its cycle)
+    expect(ruleRewardFactor(s.standing, { N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1);
     s.standing.cycleEarned = RESET_MIN;
-    s.owned.push("seeds2");
     resetCycle(s, T0 + MIN);
-    expect(s.standing.rulesDone).toEqual(["clicks", "seed"]);
-    s.owned.push("seeds2");
-    expect(seedsPerProblem(ownedSet(s))).toBe(4);
-    expect(RULES.map((r) => r.id)).toEqual(["circles", "small", "seed", "clicks", "method"]);
+    expect(s.standing.rulesDone).toEqual(["clicks", "method"]);
+    expect(ruleRewardFactor(s.standing, { N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1.5);
+    // the One seed rule went with the Seeds row
+    expect(RULES.map((r) => r.id)).toEqual(["circles", "small", "clicks", "method"]);
   });
 
   it("begin a cycle without a rule unless Cycle rules is owned", () => {

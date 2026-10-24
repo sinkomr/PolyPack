@@ -108,10 +108,23 @@ describe("POST /api/submit", () => {
     expect(lb.body.accepts_submissions).toBe(true);
   });
 
-  it("scores at the better of the submitted phi and the auto-oriented phi", async () => {
-    const r = await submit(squares(2, { container_phi: 0.3 }));
-    expect(r.body.score).toBeCloseTo(2, 9);
-    expect(evaluate(squares(2, { container_phi: 0.3 })).score!).toBeGreaterThan(2.1);
+  it("scores the container at the phi sent and does not look for a better one", async () => {
+    // two squares side by side fit a square of side 2 at phi = 0; turned by 0.3 it must be larger
+    const turned = squares(2, { container_phi: 0.3 });
+    const r = await submit(turned);
+    expect(r.body.score).toBe(evaluate(turned).score);
+    expect(r.body.container).toEqual(evaluate(turned).container);
+    expect(r.body.container!.phi).toBe(0.3);
+    expect(r.body.score!).toBeGreaterThan(2.1);
+    // the better orientation was there to be found, by the client
+    const oriented = evaluate(turned, { autoOrient: true });
+    expect(oriented.score).toBeCloseTo(2, 9);
+    expect((await submit({ ...turned, container_phi: oriented.container!.phi })).body.score).toBe(oriented.score);
+    // without container_phi, at 0
+    const { container_phi: _phi, ...unturned } = squares(2, { name: "bob" });
+    const zero = await submit(unturned);
+    expect(zero.body.container!.phi).toBe(0);
+    expect(zero.body.score).toBe(evaluate(squares(2)).score);
   });
 
   it("rejects overlaps, wrong counts and malformed bodies with reasons", async () => {
@@ -368,9 +381,18 @@ describe("GET /api", () => {
       'id="automated-search"',
       "examples/solve-and-submit.ts",
       "https://github.com/sinkomr/PolyPack",
+      // the scoring rule, plainly, with the default
+      "The score is computed at the <code>container_phi</code> you send</strong> (0 when it is missing)",
+      "does not search for a better one",
+      'href="#orientation">orient your board before submitting',
     ]) {
       expect(html).toContain(part);
     }
+    // and in the conventions every problem description carries
+    const { conventions } = (await get("/api/problems/4/4/2")).body;
+    expect(conventions.scoring).toMatch(
+      /^the server scores the container at the container_phi sent \(0 when it is missing\) and does not search for a better orientation/,
+    );
     // nothing is left of the three-row leaderboard
     expect(html).not.toMatch(/top[- ]3|top three/i);
   });
@@ -1493,7 +1515,8 @@ describe("GET /api/holders", () => {
     ]);
   });
 
-  it("is counted again at most once a minute while entries keep changing", async () => {
+  it("is counted again at most once every 15 minutes while entries keep changing", async () => {
+    expect(HOLDERS_REFRESH_MS).toBe(15 * 60_000);
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       vi.setSystemTime(Date.parse("2026-10-21T12:00:00Z"));
@@ -1503,8 +1526,8 @@ describe("GET /api/holders", () => {
       expect(await holders()).toEqual([]);
       vi.setSystemTime(Date.now() + 1);
       expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann"]);
-      // without a change the answer stands however old it is, and the first change after a
-      // minute shows at once
+      // without a change the answer stands however old it is, and the first change after the
+      // interval shows at once
       vi.setSystemTime(Date.now() + 10 * HOLDERS_REFRESH_MS);
       await submit(squares(4, { name: "bob" }));
       expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann", "bob"]);
@@ -1698,7 +1721,7 @@ describe("GET /api/targets", () => {
       expect([good, (await targets(`?${good}`)).status]).toEqual([good, 200]);
   });
 
-  it("shares one reading of the leaders with /api/holders and ranks again at most every 10 minutes", async () => {
+  it("shares one reading of the leaders with /api/holders and ranks again at most every TARGETS_REFRESH_MS", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     try {
       const reads = vi.spyOn(store, "leaders");
@@ -1715,7 +1738,7 @@ describe("GET /api/targets", () => {
       expect((await get("/api/holders")).body.holders).toEqual([]);
       expect((await leaderOf(4))!.leader).toBeNull();
       expect(reads).toHaveBeenCalledTimes(1);
-      // a minute on, the holders are counted again, but the ranking is kept for ten
+      // HOLDERS_REFRESH_MS on, the holders are counted again, but the ranking is kept for longer
       vi.setSystemTime(start + HOLDERS_REFRESH_MS);
       expect((await get("/api/holders")).body.holders.map((h: { name: string }) => h.name)).toEqual(["ann"]);
       expect(reads).toHaveBeenCalledTimes(2);
@@ -1726,8 +1749,8 @@ describe("GET /api/targets", () => {
       expect(await leaderOf(4)).toMatchObject({ leader: four.score, leader_id: four.id });
       expect(reads).toHaveBeenCalledTimes(2);
       expect((await targets()).body.generated_at).toBe(new Date(start + TARGETS_REFRESH_MS).toISOString());
-      // without a change the ranking stands however old it is, and the first change after ten
-      // minutes shows at once
+      // without a change the ranking stands however old it is, and the first change after
+      // TARGETS_REFRESH_MS shows at once
       vi.setSystemTime(start + 5 * TARGETS_REFRESH_MS);
       expect((await leaderOf(4))!.leader_id).toBe(four.id);
       expect(reads).toHaveBeenCalledTimes(2);
@@ -1780,20 +1803,25 @@ describe("GET /api/targets", () => {
   });
 });
 
-// The corpus holds saved configurations with the score recorded when they were saved.
-// Client and server share one scoring routine; this guards the shared routine against drift
-// and checks that the HTTP path returns exactly what the client computes.
+// The corpus holds saved configurations with their score at their own container_phi and after an
+// orientation search. Client and server share one scoring routine; this guards the shared routine
+// against drift and checks that the HTTP path returns exactly what the client computes.
 describe("client and server agree on the corpus", () => {
   const dir = resolve(import.meta.dirname, "../../../data/corpus");
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
     it(file, async () => {
       const saved = JSON.parse(readFileSync(resolve(dir, file), "utf8"));
+      ip = file;
+      // sent as saved: scored at its own phi
+      const asSaved = await submit({ ...saved.config, name: file });
+      expect(asSaved.body.score).toBe(evaluate(saved.config).score);
+      expect(asSaved.body.score).toBeCloseTo(saved.expected_score, 9);
+      // turned first, as every client does: exactly the client's score
       const client = evaluate(saved.config, { autoOrient: true });
       expect(client.valid).toBe(true);
-      expect(client.score).toBeCloseTo(saved.expected_score, 9);
-      ip = file;
-      const server = await submit({ ...saved.config, name: file });
-      expect(server.body.score).toBe(client.score);
+      expect(client.score).toBeCloseTo(saved.oriented_score, 9);
+      const turned = await submit({ ...saved.config, container_phi: client.container!.phi, name: file });
+      expect(turned.body.score).toBe(client.score);
     });
   }
 });

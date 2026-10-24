@@ -36,7 +36,10 @@ export interface NewSubmission extends Provenance {
   name: string;
   agent_note: string;
   pieces: Pose[];
-  /** Orientation the score was computed at (the better of submitted and auto-oriented). */
+  /**
+   * Orientation the score was computed at: the container_phi submitted. Entries stored before
+   * 2026-10-21 hold the better of the submitted and the server's auto-oriented one.
+   */
   container_phi: number;
   created_at: string;
   verification: Verification;
@@ -62,6 +65,18 @@ export interface ProblemLeader {
   found_with: FoundWith | null;
 }
 
+/** What `submit` did with a new entry. */
+export interface Submitted {
+  id: number;
+  /** The problem's leader before the entry was added, and after. */
+  before: LeaderboardEntry | null;
+  leader: LeaderboardEntry | null;
+  /** The entry's `rank` position when it was added. */
+  position: number;
+  /** False when the prune deleted the entry at once: it does not lead and is not kept behind a pending leader. */
+  kept: boolean;
+}
+
 /**
  * Persistence used by the API. Async so that the same routes can run on a hosted SQL service
  * (for example Cloudflare D1) as well as on local SQLite.
@@ -69,6 +84,11 @@ export interface ProblemLeader {
  * listed entry whose score is within SCORE_TIE (relative) of the smallest listed score.
  */
 export interface Store {
+  /**
+   * A new entry, as one transaction: reads the leader, inserts the entry and counts it, reads the
+   * leader and the entry's rank again, and prunes the problem (see `prune`).
+   */
+  submit(s: NewSubmission): Promise<Submitted>;
   insert(s: NewSubmission): Promise<number>;
   get(id: number): Promise<StoredSubmission | null>;
   /**

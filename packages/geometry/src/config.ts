@@ -1,4 +1,4 @@
-import { autoOrientSet, encloseSet, extremePoints } from "./enclose";
+import { autoOrientSet, enclose, encloseSet, extremePoints } from "./enclose";
 import { Overlap, TOL, findOverlaps } from "./overlap";
 import { Container, MAX_COORD, MAX_PIECES, MAX_SIDES, Pose, isShapeCode } from "./shapes";
 
@@ -74,7 +74,7 @@ export interface Evaluation {
   /** Human-readable reasons when not valid. */
   reasons: string[];
   overlaps: Overlap[];
-  /** Smallest enclosing container found; null when there are no pieces. */
+  /** Smallest enclosing container found; null when there are no pieces, or with `stopWhenInvalid` when not valid. */
   container: Container | null;
   /** container.size, the score. Only meaningful as a record when valid. */
   score: number | null;
@@ -85,8 +85,14 @@ export interface Evaluation {
  * With `autoOrient` the container is computed at the given phi and at the auto-oriented phi,
  * and the smaller one is kept. With `maxOverlaps`, at most that many overlapping pairs are found
  * and reported (the server's guard against slow, deliberately invalid submissions).
+ * With `stopWhenInvalid`, a configuration found invalid (wrong piece count, overlaps) returns at
+ * once, with the same reasons and overlaps but no container or score. The server passes it: its
+ * refusal carries the reasons only, and the container is the costly part for large hulls.
  */
-export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean; maxOverlaps?: number } = {}): Evaluation {
+export function evaluate(
+  config: PackingConfig,
+  opts: { autoOrient?: boolean; maxOverlaps?: number; stopWhenInvalid?: boolean } = {},
+): Evaluation {
   const { N, M, P, pieces } = config;
   const reasons: string[] = [];
   if (pieces.length !== P) reasons.push(`expected exactly ${P} pieces, got ${pieces.length}`);
@@ -100,14 +106,16 @@ export function evaluate(config: PackingConfig, opts: { autoOrient?: boolean; ma
         `penetration ${(-worst.sep).toExponential(3)} (tolerance ${TOL})`,
     );
   }
+  if (opts.stopWhenInvalid && reasons.length) return { valid: false, reasons, overlaps, container: null, score: null };
   let container: Container | null = null;
-  if (pieces.length > 0) {
+  if (pieces.length > 0 && opts.autoOrient && M !== 0) {
     const set = extremePoints(N, pieces);
     container = encloseSet(set, M, config.container_phi);
-    if (opts.autoOrient && M !== 0) {
-      const best = autoOrientSet(set, M, config.container_phi);
-      if (best.size < container.size) container = best;
-    }
+    const best = autoOrientSet(set, M, config.container_phi);
+    if (best.size < container.size) container = best;
+  } else if (pieces.length > 0) {
+    // at one orientation the hull of all the vertices is rarely needed (see `enclose`)
+    container = enclose(N, pieces, M, config.container_phi);
   }
   return { valid: reasons.length === 0, reasons, overlaps, container, score: container ? container.size : null };
 }
