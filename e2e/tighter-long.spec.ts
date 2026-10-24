@@ -278,6 +278,62 @@ test("long game: offers to pick from, best first; filters saved and applied; dea
   expect(errors).toEqual([]);
 });
 
+test("long game: the dealer's upgrades turn off and on again in the tech tree, and stay so through a reload", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(String(e)));
+  await fresh(page, 24);
+  await grant(page, 1);
+  await give(page, ["queue3", "rank2", "rank4", "pick3", "filters"]);
+  await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 3));
+  await expect(page.locator("#t-offer-list > li")).toHaveCount(3, { timeout: 30_000 });
+  await expect(page.locator("#t-filters")).toBeVisible();
+  await openTree(page);
+  const node = (id: string) => page.locator(`.t-node[data-id="${id}"]`);
+  await expect(node("pick3")).toHaveAttribute("data-switch", "on");
+  await expect(node("queue3")).not.toHaveAttribute("data-switch", /./);
+  // the card beside it says what turning it off does
+  await node("pick3").hover();
+  await expect(page.locator("#t-tree-tip")).toContainText("Owned · on. Press it to turn it off.");
+  await expect(page.locator("#t-tree-tip")).toContainText("While it is off, the dealer deals on its own.");
+  // Your pick off: the offers go, and the dealer fills the free slots on its own
+  await node("pick3").locator("button").click();
+  await expect(node("pick3")).toHaveAttribute("data-switch", "off");
+  await expect(page.locator("#t-tree-tip")).toContainText("Owned · off. Press it to turn it on.");
+  expect(await game(page, (s) => s.settings.off)).toEqual(["pick3"]);
+  expect(await game(page, (s) => s.picks.offers.length)).toBe(0);
+  await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 30_000 }).toBe(3);
+  await expect(page.locator("#t-offers")).toBeHidden();
+  expect(await logText(page)).toContain("Turned off Your pick: 3. While it is off, the dealer deals on its own.");
+  // a ladder is one switch: Best of 4 off turns off Best of 2 too
+  await node("rank4").locator("button").click();
+  await expect(node("rank2")).toHaveAttribute("data-switch", "off");
+  await expect(node("rank4")).toHaveAttribute("data-switch", "off");
+  await node("filters").locator("button").click();
+  await expect(page.locator("#t-filters")).toBeHidden();
+  expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3", "filters"]);
+  await page.mouse.move(0, 0);
+  await node("rank4").scrollIntoViewIfNeeded();
+  await page.locator("#t-cards").screenshot({ path: test.info().outputPath("dealer-switches.png") });
+  // still owned: nothing to buy again
+  expect(await game(page, (s) => ["rank2", "rank4", "pick3", "filters"].every((id) => s.owned.includes(id)))).toBe(
+    true,
+  );
+  await page.waitForTimeout(1500);
+  await page.reload();
+  await openTree(page);
+  for (const id of ["rank2", "rank4", "pick3", "filters"]) await expect(node(id)).toHaveAttribute("data-switch", "off");
+  await node("filters").locator("button").click();
+  await expect(node("filters")).toHaveAttribute("data-switch", "on");
+  await expect(page.locator("#t-filters")).toBeVisible();
+  expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3"]);
+  expect(await logText(page)).toContain("Turned on Dealer filters again.");
+  expect(await axe(page)).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
 test("long game: Auto picks each run's method; a pipeline moves to its next method when a run ends", async ({
   page,
 }) => {

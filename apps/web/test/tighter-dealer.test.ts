@@ -40,7 +40,7 @@ import {
   speedFactor,
 } from "../src/tighter/rank";
 import { fromJson, toJson } from "../src/tighter/save";
-import { dealerChoices, offerCount, owning, ringMin } from "../src/tighter/upgrades";
+import { SWITCHES, dealerChoices, inUse, offText, offerCount, owning, ringMin, switchName, switchOf } from "../src/tighter/upgrades";
 
 const T0 = 1_700_000_000_000;
 
@@ -429,6 +429,30 @@ describe("Tighter offers and the dealer's memory", () => {
     expect(offerCount(owning(["pick3", "pick5"]))).toBe(5);
     expect(ringMin(owning([]))).toBe(Infinity);
     expect(ringMin(owning(["reach2", "ring200", "ring120"]))).toBe(120);
+  });
+
+  it("turns the dealer's upgrades off and on again: a ladder is one switch, named by its first rung", () => {
+    expect(SWITCHES).toEqual(["rank2", "pick3", "filters", "retake", "collector", "learning"]);
+    expect(switchOf("rank8")).toBe("rank2");
+    expect(switchOf("pick5")).toBe("pick3");
+    expect(switchOf("reach2")).toBeNull();
+    const ids = ["rank2", "rank4", "pick3", "pick5", "filters", "learning"] as const;
+    // the best of 4 off: the dealer deals the first problem it draws, not the best of 2
+    const off = owning(ids, {}, null, [], ["rank2", "learning"]);
+    expect(dealerChoices(off)).toBe(1);
+    expect(offerCount(off)).toBe(5);
+    expect(inUse(off, "learning")).toBe(false);
+    expect(inUse(off, "filters")).toBe(true);
+    // still owned: the tree, its prices and its prerequisites see no change
+    expect(off.has("rank4")).toBe(true);
+    expect(offerCount(owning(ids, {}, null, [], ["pick3"]))).toBe(0);
+    // a switch off on an upgrade not owned changes nothing
+    expect(inUse(owning(["retake"], {}, null, [], ["collector"]), "retake")).toBe(true);
+    expect(switchName(off, "rank2")).toBe("Dealer: best of 4");
+    expect(switchName(off, "pick3")).toBe("Your pick: 5");
+    for (const id of SWITCHES) expect(offText(id)).toMatch(/^While it is off, [^—;:]+\.$/);
+    expect(offText("rank8")).toBe(offText("rank2"));
+    expect(offText("reach2")).toBeNull();
   });
 });
 

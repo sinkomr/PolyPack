@@ -29,6 +29,7 @@ import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, normalizeStanding } from "./standing";
 import {
   EvolveMethod,
+  SWITCHES,
   UPGRADES,
   UpgradeId,
   currencyOf,
@@ -646,6 +647,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       tolerance: TOLERANCES.find((t) => t === settings.tolerance) ?? DEFAULT_TOLERANCE,
       patience:
         settings.patience === null ? null : (PATIENCES.find((w) => w === settings.patience) ?? DEFAULT_PATIENCE),
+      off: SWITCHES.filter((id) => Array.isArray(settings.off) && settings.off.includes(id)),
     },
     stats: {
       evaluations,

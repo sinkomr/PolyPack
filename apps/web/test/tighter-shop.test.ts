@@ -236,6 +236,23 @@ describe("Tighter tech tree", () => {
     expect(st.nodes.find((n) => n.id === "head1")!.state).toBe("dear");
   });
 
+  it("gives an owned dealer upgrade a switch, on or off, and no other node one", async () => {
+    const { treeView } = await import("../src/tighter/shop");
+    const o = owning(["trace", "queue3", "rank2", "rank4", "filters"], {}, null, [], ["rank2"]);
+    const v = treeView(o, { rp: 1e9, standing: 0 }, 8);
+    const on = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!.on;
+    // a ladder's rungs share its switch
+    expect(on("rank2")).toBe(false);
+    expect(on("rank4")).toBe(false);
+    expect(on("filters")).toBe(true);
+    // not owned, or not a dealer upgrade: no switch
+    expect(on("rank8")).toBeNull();
+    expect(on("retake")).toBeNull();
+    expect(on("queue3")).toBeNull();
+    expect(on("trace")).toBeNull();
+    expect(v.nodes.find((n) => n.id === "rank4")!.state).toBe("owned");
+  });
+
   it("lays every node out to the right of its prerequisites, without two nodes in one place", async () => {
     const { treeView, treeLayout, TREE } = await import("../src/tighter/shop");
     const v = treeView(owning(["standing"]), { rp: 0, standing: 0 }, 8);

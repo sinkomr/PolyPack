@@ -183,30 +183,34 @@ export type Levels = Readonly<Partial<Record<UpgradeId, number>>>;
 
 /**
  * What the player owns: the upgrade ids, the levels of levelled ones, the cycle rule played under (a
- * standing rule can take something away, such as auto-eval), and the rules finished (whose rewards
- * hold for good).
+ * standing rule can take something away, such as auto-eval), the rules finished (whose rewards
+ * hold for good), and the switches turned off (SWITCHES: owned, but not in use).
  */
 export type Owned = ReadonlySet<UpgradeId> & {
   readonly levels?: Levels;
   readonly rule?: string | null;
   readonly rewards?: readonly string[];
+  readonly off?: ReadonlySet<UpgradeId>;
 };
 
-/** An Owned from ids, levels, the cycle's rule and the rules finished. */
+/** An Owned from ids, levels, the cycle's rule, the rules finished and the switches turned off. */
 export function owning(
   ids: Iterable<UpgradeId>,
   levels: Levels = {},
   rule: string | null = null,
   rewards: readonly string[] = [],
+  off: Iterable<UpgradeId> = [],
 ): Owned {
   const set = new Set(ids) as Set<UpgradeId> & {
     levels?: Levels;
     rule?: string | null;
     rewards?: readonly string[];
+    off?: ReadonlySet<UpgradeId>;
   };
   set.levels = levels;
   set.rule = rule;
   set.rewards = rewards;
+  set.off = new Set(off);
   return set;
 }
 
@@ -1489,12 +1493,65 @@ export function ringMin(o: Owned): number {
 
 /** Candidates the dealer draws to deal the best of (1: a random draw). */
 export function dealerChoices(o: Owned): number {
-  return o.has("rank8") ? 8 : o.has("rank4") ? 4 : o.has("rank2") ? 2 : 1;
+  return inUse(o, "rank8") ? 8 : inUse(o, "rank4") ? 4 : inUse(o, "rank2") ? 2 : 1;
 }
 
 /** Offers the player picks from (0: the dealer deals on its own). */
 export function offerCount(o: Owned): number {
-  return o.has("pick5") ? 5 : o.has("pick3") ? 3 : 0;
+  return inUse(o, "pick5") ? 5 : inUse(o, "pick3") ? 3 : 0;
+}
+
+// ---------- switches ----------
+
+/**
+ * The dealer's upgrades, which the player can turn off and on again in the tech tree once owned. A
+ * ladder is one switch, named by its first rung: while it is off, the dealer works as it did before
+ * the ladder's first rung.
+ */
+const SWITCH: Partial<Record<UpgradeId, UpgradeId>> = {
+  rank2: "rank2",
+  rank4: "rank2",
+  rank8: "rank2",
+  pick3: "pick3",
+  pick5: "pick3",
+  filters: "filters",
+  retake: "retake",
+  collector: "collector",
+  learning: "learning",
+};
+/** The switches, by the upgrade that names each. */
+export const SWITCHES: readonly UpgradeId[] = [...new Set(Object.values(SWITCH))];
+
+/** The switch that turns the upgrade off and on, or null where it has none. */
+export const switchOf = (id: UpgradeId): UpgradeId | null => SWITCH[id] ?? null;
+
+/** The upgrade is owned and its switch, if it has one, is on. */
+export function inUse(o: Owned, id: UpgradeId): boolean {
+  const sw = SWITCH[id];
+  return o.has(id) && !(sw && o.off?.has(sw));
+}
+
+/** The switch's name: the name of the highest rung owned of its ladder ("Dealer: best of 4"). */
+export function switchName(o: Owned, sw: UpgradeId): string {
+  const owned = UPGRADES.filter((u) => SWITCH[u.id] === sw && o.has(u.id));
+  return (owned.at(-1) ?? upgrade(sw)).name;
+}
+
+/** What the dealer does while the switch is off. */
+const OFF_TEXT: Partial<Record<UpgradeId, string>> = {
+  rank2: "While it is off, the dealer deals the first problem it draws.",
+  pick3: "While it is off, the dealer deals on its own. Turning it off clears the offers.",
+  filters: "While it is off, the dealer may deal any problem. Your filters are kept for when you turn it on.",
+  retake: "While it is off, the records you lose are not offered to you again.",
+  collector: "While it is off, the dealer does not look for the problems your collections are missing.",
+  learning:
+    "While it is off, the dealer ranks problems without what it has learned. It still learns from the problems that leave the queue.",
+};
+
+/** For an upgrade with a switch, what turning it off does; null for the others. */
+export function offText(id: UpgradeId): string | null {
+  const sw = SWITCH[id];
+  return sw ? OFF_TEXT[sw]! : null;
 }
 
 // ---------- the shop's view of levels (appended by the shop work) ----------

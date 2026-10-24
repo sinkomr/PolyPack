@@ -13,10 +13,13 @@ import {
   cores,
   costOf,
   currencyOf,
+  inUse,
   isRevealed,
   laneCount,
   lanesMaxed,
   level,
+  offText,
+  switchOf,
   upgrade,
 } from "./upgrades";
 
@@ -255,6 +258,8 @@ export interface NodeView extends Omit<CardView, "state"> {
   row: Row;
   /** Its column: the longest chain of prerequisites before it. */
   depth: number;
+  /** An owned dealer upgrade's switch, on or off (upgrades.ts SWITCHES); null for every other node. */
+  on: boolean | null;
 }
 
 export interface TreeView {
@@ -299,10 +304,11 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
           needs: [],
           levelText: u.levels ? levelLine(o, u, coreCount) : null,
           label: `${name}: owned`,
+          on: switchOf(u.id) && o.has(u.id) ? inUse(o, u.id) : null,
         });
         continue;
       }
-      nodes.push({ ...card(o, u, state, coreCount), state, row, depth });
+      nodes.push({ ...card(o, u, state, coreCount), state, row, depth, on: null });
     }
   const buyable = nodes.filter((n) => n.state === "buyable").length;
   const dear = nodes.filter((n) => n.state === "dear" && n.currency === "rp" && n.cost !== null);
@@ -383,11 +389,13 @@ export function treeLayout(rows: readonly { id: Row; title: string }[], nodes: r
 /** The line a node's state draws: what the bar under it shows, and its button's word. */
 function nodeAct(n: NodeView, touch: boolean): string {
   if (n.state === "buyable") return touch ? "Details" : "Buy";
+  if (n.on !== null && !touch) return n.on ? "Turn off" : "Turn on";
   return "Details";
 }
 
 /** A node's price or standing, as its details say it: "1,000 RP · needs Trace detail." */
 function statusText(n: NodeView): string {
+  if (n.state === "owned" && n.on !== null) return `Owned · ${n.on ? "on" : "off"}.`;
   if (n.state === "owned") return `Owned${n.levelText ? ` · ${n.levelText}` : ""}.`;
   if (n.state === "mystery") return `Needs ${n.needs.join(", ")}.`;
   if (n.state === "locked") return `${n.price} · needs ${n.needs.join(", ")}.`;
@@ -412,7 +420,9 @@ function focusVisible(e: Element): boolean {
  * beside it with its details and explanation (a mystery's card says only what it needs). On a touch
  * screen, and in the phone's list, a tap shows the details below the tree instead, which hold the
  * Buy button and the explanation behind "How it works"; the list's upgrades also show their effect
- * and "How it works" themselves. A mystery shows no explanation.
+ * and "How it works" themselves. A mystery shows no explanation. An owned dealer upgrade has a
+ * switch (upgrades.ts SWITCHES): pressing it turns it off or on again where pressing would buy, and
+ * its details hold a button that does the same where a tap shows them.
  *
  * Nothing that shows on hover moves a node: the card is fixed to the window, placed clear of the
  * node and transparent to the pointer, so it takes no click, and the details below the tree (where
@@ -447,6 +457,8 @@ export class TreeRenderer {
     private readonly onBuy: (id: UpgradeId) => void,
     /** Whether the upgrade can be bought this moment (the view may be a second old). */
     private readonly canBuyNow: (id: UpgradeId) => boolean,
+    /** Turns an owned dealer upgrade off or on again. */
+    private readonly onSwitch: (id: UpgradeId) => void,
   ) {
     this.touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
     const phone = typeof matchMedia === "function" ? matchMedia(PHONE_QUERY) : null;
@@ -656,6 +668,11 @@ export class TreeRenderer {
     const node = this.nodes.get(n.id);
     if (!node) return;
     if (node.dataset.state !== n.state) node.dataset.state = n.state;
+    const sw = n.on === null ? undefined : n.on ? "on" : "off";
+    if (node.dataset.switch !== sw) {
+      if (sw) node.dataset.switch = sw;
+      else delete node.dataset.switch;
+    }
     const set = (sel: string, value: string) => {
       const e = node.querySelector(sel)!;
       if (e.textContent !== value) e.textContent = value;
@@ -674,7 +691,12 @@ export class TreeRenderer {
     const btn = node.querySelector("button")!;
     const word = nodeAct(n, this.touch);
     if (btn.textContent !== word) btn.textContent = word;
-    const label = n.state === "buyable" && !this.touch ? n.label : `${n.label}; details`;
+    const label =
+      n.on !== null && !this.touch
+        ? `${n.name}: owned and ${n.on ? "on" : "off"}; press to turn it ${n.on ? "off" : "on"}`
+        : n.state === "buyable" && !this.touch
+          ? n.label
+          : `${n.label}; details`;
     if (btn.getAttribute("aria-label") !== label) btn.setAttribute("aria-label", label);
     const sel = this.selected === n.id ? "true" : "false";
     if (btn.getAttribute("aria-expanded") !== sel) btn.setAttribute("aria-expanded", sel);
@@ -687,6 +709,10 @@ export class TreeRenderer {
     if (!n) return;
     if (!this.touch && this.canBuyNow(id)) {
       this.onBuy(id);
+      return;
+    }
+    if (!this.touch && n.on !== null) {
+      this.onSwitch(id);
       return;
     }
     this.selected = this.selected === id ? null : id;
@@ -709,7 +735,7 @@ export class TreeRenderer {
     this.renderTip();
     const id = this.pointed ?? this.focused ?? this.selected;
     const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
-    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.name}|${this.selected}` : "";
+    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.name}|${n.on}|${this.selected}` : "";
     if (sig === this.detailSig) {
       const buy = this.detail.querySelector<HTMLButtonElement>(".t-detail-buy");
       if (buy && n) buy.disabled = n.state !== "buyable";
@@ -744,6 +770,13 @@ export class TreeRenderer {
       buy.addEventListener("click", () => this.onBuy(n.id));
       parts.push(buy);
     }
+    if (n.on !== null) {
+      const sw = el("button", "t-detail-switch", n.on ? "Turn off" : "Turn on");
+      sw.type = "button";
+      sw.setAttribute("aria-label", `Turn ${n.name} ${n.on ? "off" : "on"}`);
+      sw.addEventListener("click", () => this.onSwitch(n.id));
+      parts.push(sw, el("p", "t-detail-effect", offText(n.id)!));
+    }
     // with no hover there is no card beside the node: the explanation is here (the list has its own)
     if (this.touch && !this.list && n.state !== "mystery" && n.how) {
       const how = howDisclosure(n.how);
@@ -762,7 +795,7 @@ export class TreeRenderer {
   private renderTip(): void {
     const id = this.touch || this.list ? null : (this.pointed ?? (this.keyboardFocus ? this.focused : null));
     const n = id ? this.view?.nodes.find((x) => x.id === id) : undefined;
-    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.needs.join()}` : "";
+    const sig = n ? `${n.id}|${n.state}|${n.price}|${n.levelText}|${n.needs.join()}|${n.on}` : "";
     if (sig !== this.tipSig) {
       this.tipSig = sig;
       this.box.querySelectorAll(`[aria-describedby="${TIP_ID}"]`).forEach((b) => b.removeAttribute("aria-describedby"));
@@ -775,8 +808,13 @@ export class TreeRenderer {
       const mystery = n.state === "mystery";
       this.tip.replaceChildren(
         el("p", "t-tree-tip-name", mystery ? MYSTERY : n.name),
-        el("p", "t-detail-status", statusText(n)),
+        el(
+          "p",
+          "t-detail-status",
+          n.on === null ? statusText(n) : `${statusText(n)} Press it to turn it ${n.on ? "off" : "on"}.`,
+        ),
         ...(mystery ? [] : [el("p", "t-tree-tip-effect", n.effect)]),
+        ...(n.on === null ? [] : [el("p", "t-tree-tip-effect", offText(n.id)!)]),
         ...(!mystery && n.how ? [renderHow(n.how)] : []),
       );
       this.tip.hidden = false;

@@ -377,6 +377,7 @@ describe("Tighter saves", () => {
       battery: false,
       tolerance: 1e-6,
       patience: 1000,
+      off: [],
     });
     expect(s.stats).toEqual({
       evaluations: 0,
@@ -439,6 +440,19 @@ describe("Tighter saves", () => {
     delete raw.settings.tolerance;
     delete raw.settings.patience;
     expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+  });
+
+  it("keep the dealer's switches turned off, in their order, and drop anything that is not a switch", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.settings.off = ["learning", "rank4", "trace", "rank2", 7, "learning"];
+    expect(normalize(raw, T0).settings.off).toEqual(["rank2", "learning"]);
+    const r = fromJson(toJson(normalize(raw, T0)), T0);
+    expect(r.ok && r.state.settings.off).toEqual(["rank2", "learning"]);
+    // a save from before the switches has every one on
+    delete raw.settings.off;
+    expect(normalize(raw, T0).settings.off).toEqual([]);
+    raw.settings.off = "rank2";
+    expect(normalize(raw, T0).settings.off).toEqual([]);
   });
 
   it("keep each problem's counters, and its best at the last progress or else its best", () => {

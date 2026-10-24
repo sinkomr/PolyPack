@@ -184,6 +184,19 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await page.locator(".t-detail-buy").tap();
   await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
   await fits(page);
+  // an owned dealer upgrade: its details turn it off, and on again, by touch
+  await page.evaluate(() => (window as any).tighter.state.owned.push("filters"));
+  const filters = page.locator('.t-node[data-id="filters"]');
+  await expect(filters).toHaveAttribute("data-switch", "on");
+  await filters.locator("button").tap();
+  await expect(page.locator(".t-detail-switch")).toHaveText("Turn off");
+  await page.locator(".t-detail-switch").tap();
+  await expect(filters).toHaveAttribute("data-switch", "off");
+  await expect.poll(() => state(page, (s) => s.settings.off)).toEqual(["filters"]);
+  await expect(page.locator(".t-detail-switch")).toHaveText("Turn on");
+  await axeClean(page);
+  await page.locator(".t-detail-switch").tap();
+  await expect.poll(() => state(page, (s) => s.settings.off)).toEqual([]);
 
   // the queue: the queue, its offers and lanes, without the points
   await page.locator("#t-dock-queue").tap();

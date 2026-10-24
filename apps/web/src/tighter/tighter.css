@@ -905,6 +905,36 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-node[data-state="owned"] .t-node-bar {
   display: none;
 }
+/* an owned dealer upgrade with a switch (shop.ts): a badge says on or off, and off it looks unowned */
+.t-node[data-switch] .t-node-name {
+  padding-right: 30px;
+}
+.t-node[data-switch]::after {
+  content: "On";
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--good);
+  color: var(--accent-text);
+  font-size: 10.5px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.t-node[data-switch="off"] {
+  border-color: var(--border);
+  background: var(--panel);
+}
+.t-node[data-switch="off"]::after {
+  content: "Off";
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--muted);
+}
+.t-node[data-switch="off"] .t-node-price {
+  color: var(--muted);
+}
 /* a fixed height: a panel that grew with the hovered node's text would shrink the tree and could
    slide the node under the pointer behind the panel */
 .t-tree-detail {
@@ -1106,6 +1136,7 @@ html {
 #t-auto,
 #t-stop,
 .t-detail-buy,
+.t-detail-switch,
 .t-offer button,
 .tighter .top .t-settings-btn {
   min-height: 44px;

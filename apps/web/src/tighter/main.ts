@@ -152,16 +152,21 @@ import {
   autoRateText,
   canBuy,
   cores,
+  SWITCHES,
   dealerChoices,
   evalsPerClick,
+  inUse,
   laneCount,
   lanesMaxed,
   level,
   methodParams,
   methods,
+  offText,
   offerCount,
   queueSize,
   ringMin,
+  switchName,
+  switchOf,
   tuningLevel,
   upgrade,
   UPGRADES,
@@ -1441,7 +1446,7 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
   return t;
 }
 
-const dealerFilters = () => (owned().has("filters") ? state.picks.filters : null);
+const dealerFilters = () => (inUse(owned(), "filters") ? state.picks.filters : null);
 /** The player's filters and the cycle's rule allow a candidate. */
 const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleAllowsProblem(state.standing, c);
 
@@ -1563,8 +1568,8 @@ async function gatherCandidates(
     list.push(c);
     exclude.add(keyOf(c));
   };
-  if (o.has("retake")) forced = await retakeCandidate(io);
-  if (!forced && o.has("collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
+  if (inUse(o, "retake")) forced = await retakeCandidate(io);
+  if (!forced && inUse(o, "collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
   if (forced) exclude.add(keyOf(forced));
   const contested = Number.isFinite(ringMin(o)) && contestedTiers(o).size > 0;
   const room = want - (forced ? 1 : 0);
@@ -1579,7 +1584,7 @@ async function gatherCandidates(
 
 /** The candidates in order, best first: the learning dealer's draws once owned, else the prior. */
 function rank(d: DealerState, list: readonly Candidate[]): Ranked[] {
-  return rankCandidates(list, owned().has("learning") ? state.picks.bandit : null, () => nextRandom(d));
+  return rankCandidates(list, inUse(owned(), "learning") ? state.picks.bandit : null, () => nextRandom(d));
 }
 
 /** A ranking for a candidate dealt without one (the first deal, a forced one). */
@@ -1652,7 +1657,7 @@ const picking = (o: ReadonlySet<UpgradeId>) => offerCount(o) > 0 && state.dealer
 
 /** An offer the tree, the filters and the cycle's rule still allow (they may have changed since it was drawn). */
 const offerAllowed = (o: Owned, x: Offer): boolean =>
-  offerFits(x, { retake: o.has("retake"), tiers: contestedTiers(o), ringMin: ringMin(o) }, allowed);
+  offerFits(x, { retake: inUse(o, "retake"), tiers: contestedTiers(o), ringMin: ringMin(o) }, allowed);
 
 /** Auto-advance moves on: owned, with auto-eval switched on. */
 const advancing = (o: ReadonlySet<UpgradeId>): boolean =>
@@ -1869,7 +1874,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     );
   } else if (r.lost) {
     // Retake: a record lost after it left the queue is offered again first
-    const retake = owned().has("retake") && !problem(state, p.key);
+    const retake = inUse(owned(), "retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
     event(
       `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
@@ -2293,6 +2298,7 @@ const tree = new TreeRenderer(
   $("t-tree-detail"),
   (id) => onBuy(id),
   (id) => canBuy(owned(), { rp: state.rp, standing: state.standing.points }, id).ok,
+  (id) => onSwitch(id),
 );
 /** The tech tree is the view in place of the board (kept while the page is open). */
 let treeOpen = false;
@@ -2431,6 +2437,26 @@ function onBuy(id: UpgradeId): void {
   render();
   void dealTick();
   kickLanes();
+}
+
+/** Turns a dealer upgrade off, or on again (its switch in the tech tree). */
+function onSwitch(id: UpgradeId): void {
+  const sw = switchOf(id);
+  if (!sw || !owned().has(id)) return;
+  const off = new Set(state.settings.off);
+  // it was off: it goes on again
+  const on = off.delete(sw);
+  if (!on) off.add(sw);
+  state.settings.off = SWITCHES.filter((x) => off.has(x));
+  // Your pick off: the dealer deals on its own, and the offers waiting are cleared
+  if (sw === "pick3" && !on) state.picks.offers = [];
+  const name = switchName(owned(), sw);
+  const line = on ? `Turned on ${name} again.` : `Turned off ${name}. ${offText(sw)}`;
+  event(line, false);
+  say(line);
+  persist();
+  render();
+  void dealTick();
 }
 
 let queueSig = "";
@@ -2620,9 +2646,9 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
 
 let filtersShown = "";
 /** Dealer filters: the form shows the saved filters (until the player edits it). */
-function renderFilters(o: ReadonlySet<UpgradeId>): void {
-  show("t-filters", o.has("filters"));
-  if (!o.has("filters")) return;
+function renderFilters(o: Owned): void {
+  show("t-filters", inUse(o, "filters"));
+  if (!inUse(o, "filters")) return;
   const f = state.picks.filters;
   const sig = JSON.stringify(f);
   if (sig === filtersShown) return;
