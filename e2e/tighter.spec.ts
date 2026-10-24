@@ -26,6 +26,8 @@ interface ProblemView {
   run: { method: string; seed: number } | null;
   unconfirmed: number;
   sending: unknown;
+  rp: number;
+  rpTrace: [number, number][];
 }
 const focused = (page: Page): Promise<ProblemView> =>
   page.evaluate(() => {
@@ -244,6 +246,13 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (1,000 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
+  // under it, the RP paid here by evaluations, noted only "RP"
+  await expect(page.locator("#t-rp-trace")).toBeVisible();
+  await expect(page.locator("#t-rp-trace text")).toHaveText("RP");
+  const rpTrace = (await focused(page)).rpTrace;
+  expect(rpTrace.length).toBeGreaterThanOrEqual(2);
+  expect(rpTrace.at(-1)![1]).toBeCloseTo((await focused(page)).rp, 9);
+  await page.locator("#t-pip").screenshot({ path: test.info().outputPath("pip.png") });
   await grant(page, 1000);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
@@ -275,6 +284,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace", "click2", "click3"]);
   expect((await focused(page)).best).toBe(saved.best);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
+  await expect(page.locator("#t-rp-trace")).toBeVisible();
+  expect((await focused(page)).rpTrace).toEqual(saved.rpTrace);
   // after a reload the next click opens a new run, with a new seed (the open run's: the board keeps
   // the old run's until the new one beats it, which its first few evaluations rarely do)
   await click(page);

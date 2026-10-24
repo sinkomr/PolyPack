@@ -488,6 +488,26 @@ function problemState(v: unknown, now: number): ProblemState | null {
     isObj(v.refused) && posOrNull(v.refused.score) !== null && Array.isArray(v.refused.reasons)
       ? { score: v.refused.score as number, reasons: v.refused.reasons.map(String).slice(0, 20) }
       : null;
+  const rp = num(v.rp, 0, 0);
+  const evaluations = int(v.evaluations, 0);
+  // the RP paid here by evaluations; a save from before it was kept starts from what the problem has paid
+  const rpTrace: [number, number][] = Array.isArray(v.rpTrace)
+    ? v.rpTrace
+        .filter(
+          (x): x is [number, number] =>
+            Array.isArray(x) &&
+            x.length === 2 &&
+            Number.isSafeInteger(x[0]) &&
+            x[0] >= 0 &&
+            typeof x[1] === "number" &&
+            Number.isFinite(x[1]) &&
+            x[1] >= 0,
+        )
+        .map(([e, r]) => [e, r] as [number, number])
+        .slice(-TRACE_LIMIT)
+    : rp > 0
+      ? [[evaluations, rp]]
+      : [];
   // the best at the last progress is never below the best; a save from before it was kept starts from the best
   const mark = posOrNull(v.progressBest);
   const progressBest = phase !== "ready" ? null : mark !== null && mark >= best! ? mark : best;
@@ -514,7 +534,8 @@ function problemState(v: unknown, now: number): ProblemState | null {
     paidTo: phase === "ready" ? posOrNull(v.paidTo) : null,
     unconfirmed: num(v.unconfirmed, 0, 0),
     trace: phase === "bare" ? [] : trace,
-    evaluations: int(v.evaluations, 0),
+    rpTrace,
+    evaluations,
     sinceGain: int(v.sinceGain, 0),
     progressBest,
     runs: int(v.runs, 0),
@@ -522,7 +543,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     // a save from before the build was kept has none: each of its problems gets its one build
     lattice: phase === "bare" ? null : readLattice(v.lattice),
     lastRunAt: num(v.lastRunAt, 0),
-    rp: num(v.rp, 0, 0),
+    rp,
   };
 }
 

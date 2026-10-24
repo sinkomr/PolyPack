@@ -101,6 +101,8 @@ export interface ProblemState extends ProblemKey {
   unconfirmed: number;
   /** The board's score after each counted improvement, by evaluations run here (thinned when long). */
   trace: [number, number][];
+  /** The RP paid here so far (`rp`) after each payment or take-back, by evaluations run here (thinned like `trace`). */
+  rpTrace: [number, number][];
   /**
    * Evaluations run on this problem (clicks' and auto-eval's), and since its last progress: an
    * improvement on `progressBest` by the tolerance (see applyStep).
@@ -285,6 +287,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     paidTo: null,
     unconfirmed: 0,
     trace: [],
+    rpTrace: [],
     evaluations: 0,
     sinceGain: 0,
     progressBest: null,
@@ -508,12 +511,21 @@ export function applyStep(s: GameState, p: ProblemState, o: StepOutcome, now: nu
   return { before, after: smaller ? p.best : before, improved: smaller, counted, firstRecord, points };
 }
 
+/** Thins the middle of a trace past TRACE_LIMIT, keeping the first and the last points, so the whole history stays drawn. */
+const thinned = (tr: [number, number][]): [number, number][] =>
+  tr.length > TRACE_LIMIT ? [tr[0], ...tr.slice(1, -1).filter((_, i) => i % 2 === 1), tr.at(-1)!] : tr;
+
 function pushTrace(p: ProblemState): void {
   if (p.best === null) return;
   p.trace.push([p.evaluations, p.best]);
-  // thin the middle, keeping the first and the last points, so the whole history stays drawn
-  if (p.trace.length > TRACE_LIMIT)
-    p.trace = [p.trace[0], ...p.trace.slice(1, -1).filter((_, i) => i % 2 === 1), p.trace.at(-1)!];
+  p.trace = thinned(p.trace);
+}
+
+/** The RP paid here, after a payment or a take-back: a second change at the same evaluation replaces the first. */
+function pushRpTrace(p: ProblemState): void {
+  if (p.rpTrace.at(-1)?.[0] === p.evaluations) p.rpTrace.pop();
+  p.rpTrace.push([p.evaluations, p.rp]);
+  p.rpTrace = thinned(p.rpTrace);
 }
 
 /**
@@ -597,6 +609,7 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   s.rpEarned += points.total;
   s.standing.cycleEarned += points.total;
   p.rp += points.total;
+  pushRpTrace(p);
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);
   p.paidTo = p.best;
@@ -635,6 +648,7 @@ function takeBack(s: GameState, p: ProblemState, rp: number): number {
   s.rpEarned = Math.max(0, s.rpEarned - rp);
   s.standing.cycleEarned = Math.max(0, s.standing.cycleEarned - rp);
   p.rp = Math.max(0, p.rp - rp);
+  pushRpTrace(p);
   return rp;
 }
 

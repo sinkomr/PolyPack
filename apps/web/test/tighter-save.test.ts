@@ -455,6 +455,26 @@ describe("Tighter saves", () => {
     expect(normalize(raw, T0).settings.off).toEqual([]);
   });
 
+  it("keep each problem's RP by evaluations, and start a save from before it at what the problem has paid", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.queue[0].rp = 900;
+    raw.queue[0].evaluations = 500;
+    raw.queue[0].rpTrace = [[100, 600], [300, 900], [-1, 5], [400, -2], [450, "x"], [460]];
+    expect(normalize(raw, T0).queue[0].rpTrace).toEqual([
+      [100, 600],
+      [300, 900],
+    ]);
+    const r = fromJson(toJson(normalize(raw, T0)), T0);
+    expect(r.ok && r.state.queue[0].rpTrace).toEqual([
+      [100, 600],
+      [300, 900],
+    ]);
+    delete raw.queue[0].rpTrace;
+    expect(normalize(raw, T0).queue[0].rpTrace).toEqual([[500, 900]]);
+    raw.queue[0].rp = 0;
+    expect(normalize(raw, T0).queue[0].rpTrace).toEqual([]);
+  });
+
   it("keep each problem's counters, and its best at the last progress or else its best", () => {
     const raw = JSON.parse(toJson(played()));
     raw.queue[0].evaluations = 12345;

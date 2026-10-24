@@ -497,6 +497,11 @@ describe("Tighter points per click", () => {
     const c3 = applyStep(s, p, step(1.19 * B * (1 - 1e-12), 3), T0);
     expect(c3.points).toBeNull();
     expect(p.paidTo).toBe(1.19 * B);
+    // the RP paid here after each payment, by evaluations run here: what the board's RP graph draws
+    expect(p.rpTrace).toEqual([
+      [100, c1.points!.total],
+      [p.evaluations - 1, c1.points!.total + c2.points!.total],
+    ]);
   });
 
   it("pay nothing without a name; on consent, what the board improved pays as one event", () => {
@@ -710,9 +715,13 @@ describe("Tighter answers from the server", () => {
     applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 17, pending: false }, T0);
     const confirmed = s.rp;
     const c = applyStep(s, p, step(9.4, 2), T0);
+    const traced = p.rpTrace.length;
     expect(withdrawConsent(s)).toBeCloseTo(c.points!.total, 12);
     expect(s.consent).toBe(false);
     expect(s.rp).toBeCloseTo(confirmed, 12);
+    // the graph falls back with the points taken, at the same evaluation: the payment's point is replaced
+    expect(p.rpTrace).toHaveLength(traced);
+    expect(p.rpTrace.at(-1)).toEqual([p.evaluations, p.rp]);
     expect(p.paidTo).toBe(9.5);
     // nothing pays while sending is off
     expect(applyStep(s, p, step(9.3, 3), T0).points).toBeNull();

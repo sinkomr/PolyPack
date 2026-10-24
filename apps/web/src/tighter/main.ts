@@ -2212,59 +2212,93 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
         ? `${show6(p.leader.score)} by ${p.leader.name}`
         : "none yet",
   );
-  // the trace, always in the board's corner: the side after each improvement here, by evaluations run
-  // here; Trace detail adds its labels and a mark at each improvement
+  renderTraces(p, o.has("trace"));
+}
+
+/**
+ * The graphs in the board's corner, always there, on one scale of evaluations run here: the side
+ * after each improvement here (Trace detail adds its labels and a mark at each improvement), and
+ * under it the RP paid here so far, noted only "RP".
+ */
+function renderTraces(p: ProblemState, detail: boolean): void {
   const svg = $("t-trace") as unknown as SVGSVGElement;
+  const rpSvg = $("t-rp-trace") as unknown as SVGSVGElement;
   const tr = p.trace;
+  const rt = p.rpTrace;
   const visible = tr.length >= 2;
+  const rpVisible = rt.length >= 2;
   svg.toggleAttribute("hidden", !visible);
+  rpSvg.toggleAttribute("hidden", !rpVisible);
   show("t-trace-empty", !visible);
-  if (!visible) return;
-  const detail = o.has("trace");
-  const sig = `${p.key}|${tr.length}|${tr[tr.length - 1][1]}|${detail}`;
-  if (svg.dataset.sig === sig) return;
-  svg.dataset.sig = sig;
-  const sides = tr.map(([, v]) => v);
-  const high = Math.max(...sides),
-    low = Math.min(...sides);
-  const range = high - low || high * 1e-6;
-  const e0 = tr[0][0],
-    e1 = tr[tr.length - 1][0];
+  const drawn = [...(visible ? [tr] : []), ...(rpVisible ? [rt] : [])];
+  if (!drawn.length) return;
+  const e0 = Math.min(...drawn.map((t) => t[0][0])),
+    e1 = Math.max(...drawn.map((t) => t[t.length - 1][0]));
   const span = e1 - e0 || 1;
-  const bottom = detail ? 72 : 88;
-  const pt = ([e, v]: [number, number]) =>
-    [10 + (280 * (e - e0)) / span, 10 + ((bottom - 10) * (high - v)) / range] as const;
+  /** A point's place: x by evaluations, y from the highest value at `top` to the lowest at `bottom`. */
+  const placer = (values: readonly number[], top: number, bottom: number) => {
+    const high = Math.max(...values),
+      low = Math.min(...values);
+    const range = high - low || high * 1e-6 || 1;
+    return ([e, v]: [number, number]) =>
+      [10 + (280 * (e - e0)) / span, top + ((bottom - top) * (high - v)) / range] as const;
+  };
   const NS = "http://www.w3.org/2000/svg";
-  const line = document.createElementNS(NS, "polyline");
-  line.setAttribute(
-    "points",
-    tr
-      .map(pt)
-      .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(2)}`)
-      .join(" "),
-  );
-  const parts: SVGElement[] = [line];
-  if (detail) {
-    // a mark at each improvement (the last 60), and the labels
-    for (const q of tr.slice(-60)) {
-      const [x, y] = pt(q);
-      const dot = document.createElementNS(NS, "circle");
-      dot.setAttribute("cx", x.toFixed(1));
-      dot.setAttribute("cy", y.toFixed(2));
-      dot.setAttribute("r", "2.2");
-      parts.push(dot);
+  const polyline = (t: readonly [number, number][], pt: ReturnType<typeof placer>) => {
+    const line = document.createElementNS(NS, "polyline");
+    line.setAttribute(
+      "points",
+      t
+        .map(pt)
+        .map(([x, y]) => `${x.toFixed(1)},${y.toFixed(2)}`)
+        .join(" "),
+    );
+    return line;
+  };
+  const sig = `${p.key}|${tr.length}|${tr.at(-1)?.[1]}|${detail}|${e0}|${e1}`;
+  if (visible && svg.dataset.sig !== sig) {
+    svg.dataset.sig = sig;
+    const sides = tr.map(([, v]) => v);
+    const pt = placer(sides, 10, detail ? 72 : 88);
+    const parts: SVGElement[] = [polyline(tr, pt)];
+    if (detail) {
+      // a mark at each improvement (the last 60), and the labels
+      for (const q of tr.slice(-60)) {
+        const [x, y] = pt(q);
+        const dot = document.createElementNS(NS, "circle");
+        dot.setAttribute("cx", x.toFixed(1));
+        dot.setAttribute("cy", y.toFixed(2));
+        dot.setAttribute("r", "2.2");
+        parts.push(dot);
+      }
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", "10");
+      label.setAttribute("y", "92");
+      label.textContent = `${show6(sides[0])} → ${show6(sides[sides.length - 1])} · ${fmtInt(tr.length)} improvements · ${evals(tr[tr.length - 1][0] - tr[0][0])}`;
+      parts.push(label);
     }
-    const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", "10");
-    label.setAttribute("y", "92");
-    label.textContent = `${show6(sides[0])} → ${show6(sides[sides.length - 1])} · ${fmtInt(tr.length)} improvements · ${evals(e1 - e0)}`;
-    parts.push(label);
+    svg.replaceChildren(...parts);
+    svg.setAttribute(
+      "aria-label",
+      `Side after each improvement, from ${show6(sides[0])} to ${show6(sides[sides.length - 1])} over ${evals(tr[tr.length - 1][0] - tr[0][0])}`,
+    );
   }
-  svg.replaceChildren(...parts);
-  svg.setAttribute(
-    "aria-label",
-    `Side after each improvement, from ${show6(sides[0])} to ${show6(sides[sides.length - 1])} over ${evals(e1 - e0)}`,
-  );
+  const rpSig = `${p.key}|${rt.length}|${rt.at(-1)?.[1]}|${e0}|${e1}`;
+  if (rpVisible && rpSvg.dataset.sig !== rpSig) {
+    rpSvg.dataset.sig = rpSig;
+    const paid = rt.map(([, v]) => v);
+    // the RP rises from the bottom left, so its note sits in the bottom right
+    const note = document.createElementNS(NS, "text");
+    note.setAttribute("x", "290");
+    note.setAttribute("y", "58");
+    note.setAttribute("text-anchor", "end");
+    note.textContent = "RP";
+    rpSvg.replaceChildren(polyline(rt, placer(paid, 6, 58)), note);
+    rpSvg.setAttribute(
+      "aria-label",
+      `RP earned here, from ${fmtRP(paid[0])} to ${fmtRP(paid[paid.length - 1])} over ${evals(rt[rt.length - 1][0] - rt[0][0])}`,
+    );
+  }
 }
 
 function renderConsent(): void {

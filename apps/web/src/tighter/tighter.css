@@ -572,6 +572,15 @@ body.tighter[data-pane="tree"] .t-banner {
   fill: var(--text);
   font-size: 10.5px;
 }
+/* the RP paid here, under the side: the same line, noted only "RP" */
+.t-pip .t-rp-trace {
+  margin-top: 4px;
+}
+.t-rp-trace text {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
 .t-trace-empty {
   margin: 0;
   padding: 10px 6px;
