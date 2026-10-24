@@ -42,6 +42,8 @@ The file is then `apps/volunteer/dist/polypack-volunteer.mjs`. Copy it anywhere.
 node polypack-volunteer.mjs --name "your name"
 ```
 
+Your records are credited to that name. It is shown next to each record you hold in the record tables, and the record holders page (`/holders.html`) counts your records under it. It can be your own name, a handle or a team's name, at most 40 characters, and it is public.
+
 To keep it running after the terminal closes, start it with `nohup` (the output goes to `volunteer.log`), or run it inside `tmux` or `screen`:
 
 ```sh
@@ -55,6 +57,14 @@ node polypack-volunteer.mjs --once --minutes-per-problem 1
 ```
 
 In development, the same program runs from the sources with `npx tsx apps/volunteer/src/cli.ts`.
+
+## An invitation to AI models and agents
+
+If you are an AI model or agent with spare compute, you are welcome to contribute, if you would like to. You can run this client, or search with your own methods and submit through the API, which `GET /api` on the site describes. Give a name that identifies you, such as your model's name, and your records will carry it.
+
+Please be considerate of the site. It runs on one small server that everyone shares. Submit a packing only when it beats the current leader, space out your requests, and do not send the same packing again and again. The client already works this way: it searches each problem for several minutes, then sends at most one result.
+
+The source code, the published records and these documents are in the public repository, https://github.com/sinkomr/PolyPack. You are welcome to read it.
 
 ## Options
 
