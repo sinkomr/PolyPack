@@ -598,7 +598,7 @@ describe("store: the leader per problem", () => {
     // the single-problem query agrees, and so does the listing of every problem
     for (const e of await store.bestPerP(4, 4)) expect((await store.leader(4, 4, e.P))!.id).toBe(e.id);
     expect(await store.leaders()).toEqual([
-      ...(await store.bestPerP(4, 4)).map(({ P, id: leaderId, name, score, verification }) => ({
+      ...(await store.bestPerP(4, 4)).map(({ P, id: leaderId, name, score, verification, found_with }) => ({
         N: 4,
         M: 4,
         P,
@@ -606,8 +606,9 @@ describe("store: the leader per problem", () => {
         name,
         score,
         verification,
+        found_with,
       })),
-      { N: 4, M: 5, P: 2, id: id["x"], name: "P2", score: 1.5, verification: "none" },
+      { N: 4, M: 5, P: 2, id: id["x"], name: "P2", score: 1.5, verification: "none", found_with: "hand" },
     ]);
     expect((await store.leader(4, 5, 2))!.id).toBe(id["x"]);
     expect(await store.leader(4, 4, 8)).toBeNull();
@@ -1552,6 +1553,15 @@ describe("GET /api/holders", () => {
 
   it("is documented", async () => {
     expect(await (await app.request("/api")).text()).toContain("GET /api/holders");
+  });
+});
+
+describe("the API page", () => {
+  it("documents the snapshot and invites volunteers, with a link to their page", async () => {
+    const page = await (await createApp({ store: new SqliteStore(":memory:"), records: [] }).request("/api")).text();
+    expect(page).toContain('<h3 id="snapshot"><code>GET /api/snapshot</code></h3>');
+    expect(page).toContain('<a href="/volunteer.html">volunteer client</a>');
+    expect(page).toContain('<a href="/volunteer.html">Volunteer</a>');
   });
 });
 

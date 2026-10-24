@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "npm run dev --workspace @polypack/server & npm run dev --workspace @polypack/web",
-    "build": "npm run build --workspace @polypack/web",
+    "build": "npm run build --workspace @polypack/volunteer -- ../web/public/downloads/polypack-volunteer.mjs && npm run build --workspace @polypack/web",
     "build:volunteer": "npm run build --workspace @polypack/volunteer",
     "start": "npm run start --workspace @polypack/server",
     "test": "vitest run",

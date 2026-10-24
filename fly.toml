@@ -9,6 +9,8 @@ primary_region = 'sjc'
 [build]
 [env]
   CLIENT_IP_HEADER = 'fly-client-ip'
+  # the nightly records snapshot, served at /api/snapshot (apps/server/src/snapshot.ts)
+  SNAPSHOT_DIR = '/data/snapshot'
 
 [[mounts]]
   source = 'polypack_data'

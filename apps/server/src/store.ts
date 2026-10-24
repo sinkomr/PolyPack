@@ -1,4 +1,4 @@
-import { LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
+import { FoundWith, LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
 
 /** What `edit` may change; `provenance` replaces all six provenance fields together. */
 export interface EntryEdit {
@@ -59,6 +59,7 @@ export interface ProblemLeader {
   name: string;
   score: number;
   verification: Verification;
+  found_with: FoundWith | null;
 }
 
 /**

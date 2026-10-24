@@ -100,3 +100,14 @@ test("phone: run an optimizer and accept its preview", async ({ page }) => {
   expect(findOverlaps(0, await pieces(page))).toHaveLength(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
 });
+
+test("phone: the volunteer page and the records pages fit, with the site menu wrapped", async ({ page }) => {
+  for (const path of ["/volunteer.html", "/browse.html", "/holders.html"]) {
+    await page.goto(path);
+    await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link", { name: "Volunteer" })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      path,
+    ).toBeLessThanOrEqual(1);
+  }
+});

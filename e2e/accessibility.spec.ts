@@ -6,7 +6,7 @@ import { openProblem, pieces } from "./helpers";
 for (const scheme of ["light", "dark"] as const) {
   test(`no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
-    for (const path of ["/", "/browse.html#0,4", "/holders.html", "/api", "/admin.html"]) {
+    for (const path of ["/", "/browse.html#0,4", "/holders.html", "/volunteer.html", "/api", "/admin.html"]) {
       // the default problem has no published record, so the board is checked on one that does
       if (path === "/") await openProblem(page, 4, 4, 5);
       else await page.goto(path);

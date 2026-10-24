@@ -71,7 +71,8 @@ body {
 }
 .top nav {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 4px 16px;
 }
 a {
   color: var(--accent);
@@ -418,6 +419,45 @@ body.scroll {
   text-transform: none;
   letter-spacing: 0;
   color: var(--text);
+}
+/* a page of running text: the volunteer page */
+.prose {
+  max-width: 760px;
+  line-height: 1.55;
+}
+.prose h2.title {
+  margin-top: 32px;
+}
+.prose h2.title:first-child {
+  margin-top: 8px;
+}
+.prose h3 {
+  font-size: 15.5px;
+  margin: 22px 0 6px;
+}
+.prose pre {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+.prose code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.93em;
+}
+.button-link {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.button-link:hover {
+  text-decoration: underline;
 }
 .page select {
   flex: 0 1 180px;

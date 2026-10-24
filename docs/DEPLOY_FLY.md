@@ -42,6 +42,7 @@ fly open
 | `fly.toml` | `app`, `primary_region` | Chosen at `fly launch`. |
 | `fly.toml` | `CLIENT_IP_HEADER = "fly-client-ip"` | Rate limits apply to each visitor's address, as reported by Fly's proxy. |
 | `fly.toml` | `[mounts]` | The volume holding `/data/polypack.sqlite`. It survives deployments and restarts. |
+| `fly.toml` | `SNAPSHOT_DIR = "/data/snapshot"` | Where the server builds the nightly records snapshot (see below). |
 | `fly.toml` | `[[vm]]` | Machine size. |
 | secret | `ADMIN_TOKEN` | Admin password. Without one the admin page is switched off. |
 
@@ -70,6 +71,12 @@ fly deploy
 ## Moderation
 
 `/admin.html`, with the admin token, lists entries that claim to beat a published value for review, and can remove any entry by its number.
+
+## Records snapshot
+
+Every night at 11:00 UTC (`SNAPSHOT_HOUR`) the server writes every open problem's leader, with its coordinates, to `/data/snapshot`: one gzipped JSON file per shape pair and `manifest.json`. It serves them at `/api/snapshot`, and the workflow `.github/workflows/records.yml` mirrors them at 12:30 UTC into the GitHub release `records` (`scripts/mirror-snapshot.ts`). The format is on the API page.
+
+A pair's file is rebuilt only when its leaders changed, so most nights are short. The first build writes every file. On an Apple Silicon Mac a full pair (P from 1 to 500, about 125,000 pieces) took 0.37 s and made a 3.4 MB file, and no request waited more than 7 ms behind it [CALC]. The live site has about 324 such pairs, so the files take about 1.1 GB of the volume [SPEC]. After each pair the build pauses three times as long as the pair took, at least 1 s, to leave the shared CPU to requests. When the snapshot is missing or more than a day old, the build starts 5 minutes after the server starts.
 
 ## Looking after it
 

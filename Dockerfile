@@ -6,6 +6,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
+COPY apps/volunteer/package.json apps/volunteer/
 COPY packages/geometry/package.json packages/geometry/
 COPY packages/solver/package.json packages/solver/
 RUN npm ci --no-audit --no-fund

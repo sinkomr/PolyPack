@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 import { getConnInfo } from "@hono/node-server/conninfo";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { LiteratureRecord } from "@polypack/geometry";
+import { LiteratureRecord, closedToSubmissions } from "@polypack/geometry";
 import { HOLDERS_REFRESH_MS, createApp } from "./app";
+import { scheduleSnapshots, snapshotSource } from "./snapshot";
 import { SqliteStore } from "./sqlite-store";
 
 // Node entry point: local development and any always-on host.
@@ -44,12 +45,28 @@ store.startPiecesMigration({
   log: (msg) => console.log(msg),
 });
 
+// The nightly records snapshot (snapshot.ts), built into SNAPSHOT_DIR at SNAPSHOT_HOUR (UTC, 11 by
+// default: after the nightly trim-down job) and served at /api/snapshot. Off without SNAPSHOT_DIR.
+const snapshotDir = process.env.SNAPSHOT_DIR || undefined;
+if (snapshotDir) {
+  const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
+  const hourUtc = wholeNumber("SNAPSHOT_HOUR", 11);
+  scheduleSnapshots({
+    store,
+    dir: snapshotDir,
+    closed: (N, M, P) => closedToSubmissions(literature.get(`${N}/${M}/${P}`)),
+    hourUtc: hourUtc < 24 ? hourUtc : 11,
+    log: (msg) => console.log(msg),
+  });
+}
+
 const app = createApp({
   store,
   records,
   adminToken,
   // the end-to-end tests set 0, so that the record holders page shows each entry at once
   holdersRefreshMs: wholeNumber("HOLDERS_REFRESH_MS", HOLDERS_REFRESH_MS),
+  snapshots: snapshotDir ? snapshotSource(snapshotDir) : undefined,
   // Behind a proxy the socket address is the proxy's, so a header set by the proxy is used instead.
   // Only set CLIENT_IP_HEADER or TRUST_PROXY when a proxy that sets the header is really in front.
   clientIp: (c) =>

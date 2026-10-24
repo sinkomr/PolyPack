@@ -38,6 +38,7 @@ import {
   SUBMISSIONS_PER_MINUTE,
   sanitizeText,
 } from "./limits";
+import type { SnapshotSource } from "./snapshot";
 import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
@@ -60,6 +61,8 @@ export interface AppOptions {
   holdersRefreshMs?: number;
   /** Least age at which /api/targets is ranked again after an entry changed; TARGETS_REFRESH_MS by default. */
   targetsRefreshMs?: number;
+  /** The nightly records snapshot; without it /api/snapshot answers 404. */
+  snapshots?: SnapshotSource;
 }
 
 const CONVENTIONS = {
@@ -721,6 +724,30 @@ export function createApp(opts: AppOptions): Hono {
     if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
+  });
+
+  // The nightly records snapshot (snapshot.ts): the manifest, then one gzipped file per shape pair.
+  app.get("/api/snapshot", (c) => {
+    const manifest = opts.snapshots?.manifest() ?? null;
+    if (!manifest)
+      return c.json(
+        { error: opts.snapshots ? "no snapshot has been built yet" : "this server builds no snapshots" },
+        404,
+      );
+    c.header("cache-control", "no-cache");
+    return c.json(manifest);
+  });
+  app.get("/api/snapshot/:file", (c) => {
+    const name = c.req.param("file");
+    const file = opts.snapshots?.file(name) ?? null;
+    if (!file) return c.json({ error: "no such snapshot file" }, 404);
+    return c.body(file.stream, 200, {
+      "content-type": "application/gzip",
+      "content-length": String(file.bytes),
+      "content-disposition": `attachment; filename="${name}"`,
+      "cache-control": "public, max-age=300",
+      etag: `"${file.sha256}"`,
+    });
   });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));

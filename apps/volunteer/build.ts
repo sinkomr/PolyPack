@@ -4,13 +4,19 @@
  *
  *   npm run build:volunteer          (from the repository root)
  *
+ * The site build writes it to apps/web/public/downloads instead (the root `npm run build`), so that
+ * the volunteer page offers it. Next to the file goes polypack-volunteer.json: its version, size and
+ * SHA-256, which that page shows.
+ *
  * __POLYPACK_BUNDLE__ tells the code that it is bundled, so that its search threads run the
  * bundle itself (src/bundle.ts). esbuild is external: only the development path imports it.
  */
-import { chmodSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { VERSION } from "./src/version";
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DEFAULT_OUTFILE = join(here, "dist", "polypack-volunteer.mjs");
@@ -32,6 +38,9 @@ export async function buildBundle(outfile = DEFAULT_OUTFILE): Promise<string> {
     logLevel: "warning",
   });
   chmodSync(outfile, 0o755);
+  const bytes = readFileSync(outfile);
+  const info = { version: VERSION, bytes: bytes.length, sha256: createHash("sha256").update(bytes).digest("hex") };
+  writeFileSync(outfile.replace(/\.mjs$/, ".json"), JSON.stringify(info, null, 2) + "\n");
   return outfile;
 }
 

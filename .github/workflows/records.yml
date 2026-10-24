@@ -1,0 +1,26 @@
+name: Records snapshot
+# Every night: mirrors the site's records snapshot (GET /api/snapshot), which the server builds at
+# 11:00 UTC, into the release "records" (scripts/mirror-snapshot.ts): one gzipped JSON file per
+# shape pair with every open problem's leader and its coordinates. Only changed files are fetched
+# and uploaded.
+on:
+  schedule:
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: records-snapshot
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    # a full mirror (every file changed) moves about 1 GB; a stuck run stops long before 6 hours
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # plain Node: the script has no dependencies
+      - run: node scripts/mirror-snapshot.ts
+        env:
+          GH_TOKEN: ${{ github.token }}

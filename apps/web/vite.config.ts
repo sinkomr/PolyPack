@@ -11,6 +11,7 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         browse: resolve(import.meta.dirname, "browse.html"),
         holders: resolve(import.meta.dirname, "holders.html"),
+        volunteer: resolve(import.meta.dirname, "volunteer.html"),
         admin: resolve(import.meta.dirname, "admin.html"),
         // the idle game, linked from every page's nav
         tighter: resolve(import.meta.dirname, "tighter.html"),

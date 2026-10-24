@@ -20,3 +20,5 @@ ellsworth.html
 packomania/
 # working log of scripts/construct-coordinates.ts (resume state); the results are in data/sources/constructed.json
 construct-coordinates.log.jsonl
+# the volunteer client, built into the site by `npm run build` (apps/volunteer/build.ts)
+apps/web/public/downloads/
