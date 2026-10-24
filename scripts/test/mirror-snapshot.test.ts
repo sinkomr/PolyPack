@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type Manifest, type ManifestFile, checkManifest, plan, releaseManifest } from "../mirror-snapshot";
+import { type Asset, type Manifest, type ManifestFile, checkManifest, plan, releaseManifest } from "../mirror-snapshot";
 
 const file = (N: number, M: number, sha: string, bytes = 100): ManifestFile => ({
   N,
@@ -19,7 +19,12 @@ const manifest = (files: ManifestFile[]): Manifest => ({
   pieces: 5 * files.length,
   files,
 });
-const asset = (f: ManifestFile, size = f.bytes) => ({ name: f.file, size });
+/** The release's copy of `f`, with GitHub's digest unless `digest` is false. */
+const asset = (f: ManifestFile, digest = true, size = f.bytes): Asset => ({
+  name: f.file,
+  size,
+  digest: digest ? `sha256:${f.sha256}` : null,
+});
 
 describe("mirroring the snapshot", () => {
   it("uploads new and changed files only, and removes pairs the site no longer has", () => {
@@ -27,33 +32,45 @@ describe("mirroring the snapshot", () => {
     const changed = file(3, 4, "b");
     const fresh = file(4, 4, "c");
     const gone = file(5, 5, "d");
-    const release = manifest([same, file(3, 4, "e"), gone]);
     const site = manifest([same, changed, fresh]);
-    const assets = [asset(same), asset(release.files[1]), asset(gone), { name: "manifest.json", size: 900 }];
-    const { upload, remove } = plan(site, release, assets);
+    // the release's manifest may be stale or missing: GitHub's digests decide
+    const assets = [asset(same), asset(file(3, 4, "e")), asset(gone), { name: "manifest.json", size: 900 }];
+    const { upload, remove } = plan(site, null, assets);
     expect(upload.map((f) => f.file)).toEqual(["3-4.json.gz", "4-4.json.gz"]);
     expect(remove).toEqual(["5-5.json.gz"]);
   });
 
-  it("uploads again a file whose asset is missing or of the wrong size, and everything without a manifest", () => {
+  it("without digests, trusts the release's manifest and the size", () => {
     const f = file(3, 3, "a");
     const site = manifest([f]);
+    expect(plan(site, manifest([f]), [asset(f, false)]).upload).toEqual([]);
+    expect(plan(site, manifest([f]), [asset(f, false, 99)]).upload).toEqual([f]);
+    expect(plan(site, manifest([file(3, 3, "b")]), [asset(f, false)]).upload).toEqual([f]);
+    expect(plan(site, null, [asset(f, false)]).upload).toEqual([f]);
     expect(plan(site, manifest([f]), []).upload).toEqual([f]);
-    expect(plan(site, manifest([f]), [asset(f, 99)]).upload).toEqual([f]);
-    expect(plan(site, null, [asset(f)]).upload).toEqual([f]);
   });
 
   it("ends with a manifest of exactly what the release holds", () => {
     const kept = file(3, 3, "a");
     const oldCopy = file(3, 4, "b");
-    const site = manifest([kept, file(3, 4, "c"), file(4, 4, "d"), file(5, 5, "e")]);
-    const release = manifest([kept, oldCopy]);
-    const assets = [asset(kept), asset(oldCopy)];
-    // 3-4 and 5-5 could not be fetched; 4-4 was uploaded, as the version read on the second try
-    const second = file(4, 4, "f");
-    const final = releaseManifest(site, release, assets, new Map([[second.file, second]]));
+    const site = manifest([kept, file(3, 4, "c"), file(4, 4, "d"), file(5, 5, "e"), file(6, 6, "f")]);
+    const release = manifest([kept, oldCopy, file(6, 6, "g")]);
+    // 3-4 could not be fetched and keeps its old copy; 4-4 was uploaded as the version read on the
+    // second try; 5-5 was never uploaded; 6-6's old copy was clobbered by an upload that failed
+    const second = file(4, 4, "h");
+    const fresh = [asset(kept), asset(oldCopy), asset(second)];
+    const final = releaseManifest(site, release, fresh, new Map([[second.file, second]]));
     expect(final.files).toEqual([kept, oldCopy, second]);
     expect([final.records, final.pieces]).toEqual([6, 15]);
+  });
+
+  it("without digests, lists what this run uploaded and what the release's manifest vouches for", () => {
+    const kept = file(3, 3, "a");
+    const now = file(4, 4, "b");
+    const site = manifest([kept, now]);
+    const final = releaseManifest(site, manifest([kept]), [asset(kept, false), asset(now, false)], new Map([[now.file, now]]));
+    expect(final.files).toEqual([kept, now]);
+    expect(releaseManifest(site, null, [asset(kept, false)], new Map()).files).toEqual([]);
   });
 
   it("refuses a manifest it does not understand", () => {

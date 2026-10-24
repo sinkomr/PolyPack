@@ -844,14 +844,18 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/snapshot/:file", (c) => {
     const name = c.req.param("file");
     const file = opts.snapshots?.file(name) ?? null;
-    if (!file) return c.json({ error: "no such snapshot file" }, 404);
-    return c.body(file.stream, 200, {
+    const headers = {
       "content-type": "application/gzip",
-      "content-length": String(file.bytes),
       "content-disposition": `attachment; filename="${name}"`,
       "cache-control": "public, max-age=300",
-      etag: `"${file.sha256}"`,
-    });
+      etag: `"${file?.sha256}"`,
+    };
+    // A HEAD request runs this handler too and drops the body, so the file is opened for GET only:
+    // a stream opened and never read would hold its file descriptor for good.
+    if (file && c.req.method === "HEAD") return c.body(null, 200, { ...headers, "content-length": String(file.bytes) });
+    const opened = file?.open() ?? null;
+    if (!opened) return c.json({ error: "no such snapshot file" }, 404);
+    return c.body(opened.stream, 200, { ...headers, "content-length": String(opened.bytes) });
   });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));

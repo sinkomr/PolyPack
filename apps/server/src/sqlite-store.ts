@@ -342,6 +342,12 @@ export class SqliteStore implements Store {
       .all(N, M, N, M, SCORE_TIE) as unknown as (LeaderboardEntry & { P: number })[];
   }
 
+  async pairs(): Promise<{ N: number; M: number }[]> {
+    return this.db
+      .prepare(`SELECT DISTINCT n AS N, m AS M FROM submissions WHERE ${LISTED} ORDER BY n, m`)
+      .all() as unknown as { N: number; M: number }[];
+  }
+
   async leaders(): Promise<ProblemLeader[]> {
     // The same rule again, for every problem: one pass over the listing index in its own order,
     // so SQLite sorts nothing, and the rule applied here (about 150 ms for 100,000 problems, half
@@ -349,7 +355,7 @@ export class SqliteStore implements Store {
     // the leader is the earliest of the rows within the tie tolerance of it.
     const rows = this.db
       .prepare(
-        `SELECT n, m, p, id, name, score, verification, found_with FROM submissions WHERE ${LISTED}
+        `SELECT n, m, p, id, name, score, verification FROM submissions WHERE ${LISTED}
          ORDER BY n, m, p, score, id`,
       )
       .all() as Row[];
@@ -366,7 +372,6 @@ export class SqliteStore implements Store {
           name: leader.name as string,
           score: leader.score as number,
           verification: leader.verification as ProblemLeader["verification"],
-          found_with: (leader.found_with ?? null) as ProblemLeader["found_with"],
         });
     };
     for (const r of rows) {

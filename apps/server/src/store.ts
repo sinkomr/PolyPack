@@ -1,4 +1,4 @@
-import { FoundWith, LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
+import { LeaderboardEntry, Pose, Provenance, StrictResult, Verification } from "@polypack/geometry";
 
 /** What `edit` may change; `provenance` replaces all six provenance fields together. */
 export interface EntryEdit {
@@ -62,7 +62,6 @@ export interface ProblemLeader {
   name: string;
   score: number;
   verification: Verification;
-  found_with: FoundWith | null;
 }
 
 /** What `submit` did with a new entry. */
@@ -117,6 +116,8 @@ export interface Store {
    * reviewed or unremarkable entries.
    */
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
+  /** Every pair of shapes with a listed entry, by N then M. */
+  pairs(): Promise<{ N: number; M: number }[]>;
   /** The leader of every problem that has a listed entry, by N, then M, then P. */
   leaders(): Promise<ProblemLeader[]>;
   pending(): Promise<StoredSubmission[]>;

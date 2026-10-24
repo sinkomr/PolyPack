@@ -1,11 +1,18 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import { buildSnapshot, readManifest, scheduleSnapshots, snapshotSource } from "../src/snapshot";
+import {
+  type SnapshotSource,
+  buildSnapshot,
+  isComplete,
+  readManifest,
+  scheduleSnapshots,
+  snapshotSource,
+} from "../src/snapshot";
 import { SqliteStore } from "../src/sqlite-store";
 import type { Store } from "../src/store";
 
@@ -129,16 +136,28 @@ describe("the records snapshot", () => {
     const store = new SqliteStore(":memory:");
     const dir = freshDir();
     const old = await add(store, 4, 4, 2, 2.5);
-    const leaders = await store.leaders();
+    const leaders = await store.bestPerP(4, 4);
     const better = await add(store, 4, 4, 2, 2.4);
     await store.prune(4, 4, 2); // as after every submission: the old leader is deleted
     expect(await store.get(old)).toBeNull();
     // the build read the leaders before the new entry arrived
     const view = new Proxy(store, {
-      get: (t, k) => (k === "leaders" ? async () => leaders : Reflect.get(t, k).bind(t)),
+      get: (t, k) => (k === "bestPerP" ? async () => leaders : Reflect.get(t, k).bind(t)),
     }) as Store;
     await buildSnapshot({ store: view, dir, closed, pause: noPause });
     expect(readPair(dir, "4-4.json.gz").records.map((r: { id: number }) => r.id)).toEqual([better]);
+    // the fingerprint is of what was written, so the next build finds the pair unchanged
+    expect(await buildSnapshot({ store, dir, closed, pause: noPause })).toMatchObject({ built: 0, kept: 1 });
+  });
+
+  it("removes files it does not list, also those an interrupted build left behind", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    await buildSnapshot({ store, dir, closed, pause: noPause });
+    writeFileSync(join(dir, "7-7.json.gz"), "an orphan");
+    expect(await buildSnapshot({ store, dir, closed, pause: noPause })).toEqual({ built: 0, kept: 1, removed: 1 });
+    expect(readdirSync(dir).sort()).toEqual(["4-4.json.gz", "manifest.json"]);
   });
 
   it("pauses after each pair it builds, in proportion to the work", async () => {
@@ -186,6 +205,35 @@ describe("GET /api/snapshot", () => {
     }
   });
 
+  // Hono answers HEAD with the GET handler and drops its body: a file opened for it was never closed.
+  it("answers HEAD without opening the file, and leaks no file descriptor", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    await buildSnapshot({ store, dir, closed, pause: noPause });
+    const source = snapshotSource(dir);
+    let opened = 0;
+    const counting: SnapshotSource = {
+      manifest: source.manifest,
+      file: (name) => {
+        const f = source.file(name);
+        return f && { ...f, open: () => (opened++, f.open()) };
+      },
+    };
+    const app = createApp({ store, records: [], snapshots: counting });
+    const head = await app.request("/api/snapshot/4-4.json.gz", { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-length")).toBe(String(readManifest(dir)!.files[0].bytes));
+    expect(opened).toBe(0);
+    expect((await app.request("/api/snapshot/9-9.json.gz", { method: "HEAD" })).status).toBe(404);
+
+    const fds = () => readdirSync("/dev/fd").length;
+    const real = createApp({ store, records: [], snapshots: source });
+    const before = fds();
+    for (let i = 0; i < 50; i++) await real.request("/api/snapshot/4-4.json.gz", { method: "HEAD" });
+    expect(fds() - before).toBeLessThan(5);
+  });
+
   it("answers 404 on a server that builds no snapshots", async () => {
     const app = createApp({ store: new SqliteStore(":memory:"), records: [] });
     const r = await app.request("/api/snapshot");
@@ -211,6 +259,19 @@ describe("the nightly schedule", () => {
     await add(store, 4, 4, 2, 2.5);
     stops.push(scheduleSnapshots({ store, dir, closed, pause: noPause, hourUtc: 11, startDelayMs: 1 }).stop);
     await waitFor(() => readManifest(dir)?.completed_at != null);
+  });
+
+  it("builds soon after startup when the last build was cut short", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    await buildSnapshot({ store, dir, closed, pause: noPause });
+    const m = readManifest(dir)!;
+    // as a build leaves it after some pairs
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify({ ...m, generated_at: new Date(Date.parse(m.generated_at) + 60_000).toISOString() }));
+    expect(isComplete(readManifest(dir))).toBe(false);
+    stops.push(scheduleSnapshots({ store, dir, closed, pause: noPause, hourUtc: 11, startDelayMs: 1 }).stop);
+    await waitFor(() => isComplete(readManifest(dir)));
   });
 
   it("does not build at startup when the last build is recent", async () => {

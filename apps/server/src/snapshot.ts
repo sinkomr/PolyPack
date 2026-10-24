@@ -1,8 +1,11 @@
 import { createHash } from "node:crypto";
 import {
+  closeSync,
   createReadStream,
   createWriteStream,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -14,7 +17,8 @@ import { join } from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
-import { ProblemLeader, Store, StoredSubmission } from "./store";
+import type { LeaderboardEntry } from "@polypack/geometry";
+import { Store, StoredSubmission } from "./store";
 
 /**
  * The records snapshot: every open problem's leader with its coordinates, as one gzipped JSON file
@@ -24,8 +28,8 @@ import { ProblemLeader, Store, StoredSubmission } from "./store";
  * A pair's file depends only on its leaders' (P, id, name, found_with, verification): every other
  * field it holds never changes. So a pair whose leaders are unchanged keeps its file, which makes
  * most nights cheap, and its bytes stay the same (no timestamps inside), which lets the mirror
- * skip it too. The build reads 25 entries at a time and pauses after each pair, so that requests
- * keep being answered while it runs.
+ * skip it too. The build reads the leaders one pair at a time and their entries 25 at a time, and
+ * pauses after each pair it writes, so that requests keep being answered while it runs.
  */
 export const SNAPSHOT_FORMAT = 1;
 const MANIFEST = "manifest.json";
@@ -44,7 +48,7 @@ export interface SnapshotFile {
   sha256: string;
   /** When the leaders in the file were read. */
   as_of: string;
-  /** Hash of the leaders the file was built from; an unchanged one means an unchanged file. */
+  /** Hash of the records the file holds (see fingerprint); an unchanged one means an unchanged file. */
   fingerprint: string;
 }
 
@@ -52,18 +56,28 @@ export interface SnapshotManifest {
   format: number;
   /** When the manifest was last written. */
   generated_at: string;
-  /** When the last complete build finished; null while the first one runs. */
+  /**
+   * When the last complete build finished; null while the first one runs. Equal to generated_at
+   * once a build has finished, and earlier while the next one is under way.
+   */
   completed_at: string | null;
   records: number;
   pieces: number;
   files: SnapshotFile[];
 }
 
+/** One listed file, ready to be served; `open` opens it only when its bytes are wanted. */
+export interface SnapshotFileSource {
+  bytes: number;
+  sha256: string;
+  open(): { stream: ReadableStream<Uint8Array>; bytes: number } | null;
+}
+
 /** What /api/snapshot serves; the routes are in app.ts, which stays free of file system code. */
 export interface SnapshotSource {
   manifest(): SnapshotManifest | null;
-  /** A file the manifest lists, as a stream; null for any other name. */
-  file(name: string): { stream: ReadableStream<Uint8Array>; bytes: number; sha256: string } | null;
+  /** A file the manifest lists; null for any other name. */
+  file(name: string): SnapshotFileSource | null;
 }
 
 export const fileName = (N: number, M: number) => `${N}-${M}.json.gz`;
@@ -76,6 +90,9 @@ export function readManifest(dir: string): SnapshotManifest | null {
     return null;
   }
 }
+
+/** Whether the manifest describes a finished build, rather than one that is under way or was cut short. */
+export const isComplete = (m: SnapshotManifest | null) => !!m?.completed_at && m.completed_at === m.generated_at;
 
 function writeManifest(dir: string, m: SnapshotManifest): void {
   const tmp = join(dir, `.${MANIFEST}.tmp`);
@@ -90,13 +107,31 @@ export function snapshotSource(dir: string): SnapshotSource {
       if (!FILE_NAME.test(name)) return null;
       const entry = readManifest(dir)?.files.find((f) => f.file === name);
       if (!entry) return null;
-      try {
-        const path = join(dir, name);
-        const bytes = statSync(path).size;
-        return { stream: Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>, bytes, sha256: entry.sha256 };
-      } catch {
-        return null;
-      }
+      return {
+        bytes: entry.bytes,
+        sha256: entry.sha256,
+        // Opened in the same synchronous step as the manifest was read, so the open file is the
+        // one listed: the build renames a new file into place and writes the manifest without
+        // anything in between. A file renamed over later keeps being served whole from this one.
+        open() {
+          let fd: number;
+          try {
+            fd = openSync(join(dir, name), "r");
+          } catch {
+            return null;
+          }
+          try {
+            const bytes = fstatSync(fd).size;
+            if (bytes !== entry.bytes) throw new Error("not the listed file");
+            // closes the descriptor at the end, and when the client goes away early
+            const stream = Readable.toWeb(createReadStream("", { fd })) as ReadableStream<Uint8Array>;
+            return { stream, bytes };
+          } catch {
+            closeSync(fd);
+            return null;
+          }
+        },
+      };
     },
   };
 }
@@ -116,9 +151,12 @@ function recordLine(s: StoredSubmission): string {
   });
 }
 
-function fingerprint(leaders: readonly ProblemLeader[]): string {
+type Leader = Pick<LeaderboardEntry, "id" | "name" | "found_with" | "verification"> & { P: number };
+
+/** Hash of the fields of a pair's records that can change; the others never do. */
+function fingerprint(records: readonly Leader[]): string {
   const h = createHash("sha256").update(`format ${SNAPSHOT_FORMAT}\n`);
-  for (const l of leaders) h.update(JSON.stringify([l.P, l.id, l.name, l.found_with, l.verification]) + "\n");
+  for (const r of records) h.update(JSON.stringify([r.P, r.id, r.name, r.found_with, r.verification]) + "\n");
   return h.digest("hex");
 }
 
@@ -138,7 +176,8 @@ const yieldNow = () => new Promise<void>((r) => setImmediate(r));
 
 /**
  * Builds or refreshes the snapshot in `dir`. The manifest is rewritten after every pair, so that
- * it always describes the files on disk; files of pairs that no longer have a leader are removed.
+ * it always describes files on disk; it is marked complete at the end, and only then are the
+ * files of pairs without leaders removed (with any other file it does not list).
  */
 export async function buildSnapshot(opts: BuildOptions): Promise<{ built: number; kept: number; removed: number }> {
   const { store, dir, closed } = opts;
@@ -148,57 +187,52 @@ export async function buildSnapshot(opts: BuildOptions): Promise<{ built: number
   mkdirSync(dir, { recursive: true });
   for (const name of readdirSync(dir)) if (name.endsWith(".tmp")) rmSync(join(dir, name), { force: true });
 
-  const previous = new Map((readManifest(dir)?.files ?? []).map((f) => [f.file, f]));
-  const asOf = now().toISOString();
-  const pairs = new Map<string, ProblemLeader[]>();
-  for (const l of await store.leaders()) {
-    if (closed(l.N, l.M, l.P)) continue;
-    const key = fileName(l.N, l.M);
-    const list = pairs.get(key);
-    if (list) list.push(l);
-    else pairs.set(key, [l]);
-  }
-
-  const files = new Map<string, SnapshotFile>();
+  const before = readManifest(dir);
+  const previous = new Map((before?.files ?? []).map((f) => [f.file, f]));
   // until a pair is reached, the manifest keeps its previous entry, whose file is still on disk
-  for (const [name, f] of previous) if (pairs.has(name)) files.set(name, f);
+  const files = new Map(previous);
   const manifest = (completed: boolean): SnapshotManifest => {
     const list = [...files.values()].sort((a, b) => a.N - b.N || a.M - b.M);
+    const at = now().toISOString();
     return {
       format: SNAPSHOT_FORMAT,
-      generated_at: now().toISOString(),
-      completed_at: completed ? now().toISOString() : (readManifest(dir)?.completed_at ?? null),
+      generated_at: at,
+      completed_at: completed ? at : (before?.completed_at ?? null),
       records: list.reduce((n, f) => n + f.records, 0),
       pieces: list.reduce((n, f) => n + f.pieces, 0),
       files: list,
     };
   };
 
+  const listed = new Set<string>();
   let built = 0;
   let kept = 0;
-  for (const [name, leaders] of pairs) {
-    const { N, M } = leaders[0];
-    const print = fingerprint(leaders);
+  for (const { N, M } of await store.pairs()) {
+    await yieldNow();
+    const leaders = (await store.bestPerP(N, M)).filter((e) => !closed(N, M, e.P));
+    if (!leaders.length) continue;
+    const name = fileName(N, M);
+    listed.add(name);
     const old = previous.get(name);
-    if (old && old.fingerprint === print && sizeOf(join(dir, name)) === old.bytes) {
+    if (old && old.fingerprint === fingerprint(leaders) && sizeOf(join(dir, name)) === old.bytes) {
       kept++;
       continue;
     }
     const started = performance.now();
-    const entry = await writePair(store, dir, name, N, M, leaders, print, asOf);
-    files.set(name, entry);
+    files.set(name, await writePair(store, dir, name, N, M, leaders, now().toISOString()));
     writeManifest(dir, manifest(false));
     built++;
     await pause(performance.now() - started);
   }
 
+  for (const name of previous.keys()) if (!listed.has(name)) files.delete(name);
+  writeManifest(dir, manifest(true));
   let removed = 0;
-  for (const name of previous.keys())
-    if (!pairs.has(name)) {
+  for (const name of readdirSync(dir))
+    if (FILE_NAME.test(name) && !files.has(name)) {
       rmSync(join(dir, name), { force: true });
       removed++;
     }
-  writeManifest(dir, manifest(true));
   log(`[snapshot] ${built} pair(s) built, ${kept} unchanged, ${removed} removed`);
   return { built, kept, removed };
 }
@@ -217,11 +251,11 @@ async function writePair(
   name: string,
   N: number,
   M: number,
-  leaders: readonly ProblemLeader[],
-  print: string,
+  leaders: readonly Leader[],
   asOf: string,
 ): Promise<SnapshotFile> {
-  let records = 0;
+  // the fingerprint is of what is written, which may differ from `leaders` if entries changed meanwhile
+  const written: Leader[] = [];
   let pieces = 0;
   async function* text(): AsyncGenerator<string> {
     yield `{"format":${SNAPSHOT_FORMAT},"N":${N},"M":${M},"records":[`;
@@ -231,15 +265,15 @@ async function writePair(
       const lines: string[] = [];
       for (const l of part) {
         // an entry overtaken since the leaders were read has been deleted: its problem's new
-        // leader is taken instead, and the next build sees the change in the fingerprint
+        // leader is taken instead
         let s = byId.get(l.id);
         if (!s) {
-          const now = await store.leader(l.N, l.M, l.P);
-          s = (now && (await store.get(now.id))) || undefined;
+          const current = await store.leader(N, M, l.P);
+          s = (current && (await store.get(current.id))) || undefined;
         }
         if (!s) continue;
-        lines.push((records ? ",\n" : "\n") + recordLine(s));
-        records++;
+        lines.push((written.length ? ",\n" : "\n") + recordLine(s));
+        written.push(s);
         pieces += s.P;
       }
       if (lines.length) yield lines.join("");
@@ -259,17 +293,30 @@ async function writePair(
   const tmp = join(dir, `.${name}.tmp`);
   await pipeline(Readable.from(text()), createGzip({ level: 6 }), tap, createWriteStream(tmp));
   renameSync(tmp, join(dir, name));
-  return { N, M, file: name, records, pieces, bytes, sha256: hash.digest("hex"), as_of: asOf, fingerprint: print };
+  return {
+    N,
+    M,
+    file: name,
+    records: written.length,
+    pieces,
+    bytes,
+    sha256: hash.digest("hex"),
+    as_of: asOf,
+    fingerprint: fingerprint(written),
+  };
 }
 
 export interface ScheduleOptions extends BuildOptions {
   /** Hour of the day (UTC) at which the nightly build starts. */
   hourUtc: number;
-  /** Delay of the build at startup, when the snapshot is missing or more than a day old; 5 minutes by default. */
+  /**
+   * Delay of the build at startup, when the snapshot is missing, unfinished (a restart cut the
+   * last build short) or more than a day old; 5 minutes by default.
+   */
   startDelayMs?: number;
 }
 
-/** Builds once a day at `hourUtc`, and soon after startup when the snapshot is missing or stale. */
+/** Builds once a day at `hourUtc`, and soon after startup when the snapshot needs it. */
 export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void } {
   const log = opts.log ?? (() => {});
   const now = opts.now ?? (() => new Date());
@@ -299,8 +346,8 @@ export function scheduleSnapshots(opts: ScheduleOptions): { stop: () => void } {
   };
 
   const m = readManifest(opts.dir);
-  const done = m?.completed_at ? Date.parse(m.completed_at) : NaN;
-  if (!(now().getTime() - done < 25 * 3600_000)) {
+  const fresh = isComplete(m) && now().getTime() - Date.parse(m!.completed_at!) < 25 * 3600_000;
+  if (!fresh) {
     timer = setTimeout(run, opts.startDelayMs ?? 5 * 60_000);
     timer.unref();
   } else next();

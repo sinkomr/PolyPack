@@ -620,7 +620,7 @@ describe("store: the leader per problem", () => {
     // the single-problem query agrees, and so does the listing of every problem
     for (const e of await store.bestPerP(4, 4)) expect((await store.leader(4, 4, e.P))!.id).toBe(e.id);
     expect(await store.leaders()).toEqual([
-      ...(await store.bestPerP(4, 4)).map(({ P, id: leaderId, name, score, verification, found_with }) => ({
+      ...(await store.bestPerP(4, 4)).map(({ P, id: leaderId, name, score, verification }) => ({
         N: 4,
         M: 4,
         P,
@@ -628,11 +628,14 @@ describe("store: the leader per problem", () => {
         name,
         score,
         verification,
-        found_with,
       })),
-      { N: 4, M: 5, P: 2, id: id["x"], name: "P2", score: 1.5, verification: "none", found_with: "hand" },
+      { N: 4, M: 5, P: 2, id: id["x"], name: "P2", score: 1.5, verification: "none" },
     ]);
     expect((await store.leader(4, 5, 2))!.id).toBe(id["x"]);
+    expect(await store.pairs()).toEqual([
+      { N: 4, M: 4 },
+      { N: 4, M: 5 },
+    ]);
     expect(await store.leader(4, 4, 8)).toBeNull();
     expect(await store.bestPerP(3, 3)).toEqual([]);
     // rejecting a leader hands the lead to the earliest of the remaining best

@@ -395,7 +395,8 @@ Values of <code>P</code> with no coordinates at all are simply absent. The answe
 <p>Every current record at once: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, rebuilt each night and mirrored into the GitHub release
 <a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads.
 This route answers the manifest: <code>{format, generated_at, completed_at, records, pieces, files}</code>, where each of <code>files</code> is
-<code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read. 404 before the first build, and on a server without snapshots.</p>
+<code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read.
+<code>completed_at</code> equals <code>generated_at</code> once a build has finished; while one runs, the files already rebuilt sit beside those of the night before. 404 before the first build, and on a server without snapshots.</p>
 <p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, gzip-compressed JSON:
 <code>{"format": 1, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
 <code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href="#conventions">conventions</a> above and every number at full precision.

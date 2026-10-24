@@ -6,11 +6,14 @@
  *
  *   GH_TOKEN=... node scripts/mirror-snapshot.ts
  *
- * Only files whose SHA-256 differs from the release's manifest are downloaded and uploaded; an
- * unchanged pair costs nothing. A file whose bytes do not match the site's manifest (the server
- * rebuilt it meanwhile) is fetched once more after reading the manifest again, and otherwise
- * left for the next night: the release keeps its previous copy and manifest entry. The release's
- * manifest is uploaded last, so that it never lists a file the release does not hold yet.
+ * - Only a finished snapshot is mirrored: while the server is building one, nothing is done.
+ * - Only files whose SHA-256 differs from the release's copy (GitHub keeps each asset's digest)
+ *   are downloaded and uploaded; an unchanged pair costs nothing.
+ * - A file whose bytes do not match the site's manifest (the server rebuilt it meanwhile) is
+ *   fetched once more after reading the manifest again, and otherwise left for the next night.
+ * - The release's manifest is written last, from a fresh listing of the release, even after a
+ *   failure: it lists exactly the files the release holds. Pairs that left the snapshot are
+ *   deleted only after it.
  *
  * Needs the GitHub CLI (`gh`) and plain Node 24 or newer: no dependencies.
  */
@@ -51,6 +54,8 @@ export interface Manifest {
 export interface Asset {
   name: string;
   size: number;
+  /** "sha256:<hex>", as GitHub computes it; missing on older assets or tools. */
+  digest?: string | null;
 }
 
 /** Throws unless `m` is a snapshot manifest this script understands. */
@@ -64,28 +69,29 @@ export function checkManifest(m: unknown): Manifest {
   return x;
 }
 
+/** Whether the release's asset is a copy of `f`: by GitHub's digest, or else by the release's manifest and the size. */
+export function holds(f: ManifestFile, asset: Asset | undefined, release: Manifest | null): boolean {
+  if (!asset || asset.size !== f.bytes) return false;
+  if (asset.digest) return asset.digest === `sha256:${f.sha256}`;
+  return release?.files.some((r) => r.file === f.file && r.sha256 === f.sha256) ?? false;
+}
+
 /**
  * What to do: the files to fetch and upload (new or changed), and the release's assets to delete
- * (pairs no longer in the snapshot). A file counts as held only when the release's manifest lists
- * it with the same SHA-256 and the asset is there with the same size.
+ * once the manifest no longer lists them (pairs no longer in the snapshot).
  */
 export function plan(site: Manifest, release: Manifest | null, assets: readonly Asset[]) {
-  const held = new Map((release?.files ?? []).map((f) => [f.file, f]));
-  const sizes = new Map(assets.map((a) => [a.name, a.size]));
-  const upload = site.files.filter((f) => {
-    const h = held.get(f.file);
-    return !h || h.sha256 !== f.sha256 || sizes.get(f.file) !== f.bytes;
-  });
+  const byName = new Map(assets.map((a) => [a.name, a]));
+  const upload = site.files.filter((f) => !holds(f, byName.get(f.file), release));
   const wanted = new Set(site.files.map((f) => f.file));
   const remove = assets.map((a) => a.name).filter((n) => FILE_NAME.test(n) && !wanted.has(n));
   return { upload, remove };
 }
 
 /**
- * The manifest the release ends with, describing exactly what it holds: for each file of the
- * planned snapshot, the entry of the copy uploaded now, or else the release's previous entry when
- * its asset is still there unchanged (an unchanged file, or one that could not be fetched this
- * time), or nothing.
+ * The manifest the release ends with, from a fresh listing of its assets: for each file of the
+ * snapshot, the entry of the copy the release now holds (the site's, one read again during the
+ * run, or the release's previous one), or nothing.
  */
 export function releaseManifest(
   site: Manifest,
@@ -93,13 +99,15 @@ export function releaseManifest(
   assets: readonly Asset[],
   uploaded: ReadonlyMap<string, ManifestFile>,
 ): Manifest {
-  const before = new Map((release?.files ?? []).map((f) => [f.file, f]));
-  const sizes = new Map(assets.map((a) => [a.name, a.size]));
+  const byName = new Map(assets.map((a) => [a.name, a]));
   const files = site.files.flatMap((f) => {
+    const asset = byName.get(f.file);
+    const candidates = [uploaded.get(f.file), f, release?.files.find((r) => r.file === f.file)];
+    const held = candidates.find((c): c is ManifestFile => !!c && holds(c, asset, release));
+    if (held) return [held];
+    // without digests, a copy uploaded in this run is known by what was uploaded
     const now = uploaded.get(f.file);
-    if (now) return [now];
-    const old = before.get(f.file);
-    return old && sizes.get(old.file) === old.bytes ? [old] : [];
+    return now && asset && !asset.digest && asset.size === now.bytes ? [now] : [];
   });
   return {
     ...site,
@@ -144,13 +152,21 @@ Published values from the literature, with their sources, are in [\`data/records
 `;
 }
 
+function listAssets(): Asset[] {
+  return (JSON.parse(gh(["release", "view", TAG, "--json", "assets"])) as { assets: Asset[] }).assets;
+}
+
 async function main(): Promise<void> {
   const work = mkdtempSync(join(tmpdir(), "polypack-mirror-"));
   const site = await siteManifest();
+  if (!site.completed_at || site.completed_at !== site.generated_at) {
+    console.log(`the site's snapshot is being built (generated ${site.generated_at}); nothing to do until it is finished`);
+    return;
+  }
 
   let assets: Asset[] = [];
   try {
-    assets = (JSON.parse(gh(["release", "view", TAG, "--json", "assets"])) as { assets: Asset[] }).assets;
+    assets = listAssets();
   } catch {
     console.log(`creating the release "${TAG}"`);
     gh(["release", "create", TAG, "--title", "Records snapshot", "--notes", "Being filled.", "--latest=false"]);
@@ -161,7 +177,7 @@ async function main(): Promise<void> {
     try {
       release = checkManifest(JSON.parse(readFileSync(join(work, "manifest.json"), "utf8")));
     } catch (e) {
-      console.log(`the release's manifest is unusable (${(e as Error).message}); every file is uploaded again`);
+      console.log(`the release's manifest is unusable (${(e as Error).message})`);
     }
   }
 
@@ -169,38 +185,44 @@ async function main(): Promise<void> {
   console.log(`${site.files.length} files on the site; ${upload.length} new or changed; ${remove.length} to remove`);
   const uploaded = new Map<string, ManifestFile>();
   let failed = 0;
-  let batch: ManifestFile[] = [];
-  const send = () => {
-    if (!batch.length) return;
-    gh(["release", "upload", TAG, ...batch.map((f) => join(work, f.file)), "--clobber"]);
-    for (const f of batch) uploaded.set(f.file, f);
-    batch = [];
-  };
-  for (const f of upload) {
-    const path = join(work, f.file);
-    let got: ManifestFile | undefined = (await fetchFile(f, path)) ? f : undefined;
-    if (!got) {
-      // the server may have rebuilt the file since its manifest was read
-      got = (await siteManifest()).files.find((g) => g.file === f.file);
-      if (got && !(await fetchFile(got, path))) got = undefined;
+  try {
+    let batch: ManifestFile[] = [];
+    const send = () => {
+      if (!batch.length) return;
+      gh(["release", "upload", TAG, ...batch.map((f) => join(work, f.file)), "--clobber"]);
+      for (const f of batch) uploaded.set(f.file, f);
+      batch = [];
+    };
+    for (const f of upload) {
+      const path = join(work, f.file);
+      let got: ManifestFile | undefined = (await fetchFile(f, path)) ? f : undefined;
+      if (!got) {
+        // the server may have rebuilt the file since its manifest was read
+        got = (await siteManifest()).files.find((g) => g.file === f.file);
+        if (got && !(await fetchFile(got, path))) got = undefined;
+      }
+      if (got) batch.push(got);
+      else {
+        failed++;
+        console.log(`${f.file}: could not be fetched intact; the release keeps what it had`);
+      }
+      if (batch.length === 20) send();
     }
-    if (got) batch.push(got);
-    else {
-      failed++;
-      console.log(`${f.file}: could not be fetched intact; the release keeps what it had`);
-    }
-    if (batch.length === 20) send();
+    send();
+  } finally {
+    // whatever happened above, the manifest describes what the release now holds
+    const final = releaseManifest(site, release, listAssets(), uploaded);
+    writeFileSync(join(work, "manifest.json"), JSON.stringify(final, null, 1) + "\n");
+    gh(["release", "upload", TAG, join(work, "manifest.json"), "--clobber"]);
+    writeFileSync(join(work, "notes.md"), notes(final));
+    gh(["release", "edit", TAG, "--notes-file", join(work, "notes.md")]);
+    console.log(`the release lists ${final.files.length} files, ${final.records} records`);
   }
-  send();
   for (const name of remove) gh(["release", "delete-asset", TAG, name, "--yes"]);
-
-  const final = releaseManifest(site, release, assets, uploaded);
-  writeFileSync(join(work, "manifest.json"), JSON.stringify(final, null, 1) + "\n");
-  gh(["release", "upload", TAG, join(work, "manifest.json"), "--clobber"]);
-  writeFileSync(join(work, "notes.md"), notes(final));
-  gh(["release", "edit", TAG, "--notes-file", join(work, "notes.md")]);
-  console.log(`mirrored: ${final.files.length} files, ${final.records} records; ${failed} left for the next night`);
-  if (failed) process.exitCode = 1;
+  if (failed) {
+    console.log(`${failed} file(s) left for the next night`);
+    process.exitCode = 1;
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await main();
