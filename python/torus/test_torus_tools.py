@@ -86,6 +86,81 @@ class Literature(unittest.TestCase):
         e = LIT.exact_form("free", 0, 7, math.sqrt(7 * 2 * math.sqrt(3)))
         self.assertIsNotNone(e)
         self.assertIsNone(LIT.exact_form("free", 0, 7, 1.0001 * math.sqrt(7 * 2 * math.sqrt(3))))
+        # one triangle on a free torus: Fary's lattice optimum, density 2/3
+        e = LIT.exact_form("free", 3, 1, math.sqrt(3 * math.sqrt(3) / 8))
+        self.assertEqual(e["expr"], "sqrt(3 sqrt(3) / 8)")
+        self.assertIsNone(LIT.exact_form("free", 3, 2, math.sqrt(3 * math.sqrt(3) / 8)))
+
+    def test_fary_bound_for_one_triangle(self):
+        b = LIT.score_bound("free", 3, 1)
+        self.assertEqual(b["kind"], "proven")
+        self.assertAlmostEqual(b["value"], math.sqrt(3 * math.sqrt(3) / 8), places=14)
+        self.assertIn("Fary 1950", b["label"])
+
+
+def proofs(fam, N, P):
+    return [e for e in LIT.literature(fam, N, P) if e.get("proof")]
+
+
+class ProofEntries(unittest.TestCase):
+    """Which cases carry a `proof` (a checked, published proof of the exact torus case)."""
+
+    LOESCHIAN = sorted({a * a + a * b + b * b for a in range(8) for b in range(8)} - {0})
+    SUMSQ = sorted({a * a + b * b for a in range(8) for b in range(8)} - {0})
+
+    def proven_cases(self):
+        out = [("sq", 0, P) for P in (2, 3, 4, 6, 7, 8)]
+        out += [("hex", 0, 2)] + [("hex", 0, n) for n in self.LOESCHIAN if n <= 49]
+        out += [("sq", 4, P) for P in self.SUMSQ if P <= 49]
+        return out
+
+    def test_every_proof_entry_is_complete(self):
+        for (fam, N, P), entries in LIT.LIT.items():
+            for e in entries:
+                if not e.get("proof"):
+                    continue
+                self.assertEqual(e["status"], "proven", (fam, N, P))
+                self.assertRegex(e["doi"], r"^10\.\d{4,9}/\S+$")
+                self.assertGreater(e["value"], 0)
+                self.assertTrue(e["source"].strip())
+                self.assertNotIn("not read", e["source"] + e["short"])
+
+    def test_the_proven_cases(self):
+        cases = sorted(k for k in LIT.LIT if proofs(*k))
+        self.assertEqual(cases, sorted(self.proven_cases()))
+        self.assertEqual(len(cases), 50)
+
+    def test_values_of_the_proofs(self):
+        r2, r34 = math.sqrt(2) / 4, (math.sqrt(6) - math.sqrt(2)) / 4
+        self.assertAlmostEqual(proofs("sq", 0, 2)[0]["value"], 1 / r2, places=13)
+        self.assertAlmostEqual(proofs("sq", 0, 3)[0]["value"], 1 / r34, places=13)
+        self.assertAlmostEqual(proofs("sq", 0, 4)[0]["value"], 1 / r34, places=13)
+        self.assertAlmostEqual(proofs("hex", 0, 2)[0]["value"], 2 * math.sqrt(3), places=13)
+        for n in self.LOESCHIAN:
+            if n <= 49:
+                for e in proofs("hex", 0, n):
+                    self.assertAlmostEqual(e["value"], 2 * math.sqrt(n), places=12)
+        for P in self.SUMSQ:
+            if P <= 49:
+                self.assertAlmostEqual(proofs("sq", 4, P)[0]["value"], math.sqrt(P), places=13)
+
+    def test_cases_left_best_known(self):
+        # papers not read (Dickinson et al. 2011a/b), lattice theorems (Lagrange, Fary), plane
+        # theorems (Fejes Toth, Thue), a preprint (Hales-Kusner) and a conjecture give no proof
+        for k in (("sq", 0, 1), ("sq", 0, 5), ("hex", 0, 5), ("hex", 0, 6), ("free", 0, 1), ("free", 3, 1),
+                  ("free", 8, 1), ("free", 5, 2), ("sq", 0, 9), ("hex", 0, 8), ("sq", 4, 3)):
+            self.assertEqual(proofs(*k), [], k)
+        self.assertIn("Fary 1950", LIT.literature("free", 3, 1)[0]["short"])
+        self.assertEqual(LIT.literature("free", 3, 1)[0]["doi"], "10.24033/bsmf.1413")
+        self.assertEqual(LIT.literature("free", 5, 2)[0]["status"], "proven_unrefereed")
+
+    def test_citations(self):
+        cd = LIT.literature("hex", 0, 7)[0]
+        self.assertEqual(cd["short"], "Connelly and Dickinson 2014, Thm 1.1")
+        self.assertTrue(cd["proof"].startswith("Theorem 1.1"))
+        self.assertEqual(LIT.literature("hex", 0, 8)[0]["short"], "Connelly and Dickinson 2014, Conjecture 1.3")
+        self.assertTrue(LIT.literature("sq", 4, 5)[0]["source"].startswith("D. W. Blair, C. Santangelo, J. Machta"))
+        self.assertEqual(LIT.literature("sq", 0, 1)[0]["value"], 2.0)
 
 
 if __name__ == "__main__":

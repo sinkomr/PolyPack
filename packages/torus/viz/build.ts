@@ -14,7 +14,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { circumradius, pieceArea } from "@polypack/geometry";
-import { TorusRecordsFile, recordPacking, validateTorusPacking } from "../src";
+import { TorusRecord, TorusRecordsFile, recordPacking, validateTorusPacking } from "../src";
 
 const root = new URL("../../../", import.meta.url);
 // optional arguments: input records file and output html (defaults: the repository paths)
@@ -38,9 +38,17 @@ interface VizRecord {
   poses: [number, number, number][];
   contacts: [number, number, number, number][];
   eps: number;
+  status: string;
   notes: string;
   lit: string[];
   exact: string;
+}
+
+/** "proven (source, proof; doi)" from the entry with a `proof`, or "best known". */
+function statusText(r: TorusRecord): string {
+  if (r.status !== "proven") return r.status.replace("_", " ");
+  const proof = (r.literature ?? []).find((l) => l.proof);
+  return proof ? `proven optimal: ${proof.short} (${proof.proof}; doi:${proof.doi})` : "proven";
 }
 
 const recs: VizRecord[] = file.records.map((r) => {
@@ -63,9 +71,11 @@ const recs: VizRecord[] = file.records.map((r) => {
     poses: p.poses.map((q) => [round(q.x), round(q.y), round(q.theta)]),
     contacts: v.contacts.map((c) => [c.i, c.j, c.m, c.n]),
     eps: r.eps,
+    status: statusText(r),
     notes: r.notes ?? "",
     lit: (r.literature ?? []).map(
-      (l) => `${l.status.replace("_", " ")}: ${l.value === null ? "no value" : l.value.toFixed(6)} (${l.short})${l.note ? "; " + l.note : ""}`,
+      (l) =>
+        `${l.status.replace("_", " ")}: ${l.value === null ? "no value" : l.value.toFixed(6)} (${l.short}${l.doi ? ", doi:" + l.doi : ""})${l.note ? "; " + l.note : ""}`,
     ),
     exact: r.exact ? `${r.exact.expr} = ${r.exact.value.toPrecision(15)}` : "",
   };
@@ -253,6 +263,7 @@ small, .muted { color:var(--muted); }
     const gap = (r.sf - r.bound) / r.bound;
     const rows = [
       ["Problem", r.id],
+      ["Status", r.status],
       ["Torus", FAM[r.f] + ", " + r.P + " " + SHAPE(r.N)],
       ["Score (certified)", r.d + (r.f === "free" ? "  (sqrt of cell area)" : "  (side L)")],
       ["score_float", r.sf.toPrecision(15)],

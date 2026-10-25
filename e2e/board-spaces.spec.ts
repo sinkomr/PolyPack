@@ -3,7 +3,7 @@ import { type Page, type Route, expect, test } from "@playwright/test";
 import { type SpaceName, type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/spaces";
 import { DIMENSIONS, whereIs } from "../apps/web/src/dimension-table";
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
-import { openProblem } from "./helpers";
+import { LAZY_VIEW, openProblem } from "./helpers";
 
 // The board's space mode against the local stack (playwright.config.ts): the server lists the
 // research records of data/<space>/records.json and checks submissions; the board draws a
@@ -68,7 +68,7 @@ test("the Dimension and Kind menus switch the board to each kind and back to the
     await expect(page.locator("#board")).toBeHidden();
     await expect(page.locator("#solve-panel")).toBeHidden();
     // the 2D kinds draw on a canvas or in an svg; 3D on 4D in the three.js view (e2e/board-boundary.spec.ts)
-    await expect(page.locator(".space-draw > canvas, .space-draw > svg, .pp3 canvas")).toBeVisible();
+    await expect(page.locator(".space-draw > canvas, .space-draw > svg, .pp3 canvas")).toBeVisible(LAZY_VIEW);
     const api = (await (await page.request.get(`/api/spaces/${space}/problems/${id}`)).json()) as SpaceProblemResponse;
     const facts = page.locator("#space-facts");
     await expect(facts).toContainText(`Certified value${api.certified!.display}`);

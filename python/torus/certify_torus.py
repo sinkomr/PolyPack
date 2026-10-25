@@ -37,6 +37,12 @@ So only integers m, n with |alpha_0 + m| < 2 s R |b2| / |det| and
 of c_j - c_i). The certifier enumerates an integer superset of these from
 interval bounds, so it never relies on a reduced basis.
 
+Status (check_status, applied to every record of records.json):
+  `best_known` or `proven`. `proven` needs a literature entry with status `proven`, a DOI, the
+  theorem or section that proves this exact torus case in `proof`, and a value that score_cert
+  attains (value <= score_cert <= value (1 + PROVEN_SLACK)). No record may lie below the value of
+  any literature entry with status `proven`.
+
 Usage:
   python3 certify_torus.py data/torus/records.json            # verify all records
   python3 certify_torus.py data/torus/records.json --id torus/sq/0/5
@@ -45,6 +51,7 @@ Usage:
 import json
 import math
 import os
+import re
 import sys
 
 import mpmath
@@ -388,6 +395,66 @@ def _float_up(x):
     return f
 
 
+STATUSES = ("best_known", "proven")
+DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$")
+# score_cert exceeds the configuration's score by the shrink factor 1/(1 - eps), eps <= 1e-9 on the
+# build ladder, so a record at a proven optimum has score_cert within this of the optimum.
+PROVEN_SLACK = 2e-9
+
+
+def _finite_positive(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x > 0
+
+
+def _text(x):
+    return isinstance(x, str) and x.strip() != ""
+
+
+def proof_entry(literature, score_cert):
+    """The first literature entry that proves this exact case and that score_cert attains, or None.
+
+    Such an entry has status `proven`, a full citation in `source`, a DOI, the theorem or section
+    in `proof`, and a value with value <= score_cert <= value (1 + PROVEN_SLACK).
+    """
+    if not isinstance(literature, list) or not _finite_positive(score_cert):
+        return None
+    for e in literature:
+        if not isinstance(e, dict) or e.get("status") != "proven":
+            continue
+        v = e.get("value")
+        if not (_finite_positive(v) and _text(e.get("source")) and _text(e.get("proof"))):
+            continue
+        if not (isinstance(e.get("doi"), str) and DOI_RE.match(e["doi"])):
+            continue
+        if v <= score_cert <= v * (1 + PROVEN_SLACK):
+            return e
+    return None
+
+
+def check_status(rec):
+    """Raise CertError unless the record's status and literature obey the rule above."""
+    status = rec.get("status")
+    if status not in STATUSES:
+        raise CertError("unknown status %r" % (status,))
+    sc = rec.get("score_cert")
+    if not _finite_positive(sc):
+        raise CertError("score_cert must be a positive finite number")
+    lit = rec.get("literature")
+    if lit is None:
+        lit = []
+    if not isinstance(lit, list) or not all(isinstance(e, dict) for e in lit):
+        raise CertError("literature must be a list of objects")
+    for e in lit:
+        v = e.get("value")
+        if e.get("status") == "proven" and _finite_positive(v) and sc < v:
+            raise CertError("score_cert %r lies below the proven optimum %r (%s)" % (sc, v, e.get("short")))
+    if status == "proven" and proof_entry(lit, sc) is None:
+        raise CertError(
+            "status proven needs a literature entry with status proven, a DOI, the theorem in `proof` "
+            "and a value that score_cert attains"
+        )
+
+
 def record_input(rec):
     """Map a records.json entry to the certifier's input."""
     cfg = rec["configuration"]
@@ -417,8 +484,9 @@ def main(argv):
             continue
         try:
             cert = certify(record_input(rec), collect=False)
+            check_status(rec)
             ok += 1
-            print("OK  %-18s score_cert %.12f  min clearance %s" % (rec["problem"], rec["score_cert"], cert["min_clearance_lb"]))
+            print("OK  %-18s score_cert %.12f  min clearance %s  %s" % (rec["problem"], rec["score_cert"], cert["min_clearance_lb"], rec["status"]))
         except Exception as e:  # noqa: BLE001 - report every bad record and continue
             bad += 1
             print("BAD %-18s %s" % (rec.get("problem"), e))

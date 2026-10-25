@@ -9,6 +9,12 @@ valid). The best candidate is certified with the smallest shrink eps on a ladder
 that the interval certifier (certify_torus.py) accepts; score_cert is the
 smallest double >= the certified upper bound of score/(1 - eps). Standard
 library only (plus the certifier's mpmath).
+
+  python3 python/torus/build_records.py --refresh data/torus/records.json --out data/torus
+
+re-derives the bound, literature, closed form, notes and status of every record from
+literature_torus.py and leaves configurations, scores and certificates as they are. A record is
+proven only through a literature entry that certify_torus.proof_entry accepts.
 """
 
 import argparse
@@ -126,6 +132,59 @@ def certify_candidate(c):
     raise C.CertError("no eps on the ladder certifies: %s" % last)
 
 
+def annotate(fam, N, P, sf, sc, label):
+    """Bound, closed form, literature, notes and status of a record (from literature_torus.py)."""
+    bound = LIT.score_bound(fam, N, P)
+    lit = LIT.literature(fam, N, P)
+    notes = []
+    gap_rel = (sf - bound["value"]) / bound["value"]
+    exact = LIT.exact_form(fam, N, P, sf)
+    if gap_rel <= 1e-12:
+        notes.append("[CALC] score_float equals the lower bound (%s) to 1e-12 relative." % bound["label"])
+        if exact:
+            notes.append(
+                "[CALC] Exact value %s = %.15g (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+                % (exact["expr"], exact["value"])
+            )
+    if label.startswith("P+1") or "as a free lattice" in label:
+        notes.append("Taken from: %s." % label)
+    for L_ in lit:
+        if L_.get("value") is not None:
+            d = sf - L_["value"]
+            notes.append("Literature %s value %.10f (%s): ours - literature = %.3e." % (L_["status"], L_["value"], L_["short"], d))
+    proof = C.proof_entry(lit, sc)
+    if proof is not None:
+        notes.append("Proven optimal: %s (%s; doi:%s)." % (proof["short"], proof["proof"], proof["doi"]))
+    return {
+        "status": "proven" if proof is not None else "best_known",
+        "bound": bound,
+        "exact": exact if gap_rel <= 1e-12 else None,
+        "literature": lit,
+        "notes": " ".join(notes),
+        "gap_rel": gap_rel,
+    }
+
+
+def refresh(path, out_dir):
+    """Re-derive every record's metadata from literature_torus.py; the packings stay as they are."""
+    with open(path) as f:
+        data = json.load(f)
+    changed = []
+    for r in data["records"]:
+        meta = annotate(r["family"], r["N"], r["P"], r["score_float"], r["score_cert"], r.get("search_label") or "")
+        meta.pop("gap_rel")
+        before = {k: r.get(k) for k in meta}
+        r.update(meta)
+        C.check_status(r)
+        if before != meta:
+            changed.append((r["problem"], sorted(k for k in meta if before[k] != meta[k]), before["status"], meta["status"]))
+    with open(os.path.join(out_dir, "records.json"), "w") as f:
+        json.dump(data, f, indent=1)
+    for pid, keys, s0, s1 in changed:
+        print("REFRESHED %-18s %s%s" % (pid, ", ".join(keys), "" if s0 == s1 else "  (status %s -> %s)" % (s0, s1)))
+    print("refreshed %d of %d records; %d proven" % (len(changed), len(data["records"]), sum(r["status"] == "proven" for r in data["records"])))
+
+
 def display(x, digits=6):
     """score_cert rounded to the nearest at 6 decimals, from its exact binary64 value
     (ties to even); always 6 decimals, e.g. 2.000000000002 -> "2.000000"."""
@@ -135,8 +194,14 @@ def display(x, digits=6):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--raw", required=True)
+    ap.add_argument("--raw", default=None, help="raw search results (required unless --refresh)")
     ap.add_argument("--out", required=True)
+    ap.add_argument(
+        "--refresh",
+        default=None,
+        help="existing records.json: re-derive bound, literature, closed form, notes and status of every "
+        "record from literature_torus.py; configurations, scores and certificates are kept",
+    )
     ap.add_argument("--Ns", default="0,3,4,5,6,7,8")
     ap.add_argument("--Pmax", type=int, default=16, help="searched range 1..Pmax")
     ap.add_argument("--raw-ext", default=None, help="extension results (extend_torus.py) for P > Pmax")
@@ -150,6 +215,11 @@ def main():
     )
     ap.add_argument("--min-gain", type=float, default=1e-11, help="relative gain needed to replace a record")
     args = ap.parse_args()
+    if args.refresh:
+        refresh(args.refresh, args.out)
+        return
+    if not args.raw:
+        ap.error("--raw is required unless --refresh is given")
     existing = None
     if args.only_improve:
         with open(args.only_improve) as f:
@@ -234,28 +304,9 @@ def main():
                 area = abs(b1[0] * b2[1] - b1[1] * b2[0])
                 dens = P * piece_area(N) / area
                 sc = cert["score_upper_float"]
-                bound = LIT.score_bound(fam, N, P)
-                lit = LIT.literature(fam, N, P)
+                meta = annotate(fam, N, P, c["score_float"], sc, c["label"])
+                bound, gap_rel = meta["bound"], meta["gap_rel"]
                 raw = c["raw"]
-                notes = []
-                gap_rel = (c["score_float"] - bound["value"]) / bound["value"]
-                exact = LIT.exact_form(fam, N, P, c["score_float"])
-                if gap_rel <= 1e-12:
-                    notes.append("[CALC] score_float equals the lower bound (%s) to 1e-12 relative." % bound["label"])
-                    if exact:
-                        notes.append(
-                            "[CALC] Exact value %s = %.15g (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
-                            % (exact["expr"], exact["value"])
-                        )
-                if c["label"].startswith("P+1") or "as a free lattice" in c["label"]:
-                    notes.append("Taken from: %s." % c["label"])
-                for L_ in lit:
-                    if L_.get("value") is not None:
-                        d = c["score_float"] - L_["value"]
-                        notes.append(
-                            "Literature %s value %.10f (%s): ours - literature = %.3e."
-                            % (L_["status"], L_["value"], L_["short"], d)
-                        )
                 rec = {
                     "problem": pid,
                     "family": fam,
@@ -264,23 +315,24 @@ def main():
                     "score_float": c["score_float"],
                     "score_cert": sc,
                     "display": display(sc),
-                    "status": "best_known",
+                    "status": meta["status"],
                     "density": dens,
                     "eps": eps,
                     "configuration": {"lattice": c["lattice"], "poses": c["poses"]},
                     "certificate": certname,
                     "min_clearance_shrunk": cert["min_clearance_lb"],
                     "bound": bound,
-                    "exact": exact if gap_rel <= 1e-12 else None,
-                    "literature": lit,
+                    "exact": meta["exact"],
+                    "literature": meta["literature"],
                     "method": raw.get("method", "search"),
                     "seed": raw.get("seed"),
                     "budget": raw.get("budget"),
                     "search_label": c["label"],
                     "software": SOFTWARE,
                     "found_by": FOUND_BY,
-                    "notes": " ".join(notes),
+                    "notes": meta["notes"],
                 }
+                C.check_status(rec)
                 records.append(rec)
                 report.append(
                     "%-18s %.10f cert %.10f eps %.0e dens %.6f bound %.10f gap %.2e %s"
