@@ -266,7 +266,8 @@ def cmd_assemble(out_path, certdir_in, certdir_out, certified_paths):
                     "piece vertex k at angle theta + pi/2 + 2 pi k/N (radians)",
             "certified_statement": "pieces scaled by lam = 1 - eps about their centres at edge s are strictly valid "
                                    "(python/surface/cert.py); by similarity unit pieces fit at edge s / lam, so "
-                                   "score_cert = s / lam rounded up; display = score_cert rounded up at 6 decimals",
+                                   "score_cert = s / lam rounded up to a float; display = score_cert rounded to 6 decimals "
+                                   "(nearest, ties to even, from its exact binary64 value)",
             "score_float": "s, the edge of the stored configuration (pieces touching up to float rounding)",
             "status": "best_known everywhere (no published proofs); see notes for matches with the bound",
             "docs": "docs/spaces/SURFACE.md",

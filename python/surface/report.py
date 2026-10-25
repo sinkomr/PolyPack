@@ -28,7 +28,8 @@ def main(argv):
     w("")
     w("Generated from `data/surface/records.json` (%s) by `python/surface/report.py`. %d nofold and %d fold "
       "records; every value is certified by `python/surface/cert.py` (largest relative gap "
-      "score_cert / score_float - 1: %.1e). Values are the certified edge s, rounded up at 6 decimals. "
+      "score_cert / score_float - 1: %.1e). Values are the certified edge score_cert rounded to 6 decimals "
+      "(nearest); score_cert itself, in the records, is the certified bound rounded up to a float. "
       "Definitions and proofs: [SURFACE.md](SURFACE.md)." % (doc["generated"], n_nofold, n_fold, worst_gap))
     w("")
     w("Columns: **fold** and **nofold** values; **gain** = 1 - fold/nofold; **bound** = the larger of the area "

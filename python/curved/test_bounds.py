@@ -123,7 +123,8 @@ class ShippedRecords(unittest.TestCase):
             res = certify.certify_record(r)
             self.assertTrue(res["certified"], (r["id"], res.get("reason")))
             self.assertGreaterEqual(r["score_cert"], r["score_float"])
-            self.assertGreaterEqual(float(r["display"]), r["score_cert"])
+            # display = score_cert rounded to the nearest at 6 decimals (an exact 1 shows as 1.000000)
+            self.assertEqual(r["display"], certify.display_nearest(r["score_cert"]))
 
 
 if __name__ == "__main__":

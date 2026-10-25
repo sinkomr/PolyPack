@@ -29,7 +29,8 @@ non-existent piece, non-object records or fields) is rejected; nothing ever rais
 
 Published records (certify_record, and the command line) are also checked for their own consistency:
 id = sphere/N/P (optionally followed by #tag), config present, score_cert equal to config.rho,
-display = score_cert rounded up at 6 decimals, 0 < score_float <= score_cert, status in
+display = score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64
+value), 0 < score_float <= score_cert, status in
 {best_known, proven}, and 'proven' only with a cited proof (literature.proof, a non-empty list of
 references). Every record in the file is counted; any failure gives exit status 1.
 
@@ -41,6 +42,7 @@ import os
 import re
 import sys
 import time
+from decimal import ROUND_HALF_EVEN, Decimal
 from fractions import Fraction
 
 from mpmath import iv
@@ -83,13 +85,15 @@ def _posint(P):
     return P
 
 
-def display_up(x):
-    """Score rounded UP at 6 decimals, as a string (exact: x is read as its binary64 value)."""
-    f = Fraction(x)
-    n = math.ceil(f * 10 ** 6)
-    if n < 0:
+def display_6(x):
+    """Score rounded to the NEAREST at 6 decimals (ties to even), from its exact binary64 value, always
+    6 decimals: str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN)). PolyPack rule for
+    every space since 2026-10-24 (it replaced rounding up, which showed exact values like 2 as 2.000001)."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or (isinstance(x, float) and not math.isfinite(x)):
+        raise CertError("score must be a finite number")
+    if x < 0:
         raise CertError("negative score")
-    return f"{n // 10 ** 6}.{n % 10 ** 6:06d}"
+    return str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN))
 
 
 # ---------------------------------------------------------------- interval geometry
@@ -230,8 +234,8 @@ def _certify_published(rec, use_witnesses):
     sc = _num(rec["score_cert"], "score_cert")
     if sc != _num(cfg.get("rho"), "config.rho"):
         raise CertError("score_cert differs from the radius of the stored configuration")
-    if rec.get("display") != display_up(sc):
-        raise CertError(f"display must be {display_up(sc)} (score_cert rounded up at 6 decimals)")
+    if rec.get("display") != display_6(rec["score_cert"]):
+        raise CertError(f"display must be {display_6(rec['score_cert'])} (score_cert rounded to 6 decimals)")
     sf = _num(rec.get("score_float"), "score_float")
     if not (0 < sf <= sc):
         raise CertError("need 0 < score_float <= score_cert")

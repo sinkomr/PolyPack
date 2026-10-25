@@ -43,10 +43,10 @@ def main():
         rows = sorted([r for r in recs if r["N"] == N], key=lambda r: r["P"])
         print(f"\n#### {NAMES.get(N, N)} (N = {N})\n")
         if N == 0:
-            print("| P | rho (certified, rounded up) | lower bound (kind) | gap to bound | Tammes rho (Cohn table) | ours - lit (rel) | status |")
+            print("| P | rho (certified, 6 decimals) | lower bound (kind) | gap to bound | Tammes rho (Cohn table) | ours - lit (rel) | status |")
             print("|---|---|---|---|---|---|---|")
         else:
-            print("| P | rho (certified, rounded up) | circumradius R (rad) | lower bound (kind) | gap to bound | dOSV 2026 R (truncated) | vs dOSV | status |")
+            print("| P | rho (certified, 6 decimals) | circumradius R (rad) | lower bound (kind) | gap to bound | dOSV 2026 R (truncated) | vs dOSV | status |")
             print("|---|---|---|---|---|---|---|---|")
         for r in rows:
             b = r["bound"]

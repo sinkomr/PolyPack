@@ -67,13 +67,35 @@ If any pair is not proven, the record is rejected. The certificate (`data/torus/
 
 Starts, per (family, N, P): translative lattice packings on every superlattice of index P of the family lattice (Hermite normal forms; the best piece angle is found from the gauge of the difference body K − K), replications of smaller solutions over sublattices (same density), a double-lattice start (two orientations θ and θ + π on a superlattice of index P/2), the P − 1 solution plus one piece in its largest sampled hole, random sequential addition at density 0.25, and, for `sq`/`hex`, the `free` solution deformed to the target cell. Then basin hopping on the pool of the 8 best (expand 2–8 % and jitter; re-place up to P/3 pieces; turn one polygon by up to π/N; shear the free cell). Budget per problem (deterministic counts): s (6 + P) random starts and s (12 + 5P) hops with scale s; a search stops early when it reaches a density bound (π/√12 for disks, (5 − √5)/3 for pentagons, 1 otherwise), because no packing can do better.
 
-The run of 2026-10-24 (00:59–03:09, at most 2 processes, `nice -n 10`, seed 20261024): phase A, `free` with s = 1.5 (the octagon job was stopped after P = 12 once Fejes Tóth's theorem, §6, made the lattice packing provably optimal; exact replications supply every octagon entry); phase B, `sq` and `hex` with s = 0.6, seeded with the deformed `free` solutions; phase S, structured seeds only for `sq` and `hex` (seed + 11), after a bug fix: the first superlattice enumeration used column-style Hermite forms, which list sublattices, and so missed most superlattices (all but two for prime P); phase C, `free` for N = 3, 5, 7 with s = 0.3 (seed + 7), seeded with the `sq` and `hex` solutions; finally `polish_raw.py` (SLP from every stored result with a box down to 1e-12, keeping improvements, which were at most a few 1e-9 relative). Each raw result records its label, seed, budget and how it stopped. scipy 1.7's HiGHS occasionally aborts the process or stalls on these degenerate LPs, so each local solve runs in a forked child with a 90 s limit and each LP has a 2 s limit; a failed solve is dropped (counts are in the raw results).
+The run of 2026-10-24 (00:59–03:09, at most 2 processes, `nice -n 10`, seed 20261024): phase A, `free` with s = 1.5 (the octagon job was stopped after P = 12 once Fejes Tóth's theorem, §6, made the lattice packing provably optimal; exact replications supply every octagon entry); phase B, `sq` and `hex` with s = 0.6, seeded with the deformed `free` solutions; phase S, structured seeds only for `sq` and `hex` (seed + 11), after a bug fix: the first superlattice enumeration used column-style Hermite forms, which list sublattices, and so missed most superlattices (all but two for prime P); phase C, `free` for N = 3, 5, 7 with s = 0.3 (seed + 7), seeded with the `sq` and `hex` solutions; finally `polish_raw.py` (SLP from every stored result with a box down to 1e-12, keeping improvements, which were at most a few 1e-9 relative). Each raw result records its label, seed, budget and how it stopped.
+
+**Rerun on a quieter machine (2026-10-24, 16:35–18:15, one process, `nice -n 10`, logs in `data/torus/raw/rerun-2026-10-24/`):**
+
+1. The three records that were still creeping (`hex/3/12`, `hex/7/11`, `sq/7/11`) were polished to convergence: `polish_raw.py --deep 200`, then `--slsqp 60`. The SLSQP mode freezes the contact set (pair, lattice vector, axis owner, edge, vertex), solves the exact nonlinear constraints with scipy's SLSQP and re-selects. A final pass with `--slsqp 60 --deep 3` changed nothing by more than 1e-15 relative.
+2. Random starts and hops with the corrected lattice seeds (seed 20261025, s = 1.5) ran for the early families: `sq` and `hex` disks, triangles and squares, P ≤ 16, skipping entries that are proven or at a bound.
+3. Odd-P free pentagons were searched again (seed 20261026, s = 1.0).
+
+Records were then rebuilt with `build_records.py --only-improve`, which replaces a record only by a certified candidate lower by more than 1e-11 relative and leaves every other record unchanged except for the display rule. Nine records improved:
+
+| record | old score_float | new score_float | gain |
+|---|---:|---:|---:|
+| sq/3/6 | 1.793150944336 | 1.791836944045 | 7.3e-4 |
+| sq/3/13 | 2.552558883258 | 2.538945636830 | 5.3e-3 |
+| sq/7/11 | 7.023958888775 | 7.023958869017 | 2.8e-9 (polish) |
+| hex/3/10 | 2.415328488045 | 2.413240644942 | 8.6e-4 |
+| hex/3/11 | 2.500000000040 | 2.500000000002 | 1.5e-11 |
+| hex/3/12 | 2.596952237790 | 2.582838096277 | 5.4e-3 |
+| hex/3/16 | 2.945941519798 | 2.884441020371 | 2.1e-2 (density 25/26 to 1e-16) |
+| hex/4/11 | 4.000000000000 | 3.983152676502 | 4.2e-3 |
+| hex/7/11 | 7.539096719347 | 7.539096598716 | 1.6e-8 (polish) |
+
+Disks on both tori, squares on the square torus and the odd-P free pentagons did not improve. Four further candidates were lower only at the 1e-12 level and were not taken: `sq/4/12`, `hex/3/13`, `hex/4/5`, `free/5/15`. scipy 1.7's HiGHS occasionally aborts the process or stalls on these degenerate LPs, so each local solve runs in a forked child with a 90 s limit and each LP has a 2 s limit; a failed solve is dropped (counts are in the raw results).
 
 `python/torus/build_records.py` then takes, for each problem, the best of: the search result; for `free`, the `sq` and `hex` results read as free lattices; the P + 1 result with one piece deleted; and exact replications from `python/torus/extend_torus.py`. It certifies the winner and writes `data/torus/records.json`.
 
 ## 5. Results
 
-Display values are `score_cert` rounded up at 6 decimals, so an exact value such as 2 shows as 2.000001. Where the score equals a bound, the record also has `exact` (for example `sqrt(5)` or `sqrt(7 * 2 sqrt(3))`). Densities are P · A_piece / cell area. The lower bound kept in each record is the best of these:
+Display values are `score_cert` rounded to the nearest at 6 decimals (from its exact binary64 value, ties to even). Where the score equals a bound, the record also has `exact` (for example `sqrt(5)` or `sqrt(7 * 2 sqrt(3))`). Densities are P · A_piece / cell area. The lower bound kept in each record is the best of these:
 
 - the area bound;
 - a density bound for congruent copies in the plane: π/√12 for disks, (5 − √5)/3 for pentagons, (4 + 4√2)/(5 + 4√2) for octagons (§6);
@@ -82,72 +104,72 @@ Display values are `score_cert` rounded up at 6 decimals, so an exact value such
 
 ### Square torus (score L)
 
-Certified score (rounded up), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
+Certified score (rounded to 6 decimals), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **2.000001**<br>0.7854 | **0.896576**<br>0.5387 | **1.000001**<br>1.0000 | **1.558024**<br>0.7088 | **1.793151**<br>0.8080 | **2.204505**<br>0.7477 | **2.414214**<br>0.8284 |
-| 2 | **2.828428**<br>0.7854 | 0.954748<br>0.9501 | **1.414214**<br>1.0000 | 2.120995<br>0.7649 | 2.535899<br>0.8080 | 3.017103<br>0.7984 | 3.414214<br>0.8284 |
-| 3 | **3.863704**<br>0.6313 | 1.344864<br>0.7182 | 2.000001<br>0.7500 | 2.774480<br>0.6705 | 3.464102<br>0.6495 | 4.079906<br>0.6549 | 4.765891<br>0.6377 |
-| 4 | **3.863704**<br>0.8418 | 1.350217<br>0.9501 | **2.000001**<br>1.0000 | 2.776419<br>0.8928 | 3.464102<br>0.8660 | 4.111522<br>0.8599 | 4.765891<br>0.8503 |
-| 5 | **4.472136**<br>0.7854 | 1.692811<br>0.7555 | **2.236068**<br>1.0000 | 3.387249<br>0.7498 | 4.009608<br>0.8080 | 4.831474<br>0.7784 | 5.398346<br>0.8284 |
-| 6 | **4.994936**<br>0.7555 | 1.793151<br>0.8080 | 2.683282<br>0.8333 | 3.503920<br>0.8408 | 4.437823<br>0.7915 | 5.325567<br>0.7688 | 6.161761<br>0.7630 |
-| 7 | **5.464102**<br>0.7366 | 1.811734<br>0.9234 | 2.828428<br>0.8750 | 3.923707<br>0.7823 | 4.885777<br>0.7619 | 5.787544<br>0.7594 | 6.723128<br>0.7478 |
-| 8 | **5.464102**<br>0.8418 | 1.872993<br>0.9875 | **2.828428**<br>1.0000 | 3.926449<br>0.8928 | 4.898980<br>0.8660 | 5.814571<br>0.8599 | 6.739987<br>0.8503 |
-| 9 | 5.818626<br>0.8351 | 2.094070<br>0.8887 | **3.000001**<br>1.0000 | 4.309277<br>0.8338 | 5.196153<br>0.8660 | 6.263837<br>0.8336 | 7.135642<br>0.8535 |
-| 10 | 6.324556<br>0.7854 | 2.134881<br>0.9501 | **3.162278**<br>1.0000 | 4.638836<br>0.7995 | 5.670442<br>0.8080 | 6.746448<br>0.7984 | 7.634414<br>0.8284 |
-| 11 | 6.547758<br>0.8060 | 2.320509<br>0.8846 | 3.478506<br>0.9091 | 4.775184<br>0.8300 | 5.705772<br>0.8778 | 7.023959<br>0.8102 | 8.035534<br>0.8226 |
-| 12 | 6.656403<br>0.8508 | 2.356352<br>0.9358 | 3.535534<br>0.9600 | 4.792445<br>0.8989 | 5.776590<br>0.9343 | 7.139950<br>0.8554 | 8.190704<br>0.8637 |
-| 13 | 7.190417<br>0.7899 | 2.552559<br>0.8640 | **3.605552**<br>1.0000 | 5.224368<br>0.8195 | 6.276029<br>0.8575 | 7.702229<br>0.7963 | 8.704571<br>0.8284 |
-| 14 | 7.241691<br>0.8387 | 2.562178<br>0.9234 | 3.882902<br>0.9286 | 5.320280<br>0.8510 | 6.276029<br>0.9234 | 7.827717<br>0.8303 | 8.949748<br>0.8439 |
-| 15 | 7.276069<br>0.8901 | 2.621426<br>0.9452 | 4.000001<br>0.9375 | 5.388975<br>0.8886 | 6.302152<br>0.9812 | 7.881092<br>0.8776 | 8.997243<br>0.8947 |
-| 16 | 7.727407<br>0.8418 | 2.648812<br>0.9875 | **4.000001**<br>1.0000 | 5.552837<br>0.8928 | 6.928204<br>0.8660 | 8.223044<br>0.8599 | 9.525484<br>0.8514 |
+| 1 | **2.000000**<br>0.7854 | **0.896575**<br>0.5387 | **1.000000**<br>1.0000 | **1.558024**<br>0.7088 | **1.793151**<br>0.8080 | **2.204505**<br>0.7477 | **2.414214**<br>0.8284 |
+| 2 | **2.828427**<br>0.7854 | 0.954747<br>0.9501 | **1.414214**<br>1.0000 | 2.120995<br>0.7649 | 2.535898<br>0.8080 | 3.017103<br>0.7984 | 3.414214<br>0.8284 |
+| 3 | **3.863703**<br>0.6313 | 1.344863<br>0.7182 | 2.000000<br>0.7500 | 2.774480<br>0.6705 | 3.464102<br>0.6495 | 4.079906<br>0.6549 | 4.765890<br>0.6377 |
+| 4 | **3.863703**<br>0.8418 | 1.350217<br>0.9501 | **2.000000**<br>1.0000 | 2.776418<br>0.8928 | 3.464102<br>0.8660 | 4.111522<br>0.8599 | 4.765890<br>0.8503 |
+| 5 | **4.472136**<br>0.7854 | 1.692811<br>0.7555 | **2.236068**<br>1.0000 | 3.387248<br>0.7498 | 4.009607<br>0.8080 | 4.831473<br>0.7784 | 5.398346<br>0.8284 |
+| 6 | **4.994936**<br>0.7555 | 1.791837<br>0.8092 | 2.683282<br>0.8333 | 3.503920<br>0.8408 | 4.437822<br>0.7915 | 5.325566<br>0.7688 | 6.161760<br>0.7630 |
+| 7 | **5.464102**<br>0.7366 | 1.811733<br>0.9234 | 2.828427<br>0.8750 | 3.923707<br>0.7823 | 4.885776<br>0.7619 | 5.787543<br>0.7594 | 6.723128<br>0.7478 |
+| 8 | **5.464102**<br>0.8418 | 1.872993<br>0.9875 | **2.828427**<br>1.0000 | 3.926449<br>0.8928 | 4.898979<br>0.8660 | 5.814570<br>0.8599 | 6.739986<br>0.8503 |
+| 9 | 5.818626<br>0.8351 | 2.094070<br>0.8887 | **3.000000**<br>1.0000 | 4.309276<br>0.8338 | 5.196152<br>0.8660 | 6.263837<br>0.8336 | 7.135642<br>0.8535 |
+| 10 | 6.324555<br>0.7854 | 2.134880<br>0.9501 | **3.162278**<br>1.0000 | 4.638836<br>0.7995 | 5.670441<br>0.8080 | 6.746447<br>0.7984 | 7.634414<br>0.8284 |
+| 11 | 6.547757<br>0.8060 | 2.320508<br>0.8846 | 3.478505<br>0.9091 | 4.775184<br>0.8300 | 5.705771<br>0.8778 | 7.023959<br>0.8102 | 8.035534<br>0.8226 |
+| 12 | 6.656402<br>0.8508 | 2.356351<br>0.9358 | 3.535534<br>0.9600 | 4.792445<br>0.8989 | 5.776590<br>0.9343 | 7.139949<br>0.8554 | 8.190703<br>0.8637 |
+| 13 | 7.190416<br>0.7899 | 2.538946<br>0.8732 | **3.605551**<br>1.0000 | 5.224367<br>0.8195 | 6.276028<br>0.8575 | 7.702229<br>0.7963 | 8.704571<br>0.8284 |
+| 14 | 7.241690<br>0.8387 | 2.562178<br>0.9234 | 3.882901<br>0.9286 | 5.320280<br>0.8510 | 6.276028<br>0.9234 | 7.827717<br>0.8303 | 8.949747<br>0.8439 |
+| 15 | 7.276069<br>0.8901 | 2.621425<br>0.9452 | 4.000000<br>0.9375 | 5.388975<br>0.8886 | 6.302152<br>0.9812 | 7.881092<br>0.8776 | 8.997243<br>0.8947 |
+| 16 | 7.727407<br>0.8418 | 2.648812<br>0.9875 | **4.000000**<br>1.0000 | 5.552837<br>0.8928 | 6.928203<br>0.8660 | 8.223044<br>0.8599 | 9.525483<br>0.8514 |
 
 ### Hexagonal torus (score L)
 
-Certified score (rounded up), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
+Certified score (rounded to 6 decimals), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **2.000001**<br>0.9069 | **0.866026**<br>0.6667 | 1.154701<br>0.8660 | 1.573221<br>0.8027 | **1.732051**<br>1.0000 | 2.215388<br>0.8550 | 2.499378<br>0.8925 |
-| 2 | **3.464102**<br>0.6046 | **1.000001**<br>1.0000 | 2.000001<br>0.5774 | 2.503614<br>0.6339 | 3.000001<br>0.6667 | 3.732274<br>0.6025 | 4.266705<br>0.6125 |
-| 3 | **3.464102**<br>0.9069 | 1.401259<br>0.7639 | 2.000001<br>0.8660 | 2.616619<br>0.8705 | **3.000001**<br>1.0000 | 3.780347<br>0.8809 | 4.329050<br>0.8925 |
-| 4 | **4.000001**<br>0.9069 | 1.599948<br>0.7813 | 2.309402<br>0.8660 | 3.013138<br>0.8753 | **3.464102**<br>1.0000 | 4.368224<br>0.8796 | 4.998756<br>0.8925 |
-| 5 | 5.048676<br>0.7116 | 1.700841<br>0.8642 | 2.886752<br>0.6928 | 3.745645<br>0.7080 | 4.493572<br>0.7429 | 5.395121<br>0.7208 | 6.246890<br>0.7144 |
-| 6 | **5.291503**<br>0.7773 | **1.732051**<br>1.0000 | 3.000001<br>0.7698 | 3.907093<br>0.7808 | 4.582576<br>0.8571 | 5.747856<br>0.7620 | 6.556230<br>0.7782 |
-| 7 | **5.291503**<br>0.9069 | 1.963962<br>0.9074 | 3.000001<br>0.8981 | 3.963369<br>0.8853 | **4.582576**<br>1.0000 | 5.778922<br>0.8795 | 6.612733<br>0.8925 |
-| 8 | 6.000001<br>0.8061 | **2.000001**<br>1.0000 | 3.055051<br>0.9897 | 4.416366<br>0.8149 | 5.196153<br>0.8889 | 6.434735<br>0.8107 | 7.318687<br>0.8327 |
-| 9 | **6.000001**<br>0.9069 | 2.236068<br>0.9000 | 3.401681<br>0.8981 | 4.502288<br>0.8821 | **5.196153**<br>1.0000 | 6.544421<br>0.8817 | 7.498134<br>0.8925 |
-| 10 | 6.854069<br>0.7722 | 2.415329<br>0.8571 | 3.779645<br>0.8083 | 4.917678<br>0.8215 | 6.000001<br>0.8333 | 7.310701<br>0.7851 | 8.485114<br>0.7744 |
-| 11 | 6.928204<br>0.8313 | 2.500001<br>0.8800 | 4.000001<br>0.7939 | 5.146917<br>0.8249 | 6.000001<br>0.9167 | 7.539097<br>0.8121 | 8.642668<br>0.8211 |
-| 12 | **6.928204**<br>0.9069 | 2.596953<br>0.8897 | 4.000001<br>0.8660 | 5.192396<br>0.8842 | **6.000001**<br>1.0000 | 7.557439<br>0.8816 | 8.658099<br>0.8925 |
-| 13 | **7.211103**<br>0.9069 | 2.598077<br>0.9630 | 4.041452<br>0.9190 | 5.410898<br>0.8821 | **6.244998**<br>1.0000 | 7.862185<br>0.8825 | 9.011635<br>0.8925 |
-| 14 | 7.935884<br>0.8064 | **2.645752**<br>1.0000 | 4.041452<br>0.9897 | 5.750558<br>0.8411 | 6.928204<br>0.8750 | 8.474116<br>0.8181 | 9.728317<br>0.8248 |
-| 15 | 8.000001<br>0.8502 | 2.882307<br>0.9028 | 4.163332<br>0.9993 | 5.912064<br>0.8526 | 6.928204<br>0.9375 | 8.707971<br>0.8300 | 9.991605<br>0.8377 |
-| 16 | **8.000001**<br>0.9069 | 2.945942<br>0.9218 | 4.437602<br>0.9382 | 5.912064<br>0.9094 | **6.928204**<br>1.0000 | 8.723435<br>0.8822 | 9.997512<br>0.8925 |
+| 1 | **2.000000**<br>0.9069 | **0.866025**<br>0.6667 | 1.154701<br>0.8660 | 1.573220<br>0.8027 | **1.732051**<br>1.0000 | 2.215387<br>0.8550 | 2.499378<br>0.8925 |
+| 2 | **3.464102**<br>0.6046 | **1.000000**<br>1.0000 | 2.000000<br>0.5774 | 2.503613<br>0.6339 | 3.000000<br>0.6667 | 3.732274<br>0.6025 | 4.266705<br>0.6125 |
+| 3 | **3.464102**<br>0.9069 | 1.401259<br>0.7639 | 2.000000<br>0.8660 | 2.616618<br>0.8705 | **3.000000**<br>1.0000 | 3.780346<br>0.8809 | 4.329049<br>0.8925 |
+| 4 | **4.000000**<br>0.9069 | 1.599947<br>0.7813 | 2.309401<br>0.8660 | 3.013137<br>0.8753 | **3.464102**<br>1.0000 | 4.368224<br>0.8796 | 4.998756<br>0.8925 |
+| 5 | 5.048676<br>0.7116 | 1.700840<br>0.8642 | 2.886751<br>0.6928 | 3.745645<br>0.7080 | 4.493572<br>0.7429 | 5.395121<br>0.7208 | 6.246889<br>0.7144 |
+| 6 | **5.291503**<br>0.7773 | **1.732051**<br>1.0000 | 3.000000<br>0.7698 | 3.907092<br>0.7808 | 4.582576<br>0.8571 | 5.747856<br>0.7620 | 6.556230<br>0.7782 |
+| 7 | **5.291503**<br>0.9069 | 1.963961<br>0.9074 | 3.000000<br>0.8981 | 3.963368<br>0.8853 | **4.582576**<br>1.0000 | 5.778922<br>0.8795 | 6.612732<br>0.8925 |
+| 8 | 6.000000<br>0.8061 | **2.000000**<br>1.0000 | 3.055050<br>0.9897 | 4.416365<br>0.8149 | 5.196152<br>0.8889 | 6.434734<br>0.8107 | 7.318686<br>0.8327 |
+| 9 | **6.000000**<br>0.9069 | 2.236068<br>0.9000 | 3.401680<br>0.8981 | 4.502288<br>0.8821 | **5.196152**<br>1.0000 | 6.544421<br>0.8817 | 7.498133<br>0.8925 |
+| 10 | 6.854068<br>0.7722 | 2.413241<br>0.8586 | 3.779645<br>0.8083 | 4.917678<br>0.8215 | 6.000000<br>0.8333 | 7.310700<br>0.7851 | 8.485113<br>0.7744 |
+| 11 | 6.928203<br>0.8313 | 2.500000<br>0.8800 | 3.983153<br>0.8006 | 5.146917<br>0.8249 | 6.000000<br>0.9167 | 7.539097<br>0.8121 | 8.642667<br>0.8211 |
+| 12 | **6.928203**<br>0.9069 | 2.582838<br>0.8994 | 4.000000<br>0.8660 | 5.192395<br>0.8842 | **6.000000**<br>1.0000 | 7.557438<br>0.8816 | 8.658099<br>0.8925 |
+| 13 | **7.211103**<br>0.9069 | 2.598076<br>0.9630 | 4.041452<br>0.9190 | 5.410898<br>0.8821 | **6.244998**<br>1.0000 | 7.862184<br>0.8825 | 9.011635<br>0.8925 |
+| 14 | 7.935884<br>0.8064 | **2.645751**<br>1.0000 | 4.041452<br>0.9897 | 5.750557<br>0.8411 | 6.928203<br>0.8750 | 8.474115<br>0.8181 | 9.728316<br>0.8248 |
+| 15 | 8.000000<br>0.8502 | 2.882307<br>0.9028 | 4.163332<br>0.9993 | 5.912063<br>0.8526 | 6.928203<br>0.9375 | 8.707970<br>0.8300 | 9.991605<br>0.8377 |
+| 16 | **8.000000**<br>0.9069 | 2.884441<br>0.9615 | 4.437602<br>0.9382 | 5.912063<br>0.9094 | **6.928203**<br>1.0000 | 8.723434<br>0.8822 | 9.997511<br>0.8925 |
 
 ### Free lattice (score sqrt(cell area))
 
-Certified score (rounded up), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
+Certified score (rounded to 6 decimals), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **1.861210**<br>0.9069 | 0.805928<br>0.6667 | **1.000001**<br>1.0000 | 1.450927<br>0.8173 | **1.611855**<br>1.0000 | 2.055369<br>0.8602 | **2.308339**<br>0.9062 |
-| 2 | **2.632149**<br>0.9069 | **0.930605**<br>1.0000 | **1.414214**<br>1.0000 | **1.932576**<br>0.9213 | **2.279508**<br>1.0000 | 2.853329<br>0.8927 | **3.264484**<br>0.9062 |
-| 3 | **3.223710**<br>0.9069 | 1.231075<br>0.8571 | **1.732051**<br>1.0000 | 2.416617<br>0.8838 | **2.791815**<br>1.0000 | 3.516536<br>0.8816 | **3.998160**<br>0.9062 |
-| 4 | **3.722420**<br>0.9069 | **1.316075**<br>1.0000 | **2.000001**<br>1.0000 | **2.733075**<br>0.9213 | **3.223710**<br>1.0000 | 4.035216<br>0.8927 | **4.616678**<br>0.9062 |
-| 5 | **4.161792**<br>0.9069 | 1.543234<br>0.9091 | **2.236068**<br>1.0000 | 3.094331<br>0.8984 | **3.604218**<br>1.0000 | 4.528522<br>0.8860 | **5.161603**<br>0.9062 |
-| 6 | **4.559015**<br>0.9069 | **1.611855**<br>1.0000 | **2.449490**<br>1.0000 | **3.347319**<br>0.9213 | **3.948223**<br>1.0000 | 4.942110<br>0.8927 | **5.654252**<br>0.9062 |
-| 7 | **4.924299**<br>0.9069 | 1.802109<br>0.9333 | **2.645752**<br>1.0000 | 3.657910<br>0.9001 | **4.264568**<br>1.0000 | 5.364265<br>0.8840 | **6.107290**<br>0.9062 |
-| 8 | **5.264297**<br>0.9069 | **1.861210**<br>1.0000 | **2.828428**<br>1.0000 | **3.865151**<br>0.9213 | **4.559015**<br>1.0000 | 5.706657<br>0.8927 | **6.528968**<br>0.9062 |
-| 9 | **5.583630**<br>0.9069 | 2.028207<br>0.9474 | **3.000001**<br>1.0000 | 4.139026<br>0.9038 | **4.835565**<br>1.0000 | 6.075993<br>0.8859 | **6.925016**<br>0.9062 |
+| 1 | **1.861210**<br>0.9069 | 0.805927<br>0.6667 | **1.000000**<br>1.0000 | 1.450927<br>0.8173 | **1.611855**<br>1.0000 | 2.055369<br>0.8602 | **2.308339**<br>0.9062 |
+| 2 | **2.632148**<br>0.9069 | **0.930605**<br>1.0000 | **1.414214**<br>1.0000 | **1.932575**<br>0.9213 | **2.279507**<br>1.0000 | 2.853328<br>0.8927 | **3.264484**<br>0.9062 |
+| 3 | **3.223710**<br>0.9069 | 1.231075<br>0.8571 | **1.732051**<br>1.0000 | 2.416616<br>0.8838 | **2.791815**<br>1.0000 | 3.516536<br>0.8816 | **3.998160**<br>0.9062 |
+| 4 | **3.722419**<br>0.9069 | **1.316074**<br>1.0000 | **2.000000**<br>1.0000 | **2.733074**<br>0.9213 | **3.223710**<br>1.0000 | 4.035215<br>0.8927 | **4.616677**<br>0.9062 |
+| 5 | **4.161791**<br>0.9069 | 1.543234<br>0.9091 | **2.236068**<br>1.0000 | 3.094331<br>0.8984 | **3.604217**<br>1.0000 | 4.528521<br>0.8860 | **5.161602**<br>0.9062 |
+| 6 | **4.559014**<br>0.9069 | **1.611855**<br>1.0000 | **2.449490**<br>1.0000 | **3.347319**<br>0.9213 | **3.948222**<br>1.0000 | 4.942109<br>0.8927 | **5.654252**<br>0.9062 |
+| 7 | **4.924298**<br>0.9069 | 1.802109<br>0.9333 | **2.645751**<br>1.0000 | 3.657910<br>0.9001 | **4.264567**<br>1.0000 | 5.364265<br>0.8840 | **6.107290**<br>0.9062 |
+| 8 | **5.264296**<br>0.9069 | **1.861210**<br>1.0000 | **2.828427**<br>1.0000 | **3.865151**<br>0.9213 | **4.559014**<br>1.0000 | 5.706656<br>0.8927 | **6.528968**<br>0.9062 |
+| 9 | **5.583629**<br>0.9069 | 2.028206<br>0.9474 | **3.000000**<br>1.0000 | 4.139025<br>0.9038 | **4.835565**<br>1.0000 | 6.075992<br>0.8859 | **6.925016**<br>0.9062 |
 | 10 | **5.885662**<br>0.9069 | **2.080896**<br>1.0000 | **3.162278**<br>1.0000 | **4.321370**<br>0.9213 | **5.097133**<br>1.0000 | 6.380236<br>0.8927 | **7.299608**<br>0.9062 |
-| 11 | **6.172935**<br>0.9069 | 2.231513<br>0.9565 | **3.316625**<br>1.0000 | 4.558446<br>0.9108 | **5.345918**<br>1.0000 | 6.712678<br>0.8871 | **7.655894**<br>0.9062 |
-| 12 | **6.447420**<br>0.9069 | **2.279508**<br>1.0000 | **3.464102**<br>1.0000 | **4.733824**<br>0.9213 | **5.583630**<br>1.0000 | 6.989199<br>0.8927 | **7.996320**<br>0.9062 |
-| 13 | **6.710688**<br>0.9069 | 2.417783<br>0.9630 | **3.605552**<br>1.0000 | 4.951189<br>0.9124 | **5.811626**<br>1.0000 | 7.293997<br>0.8879 | **8.322834**<br>0.9062 |
-| 14 | **6.964010**<br>0.9069 | **2.462150**<br>1.0000 | **3.741658**<br>1.0000 | **5.113114**<br>0.9213 | **6.031009**<br>1.0000 | 7.549197<br>0.8927 | **8.637013**<br>0.9062 |
-| 15 | **7.208435**<br>0.9069 | 2.590695<br>0.9677 | **3.872984**<br>1.0000 | 5.314991<br>0.9136 | **6.242688**<br>1.0000 | 7.832289<br>0.8886 | **8.940157**<br>0.9062 |
-| 16 | **7.444839**<br>0.9069 | **2.632149**<br>1.0000 | **4.000001**<br>1.0000 | **5.466149**<br>0.9213 | **6.447420**<br>1.0000 | 8.070431<br>0.8927 | **9.233355**<br>0.9062 |
+| 11 | **6.172934**<br>0.9069 | 2.231512<br>0.9565 | **3.316625**<br>1.0000 | 4.558445<br>0.9108 | **5.345918**<br>1.0000 | 6.712677<br>0.8871 | **7.655893**<br>0.9062 |
+| 12 | **6.447420**<br>0.9069 | **2.279507**<br>1.0000 | **3.464102**<br>1.0000 | **4.733823**<br>0.9213 | **5.583629**<br>1.0000 | 6.989198<br>0.8927 | **7.996319**<br>0.9062 |
+| 13 | **6.710687**<br>0.9069 | 2.417782<br>0.9630 | **3.605551**<br>1.0000 | 4.951189<br>0.9124 | **5.811625**<br>1.0000 | 7.293997<br>0.8879 | **8.322833**<br>0.9062 |
+| 14 | **6.964009**<br>0.9069 | **2.462149**<br>1.0000 | **3.741657**<br>1.0000 | **5.113114**<br>0.9213 | **6.031009**<br>1.0000 | 7.549197<br>0.8927 | **8.637012**<br>0.9062 |
+| 15 | **7.208434**<br>0.9069 | 2.590694<br>0.9677 | **3.872983**<br>1.0000 | 5.314990<br>0.9136 | **6.242687**<br>1.0000 | 7.832288<br>0.8886 | **8.940157**<br>0.9062 |
+| 16 | **7.444839**<br>0.9069 | **2.632148**<br>1.0000 | **4.000000**<br>1.0000 | **5.466148**<br>0.9213 | **6.447420**<br>1.0000 | 8.070431<br>0.8927 | **9.233354**<br>0.9062 |
 
 **Beyond P = 16** (exact replications, `extend_torus.py`; every one attains its bound):
 
@@ -272,8 +294,7 @@ These are [EST] facts with the sources in §6; whether to mark any of them `prov
 ## 8. Limitations and open questions
 
 - The search is heuristic. Where no bound is attained (most `sq`/`hex` polygon entries and odd P for `free` triangles, pentagons and heptagons), values are best found, not optimal; budgets were modest (phase B scale 0.6, about 70–130 local solves for P = 16).
-- A few entries were still improving by about 1e-8 per polish round when polishing stopped (`hex/3/12`, `hex/7/11`, `sq/7/11`), so they are probably not exact local optima. The certificates are unaffected: they prove validity of the stored configuration, not optimality.
-- Phase B ran partly with the faulty superlattice enumeration, and phase S re-ran only the structured seeds with the fix. Random starts and hops never ran with the fixed lattice seeds for the early families (disks, triangles, squares and their `hex` counterparts).
+- The three records that were still creeping are now converged at a fixed contact set (see the rerun). The rerun found improvements of up to 2 % for triangles on the hexagonal torus, so other unbounded entries, especially for pentagons to octagons on `sq`/`hex`, may still improve with more search. The certificates prove validity, not optimality.
 - A few results are reproducible only up to timing effects: HiGHS solves have a 2 s limit, and failed child solves are dropped.
 - Three tilings never occur, so `hex/4`, `sq/6` and `sq/3` never reach density 1 (`hex/4/15` reaches 0.99926):
   - **Squares on the hexagonal torus.** [CALC] A tiling of the plane by unit squares has straight rows (or columns); we use this standard structure fact without proving it here. The projections k1, k2 of the hexagonal torus basis on the row normal would then be integers with k1² − k1k2 + k2² = √3 P/2, which is irrational.
@@ -286,9 +307,11 @@ These are [EST] facts with the sources in §6; whether to mark any of them `prov
 python3 python/torus/run_all.py --out data/torus/raw --phases A --scale 1.5
 python3 python/torus/run_all.py --out data/torus/raw --phases B,S,C --scale 0.6 --final-scale 0.3 --c-Ns 3,5,7
 python3 python/torus/polish_raw.py --raw data/torus/raw
+python3 python/torus/polish_raw.py --raw data/torus/raw --pattern hex_7_11.json --deep 200 --slsqp 60
 python3 python/torus/p1_bound.py data/torus/p1_bounds.json
 python3 python/torus/extend_torus.py --raw data/torus/raw --out data/torus/raw_ext --Pmax 49 --octagons
 python3 python/torus/build_records.py --raw data/torus/raw --raw-ext data/torus/raw_ext --out data/torus
+python3 python/torus/build_records.py --raw data/torus/raw --raw-ext data/torus/raw_ext --out data/torus --only-improve data/torus/records.json
 python3 python/torus/certify_torus.py data/torus/records.json
 python3 python/torus/test_certify_torus.py
 python3 python/torus/test_torus_tools.py

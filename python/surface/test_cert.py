@@ -17,7 +17,7 @@ sys.path.insert(0, HERE)
 
 import time  # noqa: E402
 
-from cert import CertError, certify, check_records, enumerate_chains, published_errors  # noqa: E402
+from cert import CertError, certify, check_records, display_6, enumerate_chains, published_errors  # noqa: E402
 from geom import SOLIDS, get_solid  # noqa: E402
 from numfield import KD, Q3  # noqa: E402
 
@@ -147,7 +147,20 @@ class KnownPackings(unittest.TestCase):
     def test_score_rounding(self):
         c = certify(rec("cube", "fold", 0, 2.0, [(f, 0.0, 0.0, 0.0) for f in range(6)]), "1e-9")
         self.assertGreaterEqual(Fr(c["score_cert"]), Fr(2) / (1 - Fr("1e-9")))
-        self.assertEqual(c["display"], "2.000001")
+        # display: score_cert rounded to the nearest at 6 decimals (not up), always 6 decimals
+        self.assertEqual(c["display"], "2.000000")
+
+    def test_display_rule(self):
+        from cert import display_6
+
+        self.assertEqual(display_6(2.000000000002), "2.000000")
+        self.assertEqual(display_6(1.0000000000010000), "1.000000")
+        self.assertEqual(display_6(1.4142135623746), "1.414214")
+        self.assertEqual(display_6(11.628054122871946), "11.628054")
+        self.assertEqual(display_6(0.5), "0.500000")
+        # decided on the exact binary64 value: 2.0000005 is slightly above the midpoint, 0.1234565 below
+        self.assertEqual(display_6(2.0000005), "2.000001")
+        self.assertEqual(display_6(0.1234565), "0.123456")
 
 
 class Adversarial(unittest.TestCase):
@@ -321,7 +334,9 @@ class ReviewFixtures(unittest.TestCase):
         for r in load(HERE, "fixtures", "review", "constructions_records.json")["records"]:
             c = certify(r, r["eps"])
             self.assertEqual(c["score_cert"], r["score_cert"], r["id"])
-            self.assertEqual(c["display"], r["display"], r["id"])
+            # the fixture's display strings follow the old round-up rule (e.g. "0.500001"); the
+            # display rule changed on 2026-10-24 to nearest, so only score_cert is compared here
+            self.assertEqual(c["display"], display_6(r["score_cert"]), r["id"])
 
 
 class RecordsFile(unittest.TestCase):
@@ -343,9 +358,7 @@ class RecordsFile(unittest.TestCase):
             self.assertEqual(r["status"], "best_known")
             self.assertEqual(len(r["pieces"]), r["P"])
             self.assertGreaterEqual(Fr(r["score_cert"]), Fr(r["score_float"]) / (1 - Fr(r["eps"])))
-            q = Fr(r["score_cert"]) * 10 ** 6
-            n = q.numerator // q.denominator + (1 if q.numerator % q.denominator else 0)
-            self.assertEqual(r["display"], "%d.%06d" % (n // 10 ** 6, n % 10 ** 6), r["id"])
+            self.assertEqual(r["display"], display_6(r["score_cert"]), r["id"])
             self.assertGreaterEqual(r["score_cert"], r["bound"]["value"] * (1 - 1e-12), r["id"])
             if key[1] == "fold" and (key[0], "nofold", key[2], key[3]) in recs:
                 self.assertLessEqual(r["score_cert"], recs[(key[0], "nofold", key[2], key[3])]["score_cert"], r["id"])

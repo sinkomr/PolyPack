@@ -119,7 +119,7 @@ small, .muted { color:var(--muted); }
 <body>
 <main>
 <h1>PolyPack pieces on flat tori</h1>
-<p class="lede">P congruent pieces (disks of radius 1, regular polygons of side 1) packed on a square torus, a hexagonal torus or a torus with any lattice. Pieces may touch; interiors of all pieces and their lattice translates are disjoint. Every number is certified with interval arithmetic and rounded up. Green: equal to a lower bound.</p>
+<p class="lede">P congruent pieces (disks of radius 1, regular polygons of side 1) packed on a square torus, a hexagonal torus or a torus with any lattice. Pieces may touch; interiors of all pieces and their lattice translates are disjoint. Every score is certified with interval arithmetic and shown rounded to 6 decimals. Green: equal to a lower bound.</p>
 <div class="controls">
   <div class="seg" id="fam" role="group" aria-label="torus family"></div>
   <label>Shape <select id="shape"></select></label>

@@ -58,7 +58,7 @@ def published(K, N, M, size, poses, **extra):
         "P": len(poses),
         "config": {"size": size, "pieces": [{"x": x, "y": y, "theta": t} for (x, y, t) in poses]},
         "score_cert": size,
-        "display": certify.display_up(size),
+        "display": certify.display_nearest(size),
     }
     r.update(extra)
     return r
@@ -270,13 +270,15 @@ class ReviewRegressions(unittest.TestCase):
         r = base()
         r.pop("id")
         self.assertFalse(ok(r))
-        # score_cert required and equal to the size; display = score_cert rounded up at 6 decimals
+        # score_cert required and equal to the size; display = score_cert rounded to the nearest at 6 decimals
         r = base()
         r.pop("score_cert")
         self.assertFalse(ok(r))
         self.assertFalse(ok(base(score_cert=1.4)))
         self.assertFalse(ok(base(display="0.000001")))
         self.assertFalse(ok(base(display="1.499999")))
+        self.assertFalse(ok(base(display="1.500001")))  # the former rounded-up form is rejected
+        self.assertTrue(ok(base(display="1.500000")))
         r = base()
         r.pop("display")
         self.assertFalse(ok(r))
@@ -295,6 +297,23 @@ class ReviewRegressions(unittest.TestCase):
             self.assertFalse(ok(r2))
             r3 = dict(r, id="curved/-1/3/4/8")
             self.assertFalse(ok(r3))
+
+    def test_display_rounds_to_nearest(self):
+        # display = score_cert rounded to the NEAREST at 6 decimals (ties to even), from the exact binary64 value
+        d = certify.display_nearest
+        self.assertEqual(d(1.0000000000400), "1.000000")
+        self.assertEqual(d(2.8284271247490187), "2.828427")
+        self.assertEqual(d(1.0), "1.000000")
+        self.assertEqual(d(math.nextafter(1.0, 2.0)), "1.000000")
+        self.assertEqual(d(3), "3.000000")
+        self.assertEqual(d(2.9999995000001), "3.000000")
+        self.assertEqual(d(2.9999994999999), "2.999999")
+        # exact binary64 ties: 1/128 = 0.0078125 and 3/128 = 0.0234375 go to the even neighbour
+        self.assertEqual(d(1 / 128), "0.007812")
+        self.assertEqual(d(3 / 128), "0.023438")
+        for bad in (-1e-9, float("nan"), float("inf"), True, "1.0"):
+            with self.assertRaises(certify.CertError):
+                d(bad)
 
     def test_crashes_become_rejections(self):
         big = 10**400

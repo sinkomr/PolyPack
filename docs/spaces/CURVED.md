@@ -61,7 +61,7 @@ A line at signed distance h from O with outward normal angle a is the covector n
 - for K > 0: the unit piece exists (√K < 2π/N, decided as (2π/N)² − K > 0), the container lies in an open hemisphere (K s² < (2π/M)² for polygons, K r² < (π/2)² for disks; without the polygon check a side near 4πk/√K would wrap around to a smaller polygon), and every vertex and centre has v0 > 0;
 - containment: n_k·v < 0 for every vertex and wall; sn_K(signed distance) < −sn_K(1) for disk centres; vs_K(d(O, v)) < vs_K(r) (or vs_K(r − 1)) in disk containers;
 - pairs: a stored witness (edge `edge` of piece `owner`) with the owner's other vertices on n·v < 0 and all vertices of the other piece on n·v > 0, or circumscribed disks disjoint (vs_K(d) > vs_K(2R) = 2 sn_K(R)²), or for disks vs_K(d) > vs_K(2). Without a witness, or if it fails, every axis is tried.
-For a published record it first checks the record itself: id = curved/K/N/M/P (optionally followed by `#tag`, as the sweep does for branches), `K_exact` (if present) equal to `K`, `score_cert` present and equal to the size of the published `config`, and `display` equal to `score_cert` rounded up at 6 decimals; it then certifies `config` (and `config_cert` too, if a record carries a different one). Angles are reduced modulo 2π with the rigorous π before the series, so large θ is handled. It rejects malformed input (wrong P, NaN, ∞, numbers outside the binary64 range, non-integer or out-of-range N or M, size ≤ 0, containers beyond the hemisphere, non-existent pieces, records that are not objects) without crashing, and the command line keeps going and reports every failure.
+For a published record it first checks the record itself: id = curved/K/N/M/P (optionally followed by `#tag`, as the sweep does for branches), `K_exact` (if present) equal to `K`, `score_cert` present and equal to the size of the published `config`, and `display` equal to `score_cert` rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value); it then certifies `config` (and `config_cert` too, if a record carries a different one). Angles are reduced modulo 2π with the rigorous π before the series, so large θ is handled. It rejects malformed input (wrong P, NaN, ∞, numbers outside the binary64 range, non-integer or out-of-range N or M, size ≤ 0, containers beyond the hemisphere, non-existent pieces, records that are not objects) without crashing, and the command line keeps going and reports every failure.
 
 **Margin re-solve.** Curved spaces have no similarity, so the PolyPack scaling trick does not apply. The touching optimum (`score_float`) is re-polished with every gap ≥ μ (μ = 4·10⁻¹¹, smaller where s is very sensitive to the apothem), and the resulting size is `score_cert`, at which the stored configuration is certified with clearance about μ. Over all 299 records `score_cert − score_float` is at most 1.7·10⁻¹⁰ relative (median 4·10⁻¹¹). In 26 degenerate cases the margin re-solve found a slightly better configuration than the float polish; there `score_float` is set to `score_cert` and the record says so.
 
@@ -87,78 +87,78 @@ Search method: random starts in a roomy container; penalty compression (L-BFGS o
 
 ## 4. Tables
 
-All values are `display` = score_cert rounded up at 6 decimals; every listed packing is certified (`data/curved/certification.json`). Status is `best_known` throughout [CALC]; records also carry `score_float` (touching limit), a rigorous lower bound (`bound`), the Euclidean record for comparison, ds/dK and its multiplier range, seed and budget. Searches: seed 1, 6 restarts × 25 hops for polygon containers, 5 × 20 for disk containers, each P warm-started from P − 1, one retry with a doubled budget before a P counted as "not found"; total about 3 hours on two processes at nice 10 on a heavily shared machine.
+All values are `display` = score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value; a certified upper bound is score_cert itself, kept at full precision in the records); every listed packing is certified (`data/curved/certification.json`). Status is `best_known` throughout [CALC]; records also carry `score_float` (touching limit), a rigorous lower bound (`bound`), the Euclidean record for comparison, ds/dK and its multiplier range, seed and budget. Searches: seed 1, 6 restarts × 25 hops for polygon containers, 5 × 20 for disk containers, each P warm-started from P − 1, one retry with a doubled budget before a P counted as "not found"; total about 3 hours on two processes at nice 10 on a heavily shared machine.
 
 Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is the container; the inradius bound gives s ≥ 1); one disk needs exactly the container with inradius 1 (bound attained); two disks in a disk need r = 2 (both centres within r − 1 of O, 2 apart); at K = −1 ten disks fit in r = 3 exactly (nine around one, best found).
 
-#### K = -1: certified sizes s(P) (rounded up), P = 1, 2, ...
+#### K = -1: certified sizes s(P) (score_cert rounded to 6 decimals), P = 1, 2, ...
 
 | N \\ M | container | values |
 |---|---|---|
-| disk | disk | 1: 1.000001, 2: 2.000001, 3: 2.112736, 4: 2.281385, 5: 2.443355, 6: 2.590193, 7: 2.722022, 8: 2.840647, 9: 2.948005, 10: 3.000001, 11: 3.045800, 12: 3.135452, 13: 3.218124, 14: 3.294768, 15: 3.366166, 16: 3.432963, 17: 3.495699, 18: 3.554825, 19: 3.610725, 20: 3.663725, 21: 3.714106, 22: 3.762109, 23: 3.807947, 24: 3.851802, 25: 3.893838, 26: 3.934198, 27: 3.957884, 28: 3.975286, 29: 4.010382, 30: 4.046422 |
+| disk | disk | 1: 1.000000, 2: 2.000000, 3: 2.112735, 4: 2.281385, 5: 2.443354, 6: 2.590192, 7: 2.722022, 8: 2.840647, 9: 2.948004, 10: 3.000000, 11: 3.045799, 12: 3.135451, 13: 3.218124, 14: 3.294768, 15: 3.366166, 16: 3.432963, 17: 3.495699, 18: 3.554825, 19: 3.610725, 20: 3.663725, 21: 3.714105, 22: 3.762109, 23: 3.807946, 24: 3.851802, 25: 3.893838, 26: 3.934197, 27: 3.957884, 28: 3.975285, 29: 4.010382, 30: 4.046422 |
 | disk | 5-gon | 1: 2.540266 |
-| disk | 6-gon | 1: 1.652669 |
+| disk | 6-gon | 1: 1.652668 |
 | disk | 8-gon | 1: 1.063675 |
-| triangle | disk | 1: 0.570290, 2: 0.834026, 3: 0.932051, 4: 0.967040, 5: 0.992486, 6: 1.000001, 7: 1.016615, 8: 1.115510, 9: 1.207773, 10: 1.249683, 11: 1.306227, 12: 1.374282 |
-| triangle | 3-gon | 1: 1.000001, 2: 3.594700 |
-| triangle | 4-gon | 1: 1.000001, 2: 1.240070, 3: 1.674709, 4: 1.949225, 5: 1.981454, 6: 2.843791, 7: 4.286247 |
-| triangle | 5-gon | 1: 0.843024, 2: 1.098573, 3: 1.234509, 4: 1.348016, 5: 1.552143, 6: 1.847531, 7: 1.965827, 8: 2.147089, 9: 2.297768, 10: 2.387893, 11: 2.767381, 12: 3.109604, 13: 3.817300 |
-| triangle | 6-gon | 1: 0.592983, 2: 0.903129, 3: 1.038830, 4: 1.102341, 5: 1.158887, 6: 1.199213, 7: 1.559220, 8: 1.724149, 9: 1.882525, 10: 1.942396, 11: 2.006672, 12: 2.207072, 13: 2.410356, 14: 2.549220, 15: 2.649973, 16: 2.662907, 17: 3.410023, 18: 3.885671, 19: 5.003811 |
-| triangle | 8-gon | 1: 0.489555, 2: 0.700544, 3: 0.825318, 4: 0.854190, 5: 0.931469, 6: 0.954101, 7: 0.975572, 8: 1.000001, 9: 1.205219, 10: 1.318218, 11: 1.463486, 12: 1.583596, 13: 1.707685, 14: 1.802339, 15: 1.868380, 16: 1.942748, 17: 1.989460, 18: 2.056760, 19: 2.218354, 20: 2.378573, 21: 2.530984, 22: 2.633464, 23: 2.802496, 24: 2.848648, 25: 3.101038, 26: 3.294997, 27: 3.813693, 28: 4.169243, 29: 4.396216 |
-| square | disk | 1: 0.682667, 2: 1.054332, 3: 1.226552, 4: 1.333569, 5: 1.427402, 6: 1.572472, 7: 1.632291, 8: 1.712553, 9: 1.799097, 10: 1.881537, 11: 1.928133, 12: 1.983350 |
-| square | 4-gon | 1: 1.000001 |
-| square | 5-gon | 1: 0.979762, 2: 2.175862, 3: 2.462656, 4: 2.615087, 5: 2.898805 |
-| square | 6-gon | 1: 0.856117, 2: 1.348684, 3: 1.619232, 4: 2.117992, 5: 2.316920, 6: 2.474470 |
-| square | 8-gon | 1: 0.556809, 2: 0.960456, 3: 1.187279, 4: 1.299436, 5: 1.712315, 6: 2.038421, 7: 2.107385, 8: 2.177821, 9: 2.246180 |
-| pentagon | disk | 1: 0.798829, 2: 1.398320, 3: 1.493455, 4: 1.547386, 5: 1.735712, 6: 1.895273, 7: 2.022252, 8: 2.069616 |
-| pentagon | 4-gon | 1: 2.254011 |
-| pentagon | 5-gon | 1: 1.000001 |
-| pentagon | 6-gon | 1: 0.974861, 2: 2.239597, 3: 6.634000 |
-| pentagon | 8-gon | 1: 0.754510, 2: 1.349878, 3: 1.876197, 4: 2.205046, 5: 5.356535 |
-| hexagon | disk | 1: 0.910895, 2: 1.597895, 3: 1.767466, 4: 1.913846, 5: 2.087447, 6: 2.219236, 7: 2.321730, 8: 2.404012, 9: 2.473323, 10: 2.553216 |
+| triangle | disk | 1: 0.570290, 2: 0.834025, 3: 0.932050, 4: 0.967039, 5: 0.992486, 6: 1.000000, 7: 1.016615, 8: 1.115510, 9: 1.207773, 10: 1.249682, 11: 1.306227, 12: 1.374281 |
+| triangle | 3-gon | 1: 1.000000, 2: 3.594700 |
+| triangle | 4-gon | 1: 1.000000, 2: 1.240070, 3: 1.674709, 4: 1.949225, 5: 1.981453, 6: 2.843790, 7: 4.286247 |
+| triangle | 5-gon | 1: 0.843023, 2: 1.098573, 3: 1.234508, 4: 1.348015, 5: 1.552143, 6: 1.847531, 7: 1.965826, 8: 2.147089, 9: 2.297767, 10: 2.387892, 11: 2.767381, 12: 3.109604, 13: 3.817299 |
+| triangle | 6-gon | 1: 0.592983, 2: 0.903128, 3: 1.038830, 4: 1.102341, 5: 1.158886, 6: 1.199212, 7: 1.559220, 8: 1.724149, 9: 1.882524, 10: 1.942396, 11: 2.006671, 12: 2.207071, 13: 2.410355, 14: 2.549220, 15: 2.649973, 16: 2.662906, 17: 3.410023, 18: 3.885671, 19: 5.003810 |
+| triangle | 8-gon | 1: 0.489555, 2: 0.700543, 3: 0.825317, 4: 0.854190, 5: 0.931469, 6: 0.954101, 7: 0.975572, 8: 1.000000, 9: 1.205218, 10: 1.318218, 11: 1.463486, 12: 1.583595, 13: 1.707684, 14: 1.802338, 15: 1.868379, 16: 1.942748, 17: 1.989459, 18: 2.056760, 19: 2.218353, 20: 2.378572, 21: 2.530984, 22: 2.633464, 23: 2.802496, 24: 2.848648, 25: 3.101038, 26: 3.294997, 27: 3.813693, 28: 4.169243, 29: 4.396215 |
+| square | disk | 1: 0.682666, 2: 1.054331, 3: 1.226551, 4: 1.333568, 5: 1.427402, 6: 1.572471, 7: 1.632291, 8: 1.712552, 9: 1.799096, 10: 1.881536, 11: 1.928132, 12: 1.983350 |
+| square | 4-gon | 1: 1.000000 |
+| square | 5-gon | 1: 0.979761, 2: 2.175862, 3: 2.462656, 4: 2.615087, 5: 2.898805 |
+| square | 6-gon | 1: 0.856117, 2: 1.348683, 3: 1.619232, 4: 2.117991, 5: 2.316920, 6: 2.474469 |
+| square | 8-gon | 1: 0.556809, 2: 0.960456, 3: 1.187279, 4: 1.299436, 5: 1.712314, 6: 2.038421, 7: 2.107384, 8: 2.177821, 9: 2.246180 |
+| pentagon | disk | 1: 0.798829, 2: 1.398319, 3: 1.493454, 4: 1.547386, 5: 1.735711, 6: 1.895273, 7: 2.022252, 8: 2.069616 |
+| pentagon | 4-gon | 1: 2.254010 |
+| pentagon | 5-gon | 1: 1.000000 |
+| pentagon | 6-gon | 1: 0.974860, 2: 2.239596, 3: 6.633999 |
+| pentagon | 8-gon | 1: 0.754510, 2: 1.349877, 3: 1.876196, 4: 2.205045, 5: 5.356534 |
+| hexagon | disk | 1: 0.910894, 2: 1.597895, 3: 1.767466, 4: 1.913845, 5: 2.087447, 6: 2.219235, 7: 2.321730, 8: 2.404011, 9: 2.473322, 10: 2.553216 |
 | hexagon | 4-gon | 1: 4.252460 |
 | hexagon | 5-gon | 1: 1.782123 |
-| hexagon | 6-gon | 1: 1.000001 |
+| hexagon | 6-gon | 1: 1.000000 |
 | hexagon | 8-gon | 1: 0.905338, 2: 2.507479, 3: 3.702222 |
-| octagon | disk | 1: 1.115510, 2: 2.046423, 3: 2.222714, 4: 2.398281, 5: 2.560481, 6: 2.690682, 7: 2.834433, 8: 2.951490 |
+| octagon | disk | 1: 1.115510, 2: 2.046423, 3: 2.222714, 4: 2.398280, 5: 2.560481, 6: 2.690682, 7: 2.834433, 8: 2.951490 |
 | octagon | 5-gon | 1: 3.920113 |
-| octagon | 6-gon | 1: 2.028032 |
-| octagon | 8-gon | 1: 1.000001 |
+| octagon | 6-gon | 1: 2.028031 |
+| octagon | 8-gon | 1: 1.000000 |
 
-#### K = 1: certified sizes s(P) (rounded up), P = 1, 2, ...
+#### K = 1: certified sizes s(P) (score_cert rounded to 6 decimals), P = 1, 2, ...
 
 | N \\ M | container | values |
 |---|---|---|
-| disk | disk | 1: 1.000001 |
-| disk | 3-gon | 1: 1.938894 |
-| disk | 4-gon | 1: 1.399044 |
+| disk | disk | 1: 1.000000 |
+| disk | 3-gon | 1: 1.938893 |
+| disk | 4-gon | 1: 1.399043 |
 | disk | 5-gon | 1: 1.097468 |
-| disk | 6-gon | 1: 0.904485 |
+| disk | 6-gon | 1: 0.904484 |
 | disk | 8-gon | 1: 0.670763 |
-| triangle | disk | 1: 0.586673, 2: 0.907559, 3: 0.975932, 4: 1.000001, 5: 1.000001, 6: 1.244336, 7: 1.280832, 8: 1.403256, 9: 1.491761, 10: 1.560514 |
-| triangle | 3-gon | 1: 1.000001, 2: 1.728493, 3: 1.736194, 4: 1.882765, 5: 1.916475, 6: 1.991416, 7: 2.010640, 8: 2.074257, 9: 2.089148, 10: 2.094286 |
-| triangle | 4-gon | 1: 0.914421, 2: 1.182026, 3: 1.280681, 4: 1.316079, 5: 1.366961, 6: 1.491433, 7: 1.517499, 8: 1.549537, 9: 1.565879, 10: 1.570722 |
-| triangle | 5-gon | 1: 0.729466, 2: 1.003879, 3: 1.027908, 4: 1.037940, 5: 1.039688, 6: 1.197852, 7: 1.210201, 8: 1.240642, 9: 1.253136, 10: 1.256575 |
-| triangle | 6-gon | 1: 0.560918, 2: 0.809963, 3: 0.868360, 4: 0.883146, 5: 0.890947, 6: 0.986996, 7: 0.999330, 8: 1.032180, 9: 1.044191, 10: 1.047144 |
-| triangle | 8-gon | 1: 0.441898, 2: 0.612648, 3: 0.649779, 4: 0.661540, 5: 0.668269, 6: 0.744997, 7: 0.753889, 8: 0.774726, 9: 0.783019, 10: 0.785358 |
-| square | disk | 1: 0.745053, 2: 1.209209, 3: 1.436811 |
-| square | 3-gon | 1: 1.646958, 2: 2.000426, 3: 2.075760 |
-| square | 4-gon | 1: 1.000001, 2: 1.477479, 3: 1.557631 |
-| square | 5-gon | 1: 0.883222, 2: 1.184039, 3: 1.246253 |
-| square | 6-gon | 1: 0.733399, 2: 0.974377, 3: 1.038454 |
-| square | 8-gon | 1: 0.524933, 2: 0.735629, 3: 0.778635 |
-| pentagon | disk | 1: 0.953848 |
+| triangle | disk | 1: 0.586672, 2: 0.907559, 3: 0.975932, 4: 1.000000, 5: 1.000000, 6: 1.244336, 7: 1.280832, 8: 1.403255, 9: 1.491760, 10: 1.560514 |
+| triangle | 3-gon | 1: 1.000000, 2: 1.728493, 3: 1.736194, 4: 1.882764, 5: 1.916475, 6: 1.991416, 7: 2.010640, 8: 2.074257, 9: 2.089147, 10: 2.094285 |
+| triangle | 4-gon | 1: 0.914420, 2: 1.182026, 3: 1.280680, 4: 1.316078, 5: 1.366961, 6: 1.491433, 7: 1.517498, 8: 1.549537, 9: 1.565878, 10: 1.570721 |
+| triangle | 5-gon | 1: 0.729465, 2: 1.003879, 3: 1.027907, 4: 1.037939, 5: 1.039687, 6: 1.197851, 7: 1.210201, 8: 1.240642, 9: 1.253136, 10: 1.256575 |
+| triangle | 6-gon | 1: 0.560917, 2: 0.809963, 3: 0.868360, 4: 0.883145, 5: 0.890946, 6: 0.986996, 7: 0.999330, 8: 1.032180, 9: 1.044191, 10: 1.047144 |
+| triangle | 8-gon | 1: 0.441898, 2: 0.612648, 3: 0.649779, 4: 0.661539, 5: 0.668269, 6: 0.744996, 7: 0.753888, 8: 0.774725, 9: 0.783018, 10: 0.785358 |
+| square | disk | 1: 0.745052, 2: 1.209208, 3: 1.436811 |
+| square | 3-gon | 1: 1.646957, 2: 2.000425, 3: 2.075759 |
+| square | 4-gon | 1: 1.000000, 2: 1.477478, 3: 1.557631 |
+| square | 5-gon | 1: 0.883221, 2: 1.184039, 3: 1.246252 |
+| square | 6-gon | 1: 0.733399, 2: 0.974376, 3: 1.038454 |
+| square | 8-gon | 1: 0.524933, 2: 0.735629, 3: 0.778634 |
+| pentagon | disk | 1: 0.953847 |
 | pentagon | 3-gon | 1: 1.885017 |
 | pentagon | 4-gon | 1: 1.342108 |
-| pentagon | 5-gon | 1: 1.000001 |
-| pentagon | 6-gon | 1: 0.868310 |
-| pentagon | 8-gon | 1: 0.649577 |
-| hexagon | disk | 1: 1.282928 |
+| pentagon | 5-gon | 1: 1.000000 |
+| pentagon | 6-gon | 1: 0.868309 |
+| pentagon | 8-gon | 1: 0.649576 |
+| hexagon | disk | 1: 1.282927 |
 | hexagon | 3-gon | 1: 2.045876 |
 | hexagon | 4-gon | 1: 1.525907 |
-| hexagon | 5-gon | 1: 1.212645 |
-| hexagon | 6-gon | 1: 1.000001 |
-| hexagon | 8-gon | 1: 0.755649 |
+| hexagon | 5-gon | 1: 1.212644 |
+| hexagon | 6-gon | 1: 1.000000 |
+| hexagon | 8-gon | 1: 0.755648 |
 
 #### Catalogue (polygon containers)
 

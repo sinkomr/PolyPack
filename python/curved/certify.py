@@ -27,6 +27,7 @@ import json
 import math
 import re
 import sys
+from decimal import ROUND_HALF_EVEN, Decimal
 from fractions import Fraction
 
 from mpmath import iv
@@ -92,13 +93,15 @@ def _shape_code(n, what):
     return n
 
 
-def display_up(x):
-    """Score rounded UP at 6 decimals, as a string (exact: x is read as its binary64 value)."""
-    f = Fraction(x)
-    n = math.ceil(f * 10**6)
-    if n < 0:
+def display_nearest(x):
+    """Score rounded to the NEAREST at 6 decimals (ties to even), always 6 decimals, as a string.
+    Exact: x is read as its binary64 value (Decimal(float) is exact), e.g. 1.0000000000400 -> "1.000000",
+    2.8284271247490187 -> "2.828427", 1/128 = 0.0078125 -> "0.007812"."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x):
+        raise CertError("score must be a finite number")
+    if x < 0:
         raise CertError("negative score")
-    return f"{n // 10**6}.{n % 10**6:06d}"
+    return str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN))
 
 
 def problem_id(K, N, M, P):
@@ -257,7 +260,7 @@ def certify_record(rec, use_witnesses=True):
     """Certify one PUBLISHED record of data/curved/records.json. Returns {certified: bool, ...}.
 
     Checks the record's own consistency (id = curved/K/N/M/P, K_exact equal to K, score_cert equal
-    to the size of `config`, display = score_cert rounded up at 6 decimals) and then proves the
+    to the size of `config`, display = score_cert rounded to the nearest at 6 decimals) and then proves the
     published `config` (and `config_cert`, if a record carries one) strictly valid. Never raises."""
     return _guard(_certify_published, rec, use_witnesses)
 
@@ -311,8 +314,8 @@ def _certify_published(rec, use_witnesses):
     if "score_cert" not in rec:
         raise CertError("missing score_cert")
     score = _finite_float(rec["score_cert"], "score_cert")
-    if rec.get("display") != display_up(score):
-        raise CertError(f"display must be {display_up(score)} (score_cert rounded up at 6 decimals)")
+    if rec.get("display") != display_nearest(score):
+        raise CertError(f"display must be {display_nearest(score)} (score_cert rounded to the nearest at 6 decimals)")
     wl = None
     if use_witnesses:
         wl = rec.get("witnesses")

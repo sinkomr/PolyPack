@@ -18,8 +18,7 @@ import {
   parseHash,
   plainBoundLabel,
   problemStatus,
-  roundDown6,
-  roundUp6,
+  round6,
   sentence,
   settleFilters,
   shownFields,
@@ -182,10 +181,10 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
       tr.append(el("td", String(p.P), "num"));
       tr.append(el("td", p.certified ? p.certified.display : "—", "num"));
       tr.append(el("td", statusLabel(problemStatus(p)), "state"));
-      const bound = el("td", p.bound ? minus(roundDown6(p.bound.value)) : "—", "num");
+      const bound = el("td", p.bound ? minus(round6(p.bound.value)) : "—", "num");
       if (p.bound?.label) bound.append(el("span", plainBoundLabel(p.bound.label), "cell-why"));
       tr.append(bound);
-      const site = el("td", p.site_best ? roundUp6(p.site_best.score) : "—", "num");
+      const site = el("td", p.site_best ? round6(p.site_best.score) : "—", "num");
       if (siteBelowCertified(p)) site.append(" ", el("span", "below certified", "badge"));
       tr.append(site);
       // a name is only ever inserted as text

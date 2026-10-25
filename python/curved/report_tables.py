@@ -23,7 +23,7 @@ def main():
     for r in recs:
         by.setdefault((r["K"], r["N"], r["M"]), []).append(r)
     for K in (-1, 1):
-        print(f"\n#### K = {K}: certified sizes s(P) (rounded up), P = 1, 2, ...\n")
+        print(f"\n#### K = {K}: certified sizes s(P) (score_cert rounded to 6 decimals), P = 1, 2, ...\n")
         print("| N \\\\ M | container | values |")
         print("|---|---|---|")
         for key in sorted(k for k in by if k[0] == K):

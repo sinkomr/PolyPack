@@ -12,16 +12,30 @@ from decimal import Decimal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import literature_torus as LIT  # noqa: E402
 import p1_bound  # noqa: E402
-from build_records import display_up  # noqa: E402
+from build_records import display  # noqa: E402
 
 
 class Display(unittest.TestCase):
-    def test_rounds_up(self):
-        self.assertEqual(display_up(1.0), "1.000000")
-        self.assertEqual(display_up(1.0000000000001), "1.000001")
-        self.assertEqual(display_up(2.4166164921352), "2.416617")
-        x = 3.8637033051562737
-        self.assertGreaterEqual(Decimal(display_up(x)), Decimal(x))
+    def test_rounds_to_nearest_six_decimals(self):
+        self.assertEqual(display(1.0), "1.000000")
+        self.assertEqual(display(2.000000000002), "2.000000")
+        self.assertEqual(display(1.0000000000001), "1.000000")
+        self.assertEqual(display(2.4166164921352), "2.416616")
+        self.assertEqual(display(2.4166165), "2.416616")  # its binary value is just below the tie
+        self.assertEqual(display(2.41661650000001), "2.416617")
+        self.assertEqual(display(3.8637033051562737), "3.863703")
+
+    def test_exact_binary_ties_go_to_even(self):
+        # 1/128 = 0.0078125 is an exact binary64 tie at 6 decimals
+        self.assertEqual(display(0.0078125), "0.007812")
+        self.assertEqual(display(1.0078125), "1.007812")
+        self.assertEqual(display(1.0234375), "1.023438")
+
+    def test_always_six_decimals(self):
+        x = 7.190416372301467
+        d = display(x)
+        self.assertEqual(len(d.split(".")[1]), 6)
+        self.assertLessEqual(abs(Decimal(d) - Decimal(x)), Decimal("0.0000005"))
 
 
 class P1Bounds(unittest.TestCase):

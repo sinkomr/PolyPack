@@ -9,7 +9,7 @@
   "score": "s (M >= 3) or r (M = 0); smaller is better",
   "score_float": "touching limit found by the search (float64 polish)",
   "score_cert": "size at which the stored configuration `config` is proven valid with strictly positive clearance",
-  "display": "score_cert rounded up at 6 decimals"
+  "display": "score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value)"
  },
  "catalogue": [
   {
@@ -1054,7 +1054,7 @@
    "score_cert": 1.0000000000170126,
    "cert_minus_float": 1.70130576293559e-11,
    "cert_minus_float_relative": 1.7013057629355905e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1237,7 +1237,7 @@
    "score_cert": 1.0000000000395772,
    "cert_minus_float": 3.9493519565780844e-11,
    "cert_minus_float_relative": 3.9493519565777535e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1311,7 +1311,7 @@
    "score_cert": 1.938893014939936,
    "cert_minus_float": 2.3963275808114304e-11,
    "cert_minus_float_relative": 1.2359256350796034e-11,
-   "display": "1.938894",
+   "display": "1.938893",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1385,7 +1385,7 @@
    "score_cert": 1.399043288722345,
    "cert_minus_float": 2.5305757489491043e-11,
    "cert_minus_float_relative": 1.8087901706786264e-11,
-   "display": "1.399044",
+   "display": "1.399043",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1533,7 +1533,7 @@
    "score_cert": 0.9044844501669184,
    "cert_minus_float": 2.0190293881228172e-11,
    "cert_minus_float_relative": 2.232243337953775e-11,
-   "display": "0.904485",
+   "display": "0.904484",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1677,7 +1677,7 @@
    "score_cert": 0.5866724216486153,
    "cert_minus_float": 3.999989228731238e-11,
    "cert_minus_float_relative": 6.818096575536212e-11,
-   "display": "0.586673",
+   "display": "0.586672",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -1959,7 +1959,7 @@
    "score_cert": 1.0000000000673988,
    "cert_minus_float": 6.739830915591938e-11,
    "cert_minus_float_relative": 6.739830915591935e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -2106,7 +2106,7 @@
    "score_cert": 1.0000000000686644,
    "cert_minus_float": 6.866396340399206e-11,
    "cert_minus_float_relative": 6.866396340399203e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -2769,7 +2769,7 @@
    "score_cert": 1.4032552582588231,
    "cert_minus_float": 9.563483338581591e-11,
    "cert_minus_float_relative": 6.815212900823086e-11,
-   "display": "1.403256",
+   "display": "1.403255",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -3096,7 +3096,7 @@
    "score_cert": 1.4917603028711144,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.491761",
+   "display": "1.491760",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -3905,7 +3905,7 @@
    "score_cert": 1.0000000000911597,
    "cert_minus_float": 9.11595243735519e-11,
    "cert_minus_float_relative": 9.115952437355188e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -4187,7 +4187,7 @@
    "score_cert": 1.8827642574672663,
    "cert_minus_float": 5.279487957920992e-11,
    "cert_minus_float_relative": 2.8041152455119963e-11,
-   "display": "1.882765",
+   "display": "1.882764",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -5330,7 +5330,7 @@
    "score_cert": 2.08914712701352,
    "cert_minus_float": 8.061551426408187e-12,
    "cert_minus_float_relative": 3.858776302635733e-12,
-   "display": "2.089148",
+   "display": "2.089147",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -5705,7 +5705,7 @@
    "score_cert": 2.094285440466882,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.094286",
+   "display": "2.094285",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -6139,7 +6139,7 @@
    "score_cert": 0.9144203956183559,
    "cert_minus_float": 5.941558356425958e-11,
    "cert_minus_float_relative": 6.497622302917002e-11,
-   "display": "0.914421",
+   "display": "0.914420",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -6305,7 +6305,7 @@
    "score_cert": 1.2806802786787332,
    "cert_minus_float": 6.323275236752579e-11,
    "cert_minus_float_relative": 4.937434691809618e-11,
-   "display": "1.280681",
+   "display": "1.280680",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -6421,7 +6421,7 @@
    "score_cert": 1.3160781354721929,
    "cert_minus_float": 5.917577539094054e-11,
    "cert_minus_float_relative": 4.496372502409954e-11,
-   "display": "1.316079",
+   "display": "1.316078",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -6965,7 +6965,7 @@
    "score_cert": 1.517498077021013,
    "cert_minus_float": 3.118771907395512e-11,
    "cert_minus_float_relative": 2.0552064972510826e-11,
-   "display": "1.517499",
+   "display": "1.517498",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -7552,7 +7552,7 @@
    "score_cert": 1.5658783181253837,
    "cert_minus_float": 1.5267787034645153e-12,
    "cert_minus_float_relative": 9.750302343376282e-13,
-   "display": "1.565879",
+   "display": "1.565878",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -7927,7 +7927,7 @@
    "score_cert": 1.5707210616839926,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.570722",
+   "display": "1.570721",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -8361,7 +8361,7 @@
    "score_cert": 0.7294651179591194,
    "cert_minus_float": 4.4037107294059297e-11,
    "cert_minus_float_relative": 6.036903782311589e-11,
-   "display": "0.729466",
+   "display": "0.729465",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -8527,7 +8527,7 @@
    "score_cert": 1.0279072705211647,
    "cert_minus_float": 5.120659452018117e-11,
    "cert_minus_float_relative": 4.981635599947607e-11,
-   "display": "1.027908",
+   "display": "1.027907",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -8643,7 +8643,7 @@
    "score_cert": 1.037939006051639,
    "cert_minus_float": 5.14348563740441e-11,
    "cert_minus_float_relative": 4.955479664672511e-11,
-   "display": "1.037940",
+   "display": "1.037939",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -8790,7 +8790,7 @@
    "score_cert": 1.0396873298081775,
    "cert_minus_float": 5.3522519749549247e-11,
    "cert_minus_float_relative": 5.147943830591787e-11,
-   "display": "1.039688",
+   "display": "1.039687",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -8975,7 +8975,7 @@
    "score_cert": 1.1978511803151999,
    "cert_minus_float": 3.941269532958813e-11,
    "cert_minus_float_relative": 3.2902831318756935e-11,
-   "display": "1.197852",
+   "display": "1.197851",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -10589,7 +10589,7 @@
    "score_cert": 0.5609174170318404,
    "cert_minus_float": 3.846467588886071e-11,
    "cert_minus_float_relative": 6.857457929375541e-11,
-   "display": "0.560918",
+   "display": "0.560917",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -10871,7 +10871,7 @@
    "score_cert": 0.8831452104225643,
    "cert_minus_float": 3.789757396788218e-11,
    "cert_minus_float_relative": 4.29120528790224e-11,
-   "display": "0.883146",
+   "display": "0.883145",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -11016,7 +11016,7 @@
    "score_cert": 0.8909463919062448,
    "cert_minus_float": 3.9640180027333827e-11,
    "cert_minus_float_relative": 4.44922168036221e-11,
-   "display": "0.890947",
+   "display": "0.890946",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -13095,7 +13095,7 @@
    "score_cert": 0.6615394577922801,
    "cert_minus_float": 2.7167823546392356e-11,
    "cert_minus_float_relative": 4.1067578399894365e-11,
-   "display": "0.661540",
+   "display": "0.661539",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -13427,7 +13427,7 @@
    "score_cert": 0.7449964893488343,
    "cert_minus_float": 2.6869506619675576e-11,
    "cert_minus_float_relative": 3.606662179593627e-11,
-   "display": "0.744997",
+   "display": "0.744996",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -13641,7 +13641,7 @@
    "score_cert": 0.753888497016133,
    "cert_minus_float": 1.8370416299262615e-11,
    "cert_minus_float_relative": 2.4367550867826988e-11,
-   "display": "0.753889",
+   "display": "0.753888",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -13905,7 +13905,7 @@
    "score_cert": 0.7747253206795977,
    "cert_minus_float": 1.216560185923754e-11,
    "cert_minus_float_relative": 1.5703116362269892e-11,
-   "display": "0.774726",
+   "display": "0.774725",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -14232,7 +14232,7 @@
    "score_cert": 0.7830180569415853,
    "cert_minus_float": 5.492384325123112e-12,
    "cert_minus_float_relative": 7.014377607860683e-12,
-   "display": "0.783019",
+   "display": "0.783018",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15041,7 +15041,7 @@
    "score_cert": 0.7450520881045614,
    "cert_minus_float": 4.000000330961484e-11,
    "cert_minus_float_relative": 5.368752594670763e-11,
-   "display": "0.745053",
+   "display": "0.745052",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15115,7 +15115,7 @@
    "score_cert": 1.20920849963918,
    "cert_minus_float": 5.956857229705292e-11,
    "cert_minus_float_relative": 4.92624492118293e-11,
-   "display": "1.209209",
+   "display": "1.209208",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15323,7 +15323,7 @@
    "score_cert": 1.6469570054075788,
    "cert_minus_float": 5.278599779501292e-11,
    "cert_minus_float_relative": 3.205062282949007e-11,
-   "display": "1.646958",
+   "display": "1.646957",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15397,7 +15397,7 @@
    "score_cert": 2.000425087802504,
    "cert_minus_float": 3.113864721626669e-11,
    "cert_minus_float_relative": 1.5566015146789453e-11,
-   "display": "2.000426",
+   "display": "2.000425",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15489,7 +15489,7 @@
    "score_cert": 2.075759377261134,
    "cert_minus_float": 2.2952750811100486e-11,
    "cert_minus_float_relative": 1.1057519991377493e-11,
-   "display": "2.075760",
+   "display": "2.075759",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15605,7 +15605,7 @@
    "score_cert": 1.000000000058804,
    "cert_minus_float": 5.880407272229604e-11,
    "cert_minus_float_relative": 5.880407272229604e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15679,7 +15679,7 @@
    "score_cert": 1.477478177015289,
    "cert_minus_float": 3.1414648660188504e-11,
    "cert_minus_float_relative": 2.1262343599767008e-11,
-   "display": "1.477479",
+   "display": "1.477478",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -15887,7 +15887,7 @@
    "score_cert": 0.883221305478431,
    "cert_minus_float": 3.749511812145556e-11,
    "cert_minus_float_relative": 4.245268755460631e-11,
-   "display": "0.883222",
+   "display": "0.883221",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -16053,7 +16053,7 @@
    "score_cert": 1.2462520252779732,
    "cert_minus_float": 1.0515810444644558e-11,
    "cert_minus_float_relative": 8.437948530023665e-12,
-   "display": "1.246253",
+   "display": "1.246252",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -16243,7 +16243,7 @@
    "score_cert": 0.9743762559053549,
    "cert_minus_float": 2.3524626691084904e-11,
    "cert_minus_float_relative": 2.414326760230281e-11,
-   "display": "0.974377",
+   "display": "0.974376",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -16617,7 +16617,7 @@
    "score_cert": 0.778634344071148,
    "cert_minus_float": 6.794120821496108e-12,
    "cert_minus_float_relative": 8.72568860247266e-12,
-   "display": "0.778635",
+   "display": "0.778634",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -16733,7 +16733,7 @@
    "score_cert": 0.9538473955610639,
    "cert_minus_float": 4.000000330961484e-11,
    "cert_minus_float_relative": 4.1935432751025964e-11,
-   "display": "0.953848",
+   "display": "0.953847",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -16955,7 +16955,7 @@
    "score_cert": 1.000000000033627,
    "cert_minus_float": 3.362732314826644e-11,
    "cert_minus_float_relative": 3.362732314826645e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17029,7 +17029,7 @@
    "score_cert": 0.8683090184018964,
    "cert_minus_float": 2.3407276117382025e-11,
    "cert_minus_float_relative": 2.695731084435078e-11,
-   "display": "0.868310",
+   "display": "0.868309",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17103,7 +17103,7 @@
    "score_cert": 0.6495761713447861,
    "cert_minus_float": 1.7451706746385298e-11,
    "cert_minus_float_relative": 2.686629762099299e-11,
-   "display": "0.649577",
+   "display": "0.649576",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17177,7 +17177,7 @@
    "score_cert": 1.2829273752103358,
    "cert_minus_float": 4.000000330961484e-11,
    "cert_minus_float_relative": 3.117869653713172e-11,
-   "display": "1.282928",
+   "display": "1.282927",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17399,7 +17399,7 @@
    "score_cert": 1.212644029960468,
    "cert_minus_float": 1.2287282302736457e-11,
    "cert_minus_float_relative": 1.0132637442878867e-11,
-   "display": "1.212645",
+   "display": "1.212644",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17473,7 +17473,7 @@
    "score_cert": 1.0000000000131133,
    "cert_minus_float": 1.3113066188452649e-11,
    "cert_minus_float_relative": 1.3113066188452646e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17547,7 +17547,7 @@
    "score_cert": 0.7556483529645943,
    "cert_minus_float": 8.256950678742214e-12,
    "cert_minus_float_relative": 1.0926975022758125e-11,
-   "display": "0.755649",
+   "display": "0.755648",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17621,7 +17621,7 @@
    "score_cert": 3.00000100008175,
    "cert_minus_float": 7.999956253001983e-11,
    "cert_minus_float_relative": 2.6666511954487068e-11,
-   "display": "3.000002",
+   "display": "3.000001",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -17861,7 +17861,7 @@
    "score_cert": 2.707106126423657,
    "cert_minus_float": 1.251518888523151e-10,
    "cert_minus_float_relative": 4.6230876446443e-11,
-   "display": "2.707107",
+   "display": "2.707106",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18034,7 +18034,7 @@
    "score_cert": 3.00000000008,
    "cert_minus_float": 7.999956253001983e-11,
    "cert_minus_float_relative": 2.666652084333994e-11,
-   "display": "3.000001",
+   "display": "3.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18274,7 +18274,7 @@
    "score_cert": 2.7071090183288176,
    "cert_minus_float": 1.3541567867036974e-10,
    "cert_minus_float_relative": 5.002224799972771e-11,
-   "display": "2.707110",
+   "display": "2.707109",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18447,7 +18447,7 @@
    "score_cert": 1.0000000000394969,
    "cert_minus_float": 3.948774640605279e-11,
    "cert_minus_float_relative": 3.948774640605243e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18521,7 +18521,7 @@
    "score_cert": 2.000000000060045,
    "cert_minus_float": 6.000000496442226e-11,
    "cert_minus_float_relative": 3.000000248221046e-11,
-   "display": "2.000001",
+   "display": "2.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18611,7 +18611,7 @@
    "score_cert": 2.1127353046741946,
    "cert_minus_float": 6.114042605531722e-11,
    "cert_minus_float_relative": 2.8938990095834578e-11,
-   "display": "2.112736",
+   "display": "2.112735",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -18856,7 +18856,7 @@
    "score_cert": 2.443354451465895,
    "cert_minus_float": 6.34865493509551e-11,
    "cert_minus_float_relative": 2.5983356329866845e-11,
-   "display": "2.443355",
+   "display": "2.443354",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -19021,7 +19021,7 @@
    "score_cert": 2.590192136665393,
    "cert_minus_float": 6.416467357439615e-11,
    "cert_minus_float_relative": 2.4772167542208315e-11,
-   "display": "2.590193",
+   "display": "2.590192",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -19746,7 +19746,7 @@
    "score_cert": 2.9480044002574886,
    "cert_minus_float": 6.52145004664817e-11,
    "cert_minus_float_relative": 2.2121575009259923e-11,
-   "display": "2.948005",
+   "display": "2.948004",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -20081,7 +20081,7 @@
    "score_cert": 3.00000000008,
    "cert_minus_float": 7.999956253001983e-11,
    "cert_minus_float_relative": 2.666652084333994e-11,
-   "display": "3.000001",
+   "display": "3.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -20471,7 +20471,7 @@
    "score_cert": 3.045799273803305,
    "cert_minus_float": 6.539746522093992e-11,
    "cert_minus_float_relative": 2.1471364112803777e-11,
-   "display": "3.045800",
+   "display": "3.045799",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -20923,7 +20923,7 @@
    "score_cert": 3.135451237985124,
    "cert_minus_float": 6.553735332204269e-11,
    "cert_minus_float_relative": 2.090204833340913e-11,
-   "display": "3.135452",
+   "display": "3.135451",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -28516,7 +28516,7 @@
    "score_cert": 3.714105267377632,
    "cert_minus_float": 6.603118052339596e-11,
    "cert_minus_float_relative": 1.777848923791857e-11,
-   "display": "3.714106",
+   "display": "3.714105",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -31285,7 +31285,7 @@
    "score_cert": 3.8079462462175258,
    "cert_minus_float": 6.607026037386277e-11,
    "cert_minus_float_relative": 1.7350628423559662e-11,
-   "display": "3.807947",
+   "display": "3.807946",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -36347,7 +36347,7 @@
    "score_cert": 3.934197176672324,
    "cert_minus_float": 6.611244884879852e-11,
    "cert_minus_float_relative": 1.6804559070379293e-11,
-   "display": "3.934198",
+   "display": "3.934197",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -40389,7 +40389,7 @@
    "score_cert": 3.975285162785338,
    "cert_minus_float": 8.666889428354807e-11,
    "cert_minus_float_relative": 2.1801931367537887e-11,
-   "display": "3.975286",
+   "display": "3.975285",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -47628,7 +47628,7 @@
    "score_cert": 1.6526683740859327,
    "cert_minus_float": 7.999956253001983e-11,
    "cert_minus_float_relative": 4.840630085762906e-11,
-   "display": "1.652669",
+   "display": "1.652668",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -47846,7 +47846,7 @@
    "score_cert": 0.834025229039068,
    "cert_minus_float": 5.773648226181649e-11,
    "cert_minus_float_relative": 6.922630186179757e-11,
-   "display": "0.834026",
+   "display": "0.834025",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -47938,7 +47938,7 @@
    "score_cert": 0.9320500329077069,
    "cert_minus_float": 6.273104258269768e-11,
    "cert_minus_float_relative": 6.730437248225653e-11,
-   "display": "0.932051",
+   "display": "0.932050",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -48054,7 +48054,7 @@
    "score_cert": 0.9670391594696719,
    "cert_minus_float": 6.513589667633823e-11,
    "cert_minus_float_relative": 6.735600729596753e-11,
-   "display": "0.967040",
+   "display": "0.967039",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -48386,7 +48386,7 @@
    "score_cert": 1.0000000000785747,
    "cert_minus_float": 7.857448025561098e-11,
    "cert_minus_float_relative": 7.857448025561097e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -49572,7 +49572,7 @@
    "score_cert": 1.2496821874324322,
    "cert_minus_float": 3.7472247527148284e-11,
    "cert_minus_float_relative": 2.998542181773552e-11,
-   "display": "1.249683",
+   "display": "1.249682",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -50506,7 +50506,7 @@
    "score_cert": 1.3742813041455948,
    "cert_minus_float": 8.297140752233645e-11,
    "cert_minus_float_relative": 6.037439880543962e-11,
-   "display": "1.374282",
+   "display": "1.374281",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -51079,7 +51079,7 @@
    "score_cert": 1.0000000000709461,
    "cert_minus_float": 7.094569376420168e-11,
    "cert_minus_float_relative": 7.094569376420165e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -51245,7 +51245,7 @@
    "score_cert": 1.000000000070945,
    "cert_minus_float": 7.09450276303869e-11,
    "cert_minus_float_relative": 7.09450276303869e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -51672,7 +51672,7 @@
    "score_cert": 1.9814532739872321,
    "cert_minus_float": 8.214606772583011e-11,
    "cert_minus_float_relative": 4.1457484164607656e-11,
-   "display": "1.981454",
+   "display": "1.981453",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -51853,7 +51853,7 @@
    "score_cert": 2.84379003670433,
    "cert_minus_float": 1.1052936343958208e-10,
    "cert_minus_float_relative": 3.886692126257344e-11,
-   "display": "2.843791",
+   "display": "2.843790",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -52338,7 +52338,7 @@
    "score_cert": 0.8430234940810323,
    "cert_minus_float": 7.673872648439328e-11,
    "cert_minus_float_relative": 9.102798086906276e-11,
-   "display": "0.843024",
+   "display": "0.843023",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -52504,7 +52504,7 @@
    "score_cert": 1.2345084053436017,
    "cert_minus_float": 9.55984180706082e-11,
    "cert_minus_float_relative": 7.74384505315727e-11,
-   "display": "1.234509",
+   "display": "1.234508",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -52620,7 +52620,7 @@
    "score_cert": 1.348015008500897,
    "cert_minus_float": 1.1419865053596823e-10,
    "cert_minus_float_relative": 8.471615658985944e-11,
-   "display": "1.348016",
+   "display": "1.348015",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -53164,7 +53164,7 @@
    "score_cert": 1.9658261842385638,
    "cert_minus_float": 2.0159207636538667e-11,
    "cert_minus_float_relative": 1.0254827104438937e-11,
-   "display": "1.965827",
+   "display": "1.965826",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -53757,7 +53757,7 @@
    "score_cert": 2.297767273983743,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.297768",
+   "display": "2.297767",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -54130,7 +54130,7 @@
    "score_cert": 2.387892447134027,
    "cert_minus_float": 8.462430756139838e-11,
    "cert_minus_float_relative": 3.5438910854617567e-11,
-   "display": "2.387893",
+   "display": "2.387892",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -55645,7 +55645,7 @@
    "score_cert": 3.81729928325155,
    "cert_minus_float": 1.2257128645387638e-10,
    "cert_minus_float_relative": 3.2109425371910236e-11,
-   "display": "3.817300",
+   "display": "3.817299",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -56362,7 +56362,7 @@
    "score_cert": 0.9031281507692265,
    "cert_minus_float": 8.519607241908034e-11,
    "cert_minus_float_relative": 9.433442236802465e-11,
-   "display": "0.903129",
+   "display": "0.903128",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -56717,7 +56717,7 @@
    "score_cert": 1.158886380955061,
    "cert_minus_float": 1.268249949504252e-10,
    "cert_minus_float_relative": 1.0943695348269223e-10,
-   "display": "1.158887",
+   "display": "1.158886",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -56902,7 +56902,7 @@
    "score_cert": 1.1992123559476362,
    "cert_minus_float": 1.510436220542033e-10,
    "cert_minus_float_relative": 1.2595235641469904e-10,
-   "display": "1.199213",
+   "display": "1.199212",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -57717,7 +57717,7 @@
    "score_cert": 1.8825241860466728,
    "cert_minus_float": 1.1530199017784071e-10,
    "cert_minus_float_relative": 6.124861026462486e-11,
-   "display": "1.882525",
+   "display": "1.882524",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -58538,7 +58538,7 @@
    "score_cert": 2.0066712902153947,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.006672",
+   "display": "2.006671",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -59046,7 +59046,7 @@
    "score_cert": 2.2070713933659096,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.207072",
+   "display": "2.207071",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -59619,7 +59619,7 @@
    "score_cert": 2.4103554679217476,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.410356",
+   "display": "2.410355",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -61798,7 +61798,7 @@
    "score_cert": 2.662906020447992,
    "cert_minus_float": 1.5779200168708485e-10,
    "cert_minus_float_relative": 5.92555653428163e-11,
-   "display": "2.662907",
+   "display": "2.662906",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -64806,7 +64806,7 @@
    "score_cert": 5.00381036552156,
    "cert_minus_float": 2.5844215656434244e-10,
    "cert_minus_float_relative": 5.1649070947706195e-11,
-   "display": "5.003811",
+   "display": "5.003810",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -66079,7 +66079,7 @@
    "score_cert": 0.7005432080166399,
    "cert_minus_float": 6.28376239930617e-11,
    "cert_minus_float_relative": 8.969842727703036e-11,
-   "display": "0.700544",
+   "display": "0.700543",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -66171,7 +66171,7 @@
    "score_cert": 0.8253174623739871,
    "cert_minus_float": 7.033462701144799e-11,
    "cert_minus_float_relative": 8.522129995302382e-11,
-   "display": "0.825318",
+   "display": "0.825317",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -67119,7 +67119,7 @@
    "score_cert": 1.0000000001034697,
    "cert_minus_float": 1.0346923318138579e-10,
    "cert_minus_float_relative": 1.0346923318138574e-10,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -67436,7 +67436,7 @@
    "score_cert": 1.2052180760165798,
    "cert_minus_float": 1.3079826111095372e-10,
    "cert_minus_float_relative": 1.085266340822368e-10,
-   "display": "1.205219",
+   "display": "1.205218",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -68745,7 +68745,7 @@
    "score_cert": 1.5835953851641258,
    "cert_minus_float": 1.2719958419893374e-10,
    "cert_minus_float_relative": 8.032328548113803e-11,
-   "display": "1.583596",
+   "display": "1.583595",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -69315,7 +69315,7 @@
    "score_cert": 1.707684255589488,
    "cert_minus_float": 7.798872658781875e-11,
    "cert_minus_float_relative": 4.566928946970875e-11,
-   "display": "1.707685",
+   "display": "1.707684",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -69966,7 +69966,7 @@
    "score_cert": 1.802338007136371,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.802339",
+   "display": "1.802338",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -70707,7 +70707,7 @@
    "score_cert": 1.86837900768327,
    "cert_minus_float": 1.201834187725126e-10,
    "cert_minus_float_relative": 6.43249674107969e-11,
-   "display": "1.868380",
+   "display": "1.868379",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -72438,7 +72438,7 @@
    "score_cert": 1.989459309860338,
    "cert_minus_float": 1.1700662660985017e-10,
    "cert_minus_float_relative": 5.881327958647504e-11,
-   "display": "1.989460",
+   "display": "1.989459",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -74541,7 +74541,7 @@
    "score_cert": 2.218353401626256,
    "cert_minus_float": 1.339968136448988e-10,
    "cert_minus_float_relative": 6.04037271765449e-11,
-   "display": "2.218354",
+   "display": "2.218353",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -75751,7 +75751,7 @@
    "score_cert": 2.378572174188917,
    "cert_minus_float": 1.418136719166796e-10,
    "cert_minus_float_relative": 5.962134488245772e-11,
-   "display": "2.378573",
+   "display": "2.378572",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -92233,7 +92233,7 @@
    "score_cert": 4.396215280428584,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "4.396216",
+   "display": "4.396215",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -94780,7 +94780,7 @@
    "score_cert": 0.6826664571616057,
    "cert_minus_float": 3.999989228731238e-11,
    "cert_minus_float_relative": 5.859361020309668e-11,
-   "display": "0.682667",
+   "display": "0.682666",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -94854,7 +94854,7 @@
    "score_cert": 1.0543311445301038,
    "cert_minus_float": 5.615063969344192e-11,
    "cert_minus_float_relative": 5.325711944273225e-11,
-   "display": "1.054332",
+   "display": "1.054331",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -94946,7 +94946,7 @@
    "score_cert": 1.226551070854407,
    "cert_minus_float": 6.264211371842521e-11,
    "cert_minus_float_relative": 5.1071753317200554e-11,
-   "display": "1.226552",
+   "display": "1.226551",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -95062,7 +95062,7 @@
    "score_cert": 1.3335683392221926,
    "cert_minus_float": 6.304690103320354e-11,
    "cert_minus_float_relative": 4.727684302475003e-11,
-   "display": "1.333569",
+   "display": "1.333568",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -95382,7 +95382,7 @@
    "score_cert": 1.5724710839050653,
    "cert_minus_float": 7.625189368809515e-11,
    "cert_minus_float_relative": 4.849176208851437e-11,
-   "display": "1.572472",
+   "display": "1.572471",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -95866,7 +95866,7 @@
    "score_cert": 1.7125524526759106,
    "cert_minus_float": 7.452283234954393e-11,
    "cert_minus_float_relative": 4.351564954191205e-11,
-   "display": "1.712553",
+   "display": "1.712552",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -96179,7 +96179,7 @@
    "score_cert": 1.7990961320894658,
    "cert_minus_float": 2.0158985591933742e-11,
    "cert_minus_float_relative": 1.1205063049491984e-11,
-   "display": "1.799097",
+   "display": "1.799096",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -96546,7 +96546,7 @@
    "score_cert": 1.881536325008816,
    "cert_minus_float": 1.5802470443304628e-11,
    "cert_minus_float_relative": 8.398706011356601e-12,
-   "display": "1.881537",
+   "display": "1.881536",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -96972,7 +96972,7 @@
    "score_cert": 1.928132491481423,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.928133",
+   "display": "1.928132",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -98021,7 +98021,7 @@
    "score_cert": 1.000000000070945,
    "cert_minus_float": 7.09450276303869e-11,
    "cert_minus_float_relative": 7.09450276303869e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -98095,7 +98095,7 @@
    "score_cert": 0.9797614007764159,
    "cert_minus_float": 7.367306764649584e-11,
    "cert_minus_float_relative": 7.51949072433892e-11,
-   "display": "0.979762",
+   "display": "0.979761",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -98769,7 +98769,7 @@
    "score_cert": 1.3486833865932732,
    "cert_minus_float": 1.064188737132099e-10,
    "cert_minus_float_relative": 7.890574969594405e-11,
-   "display": "1.348684",
+   "display": "1.348683",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -98977,7 +98977,7 @@
    "score_cert": 2.1179914310524772,
    "cert_minus_float": 8.800116191309826e-11,
    "cert_minus_float_relative": 4.1549347474472505e-11,
-   "display": "2.117992",
+   "display": "2.117991",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -99295,7 +99295,7 @@
    "score_cert": 2.474469301592495,
    "cert_minus_float": 1.1246870101899731e-10,
    "cert_minus_float_relative": 4.545164530904775e-11,
-   "display": "2.474470",
+   "display": "2.474469",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -99936,7 +99936,7 @@
    "score_cert": 1.7123142793355595,
    "cert_minus_float": 1.0189937782456582e-10,
    "cert_minus_float_relative": 5.950974015714598e-11,
-   "display": "1.712315",
+   "display": "1.712314",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -100326,7 +100326,7 @@
    "score_cert": 2.1073842001010212,
    "cert_minus_float": 1.1748202410899466e-10,
    "cert_minus_float_relative": 5.574779582665198e-11,
-   "display": "2.107385",
+   "display": "2.107384",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -101330,7 +101330,7 @@
    "score_cert": 1.398319399261343,
    "cert_minus_float": 5.773648226181649e-11,
    "cert_minus_float_relative": 4.128991008399047e-11,
-   "display": "1.398320",
+   "display": "1.398319",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -101422,7 +101422,7 @@
    "score_cert": 1.4934542473113546,
    "cert_minus_float": 6.085154602430976e-11,
    "cert_minus_float_relative": 4.074550401282088e-11,
-   "display": "1.493455",
+   "display": "1.493454",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -101681,7 +101681,7 @@
    "score_cert": 1.7357112923721985,
    "cert_minus_float": 5.92117466169384e-11,
    "cert_minus_float_relative": 3.411382231548058e-11,
-   "display": "1.735712",
+   "display": "1.735711",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -102635,7 +102635,7 @@
    "score_cert": 2.2540102568154032,
    "cert_minus_float": 7.807487989452966e-11,
    "cert_minus_float_relative": 3.4638209680351126e-11,
-   "display": "2.254011",
+   "display": "2.254010",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -102709,7 +102709,7 @@
    "score_cert": 1.000000000070945,
    "cert_minus_float": 7.09450276303869e-11,
    "cert_minus_float_relative": 7.09450276303869e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -102783,7 +102783,7 @@
    "score_cert": 0.9748600859829331,
    "cert_minus_float": 6.76938505250746e-11,
    "cert_minus_float_relative": 6.94395549711329e-11,
-   "display": "0.974861",
+   "display": "0.974860",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -102857,7 +102857,7 @@
    "score_cert": 2.2395962752245775,
    "cert_minus_float": 1.0661649341159318e-10,
    "cert_minus_float_relative": 4.7605228940639144e-11,
-   "display": "2.239597",
+   "display": "2.239596",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -102949,7 +102949,7 @@
    "score_cert": 6.633999362333136,
    "cert_minus_float": 9.925988919690099e-10,
    "cert_minus_float_relative": 1.4962300083315575e-10,
-   "display": "6.634000",
+   "display": "6.633999",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103139,7 +103139,7 @@
    "score_cert": 1.3498771782075052,
    "cert_minus_float": 8.61297699827901e-11,
    "cert_minus_float_relative": 6.380563460051746e-11,
-   "display": "1.349878",
+   "display": "1.349877",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103231,7 +103231,7 @@
    "score_cert": 1.8761963953706835,
    "cert_minus_float": 1.1060263815920734e-10,
    "cert_minus_float_relative": 5.895045872523141e-11,
-   "display": "1.876197",
+   "display": "1.876196",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103347,7 +103347,7 @@
    "score_cert": 2.205045139864444,
    "cert_minus_float": 1.0764944491370443e-10,
    "cert_minus_float_relative": 4.8819610525332656e-11,
-   "display": "2.205046",
+   "display": "2.205045",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103490,7 +103490,7 @@
    "score_cert": 5.356534062016916,
    "cert_minus_float": 3.0803537498513833e-10,
    "cert_minus_float_relative": 5.7506471803684685e-11,
-   "display": "5.356535",
+   "display": "5.356534",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103665,7 +103665,7 @@
    "score_cert": 0.9108944290740608,
    "cert_minus_float": 4.000000330961484e-11,
    "cert_minus_float_relative": 4.391288609815302e-11,
-   "display": "0.910895",
+   "display": "0.910894",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -103947,7 +103947,7 @@
    "score_cert": 1.9138452719873857,
    "cert_minus_float": 2.913580487984291e-11,
    "cert_minus_float_relative": 1.522369927535004e-11,
-   "display": "1.913846",
+   "display": "1.913845",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -104265,7 +104265,7 @@
    "score_cert": 2.219235040414613,
    "cert_minus_float": 6.45110631580792e-11,
    "cert_minus_float_relative": 2.9069053969110936e-11,
-   "display": "2.219236",
+   "display": "2.219235",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -104741,7 +104741,7 @@
    "score_cert": 2.4040113763373374,
    "cert_minus_float": 7.69841967951379e-11,
    "cert_minus_float_relative": 3.202322482969837e-11,
-   "display": "2.404012",
+   "display": "2.404011",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -105052,7 +105052,7 @@
    "score_cert": 2.4733220761986914,
    "cert_minus_float": 7.370370980197549e-11,
    "cert_minus_float_relative": 2.979947921600605e-11,
-   "display": "2.473323",
+   "display": "2.473322",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -105993,7 +105993,7 @@
    "score_cert": 1.0000000000667117,
    "cert_minus_float": 6.671174723749118e-11,
    "cert_minus_float_relative": 6.671174723749118e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -106631,7 +106631,7 @@
    "score_cert": 2.3982804723824547,
    "cert_minus_float": 1.3140599719463353e-12,
    "cert_minus_float_relative": 5.479175547143852e-13,
-   "display": "2.398281",
+   "display": "2.398280",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -107790,7 +107790,7 @@
    "score_cert": 2.0280311617391455,
    "cert_minus_float": 7.87636622590071e-11,
    "cert_minus_float_relative": 3.8837500995064604e-11,
-   "display": "2.028032",
+   "display": "2.028031",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -107864,7 +107864,7 @@
    "score_cert": 1.0000000000559828,
    "cert_minus_float": 5.5982329882908743e-11,
    "cert_minus_float_relative": 5.598232988290872e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -107938,7 +107938,7 @@
    "score_cert": 1.0000000000371305,
    "cert_minus_float": 3.713096496937851e-11,
    "cert_minus_float_relative": 3.713096496937853e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -108214,7 +108214,7 @@
    "score_cert": 1.0000000000541422,
    "cert_minus_float": 5.414235726419747e-11,
    "cert_minus_float_relative": 5.414235726419748e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -108553,7 +108553,7 @@
    "score_cert": 1.0000000000747782,
    "cert_minus_float": 7.477485297613384e-11,
    "cert_minus_float_relative": 7.47748529761336e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -108954,7 +108954,7 @@
    "score_cert": 1.0000000000995966,
    "cert_minus_float": 9.959255642399967e-11,
    "cert_minus_float_relative": 9.959255642399927e-11,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {
@@ -109428,7 +109428,7 @@
    "score_cert": 1.0000000001639215,
    "cert_minus_float": 1.639204327830157e-10,
    "cert_minus_float_relative": 1.6392043278301553e-10,
-   "display": "1.000001",
+   "display": "1.000000",
    "status": "best_known",
    "certified": true,
    "config": {

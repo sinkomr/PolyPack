@@ -1,0 +1,8 @@
+sq N=0 P=9 score=5.8186258224 dens=0.835125 msep=-4.44e-16 label=random runs=115 hops=86 stop=count t=11.2
+sq N=0 P=10 score=6.3245553203 dens=0.785398 msep=-4.44e-16 label=lattice runs=128 hops=93 stop=count t=11.1
+sq N=0 P=11 score=6.5477573317 dens=0.806042 msep=-4.44e-16 label=lattice runs=132 hops=100 stop=count t=12.0
+sq N=0 P=12 score=6.6564023547 dens=0.850848 msep=0.00e+00 label=lattice runs=143 hops=108 stop=count t=13.5
+sq N=0 P=13 score=7.1904163723 dens=0.789924 msep=-4.44e-16 label=hop:lattice runs=152 hops=116 stop=count t=15.2
+sq N=0 P=14 score=7.2416903933 dens=0.838683 msep=-6.66e-16 label=lattice runs=160 hops=123 stop=count t=23.0
+sq N=0 P=15 score=7.2760687511 dens=0.890118 msep=-4.44e-16 label=random runs=170 hops=130 stop=count t=20.5
+sq N=0 P=16 score=7.7274066103 dens=0.841787 msep=-4.44e-16 label=lattice runs=181 hops=138 stop=count t=26.7

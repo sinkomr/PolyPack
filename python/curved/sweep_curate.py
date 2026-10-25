@@ -20,13 +20,14 @@ import json
 import math
 import os
 from datetime import date
-from decimal import ROUND_CEILING, Decimal
+from decimal import ROUND_HALF_EVEN, Decimal
 from fractions import Fraction
 
 
-def display_up(x):
-    """score rounded UP at 6 decimals, exactly (Decimal of the binary64 value)."""
-    return str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_CEILING))
+def display_nearest(x):
+    """score rounded to the NEAREST at 6 decimals (ties to even), exactly (Decimal of the binary64 value);
+    the same rule as python/curved/certify.py display_nearest."""
+    return str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN))
 
 
 def k_exact(K):
@@ -108,7 +109,7 @@ def cert_records(certs, res, N, M, P):
                 "score_cert": c["score_cert"],
                 "cert_minus_float": c["score_cert"] - c["score_float"],
                 "cert_minus_float_relative": (c["score_cert"] - c["score_float"]) / c["score_float"],
-                "display": display_up(c["score_cert"]),
+                "display": display_nearest(c["score_cert"]),
                 "status": "best_known",
                 "certified": True,
                 "config": c["config_cert"],
@@ -513,7 +514,7 @@ def main():
         json.dump(
             {
                 "generated": str(date.today()),
-                "conventions": "as data/curved/records.json (docs/spaces/CURVED.md); K_exact is the exact rational value of the binary64 K; config is the certified configuration at score_cert; display is score_cert rounded up at 6 decimals",
+                "conventions": "as data/curved/records.json (docs/spaces/CURVED.md); K_exact is the exact rational value of the binary64 K; config is the certified configuration at score_cert; display is score_cert rounded to the nearest at 6 decimals (ties to even)",
                 "records": flat,
             },
             f,

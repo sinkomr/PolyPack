@@ -10,13 +10,22 @@
  * Triangles: the same with the triangular lattice, s^2 = h^2 + h k + k^2 (gluings rotate by
  * multiples of 60 degrees, which preserve the tiling by unit triangles): P = F (h^2 + h k + k^2).
  *
+ * Hexagons (tetrahedron, octahedron): the hexagonal tiling by unit hexagons descends to the
+ * surface when every holonomy (rotation about a cone point by the cone angle) is a symmetry of it
+ * and no cone point is a hexagon centre. On the tetrahedron (holonomy 180 degrees) the cone points
+ * sit at midpoints of hexagon sides; on the octahedron (holonomy 120 degrees) at hexagon vertices.
+ * With T = h^2 + h k + k^2 the face side is s = sqrt(3 T), the side vector h a + k b in the lattice
+ * of hexagon centres (spacing sqrt 3) or of one class of hexagon vertices (also spacing sqrt 3).
+ * P = 2 T on the tetrahedron and 4 T on the octahedron; both meet the area bound. The tiling is
+ * placed in face 0's frame and developed onto every face along a spanning tree of the gluings.
+ *
  * Each cell becomes one piece anchored at the face that contains its centre (a centre on an
  * edge is moved 1e-12 into one of its faces, which the certificate's shrink absorbs).
  *
  * Usage: npx tsx packages/surface/scripts/build-exact.ts <out.json>
  */
 import { writeFileSync } from "node:fs";
-import { SolidName, faceTo3D, getSolid, insideFaceDepth, validateFold, areaBoundEdge } from "../src/index";
+import { Rigid, SolidName, apply, compose, faceTo3D, frameVertex, getSolid, glue, insideFaceDepth, inverse, validateFold, areaBoundEdge, IDENTITY } from "../src/index";
 
 const outPath = process.argv[2];
 if (!outPath) throw new Error("usage: build-exact.ts <out.json>");
@@ -134,4 +143,93 @@ for (const c of cases) {
   });
   console.log(c.solid, c.N, P, s.toFixed(9), closed, "area bound", areaBoundEdge(c.solid, c.N, P).toFixed(9), "minSep", val.minPairSep.toExponential(2));
 }
+// ---- hexagon tilings of the tetrahedron and the octahedron, by development from face 0
+for (const solidName of ["tetrahedron", "octahedron"] as SolidName[])
+  for (const [h, k] of [
+    [1, 0],
+    [1, 1],
+    [2, 0],
+    [2, 1],
+  ]) {
+    const S = getSolid(solidName);
+    const T = h * h + h * k + k * k;
+    const P = solidName === "tetrahedron" ? 2 * T : 4 * T;
+    if (P > 24) continue;
+    const r3 = Math.sqrt(3);
+    // lattice of spacing sqrt 3: hexagon centres (tetrahedron) or one class of hexagon vertices (octahedron)
+    const a = [r3, 0];
+    const b = [r3 / 2, 1.5];
+    const sx = h * a[0] + k * b[0];
+    const sy = h * a[1] + k * b[1];
+    const s = Math.hypot(sx, sy);
+    const alpha = -Math.atan2(sy, sx);
+    const rot = (p: number[]) => [Math.cos(alpha) * p[0] - Math.sin(alpha) * p[1], Math.sin(alpha) * p[0] + Math.cos(alpha) * p[1]];
+    const A = rot(a);
+    const B = rot(b);
+    const [ox, oy] = frameVertex(S.M, s, S.M - 1); // the lower-left corner, a lattice point
+    // Hexagons at angle theta have vertices at theta + 90 + 60 m degrees and neighbouring centres at
+    // theta + 60 m; one class of their vertices forms a lattice along the same directions. So with
+    // theta = alpha both lattices are A, B. Tetrahedron: the corner is the midpoint between two
+    // centres, so the centres are corner + A/2 + lattice. Octahedron: the corner is the vertex at
+    // theta + 90 degrees of a hexagon, whose centre is corner - (cos(theta + 90), sin(theta + 90)).
+    const theta = alpha;
+    const off = solidName === "tetrahedron" ? [A[0] / 2, A[1] / 2] : [Math.sin(alpha), -Math.cos(alpha)];
+    // development: transform of every face into face 0's plane along a BFS tree
+    const Tf: (Rigid | null)[] = Array(S.F).fill(null);
+    Tf[0] = IDENTITY;
+    const queue = [0];
+    while (queue.length) {
+      const f = queue.shift()!;
+      for (let e = 0; e < S.M; e++) {
+        const g = glue(S, s, f, e);
+        if (Tf[g.face]) continue;
+        Tf[g.face] = compose(Tf[f]!, g.T);
+        queue.push(g.face);
+      }
+    }
+    const pieces: { face: number; x: number; y: number; theta: number }[] = [];
+    const seen: [number, number, number][] = [];
+    const span = 12;
+    for (let f = 0; f < S.F; f++) {
+      const back = inverse(Tf[f]!);
+      for (let i = -span; i <= span; i++)
+        for (let j = -span; j <= span; j++) {
+          const px = ox + off[0] + i * A[0] + j * B[0];
+          const py = oy + off[1] + i * A[1] + j * B[1];
+          let [x, y] = apply(back, px, py);
+          const depth = insideFaceDepth(S.M, s, x, y);
+          if (depth < -1e-9) continue;
+          const p3 = faceTo3D(S, s, f, x, y);
+          if (seen.some((q) => Math.hypot(q[0] - p3[0], q[1] - p3[1], q[2] - p3[2]) < 1e-7)) continue;
+          seen.push(p3);
+          if (depth < 1e-12) {
+            const rr = Math.hypot(x, y);
+            x *= (rr - 2e-12) / rr;
+            y *= (rr - 2e-12) / rr;
+          }
+          pieces.push({ face: f, x, y, theta: theta + back.ang });
+        }
+    }
+    if (pieces.length !== P) throw new Error(`${solidName} hexagons ${h},${k}: ${pieces.length} pieces, expected ${P}`);
+    const val = validateFold({ solid: solidName, N: 6, s, pieces });
+    if (!val.ok) throw new Error(`${solidName} hexagons ${h},${k}: ${val.errors.slice(0, 3).join("; ")}`);
+    out.push({
+      id: `surface/${solidName}/fold/6/${P}`,
+      solid: solidName,
+      mode: "fold",
+      N: 6,
+      P,
+      s,
+      pieces,
+      exact: {
+        construction: "hexagon tiling",
+        params: { h, k, T },
+        s_exact: `sqrt(${3 * T})`,
+        lattice_rotation: alpha,
+      },
+      area_bound: areaBoundEdge(solidName, 6, P),
+      float_check: { minPairSep: val.minPairSep, minConeSep: val.minConeSep },
+    });
+    console.log(solidName, 6, P, s.toFixed(9), `sqrt(${3 * T})`, "area bound", areaBoundEdge(solidName, 6, P).toFixed(9), "minSep", val.minPairSep.toExponential(2));
+  }
 writeFileSync(outPath, JSON.stringify({ generated: "2026-10-24", records: out }));

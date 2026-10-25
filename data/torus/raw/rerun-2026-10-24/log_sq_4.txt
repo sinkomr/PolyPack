@@ -1,0 +1,14 @@
+sq N=4 P=3 score=2.0000000000 dens=0.750000 msep=0.00e+00 label=hop:random runs=58 hops=40 stop=count t=7.0
+sq N=4 P=4 score=2.0000000000 dens=1.000000 msep=-4.44e-16 label=replicate2 runs=11 hops=0 stop=floor t=1.8
+sq N=4 P=5 score=2.2360679775 dens=1.000000 msep=-2.22e-16 label=from-free runs=7 hops=0 stop=floor t=3.9
+sq N=4 P=6 score=2.6832815730 dens=0.833333 msep=-6.66e-16 label=hop:double runs=92 hops=63 stop=count t=29.6
+sq N=4 P=7 score=2.8284271247 dens=0.875000 msep=-4.44e-16 label=hop:random runs=95 hops=70 stop=count t=39.9
+sq N=4 P=8 score=2.8284271247 dens=1.000000 msep=-1.28e-15 label=double runs=13 hops=0 stop=floor t=9.4
+sq N=4 P=9 score=3.0000000000 dens=1.000000 msep=-5.55e-16 label=from-free runs=7 hops=0 stop=floor t=5.7
+sq N=4 P=10 score=3.1622776602 dens=1.000000 msep=-5.55e-16 label=replicate5 runs=15 hops=0 stop=floor t=11.1
+sq N=4 P=11 score=3.4785054262 dens=0.909091 msep=-4.44e-16 label=hop:random runs=132 hops=100 stop=count t=85.8
+sq N=4 P=12 score=3.5355339059 dens=0.960000 msep=-5.55e-16 label=hop:double runs=147 hops=108 stop=count t=82.0
+sq N=4 P=13 score=3.6055512755 dens=1.000000 msep=-3.33e-16 label=replicate1 runs=8 hops=0 stop=floor t=10.9
+sq N=4 P=14 score=3.8829013783 dens=0.928571 msep=1.00e-12 label=hop:lattice runs=164 hops=123 stop=count t=146.4
+sq N=4 P=15 score=4.0000000000 dens=0.937500 msep=-1.89e-15 label=hop:random runs=170 hops=130 stop=count t=181.3
+sq N=4 P=16 score=4.0000000000 dens=1.000000 msep=-6.66e-16 label=lattice runs=14 hops=0 stop=floor t=6.9

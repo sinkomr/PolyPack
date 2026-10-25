@@ -14,7 +14,7 @@ Status: research build, 2026-10-24. Code: `packages/curved/src/sweep.ts` and `pa
 - **Generic packings change smoothly.** Rings of 3, 4 and 5 disks follow one analytic branch over the whole range (from K = −2 to the hemisphere limit), with ds/dK(0) = r₀(r₀² − 1)/6 as the envelope theorem predicts.
 
 **Where the sharp changes are** [CALC; details and certificates in §4]:
-1. **At K = 0 itself, for degenerate Euclidean records.** The flat plane allows angle coincidences such as six 60° angles making 360°, a disk ringed by six equal disks, or tilings. They make more contacts tight than a generic optimum has, so the contact forces (multipliers) are not unique. For K ≠ 0 the angle sums change by K × area (Gauss–Bonnet), and the coincidence breaks in a direction set by the sign of K. One subset of contacts stays tight for K < 0, another for K > 0, and the one-sided slopes are the minimum and maximum of −Σλ ∂g/∂K over the multiplier polytope. Examples [CALC, table in §6]: 6, 7 and 11 disks; 2, 3, 4, 5, 6 and 9 triangles in a triangle; 2 to 9 squares in a square; 6 triangles in a hexagon. 7 disks keep one arrangement with slopes 0 | +1. In many cases (6 and 11 disks; 3, 5, 6 triangles; 2, 5, 6, 7, 8 squares), K = 0 is itself a crossing: the flat optimum is one member of a continuum or a tie, and different members continue on the two sides. Records without such coincidences are smooth through K = 0: rings of 3–5 disks, the 8- and 9-disk records (whose centre disk is a rattler), and 10 and 12 disks.
+1. **At K = 0 itself, for degenerate Euclidean records.** The flat plane allows angle coincidences such as six 60° angles making 360°, a disk ringed by six equal disks, or tilings. They make more contacts tight than a generic optimum has, so the contact forces (multipliers) are not unique. For K ≠ 0 the angle sums change by K × area (Gauss–Bonnet), and the coincidence breaks in a direction set by the sign of K. One subset of contacts stays tight for K < 0, another for K > 0, and the one-sided slopes are the minimum and maximum of −Σλ ∂g/∂K over the multiplier polytope. Examples [CALC, table in §6]: 6, 7 and 11 disks; 2, 3, 4, 5, 6, 8 and 9 triangles in a triangle; 2 to 9 squares in a square; 6 triangles in a hexagon. 7 disks keep one arrangement with slopes 0 | +1. In many cases (6 and 11 disks; 3, 5, 8 triangles; 2, 5, 6, 7, 8, 9 squares), K = 0 is itself a crossing: the flat optimum is one member of a continuum or a tie, and different members continue on the two sides. Records without such coincidences are smooth through K = 0: rings of 3–5 disks, the 8- and 9-disk records (whose centre disk is a rattler), and 10 and 12 disks.
 2. **At the {3, q} tiling curvatures K\*.** For 5, 6, 7 and 8 triangles in a regular q-gon, s\*(K) falls to exactly 1 at K\*, kinks (slope about −0.17 → 0), and stays flat at s = 1, every triangle's base locked along a wall, until a crossing well beyond K\*.
 3. **At crossings (first-order transitions).** Disks in a disk give a closed form: as K decreases, the (P−1)-ring around one disk (size exactly 3) loses to the P-ring when the P-ring's radius reaches 3, at **K_c(P) = −(arccosh(1/(2 sin(π/P))))²**. That is K_c = −0.29732, −0.58413, −0.86033, −1.12630, −1.38263, −1.62993 for P = 7…12, and the sweeps reproduce all six to 10 digits. Polygon problems have several crossings each, some of them crowded together near the hemisphere limit.
 4. **Where a contact appears or disappears along a branch.** Usually s stays C¹ and only the second derivative jumps. It kinks when the contact set is degenerate, for example when a disk ringed at distance exactly 2 locks the centre at K_c(P−1) and the curve leaves the flat s = 3 plateau.
@@ -36,7 +36,7 @@ Open `packages/curved/viz/sweep.html` (standalone; works offline, in light and d
 
 ## 3. Method
 
-**Problems.** Disks in a disk, P = 2 … 12, K ∈ [−2, 0.65], and P = 27, K ∈ [−1.5, −0.5]. Triangles in a triangle, P = 2 … 6 and 9, K ∈ [−1.2, 3]. Squares in a square, P = 2 … 9, K ∈ [−1, 1.6]. (7, 8, 10 triangles and 10 squares were dropped for time.) Four problems with a {3, q} tiling curvature K\*: 5 triangles in a pentagon (K\* = 1.2258), 6 in a hexagon (K\* = 0), 7 in a heptagon (K\* = −1.1893) and 8 in an octagon (K\* = −2.3365). Each range runs from where the pieces stop fitting (or a practical limit) to the hemisphere limit. Disks give the cleanest closed forms, triangles and squares cover the tilings at P = 4, 9 and the proven 5-piece records, and the {3, q} problems contain an exact tiling at K\* ≠ 0.
+**Problems.** Disks in a disk, P = 2 … 12, K ∈ [−2, 0.65], and P = 27 … 30, K ∈ [−1.5, −0.5]. Triangles in a triangle, P = 2 … 6, 8 and 9, K ∈ [−1.2, 3]. Squares in a square, P = 2 … 9, K ∈ [−1, 1.6]. (7 and 10 triangles and 10 squares were not run.) Four problems with a {3, q} tiling curvature K\*: 5 triangles in a pentagon (K\* = 1.2258), 6 in a hexagon (K\* = 0), 7 in a heptagon (K\* = −1.1893) and 8 in an octagon (K\* = −2.3365). Each range runs from where the pieces stop fitting (or a practical limit) to the hemisphere limit. Disks give the cleanest closed forms, triangles and squares cover the tilings at P = 4, 9 and the proven 5-piece records, and the {3, q} problems contain an exact tiling at K\* ≠ 0.
 
 **Grid.** K takes multiples of 1/64. Each is an exact binary64 number and an exact rational, so the certifier reads K exactly. Sub-steps (halvings) are also dyadic.
 
@@ -59,6 +59,29 @@ Open `packages/curved/viz/sweep.html` (standalone; works offline, in light and d
 
 **What is and is not claimed.** Every certified size is a proven upper bound for its problem at its K. The ground state is the best found [CALC], not proven optimal, except where a published proof exists at K = 0. A crossing is reported only when both branches were followed through it from both sides. Its location is a numerical root [CALC], with both branch values certified as upper bounds on both sides.
 
+### 3a. Rerun on a quieter machine (2026-10-24, evening)
+
+The first sweeps ran on a machine with load average 35–50. The rerun ran at load average about 12. It searched the least complete problems again **on top of the earlier branches** (`run-sweep.ts --resume` with the new options `--solveOnResume`, `--seedOffset`, `--hopEvery`, `--maxBranches`, `--refineEvery`, `--refineTrials`, `--refineSigmas`):
+- 4 new seeded multistart searches every 1/8 in K (20 hops; seeds offset from the first run);
+- warm-started basin hopping (20 hops) from the lowest configuration at every second grid value;
+- up to 140 branches;
+- 4 refinement rounds at *every* grid value (σ = 10⁻³, 10⁻², 3·10⁻², 8·10⁻², 0.15; 3 trials each).
+
+This covered 6, 7 and 9 squares and 5 and 6 triangles. 8 squares got a moderate version (3 seeds, 15 hops, 90 branches, 2 rounds). New problems: 8 triangles in a triangle (4 seeds and 15 hops every 1/8, basin hopping, 120 branches, 3 rounds) and 28, 29 and 30 disks (as for 27, plus basin hopping every 4th grid value). Analysis and certification are unchanged. Every crossing of the rerun problems was recomputed from the new branches and certified on both sides.
+
+| problem | grid values with a lower s\* now | largest drop | crossings before → after | what changed |
+|---|---|---|---|---|
+| 5 triangles in a triangle | 0 of 147 | – | 4 → 4 | nothing: all four crossings reproduced to 10 digits |
+| 6 triangles in a triangle | 8 of 127 | 3.1·10⁻⁴ (K = 1.42) | 5 → 5 | the "crossing" at K = 0 was an artefact: one configuration continues through 0 with a contact change and a kink (−1.904 \| −1.655); new crossing at 1.35840; the other four unchanged |
+| 6 squares in a square | 34 of 74 | 0.566 (K = −0.4375) | 2 → 3 | much lower states near the negative asymptote (K∞ moves from −0.45116 to −0.45761); new crossing at 0.65909; K = 0 and 0.47129 unchanged |
+| 7 squares in a square | 21 of 65 | 0.698 (K = −0.4375) | 2 → 5 | lower states for K < 0 (K∞ from −0.43962 to −0.44089); new crossings at −0.38890, −0.18073, 0.51489; K = 0 and 0.45683 unchanged |
+| 8 squares in a square | 0 of 62 | – | 6 → 6 | nothing: all six crossings reproduced |
+| 9 squares in a square | 12 of 56 | 4.6·10⁻³ (K = 0.25) | 7 → 8 | the cascade toward the hemisphere changed: 0.25753 and 0.38172 moved by 4.6·10⁻⁴ and 8.4·10⁻⁴; 0.24637, 0.34577, 0.42930, 0.44316, 0.47085 removed; new at 0 (the 3×3 tiling now meets a different branch for K > 0), 0.02161, 0.20563, 0.22485, 0.35461, 0.39844 |
+| 8 triangles in a triangle | new | | 10 | a crossing at K = 0 (−2.334 \| −0.708) and a cascade of nine crossings for K ∈ (0.33, 1.2) |
+| 28, 29, 30 disks | new | | 4, 5, 4 | the inner shell grows one disk at a time (§4.1) |
+
+So the deeper search confirmed 5 triangles and 8 squares exactly and found real misses for 6 and 7 squares near the asymptote. The fine structure of the 9-square cascade near the hemisphere limit is not converged: its crossings are certified for the branches found, but a still deeper search could move them again.
+
 ## 4. Results by family
 
 ### 4.1 Disks in a disk (P = 2 … 12, K ∈ [−2, 0.65])
@@ -77,21 +100,22 @@ Open `packages/curved/viz/sweep.html` (standalone; works offline, in light and d
   | 12 | −1.6299293599 | −1.6299293599 | 0.259 | 0 |
 
   The plateau ends at the upper side, at K_c(P − 1), where the (P−1)-ring closes at radius 2. There the centre disk becomes loose and s starts to rise with the (P−1)-ring's slope: a kink with no crossing, because the same configuration bends. For P = 10, 11, 12 further crossings follow nearer K = 0: 9+1 → 8+1+1 at −0.0625 (P = 10); 10+1 → 9+1+1 at −0.1402, then the Euclidean record from K = 0 (P = 11); 11+1 → 10+1+1 at −0.2200 and → 9+3 at −0.0624 (P = 12). Every losing branch survives as a metastable state, usually to the end of the range or to a fold, so the hysteresis windows are wide.
-- **27 disks, K ∈ [−1.5, −0.5]: the inner shell grows one disk at a time** [CALC]. The sweep used a smaller budget: 2 seeds every 0.5 in K, 6 hops, one refinement round, plus the K = −1 record as a seed. As K increases, the lowest state goes 26+1 → 25+2 at K = −1.04090 (slopes 0.791 | 0.462) → 24+3 at −0.85470 (0.995 | 0.375) → 23+4 at −0.64937 (1.366 | 0.910). Between crossings, a contact kink appears where the deformed outer ring becomes circular: −0.9492 (0.32 → 0.87), −0.7889 and −0.5772. At K = −1 the lowest state is 25+2, as in `CURVED.md` (r = 3.957884). The 26-ring around one disk takes over below K = −1.0409.
+- **27–30 disks, K ∈ [−1.5, −0.5]: the inner shell grows one disk at a time** [CALC]. These sweeps used a smaller budget: 2 seeds every 0.5 (P = 27) or 0.25 in K, 6 hops, one refinement round, plus the K = −1 record as a seed (28–30 also had basin hopping every 4th grid value). As K increases, the lowest state goes 26+1 → 25+2 at K = −1.04090 (slopes 0.791 | 0.462) → 24+3 at −0.85470 (0.995 | 0.375) → 23+4 at −0.64937 (1.366 | 0.910). Between crossings, a contact kink appears where the deformed outer ring becomes circular: −0.9492 (0.32 → 0.87), −0.7889 and −0.5772. At K = −1 the lowest state is 25+2, as in `CURVED.md` (r = 3.957884). The 26-ring around one disk takes over below K = −1.0409. 28, 29 and 30 disks repeat the pattern. For 28: 27+1 → 26+2 → 25+3 → 24+4 → 23+5 at K = −1.08523, −0.90073, −0.69413, −0.53141. For 29: 28+1 → 27+2 → 26+3 → 25+4 → 24+5 at −1.12560, −0.93497, −0.72172, −0.54933, with one more 24+5 crossing at −0.51348. For 30: 29+1 → 28+2 → 27+3 → 26+4 → 25+5 at −1.16789, −0.97526, −0.77192, −0.58911. The first transition moves down by about 0.04 per added disk (−1.0409, −1.0852, −1.1256, −1.1679 for P = 27 … 30). At K = −1 the lowest states are 25+2, 26+2, 27+2 and 28+2, as in `CURVED.md`.
 - A curiosity [CALC]: K_c(10) = −(arccosh φ)², with φ the golden ratio, because 1/(2 sin(π/10)) = φ. The same number, −1.1263047570, is the end K∞ = −a\*(3,3,2)² of two triangles in a triangle (a\* = 1.0612750619 from `kPolish`; it agrees with `data/curved/ideal.json`). I have not checked whether that coincidence is exact.
 
-### 4.2 Triangles in a triangle (P = 2 … 6, 9)
+### 4.2 Triangles in a triangle (P = 2 … 6, 8, 9)
 
-- **K = 0 is a corner for every degenerate record:** 2 triangles (slopes −0.498 | −0.282), 3 triangles (−0.750 | −0.250, also a crossing), 4 triangles, the tiling (−0.750 | 0), the proven 5 triangles with s = 1 + √3 (−1.433 | −0.894), 6 triangles (−1.904 | −1.639, a crossing at 0) and the 9-triangle tiling (−2.500 | −0.625). The values for 2, 4 and 5 triangles agree with the research note's re-optimised slopes (−0.50 | −0.281, −0.751 | 0, −1.436 | −0.895).
+- **K = 0 is a corner for every degenerate record:** 2 triangles (slopes −0.498 | −0.282), 3 triangles (−0.750 | −0.250, also a crossing), 4 triangles, the tiling (−0.750 | 0), the proven 5 triangles with s = 1 + √3 (−1.433 | −0.894), 6 triangles (−1.904 | −1.655: after the rerun one configuration with a contact change at K = 0, not a crossing), 8 triangles (−2.334 | −0.708, a crossing) and the 9-triangle tiling (−2.500 | −0.625). The values for 2, 4 and 5 triangles agree with the research note's re-optimised slopes (−0.50 | −0.281, −0.751 | 0, −1.436 | −0.895).
 - **Two triangles: a complete small hysteresis loop near K = 0.767.** For K < K_c = 0.76701290 the lowest state is mirror-asymmetric (C1, two mirror copies). Above it, the lowest state is the mirror-symmetric D1 arrangement. The symmetric branch exists far below K_c, but the stability probe finds it is a saddle there, and it becomes stable only above K = 0.76697. The asymmetric branch survives to its fold at K = 0.76783. Copies started elsewhere fold between 0.768 and 0.782, because the soft asymmetric mode makes the fold location sensitive to the step control. Coming down from K = 1 slowly, the system stays symmetric until 0.76697, where the symmetry breaks. Going up, it stays asymmetric until 0.76783 and then drops (by 7·10⁻⁷ in s) to the symmetric state. This is a subcritical pitchfork with a fold: a first-order transition with a narrow hysteresis window.
 - **5 triangles** have four crossings for K > 0, at 0.2403, 0.6362, 0.9079 and 1.4577, and a kink at K = 1.22578 = K\*(q = 5), where five unit triangles fit around a common vertex: the {3,5} angle coincidence appears even in a triangular container.
+- **8 triangles** (new): a crossing at K = 0 between a 3+5 state (K < 0) and a 2+6 state, then a cascade of nine crossings for K ∈ (0.33, 1.2): 2+6 → 6+2 → 7+1 → 6+2 arrangements, each with folds on both sides.
 - At the negative end, s ≈ −α ln(K − K∞) + β with K∞ = −a\*² (table below).
 
 ### 4.3 Squares in a square (P = 2 … 9)
 
-- **K = 0 is a corner for all of them.** 2 squares: −0.750 | −1.000, a crossing between two arrangements that tie at K = 0. 3, 4 squares: −1.000 | 0. 5 squares: −2.24 | −0.655. The proven D4 record is lowest only at K = 0: the branch from K < 0 and the branch from K > 0 are twisted C4 arrangements that both meet the D4 record there. 6, 7, 8 squares have crossings at K = 0 with slopes near −3 on the left.
-- **For K > 0, cascades of crossings** lead toward the hemisphere limit. 4 squares go C4 → C2 → C1 → D1 → D2 at K = 0.6214, 0.6614, 0.7474, 0.8757; 8 squares cross six times between K = 0 and 0.37; 9 squares seven times between 0.24 and 0.48. Each crossing has a hysteresis window ending in folds, shown in the viewer as × with a drop arrow.
-- **Negative end:** P squares stop fitting at K∞ = −a\*², with a\* = 0.98220, 0.92481, 0.92062, 0.73915 for P = 2, 3, 4, 5 (`kPolish` from the last configuration; floats, not certified). P = 4 agrees with the value quoted in `docs/spaces/CURVED.md` (0.9206).
+- **K = 0 is a corner for all of them.** 2 squares: −0.750 | −1.000, a crossing between two arrangements that tie at K = 0. 3, 4 squares: −1.000 | 0. 5 squares: −2.24 | −0.655. The proven D4 record is lowest only at K = 0: the branch from K < 0 and the branch from K > 0 are twisted C4 arrangements that both meet the D4 record there. 6, 7, 8 and 9 squares have crossings at K = 0 with slopes near −3 on the left. For 9 squares the 3×3 tiling meets, after the rerun, a different branch on the K > 0 side.
+- **For K > 0, cascades of crossings** lead toward the hemisphere limit. 4 squares go C4 → C2 → C1 → D1 → D2 at K = 0.6214, 0.6614, 0.7474, 0.8757; 8 squares cross six times between K = 0 and 0.37; 9 squares eight times between K = 0 and 0.40. The individual positions in that cascade moved when the search was deepened (§3a); the number and range of crossings are the robust part. Each crossing has a hysteresis window ending in folds, shown in the viewer as × with a drop arrow.
+- **Negative end:** P squares stop fitting at K∞ = −a\*², with a\* = 0.98220, 0.92481, 0.92062, 0.73915, 0.67647, 0.66400, 0.65924, 0.61473 for P = 2 … 9 (`kPolish` from the last configuration; floats, not certified). P = 4 agrees with the value quoted in `docs/spaces/CURVED.md` (0.9206).
 
 ### 4.4 Triangles in a q-gon with a {3, q} tiling curvature
 
@@ -112,12 +136,12 @@ So the tiling curvature is a corner of s\*(K). It is not an isolated optimum: th
 
 ## 5. Limitations and open questions
 
-- **Best found, not proven.** Every size is a certified upper bound at its K. s\*(K) is the lowest of the branches found; a lower branch that no seed reached would move crossings or add new ones. Refinement found real misses near asymptotes (5 squares). The polygon problems with many local optima (6–9 squares, 5 triangles) are the least complete.
+- **Best found, not proven.** Every size is a certified upper bound at its K. s\*(K) is the lowest of the branches found; a lower branch that no seed reached would move crossings or add new ones. Refinement found real misses near asymptotes (5 squares), and the rerun (§3a) found more for 6 and 7 squares. After the rerun the least converged part is the 9-square cascade near the hemisphere limit. 8 triangles and 28–30 disks had a single, moderate search.
 - **Branch identity.** Branches are separated by size and sorted centre radii. Floppy configurations (s = 3 disk plateaus, s = 1 triangle plateaus) are not unique, so contact and symmetry changes inside a plateau are changes of representative, not of s.
 - **Stability probe.** Perturbations of size 10⁻³ with re-polishing detect saddles reliably. On floppy or nearly degenerate branches they can flip back and forth; only the two-triangle pitchfork was checked in detail.
 - **Folds versus slides.** A step is a fold when the configuration jumps *and* s drops. A fast but continuous rearrangement with no drop in s is accepted as continuous. Near a pitchfork, several numerically distinct folds can belong to one bifurcation (two triangles near 0.77).
 - **Kink locations.** Crossings are roots of polished branch differences, located to about 10⁻¹⁰. Kinks found by the slope scan are located to about 10⁻⁶ by fits to sampled sizes. Contact changes are located by bisection, to about 10⁻¹¹, except in floppy states.
-- **Not done:** disks P = 28–30 near K = −1 (P = 27 is done, with a smaller budget), 7, 8 and 10 triangles and 10 squares (skipped for time on a heavily shared machine), and a second-order (Hessian) test for bifurcations.
+- **Not done:** 7 and 10 triangles and 10 squares (not reached within the rerun budget), and a second-order (Hessian) test for bifurcations.
 - **Open:** is K_c(10) = K∞(two triangles) = −(arccosh φ)² exact? Do the crossing cascades near the hemisphere limit continue to accumulate for larger P?
 
 ## 6. Tables [CALC]
@@ -140,20 +164,24 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 11 disks in a disk | [-2.000, 0.125] | b2 11 · D11 [-2.000, -1.391]; b1 10+1 · C1 [-1.375, -0.141]; b3 9+1+1 · C1 [-0.125, 0.000]; b0 8+1+2 · D1 [0.016, 0.125] | 53/53 |
 | 12 disks in a disk | [-2.000, 0.094] | b2 12 · D12 [-2.000, -1.641]; b1 11+1 · C1 [-1.625, -0.234]; b3 10+1+1 · D1 [-0.219, -0.062]; b0 9+3 · D3 [-0.047, 0.094] | 53/53 |
 | 27 disks in a disk | [-1.500, -0.500] | b1 26+1 · D26 [-1.500, -1.047]; b0 25+2 · C1 [-1.031, -0.859]; b7 24+3 · D3 [-0.844, -0.656]; b2 23+4 · D1 [-0.641, -0.500] | 35/35 |
+| 28 disks in a disk | [-1.500, -0.500] | b0 27+1 · D27 [-1.500, -1.094]; b1 26+2 · D1 [-1.078, -0.906]; b2 25+3 · D1 [-0.891, -0.703]; b6 24+4 · D2 [-0.688, -0.547]; b3 23+5 · D1 [-0.531, -0.500] | 41/41 |
+| 29 disks in a disk | [-1.500, -0.500] | b1 28+1 · D28 [-1.500, -1.141]; b5 27+2 · C1 [-1.125, -0.938]; b2 26+3 · D1 [-0.922, -0.734]; b7 25+4 · D1 [-0.719, -0.562]; b4 24+5 · D1 [-0.547, -0.516]; b3 24+5 · D1 [-0.500, -0.500] | 47/47 |
+| 30 disks in a disk | [-1.500, -0.500] | b1 29+1 · C1 [-1.500, -1.172]; b2 28+2 · D1 [-1.156, -1.062]; b0 28+2 · D28 [-1.047, -0.984]; b5 27+3 · D3 [-0.969, -0.781]; b3 26+4 · D1 [-0.766, -0.594]; b4 25+5 · D5 [-0.578, -0.500] | 41/41 |
 | 2 triangles in a triangle | [-1.125, 2.453] | b1 2 · D1 [-1.125, 0.766]; b0 1+1 · D1 [0.781, 2.453] | 64/64 |
 | 3 triangles in a triangle | [-0.953, 2.453] | b2 2+1 · C1 [-0.953, 0.000]; b0 3 · C3 [0.016, 2.453] | 62/62 |
 | 4 triangles in a triangle | [-0.953, 2.453] | b1 3+1 · C3 [-0.953, 0.922]; b0 4 · C1 [0.938, 1.359]; b2 4 · C1 [1.375, 1.500]; b3 4 · C1 [1.516, 1.828]; b0 4 · C1 [1.844, 2.344]; b4 4 · C1 [2.359, 2.406]; b0 4 · C1 [2.422, 2.453] | 67/67 |
 | 5 triangles in a triangle | [-0.594, 1.688] | b1 3+2 · D1 [-0.594, 0.000]; b8 3+2 · D1 [0.016, 0.234]; b2 1+4 · C1 [0.250, 0.625]; b3 5 · C1 [0.641, 0.859]; b9 5 · C1 [0.875, 0.906]; b0 5 · D1 [0.922, 1.453]; b4 5 · C1 [1.469, 1.688] | 61/61 |
-| 6 triangles in a triangle | [-0.516, 1.453] | b0 3+3 · C1 [-0.516, -0.156]; b1 3+3 · C1 [-0.141, 0.000]; b7 3+3 · C1 [0.016, 0.062]; b2 5+1 · C1 [0.078, 0.750]; b3 5+1 · C1 [0.766, 1.109]; b4 5+1 · C1 [1.125, 1.453] | 63/63 |
+| 6 triangles in a triangle | [-0.516, 1.469] | b0 3+3 · C1 [-0.516, -0.156]; b1 3+3 · C1 [-0.141, 0.000]; b29 3+3 · C1 [0.016, 0.047]; b7 3+3 · C1 [0.062, 0.062]; b2 5+1 · C1 [0.078, 0.750]; b3 5+1 · C1 [0.766, 1.109]; b4 5+1 · C1 [1.125, 1.344]; b17 5+1 · D1 [1.359, 1.469] | 63/63 |
+| 8 triangles in a triangle | [-0.438, 1.219] | b2 3+5 · C1 [-0.438, 0.000]; b3 2+6 · C1 [0.016, 0.312]; b9 2+6 · D1 [0.328, 0.344]; b4 2+6 · C1 [0.359, 0.469]; b5 6+2 · C1 [0.484, 0.516]; b11 6+2 · C1 [0.531, 0.531]; b45 7+1 · C1 [0.547, 0.609]; b70 7+1 · C1 [0.625, 0.641]; b6 7+1 · C1 [0.656, 0.766]; b7 7+1 · C1 [0.781, 0.969]; b1 6+2 · C1 [0.984, 1.016]; b69 6+2 · C1 [1.031, 1.062]; b1 6+2 · C1 [1.078, 1.141]; b8 6+2 · C1 [1.156, 1.203]; b1 6+2 · C1 [1.219, 1.219] | 97/97 |
 | 9 triangles in a triangle | [-0.438, 1.078] | b0 3+6 · C3 [-0.438, 0.422]; b12 6+3 · C3 [0.438, 0.484]; b3 5+3+1 · C1 [0.500, 0.562]; b4 8+1 · C1 [0.578, 0.750]; b20 6+2+1 · C1 [0.766, 0.781]; b53 6+2+1 · C1 [0.797, 0.812]; b49 6+2+1 · C1 [0.828, 0.844]; b16 7+1+1 · C1 [0.859, 0.859]; b1 7+2 · C1 [0.875, 1.078] | 74/74 |
 | 2 squares in a square | [-0.953, 1.500] | b0 2 · D2 [-0.953, 0.000]; b1 2 · C2 [0.016, 1.500] | 47/47 |
 | 3 squares in a square | [-0.844, 1.141] | b0 3 · C1 [-0.844, -0.469]; b1 3 · C1 [-0.453, 0.000]; b0 3 · C1 [0.016, 1.141] | 33/33 |
 | 4 squares in a square | [-0.844, 0.891] | b0 4 · C4 [-0.844, 0.609]; b3 4 · C2 [0.625, 0.656]; b2 4 · C1 [0.672, 0.734]; b1 4 · D1 [0.750, 0.875]; b4 4 · D2 [0.891, 0.891] | 53/53 |
 | 5 squares in a square | [-0.531, 0.859] | b9 4+1 · C1 [-0.531, -0.516]; b10 4+1 · C1 [-0.500, -0.484]; b6 4+1 · C4 [-0.469, 0.000]; b3 4+1 · C4 [0.016, 0.281]; b1 4+1 · C4 [0.297, 0.859] | 40/40 |
-| 6 squares in a square | [-0.438, 0.703] | b44 2+2+2 · C1 [-0.438, 0.000]; b1 1+4+1 · C1 [0.016, 0.469]; b2 5+1 · C1 [0.484, 0.703] | 31/31 |
-| 7 squares in a square | [-0.438, 0.562] | b0 3+4 · C1 [-0.438, -0.266]; b14 3+3+1 · C1 [-0.250, -0.234]; b0 3+3+1 · C1 [-0.219, 0.000]; b1 2+4+1 · C2 [0.016, 0.453]; b2 6+1 · C1 [0.469, 0.562] | 35/35 |
+| 6 squares in a square | [-0.453, 0.703] | b61 2+2+2 · C2 [-0.453, 0.000]; b1 1+4+1 · C1 [0.016, 0.016]; b68 1+4+1 · C1 [0.031, 0.047]; b1 1+4+1 · C1 [0.062, 0.219]; b72 5+1 · C1 [0.234, 0.250]; b1 5+1 · C1 [0.266, 0.344]; b73 5+1 · C1 [0.359, 0.375]; b1 5+1 · C1 [0.391, 0.469]; b2 5+1 · C1 [0.484, 0.656]; b70 5+1 · C1 [0.672, 0.688]; b69 5+1 · C1 [0.703, 0.703] | 38/38 |
+| 7 squares in a square | [-0.438, 0.562] | b15 4+2+1 · C1 [-0.438, -0.391]; b17 4+2+1 · C1 [-0.375, -0.328]; b22 4+2+1 · C1 [-0.312, -0.297]; b17 4+2+1 · C1 [-0.281, -0.188]; b0 3+3+1 · C1 [-0.172, 0.000]; b1 2+4+1 · C2 [0.016, 0.453]; b2 6+1 · C1 [0.469, 0.500]; b18 5+1+1 · C1 [0.516, 0.562] | 47/47 |
 | 8 squares in a square | [-0.422, 0.531] | b0 4+4 · C4 [-0.422, 0.000]; b25 3+4+1 · C1 [0.016, 0.047]; b26 7+1 · C1 [0.062, 0.062]; b17 7+1 · C1 [0.078, 0.109]; b8 6+1+1 · C1 [0.125, 0.234]; b1 6+1+1 · C1 [0.250, 0.266]; b18 5+2+1 · C1 [0.281, 0.297]; b1 6+1+1 · C1 [0.312, 0.328]; b8 6+2 · C1 [0.344, 0.359]; b10 6+2 · C2 [0.375, 0.516]; b3 6+2 · C1 [0.531, 0.531] | 52/52 |
-| 9 squares in a square | [-0.375, 0.484] | b0 4+4+1 · D4 [-0.375, 0.234]; b1 7+2 · C1 [0.250, 0.250]; b5 7+2 · C1 [0.266, 0.344]; b11 7+2 · C1 [0.359, 0.375]; b23 7+2 · C1 [0.391, 0.422]; b46 7+2 · C1 [0.438, 0.438]; b34 7+2 · C1 [0.453, 0.469]; b20 6+3 · C1 [0.484, 0.484] | 55/55 |
+| 9 squares in a square | [-0.375, 0.484] | b0 4+4+1 · D4 [-0.375, 0.000]; b68 4+4+1 · C4 [0.016, 0.016]; b0 4+4+1 · C4 [0.031, 0.203]; b111 7+1+1 · C1 [0.219, 0.219]; b71 5+2+2 · C1 [0.234, 0.250]; b5 7+2 · C1 [0.266, 0.328]; b135 7+2 · C1 [0.344, 0.344]; b61 7+2 · C1 [0.359, 0.375]; b23 7+2 · C1 [0.391, 0.391]; b95 6+3 · C1 [0.406, 0.484] | 62/62 |
 | 5 triangles in a pentagon | [-1.000, 1.688] | b0 5 · C5 [-1.000, 1.500]; b4 5 · D1 [1.516, 1.688] | 50/50 |
 | 6 triangles in a hexagon | [-1.500, 1.469] | b0 6 · C6 [-1.500, -0.062]; b13 6 · C6 [-0.047, 0.000]; b0 6 · D6 [0.016, 0.891]; b1 6 · C3 [0.906, 1.094]; b2 5+1 · C1 [1.109, 1.250]; b3 5+1 · D1 [1.266, 1.469] | 73/73 |
 | 7 triangles in a heptagon | [-2.000, 1.000] | b0 7 · C7 [-2.000, 0.391]; b1 6+1 · C1 [0.406, 0.500]; b6 6+1 · C1 [0.516, 0.516]; b10 6+1 · C1 [0.531, 0.719]; b2 6+1 · C1 [0.734, 1.000] | 61/61 |
@@ -192,6 +220,33 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 27 disks in a disk | -0.78894913 | contact | 4.088340 | 0.3350 | 1.0727 | branch 7: contacts +[p:0-5, p:16-23, p:2-20] -[p:0-25, p:12-16, p:12-23, p:2-6, p:5-25, p: |  |  |
 | 27 disks in a disk | -0.64936949 | crossing | 4.257112 | 1.3658 | 0.9100 | 24+3 C1 → 23+4 D1 | b7 up to -0.5000 (range); b2 down to -0.9653 (fold) | 6/6 |
 | 27 disks in a disk | -0.57720168 | contact | 4.308034 | 0.3241 | 1.5318 | branch 2: contacts +[p:4-23] -[p:1-10, p:14-25, p:2-10, p:2-13, p:2-14, p:4-6, p:6-10, p:6 |  |  |
+| 28 disks in a disk | -1.08522611 | crossing | 3.941547 | 0.7660 | 0.4474 | 27+1 D27 → 26+2 D1 | b0 up to -0.5000 (range); b1 down to -1.5000 (range) | 6/6 |
+| 28 disks in a disk | -0.99562538 | contact | 3.976664 | 0.3093 | 0.8382 | branch 1: contacts +[p:2-5] -[p:1-12, p:1-2, p:1-5, p:12-16, p:3-12]; rattlers [] -> [1, 1 |  |  |
+| 28 disks in a disk | -0.90073317 | crossing | 4.061451 | 0.9530 | 0.3511 | 26+2 D26 → 25+3 D1 | b1 up to -0.5000 (range); b2 down to -1.5000 (range) | 6/6 |
+| 28 disks in a disk | -0.88612083 | contact | 4.066519 | 0.3423 | 0.6023 | branch 2: contacts +[p:1-2, p:18-20] -[p:1-25, p:11-18]; symmetry D1 -> D1; kink (slope 0. |  |  |
+| 28 disks in a disk | -0.81631103 | contact | 4.104205 | 0.4464 | 1.0546 | branch 2: contacts +[p:10-12] -[p:10-15, p:11-15, p:11-20, p:11-25, p:12-15, p:15-25, p:2- |  |  |
+| 28 disks in a disk | -0.69412893 | crossing | 4.246717 | 1.2919 | 0.5423 | 25+3 C1 → 24+4 D2 | b2 up to -0.5000 (range); b6 down to -1.2703 (fold) | 6/6 |
+| 28 disks in a disk | -0.63615656 | contact | 4.275391 | 0.4384 | 1.4012 | branch 6: contacts +[p:14-24, p:8-9] -[p:1-16, p:10-16, p:13-15, p:14-27, p:24-27, p:7-13, |  |  |
+| 28 disks in a disk | -0.53599208 | contact | 4.435819 | 1.8216 | -0.6181 | branch 3: contacts +[p:12-20, p:2-16, p:3-23, p:4-14] -[p:10-12, p:14-26, p:16-22, p:3-7]; |  |  |
+| 28 disks in a disk | -0.53141016 | crossing | 4.438969 | 1.7436 | 1.2787 | 24+4 C2 → 23+5 D1 | b6 up to -0.5000 (range); b3 down to -1.3726 (fold) | 6/6 |
+| 29 disks in a disk | -1.12560080 | crossing | 3.945339 | 0.7453 | 0.4368 | 28+1 D28 → 27+2 C1 | b1 up to -0.5000 (range); b5 down to -1.5000 (range) | 6/6 |
+| 29 disks in a disk | -1.03774898 | contact | 3.978989 | 0.3031 | 0.8120 | branch 5: contacts +[p:18-22] -[p:0-14, p:0-27, p:17-18, p:17-22]; symmetry C1 -> C1; kink |  |  |
+| 29 disks in a disk | -0.93496578 | crossing | 4.068229 | 0.9289 | 0.5914 | 27+2 C1 → 26+3 D1 | b5 up to -0.5000 (range); b2 down to -1.5000 (range) | 6/6 |
+| 29 disks in a disk | -0.85447292 | contact | 4.107046 | 0.2846 | 1.0195 | branch 2: contacts +[p:19-20] -[p:15-22, p:15-26, p:19-26, p:2-15, p:2-26, p:2-28, p:20-26 |  |  |
+| 29 disks in a disk | -0.72172178 | crossing | 4.257478 | 1.2616 | 0.4847 | 26+3 D26 → 25+4 D1 | b2 up to -0.5000 (range); b7 down to -0.8821 (fold) | 6/6 |
+| 29 disks in a disk | -0.68782315 | contact | 4.272889 | 0.4213 | 0.7935 | branch 7: contacts +[p:0-14, p:8-17] -[p:0-27, p:8-13]; symmetry D1 -> D1; kink (slope 0.4 |  |  |
+| 29 disks in a disk | -0.65811444 | contact | 4.294814 | 0.6696 | 1.3806 | branch 7: contacts +[p:3-24] -[p:13-17, p:13-23, p:14-27, p:23-24, p:23-27, p:3-23, p:4-10 |  |  |
+| 29 disks in a disk | -0.54932665 | crossing | 4.462449 | 1.7230 | 1.2066 | 25+4 C1 → 24+5 D1 | b7 up to -0.5000 (range); b4 down to -0.6599 (fold) | 6/6 |
+| 29 disks in a disk | -0.51348097 | crossing | 4.501528 | 0.9185 | 0.8227 | 24+5 D1 → 24+5 C1 | b4 up to -0.5000 (range); b3 down to -0.5708 (fold) | 6/6 |
+| 30 disks in a disk | -1.16788840 | crossing | 3.946797 | 0.7238 | 0.4242 | 29+1 D29 → 28+2 D1 | b1 up to -0.5000 (range); b2 down to -1.5000 (range) | 6/6 |
+| 30 disks in a disk | -1.08190878 | contact | 3.978759 | 0.2939 | 0.7850 | branch 2: contacts +[p:14-17] -[p:1-14, p:1-17, p:1-22, p:11-22, p:22-27]; rattlers [] ->  |  |  |
+| 30 disks in a disk | -0.97525781 | crossing | 4.068291 | 0.8982 | 0.3473 | 28+2 D28 → 27+3 D3 | b0 up to -0.5000 (range); b5 down to -1.5000 (range) | 6/6 |
+| 30 disks in a disk | -0.91320325 | contact | 4.088756 | 0.3087 | 0.9577 | branch 5: contacts +[p:13-19, p:17-24, p:6-29] -[p:13-20, p:4-7, p:7-17, p:7-24]; symmetry |  |  |
+| 30 disks in a disk | -0.77192006 | crossing | 4.239225 | 1.1863 | 0.4935 | 27+3 D27 → 26+4 D1 | b5 up to -0.5000 (range); b3 down to -1.1235 (fold) | 6/6 |
+| 30 disks in a disk | -0.76845206 | contact | 4.240927 | 0.4881 | 0.8172 | branch 3: contacts +[p:9-28] -[p:16-20, p:5-29]; symmetry D1 -> D1; kink (slope 0.4881 | 0 |  |  |
+| 30 disks in a disk | -0.69642269 | contact | 4.290120 | 0.4459 | 1.3196 | branch 3: contacts +[p:22-25] -[p:11-28, p:20-26, p:5-11, p:5-18, p:5-6, p:6-20, p:6-22, p |  |  |
+| 30 disks in a disk | -0.58910966 | crossing | 4.447075 | 1.6236 | 0.5915 | 26+4 C1 → 25+5 D5 | b3 up to -0.5000 (range); b4 down to -1.5000 (range) | 6/6 |
+| 30 disks in a disk | -0.54247304 | contact | 4.474351 | 0.5766 | 1.7501 | branch 4: contacts +[p:0-27, p:11-23, p:2-14, p:3-7, p:5-21] -[p:0-1, p:1-26, p:1-27, p:1- |  |  |
 | 2 triangles in a triangle | 0.00000095 | contact | 2.000000 | -0.4976 | -0.2815 | branch 1: contacts +[none] -[w:1:1]; symmetry D1 -> C1; kink (slope -0.4976 | -0.2815) |  |  |
 | 2 triangles in a triangle | 0.76696676 | stability | 1.793584 | – | – | branch 0 (D1) gains stability as K increases (perturb-and-polish probe) |  |  |
 | 2 triangles in a triangle | 0.76701290 | crossing | 1.793571 | -0.2625 | -0.2793 | 2 C1 → 1+1 D1 | b1 up to 0.7678 (fold); b0 down to 0.3897 (fold) | 5/5 |
@@ -210,13 +265,27 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 5 triangles in a triangle | 1.48451780 | contact | 1.685940 | -0.3996 | -0.2857 | branch 4: contacts +[w:2:2] -[none]; symmetry C1 -> D1; kink (slope -0.3996 | -0.2857) |  |  |
 | 6 triangles in a triangle | -0.15302831 | crossing | 3.329106 | -2.6633 | -2.8101 | 3+3 C1 → 3+3 C1 | b0 up to 0.0000 (fold); b1 down to -0.2843 (fold) | 6/6 |
 | 6 triangles in a triangle | -0.00000002 | contact | 2.977082 | -1.9042 | -1.6551 | branch 1: contacts +[w:2:2] -[none]; rattlers [2] -> []; symmetry C1 -> C1; kink (slope -1 |  |  |
-| 6 triangles in a triangle | 0.00000000 | crossing | 2.977082 | -1.9044 | -1.6387 | 3+3 C1 → 3+3 C1 | b1 up to 0.3620 (fold); b7 down to -0.2843 (fold) | 6/6 |
 | 6 triangles in a triangle | 0.01562494 | stability | 2.951356 | – | – | branch 1 (C1) loses stability as K increases (perturb-and-polish probe) |  |  |
 | 6 triangles in a triangle | 0.06951021 | crossing | 2.865760 | -0.8999 | -1.7819 | 3+3 C1 → 5+1 C1 | b7 up to 0.5994 (fold); b2 down to -0.4602 (cap) | 6/6 |
 | 6 triangles in a triangle | 0.55519110 | contact | 2.286824 | -0.8331 | -0.6365 | branch 2: contacts +[w:1:1] -[none]; symmetry C1 -> C1; kink (slope -0.8331 | -0.6365) |  |  |
 | 6 triangles in a triangle | 0.64631121 | kink | 2.226673 | -0.6975 | -0.5796 | branch 2 (shells 5+1, C1, 16 contacts): slope jumps from -0.6975 to -0.5796 with no change |  |  |
 | 6 triangles in a triangle | 0.76276815 | crossing | 2.159024 | -0.5827 | -0.7771 | 5+1 C1 → 5+1 C1 | b2 up to 0.9919 (fold); b3 down to 0.6116 (fold) | 6/6 |
 | 6 triangles in a triangle | 1.11383321 | crossing | 1.924409 | -0.4740 | -0.4845 | 5+1 C1 → 5+1 C1 | b3 up to 1.1395 (fold); b4 down to 1.0959 (fold) | 6/6 |
+| 6 triangles in a triangle | 1.33203894 | stability | 1.807713 | – | – | branch 17 (C1) gains stability as K increases (perturb-and-polish probe) |  |  |
+| 6 triangles in a triangle | 1.35840497 | crossing | 1.792299 | -0.5725 | -0.5835 | 5+1 C1 → 5+1 D1 | b4 up to 1.4634 (hemisphere); b17 down to 1.3242 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.00000000 | crossing | 3.000000 | -2.3339 | -0.7084 | 3+5 D3 → 2+6 D1 | b2 up to 0.4466 (fold); b3 down to -0.4196 (cap) | 6/6 |
+| 8 triangles in a triangle | 0.32697730 | crossing | 2.700482 | -0.8840 | -0.8961 | 2+6 C1 → 2+6 D1 | b3 up to 0.3974 (fold); b9 down to -0.4196 (cap) | 6/6 |
+| 8 triangles in a triangle | 0.35389754 | crossing | 2.676422 | -0.8914 | -0.9251 | 8 D1 → 2+6 C1 | b9 up to 0.7615 (fold); b4 down to 0.1845 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.49877614 | stability | 2.542992 | – | – | branch 4 (C1) loses stability as K increases (perturb-and-polish probe) |  |  |
+| 8 triangles in a triangle | 0.51818117 | crossing | 2.525118 | -0.9199 | -0.9517 | 6+2 C1 → 6+2 C1 | b5 up to 0.6313 (fold); b11 down to 0.4041 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.53146302 | crossing | 2.512470 | -0.9529 | -1.3057 | 6+2 C1 → 7+1 C1 | b11 up to 0.6147 (fold); b45 down to -0.0000 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.54796159 | contact | 2.491168 | -1.2767 | -1.1478 | branch 45: contacts +[w:2:1] -[none]; symmetry C1 -> C1; kink (slope -1.2767 | -1.1478) |  |  |
+| 8 triangles in a triangle | 0.62042454 | crossing | 2.407580 | -1.1567 | -1.1771 | 7+1 C1 → 7+1 C1 | b45 up to 0.8940 (fold); b70 down to 0.4163 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.64531607 | contact | 2.379945 | -1.0261 | -0.9191 | branch 6: contacts +[p:0-5, p:1-3] -[w:6:0]; symmetry C1 -> C1; kink (slope -1.0261 | -0.9 |  |  |
+| 8 triangles in a triangle | 0.77732992 | crossing | 2.269898 | -0.7866 | -0.9494 | 7+1 C1 → 7+1 C1 | b6 up to 0.8939 (fold); b7 down to -0.0000 (fold) | 6/6 |
+| 8 triangles in a triangle | 0.98308508 | crossing | 2.088641 | -0.8462 | -0.8609 | 6+2 C1 → 6+2 C1 | b7 up to 1.0092 (fold); b1 down to 0.9407 (fold) | 6/6 |
+| 8 triangles in a triangle | 1.07253585 | crossing | 2.014554 | 3.9478 | -0.8240 | 6+2 C1 → 6+2 C1 | b69 up to 1.2258 (hemisphere); b1 down to 0.9923 (fold) | 5/5 |
+| 8 triangles in a triangle | 1.14366326 | crossing | 1.956698 | 2.6237 | – | 6+2 C1 → 6+2 C1 | b1 up to 1.2258 (hemisphere) | 5/5 |
 | 9 triangles in a triangle | -0.00000001 | contact | 3.000000 | -2.3336 | -0.5797 | branch 0: contacts +[p:0-1, p:1-7, p:2-6, p:3-4, p:3-6, p:3-7, p:4-5, p:4-7, p:5-8] -[none |  |  |
 | 9 triangles in a triangle | 0.43077186 | crossing | 2.658738 | -0.9162 | -0.9541 | 3+3+3 C3 → 6+3 C3 | b0 up to 0.5813 (fold); b12 down to 0.3926 (fold) | 6/6 |
 | 9 triangles in a triangle | 0.49183500 | contact | 2.599887 | -1.4108 | -1.2676 | branch 3: contacts +[none] -[p:2-4, w:1:0]; symmetry C1 -> C1; kink (slope -1.4108 | -1.26 |  |  |
@@ -245,12 +314,16 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 5 squares in a square | -0.46900040 | crossing | 5.039837 | -15.7050 | -15.7436 | 4+1 C1 → 4+1 C4 | b10 up to 0.1181 (fold); b6 down to -0.5463 (cap) | 5/5 |
 | 5 squares in a square | -0.00002420 | symmetry | 2.707161 | -2.2373 | -1.0379 | branch 6: contacts +[none] -[none]; symmetry C4 -> D4; kink (slope -2.2373 | -1.0379) |  |  |
 | 5 squares in a square | 0.00000000 | crossing | 2.707107 | -2.2399 | -0.6550 | 4+1 D4 → 4+1 D4 | b6 up to 0.8599 (hemisphere); b3 down to -0.4780 (cap) | 5/5 |
-| 6 squares in a square | 0.00000000 | crossing | 3.000000 | -2.7506 | -2.9987 | 2+2+2 C1 → 1+4+1 C1 | b44 up to 0.0000 (fold); b1 down to -0.3776 (cap) | 5/5 |
+| 6 squares in a square | 0.00000000 | crossing | 3.000000 | -3.1260 | -2.9987 | 2+2+2 C2 → 1+4+1 C1 | b61 up to 0.0000 (fold); b1 down to -0.3776 (cap) | 6/6 |
 | 6 squares in a square | 0.03124994 | stability | 2.912028 | – | – | branch 1 (C1) loses stability as K increases (perturb-and-polish probe) |  |  |
-| 6 squares in a square | 0.04431123 | stability | 2.877505 | – | – | branch 1 (C1) gains stability as K increases (perturb-and-polish probe) |  |  |
+| 6 squares in a square | 0.04198974 | stability | 2.883460 | – | – | branch 1 (C1) gains stability as K increases (perturb-and-polish probe) |  |  |
 | 6 squares in a square | 0.47129048 | crossing | 2.168641 | -1.2660 | -1.2812 | 5+1 C1 → 5+1 C1 | b1 up to 0.7022 (fold); b2 down to -0.3776 (cap) | 6/6 |
+| 6 squares in a square | 0.65908628 | crossing | 1.931059 | 0.6124 | -0.2025 | 5+1 C1 → 5+1 C1 | b2 up to 0.7084 (hemisphere); b70 down to 0.6339 (fold) | 6/6 |
+| 7 squares in a square | -0.38890098 | crossing | 5.822911 | -26.4663 | -26.7907 | 4+2+1 C1 → 4+2+1 C1 | b15 up to 0.0519 (fold); b17 down to -0.4399 (cap) | 6/6 |
+| 7 squares in a square | -0.18072985 | crossing | 3.682729 | -4.9290 | -4.9838 | 4+2+1 C1 → 3+3+1 C1 | b17 up to 0.2288 (fold); b0 down to -0.4394 (cap) | 6/6 |
 | 7 squares in a square | 0.00000000 | crossing | 3.000000 | -3.0006 | -2.2495 | 3+3+1 C1 → 2+4+1 C2 | b0 up to 0.0574 (fold); b1 down to -0.3776 (cap) | 6/6 |
 | 7 squares in a square | 0.45683098 | crossing | 2.272465 | -1.5532 | -1.5940 | 6+1 C2 → 6+1 C1 | b1 up to 0.5688 (hemisphere); b2 down to -0.3776 (cap) | 6/6 |
+| 7 squares in a square | 0.51489339 | crossing | 2.177176 | -1.6933 | -1.7255 | 6+1 C1 → 5+1+1 C1 | b2 up to 0.5710 (hemisphere); b18 down to 0.4062 (fold) | 6/6 |
 | 8 squares in a square | -0.00006336 | contact | 3.000190 | -3.0007 | -1.9010 | branch 0: contacts +[p:0-5, p:1-2, p:3-6, p:4-7] -[none]; symmetry C4 -> D4; kink (slope - |  |  |
 | 8 squares in a square | 0.00000006 | crossing | 3.000000 | -2.9999 | -0.0023 | 4+4 D4 → 3+4+1 C1 | b0 up to 0.1149 (fold); b25 down to -0.3776 (cap) | 6/6 |
 | 8 squares in a square | 0.06533154 | crossing | 2.969949 | -0.1452 | -0.8188 | 7+1 C1 → 7+1 C1 | b26 up to 0.1711 (fold); b17 down to -0.3776 (cap) | 6/6 |
@@ -260,16 +333,17 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 8 squares in a square | 0.30766057 | crossing | 2.610208 | -1.7821 | -1.8398 | 5+3 C1 → 6+1+1 C1 | b18 up to 0.3578 (fold); b1 down to 0.2280 (fold) | 6/6 |
 | 8 squares in a square | 0.36308110 | crossing | 2.506328 | -1.9140 | -2.2510 | 6+2 C1 → 6+2 C2 | b8 up to 0.3705 (fold); b10 down to -0.0253 (fold) | 5/5 |
 | 9 squares in a square | 0.00000000 | contact | 3.000000 | -3.0004 | -0.0002 | branch 0: contacts +[none] -[p:0-2, p:0-4, p:0-5, p:0-7, p:1-3, p:1-8, p:3-6, p:6-8, w:1:2 |  |  |
+| 9 squares in a square | 0.00000002 | crossing | 3.000000 | -3.0006 | -0.0004 | 4+4+1 D4 → 4+4+1 C4 | b0 up to 0.4052 (fold); b68 down to -0.3776 (cap) | 5/5 |
 | 9 squares in a square | 0.00050563 | stability | 3.000000 | – | – | branch 0 (D4) loses stability as K increases (perturb-and-polish probe) |  |  |
+| 9 squares in a square | 0.02160653 | crossing | 2.999152 | 0.1846 | -0.0858 | 4+4+1 C1 → 4+4+1 C4 | b68 up to 0.4052 (hemisphere); b0 down to -0.3776 (cap) | 6/6 |
 | 9 squares in a square | 0.03125006 | stability | 2.998080 | – | – | branch 0 (C4) gains stability as K increases (perturb-and-polish probe) |  |  |
-| 9 squares in a square | 0.24637179 | crossing | 2.835162 | -1.5641 | -2.4487 | 4+4+1 C4 → 7+2 C1 | b0 up to 0.4052 (hemisphere); b1 down to 0.1165 (fold) | 6/6 |
-| 9 squares in a square | 0.25706455 | crossing | 2.809111 | -2.4259 | -2.8516 | 7+2 C1 → 7+2 C1 | b1 up to 0.3264 (fold); b5 down to 0.1059 (fold) | 6/6 |
-| 9 squares in a square | 0.34577253 | crossing | 2.578003 | -2.2194 | -2.4446 | 7+2 C1 → 7+2 C1 | b5 up to 0.3843 (fold); b11 down to 0.2538 (fold) | 6/6 |
-| 9 squares in a square | 0.38087434 | crossing | 2.497100 | -2.1574 | -2.2496 | 7+2 C1 → 7+2 C1 | b11 up to 0.4729 (hemisphere); b23 down to 0.2582 (fold) | 6/6 |
-| 9 squares in a square | 0.42930266 | crossing | 2.389063 | 0.5667 | -2.3368 | 7+2 C1 → 7+2 C1 | b23 up to 0.4453 (fold); b46 down to 0.3791 (fold) | 6/6 |
-| 9 squares in a square | 0.44316129 | crossing | 2.356671 | 1.4840 | -2.6646 | 7+2 C1 → 7+2 C1 | b46 up to 0.4729 (hemisphere); b34 down to 0.2582 (fold) | 6/6 |
-| 9 squares in a square | 0.46644157 | stability | 2.299797 | – | – | branch 46 (C1) loses stability as K increases (perturb-and-polish probe) |  |  |
-| 9 squares in a square | 0.47084611 | crossing | 2.289165 | -2.4143 | – | 7+2 C1 → 6+1+2 C1 | b34 up to 0.4729 (hemisphere) | 4/4 |
+| 9 squares in a square | 0.20562501 | crossing | 2.891624 | -1.2109 | -1.3334 | 4+4+1 C4 → 7+1+1 C1 | b0 up to 0.4052 (fold); b111 down to 0.1388 (fold) | 6/6 |
+| 9 squares in a square | 0.22485311 | crossing | 2.864306 | -1.5082 | -1.5688 | 5+2+1+1 C1 → 5+2+2 C1 | b111 up to 0.2579 (fold); b71 down to 0.1306 (infeasible) | 6/6 |
+| 9 squares in a square | 0.25752509 | crossing | 2.807798 | -1.8856 | -2.8491 | 5+2+2 C1 → 7+2 C1 | b71 up to 0.2946 (fold); b5 down to 0.1061 (fold) | 6/6 |
+| 9 squares in a square | 0.34374994 | stability | 2.581259 | – | – | branch 135 (C1) loses stability as K increases (perturb-and-polish probe) |  |  |
+| 9 squares in a square | 0.35460772 | crossing | 2.556358 | -2.2570 | -2.4964 | 7+2 C1 → 7+2 C1 | b135 up to 0.4552 (fold); b61 down to 0.2582 (fold) | 6/6 |
+| 9 squares in a square | 0.38171720 | crossing | 2.495204 | -2.1739 | -2.2488 | 7+2 C1 → 7+2 C1 | b61 up to 0.4649 (fold); b23 down to 0.2582 (fold) | 6/6 |
+| 9 squares in a square | 0.39843750 | crossing | 2.458354 | -2.2137 | -2.3859 | 7+2 C1 → 6+3 C1 | b23 up to 0.4619 (fold); b95 down to 0.0694 (fold) | 6/6 |
 | 5 triangles in a pentagon | 1.22577826 | contact | 1.000000 | -0.1723 | -0.0000 | branch 0: contacts +[w:0:1, w:1:2, w:2:3, w:3:4, w:4:0] -[none]; symmetry C5 -> D5; kink ( |  |  |
 | 5 triangles in a pentagon | 1.50491634 | crossing | 1.000000 | 0.0000 | -0.0890 | 5 D5 → 5 D1 | b0 up to 1.5245 (fold); b4 down to 1.4796 (fold) | 6/6 |
 | 6 triangles in a hexagon | -0.03125006 | stability | 1.005229 | – | – | branch 0 (C6) loses stability as K increases (perturb-and-polish probe) |  |  |
@@ -315,16 +389,16 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 3 triangles in a triangle | 2.000000 | 2.000000 | -0.7500 (-0.7510) | -0.2500 (-0.2501) | +0.5000 | no (crossing at 0) | 10 |
 | 4 triangles in a triangle | 2.000000 | 2.000000 | -0.7500 (-0.7510) | -0.0000 (-0.0001) | +0.7500 | yes | 15 |
 | 5 triangles in a triangle | 2.732057 | 2.732051 | -1.4332 (-1.4358) | -0.8943 (-0.8944) | +0.5388 | yes (relabelled copy) | 9 |
-| 6 triangles in a triangle | 2.977000 | 2.977082 | -1.9042 (-1.9081) | -1.6387 (-1.6540) | +0.2655 | no (crossing at 0) | 13 |
+| 6 triangles in a triangle | 2.977000 | 2.977082 | -1.9042 (-1.9081) | -1.6550 (-1.6540) | +0.2492 | yes (relabelled copy) | 13 |
+| 8 triangles in a triangle | 3.000000 | 3.000000 | -2.3336 (-2.3392) | -0.7083 (-0.7085) | +1.6253 | no (crossing at 0) | 31 |
 | 9 triangles in a triangle | 3.000000 | 3.000000 | -2.5004 (-2.5071) | -0.6250 (-0.5804) | +1.8753 | yes | 39 |
 | 2 squares in a square | 2.000000 | 2.000000 | -0.7500 (-0.7508) | -0.9999 (-0.9971) | -0.2498 | no (crossing at 0) | 3 |
 | 3 squares in a square | 2.000000 | 2.000000 | -1.0001 (-1.0011) | -0.0001 (-0.0034) | +0.9999 | yes (relabelled copy) | 8 |
 | 4 squares in a square | 2.000000 | 2.000000 | -1.0001 (-1.0015) | -0.0000 (-0.0003) | +1.0001 | yes | 14 |
 | 5 squares in a square | 2.707107 | 2.707107 | -2.2372 (-2.2409) | -0.6550 (-0.6562) | +1.5822 | no (crossing at 0) | 12 |
-| 6 squares in a square | 3.000000 | 3.000000 | -2.7503 (-2.7555) | -2.9994 (-2.9871) | -0.2491 | no (crossing at 0) | 10 |
+| 6 squares in a square | 3.000000 | 3.000000 | -3.1255 (-2.7555) | -2.9994 (-2.9871) | +0.1261 | no (crossing at 0) | 10 |
 | 7 squares in a square | 3.000000 | 3.000000 | -3.0003 (-3.0059) | -2.2497 (-2.2447) | +0.7506 | no (crossing at 0) | 17 |
 | 8 squares in a square | 3.000000 | 3.000000 | -3.0005 (-3.0090) | -0.0011 (-0.0230) | +2.9993 | no (crossing at 0) | 24 |
-| 9 squares in a square | 3.000000 | 3.000000 | -3.0005 (-3.0090) | -0.0002 (-0.0035) | +3.0003 | yes | 32 |
 | 5 triangles in a pentagon | 1.240076 | 1.240076 | -0.2286 (-0.2286) | -0.2286 (-0.2285) | +0.0000 | yes | 15 |
 | 6 triangles in a hexagon | 1.000000 | 1.000000 | -0.1667 (-0.1667) | -0.0000 (-0.0000) | +0.1667 | yes (relabelled copy) | 33 |
 | 7 triangles in a heptagon | – | 1.000000 | -0.0000 (-0.0000) | -0.0000 (0.0000) | +0.0000 | yes | 28 |
@@ -339,13 +413,14 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 | 4 triangles in a triangle | -0.956358 | 13.999 | -0.9563621 | -0.9563622 | 1.0169 | 1.0226 | 0.0055 |
 | 5 triangles in a triangle | -0.606158 | 14.000 | -0.6062054 | -0.6062089 | 1.2522 | 1.2844 | 0.0196 |
 | 6 triangles in a triangle | -0.521256 | 14.000 | -0.5213472 | -0.5213565 | 1.3353 | 1.3850 | 0.0215 |
+| 8 triangles in a triangle | -0.452432 | 14.000 | -0.4525697 | -0.4525885 | 1.4189 | 1.4865 | 0.0275 |
 | 9 triangles in a triangle | -0.446688 | 14.000 | -0.4468338 | -0.4468488 | 1.4344 | 1.4960 | 0.0248 |
 | 2 squares in a square | -0.964717 | 13.999 | -0.9647207 | -0.9647208 | 1.0105 | 1.0181 | 0.0083 |
 | 3 squares in a square | -0.855259 | 13.999 | -0.8552663 | -0.8552666 | 1.0717 | 1.0813 | 0.0082 |
 | 4 squares in a square | -0.847534 | 13.999 | -0.8475419 | -0.8475421 | 1.0789 | 1.0862 | 0.0060 |
 | 5 squares in a square | -0.546249 | 14.000 | -0.5463286 | -0.5463365 | 1.3098 | 1.3529 | 0.0207 |
-| 6 squares in a square | -0.450982 | 14.000 | -0.4511461 | -0.4511647 | 1.4269 | 1.4888 | 0.0228 |
-| 7 squares in a square | -0.439423 | 14.000 | -0.4396079 | -0.4396232 | 1.4518 | 1.5082 | 0.0191 |
+| 6 squares in a square | -0.457431 | 14.000 | -0.4575891 | -0.4576054 | 1.4194 | 1.4783 | 0.0217 |
+| 7 squares in a square | -0.440694 | 14.000 | -0.4408742 | -0.4408933 | 1.4437 | 1.5061 | 0.0193 |
 | 8 squares in a square | -0.434390 | 14.000 | -0.4345738 | -0.4345947 | 1.4514 | 1.5169 | 0.0246 |
 | 9 squares in a square | -0.377643 | 14.000 | -0.3778620 | -0.3778870 | 1.5470 | 1.6268 | 0.0225 |
 
@@ -353,19 +428,19 @@ Generated by `python3 python/curved/sweep_report.py data/curved/sweep`. "certifi
 
 **Code**
 - `packages/curved/src/sweep.ts`: `followBranch` (adaptive continuation with fold detection), `symmetryLabel`, `familyLabel`, `contactKeys`, `densityOf`, `poseDistance`, `bisectChange`, `rootBisect`, `sameConfig`, `pieceExistsStrict`. No change to the existing engine files.
-- `packages/curved/scripts/sweep/run-sweep.ts`: seeds, branches, refinement, preliminary events (`--resume` reuses a run).
+- `packages/curved/scripts/sweep/run-sweep.ts`: seeds, branches, refinement, preliminary events (`--resume` reuses a run; for the rerun also `--solveOnResume`, `--seedOffset`, `--hopEvery`, `--hopHops`, `--maxBranches`, `--refineEvery`, `--refineTrials`, `--refineSigmas`).
 - `packages/curved/scripts/sweep/analyze.ts`: the authoritative event analysis and certification prep.
 - `packages/curved/scripts/sweep/build-sweep-viz.ts`: builds the viewer. `shoot.mjs` and `debug-probe.ts` are development helpers (headless screenshots; stability probe check). `timing.ts` is the timing probe used to plan the budget.
-- `packages/curved/viz/sweep-template.html`, `sweep-about.html`, generated `sweep.html` (standalone, data embedded, 3.9 MB).
-- `python/curved/sweep_certify.py` runs the unchanged `certify.py` on a sweep's prepared configurations. `sweep_curate.py` writes `data/curved/sweep/`. `sweep_report.py` prints the tables in §6.
+- `packages/curved/viz/sweep-template.html`, `sweep-about.html`, generated `sweep.html` (standalone, data embedded, 6.4 MB).
+- `python/curved/sweep_certify.py` runs `certify.py` (`certify_configuration`) on a sweep's prepared configurations. `sweep_curate.py` writes `data/curved/sweep/`. `sweep_report.py` prints the tables in §6.
 - `packages/curved/test/sweep.test.ts`: 6 tests (labels, symmetry, existence, the 3-ring closed form and hemisphere end, the 7-disk crossing against the closed form to 10⁻⁷).
 
 **Data** (`data/curved/sweep/`)
 - `sweep_N_M_P.json`, one per problem: the lowest branch on the grid (with certification flags), the branch curves (K, s, density, envelope ds/dK, symmetry, shells, contacts, rattlers), events, K = 0 slopes, asymptote fit, stability probe, and the list of certified points.
-- `records.json`: all 1473 certified configurations, in the format of `data/curved/records.json`. `id` = `curved/K/N/M/P#b<branch>`, `K` an exact binary64 value, `K_exact` its exact rational, `config` the certified configuration at `score_cert`, `display` = score_cert rounded up at 6 decimals, plus the certifier's witnesses. It can be re-checked on its own.
+- `records.json`: all 1711 certified configurations, in the format of `data/curved/records.json`. `id` = `curved/K/N/M/P#b<branch>`, `K` an exact binary64 value, `K_exact` its exact rational, `config` the certified configuration at `score_cert`, `display` = score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value; score_cert itself is the certified upper bound), plus the certifier's witnesses. It can be re-checked on its own.
 - `summary.json`: headline events per problem.
 
-**Pipeline** (raw runs and logs are kept outside the repository; budget about 1.5 h on two processes at nice 10 on a heavily loaded machine, load average 35–50)
+**Pipeline** (raw runs and logs are kept outside the repository; first run about 1.5 h on two processes at nice 10 on a heavily loaded machine, load average 35–50; rerun about 2 h at load average about 12)
 ```
 npx tsx packages/curved/scripts/sweep/run-sweep.ts --N 0 --M 0 --P 7 --Kmin -2 --Kmax 0.65 --seeds 3 --hops 12 --solveStep 0.25 --out RUN.json
 npx tsx packages/curved/scripts/sweep/analyze.ts RUN.json ANA.json
@@ -374,13 +449,18 @@ python3 python/curved/sweep_curate.py --runs RUNS --ana ANAS --out data/curved/s
 npx tsx packages/curved/scripts/sweep/build-sweep-viz.ts VIEWER.json packages/curved/viz/sweep.html
 python3 python/curved/sweep_report.py data/curved/sweep
 ```
+Rerun of an existing problem (§3a), for example 9 squares:
+```
+npx tsx packages/curved/scripts/sweep/run-sweep.ts --N 4 --M 4 --P 9 --Kmin -1 --Kmax 1.6 --resume OLD_RUN.json --solveOnResume 1 --seedOffset 1 --seeds 4 --hops 20 --solveStep 0.125 --hopEvery 2 --hopHops 20 --maxBranches 140 --refine 4 --refineEvery 1 --refineTrials 3 --refineSigmas 0.001,0.01,0.03,0.08,0.15 --out RUN.json
+```
 Ranges used: disks [−2, 0.65]; triangles in a triangle [−1.2, 3]; squares [−1, 1.6]; 5 triangles in a pentagon [−1, 2.5]; 6 in a hexagon [−1.5, 1.5]; 7 in a heptagon [−2, 1]; 8 in an octagon [−3, 0.5]. All stay below √K = 2π/N, the existence limit of the unit polygon, and every container stays in the open hemisphere (K s² < (2π/M)²).
 
-**Checks run** (2026-10-24, in the sweep worktree)
+**Checks run** (2026-10-24, after the rerun)
 ```
 npx tsc -p packages/curved --noEmit                                  -> no errors
-npx vitest run packages/curved                                       -> 24 passed (18 existing + 6 new)
-python3 python/curved/test_certify.py                                -> 10 tests OK
-python3 python/curved/certify.py data/curved/sweep/records.json      -> 1473/1473 records certified
+npx vitest run packages/curved                                       -> 28 passed (3 files)
+python3 python/curved/test_certify.py                                -> 17 tests OK
+python3 python/curved/certify.py data/curved/sweep/records.json      -> 1711/1711 records certified
+python3 python/curved/certify.py data/curved/records.json            -> 299/299 records certified
 ```
-Certification margins: score_cert − score_float is at most 2.7·10⁻¹⁰ relative, with median 2.9·10⁻¹¹.
+Certification margins: score_cert − score_float is at most 2.7·10⁻¹⁰ relative, with median 2.7·10⁻¹¹.

@@ -9,12 +9,12 @@
   "candidates": 1555,
   "bounding_disk_separated": 1382,
   "explicit_axis_separated": 30,
-  "X1": "0.3530016044",
-  "X2": "0.3530016044"
+  "X1": "0.35300161",
+  "X2": "0.35300161"
  },
- "min_clearance_lb": "2.0754886e-12",
- "score_cert_upper": "7.539096719354381431349664",
- "score_upper_float": 7.539096719354382,
+ "min_clearance_lb": "2.0741358e-12",
+ "score_cert_upper": "7.539096598723485936373639",
+ "score_upper_float": 7.539096598723487,
  "explicit": [
   {
    "i": 0,
@@ -23,9 +23,9 @@
     0,
     -1
    ],
-   "axis_owner": "j",
-   "edge": 6,
-   "clearance_lb": "2.07691e-12"
+   "axis_owner": "i",
+   "edge": 3,
+   "clearance_lb": "2.07775e-12"
   },
   {
    "i": 0,
@@ -36,7 +36,7 @@
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "0.00837973"
+   "clearance_lb": "0.00825936"
   },
   {
    "i": 0,
@@ -45,9 +45,9 @@
     0,
     0
    ],
-   "axis_owner": "i",
-   "edge": 6,
-   "clearance_lb": "2.07623e-12"
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "2.07541e-12"
   },
   {
    "i": 0,
@@ -58,7 +58,7 @@
    ],
    "axis_owner": "j",
    "edge": 5,
-   "clearance_lb": "2.15261e-12"
+   "clearance_lb": "2.15313e-12"
   },
   {
    "i": 0,
@@ -69,7 +69,7 @@
    ],
    "axis_owner": "j",
    "edge": 4,
-   "clearance_lb": "2.1902e-12"
+   "clearance_lb": "2.19072e-12"
   },
   {
    "i": 1,
@@ -80,7 +80,7 @@
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "0.0622777"
+   "clearance_lb": "0.0621806"
   },
   {
    "i": 1,
@@ -91,7 +91,7 @@
    ],
    "axis_owner": "i",
    "edge": 4,
-   "clearance_lb": "2.17433e-12"
+   "clearance_lb": "2.17286e-12"
   },
   {
    "i": 1,
@@ -102,7 +102,7 @@
    ],
    "axis_owner": "j",
    "edge": 3,
-   "clearance_lb": "2.10608e-12"
+   "clearance_lb": "2.10602e-12"
   },
   {
    "i": 1,
@@ -113,7 +113,7 @@
    ],
    "axis_owner": "i",
    "edge": 3,
-   "clearance_lb": "0.0300789"
+   "clearance_lb": "0.029992"
   },
   {
    "i": 1,
@@ -124,7 +124,7 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "2.10428e-12"
+   "clearance_lb": "2.10676e-12"
   },
   {
    "i": 1,
@@ -135,7 +135,7 @@
    ],
    "axis_owner": "i",
    "edge": 6,
-   "clearance_lb": "2.13429e-12"
+   "clearance_lb": "2.13325e-12"
   },
   {
    "i": 2,
@@ -146,7 +146,7 @@
    ],
    "axis_owner": "j",
    "edge": 3,
-   "clearance_lb": "0.00253209"
+   "clearance_lb": "0.00288111"
   },
   {
    "i": 2,
@@ -157,7 +157,7 @@
    ],
    "axis_owner": "i",
    "edge": 3,
-   "clearance_lb": "2.07549e-12"
+   "clearance_lb": "2.07698e-12"
   },
   {
    "i": 2,
@@ -168,7 +168,7 @@
    ],
    "axis_owner": "i",
    "edge": 0,
-   "clearance_lb": "2.07636e-12"
+   "clearance_lb": "2.07673e-12"
   },
   {
    "i": 2,
@@ -179,7 +179,7 @@
    ],
    "axis_owner": "j",
    "edge": 0,
-   "clearance_lb": "0.00567572"
+   "clearance_lb": "0.00534361"
   },
   {
    "i": 2,
@@ -190,7 +190,7 @@
    ],
    "axis_owner": "i",
    "edge": 5,
-   "clearance_lb": "2.19093e-12"
+   "clearance_lb": "2.18984e-12"
   },
   {
    "i": 3,
@@ -201,7 +201,7 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "2.16648e-12"
+   "clearance_lb": "2.16445e-12"
   },
   {
    "i": 3,
@@ -210,9 +210,9 @@
     0,
     0
    ],
-   "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "2.07609e-12"
+   "axis_owner": "i",
+   "edge": 3,
+   "clearance_lb": "2.07672e-12"
   },
   {
    "i": 3,
@@ -223,7 +223,7 @@
    ],
    "axis_owner": "i",
    "edge": 0,
-   "clearance_lb": "2.17052e-12"
+   "clearance_lb": "2.16954e-12"
   },
   {
    "i": 4,
@@ -234,7 +234,7 @@
    ],
    "axis_owner": "i",
    "edge": 5,
-   "clearance_lb": "2.15694e-12"
+   "clearance_lb": "2.15708e-12"
   },
   {
    "i": 4,
@@ -245,7 +245,7 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "2.1663e-12"
+   "clearance_lb": "2.16749e-12"
   },
   {
    "i": 4,
@@ -256,7 +256,7 @@
    ],
    "axis_owner": "i",
    "edge": 4,
-   "clearance_lb": "2.15807e-12"
+   "clearance_lb": "2.15726e-12"
   },
   {
    "i": 5,
@@ -267,7 +267,7 @@
    ],
    "axis_owner": "j",
    "edge": 5,
-   "clearance_lb": "0.00619004"
+   "clearance_lb": "0.00616245"
   },
   {
    "i": 5,
@@ -278,7 +278,7 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "2.1909e-12"
+   "clearance_lb": "2.1916e-12"
   },
   {
    "i": 5,
@@ -289,7 +289,7 @@
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "2.169e-12"
+   "clearance_lb": "2.16835e-12"
   },
   {
    "i": 6,
@@ -300,7 +300,7 @@
    ],
    "axis_owner": "i",
    "edge": 4,
-   "clearance_lb": "2.07627e-12"
+   "clearance_lb": "2.07414e-12"
   },
   {
    "i": 6,
@@ -311,7 +311,7 @@
    ],
    "axis_owner": "j",
    "edge": 6,
-   "clearance_lb": "2.18996e-12"
+   "clearance_lb": "2.19039e-12"
   },
   {
    "i": 7,
@@ -322,7 +322,7 @@
    ],
    "axis_owner": "i",
    "edge": 0,
-   "clearance_lb": "2.19017e-12"
+   "clearance_lb": "2.19125e-12"
   },
   {
    "i": 8,
@@ -333,7 +333,7 @@
    ],
    "axis_owner": "i",
    "edge": 1,
-   "clearance_lb": "0.00144764"
+   "clearance_lb": "0.00226375"
   },
   {
    "i": 9,
@@ -344,8 +344,8 @@
    ],
    "axis_owner": "i",
    "edge": 6,
-   "clearance_lb": "2.1517e-12"
+   "clearance_lb": "2.15255e-12"
   }
  ],
- "score_cert_checked": 7.539096719354382
+ "score_cert_checked": 7.539096598723487
 }

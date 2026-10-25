@@ -224,7 +224,7 @@ curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
 const SPACE_PROBLEM = `{
   "space": "torus", "id": "torus/sq/0/2", "fields": {"family": "sq", "N": 0, "P": 2}, "P": 2,
   "status": "best_known",
-  "certified": {"score": 2.8284271247490187, "display": "2.828428", "status": "best_known"},
+  "certified": {"score": 2.8284271247490187, "display": "2.828427", "status": "best_known"},
   "bound": {"value": 2.8284271247461903, "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019"},
   "site_best": null,
   "best_score": 2.8284271247490187,
@@ -295,7 +295,7 @@ ${exhibits}
 
 <h3 id="spaces-certified">Research records and site entries</h3>
 <p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic,
-at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it up at 6 decimals).
+at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it to 6 decimals).
 Entries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than ${SPACE_TOL} are rejected.
 The site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.
 <code>best_score</code> is the smaller of the two values.</p>

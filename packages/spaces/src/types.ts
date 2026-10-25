@@ -70,7 +70,7 @@ export interface SpacesResponse {
 export interface CertifiedValue {
   /** score_cert: the size at which the stored configuration is proven valid. */
   score: number;
-  /** score_cert rounded up at 6 decimals. */
+  /** score_cert rounded to the nearest at 6 decimals (an exact 2, certified at 2 (1 + 1e-12), shows "2.000000"). */
   display: string;
   status: CertifiedStatus;
 }

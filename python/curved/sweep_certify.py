@@ -27,17 +27,21 @@ def certify_run(path):
     results = []
     ok = 0
     for c in run.get("certs", []):
-        rec = {
-            "id": c["id"],
-            "K": c["K"],
-            "N": c["N"],
-            "M": c["M"],
-            "P": c["P"],
-            "score_cert": c["score_cert"],
-            "config_cert": c["config_cert"],
-            "witnesses": c.get("witnesses"),
-        }
-        res = certify.certify_record(rec)
+        if hasattr(certify, "certify_configuration"):
+            # bare configuration (no published-record metadata): K, N, M, P, config, witnesses, score_cert
+            res = certify.certify_configuration(c["K"], c["N"], c["M"], c["P"], c["config_cert"], c.get("witnesses"), c["score_cert"])
+        else:  # earlier certifier: certify_record read config_cert directly
+            rec = {
+                "id": c["id"],
+                "K": c["K"],
+                "N": c["N"],
+                "M": c["M"],
+                "P": c["P"],
+                "score_cert": c["score_cert"],
+                "config_cert": c["config_cert"],
+                "witnesses": c.get("witnesses"),
+            }
+            res = certify.certify_record(rec)
         gap = c["score_cert"] - c["score_float"]
         rel = gap / c["score_float"]
         good = bool(res.get("certified")) and rel <= REL_GAP

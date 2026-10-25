@@ -217,7 +217,7 @@ def build(N, P, rho_float, Q, meta, tam, poly):
     density = P * sg.area(N, a_f) / (4 * PI) if N == 0 or a_f < 2 * PI / N else 1.0
     rec = {
         "id": f"sphere/{N}/{P}", "N": N, "P": P,
-        "score_float": rho_float, "score_cert": rho_cert, "display": _fmt6_up(rho_cert),
+        "score_float": rho_float, "score_cert": rho_cert, "display": cert.display_6(rho_cert),
         "gap_rel": gap_rel, "K_cert": 1 / rho_cert ** 2, "density_float": density,
         "status": status,
         "config": {"rho": rho_cert, "pieces": [{"q": q} for q in Q]},
@@ -300,7 +300,7 @@ def main():
             "units": "lengths in units of the piece (side 1 / disk radius 1); poses on the unit sphere",
             "pose": "q = [w, x, y, z] (any nonzero quaternion; the piece is G(standard piece), G = rotation of q/|q|, v -> q v q*). Standard piece: centre e3 = (0,0,1), vertex k at (sin R cos phi_k, sin R sin phi_k, cos R), phi_k = pi/2 + 2 pi k/N (vertex up = +y), sin(1/(2 rho)) = sin R sin(pi/N). Gauge: piece 0 has q = [1,0,0,0]. G = T(c) R_z(theta) recovers the curved package's (centre, theta) pose away from the south pole.",
             "validity": "interiors disjoint (touching allowed); score_cert is a radius at which the stored configuration is proven strictly valid by python/sphere/certify.py (mpmath intervals, 256 bits)",
-            "display": "score_cert rounded up at 6 decimals",
+            "display": "score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64 value)",
             "status": "proven only when a published proof establishes the optimum and the record matches it within the certification gap; best_known otherwise",
         },
         "records": records, "failures": failures,

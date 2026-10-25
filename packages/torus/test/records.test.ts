@@ -1,13 +1,39 @@
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { pieceArea } from "@polypack/geometry";
-import { TorusRecordsFile, cellArea, certifiedPacking, recordPacking, torusScore, validateTorusPacking } from "../src";
+import { TorusRecordsFile, cellArea, certifiedPacking, displayScore, recordPacking, torusScore, validateTorusPacking } from "../src";
 
 // data/torus/records.json is written by python/torus/build_records.py after the interval
 // certifier (python/torus/certify_torus.py) has proven every entry. These float checks are an
 // independent second opinion with separate code: they must agree with the certificates.
 const url = new URL("../../../data/torus/records.json", import.meta.url);
 const file: TorusRecordsFile | undefined = existsSync(url) ? JSON.parse(readFileSync(url, "utf8")) : undefined;
+
+describe("displayScore", () => {
+  it("rounds the exact binary value to the nearest at 6 decimals", () => {
+    expect(displayScore(2.000000000002)).toBe("2.000000");
+    expect(displayScore(1.0000000000001)).toBe("1.000000");
+    expect(displayScore(2.4166164921352)).toBe("2.416616");
+    // 2.4166165 as a double is 2.41661649999999994...: just below the tie
+    expect(displayScore(2.4166165)).toBe("2.416616");
+    expect(displayScore(2.41661650000001)).toBe("2.416617");
+    expect(displayScore(7.190416372301467)).toBe("7.190416");
+    expect(displayScore(0)).toBe("0.000000");
+    expect(displayScore(1e-9)).toBe("0.000000");
+  });
+
+  it("sends exact binary ties to even, like Python's ROUND_HALF_EVEN", () => {
+    expect(displayScore(0.0078125)).toBe("0.007812");
+    expect(displayScore(1.0078125)).toBe("1.007812");
+    expect(displayScore(1.0234375)).toBe("1.023438");
+  });
+
+  it("is within half a unit of the 6th decimal", () => {
+    for (const x of [1.861209718204199, 3.86370330515627, 15.99263899386, 0.80592744886766]) {
+      expect(Math.abs(Number(displayScore(x)) - x)).toBeLessThanOrEqual(5e-7 + 1e-15);
+    }
+  });
+});
 
 describe.skipIf(!file)("data/torus/records.json", () => {
   const records = file?.records ?? [];
@@ -22,8 +48,8 @@ describe.skipIf(!file)("data/torus/records.json", () => {
       expect(r.score_cert).toBeGreaterThan(r.score_float);
       // shrink trick: score_cert - score_float is tiny (target <= 1e-9 relative)
       expect((r.score_cert - r.score_float) / r.score_float).toBeLessThanOrEqual(1e-9);
-      expect(Number(r.display)).toBeGreaterThanOrEqual(r.score_cert);
-      expect(Number(r.display) - r.score_cert).toBeLessThan(1e-6 + 1e-12);
+      // display: score_cert rounded to the nearest at 6 decimals (exact binary value, ties to even)
+      expect(r.display).toBe(displayScore(r.score_cert));
       expect(r.score_float).toBeGreaterThanOrEqual(r.bound.value * (1 - 1e-12));
     }
   });

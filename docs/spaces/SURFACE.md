@@ -160,8 +160,11 @@ centres scaled by 1/lam in their frames". If a configuration is valid (pieces ma
 pieces scaled by lam < 1 are valid with positive clearance: lam K lies in the interior of K
 together with its centre, so every touching becomes a gap and every cone point on a boundary
 moves strictly outside. The certifier proves the scaled configuration strictly valid and states
-score_cert = s / lam rounded up; score_float = s. Here lam = 1 - eps with eps = 1e-12 for almost
-every entry.
+score_cert = s / lam rounded up to a float; score_float = s. Here lam = 1 - eps with eps = 1e-12
+for almost every entry. The displayed value is score_cert rounded to 6 decimals (nearest, ties to
+even, from its exact binary64 value), PolyPack's rule for every space since 2026-10-24: an exact 2
+shows as 2.000000 although score_cert is 2.000000000002. The display is a readable value, not a
+bound; score_cert is the certified bound.
 
 **2.6 Lower bounds** [CALC].
 - Area: P a(N) <= area(S) = F M s^2 / (4 tan(pi/M)), with a(N) the piece area.
@@ -194,6 +197,22 @@ triangular lattice so that h u + k v is a face's bottom edge; gluings rotate by 
 60 degrees, which preserve the tiling by unit triangles. P = F T: tetrahedron 4, 12, 16, 28, 36;
 octahedron 8, 24, 32, 56, 72; icosahedron 20, 60, 80 (T = 1, 3, 4, 7, 9).
 
+**Hexagons on the tetrahedron and the octahedron** [CALC] (added in the re-run of 2026-10-24). The
+tiling of the plane by unit hexagons descends to a surface when the rotation about every cone
+point by its cone angle (the holonomy) is a symmetry of the tiling and no cone point is a hexagon
+centre. On the tetrahedron the holonomy is a half turn, so the cone points must be midpoints of
+hexagon sides; the tetrahedron is the plane modulo the half turns about the points of a
+triangular lattice, so it suffices that this lattice is a sublattice of the hexagon centres'
+lattice (spacing sqrt 3) moved to a side midpoint. On the octahedron the holonomy is a third of a
+turn, so the cone points must be hexagon vertices, all of one class (they form a triangular
+lattice of spacing sqrt 3). With T = h^2 + hk + k^2 the face side is s = sqrt(3T) and
+P = area / hexagon area = 2T on the tetrahedron, 4T on the octahedron: tetrahedron P = 2, 6, 8,
+14 at s = sqrt 3, 3, sqrt 12, sqrt 21; octahedron P = 4, 12, 16 at s = sqrt 3, 3, sqrt 12 (and 28
+beyond the table). The tiling is placed in face 0's frame and developed onto the other faces;
+each construction is float-checked and certified. The construction cannot apply on the
+icosahedron (a sixth of a turn is a symmetry only about hexagon centres) or on the cube and the
+dodecahedron (a quarter turn and a tenth of a turn are not symmetries of the tiling).
+
 These cases meet the area bound exactly, so they are best possible [CALC: P a(N) = area(S)];
 status `best_known` with that note. Construction code: `packages/surface/scripts/build-exact.ts`.
 [SPEC] Perfect tilings at other sizes were not searched for.
@@ -218,8 +237,8 @@ code, while the octahedron's two copies cover its surface exactly).
 ## 3b. Results in brief
 
 Full tables: [SURFACE_RESULTS.md](SURFACE_RESULTS.md); data: `data/surface/records.json`
-(2038 records: 1248 nofold, 790 fold; all certified, 1989 at eps = 1e-12, 7 at 3e-12 and 42 at
-1e-11, so score_cert exceeds score_float by at most 1.0e-11 relative). Fold searches cover every
+(2038 records: 1248 nofold, 790 fold; all certified, 1980 at eps = 1e-12, 16 at 3e-12 and 42
+at 1e-11, so score_cert exceeds score_float by at most 1.0e-11 relative). Fold searches cover every
 solid and every N in {0, 3, 4, 5, 6, 8} for P = 1..24 (720 problems); the nofold tables cover
 P = 1..max(4F, 24).
 
@@ -237,7 +256,7 @@ P = 1..max(4F, 24).
 - **Exact cases** (section 3) meet the area bound: 12 squares on the cube at s = sqrt 2
   (nofold 2), 12 triangles on the tetrahedron and 24 on the octahedron at s = sqrt 3 (nofold 2),
   60 triangles on the icosahedron at sqrt 3 (nofold 2).
-- **61 entries meet a lower bound** (listed in SURFACE_RESULTS.md with their gaps): score_cert /
+- **68 entries meet a lower bound** (listed in SURFACE_RESULTS.md with their gaps): score_cert /
   bound - 1 is at most 3 eps, the float rounding of s plus the certificate's shrink, so they are
   best possible [CALC]. With the one-piece replicas (section 3) these include, at the one-piece
   bound 2 sin(pi/M) r_in(N): disks (2 sin(pi/M)) for P = 1 on the tetrahedron, P <= 2 on the cube
@@ -246,10 +265,10 @@ P = 1..max(4F, 24).
   and 1 + 1/sqrt 2: the face's corners sit at the midpoints of the piece's sides); pentagons on the
   dodecahedron for P <= 3 (phi/2); triangles (1/2) and hexagons (3/2) for P = 1 on the
   tetrahedron, P <= 2 on the octahedron and P <= 4 on the icosahedron. Two squares on the cube
-  are exactly 1/sqrt 2 [CALC] (opposite faces). Five fold entries are within 1e-6 of their bound
-  without being shown equal (hexagons on the tetrahedron at P = 2, 6, 8, 14 and on the
-  octahedron at P = 4) [SPEC: probably exact hexagon tilings of these surfaces, with the cone
-  points at midpoints of hexagon sides; not constructed].
+  are exactly 1/sqrt 2 [CALC] (opposite faces). The five fold entries that the first build left
+  within 1e-6 of their bound (hexagons on the tetrahedron at P = 2, 6, 8, 14 and on the
+  octahedron at P = 4) are exact hexagon tilings (section 3), as are hexagons on the octahedron
+  at P = 12 and 16.
 - Cross-checks: the cube disk values agree with the earlier exploratory experiment where both
   exist (P = 6: 1.961568; P = 12: 2.730486); that experiment's P = 2 value sqrt 2 was missed by
   the first search pass (two disks landed on adjacent faces) and found by the second.
@@ -304,10 +323,10 @@ P = 1..max(4F, 24).
 
 **Records mode.** `python3 python/surface/cert.py RECORDS.json` checks, for every record, that the
 id is `surface/<solid>/<mode>/<N>/<P>` for the record's fields, that s == score_float, that eps is
-present and that score_cert and display are exactly s / (1 - eps) rounded up to a float and at 6
-decimals; it then certifies the configuration at that eps and compares again. Every problem,
-including malformed records (missing fields, eps "nan", unknown solid, non-object records), is
-reported as FAIL and the run continues.
+present, that score_cert is exactly s / (1 - eps) rounded up to a float and that display is that
+float rounded to 6 decimals; it then certifies the configuration at that eps and compares again.
+Every problem, including malformed records (missing fields, eps "nan", unknown solid, non-object
+records), is reported as FAIL and the run continues.
 
 Certificates: `data/surface/certificates/<solid>_<mode>.json.gz` (gzip-compressed JSON), keyed by
 record id: per pair of parts the face, pieces, chains, witness type, constraint labels (A/B part,
@@ -338,6 +357,23 @@ and float-checked before certification. A second pass polished the first pass's 
 way (`scripts/polish.ts`). Seeds, start and hop counts and the time limit are stored with each
 record; a run that hit its time limit is flagged (`budget.deadline_hit`) and is not exactly
 reproducible.
+
+**Re-run of the time-limited searches** (2026-10-24, evening). The 12 published search results
+that had hit their time limit were run again with the same seeds, start and hop counts and warm
+starts (the earlier results of the same run were replayed as the "P - 1" or "P + 1" starts): four
+with the same time limit, then all others with a 1500 s limit so that the run is decided by its
+counts. With the same 150 s limit, tetrahedron disks P = 13 and 22 and cube disks P = 19 gave the
+published values again (to 1e-12); cube disks P = 18 finished inside the limit at 3.427469 (from
+3.445888).
+Counted runs: tetrahedron P = 13 5.291355 -> 5.196152 (finished, 1224 s); cube P = 19 3.498175 ->
+3.491976, P = 22 3.747830 -> 3.744177, P = 23 3.839958 -> 3.839191 (finished); octahedron P = 22
+4.929035 -> 4.929022 (finished); octahedron P = 11 and 21 and icosahedron P = 23 finished with
+the published values (icosahedron 4e-11 above the published, polished value), so these are now
+reproducible from their seeds; cube P = 24 3.928892 -> 3.882425, tetrahedron P = 22 and
+dodecahedron P = 23 (unchanged) reached the 1500 s limit again. A record was replaced only by a
+certified better one; its seed, counts, limit and time are stored with it (`search_file` names the
+re-run). Machine load stayed high during the re-run (load average about 30), so times are not
+comparable with the first build.
 
 ## 6. Conventions in code
 
@@ -415,10 +451,9 @@ or on a net; pieces keep their colour across folds; red dots are the cone points
   through `data/surface/solids.json`, which it rebuilds and compares independently.
 - The chain-enumeration argument (turn rule, termination) is given in section 2.4; the code also
   has a hard depth cap that fails loudly instead of truncating.
-- Not done: perfect tilings beyond the Goldberg–Coxeter and Caspar–Klug families; lower bounds
+- Not done: perfect tilings beyond the Goldberg–Coxeter, Caspar–Klug and hexagon families; lower bounds
   for disks beyond area and one piece (an argument with the vertex-free regions around the face
-  centres looks possible for small P [SPEC]); the probable exact hexagon tilings of the
-  tetrahedron and octahedron (section 3b).
+  centres looks possible for small P [SPEC]).
 - An independent adversarial review (2026-10-24; judges with different algorithms, 2.49 million
   traced points, about 5400 perturbed records, 6000 random wrapped configurations, 2238 threshold
   tests and a tetrahedron orbifold model) found no soundness defect in the certifier. Its tooling

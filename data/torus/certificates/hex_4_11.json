@@ -6,38 +6,16 @@
  "shrink": "pieces scaled by 1 - eps about their centres",
  "interval_precision_bits": 128,
  "enumeration": {
-  "candidates": 1542,
-  "bounding_disk_separated": 1377,
-  "explicit_axis_separated": 22,
-  "X1": "0.4082482905",
-  "X2": "0.4082482905"
+  "candidates": 1562,
+  "bounding_disk_separated": 1394,
+  "explicit_axis_separated": 25,
+  "X1": "0.409975036",
+  "X2": "0.409975036"
  },
- "min_clearance_lb": "9.9793637e-13",
- "score_cert_upper": "4.000000000003999111821584",
- "score_upper_float": 4.0000000000039995,
+ "min_clearance_lb": "1.0009996e-9",
+ "score_cert_upper": "3.98315267650597760183066",
+ "score_upper_float": 3.983152676505978,
  "explicit": [
-  {
-   "i": 0,
-   "j": 1,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 3,
-   "clearance_lb": "9.9869e-13"
-  },
-  {
-   "i": 0,
-   "j": 2,
-   "lam": [
-    0,
-    -1
-   ],
-   "axis_owner": "j",
-   "edge": 3,
-   "clearance_lb": "9.98637e-13"
-  },
   {
    "i": 0,
    "j": 4,
@@ -46,11 +24,22 @@
     0
    ],
    "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "9.99998e-13"
+   "edge": 3,
+   "clearance_lb": "1.18444e-9"
   },
   {
-   "i": 1,
+   "i": 0,
+   "j": 5,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 3,
+   "clearance_lb": "3.93384e-9"
+  },
+  {
+   "i": 0,
    "j": 6,
    "lam": [
     -1,
@@ -58,10 +47,10 @@
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "1.00001e-12"
+   "clearance_lb": "6.83285e-9"
   },
   {
-   "i": 1,
+   "i": 0,
    "j": 7,
    "lam": [
     0,
@@ -69,29 +58,84 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "0.39279"
+   "clearance_lb": "0.239228"
   },
   {
-   "i": 1,
-   "j": 8,
+   "i": 0,
+   "j": 10,
    "lam": [
     0,
     0
    ],
-   "axis_owner": "i",
-   "edge": 3,
-   "clearance_lb": "9.99457e-13"
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "4.7294e-9"
   },
   {
    "i": 1,
-   "j": 9,
+   "j": 2,
    "lam": [
     0,
     0
    ],
    "axis_owner": "j",
    "edge": 2,
-   "clearance_lb": "1.00106e-12"
+   "clearance_lb": "1.08382e-9"
+  },
+  {
+   "i": 1,
+   "j": 4,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 3,
+   "clearance_lb": "2.70414e-9"
+  },
+  {
+   "i": 1,
+   "j": 5,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "7.78387e-9"
+  },
+  {
+   "i": 1,
+   "j": 6,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 3,
+   "clearance_lb": "2.73803e-9"
+  },
+  {
+   "i": 1,
+   "j": 8,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "2.6952e-9"
+  },
+  {
+   "i": 2,
+   "j": 4,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "3.36593e-9"
   },
   {
    "i": 2,
@@ -101,19 +145,41 @@
     0
    ],
    "axis_owner": "j",
-   "edge": 2,
-   "clearance_lb": "1.00246e-12"
+   "edge": 3,
+   "clearance_lb": "0.249766"
   },
   {
    "i": 2,
-   "j": 6,
+   "j": 7,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "4.06371e-9"
+  },
+  {
+   "i": 2,
+   "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 3,
+   "clearance_lb": "1.001e-9"
+  },
+  {
+   "i": 2,
+   "j": 10,
    "lam": [
     0,
     0
    ],
    "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "1.00004e-12"
+   "edge": 0,
+   "clearance_lb": "1.001e-9"
   },
   {
    "i": 3,
@@ -122,23 +188,45 @@
     0,
     0
    ],
-   "axis_owner": "j",
+   "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "9.99867e-13"
+   "clearance_lb": "2.33068e-9"
   },
   {
    "i": 3,
    "j": 5,
    "lam": [
-    0,
+    -1,
     0
    ],
    "axis_owner": "i",
    "edge": 3,
-   "clearance_lb": "9.99691e-13"
+   "clearance_lb": "4.27997e-9"
   },
   {
    "i": 3,
+   "j": 7,
+   "lam": [
+    0,
+    -1
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "2.65888e-9"
+  },
+  {
+   "i": 3,
+   "j": 9,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "2.62969e-9"
+  },
+  {
+   "i": 5,
    "j": 6,
    "lam": [
     0,
@@ -146,84 +234,29 @@
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "1.0001e-12"
+   "clearance_lb": "1.001e-9"
   },
   {
-   "i": 3,
+   "i": 5,
    "j": 9,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "1.001e-9"
+  },
+  {
+   "i": 6,
+   "j": 7,
    "lam": [
     1,
     0
    ],
    "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "9.99008e-13"
-  },
-  {
-   "i": 4,
-   "j": 7,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "9.98388e-13"
-  },
-  {
-   "i": 5,
-   "j": 7,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "9.97936e-13"
-  },
-  {
-   "i": 5,
-   "j": 10,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "9.99691e-13"
-  },
-  {
-   "i": 6,
-   "j": 8,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "9.99927e-13"
-  },
-  {
-   "i": 6,
-   "j": 9,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 3,
-   "clearance_lb": "9.99476e-13"
-  },
-  {
-   "i": 7,
-   "j": 8,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "9.99293e-13"
+   "edge": 2,
+   "clearance_lb": "1.001e-9"
   },
   {
    "i": 7,
@@ -233,31 +266,31 @@
     0
    ],
    "axis_owner": "i",
-   "edge": 3,
-   "clearance_lb": "9.99513e-13"
+   "edge": 1,
+   "clearance_lb": "2.23029e-9"
   },
   {
    "i": 8,
-   "j": 10,
+   "j": 9,
    "lam": [
     0,
     0
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "9.99705e-13"
+   "clearance_lb": "2.52627e-9"
   },
   {
    "i": 9,
    "j": 10,
    "lam": [
     0,
-    -1
+    0
    ],
    "axis_owner": "j",
-   "edge": 3,
-   "clearance_lb": "1.00028e-12"
+   "edge": 1,
+   "clearance_lb": "2.57674e-9"
   }
  ],
- "score_cert_checked": 4.0000000000039995
+ "score_cert_checked": 3.983152676505978
 }

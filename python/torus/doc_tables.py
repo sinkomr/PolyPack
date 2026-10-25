@@ -20,7 +20,7 @@ def main(path, pmax=16):
         if not Ps:
             continue
         print("### %s\n" % title)
-        print("Certified score (rounded up), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).\n")
+        print("Certified score (rounded to 6 decimals), with density below. **Bold**: equal to the lower bound in the record (to 1e-12 relative).\n")
         print("| P | " + " | ".join(NAMES.get(N, str(N)) for N in Ns) + " |")
         print("|---:|" + "---:|" * len(Ns))
         for P in Ps:

@@ -6,15 +6,15 @@
  "shrink": "pieces scaled by 1 - eps about their centres",
  "interval_precision_bits": 128,
  "enumeration": {
-  "candidates": 1395,
-  "bounding_disk_separated": 1229,
-  "explicit_axis_separated": 36,
-  "X1": "0.5520298129",
-  "X2": "0.5520298129"
+  "candidates": 1420,
+  "bounding_disk_separated": 1252,
+  "explicit_axis_separated": 38,
+  "X1": "0.5525074079",
+  "X2": "0.5525074079"
  },
- "min_clearance_lb": "5.7644312e-13",
- "score_cert_upper": "2.415328488047787585663861",
- "score_upper_float": 2.4153284880477877,
+ "min_clearance_lb": "5.7685947e-13",
+ "score_cert_upper": "2.413240644944368689033116",
+ "score_upper_float": 2.413240644944369,
  "explicit": [
   {
    "i": 0,
@@ -24,41 +24,30 @@
     0
    ],
    "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "5.77029e-13"
+   "edge": 2,
+   "clearance_lb": "8.65886e-13"
   },
   {
    "i": 0,
    "j": 2,
    "lam": [
     0,
-    -1
-   ],
-   "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "0.169829"
-  },
-  {
-   "i": 0,
-   "j": 3,
-   "lam": [
-    -1,
     0
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "5.77208e-13"
+   "clearance_lb": "0.151351"
   },
   {
    "i": 0,
    "j": 5,
    "lam": [
-    -1,
-    0
+    0,
+    1
    ],
-   "axis_owner": "i",
-   "edge": 2,
-   "clearance_lb": "8.66426e-13"
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "0.214608"
   },
   {
    "i": 0,
@@ -68,19 +57,19 @@
     0
    ],
    "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "8.65809e-13"
+   "edge": 2,
+   "clearance_lb": "7.79769e-13"
   },
   {
    "i": 0,
    "j": 7,
    "lam": [
     0,
-    -1
+    0
    ],
    "axis_owner": "j",
-   "edge": 2,
-   "clearance_lb": "7.64339e-13"
+   "edge": 1,
+   "clearance_lb": "5.77657e-13"
   },
   {
    "i": 0,
@@ -89,9 +78,9 @@
     0,
     0
    ],
-   "axis_owner": "i",
+   "axis_owner": "j",
    "edge": 2,
-   "clearance_lb": "5.7684e-13"
+   "clearance_lb": "7.97448e-13"
   },
   {
    "i": 0,
@@ -101,8 +90,30 @@
     0
    ],
    "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "5.77551e-13"
+  },
+  {
+   "i": 1,
+   "j": 2,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
    "edge": 0,
-   "clearance_lb": "7.64068e-13"
+   "clearance_lb": "7.80377e-13"
+  },
+  {
+   "i": 1,
+   "j": 3,
+   "lam": [
+    1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "7.97453e-13"
   },
   {
    "i": 1,
@@ -111,9 +122,9 @@
     0,
     0
    ],
-   "axis_owner": "j",
+   "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "7.64085e-13"
+   "clearance_lb": "7.8002e-13"
   },
   {
    "i": 1,
@@ -123,30 +134,41 @@
     0
    ],
    "axis_owner": "i",
-   "edge": 2,
-   "clearance_lb": "5.77221e-13"
+   "edge": 1,
+   "clearance_lb": "7.79727e-13"
   },
   {
    "i": 1,
    "j": 7,
    "lam": [
-    0,
-    -1
+    1,
+    0
    ],
-   "axis_owner": "j",
+   "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "8.10833e-13"
+   "clearance_lb": "5.77635e-13"
   },
   {
    "i": 1,
    "j": 8,
    "lam": [
     0,
+    1
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "7.97398e-13"
+  },
+  {
+   "i": 1,
+   "j": 9,
+   "lam": [
+    0,
     0
    ],
    "axis_owner": "j",
    "edge": 1,
-   "clearance_lb": "8.66258e-13"
+   "clearance_lb": "5.77012e-13"
   },
   {
    "i": 2,
@@ -155,31 +177,42 @@
     0,
     0
    ],
-   "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "0.195467"
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "5.77683e-13"
   },
   {
    "i": 2,
    "j": 4,
    "lam": [
-    -1,
-    1
+    0,
+    -1
    ],
-   "axis_owner": "i",
+   "axis_owner": "j",
    "edge": 2,
-   "clearance_lb": "8.66084e-13"
+   "clearance_lb": "0.171936"
   },
   {
    "i": 2,
-   "j": 6,
+   "j": 5,
    "lam": [
     0,
     0
    ],
    "axis_owner": "j",
    "edge": 2,
-   "clearance_lb": "8.09728e-13"
+   "clearance_lb": "5.76859e-13"
+  },
+  {
+   "i": 2,
+   "j": 6,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 2,
+   "clearance_lb": "8.67065e-13"
   },
   {
    "i": 2,
@@ -190,7 +223,7 @@
    ],
    "axis_owner": "j",
    "edge": 0,
-   "clearance_lb": "5.77189e-13"
+   "clearance_lb": "7.97136e-13"
   },
   {
    "i": 2,
@@ -199,31 +232,20 @@
     0,
     0
    ],
-   "axis_owner": "j",
-   "edge": 2,
-   "clearance_lb": "7.64389e-13"
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "0.0356696"
   },
   {
    "i": 2,
    "j": 9,
    "lam": [
     0,
-    1
+    -1
    ],
    "axis_owner": "i",
-   "edge": 2,
-   "clearance_lb": "5.77924e-13"
-  },
-  {
-   "i": 3,
-   "j": 4,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "7.63785e-13"
+   "edge": 0,
+   "clearance_lb": "7.97668e-13"
   },
   {
    "i": 3,
@@ -233,19 +255,19 @@
     0
    ],
    "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "5.77933e-13"
+   "edge": 2,
+   "clearance_lb": "8.65951e-13"
   },
   {
    "i": 3,
    "j": 6,
    "lam": [
-    0,
+    -1,
     0
    ],
-   "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "0.0818765"
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "5.77225e-13"
   },
   {
    "i": 3,
@@ -255,163 +277,163 @@
     0
    ],
    "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "8.10207e-13"
+   "edge": 0,
+   "clearance_lb": "7.79681e-13"
   },
   {
    "i": 3,
    "j": 8,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "i",
+   "edge": 1,
+   "clearance_lb": "0.171936"
+  },
+  {
+   "i": 4,
+   "j": 5,
+   "lam": [
+    1,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77409e-13"
+  },
+  {
+   "i": 4,
+   "j": 6,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "8.66397e-13"
+  },
+  {
+   "i": 4,
+   "j": 7,
    "lam": [
     1,
     0
    ],
    "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "7.97462e-13"
+  },
+  {
+   "i": 4,
+   "j": 8,
+   "lam": [
+    0,
+    1
+   ],
+   "axis_owner": "j",
+   "edge": 1,
+   "clearance_lb": "5.77447e-13"
+  },
+  {
+   "i": 5,
+   "j": 6,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 0,
+   "clearance_lb": "5.77448e-13"
+  },
+  {
+   "i": 5,
+   "j": 7,
+   "lam": [
+    0,
+    -1
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "7.79875e-13"
+  },
+  {
+   "i": 5,
+   "j": 8,
+   "lam": [
+    -1,
+    0
+   ],
+   "axis_owner": "i",
    "edge": 0,
    "clearance_lb": "8.66227e-13"
   },
   {
-   "i": 3,
+   "i": 5,
    "j": 9,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "8.09884e-13"
-  },
-  {
-   "i": 4,
-   "j": 5,
    "lam": [
     0,
     -1
    ],
    "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "8.10463e-13"
+   "edge": 1,
+   "clearance_lb": "7.79828e-13"
   },
   {
-   "i": 4,
-   "j": 6,
+   "i": 6,
+   "j": 8,
+   "lam": [
+    0,
+    0
+   ],
+   "axis_owner": "j",
+   "edge": 2,
+   "clearance_lb": "5.77734e-13"
+  },
+  {
+   "i": 6,
+   "j": 9,
    "lam": [
     0,
     0
    ],
    "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "8.10098e-13"
+   "clearance_lb": "0.214608"
   },
   {
-   "i": 4,
-   "j": 7,
-   "lam": [
-    0,
-    -1
-   ],
-   "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "5.77333e-13"
-  },
-  {
-   "i": 4,
+   "i": 7,
    "j": 8,
-   "lam": [
-    1,
-    -1
-   ],
-   "axis_owner": "i",
-   "edge": 0,
-   "clearance_lb": "7.65311e-13"
-  },
-  {
-   "i": 4,
-   "j": 9,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "5.76869e-13"
-  },
-  {
-   "i": 5,
-   "j": 7,
    "lam": [
     0,
     0
    ],
    "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "7.63859e-13"
-  },
-  {
-   "i": 5,
-   "j": 8,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 0,
-   "clearance_lb": "5.76443e-13"
-  },
-  {
-   "i": 6,
-   "j": 7,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "i",
    "edge": 2,
-   "clearance_lb": "7.6394e-13"
-  },
-  {
-   "i": 6,
-   "j": 8,
-   "lam": [
-    0,
-    0
-   ],
-   "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "5.78021e-13"
-  },
-  {
-   "i": 6,
-   "j": 9,
-   "lam": [
-    1,
-    0
-   ],
-   "axis_owner": "i",
-   "edge": 1,
-   "clearance_lb": "0.195467"
+   "clearance_lb": "7.80222e-13"
   },
   {
    "i": 7,
    "j": 9,
    "lam": [
     0,
-    1
+    0
    ],
    "axis_owner": "j",
-   "edge": 1,
-   "clearance_lb": "8.66183e-13"
+   "edge": 0,
+   "clearance_lb": "8.66237e-13"
   },
   {
    "i": 8,
    "j": 9,
    "lam": [
     0,
-    1
+    -1
    ],
    "axis_owner": "i",
-   "edge": 2,
-   "clearance_lb": "0.169829"
+   "edge": 0,
+   "clearance_lb": "0.151351"
   }
  ],
- "score_cert_checked": 2.4153284880477877
+ "score_cert_checked": 2.413240644944369
 }

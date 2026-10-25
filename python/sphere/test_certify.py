@@ -64,7 +64,7 @@ def ok(r):
 def published(N, rho, qs, **extra):
     """A minimal published record that passes the record-level checks."""
     r = {"id": f"sphere/{N}/{len(qs)}", "N": N, "P": len(qs), "score_float": rho, "score_cert": rho,
-         "display": certify.display_up(rho), "status": "best_known",
+         "display": certify.display_6(rho), "status": "best_known",
          "config": {"rho": rho, "pieces": [{"q": q} for q in qs]}}
     r.update(extra)
     return r
@@ -182,7 +182,7 @@ class TestPolygons(unittest.TestCase):
         self.assertFalse(ok(rec(3, 1 / math.sqrt(20), [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]])))
 
     def test_published_fields(self):
-        # S2: id (optionally #tag), score_cert = config.rho, display rounded up, score_float <= score_cert,
+        # S2: id (optionally #tag), score_cert = config.rho, display rounded to 6 decimals, score_float <= score_cert,
         # status in the allowed set, 'proven' only with a cited proof
         qs = [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]]
         r = published(4, 1.0, qs)
@@ -198,9 +198,20 @@ class TestPolygons(unittest.TestCase):
                     dict(r, certificate=[1, 2]), dict(r, certificate={"witnesses": 5})]:
             self.assertFalse(pok(bad), {k: bad.get(k) for k in ("id", "score_cert", "display", "score_float", "status", "certificate")})
         self.assertTrue(pok(dict(r, status="proven", literature={"proof": ["R. A. Rankin, Proc. Glasgow Math. Assoc. 2 (1955) 139-144"]})))
-        # display is exact: 0.1234565 rounds up to 0.123457 and a float just above 1 needs 1.000001
-        self.assertEqual(certify.display_up(1.0), "1.000000")
-        self.assertEqual(certify.display_up(math.nextafter(1.0, 2.0)), "1.000001")
+        # display: nearest at 6 decimals from the exact binary64 value (ties to even); exact values show exactly
+        self.assertEqual(certify.display_6(1.0), "1.000000")
+        self.assertEqual(certify.display_6(math.nextafter(1.0, 2.0)), "1.000000")  # no trailing 1 above an exact value
+        self.assertEqual(certify.display_6(2.0000004), "2.000000")
+        self.assertEqual(certify.display_6(2.0000006), "2.000001")
+        self.assertEqual(certify.display_6(1.9999996), "2.000000")
+        # 0.1234565 is stored as 0.12345649999999999... in binary64, so it rounds down
+        self.assertEqual(certify.display_6(0.1234565), "0.123456")
+        # exact binary64 values decide: 1 + 2^-21 = 1.000000476837158203125 rounds down,
+        # 1 + 2^-20 = 1.00000095367431640625 rounds up
+        self.assertEqual(certify.display_6(1 + 2 ** -21), "1.000000")
+        self.assertEqual(certify.display_6(1 + 2 ** -20), "1.000001")
+        self.assertEqual(certify.display_6(0.0), "0.000000")
+        self.assertFalse(pok(dict(r, display="1.000001")))  # the old rounded-up string is now rejected for rho = 1
 
     def test_supported_shapes_only(self):
         # S4: N in {0, 3, 4, 5, 6, 8}; 7-gons are geometrically fine but outside the problem set
@@ -387,8 +398,15 @@ class TestBounds(unittest.TestCase):
         recs = json.load(open(RECORDS))["records"]
         by = {r["id"]: r for r in recs}
         self.assertEqual(by["sphere/3/20"]["literature"]["verdict"], "tiling")
-        verdicts = [r["literature"]["verdict"] for r in recs if r["N"] > 0 and r["literature"]]
-        self.assertEqual(verdicts.count("better"), 34)
+        comp = [r for r in recs if r["N"] > 0 and r["literature"] and r["literature"].get("verdict")]
+        verdicts = [r["literature"]["verdict"] for r in comp]
+        self.assertEqual(verdicts.count("tiling"), 1)
+        # "better" = circumradius above the printed value by more than 1e-5, tilings excluded (34 at the
+        # first publication, 40 after the re-run of 2026-10-24)
+        expect = sum(1 for r in comp if r["literature"]["our_circumradius"] > float(r["literature"]["radius"]) + 1e-5
+                     and r["id"] != "sphere/3/20")
+        self.assertEqual(verdicts.count("better"), expect)
+        self.assertGreaterEqual(expect, 34)
 
     def test_proven_tammes_against_exact_optima(self):
         # reviewer's check: for proven Tammes P, score_cert >= 2/theta_P with cos theta_P the exact root of

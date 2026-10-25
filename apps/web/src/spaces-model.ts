@@ -93,18 +93,11 @@ export function entriesText(p: ListedProblem): { text: string; why: string | nul
 // ---------- rounding ----------
 
 /**
- * Six decimals, rounded up: a score shown this way is never below the value it stands for, as a
- * certified display is (score_cert rounded up at 6 decimals).
+ * Six decimals, rounded to the nearest, as the rest of the site shows scores and bounds. The full
+ * values (score_cert, the site score, the bound) are in the API; an exact 2 shows as 2.000000.
  */
-export function roundUp6(v: number): string {
-  const s = v.toFixed(6);
-  return Number(s) < v ? (Number(s) + 1e-6).toFixed(6) : s;
-}
-
-/** Six decimals, rounded down: a lower bound shown this way is still a lower bound. */
-export function roundDown6(v: number): string {
-  const s = v.toFixed(6);
-  return Number(s) > v ? (Number(s) - 1e-6).toFixed(6) : s;
+export function round6(v: number): string {
+  return v.toFixed(6);
 }
 
 // ---------- filters ----------

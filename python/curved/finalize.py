@@ -203,7 +203,7 @@ def main(argv):
             "score_cert": r["score_cert"],
             "cert_minus_float": r["score_cert"] - r["score_float"],
             "cert_minus_float_relative": (r["score_cert"] - r["score_float"]) / r["score_float"],
-            "display": certify.display_up(r["score_cert"]),
+            "display": certify.display_nearest(r["score_cert"]),
             "status": "best_known",
             "certified": None,
             "config": r["config_cert"],
@@ -287,7 +287,7 @@ def main(argv):
         "score": "s (M >= 3) or r (M = 0); smaller is better",
         "score_float": "touching limit found by the search (float64 polish)",
         "score_cert": "size at which the stored configuration `config` is proven valid with strictly positive clearance",
-        "display": "score_cert rounded up at 6 decimals",
+        "display": "score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value)",
     }
     os.makedirs(out_dir, exist_ok=True)
     with open(os.path.join(out_dir, "records.json"), "w") as f:

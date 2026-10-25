@@ -13,8 +13,7 @@ import {
   parseHash,
   pieceName,
   problemStatus,
-  roundDown6,
-  roundUp6,
+  round6,
   sentence,
   settleFilters,
   shownFields,
@@ -33,7 +32,7 @@ function problem(
   const space = id.split("/")[0] as SpaceName;
   const P = Number(id.split("/").at(-1));
   const status = opts.status ?? "best_known";
-  const certified = opts.cert === null ? null : { score: opts.cert ?? P, display: roundUp6(opts.cert ?? P), status };
+  const certified = opts.cert === null ? null : { score: opts.cert ?? P, display: round6(opts.cert ?? P), status };
   const site_best =
     opts.site === undefined ? null : { id: 1, score: opts.site, name: "A", created_at: "2026-10-24T10:00:00Z" };
   const scores = [certified?.score, site_best?.score].filter((v): v is number => v !== undefined);
@@ -65,23 +64,14 @@ describe("names and numbers", () => {
     expect(formatK("x")).toBe("x");
   });
 
-  it("rounds scores up and bounds down at 6 decimals", () => {
-    expect(roundUp6(1.7320508075706091)).toBe("1.732051");
-    expect(roundDown6(1.7320508075706091)).toBe("1.732050");
-    expect(roundUp6(1.0000000000170126)).toBe("1.000001");
-    expect(roundDown6(0.9999999999879088)).toBe("0.999999");
-    expect(roundUp6(0.9999999999879088)).toBe("1.000000");
-    for (const v of [2, 0.29, 1.5, 0.636619]) {
-      expect(roundUp6(v)).toBe(v.toFixed(6));
-      expect(roundDown6(v)).toBe(v.toFixed(6));
-    }
-    // the rounded value is on the right side of the true one
-    for (let i = 0; i < 1000; i++) {
-      const v = Math.random() * 20;
-      expect(Number(roundUp6(v))).toBeGreaterThanOrEqual(v);
-      expect(Number(roundDown6(v))).toBeLessThanOrEqual(v);
-      expect(Number(roundUp6(v)) - Number(roundDown6(v))).toBeLessThan(1.5e-6);
-    }
+  it("shows scores and bounds at 6 decimals, an exact value without a trailing digit", () => {
+    expect(round6(1.7320508075706091)).toBe("1.732051");
+    // certified sizes sit a hair above an exact value: 2 (1 + 1e-12) shows as 2, not 2.000001
+    expect(round6(2.000000000002)).toBe("2.000000");
+    expect(round6(1.0000000000170126)).toBe("1.000000");
+    expect(round6(0.9999999999879088)).toBe("1.000000");
+    expect(round6(2.8284271247490187)).toBe("2.828427");
+    for (const v of [2, 0.29, 1.5, 0.636619]) expect(round6(v)).toBe(v.toFixed(6));
   });
 
   it("tells the status of a problem, an infeasible one included", () => {

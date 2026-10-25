@@ -1,0 +1,7 @@
+free N=5 P=3 score=2.4166164921 dens=0.883802 msep=-2.22e-16 label=hop:random runs=43 hops=27 stop=count t=26.0
+free N=5 P=5 score=3.0943307350 dens=0.898433 msep=-5.55e-16 label=hop:random runs=57 hops=37 stop=count t=46.2
+free N=5 P=7 score=3.6579097210 dens=0.900080 msep=-4.44e-16 label=hop:from-hex runs=69 hops=47 stop=count t=30.8
+free N=5 P=9 score=4.1390251303 dens=0.903848 msep=-6.66e-16 label=hop:random runs=85 hops=57 stop=count t=159.4
+free N=5 P=11 score=4.5697652600 dens=0.906262 msep=-6.66e-16 label=hop:random runs=93 hops=67 stop=count t=86.0
+free N=5 P=13 score=4.9632209826 dens=0.907957 msep=-7.77e-16 label=hop:random runs=105 hops=77 stop=count t=167.9
+free N=5 P=15 score=5.3149901067 dens=0.913556 msep=2.51e-12 label=hop:insert runs=127 hops=87 stop=count t=298.3

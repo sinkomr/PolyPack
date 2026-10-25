@@ -1,0 +1,30 @@
+16:49:59 start sq 0 9-16
+16:52:14 end sq 0 9-16 rc 0
+16:52:14 start hex 0 5-15
+16:54:07 end hex 0 5-15 rc 0
+16:54:07 start sq 4 3-16
+17:04:31 end sq 4 3-16 rc 0
+17:04:31 start hex 4 2-16
+17:23:16 end hex 4 2-16 rc 0
+17:23:16 start sq 3 2-16
+17:40:37 end sq 3 2-16 rc 0
+17:40:37 start hex 3 3-16
+17:52:23 end hex 3 3-16 rc 0
+17:52:23 task2 done
+17:52:23 slsqp hex_3_12.json
+hex_3_12.json: 2.582838096283 -> 2.582838096277 (rel 2.21e-12)
+17:52:54 slsqp hex_7_11.json
+hex_7_11.json: 7.539096669616 -> 7.539096598716 (rel 9.40e-09)
+17:53:22 slsqp sq_7_11.json
+sq_7_11.json: 7.023958870668 -> 7.023958869017 (rel 2.35e-10)
+17:53:42 start free 5 3
+17:54:10 start free 5 5
+17:54:58 start free 5 7
+17:55:31 start free 5 9
+17:58:13 start free 5 11
+17:59:41 start free 5 13
+18:02:31 start free 5 15
+18:07:31 task3 done
+hex_7_11.json checked
+sq_7_11.json checked
+hex_3_12.json checked

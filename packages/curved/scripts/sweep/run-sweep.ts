@@ -13,6 +13,9 @@
  * 3. Ground state: lower envelope over branches on the grid (multiples of 1/64, exact rationals).
  * 4. Events: crossings of the envelope (root of s_A - s_B by bisection), contact and symmetry changes
  *    along optimal branches (bisection), branch ends, one-sided slopes at K = 0.
+ * 4a. Optional (rerun): --solveOnResume 1 --seedOffset k adds new multistart solves to a resumed run;
+ *    --hopEvery n runs warm-started basin hopping from the lowest configuration every n grid values;
+ *    --maxBranches, --refineEvery, --refineTrials, --refineSigmas set the budgets.
  * 4b. Refinement (rounds): at every second grid K the lowest configuration is perturbed (sigma 1e-3,
  *    2e-2, 8e-2; two trials each) and re-polished; anything lower becomes a seed and is followed.
  *    --resume RUN.json reuses an earlier run's branches and skips the solves.
@@ -63,6 +66,17 @@ const certEvery = Number(arg("certEvery", "4"));
 const resumeFile = process.argv.includes("--resume") ? arg("resume") : undefined;
 // refinement rounds: perturb-and-polish the lowest configuration along K, follow anything lower
 const refineRounds = Number(arg("refine", "3"));
+// deeper searches (rerun): new multistart solves also when resuming, with a seed offset so that the
+// seeds differ from the earlier run; warm-started basin hopping from the lowest configuration every
+// hopEvery grid values; denser refinement; a larger branch budget
+const solveOnResume = arg("solveOnResume", "0") === "1";
+const seedOffset = Number(arg("seedOffset", "0"));
+const maxBranches = Number(arg("maxBranches", "60"));
+const hopEvery = Number(arg("hopEvery", "0"));
+const hopHops = Number(arg("hopHops", "20"));
+const refineEvery = Number(arg("refineEvery", "2"));
+const refineTrials = Number(arg("refineTrials", "2"));
+const refineSigmas = arg("refineSigmas", "0.001,0.02,0.08").split(",").map(Number);
 const GRID = 1 / 64;
 const problem: CurvedProblem = { N, M, P };
 const t0 = Date.now();
@@ -136,9 +150,9 @@ const solveKs: number[] = [];
 for (let j = Math.ceil(Kmin / solveStep - 1e-9); j <= Math.floor(Kmax / solveStep + 1e-9); j++) solveKs.push(j * solveStep);
 const resumed = resumeFile ? JSON.parse(readFileSync(resumeFile, "utf8")) : undefined;
 const solves: { K: number; seed: number; found: boolean; size?: number }[] = resumed ? resumed.solves : [];
-for (const K of resumed ? [] : solveKs) {
+for (const K of resumed && !solveOnResume ? [] : solveKs) {
   for (let s = 1; s <= nSeeds; s++) {
-    const seed = 7919 * (gi(K) + 1000) + 31 * s + 1009 * N + 13 * M + P;
+    const seed = 7919 * (gi(K) + 1000) + 31 * s + 1009 * N + 13 * M + P + 104729 * seedOffset;
     let res;
     try {
       res = solve(problem, K, { seed, restarts: 1, hops });
@@ -245,7 +259,7 @@ if (resumed) {
 // --- follow seeds
 function processQueue(queue: PSeed[]) {
   let guard = 0;
-  while (queue.length > 0 && guard++ < 400 && branches.length < 60) {
+  while (queue.length > 0 && guard++ < 400 + 4 * maxBranches && branches.length < maxBranches) {
     const s = queue.shift() as PSeed;
     if (s.pt.grid) {
       const e = envAt(s.K);
@@ -273,20 +287,47 @@ function processQueue(queue: PSeed[]) {
 }
 processQueue([...pseeds]);
 
+// --- warm-started basin hopping from the lowest configuration (every hopEvery grid values)
+if (hopEvery > 0) {
+  const found: PSeed[] = [];
+  const js = [...env.keys()].sort((a, b) => a - b).filter((j) => j % hopEvery === 0);
+  for (const j of js) {
+    const K = j * GRID;
+    const e = env.get(j) as { s: number; b: number };
+    const p = branches[e.b].byGrid.get(j);
+    if (!p) continue;
+    const seed = 7919 * (j + 1000) + 1009 * N + 13 * M + P + 104729 * (seedOffset + 7);
+    let res;
+    try {
+      res = solve(problem, K, { seed, restarts: 1, hops: hopHops, start: { size: p.size, pieces: p.pieces } });
+    } catch {
+      continue;
+    }
+    if (!res.found || !res.config) continue;
+    const pc = tryPolish(problem, K, res.config, 600);
+    if (!pc || !feasibleAt(problem, K, pc)) continue;
+    if (pc.config.size < e.s - Math.max(1e-9 * e.s, 1e-10))
+      found.push({ K, pt: makePoint(problem, K, pc, true), pc, source: `basin hopping (${hopHops} hops, seed ${seed}) from branch ${e.b}` });
+  }
+  log(`basin hopping: ${found.length} of ${js.length} grid values improved`);
+  found.sort((a, b) => a.pt.size / envAt(a.K) - b.pt.size / envAt(b.K));
+  processQueue(found);
+}
+
 // --- refinement: perturb-and-polish the lowest configuration along K
 {
   const Rr = rng(4242 + 1009 * N + 13 * M + P);
   for (let round = 0; round < refineRounds; round++) {
     const found: PSeed[] = [];
-    const js = [...env.keys()].sort((a, b) => a - b).filter((j) => j % 2 === 0);
+    const js = [...env.keys()].sort((a, b) => a - b).filter((j) => j % refineEvery === 0);
     for (const j of js) {
       const K = j * GRID;
       const e = env.get(j) as { s: number; b: number };
       const p = branches[e.b].byGrid.get(j);
       if (!p) continue;
       let best: PSeed | undefined;
-      for (const sigma of [1e-3, 2e-2, 8e-2])
-        for (let t = 0; t < 2; t++) {
+      for (const sigma of refineSigmas)
+        for (let t = 0; t < refineTrials; t++) {
           const pieces = p.pieces.map((q) => ({ x: q.x + sigma * gaussian(Rr), y: q.y + sigma * gaussian(Rr), theta: q.theta + sigma * gaussian(Rr) }));
           const pc = tryPolish(problem, K, { size: p.size * (1 + 1e-4), pieces });
           if (!pc || !feasibleAt(problem, K, pc)) continue;

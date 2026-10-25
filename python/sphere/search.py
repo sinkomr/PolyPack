@@ -490,6 +490,34 @@ def platonic_centres(P):
     return None
 
 
+def code_start(C, N, rng, jitter=0.05, aligned=False):
+    """Quaternions from a (Tammes) point code: randomly rotated and jittered centres; theta random, or
+    'aligned' so that an edge of each piece faces its nearest neighbour (edge midpoint direction
+    pi/2 + pi/N + theta in the local frame T(c) e1, T(c) e2)."""
+    C = np.asarray(C, float)
+    A = np.linalg.qr(rng.normal(size=(3, 3)))[0]
+    C = C @ A.T + rng.normal(scale=jitter, size=C.shape)
+    C /= np.linalg.norm(C, axis=1, keepdims=True)
+    Q = []
+    for i, c in enumerate(C):
+        if aligned:
+            G = C @ c
+            G[i] = -2
+            cj = C[int(np.argmax(G))]
+            T = sg.qmat(sg.q_from_centre_theta(c, 0.0))
+            d = cj - (cj @ c) * c
+            psi = math.atan2(d @ T[:, 1], d @ T[:, 0])
+            th = psi - PI / 2 - PI / N
+        else:
+            th = rng.uniform(0, 2 * PI)
+        Q.append(sg.q_from_centre_theta(c, th))
+    Q = np.array(Q)
+    q0inv = Q[0] * np.array([1, -1, -1, -1])
+    Q = np.array([sg.qmul(q0inv, q) for q in Q])
+    Q[0] = [1, 0, 0, 0]
+    return Q
+
+
 def add_piece(Q, rng, samples=4000):
     """Previous optimum plus one piece at the sampled point farthest from all centres."""
     C = np.array([sg.centre(q) for q in Q])
@@ -499,7 +527,8 @@ def add_piece(Q, rng, samples=4000):
     return np.vstack([Q, sg.q_from_centre_theta(far, rng.uniform(0, 2 * PI))])
 
 
-def solve_polygon(N, P, seed, starts, hops, starts_centres=None, time_limit=600, log=None, prev_Q=None, warm_Q=None):
+def solve_polygon(N, P, seed, starts, hops, starts_centres=None, time_limit=600, log=None, prev_Q=None, warm_Q=None,
+                  code_mix=False):
     rng = np.random.default_rng([seed, N, P])
     t0 = time.time()
     best = None
@@ -539,6 +568,12 @@ def solve_polygon(N, P, seed, starts, hops, starts_centres=None, time_limit=600,
         if s < len(special):
             Q, kind = special[s]
             tag = f"start{s}:{kind}"
+        elif code_mix and starts_centres and s % 2 == 0:
+            # optional (--code-mix): every other random start is a rotated, jittered Tammes code with
+            # random or neighbour-aligned orientations
+            aligned = (s // 2) % 2 == 1
+            Q = code_start(starts_centres[0], N, rng, aligned=aligned)
+            tag = f"start{s}:code-{'aligned' if aligned else 'random'}"
         else:
             Q = random_quats(P, rng)
             tag = f"start{s}:random"
@@ -682,6 +717,7 @@ def main():
     ap.add_argument("--time", type=float, default=600)
     ap.add_argument("--codes", default=None, help="run dir with disk results used as polygon starting centres")
     ap.add_argument("--warm", default=None, help="run dir whose sphere_N_P.json is used as an extra start")
+    ap.add_argument("--code-mix", action="store_true", help="every other random start from the Tammes code (rotated, jittered)")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
@@ -716,13 +752,13 @@ def main():
                 fw = os.path.join(args.warm, f"sphere_{args.N}_{P}.json")
                 if os.path.exists(fw):
                     warm = json.load(open(fw))["q"]
-            r = solve_polygon(args.N, P, args.seed, args.starts, args.hops, codes, args.time, log, prev, warm)
+            r = solve_polygon(args.N, P, args.seed, args.starts, args.hops, codes, args.time, log, prev, warm, args.code_mix)
             a = sg.a_from_R(args.N, r["R"])
             out = {"N": args.N, "P": P, "R": r["R"], "a": a, "rho": 1 / a, "q": r["Q"].tolist(),
                    "normals": [[int(i), int(j)] + list(map(float, n)) for (i, j), n in r["normals"].items()],
                    "seed": args.seed,
                    "budget": {"starts": args.starts, "hops": args.hops, "time_limit_s": args.time,
-                              "code_start": bool(codes), "warm_start": bool(warm)},
+                              "code_start": bool(codes), "warm_start": bool(warm), "code_mix": bool(args.code_mix)},
                    "time_s": r["time"], "history": r["history"]}
         with open(os.path.join(args.out, f"sphere_{args.N}_{P}.json"), "w") as f:
             json.dump(out, f)

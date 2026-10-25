@@ -1,0 +1,11 @@
+hex N=0 P=5 score=5.0486755979 dens=0.711597 msep=-4.44e-16 label=lattice runs=76 hops=56 stop=count t=5.6
+hex N=0 P=6 score=5.2915026221 dens=0.777343 msep=-4.44e-16 label=lattice runs=87 hops=63 stop=count t=8.7
+hex N=0 P=7 score=5.2915026221 dens=0.906900 msep=-4.44e-16 label=lattice runs=7 hops=0 stop=floor t=1.0
+hex N=0 P=8 score=6.0000000000 dens=0.806133 msep=-4.44e-16 label=replicate2 runs=106 hops=78 stop=count t=10.7
+hex N=0 P=9 score=6.0000000000 dens=0.906900 msep=-4.44e-16 label=lattice runs=8 hops=0 stop=floor t=3.1
+hex N=0 P=10 score=6.8540681778 dens=0.772187 msep=-4.44e-16 label=hop:lattice runs=123 hops=93 stop=count t=12.5
+hex N=0 P=11 score=6.9282032303 dens=0.831325 msep=-4.44e-16 label=lattice runs=131 hops=100 stop=count t=13.7
+hex N=0 P=12 score=6.9282032303 dens=0.906900 msep=-4.44e-16 label=lattice runs=9 hops=0 stop=floor t=4.0
+hex N=0 P=13 score=7.2111025509 dens=0.906900 msep=-8.88e-16 label=lattice runs=8 hops=0 stop=floor t=5.6
+hex N=0 P=14 score=7.9358837306 dens=0.806411 msep=-8.88e-16 label=random runs=161 hops=123 stop=count t=19.5
+hex N=0 P=15 score=8.0000000000 dens=0.850218 msep=-6.66e-16 label=lattice runs=169 hops=130 stop=count t=26.2

@@ -9,7 +9,8 @@ What is certified, for a configuration (solid, N, s, poses) and a shrink factor 
 the pieces scaled by lam about their centres form a STRICTLY valid packing on the solid of
 edge s, in the stated mode. Scaling the whole surface by 1/lam is a similarity, so unit pieces
 on the solid of edge s/lam (centres scaled by 1/lam in their face frames) form a valid
-packing: score_cert = s / lam, rounded up.
+packing: score_cert = s / lam, rounded up to a float. display = score_cert rounded to the
+nearest at 6 decimals (half to even, from its exact binary64 value): a readable value, not a bound.
 
 nofold: every scaled piece lies in the interior of its anchor face; scaled pieces on one face are
 pairwise disjoint.
@@ -36,6 +37,7 @@ import json
 import math
 import os
 import sys
+from decimal import ROUND_HALF_EVEN, Decimal
 from fractions import Fraction as Fr
 
 from mpmath import iv, mpf
@@ -499,13 +501,13 @@ def parse_eps(eps):
 
 
 def certified_score(s, eps):
-    """(score_cert, display) for edge s and shrink eps: s / (1 - eps) rounded up to a float, and the
-    same exact value rounded up at 6 decimals."""
+    """(score_cert, display) for edge s and shrink eps: s / (1 - eps) rounded up to a float, and
+    score_cert rounded to the nearest at 6 decimals (see display_6)."""
     score = exact_fraction(s, "s") / (1 - parse_eps(eps))
     sc = float(score)
     if Fr(sc) < score:
         sc = math.nextafter(sc, math.inf)
-    return sc, display_up(score)
+    return sc, display_6(sc)
 
 
 def certify(rec, eps):
@@ -536,13 +538,10 @@ def certify(rec, eps):
     return cert
 
 
-def display_up(x):
-    """Decimal string with 6 decimals, rounded up (x a Fraction)."""
-    q = x * 10 ** 6
-    n = q.numerator // q.denominator
-    if Fr(n) < q:
-        n += 1
-    return "%d.%06d" % (n // 10 ** 6, n % 10 ** 6)
+def display_6(x):
+    """PolyPack's display rule for every space: the exact binary64 value of x rounded to the nearest
+    at 6 decimals, ties to even, always 6 decimals (2.000000000002 -> "2.000000")."""
+    return str(Decimal(x).quantize(Decimal("0.000001"), rounding=ROUND_HALF_EVEN))
 
 
 def centre_in_face(S, s, c):
@@ -805,7 +804,8 @@ RECORD_FIELDS = ("id", "solid", "mode", "N", "P", "s", "score_float", "score_cer
 def published_errors(rec):
     """Problems with a record's published fields, checked without certifying (exact arithmetic):
     the id matches solid/mode/N/P, s == score_float, and score_cert and display are exactly the
-    values that the certified statement at the stored eps gives (s / (1 - eps) rounded up)."""
+    values that the certified statement at the stored eps gives (s / (1 - eps) rounded up to a
+    float, and that float rounded to the nearest at 6 decimals)."""
     if not isinstance(rec, dict):
         return ["a record must be a JSON object"]
     errs = ["missing field %s" % f for f in RECORD_FIELDS if f not in rec]
@@ -828,7 +828,7 @@ def published_errors(rec):
     if rec["score_cert"] != sc or isinstance(rec["score_cert"], bool):
         errs.append("score_cert %r is not s/(1-eps) rounded up (%r)" % (rec["score_cert"], sc))
     if rec["display"] != disp:
-        errs.append("display %r is not score_cert rounded up at 6 decimals (%s)" % (rec["display"], disp))
+        errs.append("display %r is not score_cert rounded to 6 decimals (%s)" % (rec["display"], disp))
     return errs
 
 

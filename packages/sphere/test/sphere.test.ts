@@ -225,9 +225,9 @@ describe("stored records (data/sphere/records.json)", () => {
       expect(res.strictlyValid, r.id).toBe(true);
       expect(r.score_cert).toBeGreaterThanOrEqual(r.score_float);
       expect((r.score_cert - r.score_float) / r.score_float).toBeLessThanOrEqual(1.0000001e-8);
-      // display is score_cert rounded up at 6 decimals
-      expect(Number(r.display)).toBeGreaterThanOrEqual(r.score_cert);
-      expect(Number(r.display) - r.score_cert).toBeLessThan(1.0000001e-6);
+      // display is score_cert rounded to the nearest at 6 decimals (exact check in python/sphere/certify.py)
+      expect(r.display).toMatch(/^\d+\.\d{6}$/);
+      expect(Math.abs(Number(r.display) - r.score_cert)).toBeLessThanOrEqual(5.0000001e-7);
       // tightness: 1e-6 smaller and the stored poses overlap (or the piece no longer exists)
       const tight = validate({ N: r.N, P: r.P }, { rho: r.score_float * (1 - 1e-6), pieces: r.config.pieces });
       expect(tight.valid, r.id).toBe(false);

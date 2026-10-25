@@ -121,7 +121,7 @@ footer { color: var(--muted); font-size: 13px; margin-top: 16px; }
 <body>
 <main>
 <h1>Pieces on the surface of a Platonic solid</h1>
-<p class="sub">Smallest edge s for P unit pieces; every value is certified (score rounded up). Drag the solid to turn it. Red dots are the vertices (cone points).</p>
+<p class="sub">Smallest edge s for P unit pieces; every value is certified (shown rounded to 6 decimals). Drag the solid to turn it. Red dots are the vertices (cone points).</p>
 <div class="controls">
 <label>Solid <select id="solid"></select></label>
 <label>Pieces <select id="N"></select></label>
