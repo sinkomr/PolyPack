@@ -175,6 +175,9 @@ class Records(unittest.TestCase):
     def setUpClass(cls):
         cls.data = load(RECORDS)
         cls.recs = cls.data["records"]
+        cls.bases = {}
+        with redirect_stdout(io.StringIO()):
+            cls.fresh = build_records.build(cls.bases)
 
     def test_32_problems(self):
         ids = [r["id"] for r in self.recs]
@@ -206,14 +209,9 @@ class Records(unittest.TestCase):
             self.assertFalse(valid(r["id"], shrink(r["config"], 1 - 1e-6)), r["id"])
 
     def test_ladder_rule(self):
-        src = load(REPO, "data", "boundary", "sources", "research_round2.json")
-        exact = build_records.exact_configs()
         for r in self.recs:
             k = r["certificate"]["k"]
-            if (r["piece"], r["P"]) in exact:
-                base = exact[(r["piece"], r["P"])][0]
-            else:
-                base = build_records.research_config(src["balls" if r["piece"] == "ball" else "cubes"][str(r["P"])])
+            base = self.bases[r["id"]]
             self.assertEqual(base["s"], r["score_float"])
             lam, cfg = build_records.scaled(base, k)
             self.assertEqual(cfg, r["config"], r["id"])
@@ -222,9 +220,7 @@ class Records(unittest.TestCase):
                 self.assertFalse(valid(r["id"], build_records.scaled(base, j)[1], strict=True), (r["id"], j))
 
     def test_build_is_reproducible(self):
-        with redirect_stdout(io.StringIO()):
-            fresh = build_records.build()
-        self.assertEqual(json.loads(json.dumps(fresh)), self.data)
+        self.assertEqual(json.loads(json.dumps(self.fresh)), self.data)
 
     def test_status_bounds_and_nofold(self):
         for r in self.recs:
@@ -290,6 +286,137 @@ class Records(unittest.TestCase):
         # the 0.8 bound is valid (below the proven 0.854988) and must pass: one OK, the rest FAIL
         self.assertEqual((ok, nbad), (1, len(bad) - 1), "\n".join(lines))
         self.assertTrue(lines[7].startswith("OK"), lines[7])
+
+
+def above_bounds(piece, P, x):
+    """x >= every proven lower bound, exactly (x rational or a qfield.Q23 element)."""
+    if piece == "ball":
+        return x ** 3 * 6 >= P * C.PI_HI and x * x >= 2
+    return x ** 3 * 8 >= P and x * x * 2 >= 1
+
+
+class Sources(unittest.TestCase):
+    """The search results (data/boundary/sources/search_2026-10-25.json) and what they improved."""
+
+    IMPROVED = [("ball", 5), ("ball", 8), ("ball", 10), ("ball", 11), ("ball", 13), ("ball", 15), ("ball", 16),
+                ("cube", 11), ("cube", 12), ("cube", 13), ("cube", 14)]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.runs = load(REPO, "data", "boundary", "sources", "search_2026-10-25.json")["runs"]
+        cls.research = load(REPO, "data", "boundary", "sources", "research_round2.json")
+        cls.recs = {r["id"]: r for r in load(RECORDS)["records"]}
+
+    def test_search_runs(self):
+        self.assertEqual(sorted(self.runs), sorted(f"{p}/{P}" for p, P in self.IMPROVED))
+        for key, e in self.runs.items():
+            self.assertEqual(key, f"{e['piece']}/{e['P']}")
+            self.assertEqual(e["value"], e["config"]["s"])
+            self.assertEqual((e["method"], e["seed"], e["date"]), ("PolyPack boundary search", 1, "2026-10-25"))
+            self.assertIn(f"seed: 1, budget: {{evals: {e['evals_budget']}}}", e["call"])
+            self.assertLessEqual(e["evals_used"], e["evals_budget"])
+            # every search configuration certifies on its own (a few 1e-12 above its s)
+            self.assertIsNotNone(build_records.ladder(pid(e["piece"], e["P"]), e["config"], max_k=10), key)
+
+    def test_values_above_the_proven_bounds(self):
+        for key, e in self.runs.items():
+            self.assertTrue(above_bounds(e["piece"], e["P"], Fr(e["value"])), key)
+        for piece, src in (("ball", self.research["balls"]), ("cube", self.research["cubes"])):
+            for P, e in src.items():
+                self.assertTrue(above_bounds(piece, int(P), Fr(e["s"])), (piece, P))
+        for r in self.recs.values():
+            self.assertTrue(above_bounds(r["piece"], r["P"], Fr(r["score_cert"])), r["id"])
+
+    def test_improvements_recorded(self):
+        for piece, P in self.IMPROVED:
+            r = self.recs[pid(piece, P)]
+            prev = r["previous"]
+            self.assertLess(r["score_cert"], prev["score_cert"], r["id"])
+            self.assertEqual(prev["source"], "PolyPack research, round 2")
+            self.assertAlmostEqual(prev["improvement_rel"], 1 - r["score_cert"] / prev["score_cert"], places=15)
+            self.assertIn("Improves on the research value", r["notes"][0])
+            root = r["provenance"]
+            self.assertEqual(root.get("source"), "PolyPack boundary search", r["id"])
+            self.assertEqual(root["value"], self.runs[f"{piece}/{P}"]["value"])
+        for r in self.recs.values():  # records without an improvement carry no previous
+            if (r["piece"], r["P"]) not in self.IMPROVED and "previous" in r:
+                self.assertLess(r["score_cert"], r["previous"]["score_cert"])
+
+
+class Exact(unittest.TestCase):
+    """Exact constructions: rational (cubes at 5/4, 4/3, 3/2) and in Q(sqrt 2, sqrt 3) (balls 4 and 8)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.recs = {r["id"]: r for r in load(RECORDS)["records"]}
+
+    def test_field_arithmetic(self):
+        import random
+
+        from qfield import COS15, SIN15, SQRT2, SQRT3, Q23
+
+        rnd = random.Random(7)
+        for _ in range(3000):
+            x = Q23(*[Fr(rnd.randint(-60, 60), rnd.randint(1, 12)) for _ in range(4)])
+            y = Q23(*[Fr(rnd.randint(-60, 60), rnd.randint(1, 12)) for _ in range(4)])
+            fx = float(x)
+            if abs(fx) > 1e-9:
+                self.assertEqual(x.sign(), 1 if fx > 0 else -1)
+            self.assertAlmostEqual(float(x * y), fx * float(y), delta=1e-9 * max(1, abs(fx * float(y))))
+        self.assertEqual(SQRT2 * SQRT2, 2)
+        self.assertEqual(SQRT3 * SQRT3, 3)
+        self.assertEqual(SIN15 ** 2 + COS15 ** 2, 1)
+        self.assertEqual(2 * SIN15 * COS15, Fr(1, 2))  # sin 30 deg
+        self.assertEqual(COS15 - SIN15, SQRT2 / 2)
+        # signs of tiny nonzero elements, decided by the exact path: sqrt 2 against a 40-digit rational
+        r = Fr(14142135623730950488016887242096980785696, 10 ** 40)  # sqrt 2 truncated at 40 decimals
+        self.assertEqual((SQRT2 - r).sign(), 1)
+        self.assertEqual((SQRT2 - r - Fr(1, 10 ** 40)).sign(), -1)
+        self.assertEqual((SQRT3 * SQRT2 - Q23(0, 0, 0, 1)).sign(), 0)
+
+    def test_exact_constructions(self):
+        from qfield import Q23
+
+        have = sorted(i for i, r in self.recs.items() if "exact" in r)
+        self.assertEqual(have, sorted([pid("ball", 4), pid("ball", 8)] + [pid("cube", P) for P in range(9, 17)]))
+        for i in have:
+            r = self.recs[i]
+            ok, reasons, margins, s = C.check_exact(i, r["exact"])
+            self.assertTrue(ok, (i, reasons))
+            self.assertLessEqual(s, Fr(r["score_cert"]))
+            self.assertTrue(above_bounds(r["piece"], r["P"], s), i)
+            if r["piece"] == "ball":  # contacts: every clearance and the least distance are exact
+                self.assertEqual(margins["clearance_sq"], 1)
+                self.assertEqual(margins["distance_sq"], 4)
+            else:
+                self.assertEqual(margins["part_separation"], 0)
+            # shrinking the exact edge by 1e-9 breaks it
+            bad = dict(r["exact"])
+            if r["exact"]["field"] == "Q":
+                bad["s"] = str(s * Fr(999999999, 10 ** 9))
+            else:
+                bad["s"] = (Q23.from_json(r["exact"]["s"]) * Fr(999999999, 10 ** 9)).to_json()
+            self.assertFalse(C.check_exact(i, bad)[0], i)
+        want = {pid("ball", 4): "1 + 1/sqrt 2", pid("ball", 8): "2 cos 15 deg"}
+        for i, text in want.items():
+            self.assertIn(text, self.recs[i]["exact"]["statement"])
+        self.assertEqual({self.recs[pid("cube", P)]["exact"]["s"] for P in (9, 10, 11, 12)}, {"5/4"})
+        self.assertEqual({self.recs[pid("cube", P)]["exact"]["s"] for P in (13, 14)}, {"4/3"})
+        self.assertEqual({self.recs[pid("cube", P)]["exact"]["s"] for P in (15, 16)}, {"3/2"})
+
+    def test_tampered_exact_fails(self):
+        r = copy.deepcopy(self.recs[pid("cube", 13)])
+        r["exact"]["s"] = "5/4"
+        with self.assertRaises(C.CertError):
+            C.certify_record(r)
+        r = copy.deepcopy(self.recs[pid("ball", 8)])
+        r["exact"]["s"][1] = "1/5"  # (sqrt 6 + 0.8 sqrt 2)/2... smaller than 2 cos 15 deg
+        with self.assertRaises(C.CertError):
+            C.certify_record(r)
+        r = copy.deepcopy(self.recs[pid("cube", 16)])
+        r["exact"]["field"] = "R"
+        with self.assertRaises(C.CertError):
+            C.certify_record(r)
 
 
 class Adversarial(unittest.TestCase):

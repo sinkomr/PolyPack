@@ -650,6 +650,110 @@ def cube_part_boxes(problem, config, strict=False):
     return out
 
 
+# ------------------------------------------------------------------ exact constructions
+
+
+def check_field_balls(cells, U, s):
+    """Validity (touching allowed) of unit balls whose numbers lie in a field other than Q, here
+    Q(sqrt 2, sqrt 3) (qfield.Q23). The same exact tests as _check_balls, run on field elements
+    with the generic routines: h and the centres are put over one common denominator D, so the
+    elements have integer coefficients, and squared lengths are compared with D^2 and 4 D^2. Every
+    pair closer than 2 in R^4 is examined. Returns (ok, reasons, margins), squared margins exact."""
+    from qfield import Q23
+
+    h = s / 2
+    if not s > 1:
+        return False, ["s must exceed 1 for the word stage"], {}
+    D = h.denominator()
+    for u in U:
+        for x in u:
+            D = math.lcm(D, x.denominator())
+    H = h.scaled_int(D)
+    U = [[x.scaled_int(D) for x in u] for u in U]
+    one, four = D * D, 4 * D * D
+    reasons = []
+    for n, u in enumerate(U):
+        if any(abs(x) > H for x in u):
+            reasons.append(f"piece {n}: its centre lies outside its anchor cell")
+    if reasons:
+        return False, reasons, {}
+    cl = [clearance_sq(u, H) for u in U]
+    for n, c in enumerate(cl):
+        if c < one:
+            reasons.append(f"ball {n} is closer than 1 to an edge")
+    unit = lambda x: None if x is None else x / one  # noqa: E731
+    margins = {"clearance_sq": unit(min(cl))}
+    if reasons:
+        return False, reasons, margins
+    X = [embed(c, u, H) for c, u in zip(cells, U)]
+    best = None
+    for a in range(len(U)):
+        for b in range(a + 1, len(U)):
+            if sum(((p - q) ** 2 for p, q in zip(X[a], X[b])), Q23(0)) > four:
+                continue  # more than 2 apart in R^4, so more than 2 apart on the boundary
+            for L, _ in path_lengths_sq(cells[a], U[a], X[b], H):
+                best = L if best is None or L < best else best
+                if L < four:
+                    reasons.append(f"balls {a} and {b} overlap")
+    loop = None
+    for a in range(len(U)):
+        for L, _ in path_lengths_sq(cells[a], U[a], X[a], H, exclude_empty=True):
+            loop = L if loop is None or L < loop else loop
+            if L < four:
+                reasons.append(f"ball {a} overlaps itself")
+    margins["distance_sq"] = unit(best)
+    margins["loop_sq"] = unit(loop)
+    return not reasons, sorted(set(reasons)), margins
+
+
+def check_exact(problem, exact):
+    """An exact construction stored with a record ("exact": {field, s, pieces}): valid at exactly
+    its s, touching allowed. field "Q": numbers are JSON numbers or rational strings ("4/3");
+    field "Q(sqrt 2, sqrt 3)" (balls only): every number is [a, b, c, d] = a + b sqrt 2 + c sqrt 3
+    + d sqrt 6. Returns (ok, reasons, margins, s) with s exact; raises CertError when malformed."""
+    if not isinstance(exact, dict) or not isinstance(exact.get("pieces"), list):
+        raise CertError("exact must be an object with field, s and pieces")
+    field = exact.get("field")
+    if field == "Q":
+        cfg = {"s": exact.get("s"), "pieces": exact["pieces"]}
+        v = check(problem, cfg, strict=False)
+        return v.ok, v.reasons, v.margins, v.cfg.s
+    if field == "Q(sqrt 2, sqrt 3)":
+        from qfield import Q23
+
+        p = parse(problem, {"s": 1, "pieces": [{"cell": 0, "u": [0, 0, 0]}] * (problem_P(problem))})
+        if p.piece != "ball":
+            raise CertError("constructions in Q(sqrt 2, sqrt 3) are supported for balls only")
+        try:
+            s = Q23.from_json(exact.get("s"))
+            cells = []
+            U = []
+            for n, q in enumerate(exact["pieces"]):
+                c = q.get("cell") if isinstance(q, dict) else None
+                if isinstance(c, bool) or not isinstance(c, int) or not 0 <= c < 8:
+                    raise CertError(f"piece {n}: bad cell")
+                if not isinstance(q.get("u"), list) or len(q["u"]) != 3:
+                    raise CertError(f"piece {n}: u must be 3 elements")
+                cells.append(c)
+                U.append([Q23.from_json(x) for x in q["u"]])
+        except (ValueError, ZeroDivisionError) as e:
+            raise CertError(f"bad field element: {e}") from None
+        if len(cells) != p.P:
+            raise CertError(f"the construction has {len(cells)} pieces; the problem needs {p.P}")
+        ok, reasons, margins = check_field_balls(cells, U, s)
+        return ok, reasons, margins, s
+    raise CertError(f"unknown field {field!r}")
+
+
+def problem_P(problem):
+    if isinstance(problem, str):
+        m = ID_RE.match(problem)
+        if not m:
+            raise CertError(f"{problem!r} is not a boundary problem id")
+        return int(m.group(3))
+    return problem.get("P")
+
+
 # ------------------------------------------------------------------ bounds
 
 
@@ -722,11 +826,20 @@ def published_errors(rec):
 
 def certify_record(rec):
     """Records mode: consistent published fields, and the stored configuration (at s = score_cert)
-    certified strictly valid. Returns the summary; raises CertError otherwise."""
+    certified strictly valid; a stored exact construction (field "exact") must be valid at exactly
+    its s, and that s must not exceed score_cert. Returns the summary; raises CertError otherwise."""
     errs = published_errors(rec)
     if errs:
         raise CertError("; ".join(errs))
-    return certify(rec["id"], rec["config"])
+    out = certify(rec["id"], rec["config"])
+    if "exact" in rec:
+        ok, reasons, _, s = check_exact(rec["id"], rec["exact"])
+        if not ok:
+            raise CertError("the exact construction is invalid: " + "; ".join(reasons[:3]))
+        if s > Fraction(rec["score_cert"]):
+            raise CertError("the exact construction's s exceeds score_cert")
+        out["exact_valid"] = True
+    return out
 
 
 def check_records(recs, log=print):
