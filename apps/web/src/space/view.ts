@@ -4,20 +4,21 @@
  * larger steps) where the view turns. It redraws when its box changes size or the colour scheme
  * changes. Used by the board's space mode, and meant for any page that shows such a packing.
  *
- * The 2D kinds draw with a SpaceRenderer (render/*.ts) under the toolbar built here. 3D on 4D
- * (boundary) draws with the three.js views of packages/view3d, which bring their own toolbar and
- * controls (render/boundary.ts).
+ * The 2D kinds and 3D in 3D (render/polyhedra.ts, three.js) draw with a SpaceRenderer (render/*.ts)
+ * under the toolbar built here. 3D on 4D (boundary) draws with the three.js views of
+ * packages/view3d, which bring their own toolbar and controls (render/boundary.ts).
  */
 import type { SpaceConfig } from "@polypack/spaces";
 import type { SearchProblem } from "@polypack/spaces/search";
 import { mountBoundaryView } from "./render/boundary";
 import type { SpaceRenderer } from "./render/common";
 import { curvedRenderer } from "./render/curved";
+import { polyhedraRenderer } from "./render/polyhedra";
 import { sphereRenderer } from "./render/sphere";
 import { surfaceRenderer } from "./render/surface";
 import { torusRenderer } from "./render/torus";
 
-/** The problems drawn by a SpaceRenderer: the 2D kinds. */
+/** The problems drawn by a SpaceRenderer: the 2D kinds and 3D in 3D. */
 export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" }>;
 
 /** The renderer of a problem's space. */
@@ -31,11 +32,13 @@ export function createRenderer(p: FlatDrawnProblem): SpaceRenderer {
       return sphereRenderer(p.N, p.P);
     case "torus":
       return torusRenderer(p);
+    case "polyhedra":
+      return polyhedraRenderer(p.code, p.P);
   }
 }
 
 export interface SpaceView {
-  /** The 2D kinds' renderer; absent for the 3D views. */
+  /** The renderer of the 2D kinds and 3D in 3D; absent for 3D on 4D, whose views bring their own. */
   readonly renderer?: SpaceRenderer;
   /** Draws a configuration of the problem; null clears the drawing. */
   show(config: SpaceConfig | null): void;

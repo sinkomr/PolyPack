@@ -1,9 +1,12 @@
-import { gzipSync } from "node:zlib";
-import { MAX_SOFTWARE_LENGTH, SCORE_TIE } from "@polypack/geometry";
+import { promisify } from "node:util";
+import { gzip as gzipCallback } from "node:zlib";
+import { MAX_SOFTWARE_LENGTH } from "@polypack/geometry";
 import {
+  SPACE_BOUND_SLACK,
   SPACE_EXHIBITS,
   SPACE_INFO,
   SPACE_NAMES,
+  SPACE_RECORD_MARGIN,
   SiteBest,
   SpaceEntryResponse,
   SpaceName,
@@ -15,12 +18,15 @@ import {
   SpacesIndex,
   SpacesResponse,
   acceptsSubmissions,
-  beatsSpaceScore,
+  beatsSpaceRecord,
+  entryConfig,
+  improvesSpaceBest,
   isSpaceName,
+  parseSpaceConfig,
   parseSpaceId,
   spaceProblemSummary,
   storedSpaceConfig,
-  validateSpaceSubmission,
+  validateSpaceSubmissionAsync,
 } from "@polypack/spaces";
 import { Context, Hono } from "hono";
 import { compress } from "hono/compress";
@@ -40,7 +46,21 @@ import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /** Largest `limit` of /api/spaces/targets. */
-export const SPACE_TARGETS_MAX_LIMIT = 2000;
+export const SPACE_TARGETS_MAX_LIMIT = 10000;
+/**
+ * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
+ * kept: a check of 100 large polyhedra takes up to about 0.15 s, and posting a research record back
+ * would otherwise cost one each time. The other spaces' checks are short, and they keep answering
+ * "valid, not kept" for such an entry.
+ */
+export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
+/**
+ * Polyhedra checks from this P on are heavy ([CALC] up to 0.35 s of work at P = 100): one runs at a time
+ * on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their turn; another is refused with 503.
+ */
+export const SPACE_HEAVY_CHECK_P = 30;
+export const SPACE_HEAVY_CHECKS_WAITING = 8;
+
 /** Longest `method` text of a space submission. */
 export const SPACE_METHOD_LENGTH = 80;
 /**
@@ -53,8 +73,18 @@ export const SPACE_SETTLED_GAP = 1e-9;
  * container, whose area is capped), so a larger gap says little more about the room left.
  */
 export const SPACE_GAP_CAP = 0.25;
-/** Most distinct /api/spaces/targets queries whose answers are kept at once. */
-const TARGET_ANSWERS_KEPT = 256;
+/**
+ * Most bytes of /api/spaces/targets lists kept at once, encoded and gzip together. [CALC] The whole list of
+ * 9,821 targets is about 1.8 MB and 0.3 MB of gzip, so this keeps about seven filtered lists; the least
+ * recently used goes first. Every limit of a list is served from it (a prefix of its bytes).
+ */
+export const SPACE_TARGETS_CACHE_BYTES = 16_000_000;
+/**
+ * The lengths of a targets answer that are also kept gzip-compressed: the default 500, 2000 (the
+ * volunteer client's limit before 2026-10-25) and the whole list (its limit since). Other limits
+ * are served uncompressed, so that no request compresses an answer of its own.
+ */
+export const SPACE_TARGETS_GZIP_LENGTHS: readonly number[] = [SPACE_TARGETS_DEFAULT_LIMIT, 2000];
 
 /**
  * Weight of a target by its number of pieces, min(1, (P - 1) / 5): nothing for P = 1, whose
@@ -68,8 +98,14 @@ export function spaceTargetWeight(P: number): number {
 export interface SpacesOptions {
   index: SpacesIndex;
   store: SpaceStore;
-  /** Compresses the answers that are kept; zlib's gzip by default (tests count its calls). */
-  gzip?: (text: string) => Uint8Array<ArrayBuffer>;
+  /** Compresses the answers that are kept; zlib's gzip off the event loop by default (tests count its calls). */
+  gzip?: (data: Uint8Array) => Uint8Array<ArrayBuffer> | Promise<Uint8Array<ArrayBuffer>>;
+  /** Bytes of targets answers kept at once; SPACE_TARGETS_CACHE_BYTES by default. */
+  targetsCacheBytes?: number;
+  /** Told the bytes and answers the targets cache holds after each change (tests). */
+  onTargetsCache?: (bytes: number, answers: number) => void;
+  /** Told what each check of a submission took: its work, its slices and the longest of them (tests). */
+  onCheck?: (check: { workMs: number; slices: number; longestSliceMs: number }) => void;
 }
 
 /** What the spaces routes share with the rest of the API: the limits of /api/submit, the log and the admin check. */
@@ -109,10 +145,35 @@ export function acceptsGzip(header: string | undefined): boolean {
   return (gzip ?? any ?? 0) > 0;
 }
 
-/** An answer kept as JSON text, with its gzip bytes once a client asked for them. */
+/**
+ * An answer kept as its JSON bytes, encoded once and shared by every response (a connection that is slow to
+ * read holds a reference, not a copy), with its gzip bytes once a client asked for them.
+ */
 interface Packed {
-  text: string;
-  gzip: Uint8Array<ArrayBuffer> | null;
+  bytes: Uint8Array<ArrayBuffer>;
+  gzip: Uint8Array<ArrayBuffer> | Promise<Uint8Array<ArrayBuffer>> | null;
+}
+
+const encoder = new TextEncoder();
+const encode = (text: string) => encoder.encode(text) as Uint8Array<ArrayBuffer>;
+const packedOf = (value: unknown): Packed => ({ bytes: encode(JSON.stringify(value)), gzip: null });
+const gzipAsync = promisify(gzipCallback);
+const CLOSE = encode("]}");
+
+/**
+ * The work list for one filter (spaces and max_P), encoded once: the answer of any limit is the prefix of its
+ * bytes up to the end of its last target, then "]}".
+ */
+interface EncodedList {
+  bytes: Uint8Array<ArrayBuffer>;
+  /** ends[i]: the offset just after target i. */
+  ends: Uint32Array;
+  /** The offset just after the opening "[". */
+  head: number;
+  /** Gzip answers of the lengths in SPACE_TARGETS_GZIP_LENGTHS and of the whole list, by length. */
+  gzips: Map<number, Packed>;
+  /** Bytes it holds, gzips included. */
+  size: number;
 }
 
 /** A JSON object's text with raw JSON fields appended (configurations are stored as JSON text). */
@@ -131,7 +192,12 @@ function withRaw(head: object, raw: Record<string, string | null>): string {
  */
 export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   const { index, store } = ctx.spaces;
-  const gzip = ctx.spaces.gzip ?? ((text: string) => new Uint8Array(gzipSync(text)));
+  const gzip =
+    ctx.spaces.gzip ??
+    (async (data: Uint8Array) => {
+      const z = await gzipAsync(data);
+      return new Uint8Array(z.buffer, z.byteOffset, z.byteLength) as Uint8Array<ArrayBuffer>;
+    });
   const loaded = SPACE_NAMES.filter((s) => index[s]);
   const catalogue = (space: string) => (isSpaceName(space) ? index[space] : undefined);
 
@@ -140,31 +206,71 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   // so that it is compressed once and not per request. `version` keeps an answer computed across
   // a change from being kept.
   const recordsCache = new Map<SpaceName, Packed>();
-  let ranking: { list: SpaceTarget[]; at: number } | null = null;
-  const targetAnswers = new Map<string, Packed>();
+  // the ranked targets, each encoded once (made lazily, until any entry changes)
+  let ranking: { list: SpaceTarget[]; items: Uint8Array[] | null; at: number } | null = null;
+  // the targets lists by filter, least recently used first, bounded in bytes (encoded and gzip)
+  const targetLists = new Map<string, EncodedList>();
+  const targetsLimit = ctx.spaces.targetsCacheBytes ?? SPACE_TARGETS_CACHE_BYTES;
+  let targetsBytes = 0;
+  const targetsChanged = () => {
+    while (targetsBytes > targetsLimit && targetLists.size) {
+      const [oldest, l] = targetLists.entries().next().value!;
+      targetLists.delete(oldest);
+      targetsBytes -= l.size;
+    }
+    ctx.spaces.onTargetsCache?.(targetsBytes, targetLists.size);
+  };
   let version = 0;
   const changed = (space: string) => {
     if (isSpaceName(space)) recordsCache.delete(space);
     ranking = null;
-    targetAnswers.clear();
+    targetLists.clear();
+    targetsBytes = 0;
+    targetsChanged();
     version++;
   };
-  /** A kept answer, gzip-compressed for clients that accept it and plain for the others. */
-  const send = (c: Context, packed: Packed) => {
-    const headers = { "content-type": "application/json", vary: "Accept-Encoding" };
-    if (!acceptsGzip(c.req.header("accept-encoding"))) return c.body(packed.text, 200, headers);
-    packed.gzip ??= gzip(packed.text);
-    return c.body(packed.gzip, 200, { ...headers, "content-encoding": "gzip" });
+  const jsonHeaders = { "content-type": "application/json", vary: "Accept-Encoding" };
+  // the addresses with a check in flight, and the heavy checks: one running, the others in turn
+  const checking = new Set<string>();
+  let heavyRunning = false;
+  const heavyWaiting: (() => void)[] = [];
+  const heavyTurn = async () => {
+    while (heavyRunning) await new Promise<void>((resolve) => heavyWaiting.push(resolve));
+    heavyRunning = true;
+  };
+  const heavyDone = () => {
+    heavyRunning = false;
+    heavyWaiting.shift()?.();
+  };
+  /** The gzip of a kept answer, made once and off the event loop; null when it could not be made. */
+  const gzipOf = async (packed: Packed, grew?: (bytes: number) => void): Promise<Uint8Array<ArrayBuffer> | null> => {
+    if (!packed.gzip) {
+      packed.gzip = Promise.resolve(gzip(packed.bytes)).then(
+        (z) => {
+          packed.gzip = z;
+          grew?.(z.byteLength);
+          return z;
+        },
+        () => {
+          packed.gzip = null;
+          return null as unknown as Uint8Array<ArrayBuffer>;
+        },
+      );
+    }
+    return (await packed.gzip) ?? null;
+  };
+  /** A kept answer, gzip-compressed for clients that accept it and plain for the others: shared bytes either way. */
+  const send = async (c: Context, packed: Packed) => {
+    const z = acceptsGzip(c.req.header("accept-encoding")) ? await gzipOf(packed) : null;
+    if (!z) return c.body(packed.bytes, 200, jsonHeaders);
+    return c.body(z, 200, { ...jsonHeaders, "content-encoding": "gzip" });
   };
 
-  const spacesAnswer: Packed = {
-    text: JSON.stringify({
-      spaces: loaded.map((s) => ({ ...SPACE_INFO[s], problems: index[s]!.problems.length })),
-      // the curvature sweeps belong with the spaces, so they are shown only when there are any
-      exhibits: loaded.length ? SPACE_EXHIBITS : [],
-    } satisfies SpacesResponse),
-    gzip: null,
-  };
+  const spacesAnswer: Packed = packedOf({
+    spaces: loaded.map((s) => ({ ...SPACE_INFO[s], problems: index[s]!.problems.length })),
+    // the curvature sweeps belong with the spaces, so they are shown only when there are any
+    exhibits: loaded.length ? SPACE_EXHIBITS : [],
+  } satisfies SpacesResponse);
   app.get("/api/spaces", (c) => send(c, spacesAnswer));
 
   // The work list (docs: "spaces-targets"). Each open problem counts with its relative room above
@@ -187,13 +293,22 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         if (!(weight > 0)) continue;
         const lead = site.get(`${space} ${p.id}`) ?? null;
         const cert = p.certified?.score ?? null;
-        const siteLeads = !!lead && (cert === null || lead.score < cert * (1 - SCORE_TIE));
+        // a site entry leads once it beats the research record by the space's record margin
+        const siteLeads = !!lead && beatsSpaceRecord(space, lead.score, cert);
         const values = [cert, lead?.score].filter((v): v is number => typeof v === "number");
         if (!values.length) continue;
         const best = Math.min(...values);
         const bound = p.bound?.value ?? null;
         const gap = bound === null ? SPACE_GAP_CAP : (best - bound) / best;
         if (!(gap > SPACE_SETTLED_GAP)) continue;
+        // nothing can be kept when beating the record by its margin would take an entry below the
+        // lower bound (polyhedra records that meet their volume bound to within the clearance)
+        if (
+          cert !== null &&
+          bound !== null &&
+          !(cert * (1 - SPACE_RECORD_MARGIN[space]) > bound * (1 - SPACE_BOUND_SLACK))
+        )
+          continue;
         const value = Math.min(gap, SPACE_GAP_CAP) * weight;
         sums.set(space, (sums.get(space) ?? 0) + value);
         out.push({
@@ -243,30 +358,103 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       else wanted = new Set(names);
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
-    const key = `${wanted ? SPACE_NAMES.filter((s) => wanted.has(s)).join(",") : "all"}|${maxP}|${limit}`;
-    const kept = targetAnswers.get(key);
-    if (kept) return send(c, kept);
     const at = version;
     let current = ranking;
     if (!current) {
-      current = { list: await rank(), at: Date.now() };
+      current = { list: await rank(), items: null, at: Date.now() };
       // a ranking read across a change is answered but not kept
       if (at === version) ranking = current;
     }
-    const picked: SpaceTarget[] = [];
-    for (const t of current.list) {
-      if (picked.length >= limit) break;
-      if ((wanted && !wanted.has(t.space)) || t.P > maxP) continue;
-      picked.push(t);
+    // One list per filter, shared by every limit: a max_P at or above every listed P is no filter.
+    const spacesKey = wanted ? SPACE_NAMES.filter((s) => wanted.has(s)).join(",") : "all";
+    const largestP = Math.max(
+      0,
+      ...SPACE_NAMES.filter((s) => !wanted || wanted.has(s)).map((s) => index[s]?.maxP ?? 0),
+    );
+    const key = `${spacesKey}|${maxP >= largestP ? "all" : maxP}`;
+    let list = targetLists.get(key);
+    if (list) {
+      // the most recently used goes last
+      targetLists.delete(key);
+      targetLists.set(key, list);
+    } else {
+      list = encodeList(current, (t) => (!wanted || wanted.has(t.space)) && t.P <= maxP);
+      if (at === version) {
+        targetLists.set(key, list);
+        targetsBytes += list.size;
+        targetsChanged();
+      }
     }
-    const body: SpaceTargetsResponse = { generated_at: new Date(current.at).toISOString(), targets: picked };
-    const packed: Packed = { text: JSON.stringify(body), gzip: null };
-    if (at === version) {
-      if (targetAnswers.size >= TARGET_ANSWERS_KEPT) targetAnswers.clear();
-      targetAnswers.set(key, packed);
+    const kept = list;
+    const n = Math.min(limit, kept.ends.length);
+    const whole = n === kept.ends.length;
+    // the common lengths are also kept compressed; the others are served as they are
+    if ((whole || SPACE_TARGETS_GZIP_LENGTHS.includes(n)) && acceptsGzip(c.req.header("accept-encoding"))) {
+      let packed = kept.gzips.get(n);
+      if (!packed) {
+        packed = { bytes: whole ? kept.bytes : concat(prefixOf(kept, n), CLOSE), gzip: null };
+        kept.gzips.set(n, packed);
+      }
+      const z = await gzipOf(packed, (bytes) => {
+        // only the gzip is kept: a plain answer is a prefix of the list's own bytes
+        if (!whole) packed!.bytes = kept.bytes.subarray(0, 0);
+        kept.size += bytes;
+        if ([...targetLists.values()].includes(kept)) {
+          targetsBytes += bytes;
+          targetsChanged();
+        }
+      });
+      if (z) return c.body(z, 200, { ...jsonHeaders, "content-encoding": "gzip" });
     }
-    return send(c, packed);
+    if (whole) return c.body(kept.bytes, 200, jsonHeaders);
+    // a prefix of the shared bytes, then "]}": nothing is copied
+    const prefix = prefixOf(kept, n);
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(prefix);
+        controller.enqueue(CLOSE);
+        controller.close();
+      },
+    });
+    return c.body(body, 200, { ...jsonHeaders, "content-length": String(prefix.byteLength + CLOSE.byteLength) });
   });
+
+  /** The bytes of a list up to the end of its n-th target (the opening of the answer when n is 0). */
+  const prefixOf = (list: EncodedList, n: number) => list.bytes.subarray(0, n ? list.ends[n - 1] : list.head);
+  const concat = (a: Uint8Array, b: Uint8Array) => {
+    const out = new Uint8Array(a.byteLength + b.byteLength);
+    out.set(a, 0);
+    out.set(b, a.byteLength);
+    return out;
+  };
+
+  /**
+   * The targets of the ranking that pass a filter, encoded as one answer {"generated_at", "targets"} (the
+   * same text as JSON.stringify of it) with the end of each target. The targets are encoded once per ranking.
+   */
+  const encodeList = (current: NonNullable<typeof ranking>, keep: (t: SpaceTarget) => boolean): EncodedList => {
+    const items = (current.items ??= current.list.map((t) => encode(JSON.stringify(t))));
+    const open = encode(`{"generated_at":${JSON.stringify(new Date(current.at).toISOString())},"targets":[`);
+    const picked: number[] = [];
+    let total = open.byteLength + CLOSE.byteLength;
+    for (let i = 0; i < current.list.length; i++)
+      if (keep(current.list[i])) {
+        total += items[i].byteLength + (picked.length ? 1 : 0);
+        picked.push(i);
+      }
+    const bytes = new Uint8Array(total);
+    const ends = new Uint32Array(picked.length);
+    bytes.set(open, 0);
+    let at = open.byteLength;
+    picked.forEach((i, k) => {
+      if (k) bytes[at++] = 44; // ","
+      bytes.set(items[i], at);
+      at += items[i].byteLength;
+      ends[k] = at;
+    });
+    bytes.set(CLOSE, at);
+    return { bytes, ends, head: open.byteLength, gzips: new Map(), size: bytes.byteLength + ends.byteLength };
+  };
 
   // Share links: a stored entry with its configuration. 404 also once it was overtaken (only the
   // leader of a problem is kept) or removed.
@@ -366,28 +554,76 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (body.config === undefined) errors.push("config is required");
     if (errors.length) return reject(400, errors);
 
-    // The time the check takes is charged to the address, as for /api/submit. A configuration that
-    // beats the research record must also be valid at the strict tolerance (validateSpaceSubmission).
     const cert = p.certified?.score ?? null;
-    const verifyStart = performance.now();
-    const verdict = validateSpaceSubmission(space, p.id, body.config, {
-      bound: p.bound?.value ?? null,
-      maxP: cat.maxP,
-      certified: cert,
-    });
-    verifyMs = performance.now() - verifyStart;
-    ctx.verifyBudget.charge(address, verifyMs);
-    if (!verdict.valid || verdict.score === null || !verdict.config)
-      return reject(verdict.malformed ? 400 : 422, verdict.reasons);
-    const score = verdict.score;
-    const beats = cert !== null && beatsSpaceScore(score, cert);
-
-    // Kept only when it beats the problem's best value, the research record's or the site
-    // leader's, by more than the tie tolerance; otherwise it is valid and not kept.
     const current = await store.spaceLeader(space, p.id);
     const bestBefore = [cert, current?.score].filter((v): v is number => typeof v === "number");
     const best = bestBefore.length ? Math.min(...bestBefore) : null;
-    if (best !== null && !beatsSpaceScore(score, best))
+    if (SPACES_CHECKED_ONLY_IF_KEPT.has(space)) {
+      // the stated score is known before any geometry: one that cannot be kept is not checked
+      const stated = parseSpaceConfig(parsedId, body.config);
+      if (stated.ok && !improvesSpaceBest(space, stated.score, cert, current?.score ?? null))
+        return answer(
+          {
+            valid: false,
+            reasons: [
+              `not checked: a size of ${stated.score} cannot be kept, since it is not below the research record by more than a relative ${SPACE_RECORD_MARGIN[space].toExponential()} and below the site's best by more than a relative 1e-9`,
+            ],
+            score: stated.score,
+            leader: false,
+            best_score: best,
+            id: null,
+            beats_certified: false,
+            checked: false,
+          },
+          200,
+        );
+    }
+
+    // The time the check takes is charged to the address, as for /api/submit. A configuration that
+    // beats the research record must also be valid at the strict tolerance. A polyhedra check gives
+    // the event loop a turn every 20 ms (validateSpaceSubmissionAsync), so that one large check never
+    // holds the server; its work, not its waits, is charged. An address has one check at a time, an
+    // estimate of its cost is reserved from the budget before it starts, and the heavy checks run
+    // one at a time server-wide, a few waiting their turn.
+    if (checking.has(address))
+      return reject(
+        429,
+        ["an entry from this address is still being checked; send the next one when it is answered"],
+        1,
+      );
+    const heavy = space === "polyhedra" && parsedId.P >= SPACE_HEAVY_CHECK_P;
+    if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
+      return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
+    const estimate = space === "polyhedra" ? Math.min(400, 0.04 * parsedId.P * parsedId.P) : 5;
+    checking.add(address);
+    ctx.verifyBudget.charge(address, estimate);
+    let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;
+    try {
+      if (heavy) await heavyTurn();
+      try {
+        verdict = await validateSpaceSubmissionAsync(space, p.id, body.config, {
+          bound: p.bound?.value ?? null,
+          maxP: cat.maxP,
+          certified: cert,
+        });
+      } finally {
+        if (heavy) heavyDone();
+      }
+    } finally {
+      checking.delete(address);
+    }
+    verifyMs = verdict.workMs;
+    ctx.verifyBudget.charge(address, verifyMs - estimate);
+    ctx.spaces.onCheck?.(verdict);
+    if (!verdict.valid || verdict.score === null || !verdict.config)
+      return reject(verdict.malformed ? 400 : 422, verdict.reasons);
+    const score = verdict.score;
+    const beats = cert !== null && beatsSpaceRecord(space, score, cert);
+
+    // Kept only when it beats the site leader by more than the tie tolerance and the research
+    // record by more than the space's record margin (the tie tolerance too, except for polyhedra,
+    // whose records keep a clearance); otherwise it is valid and not kept.
+    if (best !== null && !improvesSpaceBest(space, score, cert, current?.score ?? null))
       return answer(
         { valid: true, reasons: [], score, leader: false, best_score: best, id: null, beats_certified: beats },
         200,
@@ -448,14 +684,11 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (cached !== undefined) return send(c, cached);
     const at = version;
     const site = new Map((await store.spaceBest(space)).map((l) => [l.problem, siteBestOf(l)]));
-    const packed: Packed = {
-      text: JSON.stringify({
-        space,
-        generated_at: new Date().toISOString(),
-        problems: cat.problems.map((p) => spaceProblemSummary(p, site.get(p.id) ?? null)),
-      } satisfies SpaceRecordsResponse),
-      gzip: null,
-    };
+    const packed = packedOf({
+      space,
+      generated_at: new Date().toISOString(),
+      problems: cat.problems.map((p) => spaceProblemSummary(p, site.get(p.id) ?? null)),
+    } satisfies SpaceRecordsResponse);
     if (at === version) recordsCache.set(space, packed);
     return send(c, packed);
   });
@@ -481,7 +714,9 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     // an entry removed between the two reads leaves the problem without a site entry
     const summary = spaceProblemSummary(p, lead && entry ? siteBestOf(lead) : null);
     const head = { ...summary, conventions: SPACE_INFO[space].conventions };
-    return c.body(withRaw(head, { certified_config: p.config, site_config: entry?.config ?? null }), 200, {
+    // a space that keeps its configurations apart (polyhedra) reads this one now, from a small cache
+    const certified = await entryConfig(cat, p);
+    return c.body(withRaw(head, { certified_config: certified, site_config: entry?.config ?? null }), 200, {
       "content-type": "application/json",
     });
   });

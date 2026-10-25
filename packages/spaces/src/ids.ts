@@ -2,19 +2,22 @@
  * Problem ids of the spaces, parsed into their fields and written back. Pure, and it uses no
  * validator, so that a page can use it without pulling them in. Boundary ids are read by the
  * boundary package's own parser (parseBoundaryId), so that both always agree; a bundle of this
- * file carries that parser and the few boundary modules it needs.
+ * file carries that parser and the few boundary modules it needs. Polyhedra ids are checked
+ * against the polyhedra space's name list (no geometry).
  *
  *  - surface/<solid>/<mode>/<N>/<P>    e.g. surface/cube/fold/4/12
  *  - curved/<K>/<N>/<M>/<P>            e.g. curved/-1/3/4/7, curved/1e-06/0/0/5
  *  - sphere/<N>/<P>                    e.g. sphere/4/12
  *  - torus/<family>/<N>/<P>            e.g. torus/hex/5/8
  *  - boundary/<polytope>/<piece>/<P>   e.g. boundary/tesseract/ball/9
+ *  - polyhedra/<code>/<P>              e.g. polyhedra/cubintet/12 (code: the wiki's <piece>in<container>)
  *
  * An id is accepted only in its one written form (no leading zeros, no "+", K written as the
  * research records write it), so that every problem has exactly one id.
  */
 import { PIECES, POLYTOPES, parseBoundaryId } from "@polypack/boundary";
 import type { PieceName, PolytopeName } from "@polypack/boundary";
+import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { SpaceName, isSpaceName } from "./types";
 
 /** The solids of the surface space, in the order the catalogue lists them. */
@@ -29,7 +32,7 @@ export const BOUNDARY_PIECES: readonly PieceName[] = PIECES;
 export interface ParsedSpaceId {
   space: SpaceName;
   id: string;
-  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P} */
+  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P}; polyhedra {code, piece, container, P} */
   fields: Record<string, string | number>;
   P: number;
 }
@@ -130,6 +133,14 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       if (typeof parsed === "string") return parts.length === 4 ? `${bad(pattern)}. ${parsed}` : bad(pattern);
       return { space, id, fields: { polytope: parsed.polytope, piece: parsed.piece, P: parsed.P }, P: parsed.P };
     }
+    case "polyhedra": {
+      const pattern = "polyhedra/<code>/<P>, code the wiki's <piece>in<container> such as cubincub or cubintet";
+      if (parts.length !== 3) return bad(pattern);
+      const problem = problemNameOf(parts[1]);
+      const P = pieceCount(parts[2]);
+      if (!problem || P === null) return bad(pattern);
+      return { space, id, fields: { code: problem.code, piece: problem.piece, container: problem.container, P }, P };
+    }
   }
 }
 
@@ -153,5 +164,7 @@ export function formatSpaceId(space: SpaceName, fields: Record<string, string | 
     case "boundary":
       // as formatBoundaryId writes it, but without its throw on fields that name no problem
       return `boundary/${fields.polytope}/${fields.piece}/${fields.P}`;
+    case "polyhedra":
+      return `polyhedra/${fields.code}/${fields.P}`;
   }
 }

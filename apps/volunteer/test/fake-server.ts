@@ -64,6 +64,8 @@ export interface FakeServerOptions {
   noSpaces?: boolean;
   /** Answer GET /api/spaces/targets with 400 when it has `spaces` or `max_P`. */
   refuseSpaceFilters?: boolean;
+  /** The largest limit of GET /api/spaces/targets (10000; 2000 on a server from before 2026-10-25). */
+  spaceTargetsMaxLimit?: number;
   /** As afterSubmit, for the `n`-th POST /api/spaces/submit. */
   afterSpaceSubmit?: (n: number, answer: SpaceSubmitResponse) => { status: number; body: unknown } | "drop" | undefined;
 }
@@ -218,8 +220,11 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
         if (req.method === "GET" && url.pathname === "/api/spaces/targets") {
           if (o.refuseSpaceFilters && (url.searchParams.has("spaces") || url.searchParams.has("max_P")))
             return send(400, { error: "unknown parameter" });
-          // as the server: 500 targets without a limit, at most 2000
-          const limit = Math.min(2000, Number(url.searchParams.get("limit") ?? 500));
+          // as the server: 500 targets without a limit, at most its largest limit
+          const maxLimit = o.spaceTargetsMaxLimit ?? 10000;
+          const limit = Number(url.searchParams.get("limit") ?? 500);
+          if (!(limit >= 1 && limit <= maxLimit))
+            return send(400, { error: `limit must be an integer from 1 to ${maxLimit}` });
           const only = url.searchParams.get("spaces")?.split(",");
           const maxP = url.searchParams.has("max_P") ? Number(url.searchParams.get("max_P")) : Infinity;
           const targets: SpaceTarget[] = [...spaceProblems.values()]

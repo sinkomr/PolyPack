@@ -16,6 +16,7 @@
     "@polypack/boundary": "0.1.0",
     "@polypack/curved": "0.1.0",
     "@polypack/geometry": "0.1.0",
+    "@polypack/polyhedra": "0.1.0",
     "@polypack/sphere": "0.1.0",
     "@polypack/surface": "0.1.0",
     "@polypack/torus": "0.1.0"

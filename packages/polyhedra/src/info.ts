@@ -4,8 +4,8 @@
  */
 import { POLYHEDRA_MAX_COORD, POLYHEDRA_MAX_QUATERNION, POLYHEDRA_MIN_QUATERNION_NORM, POLYHEDRA_TOL } from "./validate";
 
-/** Largest P of the catalogue (data/polyhedra/records.json covers P = 2 to 30). */
-export const POLYHEDRA_MAX_P = 30;
+/** Largest P of the catalogue (data/polyhedra/records.json covers P = 2 to 100, as the wiki does). */
+export const POLYHEDRA_MAX_P = 100;
 
 /**
  * Relative margin by which an entry must beat a research record's certified scale to count as better. The

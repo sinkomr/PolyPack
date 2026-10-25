@@ -80,5 +80,5 @@ export async function submitSpaceConfig(
   } catch {
     // an answer without JSON is described by its status
   }
-  return { ...submitAnswer(r.status, answer), status: r.status };
+  return { ...submitAnswer(r.status, answer, p.space), status: r.status };
 }

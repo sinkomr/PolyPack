@@ -79,6 +79,7 @@ export {
   DEFAULT_PROBLEM,
   EVAL_UNIT,
   FRESH_EVALS,
+  freshSize,
   ROUND_EVALS,
   defaultBudget,
   pickProblem,

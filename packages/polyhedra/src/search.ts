@@ -11,7 +11,10 @@
  * Every configuration returned is legalized (polish.ts) and checked with the validator at tolerance 0.
  *
  * Budget: `maxEvals` counts simulator steps and polish function evaluations, so a run that ends on evaluations
- * is reproducible from its seed; `maxSeconds` and `shouldStop` end it earlier (polled at every evaluation).
+ * is reproducible from its seed; `maxSeconds` and `shouldStop` end it earlier. They are polled at every
+ * evaluation and in the work between evaluations (the planes of a polish stage, legalizations), so that a stop
+ * is acted on within about 0.2 s even at 100 pieces of the largest solids ([CALC] the longest gap between two
+ * polls was 177 ms); the run then checks its best, so a job that holds it returns within about 0.6 s.
  */
 import { type Pose } from "./geom";
 import { legalizeConfig, polishConfig, StopSearch } from "./polish";
@@ -24,6 +27,11 @@ export interface PolyhedraSearchOptions {
   seed: number;
   /** Configuration to start from (any scale). */
   start?: PolyhedraConfig;
+  /**
+   * True when the start is this search's own polished result (the best of a board's previous round): it is
+   * legalized and taken as it is, not polished again, so that a short round spends its evaluations on hops.
+   */
+  startPolished?: boolean;
   /** Most simulator steps plus polish evaluations; default 200,000. */
   maxEvals?: number;
   /** Wall-clock ceiling in seconds (makes the result depend on the machine); default none. */
@@ -71,13 +79,16 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
   const rng = mulberry32((o.seed * 2654435761) | 0);
   let evaluations = 0;
   let stopped: PolyhedraSearchResult["stopped"] = "done";
+  // polled at every evaluation and in the work between them (which counts no evaluation, so that a
+  // run that ends on its evaluations is the same however often it was polled)
+  const poll = () => {
+    if (o.shouldStop?.()) throw new StopSearch("aborted");
+    if (o.maxSeconds !== undefined && clock() - t0 > o.maxSeconds) throw new StopSearch("time");
+  };
   const tick = () => {
     evaluations++;
     if (evaluations > maxEvals) throw new StopSearch("evals");
-    if ((evaluations & 63) === 0) {
-      if (o.shouldStop?.()) throw new StopSearch("aborted");
-      if (o.maxSeconds !== undefined && clock() - t0 > o.maxSeconds) throw new StopSearch("time");
-    }
+    poll();
   };
   const pb = makeProblem(problem.piece, problem.container);
   const scale = pb.P.edge;
@@ -96,7 +107,7 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
     return true;
   };
   const polish = (c: PolyhedraConfig, mus?: number[]) => {
-    const r = polishConfig(problem, c, { pairClearance: g, wallClearance: g, tick, mus });
+    const r = polishConfig(problem, c, { pairClearance: g, wallClearance: g, tick, poll, mus });
     if (r.stopped) throw Object.assign(new StopSearch(r.stopped), { partial: r.config });
     return r.config;
   };
@@ -105,15 +116,16 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
     // 1. start
     if (o.start) {
       if (o.start.pieces.length !== P) throw new Error(`the start has ${o.start.pieces.length} pieces, not ${P}`);
-      const legal = legalizeConfig(problem, o.start, g, g);
+      const legal = legalizeConfig(problem, o.start, g, g, poll);
       accept(legal, "start");
-      try {
-        accept(polish(legal, [1e4, 1e5, 1e6, 1e7, 1e8, 1e9]), "polished start");
-      } catch (e) {
-        if (e instanceof StopSearch && (e as StopSearch & { partial?: PolyhedraConfig }).partial)
-          accept((e as StopSearch & { partial?: PolyhedraConfig }).partial!, "partly polished start");
-        throw e;
-      }
+      if (!o.startPolished)
+        try {
+          accept(polish(legal, [1e4, 1e5, 1e6, 1e7, 1e8, 1e9]), "polished start");
+        } catch (e) {
+          if (e instanceof StopSearch && (e as StopSearch & { partial?: PolyhedraConfig }).partial)
+            accept((e as StopSearch & { partial?: PolyhedraConfig }).partial!, "partly polished start");
+          throw e;
+        }
       startScore = best ? (best as PolyhedraConfig).s : null;
     } else {
       let sch = o.schedule ?? {
@@ -127,9 +139,9 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
         const f = (0.4 * maxEvals) / total;
         sch = { compact: Math.ceil(sch.compact * f), morph: Math.ceil(sch.morph * f), settle: Math.ceil(sch.settle * f) };
       }
-      const r = run({ seed: o.seed, n: P, piece: problem.piece, container: problem.container, ...sch, tick });
+      const r = run({ seed: o.seed, n: P, piece: problem.piece, container: problem.container, ...sch, tick, poll });
       const fresh = fromSim(scale, pb.sOfL, r.final.C, r.final.Q, r.final.L);
-      accept(legalizeConfig(problem, fresh, g, g), "fresh run");
+      accept(legalizeConfig(problem, fresh, g, g, poll), "fresh run");
       try {
         accept(polish(fresh), "polished fresh run");
       } catch (e) {
@@ -145,7 +157,14 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
       const b: PolyhedraConfig = best;
       hops++;
       let cand: PolyhedraConfig;
-      const soft = P > 1 && rng() < 0.5;
+      // A soft hop has 3,800 + 120 P steps when the budget leaves room for them and a polish; with less
+      // left (the board's short rounds of many large solids) it is shortened to 60 % of what is left, and
+      // below a tenth of its length it gives way to a jiggle, which needs only a polish. The budget is
+      // known in advance, so this keeps a run that ends on its evaluations reproducible.
+      const morph0 = 3000 + 100 * P;
+      const settle0 = 800 + 20 * P;
+      const room = Math.min(1, (0.6 * (maxEvals - evaluations)) / (morph0 + settle0));
+      const soft = P > 1 && rng() < 0.5 && room >= 0.1;
       if (soft) {
         const L = pb.LofS(b.s);
         const h = hop({
@@ -162,9 +181,10 @@ export function searchPolyhedra(problem: PolyhedraProblem, P: number, o: Polyhed
           minDiff: 0.02 + 0.08 * rng(),
           rh: 0.06 + 0.14 * rng(),
           focus: rng() < 0.6 ? Math.max(2, Math.floor(P / 3)) : 0,
-          morph: 3000 + 100 * P,
-          settle: 800 + 20 * P,
+          morph: Math.round(morph0 * room),
+          settle: Math.round(settle0 * room),
           tick,
+          poll,
         });
         cand = fromSim(scale, pb.sOfL, h.C, h.Q, h.L);
       } else {

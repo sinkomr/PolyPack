@@ -19,7 +19,7 @@ import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
 // the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
 
 async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
   const r = await request.get(url);
@@ -47,7 +47,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
 
   // one section per dimension, its kinds in the order of the table; the ones to come say so
   const sections = page.locator("#dimension-groups > section");
-  await expect(sections.locator("h3")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D (coming soon)", "3D on 4D"]);
+  await expect(sections.locator("h3")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D", "3D on 4D"]);
   for (const d of DIMENSIONS) {
     const cards = page.locator(`#dimension-groups > section[data-dimension="${d.id}"] li.space-card`);
     await expect(cards.locator("h4")).toHaveText(d.families.map((f) => f.name));
@@ -272,7 +272,7 @@ test("without the server the dimensions page still lists each dimension and its 
     DIMENSIONS.flatMap((d) => d.families.map((f) => f.name)),
   );
   // the kinds the board can show are not drawn as coming soon, and still open on the board
-  await expect(page.locator("#dimension-groups li.soon")).toHaveCount(1);
+  await expect(page.locator("#dimension-groups li.soon")).toHaveCount(0);
   await expect(
     page.locator('#dimension-groups li[data-space="boundary"]').getByRole("link", { name: /^Board/ }),
   ).toHaveAttribute("href", "/#space=boundary");

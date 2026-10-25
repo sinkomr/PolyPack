@@ -6,9 +6,9 @@ import { SPACE_VIEWERS, spaceViewers, viewerFor } from "../scripts/space-viewers
 const root = resolve(import.meta.dirname, "../../..");
 
 describe("the viewers of the spaces", () => {
-  it("publishes the five viewers at /spaces/<name>.html", () => {
+  it("publishes the six viewers at /spaces/<name>.html", () => {
     expect(Object.keys(SPACE_VIEWERS).sort()).toEqual(
-      ["curved", "sphere", "surface", "sweep", "torus"].map((n) => `spaces/${n}.html`),
+      ["curved", "polyhedra", "sphere", "surface", "sweep", "torus"].map((n) => `spaces/${n}.html`),
     );
   });
 

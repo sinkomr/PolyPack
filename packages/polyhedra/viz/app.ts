@@ -1,6 +1,7 @@
 /**
  * The standalone viewer of the polyhedra records (viz/index.html, built by scripts/build-viz.ts). The page embeds
- * the records with display-precision poses as POLYHEDRA_DATA; drawing is src/draw.ts.
+ * the records as POLYHEDRA_DATA, with display-precision poses up to P = embedMaxP; a larger record's configuration
+ * is read from the site's API where the site serves the page. Drawing is src/draw.ts.
  */
 import { DARK_PALETTE, LIGHT_PALETTE, createPolyhedraView } from "../src/draw";
 import { POLYHEDRA_PROBLEMS, getProblem, wikiUrl } from "../src/problems";
@@ -20,13 +21,19 @@ interface VizRecord {
   cr?: string;
   /** method, for PolyPack's own records */
   m?: string;
-  src: string;
+  /** index into POLYHEDRA_DATA.sources */
+  src: number;
   lit: { v: number; s: string; u?: string; q?: number }[];
-  /** flat poses, 7 numbers each */
-  p: number[];
+  /** flat poses, 7 numbers each; absent above P = embedMaxP */
+  p?: number[];
 }
 
-declare const POLYHEDRA_DATA: { generated: string; records: Record<string, VizRecord[]> };
+declare const POLYHEDRA_DATA: {
+  generated: string;
+  embedMaxP: number;
+  sources: string[];
+  records: Record<string, VizRecord[]>;
+};
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const prob = $<HTMLSelectElement>("problem");
@@ -61,6 +68,31 @@ for (const fam of Object.keys(groups)) {
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const fmt = (x: number) => x.toFixed(6);
 
+/** The poses of a record above embedMaxP, from the site's API (null where the page is not served by the site). */
+const fetched = new Map<string, Promise<Pose[] | null>>();
+function posesFromSite(code: string, n: number): Promise<Pose[] | null> {
+  const key = `${code}/${n}`;
+  let p = fetched.get(key);
+  if (!p) {
+    p = (async () => {
+      if (!/^https?:$/.test(location.protocol)) return null;
+      try {
+        const res = await fetch(`/api/spaces/polyhedra/problems/polyhedra/${code}/${n}`);
+        if (!res.ok) return null;
+        const c = (await res.json())?.certified_config;
+        const pieces = Array.isArray(c?.pieces) ? (c.pieces as unknown[]) : [];
+        const ok = pieces.length === n && pieces.every((q) => Array.isArray(q) && q.length === 7 && q.every((x) => typeof x === "number" && Number.isFinite(x)));
+        return ok ? (pieces as Pose[]) : null;
+      } catch {
+        return null;
+      }
+    })();
+    fetched.set(key, p);
+  }
+  return p;
+}
+let shown = "";
+
 function show(code: string, n: number, push = true) {
   const recs = POLYHEDRA_DATA.records[code] ?? [];
   const r = recs.find((x) => x.n === n) ?? recs[0];
@@ -68,9 +100,27 @@ function show(code: string, n: number, push = true) {
   if (!r) return;
   prob.value = code;
   nsel.innerHTML = recs.map((x) => `<option value="${x.n}"${x.n === r.n ? " selected" : ""}>${x.n}</option>`).join("");
-  const pieces: Pose[] = [];
-  for (let i = 0; i < r.p.length; i += 7) pieces.push(r.p.slice(i, i + 7) as Pose);
-  view.setConfig(problem, { s: r.s, pieces });
+  shown = `${code}/${r.n}`;
+  const note = document.createElement("p");
+  note.className = "muted";
+  if (r.p) {
+    const pieces: Pose[] = [];
+    for (let i = 0; i < r.p.length; i += 7) pieces.push(r.p.slice(i, i + 7) as Pose);
+    view.setConfig(problem, { s: r.s, pieces });
+  } else {
+    // the container alone until the configuration arrives
+    view.setConfig(problem, { s: r.s, pieces: [] });
+    note.textContent = "Reading the configuration from the site...";
+    const key = shown;
+    void posesFromSite(code, r.n).then((pieces) => {
+      if (key !== shown) return;
+      if (pieces) {
+        view.setConfig(problem, { s: r.s, pieces });
+        note.textContent = "";
+      } else
+        note.textContent = `This page embeds the configurations up to P = ${POLYHEDRA_DATA.embedMaxP}; open it on the site (/spaces/polyhedra.html) to draw P = ${r.n}, or read it in data/polyhedra/configs/${code}.jsonl.`;
+    });
+  }
   const better = r.s < r.w * (1 - 1e-6);
   const lit = r.lit
     .map((l) => `<li>${fmt(l.v)}${l.q ? ` (to ${l.q})` : ""}: ${l.u ? `<a href="${esc(l.u)}" rel="noopener">${esc(l.s)}</a>` : esc(l.s)}</li>`)
@@ -81,8 +131,9 @@ function show(code: string, n: number, push = true) {
     `<p>Wiki: <a href="${wikiUrl(code, r.n)}" rel="noopener">${fmt(r.w)}</a>${better ? ' <span class="better">(beaten here)</span>' : ""}</p>` +
     `<p>Found by ${esc(r.f)}${r.cr ? `; certificate refined by ${esc(r.cr)}` : ""}.</p>` +
     (r.m ? `<p class="muted">${esc(r.m)}</p>` : "") +
-    `<p class="muted">${esc(r.src)}</p>` +
+    `<p class="muted">${esc(POLYHEDRA_DATA.sources[r.src] ?? "")}</p>` +
     (lit ? `<p>Published values without coordinates:</p><ul class="notes">${lit}</ul>` : "");
+  info.prepend(note);
   table.innerHTML =
     "<thead><tr><th>P</th><th>s</th><th>bound</th><th>wiki</th></tr></thead><tbody>" +
     recs

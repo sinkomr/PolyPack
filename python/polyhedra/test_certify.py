@@ -196,7 +196,7 @@ class CrossCheck(unittest.TestCase):
 @unittest.skipUnless(os.path.exists(RECORDS), 'no records file')
 class RecordsFile(unittest.TestCase):
     def test_fields_of_every_record(self):
-        doc = read_json(RECORDS)
+        doc = certify.load_records(RECORDS)
         ids = [r['id'] for r in doc['records']]
         self.assertEqual(len(ids), len(set(ids)))
         for r in doc['records']:
@@ -209,7 +209,7 @@ class RecordsFile(unittest.TestCase):
         return certify.field_errors(r, VOL)
 
     def test_a_sample_certifies(self):
-        doc = read_json(RECORDS)
+        doc = certify.load_records(RECORDS)
         recs = doc['records']
         sample = recs[::max(1, len(recs) // 12)][:12]
         for r in sample:

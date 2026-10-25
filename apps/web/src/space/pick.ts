@@ -14,6 +14,7 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   torus: "torus/sq/5/7",
   // nine balls: without folding one cell must hold two of them, so folding gains much here
   boundary: "boundary/tesseract/ball/9",
+  polyhedra: "polyhedra/cubincub/11",
 };
 
 /** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */
@@ -26,6 +27,7 @@ const PICK_LABELS: Record<string, string> = {
   family: "Torus",
   polytope: "Polytope",
   piece: "Piece",
+  code: "Problem",
   P: "Pieces (P)",
 };
 

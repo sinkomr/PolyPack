@@ -107,8 +107,9 @@ export const DIMENSIONS: readonly Dimension[] = [
         space: "polyhedra",
         name: "Polyhedra",
         short: "Polyhedra",
-        summary: "Equal polyhedra in the smallest copy of a container polyhedron.",
-        available: false,
+        summary:
+          "Equal polyhedra in the smallest copy of a container polyhedron: Platonic, Archimedean and Catalan solids, prisms and antiprisms, up to 100 pieces.",
+        available: true,
       },
     ],
   },

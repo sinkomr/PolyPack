@@ -4,14 +4,15 @@
  *
  * Usage: npx tsx packages/polyhedra/scripts/bench-search.ts <evals> <id> [<id> ...]
  */
-import { readFileSync } from "node:fs";
+import { readRecordsFile } from "../src/records-file";
 import { getProblem, searchPolyhedra, validatePolyhedra } from "../src/index";
 
 const [evalsArg, ...ids] = process.argv.slice(2);
 const evals = Number(evalsArg);
-const doc = JSON.parse(readFileSync(new URL("../../../data/polyhedra/records.json", import.meta.url), "utf8"));
+const doc = readRecordsFile(new URL("../../../data/polyhedra/records.json", import.meta.url).pathname);
 for (const id of ids) {
-  const r = doc.records.find((x: { id: string }) => x.id === id);
+  const r = doc.records.find((x) => x.id === id);
+  if (!r) throw new Error(`no record ${id}`);
   const p = getProblem(r.code)!;
   for (const mode of ["warm", "fresh"] as const) {
     const t0 = performance.now();

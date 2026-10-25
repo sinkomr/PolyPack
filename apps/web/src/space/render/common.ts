@@ -25,6 +25,11 @@ export interface SpaceRenderer {
   /** What is drawn, in a sentence for screen readers. */
   describe(): string;
   destroy(): void;
+  /**
+   * True when the drawing holds resources worth releasing while the board shows another kind (a WebGL
+   * context and its buffers): the mode then destroys it on leaving and makes it again on return.
+   */
+  readonly releaseOnLeave?: boolean;
 }
 
 export const isDark = (): boolean => matchMedia("(prefers-color-scheme: dark)").matches;

@@ -32,6 +32,7 @@ describe("the table of dimensions", () => {
     expect(whereIs("curved")?.dimension.label).toBe("2D in 2D");
     for (const s of ["surface", "sphere", "torus"]) expect(whereIs(s)?.dimension.label, s).toBe("2D on 3D");
     expect(whereIs("boundary")).toMatchObject({ dimension: { id: "3-on-4" }, family: { name: "Polytope boundaries" } });
+    expect(whereIs("polyhedra")).toMatchObject({ dimension: { label: "3D in 3D" }, family: { name: "Polyhedra" } });
     expect(familyTitle("sphere")).toBe("2D on 3D, Sphere");
     expect(familyTitle("boundary")).toBe("3D on 4D, Polytope boundaries");
   });
@@ -43,15 +44,11 @@ describe("the table of dimensions", () => {
     }
   });
 
-  it("lists the dimensions to come, with no kind the board can show", () => {
+  it("lists no dimension as still to come: every one has a kind the board can show", () => {
     const soon = DIMENSIONS.filter((d) => !isAvailable(d));
-    expect(soon.map((d) => d.label)).toEqual(["3D in 3D"]);
-    for (const d of soon) {
-      expect(availableFamilies(d)).toEqual([]);
-      for (const f of d.families) expect(whereIs(f.space), f.space).toBeNull();
-    }
-    // the name the API will use for it
+    expect(soon.map((d) => d.label)).toEqual([]);
     expect(familyOfSpace("polyhedra")?.dimension.label).toBe("3D in 3D");
+    expect(familyOfSpace("boundary")?.dimension.label).toBe("3D on 4D");
   });
 
   it("uses distinct names, and an id and a short name for each family", () => {

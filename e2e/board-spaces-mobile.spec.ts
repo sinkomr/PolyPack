@@ -14,7 +14,7 @@ test("phone: the board's space mode fits, and a short run can be tapped through"
   await expect(page.locator("#space-solve-status")).toContainText("Evaluation limit reached.", { timeout: 30_000 });
   await page.locator("#space-submit").scrollIntoViewIfNeeded();
   await expect(page.locator("#space-submit")).toBeVisible();
-  for (const id of ["torus/free/6/7", "surface/dodecahedron/fold/5/13", "curved/-1/0/0/14"]) {
+  for (const id of ["torus/free/6/7", "surface/dodecahedron/fold/5/13", "curved/-1/0/0/14", "polyhedra/tidintid/100"]) {
     await page.goto("about:blank");
     await page.goto(`/#space=${id}`);
     await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
@@ -36,6 +36,10 @@ test("phone: the Dimension and Kind menus fit and switch the board", async ({ pa
   await expect(page.locator("#space-problem-note")).toContainText("Problem surface/");
   await page.selectOption("#kind-select", "sphere");
   await expect(page.locator("#space-problem-note")).toContainText("Problem sphere/");
+  await page.selectOption("#dimension-select", "3-in-3");
+  await expect(page.locator("#kind-select")).toHaveValue("polyhedra");
+  await expect(page.locator("#space-problem-note")).toContainText("Problem polyhedra/");
+  await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /drawn in 3D/);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
   ).toBeLessThanOrEqual(1);

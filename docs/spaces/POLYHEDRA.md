@@ -9,22 +9,28 @@ The score is s; smaller is better. In code and data the space is called `polyhed
 
 **Summary** (2026-10-25).
 
-- `data/polyhedra/records.json` holds **2,494 records**, one for each problem and P = 2 to 30, every one with
-  coordinates, 7.5 MB. Each is proven valid by `python/polyhedra/certify.py` (exact rational rotations and
-  170-bit interval arithmetic; the geometry is upstream's `certify_general.py`) at its stated s. Every PolyPack
-  record and a random sample of the others were also certified by upstream's own unmodified `certify_general.py`
-  [CALC].
+- `data/polyhedra/records.json` holds **8,514 records**, one for each problem and P = 2 to 100 (the wiki's
+  range), every one with coordinates. The file is the index (values, bounds, provenance; 6.7 MB); the
+  configurations are kept apart, one file per problem in `data/polyhedra/configs/<code>.jsonl` (86 files, 56.9 MB,
+  at most 0.73 MB each, one line per P), and the server reads the one it is asked for on demand (§2). Each is proven valid by
+  `python/polyhedra/certify.py` (exact rational rotations and 170-bit interval arithmetic; the geometry is
+  upstream's `certify_general.py`) at its stated s. Every PolyPack record, a random sample of the others and the
+  records of P = 100 of the largest solids were also certified by upstream's own unmodified
+  `certify_general.py` [CALC].
 - **Sources.** The configurations come from the wiki's repository (alejandrozu/platonic-packing, MIT, commit
   `cbf76f2f`) and, through it, from Berthold, Kamp, Mexi, Pokutta and Polik's supplement (no licence; used
-  with citation), Hyra-results (Apache-2.0) and community submissions; some are PolyPack's own. Every record
-  names its sources; see §3.
-- **PolyPack research** beats the wiki by more than 1e-5 relative in **330 records** (§6), by a median of 0.58 %
-  and up to 8.05 % (19 tetrahedra in an icosahedron); 116 by more than 1 %. 316 come from this package's
-  search started from the case's record, run over all 725 Platonic records (296 of them start from packings of
-  Berthold, Kamp et al. that the wiki's search had not improved), 1 from a search from scratch and 13 from the
-  compute study of 2026-10-23 (crystal cuts and searches).
-- 730 published values without coordinates are listed with their sources (§6).
-- Phase B (the board, the API and the game) is not wired yet; `packages/polyhedra` is self-contained.
+  with citation), Hyra-results (Apache-2.0), Ryan Xu's square_packing (no licence; used with citation), a
+  reconstruction of Erich Friedman's construction and community submissions; some are PolyPack's own. Every
+  record names its sources; see §3.
+- **PolyPack research** beats the wiki by more than 1e-5 relative in **1,004 records** (§6), by a median of
+  5.55 % and up to 23.55 % (35 dodecahedra in a tetrahedron); 769 by more than 1 %. Up to P = 30 (330 records),
+  316 come from this package's search started from the case's record, run over all 725 Platonic records of that
+  range, 1 from a search from scratch and 13 from the compute study of 2026-10-23 (crystal cuts and searches).
+  From P = 31 to 100 (674 records) all come from that compute study's results: lattice and crystal cuts and
+  searches. No new search was run for P > 30.
+- 736 published values without coordinates are listed with their sources (§6).
+- The board (Dimension 3D in 3D, Kind Polyhedra), the API (`/api/spaces/polyhedra`) and the volunteer client
+  (opt-in) use the space (§8).
 
 Labels: [EST] established and sourced, [CALC] computed here, [SPEC] speculation.
 
@@ -57,20 +63,24 @@ disjoint. The site's float validator (`packages/polyhedra/src/validate.ts`) work
 pieces may touch, and a penetration depth or protrusion deeper than 1e-9 rejects the configuration.
 
 **Score.** s. The volume bound s >= (P vol(piece) / vol(container))^(1/3) holds for every packing [EST]; it is the
-`bound` of every record. Four records meet it to 1e-6 (cubes in a cube, P = 8 and 27; triangular prisms in a
-triangular prism, P = 8 and 27): the pieces tile the container, so these are optimal, but they stay
-`best_known` because PolyPack marks `proven` only with a published proof [CALC].
+`bound` of every record. Six records meet it to 1e-6 (cubes in a cube and triangular prisms in a triangular
+prism, P = 8, 27 and 64): the pieces tile the container, so these are optimal, but they stay `best_known`
+because PolyPack marks `proven` only with a published proof [CALC].
 
 ## 2. Records file
 
 `data/polyhedra/records.json` (written by `python/polyhedra/build_records.py`) has the fields of the other
-spaces' records and the wiki's provenance:
+spaces' records and the wiki's provenance. The configurations are kept apart: `data/polyhedra/configs/<code>.jsonl`
+has one line `{"P", "config": {s, pieces}}` per P, in increasing P, and a record's `config_at` = [offset,
+length] gives the byte offset and length of its line (without the newline), so that one configuration can be
+read alone.
 
 | field | meaning |
 |---|---|
 | `id`, `code`, `piece`, `container`, `family`, `P` | the problem |
-| `config` | `{s, pieces}`, exactly as certified |
-| `score_cert` | = `config.s`, proven valid by `certify.py` |
+| configuration | `{s, pieces}` on its line of `configs/<code>.jsonl`, exactly as certified |
+| `config_at` | [offset, length] of that line in bytes |
+| `score_cert` | = the configuration's `s`, proven valid by `certify.py` |
 | `display` | `score_cert` rounded to the nearest at 6 decimals from its exact binary value (ties to even) |
 | `score_float` | the float container scale of the stored poses (pieces keep their clearance) |
 | `s_tight` | upstream's uncertified touching limit, where it gives one |
@@ -94,38 +104,61 @@ refinements cut wall gaps to about 1e-10, and some community constructions have 
 positive. Where upstream gives its touching limit s_tight, the clearance costs at most 2.6e-7 of s relative
 (median 5.8e-8) [CALC]. PolyPack's own records keep 1e-7.
 
-**Scope and size.** P = 2 to 30 for all 86 problems (the wiki has P = 2 to 100). The file is 7.5 MB, of which the
-configurations take 5.4 MB at full precision; P up to 40 would take about 10 MB and P up to 100 about 46 MB of
-configurations, too much for a server that keeps the catalogues in memory beside 12 MB for the other spaces
-[CALC]. The 4D to 6D problems of the wiki are left out.
+**Scope and size.** P = 2 to 100 for all 86 problems, the wiki's range. `records.json` is 6.7 MB; the 86 files of
+configurations take 56.9 MB at full precision, at most 0.73 MB each (truncated icosidodecahedra), so no tracked
+file is near 10 MB. The 4D to 6D problems of the wiki are left out.
+
+**Storage on the server.** The server keeps only the index in memory: each problem's id, score, bound and status
+(`@polypack/spaces` `loadSpacesIndex`). A configuration is read when it is asked for (`GET
+/api/spaces/polyhedra/problems/<id>`, which the board and the volunteer client use): only its line is read, at
+`config_at`, and checked as the other spaces' records are (`parseSpaceConfig`, and the line's P against the
+record's); the configurations read last are kept up to 4 MB (`CONFIG_CACHE_BYTES`), at most 4 reads run at once
+(`CONFIG_READS_AT_ONCE`) and reads of one configuration at the same time share one. A read that fails is never
+kept, so the next request tries again. The listings, the targets and the keep rule need no configuration.
+Measured [CALC] (Apple Silicon, Node 26, the server as `npm run start` runs it, before the 3D on 4D space joined;
+its 32 records add about 55 kB):
+
+- the index of the 8,514 problems keeps 4.6 MB of heap (all five spaces' catalogues 11.1 MB, the other four
+  6.5 MB); reading `records.json` leaves about 22 MB more of garbage until the next collection;
+- the server's resident memory 4 s after it started was 259 to 270 MB with all five spaces and 221 to 225 MB
+  without the polyhedra space (macOS counts freed heap the system has not taken back, so these are upper
+  bounds);
+- a request for a configuration not read before costs 0.2 to 0.3 ms of CPU, and 0.1 ms once it is kept; 86
+  requests at once for 86 problems took 14 ms and 18 MB of memory at the peak (reading whole problem files, as
+  this did at first, took 5 ms of CPU a request when 9 problems were asked for in turn, and 357 ms and 127 MB
+  for those 86);
+- the image gains the 6.7 MB index and the 56.9 MB of configurations (`Dockerfile`, `.dockerignore`), the
+  website's three.js chunk (0.75 MB) and viewer (4.0 MB), and `three` and `@types/three` in `node_modules`
+  (22 MB and 4.6 MB, shared with the other 3D kinds).
 
 ## 3. Licence and lineage
 
 Upstream's code and data are MIT (`THIRD_PARTY_NOTICES.md` quotes the licence with both copyright lines: Yohei
 Nakajima for the soft-to-rigid method, simulator, tightening and checker design, and Alejandro Zarzuelo for the
 generalization). Records that rest on other sources cite them in `sources` and `source`, and the owner decided
-on 2026-10-24 to include them all with citation. Counts are of the 2,494 records (with coordinates) and of the
+on 2026-10-24 to include them all with citation. Counts are of the 8,514 records (with coordinates) and of the
 published values without coordinates:
 
 | source | terms | records with coordinates | values without coordinates |
 |---|---|---|---|
-| the wiki (alejandrozu/platonic-packing) | MIT | 2,472 rest on its files (all but the 22 purely PolyPack ones) | - |
-| community submissions (PingYou Ltd, konoha-ily2, Stian) | MIT, by the submission form | 807 | - |
-| Berthold, Kamp, Mexi, Pokutta, Polik 2026, arXiv:2605.04850, supplement `DominikKamp/Packing` at `27f71632` | no licence stated; used with citation | 427: 131 as the wiki stores them (128 their packings, 2 their n + 1 packing less a piece, 1 searched further by upstream) and 296 improved by PolyPack's search from them | 667 |
+| the wiki (alejandrozu/platonic-packing) | MIT | 7,840 rest on its files (all but the 674 purely PolyPack ones) | - |
+| community submissions (PingYou Ltd, konoha-ily2, Stian) | MIT, by the submission form | 2,308 | - |
+| Berthold, Kamp, Mexi, Pokutta, Polik 2026, arXiv:2605.04850, supplement `DominikKamp/Packing` at `27f71632` | no licence stated; used with citation | 964: 661 as the wiki stores them (130 their packings, 116 their n + 1 packing less a piece, 415 searched further by upstream from them) and 303 improved by PolyPack from them | 667 |
 | Hyra-results (Haowei Lin, Tencent Hunyuan) at `09b2d2e3` | Apache-2.0, `LICENSES/Apache-2.0.txt`; modified (see notes) | 6 (cubes P = 11; octahedra in a cube P = 19, 20, 21, 24, 25; P = 21 improved by PolyPack) | 6 |
 | hyra-packing-audit (Sam Scott) at `c107fda3` | MIT, with a NOTICE (quoted) | 0 | 3 |
-| konoha-ily2, upstream issue #1 | no licence stated; used with citation | 1 (cubes P = 28) | 2 |
+| konoha-ily2, upstream issue #1 | no licence stated; used with citation | 1 (cubes P = 28; its P = 34 to 36 are not smaller than Ryan Xu's) | 2 |
 | cubes-in-cube-n13 (@BuilderOfAgents) at `1f0c7540` | MIT | 0 (the wiki's own records are smaller) | 0 |
 | soft-to-rigid-packing (Yohei Nakajima) at `efe7a920` | MIT | 0 (the wiki's record is smaller) | 1 |
-| square_packing (Ryan Xu) at `9535d65d` | no licence stated | 0 (its cases are P = 34 to 36) | 0 |
-| Erich Friedman's Packing Center (values by Friedman, Ríain Walsh, Lin) | values cited; no images copied | 0 | 51 (Walsh 24, trivial grids 20, Friedman 7) |
-| PolyPack research | MIT | 330 (22 of them rest on nothing else) | - |
+| square_packing (Ryan Xu) at `9535d65d` | no licence stated; used with citation | 3 (cubes in a cube, P = 34 to 36) | 3 |
+| Erich Friedman's Packing Center (values by Friedman, Ríain Walsh, Lin) | values cited; no images copied | 1 (cubes P = 33: Friedman's construction, coordinates made by upstream) | 54 (Walsh 24, trivial grids 20, Friedman 10) |
+| PolyPack research | MIT | 1,004 (674 of them rest on nothing else) | - |
 
 Lineage follows upstream's own `found_by`, `credit` and `search.lineage` fields, which its engine passes on
 through every move (a packing found from a Kamp packing keeps "search started from the packing of ..."). A
-composition of two packings records the lineage of one of them only. 12 records are compositions; in each, one
-component is a single piece (upstream's one-piece fits, its own), so the recorded lineage is complete: 4 rest on
-Kamp et al. and cite them, 8 have none [CALC]. Records derived from Hyra-results carry a notice of the
+composition of two packings records the lineage of one of them only. Up to P = 30, 12 records are compositions;
+in each, one component is a single piece (upstream's one-piece fits, its own), so the recorded lineage is
+complete: 4 rest on Kamp et al. and cite them, 8 have none [CALC]. The records of P = 31 to 100 were not checked
+for compositions. Records derived from Hyra-results carry a notice of the
 changes in `notes` (Apache-2.0, section 4(b)); the repository has no NOTICE file at that commit (checked). konoha-ily2 has since published an
 MIT repository (`konoha-ily2/zerogap-packing`) with exact closed forms for cubes in a cube; it is not used here.
 
@@ -152,12 +185,18 @@ quaternions nonzero, s positive and P equal to the id's. Upstream's `certify_gen
 
 **Runs** [CALC] (Apple Silicon, Python 3.9, 2 processes at nice 10, other jobs running):
 
-- `python3 python/polyhedra/certify.py data/polyhedra/records.json --jobs 2 --out data/polyhedra/certification.json`:
-  2,494 of 2,494 certified in 339 s (646 s of CPU; slowest `polyhedra/tidintid/20`, 9.9 s); smallest proven wall
-  slack 1.5e-12 and pair gap 5.8e-12 (community constructions; most records keep 1e-7). The summary per record is
-  in `data/polyhedra/certification.json`.
-- Upstream's own `certify_general.py`, unmodified, from its checkout: 380 of 380 certified (all 330 PolyPack
-  records and 50 others drawn with seed 20261025), 81 s.
+- `python3 python/polyhedra/certify.py data/polyhedra/records.json --jobs 2 --out data/polyhedra/certification.json`
+  (it reads the configurations from `configs/`): 8,514 of 8,514 certified in 6,035 s. The run was paused now
+  and then for other measurements, so the per-record seconds in `data/polyhedra/certification.json` are wall
+  times that include those pauses; unpaused, P = 100 took 20 s for truncated icosidodecahedra, 14 s for
+  disdyakis triacontahedra and 11 s for pentagonal hexecontahedra, and the 2,494 records up to P = 30 took 646 s
+  of CPU. Smallest proven wall slack 1.5e-12 and pair gap 1.7e-13 (`polyhedra/pr5incub/96`, a community
+  construction; most records keep 1e-7). The summary per record is in `data/polyhedra/certification.json`.
+- Upstream's own `certify_general.py`, unmodified, from its checkout at `cbf76f2f`: 1,079 of 1,079 certified in
+  599 s: all 1,004 PolyPack records, 50 others drawn with seed 20261025, and P = 100 of every Archimedean and
+  Catalan problem (26; one was among the 50), the largest P of the largest solids: 21 s for truncated
+  icosidodecahedra, 17 s for pentagonal hexecontahedra, 15 s for disdyakis triacontahedra. (Up to P = 30: 380 of
+  380, all 330 PolyPack records and 50 others.)
 - `python3 python/polyhedra/test_certify.py`: 15 tests, among them overlaps and protrusions of 1.7e-7 to 3e-7,
   coincident pieces, a piece turned by 1e-3 rad, malformed numbers, zero quaternions, every field check, and
   the near-contact cross-check below.
@@ -179,12 +218,14 @@ overlap over them is the exact penetration depth. A bounding-sphere test skips f
 first axis with a gap of 1e-3 (default); the check ends after 20 errors. Limits for untrusted input: s at most
 1e6, centre coordinates at most 1e4, quaternion components at most 1e100 and norm at least 1e-6.
 
-Measured [CALC] (`scripts/bench-validate.ts`, same loaded machine): all 2,494 records in 4.0 s, the slowest
-(`polyhedra/phcinphc/28`, 28 pentagonal hexecontahedra of 92 vertices) 20 ms. The most a check of P = 30 can
-cost is 435 pairs each needing a full scan: a full scan of two truncated icosidodecahedra (576 axes) takes
-0.63 ms, so about 0.27 s in all; 0.13 to 0.16 s for the snub dodecahedron and the large Catalan solids, under
-25 ms for prisms and antiprisms. A valid grid of 30 truncated icosidodecahedra 1e-9 apart (58 near pairs) takes
-18 ms.
+Measured [CALC] (`scripts/bench-validate.ts`, Apple Silicon): all 8,514 records in 48.8 s, the slowest
+(`polyhedra/tidintid/98`, 98 truncated icosidodecahedra of 120 vertices) 149 ms, 150 ms at the strict tolerance.
+A valid grid of 100 truncated icosidodecahedra 1e-9 apart (235 near pairs) takes 74 ms; of 100 pentagonal
+hexecontahedra 84 ms, of 100 cubes 1.2 ms. Only near pairs need a full scan of their candidate axes (0.62 ms for
+two truncated icosidodecahedra, 576 axes; 0.29 to 0.37 ms for the snub dodecahedron and the large Catalan solids;
+under 0.06 ms for prisms and antiprisms), and a packing has only so many: about a dozen neighbours per piece. The
+bound of every one of the 4,950 pairs of P = 100 needing a full scan, 3.1 s for the largest solid, cannot be
+reached by a configuration that is not rejected after its first 20 errors.
 
 **Search** (`search.ts`; seeded, budgeted by evaluations, stoppable, synchronous for a worker):
 
@@ -227,21 +268,38 @@ The search returns valid configurations at any budget (tests: budgets, stops, re
 records (seed 1, 150,000 evaluations, clearance 1e-7 kept by the legalization), on 2 processes for about 2 hours,
 and kept the 313 results that beat the record by more than 1e-5; two more came from the cases of the table
 above. With the subsets they give for smaller P, they make 317 of the records (316 from a record, 1 from
-scratch; §6). Each is reproducible from its `origin` (start file, seed, evaluations) with this version of the
-search.
+scratch; §6). Each is reproducible from its `origin` (start file, seed, evaluations) with the search as it was at
+commit `54e3ca2`. Since then the search polls for a stop inside the work between evaluations and its polish
+lists near pairs by their first separating axis, so the same seed can take another path (below).
+
+**Stopping at P = 100** [CALC]. The search checks `shouldStop` and its time limit at every evaluation and inside
+the work between evaluations (the planes of a polish stage, the legalizations, the pair lists). The longest gap
+between two checks was 177 ms at 100 truncated icosidodecahedra and 88 ms at 100 pentagonal hexecontahedra
+(`scripts/bench-rate.ts`; it was 1.4 s before), so a stop is acted on within about 0.2 s. A job then returns
+within about 0.6 s at most: it checks its best at the touching tolerance, and strictly when it beats the record
+(0.3 s measured from an abort to the return of a job on 100 truncated icosidodecahedra). From a record a
+simulator step takes about P (3.3 + 0.14 f + 0.0021 v f) microseconds for a solid of v vertices and f faces
+(0.3 ms at 100 tetrahedra, 0.6 ms at 100 cubes, 2.8 ms at 100 truncated icosidodecahedra, 3.6 ms at 100
+disdyakis triacontahedra), and a soft hop about 7,000 + 130 P evaluations; the board's rounds are sized from this
+(§8). A soft hop is shortened to 60 % of the evaluations a job has left when fewer are left, and below a tenth of
+its length the search jiggles instead, so that a short job still ends on a polished configuration.
 
 **Drawing** (`draw.ts`, importable as `@polypack/polyhedra/draw`). `sceneOf` and `renderSVG` build the picture
 without a DOM; `createPolyhedraView(canvas, options)` draws on a canvas with flat-shaded pieces sorted back to
 front, the container as a wireframe with hidden edges dashed, drag or arrow keys to turn, wheel or pinch to zoom,
 a double click to reset, an optional slow spin, light and dark palettes and `pick(x, y)` for the piece under a
-point. `packages/polyhedra/viz/index.html` (built by `scripts/build-viz.ts`, 3.2 MB) is a standalone viewer of
-all records with display-precision poses: problem and P selectors, the record, the wiki's value, the published
-values, credits and sources; it works at phone width and in both colour schemes.
+point. `packages/polyhedra/viz/index.html` (built by `scripts/build-viz.ts`, 4.0 MB) is a standalone viewer of
+all records: problem and P selectors, the record, the wiki's value, the published values, credits and sources; it
+works at phone width and in both colour schemes. It embeds the poses at display precision up to P = 30 (all
+8,514 would take about 30 MB); above that it reads the configuration from the site's API where the site serves
+it (`/spaces/polyhedra.html`), and elsewhere shows the values and names the file that holds it. The board draws
+with three.js instead (§8).
 
 ## 6. Results and comparison with the wiki
 
-**PolyPack records** [CALC]. 330 records beat the wiki's by more than 1e-5 relative (median 0.58 %, 116 by more
-than 1 %, 10 by more than 5 %). Per problem (gain = 1 - ours / wiki):
+**PolyPack records** [CALC]. 1,004 records beat the wiki's by more than 1e-5 relative (median 5.55 %, 769 by more
+than 1 %, 530 by more than 5 %). Up to P = 30, 330 records (median 0.58 %, 116 by more than 1 %, 10 by more than
+5 %); per problem (gain = 1 - ours / wiki):
 
 | problem | records | P | median gain | largest gain | how |
 |---|---|---|---|---|---|
@@ -273,26 +331,133 @@ packing itself, which the wiki's search had not improved. The first six problems
 cubes in an octahedron) gave only 2 small gains [CALC]. The Archimedean, Catalan and prism records were not
 swept, only the few cases of the benchmark above, so all but 3 of them stay the wiki's.
 
-**Published values.** 730 values without coordinates are attached to 725 records. 667 are Berthold, Kamp et
+From P = 31 to 100, 674 records (median 7.92 %, 653 by more than 1 %, 233 by more than 10 %), all from the
+results of the compute study of 2026-10-23, imported as they were (a packing of m pieces also gives every n < m
+by deleting pieces; the container is then rescaled to a wall clearance of 1e-7). Per problem:
+
+| problem | records | P | median gain | largest gain | how |
+|---|---|---|---|---|---|
+| `octinoct` | 6 | 95-100 | 9.68 % | 10.37 % (P = 97: 6.000001 to 5.377906) | lattice cut |
+| `icoinico` | 6 | 95-100 | 14.30 % | 14.85 % (P = 97: 6.762263 to 5.757814) | lattice cut |
+| `dodindod` | 34 | 67-100 | 19.10 % | 21.41 % (P = 79: 6.693234 to 5.260306) | lattice cut |
+| `cubinoct` | 55 | 41-100 | 5.94 % | 9.63 % (P = 65: 7.235209 to 6.538254) | lattice cut |
+| `octincub` | 23 | 53-100 | 2.63 % | 7.20 % (P = 97: 4.673265 to 4.336922) | lattice cut |
+| `dodinico` | 1 | 100 | 15.38 % | 15.38 % (P = 100: 10.149366 to 8.588217) | lattice cut |
+| `icoindod` | 38 | 63-100 | 13.27 % | 15.73 % (P = 63: 3.953275 to 3.331309) | lattice cut |
+| `cubintet` | 60 | 41-100 | 7.60 % | 18.59 % (P = 41: 10.758893 to 8.758892) | fcc tetrahedral cut 35, lattice cut 21, search 4 |
+| `cubindod` | 51 | 41-100 | 5.94 % | 10.73 % (P = 81: 2.948337 to 2.631969) | lattice cut |
+| `cubinico` | 21 | 33-100 | 3.69 % | 5.20 % (P = 89: 4.460625 to 4.228553) | lattice cut |
+| `octintet` | 9 | 31-100 | 6.67 % | 9.97 % (P = 98: 9.996984 to 9.000002) | fcc tetrahedral cut |
+| `octindod` | 52 | 31-100 | 8.39 % | 12.50 % (P = 50: 2.150972 to 1.882153) | lattice cut |
+| `octinico` | 34 | 67-100 | 8.93 % | 11.36 % (P = 97: 3.936279 to 3.489001) | lattice cut |
+| `dodintet` | 70 | 31-100 | 15.89 % | 23.55 % (P = 35: 20.952291 to 16.017722) | fcc tetrahedral cut |
+| `dodincub` | 62 | 31-100 | 6.66 % | 10.90 % (P = 31: 8.472137 to 7.548885) | lattice cut |
+| `dodinoct` | 33 | 68-100 | 9.28 % | 20.68 % (P = 85: 15.957811 to 12.657436) | lattice cut |
+| `icointet` | 22 | 31-100 | 10.42 % | 12.76 % (P = 97: 17.529809 to 15.292993) | fcc tetrahedral cut 19, search 3 |
+| `icoincub` | 62 | 31-100 | 5.91 % | 11.65 % (P = 89: 7.757994 to 6.854103) | lattice cut |
+| `icoinoct` | 20 | 81-100 | 7.91 % | 9.84 % (P = 85: 10.319821 to 9.304391) | lattice cut |
+| `pr3inpr3` | 1 | 36 | 0.23 % | 0.23 % (P = 36: 3.894581 to 3.885609) | search |
+| `ap4incub` | 12 | 85-96 | 2.34 % | 2.61 % (P = 91: 5.217892 to 5.081925) | search |
+| `ap5inap5` | 2 | 56-57 | 0.17 % | 0.17 % (P = 57: 4.388640 to 4.381370) | search |
+
+The cuts take the pieces of a lattice packing (or of a face-centred cubic arrangement of tetrahedral layers)
+that fit in the container, with the lattice's position and orientation optimised; they beat the wiki most where
+its large-P records of Platonic pieces in another Platonic container are loose. Every one is certified like any
+other record (§4).
+
+**Published values.** 736 values without coordinates are attached to 731 records; from P = 31 on only six, for
+cubes in a cube: Friedman's 3.707107 for P = 31 to 33 and Ryan Xu's for P = 34 to 36, whose own packings are the
+records of P = 33 to 36. The records lie above those six values by the wiki's clearance only (at most 1.3e-7
+relative) [CALC]. Up to P = 30, 730 values are attached to 725 records. 667 are Berthold, Kamp et
 al.'s published values (rounded up to 5 decimals); the records are below 468 of them by more than 1e-5 (188 with
 the wiki's records alone) and above none beyond their printed precision [CALC]. The others are catalogue
 values of Friedman's Packing Center and upstream's registry. The record lies above a published value by more than the printed precision in 5 cases, all
 octahedra in a cube with only a published value: P = 11, 19, 23 (Walsh) and 12, 17 (Lin); no coordinates for
 them are available [EST, upstream registry].
 
-**Compute study.** Beyond this file's range, the compute study of 2026-10-23 found 707 certified improvements
-over the wiki's records at P <= 100 (699 by more than 1e-5), mostly lattice and crystal cuts at P >= 41 with a
-median gain of 8 % (up to 23.6 %, dodecahedra in a tetrahedron P = 35); the prism and antiprism records held up.
-Those for P > 30 are not in this file.
+**Compute study.** The compute study of 2026-10-23 found 707 certified improvements over the wiki's records at
+P <= 100 (699 by more than 1e-5), mostly lattice and crystal cuts at P >= 41; the prism and antiprism records
+held up. Those for P > 30 are the 674 records above (with the subsets their packings give); those up to P = 30
+are 13 of the 330.
 
 ## 7. Limitations and open questions
 
-- P = 31 to 100 and the 4D to 6D problems are left out (size, see §2).
+- The 4D to 6D problems of the wiki are left out.
 - The search's soft phase is less tight than upstream's for solids without an insphere (§5), and its fresh starts
   are far from the records at the budgets a browser can give; warm starts from the record are the useful mode.
-- Only the Platonic records were swept with the search; the Archimedean, Catalan and prism records (1,769) were
-  not, and the sweep used one seed and 150,000 evaluations per record.
+- Only the Platonic records up to P = 30 were swept with the search; the Archimedean, Catalan and prism records
+  (1,769 up to P = 30) were not, and the sweep used one seed and 150,000 evaluations per record. From P = 31 on
+  no record was searched by this package; the PolyPack records there are the compute study's cuts and searches.
 - Lineage is upstream's own record of it; it is not re-derived.
-- The board's beat rule needs a margin above the records' clearance: `POLYHEDRA_RECORD_MARGIN = 1e-6` relative is
-  proposed (the measured clearance cost is at most 2.6e-7 relative).
+- An entry beats a research record only by more than `POLYHEDRA_RECORD_MARGIN = 1e-6` relative, a margin above the
+  records' clearance (whose measured cost is at most 2.6e-7 relative); site entries compete with each other by
+  the usual tie tolerance 1e-9 (§8).
+- A server check of 100 of the largest solids takes up to 0.15 s of work for a record and could take longer for a
+  crafted configuration with many near pairs (§5); it runs in slices of 20 ms, is charged to the address's
+  verification budget, and an entry that could not be kept is not checked at all (§8).
 - The records are not checked against the live wiki after build 2026-10-21 of its data bundle.
+
+## 8. On the site: board, API and volunteer client
+
+**Registry.** `@polypack/spaces` lists the space as `polyhedra` (user-facing: dimension 3D in 3D, kind Polyhedra):
+ids `polyhedra/<code>/<P>`, the configuration `{s, pieces}`, P from 2 to `POLYHEDRA_MAX_P` = 100 (P = 101 and
+above are refused as malformed), the validator above at the touching tolerance 1e-9, and the strict check at
+1e-11 for an entry below a research record by more than the margin. The search registry runs
+`searchPolyhedra` for a job (`@polypack/spaces/search`, method "polyhedra soft-to-rigid search").
+
+**Keep rule.** An entry is kept when it beats the site's leader by more than the tie tolerance 1e-9 and the
+research record's certified s by more than `POLYHEDRA_RECORD_MARGIN` = 1e-6 relative (`SPACE_RECORD_MARGIN`,
+`beatsSpaceRecord`, `improvesSpaceBest`); the other spaces keep 1e-9 for both. The records keep the wiki's
+clearance (up to 1e-7), so without the margin the same packing with its clearance removed would "beat" them.
+
+**The server's checks.** An entry whose stated s cannot be kept is answered without a check (200, `valid: false`,
+`checked: false`, a reason that says so), so that posting a research record back costs nothing; the board and the
+volunteer client say "not kept" for it. Any other entry is checked in slices of about 20 ms of work
+(`validateSpaceSubmissionAsync`), with a turn of the event loop between them, so that one check never holds the
+server: [CALC] both checks of 100 truncated icosidodecahedra (the touching and the strict one) took 0.32 s of
+work in all and held the loop for at most 22 ms (0.35 s in one piece before). An address has one check at a time
+(another gets 429 with Retry-After), an estimate of its cost is reserved from the address's verification budget
+before it starts and the rest charged after it (its work, not its waits), and the heavy checks (polyhedra from
+P = 30) run one at a time on the server, at most 8 waiting their turn (a ninth is refused with 503, alone). [CALC]
+16 entries at once that force a full check of 100 truncated icosidodecahedra (the public P = 99 record and a copy of
+one piece), from one address or from four, held the loop for at most 23 ms, and a submission from another address
+was answered as usual (before: 606 ms of lag, and 503 for everyone).
+
+**Answers kept.** Every answer the server keeps (`/api/spaces`, the listings, the targets) is encoded once, and
+every response sends those bytes, plain or gzip: a connection that is slow to read holds a reference, not a copy.
+Gzip is made off the event loop. [CALC] 1,200 connections that asked for the whole targets list or the polyhedra
+listing (3.4 MB), plain or gzip, and never read, grew the heap by 9 MB (before, 150 plain ones ran a server with a
+230 MB heap out of memory).
+
+**Targets.** The targets list (`/api/spaces/targets`) treats a site entry as the leader on the same rule, and
+leaves out a problem whose record is within its margin of the lower bound (nothing could be kept below it: cubes
+in a cube and triangular prisms in a triangular prism, P = 8, 27 and 64). With 8,514 problems the whole list has
+9,821 targets with all six spaces (1.8 MB), so its largest `limit` is 10,000, and the volunteer client asks for
+all of it. One encoded list is kept per filter (the spaces, and `max_P`; one at or above every listed P is no
+filter), up to 16 MB in all (`SPACE_TARGETS_CACHE_BYTES`, the least recently used going first), and the answer of
+any `limit` is a prefix of its bytes and a closing "]}", so that no limit builds an answer of its own. Only the
+default 500, 2000 and the whole list are also kept gzip-compressed; other limits are sent uncompressed. [CALC] 32
+clients cycling `limit` and `max_P` (512 requests in 2.2 s) held the loop for at most 27 ms, and submissions from
+another address meanwhile were answered as usual (before: 820 ms of lag, and 503).
+
+**API.** `/api/spaces/polyhedra/records` lists the 8,514 problems (3.4 MB, 0.3 MB compressed);
+`/api/spaces/polyhedra/problems/<id>` adds the research configuration, read from its problem's file (§2).
+
+**Board.** Dimension 3D in 3D, kind Polyhedra (`docs/spaces/BOARD.md`, "3D in 3D"): a picker of the 86 problems
+and P, the values, a three.js drawing (instanced pieces and merged edges, solid or see-through, turned by drag or
+keys; about 1 ms a frame for 100 of the largest solids on an Apple M1 Pro), and rounds of the search in a Web
+Worker of at most about 20 s on a machine 3.5 times slower than the measured costs (16,800 evaluations at 11
+cubes, 7,100 at 100 cubes, 2,600 at 100 truncated icosidodecahedra: jiggles; a second or two each here). A round
+after the first starts from the best so far, which the search has polished, and takes it as it is. [CALC] A
+"New arrangement" run of 60 s on Time alone, seed 1: 100 cubes reached 5.00059 against the record's 5 (0.01 %
+above); 100 truncated icosidodecahedra 7.915 against 5.553 (43 % above; its first round, 3,400 evaluations, ends
+72 % above). Large problems need a start from the record. Submit is offered only for a result the server would
+keep.
+
+**Volunteer client.** `--dimensions polyhedra` (or `all`) adds the space to the opt-in list of kinds; without the
+option the client never asks the server about it. Its jobs are sized by time like the other spaces' and polled at
+every evaluation: an abort of a job on 100 truncated icosidodecahedra from the record was answered after 0.16 to
+0.33 s (the job then checks its best), of a fresh job on 100 pentagonal hexecontahedra within 10 ms [CALC]; a test
+requires 2 s, and that a paused job uses no processor time (`apps/volunteer/test/pool.spaces.test.ts`). It reads
+the whole targets list (`limit=10000`, or 2000 from an older server) and draws a space uniformly among those it
+asks for, so polyhedra get their share of its searches.

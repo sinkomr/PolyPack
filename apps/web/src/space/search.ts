@@ -192,6 +192,8 @@ export class SpaceSearch {
         { evals: evaluations, seconds },
         startOf,
         startOf ? staleTries : freshTries,
+        // the best of an earlier round, which the space's search has already polished
+        best !== null && startOf === best.config,
       );
       if (!plan) return end("evals");
       const job = plan.job;

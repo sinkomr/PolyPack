@@ -14,6 +14,7 @@ export const SPACE_VIEWERS: Readonly<Record<string, string>> = {
   "spaces/sweep.html": "packages/curved/viz/sweep.html",
   "spaces/sphere.html": "packages/sphere/viz/index.html",
   "spaces/torus.html": "packages/torus/viz/index.html",
+  "spaces/polyhedra.html": "packages/polyhedra/viz/index.html",
 };
 
 /** The viewer published at a request path such as "/spaces/torus.html?x#y", or null. */

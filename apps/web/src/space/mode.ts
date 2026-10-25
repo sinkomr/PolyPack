@@ -25,7 +25,7 @@ import {
   DEFAULT_PROBLEM,
   EVALS_MAX,
   EVAL_UNIT,
-  FRESH_EVALS,
+  freshSize,
   LARGE_FOLD,
   METHOD_TEXT,
   type LoadedSpaceProblem,
@@ -116,6 +116,8 @@ const TURN_HELP: Record<SpaceName, string> = {
   torus: TURN_2D,
   boundary:
     "Cells shows the eight cubes of the boundary side by side; Net unfolds them, and Fold folds the net up into the fourth dimension; Slice cuts the boundary across one axis. Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and − to zoom, Page Up and Page Down to follow one piece, Home to reset.",
+  polyhedra:
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
@@ -142,6 +144,11 @@ class SpaceMode {
       valid: r.check.valid,
       submittable: !$<HTMLButtonElement>("space-submit").disabled,
     };
+  }
+
+  /** The drawing shown (for the console, the tests and measurements of the 3D drawing). */
+  get renderer(): SpaceView["renderer"] | null {
+    return this.view?.renderer ?? null;
   }
 
   private space: SpaceName | null = null;
@@ -453,6 +460,11 @@ class SpaceMode {
   async enter(space: BoardSpace, id: string | null): Promise<void> {
     const wanted = id ?? this.last.get(space) ?? null;
     if (space === this.space && this.handle && (wanted === null || wanted === this.handle.problem.id)) {
+      // a drawing released on leaving is made again, showing what it showed
+      if (!this.view) {
+        this.view = this.handle.render($("space-view-host"));
+        this.view.show(this.shownConfig()?.config ?? null);
+      }
       this.setAddress();
       return;
     }
@@ -468,6 +480,23 @@ class SpaceMode {
 
   leave(): void {
     this.stopRun("left");
+    // a load still waiting for the server neither draws nor rewrites the address once the board
+    // shows another kind
+    this.token++;
+    // and the problem shown stays as it was: no "Loading" over it, and its own fields in the picker
+    if (this.loading) {
+      this.busy(null);
+      const shownId = this.handle?.problem.id ?? null;
+      this.pendingId = shownId;
+      const problems = this.space ? this.records.get(this.space) : undefined;
+      if (this.space && shownId && problems)
+        this.renderPicker(this.space, pickProblem(this.space, problems, fieldsOfId(this.space, shownId)).fields);
+    }
+    // a 3D drawing gives back its WebGL context while the board shows another kind
+    if (this.view?.renderer?.releaseOnLeave) {
+      this.view.destroy();
+      this.view = null;
+    }
   }
 
   /** Shows a problem of the space: the one wanted when the catalogue has it, else the nearest one. */
@@ -607,7 +636,8 @@ class SpaceMode {
   private setDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
     const fold = kind === "surface";
-    const key = fold ? `${kind}/${p.P}` : kind;
+    // fold and polyhedra budgets grow with P
+    const key = fold || kind === "polyhedra" ? `${kind}/${p.P}` : kind;
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search);
@@ -618,10 +648,11 @@ class SpaceMode {
     $<HTMLInputElement>("space-solve-evals").max = String(EVALS_MAX[kind]);
     $("space-method").replaceChildren(h("b", {}, "Method: "), METHOD_TEXT[kind]);
     const size = roundSize(p.search);
+    const fresh = freshSize(p.search);
     const n = (v: number) => v.toLocaleString("en-US");
     $("space-solve-unit").textContent =
       `An evaluation here is ${EVAL_UNIT[kind]}. The search runs in rounds of ${n(size)}, each from the best so far` +
-      (FRESH_EVALS[kind] > size ? `; a new arrangement needs a first round of ${n(FRESH_EVALS[kind])}` : "") +
+      (fresh > size ? `; a new arrangement needs a first round of ${n(fresh)}` : "") +
       ". With Evaluations only, the same seed gives the same result." +
       (fold && p.P >= 20
         ? ` Fold rounds on ${p.P} pieces are slow: one compression can take ${p.P >= LARGE_FOLD ? "half a minute or more" : "several seconds"}, and the time limit ends the run.`
@@ -940,7 +971,7 @@ class SpaceMode {
       space: p.space,
       id: p.id,
       method: this.handle!.method,
-      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: FRESH_EVALS[kind] },
+      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: freshSize(p.search) },
       start: info.start,
       start_from: fromText(info.from),
       result: r.best ? { score: r.best.score, round: r.best.round, seed: r.best.seed, config: r.best.config } : null,

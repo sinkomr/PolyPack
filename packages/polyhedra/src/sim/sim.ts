@@ -329,13 +329,19 @@ export function tightContainer(pb: SimProblem, Xs: Float64Array[]): { L: number;
  * Legalization: scale centres apart about their mean until no pair of rigid pieces overlaps (SAT, tol 1e-12),
  * then measure the tight container.
  */
-export function legalize(pb: SimProblem, C: number[][], Q: number[][]): { L: number; s: number; k: number; C: number[][]; Q: number[][] } {
+export function legalize(
+  pb: SimProblem,
+  C: number[][],
+  Q: number[][],
+  poll?: () => void,
+): { L: number; s: number; k: number; C: number[][]; Q: number[][] } {
   const n = C.length;
   const P = pb.P;
   const cen = [0, 1, 2].map((t) => C.reduce((a, c) => a + c[t], 0) / n);
   const pos = (s: number) => C.map((c) => [cen[0] + s * (c[0] - cen[0]), cen[1] + s * (c[1] - cen[1]), cen[2] + s * (c[2] - cen[2])]);
   const lim = (2 * P.circ) ** 2;
   const ok = (s: number) => {
+    poll?.();
     const Pp = pos(s);
     const ps = Pp.map((c, i) => pose(P, c, Q[i], 1));
     for (let i = 0; i < n; i++)
@@ -393,6 +399,8 @@ export interface RunConfig {
   mu?: number;
   anneal?: boolean;
   tick?: () => void;
+  /** Polled during the legalization, which counts no steps; may throw to end the run. */
+  poll?: () => void;
 }
 
 /** A run from random balls: compress, morph balls into solids, settle rigid, legalize (sim.js run, mode "improved"). */
@@ -412,7 +420,7 @@ export function run(cfg: RunConfig) {
     dyn(st, r0 * (1 - u), c.mu, c.anneal ? 0.004 * (1 - u) : 0, true);
   }
   for (let k = 0; k < c.settle; k++) dyn(st, 0, c.mu * Math.pow(1e-4, k / c.settle), 0, true);
-  const leg = legalize(pb, st.C, st.Q);
+  const leg = legalize(pb, st.C, st.Q, c.poll);
   return { s: leg.s, L: leg.L, final: leg, edge: pb.P.edge, steps: st.step };
 }
 
@@ -476,6 +484,8 @@ export interface HopConfig {
   remove?: number[];
   focus?: number;
   tick?: () => void;
+  /** Polled during the legalization, which counts no steps; may throw to end the hop. */
+  poll?: () => void;
 }
 
 /**
@@ -566,7 +576,7 @@ export function hop(cfg: HopConfig) {
     dyn(st, rh * (1 - u), c.mu, noise0 * (1 - u), true);
   }
   for (let k = 0; k < c.settle; k++) dyn(st, 0, c.mu * Math.pow(1e-4, k / c.settle), 0, true);
-  const leg = legalize(pb, st.C, st.Q);
+  const leg = legalize(pb, st.C, st.Q, c.poll);
   st.mask = null;
   return { n, s: leg.s, L: leg.L, C: leg.C, Q: leg.Q, diff, esc, rh, noise, steps: st.step, edge: pb.P.edge };
 }

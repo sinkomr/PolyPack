@@ -222,8 +222,9 @@ repository's form are covered by its MIT permission, above.)
 <https://github.com/ry-xu/square_packing>, commit
 `9535d65d84cc33f20f4e26329f8da12bdcef216e`, `cube_packing_records.json` (cubes in
 a cube, n = 34, 35, 36, as imported by upstream). The repository states no
-licence; it would be used with citation, but none of its cases lies in the
-range of `data/polyhedra/records.json` (P = 2 to 30), so no record uses it.
+licence; the data is used here with citation to the repository. The records of
+cubes in a cube for P = 34, 35 and 36 are these packings as upstream imported
+them, and say so ("derived from Ryan Xu").
 
 ### Other sources upstream lists
 
@@ -231,7 +232,8 @@ Yohei Nakajima's 12 cubes in a cube (soft-to-rigid-packing, commit
 `efe7a920142350a4f0678633490c3e3dbed71fa0`, MIT, Copyright (c) 2026 Yohei
 Nakajima) is listed only as a published value: the wiki's record of that case
 is smaller. Upstream's reconstruction of Erich Friedman's 33 cubes in a cube
-(upstream-made coordinates) lies outside the range P = 2 to 30.
+(coordinates made by upstream, MIT; the construction is Friedman's) is the
+record of that case and credits him.
 
 ### Published values without coordinates
 
@@ -241,3 +243,33 @@ Haowei Lin and others; upstream's registry `docs/external_records.json` records
 them with links, and `data/polyhedra/records.json` lists them as published
 values (number, author, link) without coordinates. No images or animations are
 copied.
+
+## three.js
+
+The board draws 3D in 3D and 3D on 4D packings with three.js
+(<https://threejs.org>, npm package `three` 0.186.1, in a chunk of the website's
+code that only those kinds load, and in the 3D on 4D viewer). Its licence:
+
+```
+The MIT License
+
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+```

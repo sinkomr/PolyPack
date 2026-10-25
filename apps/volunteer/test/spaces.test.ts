@@ -187,8 +187,9 @@ describe("the spaces options", () => {
 
   it("take a list or all, and --only-spaces", () => {
     expect(run("--spaces", "torus,sphere")).toMatchObject({ spaces: ["sphere", "torus"], onlySpaces: false });
+    expect(run("--spaces", "polyhedra")).toMatchObject({ spaces: ["polyhedra"], onlySpaces: false });
     expect(run("--spaces", "all", "--only-spaces")).toMatchObject({
-      spaces: ["surface", "curved", "sphere", "torus", "boundary"],
+      spaces: ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"],
       onlySpaces: true,
     });
     expect(run("--spaces", "Surface")).toMatchObject({ spaces: ["surface"] });
@@ -205,8 +206,8 @@ describe("the spaces options", () => {
     // and never without the option
     expect(run("--N", "4").spaces).toBeNull();
     const help = helpText(machine);
-    expect(help).toMatch(/and boundary \(3D on 4D: unit balls and cubes on the boundary\s+of a tesseract\)/);
-    expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, comma-separated, or all/);
+    expect(help).toMatch(/boundary \(3D on 4D: unit balls and cubes on the boundary\s+of\s+a tesseract\)/);
+    expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, polyhedra, comma-separated, or all/);
   });
 
   it("refuse bad lists and an --only-spaces without spaces", () => {
@@ -214,7 +215,9 @@ describe("the spaces options", () => {
       (...argv: string[]) =>
       () =>
         parseOptions(argv, machine);
-    expect(bad("--spaces", "plane")).toThrow(/"plane" is not one of surface, curved, sphere, torus, boundary or all/);
+    expect(bad("--spaces", "plane")).toThrow(
+      /"plane" is not one of surface, curved, sphere, torus, boundary, polyhedra or all/,
+    );
     expect(bad("--spaces", "sphere,,torus")).toThrow(/empty item/);
     expect(bad("--spaces", "all,sphere")).toThrow(/cannot be combined/);
     expect(bad("--only-spaces")).toThrow(/--only-spaces needs --spaces/);
@@ -245,7 +248,7 @@ describe("the spaces options", () => {
       () =>
         parseOptions(argv, machine);
     expect(bad("--dimensions", "plane")).toThrow(
-      /^--dimensions: "plane" is not one of surface, curved, sphere, torus, boundary or all$/,
+      /^--dimensions: "plane" is not one of surface, curved, sphere, torus, boundary, polyhedra or all$/,
     );
     expect(bad("--dimensions", "all", "--spaces", "all")).toThrow(/same option/);
     expect(bad("--only-dimensions")).toThrow(/--only-dimensions needs --dimensions LIST/);
@@ -497,6 +500,27 @@ describe("the submission rule", () => {
     expect(decide({ bound: best.score * 1.001 })).toBe("below the problem's lower bound");
     expect(decide({ dryRun: true })).toBe("dry run: would submit");
     expect(decide({ best: null })).toBe("no valid configuration");
+  });
+
+  it("follows the server's keep rule with a record margin: polyhedra records are beaten by more than 1e-6", () => {
+    const s = best.score;
+    const record = (space: "polyhedra" | "sphere", certified: number | null, leader: number | null = null) => ({
+      record: { space, certified, leader },
+    });
+    // 5e-7 below a polyhedra record: valid, but the server would not keep it
+    expect(decide({ bestScore: s / (1 - 5e-7), ...record("polyhedra", s / (1 - 5e-7)) })).toBe(
+      "not below the research record by the space's margin",
+    );
+    expect(decide({ bestScore: s / (1 - 2e-6), ...record("polyhedra", s / (1 - 2e-6)) })).toBe(
+      "better than the problem's best",
+    );
+    // the other spaces keep the tie tolerance; a site leader is beaten by the tie tolerance
+    expect(decide({ bestScore: s / (1 - 5e-7), ...record("sphere", s / (1 - 5e-7)) })).toBe(
+      "better than the problem's best",
+    );
+    expect(decide({ bestScore: s / (1 - 5e-9), ...record("polyhedra", s / (1 - 2e-6), s / (1 - 5e-9)) })).toBe(
+      "better than the problem's best",
+    );
   });
 });
 

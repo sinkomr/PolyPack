@@ -1,3 +1,4 @@
+import { PROBLEM_CODES, problemTitle } from "@polypack/polyhedra/catalogue";
 import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 
 /**
@@ -206,6 +207,19 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       cell: (v) => v,
       order: ["ball", "cube"],
       start: "ball",
+    },
+  ],
+  // polyhedra/<code>/<P>: one problem per pair of piece and container solid, in the order of
+  // polyhedrainpolyhedra.wiki
+  polyhedra: [
+    {
+      key: "code",
+      at: 1,
+      label: "Problem",
+      option: problemTitle,
+      cell: problemTitle,
+      order: PROBLEM_CODES,
+      start: "cubincub",
     },
   ],
 };

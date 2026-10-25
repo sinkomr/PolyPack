@@ -1,15 +1,15 @@
 /**
  * Times the float validator: every record of data/polyhedra/records.json at PolyPack's tolerance (as a server
  * checks a submission), and adversarial worst cases (all pieces in near contact on a tight grid, and all pieces
- * coincident) for the heaviest solids at P = 30.
+ * coincident) for the heaviest solids at P = n (default 100, the largest P).
  *
- * Usage: npx tsx packages/polyhedra/scripts/bench-validate.ts [records.json]
+ * Usage: npx tsx packages/polyhedra/scripts/bench-validate.ts [records.json] [n]
  */
-import { readFileSync } from "node:fs";
-import { type Pose, getProblem, getSolid, validatePolyhedra } from "../src/index";
+import { type Pose, POLYHEDRA_MAX_P, getProblem, getSolid, validatePolyhedra } from "../src/index";
+import { readRecordsFile } from "../src/records-file";
 
 const path = process.argv[2] ?? new URL("../../../data/polyhedra/records.json", import.meta.url).pathname;
-const doc = JSON.parse(readFileSync(path, "utf8"));
+const doc = readRecordsFile(path);
 const time = (f: () => unknown, reps = 3) => {
   let best = Infinity;
   for (let i = 0; i < reps; i++) {
@@ -28,7 +28,7 @@ for (const r of doc.records) {
   total += ms;
   if (ms > worst.ms) worst = { ms, id: r.id };
 }
-const w = doc.records.find((r: { id: string }) => r.id === worst.id);
+const w = doc.records.find((r) => r.id === worst.id)!;
 const wms = time(() => validatePolyhedra(getProblem(w.code)!, w.config), 5);
 console.log(`records: ${doc.records.length} validated in ${(total / 1000).toFixed(2)} s; slowest ${worst.id} ${wms.toFixed(1)} ms`);
 // strict check too (as for a submission that beats a record)
@@ -44,12 +44,12 @@ const randQ = () => {
 for (const code of ["tidintid", "dtcindtc", "phcinphc", "sndinsnd", "tdointdo", "pr12incub", "ap12incub", "pr3l3incub", "cubincub"]) {
   const p = getProblem(code)!;
   const P = getSolid(p.piece);
-  const n = 30;
+  const n = Number(process.argv[3] ?? POLYHEDRA_MAX_P);
   // 1. a valid grid of axis-aligned pieces, neighbours 1e-9 apart: every neighbour pair is near
   const h = [0, 1, 2].map((k) => Math.max(...Array.from({ length: P.nv }, (_, v) => P.V[3 * v + k])));
   const grid: Pose[] = [];
   for (let i = 0; i < n; i++)
-    grid.push([(i % 4) * (2 * h[0] + 1e-9), (Math.floor(i / 4) % 4) * (2 * h[1] + 1e-9), Math.floor(i / 16) * (2 * h[2] + 1e-9), 1, 0, 0, 0]);
+    grid.push([(i % 5) * (2 * h[0] + 1e-9), (Math.floor(i / 5) % 5) * (2 * h[1] + 1e-9), Math.floor(i / 25) * (2 * h[2] + 1e-9), 1, 0, 0, 0]);
   const g = validatePolyhedra(p, { s: 1e3, pieces: grid });
   const tGrid = time(() => validatePolyhedra(p, { s: 1e3, pieces: grid }));
   // 2. the cost of one full separating-axis scan (every candidate axis projected), on random near pairs
@@ -65,6 +65,6 @@ for (const code of ["tidintid", "dtcindtc", "phcinphc", "sndinsnd", "tdointdo", 
     for (const [a, b] of pairs) axes += separation(a, b, Infinity, [0, 0, 1]).axes;
   }) / pairs.length;
   console.log(
-    `${code} P=30 (V=${P.nv}, F=${P.faces.length}, E=${P.edges.length}): valid grid ${g.pairsTested} near pairs ${tGrid.toFixed(1)} ms (valid ${g.valid}); full scan ${(tFull * 1000).toFixed(0)} us per pair (${Math.round(axes / pairs.length / 3)} axes), so all 435 pairs at most ${(435 * tFull).toFixed(0)} ms`,
+    `${code} P=${n} (V=${P.nv}, F=${P.faces.length}, E=${P.edges.length}): valid grid ${g.pairsTested} near pairs ${tGrid.toFixed(1)} ms (valid ${g.valid}); full scan ${(tFull * 1000).toFixed(0)} us per pair (${Math.round(axes / pairs.length / 3)} axes), so all ${(n * (n - 1)) / 2} pairs at most ${(((n * (n - 1)) / 2) * tFull).toFixed(0)} ms`,
   );
 }

@@ -1,19 +1,31 @@
 /**
  * Builds packages/polyhedra/viz/index.html: a standalone viewer (no external scripts) with the records of
- * data/polyhedra/records.json embedded at display precision and the drawing code bundled by esbuild.
+ * data/polyhedra/records.json embedded and the drawing code bundled by esbuild. Every record's values are
+ * embedded; poses, at display precision, up to P = EMBED_MAX_P only, which keeps the page near 3 MB (all
+ * 8,514 would take about 30 MB). Above it the page reads the configuration from the site's API
+ * (/api/spaces/polyhedra/problems/<id>) when the site serves it, and shows the values alone elsewhere.
  *
  * Usage: npx tsx packages/polyhedra/scripts/build-viz.ts [records.json]
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { build } from "esbuild";
+import { readRecordsFile } from "../src/records-file";
 
 const root = new URL("../../../", import.meta.url);
 const recPath = process.argv[2] ?? new URL("data/polyhedra/records.json", root).pathname;
-const doc = JSON.parse(readFileSync(recPath, "utf8"));
+const doc = readRecordsFile(recPath);
+const EMBED_MAX_P = 30;
 
 // 5 significant digits are plenty for drawing (the full-precision poses are in the records file)
 const r5 = (x: number) => Number(x.toPrecision(5));
 const records: Record<string, unknown[]> = {};
+// citation sentences repeat across records: each is stored once
+const sources: string[] = [];
+const sourceIndex = new Map<string, number>();
+const sourceOf = (s: string) => {
+  if (!sourceIndex.has(s)) sourceIndex.set(s, sources.push(s) - 1);
+  return sourceIndex.get(s)!;
+};
 for (const r of doc.records) {
   (records[r.code] ??= []).push({
     n: r.P,
@@ -24,14 +36,14 @@ for (const r of doc.records) {
     f: r.found_by,
     ...(r.certificate_refined_by ? { cr: r.certificate_refined_by } : {}),
     ...(r.found_by === "PolyPack research" && r.method ? { m: r.method } : {}),
-    src: r.source,
-    lit: (r.literature ?? []).map((l: { value: number; source: string; url?: string; precision?: number }) => ({
+    src: sourceOf(r.source),
+    lit: (r.literature ?? []).map((l) => ({
       v: l.value,
       s: l.source,
       ...(l.url ? { u: l.url } : {}),
       ...(l.precision ? { q: l.precision } : {}),
     })),
-    p: r.config.pieces.flat().map(r5),
+    ...(r.P <= EMBED_MAX_P ? { p: r.config.pieces.flat().map(r5) } : {}),
   });
 }
 
@@ -103,7 +115,7 @@ footer { margin-top: 18px; font-size: 0.82rem; color: var(--muted); }
 </div>
 <footer>PolyPack 3D in 3D build. Data: data/polyhedra/records.json (${doc.records.length} records, generated ${doc.generated}), from polyhedrainpolyhedra.wiki (alejandrozu/platonic-packing, MIT) and the sources each record cites; see docs/spaces/POLYHEDRA.md and THIRD_PARTY_NOTICES.md.</footer>
 </main>
-<script>const POLYHEDRA_DATA = ${JSON.stringify({ generated: doc.generated, records })};</script>
+<script>const POLYHEDRA_DATA = ${JSON.stringify({ generated: doc.generated, embedMaxP: EMBED_MAX_P, sources, records })};</script>
 <script>${js}</script>
 </body>
 </html>

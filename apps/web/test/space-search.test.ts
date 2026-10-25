@@ -6,14 +6,15 @@
  * every result passes the server's rule.
  */
 import { validateSpaceSubmission } from "@polypack/spaces";
-import { loadSpacesIndex } from "@polypack/spaces/load";
+import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
 import { type SpaceJob, type SpaceJobResult, mixSeed, parseSearchProblem, runSpaceJob } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { FRESH_EVALS } from "../src/space/model";
+import { FRESH_EVALS, freshSize, roundSize } from "../src/space/model";
 import { CancelledRound, type RoundRunner, SpaceSearch, type SpaceSearchProgress } from "../src/space/search";
 
-const index = loadSpacesIndex(resolve(__dirname, "../../.."));
+const root = resolve(__dirname, "../../..");
+const index = loadSpacesIndex(root);
 
 function problemOf(id: string) {
   const space = id.split("/")[0] as "sphere";
@@ -21,7 +22,8 @@ function problemOf(id: string) {
   return {
     search: parseSearchProblem(id)!,
     rule: { bound: p.bound?.value ?? null, certified: p.certified?.score ?? null },
-    start: JSON.parse(p.config!),
+    // polyhedra configurations are kept apart and read on demand
+    start: JSON.parse(readEntryConfigSync(root, index[space]!, p)!),
   };
 }
 
@@ -398,4 +400,41 @@ describe("a run from a tight packing, with the panel's default budget", () => {
       expect(r.best!.score).toBeLessThan(start.score * (1 - gain));
       expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
     });
+});
+
+describe("3D in 3D: rounds of the polyhedra search", () => {
+  it("builds a valid packing from nothing in its first round", async () => {
+    for (const id of ["polyhedra/cubincub/5", "polyhedra/tetintet/4"]) {
+      const p = problemOf(id);
+      for (const seed of [1, 2]) {
+        const r = await new SpaceSearch(
+          p.search,
+          null,
+          { seed, budget: { evals: freshSize(p.search) }, fresh: true, rule: p.rule },
+          new LocalRunner(),
+        ).done;
+        expect(r.rounds).toBe(1);
+        expect(r.best, `${id}, seed ${seed}`).not.toBeNull();
+        expect(validateSpaceSubmission("polyhedra", id, r.best!.config, p.rule).valid).toBe(true);
+      }
+    }
+  });
+
+  it("runs rounds from the record with the run's seeds, reproducibly, never worse than the record", async () => {
+    const id = "polyhedra/cubincub/11";
+    const p = problemOf(id);
+    const run = (runner: LocalRunner) =>
+      new SpaceSearch(p.search, p.start, { seed: 7, budget: { evals: 2 * roundSize(p.search) }, fresh: false, rule: p.rule }, runner)
+        .done;
+    const a = new LocalRunner();
+    const b = new LocalRunner();
+    const [ra, rb] = [await run(a), await run(b)];
+    expect(a.jobs.map((j) => j.seed)).toEqual([mixSeed(7, 0), mixSeed(7, 1)]);
+    expect(a.jobs.every((j) => j.budget.evals === roundSize(p.search))).toBe(true);
+    expect(ra.ended).toBe("evals");
+    expect(ra.best).not.toBeNull();
+    expect(rb.best!.config).toEqual(ra.best!.config);
+    expect(ra.best!.score).toBeLessThanOrEqual(p.start.s);
+    expect(validateSpaceSubmission("polyhedra", id, ra.best!.config, p.rule).valid).toBe(true);
+  });
 });
