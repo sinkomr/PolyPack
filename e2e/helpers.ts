@@ -15,6 +15,12 @@ export const pieceCentre = (page: Page, i: number) =>
     return polypack.view.clientPoint(p.x, p.y);
   }, i);
 
+/**
+ * For the first wait on a view drawn by a lazily loaded chunk (three.js and its WebGL start-up):
+ * on a loaded machine that takes longer than expect's 5 s default.
+ */
+export const LAZY_VIEW = { timeout: 30_000 };
+
 /** A fresh board for the given problem. */
 export async function openProblem(page: Page, N: number, M: number, P: number): Promise<void> {
   await page.goto("/");

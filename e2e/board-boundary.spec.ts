@@ -3,7 +3,7 @@ import { type Page, type Route, expect, test } from "@playwright/test";
 import { SPACE_INFO, type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/spaces";
 import { foldGain, gainText } from "../apps/web/src/boundary-model";
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
-import { distinctColours, openProblem, pageErrors } from "./helpers";
+import { LAZY_VIEW, distinctColours, openProblem, pageErrors } from "./helpers";
 
 // 3D on 4D on the board, against the local stack (playwright.config.ts): the server lists the
 // research records of data/boundary/records.json and checks submissions; the board draws a
@@ -47,7 +47,7 @@ async function listedP(page: Page, piece: "ball" | "cube"): Promise<number[]> {
 async function shown(page: Page, id: string): Promise<void> {
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
   await expect(page.locator("#space-score")).not.toHaveText("—");
-  await expect(page.locator(".pp3 canvas")).toBeVisible();
+  await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   await expect(page.locator(".pp3-status")).toContainText(/edge \d\.\d{6}\./);
 }
 
@@ -335,6 +335,7 @@ test("without WebGL the drawing says so in plain words, and the rest of the boar
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${ID}`);
   await expect(page.locator(".pp3-message")).toHaveText(
     "This 3D drawing needs WebGL, which this browser has turned off or does not support.",
+    LAZY_VIEW,
   );
   await expect(page.locator(".pp3 canvas")).toHaveCount(0);
   await expect(page.locator(".pp3-bar")).toBeHidden();

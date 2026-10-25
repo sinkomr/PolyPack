@@ -177,13 +177,15 @@ function closedReason(space: SpaceName, r: Rec, status: CertifiedStatus, id: Par
   return null;
 }
 
-const ORDER: Record<string, readonly string[]> = {
-  solid: SURFACE_SOLIDS,
-  mode: SURFACE_MODES,
-  family: TORUS_FAMILIES,
-  polytope: BOUNDARY_POLYTOPES,
-  piece: BOUNDARY_PIECES,
-  code: PROBLEM_CODES,
+/**
+ * The order of each space's named fields, kept per space: another space's field of the same name
+ * (polyhedra's piece, say) is not sorted by this one's list. Fields not named here sort by number.
+ */
+const ORDER: Partial<Record<SpaceName, Record<string, readonly string[]>>> = {
+  surface: { solid: SURFACE_SOLIDS, mode: SURFACE_MODES },
+  torus: { family: TORUS_FAMILIES },
+  boundary: { polytope: BOUNDARY_POLYTOPES, piece: BOUNDARY_PIECES },
+  polyhedra: { code: PROBLEM_CODES },
 };
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
@@ -199,7 +201,8 @@ export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry)
   for (const k of SORT_KEYS[a.space]) {
     const x = a.fields[k];
     const y = b.fields[k];
-    const d = ORDER[k] ? ORDER[k].indexOf(String(x)) - ORDER[k].indexOf(String(y)) : Number(x) - Number(y);
+    const order = ORDER[a.space]?.[k];
+    const d = order ? order.indexOf(String(x)) - order.indexOf(String(y)) : Number(x) - Number(y);
     if (d) return d;
   }
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
