@@ -3,7 +3,7 @@
  * functions of what the server said and what the search found, like ../submit.ts.
  */
 import { SCORE_TIE, improvesOn } from "@polypack/geometry";
-import type { SpaceSubmission } from "@polypack/spaces";
+import { type SpaceName, type SpaceSubmission, improvesSpaceBest } from "@polypack/spaces";
 import type { Decision, SubmitCheck } from "../submit";
 import { storedName } from "../submit";
 import type { SpaceLeaderRef } from "../state";
@@ -37,6 +37,9 @@ export function betterSpace(a: SpaceCandidate | null, b: SpaceCandidate | null):
  * Submit only a configuration that the space's own validator accepts at its stated size, to an
  * open problem, at or above the problem's lower bound, that improves on the problem's best (the
  * research record or the site's leader, whichever is smaller) by more than the tie tolerance.
+ * Given `record` (the space, the research record's certified size and the site leader's score),
+ * the rule is the server's keep rule instead: the leader by the tie tolerance and the research
+ * record by the space's record margin (1e-6 relative for polyhedra; SPACE_RECORD_MARGIN).
  * `bestScore` must be read just before. In a dry run the same rule says what would have been sent.
  */
 export function decideSpaceSubmission(a: {
@@ -46,6 +49,7 @@ export function decideSpaceSubmission(a: {
   bestScore: number | null;
   bound: number | null;
   dryRun: boolean;
+  record?: { space: SpaceName; certified: number | null; leader: number | null };
 }): Decision {
   if (!a.best) return { submit: false, reason: "no valid configuration" };
   if (!a.check?.valid || a.check.score === null)
@@ -56,6 +60,8 @@ export function decideSpaceSubmission(a: {
   if (a.bound !== null && score < a.bound) return { submit: false, reason: "below the problem's lower bound" };
   if (a.bestScore !== null && !improvesOn(score, a.bestScore))
     return { submit: false, reason: "not better than the problem's best" };
+  if (a.record && !improvesSpaceBest(a.record.space, score, a.record.certified, a.record.leader))
+    return { submit: false, reason: "not below the research record by the space's margin" };
   if (a.dryRun) return { submit: false, reason: "dry run: would submit" };
   return { submit: true, reason: "better than the problem's best" };
 }

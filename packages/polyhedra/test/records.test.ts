@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   POLYHEDRA_MAX_P,
@@ -9,9 +9,11 @@ import {
   parsePolyhedraId,
   volumeBound,
 } from "../src";
+import { readRecordsFile } from "../src/records-file";
 
 const url = new URL("../../../data/polyhedra/records.json", import.meta.url);
-const file: PolyhedraRecordsFile | undefined = existsSync(url) ? JSON.parse(readFileSync(url, "utf8")) : undefined;
+// the index with each record's configuration attached from data/polyhedra/configs/<code>.jsonl
+const file: PolyhedraRecordsFile | undefined = existsSync(url) ? readRecordsFile(url.pathname) : undefined;
 
 describe("displayScore", () => {
   it("rounds the exact binary value to the nearest at 6 decimals, ties to even", () => {

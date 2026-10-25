@@ -96,12 +96,11 @@ export function configErrors(config: unknown, P?: number, maxErrors = 20): strin
   return errors;
 }
 
-/** Checks a well-formed configuration (see configErrors) of a problem at its stated s. Never throws. */
-export function validatePolyhedra(
+function* validateSteps(
   problem: PolyhedraProblem,
   config: PolyhedraConfig,
   opts: ValidateOptions = {},
-): PolyhedraValidation {
+): Generator<undefined, PolyhedraValidation, undefined> {
   const tol = opts.tol ?? POLYHEDRA_TOL;
   const maxErrors = opts.maxErrors ?? 20;
   const stopAt = opts.stopAt ?? 1e-3;
@@ -127,6 +126,7 @@ export function validatePolyhedra(
     const g = wallGap(C, s, placed[i].X);
     if (g < out.minWallGap) out.minWallGap = g;
     if (!(g >= -tol)) out.errors.push(`piece ${i} sticks out of the container by ${-g}`);
+    if (i % 16 === 15) yield;
   }
   // pieces lie in their circumscribed balls: centres more than 2 R apart cannot overlap
   const reach = 2 * P.circumradius + tol;
@@ -144,10 +144,61 @@ export function validatePolyhedra(
         out.worstPair = [i, j];
       }
       if (!(r.sep >= -tol)) out.errors.push(`pieces ${i} and ${j} overlap by ${-r.sep}`);
+      yield;
     }
   }
   out.valid = out.errors.length === 0;
   return out;
+}
+
+/** Checks a well-formed configuration (see configErrors) of a problem at its stated s. Never throws. */
+export function validatePolyhedra(
+  problem: PolyhedraProblem,
+  config: PolyhedraConfig,
+  opts: ValidateOptions = {},
+): PolyhedraValidation {
+  const steps = validateSteps(problem, config, opts);
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
+}
+
+/**
+ * validatePolyhedra, the same checks in the same order, that gives the event loop a turn after every `sliceMs`
+ * of work (default 20 ms; after a near pair or 16 wall checks at the most), so that a server's check of 100 of
+ * the largest solids never holds the loop for long. `workMs` is the time spent checking, without the turns;
+ * `slices` the pieces of work between turns and `longestSliceMs` the longest of them.
+ */
+export async function validatePolyhedraAsync(
+  problem: PolyhedraProblem,
+  config: PolyhedraConfig,
+  opts: ValidateOptions & { sliceMs?: number } = {},
+): Promise<PolyhedraValidation & { workMs: number; slices: number; longestSliceMs: number }> {
+  const sliceMs = opts.sliceMs ?? 20;
+  const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  // a turn first, so that two checks in a row (the strict one after the usual one) do not add up
+  await turn();
+  const steps = validateSteps(problem, config, opts);
+  let workMs = 0;
+  let slices = 1;
+  let longestSliceMs = 0;
+  let t = performance.now();
+  for (;;) {
+    const r = steps.next();
+    const now = performance.now();
+    if (r.done) {
+      longestSliceMs = Math.max(longestSliceMs, now - t);
+      return { ...r.value, workMs: workMs + now - t, slices, longestSliceMs };
+    }
+    if (now - t >= sliceMs) {
+      workMs += now - t;
+      longestSliceMs = Math.max(longestSliceMs, now - t);
+      slices++;
+      await turn();
+      t = performance.now();
+    }
+  }
 }
 
 /**

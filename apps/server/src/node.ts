@@ -30,7 +30,8 @@ if (process.env.ADMIN_TOKEN === "change-me")
 
 const records: LiteratureRecord[] = JSON.parse(readFileSync(resolve(root, "data/records.json"), "utf8")).records;
 // The research records of the spaces (data/<space>/records.json), each read once into a compact
-// catalogue (about 7 MB of heap); a missing file leaves its space out.
+// catalogue (about 6 MB of heap for the five, the boundary one 55 kB); a missing file leaves its
+// space out.
 const spaces = loadSpacesIndex(root, (msg) => console.log(msg));
 
 /** A non-negative integer setting; the default when it is unset or not such a number. */

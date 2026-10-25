@@ -20,7 +20,17 @@
  *    seed and started from the best so far; the hop count is the evaluation budget. The search
  *    polls the gate inside each restart and hop too (its shouldStop option);
  *  - sphere and torus: searchSphere and searchTorus of their packages (penalty relaxation, a
- *    tight-size bisection with the float validator, basin hopping), budgeted by evaluations.
+ *    tight-size bisection with the float validator, basin hopping), budgeted by evaluations;
+ *  - boundary: searchBoundary of packages/boundary (penalty relaxation in each piece's cell,
+ *    compression of the edge s, polish, hops), budgeted by its energy evaluations, one call per
+ *    job. Its time is the gate's (active seconds, polled through shouldStop at every evaluation),
+ *    so it gets no time_s of its own, which would count pauses. One call is a whole search (the
+ *    start compressed and polished, then random starts and hops); a fresh job gets no start. It
+ *    ends "bound" when its best reaches its own floor (engine.ts then stops the problem). Its word
+ *    tables cost about 50 ms once per thread.
+ *  - polyhedra: searchPolyhedra of packages/polyhedra (a start is legalized and polished, else a
+ *    soft-to-rigid run packs one; then soft hops and jiggles, each polished by a separating-plane
+ *    penalty method), budgeted by evaluations: simulator steps and polish evaluations.
  * Surface problems in the nofold mode are planar problems and run on the polygon solver instead
  * (nofold.ts has the conversion); they never reach this file.
  *
@@ -28,10 +38,12 @@
  * bound and certified size); the start, when it passes, is a candidate too, so a job never returns
  * worse than what it was given.
  */
+import { type BoundaryConfig, searchBoundary } from "@polypack/boundary";
 import { solve as solveCurved } from "@polypack/curved";
 import { searchSphere } from "@polypack/sphere";
 import { getSolid } from "@polypack/surface";
 import { searchTorus } from "@polypack/torus";
+import { type PolyhedraConfig, getProblem as getPolyhedraProblem, searchPolyhedra } from "@polypack/polyhedra";
 import type { SpaceConfig, SpaceName } from "../types";
 import {
   type SearchProblem,
@@ -56,6 +68,11 @@ export interface SpaceJob {
   budget: { time_s: number; evals?: number };
   /** Configuration to start from; without it the engine builds its own. */
   start?: SpaceConfig;
+  /**
+   * True when the start is this search's own result, already polished (the best of a board's previous
+   * round): polyhedra take it as it is instead of polishing it again. Ignored by the other spaces.
+   */
+  polished?: boolean;
   /** The problem's bound and certified size, so that results are checked by the server's whole rule. */
   rule?: SpaceRule;
   /** "polish" only for nofold results, which come from the polygon engine's jobs. */
@@ -92,6 +109,16 @@ export interface SpaceControl {
 
 /** Seconds the surface fold search's final stage may run past the job's budget. */
 export const SURFACE_FINAL_OVERRUN = 1.5;
+
+/**
+ * Evaluations of one boundary job when its caller sets the size by evaluations, as the board's
+ * rounds do: [CALC] 300,000 took 1.5 to 2.2 s on balls and cubes of P = 16 on an Apple Silicon
+ * laptop (about 140,000 to 190,000 a second), as long as a sphere or torus round of 10,000; the
+ * search's builder reports that most research values are reached within 300,000 (balls P = 6 and
+ * 9 need 0.6 to 9 million). A job's own budget.evals overrides it; the volunteer client sizes its
+ * jobs by time instead.
+ */
+export const BOUNDARY_ROUND_EVALS = 300_000;
 
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
@@ -213,6 +240,21 @@ function runEngine(
   const cap = job.budget.evals ?? Number.MAX_SAFE_INTEGER;
   const shouldStop = () => gate.stop();
   switch (p.space) {
+    case "polyhedra": {
+      // the search counts simulator steps and polish evaluations; it polls shouldStop at each of them and in the work between them
+      const r = searchPolyhedra(getPolyhedraProblem(p.code)!, p.P, {
+        seed: job.seed,
+        start: start as unknown as PolyhedraConfig | undefined,
+        startPolished: job.polished === true && start !== undefined,
+        maxEvals: cap,
+        shouldStop,
+      });
+      return {
+        config: r.config as unknown as SpaceConfig | null,
+        evaluations: r.evaluations,
+        termination: r.stopped,
+      };
+    }
     case "sphere": {
       const r = searchSphere({ N: p.N, P: p.P }, { seed: job.seed, start: start as never, maxEvals: cap, shouldStop });
       return { config: r.config as unknown as SpaceConfig | null, evaluations: r.evaluations, termination: r.stopped };
@@ -288,6 +330,19 @@ function runEngine(
       const s = 1 / r.lam;
       const config = { s, pieces: r.poses.map((q) => ({ face: q.face, x: q.x * s, y: q.y * s, theta: q.theta })) };
       return { config, evaluations: r.compressions, termination: r.compressions >= cap ? "evals" : "done" };
+    }
+    case "boundary": {
+      const r = searchBoundary(
+        { polytope: p.polytope, piece: p.piece, P: p.P },
+        {
+          seed: job.seed,
+          // a fresh job builds its own starts; the given start is still a candidate (runSpaceJob)
+          start: job.kind === "fresh" ? undefined : (start as unknown as BoundaryConfig | undefined),
+          budget: { evals: cap },
+          shouldStop,
+        },
+      );
+      return { config: r.config as unknown as SpaceConfig | null, evaluations: r.evals, termination: r.ended };
     }
   }
 }

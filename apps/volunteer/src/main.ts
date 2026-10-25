@@ -61,6 +61,9 @@ import { SOFTWARE, VERSION } from "./version";
 
 /** The work list is read again after this long; a problem that could not be read is skipped as long. */
 export const TARGETS_TTL_MS = 10 * 60_000;
+/** The largest limit of GET /api/spaces/targets (apps/server SPACE_TARGETS_MAX_LIMIT), and an older server's. */
+export const SPACE_TARGETS_LIMIT = 10000;
+export const SPACE_TARGETS_LIMIT_BEFORE = 2000;
 /** After the first signal (or the end of --hours), the most the client waits before it exits. */
 export const STOP_GRACE_MS = 30_000;
 /** No problem starts with less of --hours left than this, or than the time per problem if smaller. */
@@ -184,6 +187,8 @@ class Volunteer {
   private targets: { at: number; list: Target[] } | null = null;
   /** Whether to send the filters with GET /api/targets; dropped if the server refuses them. */
   private filterOnServer = true;
+  /** The limit the spaces' work list is asked for: the server's largest, or 2000 for an older server. */
+  private spaceTargetsLimit = SPACE_TARGETS_LIMIT;
   /** The spaces' work list (--spaces), cached like `targets`. */
   private spaceTargets: { at: number; list: SpaceTarget[] } | null = null;
   private spaceFilterOnServer = true;
@@ -582,6 +587,18 @@ class Volunteer {
       return this.spaceTargets.list;
     const query = this.spaceTargetsQuery(this.spaceFilterOnServer);
     let answer = await this.reader.spaceTargets(query);
+    if (
+      answer?.status === 400 &&
+      this.spaceTargetsLimit > SPACE_TARGETS_LIMIT_BEFORE &&
+      /limit/.test(describeAnswer(answer))
+    ) {
+      // a server from before 2026-10-25 takes at most limit=2000
+      this.log(
+        `The server refused limit=${this.spaceTargetsLimit} for the spaces' work list; asking for ${SPACE_TARGETS_LIMIT_BEFORE}`,
+      );
+      this.spaceTargetsLimit = SPACE_TARGETS_LIMIT_BEFORE;
+      answer = await this.reader.spaceTargets(this.spaceTargetsQuery(this.spaceFilterOnServer));
+    }
     if (answer?.status === 400 && this.spaceFilterOnServer) {
       // the filters are applied here as well
       this.log(`The server refused the spaces' work list filters (${describeAnswer(answer)}); filtering here instead`);
@@ -608,9 +625,10 @@ class Volunteer {
   }
 
   /**
-   * ?spaces=...&max_P=...&limit=2000, the server's largest limit, so that the client draws from
-   * the whole list; only limit=2000 once the server has refused the filters (they then apply
-   * here only).
+   * ?spaces=...&max_P=...&limit=10000, the server's largest limit, so that the client draws from
+   * the whole list (9,827 targets with the catalogues of 2026-10-25, so that every space gets its
+   * share); only the limit once the server has refused the filters (they then apply here only).
+   * An older server takes at most 2000, which the client then asks for.
    */
   private spaceTargetsQuery(filters: boolean): string {
     const q = new URLSearchParams();
@@ -619,7 +637,7 @@ class Volunteer {
       if (this.o.maxP !== null) q.set("max_P", String(this.o.maxP));
     }
     // without it the server answers its default 500, which may leave out every problem of a space
-    q.set("limit", "2000");
+    q.set("limit", String(this.spaceTargetsLimit));
     return `?${q.toString()}`;
   }
 
@@ -1156,6 +1174,12 @@ class Volunteer {
           bestScore: fresh.info.best_score,
           bound: fresh.info.bound ?? info.bound,
           dryRun: this.o.dryRun,
+          // the server's keep rule, with the record margin of the space (polyhedra: 1e-6)
+          record: {
+            space: p.space,
+            certified: fresh.info.certified?.score ?? null,
+            leader: fresh.info.site_best?.score ?? null,
+          },
         });
       }
       if (decision.submit) {
@@ -1318,6 +1342,11 @@ class Volunteer {
         }
         const stays = response.best_score === null ? "unchanged" : formatScore(response.best_score);
         return { text: `submitted: HTTP 200, valid, but the best stays at ${stays}`, response };
+      }
+      // a score the server could not keep is answered without a check (polyhedra)
+      if (a.status === 200 && (a.body as { checked?: unknown } | null)?.checked === false) {
+        const stays = response?.best_score == null ? "unchanged" : formatScore(response.best_score);
+        return { text: `submitted: HTTP 200, not kept and not checked: the best is now ${stays}`, response };
       }
       if (a.status === 409) this.skipUntil.set(p.id, Infinity);
       return { text: `refused: ${describeAnswer(a)}`, response };

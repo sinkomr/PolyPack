@@ -1,6 +1,6 @@
 /**
  * The board's search thread for the spaces: runs one round (a SpaceJob) and answers with its
- * result. Fold surfaces, curved, sphere and torus problems run the shared job of the volunteer
+ * result. Fold surfaces, curved, sphere, torus and polyhedra problems run the shared job of the volunteer
  * client (runSpaceJob, packages/spaces/src/search/run.ts); nofold surface problems run the polygon
  * solver on one face (nofold-round.ts). The page ends a round by ending this worker (search.ts),
  * so the stop and pause flags passed here never change.

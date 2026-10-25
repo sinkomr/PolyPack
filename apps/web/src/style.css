@@ -1495,3 +1495,54 @@ figure {
 #space-solve-trace[hidden] {
   display: none;
 }
+/* 3D on 4D (src/space/render/boundary.ts, the viewer page): the three.js drawing of
+   packages/view3d brings its own toolbar, Fold and Slice controls, legend and status line, and
+   fills the stage. It reads the page's colours (--bg, --panel, --accent ...). */
+.space-view-3d > .pp3 {
+  flex: 1;
+  min-height: 0;
+}
+.space-3d-wait {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.space-3d-wait p {
+  margin: 0;
+}
+/* On a narrow screen the board stacks the stage above the panel, at 62% of the screen's height.
+   A 3D drawing needs a square of its own under its controls: the stage takes the height it needs,
+   and the drawing is as tall as the screen is wide (at most three quarters of the screen's
+   height), so that it can be turned and read. */
+@media (max-width: 820px) {
+  .layout[data-dimension="3-on-4"][data-space] .stage {
+    height: auto;
+  }
+  .layout[data-dimension="3-on-4"] .space-stage,
+  .layout[data-dimension="3-on-4"] .space-placeholder {
+    min-height: min(100vw, 75vh);
+  }
+  .layout[data-dimension="3-on-4"] .pp3-stage {
+    flex: none;
+    height: min(100vw, 75vh);
+    min-height: 260px;
+  }
+  .layout[data-dimension="3-on-4"] .space-3d-wait {
+    min-height: min(100vw, 75vh);
+  }
+}
+/* the 3D on 4D viewer (spaces/boundary.html): the board's layout, its links as a short list */
+.viewer-links {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.viewer-links li + li {
+  margin-top: 4px;
+}

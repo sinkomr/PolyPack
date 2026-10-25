@@ -1,0 +1,6205 @@
+{
+ "generated": "2026-10-25",
+ "conventions": {
+  "problem_id": "boundary/<polytope>/<piece>/<P>: P congruent pieces on the boundary of a convex 4-polytope; polytope tesseract; piece ball (unit 3-ball, radius 1) or cube (unit cube, edge 1)",
+  "score": "s, the polytope's edge (smaller is better)",
+  "cells": "the tesseract is [-s/2, s/2]^4; cell 2 i + (sigma > 0) is the cube x_i = sigma s/2 (i = 0..3, sigma = -1 or +1)",
+  "pose": "{cell, u, q?}: u = the centre in the cell's local coordinates at s (the other three R^4 coordinates in increasing order, the cell's centre at the origin), in the closed cell; q = rotation (unit quaternion w, x, y, z) of a cube in that frame, absent = axis-aligned; balls have no q",
+  "validity": "fold placement: each piece is developed from its centre across 2-faces; no point of the edges or vertices in a piece's interior; developments injective on interiors; interiors of distinct pieces disjoint (touching allowed)",
+  "certified_statement": "config is at s = score_cert; python/boundary/certify.py proves it strictly valid in exact rational arithmetic (closed pieces avoid the edges and vertices, are embedded and pairwise disjoint)",
+  "score_cert": "s lam_k for the first k >= 1 with lam_k = 1 + k 1e-12 at which the scaled configuration (s lam_k, u lam_k, binary64 products) certifies; score_float = the unscaled s",
+  "certificate": "the certifier's exact margins at score_cert, rounded down to binary64: balls min_clearance (to the edges), min_distance (over the pairs at most 2 apart in R^4; null when there is none, so all centres are more than 2 apart), min_loop (null: no geodesic loop shorter than 2 s); cubes min_edge_slack (per cube the second smallest of h - |u_l| - 1/2 over its three axes, positive when it crosses faces in at most one axis and keeps clear of the edges; least over the cubes) and min_part_separation (per pair of parts in one cell the largest gap over the axes; least over the pairs); k and lambda of the scaling",
+  "exact": "where present, an exact construction valid at exactly its s (touching allowed), checked by the certifier in records mode: field Q (numbers or rational strings) or Q(sqrt 2, sqrt 3) (each number [a, b, c, d] = a + b sqrt 2 + c sqrt 3 + d sqrt 6); config is its binary64 rounding, scaled to strict validity",
+  "previous": "where the record improves on the research prototype's round-2 value: that value certified the same way, and improvement_rel = 1 - score_cert / previous.score_cert",
+  "display": "score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64 value)",
+  "bound": "the larger proven lower bound on s: volume, or one piece (sqrt 2 for balls, 1/sqrt 2 for cubes), as a binary64 value rounded down",
+  "nofold": "the best value when every piece must lie in one closed cell: f(ceil(P/8)), the smallest cube holding ceil(P/8) pieces",
+  "fold_gain": "1 - score_float / nofold.value",
+  "status": "best_known everywhere: PolyPack calls a value proven only with a published proof"
+ },
+ "records": [
+  {
+   "id": "boundary/tesseract/ball/1",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 1,
+   "score_float": 1.4142135623730951,
+   "score_cert": 1.4142135623745096,
+   "display": "1.414214",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.4142135623745096,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": null,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 0,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 1.414213562373095,
+    "exact": "sqrt 2",
+    "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.8059959770082348,
+     "exact": "(1 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 1.000310945187266e-12,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.2928932188134524,
+   "method": "exact construction: a unit ball at the centre of cell 0, s = sqrt 2 (score_float is the binary64 value of sqrt 2)",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] Meets its lower bound sqrt 2 (one piece): score_cert / bound - 1 = 1.0e-12. The bound is derived in BOUNDARY.md section 5, not taken from a published proof, so the status stays best_known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/2",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 2,
+   "score_float": 1.4142135623730951,
+   "score_cert": 1.4142135623745096,
+   "display": "1.414214",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.4142135623745096,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": 2.828427124749019,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 1,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 1.414213562373095,
+    "exact": "sqrt 2",
+    "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.015491297563259,
+     "exact": "(2 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 1.000310945187266e-12,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.2928932188134524,
+   "method": "exact construction: unit balls at the centres of the opposite cells 0 and 1, s = sqrt 2",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] Meets its lower bound sqrt 2 (one piece): score_cert / bound - 1 = 1.0e-12. The bound is derived in BOUNDARY.md section 5, not taken from a published proof, so the status stays best_known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/3",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 3,
+   "score_float": 1.6801415582584438,
+   "score_cert": 1.680141558260124,
+   "display": "1.680142",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.680141558260124,
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       -3.1158711083628266e-12,
+       -5.818231805001415e-10,
+       -0.29759397130090093
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -1.879950508258127e-11,
+       0.29759397217385986,
+       1.78810538466024e-13
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       1.2857569483924583e-12,
+       0.29759397216626704,
+       9.107385710037151e-12
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": 2.0000000000146736,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 3,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 1.414213562373095,
+    "exact": "sqrt 2",
+    "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.1624473515096263,
+     "exact": "(3 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.18803948919906666,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.1599292208707781,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 21,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 0,
+    "extra_s": 40.0,
+    "starts": [
+     24,
+     24
+    ],
+    "wall_s": 126.6
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 21,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 1.6801415582584438,
+    "seeds_rel_spread": 0.0,
+    "file": "data/boundary/sources/research_round2.json#balls/3"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "The research search's two independent seeds (21, 22) agree to 0.0e+00 relative: evidence of the best basin found, not a proof.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/4",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 4,
+   "score_float": 1.7071067811865475,
+   "score_cert": 1.7071067811882548,
+   "display": "1.707107",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.7071067811882548,
+    "pieces": [
+     {
+      "cell": 1,
+      "u": [
+       -0.1464466094068727,
+       -0.1464466094068727,
+       0.1464466094068727
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.1464466094068727,
+       -0.1464466094068727,
+       0.1464466094068727
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.1464466094068727,
+       -0.1464466094068727,
+       -0.1464466094068727
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.1464466094068727,
+       -0.1464466094068727,
+       0.1464466094068727
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000009999,
+    "min_distance": 2.000000000002,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 6,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q(sqrt 2, sqrt 3)",
+    "s": [
+     "1",
+     "1/2",
+     "0",
+     "0"
+    ],
+    "pieces": [
+     {
+      "cell": 1,
+      "u": [
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "1/2",
+        "-1/4",
+        "0",
+        "0"
+       ]
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "1/2",
+        "-1/4",
+        "0",
+        "0"
+       ]
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ]
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "-1/2",
+        "1/4",
+        "0",
+        "0"
+       ],
+       [
+        "1/2",
+        "-1/4",
+        "0",
+        "0"
+       ]
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 1 + 1/sqrt 2 = 1.707107, every coordinate +-(2 - sqrt 2)/4 (signs and cells of the stored configuration); certified in Q(sqrt 2, sqrt 3), elements [a, b, c, d] = a + b sqrt 2 + c sqrt 3 + d sqrt 6"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 1.414213562373095,
+    "exact": "sqrt 2",
+    "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.2794388617850085,
+     "exact": "(4 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.20710678118775494,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.14644660940672627,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 21,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 0,
+    "extra_s": 40.0,
+    "starts": [
+     25,
+     24
+    ],
+    "wall_s": 125.4
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 21,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 1.7071067812728435,
+    "seeds_rel_spread": 0.0,
+    "file": "data/boundary/sources/research_round2.json#balls/4",
+    "exact": "exact form of the research layout: s = 1 + 1/sqrt 2 = 1.707107, every coordinate +-(2 - sqrt 2)/4"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.7071067812728435,
+    "score_cert": 1.7071067812745508,
+    "display": "1.707107",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/4",
+    "improvement_rel": 5.055111884644248e-11
+   },
+   "notes": [
+    "Improves on the research value 1.707107 (score_cert 1.7071067812745508) by 5.06e-09%: from the research layout made exact (exact form of the research layout: s = 1 + 1/sqrt 2 = 1.707107, every coordinate +-(2 - sqrt 2)/4).",
+    "The research search's two independent seeds (21, 22) agree to 0.0e+00 relative: evidence of the best basin found, not a proof.",
+    "[CALC] Exact construction: s = 1 + 1/sqrt 2 = 1.707107, every coordinate +-(2 - sqrt 2)/4, in the cells of the research layout, is valid at exactly that s: every clearance is exactly 1 (h - a = 1/sqrt 2 in every axis) and the least centre distance is exactly 2 (certified in Q(sqrt 2, sqrt 3); field exact). The stored configuration is that construction in binary64. [SPEC] that this s is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/5",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 5,
+   "score_float": 1.7872262714441574,
+   "score_cert": 1.7872262714459448,
+   "display": "1.787226",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.7872262714459448,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       -0.1662062849575931,
+       0.18426308652548348,
+       0.18875676190474674
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -9.649757894133917e-09,
+       -0.23421118503577407,
+       0.09399089592099173
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       4.719405714952902e-13,
+       -0.44477512075880005,
+       5.206313247129512e-12
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.16620626615467865,
+       0.1842630835867225,
+       0.1887567648669658
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       8.738288272530292e-10,
+       8.700339071164144e-10,
+       0.4447751190262962
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000010003,
+    "min_distance": 2.0000000000078337,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 10,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 1.414213562373095,
+    "exact": "sqrt 2",
+    "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.3782337338022654,
+     "exact": "(5 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.263759816054177,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.10638686427792132,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 5}, {seed: 1, budget: {evals: 2617672}})",
+   "seed": 1,
+   "budget": {
+    "evals": 2617672,
+    "evals_used": 2617672,
+    "ended": "evals",
+    "starts": 101,
+    "wall_s": 13.7
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 5}, {seed: 1, budget: {evals: 2617672}})",
+    "seed": 1,
+    "evals": 2617672,
+    "value": 1.7872262714441574,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/5"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.787247697801891,
+    "score_cert": 1.7872476978036784,
+    "display": "1.787248",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/5",
+    "improvement_rel": 1.1988465706158635e-05
+   },
+   "notes": [
+    "Improves on the research value 1.787248 (score_cert 1.7872476978036784) by 0.0012%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 5}, {seed: 1, budget: {evals: 2617672}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/6",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 6,
+   "score_float": 1.865834730820973,
+   "score_cert": 1.8658347308228391,
+   "display": "1.865835",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.8658347308228391,
+    "pieces": [
+     {
+      "cell": 6,
+      "u": [
+       0.4389001503070877,
+       -0.029751375795471893,
+       0.008314596887283967
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       2.9771078411719304e-13,
+       1.2722536667183413e-12,
+       0.572826836035779
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.0008284592377613506,
+       -0.481810059838648,
+       0.0404476466735083
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.01834157940897457,
+       -0.018341578445571088,
+       0.528502811125898
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -1.460557146269298e-11,
+       -0.5728268359315479,
+       4.3635913034969904e-11
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.0006043841798358675,
+       -0.438664963391143,
+       0.0036361123210885914
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000026261,
+    "min_distance": 2.0000000000028253,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 14,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.4645918875615231,
+    "exact": "(6 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.4645918875615231,
+     "exact": "(6 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.27396221887406913,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.06708263458951347,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 22,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 2,
+    "extra_s": 40.0,
+    "starts": [
+     23,
+     27
+    ],
+    "wall_s": 335.6
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 22,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 1.8658348483844063,
+    "seeds_rel_spread": 6.300849226820238e-08,
+    "file": "data/boundary/sources/research_round2.json#balls/6"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "The research search's two independent seeds (21, 22) agree to 6.3e-08 relative: evidence of the best basin found, not a proof.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/7",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 7,
+   "score_float": 1.9254041774409978,
+   "score_cert": 1.9254041774429234,
+   "display": "1.925404",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.9254041774429234,
+    "pieces": [
+     {
+      "cell": 6,
+      "u": [
+       0.20511400073959968,
+       -0.0218995003978077,
+       -0.052462783858386396
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.25559530729039454,
+       -0.255595307286871,
+       0.2555953077776749
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.20511399984445883,
+       -0.052462787459602554,
+       0.021899496465571072
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.5486194706946638,
+       0.02189950039050057,
+       0.05246278365501873
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.5486194706616173,
+       0.05246278750337972,
+       -0.021899496640687396
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.20511400159507587,
+       -0.021899492890154897,
+       0.0524627799322045
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.5486194722662583,
+       0.02189949287747261,
+       -0.05246278020617299
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000012437,
+    "min_distance": 2.000000000002237,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 18,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.5418148376081497,
+    "exact": "(7 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.5418148376081497,
+     "exact": "(7 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.2487907954173303,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.037297911279501106,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 22,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 2,
+    "extra_s": 40.0,
+    "starts": [
+     28,
+     27
+    ],
+    "wall_s": 327.4
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 22,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 1.9263827243124056,
+    "seeds_rel_spread": 0.0005082293280927744,
+    "file": "data/boundary/sources/research_round2.json#balls/7"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "Not converged: the research search's two seeds (21, 22) differ by 5.1e-04 relative; an upper bound only.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/8",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 8,
+   "score_float": 1.9318516525781366,
+   "score_cert": 1.9318516525800686,
+   "display": "1.931852",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.9318516525800686,
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       -0.2588190451027796,
+       0.2588190451027796,
+       0.2588190451027796
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.2588190451027796,
+       -0.2588190451027796,
+       -0.2588190451027796
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.2588190451027796,
+       0.2588190451027796,
+       -0.2588190451027796
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.2588190451027796,
+       -0.2588190451027796,
+       0.2588190451027796
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.2588190451027796,
+       -0.2588190451027796,
+       -0.2588190451027796
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.2588190451027796,
+       0.2588190451027796,
+       0.2588190451027796
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.2588190451027796,
+       0.2588190451027796,
+       -0.2588190451027796
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.2588190451027796,
+       -0.2588190451027796,
+       0.2588190451027796
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": 2.000000000002,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 24,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q(sqrt 2, sqrt 3)",
+    "s": [
+     "0",
+     "1/2",
+     "0",
+     "1/2"
+    ],
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ]
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "1/4",
+        "0",
+        "-1/4"
+       ],
+       [
+        "0",
+        "-1/4",
+        "0",
+        "1/4"
+       ]
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2 = 1.931852, every coordinate +-sin 15 deg = +-(sqrt 6 - sqrt 2)/4 (signs and cells of the stored configuration); certified in Q(sqrt 2, sqrt 3), elements [a, b, c, d] = a + b sqrt 2 + c sqrt 3 + d sqrt 6"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.6119919540164696,
+    "exact": "(8 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.6119919540164696,
+     "exact": "(8 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.19842512102286292,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"
+   },
+   "fold_gain": 0.03407417371093169,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 8}, {seed: 1, budget: {evals: 65479}})",
+   "seed": 1,
+   "budget": {
+    "evals": 65479,
+    "evals_used": 65479,
+    "ended": "evals",
+    "starts": 13,
+    "wall_s": 0.9
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 8}, {seed: 1, budget: {evals: 65479}})",
+    "seed": 1,
+    "evals": 65479,
+    "value": 1.9318516526920209,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/8",
+    "exact": "exact form of the search layout: s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2 = 1.931852, every coordinate +-sin 15 deg = +-(sqrt 6 - sqrt 2)/4"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.9366301432870943,
+    "score_cert": 1.9366301432890312,
+    "display": "1.936630",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/8",
+    "improvement_rel": 0.002467425556460179
+   },
+   "notes": [
+    "Improves on the research value 1.936630 (score_cert 1.9366301432890312) by 0.247%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 8}, {seed: 1, budget: {evals: 65479}}) made exact (exact form of the search layout: s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2 = 1.931852, every coordinate +-sin 15 deg = +-(sqrt 6 - sqrt 2)/4).",
+    "[CALC] Exact construction: s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2 = 1.931852, every coordinate +-sin 15 deg = +-(sqrt 6 - sqrt 2)/4, in the cells of the search layout, is valid at exactly that s: every clearance is exactly 1 (h - a = 1/sqrt 2 in every axis) and the least centre distance is exactly 2 (certified in Q(sqrt 2, sqrt 3); field exact). The stored configuration is that construction in binary64. [SPEC] that this s is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/9",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 9,
+   "score_float": 2.2205956562383804,
+   "score_cert": 2.2205956562406013,
+   "display": "2.220596",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.2205956562406013,
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       0.9356321380112892,
+       0.12567003209748626,
+       0.12567003209747896
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.1573247443919601,
+       0.8072428779396523,
+       0.15732474498883156
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.2203423174301472,
+       0.6542504742257294,
+       0.2203423174300397
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.1113578799392825,
+       -1.0642654404164364,
+       -0.11135787975134451
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.11029782811921138,
+       0.11029782811712509,
+       1.110297827963895
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.1573247450256153,
+       -0.15732474502589416,
+       -0.8072428778232554
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.22034231752338154,
+       -0.22034231752337927,
+       -0.6542504740437696
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.12567003185872483,
+       0.9356321381138346,
+       -0.12567003207774857
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -1.0642654405240457,
+       0.1113578803285484,
+       0.11135788032854843
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": 2.000000000002,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 15,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.6765391932197435,
+    "exact": "(9 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.6765391932197435,
+     "exact": "(9 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.3245116280139049,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.2960993827391216,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 22,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 0,
+    "extra_s": 40.0,
+    "starts": [
+     42,
+     39
+    ],
+    "wall_s": 123.9
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 22,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 2.220595656352362,
+    "seeds_rel_spread": 5.132934158307683e-11,
+    "file": "data/boundary/sources/research_round2.json#balls/9"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "The research search's two independent seeds (21, 22) agree to 5.1e-11 relative: evidence of the best basin found, not a proof.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/10",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 10,
+   "score_float": 2.2692672599628225,
+   "score_cert": 2.269267259965092,
+   "display": "2.269267",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.269267259965092,
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       0.3667534521292465,
+       0.3667534543712658,
+       -0.49404012712352513
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.13672647511108804,
+       0.13672647520305403,
+       -1.0699705767717913
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.214159878433138,
+       -0.20741996095786563,
+       0.7438292380938264
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.49404012715428824,
+       0.3667534543408758,
+       -0.3667534543413995
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.907638721698347,
+       -0.16073768501676977,
+       0.1607376850167413
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.7438292381815645,
+       -0.20741996456141176,
+       0.21415987835822398
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       1.0699705762186849,
+       -0.13672647524001647,
+       -0.13672647523704345
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.16073768514802922,
+       -0.16073768515260878,
+       0.9076387211259463
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.2033018562359897,
+       0.20330185621680386,
+       -0.770461792492804
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.770461791871487,
+       0.20330185647946375,
+       -0.20330185648053248
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000010003,
+    "min_distance": 2.0000000000032623,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 19,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.7364656928926816,
+    "exact": "(10 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.7364656928926816,
+     "exact": "(10 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.3068310357372197,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.2806711025799381,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 10}, {seed: 1, budget: {evals: 654968}})",
+   "seed": 1,
+   "budget": {
+    "evals": 654968,
+    "evals_used": 654968,
+    "ended": "evals",
+    "starts": 259,
+    "wall_s": 3
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 10}, {seed: 1, budget: {evals: 654968}})",
+    "seed": 1,
+    "evals": 654968,
+    "value": 2.2692672599628225,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/10"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 2.2704876585483333,
+    "score_cert": 2.270487658550604,
+    "display": "2.270488",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/10",
+    "improvement_rel": 0.0005375050513558577
+   },
+   "notes": [
+    "Improves on the research value 2.270488 (score_cert 2.270487658550604) by 0.0538%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 10}, {seed: 1, budget: {evals: 654968}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/11",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 11,
+   "score_float": 2.3159183398657275,
+   "score_cert": 2.3159183398680434,
+   "display": "2.315918",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.3159183398680434,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       1.135194454031942,
+       0.15821831965617836,
+       -0.15821831965731803
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.17330124590253926,
+       0.17330124719230589,
+       0.9834633958190866
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.15852431675809728,
+       -1.1243440798527968,
+       0.15852431676786355
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.35897264640391163,
+       -0.3589726510882768,
+       0.556610234020778
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.1680053177010254,
+       0.16800531799050383,
+       -1.016568324994163
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.8176570059343797,
+       0.2124632720222313,
+       -0.21764303310532684
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.22416704232994972,
+       -0.011041479200729629,
+       -0.800143208259923
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.801232423347408,
+       -0.22375039868743027,
+       0.164815497116581
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.12055437694700123,
+       0.8202138545717172,
+       -0.2167216324584896
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.4373507578103011,
+       0.46461688966706105,
+       0.21804536864766938
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.28864014271807703,
+       0.1282314382961818,
+       0.6637077876010703
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000010005,
+    "min_distance": 2.0000000000025513,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 26,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.792519005945278,
+    "exact": "(11 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.792519005945278,
+     "exact": "(11 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.29199095361711525,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.2658833028077061,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 11}, {seed: 1, budget: {evals: 1358135}})",
+   "seed": 1,
+   "budget": {
+    "evals": 1358135,
+    "evals_used": 1358135,
+    "ended": "evals",
+    "starts": 414,
+    "wall_s": 6
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 11}, {seed: 1, budget: {evals: 1358135}})",
+    "seed": 1,
+    "evals": 1358135,
+    "value": 2.3159183398657275,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/11"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 2.315950130185323,
+    "score_cert": 2.3159501301876393,
+    "display": "2.315950",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/11",
+    "improvement_rel": 1.3726685726744847e-05
+   },
+   "notes": [
+    "Improves on the research value 2.315950 (score_cert 2.3159501301876393) by 0.00137%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 11}, {seed: 1, budget: {evals: 1358135}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/12",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 12,
+   "score_float": 2.3281711428792997,
+   "score_cert": 2.328171142881628,
+   "display": "2.328171",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.328171142881628,
+    "pieces": [
+     {
+      "cell": 2,
+      "u": [
+       -0.15890141642168915,
+       -0.22941116715031376,
+       -0.8085806375940936
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.16408557143218333,
+       -0.16408557143977787,
+       1.164085571437526
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -1.1640855713947396,
+       0.16408557143921376,
+       0.16408557143858873
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.8085806376165708,
+       -0.22941116715383436,
+       -0.15890141648735123
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.8085806376200717,
+       0.22941116715260648,
+       -0.1589014164788136
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.15890141656383394,
+       0.2294111671856624,
+       0.8085806375310264
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.16408557131794083,
+       1.164085571440814,
+       -0.16408557143829464
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.22941116707906406,
+       0.8085806375839446,
+       0.15890141641620595
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.22941116717522927,
+       -0.8085806375586775,
+       0.1589014165433841
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.15890141642625147,
+       -0.8085806376021997,
+       -0.2294111671554457
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       1.1640855713983198,
+       -0.1640855714398139,
+       0.1640855714393391
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.15890141635709545,
+       0.8085806375512342,
+       0.2294111671773694
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.000000000001,
+    "min_distance": 2.000000000002013,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 24,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.8452701486440284,
+    "exact": "(12 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.8452701486440284,
+     "exact": "(12 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.26169663807353793,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.26199931988618697,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 21,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 0,
+    "extra_s": 40.0,
+    "starts": [
+     20,
+     13
+    ],
+    "wall_s": 124.8
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 21,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 2.328171142903359,
+    "seeds_rel_spread": 1.0334043180473423e-11,
+    "file": "data/boundary/sources/research_round2.json#balls/12"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "The research search's two independent seeds (21, 22) agree to 1.0e-11 relative: evidence of the best basin found, not a proof.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/13",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 13,
+   "score_float": 2.3974954214219517,
+   "score_cert": 2.3974954214243493,
+   "display": "2.397495",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.3974954214243493,
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       0.3727041733873014,
+       -0.6351413991285504,
+       -0.37270417338906675
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.2197837785626688,
+       0.21904084510193805,
+       -0.9947143321426221
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.21050814486611022,
+       1.0458341386772403,
+       -0.21050814486945202
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.24471429044302012,
+       -0.89904747209167,
+       -0.020279707977054657
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.20561818576284205,
+       0.19370722188626854,
+       0.9593561313554686
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.20880672573401518,
+       0.20880672573430703,
+       1.057266806461364
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.5780605047623979,
+       0.4146894269269324,
+       0.4146894269232964
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.1826601604765641,
+       1.0409874995349782,
+       0.21127025988108675
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.2576605986007375,
+       -0.8605834792685136,
+       0.17210117763332028
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.21728356047523828,
+       -0.2172835604713587,
+       1.0071018868326633
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.16336809671765634,
+       -0.08494765827827179,
+       -0.9205207688090042
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.36259091090993106,
+       0.6477849137242521,
+       0.36421790515536784
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.21441369286058187,
+       0.003865404665214088,
+       -1.0224339525626565
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000009999,
+    "min_distance": 2.000000000007068,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 33,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.8951662989028446,
+    "exact": "(13 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.8951662989028446,
+     "exact": "(13 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.26505807053044084,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.24002440413768056,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 13}, {seed: 1, budget: {evals: 7650384}})",
+   "seed": 1,
+   "budget": {
+    "evals": 7650384,
+    "evals_used": 7650384,
+    "ended": "evals",
+    "starts": 1926,
+    "wall_s": 43.9
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 13}, {seed: 1, budget: {evals: 7650384}})",
+    "seed": 1,
+    "evals": 7650384,
+    "value": 2.3974954214219517,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/13"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 2.39762378657154,
+    "score_cert": 2.397623786573938,
+    "display": "2.397624",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/13",
+    "improvement_rel": 5.353848685818452e-05
+   },
+   "notes": [
+    "Improves on the research value 2.397624 (score_cert 2.397623786573938) by 0.00535%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 13}, {seed: 1, budget: {evals: 7650384}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/14",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 14,
+   "score_float": 2.4354308255064634,
+   "score_cert": 2.43543082551377,
+   "display": "2.435431",
+   "gap_rel": 3.000044657142098e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.43543082551377,
+    "pieces": [
+     {
+      "cell": 6,
+      "u": [
+       -1.0499241632570322,
+       0.23189286452885816,
+       0.10977526310796537
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.2587600859732557,
+       -0.9341582205795027,
+       -0.028864253931083557
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.21771541275605277,
+       0.21771541275605608,
+       1.2177154127567964
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0288642539311681,
+       -0.2587600859732636,
+       -0.9341582205794717
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.23189286452885288,
+       -0.1097752631080508,
+       1.049924163257034
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.3200480429089806,
+       -0.7770417317685843,
+       0.32004804290964217
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -1.0499241632569913,
+       -0.23189286452886915,
+       0.10977526310793748
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.32004804290958205,
+       0.3200480429089339,
+       -0.777041731768684
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.21771541275605358,
+       1.217715412756885,
+       0.21771541275605652
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.9341582205794874,
+       -0.028864253931122245,
+       0.25876008597326916
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.777041731768589,
+       -0.32004804290960764,
+       0.3200480429089731
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.9341582205794569,
+       0.02886425393120616,
+       0.25876008597327504
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.3200480429090181,
+       0.7770417317684957,
+       0.3200480429096587
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.1097752631080197,
+       1.0499241632569944,
+       -0.23189286452885968
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000008284,
+    "min_distance": 2.000000000003875,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 34,
+    "k": 3,
+    "lambda": 1.000000000003,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.9425649689427535,
+    "exact": "(14 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.9425649689427535,
+     "exact": "(14 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.2537191107895145,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.22799936289430434,
+   "method": "research prototype, round 2 (balls_round2.py): two independent seeds; per seed a 60 s screen (random starts, the P-1 packing plus a ball, hops; penalty compression with exact lattice-word distances and closed-form clearance, L-BFGS-B with re-charting across faces), then up to two 40 s rounds while the seeds differ by more than 1e-6 relative; the better seed's packing polished by bisection on s to 1e-10",
+   "seed": 22,
+   "budget": {
+    "screen_s": 60.0,
+    "extra_rounds": 2,
+    "extra_s": 40.0,
+    "starts": [
+     28,
+     26
+    ],
+    "wall_s": 326.7
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "balls_round2.py",
+    "seed": 22,
+    "seeds": [
+     21,
+     22
+    ],
+    "other_seed_score": 2.435430825701749,
+    "seeds_rel_spread": 8.01852236783178e-11,
+    "file": "data/boundary/sources/research_round2.json#balls/14"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "The research search's two independent seeds (21, 22) agree to 8.0e-11 relative: evidence of the best basin found, not a proof.",
+    "Certified strictly valid at score_cert = s (1 + 3e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/15",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 15,
+   "score_float": 2.503239532990224,
+   "score_cert": 2.5032395329927275,
+   "display": "2.503240",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.5032395329927275,
+    "pieces": [
+     {
+      "cell": 3,
+      "u": [
+       -0.2823145430196943,
+       -0.7616541357549638,
+       0.28629705114585136
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.27854284889693304,
+       -0.21949022177324148,
+       1.0211391546379012
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.31312478634779983,
+       0.31312478535469057,
+       -0.9063268875630723
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.9687221006922385,
+       0.2924696666543228,
+       -0.292469668385918
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.26914264683436556,
+       -0.14678623291609294,
+       -1.0652365340133496
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.28297135116329925,
+       -1.0031841661961511,
+       -0.2829713509602741
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.26333709033629976,
+       -0.0588009564095581,
+       1.0989850653083089
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.2605872403086263,
+       -1.0150316962895598,
+       0.28000971866612956
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.2517150881005245,
+       1.237812734544813,
+       0.2517150877440424
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.8827362750754058,
+       0.32214412412536597,
+       -0.3221441241214126
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.3167354156598406,
+       0.8966673040824595,
+       0.16998479912091577
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.25660853754519336,
+       0.9278300975361574,
+       -0.2594216329468592
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.39638121576206725,
+       0.39638121576396196,
+       -0.7333852430003488
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       1.0232067171230768,
+       0.23763505908113242,
+       0.27805544972923874
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -1.0034730945909756,
+       -0.039084492244410116,
+       -0.26971112168029054
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000010003,
+    "min_distance": 2.0000000000063456,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 37,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.9877570103594926,
+    "exact": "(15 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.9877570103594926,
+     "exact": "(15 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.25932874086053825,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.2065048639208461,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 15}, {seed: 1, budget: {evals: 5026907}})",
+   "seed": 1,
+   "budget": {
+    "evals": 5026907,
+    "evals_used": 5026907,
+    "ended": "evals",
+    "starts": 976,
+    "wall_s": 49.2
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 15}, {seed: 1, budget: {evals: 5026907}})",
+    "seed": 1,
+    "evals": 5026907,
+    "value": 2.503239532990224,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/15"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 2.5048107933517603,
+    "score_cert": 2.5048107933567696,
+    "display": "2.504811",
+    "k": 2,
+    "file": "data/boundary/sources/research_round2.json#balls/15",
+    "improvement_rel": 0.0006272970270686518
+   },
+   "notes": [
+    "Improves on the research value 2.504811 (score_cert 2.5048107933567696) by 0.0627%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 15}, {seed: 1, budget: {evals: 5026907}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/ball/16",
+   "polytope": "tesseract",
+   "piece": "ball",
+   "P": 16,
+   "score_float": 2.526573725740477,
+   "score_cert": 2.526573725743004,
+   "display": "2.526574",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 2.526573725743004,
+    "pieces": [
+     {
+      "cell": 3,
+      "u": [
+       -0.5856163049518288,
+       -0.5279212292454327,
+       0.5279212293728731
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       1.2168954185851508,
+       -0.23044006685543986,
+       0.26436352546662745
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.1251999174590722,
+       -1.2442711729161027,
+       -0.0013904392527866512
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.508261696014012,
+       0.6075910511537242,
+       -0.5082616960606754
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -1.1232175170916803,
+       0.2731451667602664,
+       -0.27314516675730194
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.26828703150630506,
+       0.26828703171002616,
+       1.163410258685973
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.5351960292348751,
+       -0.5085493995983471,
+       0.5095878673796784
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.2812207479277509,
+       0.2812207476517531,
+       -1.0747500070919598
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.31208549286068576,
+       0.3119756351832294,
+       0.953530928458799
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.08585212927043911,
+       0.2635698109935371,
+       -1.2394999716883364
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.268287887959706,
+       -1.1634017254817701,
+       -0.26638245615664996
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.6121060688750566,
+       -0.4830488718540937,
+       -0.5043642228481047
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.5561800819994551,
+       0.5561800813433612,
+       -0.5561800812199208
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -1.1784335088342137,
+       0.0177774210288142,
+       0.2668934123013421
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       1.2333461234001966,
+       0.2637351873031841,
+       0.2637351871649124
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.21077940315192217,
+       -0.3474967818660243,
+       -0.8615761497269165
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "words_per_cell": 1957,
+    "min_clearance": 1.0000000000010003,
+    "min_distance": 2.0000000000079865,
+    "min_loop": null,
+    "pairs_within_2_in_R4": 38,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 2.030982595126518,
+    "exact": "(16 pi/6)^(1/3)",
+    "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 2.030982595126518,
+     "exact": "(16 pi/6)^(1/3)",
+     "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 1.414213562373095,
+     "exact": "sqrt 2",
+     "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.24401544937198905,
+   "nofold": {
+    "value": 3.1547005383792515,
+    "exact": "2 + 2/sqrt 3",
+    "pieces_per_cell": 2,
+    "source": "[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.19910822120741734,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 16}, {seed: 1, budget: {evals: 779083}})",
+   "seed": 1,
+   "budget": {
+    "evals": 779083,
+    "evals_used": 779083,
+    "ended": "evals",
+    "starts": 133,
+    "wall_s": 5.8
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 16}, {seed: 1, budget: {evals: 779083}})",
+    "seed": 1,
+    "evals": 779083,
+    "value": 2.526573725740477,
+    "file": "data/boundary/sources/search_2026-10-25.json#ball/16"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 2.528105371068084,
+    "score_cert": 2.528105371070612,
+    "display": "2.528105",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#balls/16",
+    "improvement_rel": 0.0006058471079311012
+   },
+   "notes": [
+    "Improves on the research value 2.528105 (score_cert 2.528105371070612) by 0.0606%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"ball\", P: 16}, {seed: 1, budget: {evals: 779083}}).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/1",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 1,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 1,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 0.7071067811865475,
+    "exact": "1/sqrt 2",
+    "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.5,
+     "exact": "(1/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.41421356237450957,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only 1/sqrt 2.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/2",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 2,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 2,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "one piece",
+    "value": 0.7071067811865475,
+    "exact": "1/sqrt 2",
+    "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.6299605249474365,
+     "exact": "(2/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.41421356237450957,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only 1/sqrt 2.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/3",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 3,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 3,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 0.7211247851537042,
+    "exact": "(3/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.7211247851537042,
+     "exact": "(3/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.38672254870265643,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only (3/8)^(1/3).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/4",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 4,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 4,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 0.7937005259840997,
+    "exact": "(4/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.7937005259840997,
+     "exact": "(4/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.2599210498961333,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only (4/8)^(1/3).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/5",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 5,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 5,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 0.8549879733383484,
+    "exact": "(5/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.8549879733383484,
+     "exact": "(5/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.16960709528631623,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only (5/8)^(1/3).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/6",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 6,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 6,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 0.9085602964160697,
+    "exact": "(6/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.9085602964160697,
+     "exact": "(6/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.10064241629930981,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only (6/8)^(1/3).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/7",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 7,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 7,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 0.9564655913861945,
+    "exact": "(7/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 0.9564655913861945,
+     "exact": "(7/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.04551591715046621,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] One cube per cell at s = 1. A search found no unit cube on a tesseract of edge below 1 (numerical evidence, research note section 4); the proven bound is only (7/8)^(1/3).",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/8",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 8,
+   "score_float": 1.0,
+   "score_cert": 1.000000000001,
+   "display": "1.000000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.000000000001,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": null,
+    "parts": 8,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.0,
+    "exact": "(8/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.0,
+     "exact": "(8/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 1.000088900582341e-12,
+   "nofold": {
+    "value": 1.0,
+    "exact": "1",
+    "pieces_per_cell": 1,
+    "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"
+   },
+   "fold_gain": 0.0,
+   "method": "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1",
+   "seed": null,
+   "budget": null,
+   "provenance": {
+    "source": "PolyPack research note, 2026-10-24 (exact constructions, section 3)",
+    "date": "2026-10-24",
+    "kind": "exact"
+   },
+   "software": "PolyPack boundary research note; certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "notes": [
+    "[CALC] Meets its lower bound (8/8)^(1/3) (volume) (the 8 cubes fill the boundary): score_cert / bound - 1 = 1.0e-12. The bound is derived in BOUNDARY.md section 5, not taken from a published proof, so the status stays best_known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/9",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 9,
+   "score_float": 1.25,
+   "score_cert": 1.2500000000012501,
+   "display": "1.250000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.2500000000012501,
+    "pieces": [
+     {
+      "cell": 3,
+      "u": [
+       0.37500000000037503,
+       0.0339803102155854,
+       -0.125000000000125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.6250000000006251,
+       0.12498858434145244,
+       -0.125000000000125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.37500000000037503,
+       -0.125000000000125,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125000000000125,
+       -0.1805587284687535,
+       0.11615328510543767
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.125000000000125,
+       -0.6250000000006251,
+       0.12216186551466461
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.06711322594947197,
+       0.37500000000037503,
+       0.06461745574179786
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.124997274941996,
+       0.12005044743458794,
+       0.021399707691947184
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.05973554618465761,
+       0.055323582765229855,
+       0.11588333234671358
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.04540751017008286,
+       0.0,
+       0.3649596004896295
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 16,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "5/4",
+    "pieces": [
+     {
+      "cell": 3,
+      "u": [
+       0.375,
+       0.03398031021555142,
+       -0.125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.625,
+       0.12498858434132744,
+       -0.125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.375,
+       -0.125,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125,
+       -0.18055872846857293,
+       0.11615328510532151
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.125,
+       -0.625,
+       0.12216186551454244
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.06711322594940486,
+       0.375,
+       0.06461745574173323
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.12499727494187099,
+       0.12005044743446788,
+       0.02139970769192578
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.059735546184597865,
+       0.055323582765174524,
+       0.11588333234659769
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.045407510170037454,
+       0.0,
+       0.3649596004892645
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 5/4 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.040041911525952,
+    "exact": "(9/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.040041911525952,
+     "exact": "(9/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.20187464192404225,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.375,
+   "method": "research prototype, round 2 (cubes_aligned.py): axis-aligned cubes in any cells crossing faces in any direction (box parts, exact penetration and line-crossing energy, L-BFGS-B with re-charting, compression; starts from the two-rings layout, random, hops); one seed per P range",
+   "seed": 31,
+   "budget": {
+    "seconds": 40.0,
+    "starts": 83
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "cubes_aligned.py",
+    "seed": 31,
+    "file": "data/boundary/sources/research_round2.json#cubes/9",
+    "exact": "snapped to exact s = 5/4: 12 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.2500001544058679,
+    "score_cert": 1.250000154407118,
+    "display": "1.250000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/9",
+    "improvement_rel": 1.2352467904097608e-07
+   },
+   "notes": [
+    "Improves on the research value 1.250000 (score_cert 1.250000154407118) by 1.24e-05%: from the research layout made exact (snapped to exact s = 5/4: 12 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 5/4: the research layout scaled to 5/4, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (12 of 27), is valid at exactly s = 5/4 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 5/4 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/10",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 10,
+   "score_float": 1.25,
+   "score_cert": 1.2500000000012501,
+   "display": "1.250000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.2500000000012501,
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       -0.125000000000125,
+       0.0589507924051835,
+       0.33501858204931145
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.6250000000006251,
+       -0.125000000000125,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.11979544582890914,
+       0.125000000000125,
+       -0.2614687282544445
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.37500000000037503,
+       -0.050285889010461084,
+       0.0978489299878505
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.37500000000037503,
+       -0.125000000000125,
+       -0.11804730430870373
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125000000000125,
+       0.06754178281072405,
+       -0.6250000000006251
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.37500000000037503,
+       0.04882933178866404,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.1246499510879514,
+       0.37500000000037503,
+       -0.09017615031416186
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125000000000125,
+       -0.37500000000037503,
+       -0.08943538376355686
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125000000000125,
+       0.6250000000006251,
+       -0.11022529013623315
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 20,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "5/4",
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       -0.125,
+       0.05895079240512455,
+       0.3350185820489764
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.625,
+       -0.125,
+       0.125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.11979544582878933,
+       0.125,
+       -0.261468728254183
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.375,
+       -0.05028588901041079,
+       0.09784892998775264
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.375,
+       -0.125,
+       -0.11804730430858568
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125,
+       0.06754178281065651,
+       -0.625
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.375,
+       0.048829331788615205,
+       0.125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.12464995108782674,
+       0.375,
+       -0.09017615031407168
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125,
+       -0.375,
+       -0.08943538376346742
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125,
+       0.625,
+       -0.11022529013612292
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 5/4 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.0772173450159417,
+    "exact": "(10/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.0772173450159417,
+     "exact": "(10/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.16039720840435545,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.375,
+   "method": "the record for boundary/tesseract/cube/11 with its last piece removed; that record: PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}})",
+   "seed": 1,
+   "budget": {
+    "evals": 156372,
+    "evals_used": 156372,
+    "ended": "evals",
+    "starts": 93,
+    "wall_s": 0.5
+   },
+   "provenance": {
+    "kind": "subset",
+    "from": "boundary/tesseract/cube/11",
+    "dropped": "its last piece",
+    "parent": {
+     "source": "PolyPack boundary search",
+     "method": "PolyPack boundary search",
+     "date": "2026-10-25",
+     "kind": "search",
+     "call": "searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}})",
+     "seed": 1,
+     "evals": 156372,
+     "value": 1.2500000000663907,
+     "file": "data/boundary/sources/search_2026-10-25.json#cube/11",
+     "exact": "snapped to exact s = 5/4: 19 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+    }
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.2500003658043473,
+    "score_cert": 1.2500003658055974,
+    "display": "1.250000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/10",
+    "improvement_rel": 2.9264339218570967e-07
+   },
+   "notes": [
+    "Improves on the research value 1.250000 (score_cert 1.2500003658055974) by 2.93e-05%: from the record for boundary/tesseract/cube/11 minus pieces, which comes from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}}) made exact (snapped to exact s = 5/4: 19 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "The record for boundary/tesseract/cube/11 with its last piece removed (a subset of a valid packing is valid).",
+    "[CALC] Exact construction at s = 5/4: the exact construction of boundary/tesseract/cube/11 without its last piece (field exact).",
+    "[SPEC] that 5/4 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/11",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 11,
+   "score_float": 1.25,
+   "score_cert": 1.2500000000012501,
+   "display": "1.250000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.2500000000012501,
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       -0.125000000000125,
+       0.0589507924051835,
+       0.33501858204931145
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.6250000000006251,
+       -0.125000000000125,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.11979544582890914,
+       0.125000000000125,
+       -0.2614687282544445
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.37500000000037503,
+       -0.050285889010461084,
+       0.0978489299878505
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.37500000000037503,
+       -0.125000000000125,
+       -0.11804730430870373
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125000000000125,
+       0.06754178281072405,
+       -0.6250000000006251
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.37500000000037503,
+       0.04882933178866404,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.1246499510879514,
+       0.37500000000037503,
+       -0.09017615031416186
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125000000000125,
+       -0.37500000000037503,
+       -0.08943538376355686
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125000000000125,
+       0.6250000000006251,
+       -0.11022529013623315
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125000000000125,
+       -0.008897509718634598,
+       0.37500000000037503
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 22,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "5/4",
+    "pieces": [
+     {
+      "cell": 7,
+      "u": [
+       -0.125,
+       0.05895079240512455,
+       0.3350185820489764
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.625,
+       -0.125,
+       0.125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.11979544582878933,
+       0.125,
+       -0.261468728254183
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.375,
+       -0.05028588901041079,
+       0.09784892998775264
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.375,
+       -0.125,
+       -0.11804730430858568
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125,
+       0.06754178281065651,
+       -0.625
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.375,
+       0.048829331788615205,
+       0.125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.12464995108782674,
+       0.375,
+       -0.09017615031407168
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125,
+       -0.375,
+       -0.08943538376346742
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.125,
+       0.625,
+       -0.11022529013612292
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.125,
+       -0.008897509718625699,
+       0.375
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 5/4 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.1119900452846576,
+    "exact": "(11/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.1119900452846576,
+     "exact": "(11/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.12411078255764729,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.375,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}})",
+   "seed": 1,
+   "budget": {
+    "evals": 156372,
+    "evals_used": 156372,
+    "ended": "evals",
+    "starts": 93,
+    "wall_s": 0.5
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}})",
+    "seed": 1,
+    "evals": 156372,
+    "value": 1.2500000000663907,
+    "file": "data/boundary/sources/search_2026-10-25.json#cube/11",
+    "exact": "snapped to exact s = 5/4: 19 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.3333333983711224,
+    "score_cert": 1.3333333983724558,
+    "display": "1.333333",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/11",
+    "improvement_rel": 0.06250004572969314
+   },
+   "notes": [
+    "Improves on the research value 1.333333 (score_cert 1.3333333983724558) by 6.25%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 11}, {seed: 1, budget: {evals: 156372}}) made exact (snapped to exact s = 5/4: 19 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 5/4: the search layout scaled to 5/4, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (19 of 33), is valid at exactly s = 5/4 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 5/4 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/12",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 12,
+   "score_float": 1.25,
+   "score_cert": 1.2500000000012501,
+   "display": "1.250000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.2500000000012501,
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       0.07429196862126525,
+       -0.125000000000125,
+       -0.37500000000037503
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.6250000000006251,
+       0.125000000000125,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.125000000000125,
+       -0.125000000000125,
+       0.6250000000006251
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.37500000000037503,
+       0.11875294756595954,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.125000000000125,
+       0.6250000000006251,
+       -0.125000000000125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.125000000000125,
+       -0.10760870191082576,
+       0.37500000000037503
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.6250000000006251,
+       -0.125000000000125,
+       0.125000000000125
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.125000000000125,
+       0.10887326876441744,
+       0.37500000000037503
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.08681738159522522,
+       -0.37500000000037503,
+       -0.125000000000125
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.125000000000125,
+       -0.37500000000037503,
+       -0.08622368417905636
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.37500000000037503,
+       -0.125000000000125,
+       0.06339754963645161
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.37500000000037503,
+       -0.11867577574415761,
+       0.125000000000125
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 24,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "5/4",
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       0.07429196862119095,
+       -0.125,
+       -0.375
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.625,
+       0.125,
+       0.125
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.125,
+       -0.125,
+       0.625
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.375,
+       0.11875294756584077,
+       0.125
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.125,
+       0.625,
+       -0.125
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.125,
+       -0.10760870191071814,
+       0.375
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.625,
+       -0.125,
+       0.125
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.125,
+       0.10887326876430856,
+       0.375
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.0868173815951384,
+       -0.375,
+       -0.125
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.125,
+       -0.375,
+       -0.08622368417897013
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.375,
+       -0.125,
+       0.0633975496363882
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.375,
+       -0.11867577574403892,
+       0.125
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 5/4 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.1447142425533317,
+    "exact": "(12/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.1447142425533317,
+     "exact": "(12/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.09197558092146596,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.375,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 12}, {seed: 1, budget: {evals: 490433}})",
+   "seed": 1,
+   "budget": {
+    "evals": 490433,
+    "evals_used": 490433,
+    "ended": "evals",
+    "starts": 317,
+    "wall_s": 2
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 12}, {seed: 1, budget: {evals: 490433}})",
+    "seed": 1,
+    "evals": 490433,
+    "value": 1.250000000085737,
+    "file": "data/boundary/sources/search_2026-10-25.json#cube/12",
+    "exact": "snapped to exact s = 5/4: 28 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.5000002456126091,
+    "score_cert": 1.5000002456141093,
+    "display": "1.500000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/12",
+    "improvement_rel": 0.1666668031180939
+   },
+   "notes": [
+    "Improves on the research value 1.500000 (score_cert 1.5000002456141093) by 16.7%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 12}, {seed: 1, budget: {evals: 490433}}) made exact (snapped to exact s = 5/4: 28 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 5/4: the search layout scaled to 5/4, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (28 of 36), is valid at exactly s = 5/4 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 5/4 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/13",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 13,
+   "score_float": 1.3333333333333333,
+   "score_cert": 1.3333333333346666,
+   "display": "1.333333",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.3333333333346666,
+    "pieces": [
+     {
+      "cell": 2,
+      "u": [
+       -0.49948139898790445,
+       -0.16666666666683333,
+       0.01281788992657183
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.13217674582939729,
+       -0.16666666666683333,
+       -0.3475078112723028
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.5005228596797954,
+       -0.16666666666683333,
+       -0.14456998479256597
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.16666666666683333,
+       0.16611387517454393,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.16640799888112684,
+       0.5000000000005,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.08464308238286307,
+       -0.32012358009695296,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.16770014696757987,
+       -0.16666666666683333,
+       0.16663339486972653
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.16640799888112684,
+       -0.5000000000005,
+       -0.15280459557364776
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.16407090575963348,
+       -0.014544563258223448,
+       0.5000000000005
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.16666666666683333,
+       0.5000000000005,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.16666666666683333,
+       -0.5000000000005,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.16666666666683333,
+       -0.048846103357717566,
+       -0.5000000000005
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.13056576669135175,
+       -0.16666666666683333,
+       0.6529587828183081
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 4.999889391399392e-13,
+    "min_part_separation": 9.999223671286472e-13,
+    "parts": 25,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "4/3",
+    "pieces": [
+     {
+      "cell": 2,
+      "u": [
+       -0.4994813989874049,
+       "-1/6",
+       0.01281788992655901
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.13217674582926509,
+       "-1/6",
+       -0.34750781127195524
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.5005228596792948,
+       "-1/6",
+       -0.1445699847924214
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       "1/6",
+       0.1661138751743778,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.16640799888096042,
+       0.5,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.08464308238277841,
+       -0.32012358009663283,
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.16770014696741214,
+       "-1/6",
+       0.1666333948695599
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.16640799888096042,
+       -0.5,
+       -0.15280459557349493
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.1640709057594694,
+       -0.014544563258208902,
+       0.5
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       "1/6",
+       0.5,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       "1/6",
+       -0.5,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       "1/6",
+       -0.048846103357668716,
+       -0.5
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.13056576669122116,
+       "-1/6",
+       0.6529587828176551
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 4/3 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.1756673438603786,
+    "exact": "(13/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.1756673438603786,
+     "exact": "(13/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.13410765408910796,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.33333333333333337,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 13}, {seed: 1, budget: {evals: 298374}})",
+   "seed": 1,
+   "budget": {
+    "evals": 298374,
+    "evals_used": 298374,
+    "ended": "evals",
+    "starts": 191,
+    "wall_s": 1.1
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 13}, {seed: 1, budget: {evals: 298374}})",
+    "seed": 1,
+    "evals": 298374,
+    "value": 1.3333333333977646,
+    "file": "data/boundary/sources/search_2026-10-25.json#cube/13",
+    "exact": "snapped to exact s = 4/3: 20 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.5000002153190488,
+    "score_cert": 1.500000215320549,
+    "display": "1.500000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/13",
+    "improvement_rel": 0.11111123870756623
+   },
+   "notes": [
+    "Improves on the research value 1.500000 (score_cert 1.500000215320549) by 11.1%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 13}, {seed: 1, budget: {evals: 298374}}) made exact (snapped to exact s = 4/3: 20 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 4/3: the search layout scaled to 4/3, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (20 of 39), is valid at exactly s = 4/3 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 4/3 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/14",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 14,
+   "score_float": 1.3333333333333333,
+   "score_cert": 1.3333333333346666,
+   "display": "1.333333",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.3333333333346666,
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       0.5000000000005,
+       -0.16666666666683333,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.5000000000005,
+       0.16666666666683333,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.014488140073909833,
+       0.16666666666683333,
+       -0.5000000000005
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.005268378988310257,
+       0.5000000000005,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.16666666666683333,
+       0.16666666666683333,
+       0.5000000000005
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.5000000000005,
+       0.16666666666683333,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.5000000000005,
+       0.16666666666683333,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.07248681271101938,
+       0.16666666666683333,
+       -0.5000000000005
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.5000000000005,
+       -0.16666666666683333,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.06326002209617901,
+       0.16666666666683333,
+       0.5000000000005
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       -0.16666666666683333,
+       -0.24378258168378014,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.16666666666683333,
+       -0.3275682007140838,
+       0.16666666666683333
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.005273791183487251,
+       -0.5000000000005,
+       -0.16666666666683333
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.5000000000005,
+       0.16666666666683333,
+       0.16666666666683333
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 4.999889391399392e-13,
+    "min_part_separation": 9.999223671286472e-13,
+    "parts": 28,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "4/3",
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       0.5,
+       "-1/6",
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.5,
+       "1/6",
+       "1/6"
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.014488140073895343,
+       "1/6",
+       -0.5
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.005268378988304988,
+       0.5,
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       "1/6",
+       "1/6",
+       0.5
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       -0.5,
+       "1/6",
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.5,
+       "1/6",
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.07248681271094688,
+       "1/6",
+       -0.5
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.5,
+       "-1/6",
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.06326002209611574,
+       "1/6",
+       0.5
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       "-1/6",
+       -0.24378258168353634,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       "-1/6",
+       -0.32756820071375625,
+       "1/6"
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.005273791183481977,
+       -0.5,
+       "-1/6"
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.5,
+       "1/6",
+       "1/6"
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 4/3 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.2050711320876148,
+    "exact": "(14/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.2050711320876148,
+     "exact": "(14/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.10643537782276447,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.33333333333333337,
+   "method": "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics (balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final polish valid at tolerance 0; one deterministic call searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 14}, {seed: 1, budget: {evals: 2007977}})",
+   "seed": 1,
+   "budget": {
+    "evals": 2007977,
+    "evals_used": 2007977,
+    "ended": "evals",
+    "starts": 1275,
+    "wall_s": 8.1
+   },
+   "provenance": {
+    "source": "PolyPack boundary search",
+    "method": "PolyPack boundary search",
+    "date": "2026-10-25",
+    "kind": "search",
+    "call": "searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 14}, {seed: 1, budget: {evals: 2007977}})",
+    "seed": 1,
+    "evals": 2007977,
+    "value": 1.333333333388481,
+    "file": "data/boundary/sources/search_2026-10-25.json#cube/14",
+    "exact": "snapped to exact s = 4/3: 35 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary search (packages/boundary/src/search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack boundary search",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.5000002153190495,
+    "score_cert": 1.5000002153205496,
+    "display": "1.500000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/14",
+    "improvement_rel": 0.11111123870756667
+   },
+   "notes": [
+    "Improves on the research value 1.500000 (score_cert 1.5000002153205496) by 11.1%: from the PolyPack boundary search, searchBoundary({polytope: \"tesseract\", piece: \"cube\", P: 14}, {seed: 1, budget: {evals: 2007977}}) made exact (snapped to exact s = 4/3: 35 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 4/3: the search layout scaled to 4/3, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (35 of 42), is valid at exactly s = 4/3 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 4/3 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/15",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 15,
+   "score_float": 1.5,
+   "score_cert": 1.5000000000015001,
+   "display": "1.500000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.5000000000015001,
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       -0.25000000000025,
+       -0.2561354319623288,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.25000000000025,
+       0.7500000000007501,
+       0.23898566012195205
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.24993936026068114,
+       -0.24775661534766744,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.2476546754633086,
+       0.25000000000025,
+       -0.1531976286818754
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24792424111587577,
+       -0.7500000000007501,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.25000108062219445,
+       -0.25000000000025,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.7500000000007501,
+       0.25000000000025,
+       -0.23692852264177408
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25000000000025,
+       0.25000000000025,
+       -0.5007375992197695
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.25000000000025,
+       -0.25000000000025,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.23214351942803738,
+       -0.1782673979403862,
+       -0.7500000000007501
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.7500000000007501,
+       -0.25000000000025,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.25000000000025,
+       -0.2601786581186487,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.7500000000007501,
+       -0.25000000000025,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25000000000025,
+       0.25000000000025,
+       0.5923369516315012
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.25000000000025,
+       -0.24373213498058985,
+       0.19648708418649188
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 26,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "3/2",
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       -0.25,
+       -0.2561354319620726,
+       -0.25
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.25,
+       0.75,
+       0.23898566012171304
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.24993936026043118,
+       -0.24775661534741966,
+       -0.25
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24765467546306094,
+       0.25,
+       -0.15319762868172218
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24792424111562783,
+       -0.75,
+       -0.25
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.2500010806219444,
+       -0.25,
+       0.25
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.75,
+       0.25,
+       -0.23692852264153713
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25,
+       0.25,
+       -0.5007375992192686
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.25,
+       -0.25,
+       -0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.2321435194278052,
+       -0.17826739794020793,
+       -0.75
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.75,
+       -0.25,
+       -0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.25,
+       -0.26017865811838853,
+       0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.75,
+       -0.25,
+       0.25
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25,
+       0.25,
+       0.5923369516309088
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.25,
+       -0.2437321349803461,
+       0.19648708418629537
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 3/2 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.233106037165235,
+    "exact": "(15/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.233106037165235,
+     "exact": "(15/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.21644039911589674,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.25,
+   "method": "the record for boundary/tesseract/cube/16 with its last piece removed; that record: research prototype, round 2 (cubes_aligned.py): axis-aligned cubes in any cells crossing faces in any direction (box parts, exact penetration and line-crossing energy, L-BFGS-B with re-charting, compression; starts from the two-rings layout, random, hops); one seed per P range",
+   "seed": 32,
+   "budget": {
+    "seconds": 70.0,
+    "starts": 54
+   },
+   "provenance": {
+    "kind": "subset",
+    "from": "boundary/tesseract/cube/16",
+    "dropped": "its last piece",
+    "parent": {
+     "source": "PolyPack research, round 2",
+     "date": "2026-10-24",
+     "kind": "search",
+     "program": "cubes_aligned.py",
+     "seed": 32,
+     "file": "data/boundary/sources/research_round2.json#cubes/16",
+     "exact": "snapped to exact s = 3/2: 32 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+    }
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.5000001402750724,
+    "score_cert": 1.5000001402765726,
+    "display": "1.500000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/15",
+    "improvement_rel": 9.351670626767117e-08
+   },
+   "notes": [
+    "Improves on the research value 1.500000 (score_cert 1.5000001402765726) by 9.35e-06%: from the record for boundary/tesseract/cube/16 minus pieces, which comes from the research layout made exact (snapped to exact s = 3/2: 32 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "The record for boundary/tesseract/cube/16 with its last piece removed (a subset of a valid packing is valid).",
+    "[CALC] Exact construction at s = 3/2: the exact construction of boundary/tesseract/cube/16 without its last piece (field exact).",
+    "[SPEC] that 3/2 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  },
+  {
+   "id": "boundary/tesseract/cube/16",
+   "polytope": "tesseract",
+   "piece": "cube",
+   "P": 16,
+   "score_float": 1.5,
+   "score_cert": 1.5000000000015001,
+   "display": "1.500000",
+   "gap_rel": 1.000088900582341e-12,
+   "status": "best_known",
+   "config": {
+    "s": 1.5000000000015001,
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       -0.25000000000025,
+       -0.2561354319623288,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.25000000000025,
+       0.7500000000007501,
+       0.23898566012195205
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.24993936026068114,
+       -0.24775661534766744,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.2476546754633086,
+       0.25000000000025,
+       -0.1531976286818754
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24792424111587577,
+       -0.7500000000007501,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.25000108062219445,
+       -0.25000000000025,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.7500000000007501,
+       0.25000000000025,
+       -0.23692852264177408
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25000000000025,
+       0.25000000000025,
+       -0.5007375992197695
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.25000000000025,
+       -0.25000000000025,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.23214351942803738,
+       -0.1782673979403862,
+       -0.7500000000007501
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.7500000000007501,
+       -0.25000000000025,
+       -0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.25000000000025,
+       -0.2601786581186487,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.7500000000007501,
+       -0.25000000000025,
+       0.25000000000025
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25000000000025,
+       0.25000000000025,
+       0.5923369516315012
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.25000000000025,
+       -0.24373213498058985,
+       0.19648708418649188
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.25000000000025,
+       -0.25000000000025,
+       -0.7500000000007501
+      ]
+     }
+    ]
+   },
+   "certificate": {
+    "checker": "python/boundary/certify.py",
+    "version": "boundary-cert 1",
+    "strict": true,
+    "valid": true,
+    "min_edge_slack": 5.000444502911705e-13,
+    "min_part_separation": 1.000088900582341e-12,
+    "parts": 28,
+    "k": 1,
+    "lambda": 1.000000000001,
+    "rule": "first k >= 1 with s lam_k, u lam_k strictly valid, lam_k = 1 + k 1e-12 (binary64)",
+    "exact_valid": true
+   },
+   "exact": {
+    "field": "Q",
+    "s": "3/2",
+    "pieces": [
+     {
+      "cell": 4,
+      "u": [
+       -0.25,
+       -0.2561354319620726,
+       -0.25
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       -0.25,
+       0.75,
+       0.23898566012171304
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.24993936026043118,
+       -0.24775661534741966,
+       -0.25
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24765467546306094,
+       0.25,
+       -0.15319762868172218
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.24792424111562783,
+       -0.75,
+       -0.25
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.2500010806219444,
+       -0.25,
+       0.25
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.75,
+       0.25,
+       -0.23692852264153713
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25,
+       0.25,
+       -0.5007375992192686
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       -0.25,
+       -0.25,
+       -0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.2321435194278052,
+       -0.17826739794020793,
+       -0.75
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       -0.75,
+       -0.25,
+       -0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.25,
+       -0.26017865811838853,
+       0.25
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.75,
+       -0.25,
+       0.25
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25,
+       0.25,
+       0.5923369516309088
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.25,
+       -0.2437321349803461,
+       0.19648708418629537
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.25,
+       -0.25,
+       -0.75
+      ]
+     }
+    ],
+    "statement": "valid at exactly s = 3/2 (touching allowed), certified in rational arithmetic"
+   },
+   "bound": {
+    "kind": "volume",
+    "value": 1.259921049894873,
+    "exact": "(16/8)^(1/3)",
+    "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+    "rigorous": true
+   },
+   "bounds": [
+    {
+     "kind": "volume",
+     "value": 1.259921049894873,
+     "exact": "(16/8)^(1/3)",
+     "label": "[CALC] volume: the developed cubes have disjoint interiors, so P <= 8 s^3",
+     "rigorous": true
+    },
+    {
+     "kind": "one piece",
+     "value": 0.7071067811865475,
+     "exact": "1/sqrt 2",
+     "label": "[CALC] inscribed ball: the ball of radius 1/2 inside a cube must avoid the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges",
+     "rigorous": true
+    }
+   ],
+   "bound_gap_rel": 0.19055078897734035,
+   "nofold": {
+    "value": 2.0,
+    "exact": "2",
+    "pieces_per_cell": 2,
+    "source": "[EST] two unit cubes in a cube need edge 2: the cube-in-cube table of polyhedrainpolyhedra.wiki (n = 2), as cited by the PolyPack research note of 2026-10-24; upper bound [CALC] two cubes side by side. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)"
+   },
+   "fold_gain": 0.25,
+   "method": "research prototype, round 2 (cubes_aligned.py): axis-aligned cubes in any cells crossing faces in any direction (box parts, exact penetration and line-crossing energy, L-BFGS-B with re-charting, compression; starts from the two-rings layout, random, hops); one seed per P range",
+   "seed": 32,
+   "budget": {
+    "seconds": 70.0,
+    "starts": 54
+   },
+   "provenance": {
+    "source": "PolyPack research, round 2",
+    "date": "2026-10-24",
+    "kind": "search",
+    "program": "cubes_aligned.py",
+    "seed": 32,
+    "file": "data/boundary/sources/research_round2.json#cubes/16",
+    "exact": "snapped to exact s = 3/2: 32 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept"
+   },
+   "software": "PolyPack boundary research prototype (float search); certified by python/boundary/certify.py",
+   "found_by": "PolyPack research",
+   "previous": {
+    "source": "PolyPack research, round 2",
+    "score_float": 1.500000176560235,
+    "score_cert": 1.5000001765617352,
+    "display": "1.500000",
+    "k": 1,
+    "file": "data/boundary/sources/research_round2.json#cubes/16",
+    "improvement_rel": 1.1770680952150059e-07
+   },
+   "notes": [
+    "Improves on the research value 1.500000 (score_cert 1.5000001765617352) by 1.18e-05%: from the research layout made exact (snapped to exact s = 3/2: 32 coordinates within 1e-6 of a multiple of 1/24 moved onto it, the others kept).",
+    "[CALC] Exact construction at s = 3/2: the research layout scaled to 3/2, with every coordinate within 1e-6 of a multiple of 1/24 snapped to it (32 of 48), is valid at exactly s = 3/2 (rational arithmetic; field exact). The stored configuration is that construction in binary64.",
+    "[SPEC] that 3/2 is the optimum: no matching lower bound is known.",
+    "Certified strictly valid at score_cert = s (1 + 1e-12) by python/boundary/certify.py (exact rational arithmetic)."
+   ]
+  }
+ ]
+}

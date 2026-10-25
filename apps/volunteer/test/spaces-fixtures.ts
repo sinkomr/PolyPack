@@ -25,11 +25,20 @@ const find = (space: string, id: string) => {
   return r as Record<string, any>;
 };
 
-/** The record's configuration in the contract's format (surface records keep s and pieces at top level). */
+/**
+ * The record's configuration in the contract's format (surface records keep s and pieces at top level;
+ * polyhedra configurations are kept apart, one file per problem in data/polyhedra/configs/<code>.jsonl).
+ */
 export function recordConfig(space: string, id: string): SpaceConfig {
   const r = find(space, id);
   if (space === "surface") return { s: r.s, pieces: r.pieces };
   if (space === "torus") return r.configuration;
+  if (space === "polyhedra") {
+    // one line {"P", "config"} per P, at the byte offset and length the record's config_at gives
+    const file = readFileSync(new URL(`../../../data/polyhedra/configs/${r.code}.jsonl`, import.meta.url));
+    const [offset, length] = r.config_at as [number, number];
+    return JSON.parse(file.subarray(offset, offset + length).toString("utf8")).config;
+  }
   return r.config;
 }
 
@@ -40,6 +49,8 @@ export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold"
       return { ...c, rho: (c.rho as number) * f };
     case "curved":
       return { ...c, size: (c.size as number) * f };
+    case "polyhedra":
+      return { ...c, s: (c.s as number) * f };
     case "torus": {
       const l = c.lattice as { L?: number; b1?: number[]; b2?: number[] };
       const lattice = l.L !== undefined ? { L: l.L * f } : { b1: l.b1!.map((v) => v * f), b2: l.b2!.map((v) => v * f) };
@@ -51,6 +62,11 @@ export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold"
       // is the same as smaller pieces on the same solid
       const k = mode === "fold" ? f : 1;
       return { s: (c.s as number) * f, pieces: pieces.map((q) => ({ ...q, x: q.x * k, y: q.y * k })) };
+    }
+    case "boundary": {
+      // the tesseract and the centres scale together, which is the same as smaller pieces
+      const pieces = c.pieces as { cell: number; u: number[]; q?: number[] }[];
+      return { s: (c.s as number) * f, pieces: pieces.map((q) => ({ ...q, u: q.u.map((x) => x * f) })) };
     }
   }
   throw new Error(space);

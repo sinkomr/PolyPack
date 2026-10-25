@@ -4,7 +4,8 @@
 usage: python3 python/polyhedra/certify.py [records.json] [--out certification.json] [--jobs J] [--ids id,id]
                                            [--sample K --seed S]
 
-For every record of data/polyhedra/records.json it checks the published fields and proves the configuration valid:
+For every record of data/polyhedra/records.json, with its configuration from data/polyhedra/configs/<code>.jsonl (the line its config_at locates), it
+checks the published fields and proves the configuration valid:
 
   fields   id is polyhedra/<code>/<P> in its one written form with a known problem code; piece, container and family
            agree with the code; config has P poses of 7 JSON numbers; config.s == score_cert; display is score_cert
@@ -152,6 +153,39 @@ def certify_config(piece, container, s, pieces):
     }
 
 
+def load_records(path):
+    """The records file with every record's configuration attached: records.json keeps the index, and
+    configs/<code>.jsonl beside it the configurations of a problem, one line {"P", "config"} per P, at the byte
+    offset and length that the record's config_at gives (build_records.py writes both). A line that is not where
+    config_at says, or not the record's P, leaves the record without a configuration (field_errors reports it)."""
+    with open(path) as f:
+        doc = json.load(f)
+    cdir = os.path.join(os.path.dirname(os.path.abspath(path)), 'configs')
+    cache = {}
+    for r in doc['records']:
+        if not isinstance(r, dict) or 'config' in r or not isinstance(r.get('code'), str):
+            continue
+        code = r['code']
+        if code not in cache:
+            fn = os.path.join(cdir, f'{code}.jsonl') if catalogue.PROBLEMS.get(code) else None
+            try:
+                with open(fn, 'rb') as f:
+                    cache[code] = f.read()
+            except (OSError, TypeError):
+                cache[code] = b''
+        at = r.get('config_at')
+        if not (isinstance(at, list) and len(at) == 2 and all(isinstance(v, int) and v >= 0 for v in at)):
+            continue
+        raw = cache[code][at[0]:at[0] + at[1]]
+        try:
+            line = json.loads(raw)
+        except ValueError:
+            continue
+        if isinstance(line, dict) and line.get('P') == r.get('P') and 'config' in line:
+            r['config'] = line['config']
+    return doc
+
+
 def volume_bound(piece, container, P, volumes):
     return (P * volumes[piece] / volumes[container]) ** (1.0 / 3.0)
 
@@ -270,7 +304,7 @@ def main(argv=None):
     ap.add_argument('--sample', type=int, help='check K records drawn at random')
     ap.add_argument('--seed', type=int, default=1)
     a = ap.parse_args(argv)
-    doc = json.load(open(a.records))
+    doc = load_records(a.records)
     recs = doc['records']
     if a.ids:
         want = set(a.ids.split(','))

@@ -14,6 +14,7 @@
   "dependencies": {
     "@polypack/curved": "*",
     "@polypack/geometry": "*",
+    "@polypack/polyhedra": "*",
     "@polypack/solver": "*",
     "@polypack/spaces": "*",
     "@polypack/sphere": "*",

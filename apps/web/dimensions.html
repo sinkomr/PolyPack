@@ -33,9 +33,10 @@
       </p>
       <p class="lede">
         Each problem below shows two values side by side. The <strong>certified value</strong> is PolyPack's research
-        record: its packing is proven valid with interval arithmetic. A <strong>site entry</strong> is a packing sent to
-        this site; the server checks it with floating-point arithmetic and a tolerance of 10<sup>−9</sup>, like every
-        other entry. Entries go through the <a href="/api">API</a>. The <a href="/volunteer.html">volunteer client</a>
+        record: its packing is proven valid with interval arithmetic, or for 3D on 4D with exact rational arithmetic. A
+        <strong>site entry</strong> is a packing sent to this site; the server checks it with floating-point arithmetic
+        and a tolerance of 10<sup>−9</sup>, like every other entry. Entries go through the <a href="/api">API</a>. The
+        <a href="/volunteer.html">volunteer client</a>
         can also work on these problems when its optional mode for the other kinds is turned on.
       </p>
       <p id="spaces-status" class="note" role="status" aria-live="polite"></p>
@@ -72,8 +73,8 @@
         <dl class="note terms">
           <dt>Certified value</dt>
           <dd>
-            The research record of the problem. Its packing is proven valid with interval arithmetic at this size. Shown
-            at 6 decimals.
+            The research record of the problem. Its packing is proven valid at this size: with interval arithmetic, or
+            for 3D on 4D with exact rational arithmetic. Shown at 6 decimals.
           </dd>
           <dt>Status</dt>
           <dd>
@@ -82,6 +83,15 @@
           </dd>
           <dt>Lower bound</dt>
           <dd>No packing of the problem can be smaller. Shown at 6 decimals, with what it rests on.</dd>
+          <dt>Without folding</dt>
+          <dd>
+            3D on 4D only: the smallest edge when every piece must stay inside one cell, with no folding across the
+            square faces where two cells meet.
+          </dd>
+          <dt>Folding gains</dt>
+          <dd>
+            3D on 4D only: how much shorter the problem's best edge is than the edge without folding, as a percentage.
+          </dd>
           <dt>Site best</dt>
           <dd>
             The best entry sent to this site, checked by the server's floating-point validator of the kind. Only the

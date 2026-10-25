@@ -9,6 +9,7 @@
  * Each saved file: {id, code, P, s_full, pieces, method, start, seed, evals, record_s, date}.
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readRecordsFile } from "../src/records-file";
 import { getProblem, searchPolyhedra, validatePolyhedra } from "../src/index";
 
 const args = process.argv.slice(2);
@@ -24,7 +25,7 @@ const ids = [
   ...(idsFile >= 0 ? readFileSync(rest[idsFile + 1], "utf8").split(/\s+/).filter(Boolean) : []),
 ];
 mkdirSync(out, { recursive: true });
-const doc = JSON.parse(readFileSync(new URL("../../../data/polyhedra/records.json", import.meta.url), "utf8"));
+const doc = readRecordsFile(new URL("../../../data/polyhedra/records.json", import.meta.url).pathname);
 const records = (ids.length ? doc.records.filter((r: { id: string }) => ids.includes(r.id)) : doc.records).filter(
   (_: unknown, i: number) => i % m === k,
 );

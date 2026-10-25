@@ -9,6 +9,7 @@ import {
   volumeBound,
   wikiUrl,
 } from "../src";
+import { PROBLEM_CODES, SOLID_NAMES_LIST, problemNameOf } from "../src/catalogue";
 
 describe("solids", () => {
   it("has upstream's 56 solids and PolyPack's 20, each a closed convex polyhedron centred at the origin", () => {
@@ -114,6 +115,12 @@ describe("problems and ids", () => {
     expect(getProblem("pr10l15incub")!.title).toBe("Decagonal prisms of height 1.5 in a cube");
     expect(getProblem("ap11inap11")!.title).toBe("Hendecagonal antiprisms in a hendecagonal antiprism");
     expect(getProblem("pr12incub")!.wiki).toBe(true);
+    // catalogue.ts names the same solids as the data, in the same order
+    expect(SOLID_NAMES_LIST.map((x) => [x.name, x.code, x.family, x.title])).toEqual(
+      SOLID_NAMES.map((n) => [n, getSolid(n).code, getSolid(n).family, getSolid(n).title]),
+    );
+    expect(PROBLEM_CODES.length).toBe(114);
+    expect(problemNameOf("ap11incub")).toMatchObject({ piece: "antiprism11", container: "cube", wiki: false });
     expect(POLYHEDRA_PROBLEMS.slice(0, 5).map((p) => p.code)).toEqual(["tetintet", "octinoct", "icoinico", "dodindod", "cubincub"]);
     expect(getProblem("pr3l15incub")).toMatchObject({ piece: "prism3_l15", container: "cube", family: "prisms" });
     expect(getProblem("cubintet")!.title).toBe("Cubes in a tetrahedron");

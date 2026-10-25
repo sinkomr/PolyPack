@@ -6,6 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   type Pose,
+  POLYHEDRA_MAX_P,
   POLYHEDRA_PROBLEMS,
   configErrors,
   getProblem,
@@ -14,9 +15,12 @@ import {
   separation,
   validatePolyhedra,
 } from "../src";
+import { readRecordsFile } from "../src/records-file";
 
 const recUrl = new URL("../../../data/polyhedra/records.json", import.meta.url);
-const doc = existsSync(recUrl) ? JSON.parse(readFileSync(recUrl, "utf8")) : null;
+const doc = existsSync(recUrl) ? readRecordsFile(recUrl.pathname) : null;
+/** Lets the test runner breathe during a long loop. */
+const breathe = () => new Promise((r) => setImmediate(r));
 const cross = JSON.parse(readFileSync(new URL("../../../python/polyhedra/fixtures/crosscheck.json", import.meta.url), "utf8"));
 
 describe("validatePolyhedra", () => {
@@ -125,9 +129,12 @@ describe("validatePolyhedra", () => {
 describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   const records = doc?.records ?? [];
 
-  it("every record is valid by the float validator at tolerance 0 at its certified scale", () => {
+  it("every record up to P = 30 and every tenth above is valid by the float validator at tolerance 0 at its certified scale", async () => {
+    // all 8,514 take about 50 s (scripts/bench-validate.ts); the certifier checks every one
     let minGap = Infinity;
-    for (const r of records) {
+    for (const [i, r] of records.entries()) {
+      if (r.P > 30 && i % 10 !== 0) continue;
+      if (i % 100 === 0) await breathe();
       const p = getProblem(r.code)!;
       expect(r.config.pieces.length).toBe(r.P);
       const v = validatePolyhedra(p, r.config, { tol: 0 });
@@ -135,28 +142,34 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
       minGap = Math.min(minGap, v.minWallGap, v.minPairSep);
     }
     // the certified clearances: 1e-7 by the wiki's convention, about 1e-10 after wall-padding refinements and
-    // 5e-12 in some community constructions (all proven positive by the certifier)
-    expect(minGap).toBeGreaterThan(1e-12);
+    // 5e-12 in some community constructions; the smallest, 1.7e-13 in floats, is 96 pentagonal prisms in a cube
+    // (PingYou Ltd). All are proven positive by the certifier.
+    expect(minGap).toBeGreaterThan(1e-13);
   });
 
-  it("rejects every record's container shrunk by 1e-6 relative, at PolyPack's tolerance", () => {
-    for (const r of records.filter((_: unknown, i: number) => i % 7 === 0)) {
+  it("rejects every record's container shrunk by 1e-6 relative, at PolyPack's tolerance", async () => {
+    // every 7th up to P = 30, every 49th above
+    for (const [i, r] of records.entries()) {
+      if (i % (r.P > 30 ? 49 : 7) !== 0) continue;
+      if (i % 98 === 0) await breathe();
       const v = validatePolyhedra(getProblem(r.code)!, { s: r.config.s * (1 - 1e-6), pieces: r.config.pieces });
       expect(v.valid, r.id).toBe(false);
     }
   });
 
-  it("covers every problem of the wiki for P = 2 to 30 with consistent ids", () => {
+  it("covers every problem of the wiki for P = 2 to 100 with consistent ids", () => {
     // PolyPack's 28 problems (wiki: false) are not in this file yet
     const ids = new Set(records.map((r: { id: string }) => r.id));
+    expect(POLYHEDRA_MAX_P).toBe(100);
+    expect(records.length).toBe(86 * 99);
     for (const p of POLYHEDRA_PROBLEMS.filter((x) => x.wiki))
-      for (let n = 2; n <= 30; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
+      for (let n = 2; n <= POLYHEDRA_MAX_P; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
     for (const r of records) expect(r.id).toBe(`polyhedra/${r.code}/${r.P}`);
   });
 });
 
 describe("work bounds", () => {
-  it("validates 30 pieces of the largest solid, all in near contact, in bounded time", () => {
+  it("validates 100 pieces of the largest solid, all in near contact, in bounded time", () => {
     // worst case for the pair test: the 120-vertex truncated icosidodecahedron, pieces on a tight grid so that
     // many pairs are near, each separated only along a cross product or a far face
     const p = getProblem("tidintid")!;
@@ -164,13 +177,14 @@ describe("work bounds", () => {
     // half-widths along the axes: neighbours on the grid touch to within 1e-9
     const h = [0, 1, 2].map((k) => Math.max(...Array.from({ length: P.nv }, (_, v) => P.V[3 * v + k])));
     const pieces: Pose[] = [];
-    for (let i = 0; i < 30; i++)
-      pieces.push([(i % 4) * (2 * h[0] + 1e-9), (Math.floor(i / 4) % 4) * (2 * h[1] + 1e-9), Math.floor(i / 16) * (2 * h[2] + 1e-9), 1, 0, 0, 0]);
+    // a 5 x 5 x 4 grid: 235 near pairs [CALC]
+    for (let i = 0; i < POLYHEDRA_MAX_P; i++)
+      pieces.push([(i % 5) * (2 * h[0] + 1e-9), (Math.floor(i / 5) % 5) * (2 * h[1] + 1e-9), Math.floor(i / 25) * (2 * h[2] + 1e-9), 1, 0, 0, 0]);
     const t0 = performance.now();
     const v = validatePolyhedra(p, { s: 1e3, pieces }, { stopAt: Infinity });
     const ms = performance.now() - t0;
     expect(v.valid).toBe(true);
-    expect(v.pairsTested).toBeGreaterThan(40);
+    expect(v.pairsTested).toBeGreaterThan(200);
     expect(ms).toBeLessThan(5000);
   });
 });

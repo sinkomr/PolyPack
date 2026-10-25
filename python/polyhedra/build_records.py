@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Builds data/polyhedra/records.json (offline tool; standard library only, certification by certify.py).
 
-usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--ours DIR] [--nmax 30] [--jobs 2]
+usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--ours DIR] [--search DIR ...]
+                                                 [--nmax 100] [--jobs 2] [--no-certify] [--skip FILE]
                                                  [--out data/polyhedra/records.json]
 
   --upstream  a checkout of github.com/alejandrozu/platonic-packing at commit cbf76f2f (records/, docs/)
@@ -446,13 +447,44 @@ def certify_case(args):
     return None, None
 
 
+CONFIGS_CONVENTION = ('the configurations are kept apart, one file per problem: configs/<code>.jsonl has one line '
+                      'per P, in increasing P, each {"P", "config": {s, pieces}}; config_at = [offset, length] gives '
+                      'the byte offset and length of the record\'s line (without its newline), so that a reader can '
+                      'read that one configuration alone')
+
+
+def write_configs(cdir, records):
+    """Moves each record's configuration to configs/<code>.jsonl (one line per P, in increasing P) and gives the
+    record config_at = [offset, length] of its line. Returns the number of files and their total size."""
+    by_code = {}
+    for r in records:
+        by_code.setdefault(r['code'], []).append(r)
+    os.makedirs(cdir, exist_ok=True)
+    total = 0
+    for code, recs in by_code.items():
+        path = os.path.join(cdir, f'{code}.jsonl')
+        offset = 0
+        with open(path, 'wb') as f:
+            for r in sorted(recs, key=lambda x: x['P']):
+                line = json.dumps({'P': r['P'], 'config': r.pop('config')}, separators=(',', ':')).encode('ascii')
+                f.write(line + b'\n')
+                r['config_at'] = [offset, len(line)]
+                offset += len(line) + 1
+        total += os.path.getsize(path)
+    return len(by_code), total
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument('--upstream', required=True)
     ap.add_argument('--site', required=True)
     ap.add_argument('--ours')
     ap.add_argument('--search', action='append', help='a directory of PolyPack search results (repeatable)')
-    ap.add_argument('--nmax', type=int, default=30)
+    ap.add_argument('--nmax', type=int, default=100)
+    ap.add_argument('--no-certify', action='store_true',
+                    help='take the best candidate of each case without certifying it here (certify.py certifies the '
+                         'written files; a failure is then excluded with --skip and the build run again)')
+    ap.add_argument('--skip', help='a file of lines "<id> <origin file>": candidates not to use (failed certification)')
     ap.add_argument('--jobs', type=int, default=1)
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.dirname(HERE)), 'data', 'polyhedra',
                                                   'records.json'))
@@ -512,9 +544,15 @@ def main(argv=None):
             mine.sort(key=lambda c: c['s_cert'])
             jobs.append((case, mine + ups, volumes))
             meta.append((case, ups[0], row))
-    print(f'{len(jobs)} cases, {sum(1 for j in jobs if j[1][0].get("mine"))} with a PolyPack candidate; certifying',
-          flush=True)
-    if a.jobs > 1:
+    if a.skip:
+        skip = {tuple(line.split(None, 1)) for line in open(a.skip).read().splitlines() if line.strip()}
+        jobs = [(case, [c for c in cands if (f'polyhedra/{case.code}/{case.n}', c['file']) not in skip], vol)
+                for case, cands, vol in jobs]
+    print(f'{len(jobs)} cases, {sum(1 for j in jobs if j[1] and j[1][0].get("mine"))} with a PolyPack candidate'
+          + ('' if a.no_certify else '; certifying'), flush=True)
+    if a.no_certify:
+        results = [(cands[0], None) if cands else (None, None) for _, cands, _ in jobs]
+    elif a.jobs > 1:
         import multiprocessing as mp
         with mp.Pool(a.jobs) as pool:
             results = pool.map(certify_case, jobs, chunksize=8)
@@ -556,16 +594,19 @@ def main(argv=None):
             'wiki': 'the wiki\'s record of the case (its smallest certified s_full in the repository) and its page; '
                     'file is given when the configuration here comes from elsewhere',
             'literature': 'published values without coordinates (value, source, url, printed precision)',
+            'configs': CONFIGS_CONVENTION,
         },
         'sources': SOURCES,
         'records': records,
     }
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
+    nfiles, total = write_configs(os.path.join(os.path.dirname(a.out), 'configs'), records)
     with open(a.out, 'w') as f:
         json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
         f.write('\n')
-    print(f'wrote {a.out}: {len(records)} records, {os.path.getsize(a.out) / 1e6:.2f} MB, {len(failed)} cases '
-          f'without a certified candidate {failed[:10]}, {time.time() - t0:.0f} s')
+    print(f'wrote {a.out}: {len(records)} records, {os.path.getsize(a.out) / 1e6:.2f} MB, and {nfiles} '
+          f'configuration files, {total / 1e6:.2f} MB; {len(failed)} cases without a candidate {failed[:10]}, '
+          f'{time.time() - t0:.0f} s')
     return 0 if not failed else 1
 
 

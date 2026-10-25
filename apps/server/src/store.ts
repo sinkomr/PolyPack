@@ -140,7 +140,7 @@ export interface Store {
 }
 
 /**
- * A site entry of one of the spaces (surface, curved, sphere, torus; see @polypack/spaces). These
+ * A site entry of one of the spaces (surface, curved, sphere, torus, polyhedra; see @polypack/spaces). These
  * live in their own table and follow the same rules as the polygon entries: the leader of a problem
  * is the earliest entry within SCORE_TIE (relative) of the smallest score, and only the leader is
  * kept (KEEP_PER_PROBLEM). There is no review queue: nothing is pending.

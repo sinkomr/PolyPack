@@ -2,7 +2,14 @@
  * What GET /api/spaces says about each space, apart from its problem count, which comes from the
  * loaded catalogue. Pure data.
  */
+import { MAX_S } from "@polypack/boundary";
 import { SCORE_TIE } from "@polypack/geometry";
+import {
+  POLYHEDRA_MAX_COORD,
+  POLYHEDRA_MAX_QUATERNION,
+  POLYHEDRA_MIN_QUATERNION_NORM,
+  POLYHEDRA_RECORD_MARGIN,
+} from "@polypack/polyhedra";
 import { SpaceExhibit, SpaceInfo, SpaceName } from "./types";
 
 const NOTES = "https://github.com/sinkomr/PolyPack/blob/main/docs/spaces";
@@ -22,6 +29,32 @@ export const SPACE_MIN_QUATERNION_NORM = 1e-6;
 export const SURFACE_MAX_CHAINS = 200;
 /** Most lattice translates checked per pair of torus pieces; a reduced basis needs at most about 60. */
 export const TORUS_MAX_TRANSLATES = 1000;
+/**
+ * Most chains of cells one boundary piece may cross in the check (the boundary validator's
+ * maxChains). [CALC] Every research record, and every one of 1,449 random valid single balls and
+ * cubes (s from sqrt 2 and 0.95 up), needs at most 79; the cap is 13 times that.
+ */
+export const BOUNDARY_MAX_CHAINS = 1024;
+/** Largest edge s of a boundary configuration: the boundary validator's MAX_S. */
+export const BOUNDARY_MAX_S = MAX_S;
+
+/**
+ * Relative margin by which an entry must beat a space's research record (score < certified (1 - margin)) to count
+ * as better than it. The tie tolerance, except for polyhedra: its records keep the wiki's clearance of up to 1e-7
+ * between pieces and from the walls (up to 2.6e-7 of s where the touching limit is known), and removing that
+ * clearance is not a better packing. Site entries still compete with each other by the tie tolerance.
+ */
+export const SPACE_RECORD_MARGIN: Record<SpaceName, number> = {
+  surface: SCORE_TIE,
+  curved: SCORE_TIE,
+  sphere: SCORE_TIE,
+  torus: SCORE_TIE,
+  boundary: SCORE_TIE,
+  polyhedra: POLYHEDRA_RECORD_MARGIN,
+};
+
+/** Largest absolute value of a polyhedra quaternion component (only its direction matters; see the polyhedra package). */
+export { POLYHEDRA_MAX_QUATERNION };
 
 /** The space's notes on GitHub. */
 export function spaceDocsUrl(file: string): string {
@@ -132,6 +165,61 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
     },
     viewer: "/spaces/torus.html",
     docs: spaceDocsUrl("TORUS.md"),
+  },
+  boundary: {
+    space: "boundary",
+    title: "Polytope boundaries",
+    summary:
+      "Unit balls or unit cubes on the boundary of a 4D polytope, starting with the tesseract: its boundary is 8 solid cubes glued face to face, a closed 3D space. A piece may fold across the square faces where two cells meet, but no edge of the polytope may pass through it.",
+    score: "the edge length s of the polytope; smaller is better",
+    problem_id: "boundary/<polytope>/<piece>/<P>",
+    conventions: {
+      polytope:
+        "the tesseract [-s/2, s/2]^4 of edge s; its boundary is 8 cubes (cells), every two of which share a square face unless they are opposite; edges and vertices may not lie inside a piece",
+      cells:
+        "cell 2 i + (sigma > 0) is the cube x_i = sigma s/2, for i = 0..3 and sigma = -1 or +1: cell 0 is x_0 = -s/2, cell 1 is x_0 = +s/2, ..., cell 7 is x_3 = +s/2",
+      frame:
+        "a point of a cell has local coordinates u = its other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 centred at the origin (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3))",
+      units:
+        "balls have radius 1, cubes edge 1 (the cube [-1/2, 1/2]^3 about its centre); lengths scale with s, the pieces do not",
+      pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre; u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q`,
+      fold: "a piece is laid out from its centre by straight segments that continue across the square faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
+      configuration: "{s, pieces: [{cell, u, q?}, ...]} with P pieces",
+      score: "s, the edge of the polytope; smaller is better",
+      validity: VALIDITY,
+      scoring: SCORING,
+      improvement: IMPROVEMENT,
+      nofold:
+        "each problem's listing also gives its nofold value (every piece inside one cell, no folding) and the research record's gain over it, as `extra`",
+      work_limit: `s is at most ${BOUNDARY_MAX_S}; the check gives up with a reason when one piece crosses more than ${BOUNDARY_MAX_CHAINS} chains of cells (real packings need at most about 80); each component of u and q is at most ${SPACE_MAX_COORD} in absolute value`,
+    },
+    viewer: "/spaces/boundary.html",
+    docs: spaceDocsUrl("BOUNDARY.md"),
+  },
+  polyhedra: {
+    space: "polyhedra",
+    title: "Polyhedra",
+    summary:
+      "3D in 3D: equal polyhedra (Platonic, Archimedean and Catalan solids, prisms and antiprisms) packed in the smallest scaled copy of a container polyhedron. The problems and research records are those of polyhedrainpolyhedra.wiki, with PolyPack's improvements.",
+    score: "the scale s of the container solid (its edge length when the container has unit edges); smaller is better",
+    problem_id: "polyhedra/<code>/<P>",
+    conventions: {
+      problems:
+        "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron) or pr3l15incub (triangular prisms of height 1.5 in a cube); P from 2 to 100",
+      solids:
+        "the wiki's canonical solids, centred at the origin: unit edges, except the Catalan solids (polar reciprocals of the unit-edge Archimedean solids about the midsphere) and the elongated prisms (base edges 1, lateral edges 1.5, 2 or 3)",
+      container: "s times the canonical container solid, centred at the origin in its canonical orientation",
+      pose: `[x, y, z, qw, qx, qy, qz]: the canonical piece turned by the rotation of q / |q| (v -> q v q*) and centred at (x, y, z); x, y and z at most ${POLYHEDRA_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM.toExponential()}`,
+      configuration: "{s, pieces: [[x, y, z, qw, qx, qy, qz], ...]} with P pieces",
+      score: "s; smaller is better",
+      validity:
+        VALIDITY +
+        "; the overlap of two pieces is their penetration depth, found by the separating-axis test over the face normals of both pieces and the cross products of their edges",
+      scoring: SCORING,
+      improvement: `an entry is kept only when its score is below the site leader's by more than a relative ${SCORE_TIE} and below the research record's certified s by more than a relative ${POLYHEDRA_RECORD_MARGIN.toExponential()}: the records keep the wiki's clearances between pieces and from the walls (up to 1e-7), and removing them is not a better packing; one below the research record must also be valid with overlaps of at most ${SPACE_STRICT_TOL}`,
+    },
+    viewer: "/spaces/polyhedra.html",
+    docs: spaceDocsUrl("POLYHEDRA.md"),
   },
 };
 

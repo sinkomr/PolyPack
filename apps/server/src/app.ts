@@ -82,7 +82,7 @@ export interface AppOptions {
   /** The nightly records snapshot; without it /api/snapshot answers 404. */
   snapshots?: SnapshotSource;
   /**
-   * The spaces (surface, curved, sphere, torus): their catalogues and the store of their site
+   * The spaces (surface, curved, sphere, torus, polyhedra): their catalogues and the store of their site
    * entries. Without it the /api/spaces routes answer 404.
    */
   spaces?: SpacesOptions;

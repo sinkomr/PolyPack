@@ -1,6 +1,6 @@
 /**
- * The HTTP contract of the new spaces: polyhedral surfaces, constant curvature, the whole sphere
- * and flat tori. The server answers with these shapes, the website and the volunteer client read
+ * The HTTP contract of the new spaces: polyhedral surfaces, constant curvature, the whole sphere,
+ * flat tori, the boundaries of 4D polytopes and polyhedra in polyhedra. The server answers with these shapes, the website and the volunteer client read
  * them. Each space keeps its own problem ids and configuration format (docs/spaces/*.md); this file
  * only names them.
  *
@@ -12,8 +12,8 @@
  */
 
 /** Spaces that take submissions. */
-export type SpaceName = "surface" | "curved" | "sphere" | "torus";
-export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus"];
+export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra";
+export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
 
 export function isSpaceName(v: unknown): v is SpaceName {
   return typeof v === "string" && (SPACE_NAMES as readonly string[]).includes(v);
@@ -28,7 +28,10 @@ export type CertifiedStatus = "best_known" | "proven" | "infeasible";
  *  - curved:  `{ size, pieces: [{ x, y, theta }] }`, score size (container side or radius at curvature K);
  *  - sphere:  `{ rho, pieces: [{ q: [w, x, y, z] }] }`, score rho (sphere radius);
  *  - torus:   `{ lattice: { L } | { b1: [x, y], b2: [x, y] }, poses: [[x, y, theta], ...] }`,
- *             score L (sq, hex) or sqrt|det(b1, b2)| (free).
+ *             score L (sq, hex) or sqrt|det(b1, b2)| (free);
+ *  - boundary: `{ s, pieces: [{ cell, u: [u0, u1, u2], q?: [w, x, y, z] }] }`, score s (edge of the
+ *             polytope).
+ *  - polyhedra: `{ s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }`, score s (scale of the container solid).
  */
 export type SpaceConfig = Record<string, unknown>;
 
@@ -83,12 +86,32 @@ export interface SiteBest {
   created_at: string;
 }
 
+/**
+ * Values a research record of some spaces carries besides its score and bound. Only the boundary
+ * space has them: there `nofold` is the best edge when every piece must stay inside one cell (no
+ * folding across the square faces), and `fold_gain` = 1 - score_float / nofold.value, how much
+ * smaller the research record's polytope is than the nofold one (score_float: the record's
+ * search value before the certificate's scaling; docs/spaces/BOUNDARY.md sections 6 and 7).
+ */
+export interface SpaceProblemExtra {
+  /** The nofold value and what it rests on (a sentence with its [CALC] or [EST] label); null when the record has none. */
+  nofold: { value: number; label: string } | null;
+  /** The research record's relative gain over nofold, from 0 to 1; null when the record has none. */
+  fold_gain: number | null;
+}
+
 /** One problem as a listing shows it (no configurations). */
 export interface SpaceProblemSummary {
   space: SpaceName;
-  /** The problem id, e.g. "surface/cube/fold/0/12", "curved/-1/3/4/7", "sphere/4/12", "torus/hex/5/8". */
+  /**
+   * The problem id, e.g. "surface/cube/fold/0/12", "curved/-1/3/4/7", "sphere/4/12", "torus/hex/5/8",
+   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12".
+   */
   id: string;
-  /** The id's fields: surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}. */
+  /**
+   * The id's fields: surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P};
+   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}.
+   */
   fields: Record<string, string | number>;
   P: number;
   certified: CertifiedValue | null;
@@ -106,6 +129,8 @@ export interface SpaceProblemSummary {
   status?: CertifiedStatus;
   /** Why the problem takes no submissions, for proven and infeasible problems; null when it is open (always sent). */
   closed_reason?: string | null;
+  /** Sent for boundary problems only: the research record's nofold comparison. */
+  extra?: SpaceProblemExtra;
 }
 
 /** GET /api/spaces/:space/records */
@@ -188,4 +213,11 @@ export interface SpaceSubmitResponse {
   id: number | null;
   /** True when the score is below the research record's score_cert. */
   beats_certified: boolean;
+  /**
+   * False when the server did not check the configuration because its stated score could not be
+   * kept anyway (polyhedra: not below the research record by the record margin, or not below the
+   * site leader by the tie tolerance); `valid` is then false, `score` the stated one, the status 200.
+   * Absent otherwise.
+   */
+  checked?: false;
 }

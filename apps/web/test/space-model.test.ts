@@ -4,19 +4,25 @@
  * rounds of a run, the panel's words and the meaning of the server's answers.
  */
 import { SCORE_TIE } from "@polypack/geometry";
-import { type SpaceName, spaceProblemSummary, validateSpaceSubmission } from "@polypack/spaces";
-import { loadSpacesIndex } from "@polypack/spaces/load";
-import { mixSeed, parseSearchProblem } from "@polypack/spaces/search";
+import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
+import { type SpaceName, SPACE_RECORD_MARGIN, spaceProblemSummary, validateSpaceSubmission } from "@polypack/spaces";
+import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
+import { BOUNDARY_ROUND_EVALS, mixSeed, parseSearchProblem } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { gainText } from "../src/boundary-model";
 import { BOARD_SPACES, parseSpaceAddress, spaceAddress } from "../src/space-address";
 import {
   DEFAULT_PROBLEM,
+  EVALS_MAX,
   FRESH_EVALS,
   GROW_LIMIT,
   ROUND_EVALS,
   ROUND_TIME_CAP,
   defaultBudget,
+  freshSize,
+  polyhedraRound,
+  polyhedraRoundSeconds,
   roundSize,
   beatsBest,
   fieldsOfId,
@@ -29,7 +35,8 @@ import {
   submitAnswer,
 } from "../src/space/model";
 
-const index = loadSpacesIndex(resolve(__dirname, "../../.."));
+const root = resolve(__dirname, "../../..");
+const index = loadSpacesIndex(root);
 const catalogue = (space: SpaceName) => index[space]!;
 
 /** The server's answer for a catalogue problem, with an optional site entry (spaces.ts, GET .../problems/<id>). */
@@ -42,7 +49,11 @@ function answer(space: SpaceName, id: string, site?: { score: number; config: un
   return {
     ...summary,
     conventions: {},
-    certified_config: p.config === null ? null : JSON.parse(p.config),
+    // polyhedra configurations are kept apart and read on demand, as the server reads them
+    certified_config: (() => {
+      const c = readEntryConfigSync(root, catalogue(space), p);
+      return c === null ? null : JSON.parse(c);
+    })(),
     site_config: site?.config ?? null,
   };
 }
@@ -93,8 +104,8 @@ describe("the problem picker", () => {
   it("finds every catalogue problem from its own fields", () => {
     for (const space of BOARD_SPACES) {
       const problems = catalogue(space).problems;
-      // every problem of the small spaces, every 7th of the surface
-      for (const p of problems.filter((_, i) => space !== "surface" || i % 7 === 0)) {
+      // every problem of the small spaces, every 7th of the surface and the polyhedra
+      for (const p of problems.filter((_, i) => (space !== "surface" && space !== "polyhedra") || i % 7 === 0)) {
         const pick = pickProblem(space, problems, fieldsOfId(space, p.id));
         expect(pick.id, p.id).toBe(p.id);
         expect(pick.fields.map((f) => f.value).join("/"), p.id).toBe(p.id.split("/").slice(1).join("/"));
@@ -344,5 +355,193 @@ describe("the server's answer to a submission", () => {
       certified: p.certified!.score,
     });
     expect(v.valid).toBe(true);
+  });
+});
+
+describe("3D on 4D on the board", () => {
+  const id = DEFAULT_PROBLEM.boundary;
+
+  it("reads a boundary problem with its nofold comparison, and lists it with the usual values", () => {
+    const p = readSpaceProblem("boundary", id, answer("boundary", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p.search).toEqual({ space: "boundary", id, P: 9, polytope: "tesseract", piece: "ball" });
+    expect(p.best?.source).toBe("certified");
+    expect(p.extra?.nofold?.value).toBeCloseTo(2 + 2 / Math.sqrt(3), 12);
+    expect(scoreLabel(p.search)).toBe("Tesseract edge s");
+    expect(problemFacts(p).map((f) => f.label)).toEqual([
+      "Certified value",
+      "Status",
+      "Lower bound",
+      "Without folding",
+      "Folding gains",
+      "Site best",
+      "Entries",
+    ]);
+    const facts = Object.fromEntries(problemFacts(p).map((f) => [f.label, f]));
+    expect(facts["Without folding"]).toMatchObject({ value: "3.154701", details: true });
+    expect(facts["Folding gains"]).toMatchObject({
+      value: gainText(1 - p.best_score! / p.extra!.nofold!.value),
+      note: "shorter edge than without folding",
+    });
+    // the shown record passes the rule the page applies before it offers a result
+    const v = validateSpaceSubmission("boundary", id, p.best!.config, {
+      bound: p.bound!.value,
+      certified: p.certified!.score,
+    });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
+
+    // the other kinds have no such values; a malformed extra is left out
+    const torus = readSpaceProblem("torus", "torus/sq/5/7", answer("torus", "torus/sq/5/7"));
+    if (typeof torus === "string") throw new Error(torus);
+    expect(torus.extra).toBeNull();
+    const odd = readSpaceProblem("boundary", id, { ...answer("boundary", id), extra: { nofold: "x" } });
+    if (typeof odd === "string") throw new Error(odd);
+    expect(odd.extra).toBeNull();
+    expect(Object.fromEntries(problemFacts(odd).map((f) => [f.label, f.value]))["Folding gains"]).toBe("—");
+  });
+
+  it("runs the boundary search in rounds of its own size", () => {
+    const p = parseSearchProblem(id)!;
+    const rule = { bound: 1.6, certified: 2.2 };
+    const start = { s: 2.3, pieces: [] };
+    const run = { seed: 3, budget: { evals: 1000000, time_s: 30 }, fresh: false };
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(ROUND_EVALS.boundary);
+    // one complete search call per round, of the job runner's size, growing to at most 1,000,000
+    expect(ROUND_EVALS.boundary).toBe(BOUNDARY_ROUND_EVALS);
+    expect(FRESH_EVALS.boundary).toBe(BOUNDARY_ROUND_EVALS);
+    expect(ROUND_EVALS.boundary * GROW_LIMIT.boundary).toBeLessThanOrEqual(1_000_000);
+    const long = { ...run, budget: { evals: 1e8 } };
+    expect(roundJob(p, rule, long, 5, { evals: 0, seconds: 0 }, start, 5)!.evals).toBe(
+      GROW_LIMIT.boundary * BOUNDARY_ROUND_EVALS,
+    );
+    expect(a.job).toMatchObject({ space: "boundary", id, method: "boundary compression search", kind: "iterate" });
+    expect(roundJob(p, rule, { ...run, fresh: true }, 0, { evals: 0, seconds: 0 }, null)!.evals).toBe(
+      FRESH_EVALS.boundary,
+    );
+    expect(defaultBudget(p).time_s).toBe(30);
+    expect(defaultBudget(p).evals).toBeGreaterThanOrEqual(ROUND_EVALS.boundary);
+    expect(searchKind(p)).toBe("boundary");
+    // its evaluations are cheap, so the panel takes more of them
+    expect(EVALS_MAX.boundary).toBe(100_000_000);
+  });
+
+  it("starts every kind with a budget the panel accepts", () => {
+    for (const space of BOARD_SPACES) {
+      const p = parseSearchProblem(DEFAULT_PROBLEM[space])!;
+      const kind = searchKind(p);
+      expect(defaultBudget(p).evals, space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+      expect(ROUND_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+      expect(FRESH_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+    }
+    expect(defaultBudget(parseSearchProblem("surface/cube/nofold/4/12")!).evals).toBeLessThanOrEqual(EVALS_MAX.nofold);
+  });
+});
+
+describe("3D in 3D: polyhedra on the board", () => {
+  const rule = { bound: null, certified: null };
+
+  it("picks a problem by its pair of solids, then P from 2 to 100", () => {
+    const problems = catalogue("polyhedra").problems;
+    const pick = pickProblem("polyhedra", problems, fieldsOfId("polyhedra", DEFAULT_PROBLEM.polyhedra));
+    expect(pick.id).toBe("polyhedra/cubincub/11");
+    expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
+    expect(pick.fields[0].options).toHaveLength(86);
+    expect(pick.fields[0].options[4]).toEqual({ value: "cubincub", text: "Cubes in a cube" });
+    const Ps = pick.fields[1].options.map((o) => Number(o.value));
+    expect(Ps[0]).toBe(2);
+    expect(Ps[Ps.length - 1]).toBe(100);
+    expect(pickProblem("polyhedra", problems, { code: "tidintid", P: "100" }).id).toBe("polyhedra/tidintid/100");
+    expect(scoreLabel(parseSearchProblem("polyhedra/tidintid/100")!)).toBe("Container scale s");
+  });
+
+  it("sizes its rounds from P and the solid's size, at most about 20 s on a slow machine up to P = 100", () => {
+    // two hops for small problems; for 100 of the largest solids, a polish of the start and jiggles
+    expect(polyhedraRound(11, "cubincub").round).toBe(16800);
+    expect(polyhedraRound(100, "cubincub").round).toBe(7100);
+    expect(polyhedraRound(100, "tidintid").round).toBe(2600);
+    expect(polyhedraRound(100, "phcinphc").round).toBe(2600);
+    expect(polyhedraRound(100, "dtcindtc").round).toBe(2400);
+    for (const code of PROBLEM_CODES)
+      for (let P = 2; P <= 100; P++) {
+        const { round, fresh, stepMs } = polyhedraRound(P, code);
+        const at = `${code}/${P}`;
+        if (round > 2 * (7000 + 130 * P) || round < 1000) throw new Error(`${at}: round ${round}`);
+        // [CALC] at most about 20 s on a machine 3.5 times slower than the measured costs (3.4 times was seen under load)
+        if (!(polyhedraRoundSeconds(P, code, round) < 20)) throw new Error(`${at}: ${polyhedraRoundSeconds(P, code, round)} s`);
+        if (fresh < round) throw new Error(`${at}: fresh ${fresh}`);
+        // a new arrangement runs its schedule on at most 40 % of the round, at about 1.5 times a hop's step
+        if (fresh > round && !((0.4 * fresh * 1.5 * stepMs) / 1000 < 21)) throw new Error(`${at}: fresh ${fresh}`);
+      }
+    for (const code of ["tetintet", "cubincub", "tidintid", "phcinphc", "dtcindtc", "sndinsnd", "pr12l3incub"])
+      for (const P of [2, 11, 30, 31, 64, 100]) {
+        const { round, fresh } = polyhedraRound(P, code);
+        const at = `${code}/${P}`;
+        const search = parseSearchProblem(`polyhedra/${code}/${P}`)!;
+        expect(roundSize(search)).toBe(round);
+        expect(freshSize(search)).toBe(fresh);
+        const budget = defaultBudget(search);
+        expect(budget.evals).toBe(10 * round);
+        expect(budget.time_s).toBeGreaterThanOrEqual(60);
+        expect(budget.time_s).toBeLessThanOrEqual(300);
+        // time for at least five rounds on the slow machine
+        expect(budget.time_s, at).toBeGreaterThanOrEqual(Math.min(300, 5 * polyhedraRoundSeconds(P, code, round)));
+      }
+  });
+
+  it("runs rounds of its own search with the run's seeds, within the budget", () => {
+    const p = parseSearchProblem("polyhedra/tidintid/100")!;
+    const run = { seed: 5, budget: { evals: 50000, time_s: 120 }, fresh: false };
+    const start = { s: 6, pieces: [] };
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(2600);
+    expect(a.job).toMatchObject({ space: "polyhedra", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
+    expect(a.job.method).toBe("polyhedra soft-to-rigid search");
+    expect(a.job.budget).toEqual({ evals: 2600, time_s: 120 });
+    // the shown packing is polished in the first round; the best of a round is not polished again
+    expect(a.job.polished).toBeUndefined();
+    expect(roundJob(p, rule, run, 1, { evals: 2600, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
+    // grown after a round that did not improve, at most GROW_LIMIT times, and never past the budget
+    expect(roundJob(p, rule, run, 1, { evals: 2600, seconds: 50 }, start, 1)!.job.budget).toEqual({
+      evals: 5200,
+      time_s: 70,
+    });
+    expect(GROW_LIMIT.polyhedra).toBe(2);
+    expect(roundJob(p, rule, run, 2, { evals: 50000, seconds: 90 }, start)).toBeNull();
+    // a new arrangement of 100 large solids: what fits in about 20 s on the slow machine
+    expect(roundJob(p, rule, { ...run, budget: { evals: 1e6 } }, 0, { evals: 0, seconds: 0 }, null)!.evals).toBe(3400);
+    // of 11 cubes: the simulator's whole soft-to-rigid schedule (12,910 steps) fits in 40 % of it
+    expect(freshSize(parseSearchProblem("polyhedra/cubincub/11")!)).toBe(32200);
+  });
+
+  it("keeps an entry only when it beats the research record by the relative margin of 1e-6", () => {
+    const id = "polyhedra/cubincub/11";
+    const p = readSpaceProblem("polyhedra", id, answer("polyhedra", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p.best?.source).toBe("certified");
+    expect(SPACE_RECORD_MARGIN.polyhedra).toBe(1e-6);
+    const cert = p.certified!.score;
+    expect(beatsBest(p, cert * (1 - 2 * SCORE_TIE))).toBe(false);
+    expect(beatsBest(p, cert * (1 - 5e-7))).toBe(false);
+    expect(beatsBest(p, cert * (1 - 2e-6))).toBe(true);
+    // a site entry below the record: beaten by the tie tolerance, the record still by the margin
+    const site = cert * (1 - 3e-6);
+    const q = readSpaceProblem("polyhedra", id, answer("polyhedra", id, { score: site, config: null }));
+    if (typeof q === "string") throw new Error(q);
+    expect(beatsBest(q, site * (1 - 2 * SCORE_TIE))).toBe(true);
+    expect(beatsBest(q, site)).toBe(false);
+    expect(submitAnswer(200, { valid: true, score: 1.5, leader: false, id: null, best_score: 1.4 }, "polyhedra").text).toBe(
+      `✓ Valid, score 1.500000, but not kept: it does not beat the problem's best 1.400000 (the site's best by more than a relative ${SCORE_TIE}, the research record by more than a relative 1e-6).`,
+    );
+  });
+
+  it("shows a research record of 100 pieces that passes the server's check", () => {
+    const id = "polyhedra/tidintid/100";
+    const p = readSpaceProblem("polyhedra", id, answer("polyhedra", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p.P).toBe(100);
+    expect((p.best!.config.pieces as unknown[]).length).toBe(100);
+    const v = validateSpaceSubmission("polyhedra", id, p.best!.config, { bound: p.bound!.value, certified: p.certified!.score });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
   });
 });

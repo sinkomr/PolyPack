@@ -29,7 +29,7 @@ const run = (...argv: string[]) => {
 };
 
 describe("space problem ids and configurations", () => {
-  it("reads the four id forms and nothing else", () => {
+  it("reads the five id forms and nothing else", () => {
     expect(parseSpaceId("surface/cube/fold/0/12")).toMatchObject({
       space: "surface",
       solid: "cube",
@@ -42,7 +42,20 @@ describe("space problem ids and configurations", () => {
     expect(parseSpaceId("curved/1.225778283313099/3/5/5")).toMatchObject({ K: 1.225778283313099, P: 5 });
     expect(parseSpaceId("sphere/4/12")).toMatchObject({ space: "sphere", N: 4, P: 12 });
     expect(parseSpaceId("torus/hex/5/8")).toMatchObject({ space: "torus", family: "hex", N: 5, P: 8 });
+    expect(parseSpaceId("boundary/tesseract/ball/9")).toEqual({
+      space: "boundary",
+      id: "boundary/tesseract/ball/9",
+      polytope: "tesseract",
+      piece: "ball",
+      P: 9,
+    });
+    expect(parseSpaceId("boundary/tesseract/cube/16")).toMatchObject({ piece: "cube", P: 16 });
     for (const bad of [
+      "boundary/tesseract/ball/09",
+      "boundary/tesseract/sphere/9",
+      "boundary/tesseract/ball/9/../../x",
+      "boundary/../ball/9",
+      "boundary/tesseract/ball",
       "surface/cube/fold/0",
       "surface/prism/fold/0/3",
       "sphere/4/0",
@@ -65,6 +78,8 @@ describe("space problem ids and configurations", () => {
       ["curved", "curved/-1/3/4/7", "size"],
       ["surface", "surface/cube/fold/0/2", "s"],
       ["surface", "surface/cube/nofold/4/7", "s"],
+      ["boundary", "boundary/tesseract/ball/9", "s"],
+      ["boundary", "boundary/tesseract/cube/12", "s"],
     ];
     for (const [space, id] of cases) {
       const p = parseSpaceId(id)!;
@@ -172,11 +187,27 @@ describe("the spaces options", () => {
 
   it("take a list or all, and --only-spaces", () => {
     expect(run("--spaces", "torus,sphere")).toMatchObject({ spaces: ["sphere", "torus"], onlySpaces: false });
+    expect(run("--spaces", "polyhedra")).toMatchObject({ spaces: ["polyhedra"], onlySpaces: false });
     expect(run("--spaces", "all", "--only-spaces")).toMatchObject({
-      spaces: ["surface", "curved", "sphere", "torus"],
+      spaces: ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"],
       onlySpaces: true,
     });
     expect(run("--spaces", "Surface")).toMatchObject({ spaces: ["surface"] });
+  });
+
+  it("take boundary (3D on 4D) under either name, alone, in a list or as part of all", () => {
+    expect(run("--spaces", "boundary")).toMatchObject({ spaces: ["boundary"], onlySpaces: false });
+    expect(run("--dimensions", "boundary")).toMatchObject({ spaces: ["boundary"], onlySpaces: false });
+    expect(run("--dimensions", "boundary,torus", "--only-dimensions")).toMatchObject({
+      spaces: ["torus", "boundary"],
+      onlySpaces: true,
+    });
+    expect(run("--dimensions", "all").spaces).toContain("boundary");
+    // and never without the option
+    expect(run("--N", "4").spaces).toBeNull();
+    const help = helpText(machine);
+    expect(help).toMatch(/boundary \(3D on 4D: unit balls and cubes on the boundary\s+of\s+a tesseract\)/);
+    expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, polyhedra, comma-separated, or all/);
   });
 
   it("refuse bad lists and an --only-spaces without spaces", () => {
@@ -184,7 +215,9 @@ describe("the spaces options", () => {
       (...argv: string[]) =>
       () =>
         parseOptions(argv, machine);
-    expect(bad("--spaces", "plane")).toThrow(/"plane" is not one of surface, curved, sphere, torus or all/);
+    expect(bad("--spaces", "plane")).toThrow(
+      /"plane" is not one of surface, curved, sphere, torus, boundary, polyhedra or all/,
+    );
     expect(bad("--spaces", "sphere,,torus")).toThrow(/empty item/);
     expect(bad("--spaces", "all,sphere")).toThrow(/cannot be combined/);
     expect(bad("--only-spaces")).toThrow(/--only-spaces needs --spaces/);
@@ -215,7 +248,7 @@ describe("the spaces options", () => {
       () =>
         parseOptions(argv, machine);
     expect(bad("--dimensions", "plane")).toThrow(
-      /^--dimensions: "plane" is not one of surface, curved, sphere, torus or all$/,
+      /^--dimensions: "plane" is not one of surface, curved, sphere, torus, boundary, polyhedra or all$/,
     );
     expect(bad("--dimensions", "all", "--spaces", "all")).toThrow(/same option/);
     expect(bad("--only-dimensions")).toThrow(/--only-dimensions needs --dimensions LIST/);
@@ -468,6 +501,27 @@ describe("the submission rule", () => {
     expect(decide({ dryRun: true })).toBe("dry run: would submit");
     expect(decide({ best: null })).toBe("no valid configuration");
   });
+
+  it("follows the server's keep rule with a record margin: polyhedra records are beaten by more than 1e-6", () => {
+    const s = best.score;
+    const record = (space: "polyhedra" | "sphere", certified: number | null, leader: number | null = null) => ({
+      record: { space, certified, leader },
+    });
+    // 5e-7 below a polyhedra record: valid, but the server would not keep it
+    expect(decide({ bestScore: s / (1 - 5e-7), ...record("polyhedra", s / (1 - 5e-7)) })).toBe(
+      "not below the research record by the space's margin",
+    );
+    expect(decide({ bestScore: s / (1 - 2e-6), ...record("polyhedra", s / (1 - 2e-6)) })).toBe(
+      "better than the problem's best",
+    );
+    // the other spaces keep the tie tolerance; a site leader is beaten by the tie tolerance
+    expect(decide({ bestScore: s / (1 - 5e-7), ...record("sphere", s / (1 - 5e-7)) })).toBe(
+      "better than the problem's best",
+    );
+    expect(decide({ bestScore: s / (1 - 5e-9), ...record("polyhedra", s / (1 - 2e-6), s / (1 - 5e-9)) })).toBe(
+      "better than the problem's best",
+    );
+  });
 });
 
 describe("nofold problems as planar packings", () => {
@@ -569,6 +623,35 @@ describe("the space engine", () => {
     });
     expect((await searchSpaceProblem(input(clock), r.runJob, c)).stopped).toBe("aborted");
     expect(r.jobs).toHaveLength(2);
+  });
+
+  it("stops when a valid job ends at its search's own floor, which may lie above the problem's bound", async () => {
+    const clock = { t: 0 };
+    const jobs: SpaceJob[] = [];
+    const answer = (job: SpaceJob, valid: boolean): SpaceJobResult => ({
+      job,
+      score: valid ? 1.000000000001 : null,
+      valid,
+      ...(valid ? { config: { s: 1.000000000001, pieces: [] } } : {}),
+      evaluations: 0,
+      wallTime: 0,
+      termination: "bound",
+      reasons: [],
+    });
+    const at = (valid: boolean) => async (job: SpaceJob) => {
+      jobs.push(job);
+      clock.t += 1;
+      return answer(job, valid);
+    };
+    const floor = { ...input(clock), space: "boundary" as const, id: "boundary/tesseract/cube/4", bound: 0.79 };
+    const out = await searchSpaceProblem(floor, at(true), control());
+    expect(out).toMatchObject({ stopped: "bound", jobs: 1 });
+    expect(out.best!.score).toBe(1.000000000001);
+    // an invalid answer says nothing about the floor
+    jobs.length = 0;
+    clock.t = 0;
+    expect((await searchSpaceProblem(floor, at(false), control())).stopped).not.toBe("bound");
+    expect(jobs.length).toBeGreaterThan(1);
   });
 
   it("gives up after three failed jobs in a row", async () => {

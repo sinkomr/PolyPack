@@ -76,7 +76,9 @@ describe("space jobs in the worker pool", () => {
 
   // Review D2: the largest catalogue problems, whose searches once ran 10 to 23 s without a check.
   // A fresh curved job of seed 3 on curved/-1/3/8/29 spent 21 s in its first restart; a surface
-  // job of 2 s on 76 triangles is in its final polish from 1.6 s on.
+  // job of 2 s on 76 triangles is in its final polish from 1.6 s on. The polyhedra jobs are 100 of
+  // the largest solids at the cap P = 100: a soft hop of 100 truncated icosidodecahedra takes about
+  // 50 s, and a fresh run of 100 pentagonal hexecontahedra minutes, both polled at every step.
   const largest: [string, SpaceJob][] = [
     [
       "a fresh curved job on curved/-1/3/8/29",
@@ -101,9 +103,32 @@ describe("space jobs in the worker pool", () => {
         start: recordConfig("surface", "surface/icosahedron/fold/3/76"),
       },
     ],
+    [
+      "a polyhedra job on polyhedra/tidintid/100 from its record",
+      {
+        space: "polyhedra",
+        id: "polyhedra/tidintid/100",
+        method: "polyhedra soft-to-rigid search",
+        seed: 1,
+        budget: { time_s: 60 },
+        kind: "iterate",
+        start: recordConfig("polyhedra", "polyhedra/tidintid/100"),
+      },
+    ],
+    [
+      "a fresh polyhedra job on polyhedra/phcinphc/100",
+      {
+        space: "polyhedra",
+        id: "polyhedra/phcinphc/100",
+        method: "polyhedra soft-to-rigid search",
+        seed: 2,
+        budget: { time_s: 60 },
+        kind: "fresh",
+      },
+    ],
   ];
   for (const [what, job] of largest) {
-    const at = job.space === "curved" ? 3000 : 2000;
+    const at = job.space === "surface" ? 2000 : 3000;
     it(`answers an abort within 2 s: ${what}`, { timeout: 60_000 }, async () => {
       pool = await WorkerPool.create({ size: 1, priority: "normal", tickMs: 20 });
       const c = control();
@@ -129,9 +154,10 @@ describe("space jobs in the worker pool", () => {
       const cpu = process.cpuUsage(cpu0);
       expect((cpu.user + cpu.system) / 1e6).toBeLessThan(0.4);
       pool.setPaused(false);
-      if (job.space === "curved") c.aborted = true;
+      // the surface job ends on its 2 s budget; the others are ended here
+      if (job.space !== "surface") c.aborted = true;
       const r = await running;
-      expect(r.termination).toBe(job.space === "curved" ? "aborted" : "time");
+      expect(r.termination).toBe(job.space === "surface" ? "time" : "aborted");
       // active seconds: within the budget and the final stage's 1.5 s, the pause left out
       if (job.space === "surface") expect(r.wallTime).toBeLessThan(2 + 1.5 + 0.5);
     });

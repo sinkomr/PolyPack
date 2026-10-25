@@ -21,13 +21,19 @@ import {
   SPACE_INFO,
   SPACE_MAX_P,
   SPACE_NAMES,
+  POLYHEDRA_MAX_QUATERNION,
+  SPACE_RECORD_MARGIN,
   SPACE_TOL,
   SURFACE_MAX_CHAINS,
   TORUS_MAX_TRANSLATES,
+  BOUNDARY_MAX_CHAINS,
+  BOUNDARY_MAX_S,
 } from "@polypack/spaces";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 import {
   SPACE_GAP_CAP,
+  SPACE_HEAVY_CHECKS_WAITING,
+  SPACE_HEAVY_CHECK_P,
   SPACE_METHOD_LENGTH,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
@@ -215,6 +221,8 @@ curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/0/2
 
 curl -s --compressed "https://YOUR-SITE/api/spaces/targets?spaces=torus,sphere&max_P=20&limit=50"
 
+curl -s --compressed https://YOUR-SITE/api/spaces/boundary/problems/boundary/tesseract/ball/9
+
 curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
   -H "content-type: application/json" \\
   -d '{"space": "torus", "id": "torus/sq/0/2", "name": "my name", "method": "by hand",
@@ -266,8 +274,8 @@ const SPACE_TARGETS = `{
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**
- * The section of the API page on the spaces (surface, curved, sphere, torus): the kinds of problem
- * beyond Flat, which the site files under dimensions and the API calls spaces.
+ * The section of the API page on the spaces (surface, curved, sphere, torus, boundary, polyhedra):
+ * the kinds of problem beyond Flat, which the site files under dimensions and the API calls spaces.
  */
 function spacesSection(): string {
   const rows = SPACE_NAMES.map((name) => {
@@ -287,8 +295,9 @@ function spacesSection(): string {
   ).join("\n");
   return `<h2 id="spaces">Other dimensions: the spaces</h2>
 <p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
-Polygons in polygons, the problems above, are Flat, in 2D in 2D. Four more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature), and Platonic surfaces, Sphere and Torus (2D on 3D).
-The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code> and <code>torus</code>, under <code>/api/spaces</code>.
+Polygons in polygons, the problems above, are Flat, in 2D in 2D. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
+Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki).
+The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> and <code>polyhedra</code>, under <code>/api/spaces</code>.
 Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
 <table>
@@ -300,19 +309,21 @@ ${exhibits}
 </ul>
 
 <h3 id="spaces-certified">Research records and site entries</h3>
-<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic,
+<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code>, exact rational arithmetic),
 at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it to 6 decimals).
 Entries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than ${SPACE_TOL} are rejected.
 The site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.
 <code>best_score</code> is the smaller of the two values.</p>
-<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code> and <code>sphere</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
+<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code> and <code>polyhedra</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
 a little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>
 <p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
 Closed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
-So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.</p>
-<p id="spaces-strict">An entry below the research record by more than that tolerance (<code>beats_certified: true</code>) must also be valid at a strict tolerance, overlaps of at most ${SPACE_STRICT_TOL} instead of ${SPACE_TOL}.
+So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.
+<code>polyhedra</code> asks more against its research records: they keep the clearances of polyhedrainpolyhedra.wiki, up to 1e-7 between pieces and from the walls, so an entry must be below the record's certified size by more than a relative ${SPACE_RECORD_MARGIN.polyhedra.toExponential()} (and below a site leader by more than ${SCORE_TIE}).
+Removing a record's clearance is not a better packing.</p>
+<p id="spaces-strict">An entry below the research record by more than that tolerance (for <code>polyhedra</code>, that margin; <code>beats_certified: true</code>) must also be valid at a strict tolerance, overlaps of at most ${SPACE_STRICT_TOL} instead of ${SPACE_TOL}.
 Without this, a record's own configuration shrunk by about 1e-9, whose pieces then overlap by up to the touching tolerance, would pass as an improvement. Every research record passes the strict check at its stated size.
 An entry that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_REASON)}". There is no review queue for the spaces.</p>
 
@@ -321,7 +332,10 @@ An entry that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_RE
 
 <h3><code>GET /api/spaces/{space}/records</code></h3>
 <p>The catalogue of one space: <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
-<code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations. The answer is kept until an entry of the space changes, together with its gzip bytes, which are sent to clients whose <code>Accept-Encoding</code> accepts gzip (others get it plain).
+<code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations.
+<span id="spaces-extra">Boundary problems also carry <code>extra</code>: <code>{nofold, fold_gain}</code>, where <code>nofold</code> is <code>{value, label}</code>, the best edge when every piece must stay inside one cell (no folding) and what that value rests on,
+and <code>fold_gain</code> = 1 − score_float / nofold.value is how much smaller the research record's polytope is (score_float: the record's search value before the certificate's scaling by 1 + 1e-12); either is <code>null</code> when the record has none.
+Other spaces send no <code>extra</code>.</span> The answer is kept until an entry of the space changes, together with its gzip bytes, which are sent to clients whose <code>Accept-Encoding</code> accepts gzip (others get it plain).
 404 for an unknown space.</p>
 
 <h3><code>GET /api/spaces/{space}/problems/{id}</code></h3>
@@ -336,7 +350,8 @@ A nofold problem is the main site's planar problem of N-gons in the face polygon
 Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
 Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
 the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
-The whole list fits in one answer at the largest <code>limit</code> (1292 targets with the catalogues of 2026-10-24: surface 722, curved 233, sphere 133, torus 204), and the default 500 holds problems of every space.
+The whole list fits in one answer at the largest <code>limit</code> (9821 targets with the catalogues of 2026-10-25: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 8508; about 1.8 MB).
+The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 8514 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
 The ranking is kept until an entry changes.</p>
 <table>
@@ -351,20 +366,22 @@ The ranking is kept until an entry changes.</p>
 <p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most ${MAX_NOTE_LENGTH} characters), <code>software</code> (at most ${MAX_SOFTWARE_LENGTH}), <code>method</code> (free text, at most ${SPACE_METHOD_LENGTH}) and <code>seed</code> (a non-negative integer) are optional.
 Submissions are accepted for the problems of the catalogues only.</p>
 <pre tabindex="0"><code>${esc(SPACE_SUBMIT)}</code></pre>
-<p>The score is the size the configuration states (<code>s</code>, <code>size</code>, <code>rho</code>, <code>L</code>, or √|det(b1, b2)| for a free lattice): the server checks the configuration at that size and does not shrink it.
+<p>The score is the size the configuration states (<code>s</code> for a solid, a polytope or a polyhedra container, <code>size</code>, <code>rho</code>, <code>L</code>, or √|det(b1, b2)| for a free lattice): the server checks the configuration at that size and does not shrink it.
 Response (this example only ties the research record, so it is valid and <a href="#spaces-kept">not kept</a>):</p>
 <pre tabindex="0"><code>${esc(SPACE_SUBMIT_RESPONSE)}</code></pre>
 <table>
 <tr><th scope="row"><code>leader</code></th><td><code>true</code> when the entry was kept: it improved on the problem's <code>best_score</code> by more than the tie tolerance and is now its site leader.</td></tr>
 <tr><th scope="row"><code>best_score</code></th><td>The problem's best value after this submission, the research record's or the site leader's, whichever is smaller: the value a new entry has to beat by more than the tie tolerance to be kept.</td></tr>
 <tr><th scope="row"><code>id</code></th><td>The stored entry, at <code>/api/spaces/entries/{id}</code> while it leads; <code>null</code> when the entry was valid but not kept.</td></tr>
-<tr><th scope="row"><code>beats_certified</code></th><td><code>true</code> when the score is below the research record's certified size by more than the tie tolerance (and the entry passed the <a href="#spaces-strict">strict check</a>).</td></tr>
+<tr><th scope="row"><code>beats_certified</code></th><td><code>true</code> when the score is below the research record's certified size by more than the tie tolerance (for <code>polyhedra</code>, by more than ${SPACE_RECORD_MARGIN.polyhedra.toExponential()}) and the entry passed the <a href="#spaces-strict">strict check</a>.</td></tr>
+<tr><th scope="row"><code>checked</code></th><td><code>false</code> (and otherwise absent) when the server did not check the configuration, because its stated score could not be kept anyway: for <code>polyhedra</code>, a score not below the research record by more than ${SPACE_RECORD_MARGIN.polyhedra.toExponential()} or not below the site's best by more than ${SCORE_TIE}. The answer is then 200 with <code>valid: false</code>, the stated score and a reason; a check of 100 large solids is long, and this keeps posting a record back from costing one.</td></tr>
 </table>
 <p>The statuses are those of <a href="#submit"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href="#spaces-closed">closed</a> problem, not examined;
-413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>.
+413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>, and also 429 while another entry from the same address is being checked (one check at a time per address), and 503 when ${SPACE_HEAVY_CHECKS_WAITING} heavy checks (polyhedra from P = ${SPACE_HEAVY_CHECK_P}) already wait their turn.
 <strong>The rate limit and the verification time budget are shared with <code>/api/submit</code></strong>: both routes count against the same 120 submissions and ${VERIFY_MS_PER_MINUTE / 1000} s of verification a minute per address.</p>
-<p>Every check is bounded. P is at most the largest P of the space's catalogue (${SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(", ")}); sizes are at most ${SPACE_MAX_SIZE}, every coordinate, angle and quaternion component is at most ${SPACE_MAX_COORD} in absolute value (each number on its own), and a quaternion's norm is at least ${SPACE_MIN_QUATERNION_NORM.toExponential()};
-the size must reach the problem's lower bound (less a relative ${SPACE_BOUND_SLACK}), which is checked before the packing; on a surface in fold mode one piece may cross at most ${SURFACE_MAX_CHAINS} chains of faces; on a free torus the basis must need at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces, which any reduced basis does.</p>
+<p>Every check is bounded. P is at most the largest P of the space's catalogue (${SPACE_NAMES.map((n) => `${n} ${SPACE_MAX_P[n]}`).join(", ")}); sizes are at most ${SPACE_MAX_SIZE}, every coordinate, angle and quaternion component is at most ${SPACE_MAX_COORD} in absolute value (each number on its own; a polyhedra quaternion's components, which only give a direction, at most ${POLYHEDRA_MAX_QUATERNION}), and a quaternion's norm is at least ${SPACE_MIN_QUATERNION_NORM.toExponential()};
+the size must reach the problem's lower bound (less a relative ${SPACE_BOUND_SLACK}), which is checked before the packing; on a surface in fold mode one piece may cross at most ${SURFACE_MAX_CHAINS} chains of faces; on a free torus the basis must need at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces, which any reduced basis does;
+on a polytope boundary s is at most ${BOUNDARY_MAX_S}, one piece may cross at most ${BOUNDARY_MAX_CHAINS} chains of cells, and a cube's rotation q must be a unit quaternion to within 1e-9.</p>
 
 <h3><code>GET /api/spaces/entries/{id}</code></h3>
 <p>A stored entry with its configuration: <code>{id, space, problem, score, name, agent_note, software, method, seed, created_at, config}</code>. 404 once it was overtaken (only the leader is kept) or removed.</p>

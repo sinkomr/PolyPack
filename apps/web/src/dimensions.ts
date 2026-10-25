@@ -7,6 +7,7 @@
 import type { SpaceExhibit, SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
 import { safeHref } from "./atlas-model";
+import { foldGain, gainText, plainNofoldLabel, readFoldExtra } from "./boundary-model";
 import { DIMENSIONS, type Dimension, type Family, familyOfSpace } from "./dimension-table";
 import { el } from "./shapes-ui";
 import { isBoardSpace, spaceAddress } from "./space-address";
@@ -14,6 +15,7 @@ import {
   ALL,
   PageState,
   SPACE_FIELDS,
+  certifiedBy,
   configUrl,
   day,
   downloadName,
@@ -242,13 +244,18 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
   const filters = state!.filters;
   const fields = shownFields(space, filters);
   const rows = filterProblems(space, problems, filters);
+  // 3D on 4D: the best edge when every piece stays inside one cell, and what folding gains on it
+  const fold = space === "boundary";
   const head = el("tr");
   head.append(
     ...fields.map((f) => th(f.label)),
     th("P"),
-    th("Certified value", "proven valid by interval arithmetic"),
+    th("Certified value", `proven valid by ${certifiedBy(space)}`),
     th("Status"),
     th("Lower bound"),
+    ...(fold
+      ? [th("Without folding", "every piece inside one cell"), th("Folding gains", "best edge against no folding")]
+      : []),
     th("Site best", "site entry, checked by the server"),
     th("By"),
     th("Entries"),
@@ -270,6 +277,17 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
       const bound = el("td", p.bound ? minus(round6(p.bound.value)) : "—", "num");
       if (p.bound?.label) bound.append(el("span", plainBoundLabel(p.bound.label), "cell-why"));
       tr.append(bound);
+      if (fold) {
+        const nofold = readFoldExtra(p.extra)?.nofold ?? null;
+        const cell = el("td", nofold ? round6(nofold.value) : "—", "num");
+        if (nofold?.label) {
+          // the derivation is a few lines long, so it opens on demand
+          const why = el("details", "", "cell-why");
+          why.append(el("summary", "Why"), plainNofoldLabel(nofold.label));
+          cell.append(why);
+        }
+        tr.append(cell, el("td", gainText(foldGain(p.best_score, nofold?.value)), "num"));
+      }
       const site = el("td", p.site_best ? round6(p.site_best.score) : "—", "num");
       if (siteBelowCertified(p)) site.append(" ", el("span", "below certified", "badge"));
       tr.append(site);

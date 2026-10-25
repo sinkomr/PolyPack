@@ -5,7 +5,9 @@ import { DatabaseSync } from "node:sqlite";
 import { gunzipSync, gzipSync } from "node:zlib";
 import { SCORE_TIE } from "@polypack/geometry";
 import {
+  SPACE_BOUND_SLACK,
   SPACE_NAMES,
+  SPACE_RECORD_MARGIN,
   SPACE_STRICT_REASON,
   SpaceName,
   SpaceProblemResponse,
@@ -18,16 +20,21 @@ import {
   buildSpaceCatalogue,
   validateSpaceSubmission,
 } from "@polypack/spaces";
-import { loadSpacesIndex } from "@polypack/spaces/load";
+import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { MAX_BODY_BYTES } from "../src/limits";
 import type { LoadStats } from "../src/load";
 import {
+  SPACES_CHECKED_ONLY_IF_KEPT,
+  SPACE_HEAVY_CHECKS_WAITING,
+  SPACE_HEAVY_CHECK_P,
   SPACE_GAP_CAP,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
+  SPACE_TARGETS_CACHE_BYTES,
   SPACE_TARGETS_MAX_LIMIT,
+  SpacesOptions,
   acceptsGzip,
   spaceTargetWeight,
 } from "../src/spaces";
@@ -99,7 +106,8 @@ let ip = "1.1.1.1";
 function makeApp(
   extra: Partial<Parameters<typeof createApp>[0]> = {},
   spaces: SpacesIndex = testIndex,
-  gzip?: (text: string) => Uint8Array<ArrayBuffer>,
+  gzip?: (data: Uint8Array) => Uint8Array<ArrayBuffer>,
+  spacesExtra: Partial<SpacesOptions> = {},
 ) {
   store = new SqliteStore(":memory:");
   logs = [];
@@ -109,7 +117,7 @@ function makeApp(
     adminToken: "secret",
     clientIp: () => ip,
     log: (m) => logs.push(m),
-    spaces: { index: spaces, store, gzip },
+    spaces: { index: spaces, store, gzip, ...spacesExtra },
     ...extra,
   });
 }
@@ -129,6 +137,8 @@ function shrunk(space: SpaceName, c: any, f: number): any {
         "L" in L ? { L: L.L * f } : { b1: L.b1.map((x: number) => x * f), b2: L.b2.map((x: number) => x * f) };
       return { lattice, poses: c.poses.map(([x, y, t]: number[]) => [x * f, y * f, t]) };
     }
+    case "boundary":
+      return { s: c.s * f, pieces: c.pieces.map((q: any) => ({ ...q, u: q.u.map((x: number) => x * f) })) };
   }
 }
 
@@ -164,7 +174,7 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 });
 
 describe("GET /api/spaces", () => {
-  it("lists the four spaces with their catalogues and the curvature sweeps", async () => {
+  it("lists the six spaces with their catalogues and the curvature sweeps", async () => {
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
@@ -173,6 +183,8 @@ describe("GET /api/spaces", () => {
       ["curved", 334],
       ["sphere", 166],
       ["torus", 544],
+      ["boundary", 32],
+      ["polyhedra", 8514],
     ]);
     for (const s of r.spaces) {
       expect(s.viewer).toBe(`/spaces/${s.space}.html`);
@@ -260,11 +272,16 @@ describe("GET /api/spaces/:space/records", () => {
     expect(await plain("/api/spaces/surface/records", "identity")).toBe(a);
     expect(await plain("/api/spaces/surface/records", "gzip;q=0")).toBe(a);
     expect(gzips).toBe(1);
-    const t1 = await zipped("/api/spaces/targets?limit=50");
-    expect(await zipped("/api/spaces/targets?limit=50")).toBe(t1);
+    // the targets: the default 500, 2000 and the whole list are kept compressed; other limits are served plain
+    const t1 = await zipped("/api/spaces/targets");
+    expect(await zipped("/api/spaces/targets?limit=500")).toBe(t1);
     expect(gzips).toBe(2);
-    expect(await plain("/api/spaces/targets?limit=50")).toBe(t1);
-    await zipped("/api/spaces/targets?limit=51");
+    expect(await plain("/api/spaces/targets")).toBe(t1);
+    await zipped("/api/spaces/targets?limit=2000");
+    expect(gzips).toBe(3);
+    const odd = await app.request("/api/spaces/targets?limit=51", { headers: { "accept-encoding": "gzip" } });
+    expect(odd.headers.get("content-encoding")).toBeNull();
+    expect(JSON.parse(await odd.text()).targets).toEqual(JSON.parse(t1).targets.slice(0, 51));
     expect(gzips).toBe(3);
     // an entry of the surface space would clear its listing; a torus entry clears the torus listing and the targets
     await zipped("/api/spaces/torus/records");
@@ -274,7 +291,7 @@ describe("GET /api/spaces/:space/records", () => {
     expect(gzips).toBe(4);
     const torus = JSON.parse(await zipped("/api/spaces/torus/records")) as SpaceRecordsResponse;
     expect(torus.problems.find((p) => p.id === "torus/sq/0/2")!.site_best!.score).toBe(L2);
-    expect(JSON.parse(await zipped("/api/spaces/targets?limit=50")).generated_at).not.toBe(JSON.parse(t1).generated_at);
+    expect(JSON.parse(await zipped("/api/spaces/targets")).generated_at).not.toBe(JSON.parse(t1).generated_at);
     expect(gzips).toBe(6);
   });
 
@@ -602,7 +619,13 @@ describe("POST /api/spaces/submit", () => {
     makeApp({}, index);
     // the research record's own configuration shrunk by 1.05e-9: valid at the touching tolerance,
     // and smaller than the record by more than the tie tolerance, but its pieces overlap
-    for (const id of ["torus/sq/3/2", "sphere/3/5", "curved/-1/3/0/2", "surface/tetrahedron/fold/3/5"]) {
+    for (const id of [
+      "torus/sq/3/2",
+      "sphere/3/5",
+      "curved/-1/3/0/2",
+      "surface/tetrahedron/fold/3/5",
+      "boundary/tesseract/cube/4",
+    ]) {
       const space = id.split("/")[0] as SpaceName;
       const p = (await get(`/api/spaces/${space}/problems/${id}`)).body as SpaceProblemResponse;
       const copy = shrunk(space, p.certified_config, 1 - 1.05e-9);
@@ -762,6 +785,227 @@ describe("POST /api/spaces/submit", () => {
   });
 });
 
+describe("POST /api/spaces/submit: boundary records are beaten by the tie tolerance", () => {
+  /** The real catalogues, with a boundary research record certified at its configuration's s times `f`. */
+  function boundaryIndex(id: string, f: number): SpacesIndex {
+    const file = JSON.parse(readFileSync(resolve(root, "data/boundary/records.json"), "utf8"));
+    const rec = file.records.find((r: { id: string }) => r.id === id);
+    const cert = rec.config.s * f;
+    const records = [{ ...rec, score_cert: cert, score_float: cert, display: cert.toFixed(6) }];
+    return { ...index, boundary: buildSpaceCatalogue("boundary", { ...file, records }) };
+  }
+
+  it("does not keep an entry 1e-12 below a boundary record, and keeps one 2e-9 below", async () => {
+    const id = "boundary/tesseract/cube/4";
+    const config = JSON.parse(index.boundary!.byId.get(id)!.config!);
+    const entry = { space: "boundary", id, config, name: "ann" };
+    // the record's own configuration, 1e-12 below the record: a tie
+    makeApp({}, boundaryIndex(id, 1 + 1e-12));
+    const tie = await submit(entry);
+    expect(tie.status).toBe(200);
+    expect(tie.body).toMatchObject({ valid: true, leader: false, id: null, beats_certified: false });
+    // 2e-9 below: kept, after the strict check
+    makeApp({}, boundaryIndex(id, 1 / (1 - 2e-9)));
+    const kept = await submit(entry);
+    expect(kept.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
+    expect(kept.body.id).not.toBeNull();
+  });
+});
+
+describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
+  /** Two unit cubes side by side along x, `gap` apart (negative: overlapping), in a cube of edge s. */
+  const cubes = (s: number, gap = 0) => ({
+    s,
+    pieces: [
+      [-0.5 - gap / 2, 0, 0, 1, 0, 0, 0],
+      [0.5 + gap / 2, 0, 0, 1, 0, 0, 0],
+    ],
+  });
+  const entry = (config: unknown, id = "polyhedra/cubincub/2") => ({ space: "polyhedra", id, config, name: "ann" });
+  /** The real catalogues, with one polyhedra record replaced: certified at `cert` with configuration `config`. */
+  function replaced(id: string, cert: number, config: { s: number; pieces: number[][] }): SpacesIndex {
+    const p = index.polyhedra!.byId.get(id)!;
+    const file = {
+      generated: "test",
+      records: index.polyhedra!.problems.map((q) => {
+        const fields = q.fields as { code: string; piece: string; container: string };
+        const base = { id: q.id, code: fields.code, piece: fields.piece, container: fields.container, P: q.P };
+        const family = "platonic";
+        if (q.id !== p.id) {
+          // the others keep their place in the files of configurations
+          return { ...base, family, score_float: q.certified!.score, score_cert: q.certified!.score, display: q.certified!.display, status: q.status, config_at: q.configAt, bound: { value: q.bound!.value, kind: "volume" } };
+        }
+        return { ...base, family, score_float: cert, score_cert: cert, display: cert.toFixed(6), status: "best_known", config, bound: { value: q.bound!.value, kind: "volume" } };
+      }),
+    };
+    return { ...index, polyhedra: buildSpaceCatalogue("polyhedra", file) };
+  }
+  /** The real catalogues, with polyhedra/cubincub/2's research record made worse: certified at `cert`. */
+  const polyhedraIndex = (cert: number) => replaced("polyhedra/cubincub/2", cert, cubes(cert, cert - 2));
+  /** P unit cubes in a row along x, `gap` apart, in a cube of edge s. */
+  const row = (P: number, s: number, gap = 0) => ({
+    s,
+    pieces: Array.from({ length: P }, (_, i) => [(i - (P - 1) / 2) * (1 + gap), 0, 0, 1, 0, 0, 0]),
+  });
+
+  it("checks an entry that could be kept, and refuses an overlapping or protruding one, with reasons", async () => {
+    makeApp({}, polyhedraIndex(2.1));
+    const over = await submit(entry(cubes(2, -1e-6)));
+    expect(over.status).toBe(422);
+    expect(over.body.reasons[0]).toMatch(/pieces 0 and 1 overlap by/);
+    const out = await submit(entry(cubes(2 - 2e-6)));
+    expect(out.status).toBe(422);
+    expect(out.body.reasons[0]).toMatch(/sticks out of the container/);
+    expect(await store.spaceLeaders()).toEqual([]);
+    // two touching cubes in a cube of edge 2, below the record of 2.1: valid and kept
+    const touching = await submit(entry(cubes(2)));
+    expect(touching.status).toBe(200);
+    expect(touching.body).toMatchObject({ valid: true, reasons: [], score: 2, leader: true, best_score: 2, beats_certified: true });
+  });
+
+  it("answers an entry that cannot be kept without checking it: the research record posted back", async () => {
+    makeApp({}, index);
+    const id = "polyhedra/tidintid/100";
+    const p = (await get(`/api/spaces/polyhedra/problems/${id}`)).body as SpaceProblemResponse;
+    const t0 = performance.now();
+    const r = await submit(entry(p.certified_config, id));
+    expect(performance.now() - t0).toBeLessThan(50);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({
+      valid: false,
+      score: p.certified!.score,
+      leader: false,
+      best_score: p.certified!.score,
+      id: null,
+      beats_certified: false,
+      checked: false,
+    });
+    expect(r.body.reasons[0]).toMatch(/^not checked: a size of .* cannot be kept/);
+    // an overlap at an unkeepable size is not looked at either; malformed input is still refused
+    expect((await submit(entry(cubes(2.5, -0.5)))).body).toMatchObject({ checked: false });
+    expect((await submit(entry({ s: 2, pieces: [[0, 0, 0, 1, 0, 0]] }))).status).toBe(400);
+    // the other kinds keep answering "valid, not kept" for such an entry
+    expect(SPACES_CHECKED_ONLY_IF_KEPT).toEqual(new Set(["polyhedra"]));
+  });
+
+  it("keeps an entry only below the research record by more than a relative 1e-6, then by the tie rule", async () => {
+    makeApp({}, polyhedraIndex(2.00001));
+    // 5e-7 below the record: not kept, and so not checked
+    const near = await submit(entry(cubes(2.000009, 0.000009)));
+    expect(near.body).toMatchObject({ valid: false, checked: false, leader: false, id: null, beats_certified: false, best_score: 2.00001 });
+    // 4.25e-6 below: kept, and it beats the record
+    const kept = await submit(entry(cubes(2.0000015, 0.0000015)));
+    expect(kept.body).toMatchObject({ valid: true, leader: true, beats_certified: true, best_score: 2.0000015 });
+    expect(kept.body.id).not.toBeNull();
+    expect(logs.some((l) => l.includes("leads polyhedra/cubincub/2"))).toBe(true);
+    // against the site leader, the tie tolerance: 5e-10 below is a tie, 5e-8 below is kept
+    const tieS = 2.0000015 * (1 - 5e-10);
+    const tie = await submit(entry(cubes(tieS, tieS - 2)));
+    expect(tie.body).toMatchObject({ valid: false, checked: false, leader: false, id: null, best_score: 2.0000015 });
+    const better = await submit(entry(cubes(2.0000014, 0.0000014)));
+    expect(better.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
+    const listing = (await get("/api/spaces/polyhedra/records")).body as SpaceRecordsResponse;
+    const p = listing.problems.find((x) => x.id === "polyhedra/cubincub/2")!;
+    expect(p.site_best?.score).toBe(2.0000014);
+    expect(p.best_score).toBe(2.0000014);
+  });
+
+  it("refuses malformed configurations, a P above the catalogue's and oversized bodies", async () => {
+    makeApp({}, index);
+    const bad = async (config: unknown, id?: string) => (await submit(entry(config, id))).status;
+    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 1e101, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
+    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 1, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
+    expect(await bad({ s: "2", pieces: cubes(2).pieces })).toBe(400);
+    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 0, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
+    // a wrong count is an invalid packing, not a malformed body
+    expect(await bad({ s: 3, pieces: cubes(3).pieces }, "polyhedra/cubincub/3")).toBe(422);
+    const big = await submit(entry(row(101, 120), "polyhedra/cubincub/101"));
+    expect(big.status).toBe(400);
+    expect(big.body.reasons[0]).toMatch(/is not in the polyhedra catalogue/);
+    const huge = await submit({ ...entry(cubes(2)), agent_note: "x".repeat(300 * 1024) });
+    expect(huge.status).toBe(413);
+    expect(await store.spaceLeaders()).toEqual([]);
+  });
+
+  it("checks P = 100, the cap: an overlap is refused, 100 cubes in a row below a record of 101 are kept", async () => {
+    const id = "polyhedra/cubincub/100";
+    makeApp({}, replaced(id, 101, row(100, 101, 0.01)));
+    const over = await submit(entry(row(100, 100, -1e-6), id));
+    expect(over.status).toBe(422);
+    expect(over.body.reasons[0]).toMatch(/overlap by/);
+    const ok = await submit(entry(row(100, 100), id));
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ valid: true, score: 100, leader: true, beats_certified: true });
+  });
+
+  it("checks 100 of the largest solids in short slices of work, one heavy check at a time", async () => {
+    // the record of polyhedra/tidintid/100, below a record made 0.1 % worse: checked at the touching
+    // tolerance and again at the strict one, then kept
+    const id = "polyhedra/tidintid/100";
+    const real = index.polyhedra!.byId.get(id)!;
+    const config = JSON.parse(readEntryConfigSync(root, index.polyhedra!, real)!);
+    const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
+    makeApp({}, replaced(id, real.certified!.score * 1.001, { ...config, s: real.certified!.score * 1.001 }), undefined, {
+      onCheck: (c) => checks.push(c),
+    });
+    const r = await submit(entry(config, id));
+    expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
+    // [CALC] about 0.3 s of work for both checks, in slices of 20 ms measured inside the slicer: one block of
+    // a whole check (about 0.15 s) would fail this, a loaded machine does not
+    expect(checks).toHaveLength(1);
+    expect(checks[0].slices).toBeGreaterThan(5);
+    expect(checks[0].longestSliceMs).toBeLessThan(100);
+  });
+
+  it("checks one entry at a time per address, and the heavy checks one at a time", async () => {
+    const id = "polyhedra/tidintid/100";
+    const real = index.polyhedra!.byId.get(id)!;
+    const config = JSON.parse(readEntryConfigSync(root, index.polyhedra!, real)!);
+    // a copy of piece 0 as the last piece: below the record, so it is checked in full, and refused
+    const forged = { s: real.certified!.score * 0.999, pieces: [...config.pieces.slice(0, 99), [...config.pieces[0]]] };
+    const checks: { workMs: number }[] = [];
+    makeApp({ clientIp: (c) => c.req.header("x-test-ip") ?? ip }, index, undefined, { onCheck: (c) => checks.push(c) });
+    const from = async (address: string) => {
+      const r = await app.request("/api/spaces/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-test-ip": address },
+        body: JSON.stringify(entry(forged, id)),
+      });
+      return { status: r.status, body: (await r.json()) as SpaceSubmitResponse };
+    };
+    // eight at once from one address: one is checked, the others are told to wait
+    const one = await Promise.all(Array.from({ length: 8 }, () => from("3.3.3.3")));
+    expect(one.map((a) => a.status).sort()).toEqual([422, 429, 429, 429, 429, 429, 429, 429]);
+    expect(one.find((a) => a.status === 429)!.body.reasons[0]).toMatch(/still being checked/);
+    expect(checks).toHaveLength(1);
+    // eight addresses at once: all are checked, in turn
+    const many = await Promise.all(Array.from({ length: 8 }, (_, k) => from(`2.2.2.${k}`)));
+    expect(many.map((a) => a.status)).toEqual(Array(8).fill(422));
+    expect(checks).toHaveLength(9);
+    expect(SPACE_HEAVY_CHECK_P).toBe(30);
+    expect(SPACE_HEAVY_CHECKS_WAITING).toBe(8);
+  });
+
+  it("serves a research configuration kept apart, read on demand, the same as its file", async () => {
+    makeApp({}, index);
+    const id = "polyhedra/phcinphc/100";
+    const entryOf = index.polyhedra!.byId.get(id)!;
+    expect(entryOf.config).toBeNull();
+    expect(entryOf.configApart).toBe(true);
+    const r = await get(`/api/spaces/polyhedra/problems/${id}`);
+    expect(r.status).toBe(200);
+    const body = r.body as SpaceProblemResponse;
+    const [offset, length] = entryOf.configAt!;
+    const file = readFileSync(resolve(root, "data/polyhedra/configs/phcinphc.jsonl"));
+    expect(body.certified_config).toEqual(JSON.parse(file.subarray(offset, offset + length).toString("utf8")).config);
+    expect((body.certified_config as { pieces: unknown[] }).pieces).toHaveLength(100);
+    // and again, from the cache
+    expect(((await get(`/api/spaces/polyhedra/problems/${id}`)).body as SpaceProblemResponse).certified_config).toEqual(
+      body.certified_config,
+    );
+  });
+});
+
 describe("GET /api/spaces/targets", () => {
   /** The work list as the rule says it should be, from the research records alone (no site entries). */
   function expected(): Map<string, { space: SpaceName; P: number; raw: number }> {
@@ -771,7 +1015,10 @@ describe("GET /api/spaces/targets", () => {
         if (!acceptsSubmissions(p) || (space === "surface" && p.fields.mode === "nofold")) continue;
         const gap = (p.certified!.score - p.bound!.value) / p.certified!.score;
         const w = spaceTargetWeight(p.P);
-        if (gap > SPACE_SETTLED_GAP && w > 0) out.set(p.id, { space, P: p.P, raw: Math.min(gap, SPACE_GAP_CAP) * w });
+        // a record within its space's margin of the lower bound cannot be beaten by a kept entry
+        const unbeatable = !(p.certified!.score * (1 - SPACE_RECORD_MARGIN[space]) > p.bound!.value * (1 - SPACE_BOUND_SLACK));
+        if (gap > SPACE_SETTLED_GAP && w > 0 && !unbeatable)
+          out.set(p.id, { space, P: p.P, raw: Math.min(gap, SPACE_GAP_CAP) * w });
       }
     return out;
   }
@@ -790,6 +1037,11 @@ describe("GET /api/spaces/targets", () => {
     for (const id of ["sphere/0/2", "curved/1/0/0/2", "torus/sq/0/2", "torus/free/3/1", "surface/cube/nofold/4/12"])
       expect(ids.has(id), id).toBe(false);
     expect(r.targets.some((t) => t.P === 1 || t.id.includes("/nofold/"))).toBe(false);
+    // polyhedra records at their volume bound to within the record margin: nothing can be kept below them
+    for (const id of ["cubincub/8", "cubincub/27", "cubincub/64", "pr3inpr3/8", "pr3inpr3/27", "pr3inpr3/64"])
+      expect(ids.has(`polyhedra/${id}`), id).toBe(false);
+    // the margin rule leaves the spaces whose margin is the tie tolerance as they were
+    expect(r.targets.filter((t) => t.space === "boundary").length).toBe(28);
     for (const t of r.targets) {
       const p = index[t.space]!.byId.get(t.id)!;
       expect(t).toMatchObject({
@@ -809,20 +1061,60 @@ describe("GET /api/spaces/targets", () => {
     for (const v of want.values()) sums.set(v.space, (sums.get(v.space) ?? 0) + v.raw);
     expect([...sums.keys()].sort()).toEqual([...SPACE_NAMES].sort());
     const share = new Map<SpaceName, number>();
+    const n = SPACE_NAMES.length;
     for (const t of r.targets) {
       const v = want.get(t.id)!;
-      expect(t.priority / (v.raw / (4 * sums.get(t.space)!)), t.id).toBeCloseTo(1, 12);
+      expect(t.priority / (v.raw / (n * sums.get(t.space)!)), t.id).toBeCloseTo(1, 12);
       share.set(t.space, (share.get(t.space) ?? 0) + t.priority);
     }
-    for (const s of SPACE_NAMES) expect(share.get(s), s).toBeCloseTo(0.25, 12);
+    for (const s of SPACE_NAMES) expect(share.get(s), s).toBeCloseTo(1 / n, 12);
     expect(spaceTargetWeight(1)).toBe(0);
     expect(spaceTargetWeight(2)).toBeCloseTo(0.2, 15);
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
-    // the default list holds problems of all four spaces
+    // the default list is the head of the whole list and holds problems of every space but polyhedra:
+    // its 8,514 problems share one space's share of the priority, so they come after the others' head
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
-    expect(new Set(first.targets.map((t) => t.space))).toEqual(new Set(SPACE_NAMES));
+    expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));
+    expect(new Set(first.targets.map((t) => t.space))).toEqual(new Set(SPACE_NAMES.filter((s) => s !== "polyhedra")));
+    const polyhedra = (await get("/api/spaces/targets?spaces=polyhedra")).body as SpaceTargetsResponse;
+    expect(polyhedra.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
+    expect(polyhedra.targets.every((t) => t.space === "polyhedra")).toBe(true);
+  });
+
+  it("keeps its answers within a bound in bytes, and one answer for the queries that give it", async () => {
+    expect(SPACE_TARGETS_CACHE_BYTES).toBe(16_000_000);
+    const bound = 5_000_000;
+    let most = 0;
+    let gzips = 0;
+    makeApp({}, index, (text) => (gzips++, new Uint8Array(gzipSync(text))), {
+      targetsCacheBytes: bound,
+      onTargetsCache: (bytes) => (most = Math.max(most, bytes)),
+    });
+    // 256 queries of the whole list under different max_P and limit: one answer, compressed once
+    const whole = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
+    for (let k = 0; k < 256; k++) {
+      const r = await app.request(`/api/spaces/targets?limit=${10000 - (k % 150)}&max_P=${100 + k}`, {
+        headers: { "accept-encoding": "gzip" },
+      });
+      const body = JSON.parse(gunzipSync(Buffer.from(await r.arrayBuffer())).toString("utf8")) as SpaceTargetsResponse;
+      expect(body.targets.length).toBe(whole.targets.length);
+    }
+    expect(gzips).toBe(1);
+    // 256 distinct answers, with and without gzip: the cache stays within its bound
+    for (let k = 0; k < 256; k++) {
+      const q = `/api/spaces/targets?limit=${5000 + k}&max_P=${1 + (k % 99)}`;
+      const r = await app.request(q, k % 2 ? { headers: { "accept-encoding": "gzip" } } : {});
+      expect(r.status).toBe(200);
+      await r.arrayBuffer();
+    }
+    expect(most).toBeGreaterThan(1_000_000);
+    expect(most).toBeLessThanOrEqual(bound);
+    // answers drawn from the cache are still right
+    const small = (await get("/api/spaces/targets?max_P=5&limit=10000")).body as SpaceTargetsResponse;
+    expect(small.targets.length).toBeGreaterThan(0);
+    expect(small.targets.every((t) => t.P <= 5)).toBe(true);
   });
 
   it("filters by space and P and caps the answer", async () => {

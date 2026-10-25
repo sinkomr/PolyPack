@@ -2,9 +2,23 @@
  * The catalogue of a space: its research records (data/<space>/records.json) reduced to what the
  * site needs, one compact entry per problem, with the configuration kept as JSON text. Pure: the
  * caller reads the file (see load.ts) and passes the parsed JSON, which can then be dropped.
+ *
+ * A space whose records file keeps the configurations apart (polyhedra: data/polyhedra/configs/
+ * <code>.jsonl, one file per problem, one line per P, which each record's `config_at` locates)
+ * has entries without configuration text (`configApart`, `configAt`); load.ts then gives the
+ * catalogue a `loadConfig` that reads one on demand.
  */
-import { ParsedSpaceId, SURFACE_MODES, SURFACE_SOLIDS, TORUS_FAMILIES, parseSpaceId } from "./ids";
-import { CertifiedStatus, CertifiedValue, SpaceName, SpaceProblemSummary, SiteBest } from "./types";
+import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
+import {
+  BOUNDARY_PIECES,
+  BOUNDARY_POLYTOPES,
+  ParsedSpaceId,
+  SURFACE_MODES,
+  SURFACE_SOLIDS,
+  TORUS_FAMILIES,
+  parseSpaceId,
+} from "./ids";
+import { CertifiedStatus, CertifiedValue, SiteBest, SpaceName, SpaceProblemExtra, SpaceProblemSummary } from "./types";
 import { parseSpaceConfig } from "./validate";
 
 /** One problem of a catalogue. */
@@ -22,10 +36,17 @@ export interface SpaceProblemEntry {
   closed_reason: string | null;
   /**
    * The research record's configuration in the space's format, as JSON text; null when there is
-   * none (infeasible). Its stated size is score_cert for curved and sphere, and score_float for
-   * surface and torus, whose certificates shrink the pieces instead (score_cert = size / (1 - eps)).
+   * none (infeasible). Its stated size is score_cert for curved, sphere, boundary and polyhedra,
+   * and score_float for surface and torus, whose certificates shrink the pieces instead
+   * (score_cert = size / (1 - eps)).
    */
   config: string | null;
+  /** True when the configuration is kept in a file of its own and read on demand (SpaceCatalogue.loadConfig). */
+  configApart?: boolean;
+  /** Where it is in that file: the byte offset and length of its line (the record's config_at). */
+  configAt?: readonly [number, number];
+  /** The nofold comparison (boundary only); absent for the other spaces. */
+  extra?: SpaceProblemExtra;
 }
 
 export interface SpaceCatalogue {
@@ -37,7 +58,38 @@ export interface SpaceCatalogue {
   maxP: number;
   /** Records left out, with the reason (none for the shipped data; a test checks it). */
   skipped: string[];
+  /**
+   * Reads the research configuration of an entry whose configuration is kept apart (configApart),
+   * checked as the catalogue checks the others; null when it cannot be read. Set by load.ts.
+   */
+  loadConfig?: (entry: SpaceProblemEntry) => Promise<string | null>;
 }
+
+/** The research configuration of an entry, as JSON text: kept in the entry, or read on demand. */
+export async function entryConfig(cat: SpaceCatalogue, entry: SpaceProblemEntry): Promise<string | null> {
+  if (entry.config !== null || !entry.configApart) return entry.config;
+  return cat.loadConfig ? cat.loadConfig(entry) : null;
+}
+
+/**
+ * Where a configuration kept apart lives: the file configs/<file>.jsonl below the space's data
+ * folder, and the byte offset and length of its line there. For polyhedra the file is the
+ * problem's code. The file name comes from a catalogue entry (a known code), never from a request.
+ */
+export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "configAt">): {
+  file: string;
+  offset: number;
+  length: number;
+} {
+  const [offset, length] = entry.configAt ?? [0, 0];
+  return { file: String(entry.fields.code), offset, length };
+}
+
+/** Longest line of a configuration kept apart that is read (a P = 100 configuration is about 20 kB). */
+export const CONFIG_LINE_MAX = 1_000_000;
+
+/** Spaces whose records file may keep the configurations apart. */
+const CONFIGS_APART: readonly SpaceName[] = ["polyhedra"];
 
 /** The loaded catalogues; a space whose records file is missing is absent. */
 export type SpacesIndex = Partial<Record<SpaceName, SpaceCatalogue>>;
@@ -52,9 +104,12 @@ function recordConfig(space: SpaceName, r: Rec): unknown {
       return { s: r.s, pieces: r.pieces };
     case "curved":
     case "sphere":
+    case "boundary":
       return r.config;
     case "torus":
       return r.configuration;
+    case "polyhedra":
+      return r.config;
   }
 }
 
@@ -69,7 +124,26 @@ function recordFields(space: SpaceName, r: Rec): Record<string, unknown> {
       return { N: r.N, P: r.P };
     case "torus":
       return { family: r.family, N: r.N, P: r.P };
+    case "boundary":
+      return { polytope: r.polytope, piece: r.piece, P: r.P };
+    case "polyhedra":
+      return { code: r.code, piece: r.piece, container: r.container, P: r.P };
   }
+}
+
+/**
+ * The record's nofold comparison (boundary): `nofold` {value, source} and `fold_gain`, each kept
+ * only when it is well formed; undefined for the other spaces.
+ */
+function extraOf(space: SpaceName, r: Rec): SpaceProblemExtra | undefined {
+  if (space !== "boundary") return undefined;
+  const n = isObject(r.nofold) ? r.nofold : null;
+  const value = n && typeof n.value === "number" && Number.isFinite(n.value) && n.value > 0 ? n.value : null;
+  const gain = typeof r.fold_gain === "number" && Number.isFinite(r.fold_gain) ? r.fold_gain : null;
+  return {
+    nofold: value === null ? null : { value, label: typeof n!.source === "string" ? n!.source : "" },
+    fold_gain: gain,
+  };
 }
 
 /** The bound as {value, label}: from `value` (surface, sphere, torus) or `lower` (curved). */
@@ -81,7 +155,7 @@ function boundOf(space: SpaceName, b: unknown): { value: number; label: string }
   const kind = typeof b.kind === "string" ? b.kind.replace(/[-_]/g, " ") : "";
   // surface and curved labels carry only the kind of claim ([CALC], rigorous); their `kind` says
   // which bound it is: one word ("area", "one piece") or a sentence of its own
-  if ((space === "surface" || space === "curved") && kind) {
+  if ((space === "surface" || space === "curved" || space === "polyhedra") && kind) {
     const what = /^[a-z]+( piece)?$/.test(kind) ? `${kind} bound` : kind;
     return { value, label: label ? `${what}; ${label}` : what };
   }
@@ -103,13 +177,22 @@ function closedReason(space: SpaceName, r: Rec, status: CertifiedStatus, id: Par
   return null;
 }
 
-const ORDER: Record<string, readonly string[]> = { solid: SURFACE_SOLIDS, mode: SURFACE_MODES, family: TORUS_FAMILIES };
+const ORDER: Record<string, readonly string[]> = {
+  solid: SURFACE_SOLIDS,
+  mode: SURFACE_MODES,
+  family: TORUS_FAMILIES,
+  polytope: BOUNDARY_POLYTOPES,
+  piece: BOUNDARY_PIECES,
+  code: PROBLEM_CODES,
+};
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
   surface: ["solid", "mode", "N", "P"],
   curved: ["K", "N", "M", "P"],
   sphere: ["N", "P"],
   torus: ["family", "N", "P"],
+  boundary: ["polytope", "piece", "P"],
+  polyhedra: ["code", "P"],
 };
 
 export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry): number {
@@ -156,19 +239,41 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
     }
     let certified: CertifiedValue | null = null;
     let config: string | null = null;
+    let configApart = false;
+    let configAt: [number, number] | null = null;
     if (status !== "infeasible") {
       if (typeof r.score_cert !== "number" || !Number.isFinite(r.score_cert) || typeof r.display !== "string") {
         skipped.push(`${id.id}: score_cert or display is missing`);
         continue;
       }
-      const parsed = parseSpaceConfig(id, recordConfig(space, r));
-      if (!parsed.ok) {
-        skipped.push(`${id.id}: ${parsed.errors.join("; ")}`);
-        continue;
+      const raw = recordConfig(space, r);
+      if (raw === undefined && CONFIGS_APART.includes(space)) {
+        const at = r.config_at;
+        if (
+          !Array.isArray(at) ||
+          at.length !== 2 ||
+          !Number.isSafeInteger(at[0]) ||
+          at[0] < 0 ||
+          !Number.isSafeInteger(at[1]) ||
+          at[1] < 1 ||
+          at[1] > CONFIG_LINE_MAX
+        ) {
+          skipped.push(`${id.id}: no configuration, and no config_at [offset, length] of one kept apart`);
+          continue;
+        }
+        configApart = true;
+        configAt = [at[0], at[1]];
+      } else {
+        const parsed = parseSpaceConfig(id, raw);
+        if (!parsed.ok) {
+          skipped.push(`${id.id}: ${parsed.errors.join("; ")}`);
+          continue;
+        }
+        config = JSON.stringify(parsed.config);
       }
       certified = { score: r.score_cert, display: r.display, status };
-      config = JSON.stringify(parsed.config);
     }
+    const extra = extraOf(space, r);
     problems.push({
       space,
       id: id.id,
@@ -179,6 +284,8 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
       bound: boundOf(space, r.bound),
       closed_reason: closedReason(space, r, status, id),
       config,
+      ...(configApart ? { configApart, configAt: configAt! } : {}),
+      ...(extra ? { extra } : {}),
     });
   }
   problems.sort(compareSpaceProblems);
@@ -223,5 +330,6 @@ export function spaceProblemSummary(p: SpaceProblemEntry, site: SiteBest | null)
     best_score: values.length ? Math.min(...values) : null,
     accepts_submissions: open,
     closed_reason: p.closed_reason,
+    ...(p.extra ? { extra: p.extra } : {}),
   };
 }

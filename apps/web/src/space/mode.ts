@@ -17,14 +17,15 @@ import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
 import type { SpaceCheck } from "@polypack/spaces/search";
-import { downloadName } from "../spaces-model";
+import { certifiedBy, downloadName } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceProblem } from "./load";
 import {
   DEFAULT_PROBLEM,
+  EVALS_MAX,
   EVAL_UNIT,
-  FRESH_EVALS,
+  freshSize,
   LARGE_FOLD,
   METHOD_TEXT,
   type LoadedSpaceProblem,
@@ -105,6 +106,20 @@ const count = (n: number, one: string, many: string) => `${n.toLocaleString("en-
 const progressText = (q: { rounds: number; evaluations: number; seconds: number }) =>
   `${count(q.rounds, "round", "rounds")} · ${count(q.evaluations, "evaluation", "evaluations")} · ${q.seconds.toFixed(1)} s`;
 
+/** How the drawing is turned, in the About section's words: the 2D kinds share one sentence. */
+const TURN_2D =
+  "Drag the globe or the solid to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).";
+const TURN_HELP: Record<SpaceName, string> = {
+  surface: TURN_2D,
+  curved: TURN_2D,
+  sphere: TURN_2D,
+  torus: TURN_2D,
+  boundary:
+    "Cells shows the eight cubes of the boundary side by side; Net unfolds them, and Fold folds the net up into the fourth dimension; Slice cuts the boundary across one axis. Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and − to zoom, Page Up and Page Down to follow one piece, Home to reset.",
+  polyhedra:
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+};
+
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
   evals: "Evaluation limit reached",
   time: "Time limit reached",
@@ -129,6 +144,11 @@ class SpaceMode {
       valid: r.check.valid,
       submittable: !$<HTMLButtonElement>("space-submit").disabled,
     };
+  }
+
+  /** The drawing shown (for the console, the tests and measurements of the 3D drawing). */
+  get renderer(): SpaceView["renderer"] | null {
+    return this.view?.renderer ?? null;
   }
 
   private space: SpaceName | null = null;
@@ -220,11 +240,7 @@ class SpaceMode {
         h("button", { id: "space-show-best", type: "button" }, "Show the problem's best"),
         h("button", { id: "space-show-result", type: "button" }, "Show the result"),
       ),
-      h(
-        "p",
-        { class: "note" },
-        "The certified value is proven valid with interval arithmetic. The site best is an entry sent to this site and checked by the server in floating point.",
-      ),
+      h("p", { id: "space-values-note", class: "note" }),
     );
 
     const time = h("input", { id: "space-solve-time", type: "range", min: "1", max: "300", step: "1", value: "15" });
@@ -373,11 +389,7 @@ class SpaceMode {
         h(
           "ul",
           { class: "help" },
-          h(
-            "li",
-            {},
-            "Drag the globe or the solid to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
-          ),
+          h("li", { id: "space-turn-help" }),
           h("li", {}, "Pieces are not moved by hand here. Run the optimizer to improve the shown packing."),
           h(
             "li",
@@ -448,11 +460,19 @@ class SpaceMode {
   async enter(space: BoardSpace, id: string | null): Promise<void> {
     const wanted = id ?? this.last.get(space) ?? null;
     if (space === this.space && this.handle && (wanted === null || wanted === this.handle.problem.id)) {
+      // a drawing released on leaving is made again, showing what it showed
+      if (!this.view) {
+        this.view = this.handle.render($("space-view-host"));
+        this.view.show(this.shownConfig()?.config ?? null);
+      }
       this.setAddress();
       return;
     }
     this.space = space;
     $("space-summary").textContent = SPACE_INFO[space].summary;
+    $("space-turn-help").textContent = TURN_HELP[space];
+    $("space-values-note").textContent =
+      `The certified value is proven valid with ${certifiedBy(space)}. The site best is an entry sent to this site and checked by the server in floating point.`;
     $<HTMLAnchorElement>("space-docs").href = SPACE_INFO[space].docs;
     $<HTMLAnchorElement>("space-records").href = `/dimensions.html#space=${space}`;
     await this.open(space, wanted);
@@ -460,6 +480,23 @@ class SpaceMode {
 
   leave(): void {
     this.stopRun("left");
+    // a load still waiting for the server neither draws nor rewrites the address once the board
+    // shows another kind
+    this.token++;
+    // and the problem shown stays as it was: no "Loading" over it, and its own fields in the picker
+    if (this.loading) {
+      this.busy(null);
+      const shownId = this.handle?.problem.id ?? null;
+      this.pendingId = shownId;
+      const problems = this.space ? this.records.get(this.space) : undefined;
+      if (this.space && shownId && problems)
+        this.renderPicker(this.space, pickProblem(this.space, problems, fieldsOfId(this.space, shownId)).fields);
+    }
+    // a 3D drawing gives back its WebGL context while the board shows another kind
+    if (this.view?.renderer?.releaseOnLeave) {
+      this.view.destroy();
+      this.view = null;
+    }
   }
 
   /** Shows a problem of the space: the one wanted when the catalogue has it, else the nearest one. */
@@ -542,7 +579,8 @@ class SpaceMode {
     this.result = null;
     this.finished = null;
     this.shown = "best";
-    if (!sameProblem || !this.view) {
+    // a 3D view keeps its camera, fold and slice for another P of the same piece
+    if (!this.view || !(sameProblem || this.view.canShow?.(p.search))) {
       this.view?.destroy();
       this.view = this.handle.render($("space-view-host"));
     }
@@ -598,7 +636,8 @@ class SpaceMode {
   private setDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
     const fold = kind === "surface";
-    const key = fold ? `${kind}/${p.P}` : kind;
+    // fold and polyhedra budgets grow with P
+    const key = fold || kind === "polyhedra" ? `${kind}/${p.P}` : kind;
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search);
@@ -606,12 +645,14 @@ class SpaceMode {
       $("space-solve-time-value").textContent = `${d.time_s} s`;
       $<HTMLInputElement>("space-solve-evals").value = String(d.evals);
     }
+    $<HTMLInputElement>("space-solve-evals").max = String(EVALS_MAX[kind]);
     $("space-method").replaceChildren(h("b", {}, "Method: "), METHOD_TEXT[kind]);
     const size = roundSize(p.search);
+    const fresh = freshSize(p.search);
     const n = (v: number) => v.toLocaleString("en-US");
     $("space-solve-unit").textContent =
       `An evaluation here is ${EVAL_UNIT[kind]}. The search runs in rounds of ${n(size)}, each from the best so far` +
-      (FRESH_EVALS[kind] > size ? `; a new arrangement needs a first round of ${n(FRESH_EVALS[kind])}` : "") +
+      (fresh > size ? `; a new arrangement needs a first round of ${n(fresh)}` : "") +
       ". With Evaluations only, the same seed gives the same result." +
       (fold && p.P >= 20
         ? ` Fold rounds on ${p.P} pieces are slow: one compression can take ${p.P >= LARGE_FOLD ? "half a minute or more" : "several seconds"}, and the time limit ends the run.`
@@ -655,9 +696,8 @@ class SpaceMode {
     if (p && !facts.childElementCount)
       for (const f of problemFacts(p)) {
         const dd = h("dd", {}, f.value);
-        // a closed problem's reason can be long (a proof is cited), so it opens on demand
-        if (f.note && f.label === "Entries")
-          dd.append(h("details", { class: "fact-note" }, h("summary", {}, "Why"), f.note));
+        // a long note (a closed problem's proof, how a value is derived) opens on demand
+        if (f.note && f.details) dd.append(h("details", { class: "fact-note" }, h("summary", {}, "Why"), f.note));
         else if (f.note) dd.append(h("span", { class: "fact-note" }, f.note));
         facts.append(h("dt", {}, f.label), dd);
       }
@@ -730,9 +770,10 @@ class SpaceMode {
     const evals = field("space-solve-evals") === "" ? NaN : Number(field("space-solve-evals"));
     const seed = field("space-solve-seed") === "" ? NaN : Number(field("space-solve-seed"));
     const time = Number($<HTMLInputElement>("space-solve-time").value);
-    if (!Number.isSafeInteger(evals) || evals < 1 || evals > 1_000_000) {
+    const max = this.handle ? EVALS_MAX[searchKind(this.handle.problem.search)] : 1_000_000;
+    if (!Number.isSafeInteger(evals) || evals < 1 || evals > max) {
       $("space-solve-evals").focus();
-      return "Evaluations: enter a whole number from 1 to 1,000,000. Nothing was run.";
+      return `Evaluations: enter a whole number from 1 to ${max.toLocaleString("en-US")}. Nothing was run.`;
     }
     if (!Number.isInteger(seed) || seed < 0 || seed > 0xffffffff) {
       $("space-solve-seed").focus();
@@ -930,7 +971,7 @@ class SpaceMode {
       space: p.space,
       id: p.id,
       method: this.handle!.method,
-      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: FRESH_EVALS[kind] },
+      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: freshSize(p.search) },
       start: info.start,
       start_from: fromText(info.from),
       result: r.best ? { score: r.best.score, round: r.best.round, seed: r.best.seed, config: r.best.config } : null,

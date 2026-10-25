@@ -15,6 +15,8 @@ COPY packages/sphere/package.json packages/sphere/
 COPY packages/torus/package.json packages/torus/
 COPY packages/spaces/package.json packages/spaces/
 COPY packages/polyhedra/package.json packages/polyhedra/
+COPY packages/boundary/package.json packages/boundary/
+COPY packages/view3d/package.json packages/view3d/
 RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.base.json ./
@@ -26,6 +28,10 @@ COPY data/surface/records.json data/surface/records.json
 COPY data/curved/records.json data/curved/records.json
 COPY data/sphere/records.json data/sphere/records.json
 COPY data/torus/records.json data/torus/records.json
+COPY data/boundary/records.json data/boundary/records.json
+COPY data/polyhedra/records.json data/polyhedra/records.json
+# polyhedra configurations, one file per problem, read on demand (records.json is their index)
+COPY data/polyhedra/configs data/polyhedra/configs
 RUN npm run build
 
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite

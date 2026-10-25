@@ -43,6 +43,12 @@ export interface PolishOptions {
   iterations?: number;
   /** Called once per function evaluation; may throw StopSearch (the polish then legalizes what it has). */
   tick?: () => void;
+  /**
+   * Called often in the work between evaluations (the planes of a stage, the legalization) without counting
+   * an evaluation, so that a stop is seen within a fraction of a second; may throw StopSearch, which then
+   * ends the polish without a result.
+   */
+  poll?: () => void;
 }
 
 export interface PolishResult {
@@ -380,8 +386,12 @@ function makeObjective(
   return { f, evals: () => count };
 }
 
-/** Pairs whose circumscribed balls (widened by `pad`) meet, with planes from the separating-axis test. */
-function nearPairs(Pc: Solid, poses: Pose[], pad: number) {
+/**
+ * Pairs whose circumscribed balls (widened by `pad`) meet, with planes from the separating-axis test: for a
+ * separated pair the first axis that separates it (the stage moves the plane anyway), for an overlapping
+ * pair the axis of least overlap.
+ */
+function nearPairs(Pc: Solid, poses: Pose[], pad: number, poll?: () => void) {
   const n = poses.length;
   const placed = poses.map((p) => place(Pc, p));
   const reach = 2 * Pc.circumradius + pad;
@@ -391,7 +401,8 @@ function nearPairs(Pc: Solid, poses: Pose[], pad: number) {
       const a = placed[i].c;
       const b = placed[j].c;
       if ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2 > reach * reach) continue;
-      const r = separation(placed[i], placed[j]);
+      poll?.();
+      const r = separation(placed[i], placed[j], 0);
       const [ux, uy, uz] = r.axis;
       let hiA = -Infinity;
       let loB = Infinity;
@@ -425,7 +436,7 @@ export function polishConfig(problem: PolyhedraProblem, config: PolyhedraConfig,
   for (const mu of mus) {
     // vertex lists: within delta of the stage's planes and walls
     const delta = 0.25 * Pc.circumradius + 0.05;
-    const { placed, out } = nearPairs(Pc, poses, 0.1 * Pc.circumradius + 0.05);
+    const { placed, out } = nearPairs(Pc, poses, 0.1 * Pc.circumradius + 0.05, opts.poll);
     const pairs: Pair[] = out.map(({ i, j, axis, t }) => {
       const vi: number[] = [];
       const vj: number[] = [];
@@ -473,7 +484,7 @@ export function polishConfig(problem: PolyhedraProblem, config: PolyhedraConfig,
     }
     if (stopped) break;
   }
-  const config2 = legalizeConfig(problem, { s, pieces: poses }, g, w);
+  const config2 = legalizeConfig(problem, { s, pieces: poses }, g, w, opts.poll);
   return { config: config2, evaluations, stopped };
 }
 
@@ -550,7 +561,7 @@ function bestTranslation(Cc: Solid, S: number[]): [number, number, number] {
 }
 
 /** Smallest separation over pairs whose circumscribed balls meet (stops each pair at `enough`). */
-function minSeparation(Pc: Solid, poses: Pose[], enough: number): number {
+function minSeparation(Pc: Solid, poses: Pose[], enough: number, poll?: () => void): number {
   const placed = poses.map((p) => place(Pc, p));
   const reach = 2 * Pc.circumradius + Math.max(enough, 0) + 1e-9;
   let m = Infinity;
@@ -559,6 +570,7 @@ function minSeparation(Pc: Solid, poses: Pose[], enough: number): number {
       const a = placed[i].c;
       const b = placed[j].c;
       if ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2 > reach * reach) continue;
+      poll?.();
       m = Math.min(m, separation(placed[i], placed[j], enough).sep);
     }
   return m;
@@ -568,7 +580,13 @@ function minSeparation(Pc: Solid, poses: Pose[], enough: number): number {
  * A valid configuration near the given one: pairs separated by at least g, walls at least w, container
  * translated to its best position (see the file comment). The pieces' orientations are kept.
  */
-export function legalizeConfig(problem: PolyhedraProblem, config: PolyhedraConfig, g = 1e-12, w = 1e-12): PolyhedraConfig {
+export function legalizeConfig(
+  problem: PolyhedraProblem,
+  config: PolyhedraConfig,
+  g = 1e-12,
+  w = 1e-12,
+  poll?: () => void,
+): PolyhedraConfig {
   const Pc = getSolid(problem.piece);
   const Cc = getSolid(problem.container);
   let poses = config.pieces.map(normalised);
@@ -586,7 +604,7 @@ export function legalizeConfig(problem: PolyhedraProblem, config: PolyhedraConfi
   // move apart until every pair has its clearance (float rounding may leave a pair a hair short)
   let extra = 0;
   for (let round = 0; round < 60; round++) {
-    const sep = minSeparation(Pc, poses, g);
+    const sep = minSeparation(Pc, poses, g, poll);
     if (sep >= g) break;
     const delta = (g - sep) / (2 * Pc.inradius) + extra + 1e-15;
     poses = poses.map((p) => [p[0] * (1 + delta), p[1] * (1 + delta), p[2] * (1 + delta), p[3], p[4], p[5], p[6]]);

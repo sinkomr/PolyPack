@@ -1,12 +1,13 @@
 /**
  * Configuration parsing and validation of the spaces, with the work bounds the server needs for
  * untrusted input. Each space is checked by its own floating-point validator (packages/surface,
- * curved, sphere, torus) at PolyPack's touching tolerance SPACE_TOL = 1e-9: pieces may touch, and
+ * curved, sphere, torus, polyhedra) at PolyPack's touching tolerance SPACE_TOL = 1e-9: pieces may touch, and
  * an overlap or protrusion deeper than 1e-9 rejects the configuration. This is a float check, like
  * every other site entry; the research records' interval certificates are separate.
  *
  * Beating a research record: a configuration whose size is below the record's certified size by
- * more than the tie tolerance must also pass the validator at SPACE_STRICT_TOL = 1e-11. Without
+ * more than the space's record margin (SPACE_RECORD_MARGIN: the tie tolerance, 1e-6 for polyhedra)
+ * must also pass the validator at SPACE_STRICT_TOL = 1e-11. Without
  * this, a record's own configuration shrunk by about 1e-9 (its pieces then overlap by up to the
  * touching tolerance) would "beat" it; every research record passes at 1e-11 at its stated size.
  *
@@ -19,17 +20,33 @@
  *    or a torus from being far too small for its pieces;
  *  - surface, fold: at most SURFACE_MAX_CHAINS chains of faces per piece;
  *  - torus: at most TORUS_MAX_TRANSLATES lattice translates per pair of pieces, and no lattice
- *    vector shorter than the piece's width (which would make a piece overlap its own translate).
+ *    vector shorter than the piece's width (which would make a piece overlap its own translate);
+ *  - boundary: s at most the boundary package's MAX_S = 1e4, at most BOUNDARY_MAX_CHAINS chains of
+ *    cells per piece; the validator's volume bound refuses a polytope far too small for its pieces
+ *    before any chain is enumerated, and its pair stages bin the pieces in a grid, so their work is
+ *    linear in P.
  */
+import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validate as validateCurved } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
 import { SphereConfig, validate as validateSphere } from "@polypack/sphere";
 import { ChainLimitError, SolidName, SurfaceConfig, getSolid, validate as validateSurface } from "@polypack/surface";
 import { Lattice, TorusFamily, gaussReduce, imageWindow, torusScore, validateTorusPacking } from "@polypack/torus";
+import {
+  POLYHEDRA_MAX_P,
+  type PolyhedraConfig,
+  getProblem as getPolyhedraProblem,
+  parsePolyhedraConfig,
+  validatePolyhedra,
+  validatePolyhedraAsync,
+} from "@polypack/polyhedra";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
+  BOUNDARY_MAX_CHAINS,
+  BOUNDARY_MAX_S,
   SPACE_MAX_COORD,
   SPACE_MIN_QUATERNION_NORM,
+  SPACE_RECORD_MARGIN,
   SPACE_STRICT_TOL,
   SPACE_TOL,
   SURFACE_MAX_CHAINS,
@@ -37,8 +54,19 @@ import {
 } from "./info";
 import { SpaceConfig, SpaceName } from "./types";
 
-/** Largest P each space accepts: the largest P of its catalogue (2026-10-24). */
-export const SPACE_MAX_P: Record<SpaceName, number> = { surface: 80, curved: 30, sphere: 40, torus: 49 };
+/**
+ * Largest P each space accepts: the largest P of its catalogue (2026-10-24; polyhedra 2026-10-25),
+ * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
+ * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
+ */
+export const SPACE_MAX_P: Record<SpaceName, number> = {
+  surface: 80,
+  curved: 30,
+  sphere: 40,
+  torus: 49,
+  boundary: 64,
+  polyhedra: POLYHEDRA_MAX_P,
+};
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
 /** Relative slack below the lower bound that a size may have (float rounding of the bound). */
@@ -67,7 +95,8 @@ export interface SpaceValidateOptions {
   maxP?: number;
   /**
    * The research record's certified size (certified.score). A configuration below it by more than
-   * the tie tolerance must also be valid at SPACE_STRICT_TOL; without it there is no strict check.
+   * the space's record margin (beatsSpaceRecord) must also be valid at SPACE_STRICT_TOL; without it
+   * there is no strict check.
    */
   certified?: number | null;
 }
@@ -234,6 +263,48 @@ function parseTorus(
   return { ok: true, config: { lattice, poses }, score: torusScore(family, basis) };
 }
 
+/** Quaternion norms the boundary validator accepts as unit: within this of 1. */
+const BOUNDARY_UNIT_SLACK = 1e-9;
+
+function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<BoundaryConfig> {
+  const r = new Reader();
+  const C = getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  const ball = (id.fields.piece as PieceName) === "ball";
+  const s = r.num(raw.s, "s", BOUNDARY_MAX_S, true);
+  const list = piecesOf(raw, "pieces", id.P);
+  if (!Array.isArray(list)) return r.failWith(list);
+  const pieces = list.map((p, i): BoundaryConfig["pieces"][number] => {
+    const none = { cell: 0, u: [0, 0, 0] };
+    if (r.full()) return none;
+    if (!isObject(p)) {
+      r.errors.push(`pieces[${i}] must be an object {cell, u${ball ? "" : ", q?"}}`);
+      return none;
+    }
+    if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= C)
+      r.errors.push(`pieces[${i}].cell must be an integer from 0 to ${C - 1}`);
+    let u = [0, 0, 0];
+    // read by index, so that a hole in a sparse array is seen
+    if (!Array.isArray(p.u) || p.u.length !== 3) r.errors.push(`pieces[${i}].u must be [u0, u1, u2]`);
+    else u = [0, 1, 2].map((k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
+    const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
+    if (p.q === undefined) return piece;
+    if (ball) {
+      r.errors.push(`pieces[${i}] is a ball and has no rotation q`);
+      return piece;
+    }
+    if (!Array.isArray(p.q) || p.q.length !== 4) {
+      r.errors.push(`pieces[${i}].q must be a unit quaternion [w, x, y, z]`);
+      return piece;
+    }
+    const q = [0, 1, 2, 3].map((k) => r.num((p.q as unknown[])[k], `pieces[${i}].q[${k}]`, SPACE_MAX_COORD));
+    if (q.every(Number.isFinite) && !(Math.abs(Math.hypot(...q) - 1) <= BOUNDARY_UNIT_SLACK))
+      r.errors.push(`pieces[${i}].q must be a unit quaternion (norm within ${BOUNDARY_UNIT_SLACK} of 1)`);
+    return { ...piece, q: q as [number, number, number, number] };
+  });
+  if (r.errors.length) return { ok: false, malformed: true, errors: r.errors };
+  return { ok: true, config: { s, pieces }, score: s };
+}
+
 /**
  * The configuration of a problem in its space's own format, with only the known fields, and the
  * size it states. Errors are `malformed` when the input is not such a configuration (types,
@@ -250,6 +321,12 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
       return parseSphere(raw, id) as Parsed<SpaceConfig>;
     case "torus":
       return parseTorus(raw, id) as unknown as Parsed<SpaceConfig>;
+    case "boundary":
+      return parseBoundary(raw, id) as unknown as Parsed<SpaceConfig>;
+    case "polyhedra": {
+      const r = parsePolyhedraConfig(raw, id.P, MAX_REASONS);
+      return r.ok ? { ok: true, config: r.config as unknown as SpaceConfig, score: r.score } : r;
+    }
   }
 }
 
@@ -339,6 +416,18 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
             : `pieces ${o.i} and ${o.j} overlap (translate (${o.m}, ${o.n})) by ${-o.sep}`,
         );
     }
+    case "boundary": {
+      const problem = { polytope: f.polytope as PolytopeName, piece: f.piece as PieceName, P: id.P };
+      // the validator's own volume bound and in-cell edge tests run before any chain is enumerated
+      const v = validateBoundary(problem, config, { tol, maxReasons: MAX_REASONS, maxChains: BOUNDARY_MAX_CHAINS });
+      return v.ok ? [] : reasonsOf(v.reasons, "not a valid packing");
+    }
+    case "polyhedra": {
+      const problem = getPolyhedraProblem(f.code as string);
+      if (!problem) return [`unknown polyhedra problem ${String(f.code)}`];
+      const v = validatePolyhedra(problem, config as unknown as PolyhedraConfig, { tol, maxErrors: MAX_REASONS });
+      return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
+    }
   }
 }
 
@@ -346,8 +435,8 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
  * Checks a configuration for a problem of a space: the id, the number of pieces, the work bounds,
  * the lower bound when one is given, and then the space's own validator at the size the
  * configuration states (TOL = 1e-9); when `certified` is given and the size beats it by more than
- * the tie tolerance, also at SPACE_STRICT_TOL. It never throws; a validator that gives up (a work
- * limit) gives an invalid verdict with its reason.
+ * the space's record margin, also at SPACE_STRICT_TOL. It never throws; a validator that gives up (a
+ * work limit) gives an invalid verdict with its reason.
  */
 export function validateSpaceSubmission(
   space: SpaceName,
@@ -355,6 +444,87 @@ export function validateSpaceSubmission(
   rawConfig: unknown,
   opts: SpaceValidateOptions = {},
 ): SpaceVerdict {
+  const prep = prepare(space, id, rawConfig, opts);
+  if (!("run" in prep)) return prep;
+  const reasons = prep.run((tol) => checked(prep.id, prep.config, tol));
+  return prep.finish(reasons, (tol) => checked(prep.id, prep.config, tol));
+}
+
+/**
+ * validateSpaceSubmission for a server: the same checks, but a polyhedra configuration is checked in slices
+ * that give the event loop a turn every `sliceMs` (validatePolyhedraAsync), so that no check of 100 large
+ * solids holds the loop for long. `workMs` is the time the checks took, without the turns.
+ */
+export async function validateSpaceSubmissionAsync(
+  space: SpaceName,
+  id: string,
+  rawConfig: unknown,
+  opts: SpaceValidateOptions & { sliceMs?: number } = {},
+): Promise<SpaceVerdict & { workMs: number; slices: number; longestSliceMs: number }> {
+  const t0 = performance.now();
+  const prep = prepare(space, id, rawConfig, opts);
+  const first = performance.now() - t0;
+  if (!("run" in prep)) return { ...prep, workMs: first, slices: 1, longestSliceMs: first };
+  let workMs = first;
+  let slices = 1;
+  let longestSliceMs = first;
+  const run = async (tol: number): Promise<string[]> => {
+    if (prep.id.space !== "polyhedra") {
+      const t = performance.now();
+      const r = checked(prep.id, prep.config, tol);
+      workMs += performance.now() - t;
+      longestSliceMs = Math.max(longestSliceMs, performance.now() - t);
+      return r;
+    }
+    const problem = getPolyhedraProblem(prep.id.fields.code as string);
+    if (!problem) return [`unknown polyhedra problem ${String(prep.id.fields.code)}`];
+    const v = await validatePolyhedraAsync(problem, prep.config as unknown as PolyhedraConfig, {
+      tol,
+      maxErrors: MAX_REASONS,
+      sliceMs: opts.sliceMs,
+    });
+    workMs += v.workMs;
+    slices += v.slices;
+    longestSliceMs = Math.max(longestSliceMs, v.longestSliceMs);
+    return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
+  };
+  const reasons = await run(SPACE_TOL);
+  const strict = prep.needsStrict(reasons) ? await run(SPACE_STRICT_TOL) : [];
+  return { ...prep.verdict(reasons, strict), workMs, slices, longestSliceMs };
+}
+
+/** check() that turns a thrown error into a reason. */
+function checked(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
+  try {
+    return check(id, config, tol);
+  } catch (e) {
+    return [
+      e instanceof ChainLimitError
+        ? `the fold check gave up: ${e.message}`
+        : `the check failed: ${e instanceof Error ? e.message : String(e)}`,
+    ];
+  }
+}
+
+/**
+ * What both checks share: the verdict on the id, P, the configuration's form and the lower bound, or what is
+ * needed to finish: the parsed id and configuration, and the verdict from the check's reasons.
+ */
+function prepare(
+  space: SpaceName,
+  id: string,
+  rawConfig: unknown,
+  opts: SpaceValidateOptions,
+):
+  | SpaceVerdict
+  | {
+      id: ParsedSpaceId;
+      config: SpaceConfig;
+      run: (check: (tol: number) => string[]) => string[];
+      finish: (reasons: string[], check: (tol: number) => string[]) => SpaceVerdict;
+      needsStrict: (reasons: string[]) => boolean;
+      verdict: (reasons: string[], strict: string[]) => SpaceVerdict;
+    } {
   const fail = (
     reasons: string[],
     malformed: boolean,
@@ -378,30 +548,49 @@ export function validateSpaceSubmission(
   const bound = opts.bound;
   if (typeof bound === "number" && Number.isFinite(bound) && score < bound * (1 - SPACE_BOUND_SLACK))
     return fail([`the size ${score} is below the lower bound ${bound} of this problem`], false, score, config);
-  const run = (tol: number): string[] => {
-    try {
-      return check(parsedId, config, tol);
-    } catch (e) {
-      return [
-        e instanceof ChainLimitError
-          ? `the fold check gave up: ${e.message}`
-          : `the check failed: ${e instanceof Error ? e.message : String(e)}`,
-      ];
-    }
-  };
-  const reasons = run(SPACE_TOL);
-  if (reasons.length) return fail(reasons, false, score, config);
   const certified = opts.certified;
-  if (typeof certified === "number" && beatsSpaceScore(score, certified)) {
-    const strict = run(SPACE_STRICT_TOL);
+  const needsStrict = (reasons: string[]) =>
+    !reasons.length && typeof certified === "number" && beatsSpaceRecord(space, score, certified);
+  const verdict = (reasons: string[], strict: string[]): SpaceVerdict => {
+    if (reasons.length) return fail(reasons, false, score, config);
     if (strict.length) return fail([SPACE_STRICT_REASON, ...strict.slice(0, 3)], false, score, config);
-  }
-  return { valid: true, score, reasons: [], malformed: false, config };
+    return { valid: true, score, reasons: [], malformed: false, config };
+  };
+  return {
+    id: parsedId,
+    config,
+    run: (c) => c(SPACE_TOL),
+    finish: (reasons, c) => verdict(reasons, needsStrict(reasons) ? c(SPACE_STRICT_TOL) : []),
+    needsStrict,
+    verdict,
+  };
 }
 
 /** True when `score` beats `best` by more than the tie tolerance (as on the main site: score < best (1 - SCORE_TIE)). */
 export function beatsSpaceScore(score: number, best: number | null | undefined): boolean {
   return best === null || best === undefined || score < best * (1 - SCORE_TIE);
+}
+
+/**
+ * True when `score` beats a research record's certified value by more than the space's record margin
+ * (SPACE_RECORD_MARGIN: the tie tolerance, or 1e-6 for polyhedra, whose records keep a clearance).
+ */
+export function beatsSpaceRecord(space: SpaceName, score: number, certified: number | null | undefined): boolean {
+  return certified === null || certified === undefined || score < certified * (1 - SPACE_RECORD_MARGIN[space]);
+}
+
+/**
+ * True when an entry improves on a problem's best values: the research record by its space's record margin and
+ * the site leader by the tie tolerance. For every space but polyhedra this is beating the smaller of the two by
+ * the tie tolerance.
+ */
+export function improvesSpaceBest(
+  space: SpaceName,
+  score: number,
+  certified: number | null | undefined,
+  leader: number | null | undefined,
+): boolean {
+  return beatsSpaceRecord(space, score, certified) && beatsSpaceScore(score, leader);
 }
 
 /**
