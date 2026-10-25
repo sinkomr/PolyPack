@@ -14,6 +14,7 @@ COPY packages/curved/package.json packages/curved/
 COPY packages/sphere/package.json packages/sphere/
 COPY packages/torus/package.json packages/torus/
 COPY packages/spaces/package.json packages/spaces/
+COPY packages/polyhedra/package.json packages/polyhedra/
 RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.base.json ./
