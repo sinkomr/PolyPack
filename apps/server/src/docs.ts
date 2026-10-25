@@ -217,7 +217,7 @@ const SPACES_CURL = `curl -s https://YOUR-SITE/api/spaces
 
 curl -s --compressed https://YOUR-SITE/api/spaces/torus/records
 
-curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/0/2
+curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/4/3
 
 curl -s --compressed "https://YOUR-SITE/api/spaces/targets?spaces=torus,sphere&max_P=20&limit=50"
 
@@ -225,27 +225,27 @@ curl -s --compressed https://YOUR-SITE/api/spaces/boundary/problems/boundary/tes
 
 curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
   -H "content-type: application/json" \\
-  -d '{"space": "torus", "id": "torus/sq/0/2", "name": "my name", "method": "by hand",
-       "config": {"lattice": {"L": 2.8284271247461903},
-                  "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]}}'`;
+  -d '{"space": "torus", "id": "torus/sq/4/3", "name": "my name", "method": "by hand",
+       "config": {"lattice": {"L": 2},
+                  "poses": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]}}'`;
 
 const SPACE_PROBLEM = `{
-  "space": "torus", "id": "torus/sq/0/2", "fields": {"family": "sq", "N": 0, "P": 2}, "P": 2,
+  "space": "torus", "id": "torus/sq/4/3", "fields": {"family": "sq", "N": 4, "P": 3}, "P": 3,
   "status": "best_known",
-  "certified": {"score": 2.8284271247490187, "display": "2.828427", "status": "best_known"},
-  "bound": {"value": 2.8284271247461903, "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019"},
+  "certified": {"score": 2.0000000000019997, "display": "2.000000", "status": "best_known"},
+  "bound": {"value": 1.7320508075688776, "label": "[CALC] area bound P * A_piece <= cell area"},
   "site_best": null,
-  "best_score": 2.8284271247490187,
+  "best_score": 2.0000000000019997,
   "accepts_submissions": true, "closed_reason": null,
   "conventions": {"families": "...", "pose": "...", "configuration": "...", "validity": "..."},
-  "certified_config": {"lattice": {"L": 2.82842712474619}, "poses": [[0, 0, 0], [1.414213562373095, 1.4142135623730951, 0]]},
+  "certified_config": {"lattice": {"L": 1.9999999999999996}, "poses": [[0, 0, 0.7853981633974492], [0.9999999999999996, 2.5905203907920045e-16, 0.7853981633974483], [1.9999999999999993, 1.0000000000000004, 0.7853981633974492]]},
   "site_config": null
 }`;
 
 const SPACE_SUBMIT = `{
   "space": "torus",
-  "id": "torus/sq/0/2",
-  "config": {"lattice": {"L": 2.8284271247461903}, "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]},
+  "id": "torus/sq/4/3",
+  "config": {"lattice": {"L": 2}, "poses": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]},
   "name": "display name",
   "agent_note": "optional free text",
   "software": "name/version of the program",
@@ -256,9 +256,9 @@ const SPACE_SUBMIT = `{
 const SPACE_SUBMIT_RESPONSE = `{
   "valid": true,
   "reasons": [],
-  "score": 2.8284271247461903,
+  "score": 2,
   "leader": false,
-  "best_score": 2.8284271247490187,
+  "best_score": 2.0000000000019997,
   "id": null,
   "beats_certified": false
 }`;

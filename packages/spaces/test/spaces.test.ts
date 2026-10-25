@@ -148,7 +148,13 @@ describe("the catalogues", () => {
   it("close proven and infeasible problems and nothing else", () => {
     const closed = (s: SpaceName) => cat(s).problems.filter((p) => !acceptsSubmissions(p));
     expect(closed("surface")).toEqual([]);
-    expect(closed("torus")).toEqual([]);
+    // the torus records with a published proof of the exact case (docs/spaces/TORUS.md, sec. 7)
+    const torus = closed("torus");
+    expect(torus.length).toBe(50);
+    expect(torus.every((p) => p.status === "proven" && /is proven \(.+, doi:10\./.test(p.closed_reason!))).toBe(true);
+    expect(torus.find((p) => p.id === "torus/sq/0/2")!.closed_reason).toBe(
+      "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
+    );
     expect(closed("boundary")).toEqual([]);
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),

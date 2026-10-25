@@ -86,17 +86,19 @@ function weakTorusIndex(): SpacesIndex {
 }
 
 /**
- * The real catalogues, but with torus/sq/0/2's research record made much worse (size 3, against
- * the optimum 2 sqrt 2), so that site entries can beat it: an entry is kept only when it does.
+ * The real catalogues with torus/sq/0/2 open: its research record is proven optimal (Brandt et al.
+ * 2019), so the real catalogue closes it. `change` alters that record further.
  */
-function weakenedIndex(): SpacesIndex {
+function openedIndex(change: object = {}): SpacesIndex {
   const file = JSON.parse(readFileSync(join(root, "data/torus/records.json"), "utf8"));
-  for (const r of file.records)
-    if (r.problem === "torus/sq/0/2")
-      Object.assign(r, { score_cert: 3, display: "3.000000", configuration: twoDisks(3 / L2) });
+  for (const r of file.records) if (r.problem === "torus/sq/0/2") Object.assign(r, { status: "best_known" }, change);
   return { ...index, torus: buildSpaceCatalogue("torus", file) };
 }
-const testIndex = weakenedIndex();
+/**
+ * The real catalogues, but with torus/sq/0/2 open and its research record made much worse (size 3,
+ * against the optimum 2 sqrt 2), so that site entries can beat it: an entry is kept only when it does.
+ */
+const testIndex = openedIndex({ score_cert: 3, display: "3.000000", configuration: twoDisks(3 / L2) });
 
 let store: SqliteStore;
 let app: ReturnType<typeof createApp>;
@@ -544,9 +546,10 @@ describe("POST /api/spaces/submit", () => {
   });
 
   it("keeps an entry only when it beats the problem's best value by more than the tie tolerance", async () => {
-    makeApp({}, index);
+    const opened = openedIndex();
+    makeApp({}, opened);
     // the research record of torus/sq/0/2 is 2 sqrt 2 to 1e-12: an entry at 2 sqrt 2 only ties it
-    const cert = index.torus!.byId.get("torus/sq/0/2")!.certified!.score;
+    const cert = opened.torus!.byId.get("torus/sq/0/2")!.certified!.score;
     const tie = await submit(torusEntry());
     expect(tie.body).toEqual({
       valid: true,

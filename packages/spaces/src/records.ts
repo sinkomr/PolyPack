@@ -166,7 +166,12 @@ function closedReason(space: SpaceName, r: Rec, status: CertifiedStatus, id: Par
   if (status === "proven") {
     const lit = isObject(r.literature) ? r.literature : {};
     const proof = Array.isArray(lit.proof) ? lit.proof.filter((p) => typeof p === "string").join("; ") : "";
-    const source = proof || (typeof lit.source === "string" ? lit.source : "a published proof");
+    // torus records list their sources; the entry with a `proof` proves the exact case
+    const listed = Array.isArray(r.literature)
+      ? r.literature.filter(isObject).find((e) => typeof e.proof === "string" && typeof e.short === "string")
+      : undefined;
+    const cited = listed ? `${listed.short}${typeof listed.doi === "string" ? `, doi:${listed.doi}` : ""}` : "";
+    const source = proof || cited || (typeof lit.source === "string" ? lit.source : "a published proof");
     return `its optimum ${r.display} is proven (${source})`;
   }
   if (status === "infeasible") {

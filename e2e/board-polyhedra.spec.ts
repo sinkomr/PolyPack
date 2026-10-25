@@ -1,7 +1,7 @@
 import { type Page, type Route, expect, test } from "@playwright/test";
 import { type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/spaces";
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
-import { openProblem } from "./helpers";
+import { LAZY_VIEW, openProblem } from "./helpers";
 
 // 3D in 3D on the board: polyhedra packed in polyhedra, drawn with three.js, searched in a Web
 // Worker, submitted to the local server (playwright.config.ts) or to a mocked one.
@@ -60,7 +60,7 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect(page).toHaveURL(/#space=polyhedra\/cubincub\/11$/);
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-in-3");
   await expect(page.locator("#board")).toBeHidden();
-  await expect(page.locator(".space-draw > canvas")).toBeVisible();
+  await expect(page.locator(".space-draw > canvas")).toBeVisible(LAZY_VIEW);
   await drawn(page, 11);
   expect(three.length).toBeGreaterThan(0);
 
