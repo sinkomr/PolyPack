@@ -5,8 +5,10 @@
  * A basis is Lagrange-Gauss reduced first (the same lattice): a skewed basis, such as
  * b2 + 320 b1, would otherwise give a long thin cell, a huge window and millions of translates.
  * The translates are enumerated from the window's lattice coordinates (Cramer's rule), so their
- * number follows the window's area, and they are capped at MAX_TORUS_PIECES drawn shapes. A basis
- * whose determinant is zero or not finite is not drawn.
+ * number follows the window's area, and they are capped at MAX_TORUS_PIECES drawn shapes. The
+ * walk itself is bounded too: a lattice whose shortest vector is far below a piece's size (no
+ * packing has one) or that needs more than MAX_TORUS_CELLS cells is not drawn, nor is one whose
+ * determinant is zero or not finite. torusLayout then returns the reason as a sentence.
  */
 import { type Lattice, gaussReduce } from "@polypack/torus";
 
@@ -14,6 +16,13 @@ type V2 = readonly [number, number];
 
 /** Most shapes a torus drawing holds; beyond it the layout is cut short and says so. */
 export const MAX_TORUS_PIECES = 6000;
+/** Most cells (lattice translates) the layout walks over. */
+export const MAX_TORUS_CELLS = 100_000;
+/**
+ * Smallest shortest lattice vector drawn, as a share of the piece's circumradius. A packing needs
+ * at least the piece's width (more than the circumradius), so anything below is malformed.
+ */
+export const MIN_TORUS_VECTOR = 0.05;
 
 export interface TorusLayout {
   /** The basis drawn: the given lattice, reduced, with det(b1, b2) > 0. */
@@ -38,26 +47,30 @@ const add = (a: V2, B: readonly [V2, V2], m: number, n: number): [number, number
 
 /**
  * The layout of a packing with circumradius R (1 for disks) in the tiled view (`tile`) or the
- * one-cell view; null when the lattice is degenerate or not finite.
+ * one-cell view, or why it is not drawn.
  */
 export function torusLayout(
   lattice: Lattice,
   poses: readonly { x: number; y: number; theta: number }[],
   R: number,
   tile: boolean,
-): TorusLayout | null {
+): TorusLayout | string {
+  const degenerate = "The lattice is degenerate, so it is not drawn.";
   const given = [lattice.b1[0], lattice.b1[1], lattice.b2[0], lattice.b2[1]];
-  if (!given.every(Number.isFinite)) return null;
+  if (!given.every(Number.isFinite)) return degenerate;
   const d0 = lattice.b1[0] * lattice.b2[1] - lattice.b1[1] * lattice.b2[0];
-  if (!(Number.isFinite(d0) && Math.abs(d0) > 0)) return null;
+  if (!(Number.isFinite(d0) && Math.abs(d0) > 0)) return degenerate;
   const reduced = gaussReduce(lattice).lattice;
+  const shortest = Math.hypot(reduced.b1[0], reduced.b1[1]);
+  if (!(shortest >= MIN_TORUS_VECTOR * R))
+    return `The lattice is far smaller than a piece (its shortest vector is ${shortest.toPrecision(3)}), so it is not drawn.`;
   const b1: V2 = [reduced.b1[0], reduced.b1[1]];
   let b2: V2 = [reduced.b2[0], reduced.b2[1]];
   // -b2 spans the same lattice; a positive determinant keeps the cell and its arrows the same way round
   if (b1[0] * b2[1] - b1[1] * b2[0] < 0) b2 = [-b2[0], -b2[1]];
   const B: readonly [V2, V2] = [b1, b2];
   const det = B[0][0] * B[1][1] - B[0][1] * B[1][0];
-  if (!(det > 0) || !Number.isFinite(det)) return null;
+  if (!(det > 0) || !Number.isFinite(det)) return degenerate;
 
   const corners = ([0, 1] as const).flatMap((s) => ([0, 1] as const).map((t) => add([0, 0], B, s, t)));
   let x0 = Math.min(...corners.map((c) => c[0]));
@@ -90,6 +103,9 @@ export function torusLayout(
   const mHi = Math.ceil(Math.max(...wc.map((c) => c[0]))) + 1;
   const nLo = Math.floor(Math.min(...wc.map((c) => c[1]))) - 1;
   const nHi = Math.ceil(Math.max(...wc.map((c) => c[1]))) + 1;
+  const cellCount = (mHi - mLo + 1) * (nHi - nLo + 1);
+  if (!(cellCount <= MAX_TORUS_CELLS))
+    return `The lattice needs too many cells to draw (${cellCount.toPrecision(3)}), so it is not drawn.`;
   const hit = (p: V2) => p[0] + R > x0 && p[0] - R < x1 && p[1] + R > y0 && p[1] - R < y1;
   const span = [Math.abs(B[0][0]) + Math.abs(B[1][0]), Math.abs(B[0][1]) + Math.abs(B[1][1])];
   const pieces: TorusLayout["pieces"] = [];

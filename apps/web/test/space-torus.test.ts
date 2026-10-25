@@ -8,7 +8,7 @@ import { loadSpacesIndex } from "@polypack/spaces/load";
 import { parseSearchProblem, readSpaceConfig, torusPackingOf } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { MAX_TORUS_PIECES, torusLayout } from "../src/space/render/torus-layout";
+import { MAX_TORUS_PIECES, type TorusLayout, torusLayout } from "../src/space/render/torus-layout";
 
 const index = loadSpacesIndex(resolve(__dirname, "../../.."));
 
@@ -23,9 +23,9 @@ describe("the torus drawing's layout", () => {
     const { b1, b2 } = packing.lattice;
     const skewed = { b1, b2: [b2[0] + 320 * b1[0], b2[1] + 320 * b1[1]] as [number, number] };
     for (const tile of [true, false]) {
-      const plain = torusLayout(packing.lattice, packing.poses, R, tile)!;
+      const plain = torusLayout(packing.lattice, packing.poses, R, tile) as TorusLayout;
       const t0 = performance.now();
-      const layout = torusLayout(skewed, packing.poses, R, tile)!;
+      const layout = torusLayout(skewed, packing.poses, R, tile) as TorusLayout;
       expect(performance.now() - t0).toBeLessThan(500);
       expect(layout.capped).toBe(false);
       expect(layout.pieces.length).toBeGreaterThanOrEqual(30);
@@ -40,11 +40,26 @@ describe("the torus drawing's layout", () => {
   it("caps the shapes it draws, and draws nothing for a degenerate lattice", () => {
     const tiny = { b1: [2.1, 0] as [number, number], b2: [0, 1000] as [number, number] };
     const many = Array.from({ length: 49 }, (_, i) => ({ x: 0, y: (i * 1000) / 49, theta: 0 }));
-    const layout = torusLayout(tiny, many, 1, true)!;
+    const layout = torusLayout(tiny, many, 1, true) as TorusLayout;
     expect(layout.pieces.length).toBeLessThanOrEqual(MAX_TORUS_PIECES);
-    expect(torusLayout({ b1: [3, 0], b2: [6, 0] }, packing.poses, R, true)).toBeNull();
-    expect(torusLayout({ b1: [3, 0], b2: [NaN, 1] }, packing.poses, R, true)).toBeNull();
-    expect(torusLayout({ b1: [1e300, 0], b2: [0, 1e300] }, packing.poses, R, true)).toBeNull();
+    const degenerate = "The lattice is degenerate, so it is not drawn.";
+    expect(torusLayout({ b1: [3, 0], b2: [6, 0] }, packing.poses, R, true)).toBe(degenerate);
+    expect(torusLayout({ b1: [3, 0], b2: [NaN, 1] }, packing.poses, R, true)).toBe(degenerate);
+    expect(torusLayout({ b1: [1e300, 0], b2: [0, 1e300] }, packing.poses, R, true)).toBe(degenerate);
+  });
+
+  it("refuses at once, with a reason, a lattice far smaller than a piece or one with too many cells", () => {
+    for (const size of [1e-4, 1e-150]) {
+      const t0 = performance.now();
+      const why = torusLayout({ b1: [size, 0], b2: [0, size] }, packing.poses, R, true);
+      expect(performance.now() - t0, String(size)).toBeLessThan(50);
+      expect(why).toMatch(
+        /^The lattice is far smaller than a piece \(its shortest vector is .*\), so it is not drawn\.$/,
+      );
+    }
+    // a long thin cell of a shape a piece fits in, with a window of millions of cells
+    const thin = torusLayout({ b1: [0.06, 0], b2: [0, 1e6] }, [], 1, true);
+    expect(thin).toMatch(/^The lattice needs too many cells to draw/);
   });
 
   it("reads only a free basis with a finite determinant other than 0", () => {

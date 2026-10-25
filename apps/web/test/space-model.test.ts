@@ -13,6 +13,7 @@ import { BOARD_SPACES, parseSpaceAddress, spaceAddress } from "../src/space-addr
 import {
   DEFAULT_PROBLEM,
   FRESH_EVALS,
+  GROW_LIMIT,
   ROUND_EVALS,
   ROUND_TIME_CAP,
   defaultBudget,
@@ -218,7 +219,7 @@ describe("the rounds of a run", () => {
   const start = { rho: 2, pieces: [] };
 
   it("seeds each round from the run's seed, starts from the best and caps its evaluations", () => {
-    const run = { seed: 7, budget: { evals: 5000, time_s: 10 }, fresh: false };
+    const run = { seed: 7, budget: { evals: 50000, time_s: 10 }, fresh: false };
     const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
     expect(a.evals).toBe(ROUND_EVALS.sphere);
     expect(a.job).toMatchObject({
@@ -230,11 +231,17 @@ describe("the rounds of a run", () => {
       start,
       rule,
     });
-    const b = roundJob(p, rule, run, 2, { evals: 4000, seconds: 9.5 }, start)!;
+    const b = roundJob(p, rule, run, 2, { evals: 49000, seconds: 9.5 }, start)!;
     expect(b.job.seed).toBe(mixSeed(7, 2));
     expect(b.job.budget).toEqual({ evals: 1000, time_s: 0.5 });
     // nothing is left for another round
-    expect(roundJob(p, rule, run, 3, { evals: 5000, seconds: 1 }, start)).toBeNull();
+    expect(roundJob(p, rule, run, 3, { evals: 50000, seconds: 1 }, start)).toBeNull();
+    // rounds that got nowhere double the next one, up to GROW_LIMIT times
+    const long = { ...run, budget: { evals: 1e6 } };
+    expect(roundJob(p, rule, long, 1, { evals: 0, seconds: 0 }, start, 1)!.evals).toBe(2 * ROUND_EVALS.sphere);
+    expect(roundJob(p, rule, long, 9, { evals: 0, seconds: 0 }, start, 9)!.evals).toBe(
+      GROW_LIMIT.sphere * ROUND_EVALS.sphere,
+    );
   });
 
   it("gives a round without a start the work to build a packing, doubled after each one that found none", () => {

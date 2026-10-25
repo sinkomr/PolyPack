@@ -83,15 +83,15 @@ describe("a search on a space problem, in rounds", () => {
       new SpaceSearch(
         sphere.search,
         sphere.start,
-        { seed, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+        { seed, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
         new LocalRunner(),
       ).done;
     const a = await run(3);
     const b = await run(3);
     expect(sphere.rule.bound).toBeLessThan(sphere.start.rho * 0.99);
     expect(a.ended).toBe("evals");
-    expect(a.rounds).toBe(3);
-    expect(a.evaluations).toBe(6000);
+    expect(a.rounds).toBe(2);
+    expect(a.evaluations).toBe(20000);
     expect(a.best).not.toBeNull();
     expect(b.best).toEqual(a.best);
     expect(a.best!.seed).toBe(mixSeed(3, a.best!.round));
@@ -106,7 +106,7 @@ describe("a search on a space problem, in rounds", () => {
     const plain = await new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 5, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      { seed: 5, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
       new LocalRunner(),
     ).done;
     let search: SpaceSearch | null = null;
@@ -122,13 +122,13 @@ describe("a search on a space problem, in rounds", () => {
     search = new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 5, budget: { evals: 6000 }, fresh: false, rule: sphere.rule, onProgress: (p) => states.push(p.state) },
+      { seed: 5, budget: { evals: 20000 }, fresh: false, rule: sphere.rule, onProgress: (p) => states.push(p.state) },
       runner,
     );
     const paused = await search.done;
     expect(runner.cancels).toBe(1);
     // the interrupted round ran again with the same job
-    expect(runner.jobs).toHaveLength(4);
+    expect(runner.jobs).toHaveLength(plain.rounds + 1);
     expect(runner.jobs[2]).toEqual(runner.jobs[1]);
     expect(states).toContain("paused");
     expect(paused.best).toEqual(plain.best);
@@ -195,13 +195,13 @@ describe("a search on a space problem, in rounds", () => {
     const r = await new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 1, budget: { evals: 34000 }, fresh: true, rule: { bound: null } },
+      { seed: 1, budget: { evals: 50000 }, fresh: true, rule: { bound: null } },
       runner,
     ).done;
     expect(runner.jobs.map((j) => j.kind)).toEqual(["fresh", "fresh", "iterate", "iterate"]);
     // a fresh round that found nothing doubles the next one
-    expect(runner.jobs.map((j) => j.budget.evals)).toEqual([10000, 20000, 2000, 2000]);
-    expect(r.evaluations).toBe(34000);
+    expect(runner.jobs.map((j) => j.budget.evals)).toEqual([10000, 20000, 10000, 10000]);
+    expect(r.evaluations).toBe(50000);
     expect(runner.jobs[2].start).toEqual({ rho: 3, pieces: [] });
     expect(runner.jobs[3].start).toEqual({ rho: 2.5, pieces: [] });
     expect(r.trace.map((p) => p[1])).toEqual([3, 2.5]);
@@ -253,7 +253,7 @@ describe("a search on a space problem, in rounds", () => {
     const plain = await new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      { seed: 9, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
       new LocalRunner(),
     ).done;
     // pause() then resume() while round 2 is in flight: it runs again, nothing counts as failed
@@ -268,7 +268,7 @@ describe("a search on a space problem, in rounds", () => {
     search = new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      { seed: 9, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
       quick,
     );
     const r = await search.done;
@@ -303,7 +303,7 @@ describe("a search on a space problem, in rounds", () => {
     held = new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      { seed: 9, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
       runner,
     );
     const again = await held.done;
@@ -343,7 +343,7 @@ describe("a new arrangement on a free torus", () => {
     expect(l && l.b1[0] * l.b2[1] - l.b1[1] * l.b2[0]).toBeLessThan(0);
     expect(r.ended).toBe("evals");
     expect(r.reasons).toEqual([]);
-    expect(r.rounds).toBe(3);
+    expect(r.rounds).toBe(2);
   });
 });
 
@@ -365,5 +365,32 @@ describe("a new arrangement, within the panel's default budget", () => {
         expect(r.best, `${id}, seed ${seed}`).not.toBeNull();
         expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
       }
+    });
+});
+
+describe("a run from a tight packing, with the panel's default budget", () => {
+  // the start: the best of a new arrangement with seed 4 (10,000 evaluations), then a run from
+  // it with 20,000 evaluations (the default, without the time limit) and seed 9
+  for (const [id, gain] of [
+    ["sphere/4/30", 0.02],
+    ["torus/free/4/12", 0.02],
+  ] as const)
+    it(`improves ${id} by more than ${gain * 100}%`, async () => {
+      const p = problemOf(id);
+      const fresh = await new SpaceSearch(
+        p.search,
+        null,
+        { seed: 4, budget: { evals: 10000 }, fresh: true, rule: p.rule },
+        new LocalRunner(),
+      ).done;
+      const start = fresh.best!;
+      const r = await new SpaceSearch(
+        p.search,
+        start.config,
+        { seed: 9, budget: { evals: 20000 }, fresh: false, rule: p.rule },
+        new LocalRunner(),
+      ).done;
+      expect(r.best!.score).toBeLessThan(start.score * (1 - gain));
+      expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
     });
 });

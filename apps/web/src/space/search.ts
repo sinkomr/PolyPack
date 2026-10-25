@@ -15,7 +15,14 @@
  * the clock as arguments, so that it is tested in Node with the real search and a fake clock.
  */
 import type { SpaceConfig } from "@polypack/spaces";
-import type { SearchProblem, SpaceJob, SpaceJobResult, SpaceRule } from "@polypack/spaces/search";
+import { SCORE_TIE } from "@polypack/geometry";
+import {
+  type SearchProblem,
+  type SpaceJob,
+  type SpaceJobResult,
+  type SpaceRule,
+  statedScore,
+} from "@polypack/spaces/search";
 import { type RunSettings, roundJob } from "./model";
 
 /** Runs one round; cancel() ends the round in flight, whose promise then rejects with CancelledRound. */
@@ -142,6 +149,8 @@ export class SpaceSearch {
     let failures = 0;
     /** Rounds without a start that found nothing: each doubles the next one (model.ts roundJob). */
     let freshTries = 0;
+    /** Rounds from a start in a row that did not improve the best: each doubles the next one. */
+    let staleTries = 0;
     let reasons: string[] = [];
     const trace: [number, number][] = [];
     const progress = (improved: boolean) => {
@@ -175,9 +184,19 @@ export class SpaceSearch {
       if (o.budget.time_s !== undefined && seconds >= o.budget.time_s) return end("time");
       if (best && bound !== null && bound > 0 && best.score <= bound * (1 + BOUND_SLACK)) return end("bound");
       const startOf = best?.config ?? (o.fresh ? null : this.start);
-      const plan = roundJob(this.problem, o.rule, o, rounds, { evals: evaluations, seconds }, startOf, freshTries);
+      const plan = roundJob(
+        this.problem,
+        o.rule,
+        o,
+        rounds,
+        { evals: evaluations, seconds },
+        startOf,
+        startOf ? staleTries : freshTries,
+      );
       if (!plan) return end("evals");
       const job = plan.job;
+      // the score to improve on: the best so far, or the start's own
+      const before = best?.score ?? (startOf ? statedScore(this.problem, startOf) : null);
       const t0 = now();
       let result: SpaceJobResult;
       try {
@@ -213,6 +232,9 @@ export class SpaceSearch {
         improved = true;
       }
       if (!startOf && !found) freshTries++;
+      // a round from a start improves when it beats the best by more than the tie tolerance
+      const gained = found && (before === null || result.score! < before * (1 - SCORE_TIE));
+      if (startOf) staleTries = gained ? 0 : staleTries + 1;
       failures = failed ? failures + 1 : 0;
       if (failed) reasons = result.reasons.slice(0, 3);
       progress(improved);

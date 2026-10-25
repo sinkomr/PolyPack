@@ -163,6 +163,8 @@ class SpaceMode {
   private interrupted = false;
   /** The problem whose values the panel lists. */
   private factsOf: LoadedSpaceProblem | null = null;
+  /** The problem asked for (a link, a choice) until it is shown: the address keeps it if a read fails. */
+  private pendingId: string | null = null;
 
   constructor(private host: Host) {
     this.build();
@@ -462,6 +464,7 @@ class SpaceMode {
   /** Shows a problem of the space: the one wanted when the catalogue has it, else the nearest one. */
   private async open(space: SpaceName, wanted: string | null): Promise<void> {
     const token = ++this.token;
+    this.pendingId = wanted;
     this.stopRun("problem");
     // the problem of another space is not shown, run or sent while this one loads
     if (this.handle && this.handle.problem.space !== space) this.clearProblem();
@@ -519,6 +522,7 @@ class SpaceMode {
   }
 
   private async load(space: SpaceName, id: string, token: number, note: string): Promise<void> {
+    this.pendingId = id;
     this.stopRun("problem");
     this.busy(`Loading ${id}…`);
     const p = await loadSpaceProblem(space, id);
@@ -569,7 +573,8 @@ class SpaceMode {
   /** The address names the problem shown (the polygon board's own links are not touched). */
   private setAddress(): void {
     if (!this.space) return;
-    const hash = spaceAddress(this.space as BoardSpace, this.handle?.problem.id ?? null);
+    // the problem shown, or the one asked for while it cannot be shown, so that a reload asks again
+    const hash = spaceAddress(this.space as BoardSpace, this.handle?.problem.id ?? this.pendingId);
     if (location.hash !== hash)
       history.replaceState(history.state, "", `${location.pathname}${location.search}${hash}`);
   }

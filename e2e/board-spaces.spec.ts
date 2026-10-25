@@ -273,7 +273,7 @@ test("pause holds a run at once, resume goes on, stop ends it at once", async ({
   await page.locator("#space-solve-time").fill("60");
   await page.fill("#space-solve-evals", "1000000");
   await page.click("#space-solve-run");
-  await expect(page.locator("#space-solve-progress")).toContainText(/\d+ rounds? · /, { timeout: 10_000 });
+  await expect(page.locator("#space-solve-progress")).toContainText(/\d+ rounds? · /, { timeout: 30_000 });
   await page.click("#space-solve-pause");
   await expect(page.locator("#space-solve-pause")).toHaveText("Resume", { timeout: 1000 });
   await expect(page.locator("#space-solve-status")).toHaveText("Paused. Resume, or stop to keep the best result.");
@@ -281,7 +281,7 @@ test("pause holds a run at once, resume goes on, stop ends it at once", async ({
   await page.waitForTimeout(1200);
   await expect(page.locator("#space-solve-progress")).toHaveText(held!);
   await page.click("#space-solve-pause");
-  await expect(page.locator("#space-solve-progress")).not.toHaveText(held!, { timeout: 10_000 });
+  await expect(page.locator("#space-solve-progress")).not.toHaveText(held!, { timeout: 30_000 });
   await page.click("#space-solve-stop");
   await expect(page.locator("#space-solve-run")).toBeEnabled({ timeout: 1000 });
   await expect(page.locator("#space-solve-status")).toContainText("Stopped.");
@@ -377,6 +377,40 @@ test("a torus entry in a skewed basis draws at once, and a degenerate lattice is
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
   await expect(page.locator("#space-shown")).toHaveText("none could be read");
   await expect(page.locator("#space-solve-run")).toBeDisabled();
+  await page.unroute(`**/api/spaces/torus/problems/${id}`);
+
+  // a lattice of cells 1e-150 wide is not degenerate, but far too small to draw: said at once
+  await page.route(`**/api/spaces/torus/problems/${id}`, async (route) => {
+    const r = await route.fetch();
+    const body = (await r.json()) as SpaceProblemResponse;
+    const c = body.certified_config as { poses: unknown[] };
+    await route.fulfill({
+      response: r,
+      json: { ...body, certified_config: { ...c, lattice: { b1: [1e-150, 0], b2: [0, 1e-150] } } },
+    });
+  });
+  await page.goto("about:blank");
+  await page.goto(`/#space=${id}`);
+  await shown(page, id);
+  await expect(page.locator(".space-draw svg text")).toHaveText(
+    /^The lattice is far smaller than a piece \(its shortest vector is 1\.00e-150\), so it is not drawn\.$/,
+  );
+  await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /far smaller than a piece/);
+});
+
+test("a deep link whose problem cannot be read stays in the address", async ({ page }) => {
+  await page.route("**/api/spaces/torus/records", (route) => route.abort());
+  await page.goto("/#space=torus/hex/5/8");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this space could not be loaded.");
+  await expect(page).toHaveURL(/#space=torus\/hex\/5\/8$/);
+  await page.unroute("**/api/spaces/torus/records");
+  await page.route("**/api/spaces/torus/problems/torus/hex/5/8", (route) => route.abort());
+  await page.click("#space-retry");
+  await expect(page.locator("#space-busy")).toContainText("torus/hex/5/8 could not be loaded.");
+  await expect(page).toHaveURL(/#space=torus\/hex\/5\/8$/);
+  await page.unroute("**/api/spaces/torus/problems/torus/hex/5/8");
+  await page.click("#space-retry");
+  await shown(page, "torus/hex/5/8");
 });
 
 test("a run without a result clears the earlier one, and a submission carries the seed of the run that found it", async ({

@@ -48,6 +48,8 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
   let view = "tile";
   let packing: ReturnType<typeof torusPackingOf> | null = null;
   let score = 0;
+  /** Why the lattice is not drawn, or null. */
+  let refused: string | null = null;
 
   // one hue per orbit; ghosts (outside the cell in the one-cell view) lighter
   const fill = (i: number, ghost: boolean) => {
@@ -67,9 +69,22 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
   };
 
   function redraw() {
-    const layout = packing ? torusLayout(packing.lattice, packing.poses, R, view === "tile") : null;
-    if (!layout) {
+    const layout = packing && !refused ? torusLayout(packing.lattice, packing.poses, R, view === "tile") : refused;
+    if (layout === null) {
       svg.replaceChildren();
+      return;
+    }
+    if (typeof layout === "string") {
+      // a lattice that cannot be drawn says why, in the drawing
+      svg.setAttribute("viewBox", "0 0 800 100");
+      const text = document.createElementNS(SVG_NS, "text");
+      text.setAttribute("x", "400");
+      text.setAttribute("y", "50");
+      text.setAttribute("text-anchor", "middle");
+      text.setAttribute("fill", "var(--text)");
+      text.setAttribute("font-size", "14");
+      text.textContent = layout;
+      svg.replaceChildren(text);
       return;
     }
     const B = layout.basis;
@@ -130,8 +145,9 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
       const l = packing.lattice;
       score =
         family === "free" ? Math.sqrt(Math.abs(l.b1[0] * l.b2[1] - l.b1[1] * l.b2[0])) : Math.hypot(l.b1[0], l.b1[1]);
-      // a degenerate lattice draws nothing
-      if (!torusLayout(packing.lattice, [], R, false)) packing = null;
+      // a lattice that cannot be drawn (degenerate, far too small) is said so instead
+      const check = torusLayout(packing.lattice, [], R, false);
+      refused = typeof check === "string" ? check : null;
       redraw();
     },
     redraw,
@@ -140,6 +156,7 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
     reset() {},
     describe() {
       if (!packing) return "No packing to draw.";
+      if (refused) return refused;
       const torus =
         family === "sq"
           ? "a square torus of side"

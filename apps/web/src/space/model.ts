@@ -299,16 +299,22 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
 /**
  * Evaluations per round. A run is a sequence of rounds, each a job of the space's search that
  * starts from the best so far with its own seed; the page sees the best after every round, and
- * pause and stop end the worker at once. [CALC] On an Apple Silicon laptop a round took 0.1 to 2 s
- * (sphere and torus, 12 to 49 pieces), 1 to 1.7 s (curved, one start and 8 hops) and 1 to 8 s
- * (surface fold, 4 compressions, 12 to 14 pieces; 141 s at 80 pieces, so large solids get 2).
+ * pause and stop end the worker at once.
+ *
+ * A sphere or torus job first relaxes its start and finds its tight size, and only then hops
+ * between basins, so a short round does not leave a tight packing. [CALC] From a tight packing
+ * (a fresh result of seed 4), ten rounds of 2,000 left sphere/4/30 at 1.819980 and
+ * torus/free/4/12 at 3.905795; two rounds of 10,000 reached 1.737518 to 1.774667 and 3.464102 to
+ * 3.793237 over seeds 9 to 11. On an Apple Silicon laptop such a round took 2 to 3 s; curved
+ * rounds (one start and 8 hops) 1 to 1.7 s; fold rounds of 4 compressions 1 to 8 s at 12 to 14
+ * pieces and 141 s at 80, so large solids get 2.
  */
 export const ROUND_EVALS: Record<SearchKind, number> = {
   surface: 4,
   nofold: 5000,
   curved: 9,
-  sphere: 2000,
-  torus: 2000,
+  sphere: 10000,
+  torus: 10000,
 };
 
 /** Pieces from which a fold round has 2 compressions instead of 4. */
@@ -327,6 +333,14 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
   sphere: 10000,
   torus: 10000,
 };
+
+/**
+ * How many times its usual size a round may grow while the rounds before it get nowhere (each
+ * such round doubles the next): a longer job hops further from a basin it cannot leave in a short
+ * one. [CALC] From the same tight sphere/4/30 packing one job reached 1.782039 with 10,000
+ * evaluations and 1.731272 with 40,000. Fold rounds of many pieces are already slow.
+ */
+export const GROW_LIMIT: Record<SearchKind, number> = { surface: 2, nofold: 4, curved: 4, sphere: 4, torus: 4 };
 
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem): number {
@@ -368,7 +382,9 @@ export interface RunSettings {
  * A round never uses more evaluations than `evals`, and the run's rounds never more than its
  * budget: null means that no round fits in what is left. A fold job's cap counts its hops, and its
  * start (or its two random starts) is compressed first, so the job is asked for that many fewer.
- * `freshTries` counts the rounds without a start that found nothing: each doubles the next one.
+ * `tries` counts the rounds before this one that got nowhere: without a start, rounds that found
+ * nothing; from a start, rounds that did not improve on it. Each doubles the next round, up to
+ * GROW_LIMIT times its size, since a tight packing needs a longer search to leave its basin.
  */
 export function roundJob(
   p: SearchProblem,
@@ -377,14 +393,14 @@ export function roundJob(
   k: number,
   used: { evals: number; seconds: number },
   start: SpaceConfig | null,
-  freshTries = 0,
+  tries = 0,
 ): { job: SpaceJob; evals: number } | null {
   const kind = searchKind(p);
   const fold = kind === "surface";
   const least = fold && !start ? 2 : 1;
   const left = run.budget.evals - used.evals;
   if (left < least) return null;
-  const size = start ? roundSize(p) : FRESH_EVALS[kind] * 2 ** Math.min(freshTries, 8);
+  const size = (start ? roundSize(p) : FRESH_EVALS[kind]) * Math.min(GROW_LIMIT[kind], 2 ** Math.min(tries, 20));
   const evals = Math.max(least, Math.min(size, left));
   const time_s =
     run.budget.time_s === undefined
