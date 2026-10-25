@@ -17,7 +17,7 @@ import { fillShapeSelect } from "./shapes-ui";
 import { BoardView } from "./view";
 import { SnapMode } from "./snapping";
 import { SolvePanel } from "./solve-panel";
-import { initSpaceSwitch } from "./space-switch";
+import { initDimensionSwitch } from "./dimension-switch";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORAGE_KEY = "polypack.board";
@@ -391,7 +391,7 @@ const layout = document.querySelector<HTMLElement>("main.layout")!;
 document.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
   if (t.id === "board" || t.tagName === "INPUT" || t.tagName === "SELECT") return;
-  // another space is shown (space-switch.ts): the hidden polygon board is left as it is
+  // another kind is shown (dimension-switch.ts): the hidden polygon board is left as it is
   if (layout.dataset.space) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     e.preventDefault();
@@ -606,9 +606,9 @@ window.addEventListener("hashchange", () => {
 view.fit();
 const solve = new SolvePanel(board, view, say);
 Object.assign((window as unknown as { polypack: object }).polypack, { solve });
-// the Space menu: the other spaces load on demand, and polygon in polygon is this board as it is;
-// a run of the board's optimizer is paused while a space is shown, and goes on after
-initSpaceSwitch(() => view.fit(), say, {
+// the Dimension and Kind menus: the other kinds load on demand, and Flat (2D in 2D) is this board as
+// it is; a run of the board's optimizer is paused while another kind is shown, and goes on after
+initDimensionSwitch(() => view.fit(), say, {
   hold: () => solve.holdWhileHidden(),
   release: () => solve.releaseHidden(),
 });

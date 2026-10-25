@@ -26,7 +26,7 @@ export async function loadSpaceProblem(space: SpaceName, id: string): Promise<Lo
   } catch {
     return "The server is not reachable.";
   }
-  if (r.status === 404) return `${id} is not in the catalogue of this space.`;
+  if (r.status === 404) return `${id} is not in the catalogue of this kind.`;
   if (!r.ok) return `The server answered ${r.status}.`;
   try {
     return readSpaceProblem(space, id, await r.json());

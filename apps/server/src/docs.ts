@@ -265,7 +265,10 @@ const SPACE_TARGETS = `{
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** The section of the API page on the spaces (surface, curved, sphere, torus). */
+/**
+ * The section of the API page on the spaces (surface, curved, sphere, torus): the kinds of problem
+ * beyond Flat, which the site files under dimensions and the API calls spaces.
+ */
 function spacesSection(): string {
   const rows = SPACE_NAMES.map((name) => {
     const i = SPACE_INFO[name];
@@ -282,8 +285,11 @@ function spacesSection(): string {
     (e) =>
       `<li><a href="${e.viewer}">${esc(e.title)}</a>: ${esc(e.summary)} (<a href="${e.docs}">notes</a>; listed by <code>/api/spaces</code>, takes no submissions)</li>`,
   ).join("\n");
-  return `<h2 id="spaces">Spaces: surfaces, curvature, the whole sphere and flat tori</h2>
-<p>Besides polygons in polygons, the site has four more packing spaces from PolyPack's research. Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
+  return `<h2 id="spaces">Other dimensions: the spaces</h2>
+<p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
+Polygons in polygons, the problems above, are Flat, in 2D in 2D. Four more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature), and Platonic surfaces, Sphere and Torus (2D on 3D).
+The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code> and <code>torus</code>, under <code>/api/spaces</code>.
+Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
 <table>
 <tr><th scope="col">Space</th><th scope="col">Problem</th><th scope="col">Id</th><th scope="col">Configuration</th><th scope="col">Score</th><th scope="col">More</th></tr>
@@ -406,7 +412,7 @@ export function docsPage(
 </style>
 </head>
 <body>
-<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/spaces.html">Spaces</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
+<header><h1>PolyPack</h1><nav aria-label="Site"><a href="/">Board</a><a href="/browse.html">Records</a><a href="/dimensions.html">Dimensions</a><a href="/volunteer.html">Volunteer</a><a href="/api" aria-current="page">API</a></nav></header>
 <main>
 <h2>API for scripts and AI agents</h2>
 <p>Everything the board does is available as JSON over HTTP. No account or key is needed; a display name is enough.

@@ -1,4 +1,6 @@
-# Sphere PolyPack: packings on the whole sphere
+# 2D on 3D, Sphere: packings on the whole sphere
+
+**Dimension.** On the site this is the kind **Sphere** under the dimension **2D on 3D**: pieces on a closed surface in 3D, with no container. The API calls it the space `sphere`.
 
 Status: research build, 2026-10-24. Package `packages/sphere` (`@polypack/sphere`), search, certifier and bounds in `python/sphere/`, data in `data/sphere/`, viewer `packages/sphere/viz/index.html`.
 

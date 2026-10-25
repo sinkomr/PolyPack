@@ -68,7 +68,7 @@ export function spaceProblemHandle(problem: LoadedSpaceProblem): SpaceProblemHan
 /** Loads a problem by its id ("sphere/0/12", "curved/-1/3/4/5", ...): a handle, or why it could not be loaded. */
 export async function openSpaceProblem(id: string): Promise<SpaceProblemHandle | string> {
   const where = parseSpaceAddress(`#space=${id}`);
-  if (!where?.id) return `${id} is not a problem id of a space.`;
+  if (!where?.id) return `${id} is not a problem id the board can show.`;
   const p = await loadSpaceProblem(where.space, where.id);
   return typeof p === "string" ? p : spaceProblemHandle(p);
 }

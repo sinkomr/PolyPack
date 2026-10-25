@@ -13,7 +13,7 @@
       <nav aria-label="Site">
         <a href="/" aria-current="page">Board</a>
         <a href="/browse.html">Records</a>
-        <a href="/spaces.html">Spaces</a>
+        <a href="/dimensions.html">Dimensions</a>
         <a href="/volunteer.html">Volunteer</a>
         <a href="/api">API</a>
         <a href="/tighter.html">Tighter</a>
@@ -59,15 +59,14 @@
       <aside class="panel" aria-label="Controls">
         <section>
           <h2>Problem</h2>
+          <!-- filled from the table in src/dimension-table.ts -->
           <div class="row">
-            <label for="space-select">Space</label>
-            <select id="space-select" autocomplete="off">
-              <option value="">Polygon in polygon</option>
-              <option value="surface">Platonic surfaces</option>
-              <option value="curved">Constant curvature</option>
-              <option value="sphere">Whole sphere</option>
-              <option value="torus">Flat tori</option>
-            </select>
+            <label for="dimension-select">Dimension</label>
+            <select id="dimension-select" autocomplete="off"></select>
+          </div>
+          <div class="row">
+            <label for="kind-select">Kind</label>
+            <select id="kind-select" autocomplete="off"></select>
           </div>
           <div class="row poly-only">
             <label for="n-select">Piece (N)</label>

@@ -39,11 +39,12 @@ export interface Options {
   priority: "low" | "normal";
   once: boolean;
   /**
-   * The new spaces whose problems are also searched (--spaces), in the order of SPACE_NAMES; null
-   * when the option is not given: then no space problem is ever fetched or searched.
+   * The kinds of problem beyond Flat whose problems are also searched (--dimensions, or its first
+   * name --spaces: the API calls these kinds spaces), in the order of SPACE_NAMES; null when the
+   * option is not given: then no space problem is ever fetched or searched.
    */
   spaces: SpaceName[] | null;
-  /** --only-spaces: the polygon work list is not used at all. */
+  /** --only-dimensions (or --only-spaces): the polygon work list is not used at all. */
   onlySpaces: boolean;
 }
 
@@ -75,7 +76,7 @@ Usage: node polypack-volunteer.mjs [options]
   --minutes-per-problem T  most minutes of search per problem, pauses excluded (default ${DEFAULT_MINUTES_PER_PROBLEM})
   --N LIST                 piece shapes, e.g. 0,3-6 (0 = circle; default: all)
   --M LIST                 container shapes, same syntax (default: all)
-  --max-P K                only problems of at most K pieces (in the spaces too)
+  --max-P K                only problems of at most K pieces (in the other kinds too)
   --dry-run                search, but never submit
   --note TEXT              free text shown with your entries (at most ${MAX_NOTE_LENGTH} characters)
   --state DIR              where the client keeps its state (default ${join(m.homedir, ".polypack-volunteer")})
@@ -85,16 +86,20 @@ Usage: node polypack-volunteer.mjs [options]
   --help                   this text
   --version                the version
 
-Optional, off by default: the new spaces (polyhedral surfaces, constant curvature, the whole
-sphere, flat tori; see ${DEFAULT_BASE}/spaces.html).
+Optional, off by default: the other kinds of problem (see ${DEFAULT_BASE}/dimensions.html).
+The work list above is Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
+at constant curvature), and surface, sphere and torus (2D on 3D: on the surface of a Platonic
+solid, on a whole sphere, on a flat torus). The API calls these kinds spaces.
 Without these options the client never asks for them.
 
-  --spaces LIST            also search problems of these spaces: surface, curved, sphere, torus,
+  --dimensions LIST        also search problems of these kinds: surface, curved, sphere, torus,
                            comma-separated, or all; each next problem comes from the polygon work
-                           list or from the spaces' work list with probability 1/2
-  --only-spaces            search only the spaces given with --spaces
+                           list or from the work list of these kinds with probability 1/2
+  --spaces LIST            the same as --dimensions (its earlier name)
+  --only-dimensions        search only the kinds given with --dimensions
+  --only-spaces            the same as --only-dimensions
 
---max-P applies to the spaces too; --N and --M filter only the polygon work list.
+--max-P applies to these kinds too; --N and --M filter only the polygon work list.
 
 Stop it with Ctrl-C: it submits the current problem's best if that beats the leader, saves its
 state and exits within about 30 s. A second Ctrl-C exits at once.
@@ -130,17 +135,20 @@ export function parseIntList(
 
 const isShape = (v: number) => v === 0 || (v >= 3 && v <= MAX_SIDES);
 
-/** "surface,torus" or "all" into the named spaces, in the order of SPACE_NAMES. */
-export function parseSpaces(text: string): SpaceName[] {
+/**
+ * "surface,torus" or "all" into the named spaces, in the order of SPACE_NAMES. `flag` is the
+ * option's name as it was given (--dimensions or --spaces), for the error messages.
+ */
+export function parseSpaces(text: string, flag = "spaces"): SpaceName[] {
   const parts = text.split(",").map((s) => s.trim().toLowerCase());
-  if (parts.some((s) => s === "")) throw new OptionError(`--spaces: empty item in "${text}"`);
+  if (parts.some((s) => s === "")) throw new OptionError(`--${flag}: empty item in "${text}"`);
   if (parts.includes("all")) {
-    if (parts.length > 1) throw new OptionError('--spaces: "all" cannot be combined with other names');
+    if (parts.length > 1) throw new OptionError(`--${flag}: "all" cannot be combined with other names`);
     return [...SPACE_NAMES];
   }
   for (const part of parts)
     if (!(SPACE_NAMES as readonly string[]).includes(part))
-      throw new OptionError(`--spaces: "${part}" is not one of ${SPACE_NAMES.join(", ")} or all`);
+      throw new OptionError(`--${flag}: "${part}" is not one of ${SPACE_NAMES.join(", ")} or all`);
   return SPACE_NAMES.filter((name) => parts.includes(name));
 }
 
@@ -176,8 +184,11 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
         "no-battery-pause": { type: "boolean", default: false },
         priority: { type: "string", default: "low" },
         once: { type: "boolean", default: false },
+        // --dimensions and --only-dimensions are the same options under the site's present words
         spaces: { type: "string" },
+        dimensions: { type: "string" },
         "only-spaces": { type: "boolean", default: false },
+        "only-dimensions": { type: "boolean", default: false },
         help: { type: "boolean", default: false },
         version: { type: "boolean", default: false },
       },
@@ -201,12 +212,18 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
     throw new OptionError(`--note is limited to ${MAX_NOTE_LENGTH} characters by the server`);
   if (values.priority !== "low" && values.priority !== "normal")
     throw new OptionError('--priority must be "low" or "normal"');
-  const spaces = values.spaces === undefined ? null : parseSpaces(values.spaces);
-  const onlySpaces = values["only-spaces"];
+  if (values.spaces !== undefined && values.dimensions !== undefined)
+    throw new OptionError("--spaces and --dimensions are the same option: give one of them");
+  const flag = values.dimensions !== undefined ? "dimensions" : "spaces";
+  const list = values.dimensions ?? values.spaces;
+  const spaces = list === undefined ? null : parseSpaces(list, flag);
+  const onlySpaces = values["only-spaces"] || values["only-dimensions"];
+  const only = values["only-dimensions"] ? "--only-dimensions" : "--only-spaces";
+  const [named, other] = values["only-dimensions"] ? ["dimensions", "spaces"] : ["spaces", "dimensions"];
   if (onlySpaces && spaces === null)
-    throw new OptionError("--only-spaces needs --spaces LIST (for example --spaces all)");
+    throw new OptionError(`${only} needs --${named} LIST (or --${other} LIST), for example --${named} all`);
   if (onlySpaces && (values.N !== undefined || values.M !== undefined))
-    throw new OptionError("--N and --M filter the polygon work list, which --only-spaces leaves out");
+    throw new OptionError(`--N and --M filter the polygon work list, which ${only} leaves out`);
 
   let stateDir = values.state ?? join(machine.homedir, ".polypack-volunteer");
   // a quoted or --state=~/... path reaches us unexpanded

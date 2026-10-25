@@ -1,4 +1,6 @@
-# Curvature sweeps: how packings change as K changes
+# Curvature sweeps (2D in 2D, Curved): how packings change as K changes
+
+**Dimension.** These sweeps belong to the kind **Curved** under the dimension **2D in 2D** ([CURVED.md](CURVED.md)). The site shows them as an exhibit: they take no entries.
 
 Status: research build, 2026-10-24. Code: `packages/curved/src/sweep.ts` and `packages/curved/scripts/sweep/`. Certification and curation: `python/curved/sweep_*.py`. Data: `data/curved/sweep/`. Viewer: `packages/curved/viz/sweep.html`. The engine and the certifier are described in `docs/spaces/CURVED.md`. Labels: [EST] established with a source, [CALC] computed here, [SPEC] speculation.
 

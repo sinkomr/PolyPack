@@ -1,4 +1,7 @@
-# PolyPack on the surface of a Platonic solid
+# 2D on 3D, Platonic surfaces: PolyPack on the surface of a Platonic solid
+
+**Dimension.** On the site this is the kind **Platonic surfaces** under the dimension **2D on 3D**: flat
+pieces on a closed surface in 3D, with no container. The API calls it the space `surface`.
 
 PolyPack's pieces (unit disks, or regular N-gons of side 1) packed on the surface of a regular
 tetrahedron, cube, octahedron, dodecahedron or icosahedron of edge s. The score is the smallest

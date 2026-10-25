@@ -1,4 +1,6 @@
-# Curved PolyPack: packings at constant curvature K
+# 2D in 2D, Curved: packings at constant curvature K
+
+**Dimension.** On the site this is the kind **Curved** under the dimension **2D in 2D**: pieces inside a container, as on the classic board, but at constant curvature K. The API calls it the space `curved`.
 
 Status: research build, 2026-10-24. Package `packages/curved` (`@polypack/curved`), certifier and bounds in `python/curved/`, data in `data/curved/`.
 

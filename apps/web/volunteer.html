@@ -13,7 +13,7 @@
       <nav aria-label="Site">
         <a href="/">Board</a>
         <a href="/browse.html">Records</a>
-        <a href="/spaces.html">Spaces</a>
+        <a href="/dimensions.html">Dimensions</a>
         <a href="/volunteer.html" aria-current="page">Volunteer</a>
         <a href="/api">API</a>
         <a href="/tighter.html">Tighter</a>
@@ -62,23 +62,28 @@
         what the client sends and what it keeps on disk.
       </p>
 
-      <h3>Optional: the new spaces</h3>
+      <h3>Optional: other dimensions</h3>
       <p>
-        The client can also search the <a href="/spaces.html">new spaces</a>: pieces on the surface of a Platonic solid,
-        at constant curvature, on the whole sphere and on flat tori. This is off by default. Without these options the
-        client never asks the server about them.
+        By default the client searches Flat problems (2D in 2D): polygons in polygons. It can also search the other
+        kinds on the <a href="/dimensions.html">Dimensions</a> page: Curved (2D in 2D at constant curvature), and
+        Platonic surfaces, Sphere and Torus (2D on 3D). This is off by default. Without these options the client never
+        asks the server about them.
       </p>
-      <pre><code>node polypack-volunteer.mjs --name "your name" --spaces all</code></pre>
+      <pre><code>node polypack-volunteer.mjs --name "your name" --dimensions all</code></pre>
       <ul>
         <li>
-          <code>--spaces</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code> and
+          <code>--dimensions</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code> and
           <code>torus</code>, comma-separated, or <code>all</code>. Each next problem then comes from the polygon work
-          list or from the spaces' list, with probability 1/2 each.
+          list or from the list of these kinds, with probability 1/2 each.
         </li>
-        <li><code>--only-spaces</code> searches the spaces alone.</li>
+        <li><code>--only-dimensions</code> searches these kinds alone.</li>
+        <li>
+          The API calls these kinds spaces, and <code>--spaces</code> and <code>--only-spaces</code>, the options'
+          earlier names, still work.
+        </li>
         <li>
           It starts from the problem's best: the research record or the site's leader. It submits a configuration only
-          when the space's own check accepts it and it beats that best.
+          when the kind's own check accepts it and it beats that best.
         </li>
       </ul>
 

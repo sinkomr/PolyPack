@@ -197,6 +197,34 @@ describe("the spaces options", () => {
     expect(help).toContain("--only-spaces");
     expect(help).toMatch(/off by default/);
   });
+
+  it("are also named --dimensions and --only-dimensions, with the same values", () => {
+    for (const argv of [
+      ["--spaces", "torus,sphere"],
+      ["--spaces", "all", "--only-spaces"],
+      ["--spaces", "Surface"],
+    ]) {
+      const renamed = argv.map((a) => a.replace("spaces", "dimensions"));
+      expect(run(...renamed), renamed.join(" ")).toEqual(run(...argv));
+    }
+    // the two names mix: the list under one, --only- under the other
+    expect(run("--dimensions", "curved", "--only-spaces")).toMatchObject({ spaces: ["curved"], onlySpaces: true });
+    expect(run("--spaces", "curved", "--only-dimensions")).toMatchObject({ spaces: ["curved"], onlySpaces: true });
+    const bad =
+      (...argv: string[]) =>
+      () =>
+        parseOptions(argv, machine);
+    expect(bad("--dimensions", "plane")).toThrow(
+      /^--dimensions: "plane" is not one of surface, curved, sphere, torus or all$/,
+    );
+    expect(bad("--dimensions", "all", "--spaces", "all")).toThrow(/same option/);
+    expect(bad("--only-dimensions")).toThrow(/--only-dimensions needs --dimensions LIST/);
+    expect(bad("--only-dimensions", "--dimensions", "all", "--M", "4")).toThrow(/which --only-dimensions leaves out/);
+    const help = helpText(machine);
+    expect(help).toContain("--dimensions LIST");
+    expect(help).toContain("--only-dimensions");
+    expect(help).toContain("/dimensions.html");
+  });
 });
 
 const target = (id: string, priority: number, leader_id: number | null = null): SpaceTarget => {

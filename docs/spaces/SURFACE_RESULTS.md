@@ -1,4 +1,4 @@
-# Surface packings: certified tables
+# 2D on 3D, Platonic surfaces: certified tables
 
 Generated from `data/surface/records.json` (2026-10-24) by `python/surface/report.py`. 1248 nofold and 790 fold records; every value is certified by `python/surface/cert.py` (largest relative gap score_cert / score_float - 1: 1.0e-11). Values are the certified edge score_cert rounded to 6 decimals (nearest); score_cert itself, in the records, is the certified bound rounded up to a float. Definitions and proofs: [SURFACE.md](SURFACE.md).
 

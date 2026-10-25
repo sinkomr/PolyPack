@@ -1,6 +1,13 @@
+/**
+ * The dimensions page: every dimension of dimension-table.ts with the kinds filed under it, then
+ * the records of the kinds the API serves (GET /api/spaces; the API calls them spaces). Flat, the
+ * classic board, has its records on the Records page; a kind that is not available yet is listed as
+ * coming soon.
+ */
 import type { SpaceExhibit, SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
 import { safeHref } from "./atlas-model";
+import { DIMENSIONS, type Dimension, type Family, familyOfSpace } from "./dimension-table";
 import { el } from "./shapes-ui";
 import { isBoardSpace, spaceAddress } from "./space-address";
 import {
@@ -31,16 +38,17 @@ import {
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-/** Short names for the space picker; the cards use the titles the server gives. */
-const SHORT: Record<SpaceName, string> = { surface: "Surfaces", curved: "Curvature", sphere: "Sphere", torus: "Tori" };
+/** The kind's name on this page: the table's, or the server's title for a space the table does not know. */
+const nameOf = (s: Pick<SpaceInfo, "space" | "title">) => familyOfSpace(s.space)?.family.name ?? s.title;
+const shortOf = (s: Pick<SpaceInfo, "space" | "title">) => familyOfSpace(s.space)?.family.short ?? s.title;
 
-/** The spaces with a records table. */
+/** The spaces with a records table, in the order of the dimensions. */
 let spaces: SpaceInfo[] = [];
 let state: PageState | null = null;
 /** Records of each space, fetched once per visit. */
 const records = new Map<SpaceName, ListedProblem[]>();
 
-/** A link whose visible text is completed for screen readers ("Viewer" → "Viewer: Flat tori"). */
+/** A link whose visible text is completed for screen readers ("Viewer" → "Viewer: Torus"). */
 function link(href: string, text: string, hidden: string, external: boolean): HTMLAnchorElement {
   const a = el("a", text);
   a.href = href;
@@ -52,53 +60,127 @@ function link(href: string, text: string, hidden: string, external: boolean): HT
   return a;
 }
 
-/** One card: title, summary, facts, and links to the viewer and the notes (and the records, for a space). */
+interface CardLinks {
+  records?: string;
+  board?: string;
+  viewer?: string;
+  docs?: string;
+}
+
+/** One card: name, summary, facts, and links to the records, the board, the viewer and the notes. */
 function card(
-  item: SpaceInfo | SpaceExhibit,
   key: string,
+  name: string,
+  summary: string,
   facts: [string, string | HTMLElement][],
-  recordsHref: string | null,
+  links: CardLinks,
 ): HTMLLIElement {
   const li = el("li", "", "space-card");
   li.dataset.space = key;
-  li.append(el("h4", item.title), el("p", item.summary));
+  li.append(el("h4", name), el("p", summary));
   if (facts.length) {
     const dl = el("dl", "", "space-facts");
     for (const [k, v] of facts) dl.append(el("dt", k), typeof v === "string" ? el("dd", v) : v);
     li.append(dl);
   }
-  const links = el("p", "", "space-links");
-  if (recordsHref) links.append(link(recordsHref, "Records", `: ${item.title}`, false));
-  // a space the board can show opens there, at the problem the board starts that space with
-  if (recordsHref && isBoardSpace(key)) links.append(link(`/${spaceAddress(key)}`, "Board", `: ${item.title}`, false));
+  const p = el("p", "", "space-links");
+  if (links.records) p.append(link(links.records, "Records", `: ${name}`, false));
+  if (links.board) p.append(link(links.board, "Board", `: ${name}`, false));
   // addresses from the server are followed only when they are http(s) or a path of this site
-  const viewer = safeHref(item.viewer);
-  if (viewer) links.append(link(viewer, "Viewer", `: ${item.title}`, false));
-  const docs = safeHref(item.docs);
-  if (docs) links.append(link(docs, "Notes", `: ${item.title} (GitHub)`, !docs.startsWith("/")));
-  li.append(links);
+  const viewer = safeHref(links.viewer ?? "");
+  if (viewer) p.append(link(viewer, "Viewer", `: ${name}`, false));
+  const docs = safeHref(links.docs ?? "");
+  if (docs) p.append(link(docs, "Notes", `: ${name} (GitHub)`, !docs.startsWith("/")));
+  if (p.childElementCount) li.append(p);
   return li;
 }
 
-function renderCards(list: SpaceInfo[], exhibits: SpaceExhibit[]): void {
-  $("space-cards").replaceChildren(
-    ...list.map((s) => {
-      const id = el("dd");
-      id.append(el("code", s.problem_id));
-      return card(
-        s,
-        s.space,
-        [
-          ["Score", s.score],
-          ["Problems", s.problems.toLocaleString("en-US")],
-          ["Problem id", id],
-        ],
-        stateHash({ space: s.space, filters: {} }),
-      );
-    }),
+/** The card of a kind the server lists. */
+function spaceCard(s: SpaceInfo): HTMLLIElement {
+  const id = el("dd");
+  id.append(el("code", s.problem_id));
+  const listed = Object.hasOwn(SPACE_FIELDS, s.space);
+  return card(
+    s.space,
+    nameOf(s),
+    s.summary,
+    [
+      ["Score", s.score],
+      ["Problems", s.problems.toLocaleString("en-US")],
+      ["Problem id", id],
+    ],
+    {
+      records: listed ? stateHash({ space: s.space, filters: {} }) : undefined,
+      // a space the board can show opens there, at the problem the board starts that space with
+      board: listed && isBoardSpace(s.space) ? `/${spaceAddress(s.space)}` : undefined,
+      viewer: s.viewer,
+      docs: s.docs,
+    },
   );
+}
+
+/**
+ * The card of a kind from the table alone: Flat, a kind that is coming soon, or one the server did
+ * not list (it may be unreachable).
+ */
+function tableCard(f: Family): HTMLLIElement {
+  if (f.space === "polygon")
+    return card(
+      "polygon",
+      f.name,
+      f.summary,
+      [
+        ["Score", "the container's side s, or its radius r for a disk; smaller is better"],
+        ["Problem", "N, M, P: the sides of the piece and of the container (0 for a disk), and the number of pieces"],
+      ],
+      { records: "/browse.html", board: "/" },
+    );
+  if (f.available) return card(f.space, f.name, f.summary, [], { board: `/${spaceAddress(f.space)}` });
+  const li = card(f.space, f.name, f.summary, [], {});
+  li.classList.add("soon");
+  return li;
+}
+
+/** One section per dimension, its kinds as cards; the server's spaces outside the table come last. */
+function renderDimensions(list: SpaceInfo[]): void {
+  const byName = new Map(list.map((s) => [s.space as string, s]));
+  const section = (d: Pick<Dimension, "id" | "label" | "summary">, cards: HTMLLIElement[], soon: boolean) => {
+    const s = el("section", "", "dimension");
+    s.dataset.dimension = d.id;
+    const title = el("h3", soon ? `${d.label} (coming soon)` : d.label, "section-title");
+    title.id = `dimension-${d.id}`;
+    s.setAttribute("aria-labelledby", title.id);
+    const ul = el("ul", "", "space-cards");
+    ul.append(...cards);
+    s.append(title, el("p", d.summary, "note dimension-summary"), ul);
+    return s;
+  };
+  const sections = DIMENSIONS.map((d) => {
+    // a kind is shown from the server when the server lists it, even before the board can show it
+    const cards = d.families.map((f) => {
+      const s = byName.get(f.space);
+      return s ? spaceCard(s) : tableCard(f);
+    });
+    const soon = d.families.every((f) => !f.available && !byName.has(f.space));
+    return section(d, cards, soon);
+  });
+  const others = list.filter((s) => !familyOfSpace(s.space));
+  if (others.length)
+    sections.push(
+      section(
+        { id: "other", label: "Other", summary: "Kinds not yet filed under a dimension." },
+        others.map(spaceCard),
+        false,
+      ),
+    );
+  $("dimension-groups").replaceChildren(...sections);
+}
+
+function renderExhibits(exhibits: SpaceExhibit[]): void {
   $("exhibits").hidden = !exhibits.length;
-  $("exhibit-cards").replaceChildren(...exhibits.map((x) => card(x, x.name, [], null)));
+  $("exhibit-cards").replaceChildren(
+    ...exhibits.map((x) => card(x.name, x.title, x.summary, [], { viewer: x.viewer, docs: x.docs })),
+  );
 }
 
 function renderPicker(): void {
@@ -113,7 +195,7 @@ function renderPicker(): void {
     input.addEventListener("change", () => {
       if (input.checked) void show({ space: s.space, filters: {} });
     });
-    label.append(input, el("span", SHORT[s.space] ?? s.title));
+    label.append(input, el("span", shortOf(s)));
     track.append(label);
   }
 }
@@ -226,7 +308,7 @@ async function show(wish: PageState, focus = false): Promise<void> {
     input.checked = input.value === wish.space;
   const viewer = safeHref(info.viewer);
   $("space-score").replaceChildren(`Score: ${sentence(info.score)}`);
-  if (viewer) $("space-score").append(" ", link(viewer, "Open the viewer", ` of ${info.title}`, false), ".");
+  if (viewer) $("space-score").append(" ", link(viewer, "Open the viewer", ` of ${nameOf(info)}`, false), ".");
   if (focus) $("records-title").focus();
   let problems = records.get(wish.space);
   if (!problems) {
@@ -239,7 +321,7 @@ async function show(wish: PageState, focus = false): Promise<void> {
     // another space was chosen while the answer was on its way; the newer request draws the table
     if (state !== wish) return;
     if (!data) {
-      $("space-note").textContent = "The records of this space could not be loaded.";
+      $("space-note").textContent = "The records of this kind could not be loaded.";
       return;
     }
     problems = data.problems;
@@ -260,17 +342,30 @@ function followHash(focus: boolean): void {
   if (wish) void show(wish, focus);
 }
 
+/** The families in the order of the dimensions. */
+const ORDER: string[] = DIMENSIONS.flatMap((d) => d.families.map((f) => f.space));
+
+/** Position of a space in the table of dimensions; spaces the table does not know come last. */
+function order(s: SpaceInfo): number {
+  const i = ORDER.indexOf(s.space);
+  return i < 0 ? ORDER.length : i;
+}
+
 async function start(): Promise<void> {
   const data = await api.getSpaces();
   if (!data) {
-    $("spaces-status").textContent = "The server is not reachable.";
+    // the dimensions and their kinds are known without the server; the server's cards are not
+    renderDimensions([]);
+    $("spaces-status").textContent = "The server is not reachable, so the records cannot be shown.";
     return;
   }
-  renderCards(data.spaces, data.exhibits);
+  const listed = [...data.spaces].sort((a, b) => order(a) - order(b));
+  renderDimensions(listed);
+  renderExhibits(data.exhibits);
   // a records table needs the space's filters; a space this page does not know yet gets only its card
-  spaces = data.spaces.filter((s) => Object.hasOwn(SPACE_FIELDS, s.space));
+  spaces = listed.filter((s) => Object.hasOwn(SPACE_FIELDS, s.space));
   if (!spaces.length) {
-    $("spaces-status").textContent = "No spaces are listed.";
+    $("spaces-status").textContent = "The server lists no records for these kinds.";
     return;
   }
   renderPicker();

@@ -14,6 +14,8 @@ export default defineConfig({
         main: resolve(import.meta.dirname, "index.html"),
         browse: resolve(import.meta.dirname, "browse.html"),
         holders: resolve(import.meta.dirname, "holders.html"),
+        dimensions: resolve(import.meta.dirname, "dimensions.html"),
+        // the former Spaces page: it sends old links on to dimensions.html, with their query and hash
         spaces: resolve(import.meta.dirname, "spaces.html"),
         volunteer: resolve(import.meta.dirname, "volunteer.html"),
         admin: resolve(import.meta.dirname, "admin.html"),

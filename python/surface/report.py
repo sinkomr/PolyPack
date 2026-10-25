@@ -24,7 +24,7 @@ def main(argv):
     n_fold = sum(1 for r in doc["records"] if r["mode"] == "fold")
     n_nofold = len(doc["records"]) - n_fold
     worst_gap = max(r["gap_rel"] for r in doc["records"])
-    w("# Surface packings: certified tables")
+    w("# 2D on 3D, Platonic surfaces: certified tables")
     w("")
     w("Generated from `data/surface/records.json` (%s) by `python/surface/report.py`. %d nofold and %d fold "
       "records; every value is certified by `python/surface/cert.py` (largest relative gap "

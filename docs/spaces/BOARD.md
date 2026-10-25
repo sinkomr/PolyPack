@@ -1,27 +1,42 @@
-# The spaces on the board
+# The dimensions on the board
 
 Labels: **[EST]** established with a source, **[CALC]** measured or computed here, **[SPEC]** a design idea not yet built.
 
-The board's Problem section has a **Space** menu: Polygon in polygon (the board as it always was), Platonic surfaces, Constant curvature, Whole sphere and Flat tori. Choosing a space shows a problem of its catalogue in place of the polygon board. Choosing Polygon in polygon again shows the polygon board as it was left: its parts were only hidden.
+The site files every kind of problem under a **dimension**: the pieces' dimension, "in" or "on", and the container's dimension. "In" means inside a container; "on" means on a closed surface or boundary, with no container. The API calls the kinds beyond Flat **spaces** (`/api/spaces`), and the code keeps that name.
+
+| Dimension | Kind | Space (API and address) | On the board |
+|---|---|---|---|
+| 2D in 2D | Flat | none: the classic polygon board | yes |
+| 2D in 2D | Curved | `curved` | yes |
+| 2D on 3D | Platonic surfaces | `surface` | yes |
+| 2D on 3D | Sphere | `sphere` | yes |
+| 2D on 3D | Torus | `torus` | yes |
+| 3D in 3D | Polyhedra | `polyhedra` | coming soon |
+| 3D on 4D | Polytope boundaries (the tesseract first) | `boundary` | coming soon |
+
+A flat torus is filed under 2D on 3D because a torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth ([TORUS.md](TORUS.md)).
+
+The board's Problem section has two menus. **Dimension** lists every dimension; one with no kind available yet is listed but disabled, as "coming soon". **Kind** lists the kinds of the chosen dimension. Flat is the board as it always was. Choosing another kind shows a problem of its catalogue in place of the polygon board. Choosing Flat again shows the polygon board as it was left: its parts were only hidden. Choosing a dimension shows the kind last shown in it, or its first kind.
 
 ## What it offers
 
-| Space | See | Optimise | Submit | Move pieces by hand |
+| Kind | See | Optimise | Submit | Move pieces by hand |
 |---|---|---|---|---|
 | Platonic surfaces, fold | the solid, which turns, or its net | fold search | yes | no |
 | Platonic surfaces, nofold | the same | basin hopping on the fullest face, copied onto every face | yes | no |
-| Constant curvature | Poincaré or Klein disk (K < 0), globe or gnomonic chart (K > 0), plane (K near 0) | curved search | yes | no |
-| Whole sphere | a globe that turns, or both hemispheres | sphere basin hopping | yes | no |
-| Flat tori | the tiled plane, or one cell with its glued sides | torus basin hopping | yes | no |
+| Curved | Poincaré or Klein disk (K < 0), globe or gnomonic chart (K > 0), plane (K near 0) | curved search | yes | no |
+| Sphere | a globe that turns, or both hemispheres | sphere basin hopping | yes | no |
+| Torus | the tiled plane, or one cell with its glued sides | torus basin hopping | yes | no |
 
 - **The problem.** One field per part of the id (solid, folding, piece, P; curvature, piece, container, P; piece, P; torus, piece, P). Each field offers only values that occur in the catalogue (`GET /api/spaces/<space>/records`) with the fields before it.
-- **The address.** `/#space=<problem id>`, such as `/#space=sphere/4/12` or `/#space=curved/-1/3/4/5`, opens a problem; `/#space=torus` opens a space at its starting problem (an open one with room above its lower bound). Each row of the spaces page links to it ("Open on the board").
-- **The values.** The packing shown is the better of the research record and the site's best entry (the record on a tie), from `GET /api/spaces/<space>/problems/<id>`. Beside it: its size, the certified value, the status, the lower bound, the site best and whether the problem takes entries, in the spaces page's words.
+- **The address.** `/#space=<problem id>`, such as `/#space=sphere/4/12` or `/#space=curved/-1/3/4/5`, opens a problem; `/#space=torus` opens a kind at its starting problem (an open one with room above its lower bound). The address keeps the API's name, so that older links still work, and choosing a kind writes the same address as the former Space menu did. Each row of the dimensions page links to it ("Open on the board").
+- **The values.** The packing shown is the better of the research record and the site's best entry (the record on a tie), from `GET /api/spaces/<space>/problems/<id>`. Beside it: its size, the certified value, the status, the lower bound, the site best and whether the problem takes entries, in the dimensions page's words.
 - **Closed problems.** A proven problem is shown and can be optimised, but its entries are closed. A problem where no packing exists has nothing to show or run.
 - **Loading.** While the space's code, its problems or a problem are read, the drawing area says so and Run and Submit wait. When a read fails, nothing of the earlier problem stays live: the drawing and the values are cleared, and a Try again button reads it again. The address keeps the problem that was asked for (a link such as `#space=torus/hex/5/8` stays as it is), so a reload asks for it again.
-- **Going back.** Any address that names no space problem (a polygon link, or none, as after Back) shows the polygon board.
-- **The polygon board's own run.** A run of the polygon optimizer is paused while a space is shown, so that two searches do not compete for the processor unseen; the panel says so, and the run goes on when Polygon in polygon is chosen again. A run the user paused stays paused.
-- **Flat tori.** The drawing reduces the lattice's basis first (Lagrange-Gauss), so that a basis written skewed, such as b2 + 320 b1, draws as fast as any; at most 6,000 shapes are drawn, over at most 100,000 cells. A lattice whose shortest vector is below a twentieth of the piece's circumradius (no packing has one), or that would need more cells, is not drawn, and the drawing says why. A configuration whose free basis is degenerate (det(b1, b2) = 0) or not finite is not read; a left-handed one (det < 0) is, since the torus search itself often returns one. The server stores a kept free-lattice entry with its basis reduced and det > 0 (the same lattice and score, the poses as sent), so every reader gets a basis it can draw.
+- **Going back.** Any address that names no space problem (a polygon link, or none, as after Back) shows the polygon board, and both menus say Flat (2D in 2D).
+- **The polygon board's own run.** A run of the polygon optimizer is paused while another kind is shown, so that two searches do not compete for the processor unseen; the panel says so, and the run goes on when Flat is chosen again. A run the user paused stays paused.
+- **The layout.** The board's `<main>` carries `data-dimension` (for example `2-on-3`) and, while a kind other than Flat is shown, `data-space`. The CSS hides the polygon board's parts while `data-space` is set. A dimension's mode can use `data-dimension` to adapt the layout and the optimizer panel; none does yet.
+- **Torus.** The drawing reduces the lattice's basis first (Lagrange-Gauss), so that a basis written skewed, such as b2 + 320 b1, draws as fast as any; at most 6,000 shapes are drawn, over at most 100,000 cells. A lattice whose shortest vector is below a twentieth of the piece's circumradius (no packing has one), or that would need more cells, is not drawn, and the drawing says why. A configuration whose free basis is degenerate (det(b1, b2) = 0) or not finite is not read; a left-handed one (det < 0) is, since the torus search itself often returns one. The server stores a kept free-lattice entry with its basis reduced and det > 0 (the same lattice and score, the poses as sent), so every reader gets a basis it can draw.
 
 ## How a run works
 
@@ -43,7 +58,9 @@ A run is a sequence of **rounds**. Each round is one job of the space's search, 
 - `packages/spaces/src/search/` (`@polypack/spaces/search`): the space jobs, the check of their results, the nofold conversion and the volunteer client's job scheduler. It moved there from `apps/volunteer/src/spaces/`, which now re-exports it, so the client and the website run one implementation.
 - `apps/web/src/space/`: the board's space mode. `model.ts` (pure: picker, problem reader, rounds, answers), `search.ts` (rounds, pause, stop), `worker.ts` and `nofold-round.ts` (the Web Worker), `view.ts` and `render/*.ts` (the drawings, ported from the standalone viewers; `render/torus-layout.ts` is the torus drawing's numbers, tested in Node), `load.ts` (the API calls), `mode.ts` (the panel), `index.ts` (the interface below).
 - `storedSpaceConfig` in `packages/spaces/src/validate.ts`: the form in which the server stores a kept configuration (a free torus basis reduced).
-- `apps/web/src/space-switch.ts` and `space-address.ts`: the Space menu and the address. They are the only space code in the default board; the rest loads with a dynamic import when a space is chosen.
+- `apps/web/src/dimension-table.ts`: the table of dimensions and their kinds, read by the menus and by the dimensions page. Each kind names its board mode (`polygon` or a space) and an `available` flag. A kind can be made available only when its space is one the board can show (`BOARD_SPACES` in `space-address.ts`); the type checks this. So adding 3D in 3D or 3D on 4D is one line of the table, plus the mode's code.
+- `apps/web/src/dimension-switch.ts` and `space-address.ts`: the Dimension and Kind menus, and the address. With the table they are the only space code in the default board; the rest loads with a dynamic import when a kind other than Flat is chosen.
+- `apps/web/dimensions.html` and `src/dimensions.ts`: the Dimensions page, grouped by dimension and then by kind, with the records of each space. The former `/spaces.html` sends old links on to it, with their query and hash.
 
 ## The interface
 
@@ -78,19 +95,19 @@ interface SpaceProblemHandle {
 
 Nothing below is built. Tighter is unchanged.
 
-1. **A new board after prestige.** After a reset the player could choose what to work on next: polygons again, or one of the four spaces. The choice could be a menu like the board's, so that the same words appear in both places.
-2. **Problems as levels.** Within a space, a ladder of catalogue problems could replace Tighter's polygon queue, for example by P within one shape, from `listSpaceProblems(space)`. `openSpaceProblem(id)` gives the starting packing, the lower bound and the problem's best, which is what a level needs.
+1. **A new board after prestige.** After a reset the player could choose what to work on next: Flat polygons again, or another kind. The choice could be the board's Dimension and Kind menus, so that the same words appear in both places.
+2. **Problems as levels.** Within a kind, a ladder of catalogue problems could replace Tighter's polygon queue, for example by P within one shape, from `listSpaceProblems(space)`. `openSpaceProblem(id)` gives the starting packing, the lower bound and the problem's best, which is what a level needs.
 3. **The game's searches.** `search(start, { seed, budget, onProgress, shouldStop })` runs in its own worker. The game could own the budgets and seeds, and connect its pause on battery to `pause()` and `resume()`. A paused run loses no reproducibility.
 4. **Points.** Progress could be scored by `improved` rounds and by the relative gap to the lower bound, `(score - bound) / score`, in place of Tighter's polygon scores. The gap is known for every catalogue problem.
 5. **Sending a record.** A result that `improves()` could be sent with `submit()` under the player's name, as Tighter sends polygon records. The server stays the judge.
 6. **Drawing.** `render(host)` gives the drawing with its own small toolbar; the game could hide the toolbar and draw only the packing.
 
-Open questions: whether a space counts as a new game or as an upgrade within one; how a level should be scored when its record is already at its lower bound (several are); and whether Tighter's offline play needs the catalogue shipped with the game rather than read from the server.
+Open questions: whether a kind counts as a new game or as an upgrade within one; how a level should be scored when its record is already at its lower bound (several are); and whether Tighter's offline play needs the catalogue shipped with the game rather than read from the server.
 
 ## Limitations
 
-- Pieces cannot be moved by hand. That would need a drag that never overlaps, like the polygon board's, for each space; it is not built, so the board shows and optimises only.
+- Pieces cannot be moved by hand. That would need a drag that never overlaps, like the polygon board's, for each kind; it is not built, so the board shows and optimises only.
 - Pausing ends the round in flight: its work is done again on resume. A round of a fold surface with many pieces can take a minute or more, so a pause near its end loses most of it.
 - A submission names where its run started, but the API has no field for the start itself; a result found from an earlier result is reproduced from the run JSON, which holds the start.
-- The board does not follow other people's entries live in a space: it reads the problem again after each submission.
-- One method per space. The volunteer client runs the same jobs, with its own scheduler of starts and budgets.
+- The board does not follow other people's entries live in a kind other than Flat: it reads the problem again after each submission.
+- One method per kind. The volunteer client runs the same jobs, with its own scheduler of starts and budgets.

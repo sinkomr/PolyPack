@@ -1,8 +1,9 @@
 import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 
 /**
- * The pure parts of the spaces page: the filters of each space's records table, how values are
- * rounded and named, and the page state kept in the address. No DOM in here.
+ * The pure parts of the dimensions page's records table: the filters of each space's table (the
+ * API calls a dimension's families spaces), how values are rounded and named, and the page state
+ * kept in the address. No DOM in here.
  */
 
 // ---------- names ----------

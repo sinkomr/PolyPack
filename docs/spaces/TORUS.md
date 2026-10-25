@@ -1,4 +1,6 @@
-# PolyPack pieces on flat tori
+# 2D on 3D, Torus: PolyPack pieces on flat tori
+
+**Dimension.** On the site this is the kind **Torus** under the dimension **2D on 3D**: pieces on a closed surface, with no container. The API calls it the space `torus`. A torus is usually pictured as a surface in 3D, which is why it is filed there, but a flat torus cannot be embedded in 3D both flat and smooth [EST]. Every closed surface in R³ that is smooth (of class C²) has a point of positive Gaussian curvature, and a flat torus has curvature 0 everywhere. Embeddings that keep every length but are only C¹ do exist: J. Nash, "C¹ isometric imbeddings", Annals of Mathematics 60 (1954), and N. H. Kuiper, "On C¹-isometric imbeddings", Indagationes Mathematicae 17 (1955). Borrelli, Jabrane, Lazarus and Thibert drew one: "Flat tori in three-dimensional space and convex integration", PNAS 109 (2012) 7218–7223. The board and the viewer draw the torus flat instead: the tiled plane, or one cell with its glued sides.
 
 **Summary** (2026-10-24). `data/torus/records.json` holds 544 records, each proven valid by an interval-arithmetic certificate (`data/torus/certificates/`, checker `python/torus/certify_torus.py`). There are 336 records for P = 1–16 in each of the three torus families (square `sq`, hexagonal `hex`, free lattice `free`) and the seven shapes N = 0 (disk) and N = 3–8. Another 208 are exact constructions for P = 17–49 where a bound is attained. Every certified score exceeds its search value by at most 1.0003e-12 relative (shrink ε = 1e-12).
 

@@ -1064,7 +1064,12 @@ describe("the API page", () => {
       "a quaternion's norm is at least 1e-6",
       '<pre tabindex="0">',
       "surface/&lt;solid&gt;/&lt;mode&gt;/&lt;N&gt;/&lt;P&gt;",
+      // the site's words: kinds filed under dimensions, which the API calls spaces
+      '<a href="/dimensions.html">Dimensions</a>',
+      "The API calls a dimension's kinds <em>spaces</em>",
+      "2D on 3D",
     ])
       expect(html).toContain(part);
+    expect(html).not.toContain("/spaces.html");
   });
 });

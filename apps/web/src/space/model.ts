@@ -3,7 +3,7 @@
  * server sends it (checked, since it is untrusted input), the values shown beside the drawing, the
  * rounds a search runs and what the server's answer to a submission means. No DOM in here.
  *
- * Wording follows the spaces page (spaces-model.ts): "Certified value", "Status", "Lower bound",
+ * Wording follows the dimensions page (spaces-model.ts): "Certified value", "Status", "Lower bound",
  * "Site best", "Entries".
  */
 import { SCORE_TIE } from "@polypack/geometry";
@@ -60,7 +60,7 @@ export interface PickField {
   value: string;
 }
 
-/** The picker's fields of a space: the id's fields as the spaces page lists them, and P. */
+/** The picker's fields of a space: the id's fields as the dimensions page lists them, and P. */
 function pickSpecs(space: SpaceName): FieldSpec[] {
   const p: FieldSpec = {
     key: "P",
@@ -234,7 +234,7 @@ export function scoreLabel(p: SearchProblem): string {
   }
 }
 
-/** The rows of the panel's values, in the spaces page's words. `why` is a closed problem's reason. */
+/** The rows of the panel's values, in the dimensions page's words. `why` is a closed problem's reason. */
 export function problemFacts(p: LoadedSpaceProblem): { label: string; value: string; note?: string }[] {
   const entries = entriesText(p);
   return [

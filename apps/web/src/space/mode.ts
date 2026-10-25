@@ -1,11 +1,12 @@
 /**
- * The board's space mode: chosen with the Space menu of the Problem section (space-switch.ts),
- * it shows a problem of another space in place of the polygon board. The polygon board's parts
- * are hidden, not changed (CSS: .layout[data-space] .poly-only), so going back shows it as it was.
+ * The board's space mode: chosen with the Dimension and Kind menus of the Problem section
+ * (dimension-switch.ts), it shows a problem of a kind other than Flat (a space of the API) in place
+ * of the polygon board. The polygon board's parts are hidden, not changed (CSS:
+ * .layout[data-space] .poly-only), so going back shows it as it was.
  *
  * What it offers, per problem of the catalogue (GET /api/spaces/:space/records):
  *  - the problem's best packing (the research record or the site's best entry), drawn by the
- *    space's renderer, with its values in the spaces page's words;
+ *    space's renderer, with its values in the dimensions page's words;
  *  - the space's search in a Web Worker, from the shown packing or a new one, with a seed and a
  *    budget, pause and stop, and the improving packing drawn as it is found;
  *  - submission of a result that passes the server's rule and beats the problem's best, under the
@@ -176,7 +177,7 @@ class SpaceMode {
     const { layout, problem, submit } = this.host;
     const stage = h(
       "section",
-      { class: "stage space-stage space-only", "aria-label": "Space workspace" },
+      { class: "stage space-stage space-only", "aria-label": "Workspace" },
       h("div", { id: "space-view-host", class: "space-view-host" }),
       h(
         "div",
@@ -186,7 +187,7 @@ class SpaceMode {
       ),
       h("p", { id: "space-status", class: "status", role: "status", "aria-live": "polite" }),
     );
-    // space-switch.ts shows a placeholder while this module loads
+    // dimension-switch.ts shows a placeholder while this module loads
     layout.querySelector(".space-placeholder")?.remove();
     layout.prepend(stage);
 
@@ -317,7 +318,7 @@ class SpaceMode {
       h(
         "p",
         { id: "space-hold", class: "note", hidden: true },
-        "The polygon board's optimizer run is paused while a space is shown. It goes on when you choose Polygon in polygon again.",
+        "The Flat board's optimizer run is paused while another kind is shown. It goes on when you choose Flat under 2D in 2D again.",
       ),
       h(
         "dl",
@@ -367,7 +368,7 @@ class SpaceMode {
       h(
         "details",
         { id: "space-about", class: "space-only" },
-        h("summary", {}, "About this space"),
+        h("summary", {}, "About this kind"),
         h("p", { id: "space-summary", class: "note" }),
         h(
           "ul",
@@ -388,9 +389,9 @@ class SpaceMode {
         h(
           "p",
           { class: "note" },
-          h("a", { id: "space-docs", href: "#", target: "_blank", rel: "noopener noreferrer" }, "Notes on this space"),
+          h("a", { id: "space-docs", href: "#", target: "_blank", rel: "noopener noreferrer" }, "Notes on this kind"),
           " · ",
-          h("a", { id: "space-records", href: "/spaces.html" }, "All its records"),
+          h("a", { id: "space-records", href: "/dimensions.html" }, "All its records"),
         ),
       ),
     );
@@ -433,7 +434,7 @@ class SpaceMode {
     this.updateButtons();
   }
 
-  /** Shows that the polygon board's own run is held while a space is shown (space-switch.ts). */
+  /** Shows that the polygon board's own run is held while a space is shown (dimension-switch.ts). */
   setPolygonHeld(held: boolean): void {
     $("space-hold").hidden = !held;
   }
@@ -453,7 +454,7 @@ class SpaceMode {
     this.space = space;
     $("space-summary").textContent = SPACE_INFO[space].summary;
     $<HTMLAnchorElement>("space-docs").href = SPACE_INFO[space].docs;
-    $<HTMLAnchorElement>("space-records").href = `/spaces.html#space=${space}`;
+    $<HTMLAnchorElement>("space-records").href = `/dimensions.html#space=${space}`;
     await this.open(space, wanted);
   }
 
@@ -471,7 +472,7 @@ class SpaceMode {
     this.setAddress();
     let problems = this.records.get(space);
     if (!problems) {
-      this.busy("Loading the problems of this space…");
+      this.busy("Loading the problems of this kind…");
       this.say("");
       $("space-fields").replaceChildren();
       const listed = await listSpaceProblems(space);
@@ -479,7 +480,7 @@ class SpaceMode {
       if (!listed) {
         this.clearProblem();
         this.setAddress();
-        const text = "The problems of this space could not be loaded. The server may be unreachable.";
+        const text = "The problems of this kind could not be loaded. The server may be unreachable.";
         this.say(text);
         this.busy(text, () => void this.open(space, wanted));
         return;
@@ -491,7 +492,7 @@ class SpaceMode {
     this.renderPicker(space, pick.fields);
     if (!pick.id) {
       this.clearProblem();
-      this.busy("This space lists no problems.", () => void this.open(space, wanted));
+      this.busy("This kind lists no problems.", () => void this.open(space, wanted));
       return;
     }
     const missing =
@@ -1035,7 +1036,7 @@ export function createSpaceMode(): {
   setPolygonHeld(held: boolean): void;
 } {
   if (!mode) {
-    const select = $("space-select");
+    const select = $("dimension-select");
     const name = $<HTMLInputElement>("name");
     mode = new SpaceMode({
       layout: select.closest("main")!,

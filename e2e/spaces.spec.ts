@@ -10,10 +10,12 @@ import type {
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { SPACE_VIEWERS } from "../apps/web/scripts/space-viewers";
+import { DIMENSIONS, familyOfSpace } from "../apps/web/src/dimension-table";
 import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
 
-// The spaces page against the local stack (playwright.config.ts): the server lists the research
-// records of data/<space>/records.json, and the web server serves the viewers from packages/*/viz.
+// The dimensions page (formerly the spaces page) against the local stack (playwright.config.ts):
+// the server lists the research records of data/<space>/records.json, and the web server serves
+// the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
 const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus"];
@@ -27,7 +29,7 @@ async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
 const rows = (page: Page) => page.locator("#space-rows tr");
 const rowIds = (page: Page) => rows(page).evaluateAll((trs) => trs.map((tr) => (tr as HTMLElement).dataset.id));
 
-test("the spaces page lists the four spaces and the exhibit, and says what its values mean", async ({
+test("the dimensions page lists each dimension with its kinds and the exhibit, and says what its values mean", async ({
   page,
   request,
 }) => {
@@ -36,14 +38,36 @@ test("the spaces page lists the four spaces and the exhibit, and says what its v
 
   await page.goto("/browse.html");
   const nav = page.getByRole("navigation", { name: "Site" });
-  await nav.getByRole("link", { name: "Spaces" }).click();
-  await expect(page).toHaveURL(/\/spaces\.html/);
-  await expect(nav.getByRole("link", { name: "Spaces" })).toHaveAttribute("aria-current", "page");
+  await nav.getByRole("link", { name: "Dimensions" }).click();
+  await expect(page).toHaveURL(/\/dimensions\.html/);
+  await expect(page).toHaveTitle("PolyPack — Dimensions");
+  await expect(page.getByRole("heading", { name: "Dimensions", exact: true })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Dimensions" })).toHaveAttribute("aria-current", "page");
+
+  // one section per dimension, its kinds in the order of the table; the ones to come say so
+  const sections = page.locator("#dimension-groups > section");
+  await expect(sections.locator("h3")).toHaveText([
+    "2D in 2D",
+    "2D on 3D",
+    "3D in 3D (coming soon)",
+    "3D on 4D (coming soon)",
+  ]);
+  for (const d of DIMENSIONS) {
+    const cards = page.locator(`#dimension-groups > section[data-dimension="${d.id}"] li.space-card`);
+    await expect(cards.locator("h4")).toHaveText(d.families.map((f) => f.name));
+    await expect(cards.and(page.locator(".soon"))).toHaveCount(d.families.filter((f) => !f.available).length);
+  }
+  // Flat is the classic board, with its records on the Records page
+  const flat = page.locator('#dimension-groups li[data-space="polygon"]');
+  await expect(flat.getByRole("link", { name: /^Records/ })).toHaveAttribute("href", "/browse.html");
+  await expect(flat.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/");
 
   for (const s of api.spaces) {
     expect(s.viewer).toBe(`/spaces/${s.space}.html`);
-    const card = page.locator(`#space-cards > li[data-space="${s.space}"]`);
-    await expect(card.getByRole("heading", { name: s.title, exact: true })).toBeVisible();
+    const card = page.locator(`#dimension-groups li[data-space="${s.space}"]`);
+    const { dimension, family } = familyOfSpace(s.space)!;
+    await expect(card.locator("xpath=ancestor::section[1]")).toHaveAttribute("data-dimension", dimension.id);
+    await expect(card.getByRole("heading", { name: family.name, exact: true })).toBeVisible();
     await expect(card).toContainText(s.summary);
     await expect(card).toContainText(s.problems.toLocaleString("en-US"));
     await expect(card.getByRole("link", { name: /^Viewer/ })).toHaveAttribute("href", s.viewer);
@@ -66,7 +90,7 @@ test("the spaces page lists the four spaces and the exhibit, and says what its v
 
   // a card's viewer link opens the viewer
   await page
-    .locator('#space-cards > li[data-space="sphere"]')
+    .locator('#dimension-groups li[data-space="sphere"]')
     .getByRole("link", { name: /^Viewer/ })
     .click();
   await expect(page).toHaveURL(/\/spaces\/sphere\.html$/);
@@ -75,7 +99,7 @@ test("the spaces page lists the four spaces and the exhibit, and says what its v
 });
 
 test("the records table loads the problems of each space", async ({ page, request }) => {
-  await page.goto("/spaces.html");
+  await page.goto("/dimensions.html");
   for (const space of SPACES) {
     const data = await getJson<SpaceRecordsResponse>(request, `/api/spaces/${space}/records`);
     expect(data.problems.length).toBeGreaterThan(0);
@@ -107,9 +131,9 @@ test("a filter narrows the table and stays in the address", async ({ page, reque
   expect(hex.length).toBeGreaterThan(0);
 
   // a card's Records link chooses its space
-  await page.goto("/spaces.html");
+  await page.goto("/dimensions.html");
   await page
-    .locator('#space-cards > li[data-space="torus"]')
+    .locator('#dimension-groups li[data-space="torus"]')
     .getByRole("link", { name: /^Records/ })
     .click();
   await expect(page.locator('#space-pick input[value="torus"]')).toBeChecked();
@@ -146,12 +170,44 @@ test("the viewers are served at /spaces/<name>.html as they are in their package
   }
 });
 
+test("the former spaces page sends its links on to the dimensions page, with their query and hash", async ({
+  page,
+}) => {
+  await page.goto("/spaces.html?from=old#space=torus&family=hex&N=5");
+  await expect(page).toHaveURL(/\/dimensions\.html\?from=old#space=torus&family=hex&N=5$/);
+  await expect(page.locator('#space-pick input[value="torus"]')).toBeChecked();
+  await expect(page.locator("#filter-family")).toHaveValue("hex");
+  await expect(page.locator("#filter-N")).toHaveValue("5");
+  await expect(rows(page).first()).toBeVisible();
+  // and without either
+  await page.goto("/spaces.html");
+  await expect(page).toHaveURL(/\/dimensions\.html(#space=[^/]*)?$/);
+  await expect(page.getByRole("heading", { name: "Dimensions", exact: true })).toBeVisible();
+});
+
+test("without the server the dimensions page still lists each dimension and its kinds", async ({ page }) => {
+  await page.route("**/api/spaces", (route) => route.abort());
+  await page.goto("/dimensions.html");
+  await expect(page.locator("#spaces-status")).toHaveText(
+    "The server is not reachable, so the records cannot be shown.",
+  );
+  await expect(page.locator("#dimension-groups h4")).toHaveText(
+    DIMENSIONS.flatMap((d) => d.families.map((f) => f.name)),
+  );
+  // the kinds the board can show are not drawn as coming soon, and still open on the board
+  await expect(page.locator("#dimension-groups li.soon")).toHaveCount(2);
+  await expect(
+    page.locator('#dimension-groups li[data-space="torus"]').getByRole("link", { name: /^Board/ }),
+  ).toHaveAttribute("href", "/#space=torus");
+  await expect(page.locator("#records")).toBeHidden();
+});
+
 for (const scheme of ["light", "dark"] as const) {
-  test(`the spaces page has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
+  test(`the dimensions page has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
     for (const hash of ["", "#space=curved&K=1&N=all&M=all", "#space=torus&family=all&N=0"]) {
       await page.goto("about:blank");
-      await page.goto(`/spaces.html${hash}`);
+      await page.goto(`/dimensions.html${hash}`);
       await expect(rows(page).first()).toBeVisible();
       await page.waitForTimeout(300);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();

@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { type Page, type Route, expect, test } from "@playwright/test";
 import { type SpaceName, type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/spaces";
+import { DIMENSIONS, whereIs } from "../apps/web/src/dimension-table";
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
 import { openProblem } from "./helpers";
 
@@ -21,6 +22,23 @@ async function shown(page: Page, id: string): Promise<void> {
   await expect(page.locator("#space-score")).not.toHaveText("—");
 }
 
+/**
+ * Chooses a kind with the Dimension and Kind menus, as a user would: the dimension first when it
+ * differs (which shows that dimension's last kind), then the kind when it differs.
+ */
+async function choose(page: Page, kind: SpaceName | "polygon"): Promise<void> {
+  const dimension = whereIs(kind)!.dimension.id;
+  if ((await page.locator("#dimension-select").inputValue()) !== dimension)
+    await page.selectOption("#dimension-select", dimension);
+  if ((await page.locator("#kind-select").inputValue()) !== kind) await page.selectOption("#kind-select", kind);
+}
+
+/** Both menus name the kind shown. */
+async function menusShow(page: Page, kind: SpaceName | "polygon"): Promise<void> {
+  await expect(page.locator("#dimension-select")).toHaveValue(whereIs(kind)!.dimension.id);
+  await expect(page.locator("#kind-select")).toHaveValue(kind);
+}
+
 /** Runs the optimizer with an evaluation budget and waits for its end; returns the status line. */
 async function runFor(page: Page, evals: number, seed = 1): Promise<string> {
   await page.selectOption("#space-solve-budget", "evals");
@@ -32,14 +50,17 @@ async function runFor(page: Page, evals: number, seed = 1): Promise<string> {
   return (await page.locator("#space-solve-status").textContent()) ?? "";
 }
 
-test("the Space menu switches the board to each space and back to the polygon board as it was", async ({ page }) => {
+test("the Dimension and Kind menus switch the board to each kind and back to the Flat board as it was", async ({
+  page,
+}) => {
   await openProblem(page, 4, 4, 5);
   await page.click("#add-all");
   await expect(page.locator("#count")).toContainText("5 / 5");
   const board = await page.evaluate(() => polypack.board.toConfig());
 
   for (const space of SPACES) {
-    await page.selectOption("#space-select", space);
+    await choose(page, space);
+    await menusShow(page, space);
     const id = DEFAULT_PROBLEM[space];
     await shown(page, id);
     await expect(page).toHaveURL(new RegExp(`#space=${id.replace(/[/-]/g, "\\$&")}$`));
@@ -54,7 +75,8 @@ test("the Space menu switches the board to each space and back to the polygon bo
     await expect(page.locator("#space-shown")).toHaveText("the research record");
   }
 
-  await page.selectOption("#space-select", "");
+  await choose(page, "polygon");
+  await menusShow(page, "polygon");
   await expect(page.locator("#board")).toBeVisible();
   await expect(page.locator(".space-stage")).toBeHidden();
   await expect(page).toHaveURL(/#p=4,4,5$/);
@@ -64,10 +86,60 @@ test("the Space menu switches the board to each space and back to the polygon bo
   // a space address opens the space; a polygon link returns to the polygon board
   await page.evaluate(() => (location.hash = "#space=torus/hex/5/8"));
   await shown(page, "torus/hex/5/8");
-  await expect(page.locator("#space-select")).toHaveValue("torus");
+  await menusShow(page, "torus");
   await page.evaluate(() => (location.hash = "#p=4,4,5"));
   await expect(page.locator("#board")).toBeVisible();
-  await expect(page.locator("#space-select")).toHaveValue("");
+  await menusShow(page, "polygon");
+});
+
+test("the Dimension menu lists every dimension, the ones to come disabled, and Kind lists its families", async ({
+  page,
+}) => {
+  await openProblem(page, 4, 4, 5);
+  const dimension = page.locator("#dimension-select");
+  const kind = page.locator("#kind-select");
+  await expect(dimension.locator("option")).toHaveText([
+    "2D in 2D",
+    "2D on 3D",
+    "3D in 3D (coming soon)",
+    "3D on 4D (coming soon)",
+  ]);
+  // a dimension with no available family is listed but cannot be chosen
+  for (const d of DIMENSIONS) {
+    const option = dimension.locator(`option[value="${d.id}"]`);
+    if (d.families.some((f) => f.available)) await expect(option).toBeEnabled();
+    else await expect(option).toBeDisabled();
+  }
+  await expect(dimension.locator("option[disabled]")).toHaveCount(2);
+  await expect(kind.locator("option")).toHaveText(["Flat", "Curved"]);
+  await menusShow(page, "polygon");
+
+  // a dimension opens its first kind, at the problem the board starts that kind with
+  await page.selectOption("#dimension-select", "2-on-3");
+  await expect(kind.locator("option")).toHaveText(["Platonic surfaces", "Sphere", "Torus"]);
+  await menusShow(page, "surface");
+  await shown(page, DEFAULT_PROBLEM.surface);
+  // the kinds write the same addresses as the board always did
+  await page.selectOption("#kind-select", "torus");
+  await shown(page, DEFAULT_PROBLEM.torus);
+  await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.torus}$`));
+
+  // back to 2D in 2D: the Flat board as it was; then Curved
+  await page.selectOption("#dimension-select", "2-in-2");
+  await menusShow(page, "polygon");
+  await expect(page.locator("#board")).toBeVisible();
+  await expect(page).toHaveURL(/#p=4,4,5$/);
+  await page.selectOption("#kind-select", "curved");
+  await shown(page, DEFAULT_PROBLEM.curved);
+  await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.curved.replace(/[/-]/g, "\\$&")}$`));
+
+  // a dimension chosen again returns to the kind last shown in it
+  await page.selectOption("#dimension-select", "2-on-3");
+  await menusShow(page, "torus");
+  await shown(page, DEFAULT_PROBLEM.torus);
+  await page.selectOption("#dimension-select", "2-in-2");
+  await menusShow(page, "curved");
+  await shown(page, DEFAULT_PROBLEM.curved);
 });
 
 test("each space loads a problem from its address, optimises it in the browser and offers only a valid result", async ({
@@ -86,7 +158,7 @@ test("each space loads a problem from its address, optimises it in the browser a
     await page.goto("about:blank");
     await page.goto(`/#space=${id}`);
     await shown(page, id);
-    await expect(page.locator("#space-select")).toHaveValue(space);
+    await menusShow(page, space);
     const status = await runFor(page, evals);
     expect(status, id).toMatch(/^(Evaluation limit reached|Reached the lower bound)\./);
     await expect(page.locator("#space-solve-score")).toHaveText(/^\d+\.\d{6}$/);
@@ -288,15 +360,15 @@ test("pause holds a run at once, resume goes on, stop ends it at once", async ({
   await expect(page.locator("#space-solve-download")).toBeEnabled();
 });
 
-test("the spaces page links each problem to the board", async ({ page }) => {
-  await page.goto("/spaces.html#space=torus&family=hex&N=5");
+test("the dimensions page links each problem to the board", async ({ page }) => {
+  await page.goto("/dimensions.html#space=torus&family=hex&N=5");
   const row = page.locator("#space-rows tr").first();
   const id = (await row.getAttribute("data-id"))!;
   const link = row.getByRole("link", { name: /^Open on the board/ });
   await expect(link).toHaveAttribute("href", `/#space=${id}`);
   await link.click();
   await shown(page, id);
-  await expect(page.locator("#space-select")).toHaveValue("torus");
+  await menusShow(page, "torus");
 });
 
 for (const scheme of ["light", "dark"] as const) {
@@ -331,7 +403,7 @@ test("the drawing turns with the keyboard", async ({ page }) => {
   const after = await page.locator(".space-draw canvas").screenshot();
   expect(after.equals(before)).toBe(false);
   // a torus does not turn, so its drawing is a picture that takes no focus
-  await page.selectOption("#space-select", "torus");
+  await choose(page, "torus");
   await shown(page, DEFAULT_PROBLEM.torus);
   await expect(draw).toHaveAttribute("role", "img");
   await expect(draw).not.toHaveAttribute("tabindex", /.*/);
@@ -401,7 +473,7 @@ test("a torus entry in a skewed basis draws at once, and a degenerate lattice is
 test("a deep link whose problem cannot be read stays in the address", async ({ page }) => {
   await page.route("**/api/spaces/torus/records", (route) => route.abort());
   await page.goto("/#space=torus/hex/5/8");
-  await expect(page.locator("#space-busy")).toContainText("The problems of this space could not be loaded.");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this kind could not be loaded.");
   await expect(page).toHaveURL(/#space=torus\/hex\/5\/8$/);
   await page.unroute("**/api/spaces/torus/records");
   await page.route("**/api/spaces/torus/problems/torus/hex/5/8", (route) => route.abort());
@@ -469,10 +541,10 @@ test("a space whose problems cannot be read leaves nothing live, and Try again l
   await page.goto("/#space=sphere/4/12");
   await shown(page, "sphere/4/12");
   await page.route("**/api/spaces/torus/records", (route) => route.abort());
-  await page.selectOption("#space-select", "torus");
-  await expect(page.locator("#space-busy")).toContainText("The problems of this space could not be loaded.");
+  await choose(page, "torus");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this kind could not be loaded.");
   await expect(page).toHaveURL(/#space=torus$/);
-  await expect(page.locator("#space-select")).toHaveValue("torus");
+  await menusShow(page, "torus");
   await expect(page.locator(".space-draw")).toHaveCount(0);
   await expect(page.locator("#space-solve-run")).toBeDisabled();
   await expect(page.locator("#space-submit")).toBeDisabled();
@@ -496,10 +568,10 @@ test("loading is shown while the space code and the problems arrive", async ({ p
     await new Promise((r) => setTimeout(r, 800));
     await route.continue();
   });
-  await page.selectOption("#space-select", "sphere");
-  await expect(page.locator(".space-placeholder")).toHaveText("Loading the spaces…");
+  await choose(page, "sphere");
+  await expect(page.locator(".space-placeholder")).toHaveText("Loading…");
   release();
-  await expect(page.locator("#space-busy-text")).toHaveText("Loading the problems of this space…");
+  await expect(page.locator("#space-busy-text")).toHaveText("Loading the problems of this kind…");
   await shown(page, DEFAULT_PROBLEM.sphere);
   await expect(page.locator(".space-placeholder")).toHaveCount(0);
   await expect(page.locator("#space-busy")).toBeHidden();
@@ -512,7 +584,7 @@ test("Back to an address without a space shows the polygon board", async ({ page
   await page.goBack();
   await expect(page).toHaveURL(/#p=4,4,5$/);
   await expect(page.locator("#board")).toBeVisible();
-  await expect(page.locator("#space-select")).toHaveValue("");
+  await menusShow(page, "polygon");
   // from the board's address without a hash, as a link from another site would open it
   await page.goto("/");
   await expect(page.locator("#board")).toBeVisible();
@@ -521,7 +593,7 @@ test("Back to an address without a space shows the polygon board", async ({ page
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("#board")).toBeVisible();
-  await expect(page.locator("#space-select")).toHaveValue("");
+  await menusShow(page, "polygon");
 });
 
 test("the answer to a submission is shown when the problem changed while it was sent", async ({ page }) => {
@@ -559,11 +631,12 @@ test("a polygon run is paused while a space is shown, and goes on after", async 
   await page.fill("#solve-evals", "1000000");
   await page.click("#solve-run");
   await expect(page.locator("#solve-stop")).toBeEnabled();
-  await page.selectOption("#space-select", "sphere");
+  await choose(page, "sphere");
   await shown(page, DEFAULT_PROBLEM.sphere);
   await expect(page.locator("#space-hold")).toBeVisible();
+  await expect(page.locator("#space-hold")).toContainText("It goes on when you choose Flat under 2D in 2D again.");
   await expect(page.locator("#solve-pause")).toHaveText("Resume");
-  await page.selectOption("#space-select", "");
+  await choose(page, "polygon");
   await expect(page.locator("#solve-pause")).toHaveText("Pause");
   await expect(page.locator("#solve-status")).toHaveText(/^Running/);
   await page.click("#solve-stop");
@@ -573,9 +646,9 @@ test("a polygon run is paused while a space is shown, and goes on after", async 
   await expect(page.locator("#solve-stop")).toBeEnabled();
   await page.click("#solve-pause");
   await expect(page.locator("#solve-pause")).toHaveText("Resume");
-  await page.selectOption("#space-select", "sphere");
+  await choose(page, "sphere");
   await expect(page.locator("#space-hold")).toBeHidden();
-  await page.selectOption("#space-select", "");
+  await choose(page, "polygon");
   await expect(page.locator("#solve-pause")).toHaveText("Resume");
   await page.click("#solve-stop");
 });

@@ -1,12 +1,16 @@
 /**
- * The board's address of a problem in one of the other spaces: "#space=<problem id>", such as
+ * The board's address of a problem of a kind other than Flat: "#space=<problem id>", such as
  * "#space=sphere/0/12" or "#space=curved/-1/3/4/5", or "#space=<space>" for a space at the problem
- * the board starts it with (space/model.ts DEFAULT_PROBLEM). No imports, so that the default board
- * can read it without loading the spaces. (The spaces page keeps its own "#space=torus&family=hex"
- * state on /spaces.html.)
+ * the board starts it with (space/model.ts DEFAULT_PROBLEM). The API calls these families spaces,
+ * and the address keeps that name, so that older links still work. No imports, so that the default
+ * board can read it without loading the spaces. (The dimensions page keeps its own
+ * "#space=torus&family=hex" state on /dimensions.html.)
  */
 
-/** The spaces the board can switch to, in the order of its menu. */
+/**
+ * The spaces the board can show. The menus list them by dimension (dimension-table.ts); a family
+ * of the table can be made available only once its space is here.
+ */
 export const BOARD_SPACES = ["surface", "curved", "sphere", "torus"] as const;
 export type BoardSpace = (typeof BOARD_SPACES)[number];
 

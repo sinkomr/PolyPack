@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Dimensions</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="scroll">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html">Records</a>
+        <a href="/dimensions.html" aria-current="page">Dimensions</a>
+        <a href="/volunteer.html">Volunteer</a>
+        <a href="/api">API</a>
+        <a href="/tighter.html">Tighter</a>
+      </nav>
+    </header>
+    <main class="page dimensions">
+      <h2 class="title">Dimensions</h2>
+      <p class="lede">
+        Each kind of problem is filed under a dimension: the pieces' dimension, "in" or "on", and the container's
+        dimension. "In" means inside a container. "On" means on a closed surface or boundary, with no container. So
+        polygons in polygons are 2D in 2D, and polygons on the surface of a solid are 2D on 3D.
+      </p>
+      <p class="lede">
+        Each kind has its own problems, a viewer that draws its records, and notes that define it exactly. The
+        <a href="/">board</a> opens every problem. Choose the dimension and the kind in its Problem section, or follow a
+        row's Open on the board link. Then run the optimizer in your browser and submit a better packing.
+      </p>
+      <p class="lede">
+        Each problem below shows two values side by side. The <strong>certified value</strong> is PolyPack's research
+        record: its packing is proven valid with interval arithmetic. A <strong>site entry</strong> is a packing sent to
+        this site; the server checks it with floating-point arithmetic and a tolerance of 10<sup>−9</sup>, like every
+        other entry. Entries go through the <a href="/api">API</a>. The <a href="/volunteer.html">volunteer client</a>
+        can also work on these problems when its optional mode for the other kinds is turned on.
+      </p>
+      <p id="spaces-status" class="note" role="status" aria-live="polite"></p>
+
+      <!-- one section per dimension, from the table in src/dimension-table.ts -->
+      <div id="dimension-groups"></div>
+
+      <section id="exhibits" aria-labelledby="exhibits-title" hidden>
+        <h3 id="exhibits-title" class="section-title">Exhibit</h3>
+        <ul id="exhibit-cards" class="space-cards"></ul>
+      </section>
+
+      <section id="records" aria-labelledby="records-title" hidden>
+        <h3 id="records-title" class="section-title" tabindex="-1">Records</h3>
+        <p class="note records-note">
+          The records of Flat (2D in 2D) are on the <a href="/browse.html">Records</a> page. Those of the other kinds
+          are here.
+        </p>
+        <form id="space-controls" class="space-controls" aria-label="Records shown">
+          <div class="seg" role="radiogroup" aria-labelledby="space-pick-name">
+            <span id="space-pick-name" class="seg-name">Kind</span>
+            <span id="space-pick" class="seg-track"></span>
+          </div>
+          <div id="space-filters" class="row wrap"></div>
+        </form>
+        <p id="space-score" class="note"></p>
+        <p id="space-note" class="note" role="status" aria-live="polite"></p>
+        <div class="table-wrap">
+          <table class="space-table" aria-labelledby="records-title">
+            <thead id="space-head"></thead>
+            <tbody id="space-rows"></tbody>
+          </table>
+        </div>
+        <dl class="note terms">
+          <dt>Certified value</dt>
+          <dd>
+            The research record of the problem. Its packing is proven valid with interval arithmetic at this size. Shown
+            at 6 decimals.
+          </dd>
+          <dt>Status</dt>
+          <dd>
+            Best known; proven optimal, where a published proof covers the problem; or no packing exists, where it is
+            proved that the pieces do not fit. Proven and impossible problems take no entries.
+          </dd>
+          <dt>Lower bound</dt>
+          <dd>No packing of the problem can be smaller. Shown at 6 decimals, with what it rests on.</dd>
+          <dt>Site best</dt>
+          <dd>
+            The best entry sent to this site, checked by the server's floating-point validator of the kind. Only the
+            leading entry of each problem is kept. Shown at 6 decimals.
+          </dd>
+          <dt>Configuration</dt>
+          <dd>The problem with its packings as JSON, in the kind's own format (see its notes).</dd>
+          <dt>Board</dt>
+          <dd>
+            Opens the problem on the board: its best packing drawn, the optimizer in your browser, and submission of a
+            better packing.
+          </dd>
+        </dl>
+      </section>
+    </main>
+    <script type="module" src="/src/dimensions.ts"></script>
+  </body>
+</html>
