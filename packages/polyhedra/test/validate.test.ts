@@ -92,6 +92,34 @@ describe("validatePolyhedra", () => {
     }
     expect(configErrors({ s: 1, pieces: [[0, 0, 0, 1, 0, 0, 0]] }, 2)).toEqual(["expected 2 pieces for this problem, got 1"]);
   });
+
+  it("checks PolyPack's prisms and antiprisms: stacked pieces fit, overlaps and protrusions are rejected", () => {
+    for (const n of [7, 9, 10]) {
+      // two prisms stacked in their own prism of scale 2 (height 2, base side 2): they touch each other and both caps
+      const pr = getProblem(`pr${n}inpr${n}`)!;
+      const stack = (dz: number): Pose[] => [[0, 0, -0.5, 1, 0, 0, 0], [0, 0, 0.5 + dz, 1, 0, 0, 0]];
+      expect(validatePolyhedra(pr, { s: 2, pieces: stack(0) }, { tol: 0 }).valid).toBe(true);
+      expect(validatePolyhedra(pr, { s: 2, pieces: stack(-1e-7) }).valid).toBe(false);
+      expect(validatePolyhedra(pr, { s: 2 - 1e-7, pieces: stack(0) }).valid).toBe(false);
+      // two antiprisms stacked in a cube: each reaches R = 1 / (2 sin(pi/n)) from its axis along x (one vertex of a
+      // base on each side), less along y and H/2 along z
+      const ap = getProblem(`ap${n}incub`)!;
+      const S = getSolid(`antiprism${n}`);
+      const R = 1 / (2 * Math.sin(Math.PI / n));
+      const H = 2 * Math.max(...Array.from({ length: S.nv }, (_, i) => S.V[3 * i + 2]));
+      const two = (dz: number): Pose[] => [[0, 0, -H / 2, 1, 0, 0, 0], [0, 0, H / 2 + dz, 1, 0, 0, 0]];
+      const v = validatePolyhedra(ap, { s: 2 * R + 2e-12, pieces: two(1e-9) }, { tol: 0 });
+      expect(v.valid, `ap${n}incub`).toBe(true);
+      expect(v.minPairSep).toBeCloseTo(1e-9, 12);
+      expect(validatePolyhedra(ap, { s: 2 * R + 2e-12, pieces: two(-1e-7) }).valid).toBe(false);
+      expect(validatePolyhedra(ap, { s: 2 * R - 1e-7, pieces: two(1e-9) }).valid).toBe(false);
+      // turned by pi/n about the axis, an antiprism shows the cube its other base: still width 2R along x
+      const qz = [Math.cos(Math.PI / (2 * n)), 0, 0, Math.sin(Math.PI / (2 * n))] as const;
+      const turned: Pose[] = [[0, 0, -H / 2, ...qz], [0, 0, H / 2 + 1e-9, 1, 0, 0, 0]];
+      expect(validatePolyhedra(ap, { s: 2 * R + 2e-12, pieces: turned }, { tol: 0 }).valid).toBe(true);
+      expect(validatePolyhedra(ap, { s: 2 * R - 1e-7, pieces: turned }).valid).toBe(false);
+    }
+  });
 });
 
 describe.skipIf(!doc)("data/polyhedra/records.json", () => {
@@ -118,9 +146,11 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
     }
   });
 
-  it("covers every problem for P = 2 to 30 with consistent ids", () => {
+  it("covers every problem of the wiki for P = 2 to 30 with consistent ids", () => {
+    // PolyPack's 21 problems (wiki: false) are not in this file yet
     const ids = new Set(records.map((r: { id: string }) => r.id));
-    for (const p of POLYHEDRA_PROBLEMS) for (let n = 2; n <= 30; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
+    for (const p of POLYHEDRA_PROBLEMS.filter((x) => x.wiki))
+      for (let n = 2; n <= 30; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
     for (const r of records) expect(r.id).toBe(`polyhedra/${r.code}/${r.P}`);
   });
 });

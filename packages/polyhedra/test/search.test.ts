@@ -3,7 +3,7 @@
  */
 import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra } from "../src";
+import { getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra, volumeBound } from "../src";
 
 const recUrl = new URL("../../../data/polyhedra/records.json", import.meta.url);
 const doc = existsSync(recUrl) ? JSON.parse(readFileSync(recUrl, "utf8")) : null;
@@ -61,6 +61,21 @@ describe("searchPolyhedra", () => {
       expect(validatePolyhedra(p, r.config!, { tol: 0 }).valid, id).toBe(true);
       expect(r.score, id).toBeLessThanOrEqual(rec.score_cert);
       expect(r.startScore!, id).toBeLessThanOrEqual(rec.score_cert);
+    }
+  });
+
+  it("packs PolyPack's prisms and antiprisms from scratch, valid with the clearance asked for", () => {
+    for (const [code, P] of [["pr9incub", 3], ["ap7inap7", 2], ["pr10l2incub", 2], ["ap10incub", 3]] as const) {
+      const p = getProblem(code)!;
+      const r = searchPolyhedra(p, P, { seed: 1, maxEvals: 20_000, clearance: 1e-7 });
+      expect(r.config, code).not.toBeNull();
+      const v = validatePolyhedra(p, r.config!, { tol: 0 });
+      expect(v.valid, code).toBe(true);
+      expect(v.minPairSep, code).toBeGreaterThan(0.99e-7);
+      expect(v.minWallGap, code).toBeGreaterThan(0.99e-7);
+      expect(r.score, code).toBeGreaterThan(volumeBound(p, P));
+      expect(r.score, code).toBeLessThan(3 * volumeBound(p, P));
+      expect(r.evaluations).toBeLessThanOrEqual(20_000);
     }
   });
 

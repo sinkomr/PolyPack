@@ -471,7 +471,7 @@ def main(argv=None):
     search = load_search(a.search)
     jobs, meta = [], []
     t0 = time.time()
-    for code in catalogue.PROBLEMS:
+    for code in [c for c in catalogue.PROBLEMS if c in catalogue.WIKI_PROBLEMS]:   # the wiki's problems only
         for n in range(2, a.nmax + 1):
             case = Case(code, n)
             row = rows.get((code, n))
@@ -531,7 +531,7 @@ def main(argv=None):
         'space': 'polyhedra',
         'title': '3D in 3D',
         'generated': time.strftime('%Y-%m-%d'),
-        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.PROBLEMS),
+        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.WIKI_PROBLEMS),
                   'note': 'the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimedean, Catalan, prisms, '
                           'antiprisms, elongated prisms) with 2 to %d pieces; 4D-6D are not included' % a.nmax},
         'upstream': {'repository': UPSTREAM, 'commit': UPSTREAM_COMMIT, 'site': 'https://polyhedrainpolyhedra.wiki/',

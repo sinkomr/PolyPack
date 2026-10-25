@@ -1,8 +1,10 @@
 /**
  * The problems of the polyhedra space: P congruent copies of a piece solid in the smallest scaled copy
- * s C of a container solid, as listed by polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
+ * s C of a container solid. The 86 problems of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
  * PROBLEMS): the 25 Platonic pairs, the 13 Archimedean and 13 Catalan solids in themselves, the 5
- * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube.
+ * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube. Then
+ * PolyPack's 21 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9 and 10 sides
+ * in themselves and in a cube, and their 9 elongated prisms in a cube.
  *
  * A problem is named by upstream's code `<piece code>in<container code>`, e.g. "cubintet" (cubes in a
  * tetrahedron) or "pr3l15incub" (triangular prisms of height 1.5 in a cube), and a problem with P
@@ -22,6 +24,8 @@ export interface PolyhedraProblem {
   family: ProblemFamily;
   /** e.g. "Cubes in a tetrahedron". */
   title: string;
+  /** True for the 86 problems that polyhedrainpolyhedra.wiki lists (wikiUrl gives their pages). */
+  wiki: boolean;
 }
 
 const PLATONIC = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
@@ -55,8 +59,13 @@ const CATALAN = [
   "disdyakis_triacontahedron",
   "pentagonal_hexecontahedron",
 ];
-const PRISMS = [3, 5, 6, 8, 12].map((k) => `prism${k}`).concat([4, 5, 6, 8, 12].map((k) => `antiprism${k}`));
-const ELONGATED = [3, 5, 6, 8, 12].flatMap((k) => ["l15", "l2", "l3"].map((t) => `prism${k}_${t}`));
+const prisms = (p: number[], a: number[]) => p.map((k) => `prism${k}`).concat(a.map((k) => `antiprism${k}`));
+const elongated = (p: number[]) => p.flatMap((k) => ["l15", "l2", "l3"].map((t) => `prism${k}_${t}`));
+const PRISMS = prisms([3, 5, 6, 8, 12], [4, 5, 6, 8, 12]);
+const ELONGATED = elongated([3, 5, 6, 8, 12]);
+/** PolyPack's additions (2026-10-25): 7, 9 and 10 sides. */
+const EXTRA_PRISMS = prisms([7, 9, 10], [7, 9, 10]);
+const EXTRA_ELONGATED = elongated([7, 9, 10]);
 
 function plural(s: Solid): string {
   const t = s.title;
@@ -69,7 +78,7 @@ function article(s: Solid): string {
   return /^[aeiou]/.test(s.title) ? `an ${s.title}` : `a ${s.title}`;
 }
 
-function problemOf(piece: string, container: string, family: ProblemFamily): PolyhedraProblem {
+function problemOf(piece: string, container: string, family: ProblemFamily, wiki = true): PolyhedraProblem {
   const P = getSolid(piece);
   const C = getSolid(container);
   const what = plural(P);
@@ -79,6 +88,7 @@ function problemOf(piece: string, container: string, family: ProblemFamily): Pol
     container,
     family,
     title: `${what[0].toUpperCase()}${what.slice(1)} in ${article(C)}`,
+    wiki,
   };
 }
 
@@ -104,10 +114,12 @@ function build(): PolyhedraProblem[] {
   for (const s of CATALAN) out.push(problemOf(s, s, "catalan"));
   for (const s of PRISMS) for (const c of [s, "cube"]) out.push(problemOf(s, c, "prisms"));
   for (const s of ELONGATED) out.push(problemOf(s, "cube", "prisms"));
+  for (const s of EXTRA_PRISMS) for (const c of [s, "cube"]) out.push(problemOf(s, c, "prisms", false));
+  for (const s of EXTRA_ELONGATED) out.push(problemOf(s, "cube", "prisms", false));
   return out;
 }
 
-/** The 86 problems, in upstream's order. */
+/** The 107 problems: upstream's 86 in upstream's order, then PolyPack's 21 (python/polyhedra/catalogue.py has the same list). */
 export const POLYHEDRA_PROBLEMS: readonly PolyhedraProblem[] = build();
 
 const BY_CODE = new Map(POLYHEDRA_PROBLEMS.map((p) => [p.code, p]));
@@ -148,7 +160,7 @@ export function formatPolyhedraId(code: string, P: number): string {
   return `polyhedra/${code}/${P}`;
 }
 
-/** The wiki's page of a case (its hash names the record id, n written with at least two digits). */
+/** The wiki's page of a case (its hash names the record id, n written with at least two digits); only for problems with `wiki`. */
 export function wikiUrl(code: string, P: number): string {
   return `https://polyhedrainpolyhedra.wiki/#${code}_n${String(P).padStart(2, "0")}`;
 }
