@@ -6,8 +6,9 @@ name `boundary`.
 
 P unit balls (radius 1) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
 edge s. The score is the smallest s. Every record is certified by an exact checker
-(`python/boundary/certify.py`, rational arithmetic only), so its validity is proven, not just
-tested. Records: `data/boundary/records.json`.
+(`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
+tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
+the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6).
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -214,7 +215,7 @@ and a valid packing becomes strictly valid [CALC]. The rule:
 
 score_float is the unscaled s. The record's configuration is the scaled one, at s = score_cert,
 so what is stored is exactly what was certified. Every record certifies at k = 1, except balls
-P = 14 (k = 3) and P = 15 (k = 2), whose search results were 2e-12 short of touching.
+P = 14 (k = 3), whose research result was 2e-12 short of touching.
 
 ### 4.5 Checks around the certifier
 
@@ -230,7 +231,7 @@ P = 14 (k = 3) and P = 15 (k = 2), whose search results were 2e-12 short of touc
   chain-based distances, loops, clearances and cube parts for 314 configurations: the engine's
   research fixtures, the records, the records shrunk by 1e-6, the adversarial cases and 200
   seeded random ones (balanced valid and invalid). The test compares them with the certifier.
-  Verdicts agree on all 314 at tolerance 1e-9 and on 286 at tolerance 0. The other 28 have an
+  Verdicts agree on all 314 at tolerance 1e-9 and on 287 at tolerance 0. The other 27 have an
   exact margin within 1e-13 of a threshold (raw float fixtures and exact contacts), where a float
   verdict at tolerance 0 is decided by rounding. One such case: the research fixture for 9 balls
   at its own s is exactly valid, with margins of about 1e-16; the engine rejects it at tolerance 0
@@ -240,6 +241,38 @@ P = 14 (k = 3) and P = 15 (k = 2), whose search results were 2e-12 short of touc
   (the shortest path crosses two 2-faces); a ball too close to an edge; a cube containing an edge
   point; two cube parts overlapping in one cell; touching variants of each, valid but not
   strictly; malformed and out-of-scope input. A copy of every record shrunk by 1e-6 fails.
+
+### 4.6 Exact constructions
+
+Some layouts sit on exact values. Where the certifier proves the exact version valid at exactly
+that s (touching allowed), the record stores it in the field `exact`, records mode re-checks it,
+and the record's configuration is that construction rounded to binary64 and scaled as in 4.4.
+
+- **Cubes, rational** [CALC]. A cube layout whose value is within 1e-5 of 5/4, 4/3 or 3/2 is
+  scaled to that value, and every coordinate within 1e-6 of a multiple of 1/24 (which holds the
+  1/8, 1/6 and 1/4 grids) is snapped onto it; the other coordinates have slack and are kept as
+  binary64 values. The certifier then decides validity at exactly s = 5/4, 4/3 or 3/2 in
+  rational arithmetic. This works for the search layouts of P = 11, 12 (5/4) and 13, 14 (4/3) and
+  the research layouts of P = 9 (5/4) and 14, 16 (3/2); it fails for the research layouts of
+  P = 10, 12, 13 and 15, whose contacts run through coordinates off the grid. Those problems
+  take a better or equal exact value from another candidate.
+- **Balls, in Q(sqrt 2, sqrt 3)** [CALC]. Two layouts have every centre coordinate equal to
+  +-a with h - a = 1/sqrt 2, so every clearance is exactly 1:
+  P = 4, s = 1 + 1/sqrt 2, a = (2 - sqrt 2)/4 (the research layout), and
+  P = 8, s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2, a = sin 15 deg = (sqrt 6 - sqrt 2)/4 (the
+  search layout, one ball per cell). The certifier runs the same tests (clearance, words, loops)
+  on elements a + b sqrt 2 + c sqrt 3 + d sqrt 6 with rational a..d (`python/boundary/qfield.py`).
+  Signs are exact: a binary64 evaluation decides only when it exceeds 1e-12 times the sum of the
+  terms' magnitudes, far above its proven error (2e-15 of that sum); otherwise sign(p + q sqrt 3)
+  with p, q in Q(sqrt 2) follows from the signs of p, q and p^2 - 3 q^2, and the same one level
+  down. Both layouts are valid at exactly their s, with every clearance exactly 1 and the least
+  centre distance exactly 2. Whether these s are optimal is open [SPEC]: no matching lower bound.
+- **P + 1 minus a piece.** A subset of a valid packing is valid, so the record for P + 1 with its
+  last piece removed is a candidate for P. Cubes P = 10 (from 11) and 15 (from 16) use it.
+
+The builder (`python/boundary/build_records.py`) certifies every candidate (research, search,
+exact versions, P + 1 minus a piece, and the research note's constructions) with the rule of
+4.4 and keeps the one with the smallest score_cert (ties: exact, search, research, subset).
 
 ## 5. Lower bounds
 
@@ -256,7 +289,9 @@ record's `bound` is the larger one.
 
 Balls P = 1 and 2 meet sqrt 2, and cubes P = 8 meet the volume bound 1 (the 8 cubes fill the
 boundary). These values are therefore optimal by our own derivation [CALC]. PolyPack calls a value
-proven only with a published proof, so they stay `best_known`, with a note.
+proven only with a published proof, so they stay `best_known`, with a note. Every other value,
+the search values and the exact constructions included, lies above both bounds; the tests check
+this exactly.
 
 "No unit cube fits on a tesseract of edge below 1" is numerical only (research note sec. 4:
 maximising the side of a cube that avoids the edges, over rotation and centre, by 150 Nelder-Mead
@@ -276,98 +311,131 @@ ceil(P / 8) pieces inside it, which is an ordinary 3D packing.
 ## 7. Results
 
 fold = score_cert at 6 decimals. Gain = 1 - score_float / nofold. Lower bound as in section 5.
+Source: exact = a construction of the research note; research = the research prototype's round-2
+search (2026-10-24; balls seeds 21 and 22, cubes seed 31 or 32); search = the PolyPack boundary
+search (2026-10-25, one deterministic call with seed 1, below). "made exact" = section 4.6.
 
-**Balls** (search: research prototype round 2, seeds 21 and 22, 2026-10-24; P = 1, 2 exact):
+**Balls:**
 
-| P | fold | nofold | gain | lower bound | search |
+| P | fold | nofold | gain | lower bound | source |
 |---|---|---|---|---|---|
 | 1 | 1.414214 | 2 | 29.3% | 1.414214 (one ball) | exact: centre of cell 0 |
 | 2 | 1.414214 | 2 | 29.3% | 1.414214 (one ball) | exact: centres of cells 0 and 1 |
-| 3 | 1.680142 | 2 | 16.0% | 1.414214 (one ball) | seeds agree |
-| 4 | 1.707107 | 2 | 14.6% | 1.414214 (one ball) | seeds agree; 1 + 1/sqrt 2 [SPEC] |
-| 5 | 1.787248 | 2 | 10.6% | 1.414214 (one ball) | seeds differ by 2.0e-6 |
-| 6 | 1.865835 | 2 | 6.7% | 1.464592 (volume) | seeds agree |
-| 7 | 1.925404 | 2 | 3.7% | 1.541815 (volume) | seeds differ by 5.1e-4 |
-| 8 | 1.936630 | 2 | 3.2% | 1.611992 (volume) | seeds agree |
-| 9 | 2.220596 | 3.154701 | 29.6% | 1.676539 (volume) | seeds agree |
-| 10 | 2.270488 | 3.154701 | 28.0% | 1.736466 (volume) | seeds differ by 1.5e-3 |
-| 11 | 2.315950 | 3.154701 | 26.6% | 1.792519 (volume) | seeds differ by 1.4e-3 |
-| 12 | 2.328171 | 3.154701 | 26.2% | 1.845270 (volume) | seeds agree |
-| 13 | 2.397624 | 3.154701 | 24.0% | 1.895166 (volume) | seeds agree |
-| 14 | 2.435431 | 3.154701 | 22.8% | 1.942565 (volume) | seeds agree |
-| 15 | 2.504811 | 3.154701 | 20.6% | 1.987757 (volume) | seeds differ by 9.1e-3 |
-| 16 | 2.528105 | 3.154701 | 19.9% | 2.030983 (volume) | seeds differ by 2.3e-3 |
+| 3 | 1.680142 | 2 | 16.0% | 1.414214 (one ball) | research (seeds agree) |
+| 4 | 1.707107 | 2 | 14.6% | 1.414214 (one ball) | research, made exact: 1 + 1/sqrt 2 |
+| 5 | 1.787226 | 2 | 10.6% | 1.414214 (one ball) | search |
+| 6 | 1.865835 | 2 | 6.7% | 1.464592 (volume) | research (seeds agree) |
+| 7 | 1.925404 | 2 | 3.7% | 1.541815 (volume) | research (seeds differ by 5.1e-4) |
+| 8 | 1.931852 | 2 | 3.4% | 1.611992 (volume) | search, made exact: 2 cos 15 deg |
+| 9 | 2.220596 | 3.154701 | 29.6% | 1.676539 (volume) | research (seeds agree) |
+| 10 | 2.269267 | 3.154701 | 28.1% | 1.736466 (volume) | search |
+| 11 | 2.315918 | 3.154701 | 26.6% | 1.792519 (volume) | search |
+| 12 | 2.328171 | 3.154701 | 26.2% | 1.845270 (volume) | research (seeds agree) |
+| 13 | 2.397495 | 3.154701 | 24.0% | 1.895166 (volume) | search |
+| 14 | 2.435431 | 3.154701 | 22.8% | 1.942565 (volume) | research (seeds agree) |
+| 15 | 2.503240 | 3.154701 | 20.7% | 1.987757 (volume) | search |
+| 16 | 2.526574 | 3.154701 | 19.9% | 2.030983 (volume) | search |
 
-Mean gain 19.4%. "Seeds agree" means the two independent seeds' values differ by at most 1e-6
-relative: evidence of the best basin found, not a proof. The gain falls from 29% to 3% as P
-grows to 8, then jumps back at P = 9, where nofold must put two balls in one cell.
+Mean gain 19.5%. "Seeds agree" means the research search's two independent seeds differ by at
+most 1e-6 relative: evidence of the best basin found, not a proof. The gain falls from 29% to 3%
+as P grows to 8, then jumps back at P = 9, where nofold must put two balls in one cell.
 
-**Cubes** (search: research prototype round 2, axis-aligned family, seed 31 for P = 9..12 and
-32 for P = 13..16, one seed each; P = 1..8 exact):
+**Cubes** (axis-aligned):
 
-| P | fold | nofold | gain | lower bound | note |
+| P | fold | nofold | gain | lower bound | source |
 |---|---|---|---|---|---|
-| 1..2 | 1.000000 | 1 | 0% | 0.707107 (one cube) | one cube per cell |
-| 3..7 | 1.000000 | 1 | 0% | 0.721125 .. 0.956466 (volume) | one cube per cell |
-| 8 | 1.000000 | 1 | 0% | 1 (volume) | the cells themselves; meets the bound |
-| 9 | 1.250000 | 2 | 37.5% | 1.040042 (volume) | 1.5e-7 above 5/4 |
-| 10 | 1.250000 | 2 | 37.5% | 1.077217 (volume) | 3.7e-7 above 5/4 |
-| 11 | 1.333333 | 2 | 33.3% | 1.111990 (volume) | 6.5e-8 above 4/3 |
-| 12 | 1.500000 | 2 | 25.0% | 1.144714 (volume) | 2.5e-7 above 3/2 |
-| 13 | 1.500000 | 2 | 25.0% | 1.175667 (volume) | 2.2e-7 above 3/2 |
-| 14 | 1.500000 | 2 | 25.0% | 1.205071 (volume) | 2.2e-7 above 3/2 |
-| 15 | 1.500000 | 2 | 25.0% | 1.233106 (volume) | 1.4e-7 above 3/2 |
-| 16 | 1.500000 | 2 | 25.0% | 1.259921 (volume) | 1.8e-7 above 3/2 |
+| 1..2 | 1.000000 | 1 | 0% | 0.707107 (one cube) | exact: one cube per cell |
+| 3..7 | 1.000000 | 1 | 0% | 0.721125 .. 0.956466 (volume) | exact: one cube per cell |
+| 8 | 1.000000 | 1 | 0% | 1 (volume) | exact: the cells themselves; meets the bound |
+| 9 | 1.250000 | 2 | 37.5% | 1.040042 (volume) | research, made exact: 5/4 |
+| 10 | 1.250000 | 2 | 37.5% | 1.077217 (volume) | P = 11 minus a cube: 5/4 |
+| 11 | 1.250000 | 2 | 37.5% | 1.111990 (volume) | search, made exact: 5/4 |
+| 12 | 1.250000 | 2 | 37.5% | 1.144714 (volume) | search, made exact: 5/4 |
+| 13 | 1.333333 | 2 | 33.3% | 1.175667 (volume) | search, made exact: 4/3 |
+| 14 | 1.333333 | 2 | 33.3% | 1.205071 (volume) | search, made exact: 4/3 |
+| 15 | 1.500000 | 2 | 25.0% | 1.233106 (volume) | P = 16 minus a cube: 3/2 |
+| 16 | 1.500000 | 2 | 25.0% | 1.259921 (volume) | research, made exact: 3/2 |
 
-Mean gain 14.6%. The cube values sit 6.5e-8 to 3.7e-7 above 5/4, 4/3 and 3/2, which suggests exact
-constructions at those edges [SPEC: not extracted]. The stored values are the certified float
-results.
+Mean gain 16.7%. Every cube value from P = 9 on is an exact construction at 5/4, 4/3 or 3/2
+[CALC]; whether these are optimal is open [SPEC].
+
+**What the search changed** (2026-10-25; `searchBoundary({polytope: "tesseract", piece, P},
+{seed: 1, budget: {evals: E}})`, reproduced by `packages/boundary/scripts/search-sources.ts`).
+It beat the research values at 11 problems. Improvement = 1 - new score_cert / research score_cert:
+
+| problem | evaluations E | research | now | improvement |
+|---|---|---|---|---|
+| ball 5 | 2,617,672 | 1.787248 | 1.787226 | 0.0012% |
+| ball 8 | 65,479 | 1.936630 | 1.931852 (2 cos 15 deg) | 0.25% |
+| ball 10 | 654,968 | 2.270488 | 2.269267 | 0.054% |
+| ball 11 | 1,358,135 | 2.315950 | 2.315918 | 0.0014% |
+| ball 13 | 7,650,384 | 2.397624 | 2.397495 | 0.0054% |
+| ball 15 | 5,026,907 | 2.504811 | 2.503240 | 0.063% |
+| ball 16 | 779,083 | 2.528105 | 2.526574 | 0.061% |
+| cube 11 | 156,372 | 1.333333 | 1.250000 (5/4) | 6.25% |
+| cube 12 | 490,433 | 1.500000 | 1.250000 (5/4) | 16.7% |
+| cube 13 | 298,374 | 1.500000 | 1.333333 (4/3) | 11.1% |
+| cube 14 | 2,007,977 | 1.500000 | 1.333333 (4/3) | 11.1% |
+
+The exact constructions also moved balls P = 4 (by 5e-11 relative, to 1 + 1/sqrt 2) and cubes
+P = 9, 10, 15, 16 (by 1e-7 to 3e-7, onto 5/4 and 3/2). Each record keeps the research value in
+its field `previous`.
 
 ## 8. Exact and float
 
-- **Exact:** the certification of every record (strict validity at score_cert); the lower bounds;
-  the closed forms of the nofold values; the word maps.
-- **Float:** the search values (score_float), and therefore every fold value except the exact
+- **Exact:** the certification of every record (strict validity at score_cert); the exact
+  constructions of section 4.6 (rational, or in Q(sqrt 2, sqrt 3)); the lower bounds; the closed
+  forms of the nofold values; the word maps.
+- **Float:** the search values (score_float) of the ball records that are not exact
   constructions; the engine's validator; the cross-check numbers.
-- The exact constructions sit on their exact values: balls P = 1, 2 at s = sqrt 2 (score_float is
-  the binary64 value of sqrt 2, just above it) and cubes P = 1..8 at s = 1 (valid, but not
-  strictly, so score_cert is 1 + 1e-12).
+- The exact constructions sit on their exact values: balls P = 1, 2 at sqrt 2, P = 4 at
+  1 + 1/sqrt 2, P = 8 at 2 cos 15 deg; cubes P = 1..8 at 1, P = 9..12 at 5/4, 13, 14 at 4/3, 15, 16
+  at 3/2. Their records store the binary64 rounding, scaled to strict validity, so score_cert is
+  about 1e-12 above the exact value.
 
 ## 9. Limitations
 
 - The vertex rule is argued, not proved [SPEC] (section 3). It does not affect the records.
-- Ball values are float search results. P = 5, 7, 10, 11, 15 and 16 are not converged: the two
-  seeds differ by 2e-6 to 9e-3, so these are upper bounds only. Nothing is claimed optimal beyond
+- Ball values are float search results, except the exact constructions. The research value of
+  P = 7 is not converged (two seeds differ by 5.1e-4), and the search values (P = 5, 10, 11, 13,
+  15, 16) come from one seeded run each. All are upper bounds. Nothing is claimed optimal beyond
   the three cases that meet their bounds, and those stay `best_known`.
-- Cubes: only the axis-aligned family was searched, with one seed per P range. Rotated cubes were
-  tried only by random single-cube insertion (no fit found). The certifier refuses rotated cubes.
+- Cubes: only axis-aligned cubes were searched. Rotated cubes were tried only by random
+  single-cube insertion in the research (no fit found). The certifier refuses rotated cubes.
 - Only the tesseract is covered. The engine is generic over convex 4-polytopes; the certifier's
   lattice words are specific to the tesseract's right-angled 2-faces.
 - The cube nofold value 2 for P = 9..16 is taken from the wiki's table, not re-derived here.
 - The certifier's soundness rests on the arguments of section 4 and on Python's exact integers
-  and fractions. Its records are also accepted by the engine's independent float validator.
+  and fractions (and, for Q(sqrt 2, sqrt 3), on the sign rule of 4.6). Its records are also
+  accepted by the engine's independent float validator.
 
 ## 10. Files and commands
 
-- `python/boundary/certify.py`: the certifier (library and records mode).
-- `python/boundary/build_records.py`: builds `data/boundary/records.json` from
-  `data/boundary/sources/research_round2.json` (the research prototype's round-2 output, imported
-  with its numbers unchanged) and the exact constructions. Deterministic; a test rebuilds and
-  compares.
+- `python/boundary/certify.py`: the certifier (library and records mode);
+  `python/boundary/qfield.py`: exact arithmetic in Q(sqrt 2, sqrt 3).
+- `python/boundary/build_records.py`: builds `data/boundary/records.json` from the sources and
+  the exact constructions. Deterministic; a test rebuilds and compares.
+- `data/boundary/sources/research_round2.json`: the research prototype's round-2 output,
+  imported with its numbers unchanged. `data/boundary/sources/search_2026-10-25.json`: the
+  search's 11 configurations with their calls (method, seed, evaluations, date, value).
 - `python/boundary/test_boundary.py`: tests; `python/boundary/fixtures/`: adversarial cases and
   the engine cross-check.
-- `packages/boundary/scripts/check-records.ts`, `packages/boundary/scripts/gen-crosscheck.ts`.
+- `packages/boundary/scripts/check-records.ts`, `packages/boundary/scripts/gen-crosscheck.ts`,
+  `packages/boundary/scripts/search-sources.ts`.
 
 ```
 python3 python/boundary/certify.py data/boundary/records.json
 python3 python/boundary/test_boundary.py
+npx tsx packages/boundary/scripts/search-sources.ts
 python3 python/boundary/build_records.py
 npx tsx packages/boundary/scripts/check-records.ts
 npx tsx packages/boundary/scripts/gen-crosscheck.ts
 ```
 
-Timing (Apple Silicon, shared machine): certifying all 32 records under 1 s; building the
-records file 0.7 s; the Python tests about 20 s; the engine check 0.5 s for 64 validations.
+Timing (Apple Silicon, shared machine): the 11 searches about 2.5 minutes in all (the longest,
+balls P = 13 and 15, 44 and 49 s); building the records file 3 s; certifying all 32 records with
+their exact constructions 2.3 s; the Python tests about 26 s; the engine check 0.3 s for 64
+validations.
 
 ## 11. Sources
 
@@ -388,5 +456,7 @@ records file 0.7 s; the Python tests about 20 s; the engine check 0.5 s for 64 v
   note (site and repository audited for PolyPack on 2026-10-23).
 - PolyPack research note "3D pieces on the boundary of a 4-polytope", 2026-10-24: definitions,
   the lattice-word developments, the round-2 searches and their configurations.
+- PolyPack boundary search (`packages/boundary/src/search`), runs of 2026-10-25: the 11
+  improved configurations.
 - [SURFACE.md](SURFACE.md) section 2.3: the distance form for disks, which section 4.2 lifts one
   dimension up.
