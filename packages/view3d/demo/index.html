@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>3D on 4D: boundary views</title>
+    <meta name="color-scheme" content="light dark" />
+    <style>
+      :root {
+        --bg: #f6f7f9;
+        --panel: #ffffff;
+        --text: #1a1d21;
+        --muted: #56606b;
+        --border: #c9ced6;
+        --accent: #0b5fd1;
+        --accent-text: #ffffff;
+        --good: #17693a;
+        --bad: #b3261e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #14171b;
+          --panel: #1d2127;
+          --text: #e8ebef;
+          --muted: #a3acb8;
+          --border: #3a414b;
+          --accent: #6aa9ff;
+          --accent-text: #0b1420;
+          --good: #7fd6a0;
+          --bad: #ff8a80;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        font: 15px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 16px;
+        padding: 8px 12px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0;
+      }
+      label {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        color: var(--muted);
+      }
+      select {
+        font: inherit;
+        color: var(--text);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 5px 8px;
+        min-height: 36px;
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 2px;
+      }
+      #verdict {
+        font-size: 13px;
+        color: var(--muted);
+      }
+      #verdict.ok {
+        color: var(--good);
+      }
+      #verdict.bad {
+        color: var(--bad);
+      }
+      #view {
+        flex: 1;
+        min-height: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>3D on 4D</h1>
+      <label>Packing <select id="fixture"></select></label>
+      <span id="verdict" aria-live="polite"></span>
+    </header>
+    <main id="view"></main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
