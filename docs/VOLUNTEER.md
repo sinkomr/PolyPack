@@ -27,7 +27,7 @@ The best strict packing this machine has found for each problem is also kept on 
 
 ## Getting it and running it
 
-You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 612 kB (627,058 bytes on 2026-10-24; the client before the spaces option, built the same way, is 418,719 bytes). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 613 kB (627,518 bytes on 2026-10-24; the client before the spaces option, built the same way, is 418,719 bytes). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
 
 Download it from the site's volunteer page, https://polypack.fly.dev/volunteer.html, which also shows its version and SHA-256. The site's build makes it from the same sources (`npm run build` writes it to `apps/web/public/downloads/`). Or build it from the repository:
 
@@ -125,6 +125,7 @@ node polypack-volunteer.mjs --name "your name" --spaces sphere,torus --only-spac
   - `surface`, nofold mode: every piece stays in one face, so this is a planar problem. The client searches the best packing of the fullest face with its usual engine, then copies it onto every face. The server's work list no longer has nofold problems, since they are planar problems of the main site; the client keeps this search for a server that lists them;
   - `curved`: the search of `packages/curved` (penalty compression, an LP polish, basin hopping), in rounds that start from the best so far. It checks the stop and pause flags inside each restart, before every L-BFGS iteration, compression step and polish iteration;
   - `sphere` and `torus`: `searchSphere` and `searchTorus` in their packages. They relax overlaps with a penalty, then find the smallest valid size for the poses by bisection with the space's validator, and hop between basins.
+  - These jobs are shared with the website's board (`packages/spaces/src/search`), which runs them in the browser on any problem of the catalogue: see [spaces/BOARD.md](spaces/BOARD.md).
 - **What it submits.** `POST /api/spaces/submit` with `space`, `id`, `config` (in the space's own format), `name`, `agent_note` when given, `software`, `method` and `seed`. It sends a configuration only when all of these hold:
   - the space's own validator accepts it at its stated size, with PolyPack's tolerance 1e-9, and, when it is below the research record, also with the strict tolerance 1e-11 (the server's rule, `validateSpaceSubmission` in `packages/spaces`). Each job's results and the kept configuration are checked by this rule too, so a configuration it refuses is never offered, now or at a later visit;
   - the problem is open, and the score is not below the problem's lower bound;

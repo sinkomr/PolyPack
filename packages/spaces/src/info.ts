@@ -127,6 +127,8 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
       scoring: SCORING,
       improvement: IMPROVEMENT,
       work_limit: `a free basis must be reduced well enough that at most ${TORUS_MAX_TRANSLATES} lattice translates per pair of pieces need checking (a Lagrange-Gauss reduced basis always is); x, y and theta of each pose are each at most ${SPACE_MAX_COORD} in absolute value`,
+      stored:
+        "a kept entry with a free lattice is stored with its basis Lagrange-Gauss reduced and det(b1, b2) > 0: the same lattice and the same score, with the poses as sent",
     },
     viewer: "/spaces/torus.html",
     docs: spaceDocsUrl("TORUS.md"),

@@ -16,6 +16,13 @@
   --bad: #b3261e;
   --good: #17693a;
   --pending: #fff1c2;
+  /* drawings of the other spaces (apps/web/src/space/render) */
+  --space-face: #ece8df;
+  --space-edge: #3b3b3f;
+  --space-cone: #b3261e;
+  --space-piece-edge: rgba(0, 0, 0, 0.45);
+  --space-globe: #e8ecf1;
+  --space-ideal: #a8a49b;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -36,6 +43,12 @@
     --bad: #ff8a80;
     --good: #7fd6a0;
     --pending: #4a3c0c;
+    --space-face: #2a2c31;
+    --space-edge: #c9cbd0;
+    --space-cone: #ff8a80;
+    --space-piece-edge: rgba(255, 255, 255, 0.5);
+    --space-globe: #22272e;
+    --space-ideal: #5c5a55;
   }
 }
 * {
@@ -141,7 +154,8 @@ canvas#board {
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
-#solve-settings {
+#solve-settings,
+#space-solve-settings {
   border: 0;
   margin: 0;
   padding: 0;
@@ -191,18 +205,21 @@ canvas#board {
 #solve-params legend {
   font-size: 13px;
 }
-#solve-trace {
+#solve-trace,
+#space-solve-trace {
   width: 100%;
   margin-top: 8px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-#solve-trace text {
+#solve-trace text,
+#space-solve-trace text {
   fill: var(--muted);
   font-size: 10px;
 }
-#solve-trace polyline {
+#solve-trace polyline,
+#space-solve-trace polyline {
   fill: none;
   stroke: var(--accent);
   stroke-width: 2;
@@ -1373,4 +1390,96 @@ figure {
 }
 .space-table tr.closed td {
   color: var(--muted);
+}
+/* the board's space mode (apps/web/src/space/mode.ts): while a space is chosen, the polygon
+   board's parts are hidden, not changed, and the space's parts are shown */
+.layout[data-space] .poly-only,
+.layout:not([data-space]) .space-only {
+  display: none !important;
+}
+.space-view-host,
+.space-view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.space-draw {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.space-draw > canvas,
+.space-draw > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* a drawing that turns takes the finger; another one lets the page scroll */
+.space-draw[role="application"] > canvas,
+.space-draw[role="application"] > svg {
+  cursor: grab;
+  touch-action: none;
+}
+.space-draw:focus-visible {
+  outline-offset: -3px;
+}
+.stats .fact-note {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.stats details.fact-note {
+  padding: 0;
+  text-align: left;
+}
+.stats details.fact-note > summary {
+  cursor: pointer;
+  color: var(--accent);
+  text-align: right;
+}
+#space-problem-note code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.93em;
+}
+.space-show {
+  margin-top: 8px;
+}
+.space-stage,
+.space-placeholder {
+  position: relative;
+}
+/* reading a space's problems or a problem: over the drawing, which cannot be used meanwhile */
+.space-busy {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 38%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.space-busy p {
+  margin: 0;
+}
+.space-busy[hidden] {
+  display: none;
+}
+.space-tools .space-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+/* the hidden attribute on an element that a rule above displays (a flex row, an svg) */
+.space-show[hidden],
+#space-solve-trace[hidden] {
+  display: none;
 }

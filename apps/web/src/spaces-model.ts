@@ -76,14 +76,19 @@ export type ListedProblem = SpaceProblemSummary & { status?: CertifiedStatus; cl
  * The status of a problem: the one the server gives; else the research value's; else, for a
  * problem without a value that takes no entries, infeasible (proven problems carry their value).
  */
-export function problemStatus(p: ListedProblem): CertifiedStatus | null {
+export function problemStatus(
+  p: Pick<ListedProblem, "status" | "certified" | "accepts_submissions">,
+): CertifiedStatus | null {
   if (p.status) return p.status;
   if (p.certified) return p.certified.status;
   return p.accepts_submissions ? null : "infeasible";
 }
 
 /** The Entries column: open or closed, and why a closed problem takes none when the server says. */
-export function entriesText(p: ListedProblem): { text: string; why: string | null } {
+export function entriesText(p: Pick<ListedProblem, "accepts_submissions" | "closed_reason">): {
+  text: string;
+  why: string | null;
+} {
   if (p.accepts_submissions) return { text: "open", why: null };
   const why = p.closed_reason?.trim();
   // the server words the reason to follow "closed: ", so it may start in lower case
@@ -201,7 +206,7 @@ function compareValues(f: FieldSpec, a: string, b: string): number {
 }
 
 /** The values of a field that occur among the problems, in the field's order. */
-export function fieldValues(problems: readonly SpaceProblemSummary[], f: FieldSpec): string[] {
+export function fieldValues(problems: readonly Pick<SpaceProblemSummary, "id">[], f: FieldSpec): string[] {
   return [...new Set(problems.map((p) => fieldOf(p, f)))].sort((a, b) => compareValues(f, a, b));
 }
 

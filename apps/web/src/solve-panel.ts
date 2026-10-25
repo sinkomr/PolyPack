@@ -101,6 +101,9 @@ export class SolvePanel {
   };
   private rejected: HTMLElement | null = null;
   private restarting = false;
+  /** A run paused because the board was hidden (holdWhileHidden), and one to resume once it has paused. */
+  private heldWhileHidden = false;
+  private resumeWhenPaused = false;
 
   get lastResult(): Result | null {
     return this.result;
@@ -358,6 +361,12 @@ export class SolvePanel {
     if (message.type === "control") {
       if (this.state === "stopping" && message.state !== "stopping") return;
       this.state = message.state;
+      if (this.resumeWhenPaused && message.state === "paused") {
+        // the board came back while the hold was still on its way
+        this.resumeWhenPaused = false;
+        this.pause();
+        return;
+      }
       this.status(
         message.state === "paused"
           ? "Paused. Resume or stop to keep the best result."
@@ -508,6 +517,28 @@ export class SolvePanel {
     this.stopTimer = 0;
     this.activeId = null;
     this.state = "idle";
+    this.heldWhileHidden = false;
+    this.resumeWhenPaused = false;
+  }
+
+  /**
+   * Pauses a running search while the board is hidden (another space is shown, space-switch.ts),
+   * so that it does not compete unseen with the space's search; true when it paused one.
+   */
+  holdWhileHidden(): boolean {
+    if (this.activeId === null || this.state !== "running") return false;
+    this.heldWhileHidden = true;
+    this.pause();
+    return true;
+  }
+
+  /** Resumes a search that holdWhileHidden paused; one the user paused stays paused. */
+  releaseHidden(): void {
+    if (!this.heldWhileHidden) return;
+    this.heldWhileHidden = false;
+    if (this.activeId === null) return;
+    if (this.state === "paused") this.pause();
+    else if (this.state === "pausing") this.resumeWhenPaused = true;
   }
 
   private clearPreview(): void {
