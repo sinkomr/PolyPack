@@ -29,6 +29,7 @@ import glob
 import json
 import math
 import os
+import re
 import sys
 import time
 from decimal import ROUND_HALF_EVEN, Decimal
@@ -285,19 +286,99 @@ def load_search(dirs):
     return out
 
 
-def start_of(U, rows, code, m, record_file):
-    """(source keys, credit) of the record a PolyPack search started from."""
+def study_runs(ours):
+    """The compute study's search runs, read from its logs runs/main/<code>_nNN_<method>_<seed>.log: case -> runs.
+
+    Each run has its method, seed, base file, the record's s, its initial best and its new bests with their times.
+    A log line starts with a clock time HH:MM:SS; the study ran from one evening into the night (23:25 to 01:15),
+    so a time before noon is on the next day."""
+    runs = {}
+    for path in sorted(glob.glob(os.path.join(ours or '', 'runs', 'main', '*.log'))):
+        run = None
+        for line in open(path):
+            m = re.match(r'(\d\d):(\d\d):(\d\d) (.*)$', line.rstrip('\n'))
+            if not m:
+                continue
+            h, msg = int(m.group(1)), m.group(4).strip()
+            t = ((h + 24 if h < 12 else h) * 60 + int(m.group(2))) * 60 + int(m.group(3))
+            if msg.startswith('start '):
+                f = dict(kv.split('=', 1) for kv in msg.split()[2:])
+                run = {'method': f['method'], 'seed': int(f['seed']), 'n': int(f['n']),
+                       'base': None if f['base'] == 'None' else f['base'],
+                       'record': None if f['record'] == 'None' else float(f['record']), 'start': t, 'bests': []}
+                runs.setdefault(f"{msg.split()[1]}_n{int(f['n']):02d}", []).append(run)
+            elif run and msg.startswith('initial best '):
+                run['initial'] = float(msg.split()[2])
+            elif run and msg.startswith('NEW BEST '):
+                run['bests'].append((t, float(msg.split()[2])))
+    return runs
+
+
+def study_lineage(runs, key, s):
+    """How the compute study found its best packing of a case (key <code>_nNN, scale s), traced through the logs.
+
+    Returns (start, path, steps): start 'record' with upstream's file that the study's search read (the record of
+    the case, or of n -+ 1 for plus1 / minus1), 'file' with the base packing of an insert / subset run, or
+    'random' with None; steps are the runs from that start on. The run that logged s found the best; a hop
+    started from the best on file at the time, the latest earlier new best of any run of the case, else from the
+    run's initial best, which is the record when no best existed yet."""
+    code, n = key.rsplit('_n', 1)[0], int(key.rsplit('_n', 1)[1])
+    events = sorted((t, v, i) for i, r in enumerate(runs.get(key, [])) for t, v in r['bests'])
+    found = [e for e in events if abs(e[1] - s) <= 1e-8 * s]
+    if not found:
+        raise ValueError(f'{key}: no logged run reached s = {s}')
+    t, v, i = found[-1]
+    steps = []
+    while True:
+        run = runs[key][i]
+        step = f"{run['method']} (seed {run['seed']}, n = {n})"
+        if not steps or steps[0] != step:
+            steps.insert(0, step)
+        if run['method'] == 'random':
+            return 'random', None, steps
+        if run['method'] in ('plus1', 'minus1'):
+            return 'record', f"records/{code}/{code}_n{n - 1 if run['method'] == 'plus1' else n + 1:02d}.json", steps
+        if run['method'] in ('insert', 'subset'):
+            return 'file', run['base'], steps
+        if run['method'] != 'hop':
+            raise ValueError(f'{key}: method {run["method"]} has no known start')
+        earlier = [e for e in events if e[0] < t and e[1] > v]
+        if earlier:
+            t, v, i = earlier[-1]
+            continue
+        if run.get('initial') is not None and run['record'] is not None and run['initial'] == run['record']:
+            return 'record', f'records/{code}/{code}_n{n:02d}.json', steps
+        raise ValueError(f'{key}: the start of {step} is not in the logs')
+
+
+def study_chain(ours, runs, file):
+    """study_lineage of a compute-study best file, followed through bases that are other cases' best files."""
+    r = load(os.path.join(ours, file))
+    key = os.path.basename(file)[:-len('_best.json')]
+    start, path, steps = study_lineage(runs, key, float(r['s_full']))
+    if start == 'file' and path.startswith('runs/main/'):
+        base_key = os.path.basename(path)[:-len('_best.json')]
+        used = min(x['start'] for x in runs[key] if x['base'] == path)
+        if any(t >= used for x in runs.get(base_key, []) for t, _ in x['bests']):
+            raise ValueError(f'{key}: its base {path} changed after the run read it')
+        start, path, pre = study_chain(ours, runs, path)
+        steps = pre + steps
+    return start, path, steps
+
+
+def start_of(U, ours, runs, code, m, record_file):
+    """(source keys, credit, record) of the packing a PolyPack search started from."""
     if record_file and record_file.startswith('records/'):
         r = load(os.path.join(U, record_file))
         if r:
             return provenance(record_file, r, code, m), f"{r.get('found_by')}, {record_file}", r
     if record_file and record_file.startswith('runs/main/'):
-        own = upstream_candidates(U, code, m, rows.get((code, m)))
-        own.sort(key=lambda x: x['s'])
-        if own:
-            st = own[0]
-            return (['polypack'] + provenance(st['file'], st['rec'], code, m),
-                    f"PolyPack research, which started from {st['rec'].get('found_by')}, {st['file']}", st['rec'])
+        # a compute-study packing: credit what its own search started from (its run logs), if that was upstream's
+        start, path, _ = study_chain(ours, runs, record_file)
+        if start == 'record':
+            r = load(os.path.join(U, path))
+            return (['polypack'] + provenance(path, r, code, r['n']),
+                    f"PolyPack research, which started from {r.get('found_by')}, {path}", r)
     return ['polypack'], 'PolyPack research', None
 
 
@@ -392,6 +473,7 @@ def make_record(case, cand, mine, wiki_best, row, literature, volumes):
             src.update(seed=r['seed'], evaluations=r.get('evals'))
         if r.get('start') == 'warm' and r.get('record_file'):
             src['start'] = r['record_file']                  # the record the search started from
+        src.update(cand.get('study') or {})                  # a compute-study search: its start and runs
         upstream_keys = [k for k in start if k != 'polypack']
         cite = 'PolyPack research' + ('; started from a packing ' + citation(upstream_keys, cand['start_rec'])
                                       if upstream_keys else '')
@@ -501,6 +583,7 @@ def main(argv=None):
             ours_rows.setdefault((r['problem'], int(r['n'])), []).append(r)
     volumes = certify.solid_volumes()
     search = load_search(a.search)
+    runs = study_runs(a.ours)
     jobs, meta = [], []
     t0 = time.time()
     for code in catalogue.PROBLEMS:
@@ -525,20 +608,19 @@ def main(argv=None):
                     c['pieces'], c['s_cert'] = [list(map(float, p)) for p in c['rec']['pieces']], c['s']
                 if c['s_cert'] < ups[0]['s'] * (1 - OUR_MARGIN):
                     if c['file'].startswith('search/'):
-                        keys, credit, st = start_of(U, rows, code, len(c['rec']['pieces']),
+                        keys, credit, st = start_of(U, a.ours, runs, code, len(c['rec']['pieces']),
                                                     c['rec'].get('record_file') if c['rec'].get('start') == 'warm' else None)
                         if keys != ['polypack']:
                             c['start_keys'], c['start_credit'], c['start_rec'] = keys, credit, st
-                    # our searches (runs/main) started from the wiki's record of the file's own piece count
+                    # the compute study's searches (runs/main): their start and runs, traced through the run logs
                     elif c['file'].startswith('runs/main/'):
-                        m = len(c['rec']['pieces'])
-                        own = upstream_candidates(U, code, m, rows.get((code, m)))
-                        own.sort(key=lambda x: x['s'])
-                        if own:
-                            start = own[0]
-                            c['start_keys'] = provenance(start['file'], start['rec'], code, m)
-                            c['start_rec'] = start['rec']
-                            c['start_credit'] = f"{start['rec'].get('found_by')}, {start['file']}"
+                        start, path, steps = study_chain(a.ours, runs, c['file'])
+                        c['study'] = {**({'start': path} if path else {}), 'runs': steps}
+                        if start == 'record':
+                            st = load(os.path.join(U, path))
+                            c['start_keys'] = provenance(path, st, code, st['n'])
+                            c['start_rec'] = st
+                            c['start_credit'] = f"{st.get('found_by')}, {path}"
                     c['mine'] = True
                     mine.append(c)
             mine.sort(key=lambda c: c['s_cert'])
@@ -590,7 +672,9 @@ def main(argv=None):
             'display': 'score_cert rounded to the nearest at 6 decimals from its exact binary64 value',
             'bound': 'kind volume: [EST] n vol(piece) <= s^3 vol(container), so s >= (n vol(piece) / vol(container))^(1/3)',
             'origin': 'the file the configuration comes from: upstream\'s records/... at commit cbf76f2f (sources.wiki.files) '
-                      'or a PolyPack research file (sources.polypack)',
+                      'or a PolyPack research file (sources.polypack); for a PolyPack search, start is the packing it '
+                      'started from (none for a start from random positions) and, for a search of the compute study, '
+                      'runs are its runs from that start, as its run logs show them',
             'wiki': 'the wiki\'s record of the case (its smallest certified s_full in the repository) and its page; '
                     'file is given when the configuration here comes from elsewhere',
             'literature': 'published values without coordinates (value, source, url, printed precision)',
