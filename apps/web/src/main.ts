@@ -606,5 +606,9 @@ window.addEventListener("hashchange", () => {
 view.fit();
 const solve = new SolvePanel(board, view, say);
 Object.assign((window as unknown as { polypack: object }).polypack, { solve });
-// the Space menu: the other spaces load on demand, and polygon in polygon is this board as it is
-initSpaceSwitch(() => view.fit(), say);
+// the Space menu: the other spaces load on demand, and polygon in polygon is this board as it is;
+// a run of the board's optimizer is paused while a space is shown, and goes on after
+initSpaceSwitch(() => view.fit(), say, {
+  hold: () => solve.holdWhileHidden(),
+  release: () => solve.releaseHidden(),
+});

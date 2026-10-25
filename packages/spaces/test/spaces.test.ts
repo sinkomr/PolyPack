@@ -22,6 +22,7 @@ import {
   formatSpaceId,
   parseSpaceId,
   spaceProblemSummary,
+  storedSpaceConfig,
   validateSpaceSubmission,
 } from "../src";
 import { loadSpacesIndex } from "../src/load";
@@ -559,5 +560,45 @@ describe("space metadata", () => {
     expect(beatsSpaceScore(1, null)).toBe(true);
     expect(beatsSpaceScore(1 - 2e-9, 1)).toBe(true);
     expect(beatsSpaceScore(1 - 5e-10, 1)).toBe(false);
+  });
+});
+
+describe("the stored form of a free torus", () => {
+  const p = problem("torus", "torus/free/6/30");
+  const opts = { bound: p.bound!.value, maxP: cat("torus").maxP };
+  const c = configOf(p);
+  const det = (l: { b1: number[]; b2: number[] }) => l.b1[0] * l.b2[1] - l.b1[1] * l.b2[0];
+  const n2 = (v: number[]) => v[0] ** 2 + v[1] ** 2;
+
+  it("keeps a reduced, right-handed basis as it was sent, and every other space's configuration", () => {
+    expect(storedSpaceConfig("torus", p.id, c, opts)).toBe(c);
+    const sq = configOf(problem("torus", "torus/sq/5/7"));
+    expect(storedSpaceConfig("torus", "torus/sq/5/7", sq, opts)).toBe(sq);
+    const sphere = configOf(problem("sphere", "sphere/4/12"));
+    expect(storedSpaceConfig("sphere", "sphere/4/12", sphere)).toBe(sphere);
+  });
+
+  it("stores a skewed or left-handed basis reduced, with det > 0, the same score and the same poses", () => {
+    const { b1, b2 } = c.lattice;
+    for (const [k, sign] of [
+      [40, 1],
+      [0, -1],
+      [7, -1],
+    ]) {
+      const sent = { ...c, lattice: { b1, b2: [sign * (b2[0] + k * b1[0]), sign * (b2[1] + k * b1[1])] } };
+      const v = check("torus", p.id, sent);
+      expect(v.valid, `k=${k}`).toBe(true);
+      const stored = storedSpaceConfig("torus", p.id, sent, opts) as typeof c;
+      expect(stored).not.toBe(sent);
+      expect(det(stored.lattice)).toBeGreaterThan(0);
+      // Lagrange-Gauss reduced: |b1| <= |b2| and |b1 . b2| <= |b1|^2 / 2
+      const { b1: r1, b2: r2 } = stored.lattice;
+      expect(n2(r1)).toBeLessThanOrEqual(n2(r2) * (1 + 1e-12));
+      expect(Math.abs(r1[0] * r2[0] + r1[1] * r2[1])).toBeLessThanOrEqual((n2(r1) / 2) * (1 + 1e-12));
+      expect(stored.poses).toEqual(sent.poses);
+      const again = check("torus", p.id, stored);
+      expect(again.valid).toBe(true);
+      expect(Math.abs(again.score! - v.score!)).toBeLessThanOrEqual(1e-12 * v.score!);
+    }
   });
 });

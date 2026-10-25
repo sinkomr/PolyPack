@@ -111,8 +111,15 @@ test("each space loads a problem from its address, optimises it in the browser a
 
 /** Serves a problem whose research record is 2% worse than it is (the sphere grows, its pieces keep their places). */
 async function weakenRecord(route: Route): Promise<void> {
-  const r = await route.fetch();
-  const body = (await r.json()) as SpaceProblemResponse;
+  let r: Awaited<ReturnType<Route["fetch"]>>;
+  let body: SpaceProblemResponse;
+  try {
+    r = await route.fetch();
+    body = (await r.json()) as SpaceProblemResponse;
+  } catch {
+    // the page went away (the test ended) while the problem was read again
+    return;
+  }
   const config = body.certified_config as { rho: number; pieces: unknown[] };
   const rho = config.rho * 1.02;
   await route.fulfill({
@@ -158,7 +165,7 @@ test("a result that beats the problem's best is submitted, and the server's answ
     id,
     name: "E2E board",
     agent_note: "a space test",
-    method: "sphere basin hopping",
+    method: "sphere basin hopping (board, from the research record)",
     seed: 1,
     software: "PolyPack board",
   });
@@ -328,4 +335,277 @@ test("the drawing turns with the keyboard", async ({ page }) => {
   await shown(page, DEFAULT_PROBLEM.torus);
   await expect(draw).toHaveAttribute("role", "img");
   await expect(draw).not.toHaveAttribute("tabindex", /.*/);
+});
+
+test("a torus entry in a skewed basis draws at once, and a degenerate lattice is not drawn", async ({ page }) => {
+  const id = "torus/free/6/30";
+  await page.route(`**/api/spaces/torus/problems/${id}`, async (route) => {
+    const r = await route.fetch();
+    const body = (await r.json()) as SpaceProblemResponse;
+    const c = body.certified_config as { lattice: { b1: number[]; b2: number[] }; poses: unknown[] };
+    const { b1, b2 } = c.lattice;
+    // the same lattice, written as b2 + 320 b1 (the server accepts such a basis)
+    const skewed = { ...c, lattice: { b1, b2: [b2[0] + 320 * b1[0], b2[1] + 320 * b1[1]] } };
+    await route.fulfill({ response: r, json: { ...body, certified_config: skewed } });
+  });
+  await page.goto(`/#space=${id}`);
+  await shown(page, id);
+  await expect(page.locator(".space-draw svg polygon").first()).toBeAttached();
+  // a redraw, timed in the page: well under half a second
+  for (const view of ["cell", "tile"]) {
+    const ms = await page.evaluate((v) => {
+      const t0 = performance.now();
+      (document.querySelector(`.space-tools [data-view="${v}"]`) as HTMLButtonElement).click();
+      return performance.now() - t0;
+    }, view);
+    expect(ms, view).toBeLessThan(500);
+  }
+  await page.unroute(`**/api/spaces/torus/problems/${id}`);
+
+  // a degenerate lattice is not read: the board shows nothing and offers nothing to run from
+  await page.route(`**/api/spaces/torus/problems/${id}`, async (route) => {
+    const r = await route.fetch();
+    const body = (await r.json()) as SpaceProblemResponse;
+    const c = body.certified_config as { poses: unknown[] };
+    await route.fulfill({
+      response: r,
+      json: { ...body, certified_config: { ...c, lattice: { b1: [3, 0], b2: [6, 0] } } },
+    });
+  });
+  await page.goto("about:blank");
+  await page.goto(`/#space=${id}`);
+  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
+  await expect(page.locator("#space-shown")).toHaveText("none could be read");
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
+});
+
+test("a run without a result clears the earlier one, and a submission carries the seed of the run that found it", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const id = "sphere/4/10";
+  await page.route(`**/api/spaces/sphere/problems/${id}`, weakenRecord);
+  const bodies: Record<string, unknown>[] = [];
+  await page.route("**/api/spaces/submit", async (route) => {
+    bodies.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      json: { valid: true, reasons: [], score: 1, leader: false, best_score: 1, id: null, beats_certified: false },
+    });
+  });
+  await page.goto(`/#space=${id}`);
+  await shown(page, id);
+  const record = await page.locator("#space-score").textContent();
+  await page.fill("#name", "E2E board");
+
+  // seed 1 finds a result that beats the (weakened) record
+  await runFor(page, 4000, 1);
+  await expect(page.locator("#space-submit")).toBeEnabled();
+
+  // a new arrangement with seed 2, stopped before its first round ends: nothing is offered now
+  await page.selectOption("#space-solve-start", "fresh");
+  await page.fill("#space-solve-seed", "2");
+  await page.click("#space-solve-run");
+  await page.click("#space-solve-stop");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await expect(page.locator("#space-solve-status")).toHaveText("Stopped. It ended before its first round finished.");
+  await expect(page.locator("#space-submit")).toBeDisabled();
+  await expect(page.locator("#space-shown")).toHaveText("the research record");
+  await expect(page.locator("#space-score")).toHaveText(record!);
+  await expect(page.locator("#space-solve-score")).toHaveText("—");
+
+  // seed 3 from the record finds a result; a run from that result with seed 4, stopped at once, keeps it
+  await page.selectOption("#space-solve-start", "shown");
+  await runFor(page, 4000, 3);
+  const found = await page.locator("#space-solve-score").textContent();
+  await page.fill("#space-solve-seed", "4");
+  await page.click("#space-solve-run");
+  await page.click("#space-solve-stop");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await expect(page.locator("#space-solve-status")).toContainText(`That result, ${found}, is kept.`);
+  await expect(page.locator("#space-shown")).toHaveText("the optimizer's result");
+  await page.click("#space-submit");
+  await expect(page.locator("#space-submit-result")).toContainText("✓ Valid");
+  await expect(page.locator("#space-busy")).toBeHidden();
+  expect(bodies).toHaveLength(1);
+  expect(bodies[0]).toMatchObject({ seed: 3, method: "sphere basin hopping (board, from the research record)" });
+});
+
+test("a space whose problems cannot be read leaves nothing live, and Try again loads them", async ({ page }) => {
+  await page.goto("/#space=sphere/4/12");
+  await shown(page, "sphere/4/12");
+  await page.route("**/api/spaces/torus/records", (route) => route.abort());
+  await page.selectOption("#space-select", "torus");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this space could not be loaded.");
+  await expect(page).toHaveURL(/#space=torus$/);
+  await expect(page.locator("#space-select")).toHaveValue("torus");
+  await expect(page.locator(".space-draw")).toHaveCount(0);
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
+  await expect(page.locator("#space-submit")).toBeDisabled();
+  await expect(page.locator("#space-score")).toHaveText("—");
+  await page.unroute("**/api/spaces/torus/records");
+  await page.click("#space-retry");
+  await shown(page, DEFAULT_PROBLEM.torus);
+  await expect(page.locator("#space-busy")).toBeHidden();
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+});
+
+test("loading is shown while the space code and the problems arrive", async ({ page }) => {
+  await openProblem(page, 4, 4, 5);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/src\/space\/mode\.ts/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.route("**/api/spaces/sphere/records", async (route) => {
+    await new Promise((r) => setTimeout(r, 800));
+    await route.continue();
+  });
+  await page.selectOption("#space-select", "sphere");
+  await expect(page.locator(".space-placeholder")).toHaveText("Loading the spaces…");
+  release();
+  await expect(page.locator("#space-busy-text")).toHaveText("Loading the problems of this space…");
+  await shown(page, DEFAULT_PROBLEM.sphere);
+  await expect(page.locator(".space-placeholder")).toHaveCount(0);
+  await expect(page.locator("#space-busy")).toBeHidden();
+});
+
+test("Back to an address without a space shows the polygon board", async ({ page }) => {
+  await openProblem(page, 4, 4, 5);
+  await page.evaluate(() => (location.hash = "#space=sphere/4/12"));
+  await shown(page, "sphere/4/12");
+  await page.goBack();
+  await expect(page).toHaveURL(/#p=4,4,5$/);
+  await expect(page.locator("#board")).toBeVisible();
+  await expect(page.locator("#space-select")).toHaveValue("");
+  // from the board's address without a hash, as a link from another site would open it
+  await page.goto("/");
+  await expect(page.locator("#board")).toBeVisible();
+  await page.evaluate(() => (location.hash = "#space=torus"));
+  await shown(page, DEFAULT_PROBLEM.torus);
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator("#board")).toBeVisible();
+  await expect(page.locator("#space-select")).toHaveValue("");
+});
+
+test("the answer to a submission is shown when the problem changed while it was sent", async ({ page }) => {
+  const id = "sphere/4/10";
+  await page.route(`**/api/spaces/sphere/problems/${id}`, weakenRecord);
+  let release = () => {};
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/spaces/submit", async (route) => {
+    await held;
+    await route.fulfill({
+      status: 200,
+      json: { valid: true, reasons: [], score: 1, leader: true, best_score: 1, id: 5, beats_certified: true },
+    });
+  });
+  await page.goto(`/#space=${id}`);
+  await shown(page, id);
+  await page.fill("#name", "E2E board");
+  await runFor(page, 4000, 1);
+  await page.click("#space-submit");
+  await page.selectOption("#space-f-P", "12");
+  await shown(page, "sphere/4/12");
+  release();
+  await expect(page.locator("#space-submit-result")).toHaveText(
+    "Your entry for sphere/4/10: ✓ Kept. Server score 1.000000. This is now the best entry for this problem. It beats the research record.",
+  );
+  await expect(page.locator("#space-status")).toContainText("Your entry for sphere/4/10:");
+});
+
+test("a polygon run is paused while a space is shown, and goes on after", async ({ page }) => {
+  await openProblem(page, 4, 4, 5);
+  await expect(page.locator("#solve-run")).toBeEnabled();
+  await page.selectOption("#solve-method", "basin_hopping");
+  await page.selectOption("#solve-budget", "both");
+  await page.locator("#solve-time").fill("300");
+  await page.fill("#solve-evals", "1000000");
+  await page.click("#solve-run");
+  await expect(page.locator("#solve-stop")).toBeEnabled();
+  await page.selectOption("#space-select", "sphere");
+  await shown(page, DEFAULT_PROBLEM.sphere);
+  await expect(page.locator("#space-hold")).toBeVisible();
+  await expect(page.locator("#solve-pause")).toHaveText("Resume");
+  await page.selectOption("#space-select", "");
+  await expect(page.locator("#solve-pause")).toHaveText("Pause");
+  await expect(page.locator("#solve-status")).toHaveText(/^Running/);
+  await page.click("#solve-stop");
+  await expect(page.locator("#solve-run")).toBeEnabled();
+  // a run the user paused stays paused
+  await page.click("#solve-run");
+  await expect(page.locator("#solve-stop")).toBeEnabled();
+  await page.click("#solve-pause");
+  await expect(page.locator("#solve-pause")).toHaveText("Resume");
+  await page.selectOption("#space-select", "sphere");
+  await expect(page.locator("#space-hold")).toBeHidden();
+  await page.selectOption("#space-select", "");
+  await expect(page.locator("#solve-pause")).toHaveText("Resume");
+  await page.click("#solve-stop");
+});
+
+test("words and focus: the globe turns both ways, an empty drawing takes no focus, an empty seed is refused", async ({
+  page,
+}) => {
+  // the curved globe (K > 0) turns left and right as well as up and down
+  await page.goto("/#space=curved/1/4/4/3");
+  await shown(page, "curved/1/4/4/3");
+  const draw = page.locator(".space-draw");
+  await expect(page.locator(".space-hint")).toBeVisible();
+  const before = await page.locator(".space-draw svg").innerHTML();
+  await draw.focus();
+  await page.keyboard.press("ArrowRight");
+  expect(await page.locator(".space-draw svg").innerHTML()).not.toBe(before);
+  // the gnomonic chart does not turn: no hint, no focus
+  await page.getByRole("button", { name: "Gnomonic chart" }).click();
+  await expect(page.locator(".space-hint")).toBeHidden();
+  await expect(draw).toHaveAttribute("role", "img");
+
+  // no packing exists, so there is nothing to turn
+  await page.goto("about:blank");
+  await page.goto("/#space=curved/1/0/4/2");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem curved/1/0/4/2");
+  await expect(draw).toHaveAttribute("role", "img");
+  await expect(draw).not.toHaveAttribute("tabindex", /.*/);
+  await expect(page.locator(".space-hint")).toBeHidden();
+
+  // an empty seed is not 0
+  await page.goto("about:blank");
+  await page.goto("/#space=sphere/4/12");
+  await shown(page, "sphere/4/12");
+  await page.fill("#space-solve-seed", "");
+  await page.click("#space-solve-run");
+  await expect(page.locator("#space-solve-status")).toHaveText(
+    "Random seed: enter a whole number from 0 to 4,294,967,295. Nothing was run.",
+  );
+  await expect(page.locator("#space-solve-stop")).toBeDisabled();
+});
+
+test("a search thread that fails says so in a sentence", async ({ page }) => {
+  await page.route(/\/src\/space\/worker\.ts/, (route) =>
+    route.fulfill({ contentType: "text/javascript", body: 'throw new Error("broken on purpose");' }),
+  );
+  await page.goto("/#space=sphere/4/12");
+  await shown(page, "sphere/4/12");
+  await runFor(page, 6000);
+  await expect(page.locator("#space-solve-status")).toContainText(
+    "The search ended with errors. The search thread failed:",
+  );
+  await expect(page.locator("#space-solve-progress")).toHaveText(/^3 rounds · 0 evaluations · /);
+});
+
+test("a large fold surface starts with a smaller budget, says why, and shows a long round working", async ({
+  page,
+}) => {
+  await page.goto("/#space=surface/icosahedron/fold/3/80");
+  await shown(page, "surface/icosahedron/fold/3/80");
+  await expect(page.locator("#space-solve-evals")).toHaveValue("8");
+  await expect(page.locator("#space-solve-unit")).toContainText("rounds of 2");
+  await expect(page.locator("#space-solve-unit")).toContainText("Fold rounds on 80 pieces are slow");
+  await page.click("#space-solve-run");
+  await expect(page.locator("#space-solve-progress")).toContainText(/round running for \d+ s/, { timeout: 15_000 });
+  await page.click("#space-solve-stop");
+  await expect(page.locator("#space-solve-run")).toBeEnabled({ timeout: 1000 });
 });

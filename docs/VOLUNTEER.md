@@ -27,7 +27,7 @@ The best strict packing this machine has found for each problem is also kept on 
 
 ## Getting it and running it
 
-You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 613 kB (627,223 bytes on 2026-10-24; the client before the spaces option, built the same way, is 418,719 bytes). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
+You need Node.js 24 or newer and the single file `polypack-volunteer.mjs`. The file needs nothing else: no `npm install`, no repository. It contains the solver and the geometry code, and is readable JavaScript rather than minified, so you can see what runs on your machine. [CALC] It is about 613 kB (627,518 bytes on 2026-10-24; the client before the spaces option, built the same way, is 418,719 bytes). It was run from a directory outside the repository on macOS, with Node 24.22.1 and 26.5.0.
 
 Download it from the site's volunteer page, https://polypack.fly.dev/volunteer.html, which also shows its version and SHA-256. The site's build makes it from the same sources (`npm run build` writes it to `apps/web/public/downloads/`). Or build it from the repository:
 

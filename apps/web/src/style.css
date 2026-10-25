@@ -1448,6 +1448,36 @@ figure {
 .space-show {
   margin-top: 8px;
 }
+.space-stage,
+.space-placeholder {
+  position: relative;
+}
+/* reading a space's problems or a problem: over the drawing, which cannot be used meanwhile */
+.space-busy {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: 38%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-align: center;
+}
+.space-busy p {
+  margin: 0;
+}
+.space-busy[hidden] {
+  display: none;
+}
+.space-tools .space-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
 /* the hidden attribute on an element that a rule above displays (a flex row, an svg) */
 .space-show[hidden],
 #space-solve-trace[hidden] {

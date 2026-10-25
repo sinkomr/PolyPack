@@ -301,7 +301,7 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
  * starts from the best so far with its own seed; the page sees the best after every round, and
  * pause and stop end the worker at once. [CALC] On an Apple Silicon laptop a round took 0.1 to 2 s
  * (sphere and torus, 12 to 49 pieces), 1 to 1.7 s (curved, one start and 8 hops) and 1 to 8 s
- * (surface fold, 4 hops, 12 to 14 pieces; much longer at 80).
+ * (surface fold, 4 compressions, 12 to 14 pieces; 141 s at 80 pieces, so large solids get 2).
  */
 export const ROUND_EVALS: Record<SearchKind, number> = {
   surface: 4,
@@ -311,14 +311,43 @@ export const ROUND_EVALS: Record<SearchKind, number> = {
   torus: 2000,
 };
 
-/** The panel's starting budget of each search. */
-export const DEFAULT_BUDGET: Record<SearchKind, { time_s: number; evals: number }> = {
-  surface: { time_s: 60, evals: 40 },
-  nofold: { time_s: 15, evals: 30000 },
-  curved: { time_s: 30, evals: 90 },
-  sphere: { time_s: 15, evals: 20000 },
-  torus: { time_s: 15, evals: 20000 },
+/** Pieces from which a fold round has 2 compressions instead of 4. */
+export const LARGE_FOLD = 40;
+
+/**
+ * Evaluations of a round with no start (a new arrangement), doubled after each such round that
+ * found nothing. [CALC] From nothing, sphere and torus searches found a valid packing in 5 of 5
+ * seeds at 10,000 evaluations on sphere/0/12, sphere/4/30, torus/sq/5/7 and torus/free/4/12, but
+ * mostly none at 2,000 (2 of 12 at 5,000); curved and fold rounds of the usual size found one.
+ */
+export const FRESH_EVALS: Record<SearchKind, number> = {
+  surface: 4,
+  nofold: 5000,
+  curved: 9,
+  sphere: 10000,
+  torus: 10000,
 };
+
+/** The evaluations of a round of this problem that starts from a packing. */
+export function roundSize(p: SearchProblem): number {
+  return p.space === "surface" && p.mode === "fold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
+}
+
+/**
+ * The panel's starting budget for a problem: a time limit first, and evaluations. Fold surfaces
+ * get fewer evaluations as they grow (480 / P, from 8 to 40), since a compression of many pieces
+ * takes long: [CALC] about 35 s each at 80 pieces.
+ */
+export function defaultBudget(p: SearchProblem): { time_s: number; evals: number } {
+  const kind = searchKind(p);
+  if (kind === "surface") return { time_s: 60, evals: Math.max(8, Math.min(40, Math.round(480 / p.P))) };
+  return {
+    nofold: { time_s: 15, evals: 30000 },
+    curved: { time_s: 30, evals: 90 },
+    sphere: { time_s: 15, evals: 20000 },
+    torus: { time_s: 15, evals: 20000 },
+  }[kind as Exclude<SearchKind, "surface">];
+}
 
 /** Active seconds a round may take when the budget has no time limit (it ends on its evaluations). */
 export const ROUND_TIME_CAP = 3600;
@@ -335,6 +364,11 @@ export interface RunSettings {
  * Round k of a run: a job of the space's search with seed mixSeed(seed, k), started from the best
  * so far (or nothing, for a fresh start), with the round's evaluations and at most the time left.
  * A run that ends on its evaluations is therefore reproducible from its start, seed and budget.
+ *
+ * A round never uses more evaluations than `evals`, and the run's rounds never more than its
+ * budget: null means that no round fits in what is left. A fold job's cap counts its hops, and its
+ * start (or its two random starts) is compressed first, so the job is asked for that many fewer.
+ * `freshTries` counts the rounds without a start that found nothing: each doubles the next one.
  */
 export function roundJob(
   p: SearchProblem,
@@ -343,23 +377,30 @@ export function roundJob(
   k: number,
   used: { evals: number; seconds: number },
   start: SpaceConfig | null,
-): SpaceJob {
+  freshTries = 0,
+): { job: SpaceJob; evals: number } | null {
   const kind = searchKind(p);
-  const evals = Math.max(1, Math.min(ROUND_EVALS[kind], run.budget.evals - used.evals));
+  const fold = kind === "surface";
+  const least = fold && !start ? 2 : 1;
+  const left = run.budget.evals - used.evals;
+  if (left < least) return null;
+  const size = start ? roundSize(p) : FRESH_EVALS[kind] * 2 ** Math.min(freshTries, 8);
+  const evals = Math.max(least, Math.min(size, left));
   const time_s =
     run.budget.time_s === undefined
       ? ROUND_TIME_CAP
       : Math.max(0.05, Math.min(ROUND_TIME_CAP, run.budget.time_s - used.seconds));
-  return {
+  const job: SpaceJob = {
     space: p.space,
     id: p.id,
     method: METHOD_NAME[kind],
     seed: mixSeed(run.seed, k),
-    budget: { time_s, evals },
+    budget: { time_s, evals: fold ? evals - (start ? 1 : 2) : evals },
     rule,
     kind: start ? "iterate" : "fresh",
     ...(start ? { start } : {}),
   };
+  return { job, evals };
 }
 
 /** The server's check of a configuration for this problem (validateSpaceSubmission with its bound and certified size). */

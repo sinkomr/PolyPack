@@ -75,5 +75,14 @@ export async function openSpaceProblem(id: string): Promise<SpaceProblemHandle |
 
 export { listSpaceProblems, loadSpaceProblem, submitSpaceConfig };
 export type { SpaceSubmitFields, LoadedSpaceProblem, SubmitAnswer, SpaceSearch, SpaceSearchOptions, SpaceView };
-export { DEFAULT_BUDGET, DEFAULT_PROBLEM, EVAL_UNIT, ROUND_EVALS, pickProblem, searchKind } from "./model";
+export {
+  DEFAULT_PROBLEM,
+  EVAL_UNIT,
+  FRESH_EVALS,
+  ROUND_EVALS,
+  defaultBudget,
+  pickProblem,
+  roundSize,
+  searchKind,
+} from "./model";
 export type { SpaceCandidate, SpaceSearchProgress, SpaceSearchResult } from "./search";

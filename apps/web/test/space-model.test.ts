@@ -12,8 +12,11 @@ import { describe, expect, it } from "vitest";
 import { BOARD_SPACES, parseSpaceAddress, spaceAddress } from "../src/space-address";
 import {
   DEFAULT_PROBLEM,
+  FRESH_EVALS,
   ROUND_EVALS,
   ROUND_TIME_CAP,
+  defaultBudget,
+  roundSize,
   beatsBest,
   fieldsOfId,
   pickProblem,
@@ -216,8 +219,9 @@ describe("the rounds of a run", () => {
 
   it("seeds each round from the run's seed, starts from the best and caps its evaluations", () => {
     const run = { seed: 7, budget: { evals: 5000, time_s: 10 }, fresh: false };
-    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start);
-    expect(a).toMatchObject({
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(ROUND_EVALS.sphere);
+    expect(a.job).toMatchObject({
       space: "sphere",
       id: "sphere/4/12",
       seed: mixSeed(7, 0),
@@ -226,14 +230,45 @@ describe("the rounds of a run", () => {
       start,
       rule,
     });
-    const b = roundJob(p, rule, run, 2, { evals: 4000, seconds: 9.5 }, start);
-    expect(b.seed).toBe(mixSeed(7, 2));
-    expect(b.budget).toEqual({ evals: 1000, time_s: 0.5 });
+    const b = roundJob(p, rule, run, 2, { evals: 4000, seconds: 9.5 }, start)!;
+    expect(b.job.seed).toBe(mixSeed(7, 2));
+    expect(b.job.budget).toEqual({ evals: 1000, time_s: 0.5 });
+    // nothing is left for another round
+    expect(roundJob(p, rule, run, 3, { evals: 5000, seconds: 1 }, start)).toBeNull();
+  });
+
+  it("gives a round without a start the work to build a packing, doubled after each one that found none", () => {
+    const run = { seed: 7, budget: { evals: 100000 }, fresh: true };
+    const c = roundJob(p, rule, run, 1, { evals: 0, seconds: 99 }, null)!;
     // without a time limit a round ends on its evaluations
-    const c = roundJob(p, rule, { ...run, budget: { evals: 5000 } }, 1, { evals: 0, seconds: 99 }, null);
-    expect(c.budget).toEqual({ evals: ROUND_EVALS.sphere, time_s: ROUND_TIME_CAP });
-    expect(c.kind).toBe("fresh");
-    expect(c.start).toBeUndefined();
+    expect(c.job.budget).toEqual({ evals: FRESH_EVALS.sphere, time_s: ROUND_TIME_CAP });
+    expect(c.job.kind).toBe("fresh");
+    expect(c.job.start).toBeUndefined();
+    expect(roundJob(p, rule, run, 2, { evals: 0, seconds: 0 }, null, 2)!.evals).toBe(4 * FRESH_EVALS.sphere);
+    // never more than the budget left
+    expect(roundJob(p, rule, run, 2, { evals: 99000, seconds: 0 }, null, 2)!.evals).toBe(1000);
+  });
+
+  it("asks a fold job for its hops, so that a round's compressions are the round's evaluations", () => {
+    const fold = parseSearchProblem("surface/cube/fold/0/10")!;
+    const run = { seed: 1, budget: { evals: 40 }, fresh: false };
+    const warm = roundJob(fold, rule, run, 0, { evals: 0, seconds: 0 }, { s: 3, pieces: [] })!;
+    // the start's compression and 3 hops
+    expect(warm.evals).toBe(4);
+    expect(warm.job.budget.evals).toBe(3);
+    const fresh = roundJob(fold, rule, run, 0, { evals: 0, seconds: 0 }, null)!;
+    // two random starts and 2 hops
+    expect(fresh.evals).toBe(FRESH_EVALS.surface);
+    expect(fresh.job.budget.evals).toBe(FRESH_EVALS.surface - 2);
+    // one evaluation left: a warm round compresses its start only; a fresh one needs two
+    expect(roundJob(fold, rule, run, 9, { evals: 39, seconds: 0 }, { s: 3, pieces: [] })!.job.budget.evals).toBe(0);
+    expect(roundJob(fold, rule, run, 9, { evals: 39, seconds: 0 }, null)).toBeNull();
+    // large solids get shorter rounds, and fewer evaluations by default
+    const large = parseSearchProblem("surface/icosahedron/fold/3/80")!;
+    expect(roundSize(large)).toBe(2);
+    expect(defaultBudget(large)).toEqual({ time_s: 60, evals: 8 });
+    expect(defaultBudget(fold)).toEqual({ time_s: 60, evals: 40 });
+    expect(defaultBudget(parseSearchProblem("surface/dodecahedron/fold/5/30")!).evals).toBe(16);
   });
 
   it("has a search for every kind of problem", () => {
@@ -247,7 +282,7 @@ describe("the rounds of a run", () => {
         0,
         { evals: 0, seconds: 0 },
         null,
-      ).method,
+      )!.job.method,
     ).toBe("surface nofold: basin hopping on one face");
   });
 });

@@ -12,6 +12,7 @@
  *    board's own Name and Note fields.
  * Pieces are not moved by hand in these spaces: the board shows and optimises.
  */
+import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
 import type { SpaceCheck } from "@polypack/spaces/search";
@@ -20,17 +21,18 @@ import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceProblem } from "./load";
 import {
-  DEFAULT_BUDGET,
   DEFAULT_PROBLEM,
   EVAL_UNIT,
+  FRESH_EVALS,
+  LARGE_FOLD,
   METHOD_TEXT,
-  ROUND_EVALS,
   type LoadedSpaceProblem,
-  type SearchKind,
+  defaultBudget,
   fieldsOfId,
   pickProblem,
   problemFacts,
   scoreLabel,
+  roundSize,
   searchKind,
   shownText,
 } from "./model";
@@ -67,11 +69,34 @@ interface Host {
   note: HTMLInputElement;
 }
 
+/** Where a run started: the research record, a site entry, an earlier result or nothing. */
+type StartFrom = { kind: "certified" } | { kind: "site"; id: number } | { kind: "result" } | { kind: "fresh" };
+
+/** "from the research record", for the method a submission names. */
+const fromText = (f: StartFrom) =>
+  f.kind === "certified"
+    ? "from the research record"
+    : f.kind === "site"
+      ? `from site entry ${f.id}`
+      : f.kind === "result"
+        ? "from an earlier board result"
+        : "from a new arrangement";
+
+/** A checked result with the run that found it: its seed and start go with a submission. */
 interface Result {
   candidate: SpaceCandidate;
   check: SpaceCheck;
   run: SpaceSearchResult;
+  seed: number;
+  start: SpaceConfig | null;
+  from: StartFrom;
 }
+
+/** The first letter in upper case (a server's or a thread's reason starts a sentence here). */
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** The longest method text the server takes (apps/server/src/spaces.ts SPACE_METHOD_LENGTH). */
+const METHOD_MAX = 80;
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
@@ -119,10 +144,18 @@ class SpaceMode {
   private runInfo: {
     settings: { seed: number; budget: { evals: number; time_s?: number }; fresh: boolean };
     start: SpaceConfig | null;
+    from: StartFrom;
     trace: [number, number][];
   } | null = null;
+  /** True while the space's problems or a problem are being read: nothing can be run or sent. */
+  private loading = false;
+  /** The defaults the panel last set: its search and, for fold surfaces, P. */
+  private defaultsFor = "";
+  /** The ticker that shows how long the round in flight has run, and when that round began. */
+  private ticker: ReturnType<typeof setInterval> | null = null;
+  private roundSince = 0;
+  private lastProgress = "";
   private finished: SpaceSearchResult | null = null;
-  private kind: SearchKind | null = null;
   /** Counts loads, so that a late answer for an earlier problem is dropped. */
   private token = 0;
   private submitting = false;
@@ -143,8 +176,16 @@ class SpaceMode {
       "section",
       { class: "stage space-stage space-only", "aria-label": "Space workspace" },
       h("div", { id: "space-view-host", class: "space-view-host" }),
+      h(
+        "div",
+        { id: "space-busy", class: "space-busy", hidden: true },
+        h("p", { id: "space-busy-text" }),
+        h("button", { id: "space-retry", type: "button", hidden: true }, "Try again"),
+      ),
       h("p", { id: "space-status", class: "status", role: "status", "aria-live": "polite" }),
     );
+    // space-switch.ts shows a placeholder while this module loads
+    layout.querySelector(".space-placeholder")?.remove();
     layout.prepend(stage);
 
     problem.append(
@@ -272,6 +313,11 @@ class SpaceMode {
         "Choose a budget, then run.",
       ),
       h(
+        "p",
+        { id: "space-hold", class: "note", hidden: true },
+        "The polygon board's optimizer run is paused while a space is shown. It goes on when you choose Polygon in polygon again.",
+      ),
+      h(
         "dl",
         { class: "stats solve-stats" },
         h("dt", {}, "Best result"),
@@ -347,6 +393,7 @@ class SpaceMode {
       ),
     );
 
+    $("space-retry").addEventListener("click", () => this.retry?.());
     $("space-show-best").addEventListener("click", () => this.showBest());
     $("space-show-result").addEventListener("click", () => this.showResult());
     $("space-solve-form").addEventListener("submit", (e) => {
@@ -366,6 +413,27 @@ class SpaceMode {
 
   private say(text: string): void {
     $("space-status").textContent = text;
+  }
+
+  /** What to do on "Try again" after a failed read. */
+  private retry: (() => void) | null = null;
+
+  /**
+   * Shows `text` over the drawing while the problems or a problem are read (and disables Run and
+   * Submit until they arrive), or a failure with a Try again button; null hides it.
+   */
+  private busy(text: string | null, retry: (() => void) | null = null): void {
+    this.loading = text !== null && !retry;
+    this.retry = retry;
+    $("space-busy").hidden = text === null;
+    $("space-busy-text").textContent = text ?? "";
+    $("space-retry").hidden = !retry;
+    this.updateButtons();
+  }
+
+  /** Shows that the polygon board's own run is held while a space is shown (space-switch.ts). */
+  setPolygonHeld(held: boolean): void {
+    $("space-hold").hidden = !held;
   }
 
   private solveStatus(text: string): void {
@@ -395,14 +463,22 @@ class SpaceMode {
   private async open(space: SpaceName, wanted: string | null): Promise<void> {
     const token = ++this.token;
     this.stopRun("problem");
+    // the problem of another space is not shown, run or sent while this one loads
+    if (this.handle && this.handle.problem.space !== space) this.clearProblem();
+    this.setAddress();
     let problems = this.records.get(space);
     if (!problems) {
-      this.say("Loading the problems of this space…");
+      this.busy("Loading the problems of this space…");
+      this.say("");
       $("space-fields").replaceChildren();
       const listed = await listSpaceProblems(space);
       if (token !== this.token) return;
       if (!listed) {
-        this.say("The problems of this space could not be loaded. The server may be unreachable.");
+        this.clearProblem();
+        this.setAddress();
+        const text = "The problems of this space could not be loaded. The server may be unreachable.";
+        this.say(text);
+        this.busy(text, () => void this.open(space, wanted));
         return;
       }
       problems = listed;
@@ -411,7 +487,8 @@ class SpaceMode {
     const pick = pickProblem(space, problems, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
     this.renderPicker(space, pick.fields);
     if (!pick.id) {
-      this.say("This space lists no problems.");
+      this.clearProblem();
+      this.busy("This space lists no problems.", () => void this.open(space, wanted));
       return;
     }
     const missing =
@@ -443,18 +520,17 @@ class SpaceMode {
 
   private async load(space: SpaceName, id: string, token: number, note: string): Promise<void> {
     this.stopRun("problem");
-    this.say(note || "Loading the problem…");
+    this.busy(`Loading ${id}…`);
     const p = await loadSpaceProblem(space, id);
     if (token !== this.token) return;
     if (typeof p === "string") {
-      this.handle = null;
-      this.view?.destroy();
-      this.view = null;
+      this.clearProblem();
+      this.setAddress();
       this.say(p);
-      this.renderFacts();
-      this.updateButtons();
+      this.busy(`${id} could not be loaded. ${p}`, () => void this.load(space, id, ++this.token, note));
       return;
     }
+    this.busy(null);
     const sameProblem = this.handle?.problem.id === p.id;
     this.handle = spaceProblemHandle(p);
     this.last.set(space, id);
@@ -466,20 +542,20 @@ class SpaceMode {
       this.view = this.handle.render($("space-view-host"));
     }
     this.view.show(p.best?.config ?? null);
-    const kind = searchKind(p.search);
-    if (kind !== this.kind) this.setDefaults(kind);
+    this.setDefaults(p);
     this.setAddress();
     this.renderFacts();
     this.renderTrace([]);
     $("space-solve-score").textContent = "—";
     $("space-solve-progress").textContent = "—";
     $("space-submit-result").textContent = "";
-    const turns = this.view.renderer.canTurn() ? " Drag the drawing to turn it." : "";
     this.say(
       note ||
         (p.best
-          ? `${p.id}: ${shownText(p.best.source, p)}, ${p.best.score.toFixed(6)}.${turns}`
-          : `${p.id}: no packing exists for this problem.`),
+          ? `${p.id}: ${shownText(p.best.source, p)}, ${p.best.score.toFixed(6)}.`
+          : p.status === "infeasible"
+            ? `${p.id}: no packing exists for this problem.`
+            : `${p.id}: the server's packing of this problem could not be read.`),
     );
     const stopped = this.interrupted;
     this.interrupted = false;
@@ -498,16 +574,42 @@ class SpaceMode {
       history.replaceState(history.state, "", `${location.pathname}${location.search}${hash}`);
   }
 
-  private setDefaults(kind: SearchKind): void {
-    this.kind = kind;
-    const d = DEFAULT_BUDGET[kind];
-    $<HTMLInputElement>("space-solve-time").value = String(d.time_s);
-    $("space-solve-time-value").textContent = `${d.time_s} s`;
-    $<HTMLInputElement>("space-solve-evals").value = String(d.evals);
+  /** No problem shown: nothing to draw, run or send (another space is loading, or a read failed). */
+  private clearProblem(): void {
+    this.handle = null;
+    this.result = null;
+    this.finished = null;
+    this.shown = "best";
+    this.view?.destroy();
+    this.view = null;
+    this.renderFacts();
+  }
+
+  /**
+   * The budget and the notes of the problem's search. The budget is set again only for another
+   * search (or, for fold surfaces, another P), so that a budget the user chose stays.
+   */
+  private setDefaults(p: LoadedSpaceProblem): void {
+    const kind = searchKind(p.search);
+    const fold = kind === "surface";
+    const key = fold ? `${kind}/${p.P}` : kind;
+    if (key !== this.defaultsFor) {
+      this.defaultsFor = key;
+      const d = defaultBudget(p.search);
+      $<HTMLInputElement>("space-solve-time").value = String(d.time_s);
+      $("space-solve-time-value").textContent = `${d.time_s} s`;
+      $<HTMLInputElement>("space-solve-evals").value = String(d.evals);
+    }
     $("space-method").replaceChildren(h("b", {}, "Method: "), METHOD_TEXT[kind]);
+    const size = roundSize(p.search);
+    const n = (v: number) => v.toLocaleString("en-US");
     $("space-solve-unit").textContent =
-      `An evaluation here is ${EVAL_UNIT[kind]}. The search runs in rounds of ${ROUND_EVALS[kind].toLocaleString("en-US")}, each from the best so far; ` +
-      "with Evaluations only, the same seed gives the same result.";
+      `An evaluation here is ${EVAL_UNIT[kind]}. The search runs in rounds of ${n(size)}, each from the best so far` +
+      (FRESH_EVALS[kind] > size ? `; a new arrangement needs a first round of ${n(FRESH_EVALS[kind])}` : "") +
+      ". With Evaluations only, the same seed gives the same result." +
+      (fold && p.P >= 20
+        ? ` Fold rounds on ${p.P} pieces are slow: one compression can take ${p.P >= LARGE_FOLD ? "half a minute or more" : "several seconds"}, and the time limit ends the run.`
+        : "");
   }
 
   // ---------- the panel ----------
@@ -530,7 +632,14 @@ class SpaceMode {
     const shown = this.shownConfig();
     $("space-score-label").textContent = p ? scoreLabel(p.search) : "Score";
     $("space-score").textContent = shown ? shown.score.toFixed(6) : "—";
-    $("space-shown").textContent = shown && p ? shownText(shown.source, p) : p ? "no packing exists" : "—";
+    $("space-shown").textContent =
+      shown && p
+        ? shownText(shown.source, p)
+        : p
+          ? p.status === "infeasible"
+            ? "no packing exists"
+            : "none could be read"
+          : "—";
     // built again only for another problem, so that an opened "Why" stays open during a run
     const facts = $("space-facts");
     if (this.factsOf !== p) {
@@ -558,7 +667,8 @@ class SpaceMode {
     const note = $("space-submit-note");
     const button = $<HTMLButtonElement>("space-submit");
     let why = "";
-    if (!p) why = "Choose a problem first.";
+    if (this.loading) why = "Loading…";
+    else if (!p) why = "Choose a problem first.";
     else if (!p.accepts_submissions) why = `This problem takes no entries: ${p.closed_reason ?? "it is closed"}.`;
     else if (this.run) why = "The optimizer is running.";
     else if (!this.result) why = "Run the optimizer first. Only a result that beats the problem's best can be sent.";
@@ -578,7 +688,8 @@ class SpaceMode {
     $<HTMLFieldSetElement>("space-solve-settings").disabled = running;
     const fresh = $<HTMLSelectElement>("space-solve-start").value === "fresh";
     $<HTMLButtonElement>("space-solve-run").disabled =
-      running || !p || (!p.best && !fresh) || p.status === "infeasible";
+      running || this.loading || !p || (!p.best && !fresh) || p.status === "infeasible";
+    $<HTMLButtonElement>("space-export").disabled = this.loading || !p?.best;
     $<HTMLButtonElement>("space-solve-pause").disabled = !running;
     $("space-solve-pause").textContent = this.run?.state === "paused" ? "Resume" : "Pause";
     $<HTMLButtonElement>("space-solve-stop").disabled = !running;
@@ -608,8 +719,10 @@ class SpaceMode {
   // ---------- the optimizer ----------
 
   private readSettings(): { seed: number; budget: { evals: number; time_s?: number }; fresh: boolean } | string {
-    const evals = Number($<HTMLInputElement>("space-solve-evals").value);
-    const seed = Number($<HTMLInputElement>("space-solve-seed").value);
+    const field = (id: string) => $<HTMLInputElement>(id).value.trim();
+    // an empty field is not 0: Number("") is
+    const evals = field("space-solve-evals") === "" ? NaN : Number(field("space-solve-evals"));
+    const seed = field("space-solve-seed") === "" ? NaN : Number(field("space-solve-seed"));
     const time = Number($<HTMLInputElement>("space-solve-time").value);
     if (!Number.isSafeInteger(evals) || evals < 1 || evals > 1_000_000) {
       $("space-solve-evals").focus();
@@ -636,8 +749,16 @@ class SpaceMode {
     const start = settings.fresh ? null : (shown?.config ?? null);
     if (!start && !settings.fresh)
       return this.solveStatus("There is no packing to start from. Choose New arrangement.");
+    const p = handle.problem;
+    const from: StartFrom = settings.fresh
+      ? { kind: "fresh" }
+      : shown?.source === "result"
+        ? { kind: "result" }
+        : shown?.source === "site" && p.site_best
+          ? { kind: "site", id: p.site_best.id }
+          : { kind: "certified" };
     const trace: [number, number][] = [];
-    this.runInfo = { settings, start, trace };
+    this.runInfo = { settings, start, from, trace };
     this.preview = null;
     this.finished = null;
     $("space-solve-score").textContent = "—";
@@ -649,7 +770,10 @@ class SpaceMode {
       ...settings,
       onProgress: (q) => {
         if (this.run !== run) return;
-        $("space-solve-progress").textContent = progressText(q);
+        // a round ended, or the run was paused or resumed: the next round starts now
+        this.roundSince = performance.now();
+        this.lastProgress = progressText(q);
+        $("space-solve-progress").textContent = this.lastProgress;
         if (q.improved && q.best) {
           this.preview = q.best;
           $("space-solve-score").textContent = q.best.score.toFixed(6);
@@ -665,10 +789,12 @@ class SpaceMode {
     });
     this.run = run;
     this.solveStatus(`Running ${handle.method}…`);
+    this.startTicker();
     this.updateButtons();
     void run.done.then((r) => {
       if (this.run !== run) return;
       this.run = null;
+      this.stopTicker();
       this.preview = null;
       this.finished = r;
       if (this.handle?.problem.id !== problemId) return;
@@ -681,27 +807,39 @@ class SpaceMode {
     const p = handle.problem;
     $("space-solve-progress").textContent = progressText(r);
     let text = `${ENDED[r.ended]}.`;
-    if (r.ended === "error" && r.reasons.length) text += ` ${r.reasons.join("; ")}.`;
-    if (r.best) {
-      // checked once more here, by the server's rule, before it is offered
-      const check = handle.validate(r.best.config);
-      if (check.valid) {
-        this.result = { candidate: r.best, check, run: r };
-        this.shown = "result";
-        this.view?.show(r.best.config);
-        $("space-solve-score").textContent = r.best.score.toFixed(6);
-        text += handle.improves(r.best.score)
-          ? ` The result ${r.best.score.toFixed(6)} beats the problem's best${p.best_score === null ? "" : ` ${p.best_score.toFixed(6)}`}. You can submit it.`
-          : ` The result ${r.best.score.toFixed(6)} does not beat the problem's best${p.best_score === null ? "" : ` ${p.best_score.toFixed(6)}`}.`;
-      } else {
-        this.result = null;
-        text += ` The result did not pass the check (${check.reasons[0] ?? "invalid"}), so it is not offered.`;
-        this.showBest();
-      }
+    if (r.ended === "error" && r.reasons.length) text += ` ${capital(r.reasons.join("; "))}.`;
+    const info = this.runInfo!;
+    const best = p.best_score === null ? "" : ` ${p.best_score.toFixed(6)}`;
+    // a run that started from the earlier result keeps it, with the seed and start of the run
+    // that found it, unless it found a better one
+    const previous = info.from.kind === "result" ? this.result : null;
+    const check = r.best ? handle.validate(r.best.config) : null;
+    const better = !!r.best && (!previous || r.best.score < previous.candidate.score * (1 - SCORE_TIE));
+    if (r.best && check?.valid && better) {
+      this.result = { candidate: r.best, check, run: r, seed: info.settings.seed, start: info.start, from: info.from };
+      this.shown = "result";
+      text += handle.improves(r.best.score)
+        ? ` The result ${r.best.score.toFixed(6)} beats the problem's best${best}. You can submit it.`
+        : ` The result ${r.best.score.toFixed(6)} does not beat the problem's best${best}.`;
     } else {
-      text += " No valid result was found.";
-      if (p.best) this.view?.show(p.best.config);
+      if (r.best && !check?.valid)
+        text += ` The result did not pass the check (${check?.reasons[0] ?? "invalid"}), so it is not offered.`;
+      else if (r.rounds === 0) text += " It ended before its first round finished.";
+      else if (previous) text += " It found nothing better than the result it started from.";
+      else text += " No valid result was found.";
+      if (previous) {
+        this.result = previous;
+        this.shown = "result";
+        text += ` That result, ${previous.candidate.score.toFixed(6)}, is kept.`;
+      } else {
+        // nothing from this run, and the earlier result (if any) is not what it started from
+        this.result = null;
+        this.shown = "best";
+      }
     }
+    const shown = this.shownConfig();
+    this.view?.show(shown?.config ?? null);
+    $("space-solve-score").textContent = this.result ? this.result.candidate.score.toFixed(6) : "—";
     this.solveStatus(text);
     this.updateButtons();
   }
@@ -711,6 +849,7 @@ class SpaceMode {
     if (!run) return;
     if (run.state === "paused") run.resume();
     else run.pause();
+    this.roundSince = performance.now();
     this.solveStatus(run.state === "paused" ? "Paused. Resume, or stop to keep the best result." : "Running…");
     this.updateButtons();
   }
@@ -720,11 +859,31 @@ class SpaceMode {
     const run = this.run;
     if (!run) return;
     this.run = null;
+    this.stopTicker();
     this.preview = null;
     this.interrupted = why === "problem";
     run.stop();
     this.solveStatus(why === "problem" ? "The problem changed, so the run was stopped." : "The run was stopped.");
     this.updateButtons();
+  }
+
+  /** Every second of a run, the progress line says how long the round in flight has run. */
+  private startTicker(): void {
+    this.stopTicker();
+    this.roundSince = performance.now();
+    this.lastProgress = "Starting…";
+    this.ticker = setInterval(() => {
+      const run = this.run;
+      if (!run || run.state !== "running") return;
+      const s = (performance.now() - this.roundSince) / 1000;
+      // short rounds need no clock; a long one shows it is working
+      if (s >= 2) $("space-solve-progress").textContent = `${this.lastProgress} · round running for ${Math.floor(s)} s`;
+    }, 1000);
+  }
+
+  private stopTicker(): void {
+    if (this.ticker) clearInterval(this.ticker);
+    this.ticker = null;
   }
 
   private renderTrace(trace: [number, number][]): void {
@@ -765,8 +924,9 @@ class SpaceMode {
       space: p.space,
       id: p.id,
       method: this.handle!.method,
-      settings: { ...info.settings, round_evals: ROUND_EVALS[kind] },
+      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: FRESH_EVALS[kind] },
       start: info.start,
+      start_from: fromText(info.from),
       result: r.best ? { score: r.best.score, round: r.best.round, seed: r.best.seed, config: r.best.config } : null,
       rounds: r.rounds,
       evaluations: r.evaluations,
@@ -811,16 +971,27 @@ class SpaceMode {
     this.renderSubmit();
     out.className = "note";
     out.textContent = "Submitting…";
+    // the seed and the start of the run that found it
+    const method = `${handle.method} (board, ${fromText(result.from)})`;
     const answer = await handle.submit(result.candidate.config, {
       name,
       note: this.host.note.value.trim(),
-      method: handle.method,
-      seed: this.runInfo?.settings.seed,
+      method: method.length <= METHOD_MAX ? method : handle.method,
+      seed: result.seed,
       software: "PolyPack board",
     });
     this.submitting = false;
-    if (this.handle !== handle) return;
-    out.className = answer.kind === "kept" ? "note good" : answer.kind === "not-kept" ? "note" : "note bad";
+    const tone = answer.kind === "kept" ? "note good" : answer.kind === "not-kept" ? "note" : "note bad";
+    if (this.handle !== handle) {
+      // another problem is shown now: say what became of this one's entry, under its name
+      const text = `Your entry for ${handle.problem.id}: ${answer.text}`;
+      this.say(text);
+      out.className = tone;
+      out.textContent = text;
+      this.renderSubmit();
+      return;
+    }
+    out.className = tone;
     out.textContent = answer.text;
     // read the problem again: its best may have changed, or it may have closed
     if (answer.kind === "kept" || answer.kind === "not-kept" || answer.kind === "closed") {
@@ -853,7 +1024,11 @@ class SpaceMode {
 let mode: SpaceMode | null = null;
 
 /** The board's space mode, built on first use from the board's markup. */
-export function createSpaceMode(): { enter(space: BoardSpace, id: string | null): Promise<void>; leave(): void } {
+export function createSpaceMode(): {
+  enter(space: BoardSpace, id: string | null): Promise<void>;
+  leave(): void;
+  setPolygonHeld(held: boolean): void;
+} {
   if (!mode) {
     const select = $("space-select");
     const name = $<HTMLInputElement>("name");

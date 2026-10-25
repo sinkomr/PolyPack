@@ -363,6 +363,54 @@ describe("POST /api/spaces/submit", () => {
     });
   });
 
+  it("stores a free torus in a reduced, right-handed basis: the same lattice, poses and score", async () => {
+    const file = {
+      generated: "test",
+      records: [
+        {
+          problem: "torus/free/0/2",
+          family: "free",
+          N: 0,
+          P: 2,
+          score_cert: 3,
+          display: "3.000000",
+          status: "best_known",
+          configuration: {
+            lattice: { b1: [3, 0], b2: [0, 3] },
+            poses: [
+              [0, 0, 0],
+              [1.5, 1.5, 0],
+            ],
+          },
+          bound: { value: 2.5, label: "a test bound" },
+        },
+      ],
+    };
+    makeApp({}, { torus: buildSpaceCatalogue("torus", file) });
+    const poses = [
+      [0, 0, 0],
+      [Math.SQRT2, Math.SQRT2, 0],
+    ];
+    // the square lattice of side 2 sqrt 2, written as b2 + 100 b1 and left-handed
+    const sent = { lattice: { b1: [L2, 0], b2: [-100 * L2, -L2] }, poses };
+    const r = await submit({ space: "torus", id: "torus/free/0/2", config: sent, name: "ann" });
+    expect(r.status).toBe(200);
+    expect(r.body.leader).toBe(true);
+    expect(r.body.score).toBeCloseTo(L2, 12);
+    const e = (await get(`/api/spaces/entries/${r.body.id}`)).body;
+    const { b1, b2 } = e.config.lattice;
+    expect(b1[0] * b2[1] - b1[1] * b2[0]).toBeGreaterThan(0);
+    expect(Math.hypot(...b1)).toBeCloseTo(L2, 12);
+    expect(Math.hypot(...b2)).toBeCloseTo(L2, 12);
+    expect(e.config.poses).toEqual(poses);
+    expect(e.score).toBe(r.body.score);
+    const p = (await get("/api/spaces/torus/problems/torus/free/0/2")).body as SpaceProblemResponse;
+    expect(p.site_config).toEqual(e.config);
+    const v = validateSpaceSubmission("torus", "torus/free/0/2", e.config, { bound: 2.5, certified: 3 });
+    expect(v.valid).toBe(true);
+    expect(Math.abs(v.score! - r.body.score!)).toBeLessThanOrEqual(1e-12 * L2);
+  });
+
   it("stores the configuration with its known fields only", async () => {
     const config = { ...twoDisks(), extra: "x".repeat(100), score: 0.1 };
     const r = await submit({ ...torusEntry(), config, container: { size: 0.1 } });

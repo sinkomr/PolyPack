@@ -10,6 +10,7 @@ import { loadSpacesIndex } from "@polypack/spaces/load";
 import { type SpaceJob, type SpaceJobResult, mixSeed, parseSearchProblem, runSpaceJob } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { FRESH_EVALS } from "../src/space/model";
 import { CancelledRound, type RoundRunner, SpaceSearch, type SpaceSearchProgress } from "../src/space/search";
 
 const index = loadSpacesIndex(resolve(__dirname, "../../.."));
@@ -194,10 +195,13 @@ describe("a search on a space problem, in rounds", () => {
     const r = await new SpaceSearch(
       sphere.search,
       sphere.start,
-      { seed: 1, budget: { evals: 8000 }, fresh: true, rule: { bound: null } },
+      { seed: 1, budget: { evals: 34000 }, fresh: true, rule: { bound: null } },
       runner,
     ).done;
     expect(runner.jobs.map((j) => j.kind)).toEqual(["fresh", "fresh", "iterate", "iterate"]);
+    // a fresh round that found nothing doubles the next one
+    expect(runner.jobs.map((j) => j.budget.evals)).toEqual([10000, 20000, 2000, 2000]);
+    expect(r.evaluations).toBe(34000);
     expect(runner.jobs[2].start).toEqual({ rho: 3, pieces: [] });
     expect(runner.jobs[3].start).toEqual({ rho: 2.5, pieces: [] });
     expect(r.trace.map((p) => p[1])).toEqual([3, 2.5]);
@@ -244,4 +248,122 @@ describe("a search on a space problem, in rounds", () => {
       expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid, id).toBe(true);
     }
   });
+
+  it("loses no round and starts none when pause and resume follow each other in one tick", async () => {
+    const plain = await new SpaceSearch(
+      sphere.search,
+      sphere.start,
+      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      new LocalRunner(),
+    ).done;
+    // pause() then resume() while round 2 is in flight: it runs again, nothing counts as failed
+    let search: SpaceSearch | null = null;
+    const quick = new LocalRunner(undefined, 5, (_job, n) => {
+      if (n === 2)
+        setTimeout(() => {
+          search!.pause();
+          search!.resume();
+        }, 1);
+    });
+    search = new SpaceSearch(
+      sphere.search,
+      sphere.start,
+      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      quick,
+    );
+    const r = await search.done;
+    expect(r.ended).toBe("evals");
+    expect(r.reasons).toEqual([]);
+    expect(r.rounds).toBe(plain.rounds);
+    expect(r.best).toEqual(plain.best);
+    expect(quick.jobs[2]).toEqual(quick.jobs[1]);
+
+    // resume() then pause() while paused: the run stays paused and starts no round
+    let held: SpaceSearch | null = null;
+    const states: string[] = [];
+    const runner = new LocalRunner(undefined, 5, (_job, n) => {
+      if (n === 2)
+        setTimeout(() => {
+          held!.pause();
+          setTimeout(() => {
+            held!.resume();
+            held!.pause();
+            setTimeout(() => {
+              states.push(held!.state);
+              const started = runner.jobs.length;
+              setTimeout(() => {
+                // still paused, and no round started meanwhile
+                states.push(held!.state, String(runner.jobs.length - started));
+                held!.resume();
+              }, 30);
+            }, 5);
+          }, 5);
+        }, 1);
+    });
+    held = new SpaceSearch(
+      sphere.search,
+      sphere.start,
+      { seed: 9, budget: { evals: 6000 }, fresh: false, rule: sphere.rule },
+      runner,
+    );
+    const again = await held.done;
+    expect(states).toEqual(["paused", "paused", "0"]);
+    expect(again.best).toEqual(plain.best);
+  });
+
+  it("keeps a fold round within the evaluations it is given", async () => {
+    const fold = problemOf("surface/cube/fold/0/10");
+    const runner = new LocalRunner();
+    const r = await new SpaceSearch(
+      fold.search,
+      fold.start,
+      { seed: 1, budget: { evals: 5 }, fresh: false, rule: fold.rule },
+      runner,
+    ).done;
+    expect(r.evaluations).toBeLessThanOrEqual(5);
+    // a round of 4 compressions (the start and 3 hops), then one of 1 (the start only)
+    expect(runner.jobs.map((j) => j.budget.evals)).toEqual([3, 0]);
+    expect(r.best).not.toBeNull();
+  });
+});
+
+describe("a new arrangement on a free torus", () => {
+  it("goes on from a left-handed basis, which the torus search returns from a fresh start", async () => {
+    const p = problemOf("torus/free/0/7");
+    const runner = new LocalRunner();
+    // seed 2's first round returns a basis with det(b1, b2) < 0
+    const r = await new SpaceSearch(
+      p.search,
+      null,
+      { seed: 2, budget: { evals: FRESH_EVALS.torus + 4000 }, fresh: true, rule: p.rule },
+      runner,
+    ).done;
+    const first = runner.jobs.length > 1 ? runner.jobs[1].start : null;
+    const l = (first as { lattice: { b1: number[]; b2: number[] } } | null)?.lattice;
+    expect(l && l.b1[0] * l.b2[1] - l.b1[1] * l.b2[0]).toBeLessThan(0);
+    expect(r.ended).toBe("evals");
+    expect(r.reasons).toEqual([]);
+    expect(r.rounds).toBe(3);
+  });
+});
+
+describe("a new arrangement, within the panel's default budget", () => {
+  // the first round alone, half of the default 20,000 evaluations, without the time limit so that
+  // the test does not depend on the machine
+  for (const id of ["sphere/0/12", "sphere/4/30", "torus/sq/5/7", "torus/free/4/12"])
+    it(`finds a valid packing of ${id} from nothing in its first round`, async () => {
+      const p = problemOf(id);
+      const kind = p.search.space as "sphere" | "torus";
+      for (const seed of [1, 2]) {
+        const r = await new SpaceSearch(
+          p.search,
+          null,
+          { seed, budget: { evals: FRESH_EVALS[kind] }, fresh: true, rule: p.rule },
+          new LocalRunner(),
+        ).done;
+        expect(r.rounds).toBe(1);
+        expect(r.best, `${id}, seed ${seed}`).not.toBeNull();
+        expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
+      }
+    });
 });

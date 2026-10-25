@@ -403,3 +403,42 @@ export function validateSpaceSubmission(
 export function beatsSpaceScore(score: number, best: number | null | undefined): boolean {
   return best === null || best === undefined || score < best * (1 - SCORE_TIE);
 }
+
+/**
+ * The configuration as the server stores it. A free torus lattice that is skewed or left-handed
+ * is stored Lagrange-Gauss reduced with det(b1, b2) > 0: the same lattice, so the same packing and
+ * score, in a basis that every reader can draw and search without a long walk over translates. The
+ * poses stay as they are, since positions count modulo the lattice. The stored form is checked
+ * again by the same rule and replaces the one sent only when it passes with the same score (to
+ * within SCORE_TIE); anything else is stored as it was sent.
+ */
+export function storedSpaceConfig(
+  space: SpaceName,
+  id: string,
+  config: SpaceConfig,
+  opts: SpaceValidateOptions = {},
+): SpaceConfig {
+  if (space !== "torus") return config;
+  const parsed = parseSpaceId(space, id);
+  if (typeof parsed === "string" || parsed.fields.family !== "free") return config;
+  const sent = config.lattice as { b1?: [number, number]; b2?: [number, number] } | undefined;
+  if (!sent?.b1 || !sent?.b2) return config;
+  const det0 = sent.b1[0] * sent.b2[1] - sent.b1[1] * sent.b2[0];
+  const { b1, b2: r2 } = gaussReduce({ b1: sent.b1, b2: sent.b2 }).lattice;
+  // -b2 spans the same lattice as b2
+  const b2: [number, number] = b1[0] * r2[1] - b1[1] * r2[0] < 0 ? [-r2[0], -r2[1]] : [r2[0], r2[1]];
+  const length2 = (u: readonly number[], v: readonly number[]) => u[0] ** 2 + u[1] ** 2 + v[0] ** 2 + v[1] ** 2;
+  // a reduced, right-handed basis is kept as it was sent, so that stored records are not rewritten
+  if (det0 > 0 && length2(b1, b2) >= length2(sent.b1, sent.b2) * (1 - 1e-12)) return config;
+  const before = validateSpaceSubmission(space, id, config, opts);
+  const after = validateSpaceSubmission(space, id, { ...config, lattice: { b1: [b1[0], b1[1]], b2 } }, opts);
+  if (
+    !after.valid ||
+    !after.config ||
+    before.score === null ||
+    after.score === null ||
+    Math.abs(after.score - before.score) > SCORE_TIE * before.score
+  )
+    return config;
+  return after.config;
+}

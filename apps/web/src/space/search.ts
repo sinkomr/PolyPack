@@ -108,6 +108,10 @@ export class SpaceSearch {
     return this.stopped ? "stopped" : this.paused ? "paused" : "running";
   }
 
+  /**
+   * Holds the run: the round in flight is ended and will run again from its start on resume.
+   * pause() and resume() may follow each other in any order, in one tick too.
+   */
   pause(): void {
     if (this.stopped || this.paused) return;
     this.paused = true;
@@ -136,6 +140,8 @@ export class SpaceSearch {
     let evaluations = 0;
     let seconds = 0;
     let failures = 0;
+    /** Rounds without a start that found nothing: each doubles the next one (model.ts roundJob). */
+    let freshTries = 0;
     let reasons: string[] = [];
     const trace: [number, number][] = [];
     const progress = (improved: boolean) => {
@@ -158,23 +164,27 @@ export class SpaceSearch {
       if (this.stopped || o.shouldStop?.()) return end("stopped");
       if (this.paused) {
         progress(false);
-        await new Promise<void>((resolve) => (this.wake = resolve));
-        this.wake = null;
+        // a resume and a pause in one tick leave the run paused: wait again until it is not
+        while (this.paused && !this.stopped) {
+          await new Promise<void>((resolve) => (this.wake = resolve));
+          this.wake = null;
+        }
         if (this.stopped) return end("stopped");
         progress(false);
       }
-      if (evaluations >= o.budget.evals) return end("evals");
       if (o.budget.time_s !== undefined && seconds >= o.budget.time_s) return end("time");
       if (best && bound !== null && bound > 0 && best.score <= bound * (1 + BOUND_SLACK)) return end("bound");
       const startOf = best?.config ?? (o.fresh ? null : this.start);
-      const job = roundJob(this.problem, o.rule, o, rounds, { evals: evaluations, seconds }, startOf);
+      const plan = roundJob(this.problem, o.rule, o, rounds, { evals: evaluations, seconds }, startOf, freshTries);
+      if (!plan) return end("evals");
+      const job = plan.job;
       const t0 = now();
       let result: SpaceJobResult;
       try {
         result = await this.runner.run(job);
       } catch (error) {
-        // a round ended by pause or stop: the loop waits, or ends
-        if (this.stopped || this.paused) continue;
+        // a round ended by pause or stop: the loop waits, ends, or runs the same round again
+        if (error instanceof CancelledRound) continue;
         result = {
           job,
           score: null,
@@ -185,23 +195,24 @@ export class SpaceSearch {
           reasons: [error instanceof Error ? error.message : String(error)],
         };
       }
+      const failed = result.termination === "error" || result.termination === "crashed";
       seconds += Math.max(0, now() - t0);
-      evaluations += Math.max(1, result.evaluations);
+      // a failed round did no search; a round that did not count its work counts the round's evaluations
+      evaluations += failed ? 0 : result.evaluations > 0 ? result.evaluations : plan.evals;
       rounds++;
       let improved = false;
-      if (
+      const found =
         result.valid &&
-        result.config &&
+        !!result.config &&
         typeof result.score === "number" &&
         Number.isFinite(result.score) &&
-        result.score > 0 &&
-        (!best || result.score < best.score)
-      ) {
-        best = { config: result.config, score: result.score, round: rounds - 1, seed: job.seed };
-        trace.push([seconds, result.score]);
+        result.score > 0;
+      if (found && (!best || result.score! < best.score)) {
+        best = { config: result.config!, score: result.score!, round: rounds - 1, seed: job.seed };
+        trace.push([seconds, result.score!]);
         improved = true;
       }
-      const failed = result.termination === "error" || result.termination === "crashed";
+      if (!startOf && !found) freshTries++;
       failures = failed ? failures + 1 : 0;
       if (failed) reasons = result.reasons.slice(0, 3);
       progress(improved);

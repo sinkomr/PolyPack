@@ -65,15 +65,21 @@ export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Dra
   reset.type = "button";
   reset.textContent = "Reset view";
   reset.addEventListener("click", () => renderer.reset());
-  tools.append(...buttons, reset);
+  // said only where it is true: a view that turns, with a packing in it
+  const hint = document.createElement("span");
+  hint.className = "space-hint";
+  hint.textContent = "Drag to turn";
+  tools.append(...buttons, reset, hint);
   root.append(tools, box);
   host.replaceChildren(root);
   let shown = false;
 
   function sync() {
     for (const b of buttons) b.setAttribute("aria-pressed", String(b.dataset.view === renderer.view));
-    const turns = renderer.canTurn();
+    // an empty drawing does not turn, and takes no focus
+    const turns = shown && renderer.canTurn();
     reset.hidden = !turns;
+    hint.hidden = !turns;
     // only a view that turns takes the keyboard
     if (turns) {
       box.tabIndex = 0;
@@ -89,7 +95,7 @@ export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Dra
   }
 
   box.addEventListener("keydown", (e) => {
-    if (!renderer.canTurn()) return;
+    if (!shown || !renderer.canTurn()) return;
     const k = e.shiftKey ? 3 * STEP : STEP;
     const d: Record<string, [number, number]> = {
       ArrowLeft: [-k, 0],

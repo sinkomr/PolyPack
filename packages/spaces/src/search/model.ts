@@ -139,7 +139,12 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
       if (p.family === "free") {
         const b1 = vec2(l.b1);
         const b2 = vec2(l.b2);
-        return b1 && b2 ? { lattice: { b1, b2 }, poses } : null;
+        if (!b1 || !b2) return null;
+        // a basis of a real lattice: a degenerate one (det 0, or not finite) has no cells to draw or
+        // search. A left-handed one (det < 0) is a lattice too: the torus search returns one about
+        // half the time from a fresh start, and the next round starts from it.
+        const det = b1[0] * b2[1] - b1[1] * b2[0];
+        return Number.isFinite(det) && det !== 0 ? { lattice: { b1, b2 }, poses } : null;
       }
       return positive(l.L) ? { lattice: { L: l.L }, poses } : null;
     }

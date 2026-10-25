@@ -5,12 +5,13 @@
  *    every lattice translate of a piece has the piece's colour;
  *  - "One cell": the fundamental cell alone; the parts of pieces that leave it come back on the
  *    opposite side (drawn lighter), and arrows mark which sides are glued.
- * Centres are reduced to the cell first (fractional coordinates in [0, 1)).
+ * The layout (torus-layout.ts) reduces the basis first, so a skewed basis draws as fast as any.
  */
 import { circumradius } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
 import { type SearchProblem, torusPackingOf } from "@polypack/spaces/search";
 import { SVG_NS, type SpaceRenderer, isDark, piecesText } from "./common";
+import { torusLayout } from "./torus-layout";
 
 type V2 = readonly [number, number];
 
@@ -66,30 +67,14 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
   };
 
   function redraw() {
-    if (!packing) {
+    const layout = packing ? torusLayout(packing.lattice, packing.poses, R, view === "tile") : null;
+    if (!layout) {
       svg.replaceChildren();
       return;
     }
-    const B: readonly [V2, V2] = [packing.lattice.b1, packing.lattice.b2];
+    const B = layout.basis;
     const tile = view === "tile";
-    const cc = (
-      [
-        [0, 0],
-        [1, 0],
-        [1, 1],
-        [0, 1],
-      ] as V2[]
-    ).map(([s, t]) => add([0, 0], B, s, t));
-    let x0 = Math.min(...cc.map((c) => c[0]));
-    let x1 = Math.max(...cc.map((c) => c[0]));
-    let y0 = Math.min(...cc.map((c) => c[1]));
-    let y1 = Math.max(...cc.map((c) => c[1]));
-    // tiled: a rectangular window around the cell; one cell: the cell itself
-    const grow = tile ? Math.max(1.6 * R, 0.45 * Math.max(x1 - x0, y1 - y0)) : 0;
-    x0 -= grow;
-    x1 += grow;
-    y0 -= grow;
-    y1 += grow;
+    const { x0, x1, y0, y1 } = layout;
     const pad = tile ? 0 : R * 0.15 + 0.3;
     const vb = [x0 - pad, -y1 - pad, x1 - x0 + 2 * pad, y1 - y0 + 2 * pad];
     const sw = (vb[2] / 600).toFixed(4);
@@ -97,42 +82,11 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
       ? `M${x0.toFixed(4)},${(-y1).toFixed(4)}H${x1.toFixed(4)}V${(-y0).toFixed(4)}H${x0.toFixed(4)}Z`
       : para(B, 0, 1);
     let s = `<defs><clipPath id="${clipId}"><path d="${clip}"/></clipPath></defs>`;
-    const det = B[0][0] * B[1][1] - B[0][1] * B[1][0];
-    const cen = packing.poses.map((q): [V2, number] => {
-      let a = (q.x * B[1][1] - q.y * B[1][0]) / det;
-      let b = (B[0][0] * q.y - B[0][1] * q.x) / det;
-      a -= Math.floor(a);
-      b -= Math.floor(b);
-      return [add([0, 0], B, a, b), q.theta];
-    });
-    // every lattice translate whose bounding disk meets the window
-    const K =
-      2 +
-      Math.ceil(
-        Math.max(x1 - x0, y1 - y0) / Math.min(Math.abs(det) / Math.hypot(...B[0]), Math.abs(det) / Math.hypot(...B[1])),
-      );
-    const hit = (p: V2) => p[0] + R > x0 && p[0] - R < x1 && p[1] + R > y0 && p[1] - R < y1;
     let body = "";
+    for (const q of layout.pieces) body += piece(q.x, q.y, q.theta, fill(q.orbit, q.ghost), sw);
     let cells = "";
-    const span = [Math.abs(B[0][0]) + Math.abs(B[1][0]), Math.abs(B[0][1]) + Math.abs(B[1][1])];
-    for (let m = -K; m <= K; m++)
-      for (let n = -K; n <= K; n++) {
-        const central = m === 0 && n === 0;
-        cen.forEach(([c, t], i) => {
-          const p = add(c, B, m, n);
-          if (hit(p)) body += piece(p[0], p[1], t, fill(i, !tile && !central), sw);
-        });
-        const o = add([0, 0], B, m, n);
-        if (
-          tile &&
-          !central &&
-          o[0] + span[0] > x0 - 1 &&
-          o[0] - span[0] < x1 + 1 &&
-          o[1] + span[1] > y0 - 1 &&
-          o[1] - span[1] < y1 + 1
-        )
-          cells += `<path d="${para(B, 0, 1)}" transform="translate(${o[0].toFixed(4)} ${(-o[1]).toFixed(4)})" fill="none" stroke="var(--text)" stroke-opacity="0.3" stroke-width="${sw}"/>`;
-      }
+    for (const o of layout.cells)
+      cells += `<path d="${para(B, 0, 1)}" transform="translate(${o[0].toFixed(4)} ${(-o[1]).toFixed(4)})" fill="none" stroke="var(--text)" stroke-opacity="0.3" stroke-width="${sw}"/>`;
     s += `<g clip-path="url(#${clipId})">${body}${cells}</g>`;
     s += `<path d="${para(B, 0, 1)}" fill="none" stroke="var(--text)" stroke-width="${(3 * Number(sw)).toFixed(4)}"/>`;
     if (!tile) {
@@ -176,6 +130,8 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
       const l = packing.lattice;
       score =
         family === "free" ? Math.sqrt(Math.abs(l.b1[0] * l.b2[1] - l.b1[1] * l.b2[0])) : Math.hypot(l.b1[0], l.b1[1]);
+      // a degenerate lattice draws nothing
+      if (!torusLayout(packing.lattice, [], R, false)) packing = null;
       redraw();
     },
     redraw,

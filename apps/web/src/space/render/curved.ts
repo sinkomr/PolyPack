@@ -9,8 +9,8 @@
  *  - K < 0: the Poincaré disk (conformal) and the Klein disk (geodesics straight); the unit circle
  *    is the ideal boundary, and for a polygon container the dashed ideal polygon is the largest
  *    container of its shape;
- *  - K > 0: a globe of radius 1/sqrt(K) seen from outside, tilted by dragging up and down, and the
- *    gnomonic chart (geodesics straight);
+ *  - K > 0: a globe of radius 1/sqrt(K) seen from outside, turned by dragging (or the arrow
+ *    keys) about its vertical and horizontal axes, and the gnomonic chart (geodesics straight);
  *  - |K| < 1e-3: the plane.
  */
 import type { SpaceConfig } from "@polypack/spaces";
@@ -117,7 +117,7 @@ interface Model {
   label: string;
   ok: (K: number) => boolean;
   /** To the plane; a third coordinate z < 0 marks the far side of the globe. */
-  map: (K: number, v: H3, tilt: number) => [number, number, number?];
+  map: (K: number, v: H3, tilt: number, spin: number) => [number, number, number?];
   /** True when the model fills the unit disk; otherwise the drawing is scaled to the container. */
   unit: boolean;
 }
@@ -147,10 +147,13 @@ const MODELS: Record<string, Model> = {
   globe: {
     label: "Globe",
     ok: (K) => K > 0,
-    map: (K, v, tilt) => {
+    map: (K, v, tilt, spin) => {
       const k = Math.sqrt(K);
       const u = norm(K, v);
-      const X = [u[0], k * u[1], k * u[2]];
+      // X0 points at the viewer: spin turns about the screen's vertical axis, then tilt about its horizontal one
+      const cp = Math.cos(spin);
+      const sp = Math.sin(spin);
+      const X = [u[0] * cp + k * u[1] * sp, k * u[1] * cp - u[0] * sp, k * u[2]];
       const ct = Math.cos(tilt);
       const st = Math.sin(tilt);
       return [X[1], X[2] * ct - X[0] * st, X[2] * st + X[0] * ct];
@@ -172,6 +175,12 @@ export function curvedRenderer(K: number, N: number, M: number, P: number): Spac
     .map(([key, m]) => ({ key, label: m.label }));
   let view = views[0].key;
   let tilt = 0;
+  let spin = 0;
+  const MAX_TILT = (80 * Math.PI) / 180;
+  const turnBy = (dx: number, dy: number) => {
+    spin = (spin + dx) % (2 * Math.PI);
+    tilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, tilt + dy));
+  };
   let config: { size: number; pieces: Pose[] } | null = null;
 
   function redraw() {
@@ -180,7 +189,7 @@ export function curvedRenderer(K: number, N: number, M: number, P: number): Spac
       return;
     }
     const m = MODELS[view];
-    const map = (v: H3) => m.map(K, v, tilt);
+    const map = (v: H3) => m.map(K, v, tilt, spin);
     const cont = containerOutline(K, M, config.size, false).map(map);
     const pieces = config.pieces.map((p) => pieceOutline(K, N, p).map(map));
     let scale = 1;
@@ -205,9 +214,9 @@ export function curvedRenderer(K: number, N: number, M: number, P: number): Spac
     svg.innerHTML = html;
   }
 
-  const stopDrag = onDrag(svg, (_dx, dy) => {
+  const stopDrag = onDrag(svg, (dx, dy) => {
     if (view !== "globe") return;
-    tilt = Math.max(0, Math.min((80 * Math.PI) / 180, tilt + dy * 0.01));
+    turnBy(dx * 0.01, dy * 0.01);
     redraw();
   });
 
@@ -227,13 +236,14 @@ export function curvedRenderer(K: number, N: number, M: number, P: number): Spac
     },
     redraw,
     canTurn: () => view === "globe",
-    turn(_dx, dy) {
+    turn(dx, dy) {
       if (view !== "globe") return;
-      tilt = Math.max(0, Math.min((80 * Math.PI) / 180, tilt + dy));
+      turnBy(dx, dy);
       redraw();
     },
     reset() {
       tilt = 0;
+      spin = 0;
       redraw();
     },
     describe() {
