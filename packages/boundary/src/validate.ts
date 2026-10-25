@@ -47,6 +47,11 @@
  * part overlaps <= tol - mu_A - mu_B. So a configuration whose unsnapped pieces violate a check by
  * more than tol is always rejected, and one with exact contacts is still accepted (the charged
  * tolerance stays >= 0.65 tol > 0). The in-cell edge tests use the unsnapped centres directly.
+ * The charged tolerance never goes below 0, the value at tol 0 (allowed() below). For tol > 0 the
+ * cap keeps the charges below 0.35 tol, so they apply in full; only when the snap is the rounding
+ * floor (tol 0, or tol below a few rounding units of s) does it go partly uncharged, by at most
+ * sqrt 3 rounding units of s, which those tolerances cannot resolve anyway. (Charging it in full
+ * made exact contacts fail at tol 0 for centres a rounding unit inside their facet.)
  *
  * Untrusted input: numbers are read by index (holes in sparse arrays read as undefined and are
  * rejected) and every rejecting comparison is written so that NaN rejects.
@@ -231,6 +236,15 @@ function hingeDepthInCube(poly: Polytope, s: number, nodes: readonly ChainNode[]
   return worst;
 }
 
+/**
+ * The tolerance left after charging a snap displacement m: tol - m, but never below 0, the value
+ * at tol 0 (header: for tol > 0 the cap keeps m < tol, so only the rounding-unit snaps of tol 0
+ * go uncharged).
+ */
+function allowed(tol: number, m: number): number {
+  return Math.max(tol - m, 0);
+}
+
 function develop(poly: Polytope, piece: PieceName, p: BoundaryPiece, s: number, reach: number, maxChains: number, snap: number, i: number, reasons: string[]): Development | null {
   try {
     return developPiece(poly, piece, p, s, reach, { maxChains, snap });
@@ -265,7 +279,7 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   // clearance along the chains
   devs.forEach((dev, i) => {
     const d = hingeDistanceOverChains(poly, s, dev.nodes, dev.u);
-    if (!(d >= 1 - tol + dev.snapped)) push(`Ball ${i} is ${fmt(d)} from an edge of the ${name} along the boundary; it must be at least 1, or the edge passes through the ball.`);
+    if (!(d >= 1 - allowed(tol, dev.snapped))) push(`Ball ${i} is ${fmt(d)} from an edge of the ${name} along the boundary; it must be at least 1, or the edge passes through the ball.`);
   });
   // Centres by cell, in a grid of side 2 (the interaction distance), for the pair checks. A centre
   // on a facet of its anchor (snapped there, chains.ts) is also entered in the neighbour across
@@ -315,14 +329,14 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
     const pairMin = new Map<number, number>();
     let loop = Infinity;
     // thresholds charged with the snap displacements (header)
-    const loopLimit = 2 - tol + 2 * dev.snapped;
+    const loopLimit = 2 - allowed(tol, 2 * dev.snapped);
     dev.nodes.forEach((node, ni) => {
       if (pairMin.size >= maxReasons) return;
       const back = isoInverse(node.toAnchor);
       const uLoc = isoApply(back, u);
       for (const { j, y, own } of near(node.cell, uLoc)) {
         if (j < i) continue;
-        const limit = 2 - tol + dev.snapped + devs[j].snapped;
+        const limit = 2 - allowed(tol, dev.snapped + devs[j].snapped);
         // cheap test in the cell's frame first (the development is an isometry)
         if (norm3(sub3(y, uLoc)) >= limit) continue;
         if (j === i) {
@@ -367,7 +381,7 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
     const dev = develop(poly, "cube", pieces[i], s, pieceReach("cube"), maxChains, snap, i, reasons);
     if (!dev) return reasons;
     const depth = hingeDepthInCube(poly, s, dev.nodes, rot[i], dev.u);
-    if (!(depth <= tol - dev.snapped)) push(`Cube ${i} has an edge of the ${name} passing through its interior beyond its anchor cell (depth ${fmt(depth)}).`);
+    if (!(depth <= allowed(tol, dev.snapped))) push(`Cube ${i} has an edge of the ${name} passing through its interior beyond its anchor cell (depth ${fmt(depth)}).`);
     for (const x of partsOfDevelopment(poly, "cube", i, dev, s)) {
       const P = x.poly!;
       if (polyhedronThickness(P) <= PART_EPS) continue;
@@ -400,7 +414,7 @@ function validateCubes(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
               if (b <= a) continue;
               const B = list[b];
               // the tolerance charged with both pieces' snap displacements (header)
-              const thr = tol - A.mu - B.mu;
+              const thr = allowed(tol, A.mu + B.mu);
               // bounding boxes overlapping by more than thr on every axis
               if (!(Math.min(A.sat.hi[0], B.sat.hi[0]) - Math.max(A.sat.lo[0], B.sat.lo[0]) > thr)) continue;
               if (!(Math.min(A.sat.hi[1], B.sat.hi[1]) - Math.max(A.sat.lo[1], B.sat.lo[1]) > thr)) continue;
