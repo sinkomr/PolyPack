@@ -1,0 +1,543 @@
+{
+ "note": "Hand-built adversarial configurations with their expected verdicts (valid: touching allowed; strict: strictly valid). Read by python/boundary/test_boundary.py and packages/boundary/scripts/gen-crosscheck.ts.",
+ "cases": [
+  {
+   "id": "adv/ball-pair-across-ridge-overlap",
+   "piece": "ball",
+   "P": 2,
+   "why": "cells 1 and 3 share the 2-face x0 = x1 = 2; each centre is 0.9 from it, so the developed distance is 1.8 (the R^4 distance is 1.27)",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 1,
+      "u": [
+       1.1,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       1.1,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-pair-across-ridge-touching",
+   "piece": "ball",
+   "P": 2,
+   "why": "as above with each centre 1 from the 2-face: developed distance exactly 2",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 1,
+      "u": [
+       1.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       1.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-pair-across-ridge-apart",
+   "piece": "ball",
+   "P": 2,
+   "why": "as above with each centre 1.0625 from the 2-face: developed distance 2.125",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 1,
+      "u": [
+       0.9375,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.9375,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": true
+  },
+  {
+   "id": "adv/ball-pair-around-an-edge",
+   "piece": "ball",
+   "P": 2,
+   "why": "the shortest path crosses two 2-faces around the edge x0 = -2, x1 = x2 = 2 (cells 0, 3, 5), passing 0.55 from the edge; length 1.905; both clearances 1.1",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       1.6237778423417646,
+       0.9663381171355006,
+       0.0
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       -0.916711471686571,
+       1.8089870045663767,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-near-an-edge",
+   "piece": "ball",
+   "P": 1,
+   "why": "clearance hypot(0.7, 0.65) = 0.955 < 1 from the edge u0 = u1 = h",
+   "config": {
+    "s": 3.0,
+    "pieces": [
+     {
+      "cell": 5,
+      "u": [
+       0.8,
+       0.85,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-on-an-edge-clearance-1",
+   "piece": "ball",
+   "P": 1,
+   "why": "centre on the face u2 = h; distance exactly 1 to the edges u0 = u2 = h and u1 = u2 = h",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 2,
+      "u": [
+       1.0,
+       1.0,
+       2.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-centre-outside-its-cell",
+   "piece": "ball",
+   "P": 1,
+   "why": "u0 = h + 1/1024",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 6,
+      "u": [
+       2.0009765625,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/ball-centre-on-a-face",
+   "piece": "ball",
+   "P": 2,
+   "why": "ball 0 is centred on the 2-face between cells 0 and 2; ball 1 in cell 2 is 2.25 from it",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       -2.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.25,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": true
+  },
+  {
+   "id": "adv/ball-centre-on-a-face-overlap",
+   "piece": "ball",
+   "P": 2,
+   "why": "as above, ball 1 is 1.75 from ball 0 (straight in cell 2)",
+   "config": {
+    "s": 4.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       -2.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       -0.25,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-containing-an-edge-point",
+   "piece": "cube",
+   "P": 1,
+   "why": "the cube crosses the faces u0 = h and u1 = h, so the edge u0 = u1 = h passes through it",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.75,
+       0.75,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-touching-an-edge",
+   "piece": "cube",
+   "P": 1,
+   "why": "the cube reaches the faces u0 = h and u1 = h exactly: the edge lies on its boundary",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.5,
+       0.5,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-parts-overlap-in-one-cell",
+   "piece": "cube",
+   "P": 2,
+   "why": "cube 0 crosses from cell 0 into cell 3, where its part fills x0 in [-1, -0.75]; cube 1 in cell 3 fills x0 in [-0.875, 0.125]: depth 0.125",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.75,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.375,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-parts-touch-in-one-cell",
+   "piece": "cube",
+   "P": 2,
+   "why": "as above, cube 1 fills x0 in [-0.75, 0.25]: the parts touch",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.75,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.25,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-parts-apart-in-one-cell",
+   "piece": "cube",
+   "P": 2,
+   "why": "as above, cube 1 fills x0 in [-0.625, 0.375]: gap 0.125",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.75,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.125,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": true
+  },
+  {
+   "id": "adv/cubes-touch-across-a-2-face",
+   "piece": "cube",
+   "P": 2,
+   "why": "each cube touches the 2-face between cells 0 and 3 from its own side, on the same square: valid, not strictly",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.5,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.5,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": false
+  },
+  {
+   "id": "adv/cubes-overlap-across-a-2-face",
+   "piece": "cube",
+   "P": 2,
+   "why": "cube 0 crosses 0.25 into cell 3, cube 1 touches the shared 2-face from inside cell 3: depth 0.25",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.75,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       -0.5,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  },
+  {
+   "id": "adv/cube-on-a-face-other-cell",
+   "piece": "cube",
+   "P": 2,
+   "why": "cube 0 is centred on the 2-face (half in cell 0, half in cell 3); cube 1 in cell 3 sits next to its half with a gap 0.25",
+   "config": {
+    "s": 2.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       1.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.25,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": true,
+   "strict": true
+  },
+  {
+   "id": "adv/cubes-too-many",
+   "piece": "cube",
+   "P": 9,
+   "why": "9 unit cubes have more volume than the boundary at s = 1 (8)",
+   "config": {
+    "s": 1.0,
+    "pieces": [
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 1,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 2,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 3,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 4,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 5,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 6,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 7,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     {
+      "cell": 0,
+      "u": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    ]
+   },
+   "valid": false,
+   "strict": false
+  }
+ ]
+}
