@@ -1,0 +1,127 @@
+/**
+ * Writes python/polyhedra/fixtures/crosscheck.json: adversarial near-contact configurations with the float
+ * validator's verdicts, for the certifier's tests (python/polyhedra/test_certify.py checks that the certifier
+ * agrees) and for test/crosscheck.test.ts (which checks that the stored verdicts are still the validator's).
+ *
+ * Each case is two pieces in random orientations, B moved from A along a random direction until they touch and
+ * then by a target separation of +-1e-7 or +-1e-9 (face, edge-edge and vertex contacts all occur), in a container
+ * large enough; or one piece pushed against a wall to a wall gap of +-1e-7 or +-1e-9.
+ *
+ * Usage: npx tsx packages/polyhedra/scripts/gen-crosscheck.ts [out.json]
+ */
+import { writeFileSync } from "node:fs";
+import { type Pose, getProblem, getSolid, place, separation, tightScale, validatePolyhedra } from "../src/index";
+import { mulberry32, gauss } from "../src/sim/sim";
+
+const out = process.argv[2] ?? new URL("../../../python/polyhedra/fixtures/crosscheck.json", import.meta.url).pathname;
+const rng = mulberry32(2026);
+const codes = ["cubincub", "tetintet", "octincub", "icoindod", "tteintte", "sncinsnc", "ddoinddo", "pr3l3incub", "ap12incub", "ridinrid"];
+const targets = [1e-7, 1e-9, -1e-9, -1e-7];
+
+const randQ = (): [number, number, number, number] => {
+  const q = [gauss(rng), gauss(rng), gauss(rng), gauss(rng)];
+  const m = Math.hypot(...q);
+  return q.map((x) => x / m) as [number, number, number, number];
+};
+
+interface Case {
+  id: string;
+  code: string;
+  kind: "pair" | "wall";
+  target: number;
+  s: number;
+  pieces: Pose[];
+  ts_sep: number;
+  ts_wall: number;
+  ts_valid_strict: boolean;
+  ts_valid_tol: boolean;
+}
+
+const cases: Case[] = [];
+for (const code of codes) {
+  const problem = getProblem(code)!;
+  const P = getSolid(problem.piece);
+  for (let rep = 0; rep < 3; rep++) {
+    // pair contacts
+    const qa = randQ();
+    const qb = randQ();
+    const u = (() => {
+      const v = [gauss(rng), gauss(rng), gauss(rng)];
+      const m = Math.hypot(...v);
+      return v.map((x) => x / m);
+    })();
+    const at = (t: number): Pose => [t * u[0], t * u[1], t * u[2], ...qb];
+    const sepAt = (t: number) => separation(place(P, [0, 0, 0, ...qa]), place(P, at(t)), Infinity).sep;
+    let lo = 0;
+    let hi = 2 * P.circumradius + 1e-3;
+    for (let it = 0; it < 200; it++) {
+      const m = (lo + hi) / 2;
+      if (sepAt(m) < 0) lo = m;
+      else hi = m;
+    }
+    for (const target of targets) {
+      // secant steps from the contact to the target separation
+      let t = hi + target;
+      for (let it = 0; it < 8; it++) {
+        const e = sepAt(t) - target;
+        const d = (sepAt(t + 1e-6) - sepAt(t - 1e-6)) / 2e-6;
+        if (!(d > 0)) break;
+        t -= e / d;
+      }
+      const pieces: Pose[] = [[0, 0, 0, ...qa], at(t)];
+      // a container comfortably larger than the pair, centred on it
+      const c = [(t * u[0]) / 2, (t * u[1]) / 2, (t * u[2]) / 2];
+      const shifted = pieces.map((p) => [p[0] - c[0], p[1] - c[1], p[2] - c[2], p[3], p[4], p[5], p[6]] as Pose);
+      const s = tightScale(problem, shifted) * 1.5 + 1;
+      const v0 = validatePolyhedra(problem, { s, pieces: shifted }, { tol: 0, stopAt: Infinity });
+      const v1 = validatePolyhedra(problem, { s, pieces: shifted }, { tol: 1e-9 });
+      cases.push({
+        id: `${code}/pair/${rep}/${target}`,
+        code,
+        kind: "pair",
+        target,
+        s,
+        pieces: shifted,
+        ts_sep: v0.minPairSep,
+        ts_wall: v0.minWallGap,
+        ts_valid_strict: v0.valid,
+        ts_valid_tol: v1.valid,
+      });
+    }
+    // wall contacts: one piece, s set so that its smallest wall gap is the target
+    const p: Pose = [0.3 * gauss(rng), 0.3 * gauss(rng), 0.3 * gauss(rng), ...randQ()];
+    const C = getSolid(problem.container);
+    const sTouch = tightScale(problem, [p]);
+    for (const target of targets) {
+      // the face that sets sTouch has gap s b_f - N_f.x = (s - sTouch) b_f
+      const X = place(P, p).X;
+      let bf = 0;
+      let best = -Infinity;
+      for (let f = 0; f < C.offsets.length; f++)
+        for (let k = 0; k < X.length; k += 3) {
+          const r = (C.N[3 * f] * X[k] + C.N[3 * f + 1] * X[k + 1] + C.N[3 * f + 2] * X[k + 2]) / C.offsets[f];
+          if (r > best) {
+            best = r;
+            bf = C.offsets[f];
+          }
+        }
+      const s = sTouch + target / bf;
+      const v0 = validatePolyhedra(problem, { s, pieces: [p] }, { tol: 0, stopAt: Infinity });
+      const v1 = validatePolyhedra(problem, { s, pieces: [p] }, { tol: 1e-9 });
+      cases.push({
+        id: `${code}/wall/${rep}/${target}`,
+        code,
+        kind: "wall",
+        target,
+        s,
+        pieces: [p],
+        ts_sep: v0.minPairSep,
+        ts_wall: v0.minWallGap,
+        ts_valid_strict: v0.valid,
+        ts_valid_tol: v1.valid,
+      });
+    }
+  }
+}
+writeFileSync(out, JSON.stringify({ note: "generated by packages/polyhedra/scripts/gen-crosscheck.ts (seed 2026)", cases }));
+console.log(`wrote ${out}: ${cases.length} cases`);
