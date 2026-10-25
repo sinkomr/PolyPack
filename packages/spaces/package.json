@@ -6,7 +6,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
-    "./load": "./src/load.ts"
+    "./load": "./src/load.ts",
+    "./search": "./src/search/index.ts"
   },
   "scripts": {
     "typecheck": "tsc -p . --noEmit"

@@ -20,7 +20,7 @@
       </nav>
     </header>
     <main class="layout">
-      <section class="stage" aria-label="Workspace">
+      <section class="stage poly-only" aria-label="Workspace">
         <div class="toolbar" role="toolbar" aria-label="Board tools">
           <button id="add" title="Add a piece (A)">+ Add piece</button>
           <button id="add-all" title="Add pieces until P are placed">Add all</button>
@@ -60,22 +60,32 @@
         <section>
           <h2>Problem</h2>
           <div class="row">
+            <label for="space-select">Space</label>
+            <select id="space-select" autocomplete="off">
+              <option value="">Polygon in polygon</option>
+              <option value="surface">Platonic surfaces</option>
+              <option value="curved">Constant curvature</option>
+              <option value="sphere">Whole sphere</option>
+              <option value="torus">Flat tori</option>
+            </select>
+          </div>
+          <div class="row poly-only">
             <label for="n-select">Piece (N)</label>
             <select id="n-select"></select>
             <input id="n-custom" type="number" min="3" max="100" step="1" aria-label="Piece sides" hidden />
           </div>
-          <div class="row">
+          <div class="row poly-only">
             <label for="m-select">Container (M)</label>
             <select id="m-select"></select>
             <input id="m-custom" type="number" min="3" max="100" step="1" aria-label="Container sides" hidden />
           </div>
-          <div class="row">
+          <div class="row poly-only">
             <label for="p-input">Pieces (P)</label>
             <input id="p-input" type="number" min="1" max="500" step="1" />
           </div>
         </section>
 
-        <section id="solve-panel" aria-labelledby="solve-heading">
+        <section id="solve-panel" class="poly-only" aria-labelledby="solve-heading">
           <h2 id="solve-heading">Solve automatically</h2>
           <form id="solve-form" novalidate>
             <fieldset id="solve-settings">
@@ -136,7 +146,7 @@
           <svg id="solve-trace" viewBox="0 0 300 100" role="img" aria-label="Best solver score over elapsed time" hidden></svg>
         </section>
 
-        <section>
+        <section class="poly-only">
           <h2>Board score</h2>
           <dl class="stats">
             <dt>Pieces placed</dt>
@@ -154,7 +164,7 @@
           <div id="record-info" class="note" hidden></div>
         </section>
 
-        <section>
+        <section class="poly-only">
           <h2>Container orientation</h2>
           <div class="row">
             <label for="phi">φ (degrees)</label>
@@ -163,7 +173,7 @@
           </div>
         </section>
 
-        <section>
+        <section class="poly-only">
           <h2>Selected piece</h2>
           <div class="row three">
             <label>x <input id="sel-x" type="number" step="any" /></label>
@@ -183,19 +193,19 @@
             <label for="agent-note">Note</label>
             <input id="agent-note" maxlength="200" placeholder="optional" />
           </div>
-          <p id="found-with" class="note">Found by hand.</p>
-          <button id="submit" class="wide primary" aria-describedby="submit-closed">Submit to leaderboard</button>
-          <p id="submit-closed" class="note" hidden></p>
-          <p id="submit-result" class="note" role="status" aria-live="polite"></p>
+          <p id="found-with" class="note poly-only">Found by hand.</p>
+          <button id="submit" class="wide primary poly-only" aria-describedby="submit-closed">Submit to leaderboard</button>
+          <p id="submit-closed" class="note poly-only" hidden></p>
+          <p id="submit-result" class="note poly-only" role="status" aria-live="polite"></p>
         </section>
 
-        <section>
+        <section class="poly-only">
           <h2>Leaderboard <span id="live" class="live" title="Live updates"></span></h2>
           <ol id="leaderboard" class="leaderboard"></ol>
           <p id="leaderboard-note" class="note"></p>
         </section>
 
-        <section>
+        <section class="poly-only">
           <h2>Save and share</h2>
           <div class="row wrap">
             <button id="export">Export JSON</button>
@@ -205,7 +215,7 @@
           </div>
         </section>
 
-        <details>
+        <details class="poly-only">
           <summary>Controls and shortcuts</summary>
           <ul class="help">
             <li><b>Drag</b> a piece to move it. It slides along whatever blocks it and never overlaps.</li>

@@ -6,6 +6,7 @@ Pack P congruent regular polygons or circles into the smallest regular polygon o
 - Records: published values with sources, and one live leader per problem: the earliest of the best entries. Problems with a proven optimum are closed to entries.
 - API: everything is scriptable; see `/api` on the running site, `examples/submit.py` and, for running an optimizer and submitting its result, `examples/solve-and-submit.ts`. The server scores a packing at the container orientation it is sent (`container_phi`, 0 when missing) and does not search for a better one, so turn the container to its best orientation before submitting; the board, Tighter and the optimizers do so themselves.
 - Automated search: seven optimizers, seed generators and a contact polish, in the browser or as a TypeScript library.
+- Other spaces: pieces on the surface of a Platonic solid, at constant curvature, on the whole sphere and on flat tori. The board's Space menu draws their problems, runs their searches in the browser and submits better packings; see [docs/spaces/BOARD.md](docs/spaces/BOARD.md).
 - Volunteer computing: a single-file program that searches in the background on spare cores and submits records under your name. Download it from `/volunteer.html` on the running site; see [docs/VOLUNTEER.md](docs/VOLUNTEER.md).
 - Downloads: every current record with its coordinates, refreshed nightly, in the [records release](https://github.com/sinkomr/PolyPack/releases/tag/records); published values with their sources in `data/records.json`.
 
@@ -55,6 +56,7 @@ POLYPACK_E2E_PRODUCTION=1 npm run e2e -- e2e/solve.spec.ts e2e/mobile.spec.ts
 |---|---|
 | `packages/geometry` | Shared geometry: overlap tests, enclosing container, auto-orient, no-overlap moves, validation. Used by browser and server. |
 | `packages/solver` | Search framework and methods (budgets, seeds, pause/stop, pipelines). See its [README](packages/solver/README.md). |
+| `packages/spaces` | The other spaces: their problem ids, the server's check of a configuration, and (`src/search`) the searches the board and the volunteer client share. The geometry of each space is in `packages/surface`, `curved`, `sphere` and `torus`. |
 | `apps/web` | The website (Vite, TypeScript, Canvas). |
 | `apps/server` | The API (Hono, SQLite). |
 | `apps/volunteer` | The volunteer client. See [docs/VOLUNTEER.md](docs/VOLUNTEER.md). |

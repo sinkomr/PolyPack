@@ -17,6 +17,7 @@ import { fillShapeSelect } from "./shapes-ui";
 import { BoardView } from "./view";
 import { SnapMode } from "./snapping";
 import { SolvePanel } from "./solve-panel";
+import { initSpaceSwitch } from "./space-switch";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const STORAGE_KEY = "polypack.board";
@@ -386,9 +387,12 @@ $("snap-up").addEventListener("click", () => snap(0, 1));
 $("snap-down").addEventListener("click", () => snap(0, -1));
 
 // undo and redo also work when the focus is outside the canvas, but not while typing in a field
+const layout = document.querySelector<HTMLElement>("main.layout")!;
 document.addEventListener("keydown", (e) => {
   const t = e.target as HTMLElement;
   if (t.id === "board" || t.tagName === "INPUT" || t.tagName === "SELECT") return;
+  // another space is shown (space-switch.ts): the hidden polygon board is left as it is
+  if (layout.dataset.space) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
     e.preventDefault();
     if (e.shiftKey) board.redo();
@@ -602,3 +606,5 @@ window.addEventListener("hashchange", () => {
 view.fit();
 const solve = new SolvePanel(board, view, say);
 Object.assign((window as unknown as { polypack: object }).polypack, { solve });
+// the Space menu: the other spaces load on demand, and polygon in polygon is this board as it is
+initSpaceSwitch(() => view.fit(), say);

@@ -3,7 +3,7 @@
  * functions of what the server said and what the search found, like ../submit.ts.
  */
 import { SCORE_TIE, improvesOn } from "@polypack/geometry";
-import type { SpaceConfig, SpaceSubmission } from "@polypack/spaces";
+import type { SpaceSubmission } from "@polypack/spaces";
 import type { Decision, SubmitCheck } from "../submit";
 import { storedName } from "../submit";
 import type { SpaceLeaderRef } from "../state";
@@ -22,18 +22,9 @@ export function bestRef(info: SpaceProblemInfo): SpaceLeaderRef | null {
 
 /**
  * The configuration to start from: the better of the research record's and the site leader's
- * (the record on a tie), when there is one.
+ * (the record on a tie), when there is one. Shared with the board (packages/spaces/src/search/model.ts).
  */
-export function buildSpaceKnown(
-  info: SpaceProblemInfo,
-): { config: SpaceConfig; score: number; source: "certified" | "site" } | undefined {
-  const cert =
-    info.certified_config && info.certified ? { config: info.certified_config, score: info.certified.score } : null;
-  const site = info.site_config && info.site_best ? { config: info.site_config, score: info.site_best.score } : null;
-  if (site && (!cert || site.score < cert.score)) return { ...site, source: "site" };
-  if (cert) return { ...cert, source: "certified" };
-  return undefined;
-}
+export { buildSpaceKnown } from "@polypack/spaces/search";
 
 /** The better of two candidates (the first on a tie). */
 export function betterSpace(a: SpaceCandidate | null, b: SpaceCandidate | null): SpaceCandidate | null {

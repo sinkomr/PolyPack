@@ -2,6 +2,7 @@ import type { SpaceExhibit, SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
 import { safeHref } from "./atlas-model";
 import { el } from "./shapes-ui";
+import { isBoardSpace, spaceAddress } from "./space-address";
 import {
   ALL,
   PageState,
@@ -68,6 +69,8 @@ function card(
   }
   const links = el("p", "", "space-links");
   if (recordsHref) links.append(link(recordsHref, "Records", `: ${item.title}`, false));
+  // a space the board can show opens there, at the problem the board starts that space with
+  if (recordsHref && isBoardSpace(key)) links.append(link(`/${spaceAddress(key)}`, "Board", `: ${item.title}`, false));
   // addresses from the server are followed only when they are http(s) or a path of this site
   const viewer = safeHref(item.viewer);
   if (viewer) links.append(link(viewer, "Viewer", `: ${item.title}`, false));
@@ -168,6 +171,7 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
     th("By"),
     th("Entries"),
     th("Configuration"),
+    th("Board"),
   );
   $("space-head").replaceChildren(head);
   $("space-note").textContent = summaryText(rows);
@@ -205,6 +209,10 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
         conf.append(a);
       } else conf.textContent = "—";
       tr.append(conf);
+      const board = el("td");
+      if (isBoardSpace(space))
+        board.append(link(`/${spaceAddress(space, p.id)}`, "Open on the board", `: ${p.id}`, false));
+      tr.append(board);
       return tr;
     }),
   );
