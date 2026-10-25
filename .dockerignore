@@ -12,5 +12,6 @@ data/*
 !data/curved/records.json
 !data/sphere/records.json
 !data/torus/records.json
+!data/boundary/records.json
 **/node_modules
 **/dist

@@ -40,8 +40,9 @@ export interface Options {
   once: boolean;
   /**
    * The kinds of problem beyond Flat whose problems are also searched (--dimensions, or its first
-   * name --spaces: the API calls these kinds spaces), in the order of SPACE_NAMES; null when the
-   * option is not given: then no space problem is ever fetched or searched.
+   * name --spaces: the API calls these kinds spaces), in the order of SPACE_NAMES (surface, curved,
+   * sphere, torus, boundary; "all" names every one); null when the option is not given: then no
+   * space problem is ever fetched or searched.
    */
   spaces: SpaceName[] | null;
   /** --only-dimensions (or --only-spaces): the polygon work list is not used at all. */
@@ -88,13 +89,15 @@ Usage: node polypack-volunteer.mjs [options]
 
 Optional, off by default: the other kinds of problem (see ${DEFAULT_BASE}/dimensions.html).
 The work list above is Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
-at constant curvature), and surface, sphere and torus (2D on 3D: on the surface of a Platonic
-solid, on a whole sphere, on a flat torus). The API calls these kinds spaces.
+at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a Platonic solid,
+on a whole sphere, on a flat torus); and boundary (3D on 4D: unit balls and cubes on the boundary
+of a tesseract). The API calls these kinds spaces.
 Without these options the client never asks for them.
 
   --dimensions LIST        also search problems of these kinds: surface, curved, sphere, torus,
-                           comma-separated, or all; each next problem comes from the polygon work
-                           list or from the work list of these kinds with probability 1/2
+                           boundary, comma-separated, or all; each next problem comes from the
+                           polygon work list or from the work list of these kinds with
+                           probability 1/2
   --spaces LIST            the same as --dimensions (its earlier name)
   --only-dimensions        search only the kinds given with --dimensions
   --only-spaces            the same as --only-dimensions

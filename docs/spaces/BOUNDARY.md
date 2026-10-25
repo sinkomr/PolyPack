@@ -460,3 +460,113 @@ validations.
   improved configurations.
 - [SURFACE.md](SURFACE.md) section 2.3: the distance form for disks, which section 4.2 lifts one
   dimension up.
+
+## 12. On the site: the API and its rule
+
+The server lists the space as `boundary` (title "Polytope boundaries", viewer
+`/spaces/boundary.html`) through the same routes as the other spaces; the API page, `/api`,
+describes them all. Everything below goes through the spaces registry, `packages/spaces`.
+
+- `GET /api/spaces`: the space with its conventions and its 32 problems.
+- `GET /api/spaces/boundary/records`: every problem with `fields` `{polytope, piece, P}`, the
+  research record (`certified`: score_cert, display, status), the lower bound (`bound`), the site's
+  best entry and `best_score`. Boundary problems also carry `extra`:
+  `{nofold: {value, label}, fold_gain}`, the nofold value of section 6 with its source sentence, and
+  the record's fold_gain = 1 - score_float / nofold (section 7). Other spaces send no `extra`.
+- `GET /api/spaces/boundary/problems/boundary/tesseract/ball/9`: one problem, with
+  `certified_config` (the record's configuration at s = score_cert) and `site_config`.
+- `GET /api/spaces/targets?spaces=boundary`: the open problems with room above their bound, 28 of
+  the 32. Left out: P = 1, and the records that meet their bound (balls P = 2 at sqrt 2, cubes P = 8
+  at 1). The space's priorities add up to the same share as each other space's.
+- `POST /api/spaces/submit`: `{"space": "boundary", "id": ..., "config": {s, pieces}, "name": ...}`.
+- `GET /api/spaces/entries/<id>`: a kept entry, with its configuration.
+
+**The server's rule** for a configuration:
+
+1. The id must be a catalogue problem's, in its one written form (no leading zeros). P is at most
+   64 for the space and at most the catalogue's largest P (16) for a submission.
+2. The configuration must be well formed, or the answer is 400 with what is wrong: s a finite
+   number in (0, 1e4]; `pieces` a list; each piece `{cell, u}` with `cell` an integer from 0 to 7
+   and `u` three finite numbers, each at most 1e4 in absolute value; a cube may have `q`, four finite
+   numbers whose norm is within 1e-9 of 1; a ball has no `q`. Unknown fields are dropped.
+3. A wrong number of pieces, or an s below the problem's lower bound (less a relative 1e-9), is an
+   invalid packing: 422 with the reason, before any geometry.
+4. `validateBoundary` (section 4.5's engine validator) at the touching tolerance 1e-9, with at most
+   1024 chains of cells per piece: 422 with up to 20 reasons when it refuses.
+5. An entry below score_cert by more than a relative 1e-9 must also pass at tolerance 1e-11
+   ("beats the research record only within the float tolerance" otherwise). Every record passes it
+   at its stored s.
+6. It is kept only when it beats the problem's best (record or site leader) by more than a relative
+   1e-9, and it is stored as sent, with its known fields.
+
+A site entry is checked in floating point and is never called certified. The research records are
+the only certified values (section 4).
+
+[CALC] Work: every research record, and every one of 1,449 random valid single balls and cubes,
+needs at most 79 chains per piece, so the cap of 1024 refuses no real packing. Checks of 64 pieces
+took 0.1 to 20 ms on an Apple Silicon laptop: the validator's volume bound and in-cell edge tests
+refuse most bad input before any chain is enumerated. The server keeps the 32 records in about
+55 kB of heap.
+
+**Searches.** The board and the volunteer client run the same job, `runSpaceJob` in
+`packages/spaces/src/search`, under the method name "boundary compression search": the boundary
+package's `searchBoundary`, seeded, with an evaluation budget, from the best so far. The volunteer
+client searches the space only when asked to (`--dimensions boundary`, or `all`); see
+[VOLUNTEER.md](../VOLUNTEER.md).
+
+```
+curl -s --compressed https://polypack.fly.dev/api/spaces/boundary/records
+curl -s --compressed https://polypack.fly.dev/api/spaces/boundary/problems/boundary/tesseract/cube/12
+```
+
+## 13. On the website: the board and the viewer
+
+**On the board.** Choose **3D on 4D** under Dimension (its one kind, Polytope boundaries, is chosen
+with it), or follow a link such as `/#space=boundary/tesseract/ball/9`; `/#space=boundary` opens
+that problem. The Problem section offers Polytope (Tesseract), Piece (Balls, Cubes) and Pieces (P),
+each with the values the catalogue has. The stage shows the drawing (below), the panel the usual
+values (the edge s of the packing shown, the certified value, the status, the lower bound, the
+site best, whether the problem takes entries) and two of this kind:
+
+- **Without folding**: the nofold value of section 6, with its derivation under "Why".
+- **Folding gains**: 1 - best / nofold, where best is the problem's best edge (the research record
+  or a better site entry), to one decimal of a percent. For a record this is section 7's gain, to
+  within the 1e-12 of certification; a site entry that beats the record raises it.
+
+Run optimizer runs section 12's search in the browser, one complete search call per round, of
+300,000 energy evaluations (up to three times that while rounds get nowhere), about 1.5 to 2.2 s
+each at P = 16, and Submit sends a result that passes the server's rule
+and beats the problem's best by more than a relative 1e-9; the board's notes
+([BOARD.md](BOARD.md)) describe both. Pieces cannot be moved by hand.
+
+**The drawing** is the three.js view of `packages/view3d`, the same in both places, drawn only
+from the engine's parts (`pieceParts`), so what is seen is what the validator checks:
+
+- **Cells**: the 8 cells side by side, each in its own coordinates; a face's colour names the cell
+  glued to it there, so a piece that folds across a 2-face shows in two tiles in one colour.
+- **Net**: the cells as a net (the Dali cross); **Fold** turns each cell about its 2-face into the
+  fourth dimension, seen from a 4D eye, until at full fold it is the classic picture of the
+  tesseract, a small cube inside a large one.
+- **Slice**: the boundary cut by the hyperplane x_k = t, for an axis x, y, z or w and a position
+  t; inside, the slice is the surface of a cube with each piece's cross-section on it, and at
+  either end it is a whole cell. A strip of nine slices shows the sweep at once.
+
+Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and - to
+zoom, Page Up and Page Down to follow one piece (its cells and centre are named below the
+drawing), Escape to let it go, Home to reset. Choosing another P keeps the view, the fold and the
+slice; another piece opens a new drawing in the view last used. three.js (166 kB gzipped) is
+loaded only when a 3D on 4D problem is drawn. Without WebGL the drawing says so in a sentence; the
+values, the optimizer and Submit still work.
+
+**The viewer**, `/spaces/boundary.html`, is a page of the site built from
+`apps/web/spaces/boundary.html` and `apps/web/src/boundary-viewer.ts`. It reads the catalogue
+(`GET /api/spaces/boundary/records`) and opens any problem with the same picker, plus a Packing
+menu that shows either the research record or the site's best entry. It shows the drawing, the same
+values, and links to the problem on the board, to these notes, to the records table and to the
+problem as JSON. `?id=boundary/tesseract/cube/12` or `#id=boundary/tesseract/cube/12` opens a
+problem (the hash wins); the address follows the problem shown, and a problem that is not listed
+opens the nearest P, with a sentence saying so.
+
+**The dimensions page** files the space under 3D on 4D, with Records, Board, Viewer and Notes
+links. Its records table starts with the balls and adds the columns Without folding and Folding
+gains.

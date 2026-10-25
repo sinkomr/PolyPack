@@ -1,15 +1,20 @@
 /**
- * Problem ids of the spaces, parsed into their fields and written back. Pure: no package imports,
- * so that a page can use it without pulling in the validators.
+ * Problem ids of the spaces, parsed into their fields and written back. Pure, and it uses no
+ * validator, so that a page can use it without pulling them in. Boundary ids are read by the
+ * boundary package's own parser (parseBoundaryId), so that both always agree; a bundle of this
+ * file carries that parser and the few boundary modules it needs.
  *
- *  - surface/<solid>/<mode>/<N>/<P>   e.g. surface/cube/fold/4/12
- *  - curved/<K>/<N>/<M>/<P>           e.g. curved/-1/3/4/7, curved/1e-06/0/0/5
- *  - sphere/<N>/<P>                   e.g. sphere/4/12
- *  - torus/<family>/<N>/<P>           e.g. torus/hex/5/8
+ *  - surface/<solid>/<mode>/<N>/<P>    e.g. surface/cube/fold/4/12
+ *  - curved/<K>/<N>/<M>/<P>            e.g. curved/-1/3/4/7, curved/1e-06/0/0/5
+ *  - sphere/<N>/<P>                    e.g. sphere/4/12
+ *  - torus/<family>/<N>/<P>            e.g. torus/hex/5/8
+ *  - boundary/<polytope>/<piece>/<P>   e.g. boundary/tesseract/ball/9
  *
  * An id is accepted only in its one written form (no leading zeros, no "+", K written as the
  * research records write it), so that every problem has exactly one id.
  */
+import { PIECES, POLYTOPES, parseBoundaryId } from "@polypack/boundary";
+import type { PieceName, PolytopeName } from "@polypack/boundary";
 import { SpaceName, isSpaceName } from "./types";
 
 /** The solids of the surface space, in the order the catalogue lists them. */
@@ -17,11 +22,14 @@ export const SURFACE_SOLIDS = ["tetrahedron", "cube", "octahedron", "dodecahedro
 export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;
+/** The polytopes and pieces of the boundary space, in the order the catalogue lists them. */
+export const BOUNDARY_POLYTOPES: readonly PolytopeName[] = POLYTOPES;
+export const BOUNDARY_PIECES: readonly PieceName[] = PIECES;
 
 export interface ParsedSpaceId {
   space: SpaceName;
   id: string;
-  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P} */
+  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P} */
   fields: Record<string, string | number>;
   P: number;
 }
@@ -115,6 +123,13 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       if (!(TORUS_FAMILIES as readonly string[]).includes(family) || N === null || P === null) return bad(pattern);
       return { space, id, fields: { family, N, P }, P };
     }
+    case "boundary": {
+      const pattern = `boundary/<polytope>/<piece>/<P>, polytope ${POLYTOPES.join(" or ")}, piece ${PIECES.join(" or ")}`;
+      const parsed = parseBoundaryId(id);
+      // the package's sentence says which part is wrong, once the id has the right number of parts
+      if (typeof parsed === "string") return parts.length === 4 ? `${bad(pattern)}. ${parsed}` : bad(pattern);
+      return { space, id, fields: { polytope: parsed.polytope, piece: parsed.piece, P: parsed.P }, P: parsed.P };
+    }
   }
 }
 
@@ -135,5 +150,8 @@ export function formatSpaceId(space: SpaceName, fields: Record<string, string | 
       return `sphere/${fields.N}/${fields.P}`;
     case "torus":
       return `torus/${fields.family}/${fields.N}/${fields.P}`;
+    case "boundary":
+      // as formatBoundaryId writes it, but without its throw on fields that name no problem
+      return `boundary/${fields.polytope}/${fields.piece}/${fields.P}`;
   }
 }

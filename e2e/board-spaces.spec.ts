@@ -9,7 +9,7 @@ import { openProblem } from "./helpers";
 // research records of data/<space>/records.json and checks submissions; the board draws a
 // problem, runs the space's search in a Web Worker and submits a better packing.
 
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary"];
 
 declare const polypack: {
   board: { toConfig(): unknown };
@@ -67,7 +67,8 @@ test("the Dimension and Kind menus switch the board to each kind and back to the
     // the polygon board is hidden, the space's drawing and values are shown
     await expect(page.locator("#board")).toBeHidden();
     await expect(page.locator("#solve-panel")).toBeHidden();
-    await expect(page.locator(".space-draw > canvas, .space-draw > svg")).toBeVisible();
+    // the 2D kinds draw on a canvas or in an svg; 3D on 4D in the three.js view (e2e/board-boundary.spec.ts)
+    await expect(page.locator(".space-draw > canvas, .space-draw > svg, .pp3 canvas")).toBeVisible();
     const api = (await (await page.request.get(`/api/spaces/${space}/problems/${id}`)).json()) as SpaceProblemResponse;
     const facts = page.locator("#space-facts");
     await expect(facts).toContainText(`Certified value${api.certified!.display}`);
@@ -98,19 +99,14 @@ test("the Dimension menu lists every dimension, the ones to come disabled, and K
   await openProblem(page, 4, 4, 5);
   const dimension = page.locator("#dimension-select");
   const kind = page.locator("#kind-select");
-  await expect(dimension.locator("option")).toHaveText([
-    "2D in 2D",
-    "2D on 3D",
-    "3D in 3D (coming soon)",
-    "3D on 4D (coming soon)",
-  ]);
+  await expect(dimension.locator("option")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D (coming soon)", "3D on 4D"]);
   // a dimension with no available family is listed but cannot be chosen
   for (const d of DIMENSIONS) {
     const option = dimension.locator(`option[value="${d.id}"]`);
     if (d.families.some((f) => f.available)) await expect(option).toBeEnabled();
     else await expect(option).toBeDisabled();
   }
-  await expect(dimension.locator("option[disabled]")).toHaveCount(2);
+  await expect(dimension.locator("option[disabled]")).toHaveCount(1);
   await expect(kind.locator("option")).toHaveText(["Flat", "Curved"]);
   await menusShow(page, "polygon");
 

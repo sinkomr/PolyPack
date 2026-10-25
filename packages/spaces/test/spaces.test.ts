@@ -54,7 +54,7 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544);
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -95,6 +95,8 @@ describe("problem ids", () => {
       ["sphere", "sphere/4"],
       ["torus", "torus/square/0/2"],
       ["torus", "torus/sq/0/2/1"],
+      ["boundary", "boundary/tesseract/ball/09"],
+      ["boundary", "boundary/tesseract/sphere/9"],
     ];
     for (const [space, id] of bad) expect(typeof parseSpaceId(space, id), id).toBe("string");
     expect(parseSpaceId("curved", "curved/0.000001/0/0/2")).toMatch(/written 1e-06/);
@@ -108,9 +110,9 @@ describe("problem ids", () => {
 });
 
 describe("the catalogues", () => {
-  it("load every record of the four files, none left out", () => {
+  it("load every record of the five files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32 });
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -123,6 +125,7 @@ describe("the catalogues", () => {
     const closed = (s: SpaceName) => cat(s).problems.filter((p) => !acceptsSubmissions(p));
     expect(closed("surface")).toEqual([]);
     expect(closed("torus")).toEqual([]);
+    expect(closed("boundary")).toEqual([]);
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
       "sphere/0/24",
@@ -164,6 +167,9 @@ describe("the catalogues", () => {
     const t = configOf(problem("torus", "torus/free/5/8"));
     expect(Object.keys(t)).toEqual(["lattice", "poses"]);
     expect(Object.keys(t.lattice)).toEqual(["b1", "b2"]);
+    const b = configOf(problem("boundary", "boundary/tesseract/cube/12"));
+    expect(Object.keys(b)).toEqual(["s", "pieces"]);
+    expect(Object.keys(b.pieces[0])).toEqual(["cell", "u"]);
   });
 
   it("summarise a problem with the smaller of the certified and the site value", () => {
@@ -221,7 +227,9 @@ describe("beating a research record needs the strict tolerance", () => {
         ? { size: c.size * f, pieces: c.pieces.map((q: any) => ({ ...q, x: q.x * f, y: q.y * f })) }
         : space === "sphere"
           ? { rho: c.rho * f, pieces: c.pieces }
-          : {
+          : space === "boundary"
+            ? { s: c.s * f, pieces: c.pieces.map((q: any) => ({ ...q, u: q.u.map((x: number) => x * f) })) }
+            : {
               lattice:
                 "L" in c.lattice
                   ? { L: c.lattice.L * f }
@@ -276,7 +284,7 @@ describe("every research record's own configuration is valid in floats", () => {
         if (!v.valid) failures.push(`${p.id}: ${v.reasons.join("; ")}`);
         else if (!(v.score! <= p.certified!.score))
           failures.push(`${p.id}: size ${v.score} above score_cert ${p.certified!.score}`);
-        if (space === "curved" || space === "sphere") expect(v.score).toBe(p.certified!.score);
+        if (space === "curved" || space === "sphere" || space === "boundary") expect(v.score).toBe(p.certified!.score);
       }
       expect(failures).toEqual([]);
     });

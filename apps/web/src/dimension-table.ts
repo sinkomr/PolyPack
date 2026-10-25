@@ -115,14 +115,16 @@ export const DIMENSIONS: readonly Dimension[] = [
   {
     id: "3-on-4",
     label: "3D on 4D",
-    summary: "Solids on the boundary of a 4D polytope, starting with the tesseract.",
+    summary:
+      "Solids on the boundary of a 4D polytope, with no container. The boundary is a closed 3D space made of solid cells, as the surface of a solid is made of flat faces.",
     families: [
       {
         space: "boundary",
         name: "Polytope boundaries",
         short: "Boundaries",
-        summary: "Equal solids on the boundary of a 4D polytope, starting with the tesseract, the 4D cube.",
-        available: false,
+        summary:
+          "Unit balls or cubes on the boundary of a 4D polytope, starting with the tesseract, the 4D cube: its boundary is eight cubes glued face to face.",
+        available: true,
       },
     ],
   },

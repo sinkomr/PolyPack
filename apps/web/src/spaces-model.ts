@@ -52,6 +52,13 @@ const STATUS: Record<CertifiedStatus, string> = {
 export const statusLabel = (s: CertifiedStatus | null): string => (s ? STATUS[s] : "—");
 
 /**
+ * How a kind's research records are proven valid: the 2D kinds' certifiers use interval
+ * arithmetic, the 3D on 4D certifier exact rational arithmetic (docs/spaces/BOUNDARY.md 4).
+ */
+export const certifiedBy = (space: SpaceName): string =>
+  space === "boundary" ? "exact rational arithmetic" : "interval arithmetic";
+
+/**
  * A lower bound's label as the page shows it: the research tags that say what kind of claim it is
  * ([CALC], [EST], "CALC from EST theorem:") stay in the API and the notes, and the page keeps what
  * the bound rests on ("area bound; [CALC]" reads "area bound").
@@ -179,6 +186,27 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       start: "sq",
     },
     pieceField("0", 2),
+  ],
+  // boundary/<polytope>/<piece>/<P>
+  boundary: [
+    {
+      key: "polytope",
+      at: 1,
+      label: "Polytope",
+      option: capital,
+      cell: (v) => v,
+      order: ["tesseract"],
+      start: "tesseract",
+    },
+    {
+      key: "piece",
+      at: 2,
+      label: "Piece",
+      option: (v) => capital(plural(v)),
+      cell: (v) => v,
+      order: ["ball", "cube"],
+      start: "ball",
+    },
   ],
 };
 

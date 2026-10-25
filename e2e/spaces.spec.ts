@@ -10,6 +10,7 @@ import type {
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { SPACE_VIEWERS } from "../apps/web/scripts/space-viewers";
+import { foldGain, gainText, plainNofoldLabel } from "../apps/web/src/boundary-model";
 import { DIMENSIONS, familyOfSpace } from "../apps/web/src/dimension-table";
 import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
 
@@ -18,7 +19,7 @@ import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
 // the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary"];
 
 async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
   const r = await request.get(url);
@@ -46,12 +47,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
 
   // one section per dimension, its kinds in the order of the table; the ones to come say so
   const sections = page.locator("#dimension-groups > section");
-  await expect(sections.locator("h3")).toHaveText([
-    "2D in 2D",
-    "2D on 3D",
-    "3D in 3D (coming soon)",
-    "3D on 4D (coming soon)",
-  ]);
+  await expect(sections.locator("h3")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D (coming soon)", "3D on 4D"]);
   for (const d of DIMENSIONS) {
     const cards = page.locator(`#dimension-groups > section[data-dimension="${d.id}"] li.space-card`);
     await expect(cards.locator("h4")).toHaveText(d.families.map((f) => f.name));
@@ -63,6 +59,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
   await expect(flat.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/");
 
   for (const s of api.spaces) {
+    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts)
     expect(s.viewer).toBe(`/spaces/${s.space}.html`);
     const card = page.locator(`#dimension-groups li[data-space="${s.space}"]`);
     const { dimension, family } = familyOfSpace(s.space)!;
@@ -82,7 +79,9 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
   }
 
   const main = page.getByRole("main");
-  await expect(main).toContainText("proven valid with interval arithmetic");
+  await expect(main).toContainText(
+    "proven valid with interval arithmetic, or for 3D on 4D with exact rational arithmetic",
+  );
   await expect(main.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", "/api");
   await expect(main.getByRole("link", { name: "volunteer client" })).toHaveAttribute("href", "/volunteer.html");
   await expect(page.locator("#space-head")).toContainText("proven valid by interval arithmetic");
@@ -161,6 +160,84 @@ test("a filter narrows the table and stays in the address", async ({ page, reque
   expect(problem.certified_config).not.toBeNull();
 });
 
+test("3D on 4D has its card with Records, Board, Viewer and Notes, and its records show what folding gains", async ({
+  page,
+  request,
+}) => {
+  // the records change as better packings are certified: their values are read here, never written
+  const data = await getJson<SpaceRecordsResponse>(request, "/api/spaces/boundary/records");
+  expect(data.problems.length).toBeGreaterThan(0);
+  const balls = data.problems.filter((p) => p.fields.piece === "ball");
+  const gain = (id: string) => {
+    const p = data.problems.find((q) => q.id === id)!;
+    return gainText(foldGain(p.best_score, p.extra!.nofold!.value));
+  };
+  await page.goto("/dimensions.html");
+  const section = page.locator('#dimension-groups > section[data-dimension="3-on-4"]');
+  await expect(section.locator("h3")).toHaveText("3D on 4D");
+  const card = section.locator('li[data-space="boundary"]');
+  await expect(card).not.toHaveClass(/soon/);
+  await expect(card.getByRole("heading", { name: "Polytope boundaries" })).toBeVisible();
+  await expect(card).toContainText(String(data.problems.length));
+  await expect(card.locator(".space-links a")).toHaveText([
+    "Records: Polytope boundaries",
+    "Board: Polytope boundaries",
+    "Viewer: Polytope boundaries",
+    "Notes: Polytope boundaries (GitHub)",
+  ]);
+  await expect(card.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/#space=boundary");
+  await expect(card.getByRole("link", { name: /^Viewer/ })).toHaveAttribute("href", "/spaces/boundary.html");
+  await expect(card.getByRole("link", { name: /^Notes/ })).toHaveAttribute(
+    "href",
+    "https://github.com/sinkomr/PolyPack/blob/main/docs/spaces/BOUNDARY.md",
+  );
+
+  // its Records link shows its table: balls first, with the two columns of this kind
+  await card.getByRole("link", { name: /^Records/ }).click();
+  await expect(page.locator('#space-pick input[value="boundary"]')).toBeChecked();
+  await expect(page.locator("#space-pick")).toContainText("Boundaries");
+  await expect(page.locator("#filter-polytope option")).toHaveText(["All", "Tesseract"]);
+  await expect(page.locator("#filter-piece option")).toHaveText(["All", "Balls", "Cubes"]);
+  await expect(page.locator("#filter-piece")).toHaveValue("ball");
+  await expect(rows(page)).toHaveCount(balls.length);
+  const head = page.locator("#space-head th");
+  await expect(head).toHaveText([
+    "P",
+    "Certified valueproven valid by exact rational arithmetic",
+    "Status",
+    "Lower bound",
+    "Without foldingevery piece inside one cell",
+    "Folding gainsbest edge against no folding",
+    "Site bestsite entry, checked by the server",
+    "By",
+    "Entries",
+    "Configuration",
+    "Board",
+  ]);
+  const nine = page.locator('#space-rows tr[data-id="boundary/tesseract/ball/9"] td');
+  await expect(nine.nth(0)).toHaveText("9");
+  const ninth = data.problems.find((p) => p.id === "boundary/tesseract/ball/9")!;
+  await expect(nine.nth(1)).toHaveText(ninth.certified!.display);
+  // two balls in one cell without folding: 2 + 2 / sqrt 3 (docs/spaces/BOUNDARY.md 6)
+  await expect(nine.nth(4)).toContainText((2 + 2 / Math.sqrt(3)).toFixed(6));
+  await expect(nine.nth(5)).toHaveText(gain(ninth.id));
+  await nine.nth(4).locator("summary").click();
+  await expect(nine.nth(4)).toContainText(plainNofoldLabel(ninth.extra!.nofold!.label));
+
+  // the cubes, and both pieces with a column naming the piece
+  await page.selectOption("#filter-piece", "cube");
+  for (const id of ["boundary/tesseract/cube/8", "boundary/tesseract/cube/9"])
+    await expect(page.locator(`#space-rows tr[data-id="${id}"] td`).nth(5)).toHaveText(gain(id));
+  await page.selectOption("#filter-piece", "all");
+  await expect(rows(page)).toHaveCount(data.problems.length);
+  await expect(head.first()).toHaveText("Piece");
+  await expect(page).toHaveURL(/#space=boundary&polytope=tesseract&piece=all$/);
+  // the other kinds keep their columns
+  await page.locator('#space-pick input[value="sphere"]').check();
+  await expect(page.locator("#space-head")).not.toContainText("Without folding");
+  await expect(page.locator("#space-head")).toContainText("proven valid by interval arithmetic");
+});
+
 test("the viewers are served at /spaces/<name>.html as they are in their packages", async ({ request }) => {
   for (const [published, source] of Object.entries(SPACE_VIEWERS)) {
     const r = await request.get(`/${published}`);
@@ -195,7 +272,10 @@ test("without the server the dimensions page still lists each dimension and its 
     DIMENSIONS.flatMap((d) => d.families.map((f) => f.name)),
   );
   // the kinds the board can show are not drawn as coming soon, and still open on the board
-  await expect(page.locator("#dimension-groups li.soon")).toHaveCount(2);
+  await expect(page.locator("#dimension-groups li.soon")).toHaveCount(1);
+  await expect(
+    page.locator('#dimension-groups li[data-space="boundary"]').getByRole("link", { name: /^Board/ }),
+  ).toHaveAttribute("href", "/#space=boundary");
   await expect(
     page.locator('#dimension-groups li[data-space="torus"]').getByRole("link", { name: /^Board/ }),
   ).toHaveAttribute("href", "/#space=torus");
@@ -205,7 +285,12 @@ test("without the server the dimensions page still lists each dimension and its 
 for (const scheme of ["light", "dark"] as const) {
   test(`the dimensions page has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
-    for (const hash of ["", "#space=curved&K=1&N=all&M=all", "#space=torus&family=all&N=0"]) {
+    for (const hash of [
+      "",
+      "#space=curved&K=1&N=all&M=all",
+      "#space=torus&family=all&N=0",
+      "#space=boundary&polytope=tesseract&piece=all",
+    ]) {
       await page.goto("about:blank");
       await page.goto(`/dimensions.html${hash}`);
       await expect(rows(page).first()).toBeVisible();

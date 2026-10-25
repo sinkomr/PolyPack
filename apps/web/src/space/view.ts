@@ -3,17 +3,25 @@
  * solid or net, ...), a button that resets the view, and keyboard turning (arrow keys, Shift for
  * larger steps) where the view turns. It redraws when its box changes size or the colour scheme
  * changes. Used by the board's space mode, and meant for any page that shows such a packing.
+ *
+ * The 2D kinds draw with a SpaceRenderer (render/*.ts) under the toolbar built here. 3D on 4D
+ * (boundary) draws with the three.js views of packages/view3d, which bring their own toolbar and
+ * controls (render/boundary.ts).
  */
 import type { SpaceConfig } from "@polypack/spaces";
 import type { SearchProblem } from "@polypack/spaces/search";
+import { mountBoundaryView } from "./render/boundary";
 import type { SpaceRenderer } from "./render/common";
 import { curvedRenderer } from "./render/curved";
 import { sphereRenderer } from "./render/sphere";
 import { surfaceRenderer } from "./render/surface";
 import { torusRenderer } from "./render/torus";
 
+/** The problems drawn by a SpaceRenderer: the 2D kinds. */
+export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" }>;
+
 /** The renderer of a problem's space. */
-export function createRenderer(p: SearchProblem): SpaceRenderer {
+export function createRenderer(p: FlatDrawnProblem): SpaceRenderer {
   switch (p.space) {
     case "surface":
       return surfaceRenderer(p.solid, p.N, p.P, p.mode);
@@ -27,9 +35,15 @@ export function createRenderer(p: SearchProblem): SpaceRenderer {
 }
 
 export interface SpaceView {
-  readonly renderer: SpaceRenderer;
+  /** The 2D kinds' renderer; absent for the 3D views. */
+  readonly renderer?: SpaceRenderer;
   /** Draws a configuration of the problem; null clears the drawing. */
   show(config: SpaceConfig | null): void;
+  /**
+   * True when this view can draw another problem's configurations as well (3D on 4D: the same
+   * polytope and piece), so that the page keeps it, with the user's view, for that problem.
+   */
+  canShow?(p: SearchProblem): boolean;
   destroy(): void;
 }
 
@@ -40,6 +54,7 @@ const STEP = (5 * Math.PI) / 180;
  * `label` names the toolbar for screen readers.
  */
 export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Drawing"): SpaceView {
+  if (p.space === "boundary") return mountBoundaryView(host, p, label);
   const renderer = createRenderer(p);
   const root = document.createElement("div");
   root.className = "space-view";

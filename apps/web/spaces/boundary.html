@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — 3D on 4D viewer</title>
+    <meta
+      name="description"
+      content="Unit balls and cubes packed on the boundary of a tesseract, drawn as its eight cells, as a net that folds into the fourth dimension, and in slices."
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html">Records</a>
+        <a href="/dimensions.html">Dimensions</a>
+        <a href="/volunteer.html">Volunteer</a>
+        <a href="/api">API</a>
+        <a href="/tighter.html">Tighter</a>
+      </nav>
+    </header>
+    <!-- data-dimension and data-space: the board's 3D on 4D layout (style.css) -->
+    <main class="layout viewer-3d" data-dimension="3-on-4" data-space="boundary">
+      <section class="stage space-stage" aria-label="Drawing">
+        <div id="viewer-host" class="space-view-host"></div>
+        <div id="viewer-busy" class="space-busy" hidden>
+          <p id="viewer-busy-text"></p>
+          <button id="viewer-retry" type="button" hidden>Try again</button>
+        </div>
+        <p id="viewer-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <aside class="panel" aria-label="Problem and values">
+        <section aria-labelledby="viewer-title">
+          <h2 id="viewer-title" class="title">3D on 4D viewer</h2>
+          <p class="note">
+            P unit balls (radius 1) or unit cubes (edge 1) on the boundary of a tesseract, the 4D cube. Its boundary is
+            eight solid cubes, its cells, glued face to face. A piece may cross a square face into the next cell, but no
+            edge of the tesseract may pass through it. The score is the tesseract's edge s; smaller is better.
+          </p>
+        </section>
+
+        <section aria-labelledby="viewer-problem-heading">
+          <h2 id="viewer-problem-heading">Problem</h2>
+          <div id="viewer-fields"></div>
+          <div class="row">
+            <label for="viewer-packing">Packing</label>
+            <select id="viewer-packing" autocomplete="off">
+              <option value="certified">Research record</option>
+              <option value="site">Site best</option>
+            </select>
+          </div>
+          <p id="viewer-problem-note" class="note"></p>
+        </section>
+
+        <section aria-labelledby="viewer-values-heading">
+          <h2 id="viewer-values-heading">Values</h2>
+          <dl class="stats">
+            <dt>Edge s</dt>
+            <dd id="viewer-score" class="big">—</dd>
+            <dt>Shown</dt>
+            <dd id="viewer-shown">—</dd>
+          </dl>
+          <dl id="viewer-facts" class="stats"></dl>
+          <p class="note">
+            The certified value is proven valid with exact rational arithmetic. The site best is an entry sent to this
+            site and checked by the server in floating point.
+          </p>
+        </section>
+
+        <section aria-labelledby="viewer-links-heading">
+          <h2 id="viewer-links-heading">Open</h2>
+          <ul class="viewer-links">
+            <li>
+              <a id="viewer-board" href="/#space=boundary">On the board</a>: optimise it in your browser and submit
+            </li>
+            <li>
+              <a
+                id="viewer-docs"
+                href="https://github.com/sinkomr/PolyPack/blob/main/docs/spaces/BOUNDARY.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Notes on this kind</a
+              >: the rules, the certificates and the sources
+            </li>
+            <li><a id="viewer-records" href="/dimensions.html#space=boundary">All its records</a></li>
+            <li><a id="viewer-json" href="#" download>The problem as JSON</a></li>
+          </ul>
+        </section>
+
+        <details>
+          <summary>How to read the drawing</summary>
+          <ul class="help">
+            <li>
+              <b>Cells</b> shows the eight cubes of the boundary side by side, each in its own coordinates. A face's
+              colour names the cell glued to it there.
+            </li>
+            <li>
+              <b>Net</b> lays the cells out in one piece, a cross of cubes. <b>Fold</b> folds it up into the fourth
+              dimension, seen from a 4D eye: fully folded, it is the classic picture of the tesseract, a small cube
+              inside a large one.
+            </li>
+            <li>
+              <b>Slice</b> cuts the tesseract with a hyperplane across one axis. Inside, the slice of the boundary is
+              the surface of a cube, and each piece shows its cross-section on it; at either end the slice is a whole
+              cell. Move the position to sweep through, or show a strip of nine slices.
+            </li>
+            <li>
+              Drag to turn the drawing, or focus it and use the arrow keys (Shift for larger steps), + and − to zoom,
+              Page Up and Page Down to follow one piece, Home to reset. Point at or tap a piece to see where it lies.
+            </li>
+            <li>The address names the problem shown, so a link reopens it.</li>
+          </ul>
+        </details>
+      </aside>
+    </main>
+    <script type="module" src="/src/boundary-viewer.ts"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TESTS = [
+    "boundary/test_boundary.py",
     "curved/test_certify.py",
     "curved/test_bounds.py",
     "polyhedra/test_certify.py",

@@ -20,7 +20,14 @@
  *    seed and started from the best so far; the hop count is the evaluation budget. The search
  *    polls the gate inside each restart and hop too (its shouldStop option);
  *  - sphere and torus: searchSphere and searchTorus of their packages (penalty relaxation, a
- *    tight-size bisection with the float validator, basin hopping), budgeted by evaluations.
+ *    tight-size bisection with the float validator, basin hopping), budgeted by evaluations;
+ *  - boundary: searchBoundary of packages/boundary (penalty relaxation in each piece's cell,
+ *    compression of the edge s, polish, hops), budgeted by its energy evaluations, one call per
+ *    job. Its time is the gate's (active seconds, polled through shouldStop at every evaluation),
+ *    so it gets no time_s of its own, which would count pauses. One call is a whole search (the
+ *    start compressed and polished, then random starts and hops); a fresh job gets no start. It
+ *    ends "bound" when its best reaches its own floor (engine.ts then stops the problem). Its word
+ *    tables cost about 50 ms once per thread.
  * Surface problems in the nofold mode are planar problems and run on the polygon solver instead
  * (nofold.ts has the conversion); they never reach this file.
  *
@@ -28,6 +35,7 @@
  * bound and certified size); the start, when it passes, is a candidate too, so a job never returns
  * worse than what it was given.
  */
+import { type BoundaryConfig, searchBoundary } from "@polypack/boundary";
 import { solve as solveCurved } from "@polypack/curved";
 import { searchSphere } from "@polypack/sphere";
 import { getSolid } from "@polypack/surface";
@@ -92,6 +100,16 @@ export interface SpaceControl {
 
 /** Seconds the surface fold search's final stage may run past the job's budget. */
 export const SURFACE_FINAL_OVERRUN = 1.5;
+
+/**
+ * Evaluations of one boundary job when its caller sets the size by evaluations, as the board's
+ * rounds do: [CALC] 300,000 took 1.5 to 2.2 s on balls and cubes of P = 16 on an Apple Silicon
+ * laptop (about 140,000 to 190,000 a second), as long as a sphere or torus round of 10,000; the
+ * search's builder reports that most research values are reached within 300,000 (balls P = 6 and
+ * 9 need 0.6 to 9 million). A job's own budget.evals overrides it; the volunteer client sizes its
+ * jobs by time instead.
+ */
+export const BOUNDARY_ROUND_EVALS = 300_000;
 
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
@@ -288,6 +306,19 @@ function runEngine(
       const s = 1 / r.lam;
       const config = { s, pieces: r.poses.map((q) => ({ face: q.face, x: q.x * s, y: q.y * s, theta: q.theta })) };
       return { config, evaluations: r.compressions, termination: r.compressions >= cap ? "evals" : "done" };
+    }
+    case "boundary": {
+      const r = searchBoundary(
+        { polytope: p.polytope, piece: p.piece, P: p.P },
+        {
+          seed: job.seed,
+          // a fresh job builds its own starts; the given start is still a candidate (runSpaceJob)
+          start: job.kind === "fresh" ? undefined : (start as unknown as BoundaryConfig | undefined),
+          budget: { evals: cap },
+          shouldStop,
+        },
+      );
+      return { config: r.config as unknown as SpaceConfig | null, evaluations: r.evals, termination: r.ended };
     }
   }
 }

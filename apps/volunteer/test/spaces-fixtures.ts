@@ -52,6 +52,11 @@ export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold"
       const k = mode === "fold" ? f : 1;
       return { s: (c.s as number) * f, pieces: pieces.map((q) => ({ ...q, x: q.x * k, y: q.y * k })) };
     }
+    case "boundary": {
+      // the tesseract and the centres scale together, which is the same as smaller pieces
+      const pieces = c.pieces as { cell: number; u: number[]; q?: number[] }[];
+      return { s: (c.s as number) * f, pieces: pieces.map((q) => ({ ...q, u: q.u.map((x) => x * f) })) };
+    }
   }
   throw new Error(space);
 }

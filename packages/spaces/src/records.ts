@@ -3,8 +3,16 @@
  * site needs, one compact entry per problem, with the configuration kept as JSON text. Pure: the
  * caller reads the file (see load.ts) and passes the parsed JSON, which can then be dropped.
  */
-import { ParsedSpaceId, SURFACE_MODES, SURFACE_SOLIDS, TORUS_FAMILIES, parseSpaceId } from "./ids";
-import { CertifiedStatus, CertifiedValue, SpaceName, SpaceProblemSummary, SiteBest } from "./types";
+import {
+  BOUNDARY_PIECES,
+  BOUNDARY_POLYTOPES,
+  ParsedSpaceId,
+  SURFACE_MODES,
+  SURFACE_SOLIDS,
+  TORUS_FAMILIES,
+  parseSpaceId,
+} from "./ids";
+import { CertifiedStatus, CertifiedValue, SiteBest, SpaceName, SpaceProblemExtra, SpaceProblemSummary } from "./types";
 import { parseSpaceConfig } from "./validate";
 
 /** One problem of a catalogue. */
@@ -22,10 +30,13 @@ export interface SpaceProblemEntry {
   closed_reason: string | null;
   /**
    * The research record's configuration in the space's format, as JSON text; null when there is
-   * none (infeasible). Its stated size is score_cert for curved and sphere, and score_float for
-   * surface and torus, whose certificates shrink the pieces instead (score_cert = size / (1 - eps)).
+   * none (infeasible). Its stated size is score_cert for curved, sphere and boundary, and
+   * score_float for surface and torus, whose certificates shrink the pieces instead
+   * (score_cert = size / (1 - eps)).
    */
   config: string | null;
+  /** The nofold comparison (boundary only); absent for the other spaces. */
+  extra?: SpaceProblemExtra;
 }
 
 export interface SpaceCatalogue {
@@ -52,6 +63,7 @@ function recordConfig(space: SpaceName, r: Rec): unknown {
       return { s: r.s, pieces: r.pieces };
     case "curved":
     case "sphere":
+    case "boundary":
       return r.config;
     case "torus":
       return r.configuration;
@@ -69,7 +81,24 @@ function recordFields(space: SpaceName, r: Rec): Record<string, unknown> {
       return { N: r.N, P: r.P };
     case "torus":
       return { family: r.family, N: r.N, P: r.P };
+    case "boundary":
+      return { polytope: r.polytope, piece: r.piece, P: r.P };
   }
+}
+
+/**
+ * The record's nofold comparison (boundary): `nofold` {value, source} and `fold_gain`, each kept
+ * only when it is well formed; undefined for the other spaces.
+ */
+function extraOf(space: SpaceName, r: Rec): SpaceProblemExtra | undefined {
+  if (space !== "boundary") return undefined;
+  const n = isObject(r.nofold) ? r.nofold : null;
+  const value = n && typeof n.value === "number" && Number.isFinite(n.value) && n.value > 0 ? n.value : null;
+  const gain = typeof r.fold_gain === "number" && Number.isFinite(r.fold_gain) ? r.fold_gain : null;
+  return {
+    nofold: value === null ? null : { value, label: typeof n!.source === "string" ? n!.source : "" },
+    fold_gain: gain,
+  };
 }
 
 /** The bound as {value, label}: from `value` (surface, sphere, torus) or `lower` (curved). */
@@ -103,13 +132,20 @@ function closedReason(space: SpaceName, r: Rec, status: CertifiedStatus, id: Par
   return null;
 }
 
-const ORDER: Record<string, readonly string[]> = { solid: SURFACE_SOLIDS, mode: SURFACE_MODES, family: TORUS_FAMILIES };
+const ORDER: Record<string, readonly string[]> = {
+  solid: SURFACE_SOLIDS,
+  mode: SURFACE_MODES,
+  family: TORUS_FAMILIES,
+  polytope: BOUNDARY_POLYTOPES,
+  piece: BOUNDARY_PIECES,
+};
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
   surface: ["solid", "mode", "N", "P"],
   curved: ["K", "N", "M", "P"],
   sphere: ["N", "P"],
   torus: ["family", "N", "P"],
+  boundary: ["polytope", "piece", "P"],
 };
 
 export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry): number {
@@ -169,6 +205,7 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
       certified = { score: r.score_cert, display: r.display, status };
       config = JSON.stringify(parsed.config);
     }
+    const extra = extraOf(space, r);
     problems.push({
       space,
       id: id.id,
@@ -179,6 +216,7 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
       bound: boundOf(space, r.bound),
       closed_reason: closedReason(space, r, status, id),
       config,
+      ...(extra ? { extra } : {}),
     });
   }
   problems.sort(compareSpaceProblems);
@@ -223,5 +261,6 @@ export function spaceProblemSummary(p: SpaceProblemEntry, site: SiteBest | null)
     best_score: values.length ? Math.min(...values) : null,
     accepts_submissions: open,
     closed_reason: p.closed_reason,
+    ...(p.extra ? { extra: p.extra } : {}),
   };
 }

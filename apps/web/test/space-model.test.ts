@@ -6,12 +6,14 @@
 import { SCORE_TIE } from "@polypack/geometry";
 import { type SpaceName, spaceProblemSummary, validateSpaceSubmission } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
-import { mixSeed, parseSearchProblem } from "@polypack/spaces/search";
+import { BOUNDARY_ROUND_EVALS, mixSeed, parseSearchProblem } from "@polypack/spaces/search";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { gainText } from "../src/boundary-model";
 import { BOARD_SPACES, parseSpaceAddress, spaceAddress } from "../src/space-address";
 import {
   DEFAULT_PROBLEM,
+  EVALS_MAX,
   FRESH_EVALS,
   GROW_LIMIT,
   ROUND_EVALS,
@@ -344,5 +346,85 @@ describe("the server's answer to a submission", () => {
       certified: p.certified!.score,
     });
     expect(v.valid).toBe(true);
+  });
+});
+
+describe("3D on 4D on the board", () => {
+  const id = DEFAULT_PROBLEM.boundary;
+
+  it("reads a boundary problem with its nofold comparison, and lists it with the usual values", () => {
+    const p = readSpaceProblem("boundary", id, answer("boundary", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p.search).toEqual({ space: "boundary", id, P: 9, polytope: "tesseract", piece: "ball" });
+    expect(p.best?.source).toBe("certified");
+    expect(p.extra?.nofold?.value).toBeCloseTo(2 + 2 / Math.sqrt(3), 12);
+    expect(scoreLabel(p.search)).toBe("Tesseract edge s");
+    expect(problemFacts(p).map((f) => f.label)).toEqual([
+      "Certified value",
+      "Status",
+      "Lower bound",
+      "Without folding",
+      "Folding gains",
+      "Site best",
+      "Entries",
+    ]);
+    const facts = Object.fromEntries(problemFacts(p).map((f) => [f.label, f]));
+    expect(facts["Without folding"]).toMatchObject({ value: "3.154701", details: true });
+    expect(facts["Folding gains"]).toMatchObject({
+      value: gainText(1 - p.best_score! / p.extra!.nofold!.value),
+      note: "shorter edge than without folding",
+    });
+    // the shown record passes the rule the page applies before it offers a result
+    const v = validateSpaceSubmission("boundary", id, p.best!.config, {
+      bound: p.bound!.value,
+      certified: p.certified!.score,
+    });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
+
+    // the other kinds have no such values; a malformed extra is left out
+    const torus = readSpaceProblem("torus", "torus/sq/5/7", answer("torus", "torus/sq/5/7"));
+    if (typeof torus === "string") throw new Error(torus);
+    expect(torus.extra).toBeNull();
+    const odd = readSpaceProblem("boundary", id, { ...answer("boundary", id), extra: { nofold: "x" } });
+    if (typeof odd === "string") throw new Error(odd);
+    expect(odd.extra).toBeNull();
+    expect(Object.fromEntries(problemFacts(odd).map((f) => [f.label, f.value]))["Folding gains"]).toBe("—");
+  });
+
+  it("runs the boundary search in rounds of its own size", () => {
+    const p = parseSearchProblem(id)!;
+    const rule = { bound: 1.6, certified: 2.2 };
+    const start = { s: 2.3, pieces: [] };
+    const run = { seed: 3, budget: { evals: 1000000, time_s: 30 }, fresh: false };
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(ROUND_EVALS.boundary);
+    // one complete search call per round, of the job runner's size, growing to at most 1,000,000
+    expect(ROUND_EVALS.boundary).toBe(BOUNDARY_ROUND_EVALS);
+    expect(FRESH_EVALS.boundary).toBe(BOUNDARY_ROUND_EVALS);
+    expect(ROUND_EVALS.boundary * GROW_LIMIT.boundary).toBeLessThanOrEqual(1_000_000);
+    const long = { ...run, budget: { evals: 1e8 } };
+    expect(roundJob(p, rule, long, 5, { evals: 0, seconds: 0 }, start, 5)!.evals).toBe(
+      GROW_LIMIT.boundary * BOUNDARY_ROUND_EVALS,
+    );
+    expect(a.job).toMatchObject({ space: "boundary", id, method: "boundary compression search", kind: "iterate" });
+    expect(roundJob(p, rule, { ...run, fresh: true }, 0, { evals: 0, seconds: 0 }, null)!.evals).toBe(
+      FRESH_EVALS.boundary,
+    );
+    expect(defaultBudget(p).time_s).toBe(30);
+    expect(defaultBudget(p).evals).toBeGreaterThanOrEqual(ROUND_EVALS.boundary);
+    expect(searchKind(p)).toBe("boundary");
+    // its evaluations are cheap, so the panel takes more of them
+    expect(EVALS_MAX.boundary).toBe(100_000_000);
+  });
+
+  it("starts every kind with a budget the panel accepts", () => {
+    for (const space of BOARD_SPACES) {
+      const p = parseSearchProblem(DEFAULT_PROBLEM[space])!;
+      const kind = searchKind(p);
+      expect(defaultBudget(p).evals, space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+      expect(ROUND_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+      expect(FRESH_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
+    }
+    expect(defaultBudget(parseSearchProblem("surface/cube/nofold/4/12")!).evals).toBeLessThanOrEqual(EVALS_MAX.nofold);
   });
 });

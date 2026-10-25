@@ -129,6 +129,8 @@ function shrunk(space: SpaceName, c: any, f: number): any {
         "L" in L ? { L: L.L * f } : { b1: L.b1.map((x: number) => x * f), b2: L.b2.map((x: number) => x * f) };
       return { lattice, poses: c.poses.map(([x, y, t]: number[]) => [x * f, y * f, t]) };
     }
+    case "boundary":
+      return { s: c.s * f, pieces: c.pieces.map((q: any) => ({ ...q, u: q.u.map((x: number) => x * f) })) };
   }
 }
 
@@ -164,7 +166,7 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 });
 
 describe("GET /api/spaces", () => {
-  it("lists the four spaces with their catalogues and the curvature sweeps", async () => {
+  it("lists the five spaces with their catalogues and the curvature sweeps", async () => {
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
@@ -173,6 +175,7 @@ describe("GET /api/spaces", () => {
       ["curved", 334],
       ["sphere", 166],
       ["torus", 544],
+      ["boundary", 32],
     ]);
     for (const s of r.spaces) {
       expect(s.viewer).toBe(`/spaces/${s.space}.html`);
@@ -602,7 +605,13 @@ describe("POST /api/spaces/submit", () => {
     makeApp({}, index);
     // the research record's own configuration shrunk by 1.05e-9: valid at the touching tolerance,
     // and smaller than the record by more than the tie tolerance, but its pieces overlap
-    for (const id of ["torus/sq/3/2", "sphere/3/5", "curved/-1/3/0/2", "surface/tetrahedron/fold/3/5"]) {
+    for (const id of [
+      "torus/sq/3/2",
+      "sphere/3/5",
+      "curved/-1/3/0/2",
+      "surface/tetrahedron/fold/3/5",
+      "boundary/tesseract/cube/4",
+    ]) {
       const space = id.split("/")[0] as SpaceName;
       const p = (await get(`/api/spaces/${space}/problems/${id}`)).body as SpaceProblemResponse;
       const copy = shrunk(space, p.certified_config, 1 - 1.05e-9);
@@ -809,17 +818,18 @@ describe("GET /api/spaces/targets", () => {
     for (const v of want.values()) sums.set(v.space, (sums.get(v.space) ?? 0) + v.raw);
     expect([...sums.keys()].sort()).toEqual([...SPACE_NAMES].sort());
     const share = new Map<SpaceName, number>();
+    const n = SPACE_NAMES.length;
     for (const t of r.targets) {
       const v = want.get(t.id)!;
-      expect(t.priority / (v.raw / (4 * sums.get(t.space)!)), t.id).toBeCloseTo(1, 12);
+      expect(t.priority / (v.raw / (n * sums.get(t.space)!)), t.id).toBeCloseTo(1, 12);
       share.set(t.space, (share.get(t.space) ?? 0) + t.priority);
     }
-    for (const s of SPACE_NAMES) expect(share.get(s), s).toBeCloseTo(0.25, 12);
+    for (const s of SPACE_NAMES) expect(share.get(s), s).toBeCloseTo(1 / n, 12);
     expect(spaceTargetWeight(1)).toBe(0);
     expect(spaceTargetWeight(2)).toBeCloseTo(0.2, 15);
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
-    // the default list holds problems of all four spaces
+    // the default list holds problems of all five spaces
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(new Set(first.targets.map((t) => t.space))).toEqual(new Set(SPACE_NAMES));

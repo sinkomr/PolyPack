@@ -1,6 +1,6 @@
 /**
- * The new spaces (polyhedral surfaces, constant curvature, the whole sphere, flat tori) as their
- * searches see them: problem ids, configurations in each space's own format (docs/spaces/*.md),
+ * The new spaces (polyhedral surfaces, constant curvature, the whole sphere, flat tori, polytope
+ * boundaries) as their searches see them: problem ids, configurations in each space's own format (docs/spaces/*.md),
  * the score a configuration states, and the check of a result before it is offered or submitted.
  * The volunteer client and the website's board share this code.
  *
@@ -9,6 +9,7 @@
  * that a page, its search threads and the volunteer client share it. Configurations come from the
  * server, so the readers treat them as untrusted input and return clean copies or null.
  */
+import { type PieceName, type PolytopeName, getPolytope, parseBoundaryId } from "@polypack/boundary";
 import { MAX_PIECES } from "@polypack/geometry";
 import { type SolidName, isSolidName } from "@polypack/surface";
 import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torusScore } from "@polypack/torus";
@@ -23,14 +24,20 @@ export type SearchProblem =
   | { space: "surface"; id: string; P: number; solid: SolidName; mode: "fold" | "nofold"; N: number }
   | { space: "curved"; id: string; P: number; K: number; N: number; M: number }
   | { space: "sphere"; id: string; P: number; N: number }
-  | { space: "torus"; id: string; P: number; family: TorusFamily; N: number };
+  | { space: "torus"; id: string; P: number; family: TorusFamily; N: number }
+  | { space: "boundary"; id: string; P: number; polytope: PolytopeName; piece: PieceName };
 
-/** The name each space's search goes by in submissions and logs. */
+/**
+ * The name each space's search goes by in submissions and logs: the space's API name, then what
+ * the search does. The boundary search compresses the polytope's edge with penalty relaxation,
+ * then polishes and hops (packages/boundary/src/search).
+ */
 export const SPACE_METHOD: Record<SpaceName, string> = {
   surface: "surface fold search",
   curved: "curved search",
   sphere: "sphere basin hopping",
   torus: "torus basin hopping",
+  boundary: "boundary compression search",
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -48,8 +55,9 @@ const shape = (text: string) => {
 /**
  * A problem id as the server lists it, or null when it is not one the searches can work on:
  * surface/<solid>/<fold|nofold>/<N>/<P>, curved/<K>/<N>/<M>/<P>, sphere/<N>/<P>,
- * torus/<sq|hex|free>/<N>/<P>. The volunteer client also uses ids in file names, so only these
- * forms pass. (The volunteer client imports it as parseSpaceId.)
+ * torus/<sq|hex|free>/<N>/<P>, boundary/<polytope>/<ball|cube>/<P>. The volunteer client also
+ * uses ids in file names, so only these forms pass. (The volunteer client imports it as
+ * parseSpaceId.)
  */
 export function parseSearchProblem(id: unknown): SearchProblem | null {
   if (typeof id !== "string" || id.length > 120) return null;
@@ -82,6 +90,12 @@ export function parseSearchProblem(id: unknown): SearchProblem | null {
     const P = count(m[3]);
     if (N === null || P === null) return null;
     return { space: "torus", id, P, family: m[1] as TorusFamily, N };
+  }
+  if (id.startsWith("boundary/")) {
+    // the boundary package's parser: catalogue names and P without leading zeros only
+    const b = parseBoundaryId(id);
+    if (typeof b === "string" || b.P > MAX_PIECES) return null;
+    return { space: "boundary", id, P: b.P, polytope: b.polytope, piece: b.piece };
   }
   return null;
 }
@@ -148,6 +162,26 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
       }
       return positive(l.L) ? { lattice: { L: l.L }, poses } : null;
     }
+    case "boundary": {
+      if (!positive(v.s) || !Array.isArray(v.pieces) || v.pieces.length !== p.P) return null;
+      const cells = getPolytope(p.polytope).cells.length;
+      const pieces: { cell: number; u: number[]; q?: number[] }[] = [];
+      for (const q of v.pieces) {
+        if (!isObject(q) || !Number.isInteger(q.cell) || (q.cell as number) < 0 || (q.cell as number) >= cells)
+          return null;
+        if (!Array.isArray(q.u) || q.u.length !== 3 || ![0, 1, 2].every((k) => finite((q.u as unknown[])[k])))
+          return null;
+        const piece: { cell: number; u: number[]; q?: number[] } = { cell: q.cell as number, u: [...q.u] };
+        if (q.q !== undefined) {
+          // balls have no rotation; a cube's is four finite numbers (the check decides whether it is a unit one)
+          if (p.piece === "ball" || !Array.isArray(q.q) || q.q.length !== 4) return null;
+          if (![0, 1, 2, 3].every((k) => finite((q.q as unknown[])[k]))) return null;
+          piece.q = [...q.q];
+        }
+        pieces.push(piece);
+      }
+      return { s: v.s, pieces };
+    }
   }
 }
 
@@ -168,7 +202,7 @@ export function torusConfigOf(p: SearchProblem & { space: "torus" }, k: TorusPac
   return { lattice, poses: k.poses.map((q) => [q.x, q.y, q.theta]) };
 }
 
-/** The score a (well-formed) configuration states: s, size, rho, L or sqrt|det(b1, b2)|. */
+/** The score a (well-formed) configuration states: s, size, rho, L or sqrt|det(b1, b2)|, or s (boundary). */
 export function statedScore(p: SearchProblem, c: SpaceConfig): number {
   switch (p.space) {
     case "surface":
@@ -179,6 +213,8 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
       return c.rho as number;
     case "torus":
       return torusScore(p.family, torusPackingOf(p, c).lattice);
+    case "boundary":
+      return c.s as number;
   }
 }
 

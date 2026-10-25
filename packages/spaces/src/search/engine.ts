@@ -17,7 +17,9 @@
  *    a second, every job also gets an evaluation cap, 0.8 of what its time buys at their
  *    measured rate, so that most jobs end on evaluations and are reproducible from the job.
  * 3. Stopping. No job starts when control.aborted is set ("aborted"), when the best is within
- *    1e-9 of the problem's lower bound ("bound"), when less than T0 / 2 is left ("time"), or
+ *    1e-9 of the problem's lower bound or a valid job ended "bound" (its search reached its own
+ *    floor, which can lie above the problem's bound: the boundary search's aligned cubes stop at
+ *    s = 1) ("bound"), when less than T0 / 2 is left ("time"), or
  *    when the score to beat (the best, or input.known before the best beats it) has not improved
  *    by more than 1e-9 relative for max(maxSeconds / 4, elapsed / 2) seconds ("stagnation").
  *    The search then waits for the jobs in flight. Three failed jobs in a row (an error, or a lost
@@ -134,6 +136,8 @@ export async function searchSpaceProblem(
     fresh: { level: 0, misses: 0, evaluations: 0, seconds: 0 },
   };
   let best: SpaceCandidate | null = null;
+  /** Set once a valid job ended at its search's own floor: more jobs of that search cannot do better. */
+  let atFloor = false;
   let lastProgress = 0;
   let jobs = 0;
   /** Failed jobs in a row: after three the problem is given up. */
@@ -153,7 +157,7 @@ export async function searchSpaceProblem(
   const decide = (): { job: SpaceJob; kind: Kind } | SpaceSearchOutcome["stopped"] => {
     if (control.aborted) return "aborted";
     if (failures >= 3) return "stagnation";
-    if (best && input.bound !== null && input.bound > 0 && best.score <= input.bound * (1 + P.minImprovement))
+    if (atFloor || (best && input.bound !== null && input.bound > 0 && best.score <= input.bound * (1 + P.minImprovement)))
       return "bound";
     const t = elapsed();
     const available = maxSeconds - t;
@@ -213,6 +217,7 @@ export async function searchSpaceProblem(
       result.score > 0
     ) {
       if (!best || result.score < best.score) best = { config: result.config, score: result.score, job: flight.job };
+      if (result.termination === "bound") atFloor = true;
       if (!Number.isFinite(before) || (before - result.score) / before > P.minImprovement) {
         improved = true;
         lastProgress = t;

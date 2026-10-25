@@ -1,14 +1,16 @@
 /**
- * The pure parts of the board's space mode: the problem picker of each space, a problem as the
- * server sends it (checked, since it is untrusted input), the values shown beside the drawing, the
- * rounds a search runs and what the server's answer to a submission means. No DOM in here.
+ * The pure parts of the board's space mode: the problem picker of each space (pick.ts), a problem
+ * as the server sends it (checked, since it is untrusted input), the values shown beside the
+ * drawing (facts.ts), the rounds a search runs and what the server's answer to a submission means.
+ * No DOM in here.
  *
  * Wording follows the dimensions page (spaces-model.ts): "Certified value", "Status", "Lower bound",
- * "Site best", "Entries".
+ * "Site best", "Entries", and for 3D on 4D "Without folding" and "Folding gains".
  */
 import { SCORE_TIE } from "@polypack/geometry";
 import type { CertifiedStatus, SpaceConfig, SpaceName } from "@polypack/spaces";
 import {
+  BOUNDARY_ROUND_EVALS,
   type SearchProblem,
   type SpaceJob,
   type SpaceRule,
@@ -20,108 +22,12 @@ import {
   readSpaceConfig,
   statedScore,
 } from "@polypack/spaces/search";
-import {
-  type FieldSpec,
-  SPACE_FIELDS,
-  day,
-  entriesText,
-  fieldValues,
-  plainBoundLabel,
-  problemStatus,
-  round6,
-  statusLabel,
-} from "../spaces-model";
+import { type FoldExtra, readFoldExtra } from "../boundary-model";
+import { round6 } from "../spaces-model";
 
-// ---------- the problem picker ----------
+// ---------- the problem picker (pick.ts, shared with the 3D on 4D viewer) ----------
 
-/** The problem a space opens with when the address names none (the first listed one when it is missing). */
-export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
-  surface: "surface/cube/fold/0/10",
-  curved: "curved/-1/3/4/5",
-  sphere: "sphere/4/12",
-  torus: "torus/sq/5/7",
-};
-
-/** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */
-const PICK_LABELS: Record<string, string> = {
-  solid: "Solid",
-  mode: "Folding",
-  N: "Piece (N)",
-  K: "Curvature (K)",
-  M: "Container (M)",
-  family: "Torus",
-  P: "Pieces (P)",
-};
-
-export interface PickField {
-  key: string;
-  label: string;
-  options: { value: string; text: string }[];
-  value: string;
-}
-
-/** The picker's fields of a space: the id's fields as the dimensions page lists them, and P. */
-function pickSpecs(space: SpaceName): FieldSpec[] {
-  const p: FieldSpec = {
-    key: "P",
-    at: -1,
-    label: "P",
-    option: (v) => v,
-    cell: (v) => v,
-    start: "",
-  };
-  return [...SPACE_FIELDS[space], p];
-}
-
-/** A field of a problem id; P is its last segment. */
-function valueOf(id: string, f: FieldSpec): string {
-  const parts = id.split("/");
-  return f.key === "P" ? parts[parts.length - 1] : (parts[f.at] ?? "");
-}
-
-/** The fields of a problem id, keyed as the picker keys them. */
-export function fieldsOfId(space: SpaceName, id: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const f of pickSpecs(space)) out[f.key] = valueOf(id, f);
-  return out;
-}
-
-/**
- * The picker for a wish: each field offers the values that occur among the problems matching the
- * fields before it, and takes the wished value when it is offered; otherwise the field's starting
- * value, and for P the offered value nearest the wished one. The last field then fixes one
- * problem: its id, or null when the space has no problems.
- */
-export function pickProblem(
-  space: SpaceName,
-  problems: readonly { id: string }[],
-  wish: Record<string, string>,
-): { fields: PickField[]; id: string | null } {
-  const fields: PickField[] = [];
-  let left = problems.slice();
-  for (const f of pickSpecs(space)) {
-    const values =
-      f.key === "P"
-        ? [...new Set(left.map((p) => valueOf(p.id, f)))].sort((a, b) => Number(a) - Number(b))
-        : fieldValues(left, f);
-    if (!values.length) return { fields, id: null };
-    let value = wish[f.key];
-    if (value === undefined || !values.includes(value)) {
-      if (f.key === "P" && value !== undefined && Number.isFinite(Number(value))) {
-        const want = Number(value);
-        value = values.reduce((a, b) => (Math.abs(Number(b) - want) < Math.abs(Number(a) - want) ? b : a));
-      } else value = values.includes(f.start) ? f.start : values[0];
-    }
-    fields.push({
-      key: f.key,
-      label: PICK_LABELS[f.key] ?? f.label,
-      options: values.map((v) => ({ value: v, text: f.key === "P" ? v : f.option(v) })),
-      value,
-    });
-    left = left.filter((p) => valueOf(p.id, f) === value);
-  }
-  return { fields, id: left[0]?.id ?? null };
-}
+export { DEFAULT_PROBLEM, type PickField, fieldsOfId, pickProblem } from "./pick";
 
 // ---------- a problem from the server ----------
 
@@ -142,6 +48,8 @@ export interface LoadedSpaceProblem {
   closed_reason: string | null;
   /** The better of the research record's and the site leader's configuration (the record on a tie). */
   best: { config: SpaceConfig; score: number; source: "certified" | "site" } | null;
+  /** 3D on 4D: the best edge without folding (every piece inside one cell); null for the other kinds. */
+  extra: FoldExtra | null;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -204,6 +112,7 @@ export function readSpaceProblem(space: SpaceName, id: string, body: unknown): L
     closed_reason:
       typeof body.closed_reason === "string" && body.closed_reason.trim() ? text(body.closed_reason) : null,
     best: known ? { ...known, score: statedScore(search, known.config) } : null,
+    extra: space === "boundary" ? readFoldExtra(body.extra) : null,
   };
 }
 
@@ -231,28 +140,12 @@ export function scoreLabel(p: SearchProblem): string {
       return "Sphere radius ρ";
     case "torus":
       return p.family === "free" ? "Cell √|det(b1, b2)|" : "Torus side L";
+    case "boundary":
+      return `${p.polytope.charAt(0).toUpperCase()}${p.polytope.slice(1)} edge s`;
   }
 }
 
-/** The rows of the panel's values, in the dimensions page's words. `why` is a closed problem's reason. */
-export function problemFacts(p: LoadedSpaceProblem): { label: string; value: string; note?: string }[] {
-  const entries = entriesText(p);
-  return [
-    { label: "Certified value", value: p.certified ? p.certified.display : "—" },
-    { label: "Status", value: statusLabel(problemStatus({ ...p, status: p.status ?? undefined })) },
-    {
-      label: "Lower bound",
-      value: p.bound ? round6(p.bound.value).replace(/^-/, "−") : "—",
-      ...(p.bound?.label ? { note: plainBoundLabel(p.bound.label) } : {}),
-    },
-    {
-      label: "Site best",
-      value: p.site_best ? round6(p.site_best.score) : "—",
-      ...(p.site_best ? { note: `${p.site_best.name}, ${day(p.site_best.created_at)}` } : {}),
-    },
-    { label: "Entries", value: entries.text, ...(entries.why ? { note: entries.why } : {}) },
-  ];
-}
+export { type ProblemFact, problemFacts } from "./facts";
 
 /** What the drawing shows, in a few words. */
 export function shownText(source: "certified" | "site" | "result" | "preview", p: LoadedSpaceProblem): string {
@@ -285,6 +178,8 @@ export const METHOD_TEXT: Record<SearchKind, string> = {
   curved: "Penalty compression at curvature K, an LP polish and basin hopping, in rounds from the best so far.",
   sphere: "Penalty relaxation, the smallest valid radius by bisection with the space's validator, and basin hopping.",
   torus: "Penalty relaxation, the smallest valid lattice by bisection with the space's validator, and basin hopping.",
+  boundary:
+    "Penalty relaxation of the pieces across the cells, compression of the edge s, a polish, and hops between basins; every result passes the space's validator.",
 };
 
 /** What an evaluation counts in each search, for the budget's note. */
@@ -294,7 +189,21 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
   curved: "one start or one hop",
   sphere: "one objective and gradient evaluation",
   torus: "one objective and gradient evaluation",
+  boundary: "one evaluation of the penalty energy (a check of a whole packing counts as 500)",
 };
+
+/**
+ * 3D on 4D rounds, in energy evaluations of the boundary search (packages/boundary/src/search: a
+ * check of a whole packing counts as 500). A round is one complete search call: from a packing it
+ * checks it, then compresses, polishes and hops; from nothing it builds its own starts first. Its
+ * size is the job runner's (BOUNDARY_ROUND_EVALS, 300,000: about 1.5 to 2.2 s at P = 16, like a
+ * sphere or torus round). [CALC] In Node on an Apple Silicon laptop (2026-10-25), 300,000 from
+ * nothing took 1.0 to 2.5 s at P = 4 to 16 and found a valid packing each time.
+ */
+export const BOUNDARY_ROUND = BOUNDARY_ROUND_EVALS;
+export const BOUNDARY_FRESH = BOUNDARY_ROUND_EVALS;
+/** The panel's starting evaluations for a 3D on 4D problem, with a time limit of 30 s. */
+export const BOUNDARY_BUDGET = 3000000;
 
 /**
  * Evaluations per round. A run is a sequence of rounds, each a job of the space's search that
@@ -315,6 +224,7 @@ export const ROUND_EVALS: Record<SearchKind, number> = {
   curved: 9,
   sphere: 10000,
   torus: 10000,
+  boundary: BOUNDARY_ROUND,
 };
 
 /** Pieces from which a fold round has 2 compressions instead of 4. */
@@ -332,6 +242,7 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
   curved: 9,
   sphere: 10000,
   torus: 10000,
+  boundary: BOUNDARY_FRESH,
 };
 
 /**
@@ -340,7 +251,15 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
  * one. [CALC] From the same tight sphere/4/30 packing one job reached 1.782039 with 10,000
  * evaluations and 1.731272 with 40,000. Fold rounds of many pieces are already slow.
  */
-export const GROW_LIMIT: Record<SearchKind, number> = { surface: 2, nofold: 4, curved: 4, sphere: 4, torus: 4 };
+export const GROW_LIMIT: Record<SearchKind, number> = {
+  surface: 2,
+  nofold: 4,
+  curved: 4,
+  sphere: 4,
+  torus: 4,
+  // at most 900,000: a round of a million takes several seconds
+  boundary: 3,
+};
 
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem): number {
@@ -360,8 +279,23 @@ export function defaultBudget(p: SearchProblem): { time_s: number; evals: number
     curved: { time_s: 30, evals: 90 },
     sphere: { time_s: 15, evals: 20000 },
     torus: { time_s: 15, evals: 20000 },
+    boundary: { time_s: 30, evals: BOUNDARY_BUDGET },
   }[kind as Exclude<SearchKind, "surface">];
 }
+
+/**
+ * The most evaluations the panel takes for a run. A 3D on 4D evaluation is cheap (one sweep of the
+ * penalty energy, 3 to 8 microseconds at 4 to 16 pieces: [CALC] see BOUNDARY_ROUND), so its
+ * limit is higher: 100 million take about 6 to 13 minutes.
+ */
+export const EVALS_MAX: Record<SearchKind, number> = {
+  surface: 1_000_000,
+  nofold: 1_000_000,
+  curved: 1_000_000,
+  sphere: 1_000_000,
+  torus: 1_000_000,
+  boundary: 100_000_000,
+};
 
 /** Active seconds a round may take when the budget has no time limit (it ends on its evaluations). */
 export const ROUND_TIME_CAP = 3600;

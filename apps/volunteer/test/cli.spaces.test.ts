@@ -166,7 +166,9 @@ describe("the client with the spaces option", () => {
       // 0.9: the spaces' list first
       const { code, output } = await client(["--once", "--spaces", "all", "--max-P", "10"], { random: () => 0.9 });
       expect(code, output).toBe(0);
-      expect(paths()[0]).toBe("GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus&max_P=10&limit=2000");
+      expect(paths()[0]).toBe(
+        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary&max_P=10&limit=2000",
+      );
       expect(server.spaceSubmissions).toEqual([]);
       expect(server.submissions).toEqual([]);
       expect(history()[0]).toMatchObject({
@@ -177,7 +179,7 @@ describe("the client with the spaces option", () => {
         decision: "dry run: would submit",
       });
       expect(output).toMatch(
-        /Also searches problems of the new spaces, half of the time: surface, curved, sphere, torus/,
+        /Also searches problems of the new spaces, half of the time: surface, curved, sphere, torus, boundary/,
       );
       // the dry run's best is kept for a real run
       expect(existsSync(join(dir, "state", "best", "spaces", "torus_sq_0_7.json"))).toBe(true);

@@ -19,8 +19,13 @@
  *    or a torus from being far too small for its pieces;
  *  - surface, fold: at most SURFACE_MAX_CHAINS chains of faces per piece;
  *  - torus: at most TORUS_MAX_TRANSLATES lattice translates per pair of pieces, and no lattice
- *    vector shorter than the piece's width (which would make a piece overlap its own translate).
+ *    vector shorter than the piece's width (which would make a piece overlap its own translate);
+ *  - boundary: s at most the boundary package's MAX_S = 1e4, at most BOUNDARY_MAX_CHAINS chains of
+ *    cells per piece; the validator's volume bound refuses a polytope far too small for its pieces
+ *    before any chain is enumerated, and its pair stages bin the pieces in a grid, so their work is
+ *    linear in P.
  */
+import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validate as validateCurved } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
 import { SphereConfig, validate as validateSphere } from "@polypack/sphere";
@@ -28,6 +33,8 @@ import { ChainLimitError, SolidName, SurfaceConfig, getSolid, validate as valida
 import { Lattice, TorusFamily, gaussReduce, imageWindow, torusScore, validateTorusPacking } from "@polypack/torus";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
+  BOUNDARY_MAX_CHAINS,
+  BOUNDARY_MAX_S,
   SPACE_MAX_COORD,
   SPACE_MIN_QUATERNION_NORM,
   SPACE_STRICT_TOL,
@@ -37,8 +44,12 @@ import {
 } from "./info";
 import { SpaceConfig, SpaceName } from "./types";
 
-/** Largest P each space accepts: the largest P of its catalogue (2026-10-24). */
-export const SPACE_MAX_P: Record<SpaceName, number> = { surface: 80, curved: 30, sphere: 40, torus: 49 };
+/**
+ * Largest P each space accepts: the largest P of its catalogue (2026-10-24), and for boundary
+ * (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took at most about
+ * 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
+ */
+export const SPACE_MAX_P: Record<SpaceName, number> = { surface: 80, curved: 30, sphere: 40, torus: 49, boundary: 64 };
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
 /** Relative slack below the lower bound that a size may have (float rounding of the bound). */
@@ -234,6 +245,48 @@ function parseTorus(
   return { ok: true, config: { lattice, poses }, score: torusScore(family, basis) };
 }
 
+/** Quaternion norms the boundary validator accepts as unit: within this of 1. */
+const BOUNDARY_UNIT_SLACK = 1e-9;
+
+function parseBoundary(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<BoundaryConfig> {
+  const r = new Reader();
+  const C = getPolytope(id.fields.polytope as PolytopeName).cells.length;
+  const ball = (id.fields.piece as PieceName) === "ball";
+  const s = r.num(raw.s, "s", BOUNDARY_MAX_S, true);
+  const list = piecesOf(raw, "pieces", id.P);
+  if (!Array.isArray(list)) return r.failWith(list);
+  const pieces = list.map((p, i): BoundaryConfig["pieces"][number] => {
+    const none = { cell: 0, u: [0, 0, 0] };
+    if (r.full()) return none;
+    if (!isObject(p)) {
+      r.errors.push(`pieces[${i}] must be an object {cell, u${ball ? "" : ", q?"}}`);
+      return none;
+    }
+    if (!Number.isInteger(p.cell) || (p.cell as number) < 0 || (p.cell as number) >= C)
+      r.errors.push(`pieces[${i}].cell must be an integer from 0 to ${C - 1}`);
+    let u = [0, 0, 0];
+    // read by index, so that a hole in a sparse array is seen
+    if (!Array.isArray(p.u) || p.u.length !== 3) r.errors.push(`pieces[${i}].u must be [u0, u1, u2]`);
+    else u = [0, 1, 2].map((k) => r.num((p.u as unknown[])[k], `pieces[${i}].u[${k}]`, SPACE_MAX_COORD));
+    const piece: BoundaryConfig["pieces"][number] = { cell: p.cell as number, u };
+    if (p.q === undefined) return piece;
+    if (ball) {
+      r.errors.push(`pieces[${i}] is a ball and has no rotation q`);
+      return piece;
+    }
+    if (!Array.isArray(p.q) || p.q.length !== 4) {
+      r.errors.push(`pieces[${i}].q must be a unit quaternion [w, x, y, z]`);
+      return piece;
+    }
+    const q = [0, 1, 2, 3].map((k) => r.num((p.q as unknown[])[k], `pieces[${i}].q[${k}]`, SPACE_MAX_COORD));
+    if (q.every(Number.isFinite) && !(Math.abs(Math.hypot(...q) - 1) <= BOUNDARY_UNIT_SLACK))
+      r.errors.push(`pieces[${i}].q must be a unit quaternion (norm within ${BOUNDARY_UNIT_SLACK} of 1)`);
+    return { ...piece, q: q as [number, number, number, number] };
+  });
+  if (r.errors.length) return { ok: false, malformed: true, errors: r.errors };
+  return { ok: true, config: { s, pieces }, score: s };
+}
+
 /**
  * The configuration of a problem in its space's own format, with only the known fields, and the
  * size it states. Errors are `malformed` when the input is not such a configuration (types,
@@ -250,6 +303,8 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
       return parseSphere(raw, id) as Parsed<SpaceConfig>;
     case "torus":
       return parseTorus(raw, id) as unknown as Parsed<SpaceConfig>;
+    case "boundary":
+      return parseBoundary(raw, id) as unknown as Parsed<SpaceConfig>;
   }
 }
 
@@ -338,6 +393,12 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
             ? `piece ${o.i} overlaps its own translate by (${o.m}, ${o.n}) lattice vectors, by ${-o.sep}`
             : `pieces ${o.i} and ${o.j} overlap (translate (${o.m}, ${o.n})) by ${-o.sep}`,
         );
+    }
+    case "boundary": {
+      const problem = { polytope: f.polytope as PolytopeName, piece: f.piece as PieceName, P: id.P };
+      // the validator's own volume bound and in-cell edge tests run before any chain is enumerated
+      const v = validateBoundary(problem, config, { tol, maxReasons: MAX_REASONS, maxChains: BOUNDARY_MAX_CHAINS });
+      return v.ok ? [] : reasonsOf(v.reasons, "not a valid packing");
     }
   }
 }

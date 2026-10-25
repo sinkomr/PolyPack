@@ -27,6 +27,20 @@ describe("the viewers of the spaces", () => {
     }
   });
 
+  it("leaves the 3D on 4D viewer to the build: a page of the site, not a copied file", async () => {
+    expect(viewerFor("/spaces/boundary.html")).toBeNull();
+    const html = readFileSync(resolve(root, "apps/web/spaces/boundary.html"), "utf8");
+    expect(html).toMatch(/<title>PolyPack — 3D on 4D viewer<\/title>/);
+    expect(html).toContain('<script type="module" src="/src/boundary-viewer.ts"></script>');
+    // it is an input of the build, at the address the API names (SPACE_INFO.boundary.viewer)
+    const config = (await import("../vite.config")).default as {
+      build: { rollupOptions: { input: Record<string, string> } };
+    };
+    expect(config.build.rollupOptions.input["spaces/boundary"]).toBe(resolve(root, "apps/web/spaces/boundary.html"));
+    const { SPACE_INFO } = await import("@polypack/spaces");
+    expect(SPACE_INFO.boundary.viewer).toBe("/spaces/boundary.html");
+  });
+
   it("finds the viewer of a request path", () => {
     expect(viewerFor("/spaces/torus.html")).toBe("spaces/torus.html");
     expect(viewerFor("/spaces/sweep.html?K=1#x")).toBe("spaces/sweep.html");
