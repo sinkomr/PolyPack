@@ -52,7 +52,14 @@ const dark = () => {
 const palette = () => (dark() ? DARK_PALETTE : LIGHT_PALETTE);
 const view = createPolyhedraView($<HTMLCanvasElement>("cv"), { palette: palette(), spin: true });
 
-const groups: Record<string, string> = { platonic: "Platonic", archimedean: "Archimedean", catalan: "Catalan", prisms: "Prisms and antiprisms" };
+const groups: Record<string, string> = {
+  platonic: "Platonic",
+  archimedean: "Archimedean",
+  catalan: "Catalan",
+  prisms: "Prisms and antiprisms",
+  bipyramids: "Bipyramids",
+  trapezohedra: "Trapezohedra",
+};
 for (const fam of Object.keys(groups)) {
   const og = document.createElement("optgroup");
   og.label = groups[fam];
@@ -121,14 +128,17 @@ function show(code: string, n: number, push = true) {
         note.textContent = `This page embeds the configurations up to P = ${POLYHEDRA_DATA.embedMaxP}; open it on the site (/spaces/polyhedra.html) to draw P = ${r.n}, or read it in data/polyhedra/configs/${code}.jsonl.`;
     });
   }
-  const better = r.s < r.w * (1 - 1e-6);
+  // PolyPack's own problems (bipyramids, trapezohedra) are not on the wiki
+  const better = problem.wiki && r.s < r.w * (1 - 1e-6);
   const lit = r.lit
     .map((l) => `<li>${fmt(l.v)}${l.q ? ` (to ${l.q})` : ""}: ${l.u ? `<a href="${esc(l.u)}" rel="noopener">${esc(l.s)}</a>` : esc(l.s)}</li>`)
     .join("");
   info.innerHTML =
     `<div class="big">s = ${r.d}</div>` +
     `<p>${n} ${esc(problem.title.toLowerCase())}; certified at s = ${r.s}. Volume bound ${fmt(r.b)}.</p>` +
-    `<p>Wiki: <a href="${wikiUrl(code, r.n)}" rel="noopener">${fmt(r.w)}</a>${better ? ' <span class="better">(beaten here)</span>' : ""}</p>` +
+    (problem.wiki
+      ? `<p>Wiki: <a href="${wikiUrl(code, r.n)}" rel="noopener">${fmt(r.w)}</a>${better ? ' <span class="better">(beaten here)</span>' : ""}</p>`
+      : "") +
     `<p>Found by ${esc(r.f)}${r.cr ? `; certificate refined by ${esc(r.cr)}` : ""}.</p>` +
     (r.m ? `<p class="muted">${esc(r.m)}</p>` : "") +
     `<p class="muted">${esc(POLYHEDRA_DATA.sources[r.src] ?? "")}</p>` +

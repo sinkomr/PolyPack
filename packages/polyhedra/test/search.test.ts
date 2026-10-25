@@ -3,7 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra } from "../src";
+import { getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra, volumeBound } from "../src";
 import { readProblemConfigs, readRecordsFile } from "../src/records-file";
 
 const recUrl = new URL("../../../data/polyhedra/records.json", import.meta.url);
@@ -46,6 +46,18 @@ describe("searchPolyhedra", () => {
     let t = 0;
     const timed = searchPolyhedra(p, 6, { seed: 1, maxEvals: 10_000_000, maxSeconds: 2, now: () => (t += 0.001) });
     expect(timed.stopped).toBe("time");
+  });
+
+  it("packs bipyramids and trapezohedra from scratch: valid at tolerance 0, above the volume bound, reproducible", () => {
+    for (const [code, P] of [["bp5incub", 3], ["tz7intz7", 2]] as const) {
+      const p = getProblem(code)!;
+      const a = searchPolyhedra(p, P, { seed: 5, maxEvals: 20_000 });
+      expect(a.config, code).not.toBeNull();
+      expect(validatePolyhedra(p, a.config!, { tol: 0 }).valid, code).toBe(true);
+      expect(a.score, code).toBeGreaterThan(volumeBound(p, P));
+      expect(a.evaluations, code).toBeLessThanOrEqual(20_000);
+      expect(searchPolyhedra(p, P, { seed: 5, maxEvals: 20_000 }).config, code).toEqual(a.config);
+    }
   });
 
   it("keeps a valid result on tiny budgets", () => {

@@ -1,8 +1,10 @@
-"""The solids and problems of the polyhedra space, as upstream lists them (standard library only).
+"""The solids and problems of the polyhedra space (standard library only).
 
-Names, codes and the order of problems follow alejandrozu/platonic-packing scripts/engine.py (AB, ARCHIMEDEAN,
-CATALAN, PRISMS, PROBLEMS; MIT, commit cbf76f2f). packages/polyhedra/src/problems.ts builds the same list; the
-TypeScript tests compare the two through data/polyhedra/records.json.
+Upstream's 56 solids and 86 problems: names, codes and the order of problems follow alejandrozu/platonic-packing
+scripts/engine.py (AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, commit cbf76f2f). Then PolyPack's own: the
+bipyramids and trapezohedra, the canonical duals of the unit-edge prisms and antiprisms (docs/spaces/POLYHEDRA.md),
+each packed in itself and in a cube. packages/polyhedra/src/catalogue.ts builds the same list; the TypeScript tests
+compare the two through data/polyhedra/records.json.
 """
 import re
 
@@ -18,7 +20,11 @@ CATALAN = ['triakis_tetrahedron', 'rhombic_dodecahedron', 'triakis_octahedron', 
 PRISM_K = [3, 5, 6, 8, 12]
 ANTIPRISM_K = [4, 5, 6, 8, 12]
 ELONG = [('l15', '1.5'), ('l2', '2'), ('l3', '3')]
-POLY = {3: 'triangular', 4: 'square', 5: 'pentagonal', 6: 'hexagonal', 8: 'octagonal', 12: 'dodecagonal'}
+POLY = {3: 'triangular', 4: 'square', 5: 'pentagonal', 6: 'hexagonal', 7: 'heptagonal', 8: 'octagonal', 9: 'enneagonal',
+        10: 'decagonal', 11: 'hendecagonal', 12: 'dodecagonal'}
+# PolyPack's: the duals of the n-prisms (n = 4 is the octahedron) and of the n-antiprisms (n = 3 is the cube)
+BIPYRAMID_K = [3, 5, 6, 7, 8, 9, 10, 11, 12]
+TRAPEZOHEDRON_K = [4, 5, 6, 7, 8, 9, 10, 11, 12]
 AB = {'tetrahedron': 'tet', 'cube': 'cub', 'octahedron': 'oct', 'dodecahedron': 'dod', 'icosahedron': 'ico',
       'truncated_tetrahedron': 'tte', 'cuboctahedron': 'cbo', 'truncated_cube': 'tcu', 'truncated_octahedron': 'toc',
       'rhombicuboctahedron': 'rco', 'truncated_cuboctahedron': 'tco', 'snub_cube': 'snc', 'icosidodecahedron': 'ido',
@@ -36,10 +42,14 @@ for _k in ANTIPRISM_K:
 for _k in PRISM_K:
     for _t, _h in ELONG:
         AB[f'prism{_k}_{_t}'] = f'pr{_k}{_t}'
+for _k in BIPYRAMID_K:
+    AB[f'bipyramid{_k}'] = f'bp{_k}'
+for _k in TRAPEZOHEDRON_K:
+    AB[f'trapezohedron{_k}'] = f'tz{_k}'
 
 
 def solids():
-    """(name, code, family, title) of every solid, in upstream's order of families."""
+    """(name, code, family, title) of every solid: upstream's families in upstream's order, then PolyPack's."""
     out = [(s, AB[s], 'platonic', s) for s in PLATONIC]
     out += [(s, AB[s], 'archimedean', s.replace('_', ' ')) for s in ARCHIMEDEAN]
     out += [(s, AB[s], 'catalan', s.replace('_', ' ')) for s in CATALAN]
@@ -47,11 +57,14 @@ def solids():
     out += [(f'antiprism{k}', f'ap{k}', 'antiprism', f'{POLY[k]} antiprism') for k in ANTIPRISM_K]
     out += [(f'prism{k}_{t}', f'pr{k}{t}', 'elongated_prism', f'{POLY[k]} prism of height {h}')
             for k in PRISM_K for t, h in ELONG]
+    out += [(f'bipyramid{k}', f'bp{k}', 'bipyramid', f'{POLY[k]} bipyramid') for k in BIPYRAMID_K]
+    out += [(f'trapezohedron{k}', f'tz{k}', 'trapezohedron', f'{POLY[k]} trapezohedron') for k in TRAPEZOHEDRON_K]
     return out
 
 
 def problems():
-    """(code, piece, container, family) of the 86 problems, in upstream's order."""
+    """(code, piece, container, family) of the 122 problems: upstream's 86 in upstream's order, then PolyPack's 36 (each
+    bipyramid and trapezohedron in itself and in a cube)."""
     pairs = [('tetrahedron', 'tetrahedron'), ('octahedron', 'octahedron'), ('icosahedron', 'icosahedron'),
              ('dodecahedron', 'dodecahedron'), ('cube', 'cube'), ('cube', 'octahedron'), ('octahedron', 'cube'),
              ('dodecahedron', 'icosahedron'), ('icosahedron', 'dodecahedron')]
@@ -62,6 +75,10 @@ def problems():
     for s in [f'prism{k}' for k in PRISM_K] + [f'antiprism{k}' for k in ANTIPRISM_K]:
         out += [(s, s, 'prisms'), (s, 'cube', 'prisms')]
     out += [(f'prism{k}_{t}', 'cube', 'prisms') for k in PRISM_K for t, _ in ELONG]
+    for s in [f'bipyramid{k}' for k in BIPYRAMID_K]:
+        out += [(s, s, 'bipyramids'), (s, 'cube', 'bipyramids')]
+    for s in [f'trapezohedron{k}' for k in TRAPEZOHEDRON_K]:
+        out += [(s, s, 'trapezohedra'), (s, 'cube', 'trapezohedra')]
     return [(f'{AB[p]}in{AB[c]}', p, c, fam) for p, c, fam in out]
 
 

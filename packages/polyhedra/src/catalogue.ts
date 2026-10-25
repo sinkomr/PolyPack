@@ -1,12 +1,21 @@
 /**
- * The names of the polyhedra space without its geometry: the solids' names, codes and titles and the 86 problems
- * of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py: AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, see
- * THIRD_PARTY_NOTICES.md). No imports, so that a page can name problems without loading the solids' coordinates;
- * problems.ts builds the same list with the solids attached.
+ * The names of the polyhedra space without its geometry: the solids' names, codes and titles and the problems: the
+ * 86 of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py: AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, see
+ * THIRD_PARTY_NOTICES.md), then PolyPack's 36: each bipyramid and trapezohedron (the canonical duals of the unit-edge
+ * prisms and antiprisms, docs/spaces/POLYHEDRA.md) in itself and in a cube. No imports, so that a page can name
+ * problems without loading the solids' coordinates; problems.ts builds the same list with the solids attached.
  */
 
-export type SolidFamily = "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "elongated_prism";
-export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms";
+export type SolidFamily =
+  | "platonic"
+  | "archimedean"
+  | "catalan"
+  | "prism"
+  | "antiprism"
+  | "elongated_prism"
+  | "bipyramid"
+  | "trapezohedron";
+export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms" | "bipyramids" | "trapezohedra";
 
 export interface SolidName {
   /** Upstream's name, e.g. "truncated_tetrahedron", "prism3_l15". */
@@ -88,11 +97,18 @@ const POLY: Record<number, string> = {
   4: "square",
   5: "pentagonal",
   6: "hexagonal",
+  7: "heptagonal",
   8: "octagonal",
+  9: "enneagonal",
+  10: "decagonal",
+  11: "hendecagonal",
   12: "dodecagonal",
 };
 const PRISM_K = [3, 5, 6, 8, 12];
 const ANTIPRISM_K = [4, 5, 6, 8, 12];
+// PolyPack's: the duals of the n-prisms (n = 4 is the octahedron) and of the n-antiprisms (n = 3 is the cube)
+const BIPYRAMID_K = [3, 5, 6, 7, 8, 9, 10, 11, 12];
+const TRAPEZOHEDRON_K = [4, 5, 6, 7, 8, 9, 10, 11, 12];
 const ELONG: [string, string][] = [
   ["l15", "1.5"],
   ["l2", "2"],
@@ -116,10 +132,14 @@ function buildSolids(): SolidName[] {
         family: "elongated_prism",
         title: `${POLY[k]} prism of height ${h}`,
       });
+  for (const k of BIPYRAMID_K)
+    out.push({ name: `bipyramid${k}`, code: `bp${k}`, family: "bipyramid", title: `${POLY[k]} bipyramid` });
+  for (const k of TRAPEZOHEDRON_K)
+    out.push({ name: `trapezohedron${k}`, code: `tz${k}`, family: "trapezohedron", title: `${POLY[k]} trapezohedron` });
   return out;
 }
 
-/** Every solid's name, code and title, in upstream's order. */
+/** Every solid's name, code and title: upstream's in upstream's order, then PolyPack's bipyramids and trapezohedra. */
 export const SOLID_NAMES_LIST: readonly SolidName[] = buildSolids();
 const SOLID_BY_NAME = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s]));
 
@@ -140,9 +160,11 @@ export interface ProblemName {
   family: ProblemFamily;
   /** e.g. "Cubes in a tetrahedron". */
   title: string;
+  /** True for the 86 problems of polyhedrainpolyhedra.wiki, false for PolyPack's own. */
+  wiki: boolean;
 }
 
-function problemName(piece: string, container: string, family: ProblemFamily): ProblemName {
+function problemName(piece: string, container: string, family: ProblemFamily, wiki = true): ProblemName {
   const P = SOLID_BY_NAME.get(piece)!;
   const C = SOLID_BY_NAME.get(container)!;
   const what = pluralTitle(P.title);
@@ -152,6 +174,7 @@ function problemName(piece: string, container: string, family: ProblemFamily): P
     container,
     family,
     title: `${what.charAt(0).toUpperCase()}${what.slice(1)} in ${article(C.title)}`,
+    wiki,
   };
 }
 
@@ -177,10 +200,15 @@ function buildProblems(): ProblemName[] {
   const prisms = PRISM_K.map((k) => `prism${k}`).concat(ANTIPRISM_K.map((k) => `antiprism${k}`));
   for (const s of prisms) for (const c of [s, "cube"]) out.push(problemName(s, c, "prisms"));
   for (const k of PRISM_K) for (const [tag] of ELONG) out.push(problemName(`prism${k}_${tag}`, "cube", "prisms"));
+  // PolyPack's problems, after upstream's
+  for (const k of BIPYRAMID_K)
+    for (const c of [`bipyramid${k}`, "cube"]) out.push(problemName(`bipyramid${k}`, c, "bipyramids", false));
+  for (const k of TRAPEZOHEDRON_K)
+    for (const c of [`trapezohedron${k}`, "cube"]) out.push(problemName(`trapezohedron${k}`, c, "trapezohedra", false));
   return out;
 }
 
-/** The 86 problems, in upstream's order. */
+/** The 122 problems: the wiki's 86 in upstream's order, then PolyPack's 36 (`wiki` false). */
 export const PROBLEM_NAMES: readonly ProblemName[] = buildProblems();
 const PROBLEM_BY_CODE = new Map(PROBLEM_NAMES.map((p) => [p.code, p]));
 
@@ -194,5 +222,5 @@ export function problemTitle(code: string): string {
   return PROBLEM_BY_CODE.get(code)?.title ?? code;
 }
 
-/** The problem codes in upstream's order. */
+/** The problem codes in the order of PROBLEM_NAMES. */
 export const PROBLEM_CODES: readonly string[] = PROBLEM_NAMES.map((p) => p.code);
