@@ -36,4 +36,9 @@ RUN npm run build
 
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite
 EXPOSE 8080
-CMD ["npm", "run", "start"]
+# Node runs the server itself, as `npm run start` would from apps/server but without the npm and tsx
+# processes around it: on a 512 MB machine those took about 130 MB [CALC, measured in this image
+# under a 470 MB limit: 348 MB with npm, 217 MB without]. The server is then process 1 and handles
+# SIGTERM itself, so a deploy stops it cleanly.
+WORKDIR /app/apps/server
+CMD ["node", "--import", "tsx", "src/node.ts"]
