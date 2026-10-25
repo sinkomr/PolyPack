@@ -20,7 +20,7 @@ export const POLYHEDRA_INFO = {
   space: "polyhedra",
   title: "3D in 3D",
   summary:
-    "Polyhedra packed in polyhedra: equal solids (Platonic, Archimedean and Catalan solids, prisms and antiprisms) in the smallest scaled copy of a container solid. The problems and records are those of polyhedrainpolyhedra.wiki, with PolyPack's own prism and antiprism problems (7, 9 and 10 sides).",
+    "Polyhedra packed in polyhedra: equal solids (Platonic, Archimedean and Catalan solids, prisms and antiprisms) in the smallest scaled copy of a container solid. The problems and records are those of polyhedrainpolyhedra.wiki, with PolyPack's own prism and antiprism problems (7, 9, 10 and 11 sides).",
   score: "the scale s of the container (its edge length for a unit-edge container); smaller is better",
   problem_id: "polyhedra/<code>/<P>",
   conventions: {

@@ -94,7 +94,7 @@ describe("validatePolyhedra", () => {
   });
 
   it("checks PolyPack's prisms and antiprisms: stacked pieces fit, overlaps and protrusions are rejected", () => {
-    for (const n of [7, 9, 10]) {
+    for (const n of [7, 9, 10, 11]) {
       // two prisms stacked in their own prism of scale 2 (height 2, base side 2): they touch each other and both caps
       const pr = getProblem(`pr${n}inpr${n}`)!;
       const stack = (dz: number): Pose[] => [[0, 0, -0.5, 1, 0, 0, 0], [0, 0, 0.5 + dz, 1, 0, 0, 0]];
@@ -147,7 +147,7 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   });
 
   it("covers every problem of the wiki for P = 2 to 30 with consistent ids", () => {
-    // PolyPack's 21 problems (wiki: false) are not in this file yet
+    // PolyPack's 28 problems (wiki: false) are not in this file yet
     const ids = new Set(records.map((r: { id: string }) => r.id));
     for (const p of POLYHEDRA_PROBLEMS.filter((x) => x.wiki))
       for (let n = 2; n <= 30; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);

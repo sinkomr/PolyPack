@@ -3,7 +3,7 @@
 
 Run: python3 python/polyhedra/test_certify.py. Standard library only. Covers the published-field checks, the display
 rule, adversarial configurations (overlaps and protrusions of 3e-7, coincident pieces, zero and non-numeric
-quaternions, strings, booleans, NaN), PolyPack's prisms and antiprisms with 7, 9 and 10 sides (exact checks of the
+quaternions, strings, booleans, NaN), PolyPack's prisms and antiprisms with 7, 9, 10 and 11 sides (exact checks of the
 solids in their number fields, valid, overlapping and protruding packings), agreement with the TypeScript validator
 on the near-contact cases of fixtures/crosscheck.json, and a field check of every record of
 data/polyhedra/records.json.
@@ -122,25 +122,27 @@ class Geometry(unittest.TestCase):
             self.assertFalse(certify.certify_config(name, name, 1 - 1e-9, p)['ok'], name)
 
 
-NEW_PRISMS = [(f'prism{k}', k, Fraction(1)) for k in (7, 9, 10)] + \
-    [(f'prism{k}_{t}', k, h) for k in (7, 9, 10) for t, h in (('l15', Fraction(3, 2)), ('l2', Fraction(2)), ('l3', Fraction(3)))]
-NEW_ANTIPRISMS = [(f'antiprism{k}', k) for k in (7, 9, 10)]
+NEW_PRISMS = [(f'prism{k}', k, Fraction(1)) for k in (7, 9, 10, 11)] + \
+    [(f'prism{k}_{t}', k, h) for k in (7, 9, 10, 11) for t, h in (('l15', Fraction(3, 2)), ('l2', Fraction(2)), ('l3', Fraction(3)))]
+NEW_ANTIPRISMS = [(f'antiprism{k}', k) for k in (7, 9, 10, 11)]
 
 
 class NewSolids(unittest.TestCase):
-    """PolyPack's prisms and antiprisms (7, 9, 10 sides), checked exactly in their number fields Q(alpha)."""
+    """PolyPack's prisms and antiprisms (7, 9, 10, 11 sides), checked exactly in their number fields Q(alpha)."""
 
     def test_catalogue(self):
-        self.assertEqual(len(catalogue.solids()), 71)
-        self.assertEqual(len(catalogue.PROBLEMS), 107)
+        self.assertEqual(len(catalogue.solids()), 76)
+        self.assertEqual(len(catalogue.PROBLEMS), 114)
         self.assertEqual(len(catalogue.WIKI_PROBLEMS), 86)
         new = [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]
-        self.assertEqual(new[:6], ['pr7inpr7', 'pr7incub', 'pr9inpr9', 'pr9incub', 'pr10inpr10', 'pr10incub'])
-        self.assertEqual(len(new), 21)
+        self.assertEqual(new[:8], ['pr7inpr7', 'pr7incub', 'pr9inpr9', 'pr9incub', 'pr10inpr10', 'pr10incub',
+                                   'pr11inpr11', 'pr11incub'])
+        self.assertEqual(len(new), 28)
+        self.assertEqual(catalogue.PROBLEMS['ap11incub'], ('antiprism11', 'cube', 'prisms'))
         self.assertEqual(catalogue.PROBLEMS['ap9inap9'], ('antiprism9', 'antiprism9', 'prisms'))
         self.assertEqual(catalogue.PROBLEMS['pr10l15incub'], ('prism10_l15', 'cube', 'prisms'))
         self.assertEqual(catalogue.parse_id('polyhedra/ap10incub/100'), ('ap10incub', 100))
-        self.assertIsNone(catalogue.parse_id('polyhedra/pr11incub/2'))
+        self.assertIsNone(catalogue.parse_id('polyhedra/pr13incub/2'))
         self.assertEqual(sorted(cg.EXACT), sorted(n for n, *_ in catalogue.solids()))
 
     def regular_base(self, S, idx):

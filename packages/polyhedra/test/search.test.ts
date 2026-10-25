@@ -65,7 +65,7 @@ describe("searchPolyhedra", () => {
   });
 
   it("packs PolyPack's prisms and antiprisms from scratch, valid with the clearance asked for", () => {
-    for (const [code, P] of [["pr9incub", 3], ["ap7inap7", 2], ["pr10l2incub", 2], ["ap10incub", 3]] as const) {
+    for (const [code, P] of [["pr9incub", 3], ["ap7inap7", 2], ["pr10l2incub", 2], ["ap10incub", 3], ["ap11inap11", 2]] as const) {
       const p = getProblem(code)!;
       const r = searchPolyhedra(p, P, { seed: 1, maxEvals: 20_000, clearance: 1e-7 });
       expect(r.config, code).not.toBeNull();

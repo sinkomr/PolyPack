@@ -72,7 +72,7 @@ Used: `certify_general.py`, `algebraic.py` and `multiquad.py`, copied into
 `python/polyhedra/` with their headers (`certify_general.py` changed only in the
 path of the solids file, marked "PolyPack:"); `src/solids_exact.json`, copied
 unchanged to `python/polyhedra/solids_exact.json` (PolyPack appends its own
-prisms and antiprisms with 7, 9 and 10 sides after upstream's 56 solids), from
+prisms and antiprisms with 7, 9, 10 and 11 sides after upstream's 56 solids), from
 which `packages/polyhedra/src/solids.data.ts` is generated; `src/geom.js` and
 `src/sim.js`, ported to TypeScript in `packages/polyhedra/src/sim/` with their
 header comments (changes listed there); the problem names and codes of

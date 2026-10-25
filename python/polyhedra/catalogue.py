@@ -1,8 +1,8 @@
 """The solids and problems of the polyhedra space (standard library only).
 
 Names, codes and the order of upstream's solids and problems follow alejandrozu/platonic-packing scripts/engine.py
-(AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, commit cbf76f2f). PolyPack adds prisms and antiprisms with 7, 9 and
-10 sides and the elongated prisms of the 7-, 9- and 10-gon (2026-10-25), named in upstream's scheme and listed after
+(AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, commit cbf76f2f). PolyPack adds prisms and antiprisms with 7, 9,
+10 and 11 sides and the elongated prisms of the 7-, 9-, 10- and 11-gon (2026-10-25), named in upstream's scheme and listed after
 upstream's solids and problems; polyhedrainpolyhedra.wiki does not list them (WIKI_PROBLEMS holds the codes it does).
 packages/polyhedra/src/problems.ts builds the same list; the TypeScript tests compare the two through
 data/polyhedra/records.json.
@@ -21,9 +21,9 @@ CATALAN = ['triakis_tetrahedron', 'rhombic_dodecahedron', 'triakis_octahedron', 
 PRISM_K = [3, 5, 6, 8, 12]
 ANTIPRISM_K = [4, 5, 6, 8, 12]
 ELONG = [('l15', '1.5'), ('l2', '2'), ('l3', '3')]
-EXTRA_K = [7, 9, 10]                     # PolyPack's prisms, antiprisms and elongated prisms (not on the wiki)
+EXTRA_K = [7, 9, 10, 11]                 # PolyPack's prisms, antiprisms and elongated prisms (not on the wiki)
 POLY = {3: 'triangular', 4: 'square', 5: 'pentagonal', 6: 'hexagonal', 7: 'heptagonal', 8: 'octagonal',
-        9: 'enneagonal', 10: 'decagonal', 12: 'dodecagonal'}
+        9: 'enneagonal', 10: 'decagonal', 11: 'hendecagonal', 12: 'dodecagonal'}
 AB = {'tetrahedron': 'tet', 'cube': 'cub', 'octahedron': 'oct', 'dodecahedron': 'dod', 'icosahedron': 'ico',
       'truncated_tetrahedron': 'tte', 'cuboctahedron': 'cbo', 'truncated_cube': 'tcu', 'truncated_octahedron': 'toc',
       'rhombicuboctahedron': 'rco', 'truncated_cuboctahedron': 'tco', 'snub_cube': 'snc', 'icosidodecahedron': 'ido',
@@ -60,7 +60,7 @@ def _prism_problems(prisms, antiprisms):
 
 
 def solids():
-    """(name, code, family, title) of every solid: upstream's 56 in upstream's order of families, then PolyPack's 15."""
+    """(name, code, family, title) of every solid: upstream's 56 in upstream's order of families, then PolyPack's 20."""
     out = [(s, AB[s], 'platonic', s) for s in PLATONIC]
     out += [(s, AB[s], 'archimedean', s.replace('_', ' ')) for s in ARCHIMEDEAN]
     out += [(s, AB[s], 'catalan', s.replace('_', ' ')) for s in CATALAN]
@@ -70,7 +70,7 @@ def solids():
 
 
 def problems(wiki_only=False):
-    """(code, piece, container, family) of the 107 problems: upstream's 86 in upstream's order, then PolyPack's 21
+    """(code, piece, container, family) of the 114 problems: upstream's 86 in upstream's order, then PolyPack's 28
     (only upstream's with wiki_only)."""
     pairs = [('tetrahedron', 'tetrahedron'), ('octahedron', 'octahedron'), ('icosahedron', 'icosahedron'),
              ('dodecahedron', 'dodecahedron'), ('cube', 'cube'), ('cube', 'octahedron'), ('octahedron', 'cube'),

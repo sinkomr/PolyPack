@@ -3,8 +3,8 @@
  * s C of a container solid. The 86 problems of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
  * PROBLEMS): the 25 Platonic pairs, the 13 Archimedean and 13 Catalan solids in themselves, the 5
  * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube. Then
- * PolyPack's 21 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9 and 10 sides
- * in themselves and in a cube, and their 9 elongated prisms in a cube.
+ * PolyPack's 28 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9, 10 and 11
+ * sides in themselves and in a cube, and their 12 elongated prisms in a cube.
  *
  * A problem is named by upstream's code `<piece code>in<container code>`, e.g. "cubintet" (cubes in a
  * tetrahedron) or "pr3l15incub" (triangular prisms of height 1.5 in a cube), and a problem with P
@@ -63,9 +63,9 @@ const prisms = (p: number[], a: number[]) => p.map((k) => `prism${k}`).concat(a.
 const elongated = (p: number[]) => p.flatMap((k) => ["l15", "l2", "l3"].map((t) => `prism${k}_${t}`));
 const PRISMS = prisms([3, 5, 6, 8, 12], [4, 5, 6, 8, 12]);
 const ELONGATED = elongated([3, 5, 6, 8, 12]);
-/** PolyPack's additions (2026-10-25): 7, 9 and 10 sides. */
-const EXTRA_PRISMS = prisms([7, 9, 10], [7, 9, 10]);
-const EXTRA_ELONGATED = elongated([7, 9, 10]);
+/** PolyPack's additions (2026-10-25): 7, 9, 10 and 11 sides. */
+const EXTRA_PRISMS = prisms([7, 9, 10, 11], [7, 9, 10, 11]);
+const EXTRA_ELONGATED = elongated([7, 9, 10, 11]);
 
 function plural(s: Solid): string {
   const t = s.title;
@@ -119,7 +119,7 @@ function build(): PolyhedraProblem[] {
   return out;
 }
 
-/** The 107 problems: upstream's 86 in upstream's order, then PolyPack's 21 (python/polyhedra/catalogue.py has the same list). */
+/** The 114 problems: upstream's 86 in upstream's order, then PolyPack's 28 (python/polyhedra/catalogue.py has the same list). */
 export const POLYHEDRA_PROBLEMS: readonly PolyhedraProblem[] = build();
 
 const BY_CODE = new Map(POLYHEDRA_PROBLEMS.map((p) => [p.code, p]));
