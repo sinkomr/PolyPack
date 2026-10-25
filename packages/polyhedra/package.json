@@ -1,0 +1,15 @@
+{
+  "name": "@polypack/polyhedra",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./draw": "./src/draw.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit",
+    "viz": "tsx scripts/build-viz.ts"
+  }
+}
