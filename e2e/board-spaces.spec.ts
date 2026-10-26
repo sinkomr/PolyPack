@@ -131,6 +131,7 @@ test("the Problem set menu lists every family under its dimension, the ones to c
     "Sphere",
     "Torus",
     "Polyhedra",
+    "Balls",
     "Polytope boundaries",
   ]);
   await expect(menu.locator("option[disabled]")).toHaveCount(0);
@@ -678,7 +679,8 @@ test("loading is shown while the space code and the problems arrive", async ({ p
 test("Back to an address without a space shows the polygon board", async ({ page }) => {
   await openProblem(page, 4, 4, 5);
   await page.evaluate(() => (location.hash = "#space=sphere/4/12"));
-  await shown(page, "sphere/4/12");
+  // the first problem of a page waits for the mode's code
+  await shown(page, "sphere/4/12", LAZY_VIEW);
   await page.goBack();
   await expect(page).toHaveURL(/#p=4,4,5$/);
   await expect(page.locator("#board")).toBeVisible();
@@ -687,7 +689,7 @@ test("Back to an address without a space shows the polygon board", async ({ page
   await page.goto("/");
   await expect(page.locator("#board")).toBeVisible();
   await page.evaluate(() => (location.hash = "#space=torus"));
-  await shown(page, DEFAULT_PROBLEM.torus);
+  await shown(page, DEFAULT_PROBLEM.torus, LAZY_VIEW);
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator("#board")).toBeVisible();
