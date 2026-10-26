@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ALL_SOLID_NAMES, CATALAN_NAMES, SURFACE_NS, surfaceBound, surfaceDomain } from "../src/index";
+import { ALL_SOLID_NAMES, CATALAN_NAMES, SOLID_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceDomain } from "../src/index";
+import { surfaceBound as kernelBound } from "../src/kernel-solid";
 
 const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records;
 
@@ -20,6 +21,17 @@ describe("the surface domain", () => {
       [{ solid: "cube", mode: "fold", N: 0 }, 0],
     ] as const)
       expect(at(bad[0], bad[1])).toBeUndefined();
+  });
+
+  it("agrees with the search kernel's bound on every Platonic problem, to two units in the last place", () => {
+    // the kernel uses Python's tan for N, M in {3, 4, 5, 6, 8}, as the records do; the domain V8's
+    for (const name of SOLID_NAMES)
+      for (const N of SURFACE_NS)
+        for (let P = 1; P <= 100; P += 3) {
+          const a = surfaceBound(name, N, P).value;
+          const b = kernelBound(getSolid(name), N, P);
+          expect(Math.abs(a / b - 1), `${name} ${N} ${P}`).toBeLessThanOrEqual(5e-16);
+        }
   });
 
   it("gives the Platonic records' own bounds", () => {

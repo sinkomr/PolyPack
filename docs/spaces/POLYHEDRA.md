@@ -748,3 +748,83 @@ every evaluation: an abort of a job on 100 truncated icosidodecahedra from the r
 requires 2 s, and that a paused job uses no processor time (`apps/volunteer/test/pool.spaces.test.ts`). It reads
 the whole targets list (`limit=10000`, or 2000 from an older server) and draws a space uniformly among those it
 asks for, so polyhedra get their share of its searches.
+
+## 9. Kernel for the generic methods
+
+`polyhedraKernel({ code, P })` (`packages/polyhedra/src/kernel.ts`) is the space's kernel for the generic search
+methods (`docs/methods/dimensions/README.md`). The space's own search (§5) stays the default, "Auto". P runs from 1
+to 100, the largest P the server accepts; the factory refuses a larger one.
+
+**State.** Six numbers per piece: its centre, then a rotation vector times the piece's circumradius, so that it
+reads as a length. The rotation turns the piece's anchor orientation, a unit quaternion the kernel keeps in the
+state; only `rebase` changes an anchor, by folding the rotation into it. The size is s and the bound the volume
+bound (§1). A step of every variable is the piece's inradius. Centres are absolute, so changing s scales them.
+`fromConfig` refuses a configuration outside the server's limits (§5: s at most 1e6, centres at most 1e4,
+quaternion components at most 1e100 and norms at least 1e-6), so a method never works on a state no submission
+could have.
+
+**Energy.** The simulator's model (§5) in the units of the canonical solids. At shape t a piece is the solid
+scaled by t about its centre and dilated by (1 - t) times its inradius: the solid at t = 1, its inscribed ball at
+t = 0, and always inside the solid, because the solid's support in every direction is at least its inradius
+[EST, elementary]. A pair's overlap is the soft pieces' exact penetration depth: twice the dilation minus the
+signed distance of the cores, which is minus their penetration depth by the separating-axis test (§5) when they
+overlap and their distance when they do not. A wall's overlap is the soft piece's support beyond the face. The
+energy is the sum of the squared overlaps. Its gradient is analytic: the simulator's for the pairs and the extreme
+vertex's lever arm for the walls, in world-frame rotations, which the left Jacobian of the exponential map takes
+to the rotation variables. [CALC] It matches central differences to 1e-5 relative, for true and soft shapes and
+rotations away from the anchor (`test/kernel.test.ts`). At t = 1 the model is exact, so a configuration valid at
+tolerance 0 has zero energy. A state with a number that is not finite has energy Infinity. The kernel prunes the
+edge-edge axes by the Gauss map when that is faster for the solid (it gives the same depth); the simulator's own
+rule is unchanged.
+
+**Other operations.**
+
+- `finish`: the legalization and the polish of §5 (penalty weights 1e4 to 1e9, as the search polishes a start,
+  clearance 1e-12), each result checked with the validator at tolerance 0; the smaller is kept. The polish polls
+  the stop it is given, at every evaluation and between them, and a stop ends it with the legalized result. A state
+  the server could not read finishes to nothing.
+- `validate`: the server's rule (`packages/spaces/src/validate.ts`) for an entry that does not beat the research
+  record: the configuration read as the server reads it, s not below the volume bound by more than 1e-9 relative,
+  then the validator at the touching tolerance 1e-9. Left out: the server also checks an entry whose s is below the
+  record's certified s by more than 1e-6 relative at the strict tolerance 1e-11 (§8). That needs the record, which
+  the kernel does not have. Every configuration `finish` returns is valid at tolerance 0, so it passes that check
+  too; only a start given to a method could pass `validate` and fail it.
+- Random starts fill about 15 % of the container, with uniformly random orientations. `randomPose` writes its
+  random orientation into the piece's rotation variables, so that writing the piece's variables back undoes it, as
+  for `jiggle`.
+- `shape`, `swap` (a piece's whole orientation) and `seeds`: patches of the lattice of the boxes that bound the
+  turned piece, the canonical orientation first (plain, then with every second layer shifted by half a box), then
+  random ones. The patch keeps the lattice points that need the smallest container. For cubes in a cube the first
+  seed is the tiling at P = 8 and 27.
+
+**Costs** [CALC]. Processor time on Apple Silicon, on a machine shared with other jobs (load average near 300 on 8
+cores, so times vary by about 2 times between runs), after a squeeze from a random start. Energy with its
+gradient, from the first measurement:
+
+| problem | P = 10 | P = 50 |
+|---|---|---|
+| cubes in a cube | 0.024 ms | 0.22 ms |
+| tetrahedra in a tetrahedron | 0.034 ms | 0.38 ms |
+| octahedra in a cube | 0.050 ms | 0.40 ms |
+| triangular prisms of height 3 in a cube | 0.039 ms | 0.34 ms |
+| dodecahedra | 0.17 ms | 0.74 ms |
+| disdyakis dodecahedra | 0.54 ms | 1.8 ms |
+| truncated icosidodecahedra | 0.99 ms | 3.0 ms |
+| pentagonal hexecontahedra | 3.9 ms | 8.5 ms |
+
+A gradient costs about as much as the energy alone (0.9 to 1.4 times), so `gradCost` is left at 1. A finish takes
+a fixed part and a few ms per piece for every solid, while the energy's cost per piece grows with the cost c of
+one overlapping pair's separating-axis test (modelled from the solid's numbers of vertices, edges and edge
+directions, in microseconds). Fitted to the medians of three random starts for 12 solids at P = 2, 3, 5, 10, 20,
+40 and 80 (82 cases), `finishCost` is (1150 + 250 P) / (P (1 + c / 35)): 805 for 2 cubes and 266 for 50, 80 for
+2 truncated icosidodecahedra and 27 for 50, from 10 to 805 over the 114 problems. The measured ratio was 0.44 to
+2.4 times it in 80 % of the cases (median 0.94) and 0.14 to 5.7 in all: the polish takes from a few to hundreds
+of iterations, depending on the state it starts from, and the three starts of one case differed by up to 10
+times. A validate costs 1 to 4 energies in 90 % of the cases (median 1.9), more at small P (up to 18 for 3
+truncated icosidodecahedra), so `validateCost` is 2 + 4 / P. `POLYHEDRA_KERNEL_BENCH=1` runs the measurement in
+`test/kernel.test.ts`.
+
+**Limitations.** The energy's gradient jumps where a pair's best axis or a wall's extreme vertex changes; the
+polish avoids this with separating planes as variables, which the kernel's state does not have. A finish told to
+stop still legalizes its start: [CALC] at 100 truncated icosidodecahedra from the record that took 0.24 s of
+processor time, against 1.4 s for the whole finish.

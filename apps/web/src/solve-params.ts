@@ -88,11 +88,37 @@ export function parseNumber(raw: string, schema: ParameterSchema, angular: boole
   return value;
 }
 
+/** Why a control failed native validation, in the panels' words rather than the browser's locale. */
+export function validityText(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement): string {
+  const name = (control.closest("label")?.querySelector("span") ?? control.labels?.[0])?.textContent ?? "A setting";
+  const v = control.validity,
+    input = control as HTMLInputElement;
+  if (v.badInput) return `${name}: enter a valid number.`;
+  if (v.valueMissing) return `${name}: enter a value; this setting cannot be left empty.`;
+  if (v.rangeUnderflow) return `${name}: must be at least ${input.min}.`;
+  if (v.rangeOverflow) return `${name}: must be at most ${input.max}.`;
+  if (v.stepMismatch) return `${name}: enter a whole number.`;
+  return `${name}: ${control.validationMessage}`;
+}
+
+/** How parameterForm names its fields and reads its values. */
+export interface ParameterFormOptions {
+  /** Each field's id is this, then its path ("solve-param-hops"), so that two panels' forms can share a page. */
+  idPrefix?: string;
+  /**
+   * The polygon solver's conventions (the default): angles in degrees, and the labels above for
+   * known keys. False shows each setting as its schema says, in its own units: the generic
+   * methods of the spaces count lengths and turns in kernel steps.
+   */
+  polygon?: boolean;
+}
+
 /** Schema-driven settings. Untouched fields are omitted so exact library defaults survive. */
 export function parameterForm(
   host: HTMLElement,
   schema: ParameterSchema,
   defaults: Record<string, unknown>,
+  { idPrefix = "solve-param", polygon = true }: ParameterFormOptions = {},
 ): () => Record<string, unknown> {
   host.replaceChildren();
   const readers: (() => void)[] = [];
@@ -120,8 +146,10 @@ export function parameterForm(
       const label = document.createElement("label"),
         text = document.createElement("span");
       label.className = "parameter";
-      const angular = isAngular(key, child);
-      const described = parameterLabel(key, child);
+      const angular = polygon && isAngular(key, child);
+      const described = polygon
+        ? parameterLabel(key, child)
+        : { text: child.title ?? readable(key), description: child.description ?? "" };
       text.textContent = described.text;
       label.title = described.description;
       label.append(text);
@@ -156,7 +184,7 @@ export function parameterForm(
           }
         }
       }
-      input.id = `solve-param-${name.join("-")}`;
+      input.id = `${idPrefix}-${name.join("-")}`;
       // A number shown with a default may not be cleared: the run would silently use a value
       // the user cannot see. Numbers without a default stay optional.
       const required = shape.required?.includes(key) === true || (number && value !== undefined);

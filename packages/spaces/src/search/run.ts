@@ -40,6 +40,15 @@
  * nofold problems run here: the surface search above in its nofold mode, every piece kept inside
  * its own face.
  *
+ * Those engines are the method "auto", the default. A job may instead name a generic method of
+ * @polypack/methods that the problem offers (methods.ts spaceMethodsFor): it then runs that method
+ * on the problem's kernel (kernels.ts) with the job's seed, parameters and start, its evaluations
+ * (the kernel's energy evaluations) capped by `evals` when the job has a cap, and the gate's time
+ * and pauses through shouldStop, polled at every kernel call. The method keeps an improvement only
+ * when it passes the job's whole rule. A method or parameters the problem does not take give an
+ * error result. A generic method ends "bound" at its kernel's bound, which can lie above the
+ * problem's (engine.ts says what the volunteer client makes of it).
+ *
  * Every result is checked here by the server's rule (model.ts checkSpaceConfig, with the job's
  * bound and certified size); the start, when it passes, is a candidate too, so a job never returns
  * worse than what it was given.
@@ -51,7 +60,10 @@ import { getSolid } from "@polypack/surface";
 import { searchTorus } from "@polypack/torus";
 import { type PolyhedraConfig, getProblem as getPolyhedraProblem, searchPolyhedra } from "@polypack/polyhedra";
 import { type BallsConfig, getBallsProblem, searchBalls } from "@polypack/balls";
+import { type SpaceKernel, runMethod } from "@polypack/methods";
 import type { SpaceConfig, SpaceName } from "../types";
+import { spaceKernel } from "./kernels";
+import { AUTO, checkSpaceMethod, isAutoMethod } from "./methods";
 import {
   type SearchProblem,
   type SpaceRule,
@@ -68,8 +80,14 @@ import { surfaceFoldSearch } from "./surface-fold";
 export interface SpaceJob {
   space: SpaceName;
   id: string;
-  /** SPACE_METHOD of the space. */
-  method: string;
+  /**
+   * "auto" (the default): the space's own search; or a generic method the problem offers
+   * (methods.ts spaceMethodsFor). The space's SPACE_METHOD, which jobs carried before methods could
+   * be chosen, also means auto. spaceMethodName gives the name a result is recorded under.
+   */
+  method?: string;
+  /** The method's parameters over its defaults; auto takes none. */
+  params?: Record<string, unknown>;
   /** Integer from 0 to 2^32 - 1. */
   seed: number;
   /** Active seconds, pauses excluded; `evals` caps the run further (see each engine). */
@@ -206,6 +224,8 @@ export function runSpaceJob(job: SpaceJob, control: SpaceControl, clock?: () => 
   if (!p || p.space !== job.space)
     return fail("error", `not a problem id of ${job.space}: ${String(job.id).slice(0, 80)}`);
   if (nofoldOnPolygonEngine(p)) return fail("error", "nofold problems of the Platonic solids run on the polygon engine");
+  const why = checkSpaceMethod(p, job.method, job.params);
+  if (why) return fail("error", why);
   const start = job.start === undefined ? undefined : (readSpaceConfig(p, job.start) ?? undefined);
   if (job.start !== undefined && !start) return fail("error", "the start is not a configuration of this problem");
   // the best valid configuration: the start, then whatever the engine returns
@@ -218,10 +238,12 @@ export function runSpaceJob(job: SpaceJob, control: SpaceControl, clock?: () => 
   if (start) consider(start);
   let evaluations = 0;
   let ran = "done";
+  let failure: string[] = [];
   try {
-    const out = runEngine(p, job, start, gate);
+    const out = isAutoMethod(p.space, job.method) ? runEngine(p, job, start, gate) : runGeneric(p, job, start, gate);
     evaluations = out.evaluations;
     ran = out.termination;
+    failure = out.reasons ?? [];
     consider(out.config);
   } catch (error) {
     return { ...fail("error", (error as Error)?.message ?? String(error)), evaluations };
@@ -235,7 +257,40 @@ export function runSpaceJob(job: SpaceJob, control: SpaceControl, clock?: () => 
     evaluations,
     wallTime: gate.elapsed,
     termination: gate.why ?? ran,
-    reasons: b ? [] : ["no valid configuration found"],
+    reasons: failure.length ? failure : b ? [] : ["no valid configuration found"],
+  };
+}
+
+/**
+ * A generic method on the problem's kernel (checkSpaceMethod has made sure it has one that offers
+ * the method). A fresh job gets no start, as in the boundary search; the start is still a
+ * candidate (runSpaceJob). The method keeps an improvement only when it passes the job's whole
+ * rule (its bound, certified size and any other flag), which replaces the kernel's own check;
+ * runSpaceJob checks the result once more. A job without an evaluation cap runs on the gate alone,
+ * so that a method does not size its work to a cap it does not have.
+ */
+function runGeneric(
+  p: SearchProblem,
+  job: SpaceJob,
+  start: SpaceConfig | undefined,
+  gate: Gate,
+): { config: SpaceConfig | null; evaluations: number; termination: string; reasons: string[] } {
+  const own = spaceKernel(p);
+  if (!own) throw new Error(`${p.id} has no kernel`);
+  const kernel: SpaceKernel = { ...own, validate: (config) => checkSpaceConfig(p.space, p.id, config, job.rule) };
+  const r = runMethod(kernel, job.method ?? AUTO, {
+    seed: job.seed,
+    ...(job.params ? { params: job.params } : {}),
+    ...(start && job.kind !== "fresh" ? { start } : {}),
+    budget: job.budget.evals === undefined ? {} : { evals: job.budget.evals },
+    shouldStop: () => gate.stop(),
+  });
+  return {
+    config: r.config as SpaceConfig | null,
+    // a piece's share of a sweep counts 1/P, so the count can be fractional
+    evaluations: Math.round(r.evaluations),
+    termination: r.stopped,
+    reasons: r.stopped === "error" ? r.reasons : [],
   };
 }
 
@@ -244,7 +299,7 @@ function runEngine(
   job: SpaceJob,
   start: SpaceConfig | undefined,
   gate: Gate,
-): { config: SpaceConfig | null; evaluations: number; termination: string } {
+): { config: SpaceConfig | null; evaluations: number; termination: string; reasons?: string[] } {
   const cap = job.budget.evals ?? Number.MAX_SAFE_INTEGER;
   const shouldStop = () => gate.stop();
   switch (p.space) {

@@ -1,23 +1,32 @@
 /**
- * One round of a nofold surface problem on a Platonic solid: every piece stays in one face, so the problem is the
- * planar problem of its fullest face (packages/spaces/src/search/nofold.ts). The round runs the
- * polygon solver's basin hopping on that face, from the face of the start, with the round's seed
- * and budget, and copies the strict result onto every face. Like runSpaceJob, it checks the start
- * and the result with the server's rule and returns the better one.
+ * One round of a nofold surface problem: every piece stays in one face, so the problem is the
+ * planar problem of its fullest face (packages/spaces/src/search/nofold.ts). The round runs a
+ * polygon solver method on that face, from the face of the start, with the round's seed and
+ * budget, and copies the strict result onto every face: the job's method (one of the polygon
+ * solver's, spaceMethodsFor) with its parameters, or for "auto" basin hopping with its defaults.
+ * Like runSpaceJob, it checks the start and the result with the server's rule and returns the
+ * better one; a method or parameters the problem does not take give an error result.
  */
 import { run } from "@polypack/solver";
 import type { SpaceConfig } from "@polypack/spaces";
+import { useNofoldMethods } from "@polypack/spaces/search/nofold-methods";
 import {
+  NOFOLD_AUTO,
   type NofoldProblem,
   type SpaceJob,
   type SpaceJobResult,
   checkSpaceConfig,
+  checkSpaceMethod,
   faceProblem,
   nofoldOnPolygonEngine,
+  isAutoMethod,
   parseSearchProblem,
   readSpaceConfig,
   surfaceFromFace,
 } from "@polypack/spaces/search";
+
+// this thread holds the polygon solver anyway: its methods are the ones a nofold job may name
+useNofoldMethods();
 
 export async function runNofoldRound(job: SpaceJob): Promise<SpaceJobResult> {
   const t0 = performance.now();
@@ -34,6 +43,9 @@ export async function runNofoldRound(job: SpaceJob): Promise<SpaceJobResult> {
   });
   if (!p || !nofoldOnPolygonEngine(p)) return fail("not a nofold surface problem of a Platonic solid");
   const nofold = p as NofoldProblem;
+  const why = checkSpaceMethod(p, job.method, job.params);
+  if (why) return fail(why);
+  const auto = isAutoMethod(p.space, job.method);
   const start = job.start === undefined ? undefined : (readSpaceConfig(p, job.start) ?? undefined);
   if (job.start !== undefined && !start) return fail("the start is not a configuration of this problem");
   let best: { config: SpaceConfig; score: number } | null = null;
@@ -45,7 +57,8 @@ export async function runNofoldRound(job: SpaceJob): Promise<SpaceJobResult> {
   consider(start);
   const face = faceProblem(nofold, start);
   const result = await run(face.problem, {
-    method: "basin_hopping",
+    method: auto ? NOFOLD_AUTO : job.method,
+    ...(auto || !job.params ? {} : { params: job.params }),
     budget: { evals: job.budget.evals, time_s: job.budget.time_s },
     seed: job.seed,
     ...(face.known ? { start: face.known.config } : {}),

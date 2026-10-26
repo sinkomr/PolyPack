@@ -30,3 +30,4 @@ export { MAX_S, validateBoundary, validateOn } from "./validate";
 export type { ValidateOptions } from "./validate";
 export { TesseractWords, embed as tesseractEmbed, tesseractClearance } from "./tesseract";
 export * from "./search";
+export * from "./kernel";

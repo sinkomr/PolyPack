@@ -8,7 +8,7 @@ import type { Decision, SubmitCheck } from "../submit";
 import { storedName } from "../submit";
 import type { SpaceLeaderRef } from "../state";
 import type { SpaceCandidate } from "./engine";
-import type { SpaceCheck, SpaceProblem } from "./model";
+import { type SpaceCheck, type SpaceProblem, spaceMethodNote } from "./model";
 import type { SpaceProblemInfo } from "./read";
 
 /** The problem's best as the history records it: the site's leader when it leads, else the research record. */
@@ -66,6 +66,9 @@ export function decideSpaceSubmission(a: {
   return { submit: true, reason: "better than the problem's best" };
 }
 
+/** The longest `method` text of a space submission (apps/server SPACE_METHOD_LENGTH). */
+export const SPACE_METHOD_LENGTH = 80;
+
 /** The body of POST /api/spaces/submit. */
 export function spaceSubmissionBody(
   p: SpaceProblem,
@@ -79,7 +82,9 @@ export function spaceSubmissionBody(
     name: o.name,
     ...(o.note ? { agent_note: o.note } : {}),
     software: o.software,
-    method: c.job.method,
+    // "sphere basin hopping" for each kind's own search, "sphere basin_hopping" for a generic method,
+    // with its --space-params when they fit (the server takes 80 characters)
+    method: spaceMethodNote(p.space, c.job.method, c.job.params, SPACE_METHOD_LENGTH),
     ...(Number.isSafeInteger(c.job.seed) && c.job.seed >= 0 ? { seed: c.job.seed } : {}),
   };
 }

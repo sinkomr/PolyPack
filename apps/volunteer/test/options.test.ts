@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { type SpaceMethodDefinition, getMethod, registerMethod } from "@polypack/methods";
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_BASE,
@@ -39,6 +40,9 @@ describe("options", () => {
       // the new spaces are off unless asked for
       spaces: null,
       onlySpaces: false,
+      // and their jobs run each kind's own search
+      spaceMethod: "auto",
+      spaceParams: null,
     } satisfies Options);
   });
 
@@ -91,6 +95,8 @@ describe("options", () => {
       once: true,
       spaces: null,
       onlySpaces: false,
+      spaceMethod: "auto",
+      spaceParams: null,
     } satisfies Options);
   });
 
@@ -139,5 +145,70 @@ describe("options", () => {
   it("has the version of package.json", () => {
     const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
     expect(VERSION).toBe(pkg.version);
+  });
+});
+
+describe("the other kinds' method", () => {
+  // a generic method for this test file only: the real ones are registered by @polypack/methods
+  const method: SpaceMethodDefinition = {
+    name: "volunteer_test_method",
+    title: "Test",
+    summary: "Does nothing.",
+    doc: "docs/methods/dimensions/volunteer_test_method.md",
+    requires: [],
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: { hops: { type: "integer", minimum: 1 } },
+    },
+    defaults: { hops: 3 },
+    run() {},
+  };
+  if (!getMethod(method.name)) registerMethod(method);
+  const bad =
+    (...argv: string[]) =>
+    () =>
+      parseOptions(argv, machine);
+
+  it("is auto unless --space-method names a method, with --space-params over its defaults", () => {
+    expect(run("--dimensions", "all")).toMatchObject({ spaceMethod: "auto", spaceParams: null });
+    expect(run("--dimensions", "all", "--space-method", "auto")).toMatchObject({
+      spaceMethod: "auto",
+      spaceParams: null,
+    });
+    expect(run("--dimensions", "sphere", "--space-method", method.name)).toMatchObject({
+      spaceMethod: method.name,
+      spaceParams: null,
+    });
+    expect(run("--dimensions", "sphere", "--space-method", method.name, "--space-params", '{"hops": 7}')).toMatchObject(
+      { spaceMethod: method.name, spaceParams: { hops: 7 } },
+    );
+  });
+
+  it("refuses an unknown method and parameters that are not the method's, with a readable message", () => {
+    expect(bad("--dimensions", "all", "--space-method", "warp_drive")).toThrow(
+      /--space-method: "warp_drive" is not a method of the other kinds; choose auto or one of .*volunteer_test_method/,
+    );
+    expect(bad("--space-method", method.name)).toThrow(/--space-method applies to the other kinds: give --dimensions/);
+    expect(bad("--dimensions", "all", "--space-params", '{"hops": 7}')).toThrow(
+      /--space-params needs --space-method NAME: auto, each kind's own search, takes no parameters/,
+    );
+    const params = (text: string) => bad("--dimensions", "all", "--space-method", method.name, "--space-params", text);
+    expect(params("{hops: 7}")).toThrow(/--space-params must be a JSON object.*is not JSON/);
+    expect(params("[7]")).toThrow(/--space-params must be a JSON object/);
+    expect(params('{"hops": 0}')).toThrow(/--space-params for volunteer_test_method: params\.hops: below minimum/);
+    expect(params('{"jumps": 1}')).toThrow(/unknown parameter jumps/);
+    for (const argv of [
+      ["--space-method", "warp_drive"],
+      ["--space-params", "{}"],
+    ])
+      expect(bad("--dimensions", "all", ...argv)).toThrow(OptionError);
+  });
+
+  it("is in the help text", () => {
+    const help = helpText(machine);
+    expect(help).toContain("--space-method NAME");
+    expect(help).toContain("--space-params JSON");
+    expect(help).toContain(method.name);
   });
 });

@@ -14,7 +14,10 @@ import {
   SURFACE_NOFOLD_METHOD,
   type SpaceJob,
   checkSpaceConfig,
-  methodOf,
+  checkSpaceMethod,
+  NOFOLD_METHOD,
+  searchMethodName,
+  spaceMethodsFor,
   nofoldOnPolygonEngine,
   parseSearchProblem,
   readSpaceConfig,
@@ -36,7 +39,7 @@ const grown = (c: { s: number; pieces: { face: number; x: number; y: number; the
 const job = (id: string, o: Partial<SpaceJob> = {}): SpaceJob => ({
   space: "surface",
   id,
-  method: methodOf("surface", id),
+  method: "auto",
   seed: 5,
   budget: { time_s: 60, evals: 2 },
   kind: "iterate",
@@ -64,9 +67,10 @@ describe("surface ids beyond the Platonic solids", () => {
       expect(typeof parseSpaceId("surface", id)).toBe("string");
       expect(parseSearchProblem(id)).toBeNull();
     }
-    expect(methodOf("surface", "surface/prism5/nofold/0/3")).toBe(SURFACE_NOFOLD_METHOD);
-    expect(methodOf("surface", "surface/cube/nofold/0/3")).toBe(SPACE_METHOD.surface);
-    expect(methodOf("surface", "surface/prism5/fold/0/3")).toBe(SPACE_METHOD.surface);
+    const name = (id: string) => searchMethodName(parseSearchProblem(id)!);
+    expect(name("surface/prism5/nofold/0/3")).toBe(SURFACE_NOFOLD_METHOD);
+    expect(name("surface/cube/nofold/0/3")).toBe(NOFOLD_METHOD);
+    expect(name("surface/prism5/fold/0/3")).toBe(SPACE_METHOD.surface);
   });
 
   it("reads configurations with face indices up to the largest solid's 120 faces", () => {
@@ -235,5 +239,21 @@ describe("the work of a surface check", () => {
         }
       }
     }
+  });
+});
+
+describe("search methods on the new solids", () => {
+  it("offer Auto only: no generic kernel and no planar face problem outside the Platonic solids", () => {
+    for (const solid of ALL_SOLID_NAMES)
+      for (const mode of ["fold", "nofold"]) {
+        const p = parseSearchProblem(`surface/${solid}/${mode}/4/5`)!;
+        const names = spaceMethodsFor(p).map((m) => m.name);
+        if (getSolid(solid).uniform) continue;
+        expect(names, p.id).toEqual(["auto"]);
+        expect(checkSpaceMethod(p, "auto"), p.id).toBeNull();
+        expect(checkSpaceMethod(p, "basin_hopping"), p.id).not.toBeNull();
+      }
+    // the Platonic solids keep their methods: a planar face problem without folding
+    expect(spaceMethodsFor(parseSearchProblem("surface/cube/nofold/4/5")!).map((m) => m.name)[0]).toBe("auto");
   });
 });

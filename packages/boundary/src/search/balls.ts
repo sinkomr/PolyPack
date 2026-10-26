@@ -28,7 +28,7 @@ import { boundaryVolume, cellExcess, topo } from "../polytope";
 import { TesseractWords } from "../tesseract";
 import type { BoundaryConfig, BoundaryPiece, Polytope } from "../types";
 import { randomCellPoint } from "./chart";
-import { type PieceModel, type State, copyState } from "./model";
+import { type PieceModel, type State, type TermOptions, copyState } from "./model";
 import { randInt } from "./random";
 
 export interface BallMetric {
@@ -158,14 +158,28 @@ export class WordMetric implements BallMetric {
     return true;
   }
 
-  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean): number {
+  /**
+   * As BallMetric.evaluate; `opts` (the kernel's options, model.ts) weights the terms, keeps only
+   * one piece's, and gives dE/ds at fixed U. Without `opts` the arithmetic is the search's own (a
+   * weight of 1 multiplies exactly). dE/ds: s enters through h = s / 2 in the clearance
+   * (A = h - |u_k|, so d cl / ds = (A_a + A_b) / (2 cl)) and in a word's translation
+   * (y = M u_j + h t, so d d / ds = r . t / (2 d)); whether a word is realised changes only at
+   * isolated s.
+   */
+  evaluate(cells: Int32Array, U: Float64Array, s: number, g: Float64Array | null, violation: boolean, opts?: TermOptions): number {
     const P = cells.length;
     const h = s / 2;
     const T = h >= 1 ? this.narrow : this.wide;
+    const W = opts?.w ?? null;
+    const focus = opts?.focus ?? -1;
+    const ds = opts?.ds ?? null;
+    let dEds = 0;
     let E = 0;
     let worst = -Infinity;
     // clearance, closed form: the nearest edge of each of the three directions
     for (let i = 0; i < P; i++) {
+      if (focus >= 0 && i !== focus) continue;
+      const wi = W ? W[i] : 1;
       const o = 3 * i;
       const A0 = h - Math.abs(U[o]);
       const A1 = h - Math.abs(U[o + 1]);
@@ -179,11 +193,14 @@ export class WordMetric implements BallMetric {
         if (violation) {
           if (1 - cl > worst) worst = 1 - cl;
         } else if (cl < 1) {
-          E += (1 - cl) * (1 - cl);
-          if (g && cl > 0) {
-            const c = (2 * (1 - cl)) / cl;
-            g[o + a] += c * Aa * (U[o + a] >= 0 ? 1 : -1);
-            g[o + b] += c * Ab * (U[o + b] >= 0 ? 1 : -1);
+          E += wi * (1 - cl) * (1 - cl);
+          if ((g || ds) && cl > 0) {
+            const c = (2 * wi * (1 - cl)) / cl;
+            if (g) {
+              g[o + a] += c * Aa * (U[o + a] >= 0 ? 1 : -1);
+              g[o + b] += c * Ab * (U[o + b] >= 0 ? 1 : -1);
+            }
+            if (ds) dEds -= 0.5 * c * (Aa + Ab);
           }
         }
       }
@@ -204,6 +221,7 @@ export class WordMetric implements BallMetric {
       u[1] = U[3 * i + 1];
       u[2] = U[3 * i + 2];
       for (let j = i; j < P; j++) {
+        if (focus >= 0 && i !== focus && j !== focus) continue;
         const self = j === i;
         if (!self) {
           const d0 = X[4 * i] - X[4 * j];
@@ -234,9 +252,13 @@ export class WordMetric implements BallMetric {
             if (2 - d > worst) worst = 2 - d;
             continue;
           }
-          E += (2 - d) * (2 - d);
+          // a pair weighs (w_i + w_j) / 2, a loop w_i
+          const wij = W ? 0.5 * (W[i] + W[j]) : 1;
+          E += wij * (2 - d) * (2 - d);
+          if (!g && !ds) continue;
+          const c = (2 * wij * (2 - d)) / Math.max(d, 1e-15);
+          if (ds) dEds -= 0.5 * c * (r0 * T.t[3 * w] + r1 * T.t[3 * w + 1] + r2 * T.t[3 * w + 2]);
           if (!g) continue;
-          const c = (2 * (2 - d)) / Math.max(d, 1e-15);
           // dE/du_i = c r; dE/du_j = -c M^T r (for a loop both, on the same piece)
           g[3 * i] += c * r0;
           g[3 * i + 1] += c * r1;
@@ -247,6 +269,7 @@ export class WordMetric implements BallMetric {
         }
       }
     }
+    if (ds) ds[0] = dEds;
     return violation ? worst : E;
   }
 }
@@ -387,6 +410,14 @@ export class BallModel implements PieceModel {
 
   violation(st: State, s: number): number {
     return this.metric.evaluate(st.cells, st.U, s, null, true);
+  }
+
+  /** The kernel's terms (model.ts); the lattice words only (the chain metric has no dE/ds). */
+  terms(st: State, s: number, g: Float64Array | null, violation: boolean, o: TermOptions): number {
+    if (!(this.metric instanceof WordMetric)) throw new Error("search: the kernel's terms need the lattice-word metric (the tesseract)");
+    if (g) g.fill(0);
+    if (o.ds) o.ds[0] = 0;
+    return this.metric.evaluate(st.cells, st.U, s, g, violation, o);
   }
 
   startEdge(): number {

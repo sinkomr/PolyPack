@@ -21,8 +21,17 @@ import { type Answer, Api, type Sleep, type SubmitOutcome, compactList, realSlee
 import { type Machine, OptionError, type Options, helpText, parseOptions } from "./options";
 import { type Recent, noteSearch, pickSpaceTarget, pickTarget, pruneRecent, recentFromHistory } from "./pick";
 import { type PoolOptions, WorkerPool } from "./pool";
-import { type SpaceCandidate, type SpaceSearchOutcome, searchSpaceProblem } from "./spaces/engine";
-import { type SpaceProblem, type SpaceRule, checkSpaceConfig, nofoldOnPolygonEngine, parseSpaceId } from "./spaces/model";
+import { type SpaceCandidate, type SpaceSearchOutcome, chooseSpaceMethod, searchSpaceProblem } from "./spaces/engine";
+import {
+  type SpaceProblem,
+  type SpaceRule,
+  checkSpaceConfig,
+  checkSpaceMethod,
+  nofoldOnPolygonEngine,
+  parseSpaceId,
+  spaceMethodName,
+  spaceMethodNote,
+} from "./spaces/model";
 import { type NofoldProblem, faceProblem, surfaceFromFace } from "./spaces/nofold";
 import { type SpaceProblemInfo, readSpaceProblem, readSpaceSubmitResponse, readSpaceTarget } from "./spaces/read";
 import {
@@ -1071,9 +1080,16 @@ class Volunteer {
       crashed: 0,
     };
     this.current = cur;
-    // nofold problems of the Platonic solids are planar problems of one face; those of the other
-    // solids run the surface search in its nofold mode, like any other space job
+    // nofold problems of the Platonic solids are planar problems of one face (the polygon engine); those
+    // of the other solids run the surface search in its nofold mode, like any other space job (Auto only)
     const nofold = nofoldOnPolygonEngine(p);
+    // the method of its jobs: --space-method where the problem offers it, else auto
+    const asked = this.o.spaceMethod;
+    const chosen = nofold ? { method: "auto", fallback: false } : chooseSpaceMethod(p.space, p.id, asked);
+    const params = chosen.method !== "auto" ? (this.o.spaceParams ?? undefined) : undefined;
+    const methodText = nofold
+      ? "the polygon engine's methods"
+      : spaceMethodNote(p.space, chosen.method, params, Infinity);
     this.log(
       `Searching ${label} (priority ${t.priority.toPrecision(3)}): best ` +
         (before
@@ -1082,8 +1098,14 @@ class Volunteer {
         `, lower bound ${info.bound === null ? "none" : formatScore(info.bound)}; ` +
         `starting from ${known ? (known.source === "site" ? "the site's leader" : "the research record") : "nothing"}` +
         (nofold ? ", as a planar packing of one face" : "") +
-        `; up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
+        `; method ${methodText}; up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
     );
+    if (nofold && asked !== "auto")
+      this.log(`  --space-method ${asked} does not apply here: nofold problems run the polygon engine's own methods`);
+    else if (chosen.fallback)
+      this.log(
+        `  ${p.id} does not offer ${asked} (${checkSpaceMethod(p, asked, this.o.spaceParams ?? undefined) ?? "not offered"}), so it runs auto`,
+      );
     const onBest = (score: number, what: string) => {
       if (cur.best && !(score < cur.best.score)) return;
       cur.best = { score };
@@ -1111,10 +1133,21 @@ class Volunteer {
                 lanes: this.pool!.size,
                 seed: engineSeed,
                 now: () => this.clock.now(),
+                method: this.o.spaceMethod,
+                ...(this.o.spaceParams ? { params: this.o.spaceParams } : {}),
                 onResult: (result, best) => {
                   cur.jobs++;
                   if (result.termination === "crashed") cur.crashed++;
-                  if (best) onBest(best.score, `${best.job.method}, ${best.job.kind}, seed ${best.job.seed}`);
+                  // the engine hands a generic method that reached its kernel's bound over to auto
+                  if (result.termination === "bound" && result.valid && (result.job.method ?? "auto") !== "auto")
+                    this.log(
+                      `  ${result.job.method} reached its kernel's bound at ${formatScore(result.score!)}; auto goes on`,
+                    );
+                  if (best)
+                    onBest(
+                      best.score,
+                      `${spaceMethodName(best.job.space, best.job.method)}, ${best.job.kind}, seed ${best.job.seed}`,
+                    );
                 },
               },
               this.pool!.runSpaceJob,
@@ -1216,7 +1249,8 @@ class Volunteer {
       best: offer
         ? {
             score: offer.score,
-            method: offer.job.method,
+            method: spaceMethodName(offer.job.space, offer.job.method),
+            ...(offer.job.params ? { params: offer.job.params } : {}),
             seed: offer.job.seed,
             kind: offer.job.kind,
             budget: { ...offer.job.budget },
@@ -1245,7 +1279,7 @@ class Volunteer {
     const vs =
       offer === null
         ? "no valid configuration"
-        : `best ${formatScore(offer.score)} (${offer.job.method}, seed ${offer.job.seed}` +
+        : `best ${formatScore(offer.score)} (${spaceMethodName(offer.job.space, offer.job.method)}, seed ${offer.job.seed}` +
           `${offer === found ? "" : ", from an earlier search"}) vs ` +
           (before === null
             ? "no best"

@@ -20,6 +20,15 @@ export interface PolishOptions {
   minTrust?: number;
   /** Optional external stop, polled before every iteration; true returns the current point. */
   shouldStop?: () => boolean;
+  /**
+   * Optional work poll: called before every iteration with the row sweeps (passes over the pairs
+   * and walls: row collections and merit evaluations) done since the last call, and before every
+   * simplex pivot with the pivot's tableau work (solveLp). True returns the current point, as
+   * shouldStop does; a pivot that is stopped ends its LP at its current, feasible basis.
+   */
+  poll?: (sweeps: number, lpWork: number) => boolean;
+  /** False skips the multiplier fit at the end (active rows, NNLS, rattlers): only poses, t and size are wanted. */
+  fit?: boolean;
 }
 
 export interface ActiveRow {
@@ -78,6 +87,7 @@ function lpStep(
   dtHi: number,
   W: number,
   below: number,
+  poll?: (work: number) => boolean,
 ): LpStep {
   const P = states.length;
   const nz = 3 * P;
@@ -114,7 +124,7 @@ function lpStep(
   for (let j = 0; j < 2 * nz; j++) hi[j] = rho;
   lo[2 * nz] = dtLo;
   hi[2 * nz] = dtHi;
-  const lp = solveLp(c, lpRows, lo, hi, W);
+  const lp = solveLp(c, lpRows, lo, hi, W, undefined, poll);
   const step = new Float64Array(nz + 1);
   for (let j = 0; j < nz; j++) step[j] = lp.x[j] - lp.x[nz + j];
   step[nz] = lp.x[2 * nz];
@@ -155,11 +165,17 @@ export function polish(
     const st = allStates(space, posesFromVector(zz));
     return { st, m: tt + W * violation(space, st, tt, margin) };
   };
+  // work since the last poll, in row sweeps (the start's merit is one)
+  let sweeps = 1;
+  const pivotPoll = opts.poll ? (work: number) => opts.poll!(0, work) : undefined;
   for (; it < maxIter; it++) {
     if (rho < minTrust) break;
     if (opts.shouldStop?.()) break;
+    if (opts.poll?.(sweeps, 0)) break;
+    sweeps = 0;
     const dtHi = Math.min(rhoT, (space.tMax - t) * 0.5);
-    const { step, predicted } = lpStep(space, states, t, margin, rho, -rhoT, dtHi, W, reachOf(rho));
+    const { step, predicted } = lpStep(space, states, t, margin, rho, -rhoT, dtHi, W, reachOf(rho), pivotPoll);
+    sweeps++;
     if (!(predicted > 1e-16)) {
       rho *= 0.25;
       rhoT *= 0.25;
@@ -169,13 +185,15 @@ export function polish(
     for (let j = 0; j < nz; j++) zn[j] = z[j] + step[j];
     const tn = t + step[nz];
     let trial = meritAt(zn, tn);
+    sweeps++;
     let actual = merit - trial.m;
     if (actual < 0.1 * predicted) {
       // second-order correction: re-linearise at the trial point and restore feasibility with t fixed
-      const soc = lpStep(space, trial.st, tn, margin, rho, 0, 0, W, reachOf(rho));
+      const soc = lpStep(space, trial.st, tn, margin, rho, 0, 0, W, reachOf(rho), pivotPoll);
       const z2 = new Float64Array(nz);
       for (let j = 0; j < nz; j++) z2[j] = zn[j] + soc.step[j];
       const trial2 = meritAt(z2, tn);
+      sweeps += 2;
       const actual2 = merit - trial2.m;
       if (actual2 > actual) {
         zn = z2;
@@ -204,6 +222,18 @@ export function polish(
     }
   }
   const poses = posesFromVector(z);
+  if (opts.fit === false)
+    return {
+      poses,
+      t,
+      size: sideFromApothem(space.M, space.K, t),
+      margin,
+      feasibility: NaN,
+      iterations: it,
+      active: [],
+      kktResidual: NaN,
+      rattlers: [],
+    };
   return finishPolish(space, poses, t, margin, it);
 }
 

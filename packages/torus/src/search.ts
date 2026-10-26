@@ -196,9 +196,85 @@ interface State {
 }
 
 /** Lattice for a family at scale k of `l` (sq/hex rebuilt from L, exactly as stored). */
-function scaledLattice(family: TorusFamily, l: Lattice, k: number): Lattice {
+export function scaledLattice(family: TorusFamily, l: Lattice, k: number): Lattice {
   if (family !== "free") return familyLattice(family, Math.hypot(l.b1[0], l.b1[1]) * k);
   return { b1: [l.b1[0] * k, l.b1[1] * k], b2: [l.b2[0] * k, l.b2[1] * k] };
+}
+
+/**
+ * The tight scale of a packing: the smallest k at which the packing scaled by k about the origin
+ * (lattice and centres; pieces keep their size) is valid by the float validator at tolerance 0
+ * (every separation >= 0), by bisection to 1e-13 relative from k = 1 (validity is monotone in k,
+ * see the header). Returns the scaled packing and its score, or null when no valid k is found
+ * within a factor of about 14 above 1. `tick` is called before each validator call and may throw.
+ */
+export function tightScale(
+  problem: TorusProblem,
+  s: { lattice: Lattice; poses: readonly Pose[] },
+  tick: () => void = () => {},
+): { lattice: Lattice; poses: Pose[]; score: number } | null {
+  const { family, N } = problem;
+  const packingAt = (k: number): TorusPacking => ({
+    family,
+    N,
+    lattice: scaledLattice(family, s.lattice, k),
+    poses: s.poses.map((p) => ({ x: p.x * k, y: p.y * k, theta: p.theta })),
+  });
+  const validAt = (k: number): boolean => {
+    tick();
+    try {
+      const v = validateTorusPacking(packingAt(k), { tol: 0 });
+      return v.errors.length === 0 && v.valid && v.minSep >= 0;
+    } catch {
+      return false;
+    }
+  };
+  const k = scaleSearch(validAt);
+  if (k === null) return null;
+  const p = packingAt(k);
+  return { lattice: p.lattice, poses: p.poses.map((q) => ({ ...q })), score: torusScore(family, p.lattice) };
+}
+
+/**
+ * The bisection of tightScale for any test of validity that is monotone in the scale k: from
+ * k = 1, up by steps of 1e-3, 2e-3, ... until valid or down by such steps until invalid, then
+ * bisection to 1e-13 relative; the smallest valid k found, or null when none is found within a
+ * factor of about 14 above 1.
+ */
+export function scaleSearch(validAt: (k: number) => boolean): number | null {
+  const bisect = (lo: number, hi: number): number => {
+    while (hi - lo > 1e-13 * hi) {
+      const mid = 0.5 * (lo + hi);
+      if (validAt(mid)) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  };
+  let step = 1e-3;
+  if (!validAt(1)) {
+    let lo = 1;
+    let hi = 1;
+    for (;;) {
+      if (step > 4) return null;
+      hi = lo * (1 + step);
+      if (validAt(hi)) break;
+      lo = hi;
+      step *= 2;
+    }
+    return bisect(lo, hi);
+  }
+  let hi = 1;
+  let lo = 0;
+  for (;;) {
+    const next = hi * (1 - step);
+    if (!validAt(next)) {
+      lo = next;
+      break;
+    }
+    hi = next;
+    step = Math.min(0.5, step * 2);
+  }
+  return bisect(lo, hi);
 }
 
 export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): TorusSearchResult {
@@ -220,63 +296,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
     if (o.maxSeconds !== undefined && clock() - t0 > o.maxSeconds) throw new Stop("time");
   };
 
-  const packingAt = (s: { lattice: Lattice; poses: Pose[] }, k: number): TorusPacking => ({
-    family,
-    N,
-    lattice: scaledLattice(family, s.lattice, k),
-    poses: s.poses.map((p) => ({ x: p.x * k, y: p.y * k, theta: p.theta })),
-  });
-
-  const validAt = (s: { lattice: Lattice; poses: Pose[] }, k: number): boolean => {
-    tick();
-    try {
-      const v = validateTorusPacking(packingAt(s, k), { tol: 0 });
-      return v.errors.length === 0 && v.valid && v.minSep >= 0;
-    } catch {
-      return false;
-    }
-  };
-
-  /** The smallest valid scale of a packing, as a State, or null when none is near. */
-  const tight = (s: { lattice: Lattice; poses: Pose[] }): State | null => {
-    const bisect = (lo: number, hi: number): number => {
-      while (hi - lo > 1e-13 * hi) {
-        const mid = 0.5 * (lo + hi);
-        if (validAt(s, mid)) hi = mid;
-        else lo = mid;
-      }
-      return hi;
-    };
-    let k: number;
-    let step = 1e-3;
-    if (!validAt(s, 1)) {
-      let lo = 1;
-      let hi = 1;
-      for (;;) {
-        if (step > 4) return null;
-        hi = lo * (1 + step);
-        if (validAt(s, hi)) break;
-        lo = hi;
-        step *= 2;
-      }
-      k = bisect(lo, hi);
-    } else {
-      let hi = 1;
-      let lo = 0;
-      for (;;) {
-        const next = hi * (1 - step);
-        if (!validAt(s, next)) {
-          lo = next;
-          break;
-        }
-        hi = next;
-        step = Math.min(0.5, step * 2);
-      }
-      k = bisect(lo, hi);
-    }
-    const p = packingAt(s, k);
-    return { lattice: p.lattice, poses: p.poses.map((q) => ({ ...q })), score: torusScore(family, p.lattice) };
-  };
+  const tight = (s: { lattice: Lattice; poses: Pose[] }): State | null => tightScale(problem, s, tick);
 
   /** Penalty continuation from a packing (lattice, poses) scaled by k0. */
   const relax = (

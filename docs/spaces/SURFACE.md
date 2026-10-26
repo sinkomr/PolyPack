@@ -530,6 +530,69 @@ certified better one; its seed, counts, limit and time are stored with it (`sear
 re-run). Machine load stayed high during the re-run (load average about 30), so times are not
 comparable with the first build.
 
+## 5b. Kernel for the generic methods
+
+`surfaceKernel({ solid, N, P })` (`packages/surface/src/kernel.ts`) lets the generic search
+methods (`docs/methods/dimensions/README.md`) run on fold problems. Nofold problems are planar and
+run on the polygon solver.
+
+- **State.** Per piece, (u, v) = (x, y) / s in its anchor face's frame, and theta for polygons:
+  the fold search's packing on the solid of edge 1, pieces scaled by 1/s. The size is s, the
+  score. `setSize` changes s only, so centres keep their places on the surface and pieces shrink
+  or grow about them. `fromConfig` refuses what the server refuses unchecked: a malformed
+  configuration, P above 80, and a size below the bound (by more than 1e-9 relative). Random
+  starts are roomy (the fold search's density) and never smaller than the edge at which a piece
+  fits in a face: larger pieces wrap around vertices, and a relaxation from random poses then
+  often leaves cone points inside them.
+- **Charts.** A local solve can move a centre off its face. Every operation reads it by developing
+  the straight segment from the face's centre to it, across the edges it crosses (`unfoldChart`
+  in `kernel-solid.ts`); across one edge this is the fold search's `canonicalize`. A segment never
+  circles a vertex, so every chart point has one surface point. `rebase` stores it. `randomPose`
+  writes a uniform random point into the piece's own chart: the end of a shortest path from the
+  anchor face's centre.
+- **Energy** (`kernel-energy.ts`): the fold search's terms with per-piece weights, in piece units
+  (s² times the unit-solid energy). Gradient: analytic for disks; central differences per piece
+  for polygons, and of the whole energy for d/ds. [CALC] Clipping can leave a part an edge of
+  length about 1e-15 whose direction rounding makes arbitrary, and the separating-axis depth then
+  jumps at isolated poses, where line searches stall (seen on the icosahedron with 30 triangles).
+  The kernel's depth therefore uses as axes the exact half-planes each part was cut from (piece
+  sides, wedge rays, face edges). Every edge of a part lies on one of them, and a half-plane that
+  does not touch the part only lowers the gap, so the result is the separating-axis depth with
+  exact normals.
+- **finish** (`kernel-finish.ts`): the largest scale at which the fold search's energy is exactly
+  zero, by bisection with the poses fixed (shrinking a piece about its centre keeps it inside the
+  old one, so the energy falls with the scale). It starts at the bound at the latest, since nothing
+  valid is smaller, shrinks the pieces to a tenth at most, and counts a scale at which a piece
+  crosses more than the server's 200 chains of faces as infeasible before developing it. Below half
+  the bound it returns null at once. Then the contact-LP polish within a deterministic work budget
+  (its stop polls, about eight iterations of a loose packing), and the validator at tolerance 0,
+  lowering the scale by 1e-13, 1e-12, ... until it passes. [CALC] On 22 fold records (every 37th
+  of the table) it returned a valid configuration within 4e-12 of the record's s.
+- **validate**: the server's rule (`packages/spaces/src/validate.ts`), with its reasons word for
+  word: the format and limits (P at most 80, s at most 1e6, coordinates and angles at most 1e4),
+  the lower bound, and `validateFold` at the touching tolerance 1e-9 with at most 200 chains per
+  piece. The server's further check of an entry that beats a research record (valid also at
+  1e-11) needs the record, and is left to the server.
+- **Bound**: the larger of the area and one-piece bounds (2.6), with the float operations and the
+  tangents (Python's `math.tan`) the records were computed with, so that it equals `bound.value`
+  of every record [CALC: all 2038]. V8's `Math.tan` differs in the last bit for pi/5, pi/6 and
+  pi/8, which moved the bound by one ulp on 434 records.
+- **Capabilities.** `shape`: polygon t K plus a disk of radius (1 - t) r_in, its round corners
+  replaced by chords, which lies inside the piece and grows with t. At t = 0 it is the N J-gon
+  inscribed in the inscribed circle (J = ceil(12 / N) chords per corner), whose inradius is
+  cos(pi / (N J)) r_in, 0.966 to 0.981 r_in for N = 3 to 8. For disks it changes nothing.
+  `seeds`: the pieces spread evenly over the faces, each face's share on a triangular patch about
+  its centre, valid at the size returned. `swap` (polygons): two pieces exchange their angles in
+  their faces' frames.
+- **Costs** [CALC] (Apple Silicon, load average about 90): an energy sweep takes 0.3 to 0.6 ms
+  at P = 10 and 0.6 to 1.1 ms at P = 30 for polygons, 0.1 to 0.15 ms for disks. With the gradient
+  it takes 8.3 to 8.9 sweeps for polygons (`gradCost` 9) and about one sweep for disks. One
+  finish costs 140 to 1200 sweeps for polygons and 490 to 2600 for disks, measured against a sweep
+  that develops every piece (`finishCost` = 100 + 20 P and 200 + 60 P); one validation about 2.
+- **Platonic-only parts**, kept in `kernel-solid.ts` for the general solids: the face polygons
+  (`faceShapes`), the area and one-piece bounds and the centre-in-face depth (the validator's
+  formula).
+
 ## 6. Conventions in code
 
 Vertex order (unit edge; the scale does not affect the combinatorics):

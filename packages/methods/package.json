@@ -1,0 +1,17 @@
+{
+  "name": "@polypack/methods",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contract": "./src/contract.ts",
+    "./reference": "./src/reference/disks.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@polypack/solver": "0.1.0"
+  }
+}

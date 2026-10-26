@@ -2,6 +2,7 @@
 export {
   type RunSpaceJob,
   SPACE_POLICY,
+  chooseSpaceMethod,
   type SpaceCandidate,
   type SpaceSearchInput,
   type SpaceSearchOutcome,

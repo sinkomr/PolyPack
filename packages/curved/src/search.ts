@@ -80,7 +80,7 @@ function minimizeEnergy(
 }
 
 /** Random centre inside a disk of radius rMax, uniform in area at curvature K. */
-function randomCentre(space: Space, rMax: number, r: () => number): { x: number; y: number } {
+export function randomCentre(space: Space, rMax: number, r: () => number): { x: number; y: number } {
   const K = space.K;
   // area within radius s is 2 pi vs_K(s); invert by bisection on vs
   const u = r();
@@ -102,7 +102,7 @@ function vsOf(K: number, x: number): number {
   return 2 * s * s;
 }
 
-function placementRadius(space: Space, t: number): number {
+export function placementRadius(space: Space, t: number): number {
   const { M, K } = space;
   if (M === 0) return Math.max(0, t - space.piece.rho * 0.5);
   // polygon container: centres within the inscribed region plus a little

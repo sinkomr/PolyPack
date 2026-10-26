@@ -11,6 +11,7 @@
     "viz": "tsx viz/build.ts"
   },
   "dependencies": {
-    "@polypack/geometry": "0.1.0"
+    "@polypack/geometry": "0.1.0",
+    "@polypack/methods": "0.1.0"
   }
 }

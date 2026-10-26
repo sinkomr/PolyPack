@@ -38,7 +38,7 @@ import type { PackingConfig } from "@polypack/geometry";
 import { type SpaceConfig, type SpaceName, isSpaceName } from "@polypack/spaces";
 import { problemKey } from "./format";
 import type { SpaceCandidate } from "./spaces/engine";
-import { type SpaceProblem, readSpaceConfig } from "./spaces/model";
+import { type SpaceProblem, readSpaceConfig, spaceMethodName } from "./spaces/model";
 import type { Candidate, Problem } from "./types";
 import { isFiniteNumber, readPieces } from "./validate";
 
@@ -363,7 +363,8 @@ export interface SpaceHistoryLine {
   leader_before: SpaceLeaderRef | null;
   leader_after: SpaceLeaderRef | null;
   bound: number | null;
-  best: HistoryLine["best"];
+  /** As a polygon line's, with the method's parameters (--space-params) when the job had any. */
+  best: (NonNullable<HistoryLine["best"]> & { params?: Record<string, unknown> }) | null;
   jobs: number;
   stopped: string;
   active_s: number;
@@ -398,6 +399,8 @@ export interface SpaceBestFile {
   P: number;
   score: number;
   method: string;
+  /** The method's parameters (--space-params), when the job had any. */
+  params?: Record<string, unknown>;
   seed: number;
   budget: { time_s: number; evals?: number };
   kind: string;
@@ -412,7 +415,9 @@ export function spaceBestFileOf(c: SpaceCandidate, P: number, version: string, a
     id: c.job.id,
     P,
     score: c.score,
-    method: c.job.method,
+    // the name the method is recorded under ("sphere basin hopping" for auto), and its parameters
+    method: spaceMethodName(c.job.space, c.job.method),
+    ...(c.job.params ? { params: c.job.params } : {}),
     seed: c.job.seed,
     budget: { ...c.job.budget },
     kind: c.job.kind,
@@ -430,6 +435,7 @@ export function spaceCandidateOf(f: SpaceBestFile): SpaceCandidate {
       space: f.space,
       id: f.id,
       method: f.method,
+      ...(f.params ? { params: f.params } : {}),
       seed: f.seed,
       budget: { ...f.budget },
       kind: f.kind as SpaceCandidate["job"]["kind"],
@@ -640,6 +646,7 @@ export class StateDir {
         isFiniteNumber(f.score) &&
         f.score > 0 &&
         typeof f.method === "string" &&
+        (f.params === undefined || (typeof f.params === "object" && f.params !== null && !Array.isArray(f.params))) &&
         typeof f.kind === "string" &&
         Number.isSafeInteger(f.seed) &&
         f.seed >= 0 &&

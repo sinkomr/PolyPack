@@ -15,6 +15,7 @@
     "@polypack/balls": "*",
     "@polypack/curved": "*",
     "@polypack/geometry": "*",
+    "@polypack/methods": "0.1.0",
     "@polypack/polyhedra": "*",
     "@polypack/solver": "*",
     "@polypack/spaces": "*",

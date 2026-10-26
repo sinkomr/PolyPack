@@ -12,5 +12,8 @@
   "scripts": {
     "typecheck": "tsc -p . --noEmit",
     "viz": "tsx scripts/build-viz.ts"
+  },
+  "dependencies": {
+    "@polypack/methods": "0.1.0"
   }
 }

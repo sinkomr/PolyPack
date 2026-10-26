@@ -109,10 +109,19 @@ export class TesseractWords {
    * affected; callers using these lengths for anything else should not take them as distances.
    */
   distances(c1: number, u1: number[], c2: number, u2: number[], s: number, excludeEmpty = false, tol = 1e-12): number[] {
+    return this.images(c1, u1, c2, u2, s, excludeEmpty, tol).map((y) => Math.hypot(y[0] - u1[0], y[1] - u1[1], y[2] - u1[2]));
+  }
+
+  /**
+   * The images y of (c2, u2) in the development from (c1, u1) at edge s (local coordinates of c1)
+   * under the realised words, as distances() takes them: each geodesic is the segment u1 -> y.
+   * The same caution applies: a segment within 1e-12 of a hinge may be reported.
+   */
+  images(c1: number, u1: number[], c2: number, u2: number[], s: number, excludeEmpty = false, tol = 1e-12): number[][] {
     const h = s / 2;
     const ws = this.by.get(`${c1},${c2}`) ?? [];
     const x2 = embed(c2, u2, h);
-    const out: number[] = [];
+    const out: number[][] = [];
     const eps = 1e-12 * Math.max(1, h);
     for (const w of ws) {
       if (excludeEmpty && w.steps.length === 0) continue;
@@ -136,7 +145,7 @@ export class TesseractWords {
         prev = t;
       }
       if (!ok) continue;
-      out.push(Math.hypot(y[0] - u1[0], y[1] - u1[1], y[2] - u1[2]));
+      out.push(y);
     }
     return out;
   }

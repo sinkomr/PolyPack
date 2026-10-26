@@ -169,21 +169,27 @@ canvas#board {
   margin-top: 8px;
   font-size: 13px;
 }
-#solve-params .parameter {
+#solve-params .parameter,
+#space-solve-params .parameter {
   display: block;
   margin: 10px 0;
 }
-#solve-params .parameter span {
+#solve-params .parameter span,
+#space-solve-params .parameter span {
   display: block;
   font-size: 13px;
   margin-bottom: 3px;
 }
 #solve-params input:not([type="checkbox"]),
 #solve-params select,
-#solve-params textarea {
+#solve-params textarea,
+#space-solve-params input:not([type="checkbox"]),
+#space-solve-params select,
+#space-solve-params textarea {
   width: 100%;
 }
-#solve-params textarea {
+#solve-params textarea,
+#space-solve-params textarea {
   color: inherit;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -193,16 +199,19 @@ canvas#board {
   resize: vertical;
   font: 12px monospace;
 }
-#solve-form [aria-invalid="true"] {
+#solve-form [aria-invalid="true"],
+#space-solve-form [aria-invalid="true"] {
   border-color: var(--bad);
 }
-#solve-params fieldset {
+#solve-params fieldset,
+#space-solve-params fieldset {
   border: 1px solid var(--border);
   margin: 10px 0;
   padding: 8px;
   min-width: 0;
 }
-#solve-params legend {
+#solve-params legend,
+#space-solve-params legend {
   font-size: 13px;
 }
 #solve-trace,

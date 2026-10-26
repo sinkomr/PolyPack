@@ -373,6 +373,10 @@ The ranking is kept until an entry changes.</p>
 <p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most ${MAX_NOTE_LENGTH} characters), <code>software</code> (at most ${MAX_SOFTWARE_LENGTH}), <code>method</code> (free text, at most ${SPACE_METHOD_LENGTH}) and <code>seed</code> (a non-negative integer) are optional.
 Submissions are accepted for the problems of the catalogues only.</p>
 <pre tabindex="0"><code>${esc(SPACE_SUBMIT)}</code></pre>
+<p id="spaces-methods">The server does not check <code>method</code>; the site's own clients name the search that found the entry.
+On the board and in the <a href="/volunteer.html">volunteer client</a> (<code>--space-method</code>) a search runs <em>Auto</em>, the space's own search, named as in <code>"sphere basin hopping"</code>,
+or one of the <a href="${REPO}/blob/main/docs/methods/dimensions/README.md">generic methods</a> that run in every space whose kernel supports them, named by the space and the method, as in <code>"sphere basin_hopping"</code>, followed by the method's parameters as JSON when the run set any and they fit.
+Nofold surface problems run the polygon solver's methods on one face (<code>"surface nofold: penalty on one face"</code>). The board adds where its run started: <code>"sphere basin hopping (board, from the research record)"</code>.</p>
 <p>The score is the size the configuration states (<code>s</code> for a solid, a polytope or a polyhedra container, <code>size</code>, <code>rho</code>, <code>L</code>, or √|det(b1, b2)| for a free lattice): the server checks the configuration at that size and does not shrink it.
 Response (this example only ties the research record, so it is valid and <a href="#spaces-kept">not kept</a>):</p>
 <pre tabindex="0"><code>${esc(SPACE_SUBMIT_RESPONSE)}</code></pre>
