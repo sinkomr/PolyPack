@@ -61,8 +61,12 @@ import { SOFTWARE, VERSION } from "./version";
 
 /** The work list is read again after this long; a problem that could not be read is skipped as long. */
 export const TARGETS_TTL_MS = 10 * 60_000;
-/** The largest limit of GET /api/spaces/targets (apps/server SPACE_TARGETS_MAX_LIMIT), and an older server's. */
-export const SPACE_TARGETS_LIMIT = 10000;
+/**
+ * The largest limit of GET /api/spaces/targets (apps/server SPACE_TARGETS_MAX_LIMIT), and the oldest server's. A
+ * server that refuses the limit says its own largest ("from 1 to 10000"), which the client then asks for; one whose
+ * answer names none gets SPACE_TARGETS_LIMIT_BEFORE.
+ */
+export const SPACE_TARGETS_LIMIT = 20000;
 export const SPACE_TARGETS_LIMIT_BEFORE = 2000;
 /** After the first signal (or the end of --hours), the most the client waits before it exits. */
 export const STOP_GRACE_MS = 30_000;
@@ -592,11 +596,11 @@ class Volunteer {
       this.spaceTargetsLimit > SPACE_TARGETS_LIMIT_BEFORE &&
       /limit/.test(describeAnswer(answer))
     ) {
-      // a server from before 2026-10-25 takes at most limit=2000
-      this.log(
-        `The server refused limit=${this.spaceTargetsLimit} for the spaces' work list; asking for ${SPACE_TARGETS_LIMIT_BEFORE}`,
-      );
-      this.spaceTargetsLimit = SPACE_TARGETS_LIMIT_BEFORE;
+      // an older server takes less: its largest limit, as its answer says, or 2000 (before 2026-10-25)
+      const said = /from 1 to (\d+)/.exec(describeAnswer(answer));
+      const next = said && Number(said[1]) < this.spaceTargetsLimit ? Number(said[1]) : SPACE_TARGETS_LIMIT_BEFORE;
+      this.log(`The server refused limit=${this.spaceTargetsLimit} for the spaces' work list; asking for ${next}`);
+      this.spaceTargetsLimit = next;
       answer = await this.reader.spaceTargets(this.spaceTargetsQuery(this.spaceFilterOnServer));
     }
     if (answer?.status === 400 && this.spaceFilterOnServer) {
@@ -625,10 +629,10 @@ class Volunteer {
   }
 
   /**
-   * ?spaces=...&max_P=...&limit=10000, the server's largest limit, so that the client draws from
-   * the whole list (9,827 targets with the catalogues of 2026-10-25, so that every space gets its
+   * ?spaces=...&max_P=...&limit=20000, the server's largest limit, so that the client draws from
+   * the whole list (10,505 targets with the catalogues of 2026-10-25, so that every space gets its
    * share); only the limit once the server has refused the filters (they then apply here only).
-   * An older server takes at most 2000, which the client then asks for.
+   * An older server takes at most 10000 or 2000, which the client then asks for.
    */
   private spaceTargetsQuery(filters: boolean): string {
     const q = new URLSearchParams();

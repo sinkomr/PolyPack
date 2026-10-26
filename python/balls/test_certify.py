@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Tests of the balls certifier (python/balls/certify.py): exact contact rules, overlaps and protrusions of 1e-9,
-malformed input and the published fields. Run: python3 python/balls/test_certify.py"""
+malformed input, the published fields and agreement with the float validator near contact. Run: python3 python/balls/test_certify.py"""
 import copy
 import json
 import math
@@ -179,6 +179,21 @@ class Fields(unittest.TestCase):
         self.assertTrue(certify.certify_record(r)['ok'])
         r['literature'][0]['value'] = 3.2
         self.assertFalse(certify.certify_record(r)['ok'])
+
+
+class CrossCheck(unittest.TestCase):
+    def test_validator_and_certifier_agree_near_contact(self):
+        # fixtures/crosscheck.json: 140 cases from packages/balls/scripts/gen-crosscheck.ts with the float validator's
+        # measured gaps (+-1e-7, +-1e-9, pairs and walls, every problem)
+        with open(os.path.join(HERE, 'fixtures', 'crosscheck.json')) as f:
+            cases = json.load(f)['cases']
+        self.assertEqual(len(cases), 140)
+        for c in cases:
+            r = certify.certify_config(c['code'], c['config']['s'], c['config']['pieces'])
+            if c['gap'] > 1e-10:
+                self.assertTrue(r['ok'], (c['code'], c['what'], c['gap']))
+            elif c['gap'] < -1e-10:
+                self.assertFalse(r['ok'], (c['code'], c['what'], c['gap']))
 
 
 @unittest.skipUnless(os.path.exists(RECORDS), 'no records file')

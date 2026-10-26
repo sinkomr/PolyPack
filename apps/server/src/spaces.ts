@@ -45,8 +45,11 @@ import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
-/** Largest `limit` of /api/spaces/targets. */
-export const SPACE_TARGETS_MAX_LIMIT = 10000;
+/**
+ * Largest `limit` of /api/spaces/targets: room for the whole list (10,505 targets with the balls space, 2026-10-25),
+ * which the volunteer client asks for, and for the catalogues still to come.
+ */
+export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
  * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
  * kept: a check of 100 large polyhedra takes up to about 0.15 s, and posting a research record back

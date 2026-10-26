@@ -176,7 +176,7 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 });
 
 describe("GET /api/spaces", () => {
-  it("lists the six spaces with their catalogues and the curvature sweeps", async () => {
+  it("lists the seven spaces with their catalogues and the curvature sweeps", async () => {
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
@@ -187,9 +187,11 @@ describe("GET /api/spaces", () => {
       ["torus", 544],
       ["boundary", 32],
       ["polyhedra", 8514],
+      ["balls", 693],
     ]);
     for (const s of r.spaces) {
-      expect(s.viewer).toBe(`/spaces/${s.space}.html`);
+      // the balls space has no standalone viewer: its problems are drawn on the board
+      expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
       expect(s.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/\w+\.md$/);
       expect(s.conventions.configuration).toBeTruthy();
     }
