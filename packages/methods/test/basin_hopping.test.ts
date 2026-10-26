@@ -218,6 +218,17 @@ describe("basin_hopping with other finishings", () => {
     expect(trace!.failures).toBeGreaterThan(0);
   });
 
+  it("returns a result early when gradients are dear, at any budget one offer fits", () => {
+    // a gradient costs 9 evaluations and an offer 242, as on the surface kernel's polygon fold
+    // problems; four structured starts squeezed in full before the first offer took 25,000
+    const dear = () => ({ ...disksKernel(10), gradCost: 9, finishCost: 240, validateCost: 2 });
+    for (const evals of [300, 1000, 3000]) {
+      const r = runMethod(dear(), "basin_hopping", { seed: 1, budget: { evals } });
+      expect(validateDisks(10, r.config, 0).valid).toBe(true);
+      expect(r.evaluations).toBeLessThanOrEqual(evals + 10);
+    }
+  });
+
   it("finds a result where the finishing gives up on loose states", () => {
     const r = runMethod(tightOnlyDisks(9), "basin_hopping", { seed: 2, budget: { evals: 10000 } });
     expect(validateDisks(9, r.config, 0).valid).toBe(true);

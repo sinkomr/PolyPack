@@ -532,66 +532,113 @@ comparable with the first build.
 
 ## 5b. Kernel for the generic methods
 
-`surfaceKernel({ solid, N, P })` (`packages/surface/src/kernel.ts`) lets the generic search
-methods (`docs/methods/dimensions/README.md`) run on fold problems. Nofold problems are planar and
-run on the polygon solver.
+`surfaceKernel({ solid, N, P, mode })` (`packages/surface/src/kernel.ts`) lets the generic search
+methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 36 solids: with
+folding (`mode` "fold", the default) and without ("nofold"). The nofold problems of the Platonic
+solids are planar problems of one face and keep the polygon solver's methods; on the other solids
+the kernel's nofold mode serves them, so every problem offers Auto and the generic methods.
 
 - **State.** Per piece, (u, v) = (x, y) / s in its anchor face's frame, and theta for polygons:
-  the fold search's packing on the solid of edge 1, pieces scaled by 1/s. The size is s, the
+  the fold search's packing on the solid of scale 1, pieces scaled by 1/s. The size is s, the
   score. `setSize` changes s only, so centres keep their places on the surface and pieces shrink
   or grow about them. `fromConfig` refuses what the server refuses unchecked: a malformed
-  configuration, P above 80, and a size below the bound (by more than 1e-9 relative). Random
-  starts are roomy (the fold search's density) and never smaller than the edge at which a piece
-  fits in a face: larger pieces wrap around vertices, and a relaxation from random poses then
-  often leaves cone points inside them.
+  configuration, P above 100, and a size below the bound (by more than 1e-9 relative). Random
+  starts put each piece at a point drawn uniformly on the surface (a face by its area, then a point
+  of it). They are roomy (the fold search's density) and never smaller than the scale at which a
+  piece fits in the smallest face: larger pieces wrap around vertices, and a relaxation from
+  random poses then often leaves cone points inside them.
+- **Faces.** Each face is read on its own: its polygon in its frame (`solids.ts` facePolygonOf: the
+  regular polygon's formulas on a regular face, the stored corners on a Catalan face), its area,
+  the largest disk about its frame origin inside it, and its corners' vertex ids
+  (`kernel-solid.ts`). Frame origins lie inside their faces: a regular face's centre, and on a
+  Catalan solid the point where the insphere touches the face. On the Platonic solids the kernel
+  gives the numbers it gave before it covered the other solids [CALC: states, energies, gradients,
+  moves, seeds, squeezes and finishes compared bit for bit on 8 problems], with two exceptions: the
+  model's chain cap rose from 400 to 1200 chains per piece with the server's cap (200 to 600), so
+  states far below the bound, where it used to give Infinity, now get finite energies (66 of 240
+  states at 0.05 to 0.25 of the bound); and two disk centres at one point now count as a full
+  overlap, where the model skipped them.
 - **Charts.** A local solve can move a centre off its face. Every operation reads it by developing
   the straight segment from the face's centre to it, across the edges it crosses (`unfoldChart`
   in `kernel-solid.ts`); across one edge this is the fold search's `canonicalize`. A segment never
   circles a vertex, so every chart point has one surface point. `rebase` stores it. `randomPose`
   writes a uniform random point into the piece's own chart: the end of a shortest path from the
-  anchor face's centre.
-- **Energy** (`kernel-energy.ts`): the fold search's terms with per-piece weights, in piece units
-  (s² times the unit-solid energy). Gradient: analytic for disks; central differences per piece
-  for polygons, and of the whole energy for d/ds. [CALC] Clipping can leave a part an edge of
+  anchor face's centre. The chains it needs reach the farthest point of the surface, bounded by
+  shortest paths between face centres through the shared edges; a few faces' chains are kept per
+  solid [CALC: all 120 faces of the disdyakis triacontahedron would hold about 118 MB, one takes
+  about 3 ms].
+- **Energy** with folding (`kernel-energy.ts`): the fold search's terms with per-piece weights, in
+  piece units (s² times the energy at scale 1). Gradient: analytic for disks; central differences
+  per piece for polygons, and of the whole energy for d/ds. [CALC] Clipping can leave a part an edge of
   length about 1e-15 whose direction rounding makes arbitrary, and the separating-axis depth then
   jumps at isolated poses, where line searches stall (seen on the icosahedron with 30 triangles).
   The kernel's depth therefore uses as axes the exact half-planes each part was cut from (piece
   sides, wedge rays, face edges). Every edge of a part lies on one of them, and a half-plane that
   does not touch the part only lowers the gap, so the result is the separating-axis depth with
   exact normals.
-- **finish** (`kernel-finish.ts`): the largest scale at which the fold search's energy is exactly
-  zero, by bisection with the poses fixed (shrinking a piece about its centre keeps it inside the
-  old one, so the energy falls with the scale). It starts at the bound at the latest, since nothing
-  valid is smaller, shrinks the pieces to a tenth at most, and counts a scale at which a piece
-  crosses more than the server's 200 chains of faces as infeasible before developing it. Below half
+- **Energy** without folding (`kernel-nofold.ts`): the squared protrusion of each piece beyond
+  each edge line of its face (its farthest point past the line, times 4 as the fold search weighs
+  walls) and the squared overlap depth of every pair on one face (separating axes from the pieces'
+  exact sides; disks by their centres' distance). Per edge only the farthest point counts, so a
+  soft piece never sticks out more than the true one (the fold search's nofold energy sums the
+  corners instead). A piece belongs to the face its centre is in, as with folding, so it can move to
+  a neighbouring face. There the energy jumps: a piece that is not symmetric about the shared edge
+  sticks out of the two faces by different amounts, the other edges of the new face count instead
+  of the old one's, and its pair terms change faces [CALC: a triangle on the rhombic dodecahedron at
+  s = 4 has energy 1.3154 just inside an edge and 0.4753 just across]. The energy is a model and
+  finish decides validity. Gradient: central differences per piece, and of the whole energy for
+  d/ds; a pose that is not a finite number has energy Infinity, with or without folding.
+- **finish** (`kernel-finish.ts`): the largest scale at which the fold search's energy of the mode
+  is exactly zero, by bisection with the poses fixed (shrinking a piece about its centre keeps it
+  inside the old one, so the energy falls with the scale). It starts at the bound at the latest,
+  since nothing valid is smaller, shrinks the pieces to a tenth at most, and, with folding, counts a
+  scale at which a piece crosses more than the server's 600 chains of faces as infeasible before
+  developing it. Below half
   the bound it returns null at once. Then the contact-LP polish within a deterministic work budget
-  (its stop polls, about eight iterations of a loose packing), and the validator at tolerance 0,
-  lowering the scale by 1e-13, 1e-12, ... until it passes. [CALC] On 22 fold records (every 37th
+  (its stop polls, about eight iterations of a loose packing; the mode's), and the mode's validator
+  at tolerance 0, lowering the scale by 1e-13, 1e-12, ... until it passes. [CALC] On 22 fold records (every 37th
   of the table) it returned a valid configuration within 4e-12 of the record's s.
 - **validate**: the server's rule (`packages/spaces/src/validate.ts`), with its reasons word for
-  word: the format and limits (P at most 80, s at most 1e6, coordinates and angles at most 1e4),
-  the lower bound, and `validateFold` at the touching tolerance 1e-9 with at most 200 chains per
-  piece. The server's further check of an entry that beats a research record (valid also at
-  1e-11) needs the record, and is left to the server.
-- **Bound**: the larger of the area and one-piece bounds (2.6), with the float operations and the
-  tangents (Python's `math.tan`) the records were computed with, so that it equals `bound.value`
-  of every record [CALC: all 2038]. V8's `Math.tan` differs in the last bit for pi/5, pi/6 and
-  pi/8, which moved the bound by one ulp on 434 records.
+  word: the format and limits (P at most 100, s at most 1e6, coordinates and angles at most 1e4),
+  the lower bound, and the mode's validator at the touching tolerance 1e-9 with at most 600 chains
+  per piece. A problem without a research record has every entry checked at 1e-11 too; the kernel
+  knows that a problem has none when its solid is not Platonic or its N is not one of the records'
+  shapes (0, 3, 4, 5, 6, 8), and then checks at 1e-11 as well. The Platonic problems with those N
+  and no record (some P above 24), and the further check of an entry that beats a research record,
+  need the catalogue; they are left to the server, and a job's own rule (packages/spaces run.ts
+  checkSpaceConfig, which replaces `validate` in a job) applies both.
+- **Bound**: the domain's (`domain.ts` surfaceBound), the larger of the area and one-piece bounds
+  (2.6), which the server checks against every problem without a record. On the Platonic solids it
+  uses the float operations and the tangents (Python's `math.tan`) the records were computed with,
+  so it also equals `bound.value` of every record [CALC: all 2038], which the server checks
+  against the problems with one. V8's `Math.tan` differs in the last bit for pi/5, pi/6 and pi/8;
+  through the bound's formula this moved the domain's Platonic bounds by up to 3 representable
+  steps (about 7e-16 relative).
 - **Capabilities.** `shape`: polygon t K plus a disk of radius (1 - t) r_in, its round corners
   replaced by chords, which lies inside the piece and grows with t. At t = 0 it is the N J-gon
   inscribed in the inscribed circle (J = ceil(12 / N) chords per corner), whose inradius is
   cos(pi / (N J)) r_in, 0.966 to 0.981 r_in for N = 3 to 8. For disks it changes nothing.
-  `seeds`: the pieces spread evenly over the faces, each face's share on a triangular patch about
-  its centre, valid at the size returned. `swap` (polygons): two pieces exchange their angles in
+  `seeds`: the pieces spread over the faces in proportion to their areas, as evenly as whole pieces
+  allow, each face's share on a triangular patch about its frame origin, valid at the size returned
+  in both modes. `swap` (polygons): two pieces exchange their angles in
   their faces' frames.
-- **Costs** [CALC] (Apple Silicon, load average about 90): an energy sweep takes 0.3 to 0.6 ms
-  at P = 10 and 0.6 to 1.1 ms at P = 30 for polygons, 0.1 to 0.15 ms for disks. With the gradient
-  it takes 8.3 to 8.9 sweeps for polygons (`gradCost` 9) and about one sweep for disks. One
-  finish costs 140 to 1200 sweeps for polygons and 490 to 2600 for disks, measured against a sweep
-  that develops every piece (`finishCost` = 100 + 20 P and 200 + 60 P); one validation about 2.
-- **Platonic-only parts**, kept in `kernel-solid.ts` for the general solids: the face polygons
-  (`faceShapes`), the area and one-piece bounds and the centre-in-face depth (the validator's
-  formula).
+- **Costs** [CALC] (Apple Silicon, load average about 90): with folding, an energy sweep takes 0.3
+  to 0.6 ms at P = 10 and 0.6 to 1.1 ms at P = 30 for polygons, 0.1 to 0.15 ms for disks. With the
+  gradient it takes 8.3 to 8.9 sweeps for polygons (`gradCost` 9) and about one sweep for disks.
+  One finish costs 140 to 1200 sweeps for polygons and 490 to 2600 for disks, measured against a
+  sweep that develops every piece (`finishCost` = 100 + 20 P and 200 + 60 P); one validation
+  about 2. The Catalan solids, prisms and antiprisms measured alike. At P = 100 (measured later)
+  a disk finish took 9,000 to 12,000 sweeps and a polygon finish 600 to 800, so `finishCost` is
+  low for many disks and high for many polygons there; it is kept as it was, so that runs on the
+  Platonic solids stay the same. Without folding a sweep has no chains to develop and takes about
+  0.01 to 0.03 ms. Against it, measured on one kernel with nothing cached, a gradient costs 3.9 to
+  9.0 sweeps for disks and 7.7 to 11.2 for polygons (central differences, at least 2 dim + 3 sweeps:
+  `gradCost` 7 and 10), a finish 1,400 to 3,100 sweeps for disks at P = 10 and 30 and up to 7,100
+  at P = 100, 270 to 960 for polygons and up to 3,900 at P = 100 (`finishCost` = 1500 + 35 P and
+  400 + 25 P), and a validation 1.2 to 2.6 (`validateCost` 4).
+- **basin_hopping** squeezes its start and the kernel's four structured starts before it first
+  offers, which on polygon problems with folding needs 25,000 to 50,000 evaluations [CALC: on the cube
+  and the rhombic dodecahedron with 5 squares]; below that it returns nothing.
 
 ## 6. Conventions in code
 

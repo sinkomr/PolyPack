@@ -24,9 +24,12 @@ import {
   swapPair,
 } from "./basin-operators";
 import { FinalRefinement } from "./basin-final";
+import { fitIterations } from "./seed-starts";
 
 /** Structured starts asked of a kernel with the capability "seeds", for the restart set. */
 const SEEDS = 4;
+/** The solves of a squeeze: its six penalty weights and the relax after them (local.ts). */
+const SQUEEZE_SOLVES = 7;
 /** Redraws in a row of a perturbation that changed nothing before a kick is forced. */
 const MAX_REDRAWS = 8;
 /** The shrink of the probe that picks the piece to reinsert (basin-operators.ts stressedPiece). */
@@ -185,7 +188,14 @@ export function runBasinHopping(ctx: MethodContext, trace?: BasinTrace, observe?
   t.kickMagnitude = p.kickMagnitude as number;
   const temperature = p.temperature as number;
   const rate = p.adaptationRate as number;
-  const local: SqueezeOptions = { maxIter: p.localIterations as number };
+  /**
+   * A squeeze's iterations per solve, fitted to the budget (seed-starts.ts fitIterations): the
+   * wanted `localIterations`, or fewer so that `solves` solves and one offer fit in what is left;
+   * a run's first squeeze takes at most half of it, so the run has a result early.
+   */
+  const fitted = (solves: number, first: boolean): SqueezeOptions => ({
+    maxIter: fitIterations(ctx, p.localIterations as number, solves, first),
+  });
   // the final refinement (basin-final.ts), which learns its cost from the hops' squeezes
   const final = new FinalRefinement(ctx, p.refinementEvals as number);
 
@@ -194,31 +204,41 @@ export function runBasinHopping(ctx: MethodContext, trace?: BasinTrace, observe?
   if (ctx.start) restarts.push(k.clone(ctx.start));
   if (k.seeds) restarts.push(...k.seeds(rng, SEEDS));
 
-  // The first local solve: the supplied start and the structured starts, all squeezed and offered
-  // smallest first until one finishes, else random poses squeezed until one finishes. A valid start
-  // the solve does not beat stays the current packing. The current packing is the squeezed state,
-  // not its finished configuration: the next hop perturbs the local minimum of the penalty, and
-  // the finished score decides acceptance.
+  // The first local solve. Without a valid supplied start, the first candidate (the supplied
+  // start, else the first structured start, else random poses) is squeezed and offered at once,
+  // until one finishes: the run has a result as early as the budget allows. Then the other
+  // candidates are squeezed, fitted together to what is left, and offered smallest first while
+  // they could beat the current packing, until one finishes: structured starts squeeze to very
+  // different sizes (polyhedra/tetintet/6, seed 1: 2.67, 3.00, 2.30 and 2.30). A valid start the
+  // solve does not beat stays the current packing. The current packing is the squeezed state, not
+  // its finished configuration: the next hop perturbs the local minimum of the penalty, and the
+  // finished score decides acceptance.
   let current: KernelState | null = null;
   let currentScore = Infinity;
-  const given = ctx.best();
-  if (given) {
-    current = given.state;
-    currentScore = given.score;
-  }
-  const starts = final.squeezedStarts(
-    restarts.map((s) => k.clone(s)),
-    local,
-  );
-  for (let attempt = 0; ; attempt++) {
-    const s = attempt < starts.length ? starts[attempt] : k.randomStart(rng);
-    if (attempt >= starts.length) final.squeeze(s, local);
-    const score = ctx.offer(s);
+  const take = (s: KernelState, score: number | null) => {
     if (score !== null && score < currentScore) {
       current = s;
       currentScore = score;
     }
-    if (current) break;
+  };
+  const given = ctx.best();
+  if (given) take(given.state, given.score);
+  const queue = restarts.map((s) => k.clone(s));
+  while (!current) {
+    const s = queue.shift() ?? k.randomStart(rng);
+    // before any result, the squeeze stops where the budget leaves the offer
+    if (ctx.best()) final.squeeze(s, fitted(SQUEEZE_SOLVES, false));
+    else final.firstSqueeze(s, fitted(SQUEEZE_SOLVES, true));
+    take(s, ctx.offer(s));
+  }
+  if (queue.length) {
+    const rest = final.squeezedStarts(queue, fitted(SQUEEZE_SOLVES * queue.length, false));
+    for (const s of rest) {
+      if (!(s.size < currentScore)) break;
+      const score = ctx.offer(s);
+      take(s, score);
+      if (score !== null) break;
+    }
   }
 
   let redraws = 0;
@@ -262,7 +282,7 @@ export function runBasinHopping(ctx: MethodContext, trace?: BasinTrace, observe?
     redraws = 0;
     const stats = t.operators[op];
     stats.tries++;
-    final.squeeze(s, local);
+    final.squeeze(s, fitted(SQUEEZE_SOLVES, false));
     const raw = ctx.offer(s);
     if (raw === null) t.failures++;
     const previous = currentScore;

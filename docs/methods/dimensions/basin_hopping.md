@@ -18,12 +18,22 @@ penalty method for its local solve; the framework does not let one method call a
 the squeeze is the local solve here. The framework keeps the best and checks it with the
 server's rule, so a hop never decides validity.
 
-- **Start.** The supplied start and the kernel's structured starts (`seeds`, four) are all
-  squeezed, then offered smallest first until one finishes; without any, random poses are
-  squeezed and offered until one finishes. Structured starts squeeze to very different sizes
-  (polyhedra/tetintet/6: 2.67, 3.00, 2.30 and 2.30 for the four tetrahedra seeds of seed 1),
-  so all are squeezed, but only the smallest is offered unless it does not finish. A valid
-  supplied start that this first solve does not beat stays the current packing.
+- **Start.** Without a valid supplied start, the first candidate (the supplied start, else the
+  first of the kernel's structured starts, `seeds`, four; else random poses) is squeezed and
+  offered at once, until one finishes, so that the run has a result as early as the budget
+  allows. Then the other candidates are squeezed, fitted together to what is left, and offered
+  smallest first while they could beat the current packing, until one finishes. Structured
+  starts squeeze to very different sizes (polyhedra/tetintet/6: 2.67, 3.00, 2.30 and 2.30 for
+  the four tetrahedra seeds of seed 1), so all are squeezed. A valid supplied start that this
+  first solve does not beat stays the current packing.
+- **Squeezes fitted to the budget.** A squeeze takes `localIterations` L-BFGS iterations per
+  solve (seven solves: six penalty weights and a relax), or fewer so that its solves and one
+  offer fit in what is left (`fitIterations` of `seed-starts.ts`, as penalty and seed do; an
+  iteration counts 1.5 gradients). A run's first squeeze takes at most half of what the offer
+  leaves, and stops outright where the budget leaves the offer, so a run returns a result
+  wherever one finish fits. Squeezing every structured start in full before the first offer,
+  as earlier versions did, returned nothing below about 25,000 evaluations on the polygon
+  fold problems of 2D on 3D, where a gradient costs 9 evaluations (below).
 - **The current packing** is the squeezed state, not its finished configuration: the next hop
   perturbs the local minimum of the penalty, and the finished score decides acceptance. On
   polyhedra/tetintet/6 and 12 and cubincub/10 (seeds 1 to 6, 20,000 evaluations), carrying the
@@ -154,7 +164,7 @@ or 1000; 50 or 200 iterations per weight), at about the lowest cost.
 
 ### The space kernels
 
-[CALC] Defaults, no start, seeds 1 to 3, 20,000 evaluations, in this version. The
+[CALC] Defaults, no start, seeds 1 to 3, 20,000 evaluations, with the early first offer. The
 record is the problem's `score_cert` in `data/<space>/records.json`; ratios are score over it,
 in brackets. Every result was checked with the kernel's server rule. Node v26.5.0, Apple M1
 Pro, load average near 150.
@@ -162,28 +172,52 @@ Pro, load average near 150.
 | Problem                    | Record (score_cert) | basin_hopping: seeds 1, 2, 3                               | shrink_repair: seeds 1, 2, 3                               |
 | -------------------------- | ------------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
 | sphere/0/13                | 2.005568            | 2.005568 (1.00000), 2.005568 (1.00000), 2.005568 (1.00000) | 2.005568 (1.00000), 2.005568 (1.00000), 2.005568 (1.00000) |
-| torus/hex/5/8              | 4.416365            | 4.447300 (1.00700), 4.449288 (1.00745), 4.416389 (1.00001) | 4.447493 (1.00705), 4.447485 (1.00705), 4.442754 (1.00598) |
-| curved/-1/3/4/6            | 2.843790            | 4.076095 (1.43333), 2.843790 (1.00000), 2.843790 (1.00000) | 3.771049 (1.32606), 2.843790 (1.00000), 2.843790 (1.00000) |
-| polyhedra/tetintet/6       | 2.290995            | 2.290994 (1.00000), 2.291694 (1.00031), 2.290994 (1.00000) | 2.290994 (1.00000), 2.291005 (1.00000), 2.290994 (1.00000) |
-| boundary/tesseract/ball/13 | 2.397495            | 2.409259 (1.00491), 2.402442 (1.00206), 2.532910 (1.05648) | 2.407408 (1.00413), 2.397830 (1.00014), 2.401765 (1.00178) |
+| torus/hex/5/8              | 4.416365            | 4.447300 (1.00700), 4.449288 (1.00745), 4.447298 (1.00700) | 4.447493 (1.00705), 4.447485 (1.00705), 4.442754 (1.00598) |
+| curved/-1/3/4/6            | 2.843790            | 2.843790 (1.00000), 2.843790 (1.00000), 2.843790 (1.00000) | 2.843790 (1.00000), 2.843790 (1.00000), 2.843790 (1.00000) |
+| polyhedra/tetintet/6       | 2.290995            | 2.290994 (1.00000), 2.290994 (1.00000), 2.290994 (1.00000) | 2.290994 (1.00000), 2.290995 (1.00000), 2.290996 (1.00000) |
+| boundary/tesseract/ball/13 | 2.397495            | 2.397781 (1.00012), 2.397624 (1.00005), 2.467637 (1.02926) | 2.410206 (1.00530), 2.397797 (1.00013), 2.399736 (1.00093) |
 
 [CALC] Notes on the table:
 
-- polyhedra/tetintet/6: four of the six results (both methods, seeds 1 and 3) are
-  2.290994449 to 2.290994492, accepted by the kernel's finishing at tolerance 0 and by the
-  server rule, up to 3.2e-7 below the record's float score 2.2909947650 (1.4e-7 relative).
+- polyhedra/tetintet/6: four of the six results (basin_hopping, seeds 1 to 3; shrink_repair,
+  seed 1) are 2.290994449 to 2.290994452, accepted by the kernel's finishing at tolerance 0 and
+  by the server rule, up to 3.2e-7 below the record's float score 2.2909947650 (1.4e-7 relative).
   This is not verified or certified, and no record is claimed; it needs the space's
   certification first.
 - boundary/tesseract/ball/13: an offer costs 4,000 evaluations, so a run makes about four
-  hops; seed 3's structured starts all squeeze to 2.5336 or more, and its result depends on
-  those few hops.
+  hops, and its result depends on those few hops (seed 3).
 - curved/-1/3/4/6 is a landscape of deep local optima: squeezed random starts reach the
-  record about one time in eight. Over seeds 1 to 6, 4 of 6 runs reach the record.
+  record about one time in eight. Over seeds 1 to 6, all 6 runs of each method reach the
+  record with the current kernels.
+- The version that squeezed every structured start before its first offer gives identical
+  results on these five problems with the same kernels (seeds 1 to 3; torus seeds 1 to 6):
+  at 20,000 evaluations the early first offer changes only the order of the starts' offers.
 - On curved/1/4/4/5 and curved/-1/4/4/8 neither method finds any valid configuration in
   20,000 evaluations (seeds 1 and 2): the squeeze there ends with a large energy (K = 1
   collapses to the lower bound; K = -1 with P = 8 ends near 1.3), and the curved finishing,
   an SLP polish of 40 iterations, gives up. That is a property of the kernel's energy and
   finishing, not of these methods.
+
+### Polygon fold problems (2D on 3D)
+
+[CALC] The surface kernel's polygon fold problems difference their gradient: one costs 9
+evaluations, and an offer 242 (the cube) or 202 (the rhombic dodecahedron). The board sizes a
+generic round there from 5,000 evaluations up. Scores, seeds 1, 2, 3; "none" is a run that
+returned no valid configuration; data/surface/records.json has 1.216554 for the cube problem
+and no record for the rhombic dodecahedron one.
+
+| Problem                               | Evaluations | Every start squeezed first | Early first offer         |
+| ------------------------------------- | ----------- | -------------------------- | ------------------------- |
+| surface/cube/fold/4/7                 | 1,000       | —                          | 1.86860, 1.68258, 1.80393 |
+| surface/cube/fold/4/7                 | 5,000       | none, none, none           | 1.41422, 1.41662, 1.27647 |
+| surface/cube/fold/4/7                 | 10,000      | none, none, none           | 1.41422, 1.41421, 1.27494 |
+| surface/cube/fold/4/7                 | 25,000      | 1.25000, 1.25177, 1.25000  | 1.25000, 1.25177, 1.25000 |
+| surface/rhombic_dodecahedron/fold/4/5 | 5,000       | none, none, none           | 1.04193, 1.09322, 1.04951 |
+| surface/rhombic_dodecahedron/fold/4/5 | 10,000      | none, none, none           | 1.03851, 1.08866, 1.03851 |
+| surface/rhombic_dodecahedron/fold/4/5 | 25,000      | 1.03851, 1.03851, 1.03851  | 1.03851, 1.03851, 1.03851 |
+
+[CALC] On the cube problem every budget tried from 250 evaluations (one offer and the four
+structured starts: 250, 300, 500, 1,000, 2,000, 5,000 and up) returns a valid configuration.
 
 ### The reference kernel
 
@@ -202,37 +236,37 @@ nice -n 10 npx tsx packages/methods/scripts/bench-basin_hopping.ts 2-30 5 10000
 | P   | Best known | 10,000: mean | 10,000: worst | 30,000: mean | 30,000: worst | 30,000: best − known | Seconds per run (30,000) |
 | --- | ---------- | ------------ | ------------- | ------------ | ------------- | -------------------- | ------------------------ |
 | 2   | 2.000000   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | -2.2e-16             | 0.02                     |
-| 3   | 2.154701   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 0.0e+0               | 0.02                     |
+| 3   | 2.154701   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 0.0e+0               | 0.01                     |
 | 4   | 2.414214   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 0.0e+0               | 0.02                     |
-| 5   | 2.701302   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 8.9e-16              | 0.03                     |
-| 6   | 3.000000   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.3e-15              | 0.03                     |
-| 7   | 3.000000   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 0.0e+0               | 0.04                     |
-| 8   | 3.304765   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.8e-15              | 0.04                     |
-| 9   | 3.613126   | 1.00614      | 1.01024       | 1.00000      | 1.00000       | 4.9e-15              | 0.06                     |
-| 10  | 3.813026   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 8.9e-11              | 0.07                     |
-| 11  | 3.923804   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 3.3e-11              | 0.07                     |
-| 12  | 4.029602   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.7e-11              | 0.08                     |
-| 13  | 4.236068   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 2.7e-15              | 0.09                     |
-| 14  | 4.328429   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 7.1e-11              | 0.10                     |
-| 15  | 4.521357   | 1.00104      | 1.00130       | 1.00026      | 1.00130       | 2.5e-11              | 0.11                     |
-| 16  | 4.615426   | 1.01832      | 1.02405       | 1.00000      | 1.00000       | 7.0e-11              | 0.13                     |
-| 17  | 4.792034   | 1.00599      | 1.01496       | 1.00000      | 1.00000       | 2.7e-11              | 0.13                     |
-| 18  | 4.863703   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.8e-11              | 0.15                     |
-| 19  | 4.863703   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 7.4e-12              | 0.15                     |
-| 20  | 5.122321   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 5.1e-11              | 0.17                     |
-| 21  | 5.252317   | 1.00816      | 1.02039       | 1.00000      | 1.00000       | 3.4e-11              | 0.20                     |
-| 22  | 5.439719   | 1.00113      | 1.00346       | 1.00007      | 1.00016       | 6.7e-11              | 0.23                     |
-| 23  | 5.545204   | 1.00519      | 1.00995       | 1.00064      | 1.00321       | 8.6e-11              | 0.22                     |
-| 24  | 5.651661   | 1.00331      | 1.00331       | 1.00277      | 1.00331       | 8.1e-3               | 0.22                     |
-| 25  | 5.752824   | 1.00500      | 1.00631       | 1.00134      | 1.00436       | 6.2e-9               | 0.23                     |
-| 26  | 5.828177   | 1.00600      | 1.01500       | 1.00000      | 1.00000       | 6.3e-11              | 0.24                     |
-| 27  | 5.906398   | 1.01487      | 1.01630       | 1.00231      | 1.01155       | 1.3e-5               | 0.26                     |
-| 28  | 6.014938   | 1.01418      | 1.01746       | 1.00274      | 1.00454       | 5.4e-9               | 0.27                     |
-| 29  | 6.138598   | 1.00093      | 1.00113       | 1.00001      | 1.00005       | 1.2e-10              | 0.28                     |
+| 5   | 2.701302   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 8.9e-16              | 0.02                     |
+| 6   | 3.000000   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 3.6e-15              | 0.03                     |
+| 7   | 3.000000   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 0.0e+0               | 0.03                     |
+| 8   | 3.304765   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 2.2e-15              | 0.04                     |
+| 9   | 3.613126   | 1.00409      | 1.01024       | 1.00000      | 1.00000       | 4.4e-15              | 0.05                     |
+| 10  | 3.813026   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 8.9e-11              | 0.06                     |
+| 11  | 3.923804   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 3.3e-11              | 0.06                     |
+| 12  | 4.029602   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.7e-11              | 0.07                     |
+| 13  | 4.236068   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 2.5e-14              | 0.08                     |
+| 14  | 4.328429   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 7.1e-11              | 0.09                     |
+| 15  | 4.521357   | 1.00130      | 1.00130       | 1.00000      | 1.00000       | 2.5e-11              | 0.10                     |
+| 16  | 4.615426   | 1.01832      | 1.02405       | 1.00000      | 1.00000       | 7.0e-11              | 0.11                     |
+| 17  | 4.792034   | 1.00926      | 1.01496       | 1.00000      | 1.00000       | 2.8e-11              | 0.13                     |
+| 18  | 4.863703   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 1.8e-11              | 0.14                     |
+| 19  | 4.863703   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 7.4e-12              | 0.14                     |
+| 20  | 5.122321   | 1.00000      | 1.00000       | 1.00000      | 1.00000       | 5.1e-11              | 0.16                     |
+| 21  | 5.252317   | 1.00408      | 1.02039       | 1.00000      | 1.00000       | 4.1e-11              | 0.17                     |
+| 22  | 5.439719   | 1.00199      | 1.00346       | 1.00007      | 1.00016       | 6.7e-11              | 0.18                     |
+| 23  | 5.545204   | 1.00583      | 1.00995       | 1.00006      | 1.00032       | 8.6e-11              | 0.20                     |
+| 24  | 5.651661   | 1.00331      | 1.00331       | 1.00277      | 1.00331       | 8.1e-3               | 0.21                     |
+| 25  | 5.752824   | 1.00463      | 1.00631       | 1.00134      | 1.00436       | 6.2e-9               | 0.22                     |
+| 26  | 5.828177   | 1.00600      | 1.01500       | 1.00300      | 1.01500       | 6.3e-11              | 0.24                     |
+| 27  | 5.906398   | 1.01161      | 1.01630       | 1.00000      | 1.00000       | 1.3e-5               | 0.25                     |
+| 28  | 6.014938   | 1.01344      | 1.01732       | 1.00362      | 1.00893       | 5.4e-9               | 0.26                     |
+| 29  | 6.138598   | 1.00094      | 1.00113       | 1.00002      | 1.00010       | 1.2e-10              | 0.28                     |
 | 30  | 6.197741   | 1.00279      | 1.01393       | 1.00279      | 1.01393       | 6.8e-11              | 0.30                     |
 
 [CALC] Of 145 runs, 143 are within 1% of the best known at 30,000 evaluations (mean ratio
-1.00045) and 122 at 10,000 (mean 1.00321). At 30,000, 131 runs are within 0.1%. The final
+1.00047) and 125 at 10,000 (mean 1.00302). At 30,000, 133 runs are within 0.1%. The final
 refinement brings the best runs to within about 1e-10 of the best known. The negative
 difference for P = 2 (−2.2e-16) is float rounding in the reference kernel's finishing, not a
 better packing. P = 27 ends 1.3e-5 above the stated value in all five runs. Seeds 1 to 20 at
@@ -240,8 +274,8 @@ P = 2 to 10, 30,000 evaluations: 180 of 180 within 1%.
 
 [CALC] A dear finishing that fails on every other call (reference kernel, P = 10, finishCost
 2,000, so 4,000 an improving offer; seeds 1 to 5, 40,000 evaluations): ratios 1.00000,
-1.01117, 1.00000, 1.01531, 1.01531. With finishCost 5,000 at P = 8 (a separate check's
-check), 3.304765, the best known, at 20,000 evaluations.
+1.01117, 1.00000, 1.01531, 1.01531. With finishCost 5,000 at P = 8 (the same check as
+for shrink_repair), 3.304765, the best known, at 20,000 evaluations.
 
 [CALC] Tests: `packages/methods/test/basin_hopping.test.ts`. They cover:
 
@@ -258,6 +292,8 @@ check), 3.304765, the best known, at 20,000 evaluations.
   Metropolis rule on the squeezed size fails it);
 - a dear finishing that fails half the time, with the refinement run; the refinement skipped
   when it does not fit; a finishing that gives up on loose states;
+- a result at 300, 1,000 and 3,000 evaluations when a gradient costs 9 and an offer 242 (the
+  earlier versions return none);
 - the Metropolis rule, the operator draw and the reinsertion into a hole.
 
 ## Limitations

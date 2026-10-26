@@ -1,27 +1,29 @@
 /**
- * The exact finishing and the server's rule of the methods kernel (kernel.ts), fold mode.
+ * The exact finishing and the server's rule of the methods kernel (kernel.ts), in both modes.
  *
- * finishFold: from poses on the unit solid (pieces scaled by lam = 1/s, as the fold search works)
+ * finishSurface: from poses on the solid of scale 1 (pieces scaled by lam = 1/s, as the fold search
+ * works), with the fold search's model of the mode (fold: parts developed across the edges; nofold:
+ * every piece in its own face)
  *  1. tighten: the largest scale at or below lam at which the fold search's energy (search/
  *     energy.ts) is exactly zero, by bisection with the poses fixed. Pieces shrink about their
  *     centres as lam falls, and a shrunk piece lies inside the one before (it is developed along
  *     the same rays), so the energy only falls with lam and a bisection finds the edge. The
  *     pieces shrink to a tenth at most (relaxed starts whose pieces are larger than the faces can
- *     need a quarter). A scale at which a piece crosses more chains of faces than the server
- *     allows counts as infeasible before the model develops it, so a piece far too large for its
- *     solid costs one capped enumeration, not an unbounded one;
+ *     need a quarter). Folding, a scale at which a piece crosses more chains of faces than the
+ *     server allows counts as infeasible before the model develops it, so a piece far too large for
+ *     its solid costs one capped enumeration, not an unbounded one;
  *  2. polish: the fold search's contact-LP polish (search/slp.ts) within a work budget, which keeps
  *     the packing valid and never lowers the scale; a stop poll ends it early with its last valid
  *     packing;
- *  3. check: the configuration at edge s = 1 / lam must pass the validator at tolerance 0. Float
+ *  3. check: the configuration at scale s = 1 / lam must pass the mode's validator at tolerance 0. Float
  *     rounding at the new scale can leave a touching pair overlapping by about 1e-16, so the
  *     scale is lowered by 1e-13, 1e-12, ... (relative) until it passes, as the certificates' shrink
  *     does. A centre that rounding puts just outside its face is moved back in. Should the polished
  *     packing fail every step, the tightened one is checked the same way.
  *
- * validateFoldSubmission: the server's rule for a fold configuration (packages/spaces/src/
- * validate.ts): the submission's form and work bounds, the lower bound, and validateFold at the
- * touching tolerance with the server's chain limit. The constants mirror packages/spaces/src/
+ * validateSurfaceSubmission: the server's rule for a configuration of either mode (packages/spaces/
+ * src/validate.ts): the submission's form and work bounds, the lower bound, and the mode's validator
+ * at the touching tolerance with the server's chain limit. The constants mirror packages/spaces/src/
  * info.ts and validate.ts, which this package cannot import (spaces depends on surface).
  */
 import { boundingRadius } from "@polypack/geometry";
@@ -32,10 +34,14 @@ import { canonicalize } from "./search/energy";
 import { Packing } from "./search/optimize";
 import { slpPolish } from "./search/slp";
 import type { Solid } from "./solids";
-import { type SurfaceConfig, validateFold } from "./validate";
+import { type Mode, type SurfaceConfig, validate } from "./validate";
 
 /** PolyPack's touching tolerance (SPACE_TOL). */
 export const SERVER_TOL = 1e-9;
+/** The strict tolerance (SPACE_STRICT_TOL) every entry of a problem without a research record must pass too. */
+export const SERVER_STRICT_TOL = 1e-11;
+/** The server's reason when such an entry passes only at the touching tolerance (SPACE_STRICT_NO_RECORD_REASON). */
+const STRICT_NO_RECORD_REASON = `valid only within the float tolerance; this problem has no research record yet, and its entries must be valid at tolerance ${SERVER_STRICT_TOL}`;
 /** Most chains of faces per piece in the server's check (SURFACE_MAX_CHAINS). */
 export const SERVER_MAX_CHAINS = 600;
 /** Largest s (SPACE_MAX_SIZE) and largest |x|, |y|, |theta| (SPACE_MAX_COORD) the server accepts. */
@@ -49,7 +55,7 @@ export const SERVER_MAX_P = 100;
 const MAX_REASONS = 20;
 
 /** The submission format of a surface problem (docs/spaces/SURFACE.md): the edge and the poses at that edge. */
-export interface FoldSubmission {
+export interface SurfaceSubmission {
   s: number;
   pieces: SurfacePose[];
 }
@@ -96,6 +102,8 @@ export interface FinishOptions {
   polls?: number;
   /** Polled by the polish: true ends it with its last valid packing. */
   shouldStop?: () => boolean;
+  /** "fold" (default) or "nofold". */
+  mode?: Mode;
 }
 
 /**
@@ -103,7 +111,8 @@ export interface FinishOptions {
  * the pieces about their centres to a tenth does not clear their overlaps (a centre on a cone
  * point, two centres at one point) or the final check fails.
  */
-export function finishFold(solid: Solid, N: number, lam0: number, poses0: SurfacePose[], o: FinishOptions = {}): FoldSubmission | null {
+export function finishSurface(solid: Solid, N: number, lam0: number, poses0: SurfacePose[], o: FinishOptions = {}): SurfaceSubmission | null {
+  const mode = o.mode ?? "fold";
   const polishIterations = o.polishIterations ?? FINISH_POLISH_ITERATIONS;
   const polls = o.polls ?? polishPolls(poses0.length);
   if (!(lam0 > 0) || !Number.isFinite(lam0)) return null;
@@ -116,14 +125,14 @@ export function finishFold(solid: Solid, N: number, lam0: number, poses0: Surfac
   const zeroAt = (lam: number): boolean => {
     if (lam >= capOver) return false;
     if (lam > capOk) {
-      if (!withinChainCap(solid, N, lam, poses)) {
+      if (mode === "fold" && !withinChainCap(solid, N, lam, poses)) {
         capOver = lam;
         return false;
       }
       capOk = lam;
     }
     if (pk) pk.setScale(lam);
-    else pk = new Packing(solid, N, lam, poses);
+    else pk = new Packing(solid, N, lam, poses, mode);
     return pk.energy() === 0;
   };
   // 1. tighten: a feasible scale below lam0 (DROPS), then bisection
@@ -153,25 +162,25 @@ export function finishFold(solid: Solid, N: number, lam0: number, poses0: Surfac
   if (polishIterations > 0 && !o.shouldStop?.()) {
     let used = 0;
     const stop = () => ++used > polls || !!o.shouldStop?.();
-    const pol = slpPolish(solid, N, lo, poses, { iterations: polishIterations, shouldStop: stop });
+    const pol = slpPolish(solid, N, lo, poses, { iterations: polishIterations, shouldStop: stop, mode });
     if (pol.lam > lo) candidates.unshift({ lam: pol.lam, poses: pol.poses });
   }
   // 3. the validator at tolerance 0 decides
   for (const c of candidates) {
-    const r = checked(solid, N, c.lam, c.poses);
+    const r = checked(solid, N, c.lam, c.poses, mode);
     if (r) return r;
   }
   return null;
 }
 
 /** The configuration at the first scale of the ladder at which it passes the validator at tolerance 0, or null. */
-function checked(solid: Solid, N: number, lam: number, best: SurfacePose[]): FoldSubmission | null {
+function checked(solid: Solid, N: number, lam: number, best: SurfacePose[], mode: Mode): SurfaceSubmission | null {
   for (const eps of LADDER) {
     const s = 1 / (lam * (1 - eps));
     const pieces = best.map((p) => inFace(solid, p.face, s, p.x * s, p.y * s, p.theta));
     const cfg: SurfaceConfig = { solid: solid.name, N, s, pieces };
     try {
-      if (validateFold(cfg, { tol: 0, maxErrors: 1, maxChains: SERVER_MAX_CHAINS }).ok) return { s, pieces };
+      if (validate(cfg, mode, { tol: 0, maxErrors: 1, maxChains: SERVER_MAX_CHAINS }).ok) return { s, pieces };
     } catch (e) {
       if (!(e instanceof ChainLimitError)) throw e;
       return null;
@@ -199,7 +208,7 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
  * s positive and at most 1e6, exactly P pieces, a face index in range, x, y and theta at most 1e4
  * in absolute value; at most 20 reasons).
  */
-export function parseFoldSubmission(solid: Solid, P: number, raw: unknown): FoldSubmission | string[] {
+export function parseSurfaceSubmission(solid: Solid, P: number, raw: unknown): SurfaceSubmission | string[] {
   if (!isObject(raw)) return ["config must be an object"];
   const errors: string[] = [];
   const num = (v: unknown, path: string, max: number, positive = false): number => {
@@ -234,29 +243,36 @@ export function parseFoldSubmission(solid: Solid, P: number, raw: unknown): Fold
 }
 
 /**
- * The server's rule for a fold submission (see the head of this file). The server's further check
- * of an entry that beats a research record (valid also at 1e-11) needs the record and is left to it.
+ * The server's rule for a submission (see the head of this file). With `noRecord`, for a problem
+ * without a research record, an entry must pass at SERVER_STRICT_TOL too, as the server asks of
+ * every entry of such a problem. The server's further check of an entry that beats a research
+ * record (valid also at 1e-11) needs the record and is left to it.
  */
-export function validateFoldSubmission(
+export function validateSurfaceSubmission(
   solid: Solid,
   N: number,
   P: number,
   bound: number | null,
   raw: unknown,
+  mode: Mode = "fold",
+  noRecord = false,
 ): { valid: boolean; score: number | null; reasons: string[] } {
   if (P > SERVER_MAX_P) return { valid: false, score: null, reasons: [`P = ${P} is above the largest P of the surface catalogue (${SERVER_MAX_P})`] };
-  const parsed = parseFoldSubmission(solid, P, raw);
+  const parsed = parseSurfaceSubmission(solid, P, raw);
   if (Array.isArray(parsed)) return { valid: false, score: null, reasons: parsed.slice(0, MAX_REASONS) };
   const { s, pieces } = parsed;
   if (bound !== null && s < bound * (1 - SERVER_BOUND_SLACK))
     return { valid: false, score: s, reasons: [`the size ${s} is below the lower bound ${bound} of this problem`] };
   try {
-    const v = validateFold({ solid: solid.name, N, s, pieces }, { tol: SERVER_TOL, maxErrors: MAX_REASONS, maxChains: SERVER_MAX_CHAINS });
-    return {
-      valid: v.ok,
-      score: s,
-      reasons: v.ok ? [] : v.errors.length ? v.errors.slice(0, MAX_REASONS) : [`not a valid packing (smallest clearance ${v.minPairSep})`],
+    const at = (tol: number) => {
+      const v = validate({ solid: solid.name, N, s, pieces }, mode, { tol, maxErrors: MAX_REASONS, maxChains: SERVER_MAX_CHAINS });
+      return v.ok ? [] : v.errors.length ? v.errors.slice(0, MAX_REASONS) : [`not a valid packing (smallest clearance ${v.minPairSep})`];
     };
+    const reasons = at(SERVER_TOL);
+    if (reasons.length) return { valid: false, score: s, reasons };
+    const strict = noRecord ? at(SERVER_STRICT_TOL) : [];
+    if (strict.length) return { valid: false, score: s, reasons: [STRICT_NO_RECORD_REASON, ...strict.slice(0, 3)] };
+    return { valid: true, score: s, reasons: [] };
   } catch (e) {
     return {
       valid: false,

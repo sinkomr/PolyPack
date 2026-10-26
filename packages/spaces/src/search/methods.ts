@@ -5,11 +5,12 @@
  *    methods could be chosen;
  *  - the generic methods of @polypack/methods that the problem's kernel can run (kernels.ts),
  *    when its space builds one for it: methodsFor(kernel), in their registration order;
- *  - for surface problems in the nofold mode, which are planar problems of one face, the polygon
- *    solver's own methods instead (nofold.ts; the board runs them in apps/web/src/space/nofold-round.ts).
- *    They come from nofold-methods.ts, which holds the polygon solver, so that a client that does
- *    not offer them does not load it: until useNofoldMethods() has run, nofold problems offer Auto
- *    alone.
+ *  - for surface problems in the nofold mode on the Platonic solids, which are planar problems of
+ *    one face, the polygon solver's own methods instead (nofold.ts; the board runs them in
+ *    apps/web/src/space/nofold-round.ts). They come from nofold-methods.ts, which holds the polygon
+ *    solver, so that a client that does not offer them does not load it: until useNofoldMethods()
+ *    has run, those problems offer Auto alone. The nofold problems of the other solids have the
+ *    surface kernel in its nofold mode, and so the generic methods.
  *
  * A result's method is recorded under a name that reads like the spaces' earlier ones
  * (SPACE_METHOD): the space, then the method ("sphere basin_hopping").
@@ -98,9 +99,8 @@ export function spaceMethodsFor(p: SearchProblem): SpaceMethodInfo[] {
     defaults: {},
   };
   // the polygon solver packs one face, which needs every face alike: the Platonic solids' ("nofold");
-  // the other solids' nofold problems run the surface search's nofold mode, Auto only
+  // the other solids' nofold problems have the surface kernel's nofold mode, as their folding ones its fold mode
   if (searchKind(p) === "nofold") return [auto, ...nofoldMethods()];
-  if (searchKind(p) === "nofold-surface") return [auto];
   const kernel = spaceKernel(p);
   if (!kernel) return [auto];
   return [

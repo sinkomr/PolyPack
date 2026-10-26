@@ -22,7 +22,10 @@ import {
   parseSearchProblem,
   readSpaceConfig,
   runSpaceJob,
+  spaceKernel,
+  spaceKernelError,
 } from "../src/search";
+import { methodsFor, runMethod } from "@polypack/methods";
 
 const packings = JSON.parse(
   readFileSync(resolve(__dirname, "../../../python/surface/fixtures/general_packings.json"), "utf8"),
@@ -243,17 +246,43 @@ describe("the work of a surface check", () => {
 });
 
 describe("search methods on the new solids", () => {
-  it("offer Auto only: no generic kernel and no planar face problem outside the Platonic solids", () => {
+  it("offer Auto and the generic methods of the surface kernel, with and without folding", () => {
     for (const solid of ALL_SOLID_NAMES)
       for (const mode of ["fold", "nofold"]) {
-        const p = parseSearchProblem(`surface/${solid}/${mode}/4/5`)!;
-        const names = spaceMethodsFor(p).map((m) => m.name);
         if (getSolid(solid).uniform) continue;
-        expect(names, p.id).toEqual(["auto"]);
+        const p = parseSearchProblem(`surface/${solid}/${mode}/4/5`)!;
+        const k = spaceKernel(p);
+        expect(k, `${p.id}: ${spaceKernelError(p)}`).not.toBeNull();
+        expect(k!.id).toBe(p.id);
+        const names = spaceMethodsFor(p).map((m) => m.name);
+        expect(names, p.id).toEqual(["auto", ...methodsFor(k!).map((m) => m.name)]);
+        for (const name of ["penalty", "mc_compress", "asc", "basin_hopping", "shrink_repair", "harden", "morph", "seed"])
+          expect(names, p.id).toContain(name);
         expect(checkSpaceMethod(p, "auto"), p.id).toBeNull();
-        expect(checkSpaceMethod(p, "basin_hopping"), p.id).not.toBeNull();
+        expect(checkSpaceMethod(p, "basin_hopping"), p.id).toBeNull();
       }
-    // the Platonic solids keep their methods: a planar face problem without folding
-    expect(spaceMethodsFor(parseSearchProblem("surface/cube/nofold/4/5")!).map((m) => m.name)[0]).toBe("auto");
+    // the Platonic solids keep the polygon solver for a planar face problem without folding
+    const cube = parseSearchProblem("surface/cube/nofold/4/5")!;
+    expect(spaceKernel(cube)).toBeNull();
+    expect(spaceMethodsFor(cube).map((m) => m.name)[0]).toBe("auto");
+  });
+
+  it("each generic method's result passes the server's rule, folding and without folding", () => {
+    for (const id of ["surface/rhombic_dodecahedron/fold/4/5", "surface/antiprism5/nofold/0/8"]) {
+      const p = parseSearchProblem(id)!;
+      const [, solid, , N, P] = id.split("/");
+      const bound = surfaceBound(solid as never, Number(N), Number(P)).value;
+      for (const m of spaceMethodsFor(p).slice(1)) {
+        // a nofold finish of 8 disks costs 1,780 evaluations, and shrink_repair offers only when its
+        // budget holds several; basin_hopping squeezes its structured starts before it first offers
+        const evals = m.name === "basin_hopping" ? 25000 : 12000;
+        const r = runMethod(spaceKernel(p)!, m.name, { seed: 1, budget: { evals } });
+        expect(r.config, `${id} ${m.name}`).not.toBeNull();
+        // no research record: the server checks every entry at 1e-11 too
+        const v = validateSpaceSubmission("surface", id, r.config, { bound, noRecord: true });
+        expect(v.valid, `${id} ${m.name}: ${v.reasons.join("; ")}`).toBe(true);
+        expect(v.score).toBe(r.score);
+      }
+    }
   });
 });

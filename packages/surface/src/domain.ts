@@ -10,7 +10,7 @@
  *  - one piece: a piece's inscribed disk (radius r = 1 for a disk, the apothem for a polygon) holds no
  *    vertex, and every point of a face f is within rho_f s of one of its corners (faceCornerRadius),
  *    so s >= r / max_f rho_f.
- * On the Platonic solids these are the bounds the records carry.
+ * On the Platonic solids these are the bounds the records carry, computed as the records were (to the last bit).
  */
 import { inradius, pieceArea } from "@polypack/geometry";
 import { GENERAL_SOLID_DATA } from "./general.data";
@@ -43,11 +43,42 @@ function maxCornerRadius(name: SolidName): number {
   return r;
 }
 
+/**
+ * tan(pi / n) as the Platonic records' bounds were computed (Python's math.tan, python/surface/tables.py).
+ * V8's Math.tan differs from it in the last bit for n = 5, 6 and 8; with these values the bound below
+ * is the records' bound.value to the last bit.
+ */
+const RECORD_TAN: Record<number, number> = {
+  3: 1.7320508075688767,
+  4: 0.9999999999999999,
+  5: 0.7265425280053609,
+  6: 0.5773502691896256,
+  8: 0.4142135623730951,
+};
+const tanPi = (n: number) => RECORD_TAN[n] ?? Math.tan(Math.PI / n);
+
+/** The two lower bounds of surface/<solid>/<mode>/<N>/<P> on the scale s (see the head of this file). */
+export function surfaceBounds(solid: SolidName, N: number, P: number): { area: number; one: number } {
+  const S = getSolid(solid);
+  let area: number;
+  let one: number;
+  if (S.uniform) {
+    // the Platonic solids, with the records' float operations (tables.py bounds): area F M s^2 / (4 tan(pi/M)),
+    // and every point of a face within its circumradius s / (2 sin(pi/M)) of a corner
+    const M = S.M;
+    const a = N === 0 ? Math.PI : N / (4 * tanPi(N));
+    area = Math.sqrt((P * a * 4 * tanPi(M)) / (S.F * M));
+    one = 2 * Math.sin(Math.PI / M) * (N === 0 ? 1 : 1 / (2 * tanPi(N)));
+  } else {
+    area = Math.sqrt((P * pieceArea(N)) / surfaceArea(S, 1));
+    one = (N === 0 ? 1 : inradius(N)) / maxCornerRadius(solid);
+  }
+  return { area, one };
+}
+
 /** The lower bound of surface/<solid>/<mode>/<N>/<P> on the scale s, with its kind. */
 export function surfaceBound(solid: SolidName, N: number, P: number): { value: number; kind: "area" | "one piece" } {
-  const S = getSolid(solid);
-  const area = Math.sqrt((P * pieceArea(N)) / surfaceArea(S, 1));
-  const one = (N === 0 ? 1 : inradius(N)) / maxCornerRadius(solid);
+  const { area, one } = surfaceBounds(solid, N, P);
   return area >= one ? { value: area, kind: "area" } : { value: one, kind: "one piece" };
 }
 

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ALL_SOLID_NAMES, CATALAN_NAMES, SOLID_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceDomain } from "../src/index";
-import { surfaceBound as kernelBound } from "../src/kernel-solid";
+import { ALL_SOLID_NAMES, CATALAN_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceBounds, surfaceDomain } from "../src/index";
+import { independentBounds } from "./helpers";
 
 const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records;
 
@@ -23,22 +23,24 @@ describe("the surface domain", () => {
       expect(at(bad[0], bad[1])).toBeUndefined();
   });
 
-  it("agrees with the search kernel's bound on every Platonic problem, to two units in the last place", () => {
-    // the kernel uses Python's tan for N, M in {3, 4, 5, 6, 8}, as the records do; the domain V8's
-    for (const name of SOLID_NAMES)
-      for (const N of SURFACE_NS)
-        for (let P = 1; P <= 100; P += 3) {
-          const a = surfaceBound(name, N, P).value;
-          const b = kernelBound(getSolid(name), N, P);
-          expect(Math.abs(a / b - 1), `${name} ${N} ${P}`).toBeLessThanOrEqual(5e-16);
+  it("agrees with bounds computed independently from the solids' 3D coordinates, on every solid", () => {
+    for (const name of ALL_SOLID_NAMES)
+      for (const N of [0, 3, 4, 5, 6, 7, 8, 12, 50, 100])
+        for (const P of [1, 5, 30, 100]) {
+          const id = `${name} ${N} ${P}`;
+          const { area, one } = surfaceBounds(name, N, P);
+          const ind = independentBounds(getSolid(name), N, P);
+          expect(Math.abs(area / ind.area - 1), id).toBeLessThan(1e-12);
+          // sampling finds the corner radius or less, so its bound is the one-piece bound or more
+          expect(one, id).toBeLessThanOrEqual(ind.oneAtMost * (1 + 1e-12));
+          expect(one, id).toBeGreaterThan(ind.oneAtMost * 0.99);
+          expect(surfaceBound(name, N, P).value, id).toBe(Math.max(area, one));
         }
   });
 
-  it("gives the Platonic records' own bounds", () => {
-    for (const r of records) {
-      const b = surfaceBound(r.solid, r.N, r.P);
-      expect(Math.abs(b.value / r.bound.value - 1), r.id).toBeLessThan(1e-12);
-    }
+  it("gives the Platonic records' own bounds, to the last bit", () => {
+    // the records' bounds come from python/surface/tables.py; the domain repeats its float operations
+    for (const r of records) expect(surfaceBound(r.solid, r.N, r.P).value, r.id).toBe(r.bound.value);
   });
 
   it("samples problems without a record, small P first, deterministically", () => {

@@ -36,10 +36,11 @@ import { CONE_WEIGHT, type PartRec, bbox } from "./search/energy";
 import type { Solid } from "./solids";
 
 /**
- * Most chains of faces per piece in the model, twice the server's cap (real packings need about
- * 35): a piece far too large for its solid makes the energy Infinity after a bounded enumeration.
+ * Most chains of faces per piece in the model, twice the server's cap of 600 (Platonic records
+ * need about 35): a piece far too large for its solid makes the energy Infinity after a bounded
+ * enumeration.
  */
-export const MODEL_MAX_CHAINS = 400;
+export const MODEL_MAX_CHAINS = 1200;
 
 /** Thrown inside the model when a piece has too many chains (caught by the kernel). */
 export class TooLarge extends Error {}
@@ -385,14 +386,15 @@ export function diskTerms(
         const dx = qx - p.x;
         const dy = qy - p.y;
         const d = Math.hypot(dx, dy);
-        if (d >= 2 * lam || d === 0) continue;
+        if (d >= 2 * lam) continue;
         const pen = 2 * lam - d;
         const wij = pairWeight(w, i, j);
         // a loop is seen from both of its ends at i, so each image carries half of it
         const share = j === i ? 0.5 : pairShare;
         e += share * wij * pen * pen;
         dlam += share * wij * 4 * pen;
-        if (!grad) continue;
+        // two centres at one point overlap fully; their pair has no direction to push along
+        if (!grad || d === 0) continue;
         if (j !== i) {
           // the pair's two halves add up to wij pen^2, whose gradient in p is 2 wij pen (q' - p) / d
           gx += (2 * wij * pen * dx) / d;

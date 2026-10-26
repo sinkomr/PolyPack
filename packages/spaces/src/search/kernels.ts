@@ -6,8 +6,9 @@
  * largest); such a problem has none, only Auto, the space's own search (methods.ts), and
  * spaceKernelError says why.
  *
- * Surface problems in the nofold mode have no kernel: they are planar problems of one face and
- * run on the polygon solver (nofold.ts).
+ * Surface problems in the nofold mode on the Platonic solids have no kernel: they are planar
+ * problems of one face and run on the polygon solver (nofold.ts). On the other solids the surface
+ * kernel serves them in its nofold mode.
  *
  * Kernels are pure (they hold only the problem and its caches), so a built one is kept for its
  * problem and shared by every job on this thread; a few problems are kept at a time.
@@ -19,7 +20,7 @@ import { polyhedraKernel } from "@polypack/polyhedra";
 import { sphereKernel } from "@polypack/sphere";
 import { surfaceKernel } from "@polypack/surface";
 import { torusKernel } from "@polypack/torus";
-import type { SearchProblem } from "./model";
+import { type SearchProblem, nofoldOnPolygonEngine } from "./model";
 
 /** Builds a problem's kernel, or throws when its space cannot. */
 export type KernelFactory = (p: SearchProblem) => SpaceKernel;
@@ -30,8 +31,8 @@ const factories: KernelFactory = (p) => {
     case "curved":
       return curvedKernel({ K: p.K, N: p.N, M: p.M, P: p.P });
     case "surface":
-      if (p.mode === "nofold") throw new Error("nofold problems run on the polygon solver");
-      return surfaceKernel({ solid: p.solid, N: p.N, P: p.P });
+      if (nofoldOnPolygonEngine(p)) throw new Error("nofold problems of the Platonic solids run on the polygon solver");
+      return surfaceKernel({ solid: p.solid, N: p.N, P: p.P, mode: p.mode });
     case "sphere":
       return sphereKernel({ N: p.N, P: p.P });
     case "torus":
@@ -52,8 +53,8 @@ const built = new Map<string, { kernel: SpaceKernel | null; why: string | null }
 const KEPT = 8;
 
 function entry(p: SearchProblem): { kernel: SpaceKernel | null; why: string | null } {
-  if (p.space === "surface" && p.mode === "nofold")
-    return { kernel: null, why: "nofold problems run on the polygon solver" };
+  if (nofoldOnPolygonEngine(p))
+    return { kernel: null, why: "nofold problems of the Platonic solids run on the polygon solver" };
   const known = built.get(p.id);
   if (known) {
     // most recent last

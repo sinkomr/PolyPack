@@ -30,14 +30,15 @@ as **Auto** and stays the default.
 | Space | Factory | Package |
 |---|---|---|
 | curved (2D in 2D) | `curvedKernel({ K, N, M, P })` | `@polypack/curved` |
-| surface, fold (2D on 3D) | `surfaceKernel({ solid, N, P })` | `@polypack/surface` |
+| surface (2D on 3D) | `surfaceKernel({ solid, N, P, mode })` | `@polypack/surface` |
 | sphere (2D on 3D) | `sphereKernel({ N, P })` | `@polypack/sphere` |
 | torus (2D on 3D) | `torusKernel({ family, N, P })` | `@polypack/torus` |
 | polyhedra (3D in 3D) | `polyhedraKernel({ code, P })` | `@polypack/polyhedra` |
 | boundary (3D on 4D) | `boundaryKernel({ polytope, piece, P })` | `@polypack/boundary` |
 
-Surface problems in the nofold mode are planar problems of one face. They run on the polygon
-solver itself, so every polygon method is available for them unchanged.
+Surface problems in the nofold mode on the Platonic solids are planar problems of one face. They
+run on the polygon solver itself, so every polygon method is available for them unchanged. On the
+other solids (Catalan solids, prisms, antiprisms) the surface kernel serves them in its nofold mode.
 
 ## Running a method (`packages/methods/src/framework.ts`)
 

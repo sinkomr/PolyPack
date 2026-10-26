@@ -240,8 +240,8 @@ every seed of boundary/tesseract/ball/13.
 | polyhedra/tetintet/6       | 2.290995            | 2.290994 (1.00000), 2.291694 (1.00031), 2.290994 (1.00000) | 2.290994 (1.00000), 2.291005 (1.00000), 2.290994 (1.00000) |
 | boundary/tesseract/ball/13 | 2.397495            | 2.409259 (1.00491), 2.402442 (1.00206), 2.532910 (1.05648) | 2.407408 (1.00413), 2.397830 (1.00014), 2.401765 (1.00178) |
 
-[CALC] Over seeds 1 to 6 on curved/-1/3/4/6, 4 of 6 runs reach the record (seeds 1 and 4 end
-at 1.326 and 1.473: squeezed random starts there reach the record about one time in eight).
+[CALC] Over seeds 1 to 6 on curved/-1/3/4/6, all 6 runs reach the record with the current
+kernels (squeezed random starts there reach it about one time in eight).
 On curved/1/4/4/5 and curved/-1/4/4/8 neither method finds a valid configuration (see
 [basin_hopping](basin_hopping.md#the-space-kernels)).
 
@@ -324,8 +324,11 @@ as with basin_hopping.
 
 ## Limitations
 
-- [CALC] torus/hex/5/8 ends 0.6% to 0.7% above the record on seeds 1 to 3, where
-  basin_hopping reaches it on one seed.
+- [CALC] torus/hex/5/8 ends 0.6% to 0.7% above the record on seeds 1 to 3; basin_hopping
+  reaches it on one seed of six.
+- [CALC] On the polygon fold problem surface/cube/fold/4/7 it ends about 16% above the record
+  (1.4148 to 1.4150 at 25,000 evaluations, seeds 1 to 3; record 1.216554), where
+  basin_hopping reaches 1.2500 to 1.2518. It returns a result from 2,000 evaluations up.
 - [CALC] Disks have no orientation, so the sawtooth that motivates the polygon method
   (squeezed square grids that need coordinated tilts) is not tested on the reference kernel.
 - [SPEC] Without a rigid block turn, a tilt of a whole group of pieces must come from the

@@ -1,20 +1,20 @@
 /**
  * What the methods kernel (kernel.ts) needs to know about the faces of a solid, in one place.
  *
- * The kernel works per face: each face is a convex polygon in its own frame (counter-clockwise,
- * at unit edge), with its area, the largest disk about its frame origin that it contains, and
- * the solid's vertex id at each of its corners. Everything else the kernel does goes through the
- * surface's chain, part and gluing code. Today every face is the regular M-gon of solids.ts, so
- * these come from the Platonic frame formulas; when the solids gain arbitrary convex faces, only
- * `faceShapes`, `areaBound`, `onePieceBound` and `centreDepth` below need the per-face data
- * instead. The rest (random points, chart unfolding, chart points) works on any convex faces whose
- * frame origin lies inside them.
+ * The kernel works per face: each face is a convex polygon in its own frame (counter-clockwise, at
+ * scale 1), with its area, the largest disk about its frame origin that it contains, and the solid's
+ * vertex id at each of its corners. These come from the solid's own faces (solids.ts facePolygonOf:
+ * the regular polygon's formulas on a regular face, the stored corners on the others), so the
+ * Platonic solids get the numbers they always had. Everything else the kernel does goes through the
+ * surface's chain, part and gluing code. Random points, chart unfolding and chart points work on any
+ * convex faces whose frame origin lies inside them: a regular face's centre, and on a Catalan solid
+ * the point where the insphere touches the face.
  */
 import { type ChainNode, enumerateChains, inWedge } from "./chains";
+import { surfaceBound as domainBound, surfaceBounds } from "./domain";
 import { apply, applyDir, glue, inverse } from "./rigid";
 import { canonicalize } from "./search/energy";
-import { Solid, facePolygon } from "./solids";
-import { insideFaceDepth } from "./validate";
+import { Solid, faceDepth, facePolygonOf } from "./solids";
 
 export interface FaceShape {
   /** Corners in the face's frame at unit edge, counter-clockwise, flat [x0, y0, x1, y1, ...]. */
@@ -33,14 +33,11 @@ export interface FaceShape {
 
 const cache = new WeakMap<Solid, FaceShape[]>();
 
-/** The faces of a solid as convex polygons in their frames. Platonic-only: the regular M-gon. */
+/** The faces of a solid as convex polygons in their frames. */
 export function faceShapes(solid: Solid): FaceShape[] {
   const hit = cache.get(solid);
   if (hit) return hit;
-  const out = solid.faces.map((ids) => {
-    const poly = facePolygon(solid.M, 1);
-    return describe(poly, [...ids]);
-  });
+  const out = solid.faces.map((ids, f) => describe(facePolygonOf(solid, 1, f), [...ids]));
   cache.set(solid, out);
   return out;
 }
@@ -67,20 +64,19 @@ function describe(poly: Float64Array, ids: number[]): FaceShape {
   return { poly, ids, area: area / 2, inner, nx, ny, b };
 }
 
-/** Signed depth of (x, y) inside a face (positive inside), at unit edge. */
-export function faceDepth(f: FaceShape, x: number, y: number): number {
+/** Signed depth of (x, y) inside a face (positive inside), at scale 1. */
+export function shapeDepth(f: FaceShape, x: number, y: number): number {
   let d = Infinity;
   for (let k = 0; k < f.b.length; k++) d = Math.min(d, f.b[k] - f.nx[k] * x - f.ny[k] * y);
   return d;
 }
 
 /**
- * Depth of a centre (x, y) inside face f at edge s, exactly as the fold validator computes it
- * (its rule 1, at tolerance 0 in a finish). Platonic-only: validate.ts's regular-face formula.
+ * Depth of a centre (x, y) inside face f at scale s, exactly as the validators compute it (the fold
+ * check's rule 1, at tolerance 0 in a finish): solids.ts faceDepth.
  */
 export function centreDepth(solid: Solid, f: number, s: number, x: number, y: number): number {
-  void f;
-  return insideFaceDepth(solid.M, s, x, y);
+  return faceDepth(solid, s, f, x, y);
 }
 
 /**
@@ -91,11 +87,11 @@ export function centreDepth(solid: Solid, f: number, s: number, x: number, y: nu
  * itself; across one edge it is what canonicalize (search/energy.ts) gives. Unlike that edge-by-
  * edge rule, a straight segment never circles a vertex, so every chart point has a surface point
  * and the map is continuous except across the rays from the origin through the corners. The
- * frame origin must lie inside its face (true for the regular faces' centres).
+ * frame origin must lie inside its face (see the head of this file).
  */
 export function unfoldChart(solid: Solid, p: { face: number; x: number; y: number; theta: number }): { face: number; x: number; y: number; theta: number } {
   const faces = faceShapes(solid);
-  if (faceDepth(faces[p.face], p.x, p.y) >= 0) return p;
+  if (shapeDepth(faces[p.face], p.x, p.y) >= 0) return p;
   // a chart point absurdly far away (no search moves a piece that far) gets the edge-by-edge rule, whose work is bounded
   if (!(Math.hypot(p.x, p.y) <= 1e3)) return canonicalize(solid, 1, p);
   let face = p.face;
@@ -138,35 +134,74 @@ export function unfoldChart(solid: Solid, p: { face: number; x: number; y: numbe
   throw new Error("unfoldChart: the segment crossed too many faces");
 }
 
-const centreChainCache = new WeakMap<Solid, ChainNode[][]>();
+/** What chartPoint needs of a chain: its last face, that face's frame in the anchor's, its wedge. */
+type CentreChain = Pick<ChainNode, "face" | "toAnchor" | "wedge">;
+const centreChainCache = new WeakMap<Solid, Map<number, CentreChain[]>>();
+/**
+ * Faces whose chains are kept per solid, the most recently used: [CALC] all 120 faces of the
+ * disdyakis triacontahedron hold about 118 MB, one face's take about 3 ms to enumerate.
+ */
+const CENTRE_FACES_KEPT = 16;
 
 /**
- * For each face, the chains from its frame origin that reach every point of the surface. A point
- * q of face g is within (2 k + 1) R of the origin of face f, where k is the number of gluings
- * between f and g (dual-graph distance) and R the largest distance from a face's origin to its
- * corners: from origin to origin through a shared edge is at most 2 R, and q is within R of g's.
+ * A distance from face f's origin within which every point of the surface lies. Dijkstra over the
+ * faces: from one face's origin to a neighbour's, a path on the surface runs straight through
+ * their shared edge when the developed segment crosses it, else through the edge's midpoint (both
+ * pieces lie in their convex faces); a point of face g is within its farthest corner of g's origin.
  */
-function centreChains(solid: Solid): ChainNode[][] {
-  const hit = centreChainCache.get(solid);
-  if (hit) return hit;
+function centreReach(solid: Solid, f: number): number {
   const faces = faceShapes(solid);
-  let R = 0;
-  for (const F of faces) for (let k = 0; k < F.poly.length; k += 2) R = Math.max(R, Math.hypot(F.poly[k], F.poly[k + 1]));
-  const out = faces.map((_, f) => {
-    // dual-graph eccentricity of f
-    const dist = new Array<number>(solid.F).fill(-1);
-    dist[f] = 0;
-    const queue = [f];
-    for (let q = 0; q < queue.length; q++)
-      for (const e of solid.adj[queue[q]])
-        if (dist[e.face] < 0) {
-          dist[e.face] = dist[queue[q]] + 1;
-          queue.push(e.face);
-        }
-    const k = Math.max(...dist);
-    return enumerateChains(solid, 1, f, 0, 0, (2 * k + 1) * R * (1 + 1e-9));
+  const far = faces.map((F) => {
+    let r = 0;
+    for (let k = 0; k < F.poly.length; k += 2) r = Math.max(r, Math.hypot(F.poly[k], F.poly[k + 1]));
+    return r;
   });
-  centreChainCache.set(solid, out);
+  const dist = new Array<number>(solid.F).fill(Infinity);
+  const done = new Array<boolean>(solid.F).fill(false);
+  dist[f] = 0;
+  for (;;) {
+    let a = -1;
+    for (let g = 0; g < solid.F; g++) if (!done[g] && dist[g] < Infinity && (a < 0 || dist[g] < dist[a])) a = g;
+    if (a < 0) break;
+    done[a] = true;
+    const A = faces[a];
+    solid.adj[a].forEach((e, k) => {
+      // the neighbour's origin developed into a's frame, and the shared edge's corners p, q there
+      const [bx, by] = apply(glue(solid, 1, a, k).T, 0, 0);
+      const j = (k + 1) % (A.poly.length / 2);
+      const [px, py, qx, qy] = [A.poly[2 * k], A.poly[2 * k + 1], A.poly[2 * j], A.poly[2 * j + 1]];
+      // the segment from the origin to b crosses the edge when each separates the other's ends
+      const byEdge = (x: number, y: number) => (qx - px) * (y - py) - (qy - py) * (x - px);
+      const bySegment = (x: number, y: number) => bx * y - by * x;
+      const straight = byEdge(0, 0) * byEdge(bx, by) <= 0 && bySegment(px, py) * bySegment(qx, qy) <= 0;
+      const mx = (px + qx) / 2;
+      const my = (py + qy) / 2;
+      const w = straight ? Math.hypot(bx, by) : Math.hypot(mx, my) + Math.hypot(bx - mx, by - my);
+      if (dist[a] + w < dist[e.face]) dist[e.face] = dist[a] + w;
+    });
+  }
+  let reach = 0;
+  for (let g = 0; g < solid.F; g++) reach = Math.max(reach, dist[g] + far[g]);
+  return reach * (1 + 1e-9);
+}
+
+/** The chains from face f's origin that reach every point of the surface (computed when needed, a few faces kept). */
+function centreChains(solid: Solid, f: number): CentreChain[] {
+  let kept = centreChainCache.get(solid);
+  if (!kept) {
+    kept = new Map();
+    centreChainCache.set(solid, kept);
+  }
+  const hit = kept.get(f);
+  if (hit) {
+    // most recent last
+    kept.delete(f);
+    kept.set(f, hit);
+    return hit;
+  }
+  const out = enumerateChains(solid, 1, f, 0, 0, centreReach(solid, f)).map(({ face, toAnchor, wedge }) => ({ face, toAnchor, wedge }));
+  kept.set(f, out);
+  if (kept.size > CENTRE_FACES_KEPT) kept.delete(kept.keys().next().value as number);
   return out;
 }
 
@@ -178,7 +213,7 @@ function centreChains(solid: Solid): ChainNode[][] {
 export function chartPoint(solid: Solid, f: number, g: number, x: number, y: number): [number, number] | null {
   let best: [number, number] | null = null;
   let bestD = Infinity;
-  for (const node of centreChains(solid)[f]) {
+  for (const node of centreChains(solid, f)) {
     if (node.face !== g) continue;
     const [u, v] = apply(node.toAnchor, x, y);
     if (!inWedge(node.wedge, 0, 0, u, v, 0)) continue;
@@ -191,49 +226,23 @@ export function chartPoint(solid: Solid, f: number, g: number, x: number, y: num
   return best;
 }
 
-/** Surface area of the solid at unit edge. */
+/** Surface area of the solid at scale 1. */
 export function unitArea(solid: Solid): number {
   return faceShapes(solid).reduce((t, f) => t + f.area, 0);
 }
 
-/**
- * tan(pi / n) as the records' bounds were computed (Python's math.tan, python/surface/tables.py).
- * V8's Math.tan differs from it in the last bit for n = 5, 6 and 8, which moved the bound by an
- * ulp on 434 of the 2038 records, and the server compares sizes with the records' bound.
- */
-const RECORD_TAN: Record<number, number> = {
-  3: 1.7320508075688767,
-  4: 0.9999999999999999,
-  5: 0.7265425280053609,
-  6: 0.5773502691896256,
-  8: 0.4142135623730951,
-};
-const tanPi = (n: number) => RECORD_TAN[n] ?? Math.tan(Math.PI / n);
-
-/**
- * The area bound on the edge: P pieces of area a(N) fit only when P a(N) <= area(S) =
- * F M s^2 / (4 tan(pi/M)). Platonic-only. The float operations are those of the records' bound
- * (python/surface/tables.py bounds), so that the kernel's bound is the one the server checks.
- */
+/** The area bound on the scale (domain.ts surfaceBounds): P pieces of area a(N) fit only when P a(N) <= area(S). */
 export function areaBound(solid: Solid, N: number, P: number): number {
-  const M = solid.M;
-  const A = N === 0 ? Math.PI : N / (4 * tanPi(N));
-  return Math.sqrt((P * A * 4 * tanPi(M)) / (solid.F * M));
+  return surfaceBounds(solid.name, N, P).area;
 }
 
 /**
- * The one-piece bound (docs/spaces/SURFACE.md, 2.6): a piece's inscribed disk holds no cone
- * point, and every point of a regular face lies within the face's circumradius s / (2 sin(pi/M))
- * of a corner, so s >= 2 sin(pi/M) r_in. Platonic-only: for other faces the circumradius bound
- * is per face (the largest distance from a point of the face to its nearest corner).
+ * The problem's lower bound on s, the server's for every problem: domain.ts surfaceBound, which on
+ * the Platonic solids is each record's bound.value to the last bit (the server checks a problem with
+ * a record against its record's bound and one without against the domain's).
  */
-export function onePieceBound(solid: Solid, N: number): number {
-  return 2 * Math.sin(Math.PI / solid.M) * (N === 0 ? 1 : 1 / (2 * tanPi(N)));
-}
-
-/** The problem's lower bound on s: the larger of the area and one-piece bounds, as the records state it. */
 export function surfaceBound(solid: Solid, N: number, P: number): number {
-  return Math.max(areaBound(solid, N, P), onePieceBound(solid, N));
+  return domainBound(solid.name, N, P).value;
 }
 
 /** A uniform random point of the surface at unit edge: a face by area, then a point of it by rejection. */
@@ -263,7 +272,7 @@ export function randomSurfacePoint(solid: Solid, rng: () => number): { face: num
   for (;;) {
     const x = minx + rng() * (maxx - minx);
     const y = miny + rng() * (maxy - miny);
-    if (faceDepth(F, x, y) > 0) return { face, x, y };
+    if (shapeDepth(F, x, y) > 0) return { face, x, y };
   }
 }
 

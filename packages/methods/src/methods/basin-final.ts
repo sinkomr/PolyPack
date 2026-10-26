@@ -78,6 +78,19 @@ export class FinalRefinement {
     this.largestSqueeze = Math.max(this.largestSqueeze, this.ctx.used() - before);
   }
 
+  /**
+   * A run's first squeeze, before it has any result: like squeeze(), but it stops where the
+   * budget leaves one offer (and one evaluation of margin), so that the offer after it is always
+   * made. The cost of an L-BFGS iteration is only estimated beforehand; this makes it a bound.
+   */
+  firstSqueeze(s: KernelState, o?: SqueezeOptions): void {
+    const room = this.ctx.remaining() - offerCost(this.ctx.kernel) - 1;
+    if (!Number.isFinite(room)) return this.squeeze(s, o);
+    const before = this.ctx.used();
+    if (room > 0) squeezeWithin(this.ctx, s, before + room, o);
+    this.largestSqueeze = Math.max(this.largestSqueeze, this.ctx.used() - before);
+  }
+
   /** Records the cost of one step of the method. */
   step(cost: number): void {
     this.dearestStep = Math.max(this.dearestStep, cost);
@@ -109,10 +122,10 @@ export class FinalRefinement {
   }
 
   /**
-   * The starts of basin_hopping's first solve: every candidate (the supplied start, the kernel's
-   * structured starts) squeezed, smallest squeezed size first. Structured starts squeeze
-   * to very different sizes (the four tetrahedra seeds of polyhedra/tetintet/6: 2.67, 3.00, 2.30
-   * and 2.30), so all are squeezed but only the smallest is offered unless it does not finish.
+   * The other starts of basin_hopping's first solve, after the first is offered: every candidate
+   * squeezed, smallest squeezed size first. Structured starts squeeze to very different sizes (the
+   * four tetrahedra seeds of polyhedra/tetintet/6: 2.67, 3.00, 2.30 and 2.30), so all are
+   * squeezed, and offered smallest first while they could beat the current packing.
    */
   squeezedStarts(candidates: readonly KernelState[], o?: SqueezeOptions): KernelState[] {
     for (const s of candidates) this.squeeze(s, o);

@@ -148,3 +148,50 @@ export function walkRayOf(solid: Solid, s: number, face: number, x: number, y: n
   }
   throw new Error("walkRayOf: too many steps");
 }
+
+const sampledCornerRadius = new Map<string, number>();
+
+/**
+ * Independent lower bounds of surface/<solid>/<mode>/<N>/<P>, for checking the domain's (domain.ts
+ * surfaceBound), from the solid's 3D coordinates rather than its face frames: the area bound from the
+ * faces' areas by cross products, and the one-piece bound r / rho with rho the largest distance from a
+ * point of a face to its nearest corner, sampled on a fine grid of each face. Sampling finds rho or less,
+ * so `oneAtMost` is the one-piece bound or more (within about a percent on a grid of 120 steps).
+ */
+export function independentBounds(solid: Solid, N: number, P: number): { area: number; oneAtMost: number } {
+  const V = solid.vertices;
+  const sub = (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a: number[], b: number[]) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  let total = 0;
+  for (const f of solid.faces) {
+    const c = [0, 0, 0];
+    for (let k = 1; k + 1 < f.length; k++) {
+      const x = cross(sub(V[f[k]], V[f[0]]), sub(V[f[k + 1]], V[f[0]]));
+      c[0] += x[0];
+      c[1] += x[1];
+      c[2] += x[2];
+    }
+    total += Math.hypot(c[0], c[1], c[2]) / 2;
+  }
+  const a = N === 0 ? Math.PI : N / (4 * Math.tan(Math.PI / N));
+  let rho = sampledCornerRadius.get(solid.name);
+  if (rho === undefined) {
+    rho = 0;
+    const G = 120;
+    for (const f of solid.faces)
+      for (let k = 1; k + 1 < f.length; k++)
+        for (let i = 0; i <= G; i++)
+          for (let j = 0; i + j <= G; j++) {
+            // a point of the triangle (corner 0, corner k, corner k + 1)
+            const u = i / G;
+            const v = j / G;
+            const p = [0, 1, 2].map((t) => (1 - u - v) * V[f[0]][t] + u * V[f[k]][t] + v * V[f[k + 1]][t]);
+            let near = Infinity;
+            for (const id of f) near = Math.min(near, Math.hypot(...sub(p, V[id])));
+            rho = Math.max(rho, near);
+          }
+    sampledCornerRadius.set(solid.name, rho);
+  }
+  const r = N === 0 ? 1 : 1 / (2 * Math.tan(Math.PI / N));
+  return { area: Math.sqrt((P * a) / total), oneAtMost: r / rho };
+}
