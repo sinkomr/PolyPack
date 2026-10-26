@@ -1,6 +1,6 @@
 /**
  * The dimensions of PolyPack's problems and the families filed under each: one table, read by the
- * board's Dimension and Kind menus (dimension-switch.ts) and by the dimensions page.
+ * board's Problem set menu (dimension-switch.ts) and by the dimensions page.
  *
  * A dimension is named by the pieces' dimension, "in" or "on", and the container's dimension.
  * "in" means inside a container; "on" means on a closed surface or boundary. Polygons in polygons
@@ -11,8 +11,8 @@
  * stay as they are, so that links (#space=...) and downloaded volunteer clients keep working.
  *
  * To make a family available, set `available: true`; its space must then be one the board can
- * show (BOARD_SPACES in space-address.ts), which the type below checks. A dimension with no
- * available family is listed, disabled, as "coming soon".
+ * show (BOARD_SPACES in space-address.ts), which the type below checks. A family that is not
+ * available is listed, disabled, as "coming soon".
  *
  * No imports at run time, so that the default board can read it without loading the spaces.
  */
@@ -22,7 +22,7 @@ import type { BoardSpace } from "./space-address";
 export type FamilyTarget = BoardSpace | "polygon";
 
 interface FamilyText {
-  /** The name in the Kind menu and on the dimensions page. */
+  /** The name in the board's Problem set menu and on the dimensions page. */
   name: string;
   /** A shorter name, for the records table's picker. */
   short: string;
@@ -36,7 +36,7 @@ export type Family =
   | (FamilyText & { space: string; available: false });
 
 export interface Dimension {
-  /** The value of the Dimension menu, e.g. "2-on-3". */
+  /** The id, e.g. "2-on-3": the board's <main> carries it as data-dimension. */
   id: string;
   /** "2D on 3D". */
   label: string;
@@ -130,6 +130,26 @@ export const DIMENSIONS: readonly Dimension[] = [
     ],
   },
 ];
+
+/** One group of the board's Problem set menu: a dimension, and an option per family. */
+export interface MenuGroup {
+  label: string;
+  options: { text: string; value: string; disabled: boolean }[];
+}
+
+/**
+ * The board's Problem set menu: a group per dimension, an option per family, in the table's order.
+ * A family that is not available yet is listed, disabled, as "coming soon".
+ */
+export const menuGroups = (dimensions: readonly Dimension[] = DIMENSIONS): MenuGroup[] =>
+  dimensions.map((d) => ({
+    label: d.label,
+    options: d.families.map((f) => ({
+      text: f.available ? f.name : `${f.name} (coming soon)`,
+      value: f.space,
+      disabled: !f.available,
+    })),
+  }));
 
 /** The families of a dimension that can be shown now. */
 export const availableFamilies = (d: Dimension) =>

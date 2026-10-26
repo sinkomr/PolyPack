@@ -1,5 +1,5 @@
 /**
- * The board's space mode: chosen with the Dimension and Kind menus of the Problem section
+ * The board's space mode: chosen with the Problem set menu of the Problem section
  * (dimension-switch.ts), it shows a problem of a kind other than Flat (a space of the API) in place
  * of the polygon board. The polygon board's parts are hidden, not changed (CSS:
  * .layout[data-space] .poly-only), so going back shows it as it was.
@@ -1077,7 +1077,7 @@ export function createSpaceMode(): {
   setPolygonHeld(held: boolean): void;
 } {
   if (!mode) {
-    const select = $("dimension-select");
+    const select = $("family-select");
     const name = $<HTMLInputElement>("name");
     mode = new SpaceMode({
       layout: select.closest("main")!,

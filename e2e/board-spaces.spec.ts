@@ -16,27 +16,21 @@ declare const polypack: {
   space?: { lastResult: { config: unknown; score: number; valid: boolean; submittable: boolean } | null };
 };
 
-/** Waits until the space mode shows a problem's packing. */
-async function shown(page: Page, id: string): Promise<void> {
-  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
+/** Waits until the space mode shows a problem's packing; `wait` for the first one, while the mode's code loads. */
+async function shown(page: Page, id: string, wait: { timeout?: number } = {}): Promise<void> {
+  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`, wait);
   await expect(page.locator("#space-score")).not.toHaveText("—");
 }
 
-/**
- * Chooses a kind with the Dimension and Kind menus, as a user would: the dimension first when it
- * differs (which shows that dimension's last kind), then the kind when it differs.
- */
+/** Chooses a family in the Problem set menu, as a user would, when it is not the one shown. */
 async function choose(page: Page, kind: SpaceName | "polygon"): Promise<void> {
-  const dimension = whereIs(kind)!.dimension.id;
-  if ((await page.locator("#dimension-select").inputValue()) !== dimension)
-    await page.selectOption("#dimension-select", dimension);
-  if ((await page.locator("#kind-select").inputValue()) !== kind) await page.selectOption("#kind-select", kind);
+  if ((await page.locator("#family-select").inputValue()) !== kind) await page.selectOption("#family-select", kind);
 }
 
-/** Both menus name the kind shown. */
+/** The menu names the family shown, and <main> its dimension. */
 async function menusShow(page: Page, kind: SpaceName | "polygon"): Promise<void> {
-  await expect(page.locator("#dimension-select")).toHaveValue(whereIs(kind)!.dimension.id);
-  await expect(page.locator("#kind-select")).toHaveValue(kind);
+  await expect(page.locator("#family-select")).toHaveValue(kind);
+  await expect(page.locator("main")).toHaveAttribute("data-dimension", whereIs(kind)!.dimension.id);
 }
 
 /** Runs the optimizer with an evaluation budget and waits for its end; returns the status line. */
@@ -50,7 +44,7 @@ async function runFor(page: Page, evals: number, seed = 1): Promise<string> {
   return (await page.locator("#space-solve-status").textContent()) ?? "";
 }
 
-test("the Dimension and Kind menus switch the board to each kind and back to the Flat board as it was", async ({
+test("the Problem set menu switches the board to each family and back to the Flat board as it was", async ({
   page,
 }) => {
   await openProblem(page, 4, 4, 5);
@@ -93,49 +87,87 @@ test("the Dimension and Kind menus switch the board to each kind and back to the
   await menusShow(page, "polygon");
 });
 
-test("the Dimension menu lists every dimension, the ones to come disabled, and Kind lists its families", async ({
-  page,
-}) => {
+test("the Problem set menu lists every family under its dimension, the ones to come disabled", async ({ page }) => {
   await openProblem(page, 4, 4, 5);
-  const dimension = page.locator("#dimension-select");
-  const kind = page.locator("#kind-select");
-  await expect(dimension.locator("option")).toHaveText(["2D in 2D", "2D on 3D", "3D in 3D", "3D on 4D"]);
-  // a dimension with no available family is listed but cannot be chosen
+  const menu = page.locator("#family-select");
+  // one menu, named by its label
+  await expect(page.getByLabel("Problem set")).toHaveAttribute("id", "family-select");
+  await expect(page.locator("#dimension-select, #kind-select")).toHaveCount(0);
+  await expect(menu.locator("optgroup")).toHaveCount(DIMENSIONS.length);
   for (const d of DIMENSIONS) {
-    const option = dimension.locator(`option[value="${d.id}"]`);
-    if (d.families.some((f) => f.available)) await expect(option).toBeEnabled();
-    else await expect(option).toBeDisabled();
+    const group = menu.locator(`optgroup[label="${d.label}"]`);
+    await expect(group.locator("option")).toHaveText(
+      d.families.map((f) => (f.available ? f.name : `${f.name} (coming soon)`)),
+    );
+    // a family that is not available is listed but cannot be chosen
+    for (const f of d.families) {
+      const option = group.locator(`option[value="${f.space}"]`);
+      if (f.available) await expect(option).toBeEnabled();
+      else await expect(option).toBeDisabled();
+    }
   }
-  await expect(dimension.locator("option[disabled]")).toHaveCount(0);
-  await expect(kind.locator("option")).toHaveText(["Flat", "Curved"]);
+  expect(await menu.locator("optgroup").evaluateAll((g) => g.map((x) => (x as HTMLOptGroupElement).label))).toEqual([
+    "2D in 2D",
+    "2D on 3D",
+    "3D in 3D",
+    "3D on 4D",
+  ]);
+  await expect(menu.locator("option")).toHaveText([
+    "Flat",
+    "Curved",
+    "Platonic surfaces",
+    "Sphere",
+    "Torus",
+    "Polyhedra",
+    "Polytope boundaries",
+  ]);
+  await expect(menu.locator("option[disabled]")).toHaveCount(0);
   await menusShow(page, "polygon");
 
-  // a dimension opens its first kind, at the problem the board starts that kind with
-  await page.selectOption("#dimension-select", "2-on-3");
-  await expect(kind.locator("option")).toHaveText(["Platonic surfaces", "Sphere", "Torus"]);
+  // a family opens at the problem the board starts it with, at the same addresses as before
+  await choose(page, "surface");
   await menusShow(page, "surface");
-  await shown(page, DEFAULT_PROBLEM.surface);
-  // the kinds write the same addresses as the board always did
-  await page.selectOption("#kind-select", "torus");
+  await shown(page, DEFAULT_PROBLEM.surface, LAZY_VIEW);
+  await choose(page, "torus");
   await shown(page, DEFAULT_PROBLEM.torus);
   await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.torus}$`));
 
-  // back to 2D in 2D: the Flat board as it was; then Curved
-  await page.selectOption("#dimension-select", "2-in-2");
+  // Flat: the board as it was; then Curved
+  await choose(page, "polygon");
   await menusShow(page, "polygon");
   await expect(page.locator("#board")).toBeVisible();
   await expect(page).toHaveURL(/#p=4,4,5$/);
-  await page.selectOption("#kind-select", "curved");
+  await choose(page, "curved");
   await shown(page, DEFAULT_PROBLEM.curved);
   await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.curved.replace(/[/-]/g, "\\$&")}$`));
 
-  // a dimension chosen again returns to the kind last shown in it
-  await page.selectOption("#dimension-select", "2-on-3");
+  // a family chosen again returns to the problem last shown in it
+  await page.evaluate(() => (location.hash = "#space=torus/hex/5/8"));
+  await shown(page, "torus/hex/5/8");
+  await choose(page, "sphere");
+  await shown(page, DEFAULT_PROBLEM.sphere);
+  await choose(page, "torus");
+  await shown(page, "torus/hex/5/8");
   await menusShow(page, "torus");
-  await shown(page, DEFAULT_PROBLEM.torus);
-  await page.selectOption("#dimension-select", "2-in-2");
-  await menusShow(page, "curved");
+  await choose(page, "curved");
   await shown(page, DEFAULT_PROBLEM.curved);
+});
+
+test("the Problem set menu works with the keyboard", async ({ page }) => {
+  await openProblem(page, 4, 4, 5);
+  const menu = page.locator("#family-select");
+  await menu.focus();
+  await expect(menu).toBeFocused();
+  // typing a name picks its family, as in any select; the board follows
+  await page.keyboard.type("Sphere");
+  await menusShow(page, "sphere");
+  await shown(page, DEFAULT_PROBLEM.sphere, LAZY_VIEW);
+  await expect(menu).toBeFocused();
+  // a select's type-ahead forgets the letters typed after a second
+  await page.waitForTimeout(1100);
+  await page.keyboard.type("Flat");
+  await menusShow(page, "polygon");
+  await expect(page.locator("#board")).toBeVisible();
 });
 
 test("each space loads a problem from its address, optimises it in the browser and offers only a valid result", async ({

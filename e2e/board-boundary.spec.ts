@@ -75,10 +75,10 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
   const errors = pageErrors(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await openProblem(page, 4, 4, 5);
-  await expect(page.locator("#dimension-select option[value='3-on-4']")).toBeEnabled();
-  await page.selectOption("#dimension-select", "3-on-4");
-  await expect(page.locator("#kind-select")).toHaveValue("boundary");
-  await expect(page.locator("#kind-select option")).toHaveText(["Polytope boundaries"]);
+  await expect(page.locator("#family-select option[value='boundary']")).toBeEnabled();
+  await page.selectOption("#family-select", "boundary");
+  await expect(page.locator("#family-select")).toHaveValue("boundary");
+  await expect(page.locator("#family-select optgroup[label='3D on 4D'] option")).toHaveText(["Polytope boundaries"]);
   await shown(page, ID);
   await expect(page).toHaveURL(new RegExp(`#space=${ID}$`));
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-on-4");
@@ -191,11 +191,11 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
   expect(await distinctColours(page, await picture(page))).toBeGreaterThan(20);
 
   // back to the polygon board, and to 3D on 4D again
-  await page.selectOption("#dimension-select", "2-in-2");
+  await page.selectOption("#family-select", "polygon");
   await expect(page.locator("#board")).toBeVisible();
   await expect(page.locator(".space-stage")).toBeHidden();
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "2-in-2");
-  await page.selectOption("#dimension-select", "3-on-4");
+  await page.selectOption("#family-select", "boundary");
   await shown(page, "boundary/tesseract/cube/10");
   expect(errors).toEqual([]);
 });
@@ -204,8 +204,8 @@ test("a deep link opens a 3D on 4D problem, and one that is not listed opens the
   const errors = pageErrors(page);
   await page.goto("/#space=boundary/tesseract/cube/12");
   await shown(page, "boundary/tesseract/cube/12");
-  await expect(page.locator("#dimension-select")).toHaveValue("3-on-4");
-  await expect(page.locator("#kind-select")).toHaveValue("boundary");
+  await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-on-4");
+  await expect(page.locator("#family-select")).toHaveValue("boundary");
   await expect(page.locator("#space-f-piece")).toHaveValue("cube");
   await expect(page.locator("#space-f-P")).toHaveValue("12");
   await expect(page.locator("#space-score")).toHaveText((await problemOf(page, "boundary/tesseract/cube/12")).edge);
@@ -227,7 +227,7 @@ test("a deep link opens a 3D on 4D problem, and one that is not listed opens the
   await shown(page, ID);
   await page.goBack();
   await expect(page.locator("#board")).toBeVisible();
-  await expect(page.locator("#dimension-select")).toHaveValue("2-in-2");
+  await expect(page.locator("#family-select")).toHaveValue("polygon");
 
   // each row of the dimensions page opens its problem here
   await page.goto("/dimensions.html#space=boundary&polytope=tesseract&piece=ball");
