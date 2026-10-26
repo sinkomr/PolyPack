@@ -3,12 +3,16 @@
  * site needs, one compact entry per problem, with the configuration kept as JSON text. Pure: the
  * caller reads the file (see load.ts) and passes the parsed JSON, which can then be dropped.
  *
- * A space whose records file keeps the configurations apart (polyhedra: data/polyhedra/configs/
+ * A space whose records file keeps the configurations apart (polyhedra and balls: data/<space>/configs/
  * <code>.jsonl, one file per problem, one line per P, which each record's `config_at` locates)
  * has entries without configuration text (`configApart`, `configAt`); load.ts then gives the
  * catalogue a `loadConfig` that reads one on demand.
+ *
+ * A space may also have a domain (domain.ts): then every id of its domain is a problem, and one without a record is
+ * made on demand (problemOf) with the status `no_record`, its bound and no certified value or configuration.
  */
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
 import {
   BOUNDARY_PIECES,
   BOUNDARY_POLYTOPES,
@@ -18,7 +22,16 @@ import {
   TORUS_FAMILIES,
   parseSpaceId,
 } from "./ids";
-import { CertifiedStatus, CertifiedValue, SiteBest, SpaceName, SpaceProblemExtra, SpaceProblemSummary } from "./types";
+import {
+  CertifiedStatus,
+  CertifiedValue,
+  SiteBest,
+  SpaceName,
+  SpaceProblemExtra,
+  SpaceProblemStatus,
+  SpaceProblemSummary,
+} from "./types";
+import { type SpaceDomain, domainMaxP } from "./domain";
 import { parseSpaceConfig } from "./validate";
 
 /** One problem of a catalogue. */
@@ -27,8 +40,8 @@ export interface SpaceProblemEntry {
   id: string;
   fields: Record<string, string | number>;
   P: number;
-  /** The research record's status. */
-  status: CertifiedStatus;
+  /** The research record's status, or `no_record` for a problem of the domain without one (problemOf). */
+  status: SpaceProblemStatus;
   /** The research record's certified value; null for infeasible problems. */
   certified: CertifiedValue | null;
   bound: { value: number; label: string } | null;
@@ -58,6 +71,8 @@ export interface SpaceCatalogue {
   maxP: number;
   /** Records left out, with the reason (none for the shipped data; a test checks it). */
   skipped: string[];
+  /** The space's domain (domain.ts), when its problems are given by one: then `problems` holds its records only. */
+  domain?: SpaceDomain;
   /**
    * Reads the research configuration of an entry whose configuration is kept apart (configApart),
    * checked as the catalogue checks the others; null when it cannot be read. Set by load.ts.
@@ -73,7 +88,7 @@ export async function entryConfig(cat: SpaceCatalogue, entry: SpaceProblemEntry)
 
 /**
  * Where a configuration kept apart lives: the file configs/<file>.jsonl below the space's data
- * folder, and the byte offset and length of its line there. For polyhedra the file is the
+ * folder, and the byte offset and length of its line there. For polyhedra and balls the file is the
  * problem's code. The file name comes from a catalogue entry (a known code), never from a request.
  */
 export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "configAt">): {
@@ -89,7 +104,7 @@ export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "
 export const CONFIG_LINE_MAX = 1_000_000;
 
 /** Spaces whose records file may keep the configurations apart. */
-const CONFIGS_APART: readonly SpaceName[] = ["polyhedra"];
+const CONFIGS_APART: readonly SpaceName[] = ["polyhedra", "balls"];
 
 /** The loaded catalogues; a space whose records file is missing is absent. */
 export type SpacesIndex = Partial<Record<SpaceName, SpaceCatalogue>>;
@@ -109,6 +124,7 @@ function recordConfig(space: SpaceName, r: Rec): unknown {
     case "torus":
       return r.configuration;
     case "polyhedra":
+    case "balls":
       return r.config;
   }
 }
@@ -127,6 +143,7 @@ function recordFields(space: SpaceName, r: Rec): Record<string, unknown> {
     case "boundary":
       return { polytope: r.polytope, piece: r.piece, P: r.P };
     case "polyhedra":
+    case "balls":
       return { code: r.code, piece: r.piece, container: r.container, P: r.P };
   }
 }
@@ -155,7 +172,7 @@ function boundOf(space: SpaceName, b: unknown): { value: number; label: string }
   const kind = typeof b.kind === "string" ? b.kind.replace(/[-_]/g, " ") : "";
   // surface and curved labels carry only the kind of claim ([CALC], rigorous); their `kind` says
   // which bound it is: one word ("area", "one piece") or a sentence of its own
-  if ((space === "surface" || space === "curved" || space === "polyhedra") && kind) {
+  if ((space === "surface" || space === "curved" || space === "polyhedra" || space === "balls") && kind) {
     const what = /^[a-z]+( piece)?$/.test(kind) ? `${kind} bound` : kind;
     return { value, label: label ? `${what}; ${label}` : what };
   }
@@ -191,6 +208,7 @@ const ORDER: Partial<Record<SpaceName, Record<string, readonly string[]>>> = {
   torus: { family: TORUS_FAMILIES },
   boundary: { polytope: BOUNDARY_POLYTOPES, piece: BOUNDARY_PIECES },
   polyhedra: { code: PROBLEM_ORDER },
+  balls: { code: BALLS_CODES },
 };
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
@@ -200,6 +218,7 @@ const SORT_KEYS: Record<SpaceName, string[]> = {
   torus: ["family", "N", "P"],
   boundary: ["polytope", "piece", "P"],
   polyhedra: ["code", "P"],
+  balls: ["code", "P"],
 };
 
 export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry): number {
@@ -214,15 +233,16 @@ export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry)
 }
 
 /**
- * The catalogue of one space from its parsed records file. A record is left out (with a reason in
- * `skipped`) when its id does not match its fields, its status is unknown, or its configuration
- * is not one of the space's format with P pieces.
+ * The catalogue of one space from its parsed records file, and its domain when it has one (domain.ts). A record is
+ * left out (with a reason in `skipped`) when its id does not match its fields, its status is unknown, its
+ * configuration is not one of the space's format with P pieces, or it lies outside the domain. `file` may be null
+ * for a space with a domain and no records file yet.
  */
-export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatalogue {
+export function buildSpaceCatalogue(space: SpaceName, file: unknown, domain?: SpaceDomain): SpaceCatalogue {
   const skipped: string[] = [];
   const problems: SpaceProblemEntry[] = [];
   const records = isObject(file) && Array.isArray(file.records) ? file.records : null;
-  if (!records) skipped.push("the file has no records list");
+  if (!records && !(file === null && domain)) skipped.push("the file has no records list");
   for (const [k, r] of (records ?? []).entries()) {
     if (!isObject(r)) {
       skipped.push(`record ${k} is not an object`);
@@ -232,6 +252,10 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
     const id = parseSpaceId(space, rawId);
     if (typeof id === "string") {
       skipped.push(`record ${k}: ${id}`);
+      continue;
+    }
+    if (domain && domain.bound(id) === undefined) {
+      skipped.push(`${id.id}: outside the space's domain`);
       continue;
     }
     const own = recordFields(space, r);
@@ -308,14 +332,45 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
     generated: isObject(file) && typeof file.generated === "string" ? file.generated : null,
     problems: unique,
     byId,
-    maxP: unique.reduce((m, p) => Math.max(m, p.P), 0),
+    maxP: Math.max(
+      unique.reduce((m, p) => Math.max(m, p.P), 0),
+      domain ? domainMaxP(domain) : 0,
+    ),
     skipped,
+    ...(domain ? { domain } : {}),
   };
 }
 
-/** True when a problem takes submissions: its research record is neither proven nor infeasible. */
+/**
+ * The problem of an id in a catalogue: its record, or, for an id of the space's domain without one, an entry made
+ * now with the status `no_record` and the domain's bound; null when the id is neither.
+ */
+export function problemOf(cat: SpaceCatalogue, id: ParsedSpaceId): SpaceProblemEntry | null {
+  const p = cat.byId.get(id.id);
+  if (p) return p;
+  const bound = cat.domain?.bound(id);
+  if (bound === undefined) return null;
+  return {
+    space: cat.space,
+    id: id.id,
+    fields: id.fields,
+    P: id.P,
+    status: "no_record",
+    certified: null,
+    bound,
+    closed_reason: null,
+    config: null,
+  };
+}
+
+/** True when a problem takes submissions: its research record is neither proven nor infeasible (or it has none). */
 export function acceptsSubmissions(p: SpaceProblemEntry): boolean {
   return p.closed_reason === null;
+}
+
+/** True when a problem has a research record (its status is not `no_record`). */
+export function hasRecord(p: Pick<SpaceProblemEntry, "status">): boolean {
+  return p.status !== "no_record";
 }
 
 /**

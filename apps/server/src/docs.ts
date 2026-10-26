@@ -13,6 +13,7 @@ import {
 import {
   SPACE_BOUND_SLACK,
   SPACE_MIN_QUATERNION_NORM,
+  SPACE_STRICT_NO_RECORD_REASON,
   SPACE_STRICT_REASON,
   SPACE_STRICT_TOL,
   SPACE_MAX_COORD,
@@ -31,6 +32,7 @@ import {
 } from "@polypack/spaces";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 import {
+  SPACE_DOMAIN_TARGETS,
   SPACE_GAP_CAP,
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
@@ -274,7 +276,7 @@ const SPACE_TARGETS = `{
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**
- * The section of the API page on the spaces (surface, curved, sphere, torus, boundary, polyhedra):
+ * The section of the API page on the spaces (surface, curved, sphere, torus, boundary, polyhedra, balls):
  * the kinds of problem beyond Flat, which the site files under dimensions and the API calls spaces.
  */
 function spacesSection(): string {
@@ -295,9 +297,9 @@ function spacesSection(): string {
   ).join("\n");
   return `<h2 id="spaces">Other dimensions: the spaces</h2>
 <p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
-Polygons in polygons, the problems above, are Flat, in 2D in 2D. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
-Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems).
-The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> and <code>polyhedra</code>, under <code>/api/spaces</code>.
+Polygons in polygons, the problems above, are Flat, in 2D in 2D. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
+Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems); and Balls (3D in 3D: unit balls in a ball or a cube, Platonic solids in a ball).
+The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, under <code>/api/spaces</code>.
 Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
 <table>
@@ -309,15 +311,18 @@ ${exhibits}
 </ul>
 
 <h3 id="spaces-certified">Research records and site entries</h3>
-<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code>, exact rational arithmetic),
+<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code> and the balls of <code>balls</code>, exact rational arithmetic),
 at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it to 6 decimals).
 Entries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than ${SPACE_TOL} are rejected.
 The site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.
 <code>best_score</code> is the smaller of the two values.</p>
-<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code> and <code>polyhedra</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
+<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
 a little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>
-<p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
+<p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks and torus packings with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
 Closed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>
+<p id="spaces-no-record">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: "no_record"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.
+Its <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.
+Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
 So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.
@@ -328,10 +333,10 @@ Without this, a record's own configuration shrunk by about 1e-9, whose pieces th
 An entry that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_REASON)}". There is no review queue for the spaces.</p>
 
 <h3><code>GET /api/spaces</code></h3>
-<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of <code>problems</code> in its catalogue, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>
+<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of its <code>problems</code> (its domain's size, or its records' count) and of those with a research record (<code>records</code>; the others have <a href="#spaces-no-record">none yet</a>), its <code>domain</code> when it has one, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>
 
-<h3><code>GET /api/spaces/{space}/records</code></h3>
-<p>The catalogue of one space: <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
+<h3><code>GET /api/spaces/{space}/problems</code> (also <code>/records</code>)</h3>
+<p>The research records of one space (for a space with a <a href="#spaces-no-record">domain</a>, its problems without a record are not listed; each answers at its own address): <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
 <code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations.
 <span id="spaces-extra">Boundary problems also carry <code>extra</code>: <code>{nofold, fold_gain}</code>, where <code>nofold</code> is <code>{value, label}</code>, the best edge when every piece must stay inside one cell (no folding) and what that value rests on,
 and <code>fold_gain</code> = 1 − score_float / nofold.value is how much smaller the research record's polytope is (score_float: the record's search value before the certificate's scaling by 1 + 1e-12); either is <code>null</code> when the record has none.
@@ -350,9 +355,11 @@ A nofold problem is the main site's planar problem of N-gons in the face polygon
 Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
 Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
 the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
-The whole list fits in one answer at the largest <code>limit</code> (16157 targets with the catalogues of 2026-10-26: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 14844; about 3.0 MB).
-The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 14850 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
+The whole list fits in one answer at the largest <code>limit</code> (16657 targets with the catalogues of 2026-10-26: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 14844, and balls 500, a sample of its domain; about 3.1 MB).
+The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 14850 problems share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
+A problem <a href="#spaces-no-record">without a research record</a> and without an entry yet is listed with <code>best_score: null</code>, <code>leader: "none"</code> and the largest room, g = ${SPACE_GAP_CAP}.
+A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain with neither a record nor an entry, in the order of the domain's own sample (small P first): never the whole domain. As those get entries, the next problems of the sample take their place, so every problem of the domain comes up in turn.
 The ranking is kept until an entry changes.</p>
 <table>
 <tr><th scope="row"><code>spaces</code></th><td>Only these spaces: <code>all</code> (the default) or a comma-separated list of ${SPACE_NAMES.map((n) => `<code>${n}</code>`).join(", ")}.</td></tr>

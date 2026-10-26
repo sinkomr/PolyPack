@@ -8,9 +8,10 @@
  * "Site best", "Entries", and for 3D on 4D "Without folding" and "Folding gains".
  */
 import { SCORE_TIE } from "@polypack/geometry";
-import type { CertifiedStatus, SpaceConfig, SpaceName } from "@polypack/spaces";
+import type { CertifiedStatus, SpaceConfig, SpaceName, SpaceProblemStatus } from "@polypack/spaces";
 import { SPACE_RECORD_MARGIN, improvesSpaceBest } from "@polypack/spaces";
 import { getProblem as getPolyhedraProblem, getSolid as getPolyhedraSolid } from "@polypack/polyhedra";
+import { ballsProblemOf } from "@polypack/balls/catalogue";
 import {
   BOUNDARY_ROUND_EVALS,
   type SearchProblem,
@@ -29,7 +30,7 @@ import { round6 } from "../spaces-model";
 
 // ---------- the problem picker (pick.ts, shared with the 3D on 4D viewer) ----------
 
-export { DEFAULT_PROBLEM, type PickField, fieldsOfId, pickProblem } from "./pick";
+export { DEFAULT_PROBLEM, type PickField, fieldsOfId, pickFromDomain, pickProblem } from "./pick";
 
 // ---------- a problem from the server ----------
 
@@ -46,7 +47,8 @@ export interface LoadedSpaceProblem {
   /** The smaller of the certified value and the site best; null when there is neither. */
   best_score: number | null;
   accepts_submissions: boolean;
-  status: CertifiedStatus | null;
+  /** The problem's status; `no_record` when it has no research record yet (then `certified` is null). */
+  status: SpaceProblemStatus | null;
   closed_reason: string | null;
   /** The better of the research record's and the site leader's configuration (the record on a tie). */
   best: { config: SpaceConfig; score: number; source: "certified" | "site" } | null;
@@ -57,6 +59,7 @@ export interface LoadedSpaceProblem {
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const STATUSES: readonly CertifiedStatus[] = ["best_known", "proven", "infeasible"];
+const PROBLEM_STATUSES: readonly SpaceProblemStatus[] = [...STATUSES, "no_record"];
 const text = (v: unknown, max = 400) => (typeof v === "string" ? v.slice(0, max) : "");
 
 /**
@@ -90,7 +93,9 @@ export function readSpaceProblem(space: SpaceName, id: string, body: unknown): L
     isObject(body.bound) && positive(body.bound.value)
       ? { value: body.bound.value, label: text(body.bound.label) }
       : null;
-  const status = STATUSES.includes(body.status as CertifiedStatus) ? (body.status as CertifiedStatus) : null;
+  const status = PROBLEM_STATUSES.includes(body.status as SpaceProblemStatus)
+    ? (body.status as SpaceProblemStatus)
+    : null;
   const certifiedConfig = body.certified_config == null ? null : readSpaceConfig(search, body.certified_config);
   const siteConfig = body.site_config == null ? null : readSpaceConfig(search, body.site_config);
   const known = buildSpaceKnown({
@@ -118,11 +123,18 @@ export function readSpaceProblem(space: SpaceName, id: string, body: unknown): L
   };
 }
 
-/** The rule a configuration of the problem must pass: the server's, with its bound and certified size. */
+/**
+ * The rule a configuration of the problem must pass: the server's, with its bound and certified size, and for a
+ * problem without a research record the strict check of every entry.
+ */
 export const ruleOf = (p: LoadedSpaceProblem): SpaceRule => ({
   bound: p.bound?.value ?? null,
   certified: p.certified?.score ?? null,
+  ...(p.status === "no_record" ? { noRecord: true } : {}),
 });
+
+/** The board's words for a problem without a research record or a site entry yet. */
+export const NO_RECORD_TEXT = "No record yet: run the optimizer or submit one.";
 
 /**
  * True when a score would be kept, as the server decides: it beats the site's best by more than
@@ -151,6 +163,8 @@ export function scoreLabel(p: SearchProblem): string {
       return `${p.polytope.charAt(0).toUpperCase()}${p.polytope.slice(1)} edge s`;
     case "polyhedra":
       return "Container scale s";
+    case "balls":
+      return ballsProblemOf(p.code)?.container === "cube" ? "Cube edge s" : "Container radius s";
   }
 }
 
@@ -191,6 +205,8 @@ export const METHOD_TEXT: Record<SearchKind, string> = {
     "Penalty relaxation of the pieces across the cells, compression of the edge s, a polish, and hops between basins; every result passes the space's validator.",
   polyhedra:
     "Soft hops of a soft-to-rigid simulator and random jiggles from the best so far, each polished by a separating-plane penalty method, then the space's own validator.",
+  balls:
+    "Basin hopping from the best so far: move or shake some pieces, then a penalty method with the container's size as a variable (separating planes for solids), scaled apart to an exact clearance, then the space's own validator.",
 };
 
 /** What an evaluation counts in each search, for the budget's note. */
@@ -202,6 +218,7 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
   torus: "one objective and gradient evaluation",
   boundary: "one evaluation of the penalty energy (a check of a whole packing counts as 500)",
   polyhedra: "one simulator step or one evaluation of the polish",
+  balls: "one evaluation of the penalty and its gradient",
 };
 
 /**
@@ -237,8 +254,9 @@ export const ROUND_EVALS: Record<SearchKind, number> = {
   sphere: 10000,
   torus: 10000,
   boundary: BOUNDARY_ROUND,
-  // polyhedra rounds depend on P and the solid (polyhedraRound); this is no size of theirs
+  // polyhedra and balls rounds depend on P and the piece (polyhedraRound, ballsRound); these are no sizes of theirs
   polyhedra: 10000,
+  balls: 10000,
 };
 
 /** Pieces from which a fold round has 2 compressions instead of 4. */
@@ -258,6 +276,7 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
   torus: 10000,
   boundary: BOUNDARY_FRESH,
   polyhedra: 10000,
+  balls: 10000,
 };
 
 /**
@@ -275,6 +294,7 @@ export const GROW_LIMIT: Record<SearchKind, number> = {
   // at most 900,000: a round of a million takes several seconds
   boundary: 3,
   polyhedra: 2,
+  balls: 2,
 };
 
 /**
@@ -336,14 +356,52 @@ export function polyhedraRoundSeconds(P: number, code: string, evals: number): n
   return (soft * 2 * stepMs + ((evals - soft) * stepMs) / 5) / 1000;
 }
 
+/**
+ * The rounds of a balls search (packages/balls search.ts): a polish of its start in a run's first round, then hops
+ * from the best so far, each a polish of a few thousand evaluations at most (10 penalty stages of up to 300 + 10 P
+ * L-BFGS iterations for balls; 9 of up to 400 for solids, whose stages also list their near pairs).
+ *
+ * Costs [CALC] (packages/balls/scripts/bench.ts: runs of 30,000 evaluations from a new start, wall time with the
+ * work between evaluations, Node 26 on an Apple Silicon laptop beside other jobs, 2026-10-25): an evaluation of P
+ * balls took about 0.6 + 0.15 P microseconds (2.2 at 10 balls, 15.4 at 100), one of P solids about k P with
+ * k = 1.8 for tetrahedra, 1.3 for cubes, 1.2 for octahedra and dodecahedra and 1.0 for icosahedra (the largest
+ * ratio over P = 10, 30, 60, 100; 182 microseconds at 100 tetrahedra, 118 at 100 dodecahedra). A round is sized to
+ * about 2 s of that (3 s for solids), at least 20,000 (10,000) and at most 300,000 (200,000) evaluations: so
+ * 300,000 at 13 balls (about 0.8 s), 128,000 at 100 balls, 25,000 at 100 dodecahedra and 16,000 at 100 tetrahedra.
+ * A round with no start is as long: its new start is one polish. The sizes depend on the problem only, so a run that
+ * ends on its evaluations stays reproducible.
+ */
+const BALLS_SOLID_EVAL_US: Record<string, number> = {
+  tetrahedron: 1.8,
+  cube: 1.3,
+  octahedron: 1.2,
+  dodecahedron: 1.2,
+  icosahedron: 1.0,
+};
+
+export function ballsRound(P: number, code: string): { round: number; fresh: number; evalUs: number } {
+  const problem = ballsProblemOf(code);
+  const k = (n: number) => 1000 * Math.floor(n / 1000);
+  if (!problem || problem.piece === "ball") {
+    const evalUs = 0.6 + 0.15 * P;
+    const round = k(Math.max(20000, Math.min(300000, 2e6 / evalUs)));
+    return { round, fresh: round, evalUs };
+  }
+  const evalUs = P * BALLS_SOLID_EVAL_US[problem.piece];
+  const round = k(Math.max(10000, Math.min(200000, 3e6 / evalUs)));
+  return { round, fresh: round, evalUs };
+}
+
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem): number {
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
+  if (p.space === "balls") return ballsRound(p.P, p.code).round;
   return p.space === "surface" && p.mode === "fold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
 }
 
 /** The evaluations of a round of this problem with no start (a new arrangement). */
 export function freshSize(p: SearchProblem): number {
+  if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
 }
 
@@ -362,13 +420,15 @@ export function defaultBudget(p: SearchProblem): { time_s: number; evals: number
     const time_s = Math.max(60, Math.min(300, 30 * Math.ceil((5 * polyhedraRoundSeconds(p.P, p.code, round)) / 30)));
     return { time_s, evals: 10 * round };
   }
+  // ten rounds of about 2 to 3 s here, with room for a machine several times slower
+  if (p.space === "balls") return { time_s: 60, evals: 10 * ballsRound(p.P, p.code).round };
   return {
     nofold: { time_s: 15, evals: 30000 },
     curved: { time_s: 30, evals: 90 },
     sphere: { time_s: 15, evals: 20000 },
     torus: { time_s: 15, evals: 20000 },
     boundary: { time_s: 30, evals: BOUNDARY_BUDGET },
-  }[kind as Exclude<SearchKind, "surface" | "polyhedra">];
+  }[kind as Exclude<SearchKind, "surface" | "polyhedra" | "balls">];
 }
 
 /**
@@ -386,6 +446,8 @@ export const EVALS_MAX: Record<SearchKind, number> = {
   // [CALC] at 0.03 to 3 ms an evaluation (polyhedraRound), 10 million take 5 minutes at 11 cubes and
   // hours at 100 of the largest solids, where the time limit ends the run first
   polyhedra: 10_000_000,
+  // [CALC] at 1 to 110 microseconds an evaluation (ballsRound), 10 million take 10 s to 20 minutes
+  balls: 10_000_000,
 };
 
 /** Active seconds a round may take when the budget has no time limit (it ends on its evaluations). */

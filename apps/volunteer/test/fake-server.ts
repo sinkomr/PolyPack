@@ -27,7 +27,10 @@ import { SOFTWARE_REFUSAL } from "../src/submit";
 /** A problem of the new spaces. */
 export interface FakeSpaceProblem {
   id: string;
-  /** The research record; its configuration must be valid at `score`. */
+  /**
+   * The research record; its configuration must be valid at `score`. Null for a problem without one (the
+   * server's status no_record: open, its entries strictly checked).
+   */
   certified: { score: number; config: SpaceConfig; status?: "best_known" | "proven" | "infeasible" } | null;
   /** A site entry that leads from the start. */
   site?: { config: SpaceConfig; name: string } | null;
@@ -181,6 +184,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
       id: sp.id,
       fields: {},
       P: p.P,
+      status: sp.certified ? (sp.certified.status ?? "best_known") : "no_record",
       certified: sp.certified
         ? {
             score: sp.certified.score,
@@ -231,16 +235,17 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
             .filter((sp) => spaceOpen(sp))
             .map((sp) => {
               const p = parseSpaceId(sp.id)!;
-              const best = spaceBest(sp.id)!;
+              // a problem without a record or an entry has no best yet
+              const best = spaceBest(sp.id);
               return {
                 space: p.space,
                 id: sp.id,
                 P: p.P,
                 priority: sp.priority ?? 1,
-                best_score: best.score,
+                best_score: best?.score ?? null,
                 bound: sp.bound ?? null,
-                leader: best.site ? ("site" as const) : ("certified" as const),
-                leader_id: best.site?.id ?? null,
+                leader: !best ? ("none" as const) : best.site ? ("site" as const) : ("certified" as const),
+                leader_id: best?.site?.id ?? null,
               };
             })
             .filter((t) => (!only || only.includes(t.space)) && t.P <= maxP)
@@ -283,6 +288,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
           const c = checkSpaceConfig(p.space, p.id, b.config, {
             bound: sp.bound ?? null,
             certified: sp.certified && sp.certified.status !== "infeasible" ? sp.certified.score : null,
+            ...(sp.certified ? {} : { noRecord: true }),
           });
           if (!c.valid) return refuse(422, c.reasons.length ? c.reasons : ["invalid configuration"]);
           const siteBefore = spaceLeaders.get(sp.id);

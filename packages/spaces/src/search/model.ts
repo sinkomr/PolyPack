@@ -1,6 +1,6 @@
 /**
  * The new spaces (polyhedral surfaces, constant curvature, the whole sphere, flat tori, polytope
- * boundaries, polyhedra in polyhedra) as their searches see them: problem ids, configurations in each space's own format (docs/spaces/*.md),
+ * boundaries, polyhedra in polyhedra, balls) as their searches see them: problem ids, configurations in each space's own format (docs/spaces/*.md),
  * the score a configuration states, and the check of a result before it is offered or submitted.
  * The volunteer client and the website's board share this code.
  *
@@ -14,6 +14,7 @@ import { MAX_PIECES } from "@polypack/geometry";
 import { type SolidName, isSolidName } from "@polypack/surface";
 import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torusScore } from "@polypack/torus";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
+import { ballsProblemOf, parseBallsId } from "@polypack/balls/catalogue";
 import type { SpaceConfig, SpaceName } from "../types";
 import { validateSpaceSubmission } from "../validate";
 
@@ -27,7 +28,8 @@ export type SearchProblem =
   | { space: "sphere"; id: string; P: number; N: number }
   | { space: "torus"; id: string; P: number; family: TorusFamily; N: number }
   | { space: "boundary"; id: string; P: number; polytope: PolytopeName; piece: PieceName }
-  | { space: "polyhedra"; id: string; P: number; code: string };
+  | { space: "polyhedra"; id: string; P: number; code: string }
+  | { space: "balls"; id: string; P: number; code: string };
 
 /**
  * The name each space's search goes by in submissions and logs: the space's API name, then what
@@ -41,6 +43,7 @@ export const SPACE_METHOD: Record<SpaceName, string> = {
   torus: "torus basin hopping",
   boundary: "boundary compression search",
   polyhedra: "polyhedra soft-to-rigid search",
+  balls: "balls penalty basin hopping",
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -58,7 +61,7 @@ const shape = (text: string) => {
 /**
  * A problem id as the server lists it, or null when it is not one the searches can work on:
  * surface/<solid>/<fold|nofold>/<N>/<P>, curved/<K>/<N>/<M>/<P>, sphere/<N>/<P>,
- * torus/<sq|hex|free>/<N>/<P>, boundary/<polytope>/<ball|cube>/<P>, polyhedra/<code>/<P>. The
+ * torus/<sq|hex|free>/<N>/<P>, boundary/<polytope>/<ball|cube>/<P>, polyhedra/<code>/<P>, balls/<code>/<P>. The
  * volunteer client also uses ids in file names, so only these forms pass. (The volunteer client
  * imports it as parseSpaceId.)
  */
@@ -105,6 +108,11 @@ export function parseSearchProblem(id: unknown): SearchProblem | null {
     const P = count(m[2]);
     if (!problemNameOf(m[1]) || P === null) return null;
     return { space: "polyhedra", id, P, code: m[1] };
+  }
+  if (id.startsWith("balls/")) {
+    const b = parseBallsId(id);
+    if (typeof b === "string" || b.P > MAX_PIECES) return null;
+    return { space: "balls", id, P: b.P, code: b.code };
   }
   return null;
 }
@@ -200,6 +208,17 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
       }
       return { s: v.s, pieces };
     }
+    case "balls": {
+      if (!positive(v.s) || !Array.isArray(v.pieces) || v.pieces.length !== p.P) return null;
+      // a ball is its centre; a solid its pose
+      const width = ballsProblemOf(p.code)?.piece === "ball" ? 3 : 7;
+      const pieces: number[][] = [];
+      for (const q of v.pieces) {
+        if (!Array.isArray(q) || q.length !== width || ![...Array(width).keys()].every((k) => finite(q[k]))) return null;
+        pieces.push([...q]);
+      }
+      return { s: v.s, pieces };
+    }
   }
 }
 
@@ -220,7 +239,7 @@ export function torusConfigOf(p: SearchProblem & { space: "torus" }, k: TorusPac
   return { lattice, poses: k.poses.map((q) => [q.x, q.y, q.theta]) };
 }
 
-/** The score a (well-formed) configuration states: s, size, rho, L or sqrt|det(b1, b2)|, or s (boundary, polyhedra). */
+/** The score a (well-formed) configuration states: s, size, rho, L or sqrt|det(b1, b2)|, or s (boundary, polyhedra, balls). */
 export function statedScore(p: SearchProblem, c: SpaceConfig): number {
   switch (p.space) {
     case "surface":
@@ -233,6 +252,7 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
       return torusScore(p.family, torusPackingOf(p, c).lattice);
     case "boundary":
     case "polyhedra":
+    case "balls":
       return c.s as number;
   }
 }
@@ -245,6 +265,8 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
 export interface SpaceRule {
   bound?: number | null;
   certified?: number | null;
+  /** True for a problem without a research record: every result must then pass the strict check too. */
+  noRecord?: boolean;
 }
 
 export interface SpaceCheck {
@@ -264,6 +286,7 @@ export function checkSpaceConfig(space: SpaceName, id: string, config: unknown, 
   const v = validateSpaceSubmission(space, id, config, {
     bound: rule.bound ?? null,
     certified: rule.certified ?? null,
+    noRecord: rule.noRecord === true,
   });
   return { valid: v.valid, score: v.malformed ? null : v.score, reasons: v.reasons.slice(0, 5) };
 }

@@ -29,6 +29,8 @@ import {
   parseHash,
   plainBoundLabel,
   problemStatus,
+  problemsText,
+  domainNote,
   round6,
   sentence,
   settleFilters,
@@ -109,7 +111,7 @@ function spaceCard(s: SpaceInfo): HTMLLIElement {
     s.summary,
     [
       ["Score", s.score],
-      ["Problems", s.problems.toLocaleString("en-US")],
+      ["Problems", problemsText(s)],
       ["Problem id", id],
     ],
     {
@@ -264,7 +266,9 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
     th("Board"),
   );
   $("space-head").replaceChildren(head);
-  $("space-note").textContent = summaryText(rows);
+  const info = spaces.find((s) => s.space === space);
+  // a kind whose problems are given by a domain lists its records only; the note says what else is open
+  $("space-note").textContent = info?.domain && !problems.length ? domainNote(info) : summaryText(rows);
   // a nofold surface problem is a 2D in 2D problem: one sentence says so, and its row links to it
   $("space-same-as").hidden = !rows.some((p) => nofoldFaceProblem(p.id));
   const tbody = $("space-rows");

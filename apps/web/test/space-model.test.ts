@@ -5,7 +5,15 @@
  */
 import { SCORE_TIE } from "@polypack/geometry";
 import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
-import { type SpaceName, SPACE_RECORD_MARGIN, spaceProblemSummary, validateSpaceSubmission } from "@polypack/spaces";
+import {
+  type SpaceName,
+  SPACE_RECORD_MARGIN,
+  type ParsedSpaceId,
+  parseSpaceId,
+  problemOf,
+  spaceProblemSummary,
+  validateSpaceSubmission,
+} from "@polypack/spaces";
 import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
 import { BOUNDARY_ROUND_EVALS, mixSeed, parseSearchProblem } from "@polypack/spaces/search";
 import { resolve } from "node:path";
@@ -21,14 +29,17 @@ import {
   ROUND_TIME_CAP,
   defaultBudget,
   freshSize,
+  ballsRound,
   polyhedraRound,
   polyhedraRoundSeconds,
   roundSize,
   beatsBest,
   fieldsOfId,
+  pickFromDomain,
   pickProblem,
   problemFacts,
   readSpaceProblem,
+  ruleOf,
   roundJob,
   scoreLabel,
   searchKind,
@@ -41,7 +52,10 @@ const catalogue = (space: SpaceName) => index[space]!;
 
 /** The server's answer for a catalogue problem, with an optional site entry (spaces.ts, GET .../problems/<id>). */
 function answer(space: SpaceName, id: string, site?: { score: number; config: unknown }) {
-  const p = catalogue(space).byId.get(id)!;
+  // a record, or a problem of the space's domain without one
+  const parsed = parseSpaceId(space, id);
+  if (typeof parsed === "string") throw new Error(parsed);
+  const p = problemOf(catalogue(space), parsed)!;
   const summary = spaceProblemSummary(
     p,
     site ? { id: 7, score: site.score, name: "Ada", created_at: "2026-10-24T12:00:00Z" } : null,
@@ -94,9 +108,11 @@ describe("the board's address of a space problem", () => {
 describe("the problem picker", () => {
   it("opens each space on an open problem of its catalogue with room above its bound", () => {
     for (const space of BOARD_SPACES) {
-      const p = catalogue(space).byId.get(DEFAULT_PROBLEM[space]);
+      const p = problemOf(catalogue(space), parseSpaceId(space, DEFAULT_PROBLEM[space]) as ParsedSpaceId);
       expect(p, space).toBeDefined();
       expect(p!.closed_reason, space).toBeNull();
+      // a space without records opens on a problem without one
+      if (p!.status === "no_record") continue;
       expect(p!.certified!.score, space).toBeGreaterThan(p!.bound!.value * 1.01);
     }
   });
@@ -435,6 +451,80 @@ describe("3D on 4D on the board", () => {
       expect(FRESH_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
     }
     expect(defaultBudget(parseSearchProblem("surface/cube/nofold/4/12")!).evals).toBeLessThanOrEqual(EVALS_MAX.nofold);
+  });
+});
+
+describe("3D in 3D: balls on the board", () => {
+  const rule = { bound: null, certified: null };
+
+  it("picks one of the seven problems, then P from 2 to 100, from its domain", () => {
+    // no records: the picker is the domain's
+    expect(catalogue("balls").problems).toHaveLength(0);
+    const domain = catalogue("balls").domain!.info;
+    const pick = pickFromDomain("balls", domain, fieldsOfId("balls", DEFAULT_PROBLEM.balls));
+    expect(pick.id).toBe("balls/ballinball/13");
+    expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
+    expect(pick.fields[0].options.map((o) => o.text)).toEqual([
+      "Balls in a ball",
+      "Balls in a cube",
+      "Tetrahedra in a ball",
+      "Cubes in a ball",
+      "Octahedra in a ball",
+      "Dodecahedra in a ball",
+      "Icosahedra in a ball",
+    ]);
+    expect(pick.fields[1].options).toHaveLength(99);
+    expect(pickFromDomain("balls", domain, { code: "icoinball", P: "100" }).id).toBe("balls/icoinball/100");
+    expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/ballincub/13")!)).toBe("Cube edge s");
+    expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container radius s");
+  });
+
+  it("sizes its rounds from P and the piece, within their limits", () => {
+    expect(ballsRound(13, "ballinball").round).toBe(300000);
+    expect(ballsRound(100, "ballinball").round).toBe(128000);
+    expect(ballsRound(100, "dodinball").round).toBe(25000);
+    expect(ballsRound(100, "tetinball").round).toBe(16000);
+    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"])
+      for (let P = 2; P <= 100; P++) {
+        const { round, fresh } = ballsRound(P, code);
+        const search = parseSearchProblem(`balls/${code}/${P}`)!;
+        expect(roundSize(search)).toBe(round);
+        expect(freshSize(search)).toBe(fresh);
+        expect(round).toBeGreaterThanOrEqual(10000);
+        expect(round).toBeLessThanOrEqual(300000);
+        expect(defaultBudget(search)).toEqual({ time_s: 60, evals: 10 * round });
+        expect(10 * round).toBeLessThanOrEqual(EVALS_MAX.balls);
+      }
+  });
+
+  it("runs rounds of its own search with the run's seeds, within the budget", () => {
+    const p = parseSearchProblem("balls/dodinball/100")!;
+    const run = { seed: 5, budget: { evals: 100000, time_s: 60 }, fresh: false };
+    const start = { s: 6, pieces: [] };
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(25000);
+    expect(a.job).toMatchObject({ space: "balls", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
+    expect(a.job.method).toBe("balls penalty basin hopping");
+    expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
+    expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 5 }, start, 3)!.evals).toBe(50000);
+    expect(GROW_LIMIT.balls).toBe(2);
+  });
+
+  it("has no records: the first valid entry is kept, then entries better by the tie tolerance", () => {
+    const id = "balls/ballinball/13";
+    const p = readSpaceProblem("balls", id, answer("balls", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p).toMatchObject({ status: "no_record", certified: null, best: null, best_score: null });
+    expect(ruleOf(p)).toMatchObject({ noRecord: true });
+    expect(beatsBest(p, 1e6)).toBe(true);
+    expect(SPACE_RECORD_MARGIN.balls).toBe(SCORE_TIE);
+    // with a site entry of 3.1: beaten by more than the tie tolerance only
+    const site = { score: 3.1, config: { s: 3.1, pieces: Array.from({ length: 13 }, (_, i) => [0, 0, 2.05 * i - 12.3]) } };
+    const q = readSpaceProblem("balls", id, answer("balls", id, site));
+    if (typeof q === "string") throw new Error(q);
+    expect(beatsBest(q, 3.1 * (1 - 0.5 * SCORE_TIE))).toBe(false);
+    expect(beatsBest(q, 3.1 * (1 - 2 * SCORE_TIE))).toBe(true);
   });
 });
 

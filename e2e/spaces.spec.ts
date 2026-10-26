@@ -19,7 +19,7 @@ import { filterProblems, nofoldFaceProblem, settleFilters } from "../apps/web/sr
 // the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
   const r = await request.get(url);
@@ -59,8 +59,9 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
   await expect(flat.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/");
 
   for (const s of api.spaces) {
-    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts)
-    expect(s.viewer).toBe(`/spaces/${s.space}.html`);
+    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts);
+    // the balls space has none of its own: its viewer is the board
+    expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
     const card = page.locator(`#dimension-groups li[data-space="${s.space}"]`);
     const { dimension, family } = familyOfSpace(s.space)!;
     await expect(card.locator("xpath=ancestor::section[1]")).toHaveAttribute("data-dimension", dimension.id);
@@ -101,8 +102,15 @@ test("the records table loads the problems of each space", async ({ page, reques
   await page.goto("/dimensions.html");
   for (const space of SPACES) {
     const data = await getJson<SpaceRecordsResponse>(request, `/api/spaces/${space}/records`);
-    expect(data.problems.length).toBeGreaterThan(0);
     await page.locator(`#space-pick input[value="${space}"]`).check();
+    // the balls kind's problems are a domain without records yet: its table is empty and its note says so
+    if (space === "balls") {
+      expect(data.problems).toEqual([]);
+      await expect(page.locator("#space-note")).toHaveText(/^No records yet\. All 693 problems of this kind are open/);
+      await expect(rows(page)).toHaveCount(0);
+      continue;
+    }
+    expect(data.problems.length).toBeGreaterThan(0);
     // the table starts with the space's default filters
     const filters = settleFilters(space, data.problems);
     const expected = filterProblems(space, data.problems, filters).map((p) => p.id);

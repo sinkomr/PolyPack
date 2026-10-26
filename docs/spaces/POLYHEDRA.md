@@ -99,8 +99,8 @@ octahedron and the 3-trapezohedron a cube; they are left out.
   coefficients were found by integer relations at 160 digits (for those three, in Q(1/(2 sin(pi/n))) of degree 6 to 10
   and then converted exactly) and proved by exact arithmetic in Q(alpha): every face planar and strictly supporting,
   a closed surface, an insphere (certify_general's checks, which treat them as tangential solids like the Catalan
-  ones), and every edge tangent to the sphere of radius rho with its touching point inside the edge. The float data
-  agree with the exact data to 6.3e-16 (at most 1e-15 is required by the check) [CALC].
+  ones), and every edge tangent to the sphere of radius rho with its touching point inside the edge. Each float of
+  the data is the binary64 number nearest its exact value (the check requires agreement to 1e-15) [CALC].
 
 | solid | code | V, E, F | field degree | midradius | inradius | circumradius | edges | volume |
 |---|---|---|---|---|---|---|---|---|
@@ -716,8 +716,9 @@ listing (3.4 MB), plain or gzip, and never read, grew the heap by 9 MB (before, 
 **Targets.** The targets list (`/api/spaces/targets`) treats a site entry as the leader on the same rule, and
 leaves out a problem whose record is within its margin of the lower bound (nothing could be kept below it: cubes
 in a cube and triangular prisms in a triangular prism, P = 8, 27 and 64). With 14,850 problems the whole list has
-16,157 targets with all six spaces (3.0 MB, 0.5 MB compressed; 12,593 and 2.4 MB with 11,286 problems, 9,821 and 1.8 MB with the
-wiki's 8,514), so its largest `limit` is 20,000 (10,000 before PolyPack's prisms and antiprisms joined), and the volunteer client asks for all of
+16,657 targets with all seven spaces, 500 of them a sample of the balls space's domain (3.1 MB, 0.5 MB compressed;
+16,157 and 3.0 MB before the balls space, 12,593 and 2.4 MB with 11,286 problems, 9,821 and 1.8 MB with the wiki's
+8,514), so its largest `limit` is 20,000 (10,000 before PolyPack's prisms and antiprisms joined), and the volunteer client asks for all of
 it, or for 10,000 or 2,000 from an older server. One encoded list is kept per filter (the spaces, and `max_P`; one at or above every listed P is no
 filter), up to 16 MB in all (`SPACE_TARGETS_CACHE_BYTES`, the least recently used going first), and the answer of
 any `limit` is a prefix of its bytes and a closing "]}", so that no limit builds an answer of its own. Only the

@@ -10,6 +10,8 @@
  * must also pass the validator at SPACE_STRICT_TOL = 1e-11. Without
  * this, a record's own configuration shrunk by about 1e-9 (its pieces then overlap by up to the
  * touching tolerance) would "beat" it; every research record passes at 1e-11 at its stated size.
+ * A problem without a research record (status `no_record`, option `noRecord`) asks the strict check of every
+ * entry, so that its leader is strictly valid too and cannot be "beaten" by its own configuration shrunk.
  *
  * Work bounds (every validator is at most quadratic in P, so these keep one check short):
  *  - P is at most SPACE_MAX_P of the space (the largest catalogue P when this was written; a test
@@ -40,6 +42,7 @@ import {
   validatePolyhedra,
   validatePolyhedraAsync,
 } from "@polypack/polyhedra";
+import { type BallsConfig, getBallsProblem, ballsConfigErrors, validateBalls } from "@polypack/balls";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
   BOUNDARY_MAX_CHAINS,
@@ -66,6 +69,8 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   torus: 49,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
+  // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
+  balls: 100,
 };
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
@@ -73,6 +78,8 @@ export const SPACE_MAX_SIZE = 1e6;
 export const SPACE_BOUND_SLACK = 1e-9;
 /** The reason given when a configuration beats a research record only within the touching tolerance. */
 export const SPACE_STRICT_REASON = `beats the research record only within the float tolerance; an improvement must be valid at tolerance ${SPACE_STRICT_TOL}`;
+/** The reason given when an entry of a problem without a research record is valid only within the touching tolerance. */
+export const SPACE_STRICT_NO_RECORD_REASON = `valid only within the float tolerance; this problem has no research record yet, and its entries must be valid at tolerance ${SPACE_STRICT_TOL}`;
 /** Overlap reasons listed at most per verdict. */
 const MAX_REASONS = 20;
 
@@ -99,6 +106,8 @@ export interface SpaceValidateOptions {
    * there is no strict check.
    */
   certified?: number | null;
+  /** True when the problem has no research record (status `no_record`): every entry then needs the strict check. */
+  noRecord?: boolean;
 }
 
 type Failure = { ok: false; malformed: boolean; errors: string[] };
@@ -327,7 +336,22 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
       const r = parsePolyhedraConfig(raw, id.P, MAX_REASONS);
       return r.ok ? { ok: true, config: r.config as unknown as SpaceConfig, score: r.score } : r;
     }
+    case "balls":
+      return parseBalls(raw, id);
   }
+}
+
+/** A balls configuration: errors of form are malformed input, except a wrong number of pieces. */
+function parseBalls(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<SpaceConfig> {
+  const problem = getBallsProblem(String(id.fields.code));
+  if (!problem) return { ok: false, malformed: true, errors: [`unknown balls problem ${String(id.fields.code)}`] };
+  const errors = ballsConfigErrors(problem, raw, undefined, MAX_REASONS);
+  if (errors.length) return { ok: false, malformed: true, errors };
+  const list = piecesOf(raw, "pieces", id.P);
+  if (!Array.isArray(list)) return list;
+  const width = problem.piece === "ball" ? 3 : 7;
+  const pieces = (raw.pieces as number[][]).map((p) => p.slice(0, width));
+  return { ok: true, config: { s: raw.s as number, pieces }, score: raw.s as number };
 }
 
 /** Reasons from a validator, at most MAX_REASONS, with a fallback when it gave none. */
@@ -426,6 +450,12 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
       const problem = getPolyhedraProblem(f.code as string);
       if (!problem) return [`unknown polyhedra problem ${String(f.code)}`];
       const v = validatePolyhedra(problem, config as unknown as PolyhedraConfig, { tol, maxErrors: MAX_REASONS });
+      return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
+    }
+    case "balls": {
+      const problem = getBallsProblem(String(f.code));
+      if (!problem) return [`unknown balls problem ${String(f.code)}`];
+      const v = validateBalls(problem, config as unknown as BallsConfig, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
     }
   }
@@ -549,11 +579,18 @@ function prepare(
   if (typeof bound === "number" && Number.isFinite(bound) && score < bound * (1 - SPACE_BOUND_SLACK))
     return fail([`the size ${score} is below the lower bound ${bound} of this problem`], false, score, config);
   const certified = opts.certified;
+  const noRecord = opts.noRecord === true;
   const needsStrict = (reasons: string[]) =>
-    !reasons.length && typeof certified === "number" && beatsSpaceRecord(space, score, certified);
+    !reasons.length && (noRecord || (typeof certified === "number" && beatsSpaceRecord(space, score, certified)));
   const verdict = (reasons: string[], strict: string[]): SpaceVerdict => {
     if (reasons.length) return fail(reasons, false, score, config);
-    if (strict.length) return fail([SPACE_STRICT_REASON, ...strict.slice(0, 3)], false, score, config);
+    if (strict.length)
+      return fail(
+        [noRecord ? SPACE_STRICT_NO_RECORD_REASON : SPACE_STRICT_REASON, ...strict.slice(0, 3)],
+        false,
+        score,
+        config,
+      );
     return { valid: true, score, reasons: [], malformed: false, config };
   };
   return {

@@ -10,7 +10,7 @@ import { LAZY_VIEW, openProblem } from "./helpers";
 // research records of data/<space>/records.json and checks submissions; the board draws a
 // problem, runs the space's search in a Web Worker and submits a better packing.
 
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 declare const polypack: {
   board: { toConfig(): unknown };
@@ -20,7 +20,9 @@ declare const polypack: {
 /** Waits until the space mode shows a problem's packing; `wait` for the first one, while the mode's code loads. */
 async function shown(page: Page, id: string, wait: { timeout?: number } = {}): Promise<void> {
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`, wait);
-  await expect(page.locator("#space-score")).not.toHaveText("—");
+  // the balls space ships without records: its problems show none until an entry is kept
+  if (id.startsWith("balls/")) await expect(page.locator("#space-empty")).toBeVisible();
+  else await expect(page.locator("#space-score")).not.toHaveText("—");
 }
 
 /** Chooses a family in the Problem set menu, as a user would, when it is not the one shown. */
@@ -62,12 +64,21 @@ test("the Problem set menu switches the board to each family and back to the Fla
     // the polygon board is hidden, the space's drawing and values are shown
     await expect(page.locator("#board")).toBeHidden();
     await expect(page.locator("#solve-panel")).toBeHidden();
+    const facts = page.locator("#space-facts");
+    await expect(facts).toContainText("Entriesopen");
+    if (space === "balls") {
+      // no record yet: nothing to draw, and the board says what to do
+      await expect(page.locator("#space-empty")).toHaveText("No record yet: run the optimizer or submit one.");
+      await expect(facts).toContainText("Certified value—");
+      await expect(facts).toContainText("Statusno record yet");
+      await expect(page.locator("#space-shown")).toHaveText("no record yet");
+      await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
+      continue;
+    }
     // the 2D kinds draw on a canvas or in an svg; 3D on 4D in the three.js view (e2e/board-boundary.spec.ts)
     await expect(page.locator(".space-draw > canvas, .space-draw > svg, .pp3 canvas")).toBeVisible(LAZY_VIEW);
     const api = (await (await page.request.get(`/api/spaces/${space}/problems/${id}`)).json()) as SpaceProblemResponse;
-    const facts = page.locator("#space-facts");
     await expect(facts).toContainText(`Certified value${api.certified!.display}`);
-    await expect(facts).toContainText("Entriesopen");
     await expect(page.locator("#space-shown")).toHaveText("the research record");
   }
 
@@ -443,6 +454,7 @@ for (const scheme of ["light", "dark"] as const) {
       "torus/sq/5/7",
       "sphere/0/12",
       "polyhedra/cubincub/11",
+      "balls/ballinball/13",
     ]) {
       await page.goto("about:blank");
       await page.goto(`/#space=${id}`);
@@ -537,6 +549,23 @@ test("a torus entry in a skewed basis draws at once, and a degenerate lattice is
     /^The lattice is far smaller than a piece \(its shortest vector is 1\.00e-150\), so it is not drawn\.$/,
   );
   await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /far smaller than a piece/);
+});
+
+test("without the kinds' descriptions a kind with records still opens, and one without records says so", async ({
+  page,
+}) => {
+  await page.route("**/api/spaces", (route) => route.abort());
+  await page.goto("/#space=torus/hex/5/8");
+  await shown(page, "torus/hex/5/8");
+  await expect(page.locator("#space-status")).toContainText("The kinds' descriptions could not be read");
+  // the balls kind has no records: it needs its domain, and Try again reads it once the server answers
+  await page.goto("about:blank");
+  await page.goto("/#space=balls/ballinball/13");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this kind could not be loaded.");
+  await page.unroute("**/api/spaces");
+  await page.click("#space-retry");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem balls/ballinball/13");
+  await expect(page.locator("#space-empty")).toBeVisible();
 });
 
 test("a deep link whose problem cannot be read stays in the address", async ({ page }) => {

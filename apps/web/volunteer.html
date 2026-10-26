@@ -67,14 +67,16 @@
         By default the client searches Flat problems (2D in 2D): polygons in polygons. It can also search the other
         kinds on the <a href="/dimensions.html">Dimensions</a> page: Curved (2D in 2D at constant curvature); Platonic
         surfaces, Sphere and Torus (2D on 3D); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a
-        tesseract); and Polyhedra (3D in 3D). This is off by default. Without these options the client never asks the
+        tesseract); Polyhedra (3D in 3D); and Balls (3D in 3D: balls in a ball or a cube, Platonic solids in a ball).
+        This is off by default. Without these options the client never asks the
         server about them.
       </p>
       <pre><code>node polypack-volunteer.mjs --name "your name" --dimensions all</code></pre>
       <ul>
         <li>
           <code>--dimensions</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code>,
-          <code>torus</code>, <code>boundary</code> and <code>polyhedra</code>, comma-separated, or <code>all</code>.
+          <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, comma-separated, or
+          <code>all</code>.
           Each next problem then comes from the polygon work list or from the list of these kinds, with probability 1/2
           each.
         </li>

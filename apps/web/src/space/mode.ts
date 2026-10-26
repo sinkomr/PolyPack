@@ -14,13 +14,14 @@
  * Pieces are not moved by hand in these spaces: the board shows and optimises.
  */
 import { SCORE_TIE } from "@polypack/geometry";
-import type { SpaceConfig, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
+import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
 import type { SpaceCheck } from "@polypack/spaces/search";
 import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
-import { listSpaceProblems, loadSpaceProblem } from "./load";
+import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
+import { type PickField, pickFromDomain } from "./pick";
 import {
   DEFAULT_PROBLEM,
   EVALS_MAX,
@@ -28,6 +29,7 @@ import {
   freshSize,
   LARGE_FOLD,
   METHOD_TEXT,
+  NO_RECORD_TEXT,
   type LoadedSpaceProblem,
   defaultBudget,
   fieldsOfId,
@@ -118,6 +120,8 @@ const TURN_HELP: Record<SpaceName, string> = {
     "Cells shows the eight cubes of the boundary side by side; Net unfolds them, and Fold folds the net up into the fourth dimension; Slice cuts the boundary across one axis. Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and − to zoom, Page Up and Page Down to follow one piece, Home to reset.",
   polyhedra:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+  balls:
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint: a ball with three great circles, or a cube by its edges. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
@@ -153,6 +157,8 @@ class SpaceMode {
 
   private space: SpaceName | null = null;
   private records = new Map<SpaceName, SpaceProblemSummary[]>();
+  /** The domains of the spaces whose problems are given by one (their picker is built from it); null for the others. */
+  private domains = new Map<SpaceName, SpaceDomainInfo | null>();
   /** The last problem shown in each space, so that the menu returns to it. */
   private last = new Map<SpaceName, string>();
   private handle: SpaceProblemHandle | null = null;
@@ -205,6 +211,8 @@ class SpaceMode {
         h("p", { id: "space-busy-text" }),
         h("button", { id: "space-retry", type: "button", hidden: true }, "Try again"),
       ),
+      // over the empty drawing of a problem without a research record or a site entry yet
+      h("div", { id: "space-empty", class: "space-busy space-empty", hidden: true }, h("p", {}, NO_RECORD_TEXT)),
       h("p", { id: "space-status", class: "status", role: "status", "aria-live": "polite" }),
     );
     // dimension-switch.ts shows a placeholder while this module loads
@@ -490,9 +498,8 @@ class SpaceMode {
       this.busy(null);
       const shownId = this.handle?.problem.id ?? null;
       this.pendingId = shownId;
-      const problems = this.space ? this.records.get(this.space) : undefined;
-      if (this.space && shownId && problems)
-        this.renderPicker(this.space, pickProblem(this.space, problems, fieldsOfId(this.space, shownId)).fields);
+      if (this.space && shownId && this.records.has(this.space))
+        this.renderPicker(this.space, this.pick(this.space, fieldsOfId(this.space, shownId)).fields);
     }
     // a 3D drawing gives back its WebGL context while the board shows another kind
     if (this.view?.renderer?.releaseOnLeave) {
@@ -510,13 +517,22 @@ class SpaceMode {
     if (this.handle && this.handle.problem.space !== space) this.clearProblem();
     this.setAddress();
     let problems = this.records.get(space);
+    let fallback = "";
+    if (problems && !this.domains.has(space)) {
+      // the kinds' descriptions could not be read last time: ask again for the domain (the listing is kept)
+      const domain = await loadSpaceDomain(space);
+      if (token !== this.token) return;
+      if (domain !== "error") this.domains.set(space, domain);
+    }
     if (!problems) {
       this.busy("Loading the problems of this kind…");
       this.say("");
       $("space-fields").replaceChildren();
-      const listed = await listSpaceProblems(space);
+      const [listed, domain] = await Promise.all([listSpaceProblems(space), loadSpaceDomain(space)]);
       if (token !== this.token) return;
-      if (!listed) {
+      // without GET /api/spaces (domain "error"), a kind with records still opens from its listing, as before
+      // domains; one without records cannot, and says so (Try again reads both again)
+      if (!listed || (domain === "error" && !listed.length)) {
         this.clearProblem();
         this.setAddress();
         const text = "The problems of this kind could not be loaded. The server may be unreachable.";
@@ -526,20 +542,32 @@ class SpaceMode {
       }
       problems = listed;
       this.records.set(space, problems);
+      if (domain !== "error") this.domains.set(space, domain);
+      else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
-    const pick = pickProblem(space, problems, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
+    const pick = this.pick(space, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
     this.renderPicker(space, pick.fields);
     if (!pick.id) {
       this.clearProblem();
       this.busy("This kind lists no problems.", () => void this.open(space, wanted));
       return;
     }
-    const missing =
-      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "";
+    const missing = [
+      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "",
+      fallback,
+    ]
+      .filter(Boolean)
+      .join(" ");
     await this.load(space, pick.id, token, missing);
   }
 
-  private renderPicker(space: SpaceName, fields: ReturnType<typeof pickProblem>["fields"]): void {
+  /** The picker for a wish: from the space's domain when it has one, else from its listed problems. */
+  private pick(space: SpaceName, wish: Record<string, string>): { fields: PickField[]; id: string | null } {
+    const domain = this.domains.get(space);
+    return domain ? pickFromDomain(space, domain, wish) : pickProblem(space, this.records.get(space) ?? [], wish);
+  }
+
+  private renderPicker(space: SpaceName, fields: PickField[]): void {
     const box = $("space-fields");
     const rows = fields.map((f) => {
       const id = `space-f-${f.key}`;
@@ -549,8 +577,7 @@ class SpaceMode {
       select.addEventListener("change", () => {
         const wish: Record<string, string> = {};
         for (const g of fields) wish[g.key] = g.key === f.key ? select.value : g.value;
-        const problems = this.records.get(space) ?? [];
-        const pick = pickProblem(space, problems, wish);
+        const pick = this.pick(space, wish);
         this.renderPicker(space, pick.fields);
         // keep the focus on the field that was changed
         $(id)?.focus();
@@ -587,6 +614,8 @@ class SpaceMode {
       this.view = this.handle.render($("space-view-host"));
     }
     this.view.show(p.best?.config ?? null);
+    // a problem with no packing yet (no research record, no site entry) can only start from a new arrangement
+    if (!p.best && p.status === "no_record") $<HTMLSelectElement>("space-solve-start").value = "fresh";
     this.setDefaults(p);
     this.setAddress();
     this.renderFacts();
@@ -600,13 +629,19 @@ class SpaceMode {
           ? `${p.id}: ${shownText(p.best.source, p)}, ${p.best.score.toFixed(6)}.`
           : p.status === "infeasible"
             ? `${p.id}: no packing exists for this problem.`
-            : `${p.id}: the server's packing of this problem could not be read.`),
+            : p.status === "no_record"
+              ? `${p.id}: ${NO_RECORD_TEXT}`
+              : `${p.id}: the server's packing of this problem could not be read.`),
     );
     const stopped = this.interrupted;
     this.interrupted = false;
     this.solveStatus(
       (stopped ? "The problem changed, so the run was stopped. " : "") +
-        (p.best ? "Choose a budget, then run." : "There is no packing to start from."),
+        (p.best
+          ? "Choose a budget, then run."
+          : p.status === "no_record"
+            ? "No record yet: a run starts from a new arrangement."
+            : "There is no packing to start from."),
     );
     this.updateButtons();
   }
@@ -638,8 +673,8 @@ class SpaceMode {
   private setDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
     const fold = kind === "surface";
-    // fold and polyhedra budgets grow with P
-    const key = fold || kind === "polyhedra" ? `${kind}/${p.P}` : kind;
+    // fold, polyhedra and balls budgets grow with P
+    const key = fold || kind === "polyhedra" || kind === "balls" ? `${kind}/${p.P}` : kind;
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search);
@@ -681,13 +716,16 @@ class SpaceMode {
     const shown = this.shownConfig();
     $("space-score-label").textContent = p ? scoreLabel(p.search) : "Score";
     $("space-score").textContent = shown ? shown.score.toFixed(6) : "—";
+    $("space-empty").hidden = !(p && !shown && p.status === "no_record" && !this.loading);
     $("space-shown").textContent =
       shown && p
         ? shownText(shown.source, p)
         : p
           ? p.status === "infeasible"
             ? "no packing exists"
-            : "none could be read"
+            : p.status === "no_record"
+              ? "no record yet"
+              : "none could be read"
           : "—";
     // built again only for another problem, so that an opened "Why" stays open during a run
     const facts = $("space-facts");

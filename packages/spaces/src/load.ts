@@ -13,6 +13,7 @@ import { existsSync, openSync, readFileSync, readSync, closeSync } from "node:fs
 import { open } from "node:fs/promises";
 import { join } from "node:path";
 import { parseSpaceId } from "./ids";
+import { SPACE_DOMAINS } from "./domain";
 import { SpaceCatalogue, SpaceProblemEntry, SpacesIndex, buildSpaceCatalogue, configLocation } from "./records";
 import { SPACE_NAMES, SpaceName } from "./types";
 import { parseSpaceConfig } from "./validate";
@@ -175,27 +176,38 @@ export function readEntryConfigSync(root: string, catalogue: SpaceCatalogue, ent
 }
 
 function catalogueOf(root: string, space: SpaceName, file: unknown, log: (msg: string) => void): SpaceCatalogue {
-  const catalogue = buildSpaceCatalogue(space, file);
+  const catalogue = buildSpaceCatalogue(space, file, SPACE_DOMAINS[space]);
   for (const s of catalogue.skipped) log(`[spaces] ${space} record left out: ${s}`);
   const apart = catalogue.problems.filter((p) => p.configApart).length;
   if (apart) catalogue.loadConfig = configLoader(root, catalogue, log).load;
+  const domain = catalogue.domain;
   log(
-    `[spaces] ${space}: ${catalogue.problems.length} problems (records of ${catalogue.generated ?? "unknown date"})` +
+    `[spaces] ${space}: ` +
+      (domain
+        ? `a domain of ${domain.info.problems} problems, ${catalogue.problems.length} with a record (`
+        : `${catalogue.problems.length} problems (`) +
+      (file === null ? "no records file" : `records of ${catalogue.generated ?? "unknown date"}`) +
+      ")" +
       (apart ? `, ${apart} configurations read on demand` : ""),
   );
   return catalogue;
 }
 
 /**
- * The catalogues of every space whose records file exists below `root`, read in this thread.
- * Each file is parsed once and only the compact catalogue is kept; `log` receives one line per
- * space and one per record left out.
+ * The catalogues of every space whose records file exists below `root`, or that has a domain (SPACE_DOMAINS),
+ * read in this thread. Each file is parsed once and only the compact catalogue is
+ * kept; `log` receives one line per space and one per record left out.
  */
 export function loadSpacesIndex(root: string, log: (msg: string) => void = () => {}): SpacesIndex {
   const index: SpacesIndex = {};
   for (const space of SPACE_NAMES) {
     const path = spaceRecordsPath(root, space);
     if (!existsSync(path)) {
+      if (SPACE_DOMAINS[space]) {
+        // a space with a domain and no records yet
+        index[space] = catalogueOf(root, space, null, log);
+        continue;
+      }
       log(`[spaces] no ${space} records (${join("data", space, "records.json")} is missing)`);
       continue;
     }

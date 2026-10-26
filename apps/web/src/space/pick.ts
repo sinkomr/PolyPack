@@ -3,7 +3,7 @@
  * values the catalogue has with the fields before it. Pure and light (no geometry), so that the
  * board's space mode and the 3D on 4D viewer (src/boundary-viewer.ts) pick problems the same way.
  */
-import type { SpaceName } from "@polypack/spaces";
+import type { SpaceDomainInfo, SpaceName } from "@polypack/spaces";
 import { type FieldSpec, SPACE_FIELDS, fieldValues } from "../spaces-model";
 
 /** The problem a space opens with when the address names none (the first listed one when it is missing). */
@@ -15,6 +15,8 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   // nine balls: without folding one cell must hold two of them, so folding gains much here
   boundary: "boundary/tesseract/ball/9",
   polyhedra: "polyhedra/cubincub/11",
+  // 13 balls: twelve round a thirteenth in a ball of radius 3 (the kissing arrangement)
+  balls: "balls/ballinball/13",
 };
 
 /** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */
@@ -99,4 +101,40 @@ export function pickProblem(
     left = left.filter((p) => valueOf(p.id, f) === value);
   }
   return { fields, id: left[0]?.id ?? null };
+}
+
+/**
+ * The picker of a space whose problems are given by a domain (packages/spaces domain.ts), as the polygon board's N, M
+ * and P menus are: each field offers its domain's values (or its range of integers) whatever the records, and takes
+ * the wished value when it is offered; otherwise the value of the space's starting problem, or the first, and for P
+ * the offered value nearest the wished one. The id is written from the domain's pattern.
+ */
+export function pickFromDomain(
+  space: SpaceName,
+  domain: SpaceDomainInfo,
+  wish: Record<string, string>,
+): { fields: PickField[]; id: string } {
+  const start = fieldsOfId(space, DEFAULT_PROBLEM[space]);
+  const fields: PickField[] = domain.fields.map((f) => {
+    const values =
+      f.values ??
+      (f.min !== undefined && f.max !== undefined
+        ? Array.from({ length: f.max - f.min + 1 }, (_, i) => String(f.min! + i))
+        : []);
+    let value = wish[f.key];
+    if (value === undefined || !values.includes(value)) {
+      if (f.values === undefined && value !== undefined && Number.isFinite(Number(value)) && values.length) {
+        const want = Number(value);
+        value = values.reduce((a, b) => (Math.abs(Number(b) - want) < Math.abs(Number(a) - want) ? b : a));
+      } else value = values.includes(start[f.key]) ? start[f.key] : values[0];
+    }
+    return {
+      key: f.key,
+      label: PICK_LABELS[f.key] ?? f.label,
+      options: values.map((v) => ({ value: v, text: f.titles?.[v] ?? v })),
+      value,
+    };
+  });
+  const chosen = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+  return { fields, id: domain.id.replace(/<([A-Za-z]+)>/g, (_, k: string) => chosen[k] ?? "") };
 }

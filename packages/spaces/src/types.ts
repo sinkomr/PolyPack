@@ -1,6 +1,6 @@
 /**
  * The HTTP contract of the new spaces: polyhedral surfaces, constant curvature, the whole sphere,
- * flat tori, the boundaries of 4D polytopes and polyhedra in polyhedra. The server answers with these shapes, the website and the volunteer client read
+ * flat tori, the boundaries of 4D polytopes, polyhedra in polyhedra and balls in balls and cubes. The server answers with these shapes, the website and the volunteer client read
  * them. Each space keeps its own problem ids and configuration format (docs/spaces/*.md); this file
  * only names them.
  *
@@ -11,9 +11,11 @@
  *    validator of that space with PolyPack's usual tolerance, like every other site entry.
  */
 
+import type { SpaceDomainInfo } from "./domain";
+
 /** Spaces that take submissions. */
-export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra";
-export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra" | "balls";
+export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 export function isSpaceName(v: unknown): v is SpaceName {
   return typeof v === "string" && (SPACE_NAMES as readonly string[]).includes(v);
@@ -21,6 +23,13 @@ export function isSpaceName(v: unknown): v is SpaceName {
 
 /** Status of a research record: `proven` only with a published proof; `infeasible` = no packing exists (proved). */
 export type CertifiedStatus = "best_known" | "proven" | "infeasible";
+
+/**
+ * Status of a problem: its research record's, or `no_record` for a problem of the space's domain (domain.ts) that has
+ * no research record yet. Such a problem takes entries; its best value is the site's, none until a first entry is
+ * kept, and every entry must pass the strict check (validate.ts).
+ */
+export type SpaceProblemStatus = CertifiedStatus | "no_record";
 
 /**
  * Configurations, in each space's own format (the record files' format):
@@ -32,6 +41,8 @@ export type CertifiedStatus = "best_known" | "proven" | "infeasible";
  *  - boundary: `{ s, pieces: [{ cell, u: [u0, u1, u2], q?: [w, x, y, z] }] }`, score s (edge of the
  *             polytope).
  *  - polyhedra: `{ s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }`, score s (scale of the container solid).
+ *  - balls:   `{ s, pieces: [[x, y, z], ...] }` for unit balls, `[[x, y, z, qw, qx, qy, qz], ...]` for
+ *             unit-edge Platonic solids; score s (the container ball's radius, or the cube's edge).
  */
 export type SpaceConfig = Record<string, unknown>;
 
@@ -47,8 +58,15 @@ export interface SpaceInfo {
   problem_id: string;
   /** Units, pose and container conventions, as short sentences keyed by topic. */
   conventions: Record<string, string>;
-  /** Problems in the catalogue (the research records, infeasible ones included). */
+  /**
+   * Problems of the space: the size of its domain when it has one, else its research records (infeasible ones
+   * included).
+   */
   problems: number;
+  /** Problems with a research record; the others of the domain have none yet (status `no_record`). */
+  records: number;
+  /** The space's domain, when its problems are given by one (domain.ts); the listing then holds its records only. */
+  domain?: SpaceDomainInfo;
   /** Path of the static viewer, e.g. "/spaces/surface.html". */
   viewer: string;
   /** URL of the space's notes on GitHub. */
@@ -105,12 +123,12 @@ export interface SpaceProblemSummary {
   space: SpaceName;
   /**
    * The problem id, e.g. "surface/cube/fold/0/12", "curved/-1/3/4/7", "sphere/4/12", "torus/hex/5/8",
-   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12".
+   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12", "balls/ballinball/13".
    */
   id: string;
   /**
    * The id's fields: surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P};
-   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}.
+   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}; balls {code, piece, container, P}.
    */
   fields: Record<string, string | number>;
   P: number;
@@ -123,10 +141,11 @@ export interface SpaceProblemSummary {
   /** False for proven and infeasible problems. */
   accepts_submissions: boolean;
   /**
-   * The research record's status (always sent). `infeasible` problems have no certified value and
-   * no configuration: no packing exists.
+   * The problem's status (always sent): its research record's, or `no_record` when it has none yet (then
+   * `certified` is null and the problem takes entries). `infeasible` problems have no certified value and no
+   * configuration: no packing exists.
    */
-  status?: CertifiedStatus;
+  status?: SpaceProblemStatus;
   /** Why the problem takes no submissions, for proven and infeasible problems; null when it is open (always sent). */
   closed_reason?: string | null;
   /** Sent for boundary problems only: the research record's nofold comparison. */
@@ -156,10 +175,11 @@ export interface SpaceTarget {
   P: number;
   /** Larger is more promising; the volunteer client draws in proportion to it. */
   priority: number;
-  best_score: number;
+  /** The problem's best value; null for a problem with neither a research record nor a site entry yet. */
+  best_score: number | null;
   bound: number | null;
-  /** Which value leads: the research record or a site entry. */
-  leader: "certified" | "site";
+  /** Which value leads: the research record, a site entry, or none (no record and no entry yet). */
+  leader: "certified" | "site" | "none";
   /** Site entry id of the leader; null when the research record leads. */
   leader_id: number | null;
 }

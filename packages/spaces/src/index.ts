@@ -3,3 +3,4 @@ export * from "./ids";
 export * from "./info";
 export * from "./validate";
 export * from "./records";
+export * from "./domain";

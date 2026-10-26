@@ -625,7 +625,7 @@ class Volunteer {
 
   /**
    * ?spaces=...&max_P=...&limit=20000, the server's largest limit, so that the client draws from
-   * the whole list (12,593 targets with the catalogues of 2026-10-25, so that every space gets its
+   * the whole list (16,657 targets with the catalogues of 2026-10-25, so that every space gets its
    * share); only the limit once the server has refused the filters (they then apply here only).
    * An older server takes at most 10000, or 2000, which the client then asks for.
    */
@@ -1049,8 +1049,13 @@ class Volunteer {
     }
     const before = bestRef(info);
     const known = buildSpaceKnown(info);
-    // the server's whole rule: also valid at the strict tolerance when below the research record
-    const rule: SpaceRule = { bound: info.bound, certified: info.certified?.score ?? null };
+    // the server's whole rule: also valid at the strict tolerance when below the research record, or when the
+    // problem has no research record yet
+    const rule: SpaceRule = {
+      bound: info.bound,
+      certified: info.certified?.score ?? null,
+      ...(info.no_record ? { noRecord: true } : {}),
+    };
     const maxSeconds = this.maxSeconds();
     const engineSeed = randomInt(2 ** 32);
     const control: Control = { aborted: this.stopped, paused: this.paused };
@@ -1099,6 +1104,7 @@ class Volunteer {
                 known,
                 bound: info.bound,
                 certified: rule.certified,
+                ...(rule.noRecord ? { noRecord: true } : {}),
                 maxSeconds,
                 lanes: this.pool!.size,
                 seed: engineSeed,
@@ -1168,6 +1174,7 @@ class Volunteer {
           check: checkSpaceConfig(p.space, p.id, offer.config, {
             bound: fresh.info.bound ?? info.bound,
             certified: fresh.info.certified?.score ?? rule.certified,
+            ...(fresh.info.no_record ? { noRecord: true } : {}),
           }),
           open: fresh.info.accepts_submissions,
           bestScore: fresh.info.best_score,

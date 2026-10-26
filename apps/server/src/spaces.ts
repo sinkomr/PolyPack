@@ -10,6 +10,7 @@ import {
   SiteBest,
   SpaceEntryResponse,
   SpaceName,
+  SpaceCatalogue,
   SpaceProblemEntry,
   SpaceRecordsResponse,
   SpaceSubmitResponse,
@@ -18,6 +19,8 @@ import {
   SpacesIndex,
   SpacesResponse,
   acceptsSubmissions,
+  hasRecord,
+  problemOf,
   beatsSpaceRecord,
   entryConfig,
   improvesSpaceBest,
@@ -43,12 +46,40 @@ import {
 import { LoadStats } from "./load";
 import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
+/** Problems of a space's domain without a record or a site entry that the targets list holds at most. */
+export const SPACE_DOMAIN_TARGETS = 500;
+
+/**
+ * The ids of a space's domain that the targets list offers besides its records: those with site entries (`entered`),
+ * then the first `limit` of the domain's sample that have neither a record nor a site entry. As problems get entries
+ * the sample moves on to the next ones, so every problem of the domain comes up in turn; the list stays bounded by
+ * the records, the entries and `limit`.
+ */
+export function domainTargetIds(cat: SpaceCatalogue, entered: readonly string[], limit: number): string[] {
+  if (!cat.domain) return [];
+  const taken = new Set(cat.byId.keys());
+  const out: string[] = [];
+  for (const id of entered)
+    if (!taken.has(id)) {
+      taken.add(id);
+      out.push(id);
+    }
+  let fresh = 0;
+  for (const id of cat.domain.sample(limit + taken.size)) {
+    if (fresh >= limit) break;
+    if (taken.has(id)) continue;
+    taken.add(id);
+    out.push(id);
+    fresh++;
+  }
+  return out;
+}
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
- * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
- * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
- * trapezohedra make 14,850, and 16,157 targets in all).
+  * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
+  * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
+  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 16,657 targets in all).
  */
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
@@ -272,7 +303,15 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   };
 
   const spacesAnswer: Packed = packedOf({
-    spaces: loaded.map((s) => ({ ...SPACE_INFO[s], problems: index[s]!.problems.length })),
+    spaces: loaded.map((s) => {
+      const domain = index[s]!.domain;
+      return {
+        ...SPACE_INFO[s],
+        problems: domain ? domain.info.problems : index[s]!.problems.length,
+        records: index[s]!.problems.filter(hasRecord).length,
+        ...(domain ? { domain: domain.info } : {}),
+      };
+    }),
     // the curvature sweeps belong with the spaces, so they are shown only when there are any
     exhibits: loaded.length ? SPACE_EXHIBITS : [],
   } satisfies SpacesResponse);
@@ -285,13 +324,31 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   // nofold problem is the main site's planar problem N in M with ceil(P / F) pieces, which the
   // polygon work list covers; it stays listed and open to submissions. The priorities are then
   // scaled so that those of each space sum to 1 / (number of spaces with targets): drawn in
-  // proportion to priority, every space gets the same share of the searches.
+  // proportion to priority, every space gets the same share of the searches. A problem without a
+  // research record or a site entry (status no_record) has no best value: it counts with the
+  // largest room, g = SPACE_GAP_CAP, and is listed with best_score null and leader "none". A space
+  // with a domain lists its records, its problems without a record that have site entries, and at
+  // most SPACE_DOMAIN_TARGETS more of its domain with neither, in the order of its sample (domainTargetIds):
+  // never the whole domain.
   const rank = async (): Promise<SpaceTarget[]> => {
-    const site = new Map((await store.spaceLeaders()).map((l) => [`${l.space} ${l.problem}`, l]));
+    const leaders = await store.spaceLeaders();
+    const site = new Map(leaders.map((l) => [`${l.space} ${l.problem}`, l]));
     const out: SpaceTarget[] = [];
     const sums = new Map<SpaceName, number>();
+    const candidates = (space: SpaceName): SpaceProblemEntry[] => {
+      const cat = index[space]!;
+      if (!cat.domain) return cat.problems;
+      const list = [...cat.problems];
+      const entered = leaders.filter((l) => l.space === space).map((l) => l.problem);
+      for (const id of domainTargetIds(cat, entered, SPACE_DOMAIN_TARGETS)) {
+        const parsed = parseSpaceId(space, id);
+        const p = typeof parsed === "string" ? null : problemOf(cat, parsed);
+        if (p) list.push(p);
+      }
+      return list;
+    };
     for (const space of loaded) {
-      for (const p of index[space]!.problems) {
+      for (const p of candidates(space)) {
         if (!acceptsSubmissions(p)) continue;
         if (space === "surface" && p.fields.mode === "nofold") continue;
         const weight = spaceTargetWeight(p.P);
@@ -301,10 +358,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         // a site entry leads once it beats the research record by the space's record margin
         const siteLeads = !!lead && beatsSpaceRecord(space, lead.score, cert);
         const values = [cert, lead?.score].filter((v): v is number => typeof v === "number");
-        if (!values.length) continue;
-        const best = Math.min(...values);
+        if (!values.length && hasRecord(p)) continue;
+        const best = values.length ? Math.min(...values) : null;
         const bound = p.bound?.value ?? null;
-        const gap = bound === null ? SPACE_GAP_CAP : (best - bound) / best;
+        const gap = bound === null || best === null ? SPACE_GAP_CAP : (best - bound) / best;
         if (!(gap > SPACE_SETTLED_GAP)) continue;
         // nothing can be kept when beating the record by its margin would take an entry below the
         // lower bound (polyhedra records that meet their volume bound to within the clearance)
@@ -323,7 +380,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
           priority: value,
           best_score: best,
           bound,
-          leader: siteLeads ? "site" : "certified",
+          leader: siteLeads ? "site" : cert !== null ? "certified" : "none",
           leader_id: siteLeads ? lead!.id : null,
         });
       }
@@ -525,7 +582,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       return reject(400, [`space must be one of ${loaded.join(", ") || "(no spaces are loaded)"}`]);
     const parsedId = parseSpaceId(space, body.id);
     if (typeof parsedId === "string") return reject(400, [parsedId]);
-    const p = cat.byId.get(parsedId.id);
+    const p = problemOf(cat, parsedId);
     if (!p)
       return reject(400, [
         `${parsedId.id} is not in the ${space} catalogue: submissions are accepted for its problems only`,
@@ -610,6 +667,8 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
           bound: p.bound?.value ?? null,
           maxP: cat.maxP,
           certified: cert,
+          // without a research record, every entry must pass the strict check (validate.ts)
+          noRecord: !hasRecord(p),
         });
       } finally {
         if (heavy) heavyDone();
@@ -641,6 +700,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       bound: p.bound?.value ?? null,
       maxP: cat.maxP,
       certified: cert,
+      noRecord: !hasRecord(p),
     });
     ctx.verifyBudget.charge(address, performance.now() - storeStart);
     const { id, before, leader, kept } = await store.spaceSubmit({
@@ -681,8 +741,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   const unknownSpace = (c: Context) =>
     c.json({ error: `no such space; the spaces are ${loaded.join(", ") || "(none loaded)"}` }, 404);
 
-  app.get("/api/spaces/:space/records", async (c) => {
-    const space = c.req.param("space");
+  // The listing of a space's research records (a space with a domain answers for its other problems one by one,
+  // below); /problems is the same answer.
+  const listing = async (c: Context) => {
+    const space = c.req.param("space") ?? "";
     const cat = catalogue(space);
     if (!cat || !isSpaceName(space)) return unknownSpace(c);
     const cached = recordsCache.get(space);
@@ -696,7 +758,9 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     } satisfies SpaceRecordsResponse);
     if (at === version) recordsCache.set(space, packed);
     return send(c, packed);
-  });
+  };
+  app.get("/api/spaces/:space/records", listing);
+  app.get("/api/spaces/:space/problems", listing);
 
   // The id holds slashes, so it is the rest of the path: /api/spaces/curved/problems/curved/-1/3/4/7.
   app.get("/api/spaces/:space/problems/*", compress(), async (c) => {
@@ -712,7 +776,8 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     }
     const parsed = parseSpaceId(space, id);
     if (typeof parsed === "string") return c.json({ error: parsed }, 400);
-    const p: SpaceProblemEntry | undefined = cat.byId.get(parsed.id);
+    // a record, or a problem of the space's domain without one (answered with its bound)
+    const p: SpaceProblemEntry | null = problemOf(cat, parsed);
     if (!p) return c.json({ error: `${parsed.id} is not in the ${space} catalogue` }, 404);
     const lead = acceptsSubmissions(p) ? await store.spaceLeader(space, p.id) : null;
     const entry = lead ? await store.spaceGet(lead.id) : null;
