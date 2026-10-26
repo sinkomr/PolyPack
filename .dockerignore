@@ -15,5 +15,7 @@ data/*
 !data/boundary/records.json
 !data/polyhedra/records.json
 !data/polyhedra/configs
+!data/balls/records.json
+!data/balls/configs
 **/node_modules
 **/dist

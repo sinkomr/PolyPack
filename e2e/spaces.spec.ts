@@ -19,7 +19,7 @@ import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
 // the viewers from packages/*/viz.
 
 const root = resolve(import.meta.dirname, "..");
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 async function getJson<T>(request: APIRequestContext, url: string): Promise<T> {
   const r = await request.get(url);

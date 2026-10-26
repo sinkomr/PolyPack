@@ -11,7 +11,7 @@
  * The spaces the board can show. The menus list them by dimension (dimension-table.ts); a family
  * of the table can be made available only once its space is here.
  */
-export const BOARD_SPACES = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"] as const;
+export const BOARD_SPACES = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"] as const;
 export type BoardSpace = (typeof BOARD_SPACES)[number];
 
 export const isBoardSpace = (v: unknown): v is BoardSpace =>

@@ -118,6 +118,8 @@ const TURN_HELP: Record<SpaceName, string> = {
     "Cells shows the eight cubes of the boundary side by side; Net unfolds them, and Fold folds the net up into the fourth dimension; Slice cuts the boundary across one axis. Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and − to zoom, Page Up and Page Down to follow one piece, Home to reset.",
   polyhedra:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+  balls:
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint, a ball with three great circles. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
@@ -636,8 +638,8 @@ class SpaceMode {
   private setDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
     const fold = kind === "surface";
-    // fold and polyhedra budgets grow with P
-    const key = fold || kind === "polyhedra" ? `${kind}/${p.P}` : kind;
+    // fold, polyhedra and balls budgets grow with P
+    const key = fold || kind === "polyhedra" || kind === "balls" ? `${kind}/${p.P}` : kind;
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search);

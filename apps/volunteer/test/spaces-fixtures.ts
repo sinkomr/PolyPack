@@ -27,15 +27,15 @@ const find = (space: string, id: string) => {
 
 /**
  * The record's configuration in the contract's format (surface records keep s and pieces at top level;
- * polyhedra configurations are kept apart, one file per problem in data/polyhedra/configs/<code>.jsonl).
+ * polyhedra and balls configurations are kept apart, one file per problem in data/<space>/configs/<code>.jsonl).
  */
 export function recordConfig(space: string, id: string): SpaceConfig {
   const r = find(space, id);
   if (space === "surface") return { s: r.s, pieces: r.pieces };
   if (space === "torus") return r.configuration;
-  if (space === "polyhedra") {
+  if (space === "polyhedra" || space === "balls") {
     // one line {"P", "config"} per P, at the byte offset and length the record's config_at gives
-    const file = readFileSync(new URL(`../../../data/polyhedra/configs/${r.code}.jsonl`, import.meta.url));
+    const file = readFileSync(new URL(`../../../data/${space}/configs/${r.code}.jsonl`, import.meta.url));
     const [offset, length] = r.config_at as [number, number];
     return JSON.parse(file.subarray(offset, offset + length).toString("utf8")).config;
   }
@@ -50,6 +50,7 @@ export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold"
     case "curved":
       return { ...c, size: (c.size as number) * f };
     case "polyhedra":
+    case "balls":
       return { ...c, s: (c.s as number) * f };
     case "torus": {
       const l = c.lattice as { L?: number; b1?: number[]; b2?: number[] };

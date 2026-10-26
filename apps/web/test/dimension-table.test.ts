@@ -33,6 +33,8 @@ describe("the table of dimensions", () => {
     for (const s of ["surface", "sphere", "torus"]) expect(whereIs(s)?.dimension.label, s).toBe("2D on 3D");
     expect(whereIs("boundary")).toMatchObject({ dimension: { id: "3-on-4" }, family: { name: "Polytope boundaries" } });
     expect(whereIs("polyhedra")).toMatchObject({ dimension: { label: "3D in 3D" }, family: { name: "Polyhedra" } });
+    expect(whereIs("balls")).toMatchObject({ dimension: { label: "3D in 3D" }, family: { name: "Balls" } });
+    expect(familyTitle("balls")).toBe("3D in 3D, Balls");
     expect(familyTitle("sphere")).toBe("2D on 3D, Sphere");
     expect(familyTitle("boundary")).toBe("3D on 4D, Polytope boundaries");
   });

@@ -274,7 +274,7 @@ const SPACE_TARGETS = `{
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**
- * The section of the API page on the spaces (surface, curved, sphere, torus, boundary, polyhedra):
+ * The section of the API page on the spaces (surface, curved, sphere, torus, boundary, polyhedra, balls):
  * the kinds of problem beyond Flat, which the site files under dimensions and the API calls spaces.
  */
 function spacesSection(): string {
@@ -295,9 +295,9 @@ function spacesSection(): string {
   ).join("\n");
   return `<h2 id="spaces">Other dimensions: the spaces</h2>
 <p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
-Polygons in polygons, the problems above, are Flat, in 2D in 2D. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
-Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki).
-The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> and <code>polyhedra</code>, under <code>/api/spaces</code>.
+Polygons in polygons, the problems above, are Flat, in 2D in 2D. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
+Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki); and Balls (3D in 3D: unit balls in a ball or a cube, Platonic solids in a ball).
+The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, under <code>/api/spaces</code>.
 Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
 <table>
@@ -309,14 +309,14 @@ ${exhibits}
 </ul>
 
 <h3 id="spaces-certified">Research records and site entries</h3>
-<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code>, exact rational arithmetic),
+<p>Every problem of a space is listed with its <em>research record</em> (<code>certified</code>): a configuration that PolyPack's research proved valid with interval arithmetic (for <code>boundary</code> and the balls of <code>balls</code>, exact rational arithmetic),
 at the size <code>certified.score</code> (the record's <code>score_cert</code>; <code>display</code> rounds it to 6 decimals).
 Entries sent to this site are checked differently: by the server's floating-point validator of the space, with the same rule as every other site entry, pieces may touch and overlaps deeper than ${SPACE_TOL} are rejected.
 The site's best entry of a problem is <code>site_best</code>. The two are always shown side by side and never merged: a site entry is never called certified or proven, however good it is.
 <code>best_score</code> is the smaller of the two values.</p>
-<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code> and <code>polyhedra</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
+<p>The configuration of the research record is <code>certified_config</code>, in the space's format. For <code>curved</code>, <code>sphere</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code> it states the size <code>certified.score</code>; for <code>surface</code> and <code>torus</code> it states the size the search found,
 a little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>
-<p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
+<p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks, torus packings and balls in a cube with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
 Closed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.

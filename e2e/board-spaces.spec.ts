@@ -9,7 +9,7 @@ import { LAZY_VIEW, openProblem } from "./helpers";
 // research records of data/<space>/records.json and checks submissions; the board draws a
 // problem, runs the space's search in a Web Worker and submits a better packing.
 
-const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+const SPACES: SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 declare const polypack: {
   board: { toConfig(): unknown };
@@ -377,6 +377,7 @@ for (const scheme of ["light", "dark"] as const) {
       "torus/sq/5/7",
       "sphere/0/12",
       "polyhedra/cubincub/11",
+      "balls/ballinball/13",
     ]) {
       await page.goto("about:blank");
       await page.goto(`/#space=${id}`);

@@ -1,3 +1,4 @@
+import { BALLS_CODES, ballsTitle } from "@polypack/balls/catalogue";
 import { PROBLEM_CODES, problemTitle } from "@polypack/polyhedra/catalogue";
 import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 
@@ -220,6 +221,18 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       cell: problemTitle,
       order: PROBLEM_CODES,
       start: "cubincub",
+    },
+  ],
+  // balls/<code>/<P>: balls in a ball and in a cube, then the Platonic solids in a ball
+  balls: [
+    {
+      key: "code",
+      at: 1,
+      label: "Problem",
+      option: ballsTitle,
+      cell: ballsTitle,
+      order: BALLS_CODES,
+      start: "ballinball",
     },
   ],
 };

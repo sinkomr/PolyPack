@@ -116,6 +116,29 @@ describe("space jobs in the worker pool", () => {
       },
     ],
     [
+      "a balls job on balls/dodinball/100 from its record",
+      {
+        space: "balls",
+        id: "balls/dodinball/100",
+        method: "balls penalty basin hopping",
+        seed: 1,
+        budget: { time_s: 60 },
+        kind: "iterate",
+        start: recordConfig("balls", "balls/dodinball/100"),
+      },
+    ],
+    [
+      "a fresh balls job on balls/ballinball/100",
+      {
+        space: "balls",
+        id: "balls/ballinball/100",
+        method: "balls penalty basin hopping",
+        seed: 2,
+        budget: { time_s: 60 },
+        kind: "fresh",
+      },
+    ],
+    [
       "a fresh polyhedra job on polyhedra/phcinphc/100",
       {
         space: "polyhedra",

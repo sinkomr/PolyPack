@@ -21,6 +21,7 @@ import {
   ROUND_TIME_CAP,
   defaultBudget,
   freshSize,
+  ballsRound,
   polyhedraRound,
   polyhedraRoundSeconds,
   roundSize,
@@ -435,6 +436,75 @@ describe("3D on 4D on the board", () => {
       expect(FRESH_EVALS[kind], space).toBeLessThanOrEqual(EVALS_MAX[kind]);
     }
     expect(defaultBudget(parseSearchProblem("surface/cube/nofold/4/12")!).evals).toBeLessThanOrEqual(EVALS_MAX.nofold);
+  });
+});
+
+describe("3D in 3D: balls on the board", () => {
+  const rule = { bound: null, certified: null };
+
+  it("picks one of the seven problems, then P from 2 to 100", () => {
+    const problems = catalogue("balls").problems;
+    expect(problems).toHaveLength(693);
+    const pick = pickProblem("balls", problems, fieldsOfId("balls", DEFAULT_PROBLEM.balls));
+    expect(pick.id).toBe("balls/ballinball/13");
+    expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
+    expect(pick.fields[0].options.map((o) => o.text)).toEqual([
+      "Balls in a ball",
+      "Balls in a cube",
+      "Tetrahedra in a ball",
+      "Cubes in a ball",
+      "Octahedra in a ball",
+      "Dodecahedra in a ball",
+      "Icosahedra in a ball",
+    ]);
+    expect(pick.fields[1].options).toHaveLength(99);
+    expect(pickProblem("balls", problems, { code: "icoinball", P: "100" }).id).toBe("balls/icoinball/100");
+    expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/ballincub/13")!)).toBe("Cube edge s");
+    expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container radius s");
+  });
+
+  it("sizes its rounds from P and the piece, within their limits", () => {
+    expect(ballsRound(13, "ballinball").round).toBe(300000);
+    expect(ballsRound(100, "ballinball").round).toBe(107000);
+    expect(ballsRound(100, "dodinball").round).toBe(23000);
+    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"])
+      for (let P = 2; P <= 100; P++) {
+        const { round, fresh } = ballsRound(P, code);
+        const search = parseSearchProblem(`balls/${code}/${P}`)!;
+        expect(roundSize(search)).toBe(round);
+        expect(freshSize(search)).toBe(fresh);
+        expect(round).toBeGreaterThanOrEqual(10000);
+        expect(round).toBeLessThanOrEqual(300000);
+        expect(defaultBudget(search)).toEqual({ time_s: 60, evals: 10 * round });
+        expect(10 * round).toBeLessThanOrEqual(EVALS_MAX.balls);
+      }
+  });
+
+  it("runs rounds of its own search with the run's seeds, within the budget", () => {
+    const p = parseSearchProblem("balls/dodinball/100")!;
+    const run = { seed: 5, budget: { evals: 100000, time_s: 60 }, fresh: false };
+    const start = { s: 6, pieces: [] };
+    const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(23000);
+    expect(a.job).toMatchObject({ space: "balls", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
+    expect(a.job.method).toBe("balls penalty basin hopping");
+    expect(roundJob(p, rule, run, 1, { evals: 23000, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
+    expect(roundJob(p, rule, run, 1, { evals: 23000, seconds: 5 }, start, 3)!.evals).toBe(46000);
+    expect(GROW_LIMIT.balls).toBe(2);
+  });
+
+  it("keeps an entry when it beats the research record by the tie tolerance", () => {
+    const id = "balls/ballinball/13";
+    const p = readSpaceProblem("balls", id, answer("balls", id));
+    if (typeof p === "string") throw new Error(p);
+    expect(p.best?.source).toBe("certified");
+    expect(SPACE_RECORD_MARGIN.balls).toBe(SCORE_TIE);
+    const cert = p.certified!.score;
+    expect(beatsBest(p, cert * (1 - 0.5 * SCORE_TIE))).toBe(false);
+    expect(beatsBest(p, cert * (1 - 2 * SCORE_TIE))).toBe(true);
+    const v = validateSpaceSubmission("balls", id, p.best!.config, { bound: p.bound!.value, certified: cert });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
   });
 });
 
