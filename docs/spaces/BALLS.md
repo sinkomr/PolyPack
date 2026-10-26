@@ -277,8 +277,123 @@ domain; a problem
 without an entry shows "No record yet: run the optimizer or submit one." over the empty drawing and runs from a new
 arrangement; the three.js drawing (instanced spheres or solids, the container a faint ball with three great circles
 or a cube's edges; Solid or See-through; released on leaving); rounds of the search in a Web Worker sized from P and
-the piece (`ballsRound`).
+the piece (`ballsRound`). The Method select offers the eight generic methods beside Auto (§8).
 
 **Volunteer client.** `--dimensions balls` (or `all`) adds the space to the opt-in list of kinds; without the option
 the client never asks the server about it. It searches a problem without an entry from a new arrangement and applies
 the strict check before it sends a result.
+
+## 8. Kernel for the generic methods
+
+`ballsKernel({ code, P })` (`packages/balls/src/kernel.ts`, with `kernel-balls.ts`, `kernel-solids.ts` and
+`kernel-rule.ts`) is the space's kernel for the generic search methods (`docs/methods/dimensions/README.md`), so
+that every balls problem offers the eight methods beside Auto, the space's own search (§5), which stays the default.
+P runs from 2 to 100, the catalogue's and the server's range; the factory refuses any other P.
+
+**State.** Balls: three numbers per ball, its centre. Solids: six numbers per piece, as in the polyhedra space's
+kernel ([POLYHEDRA.md](POLYHEDRA.md) §9): its centre, then a rotation vector times the solid's circumradius, so that
+it reads as a length, which turns an anchor orientation the kernel keeps in the state; only `rebase` changes an
+anchor. The size is s and the bound the elementary bound of §1. Centres are absolute (the container is centred at
+the origin), so changing s scales them. A step of every variable is the piece's inradius (1 for a ball).
+`fromConfig` refuses a configuration outside the server's limits (§5: s at most 1e6, coordinates at most 1e4,
+quaternion components at most 1e100 and norms at least 1e-6), so a method never works on a state no submission
+could have.
+
+**Energy.** For balls, the validator's own distances: a pair's overlap 2 - |c_i - c_j|, the protrusion
+|c_i| + 1 - s from the ball, and one term per face of the cube, +-c_ik + 1 - s/2. For solids, the polyhedra kernel's
+model with a ball for the container: at shape t a piece is the solid scaled by t about its centre and dilated by
+(1 - t) times its inradius rho (the solid at t = 1, its inscribed ball at t = 0); a pair's overlap is the soft
+pieces' exact penetration depth, twice the dilation minus the signed distance of the scaled solids by the
+separating-axis test; the protrusion from the ball is max |X_v| + (1 - t) rho - s over the scaled solid's vertices
+X_v, since the farthest point of a convex body from a point is a vertex [EST, elementary]. The energy is the
+weighted sum of the squared overlaps and protrusions, with analytic gradients (for the wall, the unit vector to the
+farthest vertex and its lever arm about the centre). [CALC] They match central differences to 1e-6 relative on
+overlapping states of every problem, for true and soft shapes and rotations away from the anchor
+(`test/kernel.test.ts`). For balls each term is minus one of the validator's gaps, rounded as the validator rounds
+it, so the energy is zero exactly when the configuration is valid at tolerance 0. For solids at t = 1 the model is
+the validator's up to rounding (the kernel's vertices and separating-axis depths agree with the validator's to about
+1e-15, as in the polyhedra kernel), so a configuration valid at tolerance 0 has an energy of about 1e-30 at most, and
+none with a clearance. A state with a number that is not finite has energy Infinity.
+
+**Other operations.**
+
+- `finish`: what the search does with a start it is given (§5): the legalization of the state's configuration with
+  the clearance 1e-10, and the polish from the penalty weight 1e4 on (to 1e10 for balls, 1e9 for solids), which
+  legalizes its result too; each result is checked with the validator at tolerance 0 and the smallest is kept. Two
+  changes from the search: a configuration already valid at tolerance 0 is a result itself, so that a finish is
+  never worse than a valid input (the legalization scales centres about the origin, which can take a valid
+  configuration near the coordinate limit 1e4 past it); and the polish starts at the size the pieces need (the
+  largest |c| + 1 or vertex distance, or for the cube twice the largest coordinate plus 2 after centring the
+  pieces' bounding box), not at the stated one, which may be as loose as 1e6. The legalization of solids polls the
+  stop between its separating-axis tests (it can take seconds for a hundred solids piled near one point), and a stop
+  there ends the finish with the input when it is valid and nothing otherwise. The polish polls at every evaluation
+  and between them, and every stop in it hands over its last iterate, legalized (a stop before its first stage has
+  moved leaves the legalized input). A state the server could not read finishes to nothing.
+- `validate`: the server's rule for a balls entry (`packages/spaces/src/validate.ts`): the configuration read as the
+  server reads it (malformed input and a wrong number of pieces have no score), s not below the bound by more than
+  1e-9 relative, the validator at the touching tolerance 1e-9, then at the strict tolerance 1e-11, which the server
+  asks of every entry of a problem without a research record (§7). The spaces package depends on this one, so the
+  rule is built again from the same parts; `packages/spaces/test/methods.test.ts` compares the two on the test
+  packings of P <= 30 (each with about 30 variants: shrunk within and beyond each tolerance, below the bound, out of
+  range, malformed) and on configurations the kernel finished, and they give the same verdict, score and reasons.
+  Once the space has records, the server asks the strict check only of an entry that beats one, and this rule stays
+  the stricter for the others; a finished configuration, valid at tolerance 0, passes both.
+- Capabilities: `shape` (for balls a ball is its own inscribed ball, so `setShape` changes nothing, as for the
+  methods' reference disks; for solids the soft shapes above), `seeds`, and for solids `swap` (a piece's whole
+  orientation). Seeds are the search's own lattice cuts (§5), legalized: for balls in a ball face-centred cubic and
+  hexagonal close-packed cuts, turned at random; in a cube first the axis-aligned face-centred and simple cubic ones;
+  for solids, balls of the circumradius placed as a face-centred cubic or hexagonal close-packed cut, each solid
+  turned at random, and for cubes first a cut of the cubic lattice. Every turn and shift comes from the stream the
+  method passes in.
+- Random starts fill about 15 % of the container; `randomPose` writes a solid's random orientation into its rotation
+  variables, so that writing the piece's variables back undoes it.
+
+**Costs** [CALC]. Processor time, Node 26 on Apple Silicon, on a machine shared with other jobs (load average 25 to
+50 on 8 cores, 2026-10-26), after a squeeze from a random start; medians of three starts. Energy with its gradient:
+
+| problem | P = 10 | P = 80 |
+|---|---|---|
+| balls in a ball | 0.0012 ms | 0.015 ms |
+| balls in a cube | 0.0010 ms | 0.014 ms |
+| tetrahedra | 0.043 ms | 0.48 ms |
+| cubes | 0.028 ms | 0.26 ms |
+| octahedra | 0.040 ms | 0.37 ms |
+| dodecahedra | 0.069 ms | 0.60 ms |
+| icosahedra | 0.11 ms | 0.64 ms |
+
+The balls' energy tests every pair (0.023 ms at P = 100). Their finish costs 190 to 2,500 energies up to P = 5 and
+6,500 to 8,300 from P = 20 on, where the polish runs out of iterations at every penalty weight (about 0.19 s at
+P = 100); at P = 10 it costs 450 to 6,200, depending on the start. `finishCost` is max(500, 7500 P^2 / (P^2 + 200)),
+which the measured finishes were 0.47 to 1.4 times in 80 % of 48 runs (median 1.03; 0.18 to 5.0 in all). For the
+solids a finish takes about 1 ms per piece whatever the solid, while the energy's cost per piece grows with the cost
+c of one overlapping pair's separating-axis test (modelled as for the polyhedra space, in microseconds), so
+`finishCost` is 250 / (1 + c / 35): 233 to 244 for tetrahedra, cubes and octahedra, 141 for dodecahedra and
+icosahedra. The measured finishes were 0.41 to 2.9 times that in 80 % of 105 runs (median 0.95; 0.21 to 5.2 in
+all, and the three starts of one case up to 10 times apart). A validate (the check at the touching and at the
+strict tolerance) costs 1.9 to 3.2 energies for balls and 1.7 to 8.2 for solids, so `validateCost` is 2.5 and 3.
+`BALLS_KERNEL_BENCH=1` runs the measurement in `test/kernel.test.ts`. An energy of deeply overlapping solids costs
+more than these: a 2 s run of penalty on 13 dodecahedra averaged about 1 ms per energy with its gradient.
+
+**Rounds on the board.** A generic method's round is K / P evaluations (`genericRound`, `apps/web/src/space/model.ts`),
+clamped to 5,000 to 300,000. [CALC] The eight methods' median rate times P, in rounds of 2 s from a test packing grown
+by 3 %, was 7.2 to 8.1 million at 13 balls, 5.1 million at 30 and 4.0 million at 80, and 33,000 to 140,000 for the
+solids (13 tetrahedra, octahedra and dodecahedra, 30 cubes and icosahedra, 80 dodecahedra). So balls take
+K = 10,000,000 (`GENERIC_ROUND_K_BALL_PIECES`: rounds of 0.5 to 2 s up to P = 33, where 300,000 caps them, and about
+2.5 s at P = 80) and solids K = 150,000 (`GENERIC_ROUND_K.balls`: 1 to 3.5 s up to P = 30; beyond, the floor of
+5,000 makes them longer, about 12 s for 80 dodecahedra).
+
+**Tests.** `test/kernel.test.ts`: the methods' contract for every problem at P = 2, 5 and 13 and at 60 balls in a
+cube and 40 icosahedra; the gradients; soft shapes; moves undone; seeds; the test packings in and finished no
+worse; states that blew up; absurd starts; a finish told to stop; a legalized iterate from every stop in either
+polish; a stop in the solids' legalization answered at once; valid inputs (near the coordinate limit, touching)
+never finished to something worse; the same finish whatever size is stated; energy and clear() against the
+validator a few units of rounding either side of contact; and every method on every problem at P = 5, from
+the test packing grown by 3 % and from nothing, each result valid by the server's rule and at tolerance 0 and never
+worse than its start. `packages/spaces/test/methods.test.ts` lists the methods of balls problems, compares the
+rules, and runs generic methods as jobs. [CALC] Four short runs from nothing (basin_hopping on 9 balls in a ball,
+harden on 7 balls in a cube, morph on 4 dodecahedra, penalty on 6 tetrahedra; 4,500 to 11,000 evaluations each)
+were proved valid by the certifier (§4), with gaps of at least 1e-10 between the pieces and from the container.
+
+**Limitations.** The energy's gradient jumps where a pair's best axis or a solid's farthest vertex changes. The
+balls' energy tests every pair, which stays cheap up to P = 100; their finish, the search's own polish with its
+iteration limits, is the dearest part of a run at large P.

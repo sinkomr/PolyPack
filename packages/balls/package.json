@@ -12,6 +12,7 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "dependencies": {
+    "@polypack/methods": "0.1.0",
     "@polypack/polyhedra": "0.1.0"
   }
 }

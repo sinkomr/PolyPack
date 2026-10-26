@@ -13,6 +13,7 @@
  * Kernels are pure (they hold only the problem and its caches), so a built one is kept for its
  * problem and shared by every job on this thread; a few problems are kept at a time.
  */
+import { ballsKernel } from "@polypack/balls";
 import { boundaryKernel } from "@polypack/boundary";
 import { curvedKernel } from "@polypack/curved";
 import type { SpaceKernel } from "@polypack/methods";
@@ -42,8 +43,7 @@ const factories: KernelFactory = (p) => {
     case "boundary":
       return boundaryKernel({ polytope: p.polytope, piece: p.piece, P: p.P });
     case "balls":
-      // no kernel yet: the balls space offers its own search (Auto) alone
-      throw new Error("the balls space has no kernel for the generic methods yet");
+      return ballsKernel({ code: p.code, P: p.P });
   }
 };
 

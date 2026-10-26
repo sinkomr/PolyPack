@@ -34,6 +34,7 @@ as **Auto** and stays the default.
 | sphere (2D on 3D) | `sphereKernel({ N, P })` | `@polypack/sphere` |
 | torus (2D on 3D) | `torusKernel({ family, N, P })` | `@polypack/torus` |
 | polyhedra (3D in 3D) | `polyhedraKernel({ code, P })` | `@polypack/polyhedra` |
+| balls (3D in 3D) | `ballsKernel({ code, P })` | `@polypack/balls` |
 | boundary (3D on 4D) | `boundaryKernel({ polytope, piece, P })` | `@polypack/boundary` |
 
 Surface problems in the nofold mode on the Platonic solids are planar problems of one face. They

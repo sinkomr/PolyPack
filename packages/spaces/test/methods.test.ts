@@ -3,12 +3,14 @@
  * kernels.ts, run.ts): Auto runs the space's own search unchanged, an unknown method or bad
  * parameters give an error result, and a generic method runs end to end on a kernel: on a test
  * kernel that stands in for one problem (generic-fixtures.ts), so that the tests do not depend on a
- * space's kernel, and on the real ones.
+ * space's kernel, and on the real ones. The balls kernel's validate() rebuilds the server's rule, because
+ * the balls package does not depend on this one; here the two are compared.
  */
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { listMethods } from "@polypack/methods";
+import { BALLS_CODES, type BallsConfig, ballsKernel } from "@polypack/balls";
+import { listMethods, mulberry32, squeeze } from "@polypack/methods";
 import { registry as polygonRegistry } from "@polypack/solver";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -33,7 +35,10 @@ import {
   spaceMethodNote,
   spaceMethodsFor,
 } from "../src/search";
+import { SPACE_DOMAINS } from "../src/domain";
+import { parseSpaceId } from "../src/ids";
 import { loadSpacesIndex, readEntryConfigSync } from "../src/load";
+import { validateSpaceSubmission } from "../src/validate";
 import { useNofoldMethods } from "../src/search/nofold-methods";
 import {
   DISKS,
@@ -110,6 +115,10 @@ describe("the methods a problem offers", () => {
       "boundary/tesseract/ball/9",
       "boundary/tesseract/cube/16",
       "polyhedra/cubincub/11",
+      "balls/ballinball/13",
+      "balls/ballincub/8",
+      "balls/tetinball/5",
+      "balls/dodinball/20",
     ]) {
       const p = parseSearchProblem(id)!;
       const k = spaceKernel(p);
@@ -453,5 +462,125 @@ describe("a method's name in a submission", () => {
     expect(spaceMethodNote("sphere", "penalty", { x: "y".repeat(80) }, Infinity)).toMatch(
       /^sphere penalty \{"x":"y+"\}$/,
     );
+  });
+});
+
+describe("the balls kernel", () => {
+  /** The balls space's test packings, shared with its certifier's tests (python/balls/fixtures/packings.json). */
+  const packings = JSON.parse(readFileSync(resolve(root, "python/balls/fixtures/packings.json"), "utf8"))
+    .packings as { id: string; code: string; P: number; config: BallsConfig }[];
+  /** The rule the server applies to a balls problem: its domain's bound, and the strict check (no research records). */
+  const ruleOf = (id: string) => {
+    const parsed = parseSpaceId("balls", id);
+    if (typeof parsed === "string") throw new Error(parsed);
+    return { bound: SPACE_DOMAINS.balls!.bound(parsed)!.value, noRecord: true };
+  };
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  /** A packing and its variants: valid, within each tolerance and beyond it, below the bound, malformed. */
+  function variants(base: BallsConfig, bound: number): [string, unknown][] {
+    const withS = (s: unknown) => ({ s, pieces: base.pieces });
+    const first = (f: (p: number[]) => unknown) => ({ s: base.s, pieces: base.pieces.map((p, i) => (i === 0 ? f(p) : p)) });
+    const holed: unknown[] = base.pieces.slice();
+    delete holed[0];
+    const solid = base.pieces[0].length === 7;
+    const out: [string, unknown][] = [
+      ["packing", base],
+      // the packings keep a clearance of 1e-10: these shrink it to within the strict tolerance, the touching one, and beyond
+      ["s (1 - 2e-11)", withS(base.s * (1 - 2e-11))],
+      ["s (1 - 1e-10)", withS(base.s * (1 - 1e-10))],
+      ["s (1 - 3e-10)", withS(base.s * (1 - 3e-10))],
+      ["s (1 - 3e-9)", withS(base.s * (1 - 3e-9))],
+      ["s (1 - 1e-6)", withS(base.s * (1 - 1e-6))],
+      ["bound (1 - 0.9e-9)", withS(bound * (1 - 0.9e-9))],
+      ["bound (1 - 1.1e-9)", withS(bound * (1 - 1.1e-9))],
+      ["s 2e6", withS(2e6)],
+      ["s 0", withS(0)],
+      ["s negative", withS(-1)],
+      ["s a string", withS("2")],
+      ["s NaN", withS(NaN)],
+      ["s missing", { pieces: base.pieces }],
+      ["x0 + 1e-10", first((p) => [p[0] + 1e-10, ...p.slice(1)])],
+      ["x0 + 1e-9", first((p) => [p[0] + 1e-9, ...p.slice(1)])],
+      ["x0 + 1e-3", first((p) => [p[0] + 1e-3, ...p.slice(1)])],
+      ["x0 + 50", first((p) => [p[0] + 50, ...p.slice(1)])],
+      ["x0 2e4", first((p) => [2e4, ...p.slice(1)])],
+      ["a piece short", first((p) => p.slice(0, -1))],
+      ["a piece long", first((p) => [...p, 0])],
+      ["a coordinate a string", first((p) => [String(p[0]), ...p.slice(1)])],
+      ["two pieces at one place", { s: base.s, pieces: base.pieces.map((p, i) => (i === 1 ? base.pieces[0] : p)) }],
+      ["a piece not an array", first(() => 3)],
+      ["a hole in the list", { s: base.s, pieces: holed }],
+      ["pieces not an array", { s: base.s, pieces: {} }],
+      ["one piece fewer", { s: base.s, pieces: base.pieces.slice(1) }],
+      ["unknown fields", { ...base, junk: 1 }],
+      ["not an object", [base]],
+      ["null", null],
+    ];
+    if (solid)
+      out.push(
+        ["q tiny", first((p) => [...p.slice(0, 3), 1e-7, 0, 0, 0])],
+        ["q huge", first((p) => [...p.slice(0, 3), 1e101, 0, 0, 0])],
+        ["q not unit", first((p) => [...p.slice(0, 3), ...p.slice(3).map((v) => 3 * v)])],
+        ["q turned", first((p) => [...p.slice(0, 3), Math.cos(0.3), Math.sin(0.3), 0, 0])],
+      );
+    return out;
+  }
+
+  it("validates as the server does: on the test packings and their variants, and on configurations it finished", async () => {
+    let compared = 0;
+    let strictOnly = 0;
+    for (const p of packings.filter((q) => q.P <= 30)) {
+      const k = ballsKernel({ code: p.code, P: p.P });
+      const rule = ruleOf(p.id);
+      expect(k.bound).toBe(rule.bound);
+      const same = (label: string, config: unknown) => {
+        const server = validateSpaceSubmission("balls", p.id, config, rule);
+        const mine = k.validate(config);
+        expect({ id: p.id, label, ...mine }).toEqual({
+          id: p.id,
+          label,
+          valid: server.valid,
+          score: server.score,
+          reasons: server.reasons,
+        });
+        // valid within the touching tolerance only: refused by the strict check of a problem without records
+        if (!server.valid && validateSpaceSubmission("balls", p.id, config, { bound: rule.bound }).valid) strictOnly++;
+        compared++;
+      };
+      for (const [label, config] of variants(p.config, rule.bound)) same(label, config);
+      const rng = mulberry32(p.P);
+      const s = k.randomStart(rng);
+      squeeze(k, s, { maxIter: 60 });
+      for (const q of [s, ...k.seeds!(rng, 2)]) {
+        const f = k.finish(q);
+        if (!f) continue;
+        same("finished", f.config);
+        same("finished, shrunk by 2e-11", { ...(f.config as object), s: f.score * (1 - 2e-11) });
+        same("finished, shrunk by 2e-9", { ...(f.config as object), s: f.score * (1 - 2e-9) });
+      }
+      await tick();
+    }
+    expect(compared).toBeGreaterThan(28 * 30);
+    expect(strictOnly).toBeGreaterThan(20);
+  });
+
+  it("runs generic methods on balls problems, each result valid by the server's rule for a problem without records", async () => {
+    for (const code of BALLS_CODES) {
+      const id = `balls/${code}/4`;
+      const rule = ruleOf(id);
+      const k = ballsKernel({ code, P: 4 });
+      for (const method of ["basin_hopping", "harden"]) {
+        const evals = 2 * (k.finishCost + k.validateCost!) + 2000;
+        const r = runSpaceJob(job(id, { method, rule, kind: "fresh", budget: { time_s: 60, evals } }), go);
+        expect(r.valid, `${id} ${method}: ${r.reasons.join("; ")}`).toBe(true);
+        expect(validateSpaceSubmission("balls", id, r.config, rule), `${id} ${method}`).toMatchObject({
+          valid: true,
+          score: r.score,
+        });
+        expect(r.score!, `${id} ${method}`).toBeGreaterThanOrEqual(rule.bound);
+        await tick();
+      }
+    }
   });
 });

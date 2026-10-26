@@ -191,7 +191,10 @@ export function legalizeBalls(problem: BallsProblem, centres: Vec3[], g: number,
   return { s: s * (1 + 4 * Number.EPSILON), pieces: c };
 }
 
-/** Penalty polish (file comment) of the centres at size s, then legalization; `partial` holds the last iterate on a stop. */
+/**
+ * Penalty polish (file comment) of the centres at size s, then legalization; on a stop, at an evaluation or between
+ * the stages, the thrown StopSearch's `partial` holds the last finite iterate, legalized.
+ */
 export function polishBalls(
   problem: BallsProblem,
   start: BallsConfig,
@@ -206,19 +209,24 @@ export function polishBalls(
   z[0] = start.s;
   start.pieces.forEach((p, i) => z.set([p[0], p[1], p[2]], 1 + 3 * i));
   const iters = 300 + 10 * n;
-  const centres = () => Array.from({ length: n }, (_, i): Vec3 => [z[1 + 3 * i], z[2 + 3 * i], z[3 + 3 * i]]);
+  const centres = (y: Float64Array) =>
+    Array.from({ length: n }, (_, i): Vec3 => [y[1 + 3 * i], y[2 + 3 * i], y[3 + 3 * i]]);
+  // the iterate before the stage under way, for a stop that comes after the stage's iterate stopped being finite
+  const last = Float64Array.from(z);
   for (const mu of mus) {
-    o.poll();
+    last.set(z);
     try {
+      o.poll();
       lbfgs(objective(cube, n, mu, g, w, o.tick), z, iters);
     } catch (e) {
-      if (e instanceof StopSearch && z.every(Number.isFinite))
-        throw Object.assign(e, { partial: legalizeBalls(problem, centres(), g, w) });
+      // every stop hands over the last finite iterate, legalized (the legalization is a sweep over the pairs)
+      if (e instanceof StopSearch)
+        throw Object.assign(e, { partial: legalizeBalls(problem, centres(z.every(Number.isFinite) ? z : last), g, w) });
       throw e;
     }
     if (!z.every(Number.isFinite)) break;
   }
-  return legalizeBalls(problem, centres(), g, w);
+  return legalizeBalls(problem, centres(z), g, w);
 }
 
 // ------------------------------------------------------------------ starts

@@ -55,6 +55,7 @@ import {
   evalsMax,
   evalUnit,
   GENERIC_ROUND_K,
+  GENERIC_ROUND_K_BALL_PIECES,
   GENERIC_ROUND_K_SURFACE_DISKS,
   GENERIC_ROUND_MAX,
   GENERIC_ROUND_MIN,
@@ -63,6 +64,7 @@ import {
   METHOD_TEXT,
 } from "../src/space/model";
 import { POLYGON_METHOD_DESCRIPTIONS, POLYGON_METHOD_NAMES, POLYGON_METHOD_ORDER } from "../src/solve-methods";
+import { ballsProblemOf } from "@polypack/balls/catalogue";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
@@ -424,7 +426,12 @@ describe("the methods of a run", () => {
     const at = (id: string) => {
       const p = parseSearchProblem(id)!;
       const k = spaceKernel(p)!;
-      const K = p.space === "surface" && p.N === 0 ? GENERIC_ROUND_K_SURFACE_DISKS : GENERIC_ROUND_K[p.space];
+      const K =
+        p.space === "surface" && p.N === 0
+          ? GENERIC_ROUND_K_SURFACE_DISKS
+          : p.space === "balls" && ballsProblemOf(p.code)?.piece === "ball"
+            ? GENERIC_ROUND_K_BALL_PIECES
+            : GENERIC_ROUND_K[p.space];
       const offers = 100 * Math.ceil((2 * (k.finishCost + (k.validateCost ?? k.finishCost))) / 100);
       return { round: genericRound(p), K, P: p.P, offers };
     };
@@ -433,6 +440,9 @@ describe("the methods of a run", () => {
     expect(at("torus/sq/5/7").round).toBe(128_600);
     expect(at("surface/cube/fold/0/10").round).toBe(30_000);
     expect(at("surface/cube/fold/4/12").round).toBe(8300);
+    // balls and solids in a ball have their own K
+    expect(at("balls/ballincub/80").round).toBe(125_000);
+    expect(at("balls/dodinball/13").round).toBe(11_500);
     // clamped to [5,000, 300,000]
     expect(at("boundary/tesseract/cube/2").round).toBe(GENERIC_ROUND_MAX);
     expect(at("polyhedra/cubincub/100").round).toBe(GENERIC_ROUND_MIN);

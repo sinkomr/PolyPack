@@ -28,6 +28,7 @@ import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
 import { type PickField, pickFromDomain } from "./pick";
 import {
   DEFAULT_PROBLEM,
+  ballPieces,
   evalsMax,
   evalUnit,
   freshSize,
@@ -773,10 +774,12 @@ class SpaceMode {
     const info = this.methods.find((m) => m.name === method) ?? this.methods[0];
     const generic = isGeneric(p.search, method);
     const fold = kind === "surface" && !generic;
-    // fold, polyhedra and balls budgets grow with P (a generic method's rounds are sized apart)
+    // fold, polyhedra and balls budgets grow with P (a generic method's rounds are sized apart, and for balls
+    // apart again for balls and for solids, whose rounds differ up to 60 times)
     const key =
       (fold || ((kind === "polyhedra" || kind === "balls") && !generic) ? `${kind}/${p.P}` : kind) +
-      (generic ? "/generic" : "");
+      (generic ? "/generic" : "") +
+      (generic && kind === "balls" ? (ballPieces(p.search) ? "/ball" : "/solid") : "");
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search, method);

@@ -284,22 +284,41 @@ export const GENERIC_ROUND_K: Record<SpaceName, number> = {
   curved: 300_000,
   surface: 100_000,
   polyhedra: 300_000,
-  // the balls space has no kernel yet; a guess like polyhedra's for when it has one [SPEC]
-  balls: 300_000,
+  // Platonic solids in a ball; balls problems whose pieces are balls have GENERIC_ROUND_K_BALL_PIECES. [CALC] The
+  // eight methods' median rate times P, from a test packing grown by 3 % (rounds of 2 s): 43,000 to 99,000 for 13
+  // tetrahedra, octahedra and dodecahedra, 140,000 for 30 cubes, 53,000 for 30 icosahedra, 33,000 for 80
+  // dodecahedra; a round of K / P then takes 1 to 3.5 s up to P = 30 (beyond, GENERIC_ROUND_MIN makes it longer:
+  // about 12 s for 80 dodecahedra)
+  balls: 150_000,
 };
 /** K for surface problems with disks (N = 0). */
 export const GENERIC_ROUND_K_SURFACE_DISKS = 300_000;
+/**
+ * K for balls problems whose pieces are balls (balls in a ball or a cube): their energy costs a few microseconds, so
+ * their rounds hold far more evaluations than the solids'. [CALC] As for GENERIC_ROUND_K: the eight methods' median
+ * rate times P was 7.2 to 8.1 million at 13 balls, 5.1 million at 30 and 4.0 million at 80; a round of K / P takes
+ * about 2.5 s at P = 80, and up to P = 33 GENERIC_ROUND_MAX holds it to 0.5 to 2 s.
+ */
+export const GENERIC_ROUND_K_BALL_PIECES = 10_000_000;
+/** True for a balls problem whose pieces are balls (balls in a ball or a cube): its generic rounds are sized apart. */
+export const ballPieces = (p: SearchProblem): boolean => p.space === "balls" && ballsProblemOf(p.code)?.piece === "ball";
 /** The smallest and the largest round of a generic method. */
 export const GENERIC_ROUND_MIN = 5000;
 export const GENERIC_ROUND_MAX = 300_000;
 
 /**
  * Evaluations of a generic method's round on the problem, from a start or without one: K / P
- * (GENERIC_ROUND_K) in hundreds, clamped to [GENERIC_ROUND_MIN, GENERIC_ROUND_MAX], and at least
- * two finishes and checks of its kernel, so that a round can offer more than its start.
+ * (GENERIC_ROUND_K, GENERIC_ROUND_K_SURFACE_DISKS or GENERIC_ROUND_K_BALL_PIECES) in hundreds,
+ * clamped to [GENERIC_ROUND_MIN, GENERIC_ROUND_MAX], and at least two finishes and checks of its
+ * kernel, so that a round can offer more than its start.
  */
 export function genericRound(p: SearchProblem): number {
-  const K = p.space === "surface" && p.N === 0 ? GENERIC_ROUND_K_SURFACE_DISKS : GENERIC_ROUND_K[p.space];
+  const K =
+    p.space === "surface" && p.N === 0
+      ? GENERIC_ROUND_K_SURFACE_DISKS
+      : ballPieces(p)
+        ? GENERIC_ROUND_K_BALL_PIECES
+        : GENERIC_ROUND_K[p.space];
   const round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
   const k = spaceKernel(p);
   const offers = k ? 2 * (k.finishCost + (k.validateCost ?? k.finishCost)) : 0;

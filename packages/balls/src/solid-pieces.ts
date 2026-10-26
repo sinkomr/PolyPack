@@ -313,7 +313,10 @@ export function legalizeSolids(problem: BallsProblem, poses0: ArrayLike<number>[
   return { s: (far + w) * (1 + 4 * Number.EPSILON), pieces: poses };
 }
 
-/** Penalty polish (file comment), then legalization. On a stop the thrown StopSearch carries `partial`. */
+/**
+ * Penalty polish (file comment), then legalization. On a stop the thrown StopSearch carries `partial`, the last
+ * iterate legalized; a stop before the first stage has minimised carries none, the start being the only iterate.
+ */
 export function polishSolids(
   problem: BallsProblem,
   config: BallsConfig,
@@ -327,9 +330,21 @@ export function polishSolids(
   let poses = config.pieces.map(normalised);
   let s = config.s;
   const iters = 400;
+  // true once a stage has minimised: its iterate is near legal, and a stop from then on hands it over, legalized
+  let moved = false;
   for (const mu of mus) {
     const delta = 0.25 * Pc.circumradius + 0.05;
-    const { placed, out } = nearPairs(Pc, poses, 0.1 * Pc.circumradius + 0.05, o.poll);
+    let near: ReturnType<typeof nearPairs>;
+    try {
+      near = nearPairs(Pc, poses, 0.1 * Pc.circumradius + 0.05, o.poll);
+    } catch (e) {
+      // a stop between stages: the last iterate, legalized without polls since it is near legal (before the first
+      // stage there is none, and the caller has the start)
+      if (e instanceof StopSearch && moved)
+        throw Object.assign(e, { partial: legalizeSolids(problem, poses, g, w, () => {}) });
+      throw e;
+    }
+    const { placed, out } = near;
     const pairs: Pair[] = out.map(({ i, j, axis, t }) => {
       const vi: number[] = [];
       const vj: number[] = [];
@@ -363,14 +378,17 @@ export function polishSolids(
     if (z.every(Number.isFinite)) {
       s = z[0];
       poses = poses.map((_, i) => normalised(z.subarray(1 + 7 * i, 8 + 7 * i)));
+      moved = true;
     }
     if (stopped) {
-      // the legalization polls too; a second stop there leaves no partial result
+      // the last iterate, legalized without polls, so that a stop already seen cannot leave it without a result
       const partial = legalizeSolids(problem, poses, g, w, () => {});
       throw Object.assign(stopped, { partial });
     }
   }
-  return legalizeSolids(problem, poses, g, w, o.poll);
+  // not polled: the polished iterate is near legal, so this is a sweep or two over the pairs, and a stop that came
+  // during it would otherwise leave the polish without a result
+  return legalizeSolids(problem, poses, g, w, () => {});
 }
 
 /** Poses of solids at given centres, turned at random. */
