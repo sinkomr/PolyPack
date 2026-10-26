@@ -150,7 +150,7 @@ describe("the catalogues", () => {
     expect(closed("surface")).toEqual([]);
     // the torus records with a published proof of the exact case (docs/spaces/TORUS.md, sec. 7)
     const torus = closed("torus");
-    expect(torus.length).toBe(50);
+    expect(torus.length).toBe(52);
     expect(torus.every((p) => p.status === "proven" && /is proven \(.+, doi:10\./.test(p.closed_reason!))).toBe(true);
     expect(torus.find((p) => p.id === "torus/sq/0/2")!.closed_reason).toBe(
       "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
