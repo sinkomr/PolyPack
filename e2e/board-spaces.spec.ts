@@ -19,7 +19,9 @@ declare const polypack: {
 /** Waits until the space mode shows a problem's packing. */
 async function shown(page: Page, id: string): Promise<void> {
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
-  await expect(page.locator("#space-score")).not.toHaveText("—");
+  // the balls space ships without records: its problems show none until an entry is kept
+  if (id.startsWith("balls/")) await expect(page.locator("#space-empty")).toBeVisible();
+  else await expect(page.locator("#space-score")).not.toHaveText("—");
 }
 
 /**
@@ -67,12 +69,21 @@ test("the Dimension and Kind menus switch the board to each kind and back to the
     // the polygon board is hidden, the space's drawing and values are shown
     await expect(page.locator("#board")).toBeHidden();
     await expect(page.locator("#solve-panel")).toBeHidden();
+    const facts = page.locator("#space-facts");
+    await expect(facts).toContainText("Entriesopen");
+    if (space === "balls") {
+      // no record yet: nothing to draw, and the board says what to do
+      await expect(page.locator("#space-empty")).toHaveText("No record yet: run the optimizer or submit one.");
+      await expect(facts).toContainText("Certified value—");
+      await expect(facts).toContainText("Statusno record yet");
+      await expect(page.locator("#space-shown")).toHaveText("no record yet");
+      await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
+      continue;
+    }
     // the 2D kinds draw on a canvas or in an svg; 3D on 4D in the three.js view (e2e/board-boundary.spec.ts)
     await expect(page.locator(".space-draw > canvas, .space-draw > svg, .pp3 canvas")).toBeVisible(LAZY_VIEW);
     const api = (await (await page.request.get(`/api/spaces/${space}/problems/${id}`)).json()) as SpaceProblemResponse;
-    const facts = page.locator("#space-facts");
     await expect(facts).toContainText(`Certified value${api.certified!.display}`);
-    await expect(facts).toContainText("Entriesopen");
     await expect(page.locator("#space-shown")).toHaveText("the research record");
   }
 

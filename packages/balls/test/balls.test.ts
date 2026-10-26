@@ -20,6 +20,12 @@ import {
 } from "../src";
 import { mulberry32 } from "../src/random";
 import { conePoses } from "../scripts/cones";
+import { readFileSync } from "node:fs";
+import { BALLS_MAX_P, BALLS_MIN_P, ballsDomain } from "../src";
+
+/** The test packings shared with the certifier's tests (python/balls/fixtures/packings.json). */
+const packings = JSON.parse(readFileSync(new URL("../../../python/balls/fixtures/packings.json", import.meta.url), "utf8"))
+  .packings as { id: string; code: string; P: number; config: BallsConfig }[];
 
 const ballInBall = getBallsProblem("ballinball")!;
 const ballInCube = getBallsProblem("ballincub")!;
@@ -41,6 +47,54 @@ describe("ids and bounds", () => {
     // two cubes hold disjoint balls of radius 1/2: s >= 1, above the circumradius sqrt(3)/2
     expect(ballsBound(cubes, 2)).toMatchObject({ value: 1, kind: "two-piece" });
     expect(ballsBound(getBallsProblem("tetinball")!, 2).kind).toBe("one piece");
+  });
+});
+
+describe("the catalogue", () => {
+  it("has a domain of the 7 problems for P = 2 to 100, with their bounds, and a sample of small P first", () => {
+    expect(ballsDomain.info.problems).toBe(7 * (BALLS_MAX_P - BALLS_MIN_P + 1));
+    expect(ballsDomain.info.fields.map((f) => f.key)).toEqual(["code", "P"]);
+    const all = ballsDomain.sample(10000);
+    expect(all).toHaveLength(693);
+    expect(new Set(all).size).toBe(693);
+    expect(all.slice(0, 8)).toEqual([...BALLS_CODES.map((c) => `balls/${c}/2`), "balls/ballinball/3"]);
+    expect(ballsDomain.sample(3)).toHaveLength(3);
+    for (const id of all) {
+      const p = parseBallsId(id);
+      if (typeof p === "string") throw new Error(p);
+      expect(ballsDomain.bound({ fields: { code: p.code }, P: p.P })!.value).toBe(ballsBound(p.problem, p.P).value);
+    }
+    expect(ballsDomain.bound({ fields: { code: "ballinball" }, P: 2 })).toEqual({
+      value: 2,
+      label: expect.stringMatching(/^two piece bound; \[EST\]/),
+    });
+    // outside the domain
+    expect(ballsDomain.bound({ fields: { code: "ballinball" }, P: 1 })).toBeUndefined();
+    expect(ballsDomain.bound({ fields: { code: "ballinball" }, P: 101 })).toBeUndefined();
+    expect(ballsDomain.bound({ fields: { code: "cubincub" }, P: 5 })).toBeUndefined();
+  });
+
+  it("has test packings of every kind, valid at tolerance 0 and not below their bounds", () => {
+    expect(new Set(packings.map((p) => p.code))).toEqual(new Set(BALLS_CODES));
+    for (const p of packings) {
+      const problem = getBallsProblem(p.code)!;
+      const v = validateBalls(problem, p.config, { tol: 0 });
+      expect(v.valid, p.id).toBe(true);
+      expect(v.minWallGap, p.id).toBeGreaterThan(0.5 * BALLS_CLEARANCE);
+      expect(p.config.pieces).toHaveLength(p.P);
+      expect(p.config.s, p.id).toBeGreaterThanOrEqual(ballsBound(problem, p.P).value);
+      // shrunk by 1e-8, the container no longer holds them
+      expect(validateBalls(problem, { ...p.config, s: p.config.s * (1 - 1e-8) }, { tol: 0 }).valid, p.id).toBe(false);
+    }
+  });
+
+  it("starts the search from a test packing and never returns worse", () => {
+    for (const p of packings.filter((q) => q.P === 13)) {
+      const problem = getBallsProblem(p.code)!;
+      const r = searchBalls(problem, 13, { seed: 3, maxEvals: 3000, start: p.config });
+      expect(r.score, p.id).toBeLessThanOrEqual(p.config.s * (1 + 1e-9));
+      expect(validateBalls(problem, r.config!, { tol: 0 }).valid, p.id).toBe(true);
+    }
   });
 });
 

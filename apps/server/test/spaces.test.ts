@@ -1066,7 +1066,7 @@ describe("GET /api/spaces/targets", () => {
     expect(r.targets.filter((t) => t.space === "boundary").length).toBe(28);
     for (const t of r.targets) {
       const p = problemOf(index[t.space]!, parseSpaceId(t.space, t.id) as ParsedSpaceId)!;
-      // a problem without a record and without entries has no best and no leader yet
+      // a problem without a record (the balls space) and without entries has no best and no leader yet
       expect(t).toMatchObject({
         leader: p.certified ? "certified" : "none",
         leader_id: null,
@@ -1074,6 +1074,10 @@ describe("GET /api/spaces/targets", () => {
         bound: p.bound!.value,
       });
     }
+    // the balls space's domain is sampled, never listed whole: small P first
+    const balls = r.targets.filter((t) => t.space === "balls");
+    expect(balls.length).toBe(SPACE_DOMAIN_TARGETS);
+    expect(balls.every((t) => t.P <= 73)).toBe(true);
   });
 
   it("gives every space an equal share of the priority: capped gap times min(1, (P - 1) / 5), scaled per space", async () => {
@@ -1097,8 +1101,8 @@ describe("GET /api/spaces/targets", () => {
     expect(spaceTargetWeight(40)).toBe(1);
     // the default list is the head of the whole list and holds problems of every space but polyhedra and balls:
     // polyhedra's 8,514 problems share one space's share of the priority, so they come after the others' head;
-    // balls' records all lie far above their elementary bounds, so their 684 shares are about even and none is
-    // among the 500 largest
+    // balls' 500 sampled problems all have the largest room, so their shares are about even and none is among the
+    // 500 largest
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));

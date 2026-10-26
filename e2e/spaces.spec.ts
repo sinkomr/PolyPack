@@ -81,7 +81,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
 
   const main = page.getByRole("main");
   await expect(main).toContainText(
-    "proven valid with interval arithmetic, or for 3D on 4D and for balls with exact rational arithmetic",
+    "proven valid with interval arithmetic, or for 3D on 4D with exact rational arithmetic",
   );
   await expect(main.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", "/api");
   await expect(main.getByRole("link", { name: "volunteer client" })).toHaveAttribute("href", "/volunteer.html");

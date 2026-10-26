@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Tests of the balls certifier (python/balls/certify.py): exact contact rules, overlaps and protrusions of 1e-9,
 malformed input, the published fields and agreement with the float validator near contact. Run: python3 python/balls/test_certify.py"""
-import copy
 import json
 import math
 import os
@@ -13,8 +12,6 @@ sys.path.insert(0, HERE)
 import certify  # noqa: E402
 from balls_catalogue import bound  # noqa: E402
 
-ROOT = os.path.dirname(os.path.dirname(HERE))
-RECORDS = os.path.join(ROOT, 'data', 'balls', 'records.json')
 
 
 def q_of_axis_angle(axis, angle):
@@ -196,24 +193,39 @@ class CrossCheck(unittest.TestCase):
                 self.assertFalse(r['ok'], (c['code'], c['what'], c['gap']))
 
 
-@unittest.skipUnless(os.path.exists(RECORDS), 'no records file')
-class Shipped(unittest.TestCase):
-    def test_a_sample_of_the_records(self):
-        doc = certify.load_records(RECORDS)
-        recs = doc['records']
-        self.assertEqual(len(recs), 7 * 99)
-        # every problem's P = 2, 13 and 50: fast enough for the test suite (the full run is in the docs)
-        pick = [r for r in recs if r['P'] in (2, 13, 50)]
-        for rec in pick:
-            res = certify.certify_record(copy.deepcopy(rec))
-            self.assertTrue(res['ok'], (rec['id'], res.get('errors')))
+class TestPackings(unittest.TestCase):
+    """fixtures/packings.json: test packings of every problem kind at P = 2, 5, 13, 30, 80 and 100 (not records: the
+    problems ship without any). Each is proven valid, and fails once its container is shrunk by 1e-8 relative."""
 
-    def test_shrunk_records_fail(self):
-        doc = certify.load_records(RECORDS)
-        for rec in [r for r in doc['records'] if r['P'] in (5, 20)]:
-            c = rec['config']
-            s = c['s'] * (1 - 1e-8)
-            self.assertFalse(certify.certify_config(rec['code'], s, c['pieces'])['ok'], rec['id'])
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(HERE, 'fixtures', 'packings.json')) as f:
+            cls.packings = json.load(f)['packings']
+
+    def test_every_kind_and_size(self):
+        self.assertEqual(sorted({p['code'] for p in self.packings}), sorted(certify.catalogue.CODES))
+        self.assertEqual(len(self.packings), 7 * 6)
+        for p in self.packings:
+            r = certify.certify_config(p['code'], p['config']['s'], p['config']['pieces'])
+            self.assertTrue(r['ok'], (p['id'], r.get('failed_walls'), r.get('failed_pairs')))
+            self.assertGreater(r['min_wall_gap'], 0)
+            self.assertGreaterEqual(p['config']['s'], bound(p['code'], p['P']))
+
+    def test_shrunk_packings_fail(self):
+        for p in self.packings:
+            if p['P'] not in (5, 13):
+                continue
+            c = p['config']
+            self.assertFalse(certify.certify_config(p['code'], c['s'] * (1 - 1e-8), c['pieces'])['ok'], p['id'])
+
+    def test_as_records(self):
+        # the packings as records of a records file pass the field checks too
+        for p in self.packings:
+            if p['P'] != 13:
+                continue
+            rec = a_record(p['code'], 13, p['config']['s'], p['config']['pieces'])
+            res = certify.certify_record(rec)
+            self.assertTrue(res['ok'], (p['id'], res.get('errors')))
 
 
 if __name__ == '__main__':

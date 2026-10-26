@@ -28,6 +28,7 @@ import {
   formatCurvature,
   formatSpaceId,
   parseSpaceId,
+  problemOf,
   spaceProblemSummary,
   storedSpaceConfig,
   validateSpaceSubmission,
@@ -38,8 +39,10 @@ import { CONFIG_CACHE_BYTES, CONFIG_READS_AT_ONCE, configLoader, loadSpacesIndex
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
 const cat = (space: SpaceName) => index[space]!;
+/** A problem: its record, or a problem of the space's domain without one. */
 const problem = (space: SpaceName, id: string): SpaceProblemEntry => {
-  const p = cat(space).byId.get(id);
+  const parsed = parseSpaceId(space, id);
+  const p = typeof parsed === "string" ? null : problemOf(cat(space), parsed);
   if (!p) throw new Error(`${id} is not in the catalogue`);
   return p;
 };
@@ -79,7 +82,8 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514 + 693);
+    // the balls space has a domain and no records
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -141,7 +145,8 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514, balls: 693 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514, balls: 0 });
+    expect(cat("balls").domain!.info.problems).toBe(693);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -161,12 +166,13 @@ describe("the catalogues", () => {
       "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
     );
     expect(closed("boundary")).toEqual([]);
-    // balls in a cube with a published proof of the exact case (docs/spaces/BALLS.md, sec. 3)
-    expect(closed("balls").map((p) => p.id)).toEqual([2, 3, 4, 5, 6, 8, 9, 10, 14].map((P) => `balls/ballincub/${P}`));
-    expect(closed("balls").every((p) => p.status === "proven" && /is proven \((Schaer|Joos) (1966|1994|2009)/.test(p.closed_reason!))).toBe(true);
-    expect(problem("balls", "balls/ballincub/14").closed_reason).toBe(
-      "its optimum 4.828427 is proven (Joos 2009, doi:10.1007/s10711-008-9308-3)",
-    );
+    // the balls space has no records yet: every problem is open, without a certified value
+    expect(closed("balls")).toEqual([]);
+    // any problem of its domain is open, without a record and with its bound
+    for (const id of cat("balls").domain!.sample(693)) {
+      const p = problem("balls", id);
+      expect(p.status === "no_record" && p.certified === null && p.bound !== null && acceptsSubmissions(p), id).toBe(true);
+    }
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
       "sphere/0/24",
@@ -193,7 +199,7 @@ describe("the catalogues", () => {
     });
     for (const s of SPACE_NAMES)
       for (const p of cat(s).problems)
-        if (p.status !== "infeasible") {
+        if (p.status !== "infeasible" && p.status !== "no_record") {
           expect(p.bound, p.id).not.toBeNull();
           expect(p.bound!.value).toBeLessThanOrEqual(p.certified!.score);
         }
@@ -259,16 +265,24 @@ describe("the catalogues", () => {
     const logs: string[] = [];
     loadSpacesIndex(root, (m) => logs.push(m));
     expect(logs).toEqual(
-      SPACE_NAMES.map((s) => expect.stringMatching(new RegExp(`^\\[spaces\\] ${s}: \\d+ problems`))),
+      SPACE_NAMES.map((s) => expect.stringMatching(new RegExp(`^\\[spaces\\] ${s}: (a domain of )?\\d+ problems`))),
     );
   });
 
-  it("leave a space out when its records file is missing", () => {
+  it("leave a space out when its records file is missing, unless it has a domain", () => {
     const empty = mkdtempSync(join(tmpdir(), "polypack-spaces-"));
     const logs: string[] = [];
-    expect(loadSpacesIndex(empty, (m) => logs.push(m))).toEqual({});
+    const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
+    // the balls space has a domain and ships no records file at all
+    expect(Object.keys(loaded)).toEqual(["balls"]);
+    expect(loaded.balls!.problems).toHaveLength(0);
+    expect(loaded.balls!.domain!.info.problems).toBe(693);
     expect(logs).toEqual(
-      SPACE_NAMES.map((s) => `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`),
+      SPACE_NAMES.map((s) =>
+        s === "balls"
+          ? "[spaces] balls: a domain of 693 problems, 0 with a record (no records file)"
+          : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
+      ),
     );
   });
 

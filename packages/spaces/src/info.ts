@@ -229,7 +229,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "balls",
     title: "Balls",
     summary:
-      "3D in 3D: unit balls packed in the smallest ball or cube, and unit-edge Platonic solids packed in the smallest ball. These are the classic sphere-packing problems of Packomania, and the same solids as the polyhedra space in a round container.",
+      "3D in 3D: unit balls packed in the smallest ball or cube, and unit-edge Platonic solids packed in the smallest ball: the classic sphere-packing problems, and the polyhedra space's solids in a round container. The problems have no research records yet; the first valid entry of each is kept.",
     score: "the container's size s: the radius of the container ball, or the edge of the cube; smaller is better",
     problem_id: "balls/<code>/<P>",
     conventions: {

@@ -33,9 +33,6 @@ COPY data/boundary/records.json data/boundary/records.json
 COPY data/polyhedra/records.json data/polyhedra/records.json
 # polyhedra configurations, one file per problem, read on demand (records.json is their index)
 COPY data/polyhedra/configs data/polyhedra/configs
-# balls: the index, and the configurations one file per problem, read on demand as polyhedra's are
-COPY data/balls/records.json data/balls/records.json
-COPY data/balls/configs data/balls/configs
 RUN npm run build
 
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATABASE_PATH=/data/polypack.sqlite

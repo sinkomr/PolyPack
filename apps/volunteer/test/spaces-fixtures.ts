@@ -27,19 +27,29 @@ const find = (space: string, id: string) => {
 
 /**
  * The record's configuration in the contract's format (surface records keep s and pieces at top level;
- * polyhedra and balls configurations are kept apart, one file per problem in data/<space>/configs/<code>.jsonl).
+ * polyhedra configurations are kept apart, one file per problem in data/polyhedra/configs/<code>.jsonl).
  */
 export function recordConfig(space: string, id: string): SpaceConfig {
   const r = find(space, id);
   if (space === "surface") return { s: r.s, pieces: r.pieces };
   if (space === "torus") return r.configuration;
-  if (space === "polyhedra" || space === "balls") {
+  if (space === "polyhedra") {
     // one line {"P", "config"} per P, at the byte offset and length the record's config_at gives
-    const file = readFileSync(new URL(`../../../data/${space}/configs/${r.code}.jsonl`, import.meta.url));
+    const file = readFileSync(new URL(`../../../data/polyhedra/configs/${r.code}.jsonl`, import.meta.url));
     const [offset, length] = r.config_at as [number, number];
     return JSON.parse(file.subarray(offset, offset + length).toString("utf8")).config;
   }
   return r.config;
+}
+
+/** A test packing of the balls space, which has no records (python/balls/fixtures/packings.json). */
+export function ballsTestPacking(id: string): SpaceConfig {
+  const doc = JSON.parse(
+    readFileSync(new URL("../../../python/balls/fixtures/packings.json", import.meta.url), "utf8"),
+  );
+  const p = (doc.packings as { id: string; config: SpaceConfig }[]).find((x) => x.id === id);
+  if (!p) throw new Error(`no test packing ${id}`);
+  return p.config;
 }
 
 /** The configuration at a size `f` times larger, with the same poses (scaled where the space needs it). */

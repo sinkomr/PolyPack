@@ -14,6 +14,7 @@
  *    (deterministic, e.g. small P first): the work list holds the records, the problems with site entries, and this
  *    bounded sample of the others, never the whole domain.
  */
+import { ballsDomain } from "@polypack/balls";
 import type { ParsedSpaceId } from "./ids";
 import type { SpaceName } from "./types";
 
@@ -50,7 +51,10 @@ export interface SpaceDomain {
 }
 
 /** The spaces whose problems are given by a domain. */
-export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {};
+export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
+  // 3D in 3D, balls: 7 problems for P = 2 to 100, without records (docs/spaces/BALLS.md)
+  balls: ballsDomain,
+};
 
 /** The largest P of a domain (its field P's range), or 0. */
 export function domainMaxP(d: SpaceDomain): number {

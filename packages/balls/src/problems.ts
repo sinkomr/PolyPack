@@ -7,7 +7,14 @@
  * polyhedra space's unit cube scaled by s). The score is s: the container ball's radius, or the cube's edge.
  */
 import { getSolid, type Solid } from "@polypack/polyhedra";
-import { type BallsProblem, ballsProblemOf } from "./catalogue";
+import {
+  BALLS_MAX_P,
+  BALLS_MIN_P,
+  BALLS_PROBLEMS,
+  type BallsProblem,
+  ballsProblemOf,
+  formatBallsId,
+} from "./catalogue";
 
 export type { BallsProblem };
 
@@ -97,3 +104,37 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
   }
   return cands.reduce((a, b) => (b.value > a.value ? b : a));
 }
+
+/**
+ * The domain of the space (packages/spaces domain.ts): the 7 codes and P = BALLS_MIN_P to BALLS_MAX_P, each problem
+ * with its elementary bound as a listing shows it ("volume bound; [EST] ..."). The space ships no research records,
+ * so every problem starts without one. Its sample for the volunteers' work list takes small P first, the codes in
+ * catalogue order.
+ */
+export const ballsDomain = {
+  info: {
+    id: "balls/<code>/<P>",
+    fields: [
+      {
+        key: "code",
+        label: "Problem",
+        values: [...BALLS_PROBLEMS.map((p) => p.code)],
+        titles: Object.fromEntries(BALLS_PROBLEMS.map((p) => [p.code, p.title])),
+      },
+      { key: "P", label: "Pieces (P)", min: BALLS_MIN_P, max: BALLS_MAX_P },
+    ],
+    problems: BALLS_PROBLEMS.length * (BALLS_MAX_P - BALLS_MIN_P + 1),
+  },
+  bound(id: { fields: Readonly<Record<string, string | number>>; P: number }) {
+    const problem = ballsProblemOf(String(id.fields.code));
+    if (!problem || !(id.P >= BALLS_MIN_P && id.P <= BALLS_MAX_P)) return undefined;
+    const b = ballsBound(problem, id.P);
+    return { value: b.value, label: `${b.kind.replace("-", " ")} bound; ${b.label}` };
+  },
+  sample(limit: number): string[] {
+    const out: string[] = [];
+    for (let P = BALLS_MIN_P; P <= BALLS_MAX_P && out.length < limit; P++)
+      for (const p of BALLS_PROBLEMS) if (out.length < limit) out.push(formatBallsId(p.code, P));
+    return out;
+  },
+};
