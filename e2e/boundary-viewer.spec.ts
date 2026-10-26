@@ -10,7 +10,7 @@ import { LAZY_VIEW, distinctColours, pageErrors } from "./helpers";
 
 /** Waits until the viewer shows a problem, drawn. */
 async function shown(page: Page, id: string): Promise<void> {
-  await expect(page.locator("#viewer-problem-note")).toHaveText(`Problem ${id}`);
+  await expect(page.locator("#viewer-problem-note")).toHaveText(`Problem ${id}`, LAZY_VIEW);
   await expect(page.locator("#viewer-score")).not.toHaveText("—");
   await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   await expect(page.locator(".pp3-status")).toContainText(/edge \d\.\d{6}\./);
@@ -101,7 +101,7 @@ test("the viewer opens from the dimensions page, draws any problem and links to 
   // to the board, with the same problem
   await page.locator("#viewer-board").click();
   await expect(page).toHaveURL(/\/#space=boundary\/tesseract\/cube\/12$/);
-  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/cube/12");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/cube/12", LAZY_VIEW);
   await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   expect(errors).toEqual([]);
 });
