@@ -247,17 +247,29 @@ describe("the catalogues", () => {
   it("log one line per space", () => {
     const logs: string[] = [];
     loadSpacesIndex(root, (m) => logs.push(m));
+    // a space with a domain (surface) says how many of its problems have a record
     expect(logs).toEqual(
-      SPACE_NAMES.map((s) => expect.stringMatching(new RegExp(`^\\[spaces\\] ${s}: \\d+ problems`))),
+      SPACE_NAMES.map((s) =>
+        expect.stringMatching(
+          new RegExp(s === "surface" ? `^\\[spaces\\] surface: a domain of 712800 problems, 2038 with a record` : `^\\[spaces\\] ${s}: \\d+ problems`),
+        ),
+      ),
     );
   });
 
   it("leave a space out when its records file is missing", () => {
     const empty = mkdtempSync(join(tmpdir(), "polypack-spaces-"));
     const logs: string[] = [];
-    expect(loadSpacesIndex(empty, (m) => logs.push(m))).toEqual({});
+    // the surface space keeps its domain, with no records
+    const index = loadSpacesIndex(empty, (m) => logs.push(m));
+    expect(Object.keys(index)).toEqual(["surface"]);
+    expect(index.surface!.problems).toEqual([]);
     expect(logs).toEqual(
-      SPACE_NAMES.map((s) => `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`),
+      SPACE_NAMES.map((s) =>
+        s === "surface"
+          ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
+          : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
+      ),
     );
   });
 

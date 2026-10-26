@@ -134,7 +134,7 @@ export function pickFromDomain(
     return {
       key: f.key,
       label: PICK_LABELS[f.key] ?? f.label,
-      options: values.map((v) => ({ value: v, text: f.titles?.[v] ?? v })),
+      options: values.map((v) => ({ value: v, text: f.titles?.[v] ?? v, ...(f.groups?.[v] ? { group: f.groups[v] } : {}) })),
       value,
     };
   });

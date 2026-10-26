@@ -23,13 +23,19 @@ export interface Part {
   cx: number;
   cy: number;
   theta: number;
+  /**
+   * The half-planes the part was cut from (piece sides, wedge rays, face edges), in this face's
+   * frame. Each supports the part, so separations are measured along them (partSeparation), not
+   * along the edges of the clipped polygon, whose near-zero edges have meaningless normals.
+   */
+  planes: HalfPlane[];
 }
 
 /** Disk approximation used only for drawing circle pieces. */
 export const DISK_SIDES = 96;
 
 /** Half-plane a.x <= b, as used by the clipper. */
-interface HalfPlane {
+export interface HalfPlane {
   ax: number;
   ay: number;
   b: number;
@@ -142,6 +148,15 @@ export function pieceParts(solid: Solid, s: number, N: number, pose: SurfacePose
       poly = clipHalfPlane(poly, h);
     }
     const back = inverse(node.toAnchor);
+    // the defining half-planes in the face's frame: a.x <= b with x = back^-1 x' becomes
+    // (R a).x' <= b + (R a).t for back: x -> R x + t
+    const planes: HalfPlane[] = [];
+    const cut = [...polygonHalfPlanes(base), ...(node.wedge ? wedgeHalfPlanes(node.wedge, pose.x, pose.y) : []), ...polygonHalfPlanes(face)];
+    for (const h of cut) {
+      const ax = back.c * h.ax - back.s * h.ay;
+      const ay = back.s * h.ax + back.c * h.ay;
+      planes.push({ ax, ay, b: h.b + ax * back.tx + ay * back.ty });
+    }
     const mapped = new Float64Array(poly.length);
     for (let i = 0; i < poly.length; i += 2) {
       const [u, v] = apply(back, poly[i], poly[i + 1]);
@@ -149,7 +164,7 @@ export function pieceParts(solid: Solid, s: number, N: number, pose: SurfacePose
       mapped[i + 1] = v;
     }
     const [cx, cy] = apply(back, pose.x, pose.y);
-    parts.push({ piece, chain: ci, face: node.face, poly: mapped, cx, cy, theta: pose.theta + back.ang });
+    parts.push({ piece, chain: ci, face: node.face, poly: mapped, cx, cy, theta: pose.theta + back.ang, planes });
   });
   return parts;
 }
@@ -162,4 +177,31 @@ export function polygonArea(poly: Float64Array): number {
     a += poly[2 * i] * poly[2 * j + 1] - poly[2 * j] * poly[2 * i + 1];
   }
   return a / 2;
+}
+
+/**
+ * Signed separation of two convex parts (positive: the distance between them; negative: minus the
+ * penetration depth), by the separating-axis theorem along the half-planes each part was cut from.
+ * Every such line supports its part, and they include every edge line of the part, so the result is
+ * the exact separation of the polygons; the clipped polygons' own edges are not used as axes, since
+ * a near-zero edge left by clipping has a normal that need not support the part.
+ */
+export function partSeparation(A: { poly: Float64Array; planes: readonly HalfPlane[] }, B: { poly: Float64Array; planes: readonly HalfPlane[] }): number {
+  let best = -Infinity;
+  for (let pass = 0; pass < 2; pass++) {
+    const planes = pass === 0 ? A.planes : B.planes;
+    const q = pass === 0 ? B.poly : A.poly;
+    for (const h of planes) {
+      const len = Math.hypot(h.ax, h.ay);
+      if (!(len > 0)) continue;
+      let m = Infinity;
+      for (let k = 0; k < q.length; k += 2) {
+        const d = h.ax * q[k] + h.ay * q[k + 1] - h.b;
+        if (d < m) m = d;
+      }
+      m /= len;
+      if (m > best) best = m;
+    }
+  }
+  return best;
 }

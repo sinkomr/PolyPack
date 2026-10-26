@@ -14,6 +14,7 @@
  *    (deterministic, e.g. small P first): the work list holds the records, the problems with site entries, and this
  *    bounded sample of the others, never the whole domain.
  */
+import { surfaceDomain } from "@polypack/surface/domain";
 import type { ParsedSpaceId } from "./ids";
 import type { SpaceName } from "./types";
 
@@ -27,6 +28,8 @@ export interface SpaceDomainField {
   values?: readonly string[];
   /** Display names of the values (by value). */
   titles?: Readonly<Record<string, string>>;
+  /** Groups of the values in a menu (by value; consecutive values share a group), e.g. the surface solids' families. */
+  groups?: Readonly<Record<string, string>>;
   /** The range of integers, both ends included; absent for a list. */
   min?: number;
   max?: number;
@@ -50,7 +53,11 @@ export interface SpaceDomain {
 }
 
 /** The spaces whose problems are given by a domain. */
-export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {};
+export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
+  // 2D on 3D, polyhedral surfaces: 36 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
+  // for the Platonic solids with N in {0, 3, 4, 5, 6, 8} (docs/spaces/SURFACE.md)
+  surface: surfaceDomain,
+};
 
 /** The largest P of a domain (its field P's range), or 0. */
 export function domainMaxP(d: SpaceDomain): number {

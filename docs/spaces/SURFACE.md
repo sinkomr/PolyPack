@@ -15,7 +15,9 @@ Every table entry carries a certificate checked by an independent rigorous certi
 (`python/surface/cert.py`), so its validity is proven, not just tested. Tables:
 `data/surface/records.json`; results summary: [SURFACE_RESULTS.md](SURFACE_RESULTS.md). The tables
 cover the Platonic solids with N in {0, 3, 4, 5, 6, 8}; the other solids, and N = 7 and 9 to 100,
-have problems but no records yet.
+have problems but no records yet. The problems are a domain of ranges (`packages/surface/src/domain.ts`,
+registered in `packages/spaces/src/domain.ts`): 36 solids, both modes, 99 shapes and P = 1 to 100,
+712,800 problems, each with the larger of its area and one-piece bounds (2.6); 2038 have a record.
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -368,11 +370,21 @@ P = 1..max(4F, 24).
 **The generalisation** (2026-10-26). `packages/surface` describes any convex polyhedral surface:
 per face its number of sides, frame vertices and corner angles, per vertex its degree and cone
 angle (`Solid.sides`, `unitFaces`, `corner`, `vertexCone`); development, parts, the validator and the
-search read them face by face. The Platonic solids keep their code paths (`Solid.uniform`), and
-their validation, parts and seeded searches are bit for bit those of before [CALC: all 2038 records
-validated three ways and their parts compared, 17052 results, and five seeded searches, all
-identical]. Their records keep their ids and bytes and re-certify unchanged (`cert.py` on
-`data/surface/records.json`: 2038 certified, 0 failed).
+search read them face by face. The Platonic solids keep their code paths (`Solid.uniform`): with
+the separation rule below aside, their validation, parts and seeded searches were bit for bit those
+of before [CALC: all 2038 records validated three ways and their parts compared, 17052 results, and
+five seeded searches, all identical]. Their records keep their ids and bytes and re-certify
+unchanged (`cert.py` on `data/surface/records.json`: 2038 certified, 0 failed).
+
+**Separating parts** (2026-10-26). Two parts on a face are separated (validator, search energy,
+contact polish) along the half-planes each was cut from: the piece's sides, the wedge's rays and the
+face's edges, in the face's frame (`partSeparation` in `parts.ts`). Each supports its part and they
+include every edge line of it, so this is the exact separating-axis separation. The edges of the
+clipped polygons are not used as axes: clipping can leave a near-zero edge whose normal does not
+support the part, and such an edge once hid an overlap (`surface/octahedron/fold/3/2`, now a
+regression test; the certifier always rejected it). [CALC] Every record keeps its verdict; the
+smallest pair clearances change by at most 1e-15, and seeded polygon searches now differ in the last
+bits.
 
 **Certifying the other solids** (`general.py`) [CALC]. Built from `solids_exact.json`, not from the
 TypeScript: exact checks (field arithmetic, exact signs) that every face is planar, convex and

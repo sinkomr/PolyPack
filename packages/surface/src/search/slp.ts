@@ -1,6 +1,6 @@
-import { boundingRadius, inradius, pieceVertices, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
-import { SurfacePose, pieceParts } from "../parts";
+import { HalfPlane, SurfacePose, partSeparation, pieceParts, polygonHalfPlanes } from "../parts";
 import { apply } from "../rigid";
 import { Solid, faceVertex } from "../solids";
 import { canonicalize } from "./energy";
@@ -17,7 +17,7 @@ import { canonicalize } from "./energy";
 
 interface PieceGeom {
   nodes: ChainNode[];
-  parts: { key: string; face: number; poly: Float64Array }[];
+  parts: { key: string; face: number; poly: Float64Array; planes: HalfPlane[] }[];
 }
 
 function pathKey(node: ChainNode): string {
@@ -29,7 +29,11 @@ export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: nu
 }
 
 function geomOf(solid: Solid, N: number, lam: number, p: SurfacePose, i: number, mode: "fold" | "nofold"): PieceGeom {
-  if (mode === "nofold") return { nodes: [], parts: N === 0 ? [] : [{ key: "", face: p.face, poly: pieceVertices(N, p, lam) }] };
+  if (mode === "nofold") {
+    if (N === 0) return { nodes: [], parts: [] };
+    const poly = pieceVertices(N, p, lam);
+    return { nodes: [], parts: [{ key: "", face: p.face, poly, planes: polygonHalfPlanes(poly) }] };
+  }
   if (N === 0) {
     const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, 2 * lam);
     return { nodes, parts: [] };
@@ -37,7 +41,7 @@ function geomOf(solid: Solid, N: number, lam: number, p: SurfacePose, i: number,
   const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, lam * boundingRadius(N));
   const parts = pieceParts(solid, 1, N, p, i, lam, nodes)
     .filter((q) => q.poly.length >= 6)
-    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly }));
+    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly, planes: q.planes }));
   return { nodes, parts };
 }
 
@@ -96,7 +100,7 @@ function valuesFold(solid: Solid, N: number, lam: number, poses: SurfacePose[], 
           if (j === i && b <= a) continue;
           const B = parts[b];
           if (B.face !== A.face) continue;
-          const v = polygonSeparation(A.poly, B.poly).sep;
+          const v = partSeparation(A, B);
           if (v < thr) {
             const key = i < j || (i === j && a < b) ? `p${i}:${A.key}:${j}:${B.key}` : `p${j}:${B.key}:${i}:${A.key}`;
             out.set(key, v);
@@ -135,7 +139,7 @@ export function valuesNofold(solid: Solid, N: number, lam: number, poses: Surfac
     for (let j = 0; j < P; j++) {
       if (j === i || poses[j].face !== p.face || (j < i && only === undefined)) continue;
       const q = poses[j];
-      const v = N === 0 ? Math.hypot(q.x - p.x, q.y - p.y) - 2 * lam : polygonSeparation(G[i].parts[0].poly, G[j].parts[0].poly).sep;
+      const v = N === 0 ? Math.hypot(q.x - p.x, q.y - p.y) - 2 * lam : partSeparation(G[i].parts[0], G[j].parts[0]);
       if (v < thr) out.set(`q${Math.min(i, j)}:${Math.max(i, j)}:${p.face}`, v);
     }
   }

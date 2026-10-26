@@ -1,6 +1,6 @@
-import { boundingRadius, inradius, pieceVertices, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
-import { SurfacePose, pieceParts } from "../parts";
+import { HalfPlane, SurfacePose, partSeparation, pieceParts, polygonHalfPlanes } from "../parts";
 import { apply, glue } from "../rigid";
 import { Solid, faceApothem, faceDepth, faceVertex, frameVertex } from "../solids";
 
@@ -106,13 +106,15 @@ function canonicalizeGeneral(solid: Solid, s: number, p: SurfacePose): SurfacePo
 interface PartRec {
   piece: number;
   poly: Float64Array;
+  /** the half-planes the part was cut from (parts.ts partSeparation) */
+  planes: HalfPlane[];
   minx: number;
   miny: number;
   maxx: number;
   maxy: number;
 }
 
-function bbox(piece: number, poly: Float64Array): PartRec {
+function bbox(piece: number, poly: Float64Array, planes: HalfPlane[]): PartRec {
   let minx = Infinity;
   let miny = Infinity;
   let maxx = -Infinity;
@@ -123,7 +125,7 @@ function bbox(piece: number, poly: Float64Array): PartRec {
     if (poly[i + 1] < miny) miny = poly[i + 1];
     if (poly[i + 1] > maxy) maxy = poly[i + 1];
   }
-  return { piece, poly, minx, miny, maxx, maxy };
+  return { piece, poly, planes, minx, miny, maxx, maxy };
 }
 
 /**
@@ -213,7 +215,7 @@ export class PolygonEnergy {
   private computePiece(i: number, pose: SurfacePose): { recs: PartRec[]; faces: number[]; cone: number } {
     if (this.mode === "nofold") {
       const poly = pieceVertices(this.N, pose, this.lam);
-      return { recs: [bbox(i, poly)], faces: [pose.face], cone: wallEnergy(this.solid, this.s, pose.face, poly) };
+      return { recs: [bbox(i, poly, polygonHalfPlanes(poly))], faces: [pose.face], cone: wallEnergy(this.solid, this.s, pose.face, poly) };
     }
     const nodes = enumerateChains(this.solid, this.s, pose.face, pose.x, pose.y, this.lam * boundingRadius(this.N));
     const parts = pieceParts(this.solid, this.s, this.N, pose, i, this.lam, nodes);
@@ -221,7 +223,7 @@ export class PolygonEnergy {
     const faces: number[] = [];
     for (const part of parts)
       if (part.poly.length >= 6) {
-        recs.push(bbox(i, part.poly));
+        recs.push(bbox(i, part.poly, part.planes));
         faces.push(part.face);
       }
     return { recs, faces, cone: coneEnergy(this.solid, this.s, this.N, pose, nodes, this.lam) };
@@ -243,7 +245,7 @@ export class PolygonEnergy {
 
   private static pen(a: PartRec, b: PartRec): number {
     if (a.maxx < b.minx || b.maxx < a.minx || a.maxy < b.miny || b.maxy < a.miny) return 0;
-    const sep = polygonSeparation(a.poly, b.poly).sep;
+    const sep = partSeparation(a, b);
     return sep < 0 ? sep * sep : 0;
   }
 

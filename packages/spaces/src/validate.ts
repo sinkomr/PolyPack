@@ -60,9 +60,12 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: the largest P of its catalogue (2026-10-24; polyhedra 2026-10-25),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
+ * Surface: its domain's P <= 100; [CALC] random configurations of 100 pieces (N = 0 to 100, six solids
+ * from the cube to the disdyakis triacontahedron, at and above the area bound) took at most 106 ms to
+ * check on a heavily loaded laptop (2026-10-26).
  */
 export const SPACE_MAX_P: Record<SpaceName, number> = {
-  surface: 80,
+  surface: 100,
   curved: 30,
   sphere: 40,
   torus: 49,

@@ -5,12 +5,12 @@ import { SPACE_INFO, type SpaceProblemResponse, type SpaceRecordsResponse } from
 import { LAZY_VIEW, distinctColours, pageErrors } from "./helpers";
 
 // The board's drawing and search on the surfaces beyond the Platonic solids. Those problems have no
-// research records yet, so this test serves three of the certifier's test packings
-// (python/surface/fixtures/general_packings.json) as if they were records: a Catalan solid, a prism
-// and an antiprism. SURFACE_SHOTS, when set, names a folder for screenshots of the drawings.
+// research records yet, so this test serves some of the certifier's test packings
+// (python/surface/fixtures/general_packings.json) as if they were records: a Catalan solid, a prism,
+// an antiprism, and 100-gons. SURFACE_SHOTS, when set, names a folder for screenshots of the drawings.
 
 const fixtures = JSON.parse(
-  readFileSync(resolve(__dirname, "../python/surface/fixtures/general_packings.json"), "utf8"),
+  readFileSync(resolve(import.meta.dirname, "../python/surface/fixtures/general_packings.json"), "utf8"),
 ).records as { id: string; solid: string; mode: string; N: number; P: number; s: number; pieces: unknown[] }[];
 const SHOWN = [
   "surface/deltoidal_icositetrahedron/fold/6/3",
@@ -93,7 +93,12 @@ test("the problem picker groups the solids by family, in order", async ({ page }
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${SHOWN[1]}`, LAZY_VIEW);
   const groups = await page.locator("#space-f-solid optgroup").evaluateAll((gs) => gs.map((g) => (g as HTMLOptGroupElement).label));
   expect(groups).toEqual(["Platonic solids", "Catalan solids", "Prisms", "Antiprisms"]);
-  await expect(page.locator('#space-f-solid optgroup[label="Prisms"] option')).toHaveText(["Pentagonal prism", "Heptagonal prism"]);
+  // the picker offers the space's whole domain, not only the problems with a record
+  await expect(page.locator('#space-f-solid optgroup[label="Prisms"] option')).toHaveText(
+    ["Triangular", "Pentagonal", "Hexagonal", "Heptagonal", "Octagonal", "Enneagonal", "Decagonal", "Hendecagonal", "Dodecagonal"].map((b) => `${b} prism`),
+  );
+  await expect(page.locator('#space-f-solid optgroup[label="Catalan solids"] option')).toHaveCount(13);
+  await expect(page.locator("#space-f-N option")).toHaveCount(99);
   await expect(page.locator('#space-f-solid optgroup[label="Platonic solids"] option')).toHaveText([
     "Tetrahedron",
     "Cube",
@@ -105,8 +110,9 @@ test("the problem picker groups the solids by family, in order", async ({ page }
   // a Platonic problem is one choice away, and back
   await page.selectOption("#space-f-solid", "cube");
   await expect(page.locator("#space-problem-note")).toHaveText(/^Problem surface\/cube\//);
+  // the other fields stay: a problem of the domain without a record
   await page.selectOption("#space-f-solid", "antiprism4");
-  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${SHOWN[2]}`);
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem surface/antiprism4/fold/3/3");
 });
 
 test("a search round runs on a prism with folding and on a Catalan solid without", async ({ page }) => {

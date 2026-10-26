@@ -184,8 +184,10 @@ describe("GET /api/spaces", () => {
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
+    // surface: the problems of its domain, 2038 of them with a record
+    expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
-      ["surface", 2038],
+      ["surface", 712800],
       ["curved", 334],
       ["sphere", 166],
       ["torus", 544],

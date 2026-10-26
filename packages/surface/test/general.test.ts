@@ -459,3 +459,36 @@ describe("general solids: float validator, adversarial", () => {
     expect(validate(cfg("rhombic_dodecahedron", 0, 6, [{ ...good, x: 100 }]), "fold").errors[0]).toMatch(/outside its face/);
   });
 });
+
+describe("separation along the half-planes a part was cut from", () => {
+  it("rejects the overlap that a near-zero clipped edge once hid (surface/octahedron/fold/3/2)", () => {
+    // reported 2026-10-26: a 2.5e-15 edge of a clipped part, with a tilted normal, "separated" two
+    // overlapping parts when the axes came from the clipped polygons; the certifier rejects it too
+    const cfg = {
+      solid: "octahedron" as SolidName,
+      N: 3,
+      s: 2.397897003428079,
+      pieces: [
+        { face: 2, x: -0.021725557453399342, y: 0.807485119891262, theta: -0.037638655618227324 },
+        { face: 0, x: -0.377819306807985, y: -0.14616605356121634, theta: -3.1792313092080215 },
+      ],
+    };
+    const v = validate(cfg, "fold");
+    expect(v.ok).toBe(false);
+    expect(v.errors.join(" ")).toMatch(/overlap/);
+  });
+
+  it("agrees with the polygon separation on whole pieces", async () => {
+    const { polygonSeparation } = await import("@polypack/geometry");
+    const { partSeparation, polygonHalfPlanes } = await import("../src/parts");
+    const rand = rng(5);
+    for (let t = 0; t < 300; t++) {
+      const N = [3, 4, 7, 20][t % 4];
+      const a = pieceVertices(N, { x: 0, y: 0, theta: rand() * 7 });
+      const b = pieceVertices(N, { x: (rand() - 0.5) * 3, y: (rand() - 0.5) * 3, theta: rand() * 7 });
+      const s1 = polygonSeparation(a, b).sep;
+      const s2 = partSeparation({ poly: a, planes: polygonHalfPlanes(a) }, { poly: b, planes: polygonHalfPlanes(b) });
+      expect(Math.abs(s1 - s2)).toBeLessThan(1e-12);
+    }
+  });
+});
