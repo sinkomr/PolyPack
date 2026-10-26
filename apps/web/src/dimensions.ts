@@ -25,6 +25,7 @@ import {
   filterProblems,
   ListedProblem,
   minus,
+  nofoldFaceProblem,
   parseHash,
   plainBoundLabel,
   problemStatus,
@@ -264,6 +265,8 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
   );
   $("space-head").replaceChildren(head);
   $("space-note").textContent = summaryText(rows);
+  // a nofold surface problem is a 2D in 2D problem: one sentence says so, and its row links to it
+  $("space-same-as").hidden = !rows.some((p) => nofoldFaceProblem(p.id));
   const tbody = $("space-rows");
   tbody.replaceChildren(
     ...rows.map((p) => {
@@ -312,6 +315,14 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
       const board = el("td");
       if (isBoardSpace(space))
         board.append(link(`/${spaceAddress(space, p.id)}`, "Open on the board", `: ${p.id}`, false));
+      const face = nofoldFaceProblem(p.id);
+      if (face) {
+        const same = el("span", "", "cell-why same-as");
+        same.append(
+          link(face.href, `Same as N = ${face.N}, M = ${face.M}, P = ${face.k}`, ` in 2D in 2D, for ${p.id}`, false),
+        );
+        board.append(same);
+      }
       tr.append(board);
       return tr;
     }),
@@ -335,6 +346,7 @@ async function show(wish: PageState, focus = false): Promise<void> {
     filtersOf = null;
     $("space-head").replaceChildren();
     $("space-rows").replaceChildren();
+    $("space-same-as").hidden = true;
     const data = await api.getSpaceRecords(wish.space);
     // another space was chosen while the answer was on its way; the newer request draws the table
     if (state !== wish) return;

@@ -1395,6 +1395,10 @@ figure {
 .space-table details.cell-why {
   padding: 0;
 }
+/* a nofold row's link to its 2D in 2D problem stays on one line */
+.space-table .same-as {
+  white-space: nowrap;
+}
 .space-table details.cell-why > summary {
   cursor: pointer;
   color: var(--accent);

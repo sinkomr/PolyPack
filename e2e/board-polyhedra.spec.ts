@@ -48,14 +48,14 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
     if (/three/i.test(new URL(r.url()).pathname)) three.push(r.url());
   });
   await openProblem(page, 4, 4, 5);
-  const dimension = page.locator("#dimension-select");
-  await expect(dimension.locator('option[value="3-in-3"]')).toHaveText("3D in 3D");
-  await expect(dimension.locator('option[value="3-in-3"]')).toBeEnabled();
+  const menu = page.locator("#family-select");
+  await expect(menu.locator('optgroup[label="3D in 3D"] option[value="polyhedra"]')).toHaveText("Polyhedra");
+  await expect(menu.locator('option[value="polyhedra"]')).toBeEnabled();
   expect(three).toEqual([]);
 
-  await page.selectOption("#dimension-select", "3-in-3");
-  await expect(page.locator("#kind-select option")).toHaveText(["Polyhedra"]);
-  await expect(page.locator("#kind-select")).toHaveValue("polyhedra");
+  await page.selectOption("#family-select", "polyhedra");
+  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText(["Polyhedra"]);
+  await expect(page.locator("#family-select")).toHaveValue("polyhedra");
   await shown(page, DEFAULT_PROBLEM.polyhedra);
   await expect(page).toHaveURL(/#space=polyhedra\/cubincub\/11$/);
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-in-3");
@@ -106,10 +106,10 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await drawn(page, 100);
   await expect(page).toHaveURL(/#space=polyhedra\/tidintid\/100$/);
   // back to the Flat board: the 3D drawing gives back its WebGL context, and is made again on return
-  await page.selectOption("#dimension-select", "2-in-2");
+  await page.selectOption("#family-select", "polygon");
   await expect(page.locator("#board")).toBeVisible();
   await expect(page.locator(".space-draw canvas")).toHaveCount(0);
-  await page.selectOption("#dimension-select", "3-in-3");
+  await page.selectOption("#family-select", "polyhedra");
   await shown(page, "polyhedra/tidintid/100");
   await drawn(page, 100);
 });
@@ -171,13 +171,13 @@ test("leaving 3D in 3D while a problem loads leaves the problem shown usable on 
   });
   await page.selectOption("#space-f-P", "12");
   await expect(page.locator("#space-busy")).toBeVisible();
-  await page.selectOption("#dimension-select", "2-in-2");
+  await page.selectOption("#family-select", "polygon");
   await expect(page.locator("#board")).toBeVisible();
   const late = page.waitForResponse((r) => r.url().endsWith("/polyhedra/cubincub/12"));
   release();
   await late;
   // back: the problem shown before, with its own fields, nothing loading, and the panel usable
-  await page.selectOption("#dimension-select", "3-in-3");
+  await page.selectOption("#family-select", "polyhedra");
   await shown(page, "polyhedra/cubincub/11");
   await expect(page.locator("#space-busy")).toBeHidden();
   await expect(page.locator("#space-f-P")).toHaveValue("11");
