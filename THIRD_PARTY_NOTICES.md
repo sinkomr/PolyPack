@@ -65,6 +65,9 @@ uses the code and data of polyhedrainpolyhedra.wiki, the repository
 in part on the further sources listed after it; `docs/spaces/POLYHEDRA.md`
 says which records use which source, and every record of
 `data/polyhedra/records.json` names its sources (`sources`, `source`).
+The balls space (`python/balls`, `packages/balls`) uses the same vendored
+certifier and solids (it imports `python/polyhedra/certify_general.py` and the
+solids of `packages/polyhedra`); none of its records rests on upstream's data.
 
 ### alejandrozu/platonic-packing
 
