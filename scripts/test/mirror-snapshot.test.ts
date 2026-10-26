@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { type Asset, type Manifest, type ManifestFile, checkManifest, plan, releaseManifest } from "../mirror-snapshot";
+import {
+  type Asset,
+  type Manifest,
+  type ManifestFile,
+  type ManifestSpaceFile,
+  checkManifest,
+  plan,
+  releaseManifest,
+} from "../mirror-snapshot";
 
 const file = (N: number, M: number, sha: string, bytes = 100): ManifestFile => ({
   N,
@@ -19,8 +27,17 @@ const manifest = (files: ManifestFile[]): Manifest => ({
   pieces: 5 * files.length,
   files,
 });
+const spaceFile = (space: string, sha: string, bytes = 100): ManifestSpaceFile => ({
+  space,
+  file: `space-${space}.json.gz`,
+  records: 3,
+  pieces: 30,
+  bytes,
+  sha256: sha.repeat(64),
+  as_of: "2026-10-24T11:20:00Z",
+});
 /** The release's copy of `f`, with GitHub's digest unless `digest` is false. */
-const asset = (f: ManifestFile, digest = true, size = f.bytes): Asset => ({
+const asset = (f: ManifestFile | ManifestSpaceFile, digest = true, size = f.bytes): Asset => ({
   name: f.file,
   size,
   digest: digest ? `sha256:${f.sha256}` : null,
@@ -68,9 +85,47 @@ describe("mirroring the snapshot", () => {
     const kept = file(3, 3, "a");
     const now = file(4, 4, "b");
     const site = manifest([kept, now]);
-    const final = releaseManifest(site, manifest([kept]), [asset(kept, false), asset(now, false)], new Map([[now.file, now]]));
+    const final = releaseManifest(
+      site,
+      manifest([kept]),
+      [asset(kept, false), asset(now, false)],
+      new Map([[now.file, now]]),
+    );
     expect(final.files).toEqual([kept, now]);
     expect(releaseManifest(site, null, [asset(kept, false)], new Map()).files).toEqual([]);
+  });
+
+  it("mirrors the spaces' files like the pairs', and lists them apart", () => {
+    const pair = file(3, 3, "a");
+    const same = spaceFile("sphere", "b");
+    const changed = spaceFile("boundary", "c");
+    const gone = spaceFile("torus", "d");
+    const site = { ...manifest([pair]), spaces: [same, changed] };
+    const assets = [asset(pair), asset(same), asset(spaceFile("boundary", "e")), asset(gone)];
+    const { upload, remove } = plan(site, null, assets);
+    expect(upload).toEqual([changed]);
+    expect(remove).toEqual(["space-torus.json.gz"]);
+
+    const final = releaseManifest(
+      site,
+      null,
+      [asset(pair), asset(same), asset(changed)],
+      new Map([[changed.file, changed]]),
+    );
+    expect(final.files).toEqual([pair]);
+    expect(final.spaces).toEqual([same, changed]);
+    // the totals stay the pairs'
+    expect([final.records, final.pieces]).toEqual([2, 5]);
+    // a space file that could not be fetched is left out until the release holds it
+    expect(releaseManifest(site, null, [asset(pair), asset(same)], new Map()).spaces).toEqual([same]);
+  });
+
+  it("reads a manifest from before the spaces, and mirrors no space file for it", () => {
+    const pair = file(3, 3, "a");
+    const site = manifest([pair]);
+    expect(checkManifest(site).spaces).toBeUndefined();
+    expect(plan(site, null, [asset(pair)])).toEqual({ upload: [], remove: [] });
+    expect(releaseManifest(site, null, [asset(pair)], new Map()).spaces).toEqual([]);
   });
 
   it("refuses a manifest it does not understand", () => {
@@ -78,5 +133,15 @@ describe("mirroring the snapshot", () => {
     expect(() => checkManifest(manifest([{ ...file(3, 3, "a"), file: "../x.json.gz" }]))).toThrow(/malformed/);
     expect(() => checkManifest(manifest([{ ...file(3, 3, "a"), sha256: "xyz" }]))).toThrow(/malformed/);
     expect(checkManifest(manifest([file(3, 3, "a")])).files).toHaveLength(1);
+    const withSpace = (f: ManifestSpaceFile | unknown) => ({ ...manifest([]), spaces: [f] });
+    expect(() => checkManifest(withSpace({ ...spaceFile("sphere", "a"), file: "space-../x.json.gz" }))).toThrow(
+      /malformed/,
+    );
+    // a pair's name in the spaces' list, or a space's in the pairs'
+    expect(() => checkManifest(withSpace({ ...spaceFile("sphere", "a"), file: "3-3.json.gz" }))).toThrow(/malformed/);
+    expect(() => checkManifest(manifest([{ ...file(3, 3, "a"), file: "space-sphere.json.gz" }]))).toThrow(/malformed/);
+    expect(() => checkManifest(withSpace(null))).toThrow(/malformed/);
+    expect(() => checkManifest({ ...manifest([]), spaces: "all" })).toThrow(/format 1/);
+    expect(checkManifest(withSpace(spaceFile("sphere", "a"))).spaces).toHaveLength(1);
   });
 });

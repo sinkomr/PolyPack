@@ -1,8 +1,8 @@
 name: Records snapshot
 # Every night: mirrors the site's records snapshot (GET /api/snapshot), which the server builds at
 # 11:00 UTC, into the release "records" (scripts/mirror-snapshot.ts): one gzipped JSON file per
-# shape pair with every open problem's leader and its coordinates. Only changed files are fetched
-# and uploaded.
+# shape pair with every open problem's leader and its coordinates, and one per space with its site
+# entries' configurations. Only changed files are fetched and uploaded.
 on:
   schedule:
     - cron: "30 12 * * *"

@@ -9,7 +9,7 @@ import { loadSpacesIndex } from "@polypack/spaces/load";
 import { HOLDERS_REFRESH_MS, createApp } from "./app";
 import { OVERLOAD_DELAY_MS } from "./limits";
 import { LoadStats, LoopDelay } from "./load";
-import { scheduleSnapshots, snapshotSource } from "./snapshot";
+import { scheduleSnapshots, snapshotSource, snapshotSpaces } from "./snapshot";
 import { SqliteStore } from "./sqlite-store";
 
 // Node entry point: local development and any always-on host.
@@ -63,6 +63,8 @@ if (snapshotDir) {
     store,
     dir: snapshotDir,
     closed: (N, M, P) => closedToSubmissions(literature.get(`${N}/${M}/${P}`)),
+    // the spaces' site entries, one file per space, for their open problems
+    spaces: snapshotSpaces(spaces, store),
     hourUtc: hourUtc < 24 ? hourUtc : 11,
     log: (msg) => console.log(msg),
   });

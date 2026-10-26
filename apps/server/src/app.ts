@@ -838,7 +838,7 @@ export function createApp(opts: AppOptions): Hono {
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
 
-  // The nightly records snapshot (snapshot.ts): the manifest, then one gzipped file per shape pair.
+  // The nightly records snapshot (snapshot.ts): the manifest, then one gzipped file per shape pair or space.
   app.get("/api/snapshot", (c) => {
     const manifest = opts.snapshots?.manifest() ?? null;
     if (!manifest)
