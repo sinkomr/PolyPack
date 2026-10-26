@@ -28058,7 +28058,7 @@
    "score_float": 1.8612097182041991,
    "score_cert": 1.8612097182060605,
    "display": "1.861210",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -28095,11 +28095,13 @@
     {
      "value": 1.8612097182041991,
      "status": "proven",
-     "short": "Thue 1910",
-     "source": "A. Thue 1910 (Handbook ch. 2, Table 2.1.1)",
-     "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
-     "accessed": "2026-10-24",
-     "note": "hexagonal lattice, density pi/sqrt12 (a theorem for the plane)"
+     "short": "Fukshansky 2011, Thm 1.1",
+     "source": "L. Fukshansky, Revisiting the hexagonal lattice: on optimal lattice circle packing, Elem. Math. 66(1) (2011) 1-9",
+     "url": "https://www1.cmc.edu/pages/faculty/lenny/papers/hexagon.pdf",
+     "accessed": "2026-10-25",
+     "doi": "10.4171/EM/163",
+     "proof": "Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly",
+     "note": "densest lattice packing of disks: the hexagonal lattice, density pi/sqrt12 (first proved by Lagrange 1773)"
     },
     {
      "value": 1.8612097182041991,
@@ -28108,7 +28110,16 @@
      "source": "J. L. Lagrange, Recherches d'arithmetique, Nouv. Mem. Acad. Roy. Sci. Belles-Lettres Berlin (1773) 265-312 (not read; cited for delta_L(disk) = pi/sqrt12 in the Handbook of Discrete and Computational Geometry, 3rd ed., ch. 2, Table 2.1.3)",
      "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
      "accessed": "2026-10-24",
-     "note": "densest lattice packing of disks, the exact problem stated for lattices; the record's status awaits the maintainer's decision"
+     "note": "the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof"
+    },
+    {
+     "value": 1.8612097182041991,
+     "status": "proven",
+     "short": "Thue 1910",
+     "source": "A. Thue 1910 (Handbook ch. 2, Table 2.1.1)",
+     "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
+     "accessed": "2026-10-24",
+     "note": "hexagonal lattice, density pi/sqrt12 (a theorem for the plane)"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -28121,7 +28132,7 @@
    "search_label": "hex result as a free lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(1 * 2 sqrt(3)) = 1.8612097182042 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Taken from: hex result as a free lattice. Literature proven value 1.8612097182 (Thue 1910): ours - literature = 0.000e+00. Literature proven value 1.8612097182 (Lagrange 1773 (not read)): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(1 * 2 sqrt(3)) = 1.8612097182042 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Taken from: hex result as a free lattice. Literature proven value 1.8612097182 (Fukshansky 2011, Thm 1.1): ours - literature = 0.000e+00. Literature proven value 1.8612097182 (Lagrange 1773 (not read)): ours - literature = 0.000e+00. Literature proven value 1.8612097182 (Thue 1910): ours - literature = 0.000e+00. Proven optimal: Fukshansky 2011, Thm 1.1 (Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly; doi:10.4171/EM/163)."
   },
   {
    "problem": "torus/free/0/2",
@@ -36467,7 +36478,7 @@
    "score_float": 0.8059274488676562,
    "score_cert": 0.8059274488684622,
    "display": "0.805927",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.6666666666666672,
    "eps": 1e-12,
    "configuration": {
@@ -36493,7 +36504,7 @@
    "min_clearance_shrunk": "8.6544301e-13",
    "bound": {
     "value": 0.8059274488676565,
-    "label": "[EST] proven optimum: Fary 1950, Theoreme 1",
+    "label": "[EST] proven optimum: Sriamorn 2016, Thm 1.1",
     "kind": "proven"
    },
    "exact": {
@@ -36504,12 +36515,23 @@
     {
      "value": 0.8059274488676565,
      "status": "proven",
+     "short": "Sriamorn 2016, Thm 1.1",
+     "source": "K. Sriamorn, On the multiple packing densities of triangles, Discrete Comput. Geom. 55(1) (2016) 228-242",
+     "url": "https://arxiv.org/abs/1501.00467",
+     "accessed": "2026-10-25",
+     "doi": "10.1007/s00454-015-9748-0",
+     "proof": "Theorem 1.1 with k = 1: delta_T(T) = delta_L(T) = 2/3 for every triangle T (the upper bound is proved there with stair polygons, secs. 4-5; Fary 1950 gives a lattice of density 2/3). A single piece on a torus is a lattice packing of it, so delta_L gives L = sqrt((sqrt3/4)/(2/3)) = sqrt(3 sqrt3/8) directly",
+     "note": "densest lattice packing of a triangle, density 2/3"
+    },
+    {
+     "value": 0.8059274488676565,
+     "status": "proven",
      "short": "Fary 1950, Theoreme 1",
      "source": "I. Fary, Sur la densite des reseaux de domaines convexes, Bull. Soc. Math. France 78 (1950) 152-161, Theoreme 1: the densest lattice packing of a convex domain has density >= 2/3, with equality only for triangles",
      "url": "http://www.numdam.org/item/BSMF_1950__78__152_0/",
      "accessed": "2026-10-25",
      "doi": "10.24033/bsmf.1413",
-     "note": "densest lattice packing of a triangle, density 2/3 (the equality case); one triangle on a free torus is a lattice packing of it, so this is the exact problem stated for lattices; the record's status awaits the maintainer's decision"
+     "note": "every convex domain has a lattice packing of density at least 2/3, denser unless it is a triangle; for a triangle this gives a lattice of density 2/3. The paper does not prove that no lattice packing of a triangle is denser (Sriamorn 2016 does)"
     },
     {
      "value": 0.8059274488676565,
@@ -36532,7 +36554,7 @@
    "search_label": "hop:random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Fary 1950, Theoreme 1) to 1e-12 relative. [CALC] Exact value sqrt(3 sqrt(3) / 8) = 0.805927448867656 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 0.8059274489 (Fary 1950, Theoreme 1): ours - literature = -3.331e-16. Literature best_known value 0.8059274489 (Torda et al. 2022 (p1)): ours - literature = -3.331e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Sriamorn 2016, Thm 1.1) to 1e-12 relative. [CALC] Exact value sqrt(3 sqrt(3) / 8) = 0.805927448867656 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 0.8059274489 (Sriamorn 2016, Thm 1.1): ours - literature = -3.331e-16. Literature proven value 0.8059274489 (Fary 1950, Theoreme 1): ours - literature = -3.331e-16. Literature best_known value 0.8059274489 (Torda et al. 2022 (p1)): ours - literature = -3.331e-16. Proven optimal: Sriamorn 2016, Thm 1.1 (Theorem 1.1 with k = 1: delta_T(T) = delta_L(T) = 2/3 for every triangle T (the upper bound is proved there with stair polygons, secs. 4-5; Fary 1950 gives a lattice of density 2/3). A single piece on a torus is a lattice packing of it, so delta_L gives L = sqrt((sqrt3/4)/(2/3)) = sqrt(3 sqrt3/8) directly; doi:10.1007/s00454-015-9748-0)."
   },
   {
    "problem": "torus/free/3/2",

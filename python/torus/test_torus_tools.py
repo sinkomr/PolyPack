@@ -91,11 +91,11 @@ class Literature(unittest.TestCase):
         self.assertEqual(e["expr"], "sqrt(3 sqrt(3) / 8)")
         self.assertIsNone(LIT.exact_form("free", 3, 2, math.sqrt(3 * math.sqrt(3) / 8)))
 
-    def test_fary_bound_for_one_triangle(self):
+    def test_lattice_bound_for_one_triangle(self):
         b = LIT.score_bound("free", 3, 1)
         self.assertEqual(b["kind"], "proven")
         self.assertAlmostEqual(b["value"], math.sqrt(3 * math.sqrt(3) / 8), places=14)
-        self.assertIn("Fary 1950", b["label"])
+        self.assertIn("Sriamorn 2016", b["label"])
 
 
 def proofs(fam, N, P):
@@ -112,6 +112,8 @@ class ProofEntries(unittest.TestCase):
         out = [("sq", 0, P) for P in (2, 3, 4, 6, 7, 8)]
         out += [("hex", 0, 2)] + [("hex", 0, n) for n in self.LOESCHIAN if n <= 49]
         out += [("sq", 4, P) for P in self.SUMSQ if P <= 49]
+        # one piece on a free torus is a lattice packing: the densest lattice packings of disks and triangles
+        out += [("free", 0, 1), ("free", 3, 1)]
         return out
 
     def test_every_proof_entry_is_complete(self):
@@ -128,7 +130,7 @@ class ProofEntries(unittest.TestCase):
     def test_the_proven_cases(self):
         cases = sorted(k for k in LIT.LIT if proofs(*k))
         self.assertEqual(cases, sorted(self.proven_cases()))
-        self.assertEqual(len(cases), 50)
+        self.assertEqual(len(cases), 52)
 
     def test_values_of_the_proofs(self):
         r2, r34 = math.sqrt(2) / 4, (math.sqrt(6) - math.sqrt(2)) / 4
@@ -143,15 +145,25 @@ class ProofEntries(unittest.TestCase):
         for P in self.SUMSQ:
             if P <= 49:
                 self.assertAlmostEqual(proofs("sq", 4, P)[0]["value"], math.sqrt(P), places=13)
+        # one disk: area pi at density pi/sqrt12; one triangle: area sqrt3/4 at density 2/3
+        self.assertAlmostEqual(proofs("free", 0, 1)[0]["value"], math.sqrt(2 * math.sqrt(3)), places=13)
+        self.assertAlmostEqual(proofs("free", 3, 1)[0]["value"], math.sqrt(3 * math.sqrt(3) / 8), places=13)
+        self.assertEqual(proofs("free", 0, 1)[0]["doi"], "10.4171/EM/163")
+        self.assertEqual(proofs("free", 3, 1)[0]["doi"], "10.1007/s00454-015-9748-0")
 
     def test_cases_left_best_known(self):
-        # papers not read (Dickinson et al. 2011a/b), lattice theorems (Lagrange, Fary), plane
-        # theorems (Fejes Toth, Thue), a preprint (Hales-Kusner) and a conjecture give no proof
-        for k in (("sq", 0, 1), ("sq", 0, 5), ("hex", 0, 5), ("hex", 0, 6), ("free", 0, 1), ("free", 3, 1),
+        # papers not read (Dickinson et al. 2011a/b), plane theorems (Fejes Toth, Thue), a preprint
+        # (Hales-Kusner) and a conjecture give no proof
+        for k in (("sq", 0, 1), ("sq", 0, 5), ("hex", 0, 5), ("hex", 0, 6),
                   ("free", 8, 1), ("free", 5, 2), ("sq", 0, 9), ("hex", 0, 8), ("sq", 4, 3)):
             self.assertEqual(proofs(*k), [], k)
-        self.assertIn("Fary 1950", LIT.literature("free", 3, 1)[0]["short"])
-        self.assertEqual(LIT.literature("free", 3, 1)[0]["doi"], "10.24033/bsmf.1413")
+        # Fary proves a lattice packing of density 2/3 exists, not that a triangle has none denser;
+        # Lagrange (not read) and Thue (the plane) are cited beside the proofs
+        fary = [e for e in LIT.literature("free", 3, 1) if e["short"].startswith("Fary 1950")][0]
+        self.assertEqual(fary["doi"], "10.24033/bsmf.1413")
+        self.assertNotIn("proof", fary)
+        self.assertEqual([e["short"] for e in LIT.literature("free", 0, 1) if not e.get("proof")],
+                         ["Lagrange 1773 (not read)", "Thue 1910"])
         self.assertEqual(LIT.literature("free", 5, 2)[0]["status"], "proven_unrefereed")
 
     def test_citations(self):
