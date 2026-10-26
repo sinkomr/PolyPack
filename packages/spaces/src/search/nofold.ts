@@ -8,16 +8,29 @@
  *
  * A face's frame is PolyPack's container frame: the regular M-gon of side s centred at the origin
  * with a horizontal bottom edge (container_phi = 0).
+ *
+ * Only the Platonic solids (model.ts nofoldOnPolygonEngine): their faces are all one regular M-gon.
+ * The other solids' nofold problems run the surface search in its nofold mode (run.ts); a prism's or
+ * an antiprism's nofold value is still a 2D in 2D value, of the best split of the pieces between its
+ * two kinds of face (docs/spaces/SURFACE.md), and a Catalan face is an irregular polygon.
  */
 import { type PackingConfig, autoOrient, enclose, evaluate, pieceArea } from "@polypack/geometry";
 import type { SpaceConfig } from "../types";
 import { SOLID_FACES, type SearchProblem } from "./model";
+import type { PlatonicName } from "@polypack/surface";
 
 export type NofoldProblem = SearchProblem & { space: "surface"; mode: "nofold" };
 
+/** The Platonic solid of a nofold problem, which the polygon engine needs. */
+function facesOf(p: NofoldProblem): { F: number; M: number } {
+  const faces = SOLID_FACES[p.solid as PlatonicName];
+  if (!faces) throw new Error(`${p.id}: the planar search of one face is for the Platonic solids`);
+  return faces;
+}
+
 /** Pieces per face of the planar problem: the start's fullest face, and at least ceil(P/F). */
 export function piecesPerFace(p: NofoldProblem, start?: SpaceConfig): number {
-  const { F } = SOLID_FACES[p.solid];
+  const { F } = facesOf(p);
   let k = Math.ceil(p.P / F);
   if (start) {
     const counts = new Map<number, number>();
@@ -36,7 +49,7 @@ export function faceProblem(
   known?: { config: PackingConfig; score: number };
   areaBound: number;
 } {
-  const { M } = SOLID_FACES[p.solid];
+  const { M } = facesOf(p);
   const k = piecesPerFace(p, start);
   const problem = { N: p.N, M, P: k };
   // container area M s^2 / (4 tan(pi/M)) holds k pieces at most
@@ -62,7 +75,7 @@ export function faceProblem(
  * hold fewer), in each face's frame. Null when there are too few faces for P pieces.
  */
 export function surfaceFromFace(p: NofoldProblem, face: PackingConfig): SpaceConfig | null {
-  const { F, M } = SOLID_FACES[p.solid];
+  const { F, M } = facesOf(p);
   const k = face.P;
   if (k * F < p.P || face.M !== M || face.N !== p.N) return null;
   // the smallest container, as the server scores planar packings, then moved to the face frame

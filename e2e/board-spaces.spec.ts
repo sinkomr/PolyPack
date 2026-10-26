@@ -112,7 +112,7 @@ test("the Dimension menu lists every dimension, the ones to come disabled, and K
 
   // a dimension opens its first kind, at the problem the board starts that kind with
   await page.selectOption("#dimension-select", "2-on-3");
-  await expect(kind.locator("option")).toHaveText(["Platonic surfaces", "Sphere", "Torus"]);
+  await expect(kind.locator("option")).toHaveText(["Polyhedral surfaces", "Sphere", "Torus"]);
   await menusShow(page, "surface");
   await shown(page, DEFAULT_PROBLEM.surface);
   // the kinds write the same addresses as the board always did

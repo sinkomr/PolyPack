@@ -1,11 +1,18 @@
 /**
  * The board's search thread for the spaces: runs one round (a SpaceJob) and answers with its
  * result. Fold surfaces, curved, sphere, torus and polyhedra problems run the shared job of the volunteer
- * client (runSpaceJob, packages/spaces/src/search/run.ts); nofold surface problems run the polygon
- * solver on one face (nofold-round.ts). The page ends a round by ending this worker (search.ts),
+ * client (runSpaceJob, packages/spaces/src/search/run.ts), and so do the nofold problems of the
+ * Catalan solids, prisms and antiprisms (the surface search in its nofold mode); nofold problems of the
+ * Platonic solids run the polygon solver on one face (nofold-round.ts). The page ends a round by ending this worker (search.ts),
  * so the stop and pause flags passed here never change.
  */
-import { type SpaceJob, type SpaceJobResult, parseSearchProblem, runSpaceJob } from "@polypack/spaces/search";
+import {
+  type SpaceJob,
+  type SpaceJobResult,
+  nofoldOnPolygonEngine,
+  parseSearchProblem,
+  runSpaceJob,
+} from "@polypack/spaces/search";
 import { runNofoldRound } from "./nofold-round";
 
 // Structural worker typing avoids importing DOM worker declarations into the window build.
@@ -20,7 +27,7 @@ worker.addEventListener("message", async (event) => {
   let result: SpaceJobResult;
   try {
     result =
-      p?.space === "surface" && p.mode === "nofold"
+      p && nofoldOnPolygonEngine(p)
         ? await runNofoldRound(job)
         : runSpaceJob(job, { aborted: false, paused: false });
   } catch (error) {

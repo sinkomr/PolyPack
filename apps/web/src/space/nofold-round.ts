@@ -1,5 +1,5 @@
 /**
- * One round of a nofold surface problem: every piece stays in one face, so the problem is the
+ * One round of a nofold surface problem on a Platonic solid: every piece stays in one face, so the problem is the
  * planar problem of its fullest face (packages/spaces/src/search/nofold.ts). The round runs the
  * polygon solver's basin hopping on that face, from the face of the start, with the round's seed
  * and budget, and copies the strict result onto every face. Like runSpaceJob, it checks the start
@@ -13,6 +13,7 @@ import {
   type SpaceJobResult,
   checkSpaceConfig,
   faceProblem,
+  nofoldOnPolygonEngine,
   parseSearchProblem,
   readSpaceConfig,
   surfaceFromFace,
@@ -31,7 +32,7 @@ export async function runNofoldRound(job: SpaceJob): Promise<SpaceJobResult> {
     termination: "error",
     reasons: [reason],
   });
-  if (!p || p.space !== "surface" || p.mode !== "nofold") return fail("not a nofold surface problem");
+  if (!p || !nofoldOnPolygonEngine(p)) return fail("not a nofold surface problem of a Platonic solid");
   const nofold = p as NofoldProblem;
   const start = job.start === undefined ? undefined : (readSpaceConfig(p, job.start) ?? undefined);
   if (job.start !== undefined && !start) return fail("the start is not a configuration of this problem");

@@ -28,7 +28,7 @@
  * answers and the same clock give the same jobs.
  */
 import type { SpaceConfig, SpaceName } from "../types";
-import { SPACE_METHOD } from "./model";
+import { methodOf } from "./model";
 import type { SpaceJob, SpaceJobResult } from "./run";
 import { mixSeed, seededStream, toUint32 } from "./seed";
 
@@ -173,7 +173,7 @@ export async function searchSpaceProblem(
     const job: SpaceJob = {
       space: input.space,
       id: input.id,
-      method: SPACE_METHOD[input.space],
+      method: methodOf(input.space, input.id),
       seed: mixSeed(seed, jobs),
       budget: evals === undefined ? { time_s: seconds } : { time_s: seconds, evals },
       kind,

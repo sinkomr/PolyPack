@@ -11,7 +11,7 @@
  */
 import { type PieceName, type PolytopeName, getPolytope, parseBoundaryId } from "@polypack/boundary";
 import { MAX_PIECES } from "@polypack/geometry";
-import { type SolidName, isSolidName } from "@polypack/surface";
+import { type PlatonicName, type SolidName, isSolidName } from "@polypack/surface";
 import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torusScore } from "@polypack/torus";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import type { SpaceConfig, SpaceName } from "../types";
@@ -43,6 +43,15 @@ export const SPACE_METHOD: Record<SpaceName, string> = {
   polyhedra: "polyhedra soft-to-rigid search",
 };
 
+/** The method of the surface search in its nofold mode (the nofold problems of the solids beyond the Platonic ones). */
+export const SURFACE_NOFOLD_METHOD = "surface nofold search";
+
+/** The method a job of this problem names: SPACE_METHOD of its space, or SURFACE_NOFOLD_METHOD. */
+export function methodOf(space: SpaceName, id: string): string {
+  const p = space === "surface" ? parseSearchProblem(id) : null;
+  return p && p.space === "surface" && p.mode === "nofold" && !nofoldOnPolygonEngine(p) ? SURFACE_NOFOLD_METHOD : SPACE_METHOD[space];
+}
+
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const positive = (v: unknown): v is number => finite(v) && v > 0;
@@ -64,7 +73,7 @@ const shape = (text: string) => {
  */
 export function parseSearchProblem(id: unknown): SearchProblem | null {
   if (typeof id !== "string" || id.length > 120) return null;
-  let m = /^surface\/([a-z]+)\/(fold|nofold)\/(\d{1,3})\/(\d{1,3})$/.exec(id);
+  let m = /^surface\/([a-z][a-z0-9_]{1,40})\/(fold|nofold)\/(\d{1,3})\/(\d{1,3})$/.exec(id);
   if (m) {
     const N = shape(m[3]);
     const P = count(m[4]);
@@ -120,7 +129,8 @@ function readXYT(
   for (const p of v) {
     if (!isObject(p) || !finite(p.x) || !finite(p.y) || !finite(p.theta)) return null;
     if (withFace) {
-      if (!Number.isInteger(p.face) || (p.face as number) < 0 || (p.face as number) > 100) return null;
+      // a face index: the largest solid (disdyakis triacontahedron) has 120 faces; the check decides the range
+      if (!Number.isInteger(p.face) || (p.face as number) < 0 || (p.face as number) > 1000) return null;
       out.push({ face: p.face as number, x: p.x, y: p.y, theta: p.theta });
     } else out.push({ x: p.x, y: p.y, theta: p.theta });
   }
@@ -291,11 +301,20 @@ export function buildSpaceKnown(
   return undefined;
 }
 
-/** Faces of each solid, for nofold configurations. */
-export const SOLID_FACES: Record<SolidName, { F: number; M: number }> = {
+/**
+ * Faces of each Platonic solid, for nofold configurations: there every face is the same regular
+ * M-gon, so a nofold problem is the planar problem of one face and runs on the polygon engine
+ * (nofold.ts). The other solids' nofold problems run the surface search in its nofold mode (run.ts).
+ */
+export const SOLID_FACES: Record<PlatonicName, { F: number; M: number }> = {
   tetrahedron: { F: 4, M: 3 },
   cube: { F: 6, M: 4 },
   octahedron: { F: 8, M: 3 },
   dodecahedron: { F: 12, M: 5 },
   icosahedron: { F: 20, M: 3 },
 };
+
+/** True for a nofold surface problem on a Platonic solid: a planar problem of one face, for the polygon engine. */
+export function nofoldOnPolygonEngine(p: SearchProblem): boolean {
+  return p.space === "surface" && p.mode === "nofold" && Object.hasOwn(SOLID_FACES, p.solid);
+}

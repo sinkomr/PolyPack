@@ -1,7 +1,8 @@
 /**
- * Drawing of a packing on the surface of a Platonic solid (surface/<solid>/<mode>/<N>/<P>): the
- * solid itself, which turns, or a net of it, flat. Ported from packages/surface/viz/app.ts and the
- * net search of packages/surface/scripts/build-viz.ts.
+ * Drawing of a packing on the surface of a convex solid (surface/<solid>/<mode>/<N>/<P>: a Platonic or
+ * Catalan solid, a prism or an antiprism): the solid itself, which turns, or a net of it, flat.
+ * Ported from packages/surface/viz/app.ts and the net search of packages/surface/scripts/build-viz.ts.
+ * Faces may differ in shape and number of sides; each is drawn from its own frame (faceVertex).
  *
  * A piece is laid out from its centre in its own face and continues across edges onto the next
  * faces (fold mode); pieceParts of packages/surface cuts it into the parts on each face, with the
@@ -17,7 +18,7 @@ import {
   apply,
   compose,
   faceTo3D,
-  frameVertex,
+  faceVertex,
   getSolid,
   glue,
   pieceParts,
@@ -33,29 +34,29 @@ function findNet(name: SolidName): number[][] {
     const T: (Rigid | null)[] = Array(S.F).fill(null);
     const parent: number[][] = Array.from({ length: S.F }, () => [-1, -1]);
     const polys: Float64Array[] = [];
-    const poly = (t: Rigid) => {
-      const out = new Float64Array(2 * S.M);
-      for (let k = 0; k < S.M; k++) {
-        const [x, y] = apply(t, ...frameVertex(S.M, 1, k));
+    const poly = (t: Rigid, f: number) => {
+      const out = new Float64Array(2 * S.sides[f]);
+      for (let k = 0; k < S.sides[f]; k++) {
+        const [x, y] = apply(t, ...faceVertex(S, 1, f, k));
         out[2 * k] = x;
         out[2 * k + 1] = y;
       }
       return out;
     };
     T[0] = IDENTITY;
-    polys[0] = poly(IDENTITY);
+    polys[0] = poly(IDENTITY, 0);
     const order = [0];
     let seed = attempt * 7919 + 17;
     const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
     for (let idx = 0; idx < order.length; idx++) {
       const f = order[idx];
-      const edges = [...Array(S.M).keys()];
+      const edges = [...Array(S.sides[f]).keys()];
       if (attempt) edges.sort(() => rnd() - 0.5);
       for (const k of edges) {
         const g = glue(S, 1, f, k);
         if (T[g.face]) continue;
         const t = compose(T[f]!, g.T);
-        const p = poly(t);
+        const p = poly(t, g.face);
         if (polys.some((q) => q && polygonSeparation(p, q).sep < -1e-9)) continue;
         T[g.face] = t;
         polys[g.face] = p;
@@ -116,9 +117,9 @@ export function surfaceRenderer(solid: SolidName, N: number, P: number, mode: "f
 
   function drawNet(ctx: CanvasRenderingContext2D, W: number, H: number) {
     const T = netTransforms(solid, s);
-    const faces = T.map((t) => {
+    const faces = T.map((t, f) => {
       const pts: [number, number][] = [];
-      for (let k = 0; k < S.M; k++) pts.push(apply(t, ...frameVertex(S.M, s, k)));
+      for (let k = 0; k < S.sides[f]; k++) pts.push(apply(t, ...faceVertex(S, s, f, k)));
       return pts;
     });
     let minx = Infinity;
@@ -194,7 +195,12 @@ export function surfaceRenderer(solid: SolidName, N: number, P: number, mode: "f
       const c: V3 = [0, 0, 0];
       for (const p of P3) for (let t = 0; t < 3; t++) c[t] += p[t] / ids.length;
       const n = rotate(c, a, b);
-      return { f, P3, depth: n[1], facing: n[1] < 0 };
+      // facing the camera (on -y): the outward normal, which on an irregular face need not point
+      // along the centroid, has a negative y component
+      const u = P3[1].map((x, t) => x - P3[0][t]);
+      const w = P3[2].map((x, t) => x - P3[1][t]);
+      const nrm = rotate([u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], a, b);
+      return { f, P3, depth: n[1], facing: nrm[1] < 0 };
     });
     faces.sort((u, v) => v.depth - u.depth);
     const faceColor = cssVar("--space-face");
@@ -297,7 +303,7 @@ export function surfaceRenderer(solid: SolidName, N: number, P: number, mode: "f
     },
     describe() {
       return drawn
-        ? `${piecesText(N, P)} on a ${solid} of edge ${s.toFixed(6)}, ${mode === "fold" ? "folding over edges" : "each in one face"}; ${view === "net" ? "drawn as a net" : "drawn as the solid"}.`
+        ? `${piecesText(N, P)} on a ${S.title} of ${S.family === "catalan" ? "scale" : "edge"} ${s.toFixed(6)}, ${mode === "fold" ? "folding over edges" : "each in one face"}; ${view === "net" ? "drawn as a net" : "drawn as the solid"}.`
         : "No packing to draw.";
     },
     destroy() {

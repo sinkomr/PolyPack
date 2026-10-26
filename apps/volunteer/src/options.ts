@@ -89,7 +89,7 @@ Usage: node polypack-volunteer.mjs [options]
 
 Optional, off by default: the other kinds of problem (see ${DEFAULT_BASE}/dimensions.html).
 The work list above is Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
-at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a Platonic solid,
+at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a polyhedron,
 on a whole sphere, on a flat torus); boundary (3D on 4D: unit balls and cubes on the boundary of
 a tesseract); and polyhedra (3D in 3D: solids in a solid). The API calls these kinds spaces.
 Without these options the client never asks for them.

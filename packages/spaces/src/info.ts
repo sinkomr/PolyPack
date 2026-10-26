@@ -25,8 +25,12 @@ export const SPACE_STRICT_TOL = 1e-11;
 export const SPACE_MAX_COORD = 1e4;
 /** Smallest norm of a sphere piece's quaternion: a tinier one's squared norm can underflow. */
 export const SPACE_MIN_QUATERNION_NORM = 1e-6;
-/** Most chains of faces one piece may cross in the fold check; real packings need at most about 35. */
-export const SURFACE_MAX_CHAINS = 200;
+/**
+ * Most chains of faces one piece may cross in the fold check. [CALC] Real packings on the Platonic
+ * solids need at most about 35; random single pieces at the one-piece and area scales need up to 126
+ * on the other solids (antiprisms with many sides, whose small triangles a piece crosses in numbers).
+ */
+export const SURFACE_MAX_CHAINS = 600;
 /** Most lattice translates checked per pair of torus pieces; a reduced basis needs at most about 60. */
 export const TORUS_MAX_TRANSLATES = 1000;
 /**
@@ -70,24 +74,24 @@ const IMPROVEMENT = `an entry is kept only when its score is below the problem's
 export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
   surface: {
     space: "surface",
-    title: "Platonic surfaces",
+    title: "Polyhedral surfaces",
     summary:
-      "Unit pieces packed on the surface of a regular tetrahedron, cube, octahedron, dodecahedron or icosahedron, as small as possible. In fold mode a piece may bend over edges onto the neighbouring faces; in nofold mode each piece stays inside one face.",
-    score: "the edge length s of the solid; smaller is better",
+      "Unit pieces packed on the surface of a convex solid, as small as possible: a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron), one of the 13 Catalan solids, a prism or an antiprism. In fold mode a piece may bend over edges onto the neighbouring faces; in nofold mode each piece stays inside one face.",
+    score: "the scale s of the solid (its edge length for the Platonic solids, prisms and antiprisms); smaller is better",
     problem_id: "surface/<solid>/<mode>/<N>/<P>",
     conventions: {
       units: "polygon pieces have side 1, disks (N = 0) radius 1; angles in radians",
       solid:
-        "solid is tetrahedron, cube, octahedron, dodecahedron or icosahedron, of edge s; face f is a regular M-gon of side s centred at the origin of its own frame with a horizontal bottom edge, frame vertex k at angle -pi/2 + pi/M + 2 pi k/M; data/surface/solids.json lists the faces and how their edges are glued",
+        "solid is a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron) of edge s, a Catalan solid (rhombic_dodecahedron, triakis_tetrahedron, deltoidal_icositetrahedron, pentagonal_icositetrahedron, tetrakis_hexahedron, triakis_octahedron, rhombic_triacontahedron, disdyakis_dodecahedron, deltoidal_hexecontahedron, pentagonal_hexecontahedron, pentakis_dodecahedron, triakis_icosahedron, disdyakis_triacontahedron) scaled by s from the polyhedra space's canonical one (the polar reciprocal of the unit-edge Archimedean solid about the midsphere), a prism (prism3, prism5 to prism12) or an antiprism (antiprism4 to antiprism12) of edge s. A face's frame has its origin at the foot of the perpendicular from the solid's centre and its last edge (frame vertex M - 1 to frame vertex 0) horizontal at the bottom; a regular face is the regular M-gon of side s centred at the origin, frame vertex k at angle -pi/2 + pi/M + 2 pi k/M. data/surface/solids.json lists the faces and how their edges are glued",
       pose: "{face, x, y, theta}: the piece centre (x, y) lies in the closed face `face`, in that face's frame; piece vertex k is at angle theta + pi/2 + 2 pi k/N about the centre",
       modes:
         "nofold: every piece lies in one closed face; fold: a rigid flat piece is laid out from its centre and continues across edges onto the next faces, no vertex of the solid may lie inside a piece and a piece may not overlap itself",
       configuration: "{s, pieces: [{face, x, y, theta}, ...]} with P pieces",
-      score: "s, the edge of the solid; smaller is better",
+      score: "s, the scale of the solid (the edge for unit-edge solids); smaller is better",
       validity: VALIDITY,
       scoring: SCORING,
       improvement: IMPROVEMENT,
-      work_limit: `the fold check gives up with an error when one piece crosses more than ${SURFACE_MAX_CHAINS} chains of faces (real packings need at most about 35); x, y and theta are each at most ${SPACE_MAX_COORD} in absolute value`,
+      work_limit: `the fold check gives up with an error when one piece crosses more than ${SURFACE_MAX_CHAINS} chains of faces (real packings need far fewer); x, y and theta are each at most ${SPACE_MAX_COORD} in absolute value`,
     },
     viewer: "/spaces/surface.html",
     docs: spaceDocsUrl("SURFACE.md"),

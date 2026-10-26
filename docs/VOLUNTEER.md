@@ -4,7 +4,7 @@
 
 It is a plain command-line program with no game in it. The Tighter idle game is unrelated.
 
-By default it searches Flat problems (2D in 2D): polygons in polygons. It can also search the other kinds of the site's dimensions (Curved, Platonic surfaces, Sphere, Torus, Polytope boundaries), but only when asked to: see [Optional: other dimensions](#optional-other-dimensions). By default it never asks the server about them.
+By default it searches Flat problems (2D in 2D): polygons in polygons. It can also search the other kinds of the site's dimensions (Curved, Polyhedral surfaces, Sphere, Torus, Polytope boundaries), but only when asked to: see [Optional: other dimensions](#optional-other-dimensions). By default it never asks the server about them.
 
 Labels: [EST] established, with its source; [CALC] measured or computed here; [SPEC] a judgement or expectation not yet measured.
 
@@ -110,7 +110,7 @@ It stops once it has made no progress for the longer of two spans. One is half t
 
 ## Optional: other dimensions
 
-The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. The default work list is Flat, in 2D in 2D: polygons in polygons. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic solid, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary` and `polyhedra`. `all` names all six. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
+The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. The default work list is Flat, in 2D in 2D: polygons in polygons. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic or Catalan solid, a prism or an antiprism, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary` and `polyhedra`. `all` names all six. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
 
 ```sh
 node polypack-volunteer.mjs --name "your name" --dimensions all

@@ -12,8 +12,12 @@
  * like any other result and dropped when it is not valid, and the job then keeps its start.
  *
  * Imported by path: the package's index does not export its search.
+ *
+ * Mode "nofold" (FoldOptions.mode) is the same search with every piece kept inside its own face
+ * (packages/surface/src/search/energy.ts): the nofold problems of the solids beyond the Platonic ones,
+ * whose faces are not all one regular polygon, so that no planar engine applies.
  */
-import { validateFold } from "@polypack/surface";
+import { validate } from "@polypack/surface";
 import type { Solid, SurfacePose } from "@polypack/surface";
 import { Packing, compress, compressPenalty } from "../../../surface/src/search/optimize";
 import { type Start, areaScale, mulberry32, randomPose } from "../../../surface/src/search/search";
@@ -63,6 +67,8 @@ export interface FoldOptions {
   stop: () => boolean;
   /** Ends the final stage. */
   finalStop: () => boolean;
+  /** "fold" (default) or "nofold" (every piece inside one face). */
+  mode?: "fold" | "nofold";
 }
 
 /**
@@ -75,6 +81,7 @@ export function surfaceFoldSearch(
   P: number,
   o: FoldOptions,
 ): { lam: number; poses: SurfacePose[]; compressions: number } | null {
+  const mode = o.mode ?? "fold";
   const rand = mulberry32(o.seed);
   const la = areaScale(solid, N, P);
   let best: { lam: number; poses: SurfacePose[] } | null = null;
@@ -92,21 +99,21 @@ export function surfaceFoldSearch(
     });
   for (const st of starts) {
     if (o.stop()) break;
-    const pk = new Packing(solid, N, st.lam, st.poses);
+    const pk = new Packing(solid, N, st.lam, st.poses, mode);
     const r = runCompress(pk, N, st.lam, o.stop);
     if (r) take(r.lam, r.poses);
   }
   for (let h = 0; h < o.hops && best; h++) {
     if (o.stop()) break;
     const b: { lam: number; poses: SurfacePose[] } = best;
-    const pk = new Packing(solid, N, b.lam * 0.97, perturb(solid, b.poses, rand, b.lam));
+    const pk = new Packing(solid, N, b.lam * 0.97, perturb(solid, b.poses, rand, b.lam), mode);
     const r = runCompress(pk, N, b.lam * 0.97, o.stop);
     if (r) take(r.lam, r.poses);
   }
   if (!best) return null;
   const fin: { lam: number; poses: SurfacePose[] } = best;
   // optimize.ts finalize, with the stop check: relax hard at a slightly smaller scale
-  const pk = new Packing(solid, N, fin.lam, fin.poses);
+  const pk = new Packing(solid, N, fin.lam, fin.poses, mode);
   let f0 = { lam: fin.lam, poses: fin.poses };
   let l = fin.lam * (1 - 1e-10);
   for (let k = 0; k < 12 && !o.finalStop(); k++) {
@@ -119,9 +126,9 @@ export function surfaceFoldSearch(
     }
     l *= 1 - 3e-10 * 3 ** k;
   }
-  const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120, shouldStop: o.finalStop });
+  const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120, shouldStop: o.finalStop, mode });
   const f = pol.lam >= f0.lam ? pol : f0;
   const poses = f.poses.map((p) => ({ face: p.face, x: p.x / f.lam, y: p.y / f.lam, theta: p.theta }));
-  const v = validateFold({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, { tol: 1e-10 });
+  const v = validate({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, mode, { tol: 1e-10 });
   return v.ok ? { lam: f.lam, poses: f.poses, compressions } : null;
 }

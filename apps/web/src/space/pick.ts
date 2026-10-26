@@ -34,7 +34,8 @@ const PICK_LABELS: Record<string, string> = {
 export interface PickField {
   key: string;
   label: string;
-  options: { value: string; text: string }[];
+  /** Each value, its text and, where the values come in groups (the surface solids), its group. */
+  options: { value: string; text: string; group?: string }[];
   value: string;
 }
 
@@ -93,7 +94,11 @@ export function pickProblem(
     fields.push({
       key: f.key,
       label: PICK_LABELS[f.key] ?? f.label,
-      options: values.map((v) => ({ value: v, text: f.key === "P" ? v : f.option(v) })),
+      options: values.map((v) => ({
+        value: v,
+        text: f.key === "P" ? v : f.option(v),
+        ...(f.group ? { group: f.group(v) } : {}),
+      })),
       value,
     });
     left = left.filter((p) => valueOf(p.id, f) === value);

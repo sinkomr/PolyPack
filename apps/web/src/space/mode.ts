@@ -13,6 +13,7 @@
  *    board's own Name and Note fields.
  * Pieces are not moved by hand in these spaces: the board shows and optimises.
  */
+import { addOptions } from "../option-groups";
 import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
@@ -542,7 +543,7 @@ class SpaceMode {
     const rows = fields.map((f) => {
       const id = `space-f-${f.key}`;
       const select = h("select", { id });
-      for (const o of f.options) select.add(new Option(o.text, o.value));
+      addOptions(select, f.options);
       select.value = f.value;
       select.addEventListener("change", () => {
         const wish: Record<string, string> = {};

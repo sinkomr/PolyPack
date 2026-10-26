@@ -6,6 +6,7 @@
  */
 import type { SpaceExhibit, SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
+import { addOptions } from "./option-groups";
 import { safeHref } from "./atlas-model";
 import { foldGain, gainText, plainNofoldLabel, readFoldExtra } from "./boundary-model";
 import { DIMENSIONS, type Dimension, type Family, familyOfSpace } from "./dimension-table";
@@ -222,7 +223,10 @@ function renderFilters(space: SpaceName, problems: ListedProblem[]): void {
     const select = el("select");
     select.id = id;
     select.add(new Option("All", ALL));
-    for (const v of fieldValues(problems, f)) select.add(new Option(f.option(v), v));
+    addOptions(
+      select,
+      fieldValues(problems, f).map((v) => ({ value: v, text: f.option(v), ...(f.group ? { group: f.group(v) } : {}) })),
+    );
     select.value = state!.filters[f.key];
     select.addEventListener("change", () => {
       void show({ space, filters: { ...state!.filters, [f.key]: select.value } });

@@ -11,6 +11,7 @@ export {
   type SpaceCheck,
   type SpaceRule,
   checkSpaceConfig,
+  nofoldOnPolygonEngine,
   parseSearchProblem as parseSpaceId,
   readSpaceConfig,
   statedScore,

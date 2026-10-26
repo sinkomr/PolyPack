@@ -1,18 +1,21 @@
-# 2D on 3D, Platonic surfaces: PolyPack on the surface of a Platonic solid
+# 2D on 3D, polyhedral surfaces: PolyPack on the surface of a convex polyhedron
 
-**Dimension.** On the site this is the kind **Platonic surfaces** under the dimension **2D on 3D**: flat
-pieces on a closed surface in 3D, with no container. The API calls it the space `surface`.
+**Dimension.** On the site this is the kind **Polyhedral surfaces** under the dimension **2D on 3D**
+(called Platonic surfaces until 2026-10-26): flat pieces on a closed surface in 3D, with no
+container. The API calls it the space `surface`.
 
-PolyPack's pieces (unit disks, or regular N-gons of side 1) packed on the surface of a regular
-tetrahedron, cube, octahedron, dodecahedron or icosahedron of edge s. The score is the smallest
-edge s. Two record tracks:
+PolyPack's pieces (unit disks, or regular N-gons of side 1, N = 3 to 100) packed on the surface of
+a convex solid scaled by s: a Platonic solid, one of the 13 Catalan solids, a prism (3 and 5 to 12
+sides) or an antiprism (4 to 12 sides). The score is the smallest s. Two tracks:
 
 - **nofold**: every piece lies in one closed face;
 - **fold**: rigid flat pieces may cross edges, folding onto the neighbouring faces.
 
 Every table entry carries a certificate checked by an independent rigorous certifier
 (`python/surface/cert.py`), so its validity is proven, not just tested. Tables:
-`data/surface/records.json`; results summary: [SURFACE_RESULTS.md](SURFACE_RESULTS.md).
+`data/surface/records.json`; results summary: [SURFACE_RESULTS.md](SURFACE_RESULTS.md). The tables
+cover the Platonic solids with N in {0, 3, 4, 5, 6, 8}; the other solids, and N = 7 and 9 to 100,
+have problems but no records yet.
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -64,13 +67,46 @@ lost by developing from the centre.
 
 A cone point may lie on a piece's boundary. [CALC] No angle condition is needed there: at a
 boundary point a convex piece occupies an angle of at most pi (pi on a smooth arc or a straight
-side, the interior angle at a polygon corner), and every cone angle above is at least pi, so the
-development never needs more angle than the vertex has. On the tetrahedron (cone angle exactly
+side, the interior angle at a polygon corner), and every cone angle of the space is at least pi
+(tables above), so the development never needs more angle than the vertex has. On the tetrahedron
+(cone angle exactly
 pi) a disk or a polygon side through a vertex fills the whole angle there; its two boundary
 rays then meet, which is touching, not overlap.
 
-**Score and ids.** The score is s, the edge length, for side-1 polygons or radius-1 disks.
+**Score and ids.** The score is s, the scale of the canonical solid (the edge length for the
+Platonic solids, prisms and antiprisms), for side-1 polygons or radius-1 disks.
 Problem id: `surface/<solid>/<mode>/<N>/<P>`, e.g. `surface/cube/fold/4/12`.
+
+**The other solids** (2026-10-26). The Catalan solids, prisms and antiprisms are the polyhedra
+space's canonical solids (`python/polyhedra/solids_exact.json`, [POLYHEDRA.md](POLYHEDRA.md)
+section 1), in its vertex order and scale: prisms and antiprisms have unit edges, so s is their
+edge; a Catalan solid is the polar reciprocal of the unit-edge Archimedean solid about the
+midsphere, and s scales it (its edges are not of length 1). Ids keep the scheme:
+`surface/rhombic_dodecahedron/fold/4/6`, `surface/prism5/nofold/0/9`, `surface/antiprism4/fold/3/3`.
+Their faces are convex polygons of up to two shapes, and the vertices of a Catalan solid have two
+or three cone angles [CALC]:
+
+| solids | faces | cone angle / pi |
+|---|---|---|
+| prism n (n = 3, 5 to 12) | 2 regular n-gons, n squares | 1 + (n - 2)/n at every vertex |
+| antiprism n (n = 4 to 12) | 2 regular n-gons, 2n triangles | 1 + (n - 2)/n at every vertex |
+| Catalan solids | 12 to 120 congruent faces: isosceles or scalene triangles, kites, rhombi, irregular pentagons | 2 or 3 values per solid, from 1.1186 (triakis tetrahedron, 6-valent vertices) to 1.9840 |
+
+Every cone angle of the 36 solids lies in [pi, 2 pi) [CALC: `packages/surface/test/general.test.ts`,
+`python/surface/test_general.py`], so the boundary rule below holds on all of them; the certifier
+refuses a solid with a sharper vertex. A Catalan face is tangential: every edge of a Catalan solid
+touches the midsphere, which meets a face plane in a circle tangent to the face's edges, centred at
+the foot of the perpendicular from the centre [EST, standard; checked to 1e-30 in the tests].
+
+**Frames of any face.** The origin is the foot of the perpendicular from the solid's centre to the
+face plane, and the last edge (frame vertex M - 1 to frame vertex 0) runs along +x at the bottom.
+On a regular face (Platonic solids, prisms, antiprisms: the vertices lie on a sphere about the
+centre, so the foot is the face centre) this is the regular frame above; a Catalan face's origin is
+its incentre. Gluing maps rotate by (direction of f's edge k) + pi - (direction of g's edge l).
+
+**Pieces and sizes.** As in 2D in 2D: N = 0 or 3 to 100 and P up to 100, with and without folding, on
+every solid. Nothing in the geometry depends on N (a regular 100-gon of side 1 has circumradius 15.9,
+so its solids are large).
 
 **Changes against the brief, flagged.**
 1. The brief allowed a cone point on a piece's boundary with no further condition; this is kept,
@@ -94,6 +130,33 @@ exact for true optima. With best-known 2D values the best upper bound is the env
 min over k >= ceil(P/F) of s2_best(N, M, k); this table uses k up to 8. The envelope picked a
 larger k only at ties (2 and 3 hexagons in a triangle both need side 5; 3 and 4 octagons in a
 square both need 2 + 2 sqrt 2), where the larger packing's coordinates scored a few 1e-13 lower.
+
+**2.1b Prisms and antiprisms: nofold is a 2D in 2D value** [CALC]. Their faces are regular polygons
+of two kinds, both of side s: F1 faces that are M1-gons and F2 that are M2-gons (a prism with n sides:
+2 n-gons and n squares; an antiprism: 2 n-gons and 2n triangles). Write s2(N, M, 0) = 0. Then
+
+  s_nofold(H, N, P) = min over k1, k2 >= 0 with F1 k1 + F2 k2 >= P of max(s2(N, M1, k1), s2(N, M2, k2)).
+
+Proof. Upper bound: take a split (k1, k2) and s = max(s2(N, M1, k1), s2(N, M2, k2)). Each face of
+kind i is a regular Mi-gon of side s >= s2(N, Mi, ki); it contains the regular Mi-gon of side
+s2(N, Mi, ki) with the same centre and orientation (a homothety about the centre with ratio at most
+1 maps a convex polygon about that centre into itself), so it holds an optimal ki-piece packing.
+Keep P of the F1 k1 + F2 k2 >= P pieces. Lower bound: in a nofold packing of P pieces let ki be the
+largest number of pieces on one face of kind i. Then F1 k1 + F2 k2 >= P, and a face of kind i with
+ki > 0 pieces holds a 2D packing in its regular Mi-gon of side s, so s >= s2(N, Mi, ki) for both
+kinds; s is at least the maximum for this split, hence at least the minimum over splits. For the
+true 2D optima (non-decreasing in k) the formula is exact; with best-known 2D values it is an upper
+bound, best taken over the envelope min over k' >= k of s2_best(N, M, k') as in 2.1. The board
+links these problems to their 2D in 2D problems instead of searching them; PolyPack's 2D records
+(`data/records.json`) do not yet cover containers with 9 to 12 sides.
+
+**2.1c Catalan solids: nofold problems are new 2D problems** [CALC]. All faces of a Catalan solid
+are congruent (by rotations or reflections, which map regular pieces to regular pieces), so the
+same argument as 2.1 gives s_nofold(H, N, P) = t(N, ceil(P/F)), where t(N, k)
+is the smallest scale of the solid's face (an irregular triangle, kite, rhombus or pentagon) that
+holds k pieces. There is no 2D in 2D problem to reduce to: PolyPack's 2D problems have regular or
+circular containers. The board and the volunteer client run the surface search in its nofold mode on
+them (section 5).
 
 **2.2 fold <= nofold** [CALC]: a nofold packing is a fold packing (each piece's development is
 the piece itself inside its face). Also s_fold(P) <= s_fold(P+1): remove a piece. A fold record
@@ -153,9 +216,12 @@ follow it:
 - the wedge W(C) has empty interior (a wedge of width 0 is a single ray through a vertex);
 - *turn rule*: a straight line not through a vertex V sees V under exactly pi, so it can cross
   consecutive edges around V only while the faces passed between them have face angles at V
-  summing to less than pi (at most 2 triangles, 1 square or 1 pentagon).
+  summing to less than pi (on the Platonic solids at most 2 triangles, 1 square or 1 pentagon; on
+  the others the faces' own angles at V are summed).
 Termination: between two turns around different vertices a ray travels at least c_M s (for
-example sqrt(3)/2 s for triangles), so a ray of length L crosses O(L/s) edges.
+example sqrt(3)/2 s for triangles), so a ray of length L crosses O(L/s) edges; on the other solids
+the constant is set by the smallest face angle and the shortest distance from a corner of a face to
+an edge not at it. Both implementations also have a hard depth cap that fails loudly.
 
 **2.5 The shrink certificate** [CALC]. Scaling the solid by 1/lam scales its intrinsic metric, so
 "pieces scaled by lam about their centres at edge s" is similar to "unit pieces at edge s/lam with
@@ -179,6 +245,10 @@ bound; score_cert is the certified bound.
   s >= 2 sin(pi/M) r. For one disk this is attained at a face centre (the validator and
   certifier accept s = 2 sin(pi/M)(1 + 1e-12)), so s_fold(H, 0, 1) = 2 sin(pi/M): sqrt(3) for the
   deltahedra, sqrt(2) for the cube, 2 sin 36 deg for the dodecahedron.
+- On any solid of the space the one-piece argument gives s >= r / max_f rho_f, with rho_f the largest
+  distance from a point of face f to that face's nearest corner at scale 1 (attained at a vertex of
+  the corners' Voronoi diagram in the face or where one of its edges meets the boundary;
+  `faceCornerRadius` in `solids.ts`), and the area bound is P a(N) <= s^2 area(S at scale 1).
 - The stored bound of each entry is the larger of these two. Nothing is called optimal: where a
   value meets its bound this is stated as a [CALC] fact; the status stays `best_known` as
   PolyPack's policy requires.
@@ -286,16 +356,67 @@ P = 1..max(4F, 24).
 - `packages/surface` (@polypack/surface, TypeScript): solids and frames (`solids.ts`, `rigid.ts`),
   chain enumeration (`chains.ts`), parts (`parts.ts`), float validator (`validate.ts`, PolyPack's
   touching tolerance 1e-9), fold search (`search/`), scripts to build nofold and exact
-  configurations and to drive the search, and the viewers in `viz/`. It imports
+  configurations, to drive the search, to build the test packings (`build-test-packings.ts`) and
+  the other solids' data (`gen-general.ts`), and the viewers in `viz/` (Platonic records). It imports
   `polygonSeparation` and `pieceVertices` from @polypack/geometry.
 - `python/surface` (certifier, standard library + mpmath only): `numfield.py` (exact arithmetic in
-  Q, Q(sqrt 3) and Q(sqrt(10 + 2 sqrt 5))), `geom.py` (independent construction of the solids by an
-  exact convex hull; exact frames and gluings), `cert.py` (certifier), `run_cert.py` (eps ladder,
-  certificate bundles), `test_cert.py`.
+  Q, Q(sqrt 3) and Q(sqrt(10 + 2 sqrt 5)), and in the field of any solid), `geom.py` (independent
+  construction of the Platonic solids by an exact convex hull; exact frames and gluings), `general.py`
+  (the other solids, below), `cert.py` (certifier), `run_cert.py` (eps ladder, certificate bundles),
+  `test_cert.py`, `test_general.py`.
+
+**The generalisation** (2026-10-26). `packages/surface` describes any convex polyhedral surface:
+per face its number of sides, frame vertices and corner angles, per vertex its degree and cone
+angle (`Solid.sides`, `unitFaces`, `corner`, `vertexCone`); development, parts, the validator and the
+search read them face by face. The Platonic solids keep their code paths (`Solid.uniform`), and
+their validation, parts and seeded searches are bit for bit those of before [CALC: all 2038 records
+validated three ways and their parts compared, 17052 results, and five seeded searches, all
+identical]. Their records keep their ids and bytes and re-certify unchanged (`cert.py` on
+`data/surface/records.json`: 2038 certified, 0 failed).
+
+**Certifying the other solids** (`general.py`) [CALC]. Built from `solids_exact.json`, not from the
+TypeScript: exact checks (field arithmetic, exact signs) that every face is planar, convex and
+counter-clockwise from outside, that every other vertex lies strictly inside every face plane, that
+the faces glue into a closed surface with Euler characteristic 2, and that prism and antiprism faces
+are regular and centred at the foot; interval checks that every cone angle is at least pi. Frames
+are exact field elements over square roots, enclosed at 320 bits and kept as 128-bit intervals, and
+so are the gluing motions and their compositions. Fields of degree up to 20 make exact chain
+topology too costly, so it is decided otherwise:
+- each wedge boundary is a ray through a developed vertex with a key naming that vertex; a vertex
+  shared by consecutive crossed edges is inherited, so two rays with one key are the same ray
+  exactly. Every other orientation is decided by intervals, and one that intervals cannot decide
+  (the centre exactly in line with two developed vertices, or on the line of an unfolded edge)
+  refuses the configuration as degenerate, never guesses;
+- prunings are made only when certain (an edge certainly beyond reach, the centre certainly beyond
+  the edge line, the turn rule certainly broken, exactly for regular faces); cone points and disk
+  images are skipped only when certainly outside the closed wedge, so doubt only adds checks;
+- fold mode first tries the nofold certificate: scaled pieces strictly inside their faces and
+  disjoint on each face are a fold packing (2.2);
+- parts, witnesses and the shrink are those of `cert.py`. For pieces with more than 8 sides an
+  empty part's witness comes from the separating axis of the piece and the face's region of its
+  chain instead of all triples of constraints (both paths; N <= 8 is unchanged): a 100-gon packing
+  certifies in about a second.
+Tests (`test_general.py`): the exact checks of all 31 solids and their combinatorics against
+`data/surface/solids.json`, tangential Catalan faces, regular prism and antiprism frames, holonomy
+equal to the cone angle at every vertex, 67 test packings (below), 160 random configurations on
+which the certifier and the TypeScript validator agree (`fixtures/crosscheck_general.json`), and
+adversarial cases: a piece pushed 2e-9 across an edge without folding, disks and polygons (up to
+100-gons) overlapping by 1e-9 across a fold, a piece 1e-9 over a vertex of every kind (the sharpest
+included), pieces larger than the whole surface, a solid with a vertex sharper than pi, a clockwise
+or open solid, degenerate centres and malformed input.
+
+**Test packings, not records** (`python/surface/fixtures/general_packings.json`, built by
+`packages/surface/scripts/build-test-packings.ts` with short seeded searches). Disks, triangles and
+hexagons on a deltoidal icositetrahedron (kites), a rhombic dodecahedron, a pentagonal prism and a
+square antiprism, with folding (P = 3, every one crossing edges) and without (P = F + 2, faces
+holding several pieces); folding packings on the triakis tetrahedron (its 6-valent vertices are the
+sharpest), the pentagonal icositetrahedron (chiral) and the 9-gon antiprism; and N = 3, 7, 12, 20
+and 100 on a cube, a rhombic dodecahedron, a heptagonal prism and a pentagonal antiprism, with and
+without folding. All 67 certify at eps = 1e-12, and each fails 1e-7 smaller.
 
 **What the certifier decides, and how** [CALC].
 - Inputs are taken as exact rationals (every float is a dyadic rational).
-- Chain topology is decided exactly: unfolded vertices and the centre lie in Q (cube), Q(sqrt 3)
+- On the Platonic solids chain topology is decided exactly (the other solids: `general.py`, above): unfolded vertices and the centre lie in Q (cube), Q(sqrt 3)
   (deltahedra) or Q(sqrt(10 + 2 sqrt 5)) (dodecahedron); the sign of an element is exact (zero
   test on coefficients, then interval evaluation at increasing precision). Exact degeneracies
   (rays exactly through vertices, frequent in symmetric constructions) are therefore handled
@@ -341,7 +462,12 @@ reads them, so the check is to re-run the certifier (about 6 minutes for every r
 
 ## 5. Search (fold track)
 
-Seeded and deterministic for given counts (`packages/surface/src/search`). Pieces are developed
+Seeded and deterministic for given counts (`packages/surface/src/search`). It runs on every solid
+of the space; random starts pick a face by area on the solids beyond the Platonic ones. In its
+nofold mode (`mode: "nofold"`, for the nofold problems of those solids, which no planar engine
+covers) every piece is its own polygon in its anchor face, and the cone-point term is replaced by
+the squared protrusion beyond the face's edges (disks: the shortfall of the distance to each edge
+line), with the same compression, hops and contact-LP polish and the nofold validator at the end. Pieces are developed
 on the solid of edge 1 and scaled by lam (the score is 1/lam). Energy: squared penetration depths
 of overlapping parts on every face (polygons, separating-axis depth), squared cone-point depths
 (each vertex counted once, at its deepest appearance, so the energy is continuous), and for disks
@@ -392,6 +518,11 @@ Vertex order (unit edge; the scale does not affect the combinatorics):
 Gluing: edge k of face f meets edge l of face g with g's frame vertex l+1 on f's k and l on f's
 k+1; the unfolding map from g's frame into f's plane rotates by 2 pi (k - l)/M + pi.
 
+The other solids: vertices in the order of `python/polyhedra/solids_exact.json` (and
+`packages/polyhedra`), faces from its face list made canonical as above; `packages/surface` reads
+them from `src/general.data.ts` (generated by `scripts/gen-general.ts` from the polyhedra data). Frames
+as in section 1; gluing rotates by (direction of f's edge k) + pi - (direction of g's edge l).
+
 ## 7. Sources
 
 - PolyPack 2D values: `data/records.json` in this repository (generated 2026-10-20; each record
@@ -423,6 +554,10 @@ npx tsc -p packages/surface --noEmit
 npx vitest run packages/surface
 python3 python/surface/test_cert.py
 npx tsx packages/surface/scripts/gen-solids.ts
+npx tsx packages/surface/scripts/gen-general.ts
+npx tsx packages/surface/scripts/build-test-packings.ts python/surface/fixtures/general_packings.json
+npx tsx packages/surface/scripts/gen-crosscheck.ts --general python/surface/fixtures/crosscheck_general.json
+python3 python/surface/test_general.py
 npx tsx packages/surface/scripts/search.ts --out runs.jsonl --solids cube --N 4 --P 1-24 --starts 3 --hops 6 --seed 1 --warm warm.json --seconds 150
 npx tsx packages/surface/scripts/polish.ts polished.jsonl runs.jsonl
 packages/surface/scripts/build-tables.sh WORK_DIR API_DIR runs.jsonl polished.jsonl
@@ -441,6 +576,12 @@ or on a net; pieces keep their colour across folds; red dots are the cone points
 
 ## 9. Limitations and open questions
 
+- The Catalan solids, prisms and antiprisms, and N = 7 and 9 to 100 on every solid, have no records:
+  their problems are open, and only test packings exist. Prism and antiprism nofold values are 2D in
+  2D values (2.1b); Catalan nofold problems are new 2D problems with irregular containers (2.1c).
+- The certifier of the other solids refuses degenerate configurations (a centre exactly in line with
+  two developed vertices, or on the line of an unfolded edge) rather than decide them; exact
+  constructions with such symmetry need a tiny perturbation before certification.
 - All values are best found, not proved optimal, except where a value meets its lower bound
   ([CALC], listed in SURFACE_RESULTS.md); even then the status stays `best_known`.
 - The fold search is heuristic and its budget was small (about 3 hours on 2 cores in total, seeds and

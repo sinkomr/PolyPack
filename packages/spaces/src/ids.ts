@@ -20,8 +20,52 @@ import type { PieceName, PolytopeName } from "@polypack/boundary";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { SpaceName, isSpaceName } from "./types";
 
-/** The solids of the surface space, in the order the catalogue lists them. */
-export const SURFACE_SOLIDS = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"] as const;
+/**
+ * The solids of the surface space, in the order the catalogue lists them: the Platonic solids, the
+ * Catalan solids (by number of faces), the prisms and the antiprisms (by number of sides). The same
+ * list as ALL_SOLID_NAMES of @polypack/surface (a test checks it), written out here so that pages
+ * reading ids need no geometry.
+ */
+export const SURFACE_SOLIDS = [
+  "tetrahedron",
+  "cube",
+  "octahedron",
+  "dodecahedron",
+  "icosahedron",
+  "rhombic_dodecahedron",
+  "triakis_tetrahedron",
+  "deltoidal_icositetrahedron",
+  "pentagonal_icositetrahedron",
+  "tetrakis_hexahedron",
+  "triakis_octahedron",
+  "rhombic_triacontahedron",
+  "disdyakis_dodecahedron",
+  "deltoidal_hexecontahedron",
+  "pentagonal_hexecontahedron",
+  "pentakis_dodecahedron",
+  "triakis_icosahedron",
+  "disdyakis_triacontahedron",
+  "prism3",
+  "prism5",
+  "prism6",
+  "prism7",
+  "prism8",
+  "prism9",
+  "prism10",
+  "prism11",
+  "prism12",
+  "antiprism4",
+  "antiprism5",
+  "antiprism6",
+  "antiprism7",
+  "antiprism8",
+  "antiprism9",
+  "antiprism10",
+  "antiprism11",
+  "antiprism12",
+] as const;
+/** The Platonic solids of the surface space: their nofold problems are planar problems of one face. */
+export const SURFACE_PLATONIC = SURFACE_SOLIDS.slice(0, 5);
 export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;
@@ -82,7 +126,9 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
   switch (space) {
     case "surface": {
       const pattern =
-        "surface/<solid>/<mode>/<N>/<P>, solid one of " + SURFACE_SOLIDS.join(", ") + ", mode fold or nofold";
+        "surface/<solid>/<mode>/<N>/<P>, solid a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron), " +
+        "a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12) or an antiprism " +
+        "(antiprism4 to antiprism12), mode fold or nofold";
       if (parts.length !== 5) return bad(pattern);
       const [, solid, mode, n, p] = parts;
       const N = shapeCode(n);

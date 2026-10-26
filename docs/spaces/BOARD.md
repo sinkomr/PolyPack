@@ -8,7 +8,7 @@ The site files every kind of problem under a **dimension**: the pieces' dimensio
 |---|---|---|---|
 | 2D in 2D | Flat | none: the classic polygon board | yes |
 | 2D in 2D | Curved | `curved` | yes |
-| 2D on 3D | Platonic surfaces | `surface` | yes |
+| 2D on 3D | Polyhedral surfaces | `surface` | yes |
 | 2D on 3D | Sphere | `sphere` | yes |
 | 2D on 3D | Torus | `torus` | yes |
 | 3D in 3D | Polyhedra | `polyhedra` | yes |
@@ -22,8 +22,8 @@ The board's Problem section has two menus. **Dimension** lists every dimension; 
 
 | Kind | See | Optimise | Submit | Move pieces by hand |
 |---|---|---|---|---|
-| Platonic surfaces, fold | the solid, which turns, or its net | fold search | yes | no |
-| Platonic surfaces, nofold | the same | basin hopping on the fullest face, copied onto every face | yes | no |
+| Polyhedral surfaces, fold | the solid, which turns, or its net | fold search | yes | no |
+| Polyhedral surfaces, nofold | the same | Platonic solids: basin hopping on the fullest face, copied onto every face; the other solids: the surface search with every piece kept in its face | yes | no |
 | Curved | Poincaré or Klein disk (K < 0), globe or gnomonic chart (K > 0), plane (K near 0) | curved search | yes | no |
 | Sphere | a globe that turns, or both hemispheres | sphere basin hopping | yes | no |
 | Torus | the tiled plane, or one cell with its glued sides | torus basin hopping | yes | no |

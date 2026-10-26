@@ -22,7 +22,7 @@ import { type Machine, OptionError, type Options, helpText, parseOptions } from 
 import { type Recent, noteSearch, pickSpaceTarget, pickTarget, pruneRecent, recentFromHistory } from "./pick";
 import { type PoolOptions, WorkerPool } from "./pool";
 import { type SpaceCandidate, type SpaceSearchOutcome, searchSpaceProblem } from "./spaces/engine";
-import { type SpaceProblem, type SpaceRule, checkSpaceConfig, parseSpaceId } from "./spaces/model";
+import { type SpaceProblem, type SpaceRule, checkSpaceConfig, nofoldOnPolygonEngine, parseSpaceId } from "./spaces/model";
 import { type NofoldProblem, faceProblem, surfaceFromFace } from "./spaces/nofold";
 import { type SpaceProblemInfo, readSpaceProblem, readSpaceSubmitResponse, readSpaceTarget } from "./spaces/read";
 import {
@@ -1066,7 +1066,9 @@ class Volunteer {
       crashed: 0,
     };
     this.current = cur;
-    const nofold = p.space === "surface" && p.mode === "nofold";
+    // nofold problems of the Platonic solids are planar problems of one face; those of the other
+    // solids run the surface search in its nofold mode, like any other space job
+    const nofold = nofoldOnPolygonEngine(p);
     this.log(
       `Searching ${label} (priority ${t.priority.toPrecision(3)}): best ` +
         (before
@@ -1249,7 +1251,7 @@ class Volunteer {
   }
 
   /**
-   * A surface problem in the nofold mode: the polygon engine searches the planar packing of one
+   * A surface problem in the nofold mode on a Platonic solid: the polygon engine searches the planar packing of one
    * face (spaces/nofold.ts), and its best is copied onto the faces.
    */
   private async searchNofold(

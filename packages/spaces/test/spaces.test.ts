@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
-import { SOLID_NAMES } from "@polypack/surface";
+import { ALL_SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
 import { describe, expect, it } from "vitest";
 import {
@@ -13,6 +13,7 @@ import {
   SPACE_INFO,
   SPACE_MAX_P,
   SPACE_NAMES,
+  SURFACE_MAX_CHAINS,
   SURFACE_SOLIDS,
   SpaceName,
   SpaceProblemEntry,
@@ -128,7 +129,7 @@ describe("problem ids", () => {
   });
 
   it("use the solids and lattice families of their packages", () => {
-    expect([...SURFACE_SOLIDS]).toEqual([...SOLID_NAMES]);
+    expect([...SURFACE_SOLIDS]).toEqual([...ALL_SOLID_NAMES]);
     expect([...TORUS_FAMILIES]).toEqual([...TORUS_PACKAGE_FAMILIES]);
   });
 });
@@ -555,7 +556,7 @@ describe("work limits", () => {
       pieces: [{ face: 0, x: 0, y: 0, theta: 0 }],
     });
     expect(v.valid).toBe(false);
-    expect(v.reasons[0]).toMatch(/^the fold check gave up: more than 200 chains/);
+    expect(v.reasons[0]).toMatch(new RegExp(`^the fold check gave up: more than ${SURFACE_MAX_CHAINS} chains`));
     // with the bound it is refused at once
     expect(
       check("surface", "surface/cube/fold/4/1", { s: 0.01, pieces: [{ face: 0, x: 0, y: 0, theta: 0 }] }).reasons[0],

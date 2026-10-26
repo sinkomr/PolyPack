@@ -1,5 +1,5 @@
 import { PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
-import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
+import { type CertifiedStatus, SURFACE_SOLIDS, type SpaceName, type SpaceProblemSummary } from "@polypack/spaces";
 
 /**
  * The pure parts of the dimensions page's records table: the filters of each space's table (the
@@ -129,6 +129,8 @@ export interface FieldSpec {
   cell(value: string): string;
   /** Order of the values; numeric order where absent. */
   order?: readonly string[];
+  /** The group of a value in the filter (an option group), where the values come in groups. */
+  group?(value: string): string;
   /** The value the table starts with ("all" for every value). */
   start: string;
 }
@@ -142,13 +144,51 @@ const pieceField = (start: string, at: number): FieldSpec => ({
   start,
 });
 
-const SOLIDS = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"] as const;
+/** Polygon names of the prisms' and antiprisms' bases. */
+const BASES: Record<string, string> = {
+  "3": "triangular",
+  "4": "square",
+  "5": "pentagonal",
+  "6": "hexagonal",
+  "7": "heptagonal",
+  "8": "octagonal",
+  "9": "enneagonal",
+  "10": "decagonal",
+  "11": "hendecagonal",
+  "12": "dodecagonal",
+};
+
+/** A surface solid in words: "cube", "rhombic dodecahedron", "pentagonal prism", "square antiprism". */
+export function solidTitle(name: string): string {
+  const m = /^(anti)?prism(\d+)$/.exec(name);
+  if (m) return `${BASES[m[2]] ?? `${m[2]}-gonal`} ${m[1] ? "antiprism" : "prism"}`;
+  return name.replace(/_/g, " ");
+}
+
+/** The family of a surface solid, for grouping the solids in a filter. */
+export function solidGroup(name: string): string {
+  const i = (SURFACE_SOLIDS as readonly string[]).indexOf(name);
+  if (i >= 0 && i < 5) return "Platonic solids";
+  if (name.startsWith("prism")) return "Prisms";
+  if (name.startsWith("antiprism")) return "Antiprisms";
+  return "Catalan solids";
+}
+
 const TORI: Record<string, string> = { sq: "square", hex: "hexagonal", free: "free lattice" };
 
 export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
   // surface/<solid>/<mode>/<N>/<P>
   surface: [
-    { key: "solid", at: 1, label: "Solid", option: capital, cell: (v) => v, order: SOLIDS, start: "cube" },
+    {
+      key: "solid",
+      at: 1,
+      label: "Solid",
+      option: (v) => capital(solidTitle(v)),
+      cell: solidTitle,
+      order: SURFACE_SOLIDS,
+      group: solidGroup,
+      start: "cube",
+    },
     {
       key: "mode",
       at: 2,

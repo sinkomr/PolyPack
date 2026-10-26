@@ -17,9 +17,11 @@ import {
   type SpaceJob,
   type SpaceRule,
   SPACE_METHOD,
+  SURFACE_NOFOLD_METHOD,
   buildSpaceKnown,
   checkSpaceConfig,
   mixSeed,
+  nofoldOnPolygonEngine,
   parseSearchProblem,
   readSpaceConfig,
   statedScore,
@@ -166,16 +168,20 @@ export function shownText(source: "certified" | "site" | "result" | "preview", p
 
 // ---------- the optimizer's rounds ----------
 
-/** The kinds of search: one per space, and the planar search of nofold surface problems. */
-export type SearchKind = SpaceName | "nofold";
+/**
+ * The kinds of search: one per space, the planar search of nofold problems on the Platonic solids
+ * ("nofold"), and the surface search in its nofold mode for the other solids ("nofold-surface").
+ */
+export type SearchKind = SpaceName | "nofold" | "nofold-surface";
 
 export const searchKind = (p: SearchProblem): SearchKind =>
-  p.space === "surface" && p.mode === "nofold" ? "nofold" : p.space;
+  p.space === "surface" && p.mode === "nofold" ? (nofoldOnPolygonEngine(p) ? "nofold" : "nofold-surface") : p.space;
 
 /** The method a submission names. */
 export const METHOD_NAME: Record<SearchKind, string> = {
   ...SPACE_METHOD,
   nofold: "surface nofold: basin hopping on one face",
+  "nofold-surface": SURFACE_NOFOLD_METHOD,
 };
 
 /** The method in the panel's words. */
@@ -184,6 +190,8 @@ export const METHOD_TEXT: Record<SearchKind, string> = {
     "Fold search: penalty compression on the solid, basin hopping and a contact polish, then the space's own validator.",
   nofold:
     "Every piece stays in one face, so the fullest face is a planar problem: basin hopping packs it, and the result is copied onto every face.",
+  "nofold-surface":
+    "Every piece stays in one face: penalty compression of the pieces in their faces, basin hopping and a contact polish, then the space's own validator.",
   curved: "Penalty compression at curvature K, an LP polish and basin hopping, in rounds from the best so far.",
   sphere: "Penalty relaxation, the smallest valid radius by bisection with the space's validator, and basin hopping.",
   torus: "Penalty relaxation, the smallest valid lattice by bisection with the space's validator, and basin hopping.",
@@ -197,6 +205,7 @@ export const METHOD_TEXT: Record<SearchKind, string> = {
 export const EVAL_UNIT: Record<SearchKind, string> = {
   surface: "one compression (a start or a hop)",
   nofold: "one evaluation of the polygon solver",
+  "nofold-surface": "one compression (a start or a hop)",
   curved: "one start or one hop",
   sphere: "one objective and gradient evaluation",
   torus: "one objective and gradient evaluation",
@@ -233,6 +242,7 @@ export const BOUNDARY_BUDGET = 3000000;
 export const ROUND_EVALS: Record<SearchKind, number> = {
   surface: 4,
   nofold: 5000,
+  "nofold-surface": 4,
   curved: 9,
   sphere: 10000,
   torus: 10000,
@@ -253,6 +263,7 @@ export const LARGE_FOLD = 40;
 export const FRESH_EVALS: Record<SearchKind, number> = {
   surface: 4,
   nofold: 5000,
+  "nofold-surface": 4,
   curved: 9,
   sphere: 10000,
   torus: 10000,
@@ -269,6 +280,7 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
 export const GROW_LIMIT: Record<SearchKind, number> = {
   surface: 2,
   nofold: 4,
+  "nofold-surface": 2,
   curved: 4,
   sphere: 4,
   torus: 4,
@@ -339,7 +351,7 @@ export function polyhedraRoundSeconds(P: number, code: string, evals: number): n
 /** The evaluations of a round of this problem that starts from a packing. */
 export function roundSize(p: SearchProblem): number {
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
-  return p.space === "surface" && p.mode === "fold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
+  return p.space === "surface" && searchKind(p) !== "nofold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
 }
 
 /** The evaluations of a round of this problem with no start (a new arrangement). */
@@ -354,7 +366,8 @@ export function freshSize(p: SearchProblem): number {
  */
 export function defaultBudget(p: SearchProblem): { time_s: number; evals: number } {
   const kind = searchKind(p);
-  if (kind === "surface") return { time_s: 60, evals: Math.max(8, Math.min(40, Math.round(480 / p.P))) };
+  if (kind === "surface" || kind === "nofold-surface")
+    return { time_s: 60, evals: Math.max(8, Math.min(40, Math.round(480 / p.P))) };
   if (p.space === "polyhedra") {
     // ten rounds, and time for five on the slow machine of polyhedraRound (at least a minute, at
     // most the panel's 300 s): on a usual machine the ten end first
@@ -368,7 +381,7 @@ export function defaultBudget(p: SearchProblem): { time_s: number; evals: number
     sphere: { time_s: 15, evals: 20000 },
     torus: { time_s: 15, evals: 20000 },
     boundary: { time_s: 30, evals: BOUNDARY_BUDGET },
-  }[kind as Exclude<SearchKind, "surface" | "polyhedra">];
+  }[kind as Exclude<SearchKind, "surface" | "nofold-surface" | "polyhedra">];
 }
 
 /**
@@ -379,6 +392,7 @@ export function defaultBudget(p: SearchProblem): { time_s: number; evals: number
 export const EVALS_MAX: Record<SearchKind, number> = {
   surface: 1_000_000,
   nofold: 1_000_000,
+  "nofold-surface": 1_000_000,
   curved: 1_000_000,
   sphere: 1_000_000,
   torus: 1_000_000,
@@ -423,7 +437,8 @@ export function roundJob(
   startPolished = false,
 ): { job: SpaceJob; evals: number } | null {
   const kind = searchKind(p);
-  const fold = kind === "surface";
+  // the surface search compresses its two random starts first when it has no start
+  const fold = kind === "surface" || kind === "nofold-surface";
   const least = fold && !start ? 2 : 1;
   const left = run.budget.evals - used.evals;
   if (left < least) return null;

@@ -31,8 +31,11 @@
  *  - polyhedra: searchPolyhedra of packages/polyhedra (a start is legalized and polished, else a
  *    soft-to-rigid run packs one; then soft hops and jiggles, each polished by a separating-plane
  *    penalty method), budgeted by evaluations: simulator steps and polish evaluations.
- * Surface problems in the nofold mode are planar problems and run on the polygon solver instead
- * (nofold.ts has the conversion); they never reach this file.
+ * Surface problems in the nofold mode on the Platonic solids are planar problems and run on the
+ * polygon solver instead (nofold.ts has the conversion); they never reach this file. On the other
+ * solids (Catalan solids, prisms, antiprisms) the faces are not all one regular polygon, and their
+ * nofold problems run here: the surface search above in its nofold mode, every piece kept inside
+ * its own face.
  *
  * Every result is checked here by the server's rule (model.ts checkSpaceConfig, with the job's
  * bound and certified size); the start, when it passes, is a candidate too, so a job never returns
@@ -49,6 +52,7 @@ import {
   type SearchProblem,
   type SpaceRule,
   checkSpaceConfig,
+  nofoldOnPolygonEngine,
   parseSearchProblem,
   readSpaceConfig,
   torusConfigOf,
@@ -197,7 +201,7 @@ export function runSpaceJob(job: SpaceJob, control: SpaceControl, clock?: () => 
   const p = parseSearchProblem(job.id);
   if (!p || p.space !== job.space)
     return fail("error", `not a problem id of ${job.space}: ${String(job.id).slice(0, 80)}`);
-  if (p.space === "surface" && p.mode === "nofold") return fail("error", "nofold problems run on the polygon engine");
+  if (nofoldOnPolygonEngine(p)) return fail("error", "nofold problems of the Platonic solids run on the polygon engine");
   const start = job.start === undefined ? undefined : (readSpaceConfig(p, job.start) ?? undefined);
   if (job.start !== undefined && !start) return fail("error", "the start is not a configuration of this problem");
   // the best valid configuration: the start, then whatever the engine returns
@@ -325,6 +329,7 @@ function runEngine(
         warm,
         stop: () => gate.stopAt(gate.seconds * 0.8),
         finalStop: () => gate.stopAt(gate.seconds + SURFACE_FINAL_OVERRUN),
+        mode: p.mode,
       });
       if (!r) return { config: null, evaluations: 0, termination: "done" };
       const s = 1 / r.lam;
