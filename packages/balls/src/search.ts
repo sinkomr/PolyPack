@@ -76,7 +76,9 @@ export function searchBalls(problem: BallsProblem, P: number, o: BallsSearchOpti
   const t0 = clock();
   const log = o.log ?? (() => {});
   const clearance = o.clearance ?? BALLS_CLEARANCE;
-  const rng = mulberry32((o.seed * 2654435761) | 0);
+  // a 32-bit multiply, so that every uint32 seed (mixSeed's job seeds) gives its own generator state; a float product
+  // would round the low bits of large seeds away
+  const rng = mulberry32(Math.imul(o.seed | 0, 2654435761));
   const balls = problem.piece === "ball";
   let evaluations = 0;
   let stopped: BallsSearchResult["stopped"] = "done";

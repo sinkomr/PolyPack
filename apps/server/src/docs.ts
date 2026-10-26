@@ -359,7 +359,7 @@ The whole list fits in one answer at the largest <code>limit</code> (10321 targe
 The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 8514 problems share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
 A problem <a href="#spaces-no-record">without a research record</a> and without an entry yet is listed with <code>best_score: null</code>, <code>leader: "none"</code> and the largest room, g = ${SPACE_GAP_CAP}.
-A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain, in the order of the domain's own sample (small P first): never the whole domain.
+A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain with neither a record nor an entry, in the order of the domain's own sample (small P first): never the whole domain. As those get entries, the next problems of the sample take their place, so every problem of the domain comes up in turn.
 The ranking is kept until an entry changes.</p>
 <table>
 <tr><th scope="row"><code>spaces</code></th><td>Only these spaces: <code>all</code> (the default) or a comma-separated list of ${SPACE_NAMES.map((n) => `<code>${n}</code>`).join(", ")}.</td></tr>

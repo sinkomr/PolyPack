@@ -515,13 +515,22 @@ class SpaceMode {
     if (this.handle && this.handle.problem.space !== space) this.clearProblem();
     this.setAddress();
     let problems = this.records.get(space);
+    let fallback = "";
+    if (problems && !this.domains.has(space)) {
+      // the kinds' descriptions could not be read last time: ask again for the domain (the listing is kept)
+      const domain = await loadSpaceDomain(space);
+      if (token !== this.token) return;
+      if (domain !== "error") this.domains.set(space, domain);
+    }
     if (!problems) {
       this.busy("Loading the problems of this kind…");
       this.say("");
       $("space-fields").replaceChildren();
       const [listed, domain] = await Promise.all([listSpaceProblems(space), loadSpaceDomain(space)]);
       if (token !== this.token) return;
-      if (!listed || domain === "error") {
+      // without GET /api/spaces (domain "error"), a kind with records still opens from its listing, as before
+      // domains; one without records cannot, and says so (Try again reads both again)
+      if (!listed || (domain === "error" && !listed.length)) {
         this.clearProblem();
         this.setAddress();
         const text = "The problems of this kind could not be loaded. The server may be unreachable.";
@@ -531,7 +540,8 @@ class SpaceMode {
       }
       problems = listed;
       this.records.set(space, problems);
-      this.domains.set(space, domain);
+      if (domain !== "error") this.domains.set(space, domain);
+      else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
     const pick = this.pick(space, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
     this.renderPicker(space, pick.fields);
@@ -540,8 +550,12 @@ class SpaceMode {
       this.busy("This kind lists no problems.", () => void this.open(space, wanted));
       return;
     }
-    const missing =
-      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "";
+    const missing = [
+      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "",
+      fallback,
+    ]
+      .filter(Boolean)
+      .join(" ");
     await this.load(space, pick.id, token, missing);
   }
 

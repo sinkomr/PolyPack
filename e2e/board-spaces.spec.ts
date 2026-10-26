@@ -485,6 +485,23 @@ test("a torus entry in a skewed basis draws at once, and a degenerate lattice is
   await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /far smaller than a piece/);
 });
 
+test("without the kinds' descriptions a kind with records still opens, and one without records says so", async ({
+  page,
+}) => {
+  await page.route("**/api/spaces", (route) => route.abort());
+  await page.goto("/#space=torus/hex/5/8");
+  await shown(page, "torus/hex/5/8");
+  await expect(page.locator("#space-status")).toContainText("The kinds' descriptions could not be read");
+  // the balls kind has no records: it needs its domain, and Try again reads it once the server answers
+  await page.goto("about:blank");
+  await page.goto("/#space=balls/ballinball/13");
+  await expect(page.locator("#space-busy")).toContainText("The problems of this kind could not be loaded.");
+  await page.unroute("**/api/spaces");
+  await page.click("#space-retry");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem balls/ballinball/13");
+  await expect(page.locator("#space-empty")).toBeVisible();
+});
+
 test("a deep link whose problem cannot be read stays in the address", async ({ page }) => {
   await page.route("**/api/spaces/torus/records", (route) => route.abort());
   await page.goto("/#space=torus/hex/5/8");

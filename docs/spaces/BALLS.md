@@ -243,7 +243,7 @@ tetrahedra, 118 at 100 dodecahedra).
 
 - No records: every problem's best value is whatever the site's users and volunteers send. The elementary bounds
   are weak, so the targets list gives every balls problem the largest room until it has an entry; the problems of
-  P > 73 reach the work list only once someone sends an entry from the board.
+  P > 73 reach the work list once the problems before them in the sample have entries.
 - The Dimensions page's records table lists records only, so it shows none for this kind; its card and the board's
   picker show the domain.
 - No proof covers any case of balls in a ball, although the small cases look elementary; and none of Platonic
@@ -263,7 +263,8 @@ P from 2 to `SPACE_MAX_P.balls` = 100, the validator above at the touching toler
 `certified: null`, `certified_config: null`, its bound, and the site leader's configuration once there is one. An
 entry is kept when it is valid, also at the strict tolerance 1e-11, and beats the site leader by the tie tolerance
 (the first valid entry is kept). The targets list holds the balls problems with site entries and the first 500 of the
-domain's sample (small P first, P <= 73), with `best_score: null` and `leader: "none"` before a first entry.
+domain's sample that have none (small P first: P <= 73 before any entry), with `best_score: null` and
+`leader: "none"`; as those get entries, the next problems of the sample come in, so every problem comes up in turn.
 
 **Server memory** [CALC] (the server as the image runs it, `node --import tsx src/node.ts`, Apple Silicon, Node 26,
 2026-10-25, with a probe that forced a full collection 10 s after the start, measured with an interim records file
