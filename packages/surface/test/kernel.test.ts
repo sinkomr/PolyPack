@@ -404,8 +404,8 @@ describe("the surface kernel (fold)", () => {
       "pieces[1] must be an object {face, x, y, theta}",
     ]);
     // P above the catalogue's
-    expect(surfaceKernel({ solid: "cube", N: 3, P: 81 }).validate({ s: 9, pieces: [] }).reasons).toEqual([
-      "P = 81 is above the largest P of the surface catalogue (80)",
+    expect(surfaceKernel({ solid: "cube", N: 3, P: 101 }).validate({ s: 9, pieces: [] }).reasons).toEqual([
+      "P = 101 is above the largest P of the surface catalogue (100)",
     ]);
   });
 
