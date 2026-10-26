@@ -102,8 +102,15 @@ test("the records table loads the problems of each space", async ({ page, reques
   await page.goto("/dimensions.html");
   for (const space of SPACES) {
     const data = await getJson<SpaceRecordsResponse>(request, `/api/spaces/${space}/records`);
-    expect(data.problems.length).toBeGreaterThan(0);
     await page.locator(`#space-pick input[value="${space}"]`).check();
+    // the balls kind's problems are a domain without records yet: its table is empty and its note says so
+    if (space === "balls") {
+      expect(data.problems).toEqual([]);
+      await expect(page.locator("#space-note")).toHaveText(/^No records yet\. All 693 problems of this kind are open/);
+      await expect(rows(page)).toHaveCount(0);
+      continue;
+    }
+    expect(data.problems.length).toBeGreaterThan(0);
     // the table starts with the space's default filters
     const filters = settleFilters(space, data.problems);
     const expected = filterProblems(space, data.problems, filters).map((p) => p.id);

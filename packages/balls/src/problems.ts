@@ -66,7 +66,7 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
     {
       value: volume,
       kind: "volume",
-      label: `[EST] volume bound: the pieces' total volume ${P} x ${v.toPrecision(6)} is at most the container's`,
+      label: `[EST] the pieces' total volume ${P} x ${v.toPrecision(6)} is at most the container's`,
     },
   ];
   if (problem.piece === "ball") {
