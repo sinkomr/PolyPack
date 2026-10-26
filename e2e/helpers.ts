@@ -16,8 +16,9 @@ export const pieceCentre = (page: Page, i: number) =>
   }, i);
 
 /**
- * For the first wait on a view drawn by a lazily loaded chunk (three.js and its WebGL start-up):
- * on a loaded machine that takes longer than expect's 5 s default.
+ * For the first wait on what a lazily loaded chunk shows (a Dimension's mode with its problem
+ * fetched, three.js and its WebGL start-up): on a loaded machine or CI's 2-core runner that can
+ * take longer than expect's 5 s default.
  */
 export const LAZY_VIEW = { timeout: 30_000 };
 

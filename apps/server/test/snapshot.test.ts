@@ -3,18 +3,21 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
+import { type SpacesIndex, buildSpaceCatalogue } from "@polypack/spaces";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import {
+  SPACE_RECORD_FIELDS,
   type SnapshotSource,
   buildSnapshot,
   isComplete,
   readManifest,
   scheduleSnapshots,
   snapshotSource,
+  snapshotSpaces,
 } from "../src/snapshot";
 import { SqliteStore } from "../src/sqlite-store";
-import type { Store } from "../src/store";
+import type { SpaceStore, Store } from "../src/store";
 
 const freshDir = () => mkdtempSync(join(tmpdir(), "polypack-snapshot-"));
 const noPause = async () => {};
@@ -174,6 +177,204 @@ describe("the records snapshot", () => {
   });
 });
 
+// Two spaces' research records, read as the server reads them: sphere/0/2 is proven (closed).
+const root = join(__dirname, "../../..");
+const catalogue = (space: "sphere" | "boundary") =>
+  buildSpaceCatalogue(space, JSON.parse(readFileSync(join(root, "data", space, "records.json"), "utf8")));
+const index: SpacesIndex = { sphere: catalogue("sphere"), boundary: catalogue("boundary") };
+
+function addSpace(store: SqliteStore, problem: string, score: number, name = "Ada") {
+  return store
+    .spaceSubmit({
+      space: problem.split("/")[0],
+      problem,
+      score,
+      name,
+      agent_note: "a note",
+      software: "polypack-volunteer 1.0",
+      method: "boundary compression search",
+      seed: 3,
+      // awkward doubles: they must come back bit for bit
+      config: JSON.stringify({ s: score, pieces: [{ cell: 0, u: [0.1 + 0.2, -1 / 3, 1e-17] }] }),
+      created_at: "2026-10-25T00:00:00Z",
+    })
+    .then((r) => r.id);
+}
+
+describe("the spaces in the snapshot", () => {
+  it("hold every open space problem's leader with its configuration, one file per space, listed apart", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    const cube = await addSpace(store, "boundary/tesseract/cube/12", 1.24);
+    const ball = await addSpace(store, "boundary/tesseract/ball/9", 2.1);
+    await addSpace(store, "boundary/tesseract/ball/9", 2.2, "Bob"); // not the leader
+    const sphere = await addSpace(store, "sphere/4/12", 3.1);
+    await addSpace(store, "sphere/0/2", 1); // closed: left out
+    await addSpace(store, "boundary/tesseract/ball/99", 5); // not in the catalogue: left out
+
+    const spaces = snapshotSpaces(index, store);
+    expect(spaces.names).toEqual(["sphere", "boundary"]);
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 3,
+      kept: 0,
+      removed: 0,
+    });
+    const m = readManifest(dir)!;
+    // the pairs alone in `files` and in the totals
+    expect(m.files.map((f) => f.file)).toEqual(["4-4.json.gz"]);
+    expect([m.records, m.pieces]).toEqual([1, 2]);
+    expect(m.spaces!.map((f) => [f.space, f.file, f.records, f.pieces])).toEqual([
+      ["sphere", "space-sphere.json.gz", 1, 12],
+      ["boundary", "space-boundary.json.gz", 2, 21],
+    ]);
+    for (const f of m.spaces!) {
+      const bytes = readFileSync(join(dir, f.file));
+      expect(f.bytes).toBe(bytes.length);
+      expect(f.sha256).toBe(createHash("sha256").update(bytes).digest("hex"));
+    }
+
+    const boundary = readPair(dir, "space-boundary.json.gz");
+    expect(boundary).toMatchObject({ format: 1, space: "boundary" });
+    // in catalogue order: balls before cubes
+    expect(boundary.records.map((r: { id: number }) => r.id)).toEqual([ball, cube]);
+    const stored = (await store.spaceGet(cube))!;
+    expect(boundary.records[1]).toEqual({
+      problem: "boundary/tesseract/cube/12",
+      P: 12,
+      score: 1.24,
+      id: cube,
+      name: "Ada",
+      software: "polypack-volunteer 1.0",
+      method: "boundary compression search",
+      created_at: "2026-10-25T00:00:00Z",
+      config: JSON.parse(stored.config),
+    });
+    expect(boundary.records[1].config.pieces[0].u).toEqual([0.1 + 0.2, -1 / 3, 1e-17]);
+    expect(Object.keys(boundary.records[1])).toEqual([...SPACE_RECORD_FIELDS]);
+    expect(readPair(dir, "space-sphere.json.gz").records.map((r: { id: number }) => r.id)).toEqual([sphere]);
+  });
+
+  it("rebuild only the spaces whose leaders changed, and remove a space's file once it has no open leader", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    const spaces = snapshotSpaces(index, store);
+    const ball = await addSpace(store, "boundary/tesseract/ball/9", 2.1);
+    const sphere = await addSpace(store, "sphere/4/12", 3.1);
+    await buildSnapshot({ store, dir, closed, spaces, pause: noPause });
+    const before = readManifest(dir)!.spaces!;
+
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 0,
+      kept: 2,
+      removed: 0,
+    });
+    expect(readManifest(dir)!.spaces).toEqual(before);
+
+    // a new leader in one space
+    await addSpace(store, "boundary/tesseract/ball/9", 2.05);
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 1,
+      kept: 1,
+      removed: 0,
+    });
+    expect(readPair(dir, "space-boundary.json.gz").records[0].score).toBe(2.05);
+    expect(await store.spaceGet(ball)).toBeNull();
+
+    // an edited name changes the file too
+    await store.spaceEdit(sphere, { name: "Cy" });
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toMatchObject({ built: 1, kept: 1 });
+    expect(readPair(dir, "space-sphere.json.gz").records[0].name).toBe("Cy");
+
+    // a space whose last entry is removed loses its file
+    await store.spaceRemove(sphere);
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 0,
+      kept: 1,
+      removed: 1,
+    });
+    expect(existsSync(join(dir, "space-sphere.json.gz"))).toBe(false);
+    expect(readManifest(dir)!.spaces!.map((f) => f.file)).toEqual(["space-boundary.json.gz"]);
+
+    // a build without the spaces drops theirs, and an orphan space file goes too
+    writeFileSync(join(dir, "space-torus.json.gz"), "an orphan");
+    expect(await buildSnapshot({ store, dir, closed, pause: noPause })).toEqual({ built: 0, kept: 0, removed: 2 });
+    expect(readManifest(dir)!.spaces).toEqual([]);
+    expect(readdirSync(dir)).toEqual(["manifest.json"]);
+  });
+
+  it("take the new leader of a problem whose leader was overtaken during the build", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await addSpace(store, "boundary/tesseract/ball/9", 2.1);
+    const leaders = await store.spaceBest("boundary");
+    // the new entry prunes the old leader at once
+    const better = await addSpace(store, "boundary/tesseract/ball/9", 2.05);
+    // the build read the leaders before the new entry arrived
+    const view = new Proxy(store, {
+      get: (t, k) => (k === "spaceBest" ? async () => leaders : Reflect.get(t, k).bind(t)),
+    }) as SpaceStore;
+    await buildSnapshot({ store, dir, closed, spaces: { ...snapshotSpaces(index, view) }, pause: noPause });
+    expect(readPair(dir, "space-boundary.json.gz").records.map((r: { id: number }) => r.id)).toEqual([better]);
+    // the fingerprint is of what was written, so the next build finds the space unchanged
+    const spaces = snapshotSpaces(index, store);
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toMatchObject({ built: 0, kept: 1 });
+  });
+
+  it("pause inside a large space's file as between pairs, and after it", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    // 32 problems: two parts of 25 entries
+    for (const p of index.boundary!.problems) await addSpace(store, p.id, 1e3);
+    const spaces = snapshotSpaces(index, store);
+    const pauses: number[] = [];
+    const pause = async (ms: number) => void pauses.push(ms);
+    await buildSnapshot({ store, dir, closed, spaces, pause, pauseEveryPieces: 1 });
+    expect(pauses).toHaveLength(2);
+    expect(readPair(dir, "space-boundary.json.gz").records).toHaveLength(32);
+    // by default, one pause after this small file
+    pauses.length = 0;
+    await addSpace(store, "boundary/tesseract/ball/1", 999);
+    await buildSnapshot({ store, dir, closed, spaces, pause });
+    expect(pauses).toHaveLength(1);
+  });
+
+  it("refuse a manifest whose `spaces` is not a list: nothing is served from it, and the next build replaces it", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await addSpace(store, "sphere/4/12", 3.1);
+    const spaces = snapshotSpaces(index, store);
+    await buildSnapshot({ store, dir, closed, spaces, pause: noPause });
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify({ ...readManifest(dir)!, spaces: {} }));
+    expect(readManifest(dir)).toBeNull();
+    expect(snapshotSource(dir).file("space-sphere.json.gz")).toBeNull();
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 1,
+      kept: 0,
+      removed: 0,
+    });
+    expect(readManifest(dir)!.spaces!.map((f) => f.file)).toEqual(["space-sphere.json.gz"]);
+  });
+
+  it("read a manifest written before the spaces were added, and add them to it", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    await buildSnapshot({ store, dir, closed, pause: noPause });
+    const old = readManifest(dir)!;
+    delete old.spaces;
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify(old));
+    await addSpace(store, "sphere/4/12", 3.1);
+    const spaces = snapshotSpaces(index, store);
+    expect(await buildSnapshot({ store, dir, closed, spaces, pause: noPause })).toEqual({
+      built: 1,
+      kept: 1,
+      removed: 0,
+    });
+    expect(readManifest(dir)!.spaces!.map((f) => f.file)).toEqual(["space-sphere.json.gz"]);
+  });
+});
+
 describe("GET /api/snapshot", () => {
   it("serves the manifest and the files it lists, and nothing else", async () => {
     const store = new SqliteStore(":memory:");
@@ -198,8 +399,27 @@ describe("GET /api/snapshot", () => {
     expect(r.headers.get("content-length")).toBe(String(body.length));
     expect(r.headers.get("etag")).toBe(`"${readManifest(dir)!.files[0].sha256}"`);
 
+    // a space's file, listed apart
+    await addSpace(store, "sphere/4/12", 3.1);
+    await buildSnapshot({ store, dir, closed, spaces: snapshotSpaces(index, store), pause: noPause });
+    r = await app.request("/api/snapshot/space-sphere.json.gz");
+    expect(r.status).toBe(200);
+    expect(Buffer.from(await r.arrayBuffer()).equals(readFileSync(join(dir, "space-sphere.json.gz")))).toBe(true);
+    expect(r.headers.get("etag")).toBe(`"${readManifest(dir)!.spaces![0].sha256}"`);
+
     writeFileSync(join(dir, "9-9.json.gz"), "not listed");
-    for (const name of ["9-9.json.gz", "manifest.json", "4-4.json", "04-4.json.gz", "..%2F4-4.json.gz"]) {
+    writeFileSync(join(dir, "space-torus.json.gz"), "not listed");
+    for (const name of [
+      "9-9.json.gz",
+      "space-torus.json.gz",
+      "space-Sphere.json.gz",
+      "space-.json.gz",
+      "manifest.json",
+      "4-4.json",
+      "04-4.json.gz",
+      "..%2F4-4.json.gz",
+      "space-..%2Fmanifest.json.gz",
+    ]) {
       const res = await app.request(`/api/snapshot/${name}`);
       expect(res.status, name).toBe(404);
     }
@@ -247,7 +467,7 @@ describe("the nightly schedule", () => {
   const stops: (() => void)[] = [];
   afterEach(() => stops.splice(0).forEach((stop) => stop()));
   const waitFor = async (check: () => boolean, ms = 5000) => {
-    for (const t0 = Date.now(); !check(); ) {
+    for (const t0 = Date.now(); !check();) {
       if (Date.now() - t0 > ms) throw new Error("timed out");
       await new Promise((r) => setTimeout(r, 10));
     }
@@ -268,10 +488,33 @@ describe("the nightly schedule", () => {
     await buildSnapshot({ store, dir, closed, pause: noPause });
     const m = readManifest(dir)!;
     // as a build leaves it after some pairs
-    writeFileSync(join(dir, "manifest.json"), JSON.stringify({ ...m, generated_at: new Date(Date.parse(m.generated_at) + 60_000).toISOString() }));
+    writeFileSync(
+      join(dir, "manifest.json"),
+      JSON.stringify({ ...m, generated_at: new Date(Date.parse(m.generated_at) + 60_000).toISOString() }),
+    );
     expect(isComplete(readManifest(dir))).toBe(false);
     stops.push(scheduleSnapshots({ store, dir, closed, pause: noPause, hourUtc: 11, startDelayMs: 1 }).stop);
     await waitFor(() => isComplete(readManifest(dir)));
+  });
+
+  it("builds soon after startup when a recent snapshot lacks the spaces' files the server asks for", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 4, 4, 2, 2.5);
+    await addSpace(store, "sphere/4/12", 3.1);
+    await buildSnapshot({ store, dir, closed, pause: noPause });
+    // as written before the space files existed
+    const old = readManifest(dir)!;
+    delete old.spaces;
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify(old));
+    // without `spaces`, such a manifest is recent enough
+    const quiet = scheduleSnapshots({ store, dir, closed, pause: noPause, hourUtc: 11, startDelayMs: 1 });
+    await new Promise((r) => setTimeout(r, 200));
+    quiet.stop();
+    expect(readManifest(dir)!.spaces).toBeUndefined();
+    const spaces = snapshotSpaces(index, store);
+    stops.push(scheduleSnapshots({ store, dir, closed, spaces, pause: noPause, hourUtc: 11, startDelayMs: 1 }).stop);
+    await waitFor(() => (readManifest(dir)?.spaces?.length ?? 0) === 1);
   });
 
   it("does not build at startup when the last build is recent", async () => {

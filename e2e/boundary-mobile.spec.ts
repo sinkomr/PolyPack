@@ -27,7 +27,7 @@ test("phone: 3D on 4D on the board gets a square drawing, its controls fit, and 
   test.setTimeout(180_000);
   const errors = pageErrors(page);
   await page.goto("/#space=boundary/tesseract/ball/9");
-  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/ball/9");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/ball/9", LAZY_VIEW);
   const canvas = page.locator(".pp3 canvas");
   await expect(canvas).toBeVisible(LAZY_VIEW);
   expect(await overflow(page)).toBeLessThanOrEqual(1);
@@ -72,7 +72,7 @@ test("phone: 3D on 4D on the board gets a square drawing, its controls fit, and 
 test("phone: the 3D on 4D viewer fits, with a square drawing", async ({ page }) => {
   const errors = pageErrors(page);
   await page.goto("/spaces/boundary.html#id=boundary/tesseract/cube/12");
-  await expect(page.locator("#viewer-problem-note")).toHaveText("Problem boundary/tesseract/cube/12");
+  await expect(page.locator("#viewer-problem-note")).toHaveText("Problem boundary/tesseract/cube/12", LAZY_VIEW);
   const canvas = page.locator(".pp3 canvas");
   await expect(canvas).toBeVisible();
   const box = (await canvas.boundingBox())!;
