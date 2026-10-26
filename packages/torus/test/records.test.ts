@@ -77,6 +77,9 @@ describe.skipIf(!file)("data/torus/records.json", () => {
       ...[2, 3, 4, 6, 7, 8].map((P) => `torus/sq/0/${P}`),
       ...[2, ...loeschian].map((P) => `torus/hex/0/${P}`),
       ...sums.map((P) => `torus/sq/4/${P}`),
+      // one piece on a free torus is a lattice packing: the densest lattice packings of disks and triangles
+      "torus/free/0/1",
+      "torus/free/3/1",
     ];
     expect(records.filter((r) => r.status === "proven").map((r) => r.problem).sort()).toEqual(expected.sort());
   });
