@@ -7,14 +7,7 @@
  */
 
 export type SolidFamily =
-  | "platonic"
-  | "archimedean"
-  | "catalan"
-  | "prism"
-  | "antiprism"
-  | "elongated_prism"
-  | "bipyramid"
-  | "trapezohedron";
+  "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "elongated_prism" | "bipyramid" | "trapezohedron";
 export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms" | "bipyramids" | "trapezohedra";
 
 export interface SolidName {

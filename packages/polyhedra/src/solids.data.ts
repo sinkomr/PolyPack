@@ -6,15 +6,7 @@
 export interface SolidData {
   name: string;
   code: string;
-  family:
-    | "platonic"
-    | "archimedean"
-    | "catalan"
-    | "prism"
-    | "antiprism"
-    | "elongated_prism"
-    | "bipyramid"
-    | "trapezohedron";
+  family: "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "elongated_prism" | "bipyramid" | "trapezohedron";
   title: string;
   V: number[][];
   faces: number[][];
