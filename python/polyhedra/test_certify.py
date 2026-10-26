@@ -227,6 +227,27 @@ class NewSolids(unittest.TestCase):
             self.assertTrue(certify.certify_config(name, name, 1 + 1e-6, q)['ok'], name)
             self.assertFalse(certify.certify_config(name, name, 1 - 1e-9, q)['ok'], name)
 
+    def test_every_new_solid_in_a_cube(self):
+        # all 20: two pieces stacked along z, 2e-7 apart, in a cube 4e-7 wider than they need (2e-7 to the binding
+        # walls): certified; the upper piece moved 3e-7 down (an overlap of 1e-7): refused; a cube 2e-7 narrower
+        # than they need (a protrusion of 1e-7): refused
+        names = [n for n, *_ in catalogue.solids()[56:]]
+        self.assertEqual(len(names), 20)
+        for name in names:
+            V = cg.get_solid(name).Vf
+            ex, ey, ez = (max(abs(v[k]) for v in V) for k in range(3))
+            z = ez + 1e-7
+            half = max(ex, ey, 2 * ez + 1e-7)
+            pieces = [[0.0, 0.0, -z, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, z, 1.0, 0.0, 0.0, 0.0]]
+            c = certify.certify_config(name, 'cube', 2 * half + 4e-7, pieces)
+            self.assertTrue(c['ok'], name)
+            self.assertGreater(c['min_pair_gap'], 1.9e-7, name)
+            self.assertGreater(c['min_wall_slack'], 1.9e-7, name)
+            over = copy.deepcopy(pieces)
+            over[1][2] -= 3e-7
+            self.assertTrue(certify.certify_config(name, 'cube', 2 * half + 4e-7, over)['failed_pairs'], name)
+            self.assertTrue(certify.certify_config(name, 'cube', 2 * half - 2e-7, pieces)['failed_walls'], name)
+
     def test_field_checks_of_a_new_record(self):
         z = 0.5 + 1e-7
         rec = record_of(2 + 6e-7, [[0.0, 0.0, -z, 1.0, 0.0, 0.0, 0.0], [0.0, 0.0, z, 1.0, 0.0, 0.0, 0.0]], 'pr7inpr7')

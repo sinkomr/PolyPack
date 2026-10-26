@@ -1,8 +1,8 @@
 /**
  * Builds packages/polyhedra/viz/index.html: a standalone viewer (no external scripts) with the records of
  * data/polyhedra/records.json embedded and the drawing code bundled by esbuild. Every record's values are
- * embedded; poses, at display precision, up to P = EMBED_MAX_P only, which keeps the page near 3 MB (all
- * 8,514 would take about 30 MB). Above it the page reads the configuration from the site's API
+ * embedded; poses, at display precision, up to P = EMBED_MAX_P only, which keeps the page near 4 MB (all
+ * 11,286 would take about 40 MB). Above it the page reads the configuration from the site's API
  * (/api/spaces/polyhedra/problems/<id>) when the site serves it, and shows the values alone elsewhere.
  *
  * Usage: npx tsx packages/polyhedra/scripts/build-viz.ts [records.json]
@@ -26,16 +26,21 @@ const sourceOf = (s: string) => {
   if (!sourceIndex.has(s)) sourceIndex.set(s, sources.push(s) - 1);
   return sourceIndex.get(s)!;
 };
+// PolyPack's own problems: their lineage in short (origin.start and origin.runs; the records file has it in full)
+const lineage = (r: (typeof doc.records)[number]) =>
+  r.origin.start || r.origin.runs
+    ? [...(r.origin.start ? [r.origin.start] : []), ...(r.origin.runs ?? [])].join("; then ")
+    : r.method!;
 for (const r of doc.records) {
   (records[r.code] ??= []).push({
     n: r.P,
     s: r.score_cert,
     d: r.display,
     b: r.bound.value,
-    w: r.wiki.s_full,
+    ...(r.wiki ? { w: r.wiki.s_full } : {}),
     f: r.found_by,
     ...(r.certificate_refined_by ? { cr: r.certificate_refined_by } : {}),
-    ...(r.found_by === "PolyPack research" && r.method ? { m: r.method } : {}),
+    ...(r.found_by === "PolyPack research" && r.method ? { m: lineage(r) } : {}),
     src: sourceOf(r.source),
     lit: (r.literature ?? []).map((l) => ({
       v: l.value,

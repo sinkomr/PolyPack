@@ -4,7 +4,8 @@
  * is read from the site's API where the site serves the page. Drawing is src/draw.ts.
  */
 import { DARK_PALETTE, LIGHT_PALETTE, createPolyhedraView } from "../src/draw";
-import { POLYHEDRA_PROBLEMS, getProblem, wikiUrl } from "../src/problems";
+import { PROBLEM_ORDER } from "../src/catalogue";
+import { getProblem, wikiUrl } from "../src/problems";
 import type { Pose } from "../src/geom";
 
 interface VizRecord {
@@ -14,8 +15,8 @@ interface VizRecord {
   d: string;
   /** volume bound */
   b: number;
-  /** wiki value */
-  w: number;
+  /** wiki value; absent for PolyPack's own problems */
+  w?: number;
   f: string;
   /** certificate refined by */
   cr?: string;
@@ -56,7 +57,8 @@ const groups: Record<string, string> = { platonic: "Platonic", archimedean: "Arc
 for (const fam of Object.keys(groups)) {
   const og = document.createElement("optgroup");
   og.label = groups[fam];
-  for (const p of POLYHEDRA_PROBLEMS.filter((x) => x.family === fam && POLYHEDRA_DATA.records[x.code])) {
+  // the wiki's order, with PolyPack's prisms and antiprisms among the wiki's by their number of sides
+  for (const p of PROBLEM_ORDER.map((c) => getProblem(c)!).filter((x) => x.family === fam && POLYHEDRA_DATA.records[x.code])) {
     const o = document.createElement("option");
     o.value = p.code;
     o.textContent = p.title;
@@ -121,14 +123,16 @@ function show(code: string, n: number, push = true) {
         note.textContent = `This page embeds the configurations up to P = ${POLYHEDRA_DATA.embedMaxP}; open it on the site (/spaces/polyhedra.html) to draw P = ${r.n}, or read it in data/polyhedra/configs/${code}.jsonl.`;
     });
   }
-  const better = r.s < r.w * (1 - 1e-6);
+  const better = r.w !== undefined && r.s < r.w * (1 - 1e-6);
   const lit = r.lit
     .map((l) => `<li>${fmt(l.v)}${l.q ? ` (to ${l.q})` : ""}: ${l.u ? `<a href="${esc(l.u)}" rel="noopener">${esc(l.s)}</a>` : esc(l.s)}</li>`)
     .join("");
   info.innerHTML =
     `<div class="big">s = ${r.d}</div>` +
     `<p>${n} ${esc(problem.title.toLowerCase())}; certified at s = ${r.s}. Volume bound ${fmt(r.b)}.</p>` +
-    `<p>Wiki: <a href="${wikiUrl(code, r.n)}" rel="noopener">${fmt(r.w)}</a>${better ? ' <span class="better">(beaten here)</span>' : ""}</p>` +
+    (r.w !== undefined
+      ? `<p>Wiki: <a href="${wikiUrl(code, r.n)}" rel="noopener">${fmt(r.w)}</a>${better ? ' <span class="better">(beaten here)</span>' : ""}</p>`
+      : "<p>PolyPack's own problem: the wiki does not list it, and no values are published.</p>") +
     `<p>Found by ${esc(r.f)}${r.cr ? `; certificate refined by ${esc(r.cr)}` : ""}.</p>` +
     (r.m ? `<p class="muted">${esc(r.m)}</p>` : "") +
     `<p class="muted">${esc(POLYHEDRA_DATA.sources[r.src] ?? "")}</p>` +
@@ -139,7 +143,7 @@ function show(code: string, n: number, push = true) {
     recs
       .map(
         (x) =>
-          `<tr data-n="${x.n}"${x.n === r.n ? ' class="sel"' : ""}><td>${x.n}</td><td>${x.d}</td><td>${fmt(x.b)}</td><td${x.s < x.w * (1 - 1e-6) ? ' class="better"' : ""}>${fmt(x.w)}</td></tr>`,
+          `<tr data-n="${x.n}"${x.n === r.n ? ' class="sel"' : ""}><td>${x.n}</td><td>${x.d}</td><td>${fmt(x.b)}</td><td${x.w !== undefined && x.s < x.w * (1 - 1e-6) ? ' class="better"' : ""}>${x.w !== undefined ? fmt(x.w) : "-"}</td></tr>`,
       )
       .join("") +
     "</tbody>";

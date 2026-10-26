@@ -70,7 +70,7 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect(page.locator("#space-score-label")).toHaveText("Container scale s");
   await expect(page.locator("#space-shown")).toHaveText("the research record");
   await expect(page.locator("#space-f-code")).toHaveValue("cubincub");
-  await expect(page.locator("#space-f-code option")).toHaveCount(86);
+  await expect(page.locator("#space-f-code option")).toHaveCount(114);
   await expect(page.locator("#space-f-P option")).toHaveCount(99);
 
   // the drawing turns with the keyboard and the views
@@ -260,7 +260,7 @@ test("the dimensions page lists 3D in 3D with the polyhedra records and links th
   await page.goto("/dimensions.html");
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="polyhedra"]');
   await expect(card.getByRole("heading", { name: "Polyhedra", exact: true })).toBeVisible();
-  await expect(card).toContainText("8,514");
+  await expect(card).toContainText("11,286");
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="polyhedra"]')).toBeChecked();
   // the table starts at cubes in a cube, P = 2 to 100

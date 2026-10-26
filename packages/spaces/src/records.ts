@@ -8,7 +8,7 @@
  * has entries without configuration text (`configApart`, `configAt`); load.ts then gives the
  * catalogue a `loadConfig` that reads one on demand.
  */
-import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
+import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import {
   BOUNDARY_PIECES,
   BOUNDARY_POLYTOPES,
@@ -190,7 +190,7 @@ const ORDER: Partial<Record<SpaceName, Record<string, readonly string[]>>> = {
   surface: { solid: SURFACE_SOLIDS, mode: SURFACE_MODES },
   torus: { family: TORUS_FAMILIES },
   boundary: { polytope: BOUNDARY_POLYTOPES, piece: BOUNDARY_PIECES },
-  polyhedra: { code: PROBLEM_CODES },
+  polyhedra: { code: PROBLEM_ORDER },
 };
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {

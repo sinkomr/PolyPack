@@ -59,7 +59,7 @@ describe("the client with --dimensions boundary", () => {
     const { code, output } = await client(["--once", "--only-dimensions", "--dimensions", "boundary", "--name", "Test volunteer"]);
     expect(code, output).toBe(0);
     expect(paths()).toEqual([
-      "GET /api/spaces/targets?spaces=boundary&limit=10000",
+      "GET /api/spaces/targets?spaces=boundary&limit=20000",
       "GET /api/spaces/boundary/problems/boundary/tesseract/ball/9",
       "GET /api/spaces/boundary/problems/boundary/tesseract/ball/9",
       "POST /api/spaces/submit",

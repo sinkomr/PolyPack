@@ -130,7 +130,7 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   const records = doc?.records ?? [];
 
   it("every record up to P = 30 and every tenth above is valid by the float validator at tolerance 0 at its certified scale", async () => {
-    // all 8,514 take about 50 s (scripts/bench-validate.ts); the certifier checks every one
+    // all 11,286 take about a minute (scripts/bench-validate.ts); the certifier checks every one
     let minGap = Infinity;
     for (const [i, r] of records.entries()) {
       if (r.P > 30 && i % 10 !== 0) continue;
@@ -157,12 +157,13 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
     }
   });
 
-  it("covers every problem of the wiki for P = 2 to 100 with consistent ids", () => {
-    // PolyPack's 28 problems (wiki: false) are not in this file yet
+  it("covers every problem for P = 2 to 100 with consistent ids", () => {
+    // the wiki's 86 problems and PolyPack's 28
     const ids = new Set(records.map((r: { id: string }) => r.id));
     expect(POLYHEDRA_MAX_P).toBe(100);
-    expect(records.length).toBe(86 * 99);
-    for (const p of POLYHEDRA_PROBLEMS.filter((x) => x.wiki))
+    expect(POLYHEDRA_PROBLEMS.length).toBe(114);
+    expect(records.length).toBe(114 * 99);
+    for (const p of POLYHEDRA_PROBLEMS)
       for (let n = 2; n <= POLYHEDRA_MAX_P; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
     for (const r of records) expect(r.id).toBe(`polyhedra/${r.code}/${r.P}`);
   });

@@ -107,7 +107,7 @@ describe("the client with the spaces option", () => {
     ]);
     expect(code, output).toBe(0);
     expect(paths()).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=10000",
+      "GET /api/spaces/targets?spaces=sphere&limit=20000",
       "GET /api/spaces/sphere/problems/sphere/3/13",
       "GET /api/spaces/sphere/problems/sphere/3/13", // the best again, just before submitting
       "POST /api/spaces/submit",
@@ -167,7 +167,7 @@ describe("the client with the spaces option", () => {
       const { code, output } = await client(["--once", "--spaces", "all", "--max-P", "10"], { random: () => 0.9 });
       expect(code, output).toBe(0);
       expect(paths()[0]).toBe(
-        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary%2Cpolyhedra&max_P=10&limit=10000",
+        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary%2Cpolyhedra&max_P=10&limit=20000",
       );
       expect(server.spaceSubmissions).toEqual([]);
       expect(server.submissions).toEqual([]);
@@ -323,8 +323,8 @@ describe("the client with the spaces option", () => {
     });
     expect(code, output).toBe(0);
     expect(paths().slice(0, 2)).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=10000",
-      "GET /api/spaces/targets?limit=10000",
+      "GET /api/spaces/targets?spaces=sphere&limit=20000",
+      "GET /api/spaces/targets?limit=20000",
     ]);
     expect(output).toMatch(/refused the spaces' work list filters/);
     expect(output).toMatch(/Searching sphere\/3\/13/);
@@ -336,11 +336,28 @@ describe("the client with the spaces option", () => {
       searchSpace: async () => ({ best: null, jobs: 0, stopped: "time" }),
     });
     expect(code, output).toBe(0);
-    expect(paths().slice(0, 2)).toEqual([
+    expect(paths().slice(0, 3)).toEqual([
+      "GET /api/spaces/targets?spaces=sphere&limit=20000",
       "GET /api/spaces/targets?spaces=sphere&limit=10000",
       "GET /api/spaces/targets?spaces=sphere&limit=2000",
     ]);
+    expect(output).toMatch(/refused limit=20000 for the spaces' work list; asking for 10000/);
     expect(output).toMatch(/refused limit=10000 for the spaces' work list; asking for 2000/);
+    expect(output).toMatch(/Searching sphere\/3\/13/);
+  });
+
+  it("asks a server whose largest limit is 10000 for 10000 targets", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [], spaces: [SPHERE], spaceTargetsMaxLimit: 10000 });
+    const { code, output } = await client(["--once", "--only-spaces", "--spaces", "sphere", "--dry-run"], {
+      searchSpace: async () => ({ best: null, jobs: 0, stopped: "time" }),
+    });
+    expect(code, output).toBe(0);
+    expect(paths().slice(0, 2)).toEqual([
+      "GET /api/spaces/targets?spaces=sphere&limit=20000",
+      "GET /api/spaces/targets?spaces=sphere&limit=10000",
+    ]);
+    expect(output).toMatch(/refused limit=20000 for the spaces' work list; asking for 10000/);
+    expect(output).not.toMatch(/asking for 2000\b/);
     expect(output).toMatch(/Searching sphere\/3\/13/);
   });
 

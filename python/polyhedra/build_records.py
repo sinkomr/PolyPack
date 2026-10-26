@@ -2,14 +2,20 @@
 """Builds data/polyhedra/records.json (offline tool; standard library only, certification by certify.py).
 
 usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--ours DIR] [--search DIR ...]
-                                                 [--nmax 100] [--jobs 2] [--no-certify] [--skip FILE]
-                                                 [--out data/polyhedra/records.json]
+                                                 [--polypack DIR] [--nmax 100] [--jobs 2] [--no-certify]
+                                                 [--skip FILE] [--out data/polyhedra/records.json]
+       python3 python/polyhedra/build_records.py --keep data/polyhedra/records.json --polypack DIR [--jobs 2]
 
   --upstream  a checkout of github.com/alejandrozu/platonic-packing at commit cbf76f2f (records/, docs/)
   --site      polyhedrainpolyhedra.wiki's data bundle /data/records.json of the same build (the site's selection of
               the best record per case and the published reference values it shows; not in the repository)
   --ours      PolyPack research results: a directory with results/improvements.csv and the files it names
               (upstream record format), whose packings of m pieces cover every n <= m by deleting pieces
+  --polypack  the records of PolyPack's own problems (catalogue.py, not in WIKI_PROBLEMS): <code>.json per problem,
+              {code, piece, container, records: [{P, s, config: [P poses], method, seed}]}; each is certified and
+              becomes a PolyPack research record after the wiki's problems
+  --keep      an existing records.json whose records of the wiki's problems are kept exactly as they are (index
+              entries and configs/<code>.jsonl untouched); only PolyPack's problems are built, from --polypack
 
 For every problem of catalogue.py and n = 2..nmax the candidates are every upstream record file of the case
 (records/<p>/, records/community/<p>/, records/external/<p>/ and the files the site lists) and, from --ours, a
@@ -144,7 +150,8 @@ SOURCES = {
         'licence': 'upstream-made coordinates (MIT); the construction is credited to Erich Friedman',
     },
     'polypack': {
-        'title': 'PolyPack research (crystal cuts and searches, 2026-10-23)',
+        'title': 'PolyPack research (crystal cuts and searches, 2026-10-23; constructions and searches for PolyPack\'s '
+                 'prism and antiprism problems, 2026-10-25)',
         'authors': 'PolyPack research',
         'url': 'https://github.com/sinkomr/PolyPack/blob/main/docs/spaces/POLYHEDRA.md',
         'commit': None,
@@ -529,6 +536,179 @@ def certify_case(args):
     return None, None
 
 
+POLYPACK_SEARCH = 'PolyPack polyhedra search ('
+POLYPACK_DATE = '2026-10-25'
+
+
+def polypack_steps(method):
+    """The steps of a --polypack record's method, from its start on: (start, runs). start is the construction the
+    lineage begins with, or None for a search from random positions; runs are the searches and subset steps."""
+    m = method.strip()
+    if m.startswith('the configuration of ') and m.endswith(' of them, at the same s'):
+        head, _, tail = m.partition(' pieces (')
+        base, sep, rest = tail.rpartition(') less ')
+        if not sep:
+            raise ValueError(f'unreadable subset method: {m[:80]}')
+        start, runs = polypack_steps(base)
+        return start, runs + [f'subset of the configuration of {head.split()[-1]} pieces, at its s']
+    if m.startswith('from the configuration of '):
+        head, _, tail = m.partition(' pieces (')
+        base, sep, rest = tail.rpartition(') by removing pieces one at a time, ')
+        if not sep:
+            raise ValueError(f'unreadable subset method: {m[:80]}')
+        start, runs = polypack_steps(base)
+        return start, runs + [f'subset of the configuration of {head.split()[-1]} pieces: pieces removed one at a '
+                              f'time, {rest}']
+    if m.startswith(POLYPACK_SEARCH):
+        what, sep, budget = m.rpartition('; seed ')
+        if not sep:
+            raise ValueError(f'unreadable search method: {m[:80]}')
+        step = f'search: {{}}, seed {budget}'
+        if ': polish and hops started from ' in what:
+            inner = what.split(': polish and hops started from ', 1)[1]
+            start, runs = polypack_steps(inner)
+            return start, runs + [step.format('polish and hops')]
+        if 'soft-to-rigid run from random balls' in what:
+            return None, [step.format('soft-to-rigid run from random balls, polish and hops')]
+        raise ValueError(f'unreadable search method: {m[:80]}')
+    return m, []
+
+
+def polypack_short(start, runs):
+    """origin.start and origin.runs in short (the method states them in full)."""
+    st = None
+    if start and start.startswith('layered construction: '):
+        st = start.split(' by PolyPack', 1)[0]
+    elif start and start.startswith('crystal cut '):
+        m = re.search(r'of columns of stacked (prisms|antiprisms) over the densest (double-lattice|lattice) packing '
+                      r'found of (the \d+-gon|their projection) \((?:2D )?density ([0-9.]+)\)(, every other piece turned '
+                      r'by pi/n)?, columns along the container\'s (\w) axis', start)
+        if not m:
+            raise ValueError(f'unreadable crystal cut: {start[:80]}')
+        st = (f'crystal cut of {m.group(1)} in columns over a {m.group(2)} packing of {m.group(3)} (density '
+              f'{m.group(4)}){" with every other piece turned" if m.group(5) else ""}, columns along {m.group(6)}')
+    elif start:
+        raise ValueError(f'unknown start: {start[:80]}')
+    out = []
+    for r in runs:
+        if r.startswith('search: soft-to-rigid run from random balls'):
+            out.append('search from random positions, seed ' + r.split(', seed ', 1)[1])
+        elif r.startswith('search: polish and hops'):
+            out.append('search, seed ' + r.split(', seed ', 1)[1])
+        elif r.startswith('subset of the configuration of ') and r.endswith(', at its s'):
+            out.append(r)
+        elif r.startswith('subset of the configuration of '):
+            out.append(r.split(':', 1)[0] + ', seed 1 (8000 evaluations a step for P <= 30, 3000 above)')
+        else:
+            raise ValueError(f'unknown step: {r[:80]}')
+    return st, out
+
+
+def polypack_candidates(d, nmax):
+    """The --polypack records: (case, candidate) for every PolyPack problem and P = 2..nmax, all required."""
+    out = []
+    for code in [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]:
+        doc = load(os.path.join(d, f'{code}.json'))
+        if not doc:
+            raise ValueError(f'--polypack: {code}.json is missing or unreadable')
+        piece, container, _ = catalogue.PROBLEMS[code]
+        if doc.get('code') != code or doc.get('piece') != piece or doc.get('container') != container:
+            raise ValueError(f'--polypack {code}.json: code, piece or container differ from the catalogue')
+        by_p = {r['P']: r for r in doc['records']}
+        for n in range(2, nmax + 1):
+            r = by_p.get(n)
+            if not r or not isinstance(r.get('config'), list) or len(r['config']) != n:
+                raise ValueError(f'--polypack {code}.json has no configuration of {n} pieces')
+            pieces = [[float(x) for x in pose] for pose in r['config']]
+            out.append((Case(code, n), {'file': f'prisms/{code}.json', 'rec': r, 'pieces': pieces,
+                                        's_cert': float(r['s']), 'mine': True}))
+    return out
+
+
+def make_polypack_record(case, cand, volumes):
+    """A PolyPack research record of one of PolyPack's own problems (there is no wiki record to compare with)."""
+    r = cand['rec']
+    pieces, s = cand['pieces'], cand['s_cert']
+    start, runs = polypack_short(*polypack_steps(r['method']))
+    origin = {'file': cand['file'], 'date': POLYPACK_DATE}
+    if r.get('seed') is not None:
+        origin['seed'] = r['seed']
+    if start:
+        origin['start'] = start
+    if runs:
+        origin['runs'] = runs
+    rec = {
+        'id': f'polyhedra/{case.code}/{case.n}', 'code': case.code, 'piece': case.piece, 'container': case.container,
+        'family': case.family, 'P': case.n,
+        'score_float': tight_scale(case, pieces), 'score_cert': s, 'display': display(s), 'status': 'best_known',
+        'config': {'s': s, 'pieces': pieces},
+        'bound': {'value': certify.volume_bound(case.piece, case.container, case.n, volumes), 'kind': 'volume'},
+        'found_by': 'PolyPack research', 'credit': 'PolyPack research', 'method': r['method'],
+        'sources': ['polypack'], 'source': 'PolyPack research', 'origin': origin, 'literature': [],
+    }
+    if s / rec['bound']['value'] - 1 < 1e-6:
+        rec['notes'] = ('[CALC] meets its volume bound to 1e-6 (the pieces tile the container), so it is optimal by the '
+                        'volume argument; the status stays best_known (PolyPack marks proven only with a published proof)')
+    return rec
+
+
+def polypack_records(d, nmax, jobs, volumes, no_certify=False):
+    """The certified records of PolyPack's problems from --polypack, in catalogue order; and the failures."""
+    cands = polypack_candidates(d, nmax)
+    work = [(case, [cand], volumes) for case, cand in cands]
+    if no_certify:
+        results = [(cand, None) for _, [cand], _ in work]
+    elif jobs > 1:
+        import multiprocessing as mp
+        with mp.Pool(jobs) as pool:
+            results = pool.map(certify_case, work, chunksize=4)
+    else:
+        results = [certify_case(w) for w in work]
+    records, failed = [], []
+    for (case, _), (cand, _) in zip(cands, results):
+        if cand is None:
+            failed.append(f'{case.code}/{case.n}')
+        else:
+            records.append(make_polypack_record(case, cand, volumes))
+    return records, failed
+
+
+SCOPE_NOTE = ('the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimedean, Catalan, prisms, antiprisms, '
+              'elongated prisms) with 2 to %d pieces; 4D-6D are not included')
+SCOPE_NOTE_POLYPACK = (SCOPE_NOTE + '; then PolyPack\'s own problems in the same scheme (prisms and antiprisms with 7, '
+                       '9, 10 and 11 sides in themselves and in a cube, and their prisms of height 1.5, 2 and 3 in a '
+                       'cube), whose records are PolyPack research only')
+POLYPACK_CONVENTION = ('records of PolyPack\'s own problems (no wiki record): origin.file is the PolyPack research '
+                       'file, origin.start the construction the configuration\'s lineage starts from (none for a '
+                       'search from random positions), origin.runs the searches and subset steps after it and '
+                       'origin.seed the last step\'s seed, in short; method states the whole lineage in full')
+
+
+def keep_and_add(keep, polypack, nmax, jobs, no_certify):
+    """--keep mode: the wiki's records of `keep` untouched, PolyPack's problems built from --polypack."""
+    with open(keep) as f:
+        doc = json.load(f)
+    old = [r for r in doc['records'] if r['code'] in catalogue.WIKI_PROBLEMS]
+    if len(old) != len(doc['records']):
+        print(f'{len(doc["records"]) - len(old)} records of PolyPack\'s problems in {keep} are replaced')
+    if not all(isinstance(r.get('config_at'), list) for r in old):
+        raise ValueError('--keep: every kept record must have its configuration apart (config_at)')
+    volumes = certify.solid_volumes()
+    t0 = time.time()
+    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify)
+    nfiles, total = write_configs(os.path.join(os.path.dirname(keep), 'configs'), new)
+    doc['records'] = old + new
+    doc['scope'] = {'P': [2, nmax], 'problems': len(catalogue.PROBLEMS), 'note': SCOPE_NOTE_POLYPACK % nmax}
+    doc['sources']['polypack'] = SOURCES['polypack']
+    doc['conventions']['polypack'] = POLYPACK_CONVENTION
+    with open(keep, 'w') as f:
+        json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
+        f.write('\n')
+    print(f'kept {len(old)} records; wrote {len(new)} of PolyPack\'s problems and {nfiles} configuration files '
+          f'({total / 1e6:.2f} MB); {len(failed)} not certified {failed[:10]}; {time.time() - t0:.0f} s')
+    return 0 if not failed else 1
+
+
 CONFIGS_CONVENTION = ('the configurations are kept apart, one file per problem: configs/<code>.jsonl has one line '
                       'per P, in increasing P, each {"P", "config": {s, pieces}}; config_at = [offset, length] gives '
                       'the byte offset and length of the record\'s line (without its newline), so that a reader can '
@@ -558,8 +738,10 @@ def write_configs(cdir, records):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--upstream', required=True)
-    ap.add_argument('--site', required=True)
+    ap.add_argument('--upstream')
+    ap.add_argument('--site')
+    ap.add_argument('--polypack', help='records of PolyPack\'s own problems: <code>.json per problem (see above)')
+    ap.add_argument('--keep', help='keep this records.json\'s wiki records as they are and add PolyPack\'s problems')
     ap.add_argument('--ours')
     ap.add_argument('--search', action='append', help='a directory of PolyPack search results (repeatable)')
     ap.add_argument('--nmax', type=int, default=100)
@@ -571,6 +753,12 @@ def main(argv=None):
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.dirname(HERE)), 'data', 'polyhedra',
                                                   'records.json'))
     a = ap.parse_args(argv)
+    if a.keep:
+        if not a.polypack:
+            ap.error('--keep needs --polypack')
+        return keep_and_add(a.keep, a.polypack, a.nmax, a.jobs, a.no_certify)
+    if not a.upstream or not a.site:
+        ap.error('--upstream and --site are required (or --keep with --polypack)')
     U = a.upstream
     site = json.load(open(a.site))
     rows = {(p['id'], r['n']): r for p in site['problems'] for r in p['rows']}
@@ -647,13 +835,16 @@ def main(argv=None):
             continue
         lit = literature_of(case.code, case.n, row, ext)
         records.append(make_record(case, cand, bool(cand.get('mine')), wiki_best, row, lit, volumes))
+    if a.polypack:
+        new, bad = polypack_records(a.polypack, a.nmax, a.jobs, volumes, a.no_certify)
+        records += new
+        failed += bad
     doc = {
         'space': 'polyhedra',
         'title': '3D in 3D',
         'generated': time.strftime('%Y-%m-%d'),
-        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.WIKI_PROBLEMS),
-                  'note': 'the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimedean, Catalan, prisms, '
-                          'antiprisms, elongated prisms) with 2 to %d pieces; 4D-6D are not included' % a.nmax},
+        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.PROBLEMS if a.polypack else catalogue.WIKI_PROBLEMS),
+                  'note': (SCOPE_NOTE_POLYPACK if a.polypack else SCOPE_NOTE) % a.nmax},
         'upstream': {'repository': UPSTREAM, 'commit': UPSTREAM_COMMIT, 'site': 'https://polyhedrainpolyhedra.wiki/',
                      'site_build': site.get('built')},
         'conventions': {
@@ -679,6 +870,7 @@ def main(argv=None):
                     'file is given when the configuration here comes from elsewhere',
             'literature': 'published values without coordinates (value, source, url, printed precision)',
             'configs': CONFIGS_CONVENTION,
+            **({'polypack': POLYPACK_CONVENTION} if a.polypack else {}),
         },
         'sources': SOURCES,
         'records': records,

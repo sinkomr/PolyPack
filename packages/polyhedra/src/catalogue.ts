@@ -219,3 +219,27 @@ export function problemTitle(code: string): string {
 
 /** The problem codes in that order. */
 export const PROBLEM_CODES: readonly string[] = PROBLEM_NAMES.map((p) => p.code);
+
+/** Rank of a prism-family problem: prisms (in themselves, in a cube), antiprisms, then elongated prisms, by sides. */
+function prismRank(p: ProblemName): [number, number, number] | null {
+  const m = /^(pr|ap)(\d+)(l15|l2|l3)?in/.exec(p.code);
+  if (p.family !== "prisms" || !m) return null;
+  const n = Number(m[2]);
+  if (m[3]) return [2, n, ["l15", "l2", "l3"].indexOf(m[3])];
+  return [m[1] === "pr" ? 0 : 1, n, p.container === "cube" ? 1 : 0];
+}
+
+/**
+ * The problem codes in the order of a listing or a picker: the wiki's order, with PolyPack's prisms and antiprisms
+ * among the wiki's by their number of sides (heptagonal prisms after the hexagonal ones, and so on). The wiki's
+ * own problems keep their order.
+ */
+export const PROBLEM_ORDER: readonly string[] = (() => {
+  const prisms = PROBLEM_NAMES.filter((p) => prismRank(p) !== null);
+  prisms.sort((a, b) => {
+    const x = prismRank(a)!;
+    const y = prismRank(b)!;
+    return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+  });
+  return [...PROBLEM_NAMES.filter((p) => prismRank(p) === null).map((p) => p.code), ...prisms.map((p) => p.code)];
+})();

@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
+import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
 import { describe, expect, it } from "vitest";
@@ -47,7 +47,7 @@ const configOf = (p: SpaceProblemEntry) =>
 /**
  * The records of a space with their configurations, read as the server reads them (polyhedra
  * configurations on demand). Every polyhedra record up to P = 30 and every tenth above it, since a
- * float check of all 8,514 takes about a minute; the certifier checks every one (POLYHEDRA.md).
+ * float check of all 11,286 takes over a minute; the certifier checks every one (POLYHEDRA.md).
  * Yields to the event loop now and then, so that a long loop does not hold up the test runner.
  */
 async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, unknown]> {
@@ -78,7 +78,7 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514);
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 11286);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -136,7 +136,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 11286 });
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -224,7 +224,7 @@ describe("the catalogues", () => {
       torus: [["family", TORUS_FAMILIES], ["N", null], ["P", null]],
       boundary: [["polytope", BOUNDARY_POLYTOPES], ["piece", ["ball", "cube"]], ["P", null]],
       // polyhedra's fields include a piece, which is not a sort key there
-      polyhedra: [["code", PROBLEM_CODES], ["P", null]],
+      polyhedra: [["code", PROBLEM_ORDER], ["P", null]],
     };
     for (const s of SPACE_NAMES) {
       const rank = (p: SpaceProblemEntry) =>

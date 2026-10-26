@@ -200,7 +200,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
     space: "polyhedra",
     title: "Polyhedra",
     summary:
-      "3D in 3D: equal polyhedra (Platonic, Archimedean and Catalan solids, prisms and antiprisms) packed in the smallest scaled copy of a container polyhedron. The problems and research records are those of polyhedrainpolyhedra.wiki, with PolyPack's improvements.",
+      "3D in 3D: equal polyhedra (Platonic, Archimedean and Catalan solids, prisms and antiprisms) packed in the smallest scaled copy of a container polyhedron. The problems and research records are those of polyhedrainpolyhedra.wiki, with PolyPack's improvements, and PolyPack's own prism and antiprism problems (7, 9, 10 and 11 sides) with its records.",
     score: "the scale s of the container solid (its edge length when the container has unit edges); smaller is better",
     problem_id: "polyhedra/<code>/<P>",
     conventions: {

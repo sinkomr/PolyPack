@@ -9,7 +9,7 @@ import {
   volumeBound,
   wikiUrl,
 } from "../src";
-import { PROBLEM_CODES, SOLID_NAMES_LIST, problemNameOf } from "../src/catalogue";
+import { PROBLEM_CODES, PROBLEM_ORDER, SOLID_NAMES_LIST, problemNameOf } from "../src/catalogue";
 
 describe("solids", () => {
   it("has upstream's 56 solids and PolyPack's 20, each a closed convex polyhedron centred at the origin", () => {
@@ -121,6 +121,14 @@ describe("problems and ids", () => {
     );
     expect(PROBLEM_CODES.length).toBe(114);
     expect(problemNameOf("ap11incub")).toMatchObject({ piece: "antiprism11", container: "cube", wiki: false });
+    // a listing puts PolyPack's prisms among the wiki's by their sides and keeps the wiki's own order
+    expect([...PROBLEM_ORDER].sort()).toEqual([...PROBLEM_CODES].sort());
+    const at = (c: string) => PROBLEM_ORDER.indexOf(c);
+    expect(PROBLEM_ORDER.filter((c) => problemNameOf(c)!.wiki)).toEqual(PROBLEM_CODES.slice(0, 86));
+    expect(PROBLEM_ORDER.slice(at("pr6inpr6"), at("pr6inpr6") + 6)).toEqual(["pr6inpr6", "pr6incub", "pr7inpr7", "pr7incub", "pr8inpr8", "pr8incub"]);
+    expect(at("pr11incub") + 1).toBe(at("pr12inpr12"));
+    expect(at("ap10incub") + 1).toBe(at("ap11inap11"));
+    expect(PROBLEM_ORDER.slice(-6)).toEqual(["pr11l15incub", "pr11l2incub", "pr11l3incub", "pr12l15incub", "pr12l2incub", "pr12l3incub"]);
     expect(POLYHEDRA_PROBLEMS.slice(0, 5).map((p) => p.code)).toEqual(["tetintet", "octinoct", "icoinico", "dodindod", "cubincub"]);
     expect(getProblem("pr3l15incub")).toMatchObject({ piece: "prism3_l15", container: "cube", family: "prisms" });
     expect(getProblem("cubintet")!.title).toBe("Cubes in a tetrahedron");

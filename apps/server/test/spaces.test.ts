@@ -186,7 +186,7 @@ describe("GET /api/spaces", () => {
       ["sphere", 166],
       ["torus", 544],
       ["boundary", 32],
-      ["polyhedra", 8514],
+      ["polyhedra", 11286],
     ]);
     for (const s of r.spaces) {
       expect(s.viewer).toBe(`/spaces/${s.space}.html`);
@@ -274,27 +274,30 @@ describe("GET /api/spaces/:space/records", () => {
     expect(await plain("/api/spaces/surface/records", "identity")).toBe(a);
     expect(await plain("/api/spaces/surface/records", "gzip;q=0")).toBe(a);
     expect(gzips).toBe(1);
-    // the targets: the default 500, 2000 and the whole list are kept compressed; other limits are served plain
+    // the targets: the default 500, 2000, 10000 and the whole list are kept compressed; other limits are served plain
     const t1 = await zipped("/api/spaces/targets");
     expect(await zipped("/api/spaces/targets?limit=500")).toBe(t1);
     expect(gzips).toBe(2);
     expect(await plain("/api/spaces/targets")).toBe(t1);
     await zipped("/api/spaces/targets?limit=2000");
     expect(gzips).toBe(3);
+    // an older volunteer client's limit, below the whole list since PolyPack's prism and antiprism problems joined
+    expect(JSON.parse(await zipped("/api/spaces/targets?limit=10000")).targets.length).toBe(10000);
+    expect(gzips).toBe(4);
     const odd = await app.request("/api/spaces/targets?limit=51", { headers: { "accept-encoding": "gzip" } });
     expect(odd.headers.get("content-encoding")).toBeNull();
     expect(JSON.parse(await odd.text()).targets).toEqual(JSON.parse(t1).targets.slice(0, 51));
-    expect(gzips).toBe(3);
+    expect(gzips).toBe(4);
     // an entry of the surface space would clear its listing; a torus entry clears the torus listing and the targets
     await zipped("/api/spaces/torus/records");
-    expect(gzips).toBe(4);
+    expect(gzips).toBe(5);
     expect((await submit(torusEntry())).body.leader).toBe(true);
     await zipped("/api/spaces/surface/records");
-    expect(gzips).toBe(4);
+    expect(gzips).toBe(5);
     const torus = JSON.parse(await zipped("/api/spaces/torus/records")) as SpaceRecordsResponse;
     expect(torus.problems.find((p) => p.id === "torus/sq/0/2")!.site_best!.score).toBe(L2);
     expect(JSON.parse(await zipped("/api/spaces/targets")).generated_at).not.toBe(JSON.parse(t1).generated_at);
-    expect(gzips).toBe(6);
+    expect(gzips).toBe(7);
   });
 
   it("reads Accept-Encoding as clients write it", () => {
@@ -1076,7 +1079,7 @@ describe("GET /api/spaces/targets", () => {
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
     // the default list is the head of the whole list and holds problems of every space but polyhedra:
-    // its 8,514 problems share one space's share of the priority, so they come after the others' head
+    // its 11,286 problems share one space's share of the priority, so they come after the others' head
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));
@@ -1098,7 +1101,7 @@ describe("GET /api/spaces/targets", () => {
     // 256 queries of the whole list under different max_P and limit: one answer, compressed once
     const whole = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
     for (let k = 0; k < 256; k++) {
-      const r = await app.request(`/api/spaces/targets?limit=${10000 - (k % 150)}&max_P=${100 + k}`, {
+      const r = await app.request(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT - (k % 150)}&max_P=${100 + k}`, {
         headers: { "accept-encoding": "gzip" },
       });
       const body = JSON.parse(gunzipSync(Buffer.from(await r.arrayBuffer())).toString("utf8")) as SpaceTargetsResponse;
