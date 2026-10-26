@@ -9,6 +9,11 @@
 // Every kept entry is checked: value not below the area bound, coordinates accepted by the
 // site's own checker and reproducing the value. Disagreements between sources are reported.
 //
+// A source whose file says "role": "gaps" (data/sources/kamp.json) is used only for the problems
+// that no other source gives a value for. Its values are not merged digit by digit with the others':
+// a general-purpose solver's packings are often worse than the best known, yet close enough to
+// "agree" with a value printed to one or two decimals, whose digits they would then replace.
+//
 // data/sources/constructed.json is not a literature source: it holds coordinates that PolyPack's
 // solver constructed for records without any (scripts/construct-coordinates.ts). They are
 // attached last, only to records that still have no coordinates, and only when they are again
@@ -30,12 +35,18 @@ const DERIVED = {
 
 const key = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 const groups = new Map<string, LiteratureRecord[]>();
+const gaps = new Map<string, LiteratureRecord[]>();
 for (const file of readdirSync("data/sources")
   .filter((f) => f.endsWith(".json") && f !== CONSTRUCTED)
   .sort()) {
-  const { records } = JSON.parse(readFileSync(`data/sources/${file}`, "utf8")) as { records: LiteratureRecord[] };
-  for (const r of records) groups.set(key(r), [...(groups.get(key(r)) ?? []), r]);
+  const { records, role } = JSON.parse(readFileSync(`data/sources/${file}`, "utf8")) as {
+    records: LiteratureRecord[];
+    role?: "gaps";
+  };
+  const into = role === "gaps" ? gaps : groups;
+  for (const r of records) into.set(key(r), [...(into.get(key(r)) ?? []), r]);
 }
+for (const [k, list] of gaps) if (!groups.has(k)) groups.set(k, list);
 
 const report: string[] = [];
 const tolerance = (r: LiteratureRecord) => 10 ** -r.display_precision;
@@ -65,6 +76,7 @@ for (const [k, list] of groups) {
 
 const merged = new Map<string, LiteratureRecord>();
 for (const [k, list] of groups) {
+  const [N, M, P] = k.split("/").map(Number);
   const ranked = [...list].sort(
     (a, b) =>
       Number(isProven(b.status)) - Number(isProven(a.status)) ||
@@ -87,6 +99,17 @@ for (const [k, list] of groups) {
       winner.display_precision = other.display_precision;
     }
     if (other.pieces && !winner.pieces) {
+      // another source's coordinates are attached only when they give the kept value to its own
+      // tolerance, the rule of the checks below: a source whose value is quoted to fewer digits
+      // may hold a packing that agrees with it there but not here
+      const e = evaluate({ N, M, P, pieces: other.pieces, container_phi: other.container_phi ?? 0 });
+      if (!e.valid || Math.abs(e.score! - winner.value) > Math.max(1e-8, 2 * tolerance(winner))) {
+        report.push(
+          `${k}: coordinates from ${other.source_name.split(":")[0]} give ${e.valid ? e.score : e.reasons.join("; ")}, ` +
+            `not ${winner.display}; not attached`,
+        );
+        continue;
+      }
       winner.pieces = other.pieces;
       winner.container_phi = other.container_phi;
       // a source whose coordinates were read rather than given says how (read-ellsworth-svg.ts)
@@ -146,6 +169,8 @@ function derive(
     }
     if (status === "trivial_tiling") {
       existing.status = "trivial_tiling";
+      // the tiling's value is exact; a source's may carry its solver's rounding (1.00000000000001)
+      existing.value = value;
       existing.note = [existing.note, `[CALC] ${why}`].filter(Boolean).join(" ");
     }
     return;

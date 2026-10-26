@@ -53,6 +53,21 @@ describe("data/records.json", () => {
     }
   });
 
+  it("takes Berthold et al.'s polygon packings only where no other source has a value: every pair with a heptagon", () => {
+    const kamp = records.filter((r) => r.source_name.startsWith("Berthold, Kamp, Mexi, Pokutta and Polik"));
+    // 3- to 6-gons in a heptagon, heptagons in 3- to 7-gons, n = 1..30
+    expect(kamp.length).toBe(9 * 30);
+    expect(
+      kamp.every((r) => (r.N === 7 || r.M === 7) && r.N <= 7 && r.M <= 7 && r.P <= 30 && r.pieces?.length === r.P),
+    ).toBe(true);
+    // the supplement claims no optimality; one heptagon in a heptagon is a tiling, at its exact value
+    expect(kamp.filter((r) => r.status !== "best_known").map((r) => [r.N, r.M, r.P, r.status, r.value])).toEqual([
+      [7, 7, 1, "trivial_tiling", 1],
+    ]);
+    // a value of theirs never replaced another source's digits
+    expect(records.filter((r) => /More digits .* Berthold/.test(r.conversion_note))).toEqual([]);
+  });
+
   it("has coordinates for every circles-in-a-circle record up to P = 500", () => {
     for (let P = 1; P <= 500; P++) {
       const r = find(0, 0, P);

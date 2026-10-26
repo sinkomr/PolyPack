@@ -439,7 +439,7 @@ function creditSources(rows: Row[]): void {
   line.hidden = !sources.length;
   line.replaceChildren();
   if (!sources.length) return;
-  line.append("Published records compiled by ");
+  line.append("Published records from ");
   sources.forEach((s, i) => {
     if (i) line.append(i === sources.length - 1 ? " and " : ", ");
     line.append(s.author, sourceMarks([s.n])!);
