@@ -12,7 +12,7 @@ import { resolve } from "node:path";
 import { SPACE_VIEWERS } from "../apps/web/scripts/space-viewers";
 import { foldGain, gainText, plainNofoldLabel } from "../apps/web/src/boundary-model";
 import { DIMENSIONS, familyOfSpace } from "../apps/web/src/dimension-table";
-import { filterProblems, settleFilters } from "../apps/web/src/spaces-model";
+import { filterProblems, nofoldFaceProblem, settleFilters } from "../apps/web/src/spaces-model";
 
 // The dimensions page (formerly the spaces page) against the local stack (playwright.config.ts):
 // the server lists the research records of data/<space>/records.json, and the web server serves
@@ -160,6 +160,42 @@ test("a filter narrows the table and stays in the address", async ({ page, reque
   expect(problem.certified_config).not.toBeNull();
 });
 
+test("each nofold surface row links to the 2D in 2D problem it is the same as, and one sentence says why", async ({
+  page,
+  request,
+}) => {
+  const data = await getJson<SpaceRecordsResponse>(request, "/api/spaces/surface/records");
+  const same = page.locator("#space-same-as");
+  await page.goto("/dimensions.html#space=surface&solid=dodecahedron&mode=nofold&N=0");
+  await expect(rows(page).first()).toBeVisible();
+  await expect(same).toBeVisible();
+  await expect(same).toContainText("is the same as packing ⌈P / F⌉ pieces in one face, a 2D in 2D problem.");
+  const ids = await rowIds(page);
+  expect(ids.length).toBe(data.problems.filter((p) => p.id.startsWith("surface/dodecahedron/nofold/0/")).length);
+  for (const id of ids) {
+    const face = nofoldFaceProblem(id!)!;
+    const link = page
+      .locator(`#space-rows tr[data-id="${id}"]`)
+      .getByRole("link", { name: `Same as N = 0, M = 5, P = ${face.k} in 2D in 2D, for ${id}` });
+    await expect(link).toHaveAttribute("href", `/#p=0,5,${Math.ceil(Number(id!.split("/").at(-1)) / 12)}`);
+  }
+  // 13 disks on the 12 faces: the face problem is 2 disks in a pentagon, on the polygon board
+  await page
+    .locator('#space-rows tr[data-id="surface/dodecahedron/nofold/0/13"]')
+    .getByRole("link", { name: /^Same as N = 0, M = 5, P = 2/ })
+    .click();
+  await expect(page).toHaveURL(/\/#p=0,5,2$/);
+  await expect(page.locator("#family-select")).toHaveValue("polygon");
+  await expect(page.locator("#m-select")).toHaveValue("5");
+  await expect(page.locator("#p-input")).toHaveValue("2");
+
+  // fold rows have neither
+  await page.goto("/dimensions.html#space=surface&solid=cube&mode=fold&N=4");
+  await expect(rows(page).first()).toBeVisible();
+  await expect(same).toBeHidden();
+  await expect(page.locator("#space-rows").getByRole("link", { name: /^Same as/ })).toHaveCount(0);
+});
+
 test("3D on 4D has its card with Records, Board, Viewer and Notes, and its records show what folding gains", async ({
   page,
   request,
@@ -247,6 +283,26 @@ test("the viewers are served at /spaces/<name>.html as they are in their package
   }
 });
 
+test("the surface viewer says that a nofold record is a 2D in 2D packing, and links to that problem", async ({
+  page,
+}) => {
+  await page.goto("/spaces/surface.html");
+  await expect(page.locator("#score")).toContainText("s = ");
+  // the viewer opens on 12 squares on the cube, folding allowed
+  await expect(page.locator("#same-as")).toHaveCount(0);
+  await page.locator("#nofold").check();
+  const note = page.locator("#same-as");
+  await expect(note).toHaveText(
+    "Without folding, each face holds its pieces on its own, and one of the 6 faces must hold at least " +
+      "⌈12 / 6⌉ = 2 of them. So this is the same as packing 2 squares in a square, " +
+      "the 2D in 2D problem N = 4, M = 4, P = 2.",
+  );
+  await expect(note.getByRole("link")).toHaveAttribute("href", "/#p=4,4,2");
+  await note.getByRole("link").click();
+  await expect(page).toHaveURL(/\/#p=4,4,2$/);
+  await expect(page.locator("#p-input")).toHaveValue("2");
+});
+
 test("the former spaces page sends its links on to the dimensions page, with their query and hash", async ({
   page,
 }) => {
@@ -289,6 +345,7 @@ for (const scheme of ["light", "dark"] as const) {
       "",
       "#space=curved&K=1&N=all&M=all",
       "#space=torus&family=all&N=0",
+      "#space=surface&solid=cube&mode=all&N=4",
       "#space=boundary&polytope=tesseract&piece=all",
     ]) {
       await page.goto("about:blank");

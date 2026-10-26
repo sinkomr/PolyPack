@@ -63,6 +63,11 @@
           <div id="space-filters" class="row wrap"></div>
         </form>
         <p id="space-score" class="note"></p>
+        <p id="space-same-as" class="note" hidden>
+          Without folding, each face holds its pieces on its own. So a no-fold problem with P pieces on a solid with F
+          faces is the same as packing &lceil;P / F&rceil; pieces in one face, a 2D in 2D problem. Each no-fold row
+          links to it.
+        </p>
         <p id="space-note" class="note" role="status" aria-live="polite"></p>
         <div class="table-wrap">
           <table class="space-table" aria-labelledby="records-title">
@@ -102,7 +107,7 @@
           <dt>Board</dt>
           <dd>
             Opens the problem on the board: its best packing drawn, the optimizer in your browser, and submission of a
-            better packing.
+            better packing. A no-fold row of Platonic surfaces also links to the 2D in 2D problem it is the same as.
           </dd>
         </dl>
       </section>

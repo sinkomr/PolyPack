@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
+import { SOLID_FACES as SEARCH_FACES } from "@polypack/spaces/search";
 import { describe, expect, it } from "vitest";
 import {
   ALL,
+  SOLID_FACES,
   SPACE_FIELDS,
   configUrl,
   day,
@@ -10,6 +14,8 @@ import {
   fieldValues,
   filterProblems,
   formatK,
+  nofoldFaceProblem,
+  nofoldNote,
   parseHash,
   pieceName,
   problemStatus,
@@ -239,5 +245,79 @@ describe("the address", () => {
     const state = { space: "curved" as const, filters: { K: "-0.000001", N: "4", M: ALL } };
     expect(stateHash(state)).toBe("#space=curved&K=-0.000001&N=4&M=all");
     expect(parseHash(stateHash(state), spaces)).toEqual(state);
+  });
+});
+
+describe("a nofold surface problem is a 2D in 2D problem", () => {
+  const root = resolve(__dirname, "../../..");
+
+  it("knows each solid's faces as the surface tables and the search do", () => {
+    const solids = JSON.parse(readFileSync(resolve(root, "data/surface/solids.json"), "utf8")).solids as Record<
+      string,
+      { F: number; M: number; faces: number[][] }
+    >;
+    expect(Object.keys(SOLID_FACES).sort()).toEqual(Object.keys(solids).sort());
+    for (const [name, s] of Object.entries(solids)) {
+      expect(SOLID_FACES[name], name).toEqual({ F: s.F, M: s.M });
+      expect(s.faces.length, name).toBe(s.F);
+      expect(SEARCH_FACES[name as keyof typeof SEARCH_FACES], name).toEqual(SOLID_FACES[name]);
+    }
+  });
+
+  it("names the face problem: k = ceil(P / F) pieces of the same shape in the face polygon", () => {
+    expect(nofoldFaceProblem("surface/cube/nofold/4/13")).toEqual({
+      P: 13,
+      F: 6,
+      N: 4,
+      M: 4,
+      k: 3,
+      href: "/#p=4,4,3",
+    });
+    // disks keep N = 0, as on the polygon board; P = F and P below F need one piece per face
+    expect(nofoldFaceProblem("surface/icosahedron/nofold/0/20")).toMatchObject({ N: 0, M: 3, k: 1, href: "/#p=0,3,1" });
+    expect(nofoldFaceProblem("surface/dodecahedron/nofold/5/13")).toMatchObject({ M: 5, k: 2, href: "/#p=5,5,2" });
+    expect(nofoldFaceProblem("surface/tetrahedron/nofold/8/1")?.href).toBe("/#p=8,3,1");
+    for (const id of [
+      "surface/cube/fold/4/13",
+      "surface/prism/nofold/4/13",
+      "surface/constructor/nofold/4/13",
+      "surface/cube/nofold/4/0",
+      "surface/cube/nofold/04/13",
+      "torus/sq/4/13",
+    ])
+      expect(nofoldFaceProblem(id), id).toBeNull();
+  });
+
+  it("matches every nofold research record: its fullest face holds ceil(P / F) pieces", () => {
+    const records = JSON.parse(readFileSync(resolve(root, "data/surface/records.json"), "utf8")).records as {
+      id: string;
+      mode: string;
+      P: number;
+      k_per_face: number;
+      pieces: { face: number }[];
+    }[];
+    const nofold = records.filter((r) => r.mode === "nofold");
+    expect(nofold.length).toBeGreaterThan(0);
+    for (const r of nofold) {
+      const face = nofoldFaceProblem(r.id)!;
+      expect(face, r.id).not.toBeNull();
+      const counts = new Map<number, number>();
+      for (const q of r.pieces) counts.set(q.face, (counts.get(q.face) ?? 0) + 1);
+      expect(Math.max(...counts.values()), r.id).toBe(face.k);
+      expect(r.k_per_face, r.id).toBeGreaterThanOrEqual(face.k);
+    }
+  });
+
+  it("says so in two plain sentences around the link", () => {
+    const [before, link, after] = nofoldNote(nofoldFaceProblem("surface/cube/nofold/4/13")!);
+    expect(before + link + after).toBe(
+      "Without folding, each face holds its pieces on its own, and one of the 6 faces must hold at least " +
+        "⌈13 / 6⌉ = 3 of them. So this is the same as packing 3 squares in a square, " +
+        "the 2D in 2D problem N = 4, M = 4, P = 3.",
+    );
+    expect(link).toBe("the 2D in 2D problem N = 4, M = 4, P = 3");
+    expect(nofoldNote(nofoldFaceProblem("surface/octahedron/nofold/0/5")!)[0]).toContain(
+      "⌈5 / 8⌉ = 1 of them. So this is the same as packing 1 disk in a triangle, ",
+    );
   });
 });

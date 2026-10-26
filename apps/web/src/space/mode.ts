@@ -17,7 +17,7 @@ import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
 import type { SpaceCheck } from "@polypack/spaces/search";
-import { certifiedBy, downloadName } from "../spaces-model";
+import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceProblem } from "./load";
@@ -234,6 +234,8 @@ class SpaceMode {
         h("dd", { id: "space-shown" }, "—"),
       ),
       facts,
+      // a nofold surface problem is a 2D in 2D problem, which this note names and links to
+      h("p", { id: "space-same-as", class: "note", hidden: true }),
       h(
         "div",
         { id: "space-show", class: "row wrap space-show", hidden: true },
@@ -692,6 +694,13 @@ class SpaceMode {
     if (this.factsOf !== p) {
       this.factsOf = p;
       facts.replaceChildren();
+      const face = p ? nofoldFaceProblem(p.id) : null;
+      const same = $("space-same-as");
+      same.hidden = !face;
+      if (face) {
+        const [before, text, after] = nofoldNote(face);
+        same.replaceChildren(before, h("a", { href: face.href }, text), after);
+      } else same.replaceChildren();
     }
     if (p && !facts.childElementCount)
       for (const f of problemFacts(p)) {

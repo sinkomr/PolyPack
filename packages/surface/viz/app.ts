@@ -239,6 +239,32 @@ function current(): VizRecord | undefined {
   return byKey.get(`${state.solid}/${state.mode}/${state.N}/${state.P}`);
 }
 
+const FACE_NAMES: Record<number, string> = { 3: "triangle", 4: "square", 5: "pentagon" };
+
+/**
+ * Without folding, each face holds its pieces on its own, and some face holds at least
+ * k = ceil(P / F) of them; so a nofold record is the 2D in 2D packing of k pieces in the face
+ * polygon, copied onto the faces (docs/spaces/SURFACE.md, 2.1). The note says so and links to that
+ * problem on the site's board.
+ */
+function sameAs(r: VizRecord, name: string): HTMLParagraphElement {
+  const S = getSolid(r.solid);
+  const k = Math.ceil(r.P / S.F);
+  const pieces = k === 1 ? name.replace(/s$/, "") : name;
+  const a = document.createElement("a");
+  a.href = `/#p=${r.N},${S.M},${k}`;
+  a.textContent = `the 2D in 2D problem N = ${r.N}, M = ${S.M}, P = ${k}`;
+  const p = document.createElement("p");
+  p.id = "same-as";
+  p.append(
+    `Without folding, each face holds its pieces on its own, and one of the ${S.F} faces must hold at least ` +
+      `⌈${r.P} / ${S.F}⌉ = ${k} of them. So this is the same as packing ${k} ${pieces} in a ${FACE_NAMES[S.M]}, `,
+    a,
+    ".",
+  );
+  return p;
+}
+
 function render() {
   const r = current();
   const info = $("info");
@@ -264,6 +290,7 @@ function render() {
     p.textContent = l;
     info.appendChild(p);
   }
+  if (r.mode === "nofold") info.appendChild(sameAs(r, name));
   if (state.view === "net") drawNet(r);
   else draw3D(r);
   renderTable();

@@ -95,6 +95,10 @@ min over k >= ceil(P/F) of s2_best(N, M, k); this table uses k up to 8. The enve
 larger k only at ties (2 and 3 hexagons in a triangle both need side 5; 3 and 4 octagons in a
 square both need 2 + 2 sqrt 2), where the larger packing's coordinates scored a few 1e-13 lower.
 
+On the site, the board (beside a nofold problem's values), the Dimensions page (a link in each
+nofold row) and the viewer at `/spaces/surface.html` say this and link to the equivalent 2D in 2D
+problem N/M/ceil(P/F) on the polygon board, `/#p=N,M,k` (disks are N = 0 there too).
+
 **2.2 fold <= nofold** [CALC]: a nofold packing is a fold packing (each piece's development is
 the piece itself inside its face). Also s_fold(P) <= s_fold(P+1): remove a piece. A fold record
 exists where a fold search ran or a fold construction is known (an exact tiling, or a better
@@ -437,7 +441,9 @@ records file checks every record's published fields and re-certifies it at its s
 
 Viewer: open `packages/surface/viz/index.html` (standalone, no network). It recomputes the parts
 from the stored poses with the same development code and draws them on the solid (drag to turn)
-or on a net; pieces keep their colour across folds; red dots are the cone points.
+or on a net; pieces keep their colour across folds; red dots are the cone points. A nofold record
+links to its 2D in 2D problem on the site's board (section 2.1), a link that works where the viewer
+is served by the site, at `/spaces/surface.html`.
 
 ## 9. Limitations and open questions
 

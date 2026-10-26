@@ -3,6 +3,7 @@ import { type Page, type Route, expect, test } from "@playwright/test";
 import { type SpaceName, type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/spaces";
 import { DIMENSIONS, whereIs } from "../apps/web/src/dimension-table";
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
+import { nofoldFaceProblem, nofoldNote } from "../apps/web/src/spaces-model";
 import { LAZY_VIEW, openProblem } from "./helpers";
 
 // The board's space mode against the local stack (playwright.config.ts): the server lists the
@@ -388,6 +389,38 @@ test("pause holds a run at once, resume goes on, stop ends it at once", async ({
   await expect(page.locator("#space-solve-download")).toBeEnabled();
 });
 
+test("a nofold surface problem says it is a 2D in 2D problem and links to it on the polygon board", async ({
+  page,
+}) => {
+  const note = page.locator("#space-same-as");
+  // a fold problem has no such note
+  await page.goto("/#space=surface/cube/fold/4/12");
+  await shown(page, "surface/cube/fold/4/12", LAZY_VIEW);
+  await expect(note).toBeHidden();
+
+  for (const [id, href, N, M, P] of [
+    ["surface/cube/nofold/4/13", "/#p=4,4,3", "4", "4", "3"],
+    // disks are N = 0 on the polygon board too
+    ["surface/tetrahedron/nofold/0/5", "/#p=0,3,2", "0", "3", "2"],
+  ]) {
+    await page.goto("about:blank");
+    await page.goto(`/#space=${id}`);
+    await shown(page, id, LAZY_VIEW);
+    await expect(note).toBeVisible();
+    await expect(note).toHaveText(nofoldNote(nofoldFaceProblem(id)!).join(""));
+    const link = note.getByRole("link", { name: `the 2D in 2D problem N = ${N}, M = ${M}, P = ${P}` });
+    await expect(link).toHaveAttribute("href", href);
+    // the link opens that problem on the polygon board, and the menu says Flat
+    await link.click();
+    await expect(page.locator("#board")).toBeVisible();
+    await expect(page).toHaveURL(new RegExp(`#p=${N},${M},${P}$`));
+    await expect(page.locator("#n-select")).toHaveValue(N);
+    await expect(page.locator("#m-select")).toHaveValue(M);
+    await expect(page.locator("#p-input")).toHaveValue(P);
+    await menusShow(page, "polygon");
+  }
+});
+
 test("the dimensions page links each problem to the board", async ({ page }) => {
   await page.goto("/dimensions.html#space=torus&family=hex&N=5");
   const row = page.locator("#space-rows tr").first();
@@ -405,6 +438,7 @@ for (const scheme of ["light", "dark"] as const) {
     for (const id of [
       "sphere/4/12",
       "surface/cube/fold/0/10",
+      "surface/cube/nofold/4/13",
       "curved/-1/3/4/5",
       "torus/sq/5/7",
       "sphere/0/12",
