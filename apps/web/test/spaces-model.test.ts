@@ -256,8 +256,11 @@ describe("a nofold surface problem is a 2D in 2D problem", () => {
       string,
       { F: number; M: number; faces: number[][] }
     >;
-    expect(Object.keys(SOLID_FACES).sort()).toEqual(Object.keys(solids).sort());
-    for (const [name, s] of Object.entries(solids)) {
+    // the Platonic solids, whose faces are all one regular M-gon (the other solids list their faces' sides)
+    const platonic = Object.entries(solids).filter(([, s]) => s.M !== undefined);
+    expect(platonic.length).toBe(5);
+    expect(Object.keys(SOLID_FACES).sort()).toEqual(platonic.map(([name]) => name).sort());
+    for (const [name, s] of platonic) {
       expect(SOLID_FACES[name], name).toEqual({ F: s.F, M: s.M });
       expect(s.faces.length, name).toBe(s.F);
       expect(SEARCH_FACES[name as keyof typeof SEARCH_FACES], name).toEqual(SOLID_FACES[name]);
