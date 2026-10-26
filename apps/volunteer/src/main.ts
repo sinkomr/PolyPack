@@ -1049,8 +1049,13 @@ class Volunteer {
     }
     const before = bestRef(info);
     const known = buildSpaceKnown(info);
-    // the server's whole rule: also valid at the strict tolerance when below the research record
-    const rule: SpaceRule = { bound: info.bound, certified: info.certified?.score ?? null };
+    // the server's whole rule: also valid at the strict tolerance when below the research record, or when the
+    // problem has no research record yet
+    const rule: SpaceRule = {
+      bound: info.bound,
+      certified: info.certified?.score ?? null,
+      ...(info.no_record ? { noRecord: true } : {}),
+    };
     const maxSeconds = this.maxSeconds();
     const engineSeed = randomInt(2 ** 32);
     const control: Control = { aborted: this.stopped, paused: this.paused };
@@ -1101,6 +1106,7 @@ class Volunteer {
                 known,
                 bound: info.bound,
                 certified: rule.certified,
+                ...(rule.noRecord ? { noRecord: true } : {}),
                 maxSeconds,
                 lanes: this.pool!.size,
                 seed: engineSeed,
@@ -1170,6 +1176,7 @@ class Volunteer {
           check: checkSpaceConfig(p.space, p.id, offer.config, {
             bound: fresh.info.bound ?? info.bound,
             certified: fresh.info.certified?.score ?? rule.certified,
+            ...(fresh.info.no_record ? { noRecord: true } : {}),
           }),
           open: fresh.info.accepts_submissions,
           bestScore: fresh.info.best_score,

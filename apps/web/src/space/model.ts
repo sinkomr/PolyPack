@@ -8,7 +8,7 @@
  * "Site best", "Entries", and for 3D on 4D "Without folding" and "Folding gains".
  */
 import { SCORE_TIE } from "@polypack/geometry";
-import type { CertifiedStatus, SpaceConfig, SpaceName } from "@polypack/spaces";
+import type { CertifiedStatus, SpaceConfig, SpaceName, SpaceProblemStatus } from "@polypack/spaces";
 import { SPACE_RECORD_MARGIN, improvesSpaceBest } from "@polypack/spaces";
 import { getProblem as getPolyhedraProblem, getSolid as getPolyhedraSolid } from "@polypack/polyhedra";
 import {
@@ -31,7 +31,7 @@ import { round6 } from "../spaces-model";
 
 // ---------- the problem picker (pick.ts, shared with the 3D on 4D viewer) ----------
 
-export { DEFAULT_PROBLEM, type PickField, fieldsOfId, pickProblem } from "./pick";
+export { DEFAULT_PROBLEM, type PickField, fieldsOfId, pickFromDomain, pickProblem } from "./pick";
 
 // ---------- a problem from the server ----------
 
@@ -48,7 +48,8 @@ export interface LoadedSpaceProblem {
   /** The smaller of the certified value and the site best; null when there is neither. */
   best_score: number | null;
   accepts_submissions: boolean;
-  status: CertifiedStatus | null;
+  /** The problem's status; `no_record` when it has no research record yet (then `certified` is null). */
+  status: SpaceProblemStatus | null;
   closed_reason: string | null;
   /** The better of the research record's and the site leader's configuration (the record on a tie). */
   best: { config: SpaceConfig; score: number; source: "certified" | "site" } | null;
@@ -59,6 +60,7 @@ export interface LoadedSpaceProblem {
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const STATUSES: readonly CertifiedStatus[] = ["best_known", "proven", "infeasible"];
+const PROBLEM_STATUSES: readonly SpaceProblemStatus[] = [...STATUSES, "no_record"];
 const text = (v: unknown, max = 400) => (typeof v === "string" ? v.slice(0, max) : "");
 
 /**
@@ -92,7 +94,9 @@ export function readSpaceProblem(space: SpaceName, id: string, body: unknown): L
     isObject(body.bound) && positive(body.bound.value)
       ? { value: body.bound.value, label: text(body.bound.label) }
       : null;
-  const status = STATUSES.includes(body.status as CertifiedStatus) ? (body.status as CertifiedStatus) : null;
+  const status = PROBLEM_STATUSES.includes(body.status as SpaceProblemStatus)
+    ? (body.status as SpaceProblemStatus)
+    : null;
   const certifiedConfig = body.certified_config == null ? null : readSpaceConfig(search, body.certified_config);
   const siteConfig = body.site_config == null ? null : readSpaceConfig(search, body.site_config);
   const known = buildSpaceKnown({
@@ -120,11 +124,18 @@ export function readSpaceProblem(space: SpaceName, id: string, body: unknown): L
   };
 }
 
-/** The rule a configuration of the problem must pass: the server's, with its bound and certified size. */
+/**
+ * The rule a configuration of the problem must pass: the server's, with its bound and certified size, and for a
+ * problem without a research record the strict check of every entry.
+ */
 export const ruleOf = (p: LoadedSpaceProblem): SpaceRule => ({
   bound: p.bound?.value ?? null,
   certified: p.certified?.score ?? null,
+  ...(p.status === "no_record" ? { noRecord: true } : {}),
 });
+
+/** The board's words for a problem without a research record or a site entry yet. */
+export const NO_RECORD_TEXT = "No record yet: run the optimizer or submit one.";
 
 /**
  * True when a score would be kept, as the server decides: it beats the site's best by more than

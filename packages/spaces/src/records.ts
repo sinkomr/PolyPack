@@ -7,6 +7,9 @@
  * <code>.jsonl, one file per problem, one line per P, which each record's `config_at` locates)
  * has entries without configuration text (`configApart`, `configAt`); load.ts then gives the
  * catalogue a `loadConfig` that reads one on demand.
+ *
+ * A space may also have a domain (domain.ts): then every id of its domain is a problem, and one without a record is
+ * made on demand (problemOf) with the status `no_record`, its bound and no certified value or configuration.
  */
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import {
@@ -18,7 +21,16 @@ import {
   TORUS_FAMILIES,
   parseSpaceId,
 } from "./ids";
-import { CertifiedStatus, CertifiedValue, SiteBest, SpaceName, SpaceProblemExtra, SpaceProblemSummary } from "./types";
+import {
+  CertifiedStatus,
+  CertifiedValue,
+  SiteBest,
+  SpaceName,
+  SpaceProblemExtra,
+  SpaceProblemStatus,
+  SpaceProblemSummary,
+} from "./types";
+import { type SpaceDomain, domainMaxP } from "./domain";
 import { parseSpaceConfig } from "./validate";
 
 /** One problem of a catalogue. */
@@ -27,8 +39,8 @@ export interface SpaceProblemEntry {
   id: string;
   fields: Record<string, string | number>;
   P: number;
-  /** The research record's status. */
-  status: CertifiedStatus;
+  /** The research record's status, or `no_record` for a problem of the domain without one (problemOf). */
+  status: SpaceProblemStatus;
   /** The research record's certified value; null for infeasible problems. */
   certified: CertifiedValue | null;
   bound: { value: number; label: string } | null;
@@ -58,6 +70,8 @@ export interface SpaceCatalogue {
   maxP: number;
   /** Records left out, with the reason (none for the shipped data; a test checks it). */
   skipped: string[];
+  /** The space's domain (domain.ts), when its problems are given by one: then `problems` holds its records only. */
+  domain?: SpaceDomain;
   /**
    * Reads the research configuration of an entry whose configuration is kept apart (configApart),
    * checked as the catalogue checks the others; null when it cannot be read. Set by load.ts.
@@ -214,15 +228,16 @@ export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry)
 }
 
 /**
- * The catalogue of one space from its parsed records file. A record is left out (with a reason in
- * `skipped`) when its id does not match its fields, its status is unknown, or its configuration
- * is not one of the space's format with P pieces.
+ * The catalogue of one space from its parsed records file, and its domain when it has one (domain.ts). A record is
+ * left out (with a reason in `skipped`) when its id does not match its fields, its status is unknown, its
+ * configuration is not one of the space's format with P pieces, or it lies outside the domain. `file` may be null
+ * for a space with a domain and no records file yet.
  */
-export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatalogue {
+export function buildSpaceCatalogue(space: SpaceName, file: unknown, domain?: SpaceDomain): SpaceCatalogue {
   const skipped: string[] = [];
   const problems: SpaceProblemEntry[] = [];
   const records = isObject(file) && Array.isArray(file.records) ? file.records : null;
-  if (!records) skipped.push("the file has no records list");
+  if (!records && !(file === null && domain)) skipped.push("the file has no records list");
   for (const [k, r] of (records ?? []).entries()) {
     if (!isObject(r)) {
       skipped.push(`record ${k} is not an object`);
@@ -232,6 +247,10 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
     const id = parseSpaceId(space, rawId);
     if (typeof id === "string") {
       skipped.push(`record ${k}: ${id}`);
+      continue;
+    }
+    if (domain && domain.bound(id) === undefined) {
+      skipped.push(`${id.id}: outside the space's domain`);
       continue;
     }
     const own = recordFields(space, r);
@@ -308,14 +327,45 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown): SpaceCatal
     generated: isObject(file) && typeof file.generated === "string" ? file.generated : null,
     problems: unique,
     byId,
-    maxP: unique.reduce((m, p) => Math.max(m, p.P), 0),
+    maxP: Math.max(
+      unique.reduce((m, p) => Math.max(m, p.P), 0),
+      domain ? domainMaxP(domain) : 0,
+    ),
     skipped,
+    ...(domain ? { domain } : {}),
   };
 }
 
-/** True when a problem takes submissions: its research record is neither proven nor infeasible. */
+/**
+ * The problem of an id in a catalogue: its record, or, for an id of the space's domain without one, an entry made
+ * now with the status `no_record` and the domain's bound; null when the id is neither.
+ */
+export function problemOf(cat: SpaceCatalogue, id: ParsedSpaceId): SpaceProblemEntry | null {
+  const p = cat.byId.get(id.id);
+  if (p) return p;
+  const bound = cat.domain?.bound(id);
+  if (bound === undefined) return null;
+  return {
+    space: cat.space,
+    id: id.id,
+    fields: id.fields,
+    P: id.P,
+    status: "no_record",
+    certified: null,
+    bound,
+    closed_reason: null,
+    config: null,
+  };
+}
+
+/** True when a problem takes submissions: its research record is neither proven nor infeasible (or it has none). */
 export function acceptsSubmissions(p: SpaceProblemEntry): boolean {
   return p.closed_reason === null;
+}
+
+/** True when a problem has a research record (its status is not `no_record`). */
+export function hasRecord(p: Pick<SpaceProblemEntry, "status">): boolean {
+  return p.status !== "no_record";
 }
 
 /**

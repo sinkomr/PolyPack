@@ -255,6 +255,8 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
 export interface SpaceRule {
   bound?: number | null;
   certified?: number | null;
+  /** True for a problem without a research record: every result must then pass the strict check too. */
+  noRecord?: boolean;
 }
 
 export interface SpaceCheck {
@@ -274,6 +276,7 @@ export function checkSpaceConfig(space: SpaceName, id: string, config: unknown, 
   const v = validateSpaceSubmission(space, id, config, {
     bound: rule.bound ?? null,
     certified: rule.certified ?? null,
+    noRecord: rule.noRecord === true,
   });
   return { valid: v.valid, score: v.malformed ? null : v.score, reasons: v.reasons.slice(0, 5) };
 }
