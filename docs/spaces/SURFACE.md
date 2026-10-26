@@ -210,6 +210,19 @@ cover D(K) and, when no vertex lies in K, two parts of one piece share no interi
 the piece overlaps itself. So condition (3) and (4) of fold validity become: on every face, the
 parts of all pieces (two parts of one piece included) have disjoint interiors.
 
+**Separating axes** [CALC] (since 2026-10-26). The float check measures two parts by the
+separating-axis test, with its axes taken from the half-planes each part was cut from: the
+piece's sides, the two rays of its wedge and its face's edges, all from their exact angles
+(`parts.ts`, `partSeparation`). Every side of a part lies on one of these lines, and a
+half-plane that does not touch the part gives a smaller gap along its normal, while any positive
+gap separates the parts. So for overlapping parts the result is exactly their separating-axis
+depth, and positive values (parts apart) are a lower bound on their distance. Before, the axes
+came from the clipped parts' own sides. Clipping can leave a side about 1e-15 long (a piece
+corner on a vertex or an edge) whose direction rounding makes arbitrary, and such an axis cuts
+a sliver off the part: an independent review found two triangles on the octahedron overlapping
+by 7.9e-4 that the server accepted (`packages/surface/test/axes.test.ts`; the certifier
+rejected it). Every research record passes the new check, at the touching tolerance and at 1e-11.
+
 Enumeration: depth-first over chains from the anchor face; a branch is cut only when no
 vertex-avoiding ray of length <= reach (the piece's circumradius, or 2 for disk distances) can
 follow it:
@@ -360,7 +373,8 @@ P = 1..max(4F, 24).
   touching tolerance 1e-9), fold search (`search/`), scripts to build nofold and exact
   configurations, to drive the search, to build the test packings (`build-test-packings.ts`) and
   the other solids' data (`gen-general.ts`), and the viewers in `viz/` (Platonic records). It imports
-  `polygonSeparation` and `pieceVertices` from @polypack/geometry.
+  `pieceSeparation` (nofold) and `pieceVertices` from @polypack/geometry; fold parts are
+  separated by `partSeparation` (2.4, separating axes).
 - `python/surface` (certifier, standard library + mpmath only): `numfield.py` (exact arithmetic in
   Q, Q(sqrt 3) and Q(sqrt(10 + 2 sqrt 5)), and in the field of any solid), `geom.py` (independent
   construction of the Platonic solids by an exact convex hull; exact frames and gluings), `general.py`
@@ -371,20 +385,13 @@ P = 1..max(4F, 24).
 per face its number of sides, frame vertices and corner angles, per vertex its degree and cone
 angle (`Solid.sides`, `unitFaces`, `corner`, `vertexCone`); development, parts, the validator and the
 search read them face by face. The Platonic solids keep their code paths (`Solid.uniform`): with
-the separation rule below aside, their validation, parts and seeded searches were bit for bit those
+the separating axes of 2.4 aside, their validation, parts and seeded searches were bit for bit those
 of before [CALC: all 2038 records validated three ways and their parts compared, 17052 results, and
 five seeded searches, all identical]. Their records keep their ids and bytes and re-certify
 unchanged (`cert.py` on `data/surface/records.json`: 2038 certified, 0 failed).
 
-**Separating parts** (2026-10-26). Two parts on a face are separated (validator, search energy,
-contact polish) along the half-planes each was cut from: the piece's sides, the wedge's rays and the
-face's edges, in the face's frame (`partSeparation` in `parts.ts`). Each supports its part and they
-include every edge line of it, so this is the exact separating-axis separation. The edges of the
-clipped polygons are not used as axes: clipping can leave a near-zero edge whose normal does not
-support the part, and such an edge once hid an overlap (`surface/octahedron/fold/3/2`, now a
-regression test; the certifier always rejected it). [CALC] Every record keeps its verdict; the
-smallest pair clearances change by at most 1e-15, and seeded polygon searches now differ in the last
-bits.
+**Separating parts** (2026-10-26). The separating axes of two parts are the half-planes each was cut
+from (2.4); on the other solids the face's own edge lines, from `faceCutsOf`.
 
 **Certifying the other solids** (`general.py`) [CALC]. Built from `solids_exact.json`, not from the
 TypeScript: exact checks (field arithmetic, exact signs) that every face is planar, convex and
@@ -474,12 +481,14 @@ reads them, so the check is to re-run the certifier (about 6 minutes for every r
 
 ## 5. Search (fold track)
 
-Seeded and deterministic for given counts (`packages/surface/src/search`). It runs on every solid
-of the space; random starts pick a face by area on the solids beyond the Platonic ones. In its
-nofold mode (`mode: "nofold"`, for the nofold problems of those solids, which no planar engine
-covers) every piece is its own polygon in its anchor face, and the cone-point term is replaced by
-the squared protrusion beyond the face's edges (disks: the shortfall of the distance to each edge
-line), with the same compression, hops and contact-LP polish and the nofold validator at the end. Pieces are developed
+Seeded and deterministic for given counts (`packages/surface/src/search`); since the separating
+axes changed (2.4, 2026-10-26) the same seeds give other values than before, so a run from
+before that date is reproduced with the code of its time. It runs on every solid of the space;
+random starts pick a face by area on the solids beyond the Platonic ones. In its nofold mode
+(`mode: "nofold"`, for the nofold problems of those solids, which no planar engine covers) every
+piece is its own polygon in its anchor face, and the cone-point term is replaced by the squared
+protrusion beyond the face's edges (disks: the shortfall of the distance to each edge line), with
+the same compression, hops and contact-LP polish and the nofold validator at the end. Pieces are developed
 on the solid of edge 1 and scaled by lam (the score is 1/lam). Energy: squared penetration depths
 of overlapping parts on every face (polygons, separating-axis depth), squared cone-point depths
 (each vertex counted once, at its deepest appearance, so the energy is continuous), and for disks

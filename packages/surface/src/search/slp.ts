@@ -1,6 +1,6 @@
-import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
+import { boundingRadius, inradius } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
-import { HalfPlane, SurfacePose, partSeparation, pieceParts, polygonHalfPlanes } from "../parts";
+import { HalfPlanes, SurfacePose, partSeparation, pieceOutline, pieceParts } from "../parts";
 import { apply } from "../rigid";
 import { Solid, faceVertex } from "../solids";
 import { canonicalize } from "./energy";
@@ -17,7 +17,7 @@ import { canonicalize } from "./energy";
 
 interface PieceGeom {
   nodes: ChainNode[];
-  parts: { key: string; face: number; poly: Float64Array; planes: HalfPlane[] }[];
+  parts: { key: string; face: number; poly: Float64Array; cuts: HalfPlanes }[];
 }
 
 function pathKey(node: ChainNode): string {
@@ -31,8 +31,8 @@ export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: nu
 function geomOf(solid: Solid, N: number, lam: number, p: SurfacePose, i: number, mode: "fold" | "nofold"): PieceGeom {
   if (mode === "nofold") {
     if (N === 0) return { nodes: [], parts: [] };
-    const poly = pieceVertices(N, p, lam);
-    return { nodes: [], parts: [{ key: "", face: p.face, poly, planes: polygonHalfPlanes(poly) }] };
+    const o = pieceOutline(N, p, lam);
+    return { nodes: [], parts: [{ key: "", face: p.face, poly: o.poly, cuts: o }] };
   }
   if (N === 0) {
     const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, 2 * lam);
@@ -41,7 +41,7 @@ function geomOf(solid: Solid, N: number, lam: number, p: SurfacePose, i: number,
   const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, lam * boundingRadius(N));
   const parts = pieceParts(solid, 1, N, p, i, lam, nodes)
     .filter((q) => q.poly.length >= 6)
-    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly, planes: q.planes }));
+    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly, cuts: q.cuts }));
   return { nodes, parts };
 }
 

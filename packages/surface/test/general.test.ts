@@ -480,14 +480,14 @@ describe("separation along the half-planes a part was cut from", () => {
 
   it("agrees with the polygon separation on whole pieces", async () => {
     const { polygonSeparation } = await import("@polypack/geometry");
-    const { partSeparation, polygonHalfPlanes } = await import("../src/parts");
+    const { partSeparation, pieceOutline } = await import("../src/parts");
     const rand = rng(5);
     for (let t = 0; t < 300; t++) {
       const N = [3, 4, 7, 20][t % 4];
-      const a = pieceVertices(N, { x: 0, y: 0, theta: rand() * 7 });
-      const b = pieceVertices(N, { x: (rand() - 0.5) * 3, y: (rand() - 0.5) * 3, theta: rand() * 7 });
-      const s1 = polygonSeparation(a, b).sep;
-      const s2 = partSeparation({ poly: a, planes: polygonHalfPlanes(a) }, { poly: b, planes: polygonHalfPlanes(b) });
+      const a = pieceOutline(N, { face: 0, x: 0, y: 0, theta: rand() * 7 });
+      const b = pieceOutline(N, { face: 0, x: (rand() - 0.5) * 3, y: (rand() - 0.5) * 3, theta: rand() * 7 });
+      const s1 = polygonSeparation(a.poly, b.poly).sep;
+      const s2 = partSeparation({ poly: a.poly, cuts: a }, { poly: b.poly, cuts: b });
       expect(Math.abs(s1 - s2)).toBeLessThan(1e-12);
     }
   });

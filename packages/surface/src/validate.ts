@@ -222,6 +222,7 @@ export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Va
       for (let b = a + 1; b < list.length; b++) {
         const A = list[a];
         const B = list[b];
+        // axes from the half-planes the parts were cut from, not from their clipped sides (parts.ts)
         const sep = partSeparation(A, B);
         minPair = Math.min(minPair, sep);
         if (sep < -tol) {
