@@ -3,6 +3,7 @@ import { gzip as gzipCallback } from "node:zlib";
 import { MAX_SOFTWARE_LENGTH } from "@polypack/geometry";
 import {
   SPACE_BOUND_SLACK,
+  SURFACE_CATALAN,
   SPACE_EXHIBITS,
   SPACE_INFO,
   SPACE_NAMES,
@@ -62,8 +63,10 @@ export const SPACE_TARGETS_MAX_LIMIT = 20000;
  */
 export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
 /**
- * Polyhedra checks from this P on are heavy ([CALC] up to 0.35 s of work at P = 100): one runs at a time
- * on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their turn; another is refused with 503.
+ * Polyhedra and surface checks from this P on are heavy ([CALC] polyhedra up to 0.35 s of work at P = 100;
+ * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
+ * parts, 0.57 s before): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
+ * turn; another is refused with 503.
  */
 export const SPACE_HEAVY_CHECK_P = 30;
 export const SPACE_HEAVY_CHECKS_WAITING = 8;
@@ -292,9 +295,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   // The work list (docs: "spaces-targets"). Each open problem counts with its relative room above
   // its lower bound, g = (best - bound) / best capped at SPACE_GAP_CAP (best: the smaller of the
   // certified and the site value), times spaceTargetWeight(P). Problems whose best value meets the
-  // bound (g at most SPACE_SETTLED_GAP), P = 1, and the surface in nofold mode are left out: a
-  // nofold problem is the main site's planar problem N in M with ceil(P / F) pieces, which the
-  // polygon work list covers; it stays listed and open to submissions. The priorities are then
+  // bound (g at most SPACE_SETTLED_GAP), P = 1, and the surface in nofold mode on the Platonic solids,
+  // prisms and antiprisms are left out: such a nofold problem is the main site's planar problem N in M
+  // (on a prism or antiprism, the best split between its two kinds of face), which the polygon work list
+  // covers; it stays listed and open to submissions. Catalan nofold problems (irregular faces) are offered. The priorities are then
   // scaled so that those of each space sum to 1 / (number of spaces with targets): drawn in
   // proportion to priority, every space gets the same share of the searches. A problem without a
   // research record or a site entry (status no_record) has no best value: it counts with the
@@ -325,7 +329,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     for (const space of loaded) {
       for (const p of candidates(space)) {
         if (!acceptsSubmissions(p)) continue;
-        if (space === "surface" && p.fields.mode === "nofold") continue;
+        // nofold problems of solids whose faces are regular polygons are 2D in 2D problems (the polygon
+        // work list's, or a split between two of them on prisms and antiprisms); a Catalan face is not
+        if (space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid)))
+          continue;
         const weight = spaceTargetWeight(p.P);
         if (!(weight > 0)) continue;
         const lead = site.get(`${space} ${p.id}`) ?? null;
@@ -618,7 +625,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
 
     // The time the check takes is charged to the address, as for /api/submit. A configuration that
     // beats the research record must also be valid at the strict tolerance. A polyhedra check gives
-    // the event loop a turn every 20 ms (validateSpaceSubmissionAsync), so that one large check never
+    // (and a surface check) the event loop a turn every 20 ms (validateSpaceSubmissionAsync), so that one large check never
     // holds the server; its work, not its waits, is charged. An address has one check at a time, an
     // estimate of its cost is reserved from the budget before it starts, and the heavy checks run
     // one at a time server-wide, a few waiting their turn.
@@ -628,10 +635,17 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         ["an entry from this address is still being checked; send the next one when it is answered"],
         1,
       );
-    const heavy = space === "polyhedra" && parsedId.P >= SPACE_HEAVY_CHECK_P;
+    const heavy = (space === "polyhedra" || space === "surface") && parsedId.P >= SPACE_HEAVY_CHECK_P;
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
-    const estimate = space === "polyhedra" ? Math.min(400, 0.04 * parsedId.P * parsedId.P) : 5;
+    // a surface check grows with P^2 N (pairs of parts of N sides): about 15 ms at P = N = 100
+    const sides = space === "surface" ? Math.max(8, Number(parsedId.fields.N)) : 0;
+    const estimate =
+      space === "polyhedra"
+        ? Math.min(400, 0.04 * parsedId.P * parsedId.P)
+        : space === "surface"
+          ? Math.min(100, 5 + 1e-5 * parsedId.P * parsedId.P * sides)
+          : 5;
     checking.add(address);
     ctx.verifyBudget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;

@@ -18,6 +18,8 @@ import {
   apply,
   applyDir,
   faceApothem,
+  faceDepth,
+  faceVertex,
   frameVertex,
   getSolid,
   glue,
@@ -36,13 +38,8 @@ import { rng } from "./helpers";
  */
 function exactDepth(S: Solid, N: number, s: number, p: SurfacePose, f: number, x: number, y: number, nodes = pieceChains(S, s, N, p, 1, 200)): number {
   const rin = inradius(N);
-  const M = S.M;
-  const ap = faceApothem(M, s);
-  let face = Infinity;
-  for (let j = 0; j < M; j++) {
-    const a = (2 * Math.PI * (j + 1)) / M - Math.PI / 2;
-    face = Math.min(face, ap - (x * Math.cos(a) + y * Math.sin(a)));
-  }
+  // depth in face f (any face shape; on the Platonic solids the apothem form)
+  const face = faceDepth(S, s, f, x, y);
   let best = -Infinity;
   for (const node of nodes) {
     if (node.face !== f) continue;
@@ -66,20 +63,32 @@ function exactDepth(S: Solid, N: number, s: number, p: SurfacePose, f: number, x
  * (its frame origin) across the edges it crosses: the placement a piece reaching over a vertex has.
  */
 function unfoldFromCentre(S: Solid, s: number, p: SurfacePose): SurfacePose {
-  const M = S.M;
-  const ap = faceApothem(M, s);
   let { face, theta } = p;
   let [ox, oy, dx, dy] = [0, 0, p.x, p.y];
   let entry = -1;
   for (let step = 0; step < 1000; step++) {
     let tau = Infinity;
     let k = -1;
+    const M = S.sides[face];
     for (let j = 0; j < M; j++) {
       if (j === entry) continue;
-      const a = (2 * Math.PI * (j + 1)) / M - Math.PI / 2;
-      const nd = Math.cos(a) * dx + Math.sin(a) * dy;
+      // edge j's outward unit normal and its distance from the frame origin (the apothem on a regular face)
+      let nx: number;
+      let ny: number;
+      let ap: number;
+      if (S.uniform) {
+        const a = (2 * Math.PI * (j + 1)) / M - Math.PI / 2;
+        [nx, ny, ap] = [Math.cos(a), Math.sin(a), faceApothem(M, s)];
+      } else {
+        const [ax, ay] = faceVertex(S, s, face, j);
+        const [bx, by] = faceVertex(S, s, face, j + 1);
+        const L = Math.hypot(bx - ax, by - ay);
+        [nx, ny] = [(by - ay) / L, -(bx - ax) / L];
+        ap = nx * ax + ny * ay;
+      }
+      const nd = nx * dx + ny * dy;
       if (!(nd > 0)) continue;
-      const tj = (ap - Math.cos(a) * ox - Math.sin(a) * oy) / nd;
+      const tj = (ap - nx * ox - ny * oy) / nd;
       if (tj < tau) [tau, k] = [tj, j];
     }
     if (k < 0 || tau >= 1) return { face, x: ox + dx, y: oy + dy, theta };
@@ -186,6 +195,25 @@ const SLIVERS: { solid: SolidName; N: number; s: number; pose: SurfacePose }[] =
     N: 8,
     s: 2.003830260108225,
     pose: { face: 4, x: 0.7379348084222851, y: -0.3646970585735645, theta: 2.833077107913249 },
+  },
+  // the irregular faces of the other solids: a corner on an edge of a kite, of a rhombus and of a prism's square
+  {
+    solid: "deltoidal_icositetrahedron",
+    N: 8,
+    s: 3.93381387809388,
+    pose: { face: 14, x: -0.5843115512910821, y: 0.777181891403512, theta: -0.03332820479903331 },
+  },
+  {
+    solid: "rhombic_dodecahedron",
+    N: 4,
+    s: 2.9353137967116902,
+    pose: { face: 7, x: 0.8736792269470413, y: 0.17666591629414707, theta: -2.68354487520181 },
+  },
+  {
+    solid: "prism5",
+    N: 3,
+    s: 1.6899630655336648,
+    pose: { face: 3, x: 0.9286629402294826, y: -0.8646967368540417, theta: -4.16938947041566 },
   },
 ];
 

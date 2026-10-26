@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ALL_SOLID_NAMES, SURFACE_NS, surfaceBound, surfaceDomain } from "../src/index";
+import { ALL_SOLID_NAMES, CATALAN_NAMES, SURFACE_NS, surfaceBound, surfaceDomain } from "../src/index";
 
 const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records;
 
@@ -29,7 +29,7 @@ describe("the surface domain", () => {
     }
   });
 
-  it("samples folding problems without a record, small P first, deterministically", () => {
+  it("samples problems without a record, small P first, deterministically", () => {
     const s = surfaceDomain.sample(500);
     expect(s.length).toBe(500);
     expect(s).toEqual(surfaceDomain.sample(500));
@@ -37,7 +37,14 @@ describe("the surface domain", () => {
     // folding problems without a record, from P = 2
     expect(s[0]).toBe(`surface/${ALL_SOLID_NAMES[5]}/fold/0/2`);
     const ids = new Set(records.map((r: { id: string }) => r.id));
-    expect(s.some((id) => ids.has(id) || id.includes("/nofold/") || id.endsWith("/1"))).toBe(false);
-    expect(s.every((id) => surfaceDomain.bound({ fields: { solid: id.split("/")[1], mode: "fold", N: Number(id.split("/")[3]) }, P: Number(id.split("/")[4]) }))).toBe(true);
+    const catalan = new Set(CATALAN_NAMES as readonly string[]);
+    expect(s.some((id) => ids.has(id) || id.endsWith("/1"))).toBe(false);
+    // nofold only on the Catalan solids, whose faces no 2D in 2D problem covers
+    expect(s.filter((id) => id.includes("/nofold/")).every((id) => catalan.has(id.split("/")[1]))).toBe(true);
+    expect(s.some((id) => id.includes("/nofold/"))).toBe(true);
+    for (const id of s) {
+      const [, solid, mode, N, P] = id.split("/");
+      expect(surfaceDomain.bound({ fields: { solid, mode, N: Number(N) }, P: Number(P) })).toBeDefined();
+    }
   });
 });

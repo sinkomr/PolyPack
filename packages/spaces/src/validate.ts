@@ -32,7 +32,14 @@ import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary 
 import { CurvedConfig, containerCircumradius, validate as validateCurved } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
 import { SphereConfig, validate as validateSphere } from "@polypack/sphere";
-import { ChainLimitError, SolidName, SurfaceConfig, getSolid, validate as validateSurface } from "@polypack/surface";
+import {
+  ChainLimitError,
+  SolidName,
+  SurfaceConfig,
+  getSolid,
+  validate as validateSurface,
+  validateAsync as validateSurfaceAsync,
+} from "@polypack/surface";
 import { Lattice, TorusFamily, gaussReduce, imageWindow, torusScore, validateTorusPacking } from "@polypack/torus";
 import {
   POLYHEDRA_MAX_P,
@@ -60,9 +67,10 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: the largest P of its catalogue (2026-10-24; polyhedra 2026-10-25),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface: its domain's P <= 100; [CALC] random configurations of 100 pieces (N = 0 to 100, six solids
- * from the cube to the disdyakis triacontahedron, at and above the area bound) took at most 106 ms to
- * check on a heavily loaded laptop (2026-10-26).
+ * Surface: its domain's P <= 100. [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
+ * compares only parts closer than two circumradii; without that, 100 coincident 100-gons took up to
+ * 0.57 s (random configurations of 100 pieces about 0.1 s). On a server the check runs in slices
+ * (validateSpaceSubmissionAsync), and checks of many pieces are queued like the polyhedra ones.
  */
 export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
@@ -460,9 +468,10 @@ export function validateSpaceSubmission(
 }
 
 /**
- * validateSpaceSubmission for a server: the same checks, but a polyhedra configuration is checked in slices
- * that give the event loop a turn every `sliceMs` (validatePolyhedraAsync), so that no check of 100 large
- * solids holds the loop for long. `workMs` is the time the checks took, without the turns.
+ * validateSpaceSubmission for a server: the same checks, but a polyhedra or surface configuration is checked
+ * in slices that give the event loop a turn every `sliceMs` (validatePolyhedraAsync, the surface package's
+ * validateAsync), so that no check of 100 large pieces holds the loop for long. `workMs` is the time the checks
+ * took, without the turns.
  */
 export async function validateSpaceSubmissionAsync(
   space: SpaceName,
@@ -478,6 +487,30 @@ export async function validateSpaceSubmissionAsync(
   let slices = 1;
   let longestSliceMs = first;
   const run = async (tol: number): Promise<string[]> => {
+    if (prep.id.space === "surface") {
+      // the surface check in slices too: 100 many-sided pieces take a few hundred ms of work at worst
+      const f = prep.id.fields;
+      const c = prep.config as { s: number; pieces: SurfaceConfig["pieces"] };
+      const cfg: SurfaceConfig = { solid: f.solid as SolidName, N: f.N as number, s: c.s, pieces: c.pieces };
+      try {
+        const v = await validateSurfaceAsync(cfg, f.mode as "fold" | "nofold", {
+          tol,
+          maxErrors: MAX_REASONS,
+          maxChains: SURFACE_MAX_CHAINS,
+          sliceMs: opts.sliceMs,
+        });
+        workMs += v.workMs;
+        slices += v.slices;
+        longestSliceMs = Math.max(longestSliceMs, v.longestSliceMs);
+        return v.ok ? [] : reasonsOf(v.errors, `not a valid packing (smallest clearance ${v.minPairSep})`);
+      } catch (e) {
+        return [
+          e instanceof ChainLimitError
+            ? `the fold check gave up: ${e.message}`
+            : `the check failed: ${e instanceof Error ? e.message : String(e)}`,
+        ];
+      }
+    }
     if (prep.id.space !== "polyhedra") {
       const t = performance.now();
       const r = checked(prep.id, prep.config, tol);

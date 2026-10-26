@@ -1,4 +1,4 @@
-import { TOL, inradius, pieceSeparation, pieceVertices } from "@polypack/geometry";
+import { TOL, boundingRadius, inradius, pieceSeparation, pieceVertices } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "./chains";
 import { Part, SurfacePose, partSeparation, pieceChains, pieceParts } from "./parts";
 import { apply } from "./rigid";
@@ -73,8 +73,19 @@ const empty = (errors: string[]): Validation => ({ ok: false, errors, minPairSep
  * Faces meet only along edges, so pieces on different faces never overlap.
  */
 export function validateNofold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Validation {
+  return drain(nofoldCheck(cfg, opts));
+}
+
+/**
+ * The checks as steps (a generator that yields between pieces and every PAIRS_PER_STEP pairs), so that
+ * validateAsync can give the event loop a turn; validateFold and validateNofold run them at once.
+ * Both stop as soon as `maxErrors` errors are found, and skip pairs whose pieces (or developed parts)
+ * have centres farther apart than two circumradii: such pieces cannot meet.
+ */
+function* nofoldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void, Validation> {
   const tol = opts.tol ?? TOL;
   const scale = opts.scale ?? 1;
+  const maxErrors = opts.maxErrors ?? 50;
   const errors: string[] = [];
   const solid = checkShape(cfg, errors);
   if (!solid) return empty(errors);
@@ -90,18 +101,37 @@ export function validateNofold(cfg: SurfaceConfig, opts: ValidateOptions = {}): 
       for (let k = 0; k < N; k++) depth = Math.min(depth, faceDepth(solid, s, p.face, v[2 * k], v[2 * k + 1]));
     }
     minWall = Math.min(minWall, depth);
-    if (depth < -tol) errors.push(`piece ${i} leaves face ${p.face} by ${-depth}`);
+    if (depth < -tol && errors.length < maxErrors) errors.push(`piece ${i} leaves face ${p.face} by ${-depth}`);
   });
+  const result = (): Validation => ({ ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: Infinity, minWallSep: minWall });
+  if (errors.length >= maxErrors) return result();
+  const reach = 2 * scale * (N === 0 ? 1 : boundingRadius(N)) * (1 + 1e-9) + 1e-12;
+  let work = 0;
   for (let i = 0; i < cfg.pieces.length; i++)
     for (let j = i + 1; j < cfg.pieces.length; j++) {
       const a = cfg.pieces[i];
       const b = cfg.pieces[j];
-      if (a.face !== b.face) continue;
+      if (a.face !== b.face || Math.hypot(a.x - b.x, a.y - b.y) > reach) continue;
+      if (++work % PAIRS_PER_STEP === 0) yield;
       const sep = pieceSeparation(N, a, b, scale).sep;
       minPair = Math.min(minPair, sep);
-      if (sep < -tol) errors.push(`pieces ${i} and ${j} overlap on face ${a.face} by ${-sep}`);
+      if (sep < -tol) {
+        errors.push(`pieces ${i} and ${j} overlap on face ${a.face} by ${-sep}`);
+        if (errors.length >= maxErrors) return result();
+      }
     }
-  return { ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: Infinity, minWallSep: minWall };
+  return result();
+}
+
+/** Pairs of pieces or parts compared between two turns of validateAsync. */
+const PAIRS_PER_STEP = 32;
+
+/** Runs the steps of a check to its end. */
+function drain(steps: Generator<void, Validation>): Validation {
+  for (;;) {
+    const r = steps.next();
+    if (r.done) return r.value;
+  }
 }
 
 /** Developed images of a point q (face fq, frame coords) seen from p along chains: [x, y, length]. */
@@ -162,6 +192,10 @@ function coneClearance(solid: Solid, s: number, N: number, pose: SurfacePose, no
  * geodesic loops at a centre >= 2.
  */
 export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Validation {
+  return drain(foldCheck(cfg, opts));
+}
+
+function* foldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void, Validation> {
   const tol = opts.tol ?? TOL;
   const scale = opts.scale ?? 1;
   const maxErrors = opts.maxErrors ?? 50;
@@ -184,7 +218,10 @@ export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Va
   if (N === 0) {
     const reach = 2 * scale;
     const nodes = cfg.pieces.map((p) => enumerateChains(solid, s, p.face, p.x, p.y, reach, maxChains));
-    cfg.pieces.forEach((p, i) => {
+    for (let i = 0; i < cfg.pieces.length; i++) {
+      const p = cfg.pieces[i];
+      if (errors.length >= maxErrors) break;
+      yield;
       const c = coneClearance(solid, s, 0, p, nodes[i], scale, tol);
       minCone = Math.min(minCone, c);
       if (c < -tol) push(`a cone point lies inside disk ${i} (by ${-c})`);
@@ -204,38 +241,86 @@ export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Va
           if (sep < -tol) push(`disks ${i} and ${j} overlap (centre distance ${d})`);
         }
       }
-    });
+    }
     return { ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: minCone, minWallSep: Infinity };
   }
 
   const byFace: Part[][] = Array.from({ length: solid.F }, () => []);
-  cfg.pieces.forEach((p, i) => {
+  const result = (): Validation => ({ ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: minCone, minWallSep: Infinity });
+  for (let i = 0; i < cfg.pieces.length; i++) {
+    const p = cfg.pieces[i];
+    yield;
     const nodes = pieceChains(solid, s, N, p, scale, maxChains);
     const c = coneClearance(solid, s, N, p, nodes, scale, tol);
     minCone = Math.min(minCone, c);
     if (c < -tol) push(`a cone point lies inside piece ${i} (depth ${-c})`);
+    if (errors.length >= maxErrors) return result();
     for (const part of pieceParts(solid, s, N, p, i, scale, nodes)) if (part.poly.length >= 6) byFace[part.face].push(part);
-  });
+  }
+  // a part lies within the circumradius of its developed centre (cx, cy), so parts whose centres are
+  // farther apart than two circumradii cannot meet
+  const reach = 2 * scale * boundingRadius(N) * (1 + 1e-9) + 1e-12;
+  let work = 0;
   for (let f = 0; f < solid.F; f++) {
     const list = byFace[f];
     for (let a = 0; a < list.length; a++)
       for (let b = a + 1; b < list.length; b++) {
         const A = list[a];
         const B = list[b];
+        if (Math.hypot(A.cx - B.cx, A.cy - B.cy) > reach) continue;
+        if (++work % PAIRS_PER_STEP === 0) yield;
         // axes from the half-planes the parts were cut from, not from their clipped sides (parts.ts)
         const sep = partSeparation(A, B);
         minPair = Math.min(minPair, sep);
         if (sep < -tol) {
           if (A.piece === B.piece) push(`piece ${A.piece} overlaps itself on face ${f} (depth ${-sep})`);
           else push(`pieces ${A.piece} and ${B.piece} overlap on face ${f} (depth ${-sep})`);
+          if (errors.length >= maxErrors) return result();
         }
       }
   }
-  return { ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: minCone, minWallSep: Infinity };
+  return result();
 }
 
 export function validate(cfg: SurfaceConfig, mode: Mode, opts: ValidateOptions = {}): Validation {
   return mode === "fold" ? validateFold(cfg, opts) : validateNofold(cfg, opts);
+}
+
+/**
+ * validate for a server: the same checks, giving the event loop a turn (setTimeout 0) whenever a slice
+ * of work reaches `sliceMs` (default 20 ms), so that no check holds the loop for long. `workMs` is the
+ * time the checks took, without the turns. Throws what validate throws (a ChainLimitError).
+ */
+export async function validateAsync(
+  cfg: SurfaceConfig,
+  mode: Mode,
+  opts: ValidateOptions & { sliceMs?: number } = {},
+): Promise<Validation & { workMs: number; slices: number; longestSliceMs: number }> {
+  const sliceMs = opts.sliceMs ?? 20;
+  const turn = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+  // a turn first, so that two checks in a row (the strict one after the usual one) do not add up
+  await turn();
+  const steps = mode === "fold" ? foldCheck(cfg, opts) : nofoldCheck(cfg, opts);
+  let workMs = 0;
+  let slices = 1;
+  let longestSliceMs = 0;
+  let t = performance.now();
+  for (;;) {
+    const r = steps.next();
+    const now = performance.now();
+    if (r.done) {
+      workMs += now - t;
+      longestSliceMs = Math.max(longestSliceMs, now - t);
+      return { ...r.value, workMs, slices, longestSliceMs };
+    }
+    if (now - t >= sliceMs) {
+      workMs += now - t;
+      longestSliceMs = Math.max(longestSliceMs, now - t);
+      slices++;
+      await turn();
+      t = performance.now();
+    }
+  }
 }
 
 /** Area lower bound on the scale s (the edge, for unit-edge solids): P * pieceArea <= surface area. */

@@ -6,9 +6,9 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ALL_SOLID_NAMES, getSolid } from "@polypack/surface";
+import { ALL_SOLID_NAMES, getSolid, pieceChains, pieceParts, surfaceBound } from "@polypack/surface";
 import { describe, expect, it } from "vitest";
-import { SURFACE_SOLIDS, formatSpaceId, parseSpaceId, validateSpaceSubmission } from "../src";
+import { SURFACE_SOLIDS, formatSpaceId, parseSpaceId, validateSpaceSubmission, validateSpaceSubmissionAsync } from "../src";
 import {
   SPACE_METHOD,
   SURFACE_NOFOLD_METHOD,
@@ -173,5 +173,67 @@ describe("search jobs on the new solids", () => {
     expect(paused.termination).toBe("time");
     // a start of another problem is refused
     expect(runSpaceJob(job("surface/prism5/fold/6/3", { start }), go)).toMatchObject({ valid: false, termination: "error" });
+  });
+});
+
+describe("the work of a surface check", () => {
+  const coincident = (solid: string, N: number, P: number) => {
+    const S = getSolid(solid as never);
+    const s = surfaceBound(solid as never, N, P).value;
+    return { s, pieces: Array.from({ length: P }, () => ({ face: 0, x: 0, y: 0, theta: 0 })), S };
+  };
+
+  it("stops at the first overlaps: 100 coincident 100-gons are refused at once", async () => {
+    for (const solid of ["tetrahedron", "triakis_octahedron", "prism6"]) {
+      const { s, pieces } = coincident(solid, 100, 100);
+      for (const mode of ["fold", "nofold"]) {
+        const id = `surface/${solid}/${mode}/100/100`;
+        const t = performance.now();
+        const v = validateSpaceSubmission("surface", id, { s, pieces });
+        expect(v.valid).toBe(false);
+        // [CALC] about 5 ms (0.57 s when every pair was compared); generous under load
+        expect(performance.now() - t, id).toBeLessThan(250);
+        const a = await validateSpaceSubmissionAsync("surface", id, { s, pieces }, { noRecord: true });
+        expect(a.valid).toBe(false);
+        expect(a.workMs, id).toBeLessThan(250);
+      }
+    }
+  });
+
+  it("checks 100 touching 100-gons in slices, and keeps them valid", async () => {
+    // a hexagonal lattice in the dodecagon of a prism, the pieces 1e-7 apart
+    const N = 100;
+    const R = 1 / (2 * Math.sin(Math.PI / N));
+    const step = 2 * R * 1.0000001;
+    const S = getSolid("prism12");
+    const face = S.sides.indexOf(12);
+    const pieces = [];
+    for (let i = 0; i < 10; i++)
+      for (let j = 0; j < 10; j++)
+        pieces.push({ face, x: (i - 4.5) * step + ((j % 2) * step) / 2, y: ((j - 4.5) * step * Math.sqrt(3)) / 2, theta: 0 });
+    const v = await validateSpaceSubmissionAsync("surface", "surface/prism12/fold/100/100", { s: 120, pieces }, { sliceMs: 5 });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
+    expect(v.slices).toBeGreaterThan(1);
+    expect(v.longestSliceMs).toBeLessThan(100);
+  });
+
+  it("skips only parts that cannot meet: every part lies within the circumradius of its developed centre", () => {
+    const rand = (() => {
+      let a = 12345;
+      return () => ((a = (Math.imul(a, 1664525) + 1013904223) >>> 0) / 4294967296);
+    })();
+    for (const solid of ["deltoidal_icositetrahedron", "antiprism12", "cube"] as const) {
+      const S = getSolid(solid);
+      for (const N of [3, 7, 100]) {
+        const R = 1 / (2 * Math.sin(Math.PI / N));
+        for (let t = 0; t < 20; t++) {
+          const s = (0.8 + 2 * rand()) * R;
+          const pose = { face: Math.floor(rand() * S.F), x: 0, y: 0, theta: 7 * rand() };
+          for (const part of pieceParts(S, s, N, pose, 0, 1, pieceChains(S, s, N, pose, 1, 600)))
+            for (let k = 0; k < part.poly.length; k += 2)
+              expect(Math.hypot(part.poly[k] - part.cx, part.poly[k + 1] - part.cy)).toBeLessThanOrEqual(R * (1 + 1e-12));
+        }
+      }
+    }
   });
 });

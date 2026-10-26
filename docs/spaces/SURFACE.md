@@ -305,8 +305,8 @@ These cases meet the area bound exactly, so they are best possible [CALC: P a(N)
 status `best_known` with that note. Construction code: `packages/surface/scripts/build-exact.ts`.
 [SPEC] Perfect tilings at other sizes were not searched for.
 
-**One-piece replicas** [CALC] (added after the independent review, which found ten fold entries
-beaten or settled this way; `packages/surface/scripts/build-replicas.ts`). Take the best one-piece
+**One-piece replicas** [CALC] (added on 2026-10-24, when a second, separately written check found ten
+fold entries beaten or settled this way; `packages/surface/scripts/build-replicas.ts`). Take the best one-piece
 placement of a shape: the closed form where the one-piece bound s = 2 sin(pi/M) r_in(N) is attained
 (disks, and polygons whose N is a multiple of M, centred on a face with the face's corners at
 the midpoints of the piece's sides), and the best P = 1 search result. The rotation group of a
@@ -319,8 +319,8 @@ the icosahedron, for every shape. It gives packings of P = 1 up to that size at 
 value; with the closed form they meet the one-piece bound. Example: two squares on opposite cube
 faces at s = 1/sqrt 2. The clique search is exhaustive over the copies of each placement, so,
 for example, five triangles on the icosahedron at s = 1/2 cannot be made from copies of the
-closed-form placement [CALC] (the reviewer's reason: the icosahedron's dual graph has no perfect
-code, while the octahedron's two copies cover its surface exactly).
+closed-form placement [CALC] (the reason: the icosahedron's dual graph has no perfect code, while
+the octahedron's two copies cover its surface exactly).
 
 ## 3b. Results in brief
 
@@ -360,8 +360,8 @@ P = 1..max(4F, 24).
 - Cross-checks: the cube disk values agree with the earlier exploratory experiment where both
   exist (P = 6: 1.961568; P = 12: 2.730486); that experiment's P = 2 value sqrt 2 was missed by
   the first search pass (two disks landed on adjacent faces) and found by the second.
-- An independent review (2026-10-24) found no soundness defect in the certifier; it found ten
-  fold entries that copies of the one-piece placement beat or settle, which led to the replica
+- A second certifier written separately (2026-10-24) re-checked the records and found no soundness
+  defect in this one; it found ten fold entries that copies of the one-piece placement beat or settle, which led to the replica
   family above. That family changed 37 fold entries, 13 of them by more than 0.1%, e.g. three
   and four triangles on the icosahedron from 0.601948 and 0.612234 to 1/2 and two octagons on
   the cube from 1.942810 to 1 + 1/sqrt 2.
@@ -555,8 +555,8 @@ as in section 1; gluing rotates by (direction of f's edge k) + pi - (direction o
   coordinates are those the atlas returned on 2026-10-24. Their validity does not rest on the
   site: every face packing is re-scored from its coordinates and certified here like any other
   configuration. What could not be checked offline is that the coordinates still match the cited
-  site entry; per the independent review, 106 of these records are up to 1.0e-6 better than what
-  the local `data/records.json` coordinates give.
+  site entry; a separate re-check (2026-10-24) found 106 of these records up to 1.0e-6 better than
+  what the local `data/records.json` coordinates give.
 - Exploratory cube-surface experiment of the PolyPack generalisation note (2026-10-23), used only
   as a cross-check: its flat-disk values for the cube agree with this search where both exist
   (P = 6: 1.961568; P = 12: 2.730486).
@@ -619,11 +619,11 @@ or on a net; pieces keep their colour across folds; red dots are the cone points
 - Not done: perfect tilings beyond the Goldberg–Coxeter, Caspar–Klug and hexagon families; lower bounds
   for disks beyond area and one piece (an argument with the vertex-free regions around the face
   centres looks possible for small P [SPEC]).
-- An independent adversarial review (2026-10-24; judges with different algorithms, 2.49 million
+- Adversarial checks written separately (2026-10-24; judges with different algorithms, 2.49 million
   traced points, about 5400 perturbed records, 6000 random wrapped configurations, 2238 threshold
-  tests and a tetrahedron orbifold model) found no soundness defect in the certifier. Its tooling
+  tests and a tetrahedron orbifold model) found no soundness defect in the certifier. Their tooling
   and documentation findings are fixed (records mode, replicas, bound claims, multiplier text,
-  cache key, work limits); its regression fixtures are in `python/surface/fixtures/review/`.
-  Open from it: the stored witnesses are informative only (no separate witness checker), and
+  cache key, work limits); their regression fixtures are in `python/surface/fixtures/review/`.
+  Still open: the stored witnesses are informative only (no separate witness checker), and
   `intersect_wedges` would mishandle two opposite half-plane wedges, a case that cannot occur
   (only the root can contribute a half-plane).

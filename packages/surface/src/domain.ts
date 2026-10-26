@@ -67,9 +67,9 @@ function inDomain(solid: unknown, mode: unknown, N: unknown, P: unknown): solid 
 
 /**
  * The domain object (the shape of packages/spaces' SpaceDomain). Its sample for the volunteers' work
- * list holds folding problems without a record, small P first from P = 2 (the work list leaves out P = 1
- * and the nofold problems), within a P the shapes of the records' tables (0, 3, 4, 5, 6, 8) first, then
- * the other N, the solids in catalogue order.
+ * list holds problems without a record, small P first from P = 2 (the work list leaves out P = 1): the
+ * folding ones, and the Catalan nofold ones (the other nofold problems are 2D in 2D problems); within a P
+ * the shapes of the records' tables (0, 3, 4, 5, 6, 8) first, then the other N, the solids in catalogue order.
  */
 export const surfaceDomain = {
   info: {
@@ -110,6 +110,8 @@ export const surfaceDomain = {
           if (out.length >= limit) return out;
           // the Platonic records' table: fold P <= 24 for these shapes
           if (DATA.has(solid) || !first.includes(N) || P > 24) out.push(`surface/${solid}/fold/${N}/${P}`);
+          // a Catalan nofold problem has an irregular face, which no 2D in 2D problem covers
+          if (DATA.get(solid)?.family === "catalan" && out.length < limit) out.push(`surface/${solid}/nofold/${N}/${P}`);
         }
     return out;
   },

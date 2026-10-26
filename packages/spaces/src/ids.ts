@@ -66,6 +66,8 @@ export const SURFACE_SOLIDS = [
 ] as const;
 /** The Platonic solids of the surface space: their nofold problems are planar problems of one face. */
 export const SURFACE_PLATONIC = SURFACE_SOLIDS.slice(0, 5);
+/** The Catalan solids of the surface space: their faces are irregular, so their nofold problems are no 2D in 2D problem. */
+export const SURFACE_CATALAN: readonly string[] = SURFACE_SOLIDS.slice(5, 18);
 export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;

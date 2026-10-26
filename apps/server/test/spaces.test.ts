@@ -7,6 +7,7 @@ import { SCORE_TIE } from "@polypack/geometry";
 import {
   SPACE_BOUND_SLACK,
   SPACE_NAMES,
+  SURFACE_CATALAN,
   SPACE_RECORD_MARGIN,
   SPACE_STRICT_REASON,
   SpaceName,
@@ -1031,7 +1032,9 @@ describe("GET /api/spaces/targets", () => {
         if (typeof parsed !== "string" && !cat.byId.has(id)) problems.push(problemOf(cat, parsed)!);
       }
       for (const p of problems) {
-        if (!acceptsSubmissions(p) || (space === "surface" && p.fields.mode === "nofold")) continue;
+        // nofold problems are 2D in 2D problems, except on the Catalan solids (irregular faces)
+        const nofold2D = space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid));
+        if (!acceptsSubmissions(p) || nofold2D) continue;
         const w = spaceTargetWeight(p.P);
         // a problem without a record (and without site entries here) has the largest room
         if (p.status === "no_record") {
@@ -1057,11 +1060,14 @@ describe("GET /api/spaces/targets", () => {
     expect(new Set(r.targets.map((t) => t.id))).toEqual(new Set(want.keys()));
     for (let i = 1; i < r.targets.length; i++)
       expect(r.targets[i].priority).toBeLessThanOrEqual(r.targets[i - 1].priority);
-    // closed problems, problems at their bound, P = 1 and the surface's nofold problems never
+    // closed problems, problems at their bound, P = 1 and the surface's nofold problems that are 2D in 2D never
     const ids = new Set(r.targets.map((t) => t.id));
     for (const id of ["sphere/0/2", "curved/1/0/0/2", "torus/sq/0/2", "torus/free/3/1", "surface/cube/nofold/4/12"])
       expect(ids.has(id), id).toBe(false);
-    expect(r.targets.some((t) => t.P === 1 || t.id.includes("/nofold/"))).toBe(false);
+    expect(r.targets.some((t) => t.P === 1)).toBe(false);
+    const nofold = r.targets.filter((t) => t.id.includes("/nofold/"));
+    expect(nofold.length).toBeGreaterThan(0);
+    expect(nofold.every((t) => SURFACE_CATALAN.includes(t.id.split("/")[1]))).toBe(true);
     // polyhedra records at their volume bound to within the record margin: nothing can be kept below them
     for (const id of ["cubincub/8", "cubincub/27", "cubincub/64", "pr3inpr3/8", "pr3inpr3/27", "pr3inpr3/64"])
       expect(ids.has(`polyhedra/${id}`), id).toBe(false);
