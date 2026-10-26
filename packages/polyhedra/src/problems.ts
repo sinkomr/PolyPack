@@ -1,9 +1,11 @@
 /**
  * The problems of the polyhedra space: P congruent copies of a piece solid in the smallest scaled copy
- * s C of a container solid. The 86 of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
+ * s C of a container solid. The 86 problems of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
  * PROBLEMS): the 25 Platonic pairs, the 13 Archimedean and 13 Catalan solids in themselves, the 5
- * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube; then
- * PolyPack's 36: the 9 bipyramids and 9 trapezohedra in themselves and in a cube.
+ * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube. Then
+ * PolyPack's 64 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9, 10 and 11
+ * sides in themselves and in a cube, and their 12 elongated prisms in a cube; and the 9 bipyramids and
+ * 9 trapezohedra in themselves and in a cube.
  *
  * A problem is named by upstream's code `<piece code>in<container code>`, e.g. "cubintet" (cubes in a
  * tetrahedron) or "pr3l15incub" (triangular prisms of height 1.5 in a cube), and a problem with P
@@ -17,7 +19,10 @@ export type { ProblemFamily };
 
 export type PolyhedraProblem = ProblemName;
 
-/** The 122 problems, the wiki's 86 in upstream's order first (catalogue.ts names them without loading the solids). */
+/**
+ * The 150 problems: upstream's 86 in upstream's order, then PolyPack's 64 (catalogue.ts names them without loading
+ * the solids; python/polyhedra/catalogue.py has the same list).
+ */
 export const POLYHEDRA_PROBLEMS: readonly PolyhedraProblem[] = PROBLEM_NAMES;
 
 const BY_CODE = new Map(POLYHEDRA_PROBLEMS.map((p) => [p.code, p]));
@@ -58,7 +63,7 @@ export function formatPolyhedraId(code: string, P: number): string {
   return `polyhedra/${code}/${P}`;
 }
 
-/** The wiki's page of a case (its hash names the record id, n written with at least two digits); for problems with `wiki`. */
+/** The wiki's page of a case (its hash names the record id, n written with at least two digits); only for problems with `wiki`. */
 export function wikiUrl(code: string, P: number): string {
   return `https://polyhedrainpolyhedra.wiki/#${code}_n${String(P).padStart(2, "0")}`;
 }

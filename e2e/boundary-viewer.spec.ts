@@ -2,7 +2,7 @@ import AxeBuilder from "@axe-core/playwright";
 import { type Page, expect, test } from "@playwright/test";
 import { SPACE_INFO, type SpaceProblemResponse } from "@polypack/spaces";
 import { foldGain, gainText, plainNofoldLabel } from "../apps/web/src/boundary-model";
-import { distinctColours, pageErrors } from "./helpers";
+import { LAZY_VIEW, distinctColours, pageErrors } from "./helpers";
 
 // The 3D on 4D viewer at /spaces/boundary.html, built by vite from apps/web/spaces/boundary.html,
 // against the local stack (playwright.config.ts): the catalogue and the problems come from the
@@ -10,9 +10,9 @@ import { distinctColours, pageErrors } from "./helpers";
 
 /** Waits until the viewer shows a problem, drawn. */
 async function shown(page: Page, id: string): Promise<void> {
-  await expect(page.locator("#viewer-problem-note")).toHaveText(`Problem ${id}`);
+  await expect(page.locator("#viewer-problem-note")).toHaveText(`Problem ${id}`, LAZY_VIEW);
   await expect(page.locator("#viewer-score")).not.toHaveText("—");
-  await expect(page.locator(".pp3 canvas")).toBeVisible();
+  await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   await expect(page.locator(".pp3-status")).toContainText(/edge \d\.\d{6}\./);
 }
 
@@ -101,8 +101,8 @@ test("the viewer opens from the dimensions page, draws any problem and links to 
   // to the board, with the same problem
   await page.locator("#viewer-board").click();
   await expect(page).toHaveURL(/\/#space=boundary\/tesseract\/cube\/12$/);
-  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/cube/12");
-  await expect(page.locator(".pp3 canvas")).toBeVisible();
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/cube/12", LAZY_VIEW);
+  await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   expect(errors).toEqual([]);
 });
 

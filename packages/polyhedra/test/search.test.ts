@@ -101,6 +101,21 @@ describe("searchPolyhedra", () => {
     }
   });
 
+  it("packs PolyPack's prisms and antiprisms from scratch, valid with the clearance asked for", () => {
+    for (const [code, P] of [["pr9incub", 3], ["ap7inap7", 2], ["pr10l2incub", 2], ["ap10incub", 3], ["ap11inap11", 2]] as const) {
+      const p = getProblem(code)!;
+      const r = searchPolyhedra(p, P, { seed: 1, maxEvals: 20_000, clearance: 1e-7 });
+      expect(r.config, code).not.toBeNull();
+      const v = validatePolyhedra(p, r.config!, { tol: 0 });
+      expect(v.valid, code).toBe(true);
+      expect(v.minPairSep, code).toBeGreaterThan(0.99e-7);
+      expect(v.minWallGap, code).toBeGreaterThan(0.99e-7);
+      expect(r.score, code).toBeGreaterThan(volumeBound(p, P));
+      expect(r.score, code).toBeLessThan(3 * volumeBound(p, P));
+      expect(r.evaluations).toBeLessThanOrEqual(20_000);
+    }
+  });
+
   it("legalizes an overlapping start", () => {
     const p = getProblem("cubincub")!;
     const start = { s: 1.5, pieces: [[0, 0, 0, 1, 0, 0, 0], [0.3, 0.1, 0, 1, 0, 0, 0]] as [number, number, number, number, number, number, number][] };

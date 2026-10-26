@@ -20,14 +20,14 @@ export const POLYHEDRA_INFO = {
   space: "polyhedra",
   title: "3D in 3D",
   summary:
-    "Polyhedra packed in polyhedra: equal solids (Platonic, Archimedean and Catalan solids, prisms and antiprisms) in the smallest scaled copy of a container solid. The problems and records are those of polyhedrainpolyhedra.wiki.",
+    "Polyhedra packed in polyhedra: equal solids (Platonic, Archimedean and Catalan solids, prisms and antiprisms, bipyramids and trapezohedra) in the smallest scaled copy of a container solid. The problems and records are those of polyhedrainpolyhedra.wiki, with PolyPack's own problems: prisms and antiprisms with 7, 9, 10 and 11 sides, and bipyramids and trapezohedra.",
   score: "the scale s of the container (its edge length for a unit-edge container); smaller is better",
   problem_id: "polyhedra/<code>/<P>",
   conventions: {
     problems:
       "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron), pr3l15incub (triangular prisms of height 1.5 in a cube); P pieces",
     solids:
-      "the wiki's canonical solids, centred at the origin: unit edges, except Catalan solids (the polar reciprocals of the unit-edge Archimedean solids about the midsphere) and elongated prisms (base edges 1, lateral edges 1.5, 2 or 3)",
+      "the wiki's canonical solids, centred at the origin: unit edges, except Catalan solids (the polar reciprocals of the unit-edge Archimedean solids about the midsphere) and elongated prisms (base edges 1, lateral edges 1.5, 2 or 3); PolyPack's bipyramids and trapezohedra are likewise the polar reciprocals of the unit-edge prisms and antiprisms about the midsphere",
     container: "s times the canonical container solid, centred at the origin in its canonical orientation",
     pose: `[x, y, z, qw, qx, qy, qz]: the canonical piece turned by the rotation of q / |q| (v -> q v q*, i.e. H(q) / |q|^2) and centred at (x, y, z); x, y, z at most ${POLYHEDRA_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM}`,
     configuration: "{s, pieces: [[x, y, z, qw, qx, qy, qz], ...]} with P pieces",

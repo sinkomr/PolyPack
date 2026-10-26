@@ -2,14 +2,22 @@
 """Builds data/polyhedra/records.json (offline tool; standard library only, certification by certify.py).
 
 usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--ours DIR] [--search DIR ...]
-                                                 [--nmax 100] [--jobs 2] [--no-certify] [--skip FILE]
-                                                 [--out data/polyhedra/records.json]
+                                                 [--polypack DIR] [--nmax 100] [--jobs 2] [--no-certify]
+                                                 [--skip FILE] [--out data/polyhedra/records.json]
+       python3 python/polyhedra/build_records.py --keep data/polyhedra/records.json --polypack DIR [--jobs 2]
 
   --upstream  a checkout of github.com/alejandrozu/platonic-packing at commit cbf76f2f (records/, docs/)
   --site      polyhedrainpolyhedra.wiki's data bundle /data/records.json of the same build (the site's selection of
               the best record per case and the published reference values it shows; not in the repository)
   --ours      PolyPack research results: a directory with results/improvements.csv and the files it names
               (upstream record format), whose packings of m pieces cover every n <= m by deleting pieces
+  --polypack  the records of PolyPack's own problems (catalogue.py, not in WIKI_PROBLEMS): <code>.json per problem,
+              {code, piece, container, records: [{P, s, config: [P poses], method, seed[, start, runs]}]}; each is
+              certified and becomes a PolyPack research record after the wiki's problems (start and runs, when
+              given, are origin.start and origin.runs as they are; otherwise they are read from the method)
+  --keep      an existing records.json whose records are kept exactly as they are (index entries and
+              configs/<code>.jsonl untouched), except those of the PolyPack problems that have a file in --polypack,
+              which are built from it
 
 For every problem of catalogue.py and n = 2..nmax the candidates are every upstream record file of the case
 (records/<p>/, records/community/<p>/, records/external/<p>/ and the files the site lists) and, from --ours, a
@@ -29,6 +37,7 @@ import glob
 import json
 import math
 import os
+import re
 import sys
 import time
 from decimal import ROUND_HALF_EVEN, Decimal
@@ -143,7 +152,8 @@ SOURCES = {
         'licence': 'upstream-made coordinates (MIT); the construction is credited to Erich Friedman',
     },
     'polypack': {
-        'title': 'PolyPack research (crystal cuts and searches, 2026-10-23)',
+        'title': 'PolyPack research (crystal cuts and searches, 2026-10-23; constructions and searches for PolyPack\'s '
+                 'prism and antiprism problems, 2026-10-25)',
         'authors': 'PolyPack research',
         'url': 'https://github.com/sinkomr/PolyPack/blob/main/docs/spaces/POLYHEDRA.md',
         'commit': None,
@@ -285,19 +295,99 @@ def load_search(dirs):
     return out
 
 
-def start_of(U, rows, code, m, record_file):
-    """(source keys, credit) of the record a PolyPack search started from."""
+def study_runs(ours):
+    """The compute study's search runs, read from its logs runs/main/<code>_nNN_<method>_<seed>.log: case -> runs.
+
+    Each run has its method, seed, base file, the record's s, its initial best and its new bests with their times.
+    A log line starts with a clock time HH:MM:SS; the study ran from one evening into the night (23:25 to 01:15),
+    so a time before noon is on the next day."""
+    runs = {}
+    for path in sorted(glob.glob(os.path.join(ours or '', 'runs', 'main', '*.log'))):
+        run = None
+        for line in open(path):
+            m = re.match(r'(\d\d):(\d\d):(\d\d) (.*)$', line.rstrip('\n'))
+            if not m:
+                continue
+            h, msg = int(m.group(1)), m.group(4).strip()
+            t = ((h + 24 if h < 12 else h) * 60 + int(m.group(2))) * 60 + int(m.group(3))
+            if msg.startswith('start '):
+                f = dict(kv.split('=', 1) for kv in msg.split()[2:])
+                run = {'method': f['method'], 'seed': int(f['seed']), 'n': int(f['n']),
+                       'base': None if f['base'] == 'None' else f['base'],
+                       'record': None if f['record'] == 'None' else float(f['record']), 'start': t, 'bests': []}
+                runs.setdefault(f"{msg.split()[1]}_n{int(f['n']):02d}", []).append(run)
+            elif run and msg.startswith('initial best '):
+                run['initial'] = float(msg.split()[2])
+            elif run and msg.startswith('NEW BEST '):
+                run['bests'].append((t, float(msg.split()[2])))
+    return runs
+
+
+def study_lineage(runs, key, s):
+    """How the compute study found its best packing of a case (key <code>_nNN, scale s), traced through the logs.
+
+    Returns (start, path, steps): start 'record' with upstream's file that the study's search read (the record of
+    the case, or of n -+ 1 for plus1 / minus1), 'file' with the base packing of an insert / subset run, or
+    'random' with None; steps are the runs from that start on. The run that logged s found the best; a hop
+    started from the best on file at the time, the latest earlier new best of any run of the case, else from the
+    run's initial best, which is the record when no best existed yet."""
+    code, n = key.rsplit('_n', 1)[0], int(key.rsplit('_n', 1)[1])
+    events = sorted((t, v, i) for i, r in enumerate(runs.get(key, [])) for t, v in r['bests'])
+    found = [e for e in events if abs(e[1] - s) <= 1e-8 * s]
+    if not found:
+        raise ValueError(f'{key}: no logged run reached s = {s}')
+    t, v, i = found[-1]
+    steps = []
+    while True:
+        run = runs[key][i]
+        step = f"{run['method']} (seed {run['seed']}, n = {n})"
+        if not steps or steps[0] != step:
+            steps.insert(0, step)
+        if run['method'] == 'random':
+            return 'random', None, steps
+        if run['method'] in ('plus1', 'minus1'):
+            return 'record', f"records/{code}/{code}_n{n - 1 if run['method'] == 'plus1' else n + 1:02d}.json", steps
+        if run['method'] in ('insert', 'subset'):
+            return 'file', run['base'], steps
+        if run['method'] != 'hop':
+            raise ValueError(f'{key}: method {run["method"]} has no known start')
+        earlier = [e for e in events if e[0] < t and e[1] > v]
+        if earlier:
+            t, v, i = earlier[-1]
+            continue
+        if run.get('initial') is not None and run['record'] is not None and run['initial'] == run['record']:
+            return 'record', f'records/{code}/{code}_n{n:02d}.json', steps
+        raise ValueError(f'{key}: the start of {step} is not in the logs')
+
+
+def study_chain(ours, runs, file):
+    """study_lineage of a compute-study best file, followed through bases that are other cases' best files."""
+    r = load(os.path.join(ours, file))
+    key = os.path.basename(file)[:-len('_best.json')]
+    start, path, steps = study_lineage(runs, key, float(r['s_full']))
+    if start == 'file' and path.startswith('runs/main/'):
+        base_key = os.path.basename(path)[:-len('_best.json')]
+        used = min(x['start'] for x in runs[key] if x['base'] == path)
+        if any(t >= used for x in runs.get(base_key, []) for t, _ in x['bests']):
+            raise ValueError(f'{key}: its base {path} changed after the run read it')
+        start, path, pre = study_chain(ours, runs, path)
+        steps = pre + steps
+    return start, path, steps
+
+
+def start_of(U, ours, runs, code, m, record_file):
+    """(source keys, credit, record) of the packing a PolyPack search started from."""
     if record_file and record_file.startswith('records/'):
         r = load(os.path.join(U, record_file))
         if r:
             return provenance(record_file, r, code, m), f"{r.get('found_by')}, {record_file}", r
     if record_file and record_file.startswith('runs/main/'):
-        own = upstream_candidates(U, code, m, rows.get((code, m)))
-        own.sort(key=lambda x: x['s'])
-        if own:
-            st = own[0]
-            return (['polypack'] + provenance(st['file'], st['rec'], code, m),
-                    f"PolyPack research, which started from {st['rec'].get('found_by')}, {st['file']}", st['rec'])
+        # a compute-study packing: credit what its own search started from (its run logs), if that was upstream's
+        start, path, _ = study_chain(ours, runs, record_file)
+        if start == 'record':
+            r = load(os.path.join(U, path))
+            return (['polypack'] + provenance(path, r, code, r['n']),
+                    f"PolyPack research, which started from {r.get('found_by')}, {path}", r)
     return ['polypack'], 'PolyPack research', None
 
 
@@ -392,6 +482,7 @@ def make_record(case, cand, mine, wiki_best, row, literature, volumes):
             src.update(seed=r['seed'], evaluations=r.get('evals'))
         if r.get('start') == 'warm' and r.get('record_file'):
             src['start'] = r['record_file']                  # the record the search started from
+        src.update(cand.get('study') or {})                  # a compute-study search: its start and runs
         upstream_keys = [k for k in start if k != 'polypack']
         cite = 'PolyPack research' + ('; started from a packing ' + citation(upstream_keys, cand['start_rec'])
                                       if upstream_keys else '')
@@ -447,6 +538,193 @@ def certify_case(args):
     return None, None
 
 
+POLYPACK_SEARCH = 'PolyPack polyhedra search ('
+POLYPACK_DATE = '2026-10-25'
+
+
+def polypack_steps(method):
+    """The steps of a --polypack record's method, from its start on: (start, runs). start is the construction the
+    lineage begins with, or None for a search from random positions; runs are the searches and subset steps."""
+    m = method.strip()
+    if m.startswith('the configuration of ') and m.endswith(' of them, at the same s'):
+        head, _, tail = m.partition(' pieces (')
+        base, sep, rest = tail.rpartition(') less ')
+        if not sep:
+            raise ValueError(f'unreadable subset method: {m[:80]}')
+        start, runs = polypack_steps(base)
+        return start, runs + [f'subset of the configuration of {head.split()[-1]} pieces, at its s']
+    if m.startswith('from the configuration of '):
+        head, _, tail = m.partition(' pieces (')
+        base, sep, rest = tail.rpartition(') by removing pieces one at a time, ')
+        if not sep:
+            raise ValueError(f'unreadable subset method: {m[:80]}')
+        start, runs = polypack_steps(base)
+        return start, runs + [f'subset of the configuration of {head.split()[-1]} pieces: pieces removed one at a '
+                              f'time, {rest}']
+    if m.startswith(POLYPACK_SEARCH):
+        what, sep, budget = m.rpartition('; seed ')
+        if not sep:
+            raise ValueError(f'unreadable search method: {m[:80]}')
+        step = f'search: {{}}, seed {budget}'
+        if ': polish and hops started from ' in what:
+            inner = what.split(': polish and hops started from ', 1)[1]
+            start, runs = polypack_steps(inner)
+            return start, runs + [step.format('polish and hops')]
+        if 'soft-to-rigid run from random balls' in what:
+            return None, [step.format('soft-to-rigid run from random balls, polish and hops')]
+        raise ValueError(f'unreadable search method: {m[:80]}')
+    return m, []
+
+
+def polypack_short(start, runs):
+    """origin.start and origin.runs in short (the method states them in full)."""
+    st = None
+    if start and start.startswith('layered construction: '):
+        st = start.split(' by PolyPack', 1)[0]
+    elif start and start.startswith('crystal cut '):
+        m = re.search(r'of columns of stacked (prisms|antiprisms) over the densest (double-lattice|lattice) packing '
+                      r'found of (the \d+-gon|their projection) \((?:2D )?density ([0-9.]+)\)(, every other piece turned '
+                      r'by pi/n)?, columns along the container\'s (\w) axis', start)
+        if not m:
+            raise ValueError(f'unreadable crystal cut: {start[:80]}')
+        st = (f'crystal cut of {m.group(1)} in columns over a {m.group(2)} packing of {m.group(3)} (density '
+              f'{m.group(4)}){" with every other piece turned" if m.group(5) else ""}, columns along {m.group(6)}')
+    elif start:
+        raise ValueError(f'unknown start: {start[:80]}')
+    out = []
+    for r in runs:
+        if r.startswith('search: soft-to-rigid run from random balls'):
+            out.append('search from random positions, seed ' + r.split(', seed ', 1)[1])
+        elif r.startswith('search: polish and hops'):
+            out.append('search, seed ' + r.split(', seed ', 1)[1])
+        elif r.startswith('subset of the configuration of ') and r.endswith(', at its s'):
+            out.append(r)
+        elif r.startswith('subset of the configuration of '):
+            out.append(r.split(':', 1)[0] + ', seed 1 (8000 evaluations a step for P <= 30, 3000 above)')
+        else:
+            raise ValueError(f'unknown step: {r[:80]}')
+    return st, out
+
+
+def polypack_codes(d):
+    """PolyPack's problems (catalogue order) that have a file in the --polypack directory d."""
+    return [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS and os.path.exists(os.path.join(d, f'{c}.json'))]
+
+
+def polypack_candidates(d, nmax, codes=None):
+    """The --polypack records: (case, candidate) for every given PolyPack problem (default all) and P = 2..nmax, all
+    required."""
+    out = []
+    label = os.path.basename(os.path.normpath(d))
+    for code in codes if codes is not None else [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]:
+        doc = load(os.path.join(d, f'{code}.json'))
+        if not doc:
+            raise ValueError(f'--polypack: {code}.json is missing or unreadable')
+        piece, container, _ = catalogue.PROBLEMS[code]
+        if doc.get('code') != code or doc.get('piece') != piece or doc.get('container') != container:
+            raise ValueError(f'--polypack {code}.json: code, piece or container differ from the catalogue')
+        by_p = {r['P']: r for r in doc['records']}
+        for n in range(2, nmax + 1):
+            r = by_p.get(n)
+            if not r or not isinstance(r.get('config'), list) or len(r['config']) != n:
+                raise ValueError(f'--polypack {code}.json has no configuration of {n} pieces')
+            pieces = [[float(x) for x in pose] for pose in r['config']]
+            out.append((Case(code, n), {'file': f'{label}/{code}.json', 'rec': r, 'pieces': pieces,
+                                        's_cert': float(r['s']), 'mine': True}))
+    return out
+
+
+def make_polypack_record(case, cand, volumes):
+    """A PolyPack research record of one of PolyPack's own problems (there is no wiki record to compare with)."""
+    r = cand['rec']
+    pieces, s = cand['pieces'], cand['s_cert']
+    if 'runs' in r:
+        start, runs = r.get('start'), list(r['runs'])
+    else:
+        start, runs = polypack_short(*polypack_steps(r['method']))
+    origin = {'file': cand['file'], 'date': POLYPACK_DATE}
+    if r.get('seed') is not None:
+        origin['seed'] = r['seed']
+    if start:
+        origin['start'] = start
+    if runs:
+        origin['runs'] = runs
+    rec = {
+        'id': f'polyhedra/{case.code}/{case.n}', 'code': case.code, 'piece': case.piece, 'container': case.container,
+        'family': case.family, 'P': case.n,
+        'score_float': tight_scale(case, pieces), 'score_cert': s, 'display': display(s), 'status': 'best_known',
+        'config': {'s': s, 'pieces': pieces},
+        'bound': {'value': certify.volume_bound(case.piece, case.container, case.n, volumes), 'kind': 'volume'},
+        'found_by': 'PolyPack research', 'credit': 'PolyPack research', 'method': r['method'],
+        'sources': ['polypack'], 'source': 'PolyPack research', 'origin': origin, 'literature': [],
+    }
+    if s / rec['bound']['value'] - 1 < 1e-6:
+        rec['notes'] = ('[CALC] meets its volume bound to 1e-6 (the pieces tile the container), so it is optimal by the '
+                        'volume argument; the status stays best_known (PolyPack marks proven only with a published proof)')
+    return rec
+
+
+def polypack_records(d, nmax, jobs, volumes, no_certify=False, codes=None):
+    """The certified records of PolyPack's problems from --polypack, in catalogue order; and the failures."""
+    cands = polypack_candidates(d, nmax, codes)
+    work = [(case, [cand], volumes) for case, cand in cands]
+    if no_certify:
+        results = [(cand, None) for _, [cand], _ in work]
+    elif jobs > 1:
+        import multiprocessing as mp
+        with mp.Pool(jobs) as pool:
+            results = pool.map(certify_case, work, chunksize=4)
+    else:
+        results = [certify_case(w) for w in work]
+    records, failed = [], []
+    for (case, _), (cand, _) in zip(cands, results):
+        if cand is None:
+            failed.append(f'{case.code}/{case.n}')
+        else:
+            records.append(make_polypack_record(case, cand, volumes))
+    return records, failed
+
+
+SCOPE_NOTE = ('the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimedean, Catalan, prisms, antiprisms, '
+              'elongated prisms) with 2 to %d pieces; 4D-6D are not included')
+SCOPE_NOTE_POLYPACK = (SCOPE_NOTE + '; then PolyPack\'s own problems in the same scheme (prisms and antiprisms with 7, '
+                       '9, 10 and 11 sides in themselves and in a cube, and their prisms of height 1.5, 2 and 3 in a '
+                       'cube; bipyramids and trapezohedra, the canonical duals of the prisms and antiprisms, in '
+                       'themselves and in a cube), whose records are PolyPack research only')
+POLYPACK_CONVENTION = ('records of PolyPack\'s own problems (no wiki record): origin.file is the PolyPack research '
+                       'file, origin.start the construction the configuration\'s lineage starts from (none for a '
+                       'search from random positions), origin.runs the searches and subset steps after it and '
+                       'origin.seed the last step\'s seed, in short; method states the whole lineage in full')
+
+
+def keep_and_add(keep, polypack, nmax, jobs, no_certify):
+    """--keep mode: the wiki's records of `keep` untouched, PolyPack's problems built from --polypack."""
+    with open(keep) as f:
+        doc = json.load(f)
+    codes = polypack_codes(polypack)
+    old = [r for r in doc['records'] if r['code'] not in codes]
+    if len(old) != len(doc['records']):
+        print(f'{len(doc["records"]) - len(old)} records of PolyPack\'s problems in {keep} are replaced')
+    if not all(isinstance(r.get('config_at'), list) for r in old):
+        raise ValueError('--keep: every kept record must have its configuration apart (config_at)')
+    volumes = certify.solid_volumes()
+    t0 = time.time()
+    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify, codes)
+    nfiles, total = write_configs(os.path.join(os.path.dirname(keep), 'configs'), new)
+    # catalogue order: kept and new records by problem, then P
+    order = {c: i for i, c in enumerate(catalogue.PROBLEMS)}
+    doc['records'] = sorted(old + new, key=lambda r: (order[r['code']], r['P']))
+    doc['scope'] = {'P': [2, nmax], 'problems': len(catalogue.PROBLEMS), 'note': SCOPE_NOTE_POLYPACK % nmax}
+    doc['sources']['polypack'] = SOURCES['polypack']
+    doc['conventions']['polypack'] = POLYPACK_CONVENTION
+    with open(keep, 'w') as f:
+        json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
+        f.write('\n')
+    print(f'kept {len(old)} records; wrote {len(new)} of PolyPack\'s problems and {nfiles} configuration files '
+          f'({total / 1e6:.2f} MB); {len(failed)} not certified {failed[:10]}; {time.time() - t0:.0f} s')
+    return 0 if not failed else 1
+
+
 CONFIGS_CONVENTION = ('the configurations are kept apart, one file per problem: configs/<code>.jsonl has one line '
                       'per P, in increasing P, each {"P", "config": {s, pieces}}; config_at = [offset, length] gives '
                       'the byte offset and length of the record\'s line (without its newline), so that a reader can '
@@ -476,8 +754,10 @@ def write_configs(cdir, records):
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
-    ap.add_argument('--upstream', required=True)
-    ap.add_argument('--site', required=True)
+    ap.add_argument('--upstream')
+    ap.add_argument('--site')
+    ap.add_argument('--polypack', help='records of PolyPack\'s own problems: <code>.json per problem (see above)')
+    ap.add_argument('--keep', help='keep this records.json\'s wiki records as they are and add PolyPack\'s problems')
     ap.add_argument('--ours')
     ap.add_argument('--search', action='append', help='a directory of PolyPack search results (repeatable)')
     ap.add_argument('--nmax', type=int, default=100)
@@ -489,6 +769,12 @@ def main(argv=None):
     ap.add_argument('--out', default=os.path.join(os.path.dirname(os.path.dirname(HERE)), 'data', 'polyhedra',
                                                   'records.json'))
     a = ap.parse_args(argv)
+    if a.keep:
+        if not a.polypack:
+            ap.error('--keep needs --polypack')
+        return keep_and_add(a.keep, a.polypack, a.nmax, a.jobs, a.no_certify)
+    if not a.upstream or not a.site:
+        ap.error('--upstream and --site are required (or --keep with --polypack)')
     U = a.upstream
     site = json.load(open(a.site))
     rows = {(p['id'], r['n']): r for p in site['problems'] for r in p['rows']}
@@ -501,9 +787,10 @@ def main(argv=None):
             ours_rows.setdefault((r['problem'], int(r['n'])), []).append(r)
     volumes = certify.solid_volumes()
     search = load_search(a.search)
+    runs = study_runs(a.ours)
     jobs, meta = [], []
     t0 = time.time()
-    for code in catalogue.PROBLEMS:
+    for code in [c for c in catalogue.PROBLEMS if c in catalogue.WIKI_PROBLEMS]:   # the wiki's problems only
         for n in range(2, a.nmax + 1):
             case = Case(code, n)
             row = rows.get((code, n))
@@ -525,20 +812,19 @@ def main(argv=None):
                     c['pieces'], c['s_cert'] = [list(map(float, p)) for p in c['rec']['pieces']], c['s']
                 if c['s_cert'] < ups[0]['s'] * (1 - OUR_MARGIN):
                     if c['file'].startswith('search/'):
-                        keys, credit, st = start_of(U, rows, code, len(c['rec']['pieces']),
+                        keys, credit, st = start_of(U, a.ours, runs, code, len(c['rec']['pieces']),
                                                     c['rec'].get('record_file') if c['rec'].get('start') == 'warm' else None)
                         if keys != ['polypack']:
                             c['start_keys'], c['start_credit'], c['start_rec'] = keys, credit, st
-                    # our searches (runs/main) started from the wiki's record of the file's own piece count
+                    # the compute study's searches (runs/main): their start and runs, traced through the run logs
                     elif c['file'].startswith('runs/main/'):
-                        m = len(c['rec']['pieces'])
-                        own = upstream_candidates(U, code, m, rows.get((code, m)))
-                        own.sort(key=lambda x: x['s'])
-                        if own:
-                            start = own[0]
-                            c['start_keys'] = provenance(start['file'], start['rec'], code, m)
-                            c['start_rec'] = start['rec']
-                            c['start_credit'] = f"{start['rec'].get('found_by')}, {start['file']}"
+                        start, path, steps = study_chain(a.ours, runs, c['file'])
+                        c['study'] = {**({'start': path} if path else {}), 'runs': steps}
+                        if start == 'record':
+                            st = load(os.path.join(U, path))
+                            c['start_keys'] = provenance(path, st, code, st['n'])
+                            c['start_rec'] = st
+                            c['start_credit'] = f"{st.get('found_by')}, {path}"
                     c['mine'] = True
                     mine.append(c)
             mine.sort(key=lambda c: c['s_cert'])
@@ -565,13 +851,16 @@ def main(argv=None):
             continue
         lit = literature_of(case.code, case.n, row, ext)
         records.append(make_record(case, cand, bool(cand.get('mine')), wiki_best, row, lit, volumes))
+    if a.polypack:
+        new, bad = polypack_records(a.polypack, a.nmax, a.jobs, volumes, a.no_certify)
+        records += new
+        failed += bad
     doc = {
         'space': 'polyhedra',
         'title': '3D in 3D',
         'generated': time.strftime('%Y-%m-%d'),
-        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.PROBLEMS),
-                  'note': 'the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimedean, Catalan, prisms, '
-                          'antiprisms, elongated prisms) with 2 to %d pieces; 4D-6D are not included' % a.nmax},
+        'scope': {'P': [2, a.nmax], 'problems': len(catalogue.PROBLEMS if a.polypack else catalogue.WIKI_PROBLEMS),
+                  'note': (SCOPE_NOTE_POLYPACK if a.polypack else SCOPE_NOTE) % a.nmax},
         'upstream': {'repository': UPSTREAM, 'commit': UPSTREAM_COMMIT, 'site': 'https://polyhedrainpolyhedra.wiki/',
                      'site_build': site.get('built')},
         'conventions': {
@@ -590,11 +879,14 @@ def main(argv=None):
             'display': 'score_cert rounded to the nearest at 6 decimals from its exact binary64 value',
             'bound': 'kind volume: [EST] n vol(piece) <= s^3 vol(container), so s >= (n vol(piece) / vol(container))^(1/3)',
             'origin': 'the file the configuration comes from: upstream\'s records/... at commit cbf76f2f (sources.wiki.files) '
-                      'or a PolyPack research file (sources.polypack)',
+                      'or a PolyPack research file (sources.polypack); for a PolyPack search, start is the packing it '
+                      'started from (none for a start from random positions) and, for a search of the compute study, '
+                      'runs are its runs from that start, as its run logs show them',
             'wiki': 'the wiki\'s record of the case (its smallest certified s_full in the repository) and its page; '
                     'file is given when the configuration here comes from elsewhere',
             'literature': 'published values without coordinates (value, source, url, printed precision)',
             'configs': CONFIGS_CONVENTION,
+            **({'polypack': POLYPACK_CONVENTION} if a.polypack else {}),
         },
         'sources': SOURCES,
         'records': records,

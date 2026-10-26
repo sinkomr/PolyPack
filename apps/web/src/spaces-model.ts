@@ -1,4 +1,4 @@
-import { PROBLEM_CODES, problemTitle } from "@polypack/polyhedra/catalogue";
+import { PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
 import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 
 /**
@@ -210,7 +210,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
     },
   ],
   // polyhedra/<code>/<P>: one problem per pair of piece and container solid, in the order of
-  // polyhedrainpolyhedra.wiki
+  // polyhedrainpolyhedra.wiki, PolyPack's prisms and antiprisms among the wiki's by their number of sides
   polyhedra: [
     {
       key: "code",
@@ -218,7 +218,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       label: "Problem",
       option: problemTitle,
       cell: problemTitle,
-      order: PROBLEM_CODES,
+      order: PROBLEM_ORDER,
       start: "cubincub",
     },
   ],

@@ -54,10 +54,19 @@ describe.skipIf(!file)("data/polyhedra/records.json", () => {
       expect(r.status).toBe("best_known");
       expect(Math.abs(r.bound.value - volumeBound(getProblem(r.code)!, r.P)) / r.bound.value).toBeLessThan(1e-12);
       expect(r.bound.value).toBeLessThan(r.score_cert);
-      expect(r.wiki.s_full).toBeGreaterThan(0);
-      // a record differs from the wiki's only where PolyPack research beats it by more than 1e-5 relative
-      if (r.found_by === "PolyPack research") expect(r.score_cert).toBeLessThan(r.wiki.s_full * (1 - 1e-5));
-      else expect(r.score_cert).toBe(r.wiki.s_full);
+      if (id.problem.wiki) {
+        expect(r.wiki!.s_full).toBeGreaterThan(0);
+        // a record differs from the wiki's only where PolyPack research beats it by more than 1e-5 relative
+        if (r.found_by === "PolyPack research") expect(r.score_cert).toBeLessThan(r.wiki!.s_full * (1 - 1e-5));
+        else expect(r.score_cert).toBe(r.wiki!.s_full);
+      } else {
+        // PolyPack's own problems: no wiki record and no published value, PolyPack research only
+        expect(r.wiki).toBeUndefined();
+        expect(r).toMatchObject({ found_by: "PolyPack research", credit: "PolyPack research", sources: ["polypack"], literature: [] });
+        expect(r.method!.length).toBeGreaterThan(20);
+        // the research file: prisms/ for the prisms and antiprisms, duals/ for the bipyramids and trapezohedra
+        expect(r.origin.file).toBe(`${/^(bp|tz)\d/.test(r.code) ? "duals" : "prisms"}/${r.code}.json`);
+      }
       for (const k of r.sources) expect(file!.sources[k], `${r.id} ${k}`).toBeDefined();
       expect(r.source.length).toBeGreaterThan(10);
       expect(parsePolyhedraConfig(r.config, r.P).ok).toBe(true);

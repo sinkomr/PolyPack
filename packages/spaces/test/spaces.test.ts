@@ -1,10 +1,12 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
 import { describe, expect, it } from "vitest";
 import {
+  BOUNDARY_POLYTOPES,
   SPACE_MAX_COORD,
   SPACE_STRICT_REASON,
   SPACE_STRICT_TOL,
@@ -45,7 +47,7 @@ const configOf = (p: SpaceProblemEntry) =>
 /**
  * The records of a space with their configurations, read as the server reads them (polyhedra
  * configurations on demand). Every polyhedra record up to P = 30 and every tenth above it, since a
- * float check of all 8,514 takes about a minute; the certifier checks every one (POLYHEDRA.md).
+ * float check of all 14,850 takes over a minute; the certifier checks every one (POLYHEDRA.md).
  * Yields to the event loop now and then, so that a long loop does not hold up the test runner.
  */
 async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, unknown]> {
@@ -76,7 +78,7 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514);
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 14850);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -134,7 +136,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850 });
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -146,7 +148,13 @@ describe("the catalogues", () => {
   it("close proven and infeasible problems and nothing else", () => {
     const closed = (s: SpaceName) => cat(s).problems.filter((p) => !acceptsSubmissions(p));
     expect(closed("surface")).toEqual([]);
-    expect(closed("torus")).toEqual([]);
+    // the torus records with a published proof of the exact case (docs/spaces/TORUS.md, sec. 7)
+    const torus = closed("torus");
+    expect(torus.length).toBe(52);
+    expect(torus.every((p) => p.status === "proven" && /is proven \(.+, doi:10\./.test(p.closed_reason!))).toBe(true);
+    expect(torus.find((p) => p.id === "torus/sq/0/2")!.closed_reason).toBe(
+      "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
+    );
     expect(closed("boundary")).toEqual([]);
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
@@ -205,6 +213,34 @@ describe("the catalogues", () => {
     const closed = spaceProblemSummary(problem("sphere", "sphere/0/2"), site);
     expect(closed.site_best).toBeNull();
     expect(closed.accepts_submissions).toBe(false);
+  });
+
+  it("list each space in its own field order: a named field by its space's list, a number ascending", () => {
+    // written out apart from records.ts, so that a change of order shows here
+    const keys: Record<SpaceName, [string, readonly string[] | null][]> = {
+      surface: [["solid", SURFACE_SOLIDS], ["mode", ["fold", "nofold"]], ["N", null], ["P", null]],
+      curved: [["K", null], ["N", null], ["M", null], ["P", null]],
+      sphere: [["N", null], ["P", null]],
+      torus: [["family", TORUS_FAMILIES], ["N", null], ["P", null]],
+      boundary: [["polytope", BOUNDARY_POLYTOPES], ["piece", ["ball", "cube"]], ["P", null]],
+      // polyhedra's fields include a piece, which is not a sort key there
+      polyhedra: [["code", PROBLEM_ORDER], ["P", null]],
+    };
+    for (const s of SPACE_NAMES) {
+      const rank = (p: SpaceProblemEntry) =>
+        keys[s].map(([k, order]) => {
+          if (!order) return Number(p.fields[k]);
+          const r = order.indexOf(String(p.fields[k]));
+          expect(r, `${p.id}: ${k}`).toBeGreaterThanOrEqual(0);
+          return r;
+        });
+      const problems = cat(s).problems;
+      for (let i = 1; i < problems.length; i++) {
+        const [a, b] = [rank(problems[i - 1]), rank(problems[i])];
+        const d = a.findIndex((x, j) => x !== b[j]);
+        expect(d === -1 || a[d] < b[d], `${problems[i - 1].id} before ${problems[i].id}`).toBe(true);
+      }
+    }
   });
 
   it("log one line per space", () => {

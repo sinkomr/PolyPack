@@ -217,7 +217,7 @@ const SPACES_CURL = `curl -s https://YOUR-SITE/api/spaces
 
 curl -s --compressed https://YOUR-SITE/api/spaces/torus/records
 
-curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/0/2
+curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/4/3
 
 curl -s --compressed "https://YOUR-SITE/api/spaces/targets?spaces=torus,sphere&max_P=20&limit=50"
 
@@ -225,27 +225,27 @@ curl -s --compressed https://YOUR-SITE/api/spaces/boundary/problems/boundary/tes
 
 curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
   -H "content-type: application/json" \\
-  -d '{"space": "torus", "id": "torus/sq/0/2", "name": "my name", "method": "by hand",
-       "config": {"lattice": {"L": 2.8284271247461903},
-                  "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]}}'`;
+  -d '{"space": "torus", "id": "torus/sq/4/3", "name": "my name", "method": "by hand",
+       "config": {"lattice": {"L": 2},
+                  "poses": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]}}'`;
 
 const SPACE_PROBLEM = `{
-  "space": "torus", "id": "torus/sq/0/2", "fields": {"family": "sq", "N": 0, "P": 2}, "P": 2,
+  "space": "torus", "id": "torus/sq/4/3", "fields": {"family": "sq", "N": 4, "P": 3}, "P": 3,
   "status": "best_known",
-  "certified": {"score": 2.8284271247490187, "display": "2.828427", "status": "best_known"},
-  "bound": {"value": 2.8284271247461903, "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019"},
+  "certified": {"score": 2.0000000000019997, "display": "2.000000", "status": "best_known"},
+  "bound": {"value": 1.7320508075688776, "label": "[CALC] area bound P * A_piece <= cell area"},
   "site_best": null,
-  "best_score": 2.8284271247490187,
+  "best_score": 2.0000000000019997,
   "accepts_submissions": true, "closed_reason": null,
   "conventions": {"families": "...", "pose": "...", "configuration": "...", "validity": "..."},
-  "certified_config": {"lattice": {"L": 2.82842712474619}, "poses": [[0, 0, 0], [1.414213562373095, 1.4142135623730951, 0]]},
+  "certified_config": {"lattice": {"L": 1.9999999999999996}, "poses": [[0, 0, 0.7853981633974492], [0.9999999999999996, 2.5905203907920045e-16, 0.7853981633974483], [1.9999999999999993, 1.0000000000000004, 0.7853981633974492]]},
   "site_config": null
 }`;
 
 const SPACE_SUBMIT = `{
   "space": "torus",
-  "id": "torus/sq/0/2",
-  "config": {"lattice": {"L": 2.8284271247461903}, "poses": [[0, 0, 0], [1.4142135623730951, 1.4142135623730951, 0]]},
+  "id": "torus/sq/4/3",
+  "config": {"lattice": {"L": 2}, "poses": [[0, 0, 0.7853981633974483], [1, 0, 0.7853981633974483], [0, 1, 0.7853981633974483]]},
   "name": "display name",
   "agent_note": "optional free text",
   "software": "name/version of the program",
@@ -256,9 +256,9 @@ const SPACE_SUBMIT = `{
 const SPACE_SUBMIT_RESPONSE = `{
   "valid": true,
   "reasons": [],
-  "score": 2.8284271247461903,
+  "score": 2,
   "leader": false,
-  "best_score": 2.8284271247490187,
+  "best_score": 2.0000000000019997,
   "id": null,
   "beats_certified": false
 }`;
@@ -296,7 +296,7 @@ function spacesSection(): string {
   return `<h2 id="spaces">Other dimensions: the spaces</h2>
 <p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
 Polygons in polygons, the problems above, are Flat, in 2D in 2D. Six more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Platonic surfaces, Sphere and Torus (2D on 3D);
-Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki).
+Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); and Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems).
 The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> and <code>polyhedra</code>, under <code>/api/spaces</code>.
 Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
@@ -350,8 +350,8 @@ A nofold problem is the main site's planar problem of N-gons in the face polygon
 Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
 Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
 the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
-The whole list fits in one answer at the largest <code>limit</code> (9821 targets with the catalogues of 2026-10-25: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 8508; about 1.8 MB).
-The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 8514 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
+The whole list fits in one answer at the largest <code>limit</code> (16157 targets with the catalogues of 2026-10-26: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 14844; about 3.0 MB).
+The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 14850 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
 The ranking is kept until an entry changes.</p>
 <table>
@@ -601,13 +601,18 @@ Values of <code>P</code> with no coordinates at all are simply absent. The answe
 <h3 id="snapshot"><code>GET /api/snapshot</code></h3>
 <p>Every current record at once: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, rebuilt each night and mirrored into the GitHub release
 <a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads.
-This route answers the manifest: <code>{format, generated_at, completed_at, records, pieces, files}</code>, where each of <code>files</code> is
+This route answers the manifest: <code>{format, generated_at, completed_at, records, pieces, files, spaces}</code>, where each of <code>files</code> is
 <code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read.
+<code>spaces</code> lists the files of the <a href="#spaces">other dimensions</a>, one per space, each <code>{space, file, records, pieces, bytes, sha256, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone. A manifest written before the space files existed has no <code>spaces</code>.
 <code>completed_at</code> equals <code>generated_at</code> once a build has finished; while one runs, the files already rebuilt sit beside those of the night before. 404 before the first build, and on a server without snapshots.</p>
 <p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, gzip-compressed JSON:
 <code>{"format": 1, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
 <code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href="#conventions">conventions</a> above and every number at full precision.
 How the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>. A file holds no timestamp, so an unchanged pair keeps the same bytes and SHA-256 from night to night.</p>
+<p><code>GET /api/snapshot/space-{space}.json.gz</code> answers the file of one space (<code>surface</code>, <code>curved</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> or <code>polyhedra</code>): the leading site entry of each of its <a href="#spaces-closed">open</a> problems that has one,
+<code>{"format": 1, "space": …, "records": [ … ]}</code> with one record per line, in the order of <a href="#spaces"><code>/api/spaces/{space}/records</code></a>. A record is
+<code>{problem, P, score, id, name, software, method, created_at, config}</code>, with <code>config</code> in the space's submission format and every number at full precision; the whole entry is at <code>/api/spaces/entries/{id}</code>.
+A space with no such entry has no file. A space's file is rebuilt whole when any of its leaders changes.</p>
 
 <h3 id="events"><code>GET /api/events?keys=N/M/P,N/M/*</code></h3>
 <p>Server-sent events. A <code>leaderboard</code> event with <code>{N, M, P, id, score, rank, name}</code> is sent whenever a problem the stream follows gets a new leader; the fields describe that leader, and <code>rank</code> is always 1.

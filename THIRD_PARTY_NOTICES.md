@@ -47,6 +47,13 @@ licence. Please credit the original source when reusing them.
 - Erich Friedman, Packing Center, <https://erich-friedman.github.io/packing/>
 - David Ellsworth, Squares in Squares, <https://kingbird.myphotos.cc/packing/squares_in_squares.html>
 - Eckard Specht, Packomania, <http://www.packomania.com/>
+- T. Berthold, D. Kamp, G. Mexi, S. Pokutta, I. Polik, "Out-of-the-Box Global
+  Optimization for Packing Problems: New Models and Improved Solutions",
+  submitted to the Journal of Global Optimization, 2026, arXiv:2605.04850; online
+  supplement "Packing Solutions", <https://github.com/DominikKamp/Packing> at
+  commit `27f71632d8655ae4b6a049410a401976748b94e3`, directory `polygon/`
+  (`data/sources/kamp.json`). The repository states no licence; the data is
+  used here with citation to the paper and the repository.
 
 `docs/RECORDS.md` describes what was taken from each and how it was converted.
 
@@ -71,8 +78,9 @@ says which records use which source, and every record of
 Used: `certify_general.py`, `algebraic.py` and `multiquad.py`, copied into
 `python/polyhedra/` with their headers (`certify_general.py` changed only in the
 path of the solids file, marked "PolyPack:"); `src/solids_exact.json`, copied
-unchanged to `python/polyhedra/solids_exact.json`, from which
-`packages/polyhedra/src/solids.data.ts` is generated; `src/geom.js` and
+unchanged to `python/polyhedra/solids_exact.json` (PolyPack appends its own
+prisms and antiprisms with 7, 9, 10 and 11 sides after upstream's 56 solids), from
+which `packages/polyhedra/src/solids.data.ts` is generated; `src/geom.js` and
 `src/sim.js`, ported to TypeScript in `packages/polyhedra/src/sim/` with their
 header comments (changes listed there); the problem names and codes of
 `scripts/engine.py`; the record files under `records/` (configurations, credits

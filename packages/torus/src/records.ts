@@ -13,10 +13,18 @@ export interface TorusLiterature {
   /** literature score in PolyPack units, or null when only a bracket or a proof without value is known */
   value: number | null;
   short: string;
+  /** full citation */
   source: string;
   url?: string;
   accessed?: string;
+  /** the source's own claim: proven, proven_unrefereed, best_known or conjecture */
   status: string;
+  doi?: string;
+  /**
+   * Set only when the entry's proof states this exact torus case and was checked against the
+   * source: the theorem or section. A record is `proven` only through such an entry.
+   */
+  proof?: string;
   note?: string;
 }
 

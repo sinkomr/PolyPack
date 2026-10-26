@@ -44,7 +44,7 @@ describe.skipIf(!file)("data/torus/records.json", () => {
     for (const r of records) {
       expect(r.problem).toBe(`torus/${r.family}/${r.N}/${r.P}`);
       expect(r.configuration.poses.length).toBe(r.P);
-      expect(r.status).not.toBe("proven");
+      expect(["best_known", "proven"]).toContain(r.status);
       expect(r.score_cert).toBeGreaterThan(r.score_float);
       // shrink trick: score_cert - score_float is tiny (target <= 1e-9 relative)
       expect((r.score_cert - r.score_float) / r.score_float).toBeLessThanOrEqual(1e-9);
@@ -52,6 +52,36 @@ describe.skipIf(!file)("data/torus/records.json", () => {
       expect(r.display).toBe(displayScore(r.score_cert));
       expect(r.score_float).toBeGreaterThanOrEqual(r.bound.value * (1 - 1e-12));
     }
+  });
+
+  it("is proven only through a published proof of the exact case that the record attains", () => {
+    for (const r of records) {
+      for (const l of r.literature ?? [])
+        if (l.status === "proven" && typeof l.value === "number") expect(r.score_cert).toBeGreaterThanOrEqual(l.value);
+      const proofs = (r.literature ?? []).filter(
+        (l) =>
+          l.status === "proven" &&
+          typeof l.proof === "string" &&
+          l.proof.trim() !== "" &&
+          typeof l.doi === "string" &&
+          /^10\.\d{4,9}\/\S+$/.test(l.doi) &&
+          typeof l.value === "number" &&
+          l.value <= r.score_cert &&
+          r.score_cert <= l.value * (1 + 2e-9),
+      );
+      expect(r.status === "proven", r.problem).toBe(proofs.length > 0);
+    }
+    const loeschian = [1, 3, 4, 7, 9, 12, 13, 16, 19, 21, 25, 27, 28, 31, 36, 37, 39, 43, 48, 49];
+    const sums = [1, 2, 4, 5, 8, 9, 10, 13, 16, 17, 18, 20, 25, 26, 29, 32, 34, 36, 37, 40, 41, 45, 49];
+    const expected = [
+      ...[2, 3, 4, 6, 7, 8].map((P) => `torus/sq/0/${P}`),
+      ...[2, ...loeschian].map((P) => `torus/hex/0/${P}`),
+      ...sums.map((P) => `torus/sq/4/${P}`),
+      // one piece on a free torus is a lattice packing: the densest lattice packings of disks and triangles
+      "torus/free/0/1",
+      "torus/free/3/1",
+    ];
+    expect(records.filter((r) => r.status === "proven").map((r) => r.problem).sort()).toEqual(expected.sort());
   });
 
   it("stores the score and density of its own configuration", () => {

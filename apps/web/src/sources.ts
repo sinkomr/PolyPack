@@ -3,7 +3,8 @@ import { el } from "./shapes-ui";
 
 /**
  * Credit for the published record data. The values, the captions with their finder and prover
- * attributions, and some coordinates are taken from three compilations. Wherever such data is
+ * attributions, and some coordinates are taken from three compilations and from one paper's
+ * supplement. Wherever such data is
  * shown, a numbered reference mark points to the note of its source; the notes are listed at the
  * foot of the records page. The numbers are fixed: they follow the order of this list.
  */
@@ -41,6 +42,15 @@ export const SOURCES: readonly Source[] = [
     title: "Packomania",
     url: "http://www.packomania.com/",
     takes: "Record values for equal circles in a circle and in a square, and the coordinates of those packings.",
+  },
+  {
+    n: 4,
+    author: "Berthold, Kamp, Mexi, Pokutta and Polik",
+    title: "Packing Solutions",
+    url: "https://github.com/DominikKamp/Packing",
+    takes:
+      "Record values and coordinates for regular polygons of 3 to 7 sides packed in each other, used where no other source gives a value: every pair with a heptagon. " +
+      "The online supplement of their paper submitted to the Journal of Global Optimization, 2026 (arXiv:2605.04850); it states no licence and is used with citation.",
   },
 ];
 

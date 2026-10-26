@@ -17,6 +17,7 @@ describe("the sources of a published record", () => {
       [1, "Erich Friedman, Packing Center"],
       [2, "David Ellsworth, Squares in Squares"],
       [3, "Eckard Specht, Packomania"],
+      [4, "Berthold, Kamp, Mexi, Pokutta and Polik, Packing Solutions"],
     ]);
     for (const s of SOURCES) expect(s.url).toMatch(/^https?:\/\//);
   });
@@ -72,6 +73,13 @@ describe("the sources of a published record", () => {
     expect(recordSources({ ...base, coordinates_note: note }).coordinates).toEqual([]);
   });
 
+  it("credits a heptagon record's value and coordinates to Berthold et al.", () => {
+    const { records } = JSON.parse(readFileSync("data/records.json", "utf8")) as { records: LiteratureRecord[] };
+    const r = records.find((r) => r.N === 7 && r.M === 3 && r.P === 5)!;
+    expect(recordSources({ ...r, has_coordinates: !!r.pieces })).toEqual({ value: [4], coordinates: [4] });
+    expect(recordCredits({ ...r, has_coordinates: true })).toEqual([{ n: 4, what: "value and caption, coordinates" }]);
+  });
+
   it("gives no number to a record derived here or taken from an unknown source", () => {
     const derived = { ...base, source_name: "PolyPack (derived here, not from the literature)", has_coordinates: true };
     expect(recordSources(derived)).toEqual({ value: [], coordinates: [] });
@@ -80,14 +88,14 @@ describe("the sources of a published record", () => {
 
   it("finds a source for every record of the data that is not derived here", () => {
     const { records } = JSON.parse(readFileSync("data/records.json", "utf8")) as { records: LiteratureRecord[] };
-    const counts = [0, 0, 0, 0];
+    const counts = [0, 0, 0, 0, 0];
     for (const r of records) {
       const { value, coordinates } = recordSources({ ...r, has_coordinates: !!r.pieces });
       if (r.source_name.startsWith("PolyPack")) expect(value).toEqual([]);
       else expect(value.length).toBeGreaterThan(0);
       // coordinates in the data are Packomania's, read from Ellsworth's drawings (squares in a
-      // square only), or constructed here
-      const from = r.N === 4 && r.M === 4 ? 2 : 3;
+      // square only), Berthold et al.'s with their values, or constructed here
+      const from = r.source_name.startsWith("Berthold") ? 4 : r.N === 4 && r.M === 4 ? 2 : 3;
       expect(coordinates.every((n) => n === from)).toBe(true);
       if (
         r.pieces &&

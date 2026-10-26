@@ -10,11 +10,14 @@ import {
   volumeBound,
   wikiUrl,
 } from "../src";
+import { PROBLEM_CODES, PROBLEM_ORDER, SOLID_NAMES_LIST, problemNameOf } from "../src/catalogue";
 
 describe("solids", () => {
-  it("has upstream's 56 solids and PolyPack's 18, each a closed convex polyhedron centred at the origin", () => {
-    expect(SOLID_NAMES.length).toBe(74);
+  it("has upstream's 56 solids and PolyPack's 38, each a closed convex polyhedron centred at the origin", () => {
+    expect(SOLID_NAMES.length).toBe(94);
     expect(SOLID_NAMES.slice(56)).toEqual([
+      ...["prism7", "prism9", "prism10", "prism11", "antiprism7", "antiprism9", "antiprism10", "antiprism11"],
+      ...[7, 9, 10, 11].flatMap((k) => ["l15", "l2", "l3"].map((t) => `prism${k}_${t}`)),
       ...[3, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `bipyramid${n}`),
       ...[4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `trapezohedron${n}`),
     ]);
@@ -54,6 +57,47 @@ describe("solids", () => {
     }
     expect(getSolid("cube").volume).toBe(1);
     expect(getSolid("prism3_l3").edgeMax).toBeCloseTo(3, 14);
+  });
+
+  it("has PolyPack's prisms and antiprisms with 7, 9, 10 and 11 sides in upstream's conventions", () => {
+    for (const n of [7, 9, 10, 11]) {
+      const R = 1 / (2 * Math.sin(Math.PI / n));
+      const area = n / (4 * Math.tan(Math.PI / n));
+      // prisms: V[2k] = (R cos 2 pi k/n, R sin 2 pi k/n, h/2), V[2k + 1] the same at -h/2; lateral edges h
+      for (const [name, h] of [[`prism${n}`, 1], [`prism${n}_l15`, 1.5], [`prism${n}_l2`, 2], [`prism${n}_l3`, 3]] as const) {
+        const S = getSolid(name);
+        expect(S.family, name).toBe(name.includes("_") ? "elongated_prism" : "prism");
+        expect([S.nv, S.edges.length, S.faces.length], name).toEqual([2 * n, 3 * n, n + 2]);
+        for (let k = 0; k < n; k++)
+          for (const [i, z] of [[2 * k, h / 2], [2 * k + 1, -h / 2]]) {
+            const v = [S.V[3 * i], S.V[3 * i + 1], S.V[3 * i + 2]];
+            const want = [R * Math.cos((2 * Math.PI * k) / n), R * Math.sin((2 * Math.PI * k) / n), z];
+            for (let c = 0; c < 3; c++) expect(Math.abs(v[c] - want[c]), `${name} vertex ${i}`).toBeLessThan(1e-14);
+          }
+        const lengths = S.edges.map(([i, j]) => Math.hypot(S.V[3 * j] - S.V[3 * i], S.V[3 * j + 1] - S.V[3 * i + 1], S.V[3 * j + 2] - S.V[3 * i + 2]));
+        expect(lengths.filter((l) => Math.abs(l - 1) < 1e-14).length, name).toBe(h === 1 ? 3 * n : 2 * n);
+        if (h !== 1) expect(lengths.filter((l) => Math.abs(l - h) < 1e-14).length, name).toBe(n);
+        expect(Math.abs(S.volume - h * area) / S.volume, name).toBeLessThan(1e-15);
+        expect(S.circumradius).toBeCloseTo(Math.hypot(R, h / 2), 14);
+      }
+      // antiprisms: top V[k] at angle 2 pi k/n and height H/2, bottom V[n + k] at angle (2k + 1) pi/n and -H/2
+      const name = `antiprism${n}`;
+      const S = getSolid(name);
+      const H = Math.sqrt(1 - 1 / (4 * Math.cos(Math.PI / (2 * n)) ** 2));
+      expect(S.family).toBe("antiprism");
+      expect([S.nv, S.edges.length, S.faces.length], name).toEqual([2 * n, 4 * n, 2 * n + 2]);
+      for (let i = 0; i < 2 * n; i++) {
+        const a = i < n ? (2 * Math.PI * i) / n : ((2 * (i - n) + 1) * Math.PI) / n;
+        const want = [R * Math.cos(a), R * Math.sin(a), i < n ? H / 2 : -H / 2];
+        for (let c = 0; c < 3; c++) expect(Math.abs(S.V[3 * i + c] - want[c]), `${name} vertex ${i}`).toBeLessThan(1e-14);
+      }
+      for (const [i, j] of S.edges)
+        expect(Math.abs(Math.hypot(S.V[3 * j] - S.V[3 * i], S.V[3 * j + 1] - S.V[3 * i + 1], S.V[3 * j + 2] - S.V[3 * i + 2]) - 1)).toBeLessThan(1e-14);
+      // prismatoid formula: the section at mid-height is the regular 2n-gon of circumradius R cos(pi/2n)
+      const mid = n * (R * Math.cos(Math.PI / (2 * n))) ** 2 * Math.sin(Math.PI / n);
+      expect(Math.abs(S.volume - (H / 6) * (2 * area + 4 * mid)) / S.volume, name).toBeLessThan(1e-14);
+      expect(S.inradius).toBeCloseTo(Math.min(H / 2, Math.min(...Array.from(S.offsets))), 15);
+    }
   });
 });
 
@@ -142,18 +186,23 @@ describe("bipyramids and trapezohedra", () => {
       expect(sameSet(vertices(S), dual, 1e-13), S.name).toBe(true);
       checked++;
     }
-    expect(checked).toBe(10);
+    expect(checked).toBe(18);
   });
 });
 
 describe("problems and ids", () => {
-  it("lists upstream's 86 3D problems, then PolyPack's 36, with unique codes", () => {
-    expect(POLYHEDRA_PROBLEMS.length).toBe(122);
-    expect(new Set(POLYHEDRA_PROBLEMS.map((p) => p.code)).size).toBe(122);
+  it("lists upstream's 86 3D problems and PolyPack's 64 with unique codes", () => {
+    expect(POLYHEDRA_PROBLEMS.length).toBe(150);
+    expect(new Set(POLYHEDRA_PROBLEMS.map((p) => p.code)).size).toBe(150);
     expect(POLYHEDRA_PROBLEMS.slice(0, 86).every((p) => p.wiki)).toBe(true);
     expect(POLYHEDRA_PROBLEMS.slice(86).some((p) => p.wiki)).toBe(false);
-    expect(POLYHEDRA_PROBLEMS.slice(86, 90).map((p) => p.code)).toEqual(["bp3inbp3", "bp3incub", "bp5inbp5", "bp5incub"]);
-    expect(POLYHEDRA_PROBLEMS.at(-1)!.code).toBe("tz12incub");
+    expect(POLYHEDRA_PROBLEMS.slice(86).map((p) => p.code)).toEqual([
+      ...[7, 9, 10, 11].flatMap((k) => [`pr${k}inpr${k}`, `pr${k}incub`]),
+      ...[7, 9, 10, 11].flatMap((k) => [`ap${k}inap${k}`, `ap${k}incub`]),
+      ...[7, 9, 10, 11].flatMap((k) => ["l15", "l2", "l3"].map((t) => `pr${k}${t}incub`)),
+      ...[3, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((n) => [`bp${n}inbp${n}`, `bp${n}incub`]),
+      ...[4, 5, 6, 7, 8, 9, 10, 11, 12].flatMap((n) => [`tz${n}intz${n}`, `tz${n}incub`]),
+    ]);
     expect(getProblem("bp5inbp5")).toMatchObject({ piece: "bipyramid5", container: "bipyramid5", family: "bipyramids", wiki: false });
     expect(getProblem("bp5inbp5")!.title).toBe("Pentagonal bipyramids in a pentagonal bipyramid");
     expect(getProblem("tz11incub")).toMatchObject({ piece: "trapezohedron11", container: "cube", family: "trapezohedra" });
@@ -162,6 +211,28 @@ describe("problems and ids", () => {
     // the octahedron and the cube are the n = 4 bipyramid and the n = 3 trapezohedron (in other sizes)
     expect(getProblem("bp4inbp4")).toBeNull();
     expect(getProblem("tz3incub")).toBeNull();
+    expect(getProblem("pr7incub")).toMatchObject({ piece: "prism7", container: "cube", family: "prisms", wiki: false });
+    expect(getProblem("pr7incub")!.title).toBe("Heptagonal prisms in a cube");
+    expect(getProblem("ap9inap9")!.title).toBe("Enneagonal antiprisms in an enneagonal antiprism");
+    expect(getProblem("pr10l15incub")!.title).toBe("Decagonal prisms of height 1.5 in a cube");
+    expect(getProblem("ap11inap11")!.title).toBe("Hendecagonal antiprisms in a hendecagonal antiprism");
+    expect(getProblem("pr12incub")!.wiki).toBe(true);
+    // catalogue.ts names the same solids as the data, in the same order
+    expect(SOLID_NAMES_LIST.map((x) => [x.name, x.code, x.family, x.title])).toEqual(
+      SOLID_NAMES.map((n) => [n, getSolid(n).code, getSolid(n).family, getSolid(n).title]),
+    );
+    expect(PROBLEM_CODES.length).toBe(150);
+    expect(problemNameOf("ap11incub")).toMatchObject({ piece: "antiprism11", container: "cube", wiki: false });
+    // a listing puts PolyPack's prisms among the wiki's by their sides and keeps the wiki's own order
+    expect([...PROBLEM_ORDER].sort()).toEqual([...PROBLEM_CODES].sort());
+    const at = (c: string) => PROBLEM_ORDER.indexOf(c);
+    expect(PROBLEM_ORDER.filter((c) => problemNameOf(c)!.wiki)).toEqual(PROBLEM_CODES.slice(0, 86));
+    expect(PROBLEM_ORDER.slice(at("pr6inpr6"), at("pr6inpr6") + 6)).toEqual(["pr6inpr6", "pr6incub", "pr7inpr7", "pr7incub", "pr8inpr8", "pr8incub"]);
+    expect(at("pr11incub") + 1).toBe(at("pr12inpr12"));
+    expect(at("ap10incub") + 1).toBe(at("ap11inap11"));
+    // then the bipyramids and trapezohedra, in the catalogue's order
+    expect(PROBLEM_ORDER.slice(-36)).toEqual(PROBLEM_CODES.slice(-36));
+    expect(PROBLEM_ORDER.slice(-42, -36)).toEqual(["pr11l15incub", "pr11l2incub", "pr11l3incub", "pr12l15incub", "pr12l2incub", "pr12l3incub"]);
     expect(POLYHEDRA_PROBLEMS.slice(0, 5).map((p) => p.code)).toEqual(["tetintet", "octinoct", "icoinico", "dodindod", "cubincub"]);
     expect(getProblem("pr3l15incub")).toMatchObject({ piece: "prism3_l15", container: "cube", family: "prisms" });
     expect(getProblem("cubintet")!.title).toBe("Cubes in a tetrahedron");
@@ -170,6 +241,9 @@ describe("problems and ids", () => {
 
   it("parses ids in their one written form only", () => {
     expect(parsePolyhedraId("polyhedra/cubintet/12")).toMatchObject({ code: "cubintet", P: 12 });
+    expect(parsePolyhedraId("polyhedra/ap10inap10/100")).toMatchObject({ code: "ap10inap10", P: 100 });
+    expect(parsePolyhedraId("polyhedra/pr9l3incub/2")).toMatchObject({ code: "pr9l3incub", P: 2 });
+    expect(typeof parsePolyhedraId("polyhedra/pr13incub/2")).toBe("string");
     expect(formatPolyhedraId("cubintet", 12)).toBe("polyhedra/cubintet/12");
     for (const bad of ["polyhedra/cubintet/012", "polyhedra/cubintet/+1", "polyhedra/cubintet/0", "polyhedra/blob/3", "surface/cube/fold/0/1", "polyhedra/cubintet", 12])
       expect(typeof parsePolyhedraId(bad)).toBe("string");
@@ -179,5 +253,10 @@ describe("problems and ids", () => {
   it("computes the volume bound", () => {
     expect(volumeBound(getProblem("cubincub")!, 8)).toBe(2);
     expect(volumeBound(getProblem("tetintet")!, 8)).toBeCloseTo(2, 14);
+    // P = 8 pieces in their own solid: s >= 2; prisms in a cube: s >= (P h n cot(pi/n) / 4)^(1/3)
+    for (const code of ["pr7inpr7", "pr9inpr9", "pr10inpr10", "pr11inpr11", "ap7inap7", "ap9inap9", "ap10inap10", "ap11inap11"])
+      expect(volumeBound(getProblem(code)!, 8)).toBeCloseTo(2, 14);
+    for (const [code, n, h] of [["pr7incub", 7, 1], ["pr9l15incub", 9, 1.5], ["pr10l3incub", 10, 3], ["pr11l2incub", 11, 2]] as const)
+      expect(volumeBound(getProblem(code)!, 20)).toBeCloseTo(Math.cbrt((20 * h * n) / (4 * Math.tan(Math.PI / n))), 13);
   });
 });

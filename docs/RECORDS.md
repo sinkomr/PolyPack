@@ -11,6 +11,7 @@ Labels: **[EST]** established with a source, **[CALC]** computed or derived here
 | Erich Friedman, Packing Center, https://erich-friedman.github.io/packing/ | 34 pages: circles, triangles, squares, pentagons, hexagons and octagons in circles, triangles, squares, pentagons, hexagons and octagons. 1,557 values, up to n = 50. | Unit pieces (side 1, circle radius 1); container radius r or side s. | None. Each page's own sentence is checked by the importer. |
 | David Ellsworth, Squares in Squares, https://kingbird.myphotos.cc/packing/squares_in_squares.html | Squares in squares, n up to 324. | Unit squares; container side s. | None. |
 | Eckard Specht, Packomania, http://www.packomania.com/ | Equal circles in a circle and in a square: values to n = 500. Coordinates: circles in a circle to n = 500, circles in a square to n = 100. | Container of radius 1 (or side 1); circle radius listed. | Value = 1 / radius (the source's "ratio" column); coordinates divided by the radius. |
+| Berthold, Kamp, Mexi, Pokutta and Polik, Packing Solutions, https://github.com/DominikKamp/Packing at commit `27f7163` (read 2026-10-25) | Directory `polygon/`: regular m-gons in a regular l-gon, l and m from 3 to 7, n from 1 to 30, 750 packings with coordinates. Used only where no other source has a value (the role "gaps"): the 270 problems with a heptagon. The online supplement of a paper submitted to the Journal of Global Optimization, 2026 (arXiv:2605.04850); the repository states no licence and is used with citation. | Pieces of circumradius 1; container circumradius R. Angles turn clockwise. | Side s = R sin(π/l) / sin(π/m); coordinates scaled by 1 / (2 sin(π/m)); angle θ' = −θ − π + π/m. See below. |
 
 ### Circle-in-circle coordinates
 
@@ -21,6 +22,19 @@ The coordinates of circles in a circle for n = 101 to 500 were read on 2026-10-1
 - [CALC] For every n up to 500 the radius implied by the archive (half the smallest centre distance, and 1 minus the largest centre distance) equals the published radius to the digits printed. The archive holds no packing that differs from the published table. The source's radius and ratio tables fetched again on 2026-10-11 are identical to the stored citations for n up to 500, for circles in a circle and in a square.
 - [CALC] The source prints 30 decimals for 315 of the n up to 500 and 12 decimals for the other 185 (all above 100), in the coordinates and in the radius alike. After conversion the 12-decimal files reproduce the published value to 3.3e-11 and have contacts that overlap by at most 6.2e-11. The site's rule for a valid configuration allows 1e-9, so all 400 new configurations are stored as printed. None was polished and none was left out. `coordinates_note` gives the number of decimals for each.
 - The published `value` and `display` are the source's table entries. Coordinates never change them.
+
+### Polygon packings of Berthold et al.
+
+`scripts/import-kamp.ts` reads the 750 files `polygon/l{l}/m{m}/n{n}/polygon_n{n}_m{m}_l{l}.txt` ("l m n", R, then "x y θ" per piece) into `data/sources/kamp.json`.
+
+- [CALC] The README does not give the orientation conventions. Read as "vertex k of a piece at −θ − π/2 + π/m + 2πk/m, vertex k of the container at −π/2 + π/l + 2πk/l, the container centred on the origin" (both with a horizontal bottom edge at θ = 0, θ turning clockwise), every one of the 750 packings is valid, with no overlap or overhang above 1e-14. Every other reading tried (θ anticlockwise, a vertex instead of an edge at the bottom, other offsets) makes hundreds of them overlap or overhang, and shifting the angle by 1e-7 breaks 545; an independent check with its own code agreed.
+- [CALC] Every converted packing passes this site's checker. Many fit a container slightly smaller than the source's R gives: 82 of the 750 by 1e-8 or more, at most 1.3e-6 in this site's units. The value stored is the source's; a record's conversion note gives the smaller size when the difference is above 1e-9 (144 of the 270 stored, at most 8.1e-7).
+- Values are quoted to 6 decimals: the source's own table (`polygon/results.dat`) rounds R up to 5.
+- [CALC] Compared on 2026-10-25 with the 481 records that already existed (two of them derived here), none of these values is smaller. 202 agree with the existing value to the digits it prints and 279 are worse; the median difference is 0.017%, the largest 12%. So the file has the role "gaps", and `scripts/build-records.ts` uses it only for the problems no other source has: every pair with a heptagon, 270 problems. 269 are new; one heptagon in a heptagon was derived here before and is now credited to the supplement, as a trivial tiling at its exact value 1. No other record changes, except the build date on the records derived here.
+- Two pentagons in a hexagon (below) are also in the supplement, at 1.538842, the value of PolyPack's packing. Friedman has a value for this problem, so the gaps rule leaves the supplement's out before the bound check removes Friedman's; the record stays PolyPack's own.
+- The status is `best_known` for all: the supplement claims no optimality.
+
+Proofs written for PolyPack, with their review status, are in [docs/proofs/](proofs/README.md).
 
 ## Status of an entry
 
@@ -44,6 +58,9 @@ npx tsx scripts/import-packomania.ts packomania 2026-10-07
 mkdir cci_coords
 tar -xf cci_coords.tar -C cci_coords
 npx tsx scripts/attach-packomania-coords.ts cci_coords 2026-10-11
+git clone https://github.com/DominikKamp/Packing.git kamp
+git -C kamp checkout 27f71632d8655ae4b6a049410a401976748b94e3
+npx tsx scripts/import-kamp.ts kamp 2026-10-25
 npx tsx scripts/build-records.ts
 ```
 
@@ -60,7 +77,7 @@ The Packomania directory layout is described at the top of `scripts/import-packo
 - An entry whose number cannot be read is skipped and reported, never guessed.
 - Every value must be at or above the area lower bound.
 - A value for an M-gon container must also be at least 2 sin(π/M)·ρ, where ρ is a `proven` value for the same pieces in a circle: the M-gon lies in its circumcircle, of radius s / (2 sin(π/M)). Both sides are allowed their printed precision. A source value below this bound is left out and listed among the build's disagreements; the problem then stays open. [CALC] The build of 2026-10-19 leaves out two, both from Friedman and marked "Trivial" there: 2 pentagons in a hexagon, 1.53879+ against the bound 1.53884 (r + R of a pentagon), and 2 pentagons in an octagon, 1.17774+ against 1.177777. The construction runs below never got under 1.538842 and 1.177778 for these. In their place the build derives PolyPack's own packings, as `best_known` (not claimed optimal): the two pentagons face to face, their far vertices in opposite corners of a container of circumradius r + R, giving 1.538841768588 and 1.177778499740.
-- Stored coordinates must pass this site's own overlap check and reproduce the value to 1e-8. The overlap check is the one used for submissions: a penetration up to 1e-9 counts as contact. No configuration taken from a source is polished (constructed ones are the solver's output; see below). `packages/geometry/test/records.test.ts` repeats the check on the generated file.
+- Stored coordinates must pass this site's own overlap check and reproduce the value to 1e-8, or to twice the precision the value is quoted to when that is coarser. Coordinates from a second source are attached to a record only when they pass the same test against the record's value. The overlap check is the one used for submissions: a penetration up to 1e-9 counts as contact. No configuration taken from a source is polished (constructed ones are the solver's output; see below). `packages/geometry/test/records.test.ts` repeats the check on the generated file.
 - A Packomania coordinate file is used only if every line is `index x y` and the indices run from 1 to n.
 - A caption that contains "proved" or "proven" but cannot be read as a proof claim is reported, never stored silently as `best_known`. [An earlier version read "Proved by F. Fodor in 2003." only as far as the initial, so 13 and 19 circles in a circle were stored as `best_known`. Corrected 2026-10-11.]
 - Where two sources cover the same problem (circles in a circle or square, n up to 24), their values must agree; disagreements are printed. The current build has none.
@@ -105,7 +122,7 @@ npx tsx scripts/build-records.ts --date 2026-10-12
 ## Known gaps
 
 - Friedman's values are printed truncated (for example "2.154+"), to 3 to 5 decimals. They are stored as printed, with `display_precision` set to the number of printed decimals.
-- No coordinates for polygon packings from the literature, except squares in a square read from Ellsworth's drawings (above). Friedman publishes pictures only. The `jlevy/squares` registry also has coordinates for squares in squares; it is not imported.
-- Container shapes other than circle, triangle, square, pentagon, hexagon and octagon, and piece shapes with 7 or more than 8 sides, have no published values in these sources.
-- Published papers were not searched one by one. Proofs are recorded as the three sources above report them. Example: Friedman lists 12 and 14 circles in a circle as "Found by", so they are `best_known` here, although Wikipedia's "Circle packing in a circle" (read 2026-10-11) cites proofs by Fodor (2000) and by Ekanayake and LaFountain (2024).
+- No coordinates for polygon packings from the literature, except squares in a square read from Ellsworth's drawings and the heptagon pairs of Berthold et al. (above). Friedman publishes pictures only. The `jlevy/squares` registry also has coordinates for squares in squares; it is not imported.
+- Container shapes other than circle, triangle, square, pentagon, hexagon, heptagon and octagon, and piece shapes with more than 8 sides, have no published values in these sources. Heptagons have values only with 3- to 7-gons and n up to 30.
+- Published papers were not searched one by one. Proofs are recorded as the sources above report them. Example: Friedman lists 12 and 14 circles in a circle as "Found by", so they are `best_known` here, although Wikipedia's "Circle packing in a circle" (read 2026-10-11) cites proofs by Fodor (2000) and by Ekanayake and LaFountain (2024).
 - Packomania coordinates for circles in a square are stored only to n = 100.

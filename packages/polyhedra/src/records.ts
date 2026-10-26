@@ -40,8 +40,13 @@ export interface PolyhedraRecord {
   sources: string[];
   /** Citation sentence. */
   source: string;
-  origin: { file: string; date?: string | null };
-  wiki: { s_full: number; url: string; file?: string };
+  /**
+   * The file the configuration comes from; for a PolyPack search its seed, the packing or construction it started
+   * from and, where given, the runs after that start.
+   */
+  origin: { file: string; date?: string | null; seed?: number; evaluations?: number; start?: string; runs?: string[] };
+  /** The wiki's record of the case; absent for PolyPack's own problems, which the wiki does not list. */
+  wiki?: { s_full: number; url: string; file?: string };
   literature: PolyhedraLiterature[];
   /** Upstream's uncertified touching limit, where given. */
   s_tight?: number;

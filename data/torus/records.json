@@ -47,7 +47,18 @@
     "kind": "exact"
    },
    "exact": null,
-   "literature": [],
+   "literature": [
+    {
+     "value": 2.0,
+     "status": "proven",
+     "short": "Dickinson et al. 2011 (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52(2) (2011) 315-333 (paper not read; values as quoted in Musin-Nikitenko 2016, Fig. 2)",
+     "url": "https://arxiv.org/abs/1212.0649",
+     "accessed": "2026-10-24",
+     "doi": "10.1007/s13366-011-0029-7",
+     "note": "one disk: the shortest lattice vector must be at least 2 (trivial); Connelly et al. 2017 report the square grid optimal for N = 1, 2 and 5"
+    }
+   ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
    "seed": 20261024,
    "budget": {
@@ -58,7 +69,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] one disk: the shortest lattice vector L must be >= 2) to 1e-12 relative."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] one disk: the shortest lattice vector L must be >= 2) to 1e-12 relative. Literature proven value 2.0000000000 (Dickinson et al. 2011 (not read)): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/sq/0/2",
@@ -68,7 +79,7 @@
    "score_float": 2.82842712474619,
    "score_cert": 2.8284271247490187,
    "display": "2.828427",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.7853981633974485,
    "eps": 1e-12,
    "configuration": {
@@ -92,7 +103,7 @@
    "min_clearance_shrunk": "1.9996657e-12",
    "bound": {
     "value": 2.8284271247461903,
-    "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019",
+    "label": "[EST] proven optimum: Brandt et al. 2019, Thm 1.1",
     "kind": "proven"
    },
    "exact": null,
@@ -100,11 +111,23 @@
     {
      "value": 2.8284271247461903,
      "status": "proven",
-     "short": "Dickinson et al. 2011; Brandt et al. 2019",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52 (2011) 315-333 (values as quoted in Musin-Nikitenko, Fig. 2); Brandt, Dickinson, Ellsworth, Kenkel, Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342 (2019) 111597",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
      "url": "https://arxiv.org/abs/1708.05395",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R1_2: r2 = sqrt2/4 on the square torus (v2 = (0, 1)); L = 1/r",
      "note": "L = 2 sqrt2"
+    },
+    {
+     "value": 2.8284271247461903,
+     "status": "proven",
+     "short": "Dickinson et al. 2011 (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52(2) (2011) 315-333 (paper not read; values as quoted in Musin-Nikitenko 2016, Fig. 2)",
+     "url": "https://arxiv.org/abs/1212.0649",
+     "accessed": "2026-10-24",
+     "doi": "10.1007/s13366-011-0029-7",
+     "note": "d = sqrt2/2, L = 2 sqrt2"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -117,7 +140,7 @@
    "search_label": "replicate1",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019) to 1e-12 relative. Literature proven value 2.8284271247 (Dickinson et al. 2011; Brandt et al. 2019): ours - literature = -4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Brandt et al. 2019, Thm 1.1) to 1e-12 relative. Literature proven value 2.8284271247 (Brandt et al. 2019, Thm 1.1): ours - literature = -4.441e-16. Literature proven value 2.8284271247 (Dickinson et al. 2011 (not read)): ours - literature = -4.441e-16. Proven optimal: Brandt et al. 2019, Thm 1.1 (Theorem 1.1, region R1_2: r2 = sqrt2/4 on the square torus (v2 = (0, 1)); L = 1/r; doi:10.1016/j.disc.2019.111597)."
   },
   {
    "problem": "torus/sq/0/3",
@@ -127,7 +150,7 @@
    "score_float": 3.8637033051562732,
    "score_cert": 3.8637033051601373,
    "display": "3.863703",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.6313404108576997,
    "eps": 1e-12,
    "configuration": {
@@ -156,7 +179,7 @@
    "min_clearance_shrunk": "1.9998227e-12",
    "bound": {
     "value": 3.863703305156273,
-    "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019",
+    "label": "[EST] proven optimum: Brandt et al. 2019, Thm 1.1",
     "kind": "proven"
    },
    "exact": null,
@@ -164,10 +187,22 @@
     {
      "value": 3.863703305156273,
      "status": "proven",
-     "short": "Dickinson et al. 2011; Brandt et al. 2019",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52 (2011) 315-333 (values as quoted in Musin-Nikitenko, Fig. 2); Brandt, Dickinson, Ellsworth, Kenkel, Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342 (2019) 111597",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
      "url": "https://arxiv.org/abs/1708.05395",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R1_3: r3 = (sqrt6 - sqrt2)/4 on the square torus (v2 = (0, 1)); L = 1/r",
+     "note": "L = sqrt6 + sqrt2"
+    },
+    {
+     "value": 3.863703305156273,
+     "status": "proven",
+     "short": "Dickinson et al. 2011 (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52(2) (2011) 315-333 (paper not read; values as quoted in Musin-Nikitenko 2016, Fig. 2)",
+     "url": "https://arxiv.org/abs/1212.0649",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s13366-011-0029-7",
      "note": "d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2"
     }
    ],
@@ -181,7 +216,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019) to 1e-12 relative. Literature proven value 3.8637033052 (Dickinson et al. 2011; Brandt et al. 2019): ours - literature = 4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Brandt et al. 2019, Thm 1.1) to 1e-12 relative. Literature proven value 3.8637033052 (Brandt et al. 2019, Thm 1.1): ours - literature = 4.441e-16. Literature proven value 3.8637033052 (Dickinson et al. 2011 (not read)): ours - literature = 4.441e-16. Proven optimal: Brandt et al. 2019, Thm 1.1 (Theorem 1.1, region R1_3: r3 = (sqrt6 - sqrt2)/4 on the square torus (v2 = (0, 1)); L = 1/r; doi:10.1016/j.disc.2019.111597)."
   },
   {
    "problem": "torus/sq/0/4",
@@ -191,7 +226,7 @@
    "score_float": 3.8637033051562732,
    "score_cert": 3.8637033051601373,
    "display": "3.863703",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.8417872144769328,
    "eps": 1e-12,
    "configuration": {
@@ -225,7 +260,7 @@
    "min_clearance_shrunk": "1.9997079e-12",
    "bound": {
     "value": 3.863703305156273,
-    "label": "[EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019",
+    "label": "[EST] proven optimum: Brandt et al. 2019, Thm 1.1",
     "kind": "proven"
    },
    "exact": null,
@@ -233,10 +268,22 @@
     {
      "value": 3.863703305156273,
      "status": "proven",
-     "short": "Dickinson et al. 2011; Brandt et al. 2019",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52 (2011) 315-333 (values as quoted in Musin-Nikitenko, Fig. 2); Brandt, Dickinson, Ellsworth, Kenkel, Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342 (2019) 111597",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
      "url": "https://arxiv.org/abs/1708.05395",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R1_4: r4 = (sqrt6 - sqrt2)/4 on the square torus (v2 = (0, 1)); L = 1/r",
+     "note": "L = sqrt6 + sqrt2"
+    },
+    {
+     "value": 3.863703305156273,
+     "status": "proven",
+     "short": "Dickinson et al. 2011 (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52(2) (2011) 315-333 (paper not read; values as quoted in Musin-Nikitenko 2016, Fig. 2)",
+     "url": "https://arxiv.org/abs/1212.0649",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s13366-011-0029-7",
      "note": "d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2"
     }
    ],
@@ -250,7 +297,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011; Brandt et al. 2019) to 1e-12 relative. Literature proven value 3.8637033052 (Dickinson et al. 2011; Brandt et al. 2019): ours - literature = 4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Brandt et al. 2019, Thm 1.1) to 1e-12 relative. Literature proven value 3.8637033052 (Brandt et al. 2019, Thm 1.1): ours - literature = 4.441e-16. Literature proven value 3.8637033052 (Dickinson et al. 2011 (not read)): ours - literature = 4.441e-16. Proven optimal: Brandt et al. 2019, Thm 1.1 (Theorem 1.1, region R1_4: r4 = (sqrt6 - sqrt2)/4 on the square torus (v2 = (0, 1)); L = 1/r; doi:10.1016/j.disc.2019.111597)."
   },
   {
    "problem": "torus/sq/0/5",
@@ -299,7 +346,7 @@
    "min_clearance_shrunk": "1.9997496e-12",
    "bound": {
     "value": 4.47213595499958,
-    "label": "[EST] proven optimum: Dickinson et al. 2011",
+    "label": "[EST] proven optimum: Dickinson et al. 2011 (not read)",
     "kind": "proven"
    },
    "exact": null,
@@ -307,10 +354,11 @@
     {
      "value": 4.47213595499958,
      "status": "proven",
-     "short": "Dickinson et al. 2011",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52 (2011) 315-333 (values as quoted in Musin-Nikitenko, Fig. 2)",
+     "short": "Dickinson et al. 2011 (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to five equal circles on a square flat torus, Beitr. Algebra Geom. 52(2) (2011) 315-333 (paper not read; values as quoted in Musin-Nikitenko 2016, Fig. 2)",
      "url": "https://arxiv.org/abs/1212.0649",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s13366-011-0029-7",
      "note": "d = 1/sqrt5, L = 2 sqrt5"
     }
    ],
@@ -324,7 +372,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011) to 1e-12 relative. Literature proven value 4.4721359550 (Dickinson et al. 2011): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011 (not read)) to 1e-12 relative. Literature proven value 4.4721359550 (Dickinson et al. 2011 (not read)): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/sq/0/6",
@@ -334,7 +382,7 @@
    "score_float": 4.994935776886124,
    "score_cert": 4.994935776891119,
    "display": "4.994936",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.7555118941353133,
    "eps": 1e-12,
    "configuration": {
@@ -387,10 +435,12 @@
      "value": 4.994935776886126,
      "status": "proven",
      "short": "Musin and Nikitenko 2016, Thm 1",
-     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55 (2016) 1-20",
+     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55(1) (2016) 1-20",
      "url": "https://arxiv.org/abs/1212.0649",
-     "accessed": "2026-10-24",
-     "note": "d = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6"
+     "accessed": "2026-10-25",
+     "doi": "10.1007/s00454-015-9742-6",
+     "proof": "Theorem 1: optimal minimal distance on the unit square torus, d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6; L = 2/d",
+     "note": "d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -403,7 +453,7 @@
    "search_label": "hop:lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 1) to 1e-12 relative. Literature proven value 4.9949357769 (Musin and Nikitenko 2016, Thm 1): ours - literature = -1.776e-15."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 1) to 1e-12 relative. Literature proven value 4.9949357769 (Musin and Nikitenko 2016, Thm 1): ours - literature = -1.776e-15. Proven optimal: Musin and Nikitenko 2016, Thm 1 (Theorem 1: optimal minimal distance on the unit square torus, d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6; L = 2/d; doi:10.1007/s00454-015-9742-6)."
   },
   {
    "problem": "torus/sq/0/7",
@@ -413,7 +463,7 @@
    "score_float": 5.464101615137754,
    "score_cert": 5.464101615143219,
    "display": "5.464102",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.7365638126673163,
    "eps": 1e-12,
    "configuration": {
@@ -471,10 +521,12 @@
      "value": 5.464101615137754,
      "status": "proven",
      "short": "Musin and Nikitenko 2016, Thm 2",
-     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55 (2016) 1-20",
+     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55(1) (2016) 1-20",
      "url": "https://arxiv.org/abs/1212.0649",
-     "accessed": "2026-10-24",
-     "note": "d = 1/(1 + sqrt3); three optimal arrangements"
+     "accessed": "2026-10-25",
+     "doi": "10.1007/s00454-015-9742-6",
+     "proof": "Theorem 2: optimal minimal distance on the unit square torus, d7 = 1/(1 + sqrt3), three optimal arrangements; L = 2/d",
+     "note": "d7 = 1/(1 + sqrt3), three optimal arrangements"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -487,7 +539,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 2) to 1e-12 relative. Literature proven value 5.4641016151 (Musin and Nikitenko 2016, Thm 2): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 2) to 1e-12 relative. Literature proven value 5.4641016151 (Musin and Nikitenko 2016, Thm 2): ours - literature = 0.000e+00. Proven optimal: Musin and Nikitenko 2016, Thm 2 (Theorem 2: optimal minimal distance on the unit square torus, d7 = 1/(1 + sqrt3), three optimal arrangements; L = 2/d; doi:10.1007/s00454-015-9742-6)."
   },
   {
    "problem": "torus/sq/0/8",
@@ -497,7 +549,7 @@
    "score_float": 5.464101615137754,
    "score_cert": 5.464101615143219,
    "display": "5.464102",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.8417872144769329,
    "eps": 1e-12,
    "configuration": {
@@ -560,10 +612,12 @@
      "value": 5.464101615137754,
      "status": "proven",
      "short": "Musin and Nikitenko 2016, Thm 3",
-     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55 (2016) 1-20",
+     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55(1) (2016) 1-20",
      "url": "https://arxiv.org/abs/1212.0649",
-     "accessed": "2026-10-24",
-     "note": "d = 1/(1 + sqrt3)"
+     "accessed": "2026-10-25",
+     "doi": "10.1007/s00454-015-9742-6",
+     "proof": "Theorem 3: optimal minimal distance on the unit square torus, d8 = 1/(1 + sqrt3); L = 2/d",
+     "note": "d8 = 1/(1 + sqrt3)"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -576,7 +630,7 @@
    "search_label": "from-free",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 3) to 1e-12 relative. Literature proven value 5.4641016151 (Musin and Nikitenko 2016, Thm 3): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Musin and Nikitenko 2016, Thm 3) to 1e-12 relative. Literature proven value 5.4641016151 (Musin and Nikitenko 2016, Thm 3): ours - literature = 0.000e+00. Proven optimal: Musin and Nikitenko 2016, Thm 3 (Theorem 3: optimal minimal distance on the unit square torus, d8 = 1/(1 + sqrt3); L = 2/d; doi:10.1007/s00454-015-9742-6)."
   },
   {
    "problem": "torus/sq/0/9",
@@ -654,10 +708,11 @@
      "value": 5.818625822352819,
      "status": "conjecture",
      "short": "Musin and Nikitenko 2016, Conjecture 2.1",
-     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55 (2016) 1-20",
+     "source": "O. R. Musin, A. V. Nikitenko, Optimal packings of congruent circles on a square flat torus, Discrete Comput. Geom. 55(1) (2016) 1-20",
      "url": "https://arxiv.org/abs/1212.0649",
      "accessed": "2026-10-24",
-     "note": "d = 1/sqrt(5 + 2 sqrt3)"
+     "doi": "10.1007/s00454-015-9742-6",
+     "note": "d = 1/sqrt(5 + 2 sqrt3); Voloshinov and Smirnov reach the same arrangement with a floating-point branch and bound (V. V. Voloshinov, S. A. Smirnov, Optimal packings of congruent circles on a square flat torus as mixed-integer nonlinear optimization problem, Communications in Computer and Information Science (Springer, 2019) 87-97, doi:10.1007/978-3-030-36592-9_8), not a rigorous proof"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -753,9 +808,10 @@
      "value": 6.324555320336759,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "square grid, conjectured optimal; table bracket L in [6.3241, 6.3282]"
     }
    ],
@@ -857,9 +913,10 @@
      "value": null,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "table bracket L in [6.5459, 6.5500] (r = 0.153, delta = 0.806)"
     }
    ],
@@ -966,9 +1023,10 @@
      "value": 6.65640235470275,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "Type I (a, b) = (3, 2): L = 24/sqrt13; table bracket [6.6539, 6.6578]"
     }
    ],
@@ -1080,9 +1138,10 @@
      "value": null,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "table bracket L in [7.1969, 7.2015] (r = 0.139, delta = 0.788)"
     }
    ],
@@ -1199,9 +1258,10 @@
      "value": null,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "table bracket L in [7.2382, 7.2425] (r = 0.138, delta = 0.839)"
     }
    ],
@@ -1323,9 +1383,10 @@
      "value": 7.276068751089989,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "Type II (a, b) = (4, 1): L = 30/sqrt17; table bracket [7.2745, 7.2786]"
     }
    ],
@@ -1452,9 +1513,10 @@
      "value": 7.727406610312546,
      "status": "best_known",
      "short": "Connelly et al. 2017",
-     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58 (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
+     "source": "R. Connelly, M. Funkhouser, V. Kuperberg, E. Solomonides, Packings of equal disks in a square torus, Discrete Comput. Geom. 58(3) (2017) 614-642 (search values, r to 3 decimals; conjectures for 10-16)",
      "url": "https://arxiv.org/abs/1512.08762",
      "accessed": "2026-10-24",
+     "doi": "10.1007/s00454-016-9843-x",
      "note": "table bracket [7.7241, 7.7287]; 2 x 2 copy of the P = 4 optimum gives 2 (sqrt6 + sqrt2) [SPEC identification]"
     }
    ],
@@ -2782,7 +2844,7 @@
    "score_float": 1.0000000000000002,
    "score_cert": 1.0000000000010003,
    "display": "1.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999998,
    "eps": 1e-12,
    "configuration": {
@@ -2812,10 +2874,12 @@
     {
      "value": 1.0,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -2829,7 +2893,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(1) = 1 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 1.0000000000 (Blair et al. 2012): ours - literature = 2.220e-16."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(1) = 1 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 1.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 2.220e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/2",
@@ -2839,7 +2903,7 @@
    "score_float": 1.4142135623730951,
    "score_cert": 1.4142135623745096,
    "display": "1.414214",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0,
    "eps": 1e-12,
    "configuration": {
@@ -2874,10 +2938,12 @@
     {
      "value": 1.4142135623730951,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -2891,7 +2957,7 @@
    "search_label": "insert",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(2) = 1.4142135623731 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 1.4142135624 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(2) = 1.4142135623731 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 1.4142135624 (Blair et al. 2012, sec. II.A.1): ours - literature = 0.000e+00. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/3",
@@ -2938,10 +3004,11 @@
     {
      "value": 2.0,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.75 (2^2 - 1); conjectured optimal"
     }
    ],
@@ -2955,7 +3022,7 @@
    "search_label": "P+1 result minus one piece (double)",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Taken from: P+1 result minus one piece (double). Literature best_known value 2.0000000000 (Blair et al. 2012): ours - literature = -4.441e-16."
+   "notes": "Taken from: P+1 result minus one piece (double). Literature best_known value 2.0000000000 (Blair et al. 2012, Table I): ours - literature = -4.441e-16."
   },
   {
    "problem": "torus/sq/4/4",
@@ -2965,7 +3032,7 @@
    "score_float": 1.9999999999999996,
    "score_cert": 2.0000000000019997,
    "display": "2.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0000000000000007,
    "eps": 1e-12,
    "configuration": {
@@ -3010,10 +3077,12 @@
     {
      "value": 2.0,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3027,7 +3096,7 @@
    "search_label": "double",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(4) = 2 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.0000000000 (Blair et al. 2012): ours - literature = -4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(4) = 2 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = -4.441e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/5",
@@ -3037,7 +3106,7 @@
    "score_float": 2.2360679774997902,
    "score_cert": 2.2360679775020267,
    "display": "2.236068",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999997,
    "eps": 1e-12,
    "configuration": {
@@ -3087,10 +3156,12 @@
     {
      "value": 2.23606797749979,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3100,7 +3171,7 @@
    "search_label": "replication of the P=1 result over an index-5 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(5) = 2.23606797749979 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.2360679775 (Blair et al. 2012): ours - literature = 4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(5) = 2.23606797749979 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.2360679775 (Blair et al. 2012, sec. II.A.1): ours - literature = 4.441e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/6",
@@ -3162,10 +3233,11 @@
     {
      "value": 2.6832815729997477,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.8333333333333334 (gapped bricklayer); conjectured optimal"
     }
    ],
@@ -3179,7 +3251,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 2.6832815730 (Blair et al. 2012): ours - literature = 1.599e-14."
+   "notes": "Literature best_known value 2.6832815730 (Blair et al. 2012, Table I): ours - literature = 1.599e-14."
   },
   {
    "problem": "torus/sq/4/7",
@@ -3246,10 +3318,11 @@
     {
      "value": 2.8284271247461903,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.875 (2^2 + 2^2 - 1); conjectured optimal"
     }
    ],
@@ -3263,7 +3336,7 @@
    "search_label": "insert",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 2.8284271247 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "Literature best_known value 2.8284271247 (Blair et al. 2012, Table I): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/sq/4/8",
@@ -3273,7 +3346,7 @@
    "score_float": 2.8284271247461903,
    "score_cert": 2.828427124749019,
    "display": "2.828427",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0,
    "eps": 1e-12,
    "configuration": {
@@ -3338,10 +3411,12 @@
     {
      "value": 2.8284271247461903,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3355,7 +3430,7 @@
    "search_label": "replicate2",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(8) = 2.82842712474619 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.8284271247 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(8) = 2.82842712474619 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.8284271247 (Blair et al. 2012, sec. II.A.1): ours - literature = 0.000e+00. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/9",
@@ -3365,7 +3440,7 @@
    "score_float": 3.0,
    "score_cert": 3.0000000000030003,
    "display": "3.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0000000000000002,
    "eps": 1e-12,
    "configuration": {
@@ -3435,10 +3510,12 @@
     {
      "value": 3.0,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3452,7 +3529,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(9) = 3 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.0000000000 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(9) = 3 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 0.000e+00. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/10",
@@ -3462,7 +3539,7 @@
    "score_float": 3.1622776601683786,
    "score_cert": 3.162277660171541,
    "display": "3.162278",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0000000000000004,
    "eps": 1e-12,
    "configuration": {
@@ -3537,10 +3614,12 @@
     {
      "value": 3.1622776601683795,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3554,7 +3633,7 @@
    "search_label": "replicate5",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(10) = 3.16227766016838 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.1622776602 (Blair et al. 2012): ours - literature = -8.882e-16."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(10) = 3.16227766016838 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.1622776602 (Blair et al. 2012, sec. II.A.1): ours - literature = -8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/11",
@@ -3641,10 +3720,11 @@
     {
      "value": 3.478505426185217,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.9090909090909091 (gapped bricklayer); conjectured optimal"
     }
    ],
@@ -3658,7 +3738,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 3.4785054262 (Blair et al. 2012): ours - literature = 1.332e-15."
+   "notes": "Literature best_known value 3.4785054262 (Blair et al. 2012, Table I): ours - literature = 1.332e-15."
   },
   {
    "problem": "torus/sq/4/12",
@@ -3750,10 +3830,11 @@
     {
      "value": 3.5355339059327378,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.96 (lattice of 1/2 x 1/2 holes); conjectured optimal"
     }
    ],
@@ -3767,7 +3848,7 @@
    "search_label": "hop:random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 3.5355339059 (Blair et al. 2012): ours - literature = 4.592e-12."
+   "notes": "Literature best_known value 3.5355339059 (Blair et al. 2012, Table I): ours - literature = 4.592e-12."
   },
   {
    "problem": "torus/sq/4/13",
@@ -3777,7 +3858,7 @@
    "score_float": 3.6055512754639896,
    "score_cert": 3.605551275467595,
    "display": "3.605551",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0000000000000002,
    "eps": 1e-12,
    "configuration": {
@@ -3867,10 +3948,12 @@
     {
      "value": 3.605551275463989,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -3884,7 +3967,7 @@
    "search_label": "insert",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(13) = 3.60555127546399 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.6055512755 (Blair et al. 2012): ours - literature = 4.441e-16."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(13) = 3.60555127546399 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.6055512755 (Blair et al. 2012, sec. II.A.1): ours - literature = 4.441e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/14",
@@ -3986,10 +4069,11 @@
     {
      "value": 3.882901373576604,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.9285714285714286 (gapped bricklayer); conjectured optimal"
     }
    ],
@@ -4003,7 +4087,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 3.8829013736 (Blair et al. 2012): ours - literature = 1.643e-14."
+   "notes": "Literature best_known value 3.8829013736 (Blair et al. 2012, Table I): ours - literature = 1.643e-14."
   },
   {
    "problem": "torus/sq/4/15",
@@ -4110,10 +4194,11 @@
     {
      "value": 4.0,
      "status": "best_known",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, Table I",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
      "note": "density 0.9375 (4^2 - 1); conjectured optimal"
     }
    ],
@@ -4127,7 +4212,7 @@
    "search_label": "hop:random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 4.0000000000 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "Literature best_known value 4.0000000000 (Blair et al. 2012, Table I): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/sq/4/16",
@@ -4137,7 +4222,7 @@
    "score_float": 4.0,
    "score_cert": 4.000000000004,
    "display": "4.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0000000000000002,
    "eps": 1e-12,
    "configuration": {
@@ -4242,10 +4327,12 @@
     {
      "value": 4.0,
      "status": "proven",
-     "short": "Blair et al. 2012",
-     "source": "J. Blair, C. D. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, Table I (density one optimal by construction; the rest conjectured)",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
      "url": "https://arxiv.org/abs/1110.5348",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
      "note": "density one (P is a sum of two squares)"
     }
    ],
@@ -4259,7 +4346,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(16) = 4 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.0000000000 (Blair et al. 2012): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(16) = 4 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 0.000e+00. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/17",
@@ -4269,7 +4356,7 @@
    "score_float": 4.1231056256176615,
    "score_cert": 4.123105625621785,
    "display": "4.123106",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999998,
    "eps": 1e-12,
    "configuration": {
@@ -4375,14 +4462,26 @@
     "expr": "sqrt(17)",
     "value": 4.123105625617661
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 4.123105625617661,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-17 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(17) = 4.12310562561766 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(17) = 4.12310562561766 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.1231056256 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/18",
@@ -4392,7 +4491,7 @@
    "score_float": 4.242640687119286,
    "score_cert": 4.2426406871235285,
    "display": "4.242641",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0,
    "eps": 1e-12,
    "configuration": {
@@ -4503,14 +4602,26 @@
     "expr": "sqrt(18)",
     "value": 4.242640687119285
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 4.242640687119285,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-18 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(18) = 4.24264068711928 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(18) = 4.24264068711928 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.2426406871 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/20",
@@ -4520,7 +4631,7 @@
    "score_float": 4.4721359549995805,
    "score_cert": 4.472135955004053,
    "display": "4.472136",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999997,
    "eps": 1e-12,
    "configuration": {
@@ -4641,14 +4752,26 @@
     "expr": "sqrt(20)",
     "value": 4.47213595499958
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 4.47213595499958,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-20 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(20) = 4.47213595499958 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(20) = 4.47213595499958 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.4721359550 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/25",
@@ -4658,7 +4781,7 @@
    "score_float": 5.000000000000002,
    "score_cert": 5.000000000005002,
    "display": "5.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999996,
    "eps": 1e-12,
    "configuration": {
@@ -4804,14 +4927,26 @@
     "expr": "sqrt(25)",
     "value": 5.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 5.0,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-25 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(25) = 5 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(25) = 5 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/26",
@@ -4821,7 +4956,7 @@
    "score_float": 5.099019513592785,
    "score_cert": 5.099019513597884,
    "display": "5.099020",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0,
    "eps": 1e-12,
    "configuration": {
@@ -4972,14 +5107,26 @@
     "expr": "sqrt(26)",
     "value": 5.0990195135927845
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 5.0990195135927845,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-26 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(26) = 5.09901951359278 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(26) = 5.09901951359278 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.0990195136 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/29",
@@ -4989,7 +5136,7 @@
    "score_float": 5.385164807134505,
    "score_cert": 5.3851648071398905,
    "display": "5.385165",
-   "status": "best_known",
+   "status": "proven",
    "density": 1.0,
    "eps": 1e-12,
    "configuration": {
@@ -5155,14 +5302,26 @@
     "expr": "sqrt(29)",
     "value": 5.385164807134504
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 5.385164807134504,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-29 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(29) = 5.3851648071345 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(29) = 5.3851648071345 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.3851648071 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/32",
@@ -5172,7 +5331,7 @@
    "score_float": 5.6568542494923815,
    "score_cert": 5.656854249498039,
    "display": "5.656854",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999998,
    "eps": 1e-12,
    "configuration": {
@@ -5353,14 +5512,26 @@
     "expr": "sqrt(32)",
     "value": 5.656854249492381
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 5.656854249492381,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-32 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(32) = 5.65685424949238 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(32) = 5.65685424949238 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.6568542495 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/34",
@@ -5370,7 +5541,7 @@
    "score_float": 5.8309518948453025,
    "score_cert": 5.830951894851134,
    "display": "5.830952",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999996,
    "eps": 1e-12,
    "configuration": {
@@ -5561,14 +5732,26 @@
     "expr": "sqrt(34)",
     "value": 5.830951894845301
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 5.830951894845301,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-34 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(34) = 5.8309518948453 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(34) = 5.8309518948453 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.8309518948 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/36",
@@ -5578,7 +5761,7 @@
    "score_float": 6.000000000000002,
    "score_cert": 6.000000000006002,
    "display": "6.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999996,
    "eps": 1e-12,
    "configuration": {
@@ -5779,14 +5962,26 @@
     "expr": "sqrt(36)",
     "value": 6.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 6.0,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-36 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(36) = 6 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(36) = 6 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/37",
@@ -5796,7 +5991,7 @@
    "score_float": 6.082762530298221,
    "score_cert": 6.082762530304304,
    "display": "6.082763",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999998,
    "eps": 1e-12,
    "configuration": {
@@ -6002,14 +6197,26 @@
     "expr": "sqrt(37)",
     "value": 6.082762530298219
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 6.082762530298219,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-37 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(37) = 6.08276253029822 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(37) = 6.08276253029822 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.0827625303 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/40",
@@ -6019,7 +6226,7 @@
    "score_float": 6.32455532033676,
    "score_cert": 6.324555320343085,
    "display": "6.324555",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999998,
    "eps": 1e-12,
    "configuration": {
@@ -6240,14 +6447,26 @@
     "expr": "sqrt(40)",
     "value": 6.324555320336759
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 6.324555320336759,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-40 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(40) = 6.32455532033676 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(40) = 6.32455532033676 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.3245553203 (Blair et al. 2012, sec. II.A.1): ours - literature = 8.882e-16. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/41",
@@ -6257,7 +6476,7 @@
    "score_float": 6.40312423743285,
    "score_cert": 6.403124237439254,
    "display": "6.403124",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999997,
    "eps": 1e-12,
    "configuration": {
@@ -6483,14 +6702,26 @@
     "expr": "sqrt(41)",
     "value": 6.4031242374328485
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 6.4031242374328485,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-41 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(41) = 6.40312423743285 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(41) = 6.40312423743285 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.4031242374 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/45",
@@ -6500,7 +6731,7 @@
    "score_float": 6.708203932499371,
    "score_cert": 6.70820393250608,
    "display": "6.708204",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999996,
    "eps": 1e-12,
    "configuration": {
@@ -6746,14 +6977,26 @@
     "expr": "sqrt(45)",
     "value": 6.708203932499369
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 6.708203932499369,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-45 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(45) = 6.70820393249937 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(45) = 6.70820393249937 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.7082039325 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/4/49",
@@ -6763,7 +7006,7 @@
    "score_float": 7.000000000000002,
    "score_cert": 7.000000000007002,
    "display": "7.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9999999999999997,
    "eps": 1e-12,
    "configuration": {
@@ -7029,14 +7272,26 @@
     "expr": "sqrt(49)",
     "value": 7.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 7.0,
+     "status": "proven",
+     "short": "Blair et al. 2012, sec. II.A.1",
+     "source": "D. W. Blair, C. Santangelo, J. Machta, Packing squares in a torus, J. Stat. Mech. (2012) P01018, sec. II.A.1 and Table I (density one optimal by construction; the rest conjectured)",
+     "url": "https://arxiv.org/abs/1110.5348",
+     "accessed": "2026-10-25",
+     "doi": "10.1088/1742-5468/2012/01/P01018",
+     "proof": "Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P)",
+     "note": "density one (P is a sum of two squares)"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-49 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(49) = 7 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] area bound P * A_piece <= cell area) to 1e-12 relative. [CALC] Exact value sqrt(49) = 7 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 7.0000000000 (Blair et al. 2012, sec. II.A.1): ours - literature = 1.776e-15. Proven optimal: Blair et al. 2012, sec. II.A.1 (Section II.A.1: a density-one packing exists when P is a sum of two squares and is optimal, since no packing has density above 1; L = sqrt(P); doi:10.1088/1742-5468/2012/01/P01018)."
   },
   {
    "problem": "torus/sq/5/1",
@@ -12262,7 +12517,7 @@
    "score_float": 2.0,
    "score_cert": 2.000000000002,
    "display": "2.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -12292,10 +12547,12 @@
     {
      "value": 2.0,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -12309,7 +12566,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([CALC] one disk: the shortest lattice vector L must be >= 2) to 1e-12 relative. [CALC] Exact value sqrt(1 * 4) = 2 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.0000000000 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([CALC] one disk: the shortest lattice vector L must be >= 2) to 1e-12 relative. [CALC] Exact value sqrt(1 * 4) = 2 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 2.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/2",
@@ -12319,7 +12576,7 @@
    "score_float": 3.4641016151377544,
    "score_cert": 3.4641016151412187,
    "display": "3.464102",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.6045997880780727,
    "eps": 1e-12,
    "configuration": {
@@ -12343,7 +12600,7 @@
    "min_clearance_shrunk": "1.9996237e-12",
    "bound": {
     "value": 3.4641016151377544,
-    "label": "[EST] proven optimum: Brandt et al. 2019; Dickinson et al. 2011",
+    "label": "[EST] proven optimum: Brandt et al. 2019, Thm 1.1",
     "kind": "proven"
    },
    "exact": null,
@@ -12351,11 +12608,23 @@
     {
      "value": 3.4641016151377544,
      "status": "proven",
-     "short": "Brandt et al. 2019; Dickinson et al. 2011",
-     "source": "Brandt, Dickinson, Ellsworth, Kenkel, Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342 (2019) 111597; W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102 (2011) 27-51 (not opened; described in Connelly-Dickinson 2014, sec. 1.4)",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
      "url": "https://arxiv.org/abs/1708.05395",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R1_2: r2 = 1/(2 sqrt3) on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/r",
      "note": "L = 2 sqrt3 (3-point lattice minus one)"
+    },
+    {
+     "value": 3.4641016151377544,
+     "status": "proven",
+     "short": "Dickinson et al. 2011, J. Geom. (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102(1-2) (2011) 27-51 (paper not read; described in Connelly-Dickinson 2014, sec. 1(d))",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-24",
+     "doi": "10.1007/s00022-011-0099-6",
+     "note": "L = 2 sqrt3"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12368,7 +12637,7 @@
    "search_label": "random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Brandt et al. 2019; Dickinson et al. 2011) to 1e-12 relative. Literature proven value 3.4641016151 (Brandt et al. 2019; Dickinson et al. 2011): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Brandt et al. 2019, Thm 1.1) to 1e-12 relative. Literature proven value 3.4641016151 (Brandt et al. 2019, Thm 1.1): ours - literature = 0.000e+00. Literature proven value 3.4641016151 (Dickinson et al. 2011, J. Geom. (not read)): ours - literature = 0.000e+00. Proven optimal: Brandt et al. 2019, Thm 1.1 (Theorem 1.1, region R1_2: r2 = 1/(2 sqrt3) on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/r; doi:10.1016/j.disc.2019.111597)."
   },
   {
    "problem": "torus/hex/0/3",
@@ -12378,7 +12647,7 @@
    "score_float": 3.4641016151377544,
    "score_cert": 3.4641016151412187,
    "display": "3.464102",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.906899682117109,
    "eps": 1e-12,
    "configuration": {
@@ -12418,11 +12687,24 @@
     {
      "value": 3.4641016151377544,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
+    },
+    {
+     "value": 3.4641016151377544,
+     "status": "proven",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
+     "url": "https://arxiv.org/abs/1708.05395",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R2_3: r3 = sqrt3/6 on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/r",
+     "note": "L = 2 sqrt3"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12435,7 +12717,7 @@
    "search_label": "replicate1",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(3 * 4) = 3.46410161513775 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.4641016151 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(3 * 4) = 3.46410161513775 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 3.4641016151 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Literature proven value 3.4641016151 (Brandt et al. 2019, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/4",
@@ -12445,7 +12727,7 @@
    "score_float": 4.0,
    "score_cert": 4.000000000004,
    "display": "4.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -12490,11 +12772,24 @@
     {
      "value": 4.0,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
+    },
+    {
+     "value": 4.0,
+     "status": "proven",
+     "short": "Brandt et al. 2019, Thm 1.1",
+     "source": "M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
+     "url": "https://arxiv.org/abs/1708.05395",
+     "accessed": "2026-10-25",
+     "doi": "10.1016/j.disc.2019.111597",
+     "proof": "Theorem 1.1, region R2_4: r4 = 1/4 on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/r",
+     "note": "L = 4"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12507,7 +12802,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(4 * 4) = 4 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.0000000000 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(4 * 4) = 4 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 4.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Literature proven value 4.0000000000 (Brandt et al. 2019, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/5",
@@ -12564,11 +12859,12 @@
     {
      "value": null,
      "status": "proven",
-     "short": "Dickinson et al. 2011 (J. Geom.)",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102 (2011) 27-51 (not opened; described in Connelly-Dickinson 2014, sec. 1.4)",
+     "short": "Dickinson et al. 2011, J. Geom. (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102(1-2) (2011) 27-51 (paper not read; described in Connelly-Dickinson 2014, sec. 1(d))",
      "url": "https://arxiv.org/abs/1201.5965",
      "accessed": "2026-10-24",
-     "note": "optimal packing proven there; value not seen (paper not opened)"
+     "doi": "10.1007/s00022-011-0099-6",
+     "note": "optimal packing proven there; no published value seen"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12635,7 +12931,7 @@
    "min_clearance_shrunk": "1.9991797e-12",
    "bound": {
     "value": 5.291502622129181,
-    "label": "[EST] proven optimum: Dickinson et al. 2011 (J. Geom.)",
+    "label": "[EST] proven optimum: Dickinson et al. 2011, J. Geom. (not read)",
     "kind": "proven"
    },
    "exact": null,
@@ -12643,11 +12939,12 @@
     {
      "value": 5.291502622129181,
      "status": "proven",
-     "short": "Dickinson et al. 2011 (J. Geom.)",
-     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102 (2011) 27-51 (not opened; described in Connelly-Dickinson 2014, sec. 1.4)",
+     "short": "Dickinson et al. 2011, J. Geom. (not read)",
+     "source": "W. Dickinson, D. Guillot, A. Keaton, S. Xhumari, Optimal packings of up to six equal circles on a triangular flat torus, J. Geom. 102(1-2) (2011) 27-51 (paper not read; described in Connelly-Dickinson 2014, sec. 1(d))",
      "url": "https://arxiv.org/abs/1201.5965",
      "accessed": "2026-10-24",
-     "note": "7-point lattice minus one disk, L = 2 sqrt7 (as described by Connelly-Dickinson)"
+     "doi": "10.1007/s00022-011-0099-6",
+     "note": "7-point lattice minus one disk, L = 2 sqrt7 (as described by Connelly-Dickinson 2014, sec. 1(d))"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12660,7 +12957,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011 (J. Geom.)) to 1e-12 relative. Literature proven value 5.2915026221 (Dickinson et al. 2011 (J. Geom.)): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Dickinson et al. 2011, J. Geom. (not read)) to 1e-12 relative. Literature proven value 5.2915026221 (Dickinson et al. 2011, J. Geom. (not read)): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/hex/0/7",
@@ -12670,7 +12967,7 @@
    "score_float": 5.291502622129181,
    "score_cert": 5.291502622134473,
    "display": "5.291503",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -12730,10 +13027,12 @@
     {
      "value": 5.291502622129181,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -12747,7 +13046,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(7 * 4) = 5.29150262212918 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.2915026221 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(7 * 4) = 5.29150262212918 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 5.2915026221 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/8",
@@ -12819,11 +13118,12 @@
     {
      "value": 6.0,
      "status": "conjecture",
-     "short": "Connelly and Dickinson 2014, Density Gap Conjecture 2",
+     "short": "Connelly and Dickinson 2014, Conjecture 1.3",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
-     "note": "(P + 1)-lattice minus one disk"
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "note": "density gap conjecture: (P + 1)-lattice minus one disk"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -12836,7 +13136,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature conjecture value 6.0000000000 (Connelly and Dickinson 2014, Density Gap Conjecture 2): ours - literature = 0.000e+00."
+   "notes": "Literature conjecture value 6.0000000000 (Connelly and Dickinson 2014, Conjecture 1.3): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/hex/0/9",
@@ -12846,7 +13146,7 @@
    "score_float": 6.0,
    "score_cert": 6.0000000000060005,
    "display": "6.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -12916,10 +13216,12 @@
     {
      "value": 6.0,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -12933,7 +13235,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(9 * 4) = 6 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.0000000000 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(9 * 4) = 6 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/10",
@@ -13109,11 +13411,12 @@
     {
      "value": 6.928203230275509,
      "status": "conjecture",
-     "short": "Connelly and Dickinson 2014, Density Gap Conjecture 2",
+     "short": "Connelly and Dickinson 2014, Conjecture 1.3",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
-     "note": "(P + 1)-lattice minus one disk"
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "note": "density gap conjecture: (P + 1)-lattice minus one disk"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -13126,7 +13429,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature conjecture value 6.9282032303 (Connelly and Dickinson 2014, Density Gap Conjecture 2): ours - literature = 0.000e+00."
+   "notes": "Literature conjecture value 6.9282032303 (Connelly and Dickinson 2014, Conjecture 1.3): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/hex/0/12",
@@ -13136,7 +13439,7 @@
    "score_float": 6.928203230275509,
    "score_cert": 6.9282032302824375,
    "display": "6.928203",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.906899682117109,
    "eps": 1e-12,
    "configuration": {
@@ -13221,10 +13524,12 @@
     {
      "value": 6.928203230275509,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -13234,7 +13539,7 @@
    "search_label": "replication of the P=1 result over an index-12 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(12 * 4) = 6.92820323027551 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.9282032303 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(12 * 4) = 6.92820323027551 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 6.9282032303 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/13",
@@ -13244,7 +13549,7 @@
    "score_float": 7.211102550927979,
    "score_cert": 7.21110255093519,
    "display": "7.211103",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -13334,10 +13639,12 @@
     {
      "value": 7.211102550927978,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -13351,7 +13658,7 @@
    "search_label": "lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(13 * 4) = 7.21110255092798 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 7.2111025509 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 8.882e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(13 * 4) = 7.21110255092798 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 7.2111025509 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 8.882e-16. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/14",
@@ -13567,11 +13874,12 @@
     {
      "value": 8.0,
      "status": "conjecture",
-     "short": "Connelly and Dickinson 2014, Density Gap Conjecture 2",
+     "short": "Connelly and Dickinson 2014, Conjecture 1.3",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
-     "note": "(P + 1)-lattice minus one disk"
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "note": "density gap conjecture: (P + 1)-lattice minus one disk"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -13584,7 +13892,7 @@
    "search_label": "random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature conjecture value 8.0000000000 (Connelly and Dickinson 2014, Density Gap Conjecture 2): ours - literature = 0.000e+00."
+   "notes": "Literature conjecture value 8.0000000000 (Connelly and Dickinson 2014, Conjecture 1.3): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/hex/0/16",
@@ -13594,7 +13902,7 @@
    "score_float": 8.0,
    "score_cert": 8.000000000008,
    "display": "8.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -13699,10 +14007,12 @@
     {
      "value": 8.0,
      "status": "proven",
-     "short": "Thue; Connelly and Dickinson 2014, Thm 1",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
      "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
      "url": "https://arxiv.org/abs/1201.5965",
-     "accessed": "2026-10-24",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
      "note": "triangular lattice, density pi/sqrt12"
     }
    ],
@@ -13716,7 +14026,7 @@
    "search_label": "replicate1",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(16 * 4) = 8 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 8.0000000000 (Thue; Connelly and Dickinson 2014, Thm 1): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(16 * 4) = 8 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 8.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/19",
@@ -13726,7 +14036,7 @@
    "score_float": 8.717797887081346,
    "score_cert": 8.717797887090065,
    "display": "8.717798",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.906899682117109,
    "eps": 1e-12,
    "configuration": {
@@ -13842,14 +14152,26 @@
     "expr": "sqrt(19 * 4)",
     "value": 8.717797887081348
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 8.717797887081348,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-19 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(19 * 4) = 8.71779788708135 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(19 * 4) = 8.71779788708135 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 8.7177978871 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = -1.776e-15. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/21",
@@ -13859,7 +14181,7 @@
    "score_float": 9.16515138991168,
    "score_cert": 9.165151389920846,
    "display": "9.165151",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171091,
    "eps": 1e-12,
    "configuration": {
@@ -13985,14 +14307,26 @@
     "expr": "sqrt(21 * 4)",
     "value": 9.16515138991168
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 9.16515138991168,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-21 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(21 * 4) = 9.16515138991168 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(21 * 4) = 9.16515138991168 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 9.1651513899 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/25",
@@ -14002,7 +14336,7 @@
    "score_float": 10.0,
    "score_cert": 10.000000000010001,
    "display": "10.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171091,
    "eps": 1e-12,
    "configuration": {
@@ -14148,14 +14482,26 @@
     "expr": "sqrt(25 * 4)",
     "value": 10.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 10.0,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-25 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(25 * 4) = 10 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(25 * 4) = 10 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 10.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/27",
@@ -14165,7 +14511,7 @@
    "score_float": 10.392304845413264,
    "score_cert": 10.392304845423658,
    "display": "10.392305",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171088,
    "eps": 1e-12,
    "configuration": {
@@ -14313,22 +14659,34 @@
    "certificate": "certificates/hex_0_27.json",
    "min_clearance_shrunk": "1.9979901e-12",
    "bound": {
-    "value": 10.392304845413262,
-    "label": "[EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)",
-    "kind": "density"
+    "value": 10.392304845413264,
+    "label": "[EST] proven optimum: Connelly and Dickinson 2014, Thm 1.1",
+    "kind": "proven"
    },
    "exact": {
     "expr": "sqrt(27 * 4)",
     "value": 10.392304845413264
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 10.392304845413264,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-27 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(27 * 4) = 10.3923048454133 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Connelly and Dickinson 2014, Thm 1.1) to 1e-12 relative. [CALC] Exact value sqrt(27 * 4) = 10.3923048454133 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 10.3923048454 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/28",
@@ -14338,7 +14696,7 @@
    "score_float": 10.583005244258363,
    "score_cert": 10.583005244268946,
    "display": "10.583005",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -14499,14 +14857,26 @@
     "expr": "sqrt(28 * 4)",
     "value": 10.583005244258363
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 10.583005244258363,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-28 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(28 * 4) = 10.5830052442584 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(28 * 4) = 10.5830052442584 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 10.5830052443 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/31",
@@ -14516,7 +14886,7 @@
    "score_float": 11.135528725660045,
    "score_cert": 11.13552872567118,
    "display": "11.135529",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171087,
    "eps": 1e-12,
    "configuration": {
@@ -14692,14 +15062,26 @@
     "expr": "sqrt(31 * 4)",
     "value": 11.135528725660043
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 11.135528725660043,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-31 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(31 * 4) = 11.13552872566 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(31 * 4) = 11.13552872566 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 11.1355287257 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 1.776e-15. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/36",
@@ -14709,7 +15091,7 @@
    "score_float": 12.0,
    "score_cert": 12.000000000012001,
    "display": "12.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -14910,14 +15292,26 @@
     "expr": "sqrt(36 * 4)",
     "value": 12.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 12.0,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-36 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(36 * 4) = 12 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(36 * 4) = 12 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 12.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/37",
@@ -14927,7 +15321,7 @@
    "score_float": 12.16552506059644,
    "score_cert": 12.165525060608607,
    "display": "12.165525",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171088,
    "eps": 1e-12,
    "configuration": {
@@ -15133,14 +15527,26 @@
     "expr": "sqrt(37 * 4)",
     "value": 12.165525060596439
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 12.165525060596439,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-37 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(37 * 4) = 12.1655250605964 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(37 * 4) = 12.1655250605964 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 12.1655250606 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 1.776e-15. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/39",
@@ -15150,7 +15556,7 @@
    "score_float": 12.489995996796795,
    "score_cert": 12.489995996809286,
    "display": "12.489996",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171093,
    "eps": 1e-12,
    "configuration": {
@@ -15366,14 +15772,26 @@
     "expr": "sqrt(39 * 4)",
     "value": 12.489995996796797
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 12.489995996796797,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-39 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(39 * 4) = 12.4899959967968 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(39 * 4) = 12.4899959967968 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 12.4899959968 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = -1.776e-15. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/43",
@@ -15383,7 +15801,7 @@
    "score_float": 13.114877048604002,
    "score_cert": 13.11487704861712,
    "display": "13.114877",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171088,
    "eps": 1e-12,
    "configuration": {
@@ -15619,14 +16037,26 @@
     "expr": "sqrt(43 * 4)",
     "value": 13.114877048604
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 13.114877048604,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-43 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(43 * 4) = 13.114877048604 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(43 * 4) = 13.114877048604 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 13.1148770486 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 1.776e-15. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/48",
@@ -15636,7 +16066,7 @@
    "score_float": 13.856406460551018,
    "score_cert": 13.856406460564875,
    "display": "13.856406",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.906899682117109,
    "eps": 1e-12,
    "configuration": {
@@ -15897,14 +16327,26 @@
     "expr": "sqrt(48 * 4)",
     "value": 13.856406460551018
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 13.856406460551018,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-48 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(48 * 4) = 13.856406460551 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(48 * 4) = 13.856406460551 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 13.8564064606 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/0/49",
@@ -15914,7 +16356,7 @@
    "score_float": 14.0,
    "score_cert": 14.000000000014001,
    "display": "14.000000",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -16180,14 +16622,26 @@
     "expr": "sqrt(49 * 4)",
     "value": 14.0
    },
-   "literature": [],
+   "literature": [
+    {
+     "value": 14.0,
+     "status": "proven",
+     "short": "Connelly and Dickinson 2014, Thm 1.1",
+     "source": "R. Connelly, W. Dickinson, Periodic planar disc packings, Phil. Trans. R. Soc. A 372 (2014) 20120039",
+     "url": "https://arxiv.org/abs/1201.5965",
+     "accessed": "2026-10-25",
+     "doi": "10.1098/rsta.2012.0039",
+     "proof": "Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)",
+     "note": "triangular lattice, density pi/sqrt12"
+    }
+   ],
    "method": "exact replication (same density as the P=1 packing)",
    "seed": null,
    "budget": null,
    "search_label": "replication of the P=1 result over an index-49 sublattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(49 * 4) = 14 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(49 * 4) = 14 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 14.0000000000 (Connelly and Dickinson 2014, Thm 1.1): ours - literature = 0.000e+00. Proven optimal: Connelly and Dickinson 2014, Thm 1.1 (Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n); doi:10.1098/rsta.2012.0039)."
   },
   {
    "problem": "torus/hex/3/1",
@@ -27604,7 +28058,7 @@
    "score_float": 1.8612097182041991,
    "score_cert": 1.8612097182060605,
    "display": "1.861210",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.9068996821171089,
    "eps": 1e-12,
    "configuration": {
@@ -27641,11 +28095,31 @@
     {
      "value": 1.8612097182041991,
      "status": "proven",
+     "short": "Fukshansky 2011, Thm 1.1",
+     "source": "L. Fukshansky, Revisiting the hexagonal lattice: on optimal lattice circle packing, Elem. Math. 66(1) (2011) 1-9",
+     "url": "https://www1.cmc.edu/pages/faculty/lenny/papers/hexagon.pdf",
+     "accessed": "2026-10-25",
+     "doi": "10.4171/EM/163",
+     "proof": "Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly",
+     "note": "densest lattice packing of disks: the hexagonal lattice, density pi/sqrt12 (first proved by Lagrange 1773)"
+    },
+    {
+     "value": 1.8612097182041991,
+     "status": "proven",
+     "short": "Lagrange 1773 (not read)",
+     "source": "J. L. Lagrange, Recherches d'arithmetique, Nouv. Mem. Acad. Roy. Sci. Belles-Lettres Berlin (1773) 265-312 (not read; cited for delta_L(disk) = pi/sqrt12 in the Handbook of Discrete and Computational Geometry, 3rd ed., ch. 2, Table 2.1.3)",
+     "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
+     "accessed": "2026-10-24",
+     "note": "the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof"
+    },
+    {
+     "value": 1.8612097182041991,
+     "status": "proven",
      "short": "Thue 1910",
      "source": "A. Thue 1910 (Handbook ch. 2, Table 2.1.1)",
      "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
      "accessed": "2026-10-24",
-     "note": "hexagonal lattice, density pi/sqrt12"
+     "note": "hexagonal lattice, density pi/sqrt12 (a theorem for the plane)"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -27658,7 +28132,7 @@
    "search_label": "hex result as a free lattice",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(1 * 2 sqrt(3)) = 1.8612097182042 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Taken from: hex result as a free lattice. Literature proven value 1.8612097182 (Thue 1910): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= pi/sqrt(12) for congruent disks (Thue 1910; Handbook of Discrete and Computational Geometry, ch. 2, Table 2.1.1)) to 1e-12 relative. [CALC] Exact value sqrt(1 * 2 sqrt(3)) = 1.8612097182042 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Taken from: hex result as a free lattice. Literature proven value 1.8612097182 (Fukshansky 2011, Thm 1.1): ours - literature = 0.000e+00. Literature proven value 1.8612097182 (Lagrange 1773 (not read)): ours - literature = 0.000e+00. Literature proven value 1.8612097182 (Thue 1910): ours - literature = 0.000e+00. Proven optimal: Fukshansky 2011, Thm 1.1 (Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly; doi:10.4171/EM/163)."
   },
   {
    "problem": "torus/free/0/2",
@@ -36004,7 +36478,7 @@
    "score_float": 0.8059274488676562,
    "score_cert": 0.8059274488684622,
    "display": "0.805927",
-   "status": "best_known",
+   "status": "proven",
    "density": 0.6666666666666672,
    "eps": 1e-12,
    "configuration": {
@@ -36029,20 +36503,45 @@
    "certificate": "certificates/free_3_1.json",
    "min_clearance_shrunk": "8.6544301e-13",
    "bound": {
-    "value": 0.6580370064762463,
-    "label": "[CALC] area bound P * A_piece <= cell area",
-    "kind": "area"
+    "value": 0.8059274488676565,
+    "label": "[EST] proven optimum: Sriamorn 2016, Thm 1.1",
+    "kind": "proven"
    },
-   "exact": null,
+   "exact": {
+    "expr": "sqrt(3 sqrt(3) / 8)",
+    "value": 0.8059274488676564
+   },
    "literature": [
+    {
+     "value": 0.8059274488676565,
+     "status": "proven",
+     "short": "Sriamorn 2016, Thm 1.1",
+     "source": "K. Sriamorn, On the multiple packing densities of triangles, Discrete Comput. Geom. 55(1) (2016) 228-242",
+     "url": "https://arxiv.org/abs/1501.00467",
+     "accessed": "2026-10-25",
+     "doi": "10.1007/s00454-015-9748-0",
+     "proof": "Theorem 1.1 with k = 1: delta_T(T) = delta_L(T) = 2/3 for every triangle T (the upper bound is proved there with stair polygons, secs. 4-5; Fary 1950 gives a lattice of density 2/3). A single piece on a torus is a lattice packing of it, so delta_L gives L = sqrt((sqrt3/4)/(2/3)) = sqrt(3 sqrt3/8) directly",
+     "note": "densest lattice packing of a triangle, density 2/3"
+    },
+    {
+     "value": 0.8059274488676565,
+     "status": "proven",
+     "short": "Fary 1950, Theoreme 1",
+     "source": "I. Fary, Sur la densite des reseaux de domaines convexes, Bull. Soc. Math. France 78 (1950) 152-161, Theoreme 1: the densest lattice packing of a convex domain has density >= 2/3, with equality only for triangles",
+     "url": "http://www.numdam.org/item/BSMF_1950__78__152_0/",
+     "accessed": "2026-10-25",
+     "doi": "10.24033/bsmf.1413",
+     "note": "every convex domain has a lattice packing of density at least 2/3, denser unless it is a triangle; for a triangle this gives a lattice of density 2/3. The paper does not prove that no lattice packing of a triangle is denser (Sriamorn 2016 does)"
+    },
     {
      "value": 0.8059274488676565,
      "status": "best_known",
      "short": "Torda et al. 2022 (p1)",
-     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (5 decimals)",
+     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (numerical, 5 decimals)",
      "url": "https://arxiv.org/abs/2207.08959",
      "accessed": "2026-10-24",
-     "note": "densest lattice packing, table density 0.66666; score from the [CALC] value 0.6666666666667"
+     "doi": "10.1103/PhysRevE.106.054603",
+     "note": "densest lattice packing, numerical table density 0.66666; score from the [CALC] value 0.6666666666667"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -36055,7 +36554,7 @@
    "search_label": "hop:random",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "Literature best_known value 0.8059274489 (Torda et al. 2022 (p1)): ours - literature = -3.331e-16."
+   "notes": "[CALC] score_float equals the lower bound ([EST] proven optimum: Sriamorn 2016, Thm 1.1) to 1e-12 relative. [CALC] Exact value sqrt(3 sqrt(3) / 8) = 0.805927448867656 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 0.8059274489 (Sriamorn 2016, Thm 1.1): ours - literature = -3.331e-16. Literature proven value 0.8059274489 (Fary 1950, Theoreme 1): ours - literature = -3.331e-16. Literature best_known value 0.8059274489 (Torda et al. 2022 (p1)): ours - literature = -3.331e-16. Proven optimal: Sriamorn 2016, Thm 1.1 (Theorem 1.1 with k = 1: delta_T(T) = delta_L(T) = 2/3 for every triangle T (the upper bound is proved there with stair polygons, secs. 4-5; Fary 1950 gives a lattice of density 2/3). A single piece on a torus is a lattice packing of it, so delta_L gives L = sqrt((sqrt3/4)/(2/3)) = sqrt(3 sqrt3/8) directly; doi:10.1007/s00454-015-9748-0)."
   },
   {
    "problem": "torus/free/3/2",
@@ -49239,10 +49738,11 @@
      "value": 1.4509265462923975,
      "status": "best_known",
      "short": "Torda et al. 2022 (p1)",
-     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (5 decimals)",
+     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (numerical, 5 decimals)",
      "url": "https://arxiv.org/abs/2207.08959",
      "accessed": "2026-10-24",
-     "note": "densest lattice packing, table density 0.81725; score from the [CALC] value 0.8172560023684"
+     "doi": "10.1103/PhysRevE.106.054603",
+     "note": "densest lattice packing, numerical table density 0.81725; score from the [CALC] value 0.8172560023684"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -49306,12 +49806,13 @@
    "literature": [
     {
      "value": 1.9325753354847957,
-     "status": "proven",
+     "status": "proven_unrefereed",
      "short": "Kuperberg and Kuperberg 1990; Hales and Kusner 2016",
-     "source": "G. Kuperberg, W. Kuperberg, Double-lattice packings of convex bodies in the plane, Discrete Comput. Geom. 5 (1990) 389-397 (values as quoted by Kallus and Kusner, arXiv:1509.02241; best known, not proven optimal for heptagons); T. Hales, W. Kusner, Packings of regular pentagons in the plane, arXiv:1602.07220 v2 (computer-assisted proof)",
+     "source": "G. Kuperberg, W. Kuperberg, Double-lattice packings of convex bodies in the plane, Discrete Comput. Geom. 5 (1990) 389-397 (values as quoted by Kallus and Kusner, arXiv:1509.02241; best known, not proven optimal for heptagons); T. Hales, W. Kusner, Packings of regular pentagons in the plane, arXiv:1602.07220 v2 (computer-assisted proof for the plane; no refereed publication found)",
      "url": "https://arxiv.org/abs/1602.07220",
-     "accessed": "2026-10-24",
-     "note": "pentagonal ice-ray double lattice, density (5 - sqrt5)/3; optimality: computer-assisted preprint proof"
+     "accessed": "2026-10-25",
+     "doi": "10.1007/BF02187800",
+     "note": "pentagonal ice-ray double lattice, density (5 - sqrt5)/3; optimality: computer-assisted preprint proof for the plane"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -49324,7 +49825,7 @@
    "search_label": "insert",
    "software": "PolyPack torus research build",
    "found_by": "PolyPack research",
-   "notes": "[CALC] score_float equals the lower bound ([EST] density <= (5 - sqrt5)/3 for congruent regular pentagons (Hales and Kusner, arXiv:1602.07220 v2, computer-assisted proof; no refereed publication found)) to 1e-12 relative. [CALC] Exact value sqrt(2 * 3 sqrt(25 + 10 sqrt(5)) / (4 (5 - sqrt(5)))) = 1.9325753354848 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven value 1.9325753355 (Kuperberg and Kuperberg 1990; Hales and Kusner 2016): ours - literature = 0.000e+00."
+   "notes": "[CALC] score_float equals the lower bound ([EST] density <= (5 - sqrt5)/3 for congruent regular pentagons (Hales and Kusner, arXiv:1602.07220 v2, computer-assisted proof; no refereed publication found)) to 1e-12 relative. [CALC] Exact value sqrt(2 * 3 sqrt(25 + 10 sqrt(5)) / (4 (5 - sqrt(5)))) = 1.9325753354848 (a lattice, double-lattice or tiling construction attains the bound); the stored floats certify score_cert just above it. Literature proven_unrefereed value 1.9325753355 (Kuperberg and Kuperberg 1990; Hales and Kusner 2016): ours - literature = 0.000e+00."
   },
   {
    "problem": "torus/free/5/3",
@@ -62393,10 +62894,11 @@
      "value": 2.0553688781644173,
      "status": "best_known",
      "short": "Torda et al. 2022 (p1)",
-     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (5 decimals)",
+     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (numerical, 5 decimals)",
      "url": "https://arxiv.org/abs/2207.08959",
      "accessed": "2026-10-24",
-     "note": "densest lattice packing, table density 0.86019; score from the [CALC] value 0.8601910243450"
+     "doi": "10.1103/PhysRevE.106.054603",
+     "note": "densest lattice packing, numerical table density 0.86019; score from the [CALC] value 0.8601910243450"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",
@@ -62462,6 +62964,7 @@
      "source": "G. Kuperberg, W. Kuperberg, Double-lattice packings of convex bodies in the plane, Discrete Comput. Geom. 5 (1990) 389-397 (values as quoted by Kallus and Kusner, arXiv:1509.02241; best known, not proven optimal for heptagons)",
      "url": "https://arxiv.org/abs/1509.02241",
      "accessed": "2026-10-24",
+     "doi": "10.1007/BF02187800",
      "note": "densest double lattice of the regular heptagon, density 0.8926906861 = (2/97)(-111 + 492 cos(pi/7) - 356 cos^2(pi/7)) (J. Baez, AMS Visual Insight 2014)"
     }
    ],
@@ -63820,19 +64323,20 @@
      "value": 2.3083386070388783,
      "status": "best_known",
      "short": "Torda et al. 2022 (p1)",
-     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (5 decimals)",
+     "source": "M. Torda, J. Y. Goulermas, V. Kurlin, G. M. Day, Densest plane group packings of regular polygons, Phys. Rev. E 106 (2022) 054603, Table I, plane group p1 (numerical, 5 decimals)",
      "url": "https://arxiv.org/abs/2207.08959",
      "accessed": "2026-10-24",
-     "note": "densest lattice packing, table density 0.90616; score from the [CALC] value 0.9061636786439"
+     "doi": "10.1103/PhysRevE.106.054603",
+     "note": "densest lattice packing, numerical table density 0.90616; score from the [CALC] value 0.9061636786439"
     },
     {
      "value": 2.3083386070388783,
      "status": "proven",
      "short": "L. Fejes Toth 1950",
-     "source": "L. Fejes Toth 1950, as stated in G. Fejes Toth, Packing and covering, Handbook of Discrete and Computational Geometry, 3rd ed., ch. 2, p. 29: delta(K) = delta_T(K) = delta_L(K) for centrally symmetric K",
+     "source": "L. Fejes Toth, Some packing and covering theorems, Acta Sci. Math. (Szeged) 12A (1950) 62-67, as stated in G. Fejes Toth, Packing and covering, Handbook of Discrete and Computational Geometry, 3rd ed., ch. 2, p. 29: delta(K) = delta_T(K) = delta_L(K) for centrally symmetric K (a theorem for the plane)",
      "url": "http://www.csun.edu/~ctoth/Handbook/chap2.pdf",
      "accessed": "2026-10-24",
-     "note": "densest packing of congruent regular octagons is the lattice packing, density (4 + 4 sqrt2)/(5 + 4 sqrt2)"
+     "note": "densest packing of congruent regular octagons is the lattice packing, density (4 + 4 sqrt2)/(5 + 4 sqrt2) (the octagon's value computed here)"
     }
    ],
    "method": "torus-slp: lattice/replication/insertion/random seeds, basin hopping, SLP polish",

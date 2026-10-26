@@ -200,14 +200,14 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
     space: "polyhedra",
     title: "Polyhedra",
     summary:
-      "3D in 3D: equal polyhedra (Platonic, Archimedean and Catalan solids, prisms and antiprisms) packed in the smallest scaled copy of a container polyhedron. The problems and research records are those of polyhedrainpolyhedra.wiki, with PolyPack's improvements.",
+      "3D in 3D: equal polyhedra (Platonic, Archimedean and Catalan solids, prisms and antiprisms, bipyramids and trapezohedra) packed in the smallest scaled copy of a container polyhedron. The problems and research records are those of polyhedrainpolyhedra.wiki, with PolyPack's improvements, and PolyPack's own problems (prisms and antiprisms with 7, 9, 10 and 11 sides; bipyramids and trapezohedra) with its records.",
     score: "the scale s of the container solid (its edge length when the container has unit edges); smaller is better",
     problem_id: "polyhedra/<code>/<P>",
     conventions: {
       problems:
         "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron) or pr3l15incub (triangular prisms of height 1.5 in a cube); P from 2 to 100",
       solids:
-        "the wiki's canonical solids, centred at the origin: unit edges, except the Catalan solids (polar reciprocals of the unit-edge Archimedean solids about the midsphere) and the elongated prisms (base edges 1, lateral edges 1.5, 2 or 3)",
+        "the wiki's canonical solids, centred at the origin: unit edges, except the Catalan solids (polar reciprocals of the unit-edge Archimedean solids about the midsphere) and the elongated prisms (base edges 1, lateral edges 1.5, 2 or 3); PolyPack's bipyramids and trapezohedra are likewise the polar reciprocals of the unit-edge prisms and antiprisms about the midsphere",
       container: "s times the canonical container solid, centred at the origin in its canonical orientation",
       pose: `[x, y, z, qw, qx, qy, qz]: the canonical piece turned by the rotation of q / |q| (v -> q v q*) and centred at (x, y, z); x, y and z at most ${POLYHEDRA_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM.toExponential()}`,
       configuration: "{s, pieces: [[x, y, z, qw, qx, qy, qz], ...]} with P pieces",

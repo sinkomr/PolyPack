@@ -45,8 +45,12 @@ import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
-/** Largest `limit` of /api/spaces/targets. */
-export const SPACE_TARGETS_MAX_LIMIT = 10000;
+/**
+ * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
+ * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
+ * trapezohedra make 14,850, and 16,157 targets in all).
+ */
+export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
  * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
  * kept: a check of 100 large polyhedra takes up to about 0.15 s, and posting a research record back
@@ -75,16 +79,17 @@ export const SPACE_SETTLED_GAP = 1e-9;
 export const SPACE_GAP_CAP = 0.25;
 /**
  * Most bytes of /api/spaces/targets lists kept at once, encoded and gzip together. [CALC] The whole list of
- * 9,821 targets is about 1.8 MB and 0.3 MB of gzip, so this keeps about seven filtered lists; the least
+ * 12,593 targets is about 2.4 MB and 0.4 MB of gzip, so this keeps about five filtered lists; the least
  * recently used goes first. Every limit of a list is served from it (a prefix of its bytes).
  */
 export const SPACE_TARGETS_CACHE_BYTES = 16_000_000;
 /**
- * The lengths of a targets answer that are also kept gzip-compressed: the default 500, 2000 (the
- * volunteer client's limit before 2026-10-25) and the whole list (its limit since). Other limits
- * are served uncompressed, so that no request compresses an answer of its own.
+ * The lengths of a targets answer that are also kept gzip-compressed: the default 500, 2000 and 10000
+ * (the volunteer client's limits before 2026-10-25 and before PolyPack's prism and antiprism problems
+ * joined) and the whole list (its limit since). Other limits are served uncompressed, so that no
+ * request compresses an answer of its own.
  */
-export const SPACE_TARGETS_GZIP_LENGTHS: readonly number[] = [SPACE_TARGETS_DEFAULT_LIMIT, 2000];
+export const SPACE_TARGETS_GZIP_LENGTHS: readonly number[] = [SPACE_TARGETS_DEFAULT_LIMIT, 2000, 10000];
 
 /**
  * Weight of a target by its number of pieces, min(1, (P - 1) / 5): nothing for P = 1, whose
