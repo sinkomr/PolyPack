@@ -19,6 +19,7 @@ import {
   validateBalls,
 } from "../src";
 import { mulberry32 } from "../src/random";
+import { conePoses } from "../scripts/cones";
 
 const ballInBall = getBallsProblem("ballinball")!;
 const ballInCube = getBallsProblem("ballincub")!;
@@ -129,6 +130,19 @@ describe("legalizeBalls and latticeCut", () => {
     // an fcc cut of 13 balls holds the cuboctahedral shell of 12 round one: radius 3 when centred
     const d = latticeCut(ballInBall, 13, () => 0.5, "fcc", false);
     expect(tightSize(ballInBall, d)).toBeCloseTo(3, 12);
+  });
+});
+
+describe("the cone construction of tetrahedra", () => {
+  it("puts 20 tetrahedra with a common vertex in the unit ball, touching only along the cones' walls", () => {
+    const tet = getBallsProblem("tetinball")!;
+    const v = validateBalls(tet, { s: 1, pieces: conePoses(20) });
+    expect(v.valid, v.errors.join("; ")).toBe(true);
+    // they touch (the common vertex), so the gaps are zero up to rounding, and every vertex is at distance 1
+    expect(Math.abs(v.minPairSep)).toBeLessThan(1e-12);
+    expect(Math.abs(v.minWallGap)).toBeLessThan(1e-12);
+    expect(tightSize(tet, conePoses(20))).toBeCloseTo(1, 12);
+    expect(() => conePoses(21)).toThrow(RangeError);
   });
 });
 
