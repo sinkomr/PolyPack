@@ -1,5 +1,5 @@
 /**
- * The board's space mode: chosen with the Dimension and Kind menus of the Problem section
+ * The board's space mode: chosen with the Problem set menu of the Problem section
  * (dimension-switch.ts), it shows a problem of a kind other than Flat (a space of the API) in place
  * of the polygon board. The polygon board's parts are hidden, not changed (CSS:
  * .layout[data-space] .poly-only), so going back shows it as it was.
@@ -18,7 +18,7 @@ import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
 import type { SpaceCheck } from "@polypack/spaces/search";
-import { certifiedBy, downloadName } from "../spaces-model";
+import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
@@ -121,6 +121,8 @@ const TURN_HELP: Record<SpaceName, string> = {
     "Cells shows the eight cubes of the boundary side by side; Net unfolds them, and Fold folds the net up into the fourth dimension; Slice cuts the boundary across one axis. Drag to turn, or focus the drawing and use the arrow keys (Shift for larger steps), + and − to zoom, Page Up and Page Down to follow one piece, Home to reset.",
   polyhedra:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+  balls:
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint: a ball with three great circles, or a cube by its edges. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
@@ -241,6 +243,8 @@ class SpaceMode {
         h("dd", { id: "space-shown" }, "—"),
       ),
       facts,
+      // a nofold surface problem is a 2D in 2D problem, which this note names and links to
+      h("p", { id: "space-same-as", class: "note", hidden: true }),
       h(
         "div",
         { id: "space-show", class: "row wrap space-show", hidden: true },
@@ -514,13 +518,22 @@ class SpaceMode {
     if (this.handle && this.handle.problem.space !== space) this.clearProblem();
     this.setAddress();
     let problems = this.records.get(space);
+    let fallback = "";
+    if (problems && !this.domains.has(space)) {
+      // the kinds' descriptions could not be read last time: ask again for the domain (the listing is kept)
+      const domain = await loadSpaceDomain(space);
+      if (token !== this.token) return;
+      if (domain !== "error") this.domains.set(space, domain);
+    }
     if (!problems) {
       this.busy("Loading the problems of this kind…");
       this.say("");
       $("space-fields").replaceChildren();
       const [listed, domain] = await Promise.all([listSpaceProblems(space), loadSpaceDomain(space)]);
       if (token !== this.token) return;
-      if (!listed || domain === "error") {
+      // without GET /api/spaces (domain "error"), a kind with records still opens from its listing, as before
+      // domains; one without records cannot, and says so (Try again reads both again)
+      if (!listed || (domain === "error" && !listed.length)) {
         this.clearProblem();
         this.setAddress();
         const text = "The problems of this kind could not be loaded. The server may be unreachable.";
@@ -530,7 +543,8 @@ class SpaceMode {
       }
       problems = listed;
       this.records.set(space, problems);
-      this.domains.set(space, domain);
+      if (domain !== "error") this.domains.set(space, domain);
+      else fallback = "The kinds' descriptions could not be read, so the menus offer the problems with records only.";
     }
     const pick = this.pick(space, fieldsOfId(space, wanted ?? DEFAULT_PROBLEM[space]));
     this.renderPicker(space, pick.fields);
@@ -539,8 +553,12 @@ class SpaceMode {
       this.busy("This kind lists no problems.", () => void this.open(space, wanted));
       return;
     }
-    const missing =
-      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "";
+    const missing = [
+      wanted !== null && pick.id !== wanted ? `${wanted} is not in the catalogue, so ${pick.id} is shown.` : "",
+      fallback,
+    ]
+      .filter(Boolean)
+      .join(" ");
     await this.load(space, pick.id, token, missing);
   }
 
@@ -656,8 +674,8 @@ class SpaceMode {
   private setDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
     const fold = kind === "surface";
-    // fold and polyhedra budgets grow with P
-    const key = fold || kind === "polyhedra" ? `${kind}/${p.P}` : kind;
+    // fold, polyhedra and balls budgets grow with P
+    const key = fold || kind === "polyhedra" || kind === "balls" ? `${kind}/${p.P}` : kind;
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
       const d = defaultBudget(p.search);
@@ -715,6 +733,13 @@ class SpaceMode {
     if (this.factsOf !== p) {
       this.factsOf = p;
       facts.replaceChildren();
+      const face = p ? nofoldFaceProblem(p.id) : null;
+      const same = $("space-same-as");
+      same.hidden = !face;
+      if (face) {
+        const [before, text, after] = nofoldNote(face);
+        same.replaceChildren(before, h("a", { href: face.href }, text), after);
+      } else same.replaceChildren();
     }
     if (p && !facts.childElementCount)
       for (const f of problemFacts(p)) {
@@ -1100,7 +1125,7 @@ export function createSpaceMode(): {
   setPolygonHeld(held: boolean): void;
 } {
   if (!mode) {
-    const select = $("dimension-select");
+    const select = $("family-select");
     const name = $<HTMLInputElement>("name");
     mode = new SpaceMode({
       layout: select.closest("main")!,

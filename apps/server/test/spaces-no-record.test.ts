@@ -17,7 +17,7 @@ import {
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import { SPACE_GAP_CAP } from "../src/spaces";
+import { SPACE_DOMAIN_TARGETS, SPACE_GAP_CAP, domainTargetIds } from "../src/spaces";
 import { SqliteStore } from "../src/sqlite-store";
 
 const root = resolve(__dirname, "../../..");
@@ -163,5 +163,75 @@ describe("a problem without a research record", () => {
     expect(kept.body).toMatchObject({ valid: true, leader: true });
     targets = (await get("/api/spaces/targets?limit=20000")).body as SpaceTargetsResponse;
     expect(targets.targets.find((x) => x.id === "torus/sq/0/48")).toMatchObject({ leader: "site", best_score: 16 });
+  });
+
+  it("is offered from the sample until it has an entry, and the sample then moves on to the next problem", () => {
+    const cat = withoutRecord().torus!;
+    expect(domainTargetIds(cat, [], 1)).toEqual([ID]);
+    // torus/sq/0/2 has an entry: it stays (through its leader), and the next problem of the sample comes in
+    expect(domainTargetIds(cat, [ID], 1)).toEqual([ID, "torus/sq/0/49"]);
+    // records are never sampled again, and a space without a domain adds nothing
+    expect(domainTargetIds({ ...cat, byId: new Map([[ID, cat.byId.values().next().value!]]) }, [], 1)).toEqual([
+      "torus/sq/0/49",
+    ]);
+    expect(domainTargetIds(index.sphere!, [], 5)).toEqual([]);
+  });
+});
+
+describe("a balls entry", () => {
+  /** Two unit balls on the x axis at +-h in a ball of radius s. */
+  const two = (h: number, s: number) => ({
+    s,
+    pieces: [
+      [h, 0, 0],
+      [-h, 0, 0],
+    ],
+  });
+  const balls = (id: string, config: unknown) => ({ space: "balls", id, config, name: "ann" });
+
+  it("is strictly checked, the first valid one kept, then only better ones", async () => {
+    // 5e-10 of overlap: valid within the touching tolerance, not at the strict one
+    const loose = await submit(balls("balls/ballinball/2", two(1 - 2.5e-10, 2 - 2.5e-10)));
+    expect(loose.status).toBe(422);
+    expect(loose.body.reasons[0]).toBe(SPACE_STRICT_NO_RECORD_REASON);
+    const first = await submit(balls("balls/ballinball/2", two(1.01, 2.01)));
+    expect(first.body).toMatchObject({ valid: true, leader: true });
+    expect(first.body.id).not.toBeNull();
+    const worse = await submit(balls("balls/ballinball/2", two(1.02, 2.02)));
+    expect(worse.body).toMatchObject({ valid: true, leader: false, id: null });
+    const better = await submit(balls("balls/ballinball/2", two(1, 2)));
+    expect(better.body).toMatchObject({ valid: true, leader: true });
+    const one = await get("/api/spaces/balls/problems/balls/ballinball/2");
+    expect(one.body).toMatchObject({ status: "no_record", certified: null, best_score: 2 });
+    // outside the domain
+    expect((await submit(balls("balls/ballinball/101", two(1, 2)))).status).toBe(400);
+  });
+
+  it("of Platonic solids is checked by their faces", async () => {
+    // two unit cubes, face to face 0.2 apart, in a ball of radius 1.4 (their far corners lie at sqrt 1.71)
+    const cubes = (x: number) => ({
+      s: 1.4,
+      pieces: [
+        [x, 0, 0, 1, 0, 0, 0],
+        [-x, 0, 0, 1, 0, 0, 0],
+      ],
+    });
+    expect((await submit(balls("balls/cubinball/2", cubes(0.45)))).status).toBe(422);
+    expect((await submit(balls("balls/cubinball/2", cubes(0.6)))).body).toMatchObject({ valid: true, leader: true });
+  });
+
+  it("takes its problem out of the sample, whose next problem comes in", async () => {
+    const next = index.balls!.domain!.sample(SPACE_DOMAIN_TARGETS + 1)[SPACE_DOMAIN_TARGETS];
+    const ids = async () =>
+      ((await get("/api/spaces/targets?spaces=balls&limit=20000")).body as SpaceTargetsResponse).targets.map(
+        (t) => t.id,
+      );
+    expect(await ids()).not.toContain(next);
+    // an entry above the bound (two balls in a ball of radius 2 would meet it, and leave nothing to search)
+    await submit(balls("balls/ballinball/2", two(1.1, 2.1)));
+    const after = await ids();
+    expect(after).toContain(next);
+    expect(after).toContain("balls/ballinball/2");
+    expect(after.length).toBe(SPACE_DOMAIN_TARGETS + 1);
   });
 });

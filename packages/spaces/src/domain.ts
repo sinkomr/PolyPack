@@ -14,6 +14,7 @@
  *    (deterministic, e.g. small P first): the work list holds the records, the problems with site entries, and this
  *    bounded sample of the others, never the whole domain.
  */
+import { ballsDomain } from "@polypack/balls";
 import { surfaceDomain } from "@polypack/surface/domain";
 import type { ParsedSpaceId } from "./ids";
 import type { SpaceName } from "./types";
@@ -54,6 +55,8 @@ export interface SpaceDomain {
 
 /** The spaces whose problems are given by a domain. */
 export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
+  // 3D in 3D, balls: 7 problems for P = 2 to 100, without records (docs/spaces/BALLS.md)
+  balls: ballsDomain,
   // 2D on 3D, polyhedral surfaces: 36 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
   // for the Platonic solids with N in {0, 3, 4, 5, 6, 8} (docs/spaces/SURFACE.md)
   surface: surfaceDomain,

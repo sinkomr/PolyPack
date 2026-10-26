@@ -625,7 +625,7 @@ class Volunteer {
 
   /**
    * ?spaces=...&max_P=...&limit=20000, the server's largest limit, so that the client draws from
-   * the whole list (12,593 targets with the catalogues of 2026-10-25, so that every space gets its
+   * the whole list (16,657 targets with the catalogues of 2026-10-25, so that every space gets its
    * share); only the limit once the server has refused the filters (they then apply here only).
    * An older server takes at most 10000, or 2000, which the client then asks for.
    */

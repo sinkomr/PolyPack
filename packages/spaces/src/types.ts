@@ -1,6 +1,6 @@
 /**
  * The HTTP contract of the new spaces: polyhedral surfaces, constant curvature, the whole sphere,
- * flat tori, the boundaries of 4D polytopes and polyhedra in polyhedra. The server answers with these shapes, the website and the volunteer client read
+ * flat tori, the boundaries of 4D polytopes, polyhedra in polyhedra and balls in balls and cubes. The server answers with these shapes, the website and the volunteer client read
  * them. Each space keeps its own problem ids and configuration format (docs/spaces/*.md); this file
  * only names them.
  *
@@ -14,8 +14,8 @@
 import type { SpaceDomainInfo } from "./domain";
 
 /** Spaces that take submissions. */
-export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra";
-export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra"];
+export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra" | "balls";
+export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
 
 export function isSpaceName(v: unknown): v is SpaceName {
   return typeof v === "string" && (SPACE_NAMES as readonly string[]).includes(v);
@@ -41,6 +41,8 @@ export type SpaceProblemStatus = CertifiedStatus | "no_record";
  *  - boundary: `{ s, pieces: [{ cell, u: [u0, u1, u2], q?: [w, x, y, z] }] }`, score s (edge of the
  *             polytope).
  *  - polyhedra: `{ s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }`, score s (scale of the container solid).
+ *  - balls:   `{ s, pieces: [[x, y, z], ...] }` for unit balls, `[[x, y, z, qw, qx, qy, qz], ...]` for
+ *             unit-edge Platonic solids; score s (the container ball's radius, or the cube's edge).
  */
 export type SpaceConfig = Record<string, unknown>;
 
@@ -121,12 +123,12 @@ export interface SpaceProblemSummary {
   space: SpaceName;
   /**
    * The problem id, e.g. "surface/cube/fold/0/12", "curved/-1/3/4/7", "sphere/4/12", "torus/hex/5/8",
-   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12".
+   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12", "balls/ballinball/13".
    */
   id: string;
   /**
    * The id's fields: surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P};
-   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}.
+   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}; balls {code, piece, container, P}.
    */
   fields: Record<string, string | number>;
   P: number;

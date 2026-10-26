@@ -4,9 +4,10 @@
 Run: python3 python/polyhedra/test_certify.py. Standard library only. Covers the published-field checks, the display
 rule, adversarial configurations (overlaps and protrusions of 3e-7, coincident pieces, zero and non-numeric
 quaternions, strings, booleans, NaN), PolyPack's prisms and antiprisms with 7, 9, 10 and 11 sides (exact checks of the
-solids in their number fields, valid, overlapping and protruding packings), agreement with the TypeScript validator
-on the near-contact cases of fixtures/crosscheck.json, and a field check of every record of
-data/polyhedra/records.json.
+solids in their number fields, valid, overlapping and protruding packings), PolyPack's bipyramids and trapezohedra
+(exact midsphere and insphere, closed-form volumes, face-to-face pairs 1e-7 apart that certify and 2e-7 overlaps and
+protrusions that do not), agreement with the TypeScript validator on the near-contact cases of
+fixtures/crosscheck.json, and a field check of every record of data/polyhedra/records.json.
 """
 import copy
 import json
@@ -131,13 +132,13 @@ class NewSolids(unittest.TestCase):
     """PolyPack's prisms and antiprisms (7, 9, 10, 11 sides), checked exactly in their number fields Q(alpha)."""
 
     def test_catalogue(self):
-        self.assertEqual(len(catalogue.solids()), 76)
-        self.assertEqual(len(catalogue.PROBLEMS), 114)
+        self.assertEqual(len(catalogue.solids()), 94)
+        self.assertEqual(len(catalogue.PROBLEMS), 150)
         self.assertEqual(len(catalogue.WIKI_PROBLEMS), 86)
         new = [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]
         self.assertEqual(new[:8], ['pr7inpr7', 'pr7incub', 'pr9inpr9', 'pr9incub', 'pr10inpr10', 'pr10incub',
                                    'pr11inpr11', 'pr11incub'])
-        self.assertEqual(len(new), 28)
+        self.assertEqual(len(new), 64)
         self.assertEqual(catalogue.PROBLEMS['ap11incub'], ('antiprism11', 'cube', 'prisms'))
         self.assertEqual(catalogue.PROBLEMS['ap9inap9'], ('antiprism9', 'antiprism9', 'prisms'))
         self.assertEqual(catalogue.PROBLEMS['pr10l15incub'], ('prism10_l15', 'cube', 'prisms'))
@@ -231,7 +232,8 @@ class NewSolids(unittest.TestCase):
         # all 20: two pieces stacked along z, 2e-7 apart, in a cube 4e-7 wider than they need (2e-7 to the binding
         # walls): certified; the upper piece moved 3e-7 down (an overlap of 1e-7): refused; a cube 2e-7 narrower
         # than they need (a protrusion of 1e-7): refused
-        names = [n for n, *_ in catalogue.solids()[56:]]
+        # (the bipyramids and trapezohedra have their own pairs below: stacked along z they meet apex to apex)
+        names = [n for n, _, fam, _ in catalogue.solids()[56:] if fam not in ('bipyramid', 'trapezohedron')]
         self.assertEqual(len(names), 20)
         for name in names:
             V = cg.get_solid(name).Vf
@@ -255,6 +257,125 @@ class NewSolids(unittest.TestCase):
         self.assertTrue(certify.check_record(rec, VOL)['ok'])
         rec['family'] = 'platonic'
         self.assertTrue(certify.field_errors(rec, VOL))
+DUALS = [f'bipyramid{n}' for n in catalogue.BIPYRAMID_K] + [f'trapezohedron{n}' for n in catalogue.TRAPEZOHEDRON_K]
+
+
+def quat_of(R):
+    """A unit quaternion [w, x, y, z] of a rotation matrix (Shepperd's method)."""
+    t = R[0][0] + R[1][1] + R[2][2]
+    if t > 0:
+        r = math.sqrt(1 + t) * 2
+        return [r / 4, (R[2][1] - R[1][2]) / r, (R[0][2] - R[2][0]) / r, (R[1][0] - R[0][1]) / r]
+    if R[0][0] > R[1][1] and R[0][0] > R[2][2]:
+        r = math.sqrt(1 + R[0][0] - R[1][1] - R[2][2]) * 2
+        return [(R[2][1] - R[1][2]) / r, r / 4, (R[0][1] + R[1][0]) / r, (R[0][2] + R[2][0]) / r]
+    if R[1][1] > R[2][2]:
+        r = math.sqrt(1 + R[1][1] - R[0][0] - R[2][2]) * 2
+        return [(R[0][2] - R[2][0]) / r, (R[0][1] + R[1][0]) / r, r / 4, (R[1][2] + R[2][1]) / r]
+    r = math.sqrt(1 + R[2][2] - R[0][0] - R[1][1]) * 2
+    return [(R[1][0] - R[0][1]) / r, (R[0][2] + R[2][0]) / r, (R[1][2] + R[2][1]) / r, r / 4]
+
+
+def mirror_pair(code, g, w):
+    """Two pieces face to face: piece 1 is the mirror image of piece 0 in the plane of its face 0, moved off it by g along
+    the face normal N (g < 0: into it). Both families have the mirror y -> -y, so the image is the proper copy
+    R K + (2b + g) N with R = (I - 2 N N^T)(I - 2 e_y e_y^T); the faces coincide at g = 0. The container is the smallest
+    with wall gap w (w < 0: the pieces stick out by -w)."""
+    piece, container, _ = catalogue.PROBLEMS[code]
+    S, C = certify.cg.get_solid(piece), certify.cg.get_solid(container)
+    N = S.Nf[0]
+    b = sum(N[k] * S.Vf[S.faces[0][0]][k] for k in range(3))
+    R = [[(1.0 if i == j else 0.0) - 2 * N[i] * N[j] for j in range(3)] for i in range(3)]
+    for row in R:
+        row[1] = -row[1]
+    q = quat_of(R)
+    d = (2 * b + g) / 2
+    pieces = [[-d * N[0], -d * N[1], -d * N[2], 1.0, 0.0, 0.0, 0.0], [d * N[0], d * N[1], d * N[2]] + q]
+    Rq = [[float(x) for x in row] for row in certify.cg.rot(q)]
+    mid = lambda e: (e[0] + e[1]) / 2 / certify.cg.ONE           # a fixed-point enclosure's midpoint
+    # the container's faces n . x = b with unit n (C.N are exact normals of any length, C.B their offsets)
+    walls = [(n, mid(B) / math.sqrt(sum(mid(e) ** 2 for e in m))) for n, m, B in zip(C.Nf, C.N, C.B)]
+    s = 0.0
+    for k, c in enumerate(pieces):
+        for v in S.Vf:
+            x = v if k == 0 else [sum(Rq[i][j] * v[j] for j in range(3)) for i in range(3)]
+            x = [x[i] + c[i] for i in range(3)]
+            for n, off in walls:
+                s = max(s, (sum(n[i] * x[i] for i in range(3)) + w) / off)
+    return piece, container, s, pieces
+
+
+class Duals(unittest.TestCase):
+    """PolyPack's bipyramids and trapezohedra: exact solids, a certified packing per family, adversarial ones."""
+
+    def test_solids_are_exact_canonical_duals(self):
+        import algebraic as A
+        for name in DUALS:
+            S = certify.cg.get_solid(name)
+            self.assertIn('insphere', S.check, name)
+            F, U = S.F, S.U
+            n = int(name.lstrip('abcdefghijklmnopqrstuvwxyz'))
+            t = math.pi / n
+            # every edge line at the same distance rho from the centre (exactly, in Q(alpha)), touching inside the edge:
+            # rho^2 |d|^2 = |a|^2 |d|^2 - (a.d)^2 for the edge a + u d, 0 < u < 1
+            q0 = d0 = None
+            for i, j in S.edges:
+                a, d = U[i], A.vsub(F, U[j], U[i])
+                aa, dd, ad = A.vdot(F, a, a), A.vdot(F, d, d), A.vdot(F, a, d)
+                num = F.sub(F.mul(aa, dd), F.mul(ad, ad))
+                if q0 is None:
+                    q0, d0 = num, dd
+                self.assertTrue(F.is_zero(F.sub(F.mul(num, d0), F.mul(q0, dd))), name)
+                self.assertEqual(F.sign(F.scale(ad, -1)), 1, name)
+                self.assertEqual(F.sign(F.add(dd, ad)), 1, name)
+            rho2 = float(F.interval(q0).lo) / float(F.interval(d0).lo)
+            # the midradius of the unit-edge n-prism, 1/(2 sin(pi/n)), or n-antiprism, 1/(4 sin(pi/2n)) [CALC]
+            rho = 1 / (2 * math.sin(t)) if name.startswith('bipyramid') else 1 / (4 * math.sin(t / 2))
+            self.assertAlmostEqual(math.sqrt(rho2) / rho, 1, places=12, msg=name)
+            # volume: MathWorld's canonical dipyramid (prism edge 1) and trapezohedron (short edge 1, here
+            # 1/sqrt(1 + 2 cos(pi/n))) [EST]
+            c = math.cos(t)
+            if name.startswith('bipyramid'):
+                vol = n / (12 * math.sin(t) ** 3 * c)
+            else:
+                h = t / 2
+                vol = n / math.tan(h) / math.sin(h) ** 2 * (2 * c + 1) / (24 * math.sqrt(2 + 2 * c)) / (1 + 2 * c) ** 1.5
+            self.assertAlmostEqual(VOL[name] / vol, 1, places=12, msg=name)
+
+    def test_catalogue_matches_the_exact_file(self):
+        exact = read_json(os.path.join(HERE, 'solids_exact.json'))
+        self.assertEqual(sorted(exact), sorted(n for n, *_ in catalogue.solids()))
+        self.assertEqual(catalogue.PROBLEMS['bp5incub'], ('bipyramid5', 'cube', 'bipyramids'))
+        self.assertEqual(catalogue.PROBLEMS['tz11intz11'], ('trapezohedron11', 'trapezohedron11', 'trapezohedra'))
+        self.assertNotIn('bp4inbp4', catalogue.PROBLEMS)
+        self.assertNotIn('tz3incub', catalogue.PROBLEMS)
+
+    def test_face_to_face_pairs(self):
+        for code in ('bp5inbp5', 'bp12incub', 'tz4incub', 'tz11intz11'):
+            piece, container, s, p = mirror_pair(code, 1e-7, 1e-7)
+            c = certify.certify_config(piece, container, s, p)
+            self.assertTrue(c['ok'], code)
+            self.assertAlmostEqual(c['min_pair_gap'] / 1e-7, 1, places=3, msg=code)
+            self.assertGreater(c['min_wall_slack'], 0.9e-7, code)
+            # faces overlapping by 2e-7: no separating plane exists
+            c = certify.certify_config(*mirror_pair(code, -2e-7, 1e-7))
+            self.assertFalse(c['ok'], code)
+            self.assertEqual(c['failed_pairs'], [[0, 1]], code)
+            self.assertFalse(c['failed_walls'], code)
+            # sticking out of the container by 2e-7
+            c = certify.certify_config(*mirror_pair(code, 1e-7, -2e-7))
+            self.assertFalse(c['ok'], code)
+            self.assertTrue(c['failed_walls'], code)
+            self.assertFalse(c['failed_pairs'], code)
+
+    def test_a_valid_record_of_each_family(self):
+        for code in ('bp7incub', 'tz6intz6'):
+            r = record_of(*mirror_pair(code, 1e-7, 1e-7)[2:], code=code)
+            self.assertEqual(self.check(r), [], code)
+            self.assertTrue(certify.check_record(r, VOL)['ok'], code)
+
+    def check(self, r):
+        return certify.field_errors(r, VOL)
 
 
 class Fields(unittest.TestCase):

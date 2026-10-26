@@ -6,6 +6,7 @@ import {
   familyOfSpace,
   familyTitle,
   isAvailable,
+  menuGroups,
   whereIs,
 } from "../src/dimension-table";
 import { BOARD_SPACES } from "../src/space-address";
@@ -33,6 +34,8 @@ describe("the table of dimensions", () => {
     for (const s of ["surface", "sphere", "torus"]) expect(whereIs(s)?.dimension.label, s).toBe("2D on 3D");
     expect(whereIs("boundary")).toMatchObject({ dimension: { id: "3-on-4" }, family: { name: "Polytope boundaries" } });
     expect(whereIs("polyhedra")).toMatchObject({ dimension: { label: "3D in 3D" }, family: { name: "Polyhedra" } });
+    expect(whereIs("balls")).toMatchObject({ dimension: { label: "3D in 3D" }, family: { name: "Balls" } });
+    expect(familyTitle("balls")).toBe("3D in 3D, Balls");
     expect(familyTitle("sphere")).toBe("2D on 3D, Sphere");
     expect(familyTitle("boundary")).toBe("3D on 4D, Polytope boundaries");
   });
@@ -60,5 +63,47 @@ describe("the table of dimensions", () => {
       expect(f.short.length, f.space).toBeGreaterThan(0);
       expect(f.summary, f.space).toMatch(/\.$/);
     }
+  });
+
+  it("gives the board one menu: a group per dimension, an option per family, the ones to come disabled", () => {
+    expect(menuGroups().map((g) => g.label)).toEqual(["2D in 2D", "2D on 3D", "3D in 3D", "3D on 4D"]);
+    expect(menuGroups().flatMap((g) => g.options.map((o) => o.text))).toEqual([
+      "Flat",
+      "Curved",
+      "Polyhedral surfaces",
+      "Sphere",
+      "Torus",
+      "Polyhedra",
+      "Balls",
+      "Polytope boundaries",
+    ]);
+    // the value is what the board shows: "polygon" or the space, as in the address
+    expect(menuGroups()[1].options.map((o) => o.value)).toEqual(["surface", "sphere", "torus"]);
+    expect(menuGroups()[2].options.map((o) => o.value)).toEqual(["polyhedra", "balls"]);
+    expect(
+      menuGroups()
+        .flatMap((g) => g.options)
+        .filter((o) => o.disabled),
+    ).toEqual([]);
+    const soon = menuGroups([
+      {
+        id: "4-in-4",
+        label: "4D in 4D",
+        summary: "Polytopes in a polytope.",
+        families: [
+          { space: "polytopes", name: "Polytopes", short: "Polytopes", summary: "Soon.", available: false },
+          { space: "polygon", name: "Flat", short: "Flat", summary: "Here.", available: true },
+        ],
+      },
+    ]);
+    expect(soon).toEqual([
+      {
+        label: "4D in 4D",
+        options: [
+          { text: "Polytopes (coming soon)", value: "polytopes", disabled: true },
+          { text: "Flat", value: "polygon", disabled: false },
+        ],
+      },
+    ]);
   });
 });

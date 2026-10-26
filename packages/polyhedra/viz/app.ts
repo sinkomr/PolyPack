@@ -53,7 +53,14 @@ const dark = () => {
 const palette = () => (dark() ? DARK_PALETTE : LIGHT_PALETTE);
 const view = createPolyhedraView($<HTMLCanvasElement>("cv"), { palette: palette(), spin: true });
 
-const groups: Record<string, string> = { platonic: "Platonic", archimedean: "Archimedean", catalan: "Catalan", prisms: "Prisms and antiprisms" };
+const groups: Record<string, string> = {
+  platonic: "Platonic",
+  archimedean: "Archimedean",
+  catalan: "Catalan",
+  prisms: "Prisms and antiprisms",
+  bipyramids: "Bipyramids",
+  trapezohedra: "Trapezohedra",
+};
 for (const fam of Object.keys(groups)) {
   const og = document.createElement("optgroup");
   og.label = groups[fam];

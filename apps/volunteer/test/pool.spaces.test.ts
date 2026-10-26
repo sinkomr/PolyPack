@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WorkerPool } from "../src/pool";
 import type { SpaceJob } from "../src/spaces/run";
 import type { Control } from "../src/types";
-import { enlarged, recordConfig } from "./spaces-fixtures";
+import { ballsTestPacking, enlarged, recordConfig } from "./spaces-fixtures";
 
 const control = (): Control => ({ aborted: false, paused: false });
 const sphereJob = (o: Partial<SpaceJob> = {}): SpaceJob => ({
@@ -113,6 +113,30 @@ describe("space jobs in the worker pool", () => {
         budget: { time_s: 60 },
         kind: "iterate",
         start: recordConfig("polyhedra", "polyhedra/tidintid/100"),
+      },
+    ],
+    [
+      // the balls space has no records: a test packing of the certifier's tests is the start
+      "a balls job on balls/dodinball/100 from a test packing",
+      {
+        space: "balls",
+        id: "balls/dodinball/100",
+        method: "balls penalty basin hopping",
+        seed: 1,
+        budget: { time_s: 60 },
+        kind: "iterate",
+        start: ballsTestPacking("balls/dodinball/100"),
+      },
+    ],
+    [
+      "a fresh balls job on balls/ballinball/100",
+      {
+        space: "balls",
+        id: "balls/ballinball/100",
+        method: "balls penalty basin hopping",
+        seed: 2,
+        budget: { time_s: 60 },
+        kind: "fresh",
       },
     ],
     [

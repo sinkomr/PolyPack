@@ -12,6 +12,7 @@
     "dev": "tsx src/cli.ts"
   },
   "dependencies": {
+    "@polypack/balls": "*",
     "@polypack/curved": "*",
     "@polypack/geometry": "*",
     "@polypack/polyhedra": "*",

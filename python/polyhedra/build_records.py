@@ -12,10 +12,12 @@ usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--o
   --ours      PolyPack research results: a directory with results/improvements.csv and the files it names
               (upstream record format), whose packings of m pieces cover every n <= m by deleting pieces
   --polypack  the records of PolyPack's own problems (catalogue.py, not in WIKI_PROBLEMS): <code>.json per problem,
-              {code, piece, container, records: [{P, s, config: [P poses], method, seed}]}; each is certified and
-              becomes a PolyPack research record after the wiki's problems
-  --keep      an existing records.json whose records of the wiki's problems are kept exactly as they are (index
-              entries and configs/<code>.jsonl untouched); only PolyPack's problems are built, from --polypack
+              {code, piece, container, records: [{P, s, config: [P poses], method, seed[, start, runs]}]}; each is
+              certified and becomes a PolyPack research record after the wiki's problems (start and runs, when
+              given, are origin.start and origin.runs as they are; otherwise they are read from the method)
+  --keep      an existing records.json whose records are kept exactly as they are (index entries and
+              configs/<code>.jsonl untouched), except those of the PolyPack problems that have a file in --polypack,
+              which are built from it
 
 For every problem of catalogue.py and n = 2..nmax the candidates are every upstream record file of the case
 (records/<p>/, records/community/<p>/, records/external/<p>/ and the files the site lists) and, from --ours, a
@@ -604,10 +606,17 @@ def polypack_short(start, runs):
     return st, out
 
 
-def polypack_candidates(d, nmax):
-    """The --polypack records: (case, candidate) for every PolyPack problem and P = 2..nmax, all required."""
+def polypack_codes(d):
+    """PolyPack's problems (catalogue order) that have a file in the --polypack directory d."""
+    return [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS and os.path.exists(os.path.join(d, f'{c}.json'))]
+
+
+def polypack_candidates(d, nmax, codes=None):
+    """The --polypack records: (case, candidate) for every given PolyPack problem (default all) and P = 2..nmax, all
+    required."""
     out = []
-    for code in [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]:
+    label = os.path.basename(os.path.normpath(d))
+    for code in codes if codes is not None else [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]:
         doc = load(os.path.join(d, f'{code}.json'))
         if not doc:
             raise ValueError(f'--polypack: {code}.json is missing or unreadable')
@@ -620,7 +629,7 @@ def polypack_candidates(d, nmax):
             if not r or not isinstance(r.get('config'), list) or len(r['config']) != n:
                 raise ValueError(f'--polypack {code}.json has no configuration of {n} pieces')
             pieces = [[float(x) for x in pose] for pose in r['config']]
-            out.append((Case(code, n), {'file': f'prisms/{code}.json', 'rec': r, 'pieces': pieces,
+            out.append((Case(code, n), {'file': f'{label}/{code}.json', 'rec': r, 'pieces': pieces,
                                         's_cert': float(r['s']), 'mine': True}))
     return out
 
@@ -629,7 +638,10 @@ def make_polypack_record(case, cand, volumes):
     """A PolyPack research record of one of PolyPack's own problems (there is no wiki record to compare with)."""
     r = cand['rec']
     pieces, s = cand['pieces'], cand['s_cert']
-    start, runs = polypack_short(*polypack_steps(r['method']))
+    if 'runs' in r:
+        start, runs = r.get('start'), list(r['runs'])
+    else:
+        start, runs = polypack_short(*polypack_steps(r['method']))
     origin = {'file': cand['file'], 'date': POLYPACK_DATE}
     if r.get('seed') is not None:
         origin['seed'] = r['seed']
@@ -652,9 +664,9 @@ def make_polypack_record(case, cand, volumes):
     return rec
 
 
-def polypack_records(d, nmax, jobs, volumes, no_certify=False):
+def polypack_records(d, nmax, jobs, volumes, no_certify=False, codes=None):
     """The certified records of PolyPack's problems from --polypack, in catalogue order; and the failures."""
-    cands = polypack_candidates(d, nmax)
+    cands = polypack_candidates(d, nmax, codes)
     work = [(case, [cand], volumes) for case, cand in cands]
     if no_certify:
         results = [(cand, None) for _, [cand], _ in work]
@@ -677,7 +689,8 @@ SCOPE_NOTE = ('the 3D problems of polyhedrainpolyhedra.wiki (Platonic, Archimede
               'elongated prisms) with 2 to %d pieces; 4D-6D are not included')
 SCOPE_NOTE_POLYPACK = (SCOPE_NOTE + '; then PolyPack\'s own problems in the same scheme (prisms and antiprisms with 7, '
                        '9, 10 and 11 sides in themselves and in a cube, and their prisms of height 1.5, 2 and 3 in a '
-                       'cube), whose records are PolyPack research only')
+                       'cube; bipyramids and trapezohedra, the canonical duals of the prisms and antiprisms, in '
+                       'themselves and in a cube), whose records are PolyPack research only')
 POLYPACK_CONVENTION = ('records of PolyPack\'s own problems (no wiki record): origin.file is the PolyPack research '
                        'file, origin.start the construction the configuration\'s lineage starts from (none for a '
                        'search from random positions), origin.runs the searches and subset steps after it and '
@@ -688,16 +701,19 @@ def keep_and_add(keep, polypack, nmax, jobs, no_certify):
     """--keep mode: the wiki's records of `keep` untouched, PolyPack's problems built from --polypack."""
     with open(keep) as f:
         doc = json.load(f)
-    old = [r for r in doc['records'] if r['code'] in catalogue.WIKI_PROBLEMS]
+    codes = polypack_codes(polypack)
+    old = [r for r in doc['records'] if r['code'] not in codes]
     if len(old) != len(doc['records']):
         print(f'{len(doc["records"]) - len(old)} records of PolyPack\'s problems in {keep} are replaced')
     if not all(isinstance(r.get('config_at'), list) for r in old):
         raise ValueError('--keep: every kept record must have its configuration apart (config_at)')
     volumes = certify.solid_volumes()
     t0 = time.time()
-    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify)
+    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify, codes)
     nfiles, total = write_configs(os.path.join(os.path.dirname(keep), 'configs'), new)
-    doc['records'] = old + new
+    # catalogue order: kept and new records by problem, then P
+    order = {c: i for i, c in enumerate(catalogue.PROBLEMS)}
+    doc['records'] = sorted(old + new, key=lambda r: (order[r['code']], r['P']))
     doc['scope'] = {'P': [2, nmax], 'problems': len(catalogue.PROBLEMS), 'note': SCOPE_NOTE_POLYPACK % nmax}
     doc['sources']['polypack'] = SOURCES['polypack']
     doc['conventions']['polypack'] = POLYPACK_CONVENTION

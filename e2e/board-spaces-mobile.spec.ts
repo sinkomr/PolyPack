@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { LAZY_VIEW } from "./helpers";
 
 test("phone: the board's space mode fits, and a short run can be tapped through", async ({ page }) => {
   await page.goto("/#space=sphere/4/12");
@@ -22,27 +23,27 @@ test("phone: the board's space mode fits, and a short run can be tapped through"
   }
 });
 
-test("phone: the Dimension and Kind menus fit and switch the board", async ({ page }) => {
+test("phone: the Problem set menu fits and switches the board", async ({ page }) => {
   await page.goto("/");
   const width = page.viewportSize()!.width;
-  for (const id of ["#dimension-select", "#kind-select"]) {
-    await page.locator(id).scrollIntoViewIfNeeded();
-    const box = (await page.locator(id).boundingBox())!;
-    expect(box.x, id).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width, id).toBeLessThanOrEqual(width + 1);
-  }
-  await page.selectOption("#dimension-select", "2-on-3");
-  await expect(page.locator("#kind-select")).toHaveValue("surface");
-  await expect(page.locator("#space-problem-note")).toContainText("Problem surface/");
-  await page.selectOption("#kind-select", "sphere");
+  const menu = page.locator("#family-select");
+  await menu.scrollIntoViewIfNeeded();
+  const box = (await menu.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+  await page.selectOption("#family-select", "surface");
+  await expect(page.locator("main")).toHaveAttribute("data-dimension", "2-on-3");
+  // the space mode's code loads on first use
+  await expect(page.locator("#space-problem-note")).toContainText("Problem surface/", LAZY_VIEW);
+  await page.selectOption("#family-select", "sphere");
   await expect(page.locator("#space-problem-note")).toContainText("Problem sphere/");
-  await page.selectOption("#dimension-select", "3-in-3");
-  await expect(page.locator("#kind-select")).toHaveValue("polyhedra");
+  await page.selectOption("#family-select", "polyhedra");
+  await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-in-3");
   await expect(page.locator("#space-problem-note")).toContainText("Problem polyhedra/");
-  await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /drawn in 3D/);
+  await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /drawn in 3D/, LAZY_VIEW);
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
   ).toBeLessThanOrEqual(1);
-  await page.selectOption("#dimension-select", "2-in-2");
+  await page.selectOption("#family-select", "polygon");
   await expect(page.locator("#board")).toBeVisible();
 });

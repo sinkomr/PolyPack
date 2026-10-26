@@ -4,7 +4,7 @@
  * larger steps) where the view turns. It redraws when its box changes size or the colour scheme
  * changes. Used by the board's space mode, and meant for any page that shows such a packing.
  *
- * The 2D kinds and 3D in 3D (render/polyhedra.ts, three.js) draw with a SpaceRenderer (render/*.ts)
+ * The 2D kinds and 3D in 3D (render/polyhedra.ts and render/balls.ts, three.js) draw with a SpaceRenderer (render/*.ts)
  * under the toolbar built here. 3D on 4D (boundary) draws with the three.js views of
  * packages/view3d, which bring their own toolbar and controls (render/boundary.ts).
  */
@@ -13,6 +13,7 @@ import type { SearchProblem } from "@polypack/spaces/search";
 import { mountBoundaryView } from "./render/boundary";
 import type { SpaceRenderer } from "./render/common";
 import { curvedRenderer } from "./render/curved";
+import { ballsRenderer } from "./render/balls";
 import { polyhedraRenderer } from "./render/polyhedra";
 import { sphereRenderer } from "./render/sphere";
 import { surfaceRenderer } from "./render/surface";
@@ -34,6 +35,8 @@ export function createRenderer(p: FlatDrawnProblem): SpaceRenderer {
       return torusRenderer(p);
     case "polyhedra":
       return polyhedraRenderer(p.code, p.P);
+    case "balls":
+      return ballsRenderer(p.code, p.P);
   }
 }
 

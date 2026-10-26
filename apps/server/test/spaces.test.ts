@@ -181,7 +181,7 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 });
 
 describe("GET /api/spaces", () => {
-  it("lists the six spaces with their catalogues and the curvature sweeps", async () => {
+  it("lists the seven spaces with their catalogues and the curvature sweeps", async () => {
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
@@ -193,10 +193,12 @@ describe("GET /api/spaces", () => {
       ["sphere", 166],
       ["torus", 544],
       ["boundary", 32],
-      ["polyhedra", 11286],
+      ["polyhedra", 14850],
+      ["balls", 693],
     ]);
     for (const s of r.spaces) {
-      expect(s.viewer).toBe(`/spaces/${s.space}.html`);
+      // the balls space has no standalone viewer: its problems are drawn on the board
+      expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
       expect(s.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/\w+\.md$/);
       expect(s.conventions.configuration).toBeTruthy();
     }
@@ -1075,7 +1077,7 @@ describe("GET /api/spaces/targets", () => {
     expect(r.targets.filter((t) => t.space === "boundary").length).toBe(28);
     for (const t of r.targets) {
       const p = problemOf(index[t.space]!, parseSpaceId(t.space, t.id) as ParsedSpaceId)!;
-      // a problem without a record and without entries has no best and no leader yet
+      // a problem without a record (the balls space) and without entries has no best and no leader yet
       expect(t).toMatchObject({
         leader: p.certified ? "certified" : "none",
         leader_id: null,
@@ -1083,6 +1085,10 @@ describe("GET /api/spaces/targets", () => {
         bound: p.bound!.value,
       });
     }
+    // the balls space's domain is sampled, never listed whole: small P first
+    const balls = r.targets.filter((t) => t.space === "balls");
+    expect(balls.length).toBe(SPACE_DOMAIN_TARGETS);
+    expect(balls.every((t) => t.P <= 73)).toBe(true);
   });
 
   it("gives every space an equal share of the priority: capped gap times min(1, (P - 1) / 5), scaled per space", async () => {
@@ -1104,12 +1110,19 @@ describe("GET /api/spaces/targets", () => {
     expect(spaceTargetWeight(2)).toBeCloseTo(0.2, 15);
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
-    // the default list is the head of the whole list and holds problems of every space but polyhedra:
-    // its 11,286 problems share one space's share of the priority, so they come after the others' head
+    // the default list is the head of the whole list and holds problems of every space but polyhedra and balls:
+    // polyhedra's 14,850 problems share one space's share of the priority, so they come after the others' head;
+    // balls' 500 sampled problems all have the largest room, so their shares are about even and none is among the
+    // 500 largest
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));
-    expect(new Set(first.targets.map((t) => t.space))).toEqual(new Set(SPACE_NAMES.filter((s) => s !== "polyhedra")));
+    expect(new Set(first.targets.map((t) => t.space))).toEqual(
+      new Set(SPACE_NAMES.filter((s) => s !== "polyhedra" && s !== "balls")),
+    );
+    const balls = (await get("/api/spaces/targets?spaces=balls")).body as SpaceTargetsResponse;
+    expect(balls.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
+    expect(balls.targets.every((t) => t.space === "balls")).toBe(true);
     const polyhedra = (await get("/api/spaces/targets?spaces=polyhedra")).body as SpaceTargetsResponse;
     expect(polyhedra.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(polyhedra.targets.every((t) => t.space === "polyhedra")).toBe(true);

@@ -3,7 +3,8 @@
 Names, codes and the order of upstream's solids and problems follow alejandrozu/platonic-packing scripts/engine.py
 (AB, ARCHIMEDEAN, CATALAN, PRISMS, PROBLEMS; MIT, commit cbf76f2f). PolyPack adds prisms and antiprisms with 7, 9,
 10 and 11 sides and the elongated prisms of the 7-, 9-, 10- and 11-gon (2026-10-25), named in upstream's scheme and listed after
-upstream's solids and problems; polyhedrainpolyhedra.wiki does not list them (WIKI_PROBLEMS holds the codes it does).
+upstream's solids and problems, and the bipyramids and trapezohedra, the canonical duals of the unit-edge prisms and
+antiprisms (docs/spaces/POLYHEDRA.md), each in itself and in a cube; polyhedrainpolyhedra.wiki does not list them (WIKI_PROBLEMS holds the codes it does).
 packages/polyhedra/src/problems.ts builds the same list; the TypeScript tests compare the two through
 data/polyhedra/records.json.
 """
@@ -22,6 +23,9 @@ PRISM_K = [3, 5, 6, 8, 12]
 ANTIPRISM_K = [4, 5, 6, 8, 12]
 ELONG = [('l15', '1.5'), ('l2', '2'), ('l3', '3')]
 EXTRA_K = [7, 9, 10, 11]                 # PolyPack's prisms, antiprisms and elongated prisms (not on the wiki)
+# PolyPack's duals of the n-prisms (n = 4 is the octahedron) and of the n-antiprisms (n = 3 is the cube)
+BIPYRAMID_K = [3, 5, 6, 7, 8, 9, 10, 11, 12]
+TRAPEZOHEDRON_K = [4, 5, 6, 7, 8, 9, 10, 11, 12]
 POLY = {3: 'triangular', 4: 'square', 5: 'pentagonal', 6: 'hexagonal', 7: 'heptagonal', 8: 'octagonal',
         9: 'enneagonal', 10: 'decagonal', 11: 'hendecagonal', 12: 'dodecagonal'}
 AB = {'tetrahedron': 'tet', 'cube': 'cub', 'octahedron': 'oct', 'dodecahedron': 'dod', 'icosahedron': 'ico',
@@ -41,6 +45,10 @@ for _k in ANTIPRISM_K + EXTRA_K:
 for _k in PRISM_K + EXTRA_K:
     for _t, _h in ELONG:
         AB[f'prism{_k}_{_t}'] = f'pr{_k}{_t}'
+for _k in BIPYRAMID_K:
+    AB[f'bipyramid{_k}'] = f'bp{_k}'
+for _k in TRAPEZOHEDRON_K:
+    AB[f'trapezohedron{_k}'] = f'tz{_k}'
 
 
 def _prism_solids(prisms, antiprisms):
@@ -60,17 +68,19 @@ def _prism_problems(prisms, antiprisms):
 
 
 def solids():
-    """(name, code, family, title) of every solid: upstream's 56 in upstream's order of families, then PolyPack's 20."""
+    """(name, code, family, title) of every solid: upstream's 56 in upstream's order of families, then PolyPack's 38."""
     out = [(s, AB[s], 'platonic', s) for s in PLATONIC]
     out += [(s, AB[s], 'archimedean', s.replace('_', ' ')) for s in ARCHIMEDEAN]
     out += [(s, AB[s], 'catalan', s.replace('_', ' ')) for s in CATALAN]
     out += _prism_solids(PRISM_K, ANTIPRISM_K)
     out += _prism_solids(EXTRA_K, EXTRA_K)
+    out += [(f'bipyramid{k}', f'bp{k}', 'bipyramid', f'{POLY[k]} bipyramid') for k in BIPYRAMID_K]
+    out += [(f'trapezohedron{k}', f'tz{k}', 'trapezohedron', f'{POLY[k]} trapezohedron') for k in TRAPEZOHEDRON_K]
     return out
 
 
 def problems(wiki_only=False):
-    """(code, piece, container, family) of the 114 problems: upstream's 86 in upstream's order, then PolyPack's 28
+    """(code, piece, container, family) of the 150 problems: upstream's 86 in upstream's order, then PolyPack's 64
     (only upstream's with wiki_only)."""
     pairs = [('tetrahedron', 'tetrahedron'), ('octahedron', 'octahedron'), ('icosahedron', 'icosahedron'),
              ('dodecahedron', 'dodecahedron'), ('cube', 'cube'), ('cube', 'octahedron'), ('octahedron', 'cube'),
@@ -82,6 +92,10 @@ def problems(wiki_only=False):
     out += _prism_problems(PRISM_K, ANTIPRISM_K)
     if not wiki_only:
         out += _prism_problems(EXTRA_K, EXTRA_K)
+        for s in [f'bipyramid{k}' for k in BIPYRAMID_K]:
+            out += [(s, s, 'bipyramids'), (s, 'cube', 'bipyramids')]
+        for s in [f'trapezohedron{k}' for k in TRAPEZOHEDRON_K]:
+            out += [(s, s, 'trapezohedra'), (s, 'cube', 'trapezohedra')]
     return [(f'{AB[p]}in{AB[c]}', p, c, fam) for p, c, fam in out]
 
 

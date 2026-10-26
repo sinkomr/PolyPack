@@ -1,8 +1,8 @@
 /**
  * Separating axes of the fold check. Clipping can leave a part a side about 1e-15 long whose
  * computed direction is arbitrary; an axis taken from that side cuts a sliver off the part, and a
- * second piece poking into the sliver was called apart from it (an independent review found
- * surface/octahedron/fold/3/2 below accepted by the server). The parts now carry the exact
+ * second piece poking into the sliver was called apart from it (the earlier rule accepted
+ * surface/octahedron/fold/3/2 below). The parts now carry the exact
  * half-planes they were cut from, and the check takes its axes from them (parts.ts
  * partSeparation). These tests pin that down against an overlap measure that uses no clipped
  * polygon at all.
@@ -144,7 +144,7 @@ function clippedAxesSeparation(S: Solid, N: number, s: number, a: SurfacePose, b
   return sep;
 }
 
-/** The reviewer's configuration: piece 0 has a corner on the top vertex of face 2, piece 1 pokes 7.9e-4 into it. */
+/** A configuration the earlier rule accepted: piece 0 has a corner on the top vertex of face 2, piece 1 pokes 7.9e-4 into it. */
 const REPRO = {
   s: 2.397897003428079,
   pieces: [
@@ -169,7 +169,7 @@ const FAR = {
   ],
 };
 
-/** Poses whose parts have a clipped side whose computed normal cuts the part (found by the review's probes). */
+/** Poses whose parts have a clipped side whose computed normal cuts the part (found by probing corners on vertices and sides along edges). */
 const SLIVERS: { solid: SolidName; N: number; s: number; pose: SurfacePose }[] = [
   { solid: "octahedron", N: 3, s: 2.397897003428079, pose: REPRO.pieces[0] },
   {
@@ -241,6 +241,9 @@ describe("separating axes of the fold check", () => {
 
   it("keeps the same pieces valid once they are apart, as the certifier does", () => {
     expect(validateFold({ solid: "octahedron", N: 3, ...NEAR }, { tol: 0 }).ok).toBe(true);
+    // the same pair listed the other way round: the check must take both parts' cuts
+    const swapped = { ...NEAR, pieces: [...NEAR.pieces].reverse() };
+    expect(validateFold({ solid: "octahedron", N: 3, ...swapped }, { tol: 0 }).ok).toBe(true);
     const far = validateFold({ solid: "octahedron", N: 3, ...FAR }, { tol: 0 });
     expect(far.ok).toBe(false);
     expect(-far.minPairSep).toBeGreaterThan(1e-7);

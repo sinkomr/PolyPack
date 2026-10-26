@@ -13,6 +13,7 @@
     "typecheck": "tsc -p . --noEmit"
   },
   "dependencies": {
+    "@polypack/balls": "0.1.0",
     "@polypack/boundary": "0.1.0",
     "@polypack/curved": "0.1.0",
     "@polypack/geometry": "0.1.0",

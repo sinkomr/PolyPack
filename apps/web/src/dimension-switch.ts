@@ -1,9 +1,9 @@
 /**
- * The Dimension and Kind menus of the board's Problem section, built from the table in
- * dimension-table.ts. Dimension lists every dimension; one with no available family is shown
- * disabled, as "coming soon". Kind lists the families of the chosen dimension.
+ * The Problem set menu of the board's Problem section, built from the table in dimension-table.ts:
+ * one option per family, grouped by dimension (an <optgroup> per dimension). A family that is not
+ * available yet is listed, disabled, as "coming soon".
  *
- * Flat (2D in 2D) is the polygon board as it always was. Another kind loads the space mode
+ * Flat (2D in 2D) is the polygon board as it always was. Another family loads the space mode
  * (space/mode.ts) with a dynamic import, so that the polygon board does not load the spaces' code
  * until it is wanted. The address "#space=<id>" (space-address.ts) opens a space problem directly;
  * any other address (a polygon link such as #p=, or none, as after Back) shows the polygon board.
@@ -11,7 +11,7 @@
  * The board's <main> carries data-space while a space is shown (the CSS hides the polygon board's
  * parts) and data-dimension always, so that a dimension's mode can adapt the layout.
  */
-import { DIMENSIONS, type FamilyTarget, availableFamilies, isAvailable, whereIs } from "./dimension-table";
+import { type FamilyTarget, menuGroups, whereIs } from "./dimension-table";
 import { type BoardSpace, isBoardSpace, parseSpaceAddress } from "./space-address";
 
 interface SpaceModeApi {
@@ -20,7 +20,7 @@ interface SpaceModeApi {
   setPolygonHeld(held: boolean): void;
 }
 
-/** What the polygon board's optimizer does while another kind is shown. */
+/** What the polygon board's optimizer does while another family is shown. */
 export interface PolygonRunHooks {
   /** Pauses a running search; true when it did. */
   hold(): boolean;
@@ -38,9 +38,8 @@ export function initDimensionSwitch(
   say: (message: string) => void,
   run: PolygonRunHooks = { hold: () => false, release: () => {} },
 ): void {
-  const dimensionSelect = document.getElementById("dimension-select") as HTMLSelectElement;
-  const kindSelect = document.getElementById("kind-select") as HTMLSelectElement;
-  const layout = dimensionSelect.closest("main") as HTMLElement;
+  const select = document.getElementById("family-select") as HTMLSelectElement;
+  const layout = select.closest("main") as HTMLElement;
   let mode: Promise<SpaceModeApi> | null = null;
   let current: BoardSpace | null = null;
   let polygonShown = true;
@@ -48,37 +47,24 @@ export function initDimensionSwitch(
   let polygonHash = "";
   /** True while the polygon board's run is paused because a space is shown. */
   let held = false;
-  /** The kind last shown in each dimension, so that choosing the dimension again returns to it. */
-  const lastKind = new Map<string, FamilyTarget>();
-  /** The dimension whose kinds the Kind menu lists. */
-  let kindsOf = "";
 
-  for (const d of DIMENSIONS) {
-    const open = isAvailable(d);
-    const option = new Option(open ? d.label : `${d.label} (coming soon)`, d.id);
-    option.disabled = !open;
-    dimensionSelect.add(option);
+  for (const g of menuGroups()) {
+    const group = document.createElement("optgroup");
+    group.label = g.label;
+    for (const o of g.options) {
+      const option = new Option(o.text, o.value);
+      option.disabled = o.disabled;
+      group.append(option);
+    }
+    select.append(group);
   }
 
-  /** Both menus name the kind shown; the Kind menu lists its dimension's families. */
-  function showMenus(target: FamilyTarget): void {
+  /** The menu names the family shown, and <main> its dimension. */
+  function showMenu(target: FamilyTarget): void {
     const where = whereIs(target);
     if (!where) return;
-    const { dimension } = where;
-    dimensionSelect.value = dimension.id;
-    if (kindsOf !== dimension.id) {
-      kindsOf = dimension.id;
-      kindSelect.replaceChildren(
-        ...dimension.families.map((f) => {
-          const option = new Option(f.available ? f.name : `${f.name} (coming soon)`, f.space);
-          option.disabled = !f.available;
-          return option;
-        }),
-      );
-    }
-    kindSelect.value = target;
-    layout.dataset.dimension = dimension.id;
-    lastKind.set(dimension.id, target);
+    select.value = target;
+    layout.dataset.dimension = where.dimension.id;
   }
 
   const load = () =>
@@ -111,7 +97,7 @@ export function initDimensionSwitch(
       held = run.hold();
     }
     current = space;
-    showMenus(space);
+    showMenu(space);
     layout.dataset.space = space;
     placeholder();
     try {
@@ -127,7 +113,7 @@ export function initDimensionSwitch(
   }
 
   function toPolygon(clearAddress: boolean): void {
-    showMenus("polygon");
+    showMenu("polygon");
     if (current === null) return;
     current = null;
     delete layout.dataset.space;
@@ -149,19 +135,12 @@ export function initDimensionSwitch(
     }
   }
 
-  function choose(target: string): void {
-    if (isBoardSpace(target)) void toSpace(target, null);
+  select.addEventListener("change", () => {
+    // a family that is not available cannot be chosen; this keeps the menu right if one ever is
+    if (!whereIs(select.value)) return showMenu(current ?? "polygon");
+    if (isBoardSpace(select.value)) void toSpace(select.value, null);
     else toPolygon(true);
-  }
-
-  dimensionSelect.addEventListener("change", () => {
-    const dimension = DIMENSIONS.find((d) => d.id === dimensionSelect.value);
-    // a disabled dimension cannot be chosen; this keeps the menus right if one ever is
-    const first = dimension ? availableFamilies(dimension)[0] : undefined;
-    if (!dimension || !first) return showMenus(current ?? "polygon");
-    choose(lastKind.get(dimension.id) ?? first.space);
   });
-  kindSelect.addEventListener("change", () => choose(kindSelect.value));
   window.addEventListener("hashchange", () => {
     const where = parseSpaceAddress(location.hash);
     if (where) void toSpace(where.space, where.id);
@@ -172,5 +151,5 @@ export function initDimensionSwitch(
   if (where) {
     polygonShown = false;
     void toSpace(where.space, where.id);
-  } else showMenus("polygon");
+  } else showMenu("polygon");
 }

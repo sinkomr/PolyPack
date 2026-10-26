@@ -167,7 +167,7 @@ describe("the client with the spaces option", () => {
       const { code, output } = await client(["--once", "--spaces", "all", "--max-P", "10"], { random: () => 0.9 });
       expect(code, output).toBe(0);
       expect(paths()[0]).toBe(
-        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary%2Cpolyhedra&max_P=10&limit=20000",
+        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary%2Cpolyhedra%2Cballs&max_P=10&limit=20000",
       );
       expect(server.spaceSubmissions).toEqual([]);
       expect(server.submissions).toEqual([]);

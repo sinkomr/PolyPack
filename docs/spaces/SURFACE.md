@@ -133,6 +133,10 @@ min over k >= ceil(P/F) of s2_best(N, M, k); this table uses k up to 8. The enve
 larger k only at ties (2 and 3 hexagons in a triangle both need side 5; 3 and 4 octagons in a
 square both need 2 + 2 sqrt 2), where the larger packing's coordinates scored a few 1e-13 lower.
 
+On the Platonic solids the site's board (beside a nofold problem's values), the Dimensions page (a link in each
+nofold row) and the viewer at `/spaces/surface.html` say this and link to the equivalent 2D in 2D
+problem N/M/ceil(P/F) on the polygon board, `/#p=N,M,k` (disks are N = 0 there too).
+
 **2.1b Prisms and antiprisms: nofold is a 2D in 2D value** [CALC]. Their faces are regular polygons
 of two kinds, both of side s: F1 faces that are M1-gons and F2 that are M2-gons (a prism with n sides:
 2 n-gons and n squares; an antiprism: 2 n-gons and 2n triangles). Write s2(N, M, 0) = 0. Then
@@ -148,9 +152,10 @@ largest number of pieces on one face of kind i. Then F1 k1 + F2 k2 >= P, and a f
 ki > 0 pieces holds a 2D packing in its regular Mi-gon of side s, so s >= s2(N, Mi, ki) for both
 kinds; s is at least the maximum for this split, hence at least the minimum over splits. For the
 true 2D optima (non-decreasing in k) the formula is exact; with best-known 2D values it is an upper
-bound, best taken over the envelope min over k' >= k of s2_best(N, M, k') as in 2.1. The board
-links these problems to their 2D in 2D problems instead of searching them; PolyPack's 2D records
-(`data/records.json`) do not yet cover containers with 9 to 12 sides.
+bound, best taken over the envelope min over k' >= k of s2_best(N, M, k') as in 2.1. The board and
+the volunteer client run the surface search in its nofold mode on them; a link to the 2D in 2D
+problems of the best split is not built yet, and PolyPack's 2D records (`data/records.json`) do not
+yet cover containers with 9 to 12 sides.
 
 **2.1c Catalan solids: nofold problems are new 2D problems** [CALC]. All faces of a Catalan solid
 are congruent (by rotations or reflections, which map regular pieces to regular pieces), so the
@@ -219,8 +224,8 @@ gap separates the parts. So for overlapping parts the result is exactly their se
 depth, and positive values (parts apart) are a lower bound on their distance. Before, the axes
 came from the clipped parts' own sides. Clipping can leave a side about 1e-15 long (a piece
 corner on a vertex or an edge) whose direction rounding makes arbitrary, and such an axis cuts
-a sliver off the part: an independent review found two triangles on the octahedron overlapping
-by 7.9e-4 that the server accepted (`packages/surface/test/axes.test.ts`; the certifier
+a sliver off the part: two triangles on the octahedron overlapping by 7.9e-4 were accepted
+by the earlier rule (`packages/surface/test/axes.test.ts`; the certifier
 rejected it). Every research record passes the new check, at the touching tolerance and at 1e-11.
 
 Enumeration: depth-first over chains from the anchor face; a branch is cut only when no
@@ -593,7 +598,9 @@ records file checks every record's published fields and re-certifies it at its s
 
 Viewer: open `packages/surface/viz/index.html` (standalone, no network). It recomputes the parts
 from the stored poses with the same development code and draws them on the solid (drag to turn)
-or on a net; pieces keep their colour across folds; red dots are the cone points.
+or on a net; pieces keep their colour across folds; red dots are the cone points. A nofold record
+links to its 2D in 2D problem on the site's board (section 2.1), a link that works where the viewer
+is served by the site, at `/spaces/surface.html`.
 
 ## 9. Limitations and open questions
 

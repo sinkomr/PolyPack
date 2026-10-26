@@ -3,8 +3,9 @@
  * s C of a container solid. The 86 problems of polyhedrainpolyhedra.wiki (upstream's scripts/engine.py,
  * PROBLEMS): the 25 Platonic pairs, the 13 Archimedean and 13 Catalan solids in themselves, the 5
  * prisms and 5 antiprisms in themselves and in a cube, and the 15 elongated prisms in a cube. Then
- * PolyPack's 28 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9, 10 and 11
- * sides in themselves and in a cube, and their 12 elongated prisms in a cube.
+ * PolyPack's 64 in the same scheme (not on the wiki): the prisms and antiprisms with 7, 9, 10 and 11
+ * sides in themselves and in a cube, and their 12 elongated prisms in a cube; and the 9 bipyramids and
+ * 9 trapezohedra in themselves and in a cube.
  *
  * A problem is named by upstream's code `<piece code>in<container code>`, e.g. "cubintet" (cubes in a
  * tetrahedron) or "pr3l15incub" (triangular prisms of height 1.5 in a cube), and a problem with P
@@ -19,7 +20,7 @@ export type { ProblemFamily };
 export type PolyhedraProblem = ProblemName;
 
 /**
- * The 114 problems: upstream's 86 in upstream's order, then PolyPack's 28 (catalogue.ts names them without loading
+ * The 150 problems: upstream's 86 in upstream's order, then PolyPack's 64 (catalogue.ts names them without loading
  * the solids; python/polyhedra/catalogue.py has the same list).
  */
 export const POLYHEDRA_PROBLEMS: readonly PolyhedraProblem[] = PROBLEM_NAMES;

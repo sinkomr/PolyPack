@@ -92,8 +92,9 @@ const html = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PolyPack Surface Packings</title>
 <style>
-:root { --bg: #fbfaf7; --fg: #1d1d1f; --muted: #5f6368; --face: #ece8df; --edge: #3b3b3f; --cone: #b3261e; --piece-edge: rgba(0,0,0,.45); --line: #d9d4c8; --sel: #fff1c9; color-scheme: light; }
-@media (prefers-color-scheme: dark) { :root { --bg: #16171a; --fg: #ececec; --muted: #a2a5ab; --face: #2a2c31; --edge: #c9cbd0; --cone: #ff8a80; --piece-edge: rgba(255,255,255,.5); --line: #34363c; --sel: #3a3420; color-scheme: dark; } }
+:root { --bg: #fbfaf7; --fg: #1d1d1f; --muted: #5f6368; --face: #ece8df; --edge: #3b3b3f; --cone: #b3261e; --piece-edge: rgba(0,0,0,.45); --line: #d9d4c8; --sel: #fff1c9; --link: #1a5fb4; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg: #16171a; --fg: #ececec; --muted: #a2a5ab; --face: #2a2c31; --edge: #c9cbd0; --cone: #ff8a80; --piece-edge: rgba(255,255,255,.5); --line: #34363c; --sel: #3a3420; --link: #8ab4f8; color-scheme: dark; } }
+a { color: var(--link); }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
 main { max-width: 1100px; margin: 0 auto; padding: 16px; }

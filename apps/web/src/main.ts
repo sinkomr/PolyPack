@@ -606,8 +606,8 @@ window.addEventListener("hashchange", () => {
 view.fit();
 const solve = new SolvePanel(board, view, say);
 Object.assign((window as unknown as { polypack: object }).polypack, { solve });
-// the Dimension and Kind menus: the other kinds load on demand, and Flat (2D in 2D) is this board as
-// it is; a run of the board's optimizer is paused while another kind is shown, and goes on after
+// the Problem set menu: the other families load on demand, and Flat (2D in 2D) is this board as it
+// is; a run of the board's optimizer is paused while another family is shown, and goes on after
 initDimensionSwitch(() => view.fit(), say, {
   hold: () => solve.holdWhileHidden(),
   release: () => solve.releaseHidden(),

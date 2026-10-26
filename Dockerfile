@@ -16,6 +16,7 @@ COPY packages/torus/package.json packages/torus/
 COPY packages/spaces/package.json packages/spaces/
 COPY packages/polyhedra/package.json packages/polyhedra/
 COPY packages/boundary/package.json packages/boundary/
+COPY packages/balls/package.json packages/balls/
 COPY packages/view3d/package.json packages/view3d/
 RUN npm ci --no-audit --no-fund
 

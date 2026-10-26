@@ -31,6 +31,9 @@
  *  - polyhedra: searchPolyhedra of packages/polyhedra (a start is legalized and polished, else a
  *    soft-to-rigid run packs one; then soft hops and jiggles, each polished by a separating-plane
  *    penalty method), budgeted by evaluations: simulator steps and polish evaluations.
+ *  - balls: searchBalls of packages/balls (a start is legalized and polished, else a lattice cut or random
+ *    centres; then hops from the best, each polished by a penalty method with the container size as a variable;
+ *    solids in a ball by separating planes), budgeted by its objective evaluations.
  * Surface problems in the nofold mode on the Platonic solids are planar problems and run on the
  * polygon solver instead (nofold.ts has the conversion); they never reach this file. On the other
  * solids (Catalan solids, prisms, antiprisms) the faces are not all one regular polygon, and their
@@ -47,6 +50,7 @@ import { searchSphere } from "@polypack/sphere";
 import { getSolid } from "@polypack/surface";
 import { searchTorus } from "@polypack/torus";
 import { type PolyhedraConfig, getProblem as getPolyhedraProblem, searchPolyhedra } from "@polypack/polyhedra";
+import { type BallsConfig, getBallsProblem, searchBalls } from "@polypack/balls";
 import type { SpaceConfig, SpaceName } from "../types";
 import {
   type SearchProblem,
@@ -74,7 +78,7 @@ export interface SpaceJob {
   start?: SpaceConfig;
   /**
    * True when the start is this search's own result, already polished (the best of a board's previous
-   * round): polyhedra take it as it is instead of polishing it again. Ignored by the other spaces.
+   * round): polyhedra and balls take it as it is instead of polishing it again. Ignored by the other spaces.
    */
   polished?: boolean;
   /** The problem's bound and certified size, so that results are checked by the server's whole rule. */
@@ -244,6 +248,17 @@ function runEngine(
   const cap = job.budget.evals ?? Number.MAX_SAFE_INTEGER;
   const shouldStop = () => gate.stop();
   switch (p.space) {
+    case "balls": {
+      // the search polls shouldStop at every evaluation and in the work between them
+      const r = searchBalls(getBallsProblem(p.code)!, p.P, {
+        seed: job.seed,
+        start: start as unknown as BallsConfig | undefined,
+        startPolished: job.polished === true && start !== undefined,
+        maxEvals: cap,
+        shouldStop,
+      });
+      return { config: r.config as unknown as SpaceConfig | null, evaluations: r.evaluations, termination: r.stopped };
+    }
     case "polyhedra": {
       // the search counts simulator steps and polish evaluations; it polls shouldStop at each of them and in the work between them
       const r = searchPolyhedra(getPolyhedraProblem(p.code)!, p.P, {

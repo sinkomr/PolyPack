@@ -42,6 +42,16 @@ export function recordConfig(space: string, id: string): SpaceConfig {
   return r.config;
 }
 
+/** A test packing of the balls space, which has no records (python/balls/fixtures/packings.json). */
+export function ballsTestPacking(id: string): SpaceConfig {
+  const doc = JSON.parse(
+    readFileSync(new URL("../../../python/balls/fixtures/packings.json", import.meta.url), "utf8"),
+  );
+  const p = (doc.packings as { id: string; config: SpaceConfig }[]).find((x) => x.id === id);
+  if (!p) throw new Error(`no test packing ${id}`);
+  return p.config;
+}
+
 /** The configuration at a size `f` times larger, with the same poses (scaled where the space needs it). */
 export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold" | "nofold"): SpaceConfig {
   switch (space) {
@@ -50,6 +60,7 @@ export function enlarged(space: string, c: SpaceConfig, f: number, mode?: "fold"
     case "curved":
       return { ...c, size: (c.size as number) * f };
     case "polyhedra":
+    case "balls":
       return { ...c, s: (c.s as number) * f };
     case "torus": {
       const l = c.lattice as { L?: number; b1?: number[]; b2?: number[] };

@@ -11,6 +11,7 @@ import {
   SiteBest,
   SpaceEntryResponse,
   SpaceName,
+  SpaceCatalogue,
   SpaceProblemEntry,
   SpaceRecordsResponse,
   SpaceSubmitResponse,
@@ -48,11 +49,38 @@ import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
 /** Problems of a space's domain without a record or a site entry that the targets list holds at most. */
 export const SPACE_DOMAIN_TARGETS = 500;
+
+/**
+ * The ids of a space's domain that the targets list offers besides its records: those with site entries (`entered`),
+ * then the first `limit` of the domain's sample that have neither a record nor a site entry. As problems get entries
+ * the sample moves on to the next ones, so every problem of the domain comes up in turn; the list stays bounded by
+ * the records, the entries and `limit`.
+ */
+export function domainTargetIds(cat: SpaceCatalogue, entered: readonly string[], limit: number): string[] {
+  if (!cat.domain) return [];
+  const taken = new Set(cat.byId.keys());
+  const out: string[] = [];
+  for (const id of entered)
+    if (!taken.has(id)) {
+      taken.add(id);
+      out.push(id);
+    }
+  let fresh = 0;
+  for (const id of cat.domain.sample(limit + taken.size)) {
+    if (fresh >= limit) break;
+    if (taken.has(id)) continue;
+    taken.add(id);
+    out.push(id);
+    fresh++;
+  }
+  return out;
+}
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
- * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
- * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25).
+  * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
+  * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
+  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 16,657 targets in all).
  */
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
@@ -304,7 +332,8 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   // research record or a site entry (status no_record) has no best value: it counts with the
   // largest room, g = SPACE_GAP_CAP, and is listed with best_score null and leader "none". A space
   // with a domain lists its records, its problems without a record that have site entries, and at
-  // most SPACE_DOMAIN_TARGETS more of its domain in the order of its sample: never the whole domain.
+  // most SPACE_DOMAIN_TARGETS more of its domain with neither, in the order of its sample (domainTargetIds):
+  // never the whole domain.
   const rank = async (): Promise<SpaceTarget[]> => {
     const leaders = await store.spaceLeaders();
     const site = new Map(leaders.map((l) => [`${l.space} ${l.problem}`, l]));
@@ -314,16 +343,12 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       const cat = index[space]!;
       if (!cat.domain) return cat.problems;
       const list = [...cat.problems];
-      const seen = new Set(cat.byId.keys());
-      const add = (id: string) => {
-        if (seen.has(id)) return;
-        seen.add(id);
+      const entered = leaders.filter((l) => l.space === space).map((l) => l.problem);
+      for (const id of domainTargetIds(cat, entered, SPACE_DOMAIN_TARGETS)) {
         const parsed = parseSpaceId(space, id);
         const p = typeof parsed === "string" ? null : problemOf(cat, parsed);
         if (p) list.push(p);
-      };
-      for (const l of leaders) if (l.space === space) add(l.problem);
-      for (const id of cat.domain.sample(SPACE_DOMAIN_TARGETS)) add(id);
+      }
       return list;
     };
     for (const space of loaded) {

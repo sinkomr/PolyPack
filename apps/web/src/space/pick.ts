@@ -15,6 +15,8 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   // nine balls: without folding one cell must hold two of them, so folding gains much here
   boundary: "boundary/tesseract/ball/9",
   polyhedra: "polyhedra/cubincub/11",
+  // 13 balls: twelve round a thirteenth in a ball of radius 3 (the kissing arrangement)
+  balls: "balls/ballinball/13",
 };
 
 /** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */

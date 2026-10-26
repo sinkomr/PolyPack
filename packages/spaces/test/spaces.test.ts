@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { ALL_SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
@@ -28,6 +29,7 @@ import {
   formatCurvature,
   formatSpaceId,
   parseSpaceId,
+  problemOf,
   spaceProblemSummary,
   storedSpaceConfig,
   validateSpaceSubmission,
@@ -38,8 +40,10 @@ import { CONFIG_CACHE_BYTES, CONFIG_READS_AT_ONCE, configLoader, loadSpacesIndex
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
 const cat = (space: SpaceName) => index[space]!;
+/** A problem: its record, or a problem of the space's domain without one. */
 const problem = (space: SpaceName, id: string): SpaceProblemEntry => {
-  const p = cat(space).byId.get(id);
+  const parsed = parseSpaceId(space, id);
+  const p = typeof parsed === "string" ? null : problemOf(cat(space), parsed);
   if (!p) throw new Error(`${id} is not in the catalogue`);
   return p;
 };
@@ -48,7 +52,7 @@ const configOf = (p: SpaceProblemEntry) =>
 /**
  * The records of a space with their configurations, read as the server reads them (polyhedra
  * configurations on demand). Every polyhedra record up to P = 30 and every tenth above it, since a
- * float check of all 11,286 takes over a minute; the certifier checks every one (POLYHEDRA.md).
+ * float check of all 14,850 takes over a minute; the certifier checks every one (POLYHEDRA.md).
  * Yields to the event loop now and then, so that a long loop does not hold up the test runner.
  */
 async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, unknown]> {
@@ -79,7 +83,8 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 11286);
+    // the balls space has a domain and no records
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 14850);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -122,6 +127,10 @@ describe("problem ids", () => {
       ["torus", "torus/sq/0/2/1"],
       ["boundary", "boundary/tesseract/ball/09"],
       ["boundary", "boundary/tesseract/sphere/9"],
+      ["balls", "balls/ballinball/013"],
+      ["balls", "balls/ballinballs/13"],
+      ["balls", "balls/ballinball"],
+      ["balls", "balls/ballinball/13/1"],
     ];
     for (const [space, id] of bad) expect(typeof parseSpaceId(space, id), id).toBe("string");
     expect(parseSpaceId("curved", "curved/0.000001/0/0/2")).toMatch(/written 1e-06/);
@@ -137,7 +146,8 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 11286 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
+    expect(cat("balls").domain!.info.problems).toBe(693);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -157,6 +167,13 @@ describe("the catalogues", () => {
       "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
     );
     expect(closed("boundary")).toEqual([]);
+    // the balls space has no records yet: every problem is open, without a certified value
+    expect(closed("balls")).toEqual([]);
+    // any problem of its domain is open, without a record and with its bound
+    for (const id of cat("balls").domain!.sample(693)) {
+      const p = problem("balls", id);
+      expect(p.status === "no_record" && p.certified === null && p.bound !== null && acceptsSubmissions(p), id).toBe(true);
+    }
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
       "sphere/0/24",
@@ -183,7 +200,7 @@ describe("the catalogues", () => {
     });
     for (const s of SPACE_NAMES)
       for (const p of cat(s).problems)
-        if (p.status !== "infeasible") {
+        if (p.status !== "infeasible" && p.status !== "no_record") {
           expect(p.bound, p.id).not.toBeNull();
           expect(p.bound!.value).toBeLessThanOrEqual(p.certified!.score);
         }
@@ -226,6 +243,7 @@ describe("the catalogues", () => {
       boundary: [["polytope", BOUNDARY_POLYTOPES], ["piece", ["ball", "cube"]], ["P", null]],
       // polyhedra's fields include a piece, which is not a sort key there
       polyhedra: [["code", PROBLEM_ORDER], ["P", null]],
+      balls: [["code", BALLS_CODES], ["P", null]],
     };
     for (const s of SPACE_NAMES) {
       const rank = (p: SpaceProblemEntry) =>
@@ -249,25 +267,26 @@ describe("the catalogues", () => {
     loadSpacesIndex(root, (m) => logs.push(m));
     // a space with a domain (surface) says how many of its problems have a record
     expect(logs).toEqual(
-      SPACE_NAMES.map((s) =>
-        expect.stringMatching(
-          new RegExp(s === "surface" ? `^\\[spaces\\] surface: a domain of 712800 problems, 2038 with a record` : `^\\[spaces\\] ${s}: \\d+ problems`),
-        ),
-      ),
+      SPACE_NAMES.map((s) => expect.stringMatching(new RegExp(`^\\[spaces\\] ${s}: (a domain of )?\\d+ problems`))),
     );
   });
 
-  it("leave a space out when its records file is missing", () => {
+  it("leave a space out when its records file is missing, unless it has a domain", () => {
     const empty = mkdtempSync(join(tmpdir(), "polypack-spaces-"));
     const logs: string[] = [];
-    // the surface space keeps its domain, with no records
-    const index = loadSpacesIndex(empty, (m) => logs.push(m));
-    expect(Object.keys(index)).toEqual(["surface"]);
-    expect(index.surface!.problems).toEqual([]);
+    const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
+    // the balls and surface spaces have a domain; balls ships no records file at all
+    expect(Object.keys(loaded).sort()).toEqual(["balls", "surface"]);
+    expect(loaded.balls!.problems).toHaveLength(0);
+    expect(loaded.balls!.domain!.info.problems).toBe(693);
+    expect(loaded.surface!.problems).toHaveLength(0);
+    expect(loaded.surface!.domain!.info.problems).toBe(712800);
     expect(logs).toEqual(
       SPACE_NAMES.map((s) =>
-        s === "surface"
-          ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
+        s === "balls"
+          ? "[spaces] balls: a domain of 693 problems, 0 with a record (no records file)"
+          : s === "surface"
+            ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
           : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
       ),
     );
@@ -598,11 +617,36 @@ describe("work limits", () => {
   });
 });
 
+describe("balls submissions", () => {
+  const two = (d: number, s: number) => ({ s, pieces: [[d, 0, 0], [-d, 0, 0]] });
+  it("check balls and solids by the space's rule, and tell malformed input from invalid packings", () => {
+    expect(check("balls", "balls/ballinball/2", two(1, 2)).valid).toBe(true);
+    // an overlap within the touching tolerance passes, a deeper one does not
+    expect(check("balls", "balls/ballinball/2", two(1 - 2e-10, 2)).valid).toBe(true);
+    const v = check("balls", "balls/ballinball/2", two(1 - 2e-9, 2));
+    expect(v).toMatchObject({ valid: false, malformed: false });
+    expect(v.reasons[0]).toMatch(/^pieces 0 and 1 overlap by/);
+    // below the lower bound 2: refused unchecked
+    expect(check("balls", "balls/ballinball/2", two(0.9, 1.9)).reasons[0]).toMatch(/below the lower bound/);
+    expect(check("balls", "balls/ballinball/2", { s: 2, pieces: [[1, 0, 0]] })).toMatchObject({ valid: false, malformed: false });
+    for (const bad of [{ s: 2 }, { s: "2", pieces: [] }, { s: 2, pieces: [[1, 0], [0, 1]] }, { s: 2, pieces: [[1, 0, NaN], [-1, 0, 0]] }])
+      expect(check("balls", "balls/ballinball/2", bad).malformed, JSON.stringify(bad)).toBe(true);
+    // a solid's pose has 7 numbers; extra fields are dropped from the stored configuration
+    const cubes = { s: Math.sqrt(1.5), pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]], extra: 1 };
+    const c = check("balls", "balls/cubinball/2", cubes);
+    expect(c.valid).toBe(true);
+    expect(c.config).toEqual({ s: cubes.s, pieces: cubes.pieces });
+    expect(check("balls", "balls/cubinball/2", { ...cubes, pieces: [[-0.5, 0, 0], [0.5, 0, 0]] }).malformed).toBe(true);
+    expect(validateSpaceSubmission("balls", "balls/ballinball/101", two(1, 2)).malformed).toBe(true);
+  });
+});
+
 describe("space metadata", () => {
   it("names a viewer and the notes on GitHub for every space", () => {
     for (const s of SPACE_NAMES) {
       const i = SPACE_INFO[s];
-      expect(i.viewer).toBe(`/spaces/${s}.html`);
+      // the balls space has no standalone viewer: the board draws its problems
+      expect(i.viewer).toBe(s === "balls" ? "/#space=balls" : `/spaces/${s}.html`);
       expect(i.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/[A-Z_]+\.md$/);
       expect(i.conventions.configuration).toBeTruthy();
       expect(i.conventions.validity).toMatch(/1e-9/);
