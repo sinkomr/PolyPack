@@ -300,5 +300,111 @@ class RandomisedAgainstExact(unittest.TestCase):
         self.assertEqual(agree, 120)
 
 
+PROOF = {
+    "value": 2 * math.sqrt(2),
+    "status": "proven",
+    "short": "Brandt et al. 2019, Thm 1.1",
+    "source": "M. Brandt et al., Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
+    "doi": "10.1016/j.disc.2019.111597",
+    "proof": "Theorem 1.1, region R1_2",
+}
+CERT_SQ02 = 2.8284271247490187  # torus/sq/0/2: 2 sqrt2 (1 + 1e-12)
+
+
+def status_rec(status, literature, score_cert=CERT_SQ02):
+    return {"problem": "torus/sq/0/2", "status": status, "score_cert": score_cert, "literature": literature}
+
+
+class StatusRules(unittest.TestCase):
+    """`proven` only with a published proof of the exact case in the literature (check_status)."""
+
+    def test_best_known_needs_nothing(self):
+        C.check_status(status_rec("best_known", []))
+        C.check_status(status_rec("best_known", None))
+        C.check_status(status_rec("best_known", [dict(PROOF)]))
+
+    def test_proven_with_a_proof_entry(self):
+        C.check_status(status_rec("proven", [dict(PROOF)]))
+        self.assertIs(C.proof_entry([dict(PROOF)], CERT_SQ02)["doi"], PROOF["doi"])
+
+    def test_proven_without_literature_is_rejected(self):
+        for lit in ([], None):
+            with self.assertRaises(C.CertError):
+                C.check_status(status_rec("proven", lit))
+
+    def test_proven_needs_every_part_of_the_entry(self):
+        for drop in ("proof", "doi", "source", "value"):
+            e = dict(PROOF)
+            del e[drop]
+            with self.assertRaises(C.CertError, msg=drop):
+                C.check_status(status_rec("proven", [e]))
+        for field, bad in (
+            ("status", "best_known"),
+            ("status", "proven_unrefereed"),
+            ("status", "conjecture"),
+            ("proof", "   "),
+            ("doi", "doi:10.1016/j.disc.2019.111597"),
+            ("doi", "https://doi.org/10.1016/j.disc.2019.111597"),
+            ("doi", "10.1016"),
+            ("value", float("nan")),
+            ("value", float("inf")),
+            ("value", "2.8284271247461903"),
+            ("value", True),
+            ("value", None),
+        ):
+            e = dict(PROOF, **{field: bad})
+            with self.assertRaises(C.CertError, msg=(field, bad)):
+                C.check_status(status_rec("proven", [e]))
+
+    def test_proven_needs_the_record_to_attain_the_value(self):
+        # 1e-6 above the proven optimum: valid, but not the optimum
+        with self.assertRaises(C.CertError):
+            C.check_status(status_rec("proven", [dict(PROOF)], score_cert=PROOF["value"] * (1 + 1e-6)))
+        # a proof of another case (a smaller optimum) does not make this record proven
+        e = dict(PROOF, value=2.0)
+        with self.assertRaises(C.CertError):
+            C.check_status(status_rec("proven", [e]))
+
+    def test_no_record_below_a_proven_optimum(self):
+        below = PROOF["value"] * (1 - 1e-9)
+        for status in ("best_known", "proven"):
+            with self.assertRaises(C.CertError):
+                C.check_status(status_rec(status, [dict(PROOF)], score_cert=below))
+        # an unrefereed or best-known value may be beaten
+        C.check_status(status_rec("best_known", [dict(PROOF, status="best_known")], score_cert=below))
+
+    def test_unknown_status_and_malformed_literature(self):
+        for status in ("guessed", "infeasible", "", None, 1):
+            with self.assertRaises(C.CertError):
+                C.check_status(status_rec(status, []))
+        for lit in ("Brandt 2019", {"status": "proven"}, [PROOF, "x"]):
+            with self.assertRaises(C.CertError):
+                C.check_status(status_rec("proven", lit))
+        for sc in (float("nan"), -1.0, 0.0, "2.83", None):
+            with self.assertRaises(C.CertError):
+                C.check_status(status_rec("best_known", [], score_cert=sc))
+
+    def test_the_records_file(self):
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "torus", "records.json")
+        if not os.path.exists(path):
+            self.skipTest("no records file")
+        import json
+
+        with open(path) as f:
+            records = json.load(f)["records"]
+        for r in records:
+            C.check_status(r)
+        proven = sorted(r["problem"] for r in records if r["status"] == "proven")
+        loeschian = sorted({a * a + a * b + b * b for a in range(8) for b in range(8)} - {0})
+        sums = sorted({a * a + b * b for a in range(8) for b in range(8)} - {0})
+        expected = (
+            ["torus/sq/0/%d" % P for P in (2, 3, 4, 6, 7, 8)]
+            + ["torus/hex/0/%d" % P for P in [2] + [n for n in loeschian if n <= 49]]
+            + ["torus/sq/4/%d" % P for P in sums if P <= 49]
+        )
+        self.assertEqual(proven, sorted(expected))
+        self.assertEqual(len(proven), 50)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

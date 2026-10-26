@@ -109,7 +109,7 @@ read alone.
 | `bound` | the volume bound |
 | `found_by`, `credit`, `lineage`, `certificate_refined_by`, `method` | upstream's fields, kept (standard credit and method strings of a family are given once in `sources.wiki`) |
 | `sources`, `source` | the sources the geometry rests on (keys of the file's `sources` table) and a citation sentence |
-| `origin` | the file the configuration comes from (upstream's `records/...` at `cbf76f2f`, or a PolyPack file) |
+| `origin` | the file the configuration comes from (upstream's `records/...` at `cbf76f2f`, or a PolyPack file); for a PolyPack search also `start`, the packing it started from (none for a start from random positions), and for a search of the compute study `runs`, its runs from that start, as its run logs show them |
 | `wiki` | the wiki's record of the case: its s_full and page |
 | `literature` | published values without coordinates (value, source, link, printed precision) |
 | `notes` | modification notices (Apache-2.0 data) and remarks |
@@ -162,9 +162,9 @@ published values without coordinates:
 
 | source | terms | records with coordinates | values without coordinates |
 |---|---|---|---|
-| the wiki (alejandrozu/platonic-packing) | MIT | 7,840 rest on its files (all but the 674 purely PolyPack ones) | - |
-| community submissions (PingYou Ltd, konoha-ily2, Stian) | MIT, by the submission form | 2,308 | - |
-| Berthold, Kamp, Mexi, Pokutta, Polik 2026, arXiv:2605.04850, supplement `DominikKamp/Packing` at `27f71632` | no licence stated; used with citation | 964: 661 as the wiki stores them (130 their packings, 116 their n + 1 packing less a piece, 415 searched further by upstream from them) and 303 improved by PolyPack from them | 667 |
+| the wiki (alejandrozu/platonic-packing) | MIT | 7,834 rest on its files (all but the 680 purely PolyPack ones) | - |
+| community submissions (PingYou Ltd, konoha-ily2, Stian) | MIT, by the submission form | 2,312 | - |
+| Berthold, Kamp, Mexi, Pokutta, Polik 2026, arXiv:2605.04850, supplement `DominikKamp/Packing` at `27f71632` | no licence stated; used with citation | 954: 661 as the wiki stores them (130 their packings, 116 their n + 1 packing less a piece, 415 searched further by upstream from them) and 293 improved by PolyPack from them | 667 |
 | Hyra-results (Haowei Lin, Tencent Hunyuan) at `09b2d2e3` | Apache-2.0, `LICENSES/Apache-2.0.txt`; modified (see notes) | 6 (cubes P = 11; octahedra in a cube P = 19, 20, 21, 24, 25; P = 21 improved by PolyPack) | 6 |
 | hyra-packing-audit (Sam Scott) at `c107fda3` | MIT, with a NOTICE (quoted) | 0 | 3 |
 | konoha-ily2, upstream issue #1 | no licence stated; used with citation | 1 (cubes P = 28; its P = 34 to 36 are not smaller than Ryan Xu's) | 2 |
@@ -172,10 +172,17 @@ published values without coordinates:
 | soft-to-rigid-packing (Yohei Nakajima) at `efe7a920` | MIT | 0 (the wiki's record is smaller) | 1 |
 | square_packing (Ryan Xu) at `9535d65d` | no licence stated; used with citation | 3 (cubes in a cube, P = 34 to 36) | 3 |
 | Erich Friedman's Packing Center (values by Friedman, Ríain Walsh, Lin) | values cited; no images copied | 1 (cubes P = 33: Friedman's construction, coordinates made by upstream) | 54 (Walsh 24, trivial grids 20, Friedman 10) |
-| PolyPack research | MIT | 1,004 (674 of them rest on nothing else) | - |
+| PolyPack research | MIT | 1,004 (680 of them rest on nothing else) | - |
 
 Lineage follows upstream's own `found_by`, `credit` and `search.lineage` fields, which its engine passes on
-through every move (a packing found from a Kamp packing keeps "search started from the packing of ..."). A
+through every move (a packing found from a Kamp packing keeps "search started from the packing of ..."). PolyPack's
+own records name what their searches started from: a sweep search the packing it was given (`origin.start`), a
+search of the compute study of 2026-10-23 the start its run logs show (`origin.start`, `origin.runs`): of the 24
+records from the study's searches, 20 go back to an upstream record, 3 to random starts and 1 to an FCC cut
+[CALC]. Until 2026-10-25 the study's searches were taken to start from the upstream record of their own P, which
+was wrong for 10 records: cubintet P = 18-20 and icointet P = 42-43 go back to random starts, icointet P = 59 from
+the 56-piece FCC cut, and cubintet P = 41-44 from PingYou Ltd's packing for P = 40 with cubes inserted, none of
+them from Kamp et al. A
 composition of two packings records the lineage of one of them only. Up to P = 30, 12 records are compositions;
 in each, one component is a single piece (upstream's one-piece fits, its own), so the recorded lineage is
 complete: 4 rest on Kamp et al. and cite them, 8 have none [CALC]. The records of P = 31 to 100 were not checked
@@ -346,7 +353,7 @@ than 1 %, 530 by more than 5 %). Up to P = 30, 330 records (median 0.58 %, 116 b
 | `pr3incub` | 1 | 8-8 | 2.88 % | 2.88 % (P = 8: 1.921405 to 1.866026) | search from the record |
 | `pr5l2incub` | 1 | 5-5 | 1.99 % | 1.99 % (P = 5: 3.393394 to 3.325841) | compute-study search |
 
-The gains are largest where the search started from a packing of Berthold, Kamp et al. (296 records): pieces
+The gains are largest where the search started from a packing of Berthold, Kamp et al. (293 records): pieces
 other than the container's solid, mostly tetrahedra, with P >= 7. There the wiki's record was their published
 packing itself, which the wiki's search had not improved. The first six problems (the five self-packings and
 cubes in an octahedron) gave only 2 small gains [CALC]. The Archimedean, Catalan and prism records were not

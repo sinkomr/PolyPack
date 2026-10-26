@@ -17,7 +17,7 @@
     "test": "vitest run",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "e2e": "playwright test",
-    "test:python": "python3 python/test_corpus.py && python3 python/test_spaces.py"
+    "test:python": "python3 python/test_corpus.py && python3 python/test_spaces.py && python3 python/test_circle_floor.py"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

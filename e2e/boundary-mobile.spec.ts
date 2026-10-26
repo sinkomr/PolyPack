@@ -1,5 +1,5 @@
 import { type Page, expect, test } from "@playwright/test";
-import { pageErrors } from "./helpers";
+import { LAZY_VIEW, pageErrors } from "./helpers";
 
 // 3D on 4D at phone width (390 px): the board stacks its stage above the panel, and the 3D
 // drawing gets a square of its own under its controls (style.css, data-dimension="3-on-4").
@@ -29,7 +29,7 @@ test("phone: 3D on 4D on the board gets a square drawing, its controls fit, and 
   await page.goto("/#space=boundary/tesseract/ball/9");
   await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/ball/9");
   const canvas = page.locator(".pp3 canvas");
-  await expect(canvas).toBeVisible();
+  await expect(canvas).toBeVisible(LAZY_VIEW);
   expect(await overflow(page)).toBeLessThanOrEqual(1);
   const box = (await canvas.boundingBox())!;
   // as tall as the screen is wide, at full width
