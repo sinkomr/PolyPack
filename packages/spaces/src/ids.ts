@@ -11,6 +11,8 @@
  *  - torus/<family>/<N>/<P>            e.g. torus/hex/5/8
  *  - boundary/<polytope>/<piece>/<P>   e.g. boundary/tesseract/ball/9
  *  - polyhedra/<code>/<P>              e.g. polyhedra/cubintet/12 (code: the wiki's <piece>in<container>)
+ *  - balls/<code>/<P>                  e.g. balls/ballinball/13 (code <piece>in<container>: piece ball or a
+ *                                      Platonic solid, container ball or cub)
  *
  * An id is accepted only in its one written form (no leading zeros, no "+", K written as the
  * research records write it), so that every problem has exactly one id.
@@ -18,6 +20,7 @@
 import { PIECES, POLYTOPES, parseBoundaryId } from "@polypack/boundary";
 import type { PieceName, PolytopeName } from "@polypack/boundary";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
+import { BALLS_CODES, parseBallsId } from "@polypack/balls/catalogue";
 import { SpaceName, isSpaceName } from "./types";
 
 /** The solids of the surface space, in the order the catalogue lists them. */
@@ -32,7 +35,7 @@ export const BOUNDARY_PIECES: readonly PieceName[] = PIECES;
 export interface ParsedSpaceId {
   space: SpaceName;
   id: string;
-  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P}; polyhedra {code, piece, container, P} */
+  /** surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P}; boundary {polytope, piece, P}; polyhedra and balls {code, piece, container, P} */
   fields: Record<string, string | number>;
   P: number;
 }
@@ -141,6 +144,13 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       if (!problem || P === null) return bad(pattern);
       return { space, id, fields: { code: problem.code, piece: problem.piece, container: problem.container, P }, P };
     }
+    case "balls": {
+      const pattern = `balls/<code>/<P>, code one of ${BALLS_CODES.join(", ")}`;
+      const parsed = parseBallsId(id);
+      if (typeof parsed === "string") return bad(pattern);
+      const { problem, P } = parsed;
+      return { space, id, fields: { code: problem.code, piece: problem.piece, container: problem.container, P }, P };
+    }
   }
 }
 
@@ -166,5 +176,7 @@ export function formatSpaceId(space: SpaceName, fields: Record<string, string | 
       return `boundary/${fields.polytope}/${fields.piece}/${fields.P}`;
     case "polyhedra":
       return `polyhedra/${fields.code}/${fields.P}`;
+    case "balls":
+      return `balls/${fields.code}/${fields.P}`;
   }
 }

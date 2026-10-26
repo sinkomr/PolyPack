@@ -3,12 +3,13 @@
  * site needs, one compact entry per problem, with the configuration kept as JSON text. Pure: the
  * caller reads the file (see load.ts) and passes the parsed JSON, which can then be dropped.
  *
- * A space whose records file keeps the configurations apart (polyhedra: data/polyhedra/configs/
+ * A space whose records file keeps the configurations apart (polyhedra and balls: data/<space>/configs/
  * <code>.jsonl, one file per problem, one line per P, which each record's `config_at` locates)
  * has entries without configuration text (`configApart`, `configAt`); load.ts then gives the
  * catalogue a `loadConfig` that reads one on demand.
  */
 import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
 import {
   BOUNDARY_PIECES,
   BOUNDARY_POLYTOPES,
@@ -73,7 +74,7 @@ export async function entryConfig(cat: SpaceCatalogue, entry: SpaceProblemEntry)
 
 /**
  * Where a configuration kept apart lives: the file configs/<file>.jsonl below the space's data
- * folder, and the byte offset and length of its line there. For polyhedra the file is the
+ * folder, and the byte offset and length of its line there. For polyhedra and balls the file is the
  * problem's code. The file name comes from a catalogue entry (a known code), never from a request.
  */
 export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "configAt">): {
@@ -89,7 +90,7 @@ export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "
 export const CONFIG_LINE_MAX = 1_000_000;
 
 /** Spaces whose records file may keep the configurations apart. */
-const CONFIGS_APART: readonly SpaceName[] = ["polyhedra"];
+const CONFIGS_APART: readonly SpaceName[] = ["polyhedra", "balls"];
 
 /** The loaded catalogues; a space whose records file is missing is absent. */
 export type SpacesIndex = Partial<Record<SpaceName, SpaceCatalogue>>;
@@ -109,6 +110,7 @@ function recordConfig(space: SpaceName, r: Rec): unknown {
     case "torus":
       return r.configuration;
     case "polyhedra":
+    case "balls":
       return r.config;
   }
 }
@@ -127,6 +129,7 @@ function recordFields(space: SpaceName, r: Rec): Record<string, unknown> {
     case "boundary":
       return { polytope: r.polytope, piece: r.piece, P: r.P };
     case "polyhedra":
+    case "balls":
       return { code: r.code, piece: r.piece, container: r.container, P: r.P };
   }
 }
@@ -155,7 +158,7 @@ function boundOf(space: SpaceName, b: unknown): { value: number; label: string }
   const kind = typeof b.kind === "string" ? b.kind.replace(/[-_]/g, " ") : "";
   // surface and curved labels carry only the kind of claim ([CALC], rigorous); their `kind` says
   // which bound it is: one word ("area", "one piece") or a sentence of its own
-  if ((space === "surface" || space === "curved" || space === "polyhedra") && kind) {
+  if ((space === "surface" || space === "curved" || space === "polyhedra" || space === "balls") && kind) {
     const what = /^[a-z]+( piece)?$/.test(kind) ? `${kind} bound` : kind;
     return { value, label: label ? `${what}; ${label}` : what };
   }
@@ -191,6 +194,7 @@ const ORDER: Partial<Record<SpaceName, Record<string, readonly string[]>>> = {
   torus: { family: TORUS_FAMILIES },
   boundary: { polytope: BOUNDARY_POLYTOPES, piece: BOUNDARY_PIECES },
   polyhedra: { code: PROBLEM_CODES },
+  balls: { code: BALLS_CODES },
 };
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
@@ -200,6 +204,7 @@ const SORT_KEYS: Record<SpaceName, string[]> = {
   torus: ["family", "N", "P"],
   boundary: ["polytope", "piece", "P"],
   polyhedra: ["code", "P"],
+  balls: ["code", "P"],
 };
 
 export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry): number {

@@ -3,6 +3,7 @@
  * loaded catalogue. Pure data.
  */
 import { MAX_S } from "@polypack/boundary";
+import { BALLS_MAX_COORD, BALLS_MAX_SIZE } from "@polypack/balls";
 import { SCORE_TIE } from "@polypack/geometry";
 import {
   POLYHEDRA_MAX_COORD,
@@ -42,7 +43,9 @@ export const BOUNDARY_MAX_S = MAX_S;
  * Relative margin by which an entry must beat a space's research record (score < certified (1 - margin)) to count
  * as better than it. The tie tolerance, except for polyhedra: its records keep the wiki's clearance of up to 1e-7
  * between pieces and from the walls (up to 2.6e-7 of s where the touching limit is known), and removing that
- * clearance is not a better packing. Site entries still compete with each other by the tie tolerance.
+ * clearance is not a better packing. Site entries still compete with each other by the tie tolerance. The balls
+ * space's records keep a clearance of only 1e-10 (exact rational and interval certificates need no float slack),
+ * which costs about 5e-11 of s relative, so the tie tolerance serves as its margin.
  */
 export const SPACE_RECORD_MARGIN: Record<SpaceName, number> = {
   surface: SCORE_TIE,
@@ -51,6 +54,7 @@ export const SPACE_RECORD_MARGIN: Record<SpaceName, number> = {
   torus: SCORE_TIE,
   boundary: SCORE_TIE,
   polyhedra: POLYHEDRA_RECORD_MARGIN,
+  balls: SCORE_TIE,
 };
 
 /** Largest absolute value of a polyhedra quaternion component (only its direction matters; see the polyhedra package). */
@@ -220,6 +224,33 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
     },
     viewer: "/spaces/polyhedra.html",
     docs: spaceDocsUrl("POLYHEDRA.md"),
+  },
+  balls: {
+    space: "balls",
+    title: "Balls",
+    summary:
+      "3D in 3D: unit balls packed in the smallest ball or cube, and unit-edge Platonic solids packed in the smallest ball. These are the classic sphere-packing problems of Packomania, and the same solids as the polyhedra space in a round container.",
+    score: "the container's size s: the radius of the container ball, or the edge of the cube; smaller is better",
+    problem_id: "balls/<code>/<P>",
+    conventions: {
+      problems:
+        "code is <piece>in<container>: ballinball (balls in a ball), ballincub (balls in a cube), and tetinball, cubinball, octinball, dodinball, icoinball (tetrahedra, cubes, octahedra, dodecahedra, icosahedra in a ball); P from 2 to 100",
+      units:
+        "balls have radius 1; the Platonic solids are the polyhedra space's canonical solids, of edge 1, centred at the origin",
+      container:
+        "the ball of radius s about the origin, or the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes",
+      pose: `a ball is its centre [x, y, z]; a solid is [x, y, z, qw, qx, qy, qz]: the canonical solid turned by the rotation of q / |q| (v -> q v q*) and centred at (x, y, z); x, y and z at most ${BALLS_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM.toExponential()}`,
+      configuration: `{s, pieces: [...]} with P pieces; s positive and at most ${BALLS_MAX_SIZE}`,
+      score: "s; smaller is better",
+      validity:
+        VALIDITY +
+        "; two balls overlap by 2 minus the distance of their centres, a ball sticks out of a ball by |c| + 1 - s and of a cube by |c_k| + 1 - s/2; a solid sticks out of the ball by the largest vertex distance minus s, and two solids overlap by their penetration depth (the polyhedra space's separating-axis test)",
+      scoring: SCORING,
+      improvement: IMPROVEMENT,
+    },
+    // no standalone viewer: the board draws every problem (#space=balls opens its first one)
+    viewer: "/#space=balls",
+    docs: spaceDocsUrl("BALLS.md"),
   },
 };
 

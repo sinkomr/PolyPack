@@ -40,6 +40,7 @@ import {
   validatePolyhedra,
   validatePolyhedraAsync,
 } from "@polypack/polyhedra";
+import { type BallsConfig, getBallsProblem, ballsConfigErrors, validateBalls } from "@polypack/balls";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
   BOUNDARY_MAX_CHAINS,
@@ -66,6 +67,8 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   torus: 49,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
+  // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
+  balls: 100,
 };
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
@@ -327,7 +330,22 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
       const r = parsePolyhedraConfig(raw, id.P, MAX_REASONS);
       return r.ok ? { ok: true, config: r.config as unknown as SpaceConfig, score: r.score } : r;
     }
+    case "balls":
+      return parseBalls(raw, id);
   }
+}
+
+/** A balls configuration: errors of form are malformed input, except a wrong number of pieces. */
+function parseBalls(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<SpaceConfig> {
+  const problem = getBallsProblem(String(id.fields.code));
+  if (!problem) return { ok: false, malformed: true, errors: [`unknown balls problem ${String(id.fields.code)}`] };
+  const errors = ballsConfigErrors(problem, raw, undefined, MAX_REASONS);
+  if (errors.length) return { ok: false, malformed: true, errors };
+  const list = piecesOf(raw, "pieces", id.P);
+  if (!Array.isArray(list)) return list;
+  const width = problem.piece === "ball" ? 3 : 7;
+  const pieces = (raw.pieces as number[][]).map((p) => p.slice(0, width));
+  return { ok: true, config: { s: raw.s as number, pieces }, score: raw.s as number };
 }
 
 /** Reasons from a validator, at most MAX_REASONS, with a fallback when it gave none. */
@@ -426,6 +444,12 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
       const problem = getPolyhedraProblem(f.code as string);
       if (!problem) return [`unknown polyhedra problem ${String(f.code)}`];
       const v = validatePolyhedra(problem, config as unknown as PolyhedraConfig, { tol, maxErrors: MAX_REASONS });
+      return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
+    }
+    case "balls": {
+      const problem = getBallsProblem(String(f.code));
+      if (!problem) return [`unknown balls problem ${String(f.code)}`];
+      const v = validateBalls(problem, config as unknown as BallsConfig, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
     }
   }
