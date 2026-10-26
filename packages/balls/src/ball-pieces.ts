@@ -8,8 +8,8 @@
  *   s + mu [ sum_{i<j} (2 + g - |c_i - c_j|)_+^2 + sum_i W_i ],
  *   W_i = (|c_i| - (s - 1 - w))_+^2 (ball), or sum_k (|c_ik| - (s/2 - 1 - w))_+^2 (cube),
  *
- * by L-BFGS from the previous stage's minimiser (g: pair clearance, w: wall clearance). Every pair enters the sum;
- * a pair farther apart than 2 + g contributes nothing, so P <= 100 costs about 5,000 distance tests an evaluation.
+ * by L-BFGS from the previous stage's minimiser (g: pair clearance, w: wall clearance). A pair farther apart than
+ * 2 + g contributes nothing; the pairs are read from a Verlet list (objective), which gives the same function.
  *
  * Legalization. The penalty leaves overlaps of about 1/mu. For a cube the centres are first translated so that
  * their bounding box is centred at the origin. Then, if the smallest centre distance d is below 2 + g, every
@@ -22,8 +22,8 @@
  * close-packed, turned and shifted at random; for a cube also the axis-aligned simple cubic and face-centred cubic
  * lattices): the P lattice points nearest the centre in the container's norm.
  *
- * Hops, from the best so far: move one to three balls to random places, shake every ball by a small normal step,
- * or (one in ten) a new start; each in a container 0.5 to 4 % larger, then polished and legalized. A smaller
+ * Hops, from the best so far: move one to three balls to random places, move one or two of the loosest balls into
+ * the largest holes found by sampling, shake every ball by a small normal step, or (one in ten) a new start; each in a container 0.5 to 4 % larger, then polished and legalized. A smaller
  * result replaces the best.
  */
 import { StopSearch, lbfgs } from "@polypack/polyhedra";
@@ -47,11 +47,50 @@ type Vec3 = [number, number, number];
 /** Penalty weights of a full polish. */
 export const BALL_MUS = [1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10];
 
-/** The objective of one stage on z = [s, x0, y0, z0, x1, ...]; returns f and fills grad. */
+/** Width of the margin of the pair list: pairs within 2 + g + SKIN of each other when it is made. */
+const SKIN = 0.5;
+
+/**
+ * The objective of one stage on z = [s, x0, y0, z0, x1, ...]; returns f and fills grad.
+ *
+ * The pairs are taken from a list of those within 2 + g + SKIN, made again whenever a ball has moved SKIN / 2 or
+ * more since (a Verlet list): a pair left out is then farther apart than 2 + g and contributes nothing, so the
+ * function is the sum over all pairs, evaluated in the same order with the same rounding, at a cost of about the
+ * dozen neighbours of each ball instead of all P - 1.
+ */
 function objective(cube: boolean, n: number, mu: number, g: number, w: number, tick: () => void) {
   const lim2 = (2 + g) * (2 + g);
+  const ref = new Float64Array(3 * n);
+  let pairs = new Int32Array(0);
+  let count = 0;
+  let made = false;
+  // a little under SKIN / 2, so that rounding never lets a pair in reach that was left out
+  const move2 = (0.499 * SKIN) ** 2;
+  const reach2 = (2 + g + SKIN) ** 2;
+  const relist = (z: Float64Array) => {
+    const list: number[] = [];
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) {
+        const dx = z[1 + 3 * i] - z[1 + 3 * j];
+        const dy = z[2 + 3 * i] - z[2 + 3 * j];
+        const dz = z[3 + 3 * i] - z[3 + 3 * j];
+        if (dx * dx + dy * dy + dz * dz < reach2) list.push(i, j);
+      }
+    pairs = Int32Array.from(list);
+    count = list.length / 2;
+    ref.set(z.subarray(1, 1 + 3 * n));
+    made = true;
+  };
   return (z: Float64Array, grad: Float64Array): number => {
     tick();
+    let stale = !made;
+    for (let i = 0; i < n && !stale; i++) {
+      const dx = z[1 + 3 * i] - ref[3 * i];
+      const dy = z[2 + 3 * i] - ref[3 * i + 1];
+      const dz = z[3 + 3 * i] - ref[3 * i + 2];
+      if (!(dx * dx + dy * dy + dz * dz < move2)) stale = true;
+    }
+    if (stale) relist(z);
     grad.fill(0);
     const s = z[0];
     let pen = 0;
@@ -84,28 +123,25 @@ function objective(cube: boolean, n: number, mu: number, g: number, w: number, t
         gs -= 2 * mu * viol;
       }
     }
-    for (let i = 0; i < n; i++) {
-      const ax = z[1 + 3 * i];
-      const ay = z[2 + 3 * i];
-      const az = z[3 + 3 * i];
-      for (let j = i + 1; j < n; j++) {
-        const dx = ax - z[1 + 3 * j];
-        const dy = ay - z[2 + 3 * j];
-        const dz = az - z[3 + 3 * j];
-        const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 >= lim2) continue;
-        const d = Math.sqrt(d2);
-        const viol = 2 + g - d;
-        pen += viol * viol;
-        if (d === 0) continue;
-        const c = (2 * mu * viol) / d;
-        grad[1 + 3 * i] -= c * dx;
-        grad[2 + 3 * i] -= c * dy;
-        grad[3 + 3 * i] -= c * dz;
-        grad[1 + 3 * j] += c * dx;
-        grad[2 + 3 * j] += c * dy;
-        grad[3 + 3 * j] += c * dz;
-      }
+    for (let p = 0; p < count; p++) {
+      const i = pairs[2 * p];
+      const j = pairs[2 * p + 1];
+      const dx = z[1 + 3 * i] - z[1 + 3 * j];
+      const dy = z[2 + 3 * i] - z[2 + 3 * j];
+      const dz = z[3 + 3 * i] - z[3 + 3 * j];
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= lim2) continue;
+      const d = Math.sqrt(d2);
+      const viol = 2 + g - d;
+      pen += viol * viol;
+      if (d === 0) continue;
+      const c = (2 * mu * viol) / d;
+      grad[1 + 3 * i] -= c * dx;
+      grad[2 + 3 * i] -= c * dy;
+      grad[3 + 3 * i] -= c * dz;
+      grad[1 + 3 * j] += c * dx;
+      grad[2 + 3 * j] += c * dy;
+      grad[3 + 3 * j] += c * dz;
     }
     grad[0] = 1 + gs;
     return s + mu * pen;
@@ -274,28 +310,57 @@ export function freshStart(problem: BallsProblem, P: number, rng: Rng, g: number
   return legalizeBalls(problem, c, g, g);
 }
 
-/** A hop from a configuration (file comment). */
-export function hopBalls(problem: BallsProblem, b: BallsConfig, rng: Rng): BallsConfig {
+/**
+ * A hop from a configuration (file comment). `hops` "holes" (the default) also moves the loosest balls into the
+ * largest holes found by sampling; "plain" is the hop of the first compute sweep (random places or a shake only).
+ */
+export function hopBalls(problem: BallsProblem, b: BallsConfig, rng: Rng, hops: "holes" | "plain" = "holes"): BallsConfig {
   const P = b.pieces.length;
   const cube = problem.container === "cube";
   const e = 1 + 0.005 + 0.035 * rng();
   const s = b.s * e;
   const pieces = b.pieces.map((p): Vec3 => [p[0] * e, p[1] * e, p[2] * e]);
   const r = rng();
-  if (r < 0.55) {
+  const somewhere = (): Vec3 => {
+    if (cube) {
+      const h = Math.max(0, s / 2 - 1);
+      return [h * (2 * rng() - 1), h * (2 * rng() - 1), h * (2 * rng() - 1)];
+    }
+    const rr = Math.max(0, s - 1) * Math.cbrt(rng());
+    const u = 2 * rng() - 1;
+    const phi = 2 * Math.PI * rng();
+    const q = Math.sqrt(1 - u * u);
+    return [rr * q * Math.cos(phi), rr * q * Math.sin(phi), rr * u];
+  };
+  if (hops === "plain" ? r < 0.55 : r < 0.4 || P < 3) {
     const k = 1 + Math.floor(rng() * Math.min(3, P));
+    for (let t = 0; t < k; t++) pieces[Math.floor(rng() * P)] = somewhere();
+  } else if (r < 0.7 && hops === "holes") {
+    // into holes: one or two of the loosest balls (fewest neighbours within 2.1, ties at random) each go to the
+    // best of 64 random places, the one farthest from every other centre
+    const near = pieces.map((p, i) => {
+      let m = 0;
+      for (let j = 0; j < P; j++)
+        if (j !== i && Math.hypot(p[0] - pieces[j][0], p[1] - pieces[j][1], p[2] - pieces[j][2]) < 2.1 * e) m++;
+      return { i, key: m + rng() };
+    });
+    near.sort((a, b) => a.key - b.key);
+    const k = 1 + Math.floor(rng() * 2);
     for (let t = 0; t < k; t++) {
-      const i = Math.floor(rng() * P);
-      if (cube) {
-        const h = Math.max(0, s / 2 - 1);
-        pieces[i] = [h * (2 * rng() - 1), h * (2 * rng() - 1), h * (2 * rng() - 1)];
-      } else {
-        const rr = Math.max(0, s - 1) * Math.cbrt(rng());
-        const u = 2 * rng() - 1;
-        const phi = 2 * Math.PI * rng();
-        const q = Math.sqrt(1 - u * u);
-        pieces[i] = [rr * q * Math.cos(phi), rr * q * Math.sin(phi), rr * u];
+      const i = near[t].i;
+      let best: Vec3 = pieces[i];
+      let far = -Infinity;
+      for (let n = 0; n < 64; n++) {
+        const x = somewhere();
+        let d = Infinity;
+        for (let j = 0; j < P; j++)
+          if (j !== i) d = Math.min(d, Math.hypot(x[0] - pieces[j][0], x[1] - pieces[j][1], x[2] - pieces[j][2]));
+        if (d > far) {
+          far = d;
+          best = x;
+        }
       }
+      pieces[i] = best;
     }
   } else {
     const sigma = 0.02 + 0.25 * rng() * rng();

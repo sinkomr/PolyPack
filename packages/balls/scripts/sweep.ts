@@ -40,6 +40,8 @@ interface Round {
   seed: number;
   evals: number;
   start: "fresh" | "previous";
+  /** The balls' hops of searchBalls; absent in the first sweep's rounds, which used "plain". */
+  hops?: "holes";
 }
 interface Row {
   code: string;
@@ -81,8 +83,9 @@ for (let P = p0; P <= p1; P++)
         seed,
         maxEvals: evals,
         ...(fresh ? {} : { start: best!.config, startPolished: true }),
+        hops: "holes",
       });
-      const round: Round = { seed, evals, start: fresh ? "fresh" : "previous" };
+      const round: Round = { seed, evals, start: fresh ? "fresh" : "previous", hops: "holes" };
       const chain = fresh ? [round] : [...best!.chain, round];
       if (r.config && validateBalls(problem, r.config, { tol: 0 }).valid && (!best || r.score < best.score * (1 - 1e-13))) {
         best = { score: r.score, config: r.config, chain };

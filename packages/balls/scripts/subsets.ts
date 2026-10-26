@@ -73,11 +73,11 @@ for (const code of codes) {
       const remove = t < 2 ? order[t].i : mix(base, mix(P, t)) % (P + 1);
       const start: BallsConfig = { s: up.config.s, pieces: up.config.pieces.filter((_, i) => i !== remove) };
       const seed = mix(base, mix(P * 977 + codes.indexOf(code), t));
-      const r = searchBalls(problem, P, { seed, maxEvals: evals, start });
+      const r = searchBalls(problem, P, { seed, maxEvals: evals, start, hops: "holes" });
       const cur = best.get(P);
       if (r.config && validateBalls(problem, r.config, { tol: 0 }).valid && (!cur || r.score < cur.score * (1 - 1e-13))) {
         // a round from the P + 1 packing less piece `remove`, polished first (not startPolished)
-        const chain: Step[] = [...up.chain, { seed, evals, start: "subset", remove }];
+        const chain: Step[] = [...up.chain, { seed, evals, start: "subset", remove, hops: "holes" }];
         const row: Row = { code, P, score: r.score, config: r.config, chain, at: new Date().toISOString() };
         best.set(P, row);
         appendFileSync(join(out, `${code}.jsonl`), JSON.stringify(row) + "\n");

@@ -48,6 +48,11 @@ export interface BallsSearchOptions {
   log?: (message: string) => void;
   /** Clearance between pieces and from the container; default BALLS_CLEARANCE. */
   clearance?: number;
+  /**
+   * The balls' hops: "holes" (default) also moves the loosest balls into the largest holes; "plain", the hops of the
+   * first compute sweep of 2026-10-25, only random places and shakes (its rounds are replayed with it).
+   */
+  hops?: "holes" | "plain";
 }
 
 export interface BallsSearchResult {
@@ -148,7 +153,7 @@ export function searchBalls(problem: BallsProblem, P: number, o: BallsSearchOpti
       const b: BallsConfig = best;
       hops++;
       const restart = P > 1 && rng() < 0.1;
-      const cand = restart ? fresh() : balls ? hopBalls(problem, b, rng) : hopSolids(problem, b, rng);
+      const cand = restart ? fresh() : balls ? hopBalls(problem, b, rng, o.hops ?? "holes") : hopSolids(problem, b, rng);
       const improved = tryPolish(cand, restart ? "new start" : "hop");
       o.onProgress?.({ score: (best as BallsConfig).s, evaluations, hops, improved });
     }
