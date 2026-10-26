@@ -1,6 +1,6 @@
-import { boundingRadius, inradius, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
-import { SurfacePose, pieceParts } from "../parts";
+import { HalfPlanes, SurfacePose, partSeparation, pieceParts } from "../parts";
 import { apply, glue } from "../rigid";
 import { Solid, faceApothem, frameVertex } from "../solids";
 
@@ -60,13 +60,15 @@ export function canonicalize(solid: Solid, s: number, p: SurfacePose): SurfacePo
 interface PartRec {
   piece: number;
   poly: Float64Array;
+  /** the half-planes the part was cut from (parts.ts Part.cuts), the separating axes */
+  cuts: HalfPlanes;
   minx: number;
   miny: number;
   maxx: number;
   maxy: number;
 }
 
-function bbox(piece: number, poly: Float64Array): PartRec {
+function bbox(piece: number, poly: Float64Array, cuts: HalfPlanes): PartRec {
   let minx = Infinity;
   let miny = Infinity;
   let maxx = -Infinity;
@@ -77,7 +79,7 @@ function bbox(piece: number, poly: Float64Array): PartRec {
     if (poly[i + 1] < miny) miny = poly[i + 1];
     if (poly[i + 1] > maxy) maxy = poly[i + 1];
   }
-  return { piece, poly, minx, miny, maxx, maxy };
+  return { piece, poly, cuts, minx, miny, maxx, maxy };
 }
 
 /**
@@ -152,7 +154,7 @@ export class PolygonEnergy {
     const faces: number[] = [];
     for (const part of parts)
       if (part.poly.length >= 6) {
-        recs.push(bbox(i, part.poly));
+        recs.push(bbox(i, part.poly, part.cuts));
         faces.push(part.face);
       }
     return { recs, faces, cone: coneEnergy(this.solid, this.s, this.N, pose, nodes, this.lam) };
@@ -174,7 +176,7 @@ export class PolygonEnergy {
 
   private static pen(a: PartRec, b: PartRec): number {
     if (a.maxx < b.minx || b.maxx < a.minx || a.maxy < b.miny || b.maxy < a.miny) return 0;
-    const sep = polygonSeparation(a.poly, b.poly).sep;
+    const sep = partSeparation(a, b);
     return sep < 0 ? sep * sep : 0;
   }
 

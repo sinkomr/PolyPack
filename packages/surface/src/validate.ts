@@ -1,6 +1,6 @@
-import { TOL, inradius, pieceSeparation, pieceVertices, polygonSeparation } from "@polypack/geometry";
+import { TOL, inradius, pieceSeparation, pieceVertices } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "./chains";
-import { Part, SurfacePose, pieceChains, pieceParts } from "./parts";
+import { Part, SurfacePose, partSeparation, pieceChains, pieceParts } from "./parts";
 import { apply } from "./rigid";
 import { Solid, SolidName, faceApothem, frameVertex, getSolid, isSolidName } from "./solids";
 
@@ -224,7 +224,8 @@ export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Va
       for (let b = a + 1; b < list.length; b++) {
         const A = list[a];
         const B = list[b];
-        const sep = polygonSeparation(A.poly, B.poly).sep;
+        // axes from the half-planes the parts were cut from, not from their clipped sides (parts.ts)
+        const sep = partSeparation(A, B);
         minPair = Math.min(minPair, sep);
         if (sep < -tol) {
           if (A.piece === B.piece) push(`piece ${A.piece} overlaps itself on face ${f} (depth ${-sep})`);
