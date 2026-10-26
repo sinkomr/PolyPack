@@ -9,6 +9,7 @@
  *     [--seed 20261025]
  *
  * --seconds a,b,c: time of a problem for P <= 30, P <= 60 and above (the rounds' sizes do not depend on it).
+ * --Ps a,b,c: only these P.
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,6 +19,8 @@ const args = new Map<string, string>();
 for (let i = 2; i < process.argv.length; i += 2) args.set(process.argv[i].replace(/^--/, ""), process.argv[i + 1]);
 const codes = (args.get("codes") ?? "ballinball").split(",");
 const [p0, p1] = (args.get("P") ?? "2-100").split("-").map(Number);
+// --Ps 25,31,40: only these P (of the range)
+const only = args.get("Ps") ? new Set(args.get("Ps")!.split(",").map(Number)) : null;
 const out = args.get("out")!;
 const evals = Number(args.get("evals") ?? 100000);
 const seconds = (args.get("seconds") ?? "30,45,70").split(",").map(Number);
@@ -67,6 +70,7 @@ function readBest(code: string): Map<number, Row> {
 
 for (let P = p0; P <= p1; P++)
   for (const code of codes) {
+    if (only && !only.has(P)) continue;
     const problem = getBallsProblem(code)!;
     const prior = readBest(code).get(P);
     const limit = P <= 30 ? seconds[0] : P <= 60 ? seconds[1] : seconds[2];

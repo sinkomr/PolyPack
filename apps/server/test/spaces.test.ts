@@ -1077,12 +1077,19 @@ describe("GET /api/spaces/targets", () => {
     expect(spaceTargetWeight(2)).toBeCloseTo(0.2, 15);
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
-    // the default list is the head of the whole list and holds problems of every space but polyhedra:
-    // its 8,514 problems share one space's share of the priority, so they come after the others' head
+    // the default list is the head of the whole list and holds problems of every space but polyhedra and balls:
+    // polyhedra's 8,514 problems share one space's share of the priority, so they come after the others' head;
+    // balls' records all lie far above their elementary bounds, so their 684 shares are about even and none is
+    // among the 500 largest
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));
-    expect(new Set(first.targets.map((t) => t.space))).toEqual(new Set(SPACE_NAMES.filter((s) => s !== "polyhedra")));
+    expect(new Set(first.targets.map((t) => t.space))).toEqual(
+      new Set(SPACE_NAMES.filter((s) => s !== "polyhedra" && s !== "balls")),
+    );
+    const balls = (await get("/api/spaces/targets?spaces=balls")).body as SpaceTargetsResponse;
+    expect(balls.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
+    expect(balls.targets.every((t) => t.space === "balls")).toBe(true);
     const polyhedra = (await get("/api/spaces/targets?spaces=polyhedra")).body as SpaceTargetsResponse;
     expect(polyhedra.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(polyhedra.targets.every((t) => t.space === "polyhedra")).toBe(true);
@@ -1100,7 +1107,7 @@ describe("GET /api/spaces/targets", () => {
     // 256 queries of the whole list under different max_P and limit: one answer, compressed once
     const whole = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
     for (let k = 0; k < 256; k++) {
-      const r = await app.request(`/api/spaces/targets?limit=${10000 - (k % 150)}&max_P=${100 + k}`, {
+      const r = await app.request(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT - (k % 150)}&max_P=${100 + k}`, {
         headers: { "accept-encoding": "gzip" },
       });
       const body = JSON.parse(gunzipSync(Buffer.from(await r.arrayBuffer())).toString("utf8")) as SpaceTargetsResponse;

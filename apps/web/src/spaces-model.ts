@@ -55,10 +55,15 @@ export const statusLabel = (s: CertifiedStatus | null): string => (s ? STATUS[s]
 
 /**
  * How a kind's research records are proven valid: the 2D kinds' certifiers use interval
- * arithmetic, the 3D on 4D certifier exact rational arithmetic (docs/spaces/BOUNDARY.md 4).
+ * arithmetic, the 3D on 4D certifier exact rational arithmetic (docs/spaces/BOUNDARY.md 4), and the balls
+ * certifier both: exact rationals for balls, intervals for the Platonic solids (docs/spaces/BALLS.md 4).
  */
 export const certifiedBy = (space: SpaceName): string =>
-  space === "boundary" ? "exact rational arithmetic" : "interval arithmetic";
+  space === "boundary"
+    ? "exact rational arithmetic"
+    : space === "balls"
+      ? "exact rational arithmetic (balls) or interval arithmetic (solids)"
+      : "interval arithmetic";
 
 /**
  * A lower bound's label as the page shows it: the research tags that say what kind of claim it is

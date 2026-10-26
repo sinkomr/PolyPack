@@ -59,8 +59,9 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
   await expect(flat.getByRole("link", { name: /^Board/ })).toHaveAttribute("href", "/");
 
   for (const s of api.spaces) {
-    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts)
-    expect(s.viewer).toBe(`/spaces/${s.space}.html`);
+    // the four 2D kinds' viewers are copied from their packages, the 3D on 4D one is built (vite.config.ts);
+    // the balls space has none of its own: its viewer is the board
+    expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
     const card = page.locator(`#dimension-groups li[data-space="${s.space}"]`);
     const { dimension, family } = familyOfSpace(s.space)!;
     await expect(card.locator("xpath=ancestor::section[1]")).toHaveAttribute("data-dimension", dimension.id);
@@ -80,7 +81,7 @@ test("the dimensions page lists each dimension with its kinds and the exhibit, a
 
   const main = page.getByRole("main");
   await expect(main).toContainText(
-    "proven valid with interval arithmetic, or for 3D on 4D with exact rational arithmetic",
+    "proven valid with interval arithmetic, or for 3D on 4D and for balls with exact rational arithmetic",
   );
   await expect(main.getByRole("link", { name: "API", exact: true })).toHaveAttribute("href", "/api");
   await expect(main.getByRole("link", { name: "volunteer client" })).toHaveAttribute("href", "/volunteer.html");

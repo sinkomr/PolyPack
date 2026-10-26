@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
 import { SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
@@ -78,7 +79,7 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514);
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 8514 + 693);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -121,6 +122,10 @@ describe("problem ids", () => {
       ["torus", "torus/sq/0/2/1"],
       ["boundary", "boundary/tesseract/ball/09"],
       ["boundary", "boundary/tesseract/sphere/9"],
+      ["balls", "balls/ballinball/013"],
+      ["balls", "balls/ballinballs/13"],
+      ["balls", "balls/ballinball"],
+      ["balls", "balls/ballinball/13/1"],
     ];
     for (const [space, id] of bad) expect(typeof parseSpaceId(space, id), id).toBe("string");
     expect(parseSpaceId("curved", "curved/0.000001/0/0/2")).toMatch(/written 1e-06/);
@@ -136,7 +141,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 8514, balls: 693 });
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -156,6 +161,12 @@ describe("the catalogues", () => {
       "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
     );
     expect(closed("boundary")).toEqual([]);
+    // balls in a cube with a published proof of the exact case (docs/spaces/BALLS.md, sec. 3)
+    expect(closed("balls").map((p) => p.id)).toEqual([2, 3, 4, 5, 6, 8, 9, 10, 14].map((P) => `balls/ballincub/${P}`));
+    expect(closed("balls").every((p) => p.status === "proven" && /is proven \((Schaer|Joos) (1966|1994|2009)/.test(p.closed_reason!))).toBe(true);
+    expect(problem("balls", "balls/ballincub/14").closed_reason).toBe(
+      "its optimum 4.828427 is proven (Joos 2009, doi:10.1007/s10711-008-9308-3)",
+    );
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
       "sphere/0/24",
@@ -225,6 +236,7 @@ describe("the catalogues", () => {
       boundary: [["polytope", BOUNDARY_POLYTOPES], ["piece", ["ball", "cube"]], ["P", null]],
       // polyhedra's fields include a piece, which is not a sort key there
       polyhedra: [["code", PROBLEM_CODES], ["P", null]],
+      balls: [["code", BALLS_CODES], ["P", null]],
     };
     for (const s of SPACE_NAMES) {
       const rank = (p: SpaceProblemEntry) =>
@@ -585,11 +597,36 @@ describe("work limits", () => {
   });
 });
 
+describe("balls submissions", () => {
+  const two = (d: number, s: number) => ({ s, pieces: [[d, 0, 0], [-d, 0, 0]] });
+  it("check balls and solids by the space's rule, and tell malformed input from invalid packings", () => {
+    expect(check("balls", "balls/ballinball/2", two(1, 2)).valid).toBe(true);
+    // an overlap within the touching tolerance passes, a deeper one does not
+    expect(check("balls", "balls/ballinball/2", two(1 - 2e-10, 2)).valid).toBe(true);
+    const v = check("balls", "balls/ballinball/2", two(1 - 2e-9, 2));
+    expect(v).toMatchObject({ valid: false, malformed: false });
+    expect(v.reasons[0]).toMatch(/^pieces 0 and 1 overlap by/);
+    // below the lower bound 2: refused unchecked
+    expect(check("balls", "balls/ballinball/2", two(0.9, 1.9)).reasons[0]).toMatch(/below the lower bound/);
+    expect(check("balls", "balls/ballinball/2", { s: 2, pieces: [[1, 0, 0]] })).toMatchObject({ valid: false, malformed: false });
+    for (const bad of [{ s: 2 }, { s: "2", pieces: [] }, { s: 2, pieces: [[1, 0], [0, 1]] }, { s: 2, pieces: [[1, 0, NaN], [-1, 0, 0]] }])
+      expect(check("balls", "balls/ballinball/2", bad).malformed, JSON.stringify(bad)).toBe(true);
+    // a solid's pose has 7 numbers; extra fields are dropped from the stored configuration
+    const cubes = { s: Math.sqrt(1.5), pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]], extra: 1 };
+    const c = check("balls", "balls/cubinball/2", cubes);
+    expect(c.valid).toBe(true);
+    expect(c.config).toEqual({ s: cubes.s, pieces: cubes.pieces });
+    expect(check("balls", "balls/cubinball/2", { ...cubes, pieces: [[-0.5, 0, 0], [0.5, 0, 0]] }).malformed).toBe(true);
+    expect(validateSpaceSubmission("balls", "balls/ballinball/101", two(1, 2)).malformed).toBe(true);
+  });
+});
+
 describe("space metadata", () => {
   it("names a viewer and the notes on GitHub for every space", () => {
     for (const s of SPACE_NAMES) {
       const i = SPACE_INFO[s];
-      expect(i.viewer).toBe(`/spaces/${s}.html`);
+      // the balls space has no standalone viewer: the board draws its problems
+      expect(i.viewer).toBe(s === "balls" ? "/#space=balls" : `/spaces/${s}.html`);
       expect(i.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/[A-Z_]+\.md$/);
       expect(i.conventions.configuration).toBeTruthy();
       expect(i.conventions.validity).toMatch(/1e-9/);
