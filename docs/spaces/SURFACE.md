@@ -145,6 +145,19 @@ cover D(K) and, when no vertex lies in K, two parts of one piece share no interi
 the piece overlaps itself. So condition (3) and (4) of fold validity become: on every face, the
 parts of all pieces (two parts of one piece included) have disjoint interiors.
 
+**Separating axes** [CALC] (since 2026-10-26). The float check measures two parts by the
+separating-axis test, with its axes taken from the half-planes each part was cut from: the
+piece's sides, the two rays of its wedge and its face's edges, all from their exact angles
+(`parts.ts`, `partSeparation`). Every side of a part lies on one of these lines, and a
+half-plane that does not touch the part gives a smaller gap along its normal, while any positive
+gap separates the parts. So for overlapping parts the result is exactly their separating-axis
+depth, and positive values (parts apart) are a lower bound on their distance. Before, the axes
+came from the clipped parts' own sides. Clipping can leave a side about 1e-15 long (a piece
+corner on a vertex or an edge) whose direction rounding makes arbitrary, and such an axis cuts
+a sliver off the part: an independent review found two triangles on the octahedron overlapping
+by 7.9e-4 that the server accepted (`packages/surface/test/axes.test.ts`; the certifier
+rejected it). Every research record passes the new check, at the touching tolerance and at 1e-11.
+
 Enumeration: depth-first over chains from the anchor face; a branch is cut only when no
 vertex-avoiding ray of length <= reach (the piece's circumradius, or 2 for disk distances) can
 follow it:
@@ -287,7 +300,8 @@ P = 1..max(4F, 24).
   chain enumeration (`chains.ts`), parts (`parts.ts`), float validator (`validate.ts`, PolyPack's
   touching tolerance 1e-9), fold search (`search/`), scripts to build nofold and exact
   configurations and to drive the search, and the viewers in `viz/`. It imports
-  `polygonSeparation` and `pieceVertices` from @polypack/geometry.
+  `pieceSeparation` (nofold) and `pieceVertices` from @polypack/geometry; fold parts are
+  separated by `partSeparation` (2.4, separating axes).
 - `python/surface` (certifier, standard library + mpmath only): `numfield.py` (exact arithmetic in
   Q, Q(sqrt 3) and Q(sqrt(10 + 2 sqrt 5))), `geom.py` (independent construction of the solids by an
   exact convex hull; exact frames and gluings), `cert.py` (certifier), `run_cert.py` (eps ladder,
@@ -341,7 +355,9 @@ reads them, so the check is to re-run the certifier (about 6 minutes for every r
 
 ## 5. Search (fold track)
 
-Seeded and deterministic for given counts (`packages/surface/src/search`). Pieces are developed
+Seeded and deterministic for given counts (`packages/surface/src/search`); since the separating
+axes changed (2.4, 2026-10-26) the same seeds give other values than before, so a run from
+before that date is reproduced with the code of its time. Pieces are developed
 on the solid of edge 1 and scaled by lam (the score is 1/lam). Energy: squared penetration depths
 of overlapping parts on every face (polygons, separating-axis depth), squared cone-point depths
 (each vertex counted once, at its deepest appearance, so the energy is continuous), and for disks

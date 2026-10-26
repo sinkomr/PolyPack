@@ -1,6 +1,6 @@
-import { boundingRadius, inradius, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
-import { SurfacePose, pieceParts } from "../parts";
+import { HalfPlanes, SurfacePose, partSeparation, pieceParts } from "../parts";
 import { apply } from "../rigid";
 import { Solid, frameVertex } from "../solids";
 import { canonicalize } from "./energy";
@@ -17,7 +17,7 @@ import { canonicalize } from "./energy";
 
 interface PieceGeom {
   nodes: ChainNode[];
-  parts: { key: string; face: number; poly: Float64Array }[];
+  parts: { key: string; face: number; poly: Float64Array; cuts: HalfPlanes }[];
 }
 
 function pathKey(node: ChainNode): string {
@@ -32,7 +32,7 @@ export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: nu
   const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, lam * boundingRadius(N));
   const parts = pieceParts(solid, 1, N, p, i, lam, nodes)
     .filter((q) => q.poly.length >= 6)
-    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly }));
+    .map((q) => ({ key: pathKey(nodes[q.chain]), face: q.face, poly: q.poly, cuts: q.cuts }));
   return { nodes, parts };
 }
 
@@ -88,7 +88,7 @@ export function values(solid: Solid, N: number, lam: number, poses: SurfacePose[
           if (j === i && b <= a) continue;
           const B = parts[b];
           if (B.face !== A.face) continue;
-          const v = polygonSeparation(A.poly, B.poly).sep;
+          const v = partSeparation(A, B);
           if (v < thr) {
             const key = i < j || (i === j && a < b) ? `p${i}:${A.key}:${j}:${B.key}` : `p${j}:${B.key}:${i}:${A.key}`;
             out.set(key, v);

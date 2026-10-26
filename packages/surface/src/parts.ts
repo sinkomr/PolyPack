@@ -1,7 +1,7 @@
-import { boundingRadius, pieceVertices } from "@polypack/geometry";
+import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
 import { ChainNode, Wedge, enumerateChains } from "./chains";
 import { apply, inverse } from "./rigid";
-import { Solid, frameVertex } from "./solids";
+import { Solid, faceApothem, frameVertex } from "./solids";
 
 /** A piece on the surface: anchor face and (x, y, theta) in that face's frame. */
 export interface SurfacePose {
@@ -9,6 +9,18 @@ export interface SurfacePose {
   x: number;
   y: number;
   theta: number;
+}
+
+/** Half-planes nx x + ny y <= b with unit normals, as parallel arrays. */
+export interface HalfPlanes {
+  nx: Float64Array;
+  ny: Float64Array;
+  b: Float64Array;
+}
+
+/** A convex outline in the anchor frame: its corners and the half-planes of its sides, side k from corner k to k + 1. */
+export interface Outline extends HalfPlanes {
+  poly: Float64Array;
 }
 
 /** The part of one piece that lies on one face, in that face's own frame. */
@@ -19,6 +31,12 @@ export interface Part {
   face: number;
   /** counter-clockwise flat array; empty when the part is empty */
   poly: Float64Array;
+  /**
+   * The half-planes the part was cut from, in this face's frame: the piece's sides, the rays of
+   * its chain's wedge and the face's edges, from their exact normals. Every side of the part lies
+   * on one of them (see partSeparation).
+   */
+  cuts: HalfPlanes;
   /** piece centre and angle mapped into this face's frame (the developed piece) */
   cx: number;
   cy: number;
@@ -118,14 +136,63 @@ export function pieceChains(solid: Solid, s: number, N: number, pose: SurfacePos
 }
 
 /**
+ * The piece polygon of piecePolygon with the half-planes of its sides, written from their
+ * angles: side k of an N-gon has its outward normal at theta + pi/2 + (k + 1/2) 2 pi / N and lies
+ * at the inradius from the centre; side k of the disk's circumscribed polygon at (2 k + 1) pi /
+ * DISK_SIDES and at the radius.
+ */
+export function pieceOutline(N: number, pose: SurfacePose, scale = 1): Outline {
+  const poly = piecePolygon(N, pose, scale);
+  const n = N === 0 ? DISK_SIDES : N;
+  const nx = new Float64Array(n);
+  const ny = new Float64Array(n);
+  const b = new Float64Array(n);
+  const r = N === 0 ? scale : inradius(N) * scale;
+  for (let k = 0; k < n; k++) {
+    const a = N === 0 ? ((2 * k + 1) * Math.PI) / n : pose.theta + Math.PI / 2 + ((k + 0.5) * 2 * Math.PI) / n;
+    nx[k] = Math.cos(a);
+    ny[k] = Math.sin(a);
+    b[k] = nx[k] * pose.x + ny[k] * pose.y + r;
+  }
+  return { poly, nx, ny, b };
+}
+
+/**
+ * The half-planes of a face in its own frame at edge s: edge j (frame vertex j to j + 1) has its
+ * outward normal at 2 pi (j + 1) / M - pi / 2 and lies at the apothem (validate.ts insideFaceDepth).
+ */
+export function faceCuts(solid: Solid, s: number): HalfPlanes {
+  const M = solid.M;
+  const nx = new Float64Array(M);
+  const ny = new Float64Array(M);
+  const b = new Float64Array(M).fill(faceApothem(M, s));
+  for (let j = 0; j < M; j++) {
+    const a = (2 * Math.PI * (j + 1)) / M - Math.PI / 2;
+    nx[j] = Math.cos(a);
+    ny[j] = Math.sin(a);
+  }
+  return { nx, ny, b };
+}
+
+/**
  * Parts of a piece on the faces, each in its face's own frame.
  * For a disk the polygon is the circumscribed DISK_SIDES-gon (drawing only; validation of disks
  * uses distances, see validate.ts).
  */
 export function pieceParts(solid: Solid, s: number, N: number, pose: SurfacePose, piece: number, scale = 1, chains?: ChainNode[]): Part[] {
   const nodes = chains ?? pieceChains(solid, s, N, pose, scale);
-  const base = piecePolygon(N, pose, scale);
+  return developParts(solid, s, pieceOutline(N, pose, scale), pose, piece, nodes);
+}
+
+/**
+ * Parts of a convex outline (anchor frame, star-shaped about the pose's centre) developed from the
+ * pose's centre along `nodes`, each in its face's own frame: the outline cut by the chain's wedge
+ * and by the unfolded face, mapped back. pieceParts is this for the piece's own outline.
+ */
+export function developParts(solid: Solid, s: number, outline: Outline, pose: SurfacePose, piece: number, nodes: ChainNode[]): Part[] {
+  const base = outline.poly;
   const M = solid.M;
+  const own = faceCuts(solid, s);
   const parts: Part[] = [];
   nodes.forEach((node, ci) => {
     let poly = base;
@@ -149,9 +216,69 @@ export function pieceParts(solid: Solid, s: number, N: number, pose: SurfacePose
       mapped[i + 1] = v;
     }
     const [cx, cy] = apply(back, pose.x, pose.y);
-    parts.push({ piece, chain: ci, face: node.face, poly: mapped, cx, cy, theta: pose.theta + back.ang });
+    const cuts = partCuts(node, outline, pose, own);
+    parts.push({ piece, chain: ci, face: node.face, poly: mapped, cuts, cx, cy, theta: pose.theta + back.ang });
   });
   return parts;
+}
+
+/**
+ * The half-planes a part on node's face was cut from, in that face's frame: the outline's sides
+ * and the wedge's rays (anchor frame, mapped back) and the face's own edges.
+ */
+function partCuts(node: ChainNode, outline: Outline, pose: SurfacePose, face: HalfPlanes): HalfPlanes {
+  const wedge = node.wedge ? wedgeHalfPlanes(node.wedge, pose.x, pose.y) : [];
+  const no = outline.b.length;
+  const n = no + wedge.length + face.b.length;
+  const nx = new Float64Array(n);
+  const ny = new Float64Array(n);
+  const b = new Float64Array(n);
+  // the anchor frame point is p = R q + t for q in the face's frame, so a . p <= c reads (R^T a) . q <= c - a . t
+  const T = node.toAnchor;
+  const put = (k: number, ax: number, ay: number, c: number) => {
+    nx[k] = T.c * ax + T.s * ay;
+    ny[k] = -T.s * ax + T.c * ay;
+    b[k] = c - (ax * T.tx + ay * T.ty);
+  };
+  for (let k = 0; k < no; k++) put(k, outline.nx[k], outline.ny[k], outline.b[k]);
+  wedge.forEach((h, k) => put(no + k, h.ax, h.ay, h.b));
+  nx.set(face.nx, no + wedge.length);
+  ny.set(face.ny, no + wedge.length);
+  b.set(face.b, no + wedge.length);
+  return { nx, ny, b };
+}
+
+/** Largest gap of the corners q beyond one of the half-planes h (the separating-axis value of h's normals). */
+function cutGap(h: HalfPlanes, q: Float64Array): number {
+  let best = -Infinity;
+  for (let k = 0; k < h.b.length; k++) {
+    const nx = h.nx[k];
+    const ny = h.ny[k];
+    const c = h.b[k];
+    let m = Infinity;
+    for (let i = 0; i < q.length; i += 2) {
+      const d = nx * q[i] + ny * q[i + 1] - c;
+      if (d < m) m = d;
+    }
+    if (m > best) best = m;
+  }
+  return best;
+}
+
+/**
+ * Separation of two parts on one face (negative: their penetration depth), by separating axes
+ * taken from the half-planes each part was cut from rather than from its clipped sides.
+ *
+ * Clipping can leave a part a side about 1e-15 long whose direction rounding makes arbitrary; an
+ * axis taken from it can cut a sliver off the part and so call two overlapping parts apart. Here
+ * every axis is exact: every side of a part lies on one of its half-planes, so the axes include
+ * every side's true normal. A half-plane that does not touch the part only gives a smaller gap
+ * along its normal, and any positive gap separates the parts (the part lies in the half-plane),
+ * so for overlapping parts the result is exactly minus the separating-axis depth. For parts that
+ * are apart it is positive, a lower bound on their distance.
+ */
+export function partSeparation(a: { poly: Float64Array; cuts: HalfPlanes }, b: { poly: Float64Array; cuts: HalfPlanes }): number {
+  return Math.max(cutGap(a.cuts, b.poly), cutGap(b.cuts, a.poly));
 }
 
 export function polygonArea(poly: Float64Array): number {
