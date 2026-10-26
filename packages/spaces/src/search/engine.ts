@@ -59,6 +59,8 @@ export interface SpaceSearchInput {
   bound: number | null;
   /** The research record's certified size, or null: results are checked by the server's whole rule. */
   certified?: number | null;
+  /** True when the problem has no research record yet (results then need the strict check too). */
+  noRecord?: boolean;
   /** Most active seconds (see `now`) this problem may take. */
   maxSeconds: number;
   /** Most jobs at once. */
@@ -177,7 +179,7 @@ export async function searchSpaceProblem(
       seed: mixSeed(seed, jobs),
       budget: evals === undefined ? { time_s: seconds } : { time_s: seconds, evals },
       kind,
-      rule: { bound: input.bound, certified: input.certified ?? null },
+      rule: { bound: input.bound, certified: input.certified ?? null, ...(input.noRecord ? { noRecord: true } : {}) },
       ...(kind === "iterate" && start ? { start } : {}),
     };
     return { job, kind };

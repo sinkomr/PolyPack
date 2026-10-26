@@ -2,7 +2,14 @@
  * The space API calls of the board: a space's catalogue, one problem with its configurations, and
  * a submission. Answers are read as untrusted input (model.ts readSpaceProblem).
  */
-import type { SpaceConfig, SpaceName, SpaceProblemSummary, SpaceRecordsResponse } from "@polypack/spaces";
+import type {
+  SpaceConfig,
+  SpaceDomainInfo,
+  SpaceName,
+  SpaceProblemSummary,
+  SpaceRecordsResponse,
+  SpacesResponse,
+} from "@polypack/spaces";
 import { configUrl } from "../spaces-model";
 import { type LoadedSpaceProblem, type SubmitAnswer, readSpaceProblem, submitAnswer } from "./model";
 
@@ -16,6 +23,35 @@ export async function listSpaceProblems(space: SpaceName): Promise<SpaceProblemS
   } catch {
     return null;
   }
+}
+
+let spacesInfo: Promise<SpacesResponse | null> | null = null;
+
+/**
+ * The domain of a space as GET /api/spaces describes it (packages/spaces domain.ts), null for a space whose problems
+ * are its records, or "error" when the answer cannot be read (it is asked again next time).
+ */
+export async function loadSpaceDomain(space: SpaceName): Promise<SpaceDomainInfo | null | "error"> {
+  spacesInfo ??= fetch("/api/spaces")
+    .then((r) => (r.ok ? (r.json() as Promise<SpacesResponse>) : null))
+    .catch(() => null);
+  const body = await spacesInfo;
+  if (!body || !Array.isArray(body.spaces)) {
+    spacesInfo = null;
+    return "error";
+  }
+  const d = body.spaces.find((s) => s?.space === space)?.domain;
+  // what the picker needs: an id pattern and fields with values or a range
+  if (!d || typeof d.id !== "string" || !Array.isArray(d.fields)) return null;
+  const fields = d.fields.filter(
+    (f) =>
+      typeof f?.key === "string" &&
+      typeof f.label === "string" &&
+      (Array.isArray(f.values)
+        ? f.values.every((v: unknown) => typeof v === "string")
+        : Number.isInteger(f.min) && Number.isInteger(f.max) && f.max! - f.min! <= 10000),
+  );
+  return fields.length === d.fields.length ? { ...d, fields } : null;
 }
 
 /** One problem with its best configuration, or a sentence saying why it could not be loaded. */

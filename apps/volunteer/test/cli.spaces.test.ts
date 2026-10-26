@@ -247,6 +247,37 @@ describe("the client with the spaces option", () => {
     });
   }
 
+  // Real space search from a new arrangement: a problem without a research record (status no_record).
+  it(
+    "searches a problem without a research record from a new arrangement and submits it",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [], spaces: [{ id: "sphere/0/5", certified: null, bound: 1.2 }] });
+      const { code, output } = await client([
+        "--once",
+        "--only-spaces",
+        "--spaces",
+        "sphere",
+        "--name",
+        "Test volunteer",
+      ]);
+      expect(code, output).toBe(0);
+      expect(paths()).toEqual([
+        "GET /api/spaces/targets?spaces=sphere&limit=20000",
+        "GET /api/spaces/sphere/problems/sphere/0/5",
+        "GET /api/spaces/sphere/problems/sphere/0/5",
+        "POST /api/spaces/submit",
+      ]);
+      const [body] = server.spaceSubmissions;
+      expect(body).toMatchObject({ space: "sphere", id: "sphere/0/5", name: "Test volunteer" });
+      // the server's rule for such a problem: strictly valid
+      expect(checkSpaceConfig("sphere", "sphere/0/5", body.config, { noRecord: true }).valid).toBe(true);
+      expect(server.spaceBest("sphere/0/5")!.site!.name).toBe("Test volunteer");
+      const [line] = history();
+      expect(line).toMatchObject({ space: "sphere", id: "sphere/0/5", leader_before: null });
+    },
+  );
+
   // Real space search, as above.
   it("does not send again when a 503 came but the configuration was stored", { timeout: 60_000 }, async () => {
     server = await startFakeServer({

@@ -1,6 +1,6 @@
 import { BALLS_CODES, ballsTitle } from "@polypack/balls/catalogue";
 import { PROBLEM_CODES, problemTitle } from "@polypack/polyhedra/catalogue";
-import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
+import type { SpaceInfo, SpaceName, SpaceProblemStatus, SpaceProblemSummary } from "@polypack/spaces";
 
 /**
  * The pure parts of the dimensions page's records table: the filters of each space's table (the
@@ -46,12 +46,13 @@ export function formatK(K: string | number): string {
   return minus(String(Number(k.toPrecision(7))));
 }
 
-const STATUS: Record<CertifiedStatus, string> = {
+const STATUS: Record<SpaceProblemStatus, string> = {
   best_known: "best known",
   proven: "proven optimal",
   infeasible: "no packing exists",
+  no_record: "no record yet",
 };
-export const statusLabel = (s: CertifiedStatus | null): string => (s ? STATUS[s] : "—");
+export const statusLabel = (s: SpaceProblemStatus | null): string => (s ? STATUS[s] : "—");
 
 /**
  * How a kind's research records are proven valid: the 2D kinds' certifiers use interval
@@ -85,7 +86,7 @@ export function plainBoundLabel(label: string): string {
  * status (the only status of an infeasible problem, whose certified value is null) and why a
  * closed problem takes no entries.
  */
-export type ListedProblem = SpaceProblemSummary & { status?: CertifiedStatus; closed_reason?: string | null };
+export type ListedProblem = SpaceProblemSummary & { status?: SpaceProblemStatus; closed_reason?: string | null };
 
 /**
  * The status of a problem: the one the server gives; else the research value's; else, for a
@@ -93,7 +94,7 @@ export type ListedProblem = SpaceProblemSummary & { status?: CertifiedStatus; cl
  */
 export function problemStatus(
   p: Pick<ListedProblem, "status" | "certified" | "accepts_submissions">,
-): CertifiedStatus | null {
+): SpaceProblemStatus | null {
   if (p.status) return p.status;
   if (p.certified) return p.certified.status;
   return p.accepts_submissions ? null : "infeasible";
@@ -319,14 +320,38 @@ export const siteBelowCertified = (p: SpaceProblemSummary): boolean =>
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
 
+/** "693, none with a record yet" or "8,514": the problems, and how many have no research record yet. */
+export function problemsText(s: Pick<SpaceInfo, "problems"> & { records?: number }): string {
+  const n = s.problems.toLocaleString("en-US");
+  if (typeof s.records !== "number" || s.records >= s.problems) return n;
+  const without = s.problems - s.records;
+  return s.records === 0
+    ? `${n}, none with a record yet`
+    : `${n}, ${without.toLocaleString("en-US")} without a record yet`;
+}
+
+/**
+ * The line above the records table of a kind whose problems are given by a domain and that has no records yet:
+ * how many problems there are, and where to work on them.
+ */
+export function domainNote(s: Pick<SpaceInfo, "problems"> & { records?: number }): string {
+  return `No records yet. All ${s.problems.toLocaleString("en-US")} problems of this kind are open: choose one on the board, or let the volunteer client search them.`;
+}
+
 /** The line above a table: how many problems, of which status, and how many have site entries. */
 export function summaryText(rows: readonly ListedProblem[]): string {
   if (!rows.length) return "No problems match these filters.";
-  const by = new Map<CertifiedStatus | null, number>();
+  const by = new Map<SpaceProblemStatus | null, number>();
   for (const p of rows) by.set(problemStatus(p), (by.get(problemStatus(p)) ?? 0) + 1);
   const statuses = [...by.entries()]
     .map(([s, n]) =>
-      s === "infeasible" ? `${n} where no packing exists` : s ? `${n} ${STATUS[s]}` : `${n} without a value`,
+      s === "infeasible"
+        ? `${n} where no packing exists`
+        : s === "no_record"
+          ? `${n} without a record yet`
+          : s
+            ? `${n} ${STATUS[s]}`
+            : `${n} without a value`,
     )
     .join(", ");
   const site = rows.filter((p) => p.site_best).length;

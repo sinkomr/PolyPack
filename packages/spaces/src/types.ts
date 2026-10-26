@@ -11,6 +11,8 @@
  *    validator of that space with PolyPack's usual tolerance, like every other site entry.
  */
 
+import type { SpaceDomainInfo } from "./domain";
+
 /** Spaces that take submissions. */
 export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra" | "balls";
 export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
@@ -21,6 +23,13 @@ export function isSpaceName(v: unknown): v is SpaceName {
 
 /** Status of a research record: `proven` only with a published proof; `infeasible` = no packing exists (proved). */
 export type CertifiedStatus = "best_known" | "proven" | "infeasible";
+
+/**
+ * Status of a problem: its research record's, or `no_record` for a problem of the space's domain (domain.ts) that has
+ * no research record yet. Such a problem takes entries; its best value is the site's, none until a first entry is
+ * kept, and every entry must pass the strict check (validate.ts).
+ */
+export type SpaceProblemStatus = CertifiedStatus | "no_record";
 
 /**
  * Configurations, in each space's own format (the record files' format):
@@ -49,8 +58,15 @@ export interface SpaceInfo {
   problem_id: string;
   /** Units, pose and container conventions, as short sentences keyed by topic. */
   conventions: Record<string, string>;
-  /** Problems in the catalogue (the research records, infeasible ones included). */
+  /**
+   * Problems of the space: the size of its domain when it has one, else its research records (infeasible ones
+   * included).
+   */
   problems: number;
+  /** Problems with a research record; the others of the domain have none yet (status `no_record`). */
+  records: number;
+  /** The space's domain, when its problems are given by one (domain.ts); the listing then holds its records only. */
+  domain?: SpaceDomainInfo;
   /** Path of the static viewer, e.g. "/spaces/surface.html". */
   viewer: string;
   /** URL of the space's notes on GitHub. */
@@ -125,10 +141,11 @@ export interface SpaceProblemSummary {
   /** False for proven and infeasible problems. */
   accepts_submissions: boolean;
   /**
-   * The research record's status (always sent). `infeasible` problems have no certified value and
-   * no configuration: no packing exists.
+   * The problem's status (always sent): its research record's, or `no_record` when it has none yet (then
+   * `certified` is null and the problem takes entries). `infeasible` problems have no certified value and no
+   * configuration: no packing exists.
    */
-  status?: CertifiedStatus;
+  status?: SpaceProblemStatus;
   /** Why the problem takes no submissions, for proven and infeasible problems; null when it is open (always sent). */
   closed_reason?: string | null;
   /** Sent for boundary problems only: the research record's nofold comparison. */
@@ -158,10 +175,11 @@ export interface SpaceTarget {
   P: number;
   /** Larger is more promising; the volunteer client draws in proportion to it. */
   priority: number;
-  best_score: number;
+  /** The problem's best value; null for a problem with neither a research record nor a site entry yet. */
+  best_score: number | null;
   bound: number | null;
-  /** Which value leads: the research record or a site entry. */
-  leader: "certified" | "site";
+  /** Which value leads: the research record, a site entry, or none (no record and no entry yet). */
+  leader: "certified" | "site" | "none";
   /** Site entry id of the leader; null when the research record leads. */
   leader_id: number | null;
 }

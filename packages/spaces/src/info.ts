@@ -1,5 +1,5 @@
 /**
- * What GET /api/spaces says about each space, apart from its problem count, which comes from the
+ * What GET /api/spaces says about each space, apart from its problem and record counts, which come from the
  * loaded catalogue. Pure data.
  */
 import { MAX_S } from "@polypack/boundary";
@@ -71,7 +71,7 @@ const SCORING =
   "the score is the size stated in the configuration; the server checks the configuration at that size and does not shrink it";
 const IMPROVEMENT = `an entry is kept only when its score is below the problem's best value (the research record or the site leader, whichever is smaller) by more than a relative ${SCORE_TIE}; one below the research record must also be valid with overlaps of at most ${SPACE_STRICT_TOL}`;
 
-export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems">> = {
+export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records" | "domain">> = {
   surface: {
     space: "surface",
     title: "Platonic surfaces",

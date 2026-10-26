@@ -4,7 +4,7 @@
  * folding" and "Folding gains". Pure and light, so that the board's space mode and the 3D on 4D
  * viewer show the same rows.
  */
-import type { CertifiedStatus, SpaceName } from "@polypack/spaces";
+import type { CertifiedStatus, SpaceName, SpaceProblemStatus } from "@polypack/spaces";
 import { type FoldExtra, foldGain, gainText, plainNofoldLabel } from "../boundary-model";
 import { day, entriesText, plainBoundLabel, problemStatus, round6, statusLabel } from "../spaces-model";
 
@@ -20,7 +20,7 @@ export interface ProblemFact {
 export interface FactSource {
   space: SpaceName;
   certified: { score: number; display: string; status: CertifiedStatus } | null;
-  status: CertifiedStatus | null;
+  status: SpaceProblemStatus | null;
   bound: { value: number; label: string } | null;
   site_best: { id: number; score: number; name: string; created_at: string } | null;
   /** The smaller of the certified value and the site best. */

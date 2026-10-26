@@ -18,6 +18,9 @@ import {
   SpacesResponse,
   acceptsSubmissions,
   buildSpaceCatalogue,
+  type ParsedSpaceId,
+  parseSpaceId,
+  problemOf,
   validateSpaceSubmission,
 } from "@polypack/spaces";
 import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
@@ -29,6 +32,7 @@ import {
   SPACES_CHECKED_ONLY_IF_KEPT,
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
+  SPACE_DOMAIN_TARGETS,
   SPACE_GAP_CAP,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
@@ -1015,16 +1019,29 @@ describe("GET /api/spaces/targets", () => {
   /** The work list as the rule says it should be, from the research records alone (no site entries). */
   function expected(): Map<string, { space: SpaceName; P: number; raw: number }> {
     const out = new Map<string, { space: SpaceName; P: number; raw: number }>();
-    for (const space of SPACE_NAMES)
-      for (const p of index[space]!.problems) {
+    for (const space of SPACE_NAMES) {
+      // a space with a domain: its records and the first SPACE_DOMAIN_TARGETS of its sample (no site entries here)
+      const cat = index[space]!;
+      const problems = [...cat.problems];
+      for (const id of cat.domain?.sample(SPACE_DOMAIN_TARGETS) ?? []) {
+        const parsed = parseSpaceId(space, id);
+        if (typeof parsed !== "string" && !cat.byId.has(id)) problems.push(problemOf(cat, parsed)!);
+      }
+      for (const p of problems) {
         if (!acceptsSubmissions(p) || (space === "surface" && p.fields.mode === "nofold")) continue;
-        const gap = (p.certified!.score - p.bound!.value) / p.certified!.score;
         const w = spaceTargetWeight(p.P);
+        // a problem without a record (and without site entries here) has the largest room
+        if (p.status === "no_record") {
+          if (w > 0) out.set(p.id, { space, P: p.P, raw: SPACE_GAP_CAP * w });
+          continue;
+        }
+        const gap = (p.certified!.score - p.bound!.value) / p.certified!.score;
         // a record within its space's margin of the lower bound cannot be beaten by a kept entry
         const unbeatable = !(p.certified!.score * (1 - SPACE_RECORD_MARGIN[space]) > p.bound!.value * (1 - SPACE_BOUND_SLACK));
         if (gap > SPACE_SETTLED_GAP && w > 0 && !unbeatable)
           out.set(p.id, { space, P: p.P, raw: Math.min(gap, SPACE_GAP_CAP) * w });
       }
+    }
     return out;
   }
 
@@ -1048,11 +1065,12 @@ describe("GET /api/spaces/targets", () => {
     // the margin rule leaves the spaces whose margin is the tie tolerance as they were
     expect(r.targets.filter((t) => t.space === "boundary").length).toBe(28);
     for (const t of r.targets) {
-      const p = index[t.space]!.byId.get(t.id)!;
+      const p = problemOf(index[t.space]!, parseSpaceId(t.space, t.id) as ParsedSpaceId)!;
+      // a problem without a record and without entries has no best and no leader yet
       expect(t).toMatchObject({
-        leader: "certified",
+        leader: p.certified ? "certified" : "none",
         leader_id: null,
-        best_score: p.certified!.score,
+        best_score: p.certified ? p.certified.score : null,
         bound: p.bound!.value,
       });
     }
@@ -1343,8 +1361,9 @@ describe("the API page", () => {
     for (const part of [
       'id="spaces"',
       "GET /api/spaces</code>",
-      "GET /api/spaces/{space}/records",
+      "GET /api/spaces/{space}/problems</code> (also <code>/records</code>)",
       "GET /api/spaces/{space}/problems/{id}",
+      'id="spaces-no-record"',
       "GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=",
       "POST /api/spaces/submit",
       "GET /api/spaces/entries/{id}",

@@ -11,21 +11,25 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "obj
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const idOrNull = (v: unknown) => (Number.isSafeInteger(v) ? (v as number) : null);
 
-/** One entry of GET /api/spaces/targets, or null (also when its id is not one this client searches). */
+/**
+ * One entry of GET /api/spaces/targets, or null (also when its id is not one this client searches). A problem
+ * without a research record or a site entry yet comes with best_score null and leader "none".
+ */
 export function readSpaceTarget(v: unknown): SpaceTarget | null {
   if (!isObject(v) || !isSpaceName(v.space) || typeof v.priority !== "number" || !Number.isFinite(v.priority))
     return null;
   const p = parseSpaceId(v.id);
-  if (!p || p.space !== v.space || v.P !== p.P || !positive(v.best_score)) return null;
-  const leaderId = idOrNull(v.leader_id);
+  const none = v.best_score === null && v.leader === "none";
+  if (!p || p.space !== v.space || v.P !== p.P || !(positive(v.best_score) || none)) return null;
+  const leaderId = none ? null : idOrNull(v.leader_id);
   return {
     space: p.space,
     id: p.id,
     P: p.P,
     priority: v.priority,
-    best_score: v.best_score,
+    best_score: none ? null : (v.best_score as number),
     bound: positive(v.bound) ? v.bound : null,
-    leader: leaderId === null ? "certified" : "site",
+    leader: none ? "none" : leaderId === null ? "certified" : "site",
     leader_id: leaderId,
   };
 }
@@ -38,6 +42,8 @@ export interface SpaceProblemInfo {
   best_score: number | null;
   bound: number | null;
   certified: { score: number; status: string } | null;
+  /** True when the problem has no research record yet (its entries must pass the strict check). */
+  no_record: boolean;
   site_best: { id: number; score: number; name: string } | null;
   certified_config: SpaceConfig | null;
   site_config: SpaceConfig | null;
@@ -68,6 +74,7 @@ export function readSpaceProblem(v: unknown, p: SpaceProblem): SpaceProblemInfo 
     best_score: v.best_score as number | null,
     bound,
     certified,
+    no_record: v.status === "no_record",
     site_best: site,
     certified_config: v.certified_config == null ? null : readSpaceConfig(p, v.certified_config),
     site_config: v.site_config == null ? null : readSpaceConfig(p, v.site_config),

@@ -13,6 +13,7 @@ import {
 import {
   SPACE_BOUND_SLACK,
   SPACE_MIN_QUATERNION_NORM,
+  SPACE_STRICT_NO_RECORD_REASON,
   SPACE_STRICT_REASON,
   SPACE_STRICT_TOL,
   SPACE_MAX_COORD,
@@ -31,6 +32,7 @@ import {
 } from "@polypack/spaces";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 import {
+  SPACE_DOMAIN_TARGETS,
   SPACE_GAP_CAP,
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
@@ -318,6 +320,9 @@ The site's best entry of a problem is <code>site_best</code>. The two are always
 a little smaller, because there the proof shrinks every piece by 1 − ε about its centre instead (the size certified is then size / (1 − ε)).</p>
 <p id="spaces-closed">A problem is <em>closed</em> when its research record is <code>proven</code> (sphere disks, torus packings and balls in a cube with a published proof of optimality) or <code>infeasible</code> (curved problems where no packing exists at all; they have no certified value and no configuration).
 Closed problems are listed with <code>accepts_submissions: false</code> and a <code>closed_reason</code>, and take no submissions.</p>
+<p id="spaces-no-record">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: "no_record"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.
+Its <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.
+Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
 So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.
@@ -328,10 +333,10 @@ Without this, a record's own configuration shrunk by about 1e-9, whose pieces th
 An entry that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_REASON)}". There is no review queue for the spaces.</p>
 
 <h3><code>GET /api/spaces</code></h3>
-<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of <code>problems</code> in its catalogue, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>
+<p><code>{spaces, exhibits}</code>: each space with <code>title</code>, <code>summary</code>, <code>score</code>, <code>problem_id</code>, <code>conventions</code>, the number of its <code>problems</code> (its domain's size, or its records' count) and of those with a research record (<code>records</code>; the others have <a href="#spaces-no-record">none yet</a>), its <code>domain</code> when it has one, its <code>viewer</code> and its <code>docs</code>; the exhibits are research shown on the site that takes no submissions.</p>
 
-<h3><code>GET /api/spaces/{space}/records</code></h3>
-<p>The catalogue of one space: <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
+<h3><code>GET /api/spaces/{space}/problems</code> (also <code>/records</code>)</h3>
+<p>The research records of one space (for a space with a <a href="#spaces-no-record">domain</a>, its problems without a record are not listed; each answers at its own address): <code>{space, generated_at, problems}</code>, every problem with <code>id</code>, <code>fields</code> (the id's parts), <code>P</code>, <code>status</code>, <code>certified</code>, <code>bound</code> (the best lower bound shipped with the record, <code>{value, label}</code>, or <code>null</code>),
 <code>site_best</code> (<code>{id, score, name, created_at}</code> or <code>null</code>), <code>best_score</code>, <code>accepts_submissions</code> and <code>closed_reason</code>. No configurations.
 <span id="spaces-extra">Boundary problems also carry <code>extra</code>: <code>{nofold, fold_gain}</code>, where <code>nofold</code> is <code>{value, label}</code>, the best edge when every piece must stay inside one cell (no folding) and what that value rests on,
 and <code>fold_gain</code> = 1 − score_float / nofold.value is how much smaller the research record's polytope is (score_float: the record's search value before the certificate's scaling by 1 + 1e-12); either is <code>null</code> when the record has none.
@@ -353,6 +358,8 @@ the priorities of each space sum to 1 / n, so a client that draws in proportion 
 The whole list fits in one answer at the largest <code>limit</code> (9821 targets with the catalogues of 2026-10-25: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 8508; about 1.8 MB).
 The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 8514 problems share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
+A problem <a href="#spaces-no-record">without a research record</a> and without an entry yet is listed with <code>best_score: null</code>, <code>leader: "none"</code> and the largest room, g = ${SPACE_GAP_CAP}.
+A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain, in the order of the domain's own sample (small P first): never the whole domain.
 The ranking is kept until an entry changes.</p>
 <table>
 <tr><th scope="row"><code>spaces</code></th><td>Only these spaces: <code>all</code> (the default) or a comma-separated list of ${SPACE_NAMES.map((n) => `<code>${n}</code>`).join(", ")}.</td></tr>
