@@ -1,6 +1,6 @@
 /** Writes data/surface/solids.json: the combinatorics shared by the TypeScript code and the Python certifier. */
 import { writeFileSync } from "node:fs";
-import { SOLID_NAMES, getSolid } from "../src/index";
+import { ALL_SOLID_NAMES, SOLID_NAMES, getSolid } from "../src/index";
 
 const out: Record<string, unknown> = {};
 for (const name of SOLID_NAMES) {
@@ -13,6 +13,23 @@ for (const name of SOLID_NAMES) {
     degree: S.degree,
     cone_angle_over_pi: S.coneAngle / Math.PI,
     vertices_unit_edge: S.vertices.map((v) => v.map((x) => Number(x.toPrecision(17)))),
+    faces: S.faces,
+    adj: S.adj.map((row) => row.map((r) => [r.face, r.edge])),
+  };
+}
+// the other solids: faces of several kinds and vertices of several kinds (their coordinates are those
+// of python/polyhedra/solids_exact.json)
+for (const name of ALL_SOLID_NAMES) {
+  if ((SOLID_NAMES as readonly string[]).includes(name)) continue;
+  const S = getSolid(name);
+  out[name] = {
+    family: S.family,
+    F: S.F,
+    V: S.V,
+    E: S.E,
+    sides: S.sides,
+    vertex_degree: S.vertexDegree,
+    cone_angles_over_pi: S.vertexCone.map((c) => Number((c / Math.PI).toPrecision(15))),
     faces: S.faces,
     adj: S.adj.map((row) => row.map((r) => [r.face, r.edge])),
   };

@@ -1,8 +1,8 @@
-import { boundingRadius, inradius, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius, pieceVertices, polygonSeparation } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
 import { SurfacePose, pieceParts } from "../parts";
 import { apply } from "../rigid";
-import { Solid, frameVertex } from "../solids";
+import { Solid, faceVertex } from "../solids";
 import { canonicalize } from "./energy";
 
 /**
@@ -24,7 +24,12 @@ function pathKey(node: ChainNode): string {
   return node.path.map((e) => `${e.face}.${e.edge}`).join("|");
 }
 
-export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: number): PieceGeom {
+export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: number, mode: "fold" | "nofold" = "fold"): PieceGeom {
+  return geomOf(solid, N, lam, p, i, mode);
+}
+
+function geomOf(solid: Solid, N: number, lam: number, p: SurfacePose, i: number, mode: "fold" | "nofold"): PieceGeom {
+  if (mode === "nofold") return { nodes: [], parts: N === 0 ? [] : [{ key: "", face: p.face, poly: pieceVertices(N, p, lam) }] };
   if (N === 0) {
     const nodes = enumerateChains(solid, 1, p.face, p.x, p.y, 2 * lam);
     return { nodes, parts: [] };
@@ -38,16 +43,19 @@ export function geom(solid: Solid, N: number, lam: number, p: SurfacePose, i: nu
 
 /** Constraint values involving piece i (all of them when `only` is undefined), keyed. */
 export function values(solid: Solid, N: number, lam: number, poses: SurfacePose[], G: PieceGeom[], only: number | undefined, thr: number, out: Map<string, number>): void {
+  valuesFold(solid, N, lam, poses, G, only, thr, out);
+}
+
+function valuesFold(solid: Solid, N: number, lam: number, poses: SurfacePose[], G: PieceGeom[], only: number | undefined, thr: number, out: Map<string, number>): void {
   const P = poses.length;
-  const M = solid.M;
   const rin = N === 0 ? lam : inradius(N) * lam;
   const pieces = only === undefined ? [...Array(P).keys()] : [only];
   for (const i of pieces) {
     const p = poses[i];
     // cone points
     for (const node of G[i].nodes) {
-      for (let k = 0; k < M; k++) {
-        const [fx, fy] = frameVertex(M, 1, k);
+      for (let k = 0; k < solid.sides[node.face]; k++) {
+        const [fx, fy] = faceVertex(solid, 1, node.face, k);
         const [vx, vy] = apply(node.toAnchor, fx, fy);
         if (!inWedge(node.wedge, p.x, p.y, vx, vy, 1e-12)) continue;
         let v: number;
@@ -95,6 +103,40 @@ export function values(solid: Solid, N: number, lam: number, poses: SurfacePose[
           }
         }
       }
+    }
+  }
+}
+
+/**
+ * Constraint values of the nofold mode: each piece's clearance to every edge line of its face
+ * (piece vertices, or the disk's centre minus lam) and the separation of pieces on one face.
+ */
+export function valuesNofold(solid: Solid, N: number, lam: number, poses: SurfacePose[], G: PieceGeom[], only: number | undefined, thr: number, out: Map<string, number>): void {
+  const P = poses.length;
+  const pieces = only === undefined ? [...Array(P).keys()] : [only];
+  for (const i of pieces) {
+    const p = poses[i];
+    const M = solid.sides[p.face];
+    for (let j = 0; j < M; j++) {
+      const [ax, ay] = faceVertex(solid, 1, p.face, j);
+      const [bx, by] = faceVertex(solid, 1, p.face, j + 1);
+      const L = Math.hypot(bx - ax, by - ay);
+      const nx = -(by - ay) / L;
+      const ny = (bx - ax) / L;
+      let v: number;
+      if (N === 0) v = nx * (p.x - ax) + ny * (p.y - ay) - lam;
+      else {
+        v = Infinity;
+        const poly = G[i].parts[0].poly;
+        for (let t = 0; t < poly.length; t += 2) v = Math.min(v, nx * (poly[t] - ax) + ny * (poly[t + 1] - ay));
+      }
+      if (v < thr) out.set(`w${i}:${p.face}:${j}`, v);
+    }
+    for (let j = 0; j < P; j++) {
+      if (j === i || poses[j].face !== p.face || (j < i && only === undefined)) continue;
+      const q = poses[j];
+      const v = N === 0 ? Math.hypot(q.x - p.x, q.y - p.y) - 2 * lam : polygonSeparation(G[i].parts[0].poly, G[j].parts[0].poly).sep;
+      if (v < thr) out.set(`q${Math.min(i, j)}:${Math.max(i, j)}:${p.face}`, v);
     }
   }
 }
@@ -173,10 +215,20 @@ export interface SlpResult {
  * also inside one (per piece of the derivatives, in the LP, per trial step); true returns the last
  * accepted packing.
  */
-export function slpPolish(solid: Solid, N: number, lam: number, poses0: SurfacePose[], opts: { iterations?: number; accept?: number; shouldStop?: () => boolean } = {}): SlpResult {
+export function slpPolish(
+  solid: Solid,
+  N: number,
+  lam: number,
+  poses0: SurfacePose[],
+  opts: { iterations?: number; accept?: number; shouldStop?: () => boolean; mode?: "fold" | "nofold" } = {},
+): SlpResult {
   const P = poses0.length;
   const dim = N === 0 ? 2 : 3;
   const accept = opts.accept ?? 1e-14;
+  const mode = opts.mode ?? "fold";
+  const nofold = mode === "nofold";
+  const geom = (sd: Solid, n: number, l: number, p: SurfacePose, i: number) => geomOf(sd, n, l, p, i, mode);
+  const values = nofold ? valuesNofold : valuesFold;
   let acceptWorst = accept;
   let poses = poses0.map((p) => canonicalize(solid, 1, p));
   let G = poses.map((p, i) => geom(solid, N, lam, p, i));
@@ -246,7 +298,8 @@ export function slpPolish(solid: Solid, N: number, lam: number, poses0: SurfaceP
           if (t !== undefined) J[t][dim * i + c] = (v - base.get(k)!) / h;
         }
         // keys owned by other pieces that involve i: recompute those pieces' view
-        if (N === 0) {
+        // (nofold: every key that involves i is computed from i's view above)
+        if (N === 0 && !nofold) {
           for (let j = 0; j < P; j++) {
             if (j === i) continue;
             const mj = new Map<string, number>();

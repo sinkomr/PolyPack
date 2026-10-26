@@ -2,7 +2,7 @@ import { TOL, inradius, pieceSeparation, pieceVertices, polygonSeparation } from
 import { ChainNode, enumerateChains, inWedge } from "./chains";
 import { Part, SurfacePose, pieceChains, pieceParts } from "./parts";
 import { apply } from "./rigid";
-import { Solid, SolidName, faceApothem, frameVertex, getSolid, isSolidName } from "./solids";
+import { Solid, SolidName, faceApothem, faceDepth, faceVertex, getSolid, isSolidName, surfaceArea } from "./solids";
 
 export type Mode = "fold" | "nofold";
 
@@ -35,7 +35,7 @@ export interface ValidateOptions {
   maxChains?: number;
 }
 
-/** Signed distance of (x, y) inside face polygon (positive inside) in a face frame. */
+/** Signed distance of (x, y) inside the regular M-gon face of side s (positive inside), in its frame. See also faceDepth. */
 export function insideFaceDepth(M: number, s: number, x: number, y: number): number {
   const ap = faceApothem(M, s);
   let worst = Infinity;
@@ -79,16 +79,15 @@ export function validateNofold(cfg: SurfaceConfig, opts: ValidateOptions = {}): 
   const solid = checkShape(cfg, errors);
   if (!solid) return empty(errors);
   const { N, s } = cfg;
-  const M = solid.M;
   let minWall = Infinity;
   let minPair = Infinity;
   cfg.pieces.forEach((p, i) => {
     let depth: number;
-    if (N === 0) depth = insideFaceDepth(M, s, p.x, p.y) - scale;
+    if (N === 0) depth = faceDepth(solid, s, p.face, p.x, p.y) - scale;
     else {
       const v = pieceVertices(N, p, scale);
       depth = Infinity;
-      for (let k = 0; k < N; k++) depth = Math.min(depth, insideFaceDepth(M, s, v[2 * k], v[2 * k + 1]));
+      for (let k = 0; k < N; k++) depth = Math.min(depth, faceDepth(solid, s, p.face, v[2 * k], v[2 * k + 1]));
     }
     minWall = Math.min(minWall, depth);
     if (depth < -tol) errors.push(`piece ${i} leaves face ${p.face} by ${-depth}`);
@@ -130,12 +129,12 @@ export function surfaceDistance(solid: Solid, s: number, p: { face: number; x: n
 
 /** Cone-point clearance of piece i: smallest distance of a vertex to the piece's boundary (negative = inside). */
 function coneClearance(solid: Solid, s: number, N: number, pose: SurfacePose, nodes: ChainNode[], scale: number, tol: number): number {
-  const M = solid.M;
   let worst = Infinity;
   const rin = N === 0 ? scale : inradius(N) * scale;
   for (const node of nodes) {
+    const M = solid.sides[node.face];
     for (let k = 0; k < M; k++) {
-      const [fx, fy] = frameVertex(M, s, k);
+      const [fx, fy] = faceVertex(solid, s, node.face, k);
       const [x, y] = apply(node.toAnchor, fx, fy);
       if (!inWedge(node.wedge, pose.x, pose.y, x, y, tol)) continue;
       let out: number;
@@ -171,14 +170,13 @@ export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Va
   const solid = checkShape(cfg, errors);
   if (!solid) return empty(errors);
   const { N, s } = cfg;
-  const M = solid.M;
   const push = (e: string) => {
     if (errors.length < maxErrors) errors.push(e);
   };
   let minPair = Infinity;
   let minCone = Infinity;
   cfg.pieces.forEach((p, i) => {
-    const d = insideFaceDepth(M, s, p.x, p.y);
+    const d = faceDepth(solid, s, p.face, p.x, p.y);
     if (d < -tol) push(`centre of piece ${i} is outside its face ${p.face} by ${-d}`);
   });
   if (errors.length) return { ok: false, errors, minPairSep: NaN, minConeSep: NaN, minWallSep: Infinity };
@@ -239,10 +237,11 @@ export function validate(cfg: SurfaceConfig, mode: Mode, opts: ValidateOptions =
   return mode === "fold" ? validateFold(cfg, opts) : validateNofold(cfg, opts);
 }
 
-/** Area lower bound on the edge: P * pieceArea <= surface area. */
+/** Area lower bound on the scale s (the edge, for unit-edge solids): P * pieceArea <= surface area. */
 export function areaBoundEdge(solidName: SolidName, N: number, P: number): number {
   const solid = getSolid(solidName);
   const A = N === 0 ? Math.PI : N / (4 * Math.tan(Math.PI / N));
-  // surface area at edge s is F * M s^2 / (4 tan(pi/M))
-  return Math.sqrt((P * A * 4 * Math.tan(Math.PI / solid.M)) / (solid.F * solid.M));
+  // Platonic: surface area at edge s is F * M s^2 / (4 tan(pi/M)), computed as before
+  if (solid.uniform) return Math.sqrt((P * A * 4 * Math.tan(Math.PI / solid.M)) / (solid.F * solid.M));
+  return Math.sqrt((P * A) / surfaceArea(solid, 1));
 }

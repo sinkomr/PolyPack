@@ -1,7 +1,7 @@
 import { pieceArea } from "@polypack/geometry";
 import { SurfacePose } from "../parts";
-import { Solid, faceApothem, surfaceArea } from "../solids";
-import { validateFold } from "../validate";
+import { Solid, faceApothem, faceArea, faceDepth, surfaceArea } from "../solids";
+import { validate } from "../validate";
 import { Packing, compress, compressPenalty, finalize } from "./optimize";
 import { slpPolish } from "./slp";
 
@@ -17,7 +17,12 @@ export function mulberry32(seed: number): () => number {
   };
 }
 
+/**
+ * A random pose on the solid of scale 1: a face (uniformly on the Platonic solids, by area on the
+ * others), a uniform point of it and a uniform angle.
+ */
 export function randomPose(solid: Solid, rand: () => number): SurfacePose {
+  if (!solid.uniform) return randomPoseGeneral(solid, rand);
   const ap = faceApothem(solid.M, 1);
   const face = Math.floor(rand() * solid.F);
   for (;;) {
@@ -29,6 +34,36 @@ export function randomPose(solid: Solid, rand: () => number): SurfacePose {
       if (x * Math.cos(a) + y * Math.sin(a) > ap) inside = false;
     }
     if (inside) return { face, x, y, theta: 2 * Math.PI * rand() };
+  }
+}
+
+function randomPoseGeneral(solid: Solid, rand: () => number): SurfacePose {
+  let total = 0;
+  for (let f = 0; f < solid.F; f++) total += faceArea(solid, f);
+  let t = rand() * total;
+  let face = solid.F - 1;
+  for (let f = 0; f < solid.F; f++) {
+    t -= faceArea(solid, f);
+    if (t < 0) {
+      face = f;
+      break;
+    }
+  }
+  const u = solid.unitFaces[face];
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let y0 = Infinity;
+  let y1 = -Infinity;
+  for (let i = 0; i < u.length; i += 2) {
+    x0 = Math.min(x0, u[i]);
+    x1 = Math.max(x1, u[i]);
+    y0 = Math.min(y0, u[i + 1]);
+    y1 = Math.max(y1, u[i + 1]);
+  }
+  for (;;) {
+    const x = x0 + rand() * (x1 - x0);
+    const y = y0 + rand() * (y1 - y0);
+    if (faceDepth(solid, 1, face, x, y) > 0) return { face, x, y, theta: 2 * Math.PI * rand() };
   }
 }
 
@@ -56,6 +91,8 @@ export interface SearchOptions {
   maxIter?: number;
   log?: (msg: string) => void;
   deadline?: number;
+  /** "fold" (default) or "nofold" (every piece inside one face; for the solids beyond the Platonic ones) */
+  mode?: "fold" | "nofold";
 }
 
 export interface SearchResult {
@@ -97,6 +134,7 @@ function runCompress(pk: Packing, N: number, lam0: number, maxIter: number | und
 
 /** Search one problem: compress every start, then basin-hop from the best. Deterministic for a seed. */
 export function searchProblem(solid: Solid, N: number, P: number, opts: SearchOptions): SearchResult | null {
+  const mode = opts.mode ?? "fold";
   const rand = mulberry32(opts.seed);
   const la = areaScale(solid, N, P);
   const log = opts.log ?? (() => {});
@@ -117,7 +155,7 @@ export function searchProblem(solid: Solid, N: number, P: number, opts: SearchOp
   }
   for (const st of starts) {
     if (stop()) break;
-    const pk = new Packing(solid, N, st.lam, st.poses);
+    const pk = new Packing(solid, N, st.lam, st.poses, mode);
     const r = runCompress(pk, N, st.lam, opts.maxIter, stop);
     evals += pk.evals;
     if (r) take(st.label, r.lam, r.poses);
@@ -128,20 +166,20 @@ export function searchProblem(solid: Solid, N: number, P: number, opts: SearchOp
     const b: SearchResult = best;
     const start = perturb(solid, b.poses, rand, b.lam);
     const lam0 = b.lam * 0.97;
-    const pk = new Packing(solid, N, lam0, start);
+    const pk = new Packing(solid, N, lam0, start, mode);
     const r = runCompress(pk, N, lam0, opts.maxIter, stop);
     evals += pk.evals;
     if (r) take(`${b.label}+hop${h}`, r.lam, r.poses);
   }
   const fin: SearchResult = best;
   // tighten to (near) zero overlap, then contact-LP polish (which keeps validity), then check
-  const pk = new Packing(solid, N, fin.lam, fin.poses);
+  const pk = new Packing(solid, N, fin.lam, fin.poses, mode);
   const f0 = finalize(pk, fin.lam, fin.poses);
-  const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120 });
+  const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120, mode });
   log(`  slp polish: s = ${(1 / pol.lam).toFixed(10)} (${pol.iterations} iterations)`);
   const f = pol.lam >= f0.lam ? { lam: pol.lam, poses: pol.poses, energy: 0 } : f0;
   const poses = f.poses.map((p) => ({ face: p.face, x: p.x / f.lam, y: p.y / f.lam, theta: p.theta }));
-  const v = validateFold({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, { tol: 1e-10 });
+  const v = validate({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, mode, { tol: 1e-10 });
   if (!v.ok) {
     log(`  finalize failed the float check: ${v.errors[0]}`);
     return null;

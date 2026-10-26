@@ -29,7 +29,7 @@ def code_hash():
     """Certifier version plus a hash of the certifier's code: part of every cache key, so a changed
     certifier never reuses certificates (or failures) made by an older one."""
     h = hashlib.sha256(VERSION.encode())
-    for name in ("cert.py", "numfield.py", "geom.py"):
+    for name in ("cert.py", "numfield.py", "geom.py", "general.py"):
         with open(os.path.join(HERE, name), "rb") as fh:
             h.update(fh.read())
     return h.hexdigest()

@@ -1,7 +1,7 @@
 import { boundingRadius, pieceVertices } from "@polypack/geometry";
 import { ChainNode, Wedge, enumerateChains } from "./chains";
 import { apply, inverse } from "./rigid";
-import { Solid, frameVertex } from "./solids";
+import { Solid, faceVertex } from "./solids";
 
 /** A piece on the surface: anchor face and (x, y, theta) in that face's frame. */
 export interface SurfacePose {
@@ -125,14 +125,14 @@ export function pieceChains(solid: Solid, s: number, N: number, pose: SurfacePos
 export function pieceParts(solid: Solid, s: number, N: number, pose: SurfacePose, piece: number, scale = 1, chains?: ChainNode[]): Part[] {
   const nodes = chains ?? pieceChains(solid, s, N, pose, scale);
   const base = piecePolygon(N, pose, scale);
-  const M = solid.M;
   const parts: Part[] = [];
   nodes.forEach((node, ci) => {
     let poly = base;
     if (node.wedge) for (const h of wedgeHalfPlanes(node.wedge, pose.x, pose.y)) poly = clipHalfPlane(poly, h);
+    const M = solid.sides[node.face];
     const face = new Float64Array(2 * M);
     for (let k = 0; k < M; k++) {
-      const [x, y] = frameVertex(M, s, k);
+      const [x, y] = faceVertex(solid, s, node.face, k);
       const [u, v] = apply(node.toAnchor, x, y);
       face[2 * k] = u;
       face[2 * k + 1] = v;

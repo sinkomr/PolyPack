@@ -1,21 +1,79 @@
 /**
- * The five Platonic solids as glued surfaces of regular polygons.
+ * Convex polyhedral surfaces: the five Platonic solids, the 13 Catalan solids, the prisms with 3 and 5
+ * to 12 sides and the antiprisms with 4 to 12 sides, each a closed surface of convex polygons glued
+ * edge to edge, flat except at the vertices (cone points).
  *
  * Conventions (fixed; the Python certifier rebuilds them independently and the two must agree):
- * - Vertices are listed in a documented order (see `vertexList`), at unit edge length.
- * - A face is the cycle of its vertex ids, counter-clockwise seen from outside, rotated so that
- *   its smallest vertex id comes first. Faces are sorted lexicographically by these cycles.
- * - Face frame: face f is the regular M-gon of side s centred at the origin with a horizontal
- *   bottom edge (PolyPack's container convention with phi = 0). Frame vertex k sits at angle
- *   -pi/2 + pi/M + 2 pi k / M and is the 3D vertex faces[f][k]. Edge k runs from frame vertex k
- *   to frame vertex k + 1. Counter-clockwise in the frame is counter-clockwise from outside, so a
- *   frame is an orientation-preserving chart of the surface.
- * - The surface metric depends only on the gluing (which edge meets which); the 3D coordinates
- *   are used for the 3D view only.
+ * - Platonic solids: vertices in a documented order (see `vertexList`), at unit edge length. The other
+ *   solids: the polyhedra space's canonical solids (python/polyhedra/solids_exact.json), in its vertex
+ *   order and scale (unit edges for prisms and antiprisms; Catalan solids are the polar reciprocals of
+ *   the unit-edge Archimedean solids about the midsphere). The score s is the scale factor of that
+ *   canonical solid, which for the Platonic solids and the prisms and antiprisms is the edge length.
+ * - A face is the cycle of its vertex ids, counter-clockwise seen from outside, rotated so that its
+ *   smallest vertex id comes first. Faces are sorted lexicographically by these cycles.
+ * - Face frame: the origin is the foot of the perpendicular from the solid's centre to the face plane,
+ *   and the last edge (frame vertex M - 1 to frame vertex 0) is horizontal at the bottom, running in
+ *   +x. Frame vertex k is the 3D vertex faces[f][k] and edge k runs from frame vertex k to k + 1, so
+ *   frame vertex 0 is the bottom right corner. For a regular face (all faces
+ *   of the Platonic solids, prisms and antiprisms: their centre is the foot) this is the regular M-gon
+ *   of side s centred at the origin with a horizontal bottom edge, PolyPack's container convention with
+ *   phi = 0: frame vertex k at angle -pi/2 + pi/M + 2 pi k/M (`frameVertex`). Catalan faces are
+ *   irregular but tangential (every edge touches the midsphere), and the foot is their incentre.
+ *   Counter-clockwise in the frame is counter-clockwise from outside, so a frame is an
+ *   orientation-preserving chart of the surface.
+ * - The surface metric depends only on the faces and the gluing (which edge meets which); the 3D
+ *   coordinates fix the face shapes and are used for drawing.
+ *
+ * The Platonic solids keep the code paths they had before the generalisation (`uniform`), so that their
+ * validation and search are bit for bit unchanged.
  */
+import { GENERAL_SOLID_DATA } from "./general.data";
 
-export type SolidName = "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
-export const SOLID_NAMES: readonly SolidName[] = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
+export type PlatonicName = "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
+export type CatalanName =
+  | "triakis_tetrahedron"
+  | "rhombic_dodecahedron"
+  | "triakis_octahedron"
+  | "tetrakis_hexahedron"
+  | "deltoidal_icositetrahedron"
+  | "disdyakis_dodecahedron"
+  | "pentagonal_icositetrahedron"
+  | "rhombic_triacontahedron"
+  | "triakis_icosahedron"
+  | "pentakis_dodecahedron"
+  | "deltoidal_hexecontahedron"
+  | "disdyakis_triacontahedron"
+  | "pentagonal_hexecontahedron";
+export type PrismName = `prism${3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
+export type AntiprismName = `antiprism${4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
+export type SolidName = PlatonicName | CatalanName | PrismName | AntiprismName;
+export type SolidFamily = "platonic" | "catalan" | "prism" | "antiprism";
+
+/** The five Platonic solids (the solids of the space before 2026-10-26), in their catalogue order. */
+export const SOLID_NAMES: readonly PlatonicName[] = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
+export const PLATONIC_NAMES = SOLID_NAMES;
+/** The Catalan solids, by number of faces, then name. */
+export const CATALAN_NAMES: readonly CatalanName[] = [
+  "rhombic_dodecahedron",
+  "triakis_tetrahedron",
+  "deltoidal_icositetrahedron",
+  "pentagonal_icositetrahedron",
+  "tetrakis_hexahedron",
+  "triakis_octahedron",
+  "rhombic_triacontahedron",
+  "disdyakis_dodecahedron",
+  "deltoidal_hexecontahedron",
+  "pentagonal_hexecontahedron",
+  "pentakis_dodecahedron",
+  "triakis_icosahedron",
+  "disdyakis_triacontahedron",
+];
+export const PRISM_NAMES: readonly PrismName[] = [3, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `prism${n}` as PrismName);
+export const ANTIPRISM_NAMES: readonly AntiprismName[] = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(
+  (n) => `antiprism${n}` as AntiprismName,
+);
+/** Every solid of the space, grouped by family (Platonic, Catalan, prisms, antiprisms) and sorted within. */
+export const ALL_SOLID_NAMES: readonly SolidName[] = [...SOLID_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
 
 export interface EdgeRef {
   face: number;
@@ -24,28 +82,52 @@ export interface EdgeRef {
 
 export interface Solid {
   name: SolidName;
-  /** sides of every face */
+  family: SolidFamily;
+  /** Plain name, e.g. "cube", "rhombic dodecahedron", "pentagonal prism". */
+  title: string;
+  /** sides of every face when all faces have the same number of sides, else the largest (see `sides`) */
   M: number;
   F: number;
   V: number;
   E: number;
-  /** faces meeting at every vertex */
+  /** faces meeting at every vertex when that number is the same at every vertex, else NaN (see `vertexDegree`) */
   degree: number;
-  /** interior angle of a face, (M - 2) pi / M */
+  /** interior angle of every face when all faces are the same regular M-gon, (M - 2) pi / M; else NaN (see `corner`) */
   faceAngle: number;
-  /** total angle around a vertex: degree * faceAngle (< 2 pi) */
+  /** total angle around every vertex when it is the same at every vertex (< 2 pi); else NaN (see `vertexCone`) */
   coneAngle: number;
-  /** unit-edge 3D coordinates, for drawing only */
+  /** canonical 3D coordinates (unit edge for the Platonic solids), for drawing only */
   vertices: [number, number, number][];
   /** faces[f][k] = vertex id of frame vertex k */
   faces: number[][];
   /** adj[f][k] = the face and edge glued to edge k of face f */
   adj: EdgeRef[][];
+  /** number of sides of each face */
+  sides: number[];
+  /**
+   * True for the Platonic solids: every face is the same regular M-gon in the regular frame. Their code
+   * paths are the ones from before the generalisation, so their results stay bit for bit the same.
+   */
+  uniform: boolean;
+  /** per face: a regular polygon in the regular frame (frame vertices from `frameVertex`) */
+  regular: boolean[];
+  /** per face: frame vertices at scale s = 1, flat [x0, y0, x1, y1, ...] */
+  unitFaces: Float64Array[];
+  /** per face: interior angle at each frame vertex (radians) */
+  corner: number[][];
+  /** per face: direction angle of each edge (frame vertex k to k + 1) in the face's frame */
+  edgeAngle: number[][];
+  /** per vertex: number of faces at it */
+  vertexDegree: number[];
+  /** per vertex: cone angle, the sum of the face angles at it (radians, < 2 pi) */
+  vertexCone: number[];
+  /** per face: the 3D frame at scale 1 (origin, x axis, y axis), for drawing */
+  frame3D: { o: [number, number, number]; ex: [number, number, number]; ey: [number, number, number] }[];
 }
 
 const PHI = (1 + Math.sqrt(5)) / 2;
 
-/** Vertex coordinates in the documented order, scaled to unit edge. */
+/** Vertex coordinates in the documented order: Platonic solids at unit edge, the others canonical. */
 export function vertexList(name: SolidName): [number, number, number][] {
   const scale = (pts: number[][], k: number) => pts.map((p) => [p[0] * k, p[1] * k, p[2] * k] as [number, number, number]);
   const cube = (h: number) => {
@@ -98,6 +180,9 @@ export function vertexList(name: SolidName): [number, number, number][] {
     case "dodecahedron":
       return scale([...cube(1), ...cyclic(1 / PHI, PHI)], PHI / 2);
   }
+  const d = GENERAL_SOLID_DATA.find((x) => x.name === name);
+  if (!d) throw new Error(`unknown solid ${name}`);
+  return d.V.map((p) => [p[0], p[1], p[2]] as [number, number, number]);
 }
 
 type V3 = [number, number, number];
@@ -135,11 +220,20 @@ export function hullFaces(pts: V3[]): number[][] {
         if (pos) nrm = [-nrm[0], -nrm[1], -nrm[2]];
         faces.push(orderCcw(pts, on, nrm));
       }
-  faces.sort((a, b) => {
+  return sortFaces(faces);
+}
+
+function sortFaces(faces: number[][]): number[][] {
+  return faces.sort((a, b) => {
     for (let t = 0; t < Math.min(a.length, b.length); t++) if (a[t] !== b[t]) return a[t] - b[t];
     return a.length - b.length;
   });
-  return faces;
+}
+
+/** A face cycle (counter-clockwise from outside) rotated to start at its smallest id. */
+export function canonicalCycle(cycle: number[]): number[] {
+  const m = cycle.indexOf(Math.min(...cycle));
+  return [...cycle.slice(m), ...cycle.slice(0, m)];
 }
 
 /** Counter-clockwise order about the outward normal, starting at the smallest id. */
@@ -155,8 +249,50 @@ function orderCcw(pts: V3[], ids: number[], nrm: V3): number[] {
     return Math.atan2(dot(d, w), dot(d, u));
   };
   const sorted = [...ids].sort((a, b) => ang(a) - ang(b));
-  const m = sorted.indexOf(Math.min(...sorted));
-  return [...sorted.slice(m), ...sorted.slice(0, m)];
+  return canonicalCycle(sorted);
+}
+
+const PLATONIC = new Set<string>(SOLID_NAMES);
+
+/** Interior angle of a convex polygon (flat counter-clockwise array) at vertex k. */
+function cornerAngle(poly: Float64Array, k: number): number {
+  const n = poly.length / 2;
+  const i = (k + n - 1) % n;
+  const j = (k + 1) % n;
+  const ax = poly[2 * i] - poly[2 * k];
+  const ay = poly[2 * i + 1] - poly[2 * k + 1];
+  const bx = poly[2 * j] - poly[2 * k];
+  const by = poly[2 * j + 1] - poly[2 * k + 1];
+  // turning from the next edge counter-clockwise to the previous one
+  return Math.atan2(bx * ay - by * ax, ax * bx + ay * by);
+}
+
+/** The frame of a face from its 3D vertices: origin at the foot from the solid's centre, edge n - 1 along +x. */
+function frameOf(pts: V3[]): { o: V3; ex: V3; ey: V3; flat: Float64Array } {
+  const n = pts.length;
+  // outward normal from the polygon's vector area (the cycle runs counter-clockwise from outside)
+  let nrm: V3 = [0, 0, 0];
+  for (let k = 0; k < n; k++) {
+    const c = cross3(pts[k], pts[(k + 1) % n]);
+    nrm = [nrm[0] + c[0], nrm[1] + c[1], nrm[2] + c[2]];
+  }
+  const ln = Math.hypot(...nrm);
+  nrm = [nrm[0] / ln, nrm[1] / ln, nrm[2] / ln];
+  let off = 0;
+  for (const p of pts) off += dot(nrm, p) / n;
+  const o: V3 = [nrm[0] * off, nrm[1] * off, nrm[2] * off];
+  // the bottom edge, from frame vertex n - 1 to frame vertex 0, runs along +x
+  const e = sub(pts[0], pts[n - 1]);
+  const le = Math.hypot(...e);
+  const ex: V3 = [e[0] / le, e[1] / le, e[2] / le];
+  const ey = cross3(nrm, ex);
+  const flat = new Float64Array(2 * n);
+  pts.forEach((p, k) => {
+    const d = sub(p, o);
+    flat[2 * k] = dot(d, ex);
+    flat[2 * k + 1] = dot(d, ey);
+  });
+  return { o, ex, ey, flat };
 }
 
 const cache = new Map<SolidName, Solid>();
@@ -164,51 +300,134 @@ const cache = new Map<SolidName, Solid>();
 export function getSolid(name: SolidName): Solid {
   const hit = cache.get(name);
   if (hit) return hit;
+  if (!isSolidName(name)) throw new Error(`unknown solid ${String(name)}`);
   const vertices = vertexList(name);
-  const faces = hullFaces(vertices);
-  const M = faces[0].length;
+  const data = GENERAL_SOLID_DATA.find((x) => x.name === name);
+  const uniform = PLATONIC.has(name);
+  // Platonic: hull of the documented vertices; the others: the canonical solid's own faces, canonically ordered
+  const faces = uniform ? hullFaces(vertices) : sortFaces(data!.faces.map(canonicalCycle));
   const F = faces.length;
   const V = vertices.length;
-  const E = (F * M) / 2;
+  const sides = faces.map((f) => f.length);
+  const E = sides.reduce((a, b) => a + b, 0) / 2;
   // edge k of face f runs from faces[f][k] to faces[f][k+1]; its neighbour holds the reverse edge
   const directed = new Map<string, EdgeRef>();
-  faces.forEach((f, fi) => f.forEach((v, k) => directed.set(`${v}>${f[(k + 1) % M]}`, { face: fi, edge: k })));
+  faces.forEach((f, fi) => f.forEach((v, k) => directed.set(`${v}>${f[(k + 1) % f.length]}`, { face: fi, edge: k })));
   const adj = faces.map((f) =>
     f.map((v, k) => {
-      const r = directed.get(`${f[(k + 1) % M]}>${v}`);
+      const r = directed.get(`${f[(k + 1) % f.length]}>${v}`);
       if (!r) throw new Error(`${name}: unglued edge`);
       return r;
     }),
   );
-  const degree = (F * M) / V;
-  const faceAngle = ((M - 2) * Math.PI) / M;
-  const solid: Solid = { name, M, F, V, E, degree, faceAngle, coneAngle: degree * faceAngle, vertices, faces, adj };
+  const frames = faces.map((f) => frameOf(f.map((v) => vertices[v])));
+  const regular = faces.map((f, fi) => {
+    if (uniform) return true;
+    if (data!.family === "catalan") return false;
+    // prisms and antiprisms: every face is the regular polygon of its frame; check it
+    const M = f.length;
+    const flat = frames[fi].flat;
+    for (let k = 0; k < M; k++) {
+      const [x, y] = frameVertex(M, 1, k);
+      if (Math.hypot(flat[2 * k] - x, flat[2 * k + 1] - y) > 1e-12 * faceCircumradius(M, 1))
+        throw new Error(`${name}: face ${fi} is not the regular ${M}-gon of its frame`);
+    }
+    return true;
+  });
+  const unitFaces = faces.map((f, fi) => (regular[fi] ? facePolygon(f.length, 1) : frames[fi].flat));
+  const corner = faces.map((f, fi) =>
+    regular[fi] ? f.map(() => ((f.length - 2) * Math.PI) / f.length) : f.map((_, k) => cornerAngle(unitFaces[fi], k)),
+  );
+  const edgeAngle = faces.map((f, fi) =>
+    f.map((_, k) => {
+      if (regular[fi]) return (2 * Math.PI * (k + 1)) / f.length;
+      const u = unitFaces[fi];
+      const j = (k + 1) % f.length;
+      return Math.atan2(u[2 * j + 1] - u[2 * k + 1], u[2 * j] - u[2 * k]);
+    }),
+  );
+  const vertexDegree = new Array<number>(V).fill(0);
+  const vertexCone = new Array<number>(V).fill(0);
+  faces.forEach((f, fi) =>
+    f.forEach((v, k) => {
+      vertexDegree[v]++;
+      vertexCone[v] += corner[fi][k];
+    }),
+  );
+  const M = Math.max(...sides);
+  const degree = vertexDegree.every((d) => d === vertexDegree[0]) ? vertexDegree[0] : NaN;
+  const faceAngle = uniform ? ((M - 2) * Math.PI) / M : NaN;
+  const coneAngle = uniform
+    ? degree * faceAngle
+    : vertexCone.every((c) => Math.abs(c - vertexCone[0]) < 1e-12)
+      ? vertexCone[0]
+      : NaN;
+  const solid: Solid = {
+    name,
+    family: uniform ? "platonic" : data!.family,
+    title: uniform ? name : data!.title,
+    M,
+    F,
+    V,
+    E,
+    degree,
+    faceAngle,
+    coneAngle,
+    vertices,
+    faces,
+    adj,
+    sides,
+    uniform,
+    regular,
+    unitFaces,
+    corner,
+    edgeAngle,
+    vertexDegree,
+    vertexCone,
+    frame3D: frames.map(({ o, ex, ey }) => ({ o, ex, ey })),
+  };
   cache.set(name, solid);
   return solid;
 }
 
 export function isSolidName(x: unknown): x is SolidName {
-  return typeof x === "string" && (SOLID_NAMES as readonly string[]).includes(x);
+  return typeof x === "string" && (ALL_SOLID_NAMES as readonly string[]).includes(x);
 }
 
-/** Circumradius of the face polygon at edge s. */
+/** Circumradius of the regular face polygon at edge s. */
 export function faceCircumradius(M: number, s: number): number {
   return s / (2 * Math.sin(Math.PI / M));
 }
 
-/** Apothem of the face polygon at edge s. */
+/** Apothem of the regular face polygon at edge s. */
 export function faceApothem(M: number, s: number): number {
   return s / (2 * Math.tan(Math.PI / M));
 }
 
-/** Frame vertex k of a face at edge s (angle -pi/2 + pi/M + 2 pi k / M). */
+/** Frame vertex k of a regular face at edge s (angle -pi/2 + pi/M + 2 pi k / M). */
 export function frameVertex(M: number, s: number, k: number): [number, number] {
   const R = faceCircumradius(M, s);
   const a = -Math.PI / 2 + Math.PI / M + (2 * Math.PI * (((k % M) + M) % M)) / M;
   return [R * Math.cos(a), R * Math.sin(a)];
 }
 
-/** Face polygon in its own frame as a flat counter-clockwise array. */
+/** Frame vertex k of face f of a solid at scale s (any face; regular faces use `frameVertex`). */
+export function faceVertex(solid: Solid, s: number, f: number, k: number): [number, number] {
+  const M = solid.sides[f];
+  if (solid.regular[f]) return frameVertex(M, s, k);
+  const u = solid.unitFaces[f];
+  const i = ((k % M) + M) % M;
+  return [s * u[2 * i], s * u[2 * i + 1]];
+}
+
+/** Frame vertices of face f at scale s, as pairs. */
+export function faceVertices(solid: Solid, s: number, f: number): [number, number][] {
+  const out: [number, number][] = [];
+  for (let k = 0; k < solid.sides[f]; k++) out.push(faceVertex(solid, s, f, k));
+  return out;
+}
+
+/** Regular face polygon in its own frame as a flat counter-clockwise array. */
 export function facePolygon(M: number, s: number): Float64Array {
   const out = new Float64Array(2 * M);
   for (let k = 0; k < M; k++) {
@@ -219,16 +438,121 @@ export function facePolygon(M: number, s: number): Float64Array {
   return out;
 }
 
-/** Surface area of the solid at edge s. */
+/** Face f of a solid in its own frame at scale s, as a flat counter-clockwise array. */
+export function facePolygonOf(solid: Solid, s: number, f: number): Float64Array {
+  if (solid.regular[f]) return facePolygon(solid.sides[f], s);
+  return Float64Array.from(solid.unitFaces[f], (v) => v * s);
+}
+
+/** Area of face f at scale 1. */
+export function faceArea(solid: Solid, f: number): number {
+  const u = solid.unitFaces[f];
+  const n = u.length / 2;
+  let a = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    a += u[2 * i] * u[2 * j + 1] - u[2 * j] * u[2 * i + 1];
+  }
+  return a / 2;
+}
+
+/** Surface area of the solid at scale s. */
 export function surfaceArea(solid: Solid, s: number): number {
-  return (solid.F * solid.M * s * s) / (4 * Math.tan(Math.PI / solid.M));
+  if (solid.uniform) return (solid.F * solid.M * s * s) / (4 * Math.tan(Math.PI / solid.M));
+  let a = 0;
+  for (let f = 0; f < solid.F; f++) a += faceArea(solid, f);
+  return a * s * s;
+}
+
+/**
+ * Signed distance of (x, y) inside face f (positive inside), in that face's frame at scale s. On a
+ * regular face this is computed as `insideFaceDepth` of validate.ts always was.
+ */
+export function faceDepth(solid: Solid, s: number, f: number, x: number, y: number): number {
+  const M = solid.sides[f];
+  if (solid.regular[f]) {
+    const ap = faceApothem(M, s);
+    let worst = Infinity;
+    for (let j = 0; j < M; j++) {
+      // outward normal of edge j has angle 2 pi (j + 1) / M - pi / 2
+      const a = (2 * Math.PI * (j + 1)) / M - Math.PI / 2;
+      const d = ap - (x * Math.cos(a) + y * Math.sin(a));
+      if (d < worst) worst = d;
+    }
+    return worst;
+  }
+  const u = solid.unitFaces[f];
+  let worst = Infinity;
+  for (let j = 0; j < M; j++) {
+    const k = (j + 1) % M;
+    const ax = s * u[2 * j];
+    const ay = s * u[2 * j + 1];
+    const ex = s * u[2 * k] - ax;
+    const ey = s * u[2 * k + 1] - ay;
+    const d = (ex * (y - ay) - ey * (x - ax)) / Math.hypot(ex, ey);
+    if (d < worst) worst = d;
+  }
+  return worst;
+}
+
+/**
+ * Largest distance from a point of face f to the nearest corner of that face, at scale 1: every point
+ * of the face is within this distance of one of its corners. The farthest point is a vertex of the
+ * corners' Voronoi diagram inside the face or a point where a Voronoi edge meets the boundary, so the
+ * circumcentres of corner triples and the meetings of corner bisectors with edges suffice.
+ */
+export function faceCornerRadius(solid: Solid, f: number): number {
+  const u = solid.unitFaces[f];
+  const n = u.length / 2;
+  const P = Array.from({ length: n }, (_, k) => [u[2 * k], u[2 * k + 1]] as [number, number]);
+  const near = (x: number, y: number) => Math.min(...P.map(([a, b]) => Math.hypot(x - a, y - b)));
+  const inside = (x: number, y: number) => faceDepth(solid, 1, f, x, y) >= -1e-12;
+  let best = 0;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      for (let k = j + 1; k < n; k++) {
+        const [ax, ay] = P[i];
+        const [bx, by] = P[j];
+        const [cx, cy] = P[k];
+        const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if (Math.abs(d) < 1e-15) continue;
+        const a2 = ax * ax + ay * ay;
+        const b2 = bx * bx + by * by;
+        const c2 = cx * cx + cy * cy;
+        const x = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d;
+        const y = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d;
+        if (inside(x, y)) best = Math.max(best, near(x, y));
+      }
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const mx = (P[i][0] + P[j][0]) / 2;
+      const my = (P[i][1] + P[j][1]) / 2;
+      const nx = P[j][0] - P[i][0];
+      const ny = P[j][1] - P[i][1];
+      for (let e = 0; e < n; e++) {
+        const [ax, ay] = P[e];
+        const [bx, by] = P[(e + 1) % n];
+        // the point a + t (b - a) on the bisector n . (p - m) = 0
+        const den = nx * (bx - ax) + ny * (by - ay);
+        if (Math.abs(den) < 1e-15) continue;
+        const t = (nx * (mx - ax) + ny * (my - ay)) / den;
+        if (t < 0 || t > 1) continue;
+        best = Math.max(best, near(ax + t * (bx - ax), ay + t * (by - ay)));
+      }
+    }
+  return best;
 }
 
 /**
  * 3D position of a point given in face f's frame (for drawing). The frame vertex k maps to the
- * 3D vertex faces[f][k]; the map is the similarity fixed by the face centre and frame vertex 0.
+ * 3D vertex faces[f][k].
  */
 export function faceTo3D(solid: Solid, s: number, f: number, x: number, y: number): [number, number, number] {
+  if (!solid.uniform) {
+    const { o, ex, ey } = solid.frame3D[f];
+    return [s * o[0] + x * ex[0] + y * ey[0], s * o[1] + x * ex[1] + y * ey[1], s * o[2] + x * ex[2] + y * ey[2]];
+  }
+  // the Platonic solids: the similarity fixed by the face centre and frame vertex 0
   const ids = solid.faces[f];
   const M = solid.M;
   const c: V3 = [0, 0, 0];

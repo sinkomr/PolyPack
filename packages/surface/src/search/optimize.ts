@@ -1,7 +1,7 @@
 import { boundingRadius } from "@polypack/geometry";
 import { SurfacePose } from "../parts";
 import { Solid } from "../solids";
-import { PolygonEnergy, canonicalize, diskEnergy } from "./energy";
+import { PolygonEnergy, canonicalize, diskEnergy, diskEnergyNofold } from "./energy";
 
 /**
  * Local optimisation for the fold search, on the solid of edge s = 1 with pieces scaled by lam
@@ -26,18 +26,28 @@ export interface RelaxResult {
 export class Packing {
   readonly solid: Solid;
   readonly N: number;
+  /** "fold" (default) or "nofold": every piece kept inside its own face (energy.ts) */
+  readonly mode: "fold" | "nofold";
   lam: number;
   poses: SurfacePose[];
   private poly: PolygonEnergy | null;
   /** polygon energy evaluations (piece-local), for budgets */
   evals = 0;
 
-  constructor(solid: Solid, N: number, lam: number, poses: SurfacePose[]) {
+  constructor(solid: Solid, N: number, lam: number, poses: SurfacePose[], mode: "fold" | "nofold" = "fold") {
     this.solid = solid;
     this.N = N;
+    this.mode = mode;
     this.lam = lam;
     this.poses = poses.map((p) => canonicalize(solid, 1, p));
-    this.poly = N === 0 ? null : new PolygonEnergy(solid, 1, N, lam, this.poses);
+    this.poly = N === 0 ? null : new PolygonEnergy(solid, 1, N, lam, this.poses, mode);
+  }
+
+  /** The disk energy of the mode at scale lam (and its gradient). */
+  private disks(lam: number, grad?: Float64Array): number {
+    return this.mode === "nofold"
+      ? diskEnergyNofold(this.solid, 1, lam, this.poses, grad)
+      : diskEnergy(this.solid, 1, lam, this.poses, grad);
   }
 
   setScale(lam: number): void {
@@ -55,7 +65,7 @@ export class Packing {
 
   energy(): number {
     if (this.poly) return this.poly.total();
-    return diskEnergy(this.solid, 1, this.lam, this.poses);
+    return this.disks(this.lam);
   }
 
   private get dim(): number {
@@ -69,7 +79,7 @@ export class Packing {
   /** Gradient in the variables (x, y[, theta * R lam]) at the current poses. */
   private gradient(g: Float64Array): number {
     const P = this.poses.length;
-    if (!this.poly) return diskEnergy(this.solid, 1, this.lam, this.poses, g);
+    if (!this.poly) return this.disks(this.lam, g);
     const E = this.poly;
     const h = 1e-7 * this.lam;
     const ts = this.thetaScale();
@@ -244,8 +254,8 @@ export class Packing {
     const lam = this.lam;
     const h = 1e-7 * lam;
     if (!this.poly) {
-      const up = diskEnergy(this.solid, 1, lam + h, this.poses);
-      const dn = diskEnergy(this.solid, 1, lam - h, this.poses);
+      const up = this.disks(lam + h);
+      const dn = this.disks(lam - h);
       return (up - dn) / (2 * h);
     }
     this.poly.setScale(lam + h);

@@ -1,4 +1,4 @@
-import { Solid, frameVertex } from "./solids";
+import { Solid, faceVertex, frameVertex } from "./solids";
 
 /**
  * Orientation-preserving rigid motion of the plane: p -> R(ang) p + (tx, ty).
@@ -50,13 +50,20 @@ export function rigidThrough(ang: number, px: number, py: number, qx: number, qy
  * Gluing map across edge k of face f: it takes the frame of the neighbour g (glued along its edge l)
  * to the plane of f's frame, so that g lies on the far side of edge k.
  * g's frame vertex l+1 goes to f's frame vertex k and g's l goes to f's k+1; the rotation is
- * 2 pi (k - l) / M + pi (edge k of a frame has direction angle 2 pi (k + 1) / M).
+ * (direction of f's edge k) + pi - (direction of g's edge l). On the Platonic solids (edge k of a
+ * frame has direction angle 2 pi (k + 1) / M) that is 2 pi (k - l) / M + pi, computed as before.
  */
 export function glue(solid: Solid, s: number, f: number, k: number): { face: number; edge: number; T: Rigid } {
-  const M = solid.M;
   const { face: g, edge: l } = solid.adj[f][k];
-  const ang = (2 * Math.PI * (k - l)) / M + Math.PI;
-  const [px, py] = frameVertex(M, s, l + 1);
-  const [qx, qy] = frameVertex(M, s, k);
+  if (solid.uniform) {
+    const M = solid.M;
+    const ang = (2 * Math.PI * (k - l)) / M + Math.PI;
+    const [px, py] = frameVertex(M, s, l + 1);
+    const [qx, qy] = frameVertex(M, s, k);
+    return { face: g, edge: l, T: rigidThrough(ang, px, py, qx, qy) };
+  }
+  const ang = solid.edgeAngle[f][k] + Math.PI - solid.edgeAngle[g][l];
+  const [px, py] = faceVertex(solid, s, g, l + 1);
+  const [qx, qy] = faceVertex(solid, s, f, k);
   return { face: g, edge: l, T: rigidThrough(ang, px, py, qx, qy) };
 }

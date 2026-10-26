@@ -16,6 +16,7 @@ TESTS = [
     "polyhedra/test_certify.py",
     "sphere/test_certify.py",
     "surface/test_cert.py",
+    "surface/test_general.py",
     "torus/test_certify_torus.py",
     "torus/test_torus_tools.py",
 ]

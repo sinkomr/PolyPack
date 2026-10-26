@@ -1,8 +1,8 @@
-import { boundingRadius, inradius, polygonSeparation } from "@polypack/geometry";
+import { boundingRadius, inradius, pieceVertices, polygonSeparation } from "@polypack/geometry";
 import { ChainNode, enumerateChains, inWedge } from "../chains";
 import { SurfacePose, pieceParts } from "../parts";
 import { apply, glue } from "../rigid";
-import { Solid, faceApothem, frameVertex } from "../solids";
+import { Solid, faceApothem, faceDepth, faceVertex, frameVertex } from "../solids";
 
 /**
  * Overlap energies for the fold search on a solid of edge `s` with pieces scaled by `lam`.
@@ -13,6 +13,7 @@ import { Solid, faceApothem, frameVertex } from "../solids";
 
 /** Move a pose whose centre left its face into the face that contains it (orientation preserved). */
 export function canonicalize(solid: Solid, s: number, p: SurfacePose): SurfacePose {
+  if (!solid.uniform) return canonicalizeGeneral(solid, s, p);
   let { face, x, y, theta } = p;
   const M = solid.M;
   const ap = faceApothem(M, s);
@@ -57,6 +58,51 @@ export function canonicalize(solid: Solid, s: number, p: SurfacePose): SurfacePo
   return { face, x, y, theta };
 }
 
+/** canonicalize on any convex faces: leave through the edge the point is farthest beyond. */
+function canonicalizeGeneral(solid: Solid, s: number, p: SurfacePose): SurfacePose {
+  let { face, x, y, theta } = p;
+  for (let step = 0; step < 64; step++) {
+    const M = solid.sides[face];
+    let worst = 0;
+    let kw = -1;
+    for (let j = 0; j < M; j++) {
+      const [ax, ay] = faceVertex(solid, s, face, j);
+      const [bx, by] = faceVertex(solid, s, face, j + 1);
+      const ex = bx - ax;
+      const ey = by - ay;
+      // distance beyond the edge line (inside is to the left)
+      const out = (ey * (x - ax) - ex * (y - ay)) / Math.hypot(ex, ey);
+      if (out > worst) {
+        worst = out;
+        kw = j;
+      }
+    }
+    if (kw < 0) return { face, x, y, theta };
+    const g = glue(solid, s, face, kw);
+    const T = g.T;
+    const ix = -(T.c * T.tx + T.s * T.ty);
+    const iy = -(-T.s * T.tx + T.c * T.ty);
+    const nx = T.c * x + T.s * y + ix;
+    const ny = -T.s * x + T.c * y + iy;
+    x = nx;
+    y = ny;
+    theta -= T.ang;
+    face = g.face;
+  }
+  // circling a vertex without landing (see canonicalize): pull the centre towards the frame origin,
+  // which lies inside the face (the foot of the solid's centre on a face of a convex solid that has
+  // an insphere or a circumsphere about that centre)
+  for (let k = 0; k < 60 && faceDepth(solid, s, face, x, y) < 0; k++) {
+    x *= 0.7;
+    y *= 0.7;
+  }
+  if (faceDepth(solid, s, face, x, y) < 0) {
+    x = 0;
+    y = 0;
+  }
+  return { face, x, y, theta };
+}
+
 interface PartRec {
   piece: number;
   poly: Float64Array;
@@ -86,12 +132,11 @@ function bbox(piece: number, poly: Float64Array): PartRec {
  * deepest appearance; that keeps the energy continuous.
  */
 function coneEnergy(solid: Solid, s: number, N: number, p: SurfacePose, nodes: ChainNode[], lam: number): number {
-  const M = solid.M;
   const rin = N === 0 ? lam : inradius(N) * lam;
   const worst = new Map<number, number>();
   for (const node of nodes)
-    for (let k = 0; k < M; k++) {
-      const [fx, fy] = frameVertex(M, s, k);
+    for (let k = 0; k < solid.sides[node.face]; k++) {
+      const [fx, fy] = faceVertex(solid, s, node.face, k);
       const [vx, vy] = apply(node.toAnchor, fx, fy);
       if (!inWedge(node.wedge, p.x, p.y, vx, vy, 1e-12)) continue;
       let out: number;
@@ -118,11 +163,30 @@ function coneEnergy(solid: Solid, s: number, N: number, p: SurfacePose, nodes: C
 /** Cone points are pushed out first: inside a piece they make its development ill-defined. */
 export const CONE_WEIGHT = 4;
 
-/** Polygon pieces: energy with per-piece caches so that moving one piece costs only its own terms. */
+/** Pieces are kept inside their faces in the nofold mode with this weight on the squared protrusion. */
+export const WALL_WEIGHT = 4;
+
+/** Squared protrusion of a polygon (flat vertices in face f's frame) beyond the edges of face f. */
+function wallEnergy(solid: Solid, s: number, f: number, poly: Float64Array): number {
+  let e = 0;
+  for (let i = 0; i < poly.length; i += 2) {
+    const d = faceDepth(solid, s, f, poly[i], poly[i + 1]);
+    if (d < 0) e += WALL_WEIGHT * d * d;
+  }
+  return e;
+}
+
+/**
+ * Polygon pieces: energy with per-piece caches so that moving one piece costs only its own terms.
+ * Mode "fold" (default): the parts of the developed pieces and the cone points, as above. Mode
+ * "nofold": each piece is its own polygon in its anchor face, with the protrusion beyond the face's
+ * edges in place of the cone points (E = 0 exactly when the nofold validator, tolerance 0, accepts).
+ */
 export class PolygonEnergy {
   readonly solid: Solid;
   readonly s: number;
   readonly N: number;
+  readonly mode: "fold" | "nofold";
   lam: number;
   poses: SurfacePose[];
   private parts: PartRec[][] = [];
@@ -130,10 +194,11 @@ export class PolygonEnergy {
   private cone: number[] = [];
   private byFace: PartRec[][];
 
-  constructor(solid: Solid, s: number, N: number, lam: number, poses: SurfacePose[]) {
+  constructor(solid: Solid, s: number, N: number, lam: number, poses: SurfacePose[], mode: "fold" | "nofold" = "fold") {
     this.solid = solid;
     this.s = s;
     this.N = N;
+    this.mode = mode;
     this.lam = lam;
     this.poses = poses.map((p) => canonicalize(solid, s, p));
     this.byFace = Array.from({ length: solid.F }, () => []);
@@ -146,6 +211,10 @@ export class PolygonEnergy {
   }
 
   private computePiece(i: number, pose: SurfacePose): { recs: PartRec[]; faces: number[]; cone: number } {
+    if (this.mode === "nofold") {
+      const poly = pieceVertices(this.N, pose, this.lam);
+      return { recs: [bbox(i, poly)], faces: [pose.face], cone: wallEnergy(this.solid, this.s, pose.face, poly) };
+    }
     const nodes = enumerateChains(this.solid, this.s, pose.face, pose.x, pose.y, this.lam * boundingRadius(this.N));
     const parts = pieceParts(this.solid, this.s, this.N, pose, i, this.lam, nodes);
     const recs: PartRec[] = [];
@@ -222,13 +291,19 @@ export class PolygonEnergy {
  * Geodesic loops at a centre count as images of the centre itself.
  */
 export function diskEnergy(solid: Solid, s: number, lam: number, poses: SurfacePose[], grad?: Float64Array): number {
-  const M = solid.M;
   const byFace: number[][] = Array.from({ length: solid.F }, () => []);
   poses.forEach((p, i) => byFace[p.face].push(i));
   let e = 0;
   if (grad) grad.fill(0);
-  const verts: [number, number][] = [];
-  for (let k = 0; k < M; k++) verts.push(frameVertex(M, s, k));
+  // frame vertices of every face (the Platonic solids share one frame, as before)
+  const shared: [number, number][] = [];
+  if (solid.uniform) for (let k = 0; k < solid.M; k++) shared.push(frameVertex(solid.M, s, k));
+  const vertsOf = (f: number): [number, number][] => {
+    if (solid.uniform) return shared;
+    const out: [number, number][] = [];
+    for (let k = 0; k < solid.sides[f]; k++) out.push(faceVertex(solid, s, f, k));
+    return out;
+  };
   for (let i = 0; i < poses.length; i++) {
     const p = poses[i];
     const nodes = enumerateChains(solid, s, p.face, p.x, p.y, 2 * lam);
@@ -262,7 +337,8 @@ export function diskEnergy(solid: Solid, s: number, lam: number, poses: SurfaceP
           gy += -pen * ry;
         }
       }
-      for (let k = 0; k < M; k++) {
+      const verts = vertsOf(node.face);
+      for (let k = 0; k < verts.length; k++) {
         const [vx, vy] = apply(T, verts[k][0], verts[k][1]);
         if (!inWedge(node.wedge, p.x, p.y, vx, vy, 1e-12)) continue;
         const dx = vx - p.x;
@@ -289,5 +365,57 @@ export function diskEnergy(solid: Solid, s: number, lam: number, poses: SurfaceP
       grad[2 * i + 1] = gy;
     }
   }
+  return e;
+}
+
+/**
+ * Disks without folding: E = sum over pairs on one face of max(0, 2 lam - d)^2 + WALL_WEIGHT * sum over
+ * the edges of each disk's face of max(0, lam - distance to the edge line)^2, with analytic gradient.
+ * Disks on different faces never meet (the open faces are disjoint).
+ */
+export function diskEnergyNofold(solid: Solid, s: number, lam: number, poses: SurfacePose[], grad?: Float64Array): number {
+  let e = 0;
+  if (grad) grad.fill(0);
+  const byFace = new Map<number, number[]>();
+  poses.forEach((p, i) => {
+    const list = byFace.get(p.face) ?? [];
+    list.push(i);
+    byFace.set(p.face, list);
+    const M = solid.sides[p.face];
+    for (let j = 0; j < M; j++) {
+      const [ax, ay] = faceVertex(solid, s, p.face, j);
+      const [bx, by] = faceVertex(solid, s, p.face, j + 1);
+      const L = Math.hypot(bx - ax, by - ay);
+      // inward unit normal (the face is to the left of its edges)
+      const nx = -(by - ay) / L;
+      const ny = (bx - ax) / L;
+      const d = nx * (p.x - ax) + ny * (p.y - ay);
+      const pen = lam - d;
+      if (pen <= 0) continue;
+      e += WALL_WEIGHT * pen * pen;
+      if (grad) {
+        grad[2 * i] -= 2 * WALL_WEIGHT * pen * nx;
+        grad[2 * i + 1] -= 2 * WALL_WEIGHT * pen * ny;
+      }
+    }
+  });
+  for (const list of byFace.values())
+    for (let a = 0; a < list.length; a++)
+      for (let b = a + 1; b < list.length; b++) {
+        const i = list[a];
+        const j = list[b];
+        const dx = poses[j].x - poses[i].x;
+        const dy = poses[j].y - poses[i].y;
+        const d = Math.hypot(dx, dy);
+        const pen = 2 * lam - d;
+        if (pen <= 0) continue;
+        e += pen * pen;
+        if (grad && d > 0) {
+          grad[2 * i] += (2 * pen * dx) / d;
+          grad[2 * i + 1] += (2 * pen * dy) / d;
+          grad[2 * j] -= (2 * pen * dx) / d;
+          grad[2 * j + 1] -= (2 * pen * dy) / d;
+        }
+      }
   return e;
 }

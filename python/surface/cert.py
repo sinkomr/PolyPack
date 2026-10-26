@@ -1,4 +1,5 @@
-"""Rigorous certifier for PolyPack packings on the surfaces of Platonic solids.
+"""Rigorous certifier for PolyPack packings on the surfaces of Platonic solids, and (general.py) of
+the Catalan solids, prisms and antiprisms.
 
 It decides every inequality exactly (chain topology, disk distances, cone points against
 wedges; arithmetic in Q, Q(sqrt 3) or Q(sqrt(10 + 2 sqrt 5))) or with mpmath interval
@@ -30,6 +31,10 @@ describe the two parts, whose combination proves that the half-planes have no co
 The multipliers are found with floating point (untrusted) and then checked with intervals,
 including the residual of the combination, so the check does not rely on exact cancellation.
 
+The other solids (13 Catalan solids, prisms, antiprisms) are certified by general.py, which builds
+them from python/polyhedra/solids_exact.json and decides with intervals and keyed wedge rays (see its
+docstring); the Platonic solids keep the exact path below.
+
 Usage: python3 cert.py RECORDS.json [--out DIR] [--only ID ...]
 """
 
@@ -57,6 +62,13 @@ MAX_ABS = 1e6  # bound on |s|, |x|, |y|, |theta|
 
 class CertError(Exception):
     pass
+
+
+def general_solids():
+    """Names of the solids certified by general.py (imported lazily: it imports this module)."""
+    from general import GENERAL_SOLIDS
+
+    return GENERAL_SOLIDS
 
 
 def ivf(x):
@@ -243,9 +255,18 @@ class Config:
             raise CertError("N must be 0 or an integer 3..100")
         if not (isinstance(self.P, int) and not isinstance(self.P, bool) and 1 <= self.P <= MAX_PIECES):
             raise CertError("P must be an integer 1..%d" % MAX_PIECES)
-        if not (isinstance(self.solid, str) and self.solid in SOLIDS):
+        self.general = isinstance(self.solid, str) and self.solid in general_solids()
+        if not (isinstance(self.solid, str) and (self.solid in SOLIDS or self.general)):
             raise CertError("unknown solid %r" % (self.solid,))
-        self.S = get_solid(self.solid)
+        if self.general:
+            import general
+
+            try:
+                self.S = general.get_general(self.solid)
+            except general.SolidError as e:
+                raise CertError(str(e))
+        else:
+            self.S = get_solid(self.solid)
         self.s = exact_fraction(rec.get("s"), "s")
         if not (0 < self.s <= MAX_ABS):
             raise CertError("s must be in (0, %g]" % MAX_ABS)
@@ -361,6 +382,43 @@ def clip(poly, labels, a, b, label):
     if len(out) < 3:
         return [], []
     return out, lab
+
+
+# pieces with more sides than this get the separating-axis witness for empty parts (fast_empty_witness)
+FAST_EMPTY_N = 8
+
+
+def face_float_polygon(S, s, f=None):
+    """Float vertices of a face in its frame (f for the general solids; the Platonic frames are shared)."""
+    k_range = range(S.M) if f is None else range(S.sides[f])
+    pts = [S.frame_vertex(s, k) if f is None else S.frame_vertex(s, f, k) for k in k_range]
+    out = []
+    for x, y in pts:
+        fx = float(x) if not hasattr(x, "mid") else float(x.mid)
+        fy = float(y) if not hasattr(y, "mid") else float(y.mid)
+        out.append((fx, fy))
+    return out
+
+
+def fast_empty_witness(cons, piece_poly, piece_labels, face_poly, centre, rho):
+    """Farkas multipliers (untrusted, float) showing that a part is empty: the piece polygon and the
+    face's region of the chain (the face clipped by the wedge) are separated by an edge of one of
+    them, as for two parts (sat_witness). `cons` lists the part's constraints (P piece, W wedge) and
+    then the face's (F). None when the float search finds no candidate."""
+    fl = float_cons(cons)
+    idx = {c[0]: k for k, c in enumerate(cons)}
+    region = list(face_poly)
+    rlabels = [("F", j) for j in range(len(face_poly))]
+    for lab, ax, ay, b in fl:
+        if lab[0] == "W":
+            region, rlabels = clip(region, rlabels, (ax, ay), b, lab)
+    if not region or not piece_poly:
+        # the face and the wedge alone have no common point: their few constraints suffice
+        small = [k for k, c in enumerate(cons) if c[0][0] in ("W", "F")]
+        best = brute_witness(fl, centre, rho, limit=small)
+        return best[1]
+    _, cands = sat_witness(piece_poly, piece_labels, region, rlabels, idx, idx, fl)
+    return cands[0] if cands else None
 
 
 def float_cons(cons):
@@ -515,7 +573,14 @@ def certify(rec, eps):
     cfg = Config(rec)
     eps_fr = parse_eps(eps)
     lam = 1 - eps_fr
-    if cfg.mode == "nofold":
+    if cfg.general:
+        import general
+
+        try:
+            body = general.certify_nofold(cfg, lam) if cfg.mode == "nofold" else general.certify_fold(cfg, lam)
+        except general.Undecided as e:
+            raise CertError("degenerate configuration: %s" % e)
+    elif cfg.mode == "nofold":
         body = certify_nofold(cfg, lam)
     else:
         body = certify_fold(cfg, lam)
@@ -703,10 +768,18 @@ def certify_fold(cfg, lam):
                 gl = sig_down(float(best[1].a))
                 worst_cone = gl if worst_cone is None else min(worst_cone, gl)
             # parts: drop certified-empty ones
+            poly0, labels0 = part.poly, part.labels
             clip_part(part, fcons_fl)
             if not part.poly:
                 cons = part.cons + fcons_iv
-                best = brute_witness(float_cons(cons), (float(part.c_iv[0].mid), float(part.c_iv[1].mid)), float(part.rho.mid))
+                # many-sided pieces: the separating axis of the piece and the face's region of the
+                # chain, instead of all triples of constraints (the same search as before for N <= 8)
+                centre = (float(part.c_iv[0].mid), float(part.c_iv[1].mid))
+                fast = fast_empty_witness(cons, poly0, labels0, face_float_polygon(S, s), centre, float(part.rho.mid)) if N > FAST_EMPTY_N else None
+                if fast:
+                    v = farkas_value(cons, round_mults(fast), part.c_iv, part.rho)
+                    fast = fast if pos(v) else None
+                best = (None, fast) if fast else brute_witness(float_cons(cons), centre, float(part.rho.mid))
                 if best[1] is not None:
                     mults = round_mults(best[1])
                     v = farkas_value(cons, mults, part.c_iv, part.rho)

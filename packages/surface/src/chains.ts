@@ -1,5 +1,5 @@
 import { IDENTITY, Rigid, apply, compose, glue } from "./rigid";
-import { Solid, frameVertex } from "./solids";
+import { Solid, faceVertex, frameVertex } from "./solids";
 
 /**
  * Development of a neighbourhood of a point c of the surface into the plane of its face's frame
@@ -18,7 +18,8 @@ import { Solid, frameVertex } from "./solids";
  * 3. turn rule: a straight line that crosses several consecutive edges around one vertex V sweeps
  *    less than pi of angle around V (a line subtends exactly pi seen from a point off it), so
  *    the faces passed between the first and the last such edge have face angles at V summing to
- *    less than pi. A chain that breaks this cannot be followed by a ray.
+ *    less than pi. A chain that breaks this cannot be followed by a ray. (On the Platonic solids
+ *    every face angle is the same, (M - 2) pi / M; on the others the angles at V are summed.)
  * Rays that hit a vertex are covered by the closed wedges (their last face has that vertex).
  */
 
@@ -47,6 +48,8 @@ export interface ChainNode {
   /** vertex id shared by the last two crossed edges (-1 if none) and the number of faces passed around it */
   runVertex: number;
   runCount: number;
+  /** sum of the face angles at runVertex of the faces passed around it (0 when runVertex is -1) */
+  runAngle?: number;
 }
 
 export let MAX_CHAIN_DEPTH = 80;
@@ -121,18 +124,25 @@ export class ChainLimitError extends Error {}
  * (a solid far too small for its pieces): more chains than that throw a ChainLimitError.
  */
 export function enumerateChains(solid: Solid, s: number, anchor: number, cx: number, cy: number, reach: number, maxChains = Infinity): ChainNode[] {
-  const M = solid.M;
+  const uniform = solid.uniform;
   const out: ChainNode[] = [
-    { face: anchor, toAnchor: IDENTITY, wedge: null, entry: -1, depth: 0, parent: -1, path: [], runVertex: -1, runCount: 0 },
+    { face: anchor, toAnchor: IDENTITY, wedge: null, entry: -1, depth: 0, parent: -1, path: [], runVertex: -1, runCount: 0, runAngle: 0 },
   ];
-  const verts: [number, number][] = [];
-  for (let k = 0; k < M; k++) verts.push(frameVertex(M, s, k));
+  // the Platonic solids: one frame for every face, as before the generalisation
+  const shared: [number, number][] = [];
+  if (uniform) for (let k = 0; k < solid.M; k++) shared.push(frameVertex(solid.M, s, k));
   const slack = 1e-12 * Math.max(1, s);
   for (let idx = 0; idx < out.length; idx++) {
     const node = out[idx];
     if (node.depth >= MAX_CHAIN_DEPTH)
       throw new Error(`chain depth limit reached: ${node.path.map((e) => `${e.face}:${e.edge}`).join(" ")} w=${node.wedge?.w}`);
     const T = node.toAnchor;
+    const M = solid.sides[node.face];
+    let verts = shared;
+    if (!uniform) {
+      verts = [];
+      for (let k = 0; k < M; k++) verts.push(faceVertex(solid, s, node.face, k));
+    }
     for (let k = 0; k < M; k++) {
       if (k === node.entry) continue;
       const [ax, ay] = apply(T, verts[k][0], verts[k][1]);
@@ -142,14 +152,17 @@ export function enumerateChains(solid: Solid, s: number, anchor: number, cx: num
       if (pointSegmentDistance(cx, cy, ax, ay, bx, by) > reach + slack) continue;
       let runVertex = -1;
       let runCount = 0;
+      let runAngle = 0;
       if (node.entry >= 0) {
         let local = -1;
         if (k === (node.entry + 1) % M) local = k;
         else if (k === (node.entry + M - 1) % M) local = node.entry;
         if (local >= 0) {
           runVertex = solid.faces[node.face][local];
-          runCount = runVertex === node.runVertex ? node.runCount + 1 : 1;
-          if (runCount * solid.faceAngle >= Math.PI - 1e-9) continue;
+          const same = runVertex === node.runVertex;
+          runCount = same ? node.runCount + 1 : 1;
+          runAngle = (same ? (node.runAngle ?? 0) : 0) + solid.corner[node.face][local];
+          if ((uniform ? runCount * solid.faceAngle : runAngle) >= Math.PI - 1e-9) continue;
         }
       }
       const W = intersectWedges(node.wedge, coneOverEdge(cx, cy, ax, ay, bx, by));
@@ -167,6 +180,7 @@ export function enumerateChains(solid: Solid, s: number, anchor: number, cx: num
         path: [...node.path, { face: node.face, edge: k }],
         runVertex,
         runCount,
+        runAngle,
       });
     }
   }
