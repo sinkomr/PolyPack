@@ -145,6 +145,14 @@ FARY = ("I. Fary, Sur la densite des reseaux de domaines convexes, Bull. Soc. Ma
         "triangles")
 FARY_DOI = "10.24033/bsmf.1413"
 FARY_URL = "http://www.numdam.org/item/BSMF_1950__78__152_0/"
+FUKSHANSKY = ("L. Fukshansky, Revisiting the hexagonal lattice: on optimal lattice circle packing, Elem. Math. "
+              "66(1) (2011) 1-9")
+FUKSHANSKY_DOI = "10.4171/EM/163"
+FUKSHANSKY_URL = "https://www1.cmc.edu/pages/faculty/lenny/papers/hexagon.pdf"
+SRIAMORN = ("K. Sriamorn, On the multiple packing densities of triangles, Discrete Comput. Geom. 55(1) (2016) "
+            "228-242")
+SRIAMORN_DOI = "10.1007/s00454-015-9748-0"
+SRIAMORN_URL = "https://arxiv.org/abs/1501.00467"
 LAGRANGE = ("J. L. Lagrange, Recherches d'arithmetique, Nouv. Mem. Acad. Roy. Sci. Belles-Lettres Berlin (1773) "
             "265-312 (not read; cited for delta_L(disk) = pi/sqrt12 in the Handbook of Discrete and Computational "
             "Geometry, 3rd ed., ch. 2, Table 2.1.3)")
@@ -263,10 +271,19 @@ for _N, _d in ((3, 2 / 3), (5, 0.8172560023684), (7, 0.8601910243450), (8, (4 + 
            "densest lattice packing, numerical table density %.5f; score from the [CALC] value %.13f" % (math.floor(_d * 1e5) / 1e5, _d),
            TORDA_DOI)
     ]
-LIT[("free", 3, 1)].insert(0, _e(_dens_score("free", 3, 1, 2 / 3), "proven", "Fary 1950, Theoreme 1", FARY, FARY_URL,
-                                 "densest lattice packing of a triangle, density 2/3 (the equality case); one triangle on "
-                                 "a free torus is a lattice packing of it, so this is the exact problem stated for "
-                                 "lattices; the record's status awaits the maintainer's decision", FARY_DOI, None, AUDITED))
+# One piece on a free torus is a lattice packing of it, so the densest lattice packing of the piece
+# gives the record directly: L = sqrt(area / delta_L).
+LIT[("free", 3, 1)][0:0] = [
+    _e(_dens_score("free", 3, 1, 2 / 3), "proven", "Sriamorn 2016, Thm 1.1", SRIAMORN, SRIAMORN_URL,
+       "densest lattice packing of a triangle, density 2/3", SRIAMORN_DOI,
+       "Theorem 1.1 with k = 1: delta_T(T) = delta_L(T) = 2/3 for every triangle T (the upper bound is proved there "
+       "with stair polygons, secs. 4-5; Fary 1950 gives a lattice of density 2/3). A single piece on a torus is a "
+       "lattice packing of it, so delta_L gives L = sqrt((sqrt3/4)/(2/3)) = sqrt(3 sqrt3/8) directly", AUDITED),
+    _e(_dens_score("free", 3, 1, 2 / 3), "proven", "Fary 1950, Theoreme 1", FARY, FARY_URL,
+       "every convex domain has a lattice packing of density at least 2/3, denser unless it is a triangle; for a "
+       "triangle this gives a lattice of density 2/3. The paper does not prove that no lattice packing of a triangle "
+       "is denser (Sriamorn 2016 does)", FARY_DOI, None, AUDITED),
+]
 LIT[("free", 8, 1)].append(_e(_dens_score("free", 8, 1, (4 + 4 * S2) / (5 + 4 * S2)), "proven", "L. Fejes Toth 1950", FT, FT_URL,
                               "densest packing of congruent regular octagons is the lattice packing, density (4 + 4 sqrt2)/(5 + 4 sqrt2) "
                               "(the octagon's value computed here)"))
@@ -279,11 +296,16 @@ LIT[("free", 7, 2)] = [_e(_dens_score("free", 7, 2, _hept), "best_known", "Kuper
                           "densest double lattice of the regular heptagon, density 0.8926906861 = (2/97)(-111 + 492 cos(pi/7) - 356 cos^2(pi/7)) (J. Baez, AMS Visual Insight 2014)",
                           KK_DOI)]
 LIT[("free", 0, 1)] = [
+    _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Fukshansky 2011, Thm 1.1", FUKSHANSKY, FUKSHANSKY_URL,
+       "densest lattice packing of disks: the hexagonal lattice, density pi/sqrt12 (first proved by Lagrange 1773)",
+       FUKSHANSKY_DOI,
+       "Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = "
+       "pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a "
+       "lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly", AUDITED),
+    _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Lagrange 1773 (not read)", LAGRANGE, FT_URL,
+       "the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof"),
     _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Thue 1910", "A. Thue 1910 (Handbook ch. 2, Table 2.1.1)", FT_URL,
        "hexagonal lattice, density pi/sqrt12 (a theorem for the plane)"),
-    _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Lagrange 1773 (not read)", LAGRANGE, FT_URL,
-       "densest lattice packing of disks, the exact problem stated for lattices; the record's status awaits the "
-       "maintainer's decision"),
 ]
 
 
@@ -312,7 +334,7 @@ EXACT_C = {
 
 # Closed forms score = sqrt(c) for single pieces whose bound is a published lattice optimum.
 EXACT_P1 = {
-    ("free", 3): ("3 sqrt(3) / 8", 3.0 * SQ3 / 8.0),  # Fary 1950: densest lattice packing of a triangle, 2/3
+    ("free", 3): ("3 sqrt(3) / 8", 3.0 * SQ3 / 8.0),  # densest lattice packing of a triangle, 2/3 (Fary 1950; Sriamorn 2016)
 }
 
 

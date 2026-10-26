@@ -401,9 +401,10 @@ class StatusRules(unittest.TestCase):
             ["torus/sq/0/%d" % P for P in (2, 3, 4, 6, 7, 8)]
             + ["torus/hex/0/%d" % P for P in [2] + [n for n in loeschian if n <= 49]]
             + ["torus/sq/4/%d" % P for P in sums if P <= 49]
+            + ["torus/free/0/1", "torus/free/3/1"]
         )
         self.assertEqual(proven, sorted(expected))
-        self.assertEqual(len(proven), 50)
+        self.assertEqual(len(proven), 52)
 
 
 if __name__ == "__main__":

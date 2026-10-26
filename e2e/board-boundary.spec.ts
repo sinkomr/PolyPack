@@ -45,7 +45,7 @@ async function listedP(page: Page, piece: "ball" | "cube"): Promise<number[]> {
 
 /** Waits until the board shows a 3D on 4D problem, drawn. */
 async function shown(page: Page, id: string): Promise<void> {
-  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`);
+  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`, LAZY_VIEW);
   await expect(page.locator("#space-score")).not.toHaveText("—");
   await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
   await expect(page.locator(".pp3-status")).toContainText(/edge \d\.\d{6}\./);
@@ -332,7 +332,7 @@ test("without WebGL the drawing says so in plain words, and the rest of the boar
     } as typeof get;
   });
   await page.goto(`/#space=${ID}`);
-  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${ID}`);
+  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${ID}`, LAZY_VIEW);
   await expect(page.locator(".pp3-message")).toHaveText(
     "This 3D drawing needs WebGL, which this browser has turned off or does not support.",
     LAZY_VIEW,
@@ -350,7 +350,7 @@ test("a 3D drawing that cannot be loaded says so and loads on Try again", async 
     fail ? route.abort() : route.continue(),
   );
   await page.goto(`/#space=${ID}`);
-  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${ID}`);
+  await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${ID}`, LAZY_VIEW);
   await expect(page.locator(".space-3d-wait")).toContainText("The 3D drawing could not be loaded.");
   fail = false;
   await page.locator(".space-3d-wait").getByRole("button", { name: "Try again" }).click();
