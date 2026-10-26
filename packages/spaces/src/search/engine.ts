@@ -17,18 +17,28 @@
  *    a second, every job also gets an evaluation cap, 0.8 of what its time buys at their
  *    measured rate, so that most jobs end on evaluations and are reproducible from the job.
  * 3. Stopping. No job starts when control.aborted is set ("aborted"), when the best is within
- *    1e-9 of the problem's lower bound or a valid job ended "bound" (its search reached its own
- *    floor, which can lie above the problem's bound: the boundary search's aligned cubes stop at
- *    s = 1) ("bound"), when less than T0 / 2 is left ("time"), or
+ *    1e-9 of the problem's lower bound or a valid auto job ended "bound" (the space's search
+ *    reached its own floor, which can lie above the problem's bound: the boundary search's aligned
+ *    cubes stop at s = 1) ("bound"), when less than T0 / 2 is left ("time"), or
  *    when the score to beat (the best, or input.known before the best beats it) has not improved
  *    by more than 1e-9 relative for max(maxSeconds / 4, elapsed / 2) seconds ("stagnation").
  *    The search then waits for the jobs in flight. Three failed jobs in a row (an error, or a lost
  *    thread) also end it ("stagnation").
+ * 4. Method. Every job runs input.method with input.params (the volunteer's --space-method and
+ *    --space-params): "auto", the default, is the space's own search; a generic method runs on
+ *    the problem's kernel (run.ts). A problem that does not offer the method (it has no kernel,
+ *    or its kernel lacks a capability the method needs) runs auto instead (chooseSpaceMethod).
+ *    A generic method stops at its kernel's bound, which can lie above the problem's ([CALC] the
+ *    boundary kernel's is 1 for one to seven cubes, whose problems' bounds are 0.707 to 0.956):
+ *    a generic job that ends "bound" does not end the problem, since every later job of that
+ *    method would stop at once. The jobs after it run auto, and the problem is done only when an
+ *    auto job ends "bound" too, or the best reaches the problem's bound (3.).
  * Job seeds are mixed from input.seed and the job's index, so the same input, the same job
  * answers and the same clock give the same jobs.
  */
 import type { SpaceConfig, SpaceName } from "../types";
-import { SPACE_METHOD } from "./model";
+import { AUTO, isAutoMethod, offersSpaceMethod, searchKind } from "./methods";
+import { parseSearchProblem } from "./model";
 import type { SpaceJob, SpaceJobResult } from "./run";
 import { mixSeed, seededStream, toUint32 } from "./seed";
 
@@ -68,6 +78,10 @@ export interface SpaceSearchInput {
   seed: number;
   /** Active seconds, monotonic. */
   now: () => number;
+  /** The jobs' method: "auto" (the default) or a generic method; see 4. above. */
+  method?: string;
+  /** The method's parameters over its defaults (none for auto). */
+  params?: Record<string, unknown>;
   onResult?: (result: SpaceJobResult, best: SpaceCandidate | null) => void;
 }
 
@@ -97,6 +111,22 @@ interface KindState {
   misses: number;
   evaluations: number;
   seconds: number;
+}
+
+/**
+ * The method a problem's jobs run: `method` where the problem offers it, else auto ("fallback"
+ * says that a method was asked for and is not offered; nofold problems run on the polygon engine,
+ * not here, and offer none).
+ */
+export function chooseSpaceMethod(
+  space: SpaceName,
+  id: string,
+  method: string | undefined,
+): { method: string; fallback: boolean } {
+  if (isAutoMethod(space, method)) return { method: AUTO, fallback: false };
+  const p = parseSearchProblem(id);
+  const offered = p !== null && searchKind(p) !== "nofold" && offersSpaceMethod(p, method!);
+  return offered ? { method: method!, fallback: false } : { method: AUTO, fallback: true };
 }
 
 /** Runs a job and turns a rejection into a result. */
@@ -155,11 +185,17 @@ export async function searchSpaceProblem(
     }
   >();
   const toBeat = () => Math.min(best?.score ?? Infinity, known?.score ?? Infinity);
+  // the problem's method: the one asked for where the problem offers it, else its own search; a
+  // generic method that reached its kernel's bound hands over to auto (4.)
+  let method = chooseSpaceMethod(input.space, input.id, input.method).method;
 
   const decide = (): { job: SpaceJob; kind: Kind } | SpaceSearchOutcome["stopped"] => {
     if (control.aborted) return "aborted";
     if (failures >= 3) return "stagnation";
-    if (atFloor || (best && input.bound !== null && input.bound > 0 && best.score <= input.bound * (1 + P.minImprovement)))
+    if (
+      atFloor ||
+      (best && input.bound !== null && input.bound > 0 && best.score <= input.bound * (1 + P.minImprovement))
+    )
       return "bound";
     const t = elapsed();
     const available = maxSeconds - t;
@@ -175,7 +211,8 @@ export async function searchSpaceProblem(
     const job: SpaceJob = {
       space: input.space,
       id: input.id,
-      method: SPACE_METHOD[input.space],
+      method,
+      ...(method !== AUTO && input.params ? { params: input.params } : {}),
       seed: mixSeed(seed, jobs),
       budget: evals === undefined ? { time_s: seconds } : { time_s: seconds, evals },
       kind,
@@ -219,7 +256,10 @@ export async function searchSpaceProblem(
       result.score > 0
     ) {
       if (!best || result.score < best.score) best = { config: result.config, score: result.score, job: flight.job };
-      if (result.termination === "bound") atFloor = true;
+      if (result.termination === "bound") {
+        if (isAutoMethod(input.space, flight.job.method)) atFloor = true;
+        else method = AUTO;
+      }
       if (!Number.isFinite(before) || (before - result.score) / before > P.minImprovement) {
         improved = true;
         lastProgress = t;

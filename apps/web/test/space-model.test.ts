@@ -15,7 +15,14 @@ import {
   validateSpaceSubmission,
 } from "@polypack/spaces";
 import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
-import { BOUNDARY_ROUND_EVALS, mixSeed, parseSearchProblem } from "@polypack/spaces/search";
+import {
+  BOUNDARY_ROUND_EVALS,
+  mixSeed,
+  parseSearchProblem,
+  setKernelFactoryForTests,
+  spaceKernel,
+} from "@polypack/spaces/search";
+import { useNofoldMethods } from "@polypack/spaces/search/nofold-methods";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { gainText } from "../src/boundary-model";
@@ -44,7 +51,18 @@ import {
   scoreLabel,
   searchKind,
   submitAnswer,
+  boardMethods,
+  evalsMax,
+  evalUnit,
+  GENERIC_ROUND_K,
+  GENERIC_ROUND_K_SURFACE_DISKS,
+  GENERIC_ROUND_MAX,
+  GENERIC_ROUND_MIN,
+  genericRound,
+  isGeneric,
+  METHOD_TEXT,
 } from "../src/space/model";
+import { POLYGON_METHOD_DESCRIPTIONS, POLYGON_METHOD_NAMES, POLYGON_METHOD_ORDER } from "../src/solve-methods";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
@@ -317,7 +335,116 @@ describe("the rounds of a run", () => {
         { evals: 0, seconds: 0 },
         null,
       )!.job.method,
-    ).toBe("surface nofold: basin hopping on one face");
+    ).toBe("auto");
+  });
+});
+
+describe("the methods of a run", () => {
+  const rule = { bound: 1, certified: 1.2 };
+  const sphere = parseSearchProblem("sphere/4/12")!;
+  const nofold = parseSearchProblem("surface/cube/nofold/4/13")!;
+  const start = { rho: 2, pieces: [] };
+
+  it("offers Auto, and the polygon solver's methods on a nofold problem under the Flat board's names and order", () => {
+    // a problem whose space builds no kernel: Auto alone
+    setKernelFactoryForTests(() => {
+      throw new Error("no kernel");
+    });
+    expect(boardMethods(sphere).map((m) => m.name)).toEqual(["auto"]);
+    expect(boardMethods(sphere)[0]).toMatchObject({ title: "Auto", summary: METHOD_TEXT.sphere });
+    setKernelFactoryForTests(null);
+    // the polygon solver's methods, which the board loads for a nofold problem
+    useNofoldMethods();
+    const methods = boardMethods(nofold);
+    expect(methods[0]).toMatchObject({ name: "auto", summary: METHOD_TEXT.nofold });
+    const listed = methods.slice(1).map((m) => m.name);
+    expect(listed).toEqual(POLYGON_METHOD_ORDER.filter((name) => listed.includes(name)));
+    expect(listed.slice(0, 3)).toEqual(["basin_hopping", "penalty", "mc_compress"]);
+    expect(methods.find((m) => m.name === "mc_compress")).toMatchObject({
+      title: POLYGON_METHOD_NAMES.mc_compress,
+      summary: POLYGON_METHOD_DESCRIPTIONS.mc_compress,
+    });
+  });
+
+  it("gives a round the run's method and parameters; Auto takes none", () => {
+    const run = { seed: 7, budget: { evals: 50000 }, fresh: false };
+    expect(roundJob(sphere, rule, run, 0, { evals: 0, seconds: 0 }, start)!.job).toMatchObject({ method: "auto" });
+    const auto = roundJob(
+      sphere,
+      rule,
+      { ...run, method: "auto", params: { hops: 3 } },
+      0,
+      { evals: 0, seconds: 0 },
+      start,
+    )!;
+    expect(auto.job.params).toBeUndefined();
+    const face = roundJob(
+      nofold,
+      rule,
+      { ...run, method: "penalty", params: { mu: 2 } },
+      0,
+      { evals: 0, seconds: 0 },
+      null,
+    )!;
+    expect(face.job).toMatchObject({ method: "penalty", params: { mu: 2 } });
+    // the polygon solver's methods count the polygon solver's evaluations, as Auto there does
+    expect(face.evals).toBe(FRESH_EVALS.nofold);
+  });
+
+  it("sizes a generic method's rounds and budget in kernel energy evaluations", () => {
+    const run = { seed: 7, budget: { evals: 1e7 }, fresh: false, method: "basin_hopping", params: {} };
+    expect(isGeneric(sphere, "basin_hopping")).toBe(true);
+    expect(isGeneric(sphere, "auto")).toBe(false);
+    expect(isGeneric(nofold, "basin_hopping")).toBe(false);
+    const round = genericRound(sphere);
+    const a = roundJob(sphere, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
+    expect(a.evals).toBe(round);
+    expect(a.job).toMatchObject({ method: "basin_hopping", budget: { evals: round } });
+    expect(a.job.params).toBeUndefined();
+    expect(roundJob(sphere, rule, run, 5, { evals: 0, seconds: 0 }, start, 9)!.evals).toBe(4 * round);
+    expect(roundSize(sphere, "basin_hopping")).toBe(round);
+    expect(freshSize(sphere, "basin_hopping")).toBe(round);
+    expect(defaultBudget(sphere, "basin_hopping")).toEqual({ time_s: 30, evals: 10 * round });
+    expect(evalsMax(sphere, "basin_hopping")).toBe(100_000_000);
+    expect(evalsMax(sphere, "auto")).toBe(EVALS_MAX.sphere);
+    // what the kernel's dearer calls count
+    expect(evalUnit(sphere, "basin_hopping")).toMatch(
+      /^one evaluation of the penalty energy \(.*a finish of a whole packing [\d,.]+, a check by the server's rule [\d,.]+\)$/,
+    );
+    expect(evalUnit(parseSearchProblem("surface/cube/fold/4/12")!, "penalty")).toContain(
+      "one with its gradient counts",
+    );
+    // a fold round of a generic method is not the fold search's: no compressions of its start are taken off
+    const fold = parseSearchProblem("surface/cube/fold/4/12")!;
+    const f = roundJob(fold, rule, run, 0, { evals: 0, seconds: 0 }, null)!;
+    expect(f.job.budget.evals).toBe(genericRound(fold));
+  });
+
+  it("makes a generic round about K / P evaluations of its space, clamped, and room for two finishes", () => {
+    const at = (id: string) => {
+      const p = parseSearchProblem(id)!;
+      const k = spaceKernel(p)!;
+      const K = p.space === "surface" && p.N === 0 ? GENERIC_ROUND_K_SURFACE_DISKS : GENERIC_ROUND_K[p.space];
+      const offers = 100 * Math.ceil((2 * (k.finishCost + (k.validateCost ?? k.finishCost))) / 100);
+      return { round: genericRound(p), K, P: p.P, offers };
+    };
+    // K / P in hundreds
+    expect(at("sphere/4/12").round).toBe(275_000);
+    expect(at("torus/sq/5/7").round).toBe(128_600);
+    expect(at("surface/cube/fold/0/10").round).toBe(30_000);
+    expect(at("surface/cube/fold/4/12").round).toBe(8300);
+    // clamped to [5,000, 300,000]
+    expect(at("boundary/tesseract/cube/2").round).toBe(GENERIC_ROUND_MAX);
+    expect(at("polyhedra/cubincub/100").round).toBe(GENERIC_ROUND_MIN);
+    // at least two finishes and checks of the kernel
+    const curved = at("curved/-1/3/8/22");
+    expect(curved.round).toBe(Math.max(100 * Math.round(curved.K / curved.P / 100), curved.offers));
+    expect(curved.round).toBeGreaterThanOrEqual(curved.offers);
+    for (const id of ["sphere/4/12", "boundary/tesseract/ball/9", "polyhedra/cubincub/57", "curved/-1/3/4/5"]) {
+      const r = at(id);
+      expect(r.round, id).toBeGreaterThanOrEqual(Math.min(r.offers, GENERIC_ROUND_MAX));
+      expect(r.round, id).toBeGreaterThanOrEqual(GENERIC_ROUND_MIN);
+    }
   });
 });
 
@@ -431,7 +558,7 @@ describe("3D on 4D on the board", () => {
     expect(roundJob(p, rule, long, 5, { evals: 0, seconds: 0 }, start, 5)!.evals).toBe(
       GROW_LIMIT.boundary * BOUNDARY_ROUND_EVALS,
     );
-    expect(a.job).toMatchObject({ space: "boundary", id, method: "boundary compression search", kind: "iterate" });
+    expect(a.job).toMatchObject({ space: "boundary", id, method: "auto", kind: "iterate" });
     expect(roundJob(p, rule, { ...run, fresh: true }, 0, { evals: 0, seconds: 0 }, null)!.evals).toBe(
       FRESH_EVALS.boundary,
     );
@@ -505,7 +632,8 @@ describe("3D in 3D: balls on the board", () => {
     const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
     expect(a.evals).toBe(25000);
     expect(a.job).toMatchObject({ space: "balls", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
-    expect(a.job.method).toBe("balls penalty basin hopping");
+    // the job's method is the method chosen (Auto), not the space's search label
+    expect(a.job.method).toBe("auto");
     expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
     expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 5 }, start, 3)!.evals).toBe(50000);
     expect(GROW_LIMIT.balls).toBe(2);
@@ -558,7 +686,8 @@ describe("3D in 3D: polyhedra on the board", () => {
         const at = `${code}/${P}`;
         if (round > 2 * (7000 + 130 * P) || round < 1000) throw new Error(`${at}: round ${round}`);
         // [CALC] at most about 20 s on a machine 3.5 times slower than the measured costs (3.4 times was seen under load)
-        if (!(polyhedraRoundSeconds(P, code, round) < 20)) throw new Error(`${at}: ${polyhedraRoundSeconds(P, code, round)} s`);
+        if (!(polyhedraRoundSeconds(P, code, round) < 20))
+          throw new Error(`${at}: ${polyhedraRoundSeconds(P, code, round)} s`);
         if (fresh < round) throw new Error(`${at}: fresh ${fresh}`);
         // a new arrangement runs its schedule on at most 40 % of the round, at about 1.5 times a hop's step
         if (fresh > round && !((0.4 * fresh * 1.5 * stepMs) / 1000 < 21)) throw new Error(`${at}: fresh ${fresh}`);
@@ -586,7 +715,7 @@ describe("3D in 3D: polyhedra on the board", () => {
     const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
     expect(a.evals).toBe(2600);
     expect(a.job).toMatchObject({ space: "polyhedra", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
-    expect(a.job.method).toBe("polyhedra soft-to-rigid search");
+    expect(a.job.method).toBe("auto");
     expect(a.job.budget).toEqual({ evals: 2600, time_s: 120 });
     // the shown packing is polished in the first round; the best of a round is not polished again
     expect(a.job.polished).toBeUndefined();
@@ -620,7 +749,9 @@ describe("3D in 3D: polyhedra on the board", () => {
     if (typeof q === "string") throw new Error(q);
     expect(beatsBest(q, site * (1 - 2 * SCORE_TIE))).toBe(true);
     expect(beatsBest(q, site)).toBe(false);
-    expect(submitAnswer(200, { valid: true, score: 1.5, leader: false, id: null, best_score: 1.4 }, "polyhedra").text).toBe(
+    expect(
+      submitAnswer(200, { valid: true, score: 1.5, leader: false, id: null, best_score: 1.4 }, "polyhedra").text,
+    ).toBe(
       `✓ Valid, score 1.500000, but not kept: it does not beat the problem's best 1.400000 (the site's best by more than a relative ${SCORE_TIE}, the research record by more than a relative 1e-6).`,
     );
   });
@@ -631,7 +762,10 @@ describe("3D in 3D: polyhedra on the board", () => {
     if (typeof p === "string") throw new Error(p);
     expect(p.P).toBe(100);
     expect((p.best!.config.pieces as unknown[]).length).toBe(100);
-    const v = validateSpaceSubmission("polyhedra", id, p.best!.config, { bound: p.bound!.value, certified: p.certified!.score });
+    const v = validateSpaceSubmission("polyhedra", id, p.best!.config, {
+      bound: p.bound!.value,
+      certified: p.certified!.score,
+    });
     expect(v.valid, v.reasons.join("; ")).toBe(true);
   });
 });

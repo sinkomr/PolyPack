@@ -570,3 +570,63 @@ opens the nearest P, with a sentence saying so.
 **The dimensions page** files the space under 3D on 4D, with Records, Board, Viewer and Notes
 links. Its records table starts with the balls and adds the columns Without folding and Folding
 gains.
+
+## 14. Kernel for the generic methods
+
+`boundaryKernel({ polytope, piece, P })` (`packages/boundary/src/kernel.ts`) lets the generic
+search methods ([docs/methods/dimensions/README.md](../methods/dimensions/README.md)) run here.
+It reuses the boundary search's own parts, so a method sees the same model as section 12's search.
+
+- **State.** Each piece has an anchor (a cell and a centre, kept in the state's `aux`) and a
+  displacement x from it, 3 lengths in the anchor's frame. The piece's centre is where the
+  straight path from the anchor along x ends, unfolded across every 2-face it crosses (the
+  search's charts). `rebase` moves the anchors to the centres. The size is s, the score. A path
+  that meets an edge, or one longer than 64 edges, leaves its piece at the anchor. That length is
+  far beyond the boundary's diameter [CALC: over 80,000 random pairs of points the shortest
+  geodesic was at most 2.3 s].
+- **Moves.** A move changes only the piece's x, so writing x back undoes it. `jiggle` adds to x.
+  `randomPose` draws a uniform target (a cell and a point in it) and writes the displacement from
+  the anchor to it along the shortest geodesic the lattice words give (section 4.1).
+- **Energy.** The search's penalty energy: lattice words for balls, aligned boxes for cubes
+  (sections 4.2 and 4.3 state the exact rules they follow). It takes per-piece weights, can be
+  restricted to one piece's terms, and has an exact gradient in x and in s [CALC: checked against
+  central differences in `packages/boundary/test/kernel.test.ts`].
+- **finish** is the search's last stage with one addition: the scale is bisected down as well as
+  up, so a state with room is drawn in until its pieces touch. The result is then nudged up until
+  `validateBoundary` accepts it at tolerance 0.
+- **validate** is the server's rule of section 12, rebuilt in `kernel-validate.ts` because this
+  package does not depend on the spaces registry. It checks P (at most 64), the form in the
+  server's words, s against the problem's lower bound less 1e-9 relative, and then runs
+  `validateBoundary` at tolerance 1e-9 with at most 1024 chains per piece. The bound is the one
+  the records store: for each of the two bounds of section 5, the largest binary64 value not
+  above its exact value, decided in integer arithmetic. The score is s whenever the
+  configuration is well formed, as on the server. Only the strict check at 1e-11 of an entry that
+  beats a research record is left out, since it needs the record. Configurations from `finish`
+  pass it anyway. `packages/spaces/test/boundary-kernel.test.ts` compares the verdict, the score
+  and the reasons with the server's `validateSpaceSubmission` on every record, on 26
+  variants of each, and on finished configurations.
+- **fromConfig** takes only what the server could take: a well-formed configuration within its
+  limits (s and coordinates at most 1e4). A start outside them gives no state, so no method works
+  on an absurd one. For the same reason there is no kernel for P above 64.
+- **Cubes stay axis-aligned.** The cube model's exact rule covers aligned cubes only, and the
+  kernel produces nothing its model cannot judge. A start with a turned cube is refused, unless
+  the turn is a symmetry of the cube. For the same reason the kernel's `bound` for cubes, where
+  a method may stop, is max(1, (P/8)^(1/3)): no aligned cube fits below s = 1. `validate` uses the
+  problem's own bound, which allows turned cubes. Balls use the proven bound of section 5 for both.
+- **Random starts.** They are the search's random layouts. Above P = 16, outside the catalogue,
+  cubes start at an edge where they fill at most a quarter of the boundary, each inside its cell
+  [CALC: at edge 2, random starts of P = 26, 27 and 31 to 64 cubes often relaxed to nothing a
+  finish could use].
+- **Capabilities.** `seeds`: the nofold layouts of section 6 (n pieces per cell at the centre, on
+  a diagonal or on a grid) and, for cubes, the search's two rings. `shape` for balls only, where
+  it changes nothing (a ball is its own inscribed ball). Cubes have no soft shapes, because the
+  cube model has no rounded cubes. No piece has an orientation, so there is no `swap`.
+- **Costs** [CALC, in process CPU time on an Apple Silicon laptop]. One energy() call takes 2 to
+  15 microseconds at P = 4 to 16. Balls cost most below s = 2, where the longer word table is
+  needed. A finish is one validator call at tolerance 0 plus 20 to 45 evaluations of the model's
+  rule; a validate is one validator call. On squeezed random starts and on the records at
+  P = 4, 8, 12 and 16, a finish cost a median of 930 energy() calls and a validate 960, each
+  ranging from about 360 to 4300. Cubes at P = 4, near s = 1, cost the most. The kernel states
+  `finishCost = validateCost = 1000`.
+- **Records.** Every record converts, passes the server's rule, and finishes about 1e-12 below its
+  score_cert. That gap is the certification's own scaling (section 4.4), not an improvement.

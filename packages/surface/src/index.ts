@@ -3,3 +3,4 @@ export * from "./rigid";
 export * from "./chains";
 export * from "./parts";
 export * from "./validate";
+export * from "./kernel";

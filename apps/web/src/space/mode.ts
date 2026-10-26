@@ -7,8 +7,10 @@
  * What it offers, per problem of the catalogue (GET /api/spaces/:space/records):
  *  - the problem's best packing (the research record or the site's best entry), drawn by the
  *    space's renderer, with its values in the dimensions page's words;
- *  - the space's search in a Web Worker, from the shown packing or a new one, with a seed and a
- *    budget, pause and stop, and the improving packing drawn as it is found;
+ *  - a search in a Web Worker, from the shown packing or a new one, with a method (Auto, the
+ *    space's own search, or a generic method the problem offers, with its settings; the choice is
+ *    remembered per kind), a seed and a budget, pause and stop, and the improving packing drawn as
+ *    it is found;
  *  - submission of a result that passes the server's rule and beats the problem's best, under the
  *    board's own Name and Note fields.
  * Pieces are not moved by hand in these spaces: the board shows and optimises.
@@ -16,21 +18,23 @@
 import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
-import type { SpaceCheck } from "@polypack/spaces/search";
+import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod } from "@polypack/spaces/search";
+import { ParameterError, parameterForm, validityText } from "../solve-params";
 import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
-import { type SpaceProblemHandle, spaceProblemHandle } from "./index";
+import { type SpaceProblemHandle, loadNofoldMethods, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
 import { type PickField, pickFromDomain } from "./pick";
 import {
   DEFAULT_PROBLEM,
-  EVALS_MAX,
-  EVAL_UNIT,
+  evalsMax,
+  evalUnit,
   freshSize,
+  isGeneric,
   LARGE_FOLD,
-  METHOD_TEXT,
   NO_RECORD_TEXT,
   type LoadedSpaceProblem,
+  type SearchKind,
   defaultBudget,
   fieldsOfId,
   pickProblem,
@@ -86,7 +90,7 @@ const fromText = (f: StartFrom) =>
         ? "from an earlier board result"
         : "from a new arrangement";
 
-/** A checked result with the run that found it: its seed and start go with a submission. */
+/** A checked result with the run that found it: its method, seed and start go with a submission. */
 interface Result {
   candidate: SpaceCandidate;
   check: SpaceCheck;
@@ -94,6 +98,38 @@ interface Result {
   seed: number;
   start: SpaceConfig | null;
   from: StartFrom;
+  method: string;
+  /** The method's settings over its defaults (empty for its defaults). */
+  params: Record<string, unknown>;
+}
+
+/** The run's settings as the panel reads them. */
+interface Settings {
+  seed: number;
+  budget: { evals: number; time_s?: number };
+  fresh: boolean;
+  method: string;
+  params: Record<string, unknown>;
+}
+
+/** Where the method chosen for each kind is remembered (the nofold problems apart from the fold ones). */
+const methodKey = (kind: SearchKind) => `polypack.space.method.${kind}`;
+
+function storedMethod(kind: SearchKind): string | null {
+  try {
+    return localStorage.getItem(methodKey(kind));
+  } catch {
+    // storage can be unavailable (private mode)
+    return null;
+  }
+}
+
+function storeMethod(kind: SearchKind, method: string): void {
+  try {
+    localStorage.setItem(methodKey(kind), method);
+  } catch {
+    // storage can be unavailable (private mode)
+  }
 }
 
 /** The first letter in upper case (a server's or a thread's reason starts a sentence here). */
@@ -169,7 +205,7 @@ class SpaceMode {
   /** The best of the run in progress, drawn while it runs. */
   private preview: SpaceCandidate | null = null;
   private runInfo: {
-    settings: { seed: number; budget: { evals: number; time_s?: number }; fresh: boolean };
+    settings: Settings;
     start: SpaceConfig | null;
     from: StartFrom;
     trace: [number, number][];
@@ -178,6 +214,13 @@ class SpaceMode {
   private loading = false;
   /** The defaults the panel last set: its search and, for fold surfaces, P. */
   private defaultsFor = "";
+  /** The methods the Method menu lists, for the problem shown. */
+  private methods: SpaceMethodInfo[] = [];
+  /** The method whose settings form is shown, as kind:method, and that form's reader. */
+  private formFor = "";
+  private readParams: () => Record<string, unknown> = () => ({});
+  /** A setting the user must correct, marked until it changes. */
+  private rejected: HTMLElement | null = null;
   /** The ticker that shows how long the round in flight has run, and when that round began. */
   private ticker: ReturnType<typeof setInterval> | null = null;
   private roundSince = 0;
@@ -264,6 +307,11 @@ class SpaceMode {
         h(
           "fieldset",
           { id: "space-solve-settings", class: "plain" },
+          row(
+            "Method",
+            "space-solve-method",
+            h("select", { id: "space-solve-method" }, h("option", { value: AUTO }, "Auto")),
+          ),
           h("p", { id: "space-method", class: "note" }),
           row(
             "Start from",
@@ -317,6 +365,13 @@ class SpaceMode {
             }),
           ),
           h("p", { id: "space-solve-unit", class: "note" }),
+          h(
+            "details",
+            { id: "space-solve-more", hidden: true },
+            h("summary", {}, "Method settings"),
+            h("p", { id: "space-solve-params-note", class: "note" }),
+            h("div", { id: "space-solve-params" }),
+          ),
         ),
         h("button", { id: "space-solve-run", class: "wide primary", type: "submit" }, "Run optimizer"),
       ),
@@ -427,6 +482,7 @@ class SpaceMode {
     });
     time.addEventListener("input", () => ($("space-solve-time-value").textContent = `${time.value} s`));
     $("space-solve-budget").addEventListener("change", () => this.updateButtons());
+    $("space-solve-method").addEventListener("change", () => this.methodChanged());
     $("space-solve-pause").addEventListener("click", () => this.pauseRun());
     $("space-solve-stop").addEventListener("click", () => this.run?.stop());
     $("space-solve-download").addEventListener("click", () => this.downloadRun());
@@ -594,6 +650,11 @@ class SpaceMode {
     this.busy(`Loading ${id}…`);
     const p = await loadSpaceProblem(space, id);
     if (token !== this.token) return;
+    // the polygon solver's methods, which a nofold problem offers, come in a chunk of their own
+    if (typeof p !== "string" && searchKind(p.search) === "nofold") {
+      await loadNofoldMethods();
+      if (token !== this.token) return;
+    }
     if (typeof p === "string") {
       this.clearProblem();
       this.setAddress();
@@ -666,34 +727,112 @@ class SpaceMode {
     this.renderFacts();
   }
 
+  /** The method chosen in the menu. */
+  private method(): string {
+    return $<HTMLSelectElement>("space-solve-method").value || AUTO;
+  }
+
   /**
-   * The budget and the notes of the problem's search. The budget is set again only for another
-   * search (or, for fold surfaces, another P), so that a budget the user chose stays.
+   * The Method menu for a problem: Auto, then the problem's other methods (boardMethods). The
+   * method remembered for its kind is chosen when the problem offers it, Auto otherwise.
    */
+  private setMethods(p: LoadedSpaceProblem): void {
+    this.methods = this.handle!.methods();
+    const select = $<HTMLSelectElement>("space-solve-method");
+    select.replaceChildren(...this.methods.map((m) => new Option(m.title, m.name)));
+    const stored = storedMethod(searchKind(p.search));
+    select.value = stored && this.methods.some((m) => m.name === stored) ? stored : AUTO;
+  }
+
+  /** The menu's choice changed: remember it for the kind, and show its notes, budget and settings. */
+  private methodChanged(): void {
+    const p = this.handle?.problem;
+    if (!p) return;
+    storeMethod(searchKind(p.search), this.method());
+    this.methodDefaults(p);
+    this.updateButtons();
+  }
+
+  /** The budget, the notes and the settings of the problem's search: the menu's method on it. */
   private setDefaults(p: LoadedSpaceProblem): void {
+    this.setMethods(p);
+    this.methodDefaults(p);
+  }
+
+  /**
+   * The budget and the notes of the method on the problem, and its settings form. The budget is
+   * set again only for another search (or, for fold surfaces and polyhedra, another P, or a generic
+   * method in place of Auto, which counts other evaluations), so that a budget the user chose
+   * stays. The settings form is built again only for another method or kind, so that settings the
+   * user chose stay too.
+   */
+  private methodDefaults(p: LoadedSpaceProblem): void {
     const kind = searchKind(p.search);
-    const fold = kind === "surface";
-    // fold, polyhedra and balls budgets grow with P
-    const key = fold || kind === "polyhedra" || kind === "balls" ? `${kind}/${p.P}` : kind;
+    const method = this.method();
+    const info = this.methods.find((m) => m.name === method) ?? this.methods[0];
+    const generic = isGeneric(p.search, method);
+    const fold = kind === "surface" && !generic;
+    // fold, polyhedra and balls budgets grow with P (a generic method's rounds are sized apart)
+    const key =
+      (fold || ((kind === "polyhedra" || kind === "balls") && !generic) ? `${kind}/${p.P}` : kind) +
+      (generic ? "/generic" : "");
     if (key !== this.defaultsFor) {
       this.defaultsFor = key;
-      const d = defaultBudget(p.search);
+      const d = defaultBudget(p.search, method);
       $<HTMLInputElement>("space-solve-time").value = String(d.time_s);
       $("space-solve-time-value").textContent = `${d.time_s} s`;
       $<HTMLInputElement>("space-solve-evals").value = String(d.evals);
     }
-    $<HTMLInputElement>("space-solve-evals").max = String(EVALS_MAX[kind]);
-    $("space-method").replaceChildren(h("b", {}, "Method: "), METHOD_TEXT[kind]);
-    const size = roundSize(p.search);
-    const fresh = freshSize(p.search);
+    $<HTMLInputElement>("space-solve-evals").max = String(evalsMax(p.search, method));
+    $("space-method").textContent = info?.summary ?? "";
+    $("space-solve-method").title = info?.summary ?? "";
+    const size = roundSize(p.search, method);
+    const fresh = freshSize(p.search, method);
     const n = (v: number) => v.toLocaleString("en-US");
     $("space-solve-unit").textContent =
-      `An evaluation here is ${EVAL_UNIT[kind]}. The search runs in rounds of ${n(size)}, each from the best so far` +
+      `An evaluation here is ${evalUnit(p.search, method)}. The search runs in rounds of ${n(size)}, each from the best so far` +
       (fresh > size ? `; a new arrangement needs a first round of ${n(fresh)}` : "") +
       ". With Evaluations only, the same seed gives the same result." +
       (fold && p.P >= 20
         ? ` Fold rounds on ${p.P} pieces are slow: one compression can take ${p.P >= LARGE_FOLD ? "half a minute or more" : "several seconds"}, and the time limit ends the run.`
         : "");
+    const form = `${kind}:${info?.name ?? AUTO}`;
+    if (form !== this.formFor) {
+      this.formFor = form;
+      this.clearRejected();
+      const settings = Object.keys(info?.schema.properties ?? {}).length > 0;
+      $("space-solve-more").hidden = !settings;
+      // the polygon solver's methods (nofold) keep the Flat board's conventions; a generic method's
+      // settings are shown as its schema states them, in steps of a piece
+      const polygon = kind === "nofold";
+      $("space-solve-params-note").textContent =
+        "Defaults are ready to use. Hover over a setting for its description." +
+        (polygon ? " Angles are in degrees unless a setting's label gives another unit." : "");
+      if (settings && info)
+        this.readParams = parameterForm($("space-solve-params"), info.schema, info.defaults, {
+          idPrefix: "space-param",
+          polygon,
+        });
+      else {
+        $("space-solve-params").replaceChildren();
+        this.readParams = () => ({});
+      }
+    }
+  }
+
+  /** Shows a rejected setting: a control inside closed <details> can neither take focus nor show a bubble. */
+  private reveal(control: HTMLElement): void {
+    for (let d = control.closest("details"); d; d = d.parentElement?.closest("details") ?? null) d.open = true;
+    this.clearRejected();
+    this.rejected = control;
+    control.setAttribute("aria-invalid", "true");
+    control.addEventListener("input", () => control === this.rejected && this.clearRejected(), { once: true });
+    control.focus();
+  }
+
+  private clearRejected(): void {
+    this.rejected?.removeAttribute("aria-invalid");
+    this.rejected = null;
   }
 
   // ---------- the panel ----------
@@ -811,13 +950,15 @@ class SpaceMode {
 
   // ---------- the optimizer ----------
 
-  private readSettings(): { seed: number; budget: { evals: number; time_s?: number }; fresh: boolean } | string {
+  private readSettings(): Settings | string {
     const field = (id: string) => $<HTMLInputElement>(id).value.trim();
     // an empty field is not 0: Number("") is
     const evals = field("space-solve-evals") === "" ? NaN : Number(field("space-solve-evals"));
     const seed = field("space-solve-seed") === "" ? NaN : Number(field("space-solve-seed"));
     const time = Number($<HTMLInputElement>("space-solve-time").value);
-    const max = this.handle ? EVALS_MAX[searchKind(this.handle.problem.search)] : 1_000_000;
+    const method = this.method();
+    const search = this.handle?.problem.search;
+    const max = search ? evalsMax(search, method) : 1_000_000;
     if (!Number.isSafeInteger(evals) || evals < 1 || evals > max) {
       $("space-solve-evals").focus();
       return `Evaluations: enter a whole number from 1 to ${max.toLocaleString("en-US")}. Nothing was run.`;
@@ -826,11 +967,35 @@ class SpaceMode {
       $("space-solve-seed").focus();
       return "Random seed: enter a whole number from 0 to 4,294,967,295. Nothing was run.";
     }
+    // the method's settings: the form is novalidate, so the fields' own limits are checked here
+    const fields = Array.from(
+      $("space-solve-params").querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(
+        "input, select, textarea",
+      ),
+    );
+    const invalid = fields.find((c) => c.willValidate && !c.checkValidity());
+    if (invalid) {
+      this.reveal(invalid);
+      return `${validityText(invalid)} Nothing was run.`;
+    }
+    let params: Record<string, unknown>;
+    try {
+      params = this.readParams();
+    } catch (error) {
+      if (error instanceof ParameterError && error.control) this.reveal(error.control);
+      return `${error instanceof Error ? error.message : String(error)} Nothing was run.`;
+    }
+    // the job's own check of the method and its settings, in the panel before a round fails on it
+    const why = search ? checkSpaceMethod(search, method, params) : null;
+    if (why) return `${capital(why)}. Nothing was run.`;
+    this.clearRejected();
     const both = $<HTMLSelectElement>("space-solve-budget").value === "both";
     return {
       seed,
       budget: { evals, ...(both ? { time_s: Math.max(1, Math.min(300, time)) } : {}) },
       fresh: $<HTMLSelectElement>("space-solve-start").value === "fresh",
+      method,
+      params,
     };
   }
 
@@ -843,7 +1008,11 @@ class SpaceMode {
     const start = settings.fresh ? null : (shown?.config ?? null);
     if (!start && !settings.fresh)
       return this.solveStatus("There is no packing to start from. Choose New arrangement.");
+    // as on the Flat board: a polish needs a packing
+    if (settings.method === "polish" && settings.fresh)
+      return this.solveStatus("Contact polish needs a packing to start from. Choose Shown packing.");
     const p = handle.problem;
+    const running = `Running ${handle.methodName(settings.method)}…`;
     const from: StartFrom = settings.fresh
       ? { kind: "fresh" }
       : shown?.source === "result"
@@ -875,14 +1044,12 @@ class SpaceMode {
           this.renderTrace(trace);
           this.view?.show(q.best.config);
         }
-        this.solveStatus(
-          q.state === "paused" ? "Paused. Resume, or stop to keep the best result." : `Running ${handle.method}…`,
-        );
+        this.solveStatus(q.state === "paused" ? "Paused. Resume, or stop to keep the best result." : running);
         this.updateButtons();
       },
     });
     this.run = run;
-    this.solveStatus(`Running ${handle.method}…`);
+    this.solveStatus(running);
     this.startTicker();
     this.updateButtons();
     void run.done.then((r) => {
@@ -910,7 +1077,16 @@ class SpaceMode {
     const check = r.best ? handle.validate(r.best.config) : null;
     const better = !!r.best && (!previous || r.best.score < previous.candidate.score * (1 - SCORE_TIE));
     if (r.best && check?.valid && better) {
-      this.result = { candidate: r.best, check, run: r, seed: info.settings.seed, start: info.start, from: info.from };
+      this.result = {
+        candidate: r.best,
+        check,
+        run: r,
+        seed: info.settings.seed,
+        start: info.start,
+        from: info.from,
+        method: info.settings.method,
+        params: info.settings.params,
+      };
       this.shown = "result";
       text += handle.improves(r.best.score)
         ? ` The result ${r.best.score.toFixed(6)} beats the problem's best${best}. You can submit it.`
@@ -1013,12 +1189,16 @@ class SpaceMode {
     const r = this.finished;
     const info = this.runInfo;
     if (!p || !r || !info || this.run) return;
-    const kind = searchKind(p.search);
+    const method = info.settings.method;
     const data = {
       space: p.space,
       id: p.id,
-      method: this.handle!.method,
-      settings: { ...info.settings, round_evals: roundSize(p.search), fresh_round_evals: freshSize(p.search) },
+      method: this.handle!.methodName(method),
+      settings: {
+        ...info.settings,
+        round_evals: roundSize(p.search, method),
+        fresh_round_evals: freshSize(p.search, method),
+      },
       start: info.start,
       start_from: fromText(info.from),
       result: r.best ? { score: r.best.score, round: r.best.round, seed: r.best.seed, config: r.best.config } : null,
@@ -1065,12 +1245,16 @@ class SpaceMode {
     this.renderSubmit();
     out.className = "note";
     out.textContent = "Submitting…";
-    // the seed and the start of the run that found it
-    const method = `${handle.method} (board, ${fromText(result.from)})`;
+    // the method with its settings, the seed and the start of the run that found it, as much as fits
+    const named = handle.methodName(result.method);
+    const settings = Object.keys(result.params).length ? `${named} ${JSON.stringify(result.params)}` : named;
+    const context = ` (board, ${fromText(result.from)})`;
+    const method =
+      [settings + context, settings, named + context].find((t) => t.length <= METHOD_MAX) ?? named.slice(0, METHOD_MAX);
     const answer = await handle.submit(result.candidate.config, {
       name,
       note: this.host.note.value.trim(),
-      method: method.length <= METHOD_MAX ? method : handle.method,
+      method,
       seed: result.seed,
       software: "PolyPack board",
     });

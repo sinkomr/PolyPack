@@ -16,8 +16,8 @@ import { checkSpaceConfig, parseSpaceId, readSpaceConfig, statedScore } from "..
 import { faceProblem, surfaceFromFace } from "../src/spaces/nofold";
 import { readSpaceProblem, readSpaceTarget } from "../src/spaces/read";
 import { Gate, type SpaceJob, type SpaceJobResult, runSpaceJob } from "../src/spaces/run";
-import { decideSpaceSubmission } from "../src/spaces/submit";
-import { type HistoryLine, type SpaceHistoryLine, StateDir } from "../src/state";
+import { decideSpaceSubmission, spaceSubmissionBody } from "../src/spaces/submit";
+import { type HistoryLine, type SpaceHistoryLine, StateDir, spaceBestFileOf, spaceCandidateOf } from "../src/state";
 import type { Control } from "../src/types";
 import { enlarged, recordConfig } from "./spaces-fixtures";
 
@@ -524,6 +524,37 @@ describe("the submission rule", () => {
       "better than the problem's best",
     );
   });
+
+  it("names the method as the spaces' records read: the kind's own search for auto, else the kind and the method", () => {
+    const named = (method: string | undefined) => {
+      const job = { ...best.job, method };
+      const o = { name: "Ada", note: "", software: "test" };
+      return [spaceSubmissionBody(p, { ...best, job }, o).method, spaceBestFileOf({ ...best, job }, 13, "v").method];
+    };
+    expect(named(undefined)).toEqual(["sphere basin hopping", "sphere basin hopping"]);
+    expect(named("auto")).toEqual(["sphere basin hopping", "sphere basin hopping"]);
+    expect(named("basin_hopping")).toEqual(["sphere basin_hopping", "sphere basin_hopping"]);
+    // a name read back from a best file stays as it is
+    expect(named("sphere basin_hopping")).toEqual(["sphere basin_hopping", "sphere basin_hopping"]);
+  });
+
+  it("keeps --space-params with the method: in full in the best file, in the submission when they fit", () => {
+    const o = { name: "Ada", note: "", software: "test" };
+    const job = { ...best.job, method: "penalty", params: { seedShare: 0.5 } };
+    expect(spaceSubmissionBody(p, { ...best, job }, o).method).toBe('sphere penalty {"seedShare":0.5}');
+    const file = spaceBestFileOf({ ...best, job }, 13, "v");
+    expect(file).toMatchObject({ method: "sphere penalty", params: { seedShare: 0.5 } });
+    // read back, it names the same method and parameters
+    const again = spaceCandidateOf(file);
+    expect(again.job.params).toEqual({ seedShare: 0.5 });
+    expect(spaceSubmissionBody(p, again, o).method).toBe('sphere penalty {"seedShare":0.5}');
+    // too long for the server's 80 characters: the name alone
+    const long = { ...best.job, method: "penalty", params: { note: "x".repeat(80) } };
+    expect(spaceSubmissionBody(p, { ...best, job: long }, o).method).toBe("sphere penalty");
+    expect(spaceBestFileOf({ ...best, job: long }, 13, "v").params).toEqual({ note: "x".repeat(80) });
+    // no parameters: no field
+    expect(spaceBestFileOf(best, 13, "v")).not.toHaveProperty("params");
+  });
 });
 
 describe("nofold problems as planar packings", () => {
@@ -588,7 +619,8 @@ describe("the space engine", () => {
     expect(r.jobs[0]).toMatchObject({ kind: "iterate", start: { rho: 2, pieces: [] } });
     // later iterate jobs start from the engine's own best
     expect(r.jobs.slice(1).filter((j) => j.kind === "iterate")[0].start).toEqual({ rho: 1.9, pieces: [] });
-    expect(r.jobs.every((j) => j.method === "sphere basin hopping" && j.budget.time_s >= 1)).toBe(true);
+    // each kind's own search, unless the client was given another method
+    expect(r.jobs.every((j) => j.method === "auto" && j.params === undefined && j.budget.time_s >= 1)).toBe(true);
     // the first jobs have no evaluation cap; once the rate is known they do
     expect(r.jobs[0].budget.evals).toBeUndefined();
     expect(r.jobs.at(-1)!.budget.evals).toBeGreaterThan(0);
@@ -676,7 +708,6 @@ describe("one space job on this thread", () => {
   const job = (space: string, id: string, start: unknown, o: Partial<SpaceJob> = {}): SpaceJob => ({
     space: space as never,
     id,
-    method: "test",
     seed: 3,
     budget: { time_s: 20, evals: 400 },
     kind: "iterate",

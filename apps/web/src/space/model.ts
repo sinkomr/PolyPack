@@ -6,6 +6,12 @@
  *
  * Wording follows the dimensions page (spaces-model.ts): "Certified value", "Status", "Lower bound",
  * "Site best", "Entries", and for 3D on 4D "Without folding" and "Folding gains".
+ *
+ * A run uses one method (packages/spaces/src/search/methods.ts): "auto", the default, is the
+ * space's own search, whose rounds are sized in that search's own unit (ROUND_EVALS, EVAL_UNIT);
+ * a generic method of @polypack/methods counts the kernel's energy evaluations, and its rounds are
+ * sized for those (genericRound). Nofold problems offer the polygon solver's methods, which count
+ * the polygon solver's evaluations, like their Auto.
  */
 import { SCORE_TIE } from "@polypack/geometry";
 import type { CertifiedStatus, SpaceConfig, SpaceName, SpaceProblemStatus } from "@polypack/spaces";
@@ -13,19 +19,29 @@ import { SPACE_RECORD_MARGIN, improvesSpaceBest } from "@polypack/spaces";
 import { getProblem as getPolyhedraProblem, getSolid as getPolyhedraSolid } from "@polypack/polyhedra";
 import { ballsProblemOf } from "@polypack/balls/catalogue";
 import {
+  AUTO,
+  AUTO_TEXT,
   BOUNDARY_ROUND_EVALS,
+  NOFOLD_METHOD,
+  type SearchKind,
   type SearchProblem,
   type SpaceJob,
+  type SpaceMethodInfo,
   type SpaceRule,
   SPACE_METHOD,
   buildSpaceKnown,
   checkSpaceConfig,
+  isAutoMethod,
   mixSeed,
   parseSearchProblem,
   readSpaceConfig,
+  searchKind,
+  spaceKernel,
+  spaceMethodsFor,
   statedScore,
 } from "@polypack/spaces/search";
 import { type FoldExtra, readFoldExtra } from "../boundary-model";
+import { POLYGON_METHOD_DESCRIPTIONS, POLYGON_METHOD_NAMES, POLYGON_METHOD_ORDER } from "../solve-methods";
 import { round6 } from "../spaces-model";
 
 // ---------- the problem picker (pick.ts, shared with the 3D on 4D viewer) ----------
@@ -181,33 +197,45 @@ export function shownText(source: "certified" | "site" | "result" | "preview", p
 // ---------- the optimizer's rounds ----------
 
 /** The kinds of search: one per space, and the planar search of nofold surface problems. */
-export type SearchKind = SpaceName | "nofold";
+export { type SearchKind, searchKind };
 
-export const searchKind = (p: SearchProblem): SearchKind =>
-  p.space === "surface" && p.mode === "nofold" ? "nofold" : p.space;
-
-/** The method a submission names. */
+/** The method a submission names, for Auto. */
 export const METHOD_NAME: Record<SearchKind, string> = {
   ...SPACE_METHOD,
-  nofold: "surface nofold: basin hopping on one face",
+  nofold: NOFOLD_METHOD,
 };
 
-/** The method in the panel's words. */
-export const METHOD_TEXT: Record<SearchKind, string> = {
-  surface:
-    "Fold search: penalty compression on the solid, basin hopping and a contact polish, then the space's own validator.",
-  nofold:
-    "Every piece stays in one face, so the fullest face is a planar problem: basin hopping packs it, and the result is copied onto every face.",
-  curved: "Penalty compression at curvature K, an LP polish and basin hopping, in rounds from the best so far.",
-  sphere: "Penalty relaxation, the smallest valid radius by bisection with the space's validator, and basin hopping.",
-  torus: "Penalty relaxation, the smallest valid lattice by bisection with the space's validator, and basin hopping.",
-  boundary:
-    "Penalty relaxation of the pieces across the cells, compression of the edge s, a polish, and hops between basins; every result passes the space's validator.",
-  polyhedra:
-    "Soft hops of a soft-to-rigid simulator and random jiggles from the best so far, each polished by a separating-plane penalty method, then the space's own validator.",
-  balls:
-    "Basin hopping from the best so far: move or shake some pieces, then a penalty method with the container's size as a variable (separating planes for solids), scaled apart to an exact clearance, then the space's own validator.",
-};
+/** Auto in the panel's words. */
+export const METHOD_TEXT: Record<SearchKind, string> = AUTO_TEXT;
+
+/**
+ * The methods the panel offers for a problem: Auto, then the generic methods its kernel runs
+ * (spaceMethodsFor), or for a nofold problem the polygon solver's methods under the Flat board's
+ * names and descriptions, in its order.
+ */
+export function boardMethods(p: SearchProblem): SpaceMethodInfo[] {
+  const methods = spaceMethodsFor(p);
+  if (searchKind(p) !== "nofold") return methods;
+  const rank = (name: string) => {
+    const i = POLYGON_METHOD_ORDER.indexOf(name);
+    return i < 0 ? POLYGON_METHOD_ORDER.length : i;
+  };
+  const [auto, ...polygon] = methods;
+  return [
+    auto,
+    ...polygon
+      .map((m) => ({
+        ...m,
+        title: POLYGON_METHOD_NAMES[m.name] ?? m.title,
+        summary: POLYGON_METHOD_DESCRIPTIONS[m.name] ?? m.summary,
+      }))
+      .sort((a, b) => rank(a.name) - rank(b.name)),
+  ];
+}
+
+/** True when a run of `method` on the problem is a generic method's, counted in kernel energy evaluations. */
+export const isGeneric = (p: SearchProblem, method: string | undefined): boolean =>
+  searchKind(p) !== "nofold" && !isAutoMethod(p.space, method);
 
 /** What an evaluation counts in each search, for the budget's note. */
 export const EVAL_UNIT: Record<SearchKind, string> = {
@@ -220,6 +248,66 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
   polyhedra: "one simulator step or one evaluation of the polish",
   balls: "one evaluation of the penalty and its gradient",
 };
+
+/**
+ * What an evaluation counts in a run of `method` on the problem, for the budget's note: for a
+ * generic method, one evaluation of the kernel's penalty energy, and what its dearer calls count
+ * (packages/methods framework.ts: gradCost, finishCost, validateCost).
+ */
+export function evalUnit(p: SearchProblem, method?: string): string {
+  if (!isGeneric(p, method)) return EVAL_UNIT[searchKind(p)];
+  const k = spaceKernel(p);
+  if (!k) return "one evaluation of the penalty energy";
+  const n = (v: number) => Number(v.toPrecision(3)).toLocaleString("en-US");
+  const grad = k.gradCost !== undefined && k.gradCost !== 1 ? `one with its gradient counts ${n(k.gradCost)}, ` : "";
+  return (
+    `one evaluation of the penalty energy (${grad}a finish of a whole packing ${n(k.finishCost)}, ` +
+    `a check by the server's rule ${n(k.validateCost ?? k.finishCost)})`
+  );
+}
+
+/**
+ * Evaluations of a generic method's round per space, as K / P: an energy evaluation costs about
+ * P times more with P pieces (each piece meets its neighbours), so K / P evaluations take about
+ * the same time at every P. Surface problems with polygons (N > 0) have a dearer energy than with
+ * disks. [CALC] From the median rates of the eight methods' rounds measured on Apple Silicon
+ * (2026-10-26, a shared and loaded machine), for rounds of 1 to 3 s like the spaces' own rounds.
+ */
+export const GENERIC_ROUND_K: Record<SpaceName, number> = {
+  sphere: 3_300_000,
+  boundary: 2_700_000,
+  torus: 900_000,
+  curved: 300_000,
+  surface: 100_000,
+  polyhedra: 300_000,
+  // the balls space has no kernel yet; a guess like polyhedra's for when it has one [SPEC]
+  balls: 300_000,
+};
+/** K for surface problems with disks (N = 0). */
+export const GENERIC_ROUND_K_SURFACE_DISKS = 300_000;
+/** The smallest and the largest round of a generic method. */
+export const GENERIC_ROUND_MIN = 5000;
+export const GENERIC_ROUND_MAX = 300_000;
+
+/**
+ * Evaluations of a generic method's round on the problem, from a start or without one: K / P
+ * (GENERIC_ROUND_K) in hundreds, clamped to [GENERIC_ROUND_MIN, GENERIC_ROUND_MAX], and at least
+ * two finishes and checks of its kernel, so that a round can offer more than its start.
+ */
+export function genericRound(p: SearchProblem): number {
+  const K = p.space === "surface" && p.N === 0 ? GENERIC_ROUND_K_SURFACE_DISKS : GENERIC_ROUND_K[p.space];
+  const round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
+  const k = spaceKernel(p);
+  const offers = k ? 2 * (k.finishCost + (k.validateCost ?? k.finishCost)) : 0;
+  return Math.max(round, 100 * Math.ceil(offers / 100));
+}
+
+/** The panel's starting budget for a generic method: ten rounds, and a time limit of 30 s. */
+export const genericBudget = (p: SearchProblem) => ({ time_s: 30, evals: 10 * genericRound(p) });
+/** The most evaluations the panel takes for a generic method's run. */
+export const GENERIC_EVALS_MAX = 100_000_000;
+/** How many times its size a generic round may grow while the rounds before it get nowhere. */
+export const GENERIC_GROW_LIMIT = 4;
 
 /**
  * 3D on 4D rounds, in energy evaluations of the boundary search (packages/boundary/src/search: a
@@ -393,14 +481,16 @@ export function ballsRound(P: number, code: string): { round: number; fresh: num
 }
 
 /** The evaluations of a round of this problem that starts from a packing. */
-export function roundSize(p: SearchProblem): number {
+export function roundSize(p: SearchProblem, method?: string): number {
+  if (isGeneric(p, method)) return genericRound(p);
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
   if (p.space === "balls") return ballsRound(p.P, p.code).round;
   return p.space === "surface" && p.mode === "fold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
 }
 
 /** The evaluations of a round of this problem with no start (a new arrangement). */
-export function freshSize(p: SearchProblem): number {
+export function freshSize(p: SearchProblem, method?: string): number {
+  if (isGeneric(p, method)) return genericRound(p);
   if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
 }
@@ -410,7 +500,8 @@ export function freshSize(p: SearchProblem): number {
  * get fewer evaluations as they grow (480 / P, from 8 to 40), since a compression of many pieces
  * takes long: [CALC] about 35 s each at 80 pieces.
  */
-export function defaultBudget(p: SearchProblem): { time_s: number; evals: number } {
+export function defaultBudget(p: SearchProblem, method?: string): { time_s: number; evals: number } {
+  if (isGeneric(p, method)) return genericBudget(p);
   const kind = searchKind(p);
   if (kind === "surface") return { time_s: 60, evals: Math.max(8, Math.min(40, Math.round(480 / p.P))) };
   if (p.space === "polyhedra") {
@@ -450,15 +541,23 @@ export const EVALS_MAX: Record<SearchKind, number> = {
   balls: 10_000_000,
 };
 
+/** The most evaluations the panel takes for a run of `method` on the problem. */
+export const evalsMax = (p: SearchProblem, method?: string): number =>
+  isGeneric(p, method) ? GENERIC_EVALS_MAX : EVALS_MAX[searchKind(p)];
+
 /** Active seconds a round may take when the budget has no time limit (it ends on its evaluations). */
 export const ROUND_TIME_CAP = 3600;
 
 export interface RunSettings {
   seed: number;
-  /** Evaluations in the search's own unit (EVAL_UNIT); time_s ends the run after that many active seconds. */
+  /** Evaluations in the method's own unit (evalUnit); time_s ends the run after that many active seconds. */
   budget: { evals: number; time_s?: number };
   /** True to let the first round build its own start instead of starting from the shown packing. */
   fresh: boolean;
+  /** "auto" (the default) or a method the problem offers (boardMethods). */
+  method?: string;
+  /** The method's parameters over its defaults (none for auto). */
+  params?: Record<string, unknown>;
 }
 
 /**
@@ -472,7 +571,8 @@ export interface RunSettings {
  * `tries` counts the rounds before this one that got nowhere: without a start, rounds that found
  * nothing; from a start, rounds that did not improve on it. Each doubles the next round, up to
  * GROW_LIMIT times its size, since a tight packing needs a longer search to leave its basin.
- * `startPolished` says that the start is the best of an earlier round (job.polished).
+ * `startPolished` says that the start is the best of an earlier round (job.polished). The job runs
+ * the run's method with its parameters; a generic method's rounds have genericRound evaluations.
  */
 export function roundJob(
   p: SearchProblem,
@@ -485,20 +585,26 @@ export function roundJob(
   startPolished = false,
 ): { job: SpaceJob; evals: number } | null {
   const kind = searchKind(p);
-  const fold = kind === "surface";
+  const method = run.method ?? AUTO;
+  const generic = isGeneric(p, method);
+  // the fold search's own budget counts its start's compressions; a generic method's does not
+  const fold = kind === "surface" && !generic;
   const least = fold && !start ? 2 : 1;
   const left = run.budget.evals - used.evals;
   if (left < least) return null;
-  const size = (start ? roundSize(p) : freshSize(p)) * Math.min(GROW_LIMIT[kind], 2 ** Math.min(tries, 20));
+  const grow = generic ? GENERIC_GROW_LIMIT : GROW_LIMIT[kind];
+  const size = (start ? roundSize(p, method) : freshSize(p, method)) * Math.min(grow, 2 ** Math.min(tries, 20));
   const evals = Math.max(least, Math.min(size, left));
   const time_s =
     run.budget.time_s === undefined
       ? ROUND_TIME_CAP
       : Math.max(0.05, Math.min(ROUND_TIME_CAP, run.budget.time_s - used.seconds));
+  const params = run.params && Object.keys(run.params).length ? run.params : undefined;
   const job: SpaceJob = {
     space: p.space,
     id: p.id,
-    method: METHOD_NAME[kind],
+    method,
+    ...(params && !isAutoMethod(p.space, method) ? { params } : {}),
     seed: mixSeed(run.seed, k),
     budget: { time_s, evals: fold ? evals - (start ? 1 : 2) : evals },
     rule,

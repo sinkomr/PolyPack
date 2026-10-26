@@ -16,7 +16,7 @@ import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torus
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { ballsProblemOf, parseBallsId } from "@polypack/balls/catalogue";
 import type { SpaceConfig, SpaceName } from "../types";
-import { validateSpaceSubmission } from "../validate";
+import { type SpaceValidateOptions, validateSpaceSubmission } from "../validate";
 
 /** PolyPack's touching tolerance: a gap of at least -TOL is contact, not overlap. */
 export { SPACE_TOL } from "../info";
@@ -260,14 +260,11 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
 /**
  * What the server's rule needs to know of the problem: its lower bound, and the research record's
  * certified size; a configuration below that by more than the tie tolerance must also be valid at
- * the strict tolerance 1e-11 (validateSpaceSubmission).
+ * the strict tolerance 1e-11 (validateSpaceSubmission). It is the options of
+ * validateSpaceSubmission, so that any other flag of the rule reaches the check too.
  */
-export interface SpaceRule {
-  bound?: number | null;
-  certified?: number | null;
-  /** True for a problem without a research record: every result must then pass the strict check too. */
-  noRecord?: boolean;
-}
+// (noRecord, for a problem without a research record, asks every result to pass the strict check too)
+export type SpaceRule = SpaceValidateOptions;
 
 export interface SpaceCheck {
   valid: boolean;
@@ -283,7 +280,9 @@ export interface SpaceCheck {
  * 1e-9). The score is null only when the configuration is malformed.
  */
 export function checkSpaceConfig(space: SpaceName, id: string, config: unknown, rule: SpaceRule = {}): SpaceCheck {
+  // the whole rule: its bound, its certified size and any other flag it carries
   const v = validateSpaceSubmission(space, id, config, {
+    ...rule,
     bound: rule.bound ?? null,
     certified: rule.certified ?? null,
     noRecord: rule.noRecord === true,

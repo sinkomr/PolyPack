@@ -29,7 +29,7 @@ import { quaternionToMatrix } from "../linalg";
 import type { BoundaryConfig, BoundaryPiece, Polytope } from "../types";
 import { clampedPieces, plainState } from "./balls";
 import { type Charts, randomCellPoint } from "./chart";
-import { type PieceModel, type State, copyState } from "./model";
+import { type PieceModel, type State, type TermOptions, copyState } from "./model";
 import { randInt } from "./random";
 
 /** Local axis k of tesseract cell (i, sg) is the 4D axis AX[i][k]. */
@@ -51,6 +51,9 @@ export class AlignedCubeModel implements PieceModel {
   private readonly hiI: Int32Array;
   private readonly hiA: Float64Array;
   private readonly hiB: Float64Array;
+  // d(bound)/ds at fixed U, for the kernel's dE/ds (the B above hold +-h or +-(2h - 1/2), h = s/2)
+  private readonly loS: Float64Array;
+  private readonly hiS: Float64Array;
   private readonly order: Int32Array;
   private readonly first = new Int32Array(9);
 
@@ -71,30 +74,41 @@ export class AlignedCubeModel implements PieceModel {
     this.hiI = new Int32Array(3 * n);
     this.hiA = new Float64Array(3 * n);
     this.hiB = new Float64Array(3 * n);
+    this.loS = new Float64Array(3 * n);
+    this.hiS = new Float64Array(3 * n);
     this.order = new Int32Array(n);
   }
 
   /**
    * Builds the parts of every cube; returns their count and the line-crossing term (energy, or
-   * with `violation` the largest second crossing depth), adding the term's gradient into g.
+   * with `violation` the largest second crossing depth), adding the term's gradient into g. With
+   * the kernel's options (model.ts) the term is weighted and kept for the focus cube only, and
+   * its dE/ds (a depth falls by 1/2 per unit of s) is added into ds[0].
    */
-  private build(st: State, s: number, g: Float64Array | null, violation: boolean): { n: number; line: number } {
+  private build(st: State, s: number, g: Float64Array | null, violation: boolean, opts?: TermOptions): { n: number; line: number } {
     const h = s / 2;
     const U = st.U;
+    const W = opts?.w ?? null;
+    const focus = opts?.focus ?? -1;
+    const ds = opts?.ds ?? null;
     let n = 0;
     let line = violation ? -Infinity : 0;
     const dep = [0, 0, 0];
     const lo4I = [0, 0, 0, 0];
     const lo4A = [0, 0, 0, 0];
     const lo4B = [0, 0, 0, 0];
+    const lo4S = [0, 0, 0, 0];
     const hi4I = [0, 0, 0, 0];
     const hi4A = [0, 0, 0, 0];
     const hi4B = [0, 0, 0, 0];
+    const hi4S = [0, 0, 0, 0];
     for (let q = 0; q < this.P; q++) {
       const c = st.cells[q];
       const i = c >> 1;
       const sg = c & 1 ? 1 : -1;
       const o = 3 * q;
+      const wq = W ? W[q] : 1;
+      const mine = focus < 0 || q === focus;
       let ncross = 0;
       let kmax = -1;
       for (let k = 0; k < 3; k++) {
@@ -104,15 +118,18 @@ export class AlignedCubeModel implements PieceModel {
           if (kmax < 0 || dep[k] > dep[kmax]) kmax = k;
         }
       }
-      if (violation) {
+      if (!mine) {
+        // another cube's line term is not asked for
+      } else if (violation) {
         // the second largest depth: <= 0 exactly when at most one axis crosses
         const sorted = dep.slice().sort((a, b) => b - a);
         line = Math.max(line, sorted[1]);
       } else if (ncross >= 2)
         for (let k = 0; k < 3; k++)
           if (dep[k] > 0 && k !== kmax) {
-            line += dep[k] * dep[k];
-            if (g) g[o + k] += 2 * dep[k] * (U[o + k] >= 0 ? 1 : -1);
+            line += wq * dep[k] * dep[k];
+            if (g) g[o + k] += 2 * wq * dep[k] * (U[o + k] >= 0 ? 1 : -1);
+            if (ds) ds[0] -= wq * dep[k];
           }
       // the part in the anchor cell
       const a = n++;
@@ -123,18 +140,22 @@ export class AlignedCubeModel implements PieceModel {
         this.loI[x] = o + k;
         this.loA[x] = 1;
         this.loB[x] = -0.5;
+        this.loS[x] = 0;
         this.hiI[x] = o + k;
         this.hiA[x] = 1;
         this.hiB[x] = 0.5;
+        this.hiS[x] = 0;
         if (dep[k] > 0) {
           if (U[o + k] > 0) {
             this.hiI[x] = -1;
             this.hiA[x] = 0;
             this.hiB[x] = h;
+            this.hiS[x] = 0.5;
           } else {
             this.loI[x] = -1;
             this.loA[x] = 0;
             this.loB[x] = -h;
+            this.loS[x] = -0.5;
           }
         }
       }
@@ -149,16 +170,20 @@ export class AlignedCubeModel implements PieceModel {
           lo4I[i] = o + k;
           lo4A[i] = -tau;
           lo4B[i] = 2 * h - 0.5;
+          lo4S[i] = 1;
           hi4I[i] = -1;
           hi4A[i] = 0;
           hi4B[i] = h;
+          hi4S[i] = 0.5;
         } else {
           lo4I[i] = -1;
           lo4A[i] = 0;
           lo4B[i] = -h;
+          lo4S[i] = -0.5;
           hi4I[i] = o + k;
           hi4A[i] = tau;
           hi4B[i] = 0.5 - 2 * h;
+          hi4S[i] = -1;
         }
         for (let m = 0; m < 3; m++) {
           if (m === k) continue;
@@ -167,9 +192,11 @@ export class AlignedCubeModel implements PieceModel {
           lo4I[gm] = this.loI[x];
           lo4A[gm] = this.loA[x];
           lo4B[gm] = this.loB[x];
+          lo4S[gm] = this.loS[x];
           hi4I[gm] = this.hiI[x];
           hi4A[gm] = this.hiA[x];
           hi4B[gm] = this.hiB[x];
+          hi4S[gm] = this.hiS[x];
         }
         const b = n++;
         this.pCell[b] = c2;
@@ -180,9 +207,11 @@ export class AlignedCubeModel implements PieceModel {
           this.loI[x] = lo4I[gp];
           this.loA[x] = lo4A[gp];
           this.loB[x] = lo4B[gp];
+          this.loS[x] = lo4S[gp];
           this.hiI[x] = hi4I[gp];
           this.hiA[x] = hi4A[gp];
           this.hiB[x] = hi4B[gp];
+          this.hiS[x] = hi4S[gp];
         }
       }
     }
@@ -193,9 +222,16 @@ export class AlignedCubeModel implements PieceModel {
     return I[x] < 0 ? B[x] : A[x] * U[I[x]] + B[x];
   }
 
-  /** Penalty energy (violation = false) or largest violation of the state at edge s. */
-  private evaluate(st: State, s: number, g: Float64Array | null, violation: boolean): number {
-    const { n, line } = this.build(st, s, g, violation);
+  /**
+   * Penalty energy (violation = false) or largest violation of the state at edge s; `opts` as in
+   * build(). Without them the arithmetic is the search's own (a weight of 1 multiplies exactly).
+   */
+  private evaluate(st: State, s: number, g: Float64Array | null, violation: boolean, opts?: TermOptions): number {
+    const ds = opts?.ds ?? null;
+    if (ds) ds[0] = 0;
+    const { n, line } = this.build(st, s, g, violation, opts);
+    const W = opts?.w ?? null;
+    const focus = opts?.focus ?? -1;
     const U = st.U;
     let E = line;
     // parts by cell (counting sort)
@@ -211,6 +247,7 @@ export class AlignedCubeModel implements PieceModel {
         for (let y = x + 1; y < first[c + 1]; y++) {
           const b = this.order[y];
           if (this.pCube[a] === this.pCube[b]) continue;
+          if (focus >= 0 && this.pCube[a] !== focus && this.pCube[b] !== focus) continue;
           let best = Infinity;
           let hiX = -1;
           let loX = -1;
@@ -232,10 +269,13 @@ export class AlignedCubeModel implements PieceModel {
             continue;
           }
           if (!(best > 0)) continue;
-          E += best * best;
+          const wab = W ? 0.5 * (W[this.pCube[a]] + W[this.pCube[b]]) : 1;
+          E += wab * best * best;
+          // the depth is hi - lo of the two bounds that set it
+          if (ds) ds[0] += 2 * wab * best * (this.hiS[hiX] - this.loS[loX]);
           if (!g) continue;
-          if (this.hiI[hiX] >= 0) g[this.hiI[hiX]] += 2 * best * this.hiA[hiX];
-          if (this.loI[loX] >= 0) g[this.loI[loX]] -= 2 * best * this.loA[loX];
+          if (this.hiI[hiX] >= 0) g[this.hiI[hiX]] += 2 * wab * best * this.hiA[hiX];
+          if (this.loI[loX] >= 0) g[this.loI[loX]] -= 2 * wab * best * this.loA[loX];
         }
       }
     return E;
@@ -244,6 +284,12 @@ export class AlignedCubeModel implements PieceModel {
   energy(st: State, s: number, g: Float64Array): number {
     g.fill(0);
     return this.evaluate(st, s, g, false);
+  }
+
+  /** The kernel's terms (model.ts). */
+  terms(st: State, s: number, g: Float64Array | null, violation: boolean, o: TermOptions): number {
+    if (g) g.fill(0);
+    return this.evaluate(st, s, g, violation, o);
   }
 
   violation(st: State, s: number): number {

@@ -23,6 +23,19 @@ export interface State {
   U: Float64Array;
 }
 
+/**
+ * What the generic methods' kernel (../kernel.ts) asks of a model beyond the search's energy.
+ * Without options, terms() gives exactly what energy() and violation() give.
+ */
+export interface TermOptions {
+  /** Per-piece weights (default all 1): a pair term is scaled by (w_i + w_j) / 2, a piece's own terms by w_i. Energy only. */
+  w?: Float64Array | null;
+  /** Only the terms of this piece: its own and its pairs (default -1: every term). */
+  focus?: number;
+  /** When given, ds[0] receives dE/ds with the centres U held fixed. Energy only. */
+  ds?: Float64Array | null;
+}
+
 export interface PieceModel {
   readonly P: number;
   /** A relaxation counts as feasible below this energy. */
@@ -38,6 +51,11 @@ export interface PieceModel {
   energy(st: State, s: number, g: Float64Array): number;
   /** Largest violation (a length; <= 0 when the state is valid by the model's own exact rule). */
   violation(st: State, s: number): number;
+  /**
+   * The energy (g, when given, receives its gradient with respect to U) or, with `violation`, the
+   * largest violation, of the terms the options select, weighted as they say.
+   */
+  terms(st: State, s: number, g: Float64Array | null, violation: boolean, o: TermOptions): number;
   /** Edge of the random starts. */
   startEdge(): number;
   randomState(s: number, rand: () => number): State;

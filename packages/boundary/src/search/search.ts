@@ -159,6 +159,83 @@ export function modelOf(problem: BoundaryProblem, ballMetric?: "words" | "chains
   return ballMetric === "chains" ? new BallModel(poly, problem.P, new ChainMetric(poly)) : new BallModel(poly, problem.P);
 }
 
+/** Relative steps by which finalizeState nudges a scale up until the validator accepts it. */
+const FINAL_BUMPS = [0, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9];
+
+/**
+ * The finalize stage (header): the smallest scale k >= 1 of st (at edge s) at which the model's
+ * exact rule holds, by bisection, then nudged up until `accept` (the validator at tol 0) takes the
+ * configuration at edge k s; null when no k <= 2 satisfies the rule or no nudge is accepted.
+ * `onViolation` is called before every evaluation of the rule (the search counts them).
+ *
+ * `shrink` (the generic kernel's finish, ../kernel.ts): when the rule already holds at k = 1, k
+ * may also go below 1, down to the model's floor, so that a state with room is drawn in until its
+ * pieces touch. The rule is monotone in k, so the bisection is sound either way.
+ */
+export function finalizeState(
+  model: PieceModel,
+  st: State,
+  s: number,
+  accept: (config: BoundaryConfig) => boolean,
+  opts: { shrink?: boolean; onViolation?: () => void } = {},
+): { config: BoundaryConfig; score: number } | null {
+  const viol = (k: number) => {
+    opts.onViolation?.();
+    return model.violation(scaleState(st, k), s * k);
+  };
+  const bisect = (lo: number, hi: number): number => {
+    // viol(lo) > 0 >= viol(hi)
+    while (hi - lo > 1e-15 * hi) {
+      const mid = 0.5 * (lo + hi);
+      if (viol(mid) > 0) lo = mid;
+      else hi = mid;
+    }
+    return hi;
+  };
+  let k = 1;
+  if (viol(1) > 0) {
+    let lo = 1;
+    let step = 1e-13;
+    let hi = 1 + step;
+    while (viol(hi) > 0) {
+      lo = hi;
+      step *= 4;
+      if (step > 1) return null;
+      hi = 1 + step;
+    }
+    k = bisect(lo, hi);
+  } else if (opts.shrink) {
+    // steps down from 1, growing fourfold, until the rule fails or the floor is reached
+    const kMin = model.floor / s;
+    let hi = 1;
+    let step = 1e-13;
+    for (;;) {
+      const lo = Math.max(1 - step, kMin);
+      if (!(lo < hi)) break;
+      if (viol(lo) > 0) {
+        hi = bisect(lo, hi);
+        break;
+      }
+      hi = lo;
+      if (lo === kMin) break;
+      step *= 4;
+    }
+    k = hi;
+  }
+  // the validator at tol 0 judges: touching contacts may need a hair more room than the model's exact rule
+  const nudge = (k0: number) => {
+    for (const bump of FINAL_BUMPS) {
+      const kk = k0 * (1 + bump);
+      const sk = s * kk;
+      const config: BoundaryConfig = { s: sk, pieces: model.pieces(scaleState(st, kk), sk) };
+      if (accept(config)) return { config, score: sk };
+    }
+    return null;
+  };
+  // a shrunk scale the validator refuses falls back to k = 1, where the rule held
+  return nudge(k) ?? (k < 1 ? nudge(1) : null);
+}
+
 export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOptions): BoundarySearchResult {
   if (!problem || !isPolytopeName(problem.polytope) || !isPieceName(problem.piece) || !isPieceCount(problem.P)) throw new Error("searchBoundary: invalid problem");
   const poly = getPolytope(problem.polytope);
@@ -256,40 +333,18 @@ export function searchBoundary(problem: BoundaryProblem, opts: BoundarySearchOpt
   };
 
   // ------------------------------------------------------------ finalize
-  const finalize = (st: State, s: number): { config: BoundaryConfig; score: number } | null => {
-    const viol = (k: number) => {
-      tick();
-      return model.violation(scaleState(st, k), s * k);
-    };
-    let k = 1;
-    if (viol(1) > 0) {
-      let lo = 1;
-      let step = 1e-13;
-      let hi = 1 + step;
-      while (viol(hi) > 0) {
-        lo = hi;
-        step *= 4;
-        if (step > 1) return null;
-        hi = 1 + step;
-      }
-      while (hi - lo > 1e-15 * hi) {
-        const mid = 0.5 * (lo + hi);
-        if (viol(mid) > 0) lo = mid;
-        else hi = mid;
-      }
-      k = hi;
-    }
-    // the validator at tol 0 judges: touching contacts may need a hair more room than the model's exact rule
-    for (const bump of [0, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9]) {
-      const kk = k * (1 + bump);
-      const sk = s * kk;
-      const config: BoundaryConfig = { s: sk, pieces: model.pieces(scaleState(st, kk), sk) };
-      tick(VALIDATION_EVALS);
-      stats.validations++;
-      if (validateBoundary(problem, config, { tol: 0 }).ok) return { config, score: sk };
-    }
-    return null;
-  };
+  const finalize = (st: State, s: number): { config: BoundaryConfig; score: number } | null =>
+    finalizeState(
+      model,
+      st,
+      s,
+      (config) => {
+        tick(VALIDATION_EVALS);
+        stats.validations++;
+        return validateBoundary(problem, config, { tol: 0 }).ok;
+      },
+      { onViolation: () => tick() },
+    );
 
   // ------------------------------------------------------------ the run
   const trace: BoundarySearchEvent[] = [];

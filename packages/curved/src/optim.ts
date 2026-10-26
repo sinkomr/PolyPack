@@ -151,6 +151,10 @@ export interface LpResult {
 /**
  * Bounded-variable primal simplex on a dense tableau. Columns: structural x' = x - lo in [0, hi - lo],
  * elastic s_k >= 0 (cost `penalty`), surplus r_k >= 0. Row k: A_k x' + s_k - r_k = b_k - A_k lo.
+ *
+ * `poll`, when given, is called before every pivot with the pivot's work (the tableau entries it
+ * reads and writes, about m (n + 2m) + m (n + m)); true ends the solve at the current basis, a
+ * feasible point of the elastic LP, with status "iteration_limit". Without it nothing changes.
  */
 export function solveLp(
   c: Float64Array,
@@ -159,6 +163,7 @@ export function solveLp(
   hi: Float64Array,
   penalty = 1e4,
   maxPivots = 5000,
+  poll?: (work: number) => boolean,
 ): LpResult {
   const n = c.length;
   const m = rows.length;
@@ -191,8 +196,9 @@ export function solveLp(
   const tolP = 1e-10;
   let status: LpResult["status"] = "optimal";
   let degenerate = 0;
+  const pivotWork = m * (n + 2 * m) + m * W;
   for (let piv = 0; ; piv++) {
-    if (piv >= maxPivots) {
+    if (piv >= maxPivots || poll?.(pivotWork)) {
       status = "iteration_limit";
       break;
     }

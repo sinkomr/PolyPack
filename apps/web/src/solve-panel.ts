@@ -3,39 +3,14 @@ import type { Result, SketchFrame, StageIdentity } from "@polypack/solver";
 import { Board } from "./board";
 import { Attribution, HAND, RunInfo, attributionAfter, readRun } from "./found-with";
 import { BoardView } from "./view";
-import { ParameterError, parameterForm } from "./solve-params";
+import { POLYGON_METHOD_DESCRIPTIONS, POLYGON_METHOD_NAMES, POLYGON_METHOD_ORDER } from "./solve-methods";
+import { ParameterError, parameterForm, validityText } from "./solve-params";
 import type { SolveMethod, SolveRequest, SolveResponse } from "./solve-protocol";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const names: Record<string, string> = {
-  basin_hopping: "Basin hopping",
-  penalty: "Penalty / augmented Lagrangian",
-  mc_compress: "Monte Carlo compression",
-  asc: "Adaptive shrinking container",
-  ls_growth: "Lubachevsky–Stillinger growth",
-  morph: "Shape continuation",
-  harden: "Soft-to-rigid hardening, after Yohei Nakajima",
-  shrink_repair: "Shrink and repair",
-  seed: "Lattice & symmetry seeds",
-  polish: "Contact polish",
-};
-const order = Object.keys(names);
-const descriptions: Record<string, string> = {
-  basin_hopping:
-    "Perturbs and improves a packing repeatedly to escape local minima. A useful starting choice for polygons.",
-  penalty: "Compresses the packing with continuous optimization, then refines its contacts.",
-  mc_compress: "Tries small random moves while gradually shrinking the container.",
-  asc: "Adjusts the pieces and container together to find a tighter packing.",
-  ls_growth:
-    "Moves and grows pieces until they settle into contact. Circle collisions are event-driven; polygon dynamics are approximate.",
-  morph: "Starts with rounded pieces and gradually changes them to the chosen shape.",
-  harden:
-    "Soft-to-rigid hardening, after Yohei Nakajima: squeezes soft inscribed disks together, hardens them into the true shapes and keeps the best of several seeded runs.",
-  shrink_repair:
-    "Shrinks the container below the best packing, then removes the overlaps by moving, relocating and regrouping pieces. Good at escaping the grid arrangement for pieces that tile the container.",
-  seed: "Generates arrangements from lattices, rings, rows, or an adjacent record.",
-  polish: "Fine-tunes the contacts and positions in a complete packing.",
-};
+const names = POLYGON_METHOD_NAMES;
+const order = POLYGON_METHOD_ORDER;
+const descriptions = POLYGON_METHOD_DESCRIPTIONS;
 interface Candidate {
   config: PackingConfig;
   container: Container;
@@ -238,15 +213,7 @@ export class SolvePanel {
 
   /** Why a control failed native validation, in the panel's words rather than the browser's locale. */
   private problem(control: Control): string {
-    const name = (control.closest("label")?.querySelector("span") ?? control.labels?.[0])?.textContent ?? "A setting";
-    const v = control.validity,
-      input = control as HTMLInputElement;
-    if (v.badInput) return `${name}: enter a valid number.`;
-    if (v.valueMissing) return `${name}: enter a value; this setting cannot be left empty.`;
-    if (v.rangeUnderflow) return `${name}: must be at least ${input.min}.`;
-    if (v.rangeOverflow) return `${name}: must be at most ${input.max}.`;
-    if (v.stepMismatch) return `${name}: enter a whole number.`;
-    return `${name}: ${control.validationMessage}`;
+    return validityText(control);
   }
 
   private start(): void {

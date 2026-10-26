@@ -5,6 +5,7 @@
 import { isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { MAX_PIECES, MAX_SIDES } from "@polypack/geometry";
+import { getMethod, listMethods, methodParams } from "@polypack/methods";
 import { SPACE_NAMES, type SpaceName } from "@polypack/spaces";
 import { VERSION } from "./version";
 
@@ -47,6 +48,14 @@ export interface Options {
   spaces: SpaceName[] | null;
   /** --only-dimensions (or --only-spaces): the polygon work list is not used at all. */
   onlySpaces: boolean;
+  /**
+   * --space-method: the search method of the other kinds' jobs, "auto" (each kind's own search,
+   * the default) or a generic method of @polypack/methods. A problem that does not offer it runs
+   * auto (packages/spaces/src/search/engine.ts).
+   */
+  spaceMethod: string;
+  /** --space-params: that method's parameters over its defaults; null for none. */
+  spaceParams: Record<string, unknown> | null;
 }
 
 export type Parsed = { kind: "help" } | { kind: "version" } | { kind: "run"; options: Options };
@@ -103,6 +112,12 @@ Without these options the client never asks for them.
   --only-dimensions        search only the kinds given with --dimensions
   --only-spaces            the same as --only-dimensions
 
+  --space-method NAME      the search method of these kinds: auto (default), each kind's own
+                           search, or a method that runs in every kind; a problem that does not
+                           offer it uses auto. Nofold surface problems keep the polygon engine.
+${spaceMethodLines()}
+  --space-params JSON      that method's parameters, a JSON object (default: its defaults)
+
 --max-P applies to these kinds too; --N and --M filter only the polygon work list.
 
 Stop it with Ctrl-C: it submits the current problem's best if that beats the leader, saves its
@@ -156,6 +171,63 @@ export function parseSpaces(text: string, flag = "spaces"): SpaceName[] {
   return SPACE_NAMES.filter((name) => parts.includes(name));
 }
 
+/** The generic methods a client of this version has, as lines of the help text. */
+function spaceMethodLines(): string {
+  const names = listMethods().map((m) => m.name);
+  const indent = " ".repeat(27);
+  if (!names.length) return `${indent}This version has no such method yet.`;
+  const lines: string[] = [];
+  let line = "Methods:";
+  for (const [i, name] of names.entries()) {
+    const word = `${name}${i < names.length - 1 ? "," : ""}`;
+    if (line.length + 1 + word.length > 70) {
+      lines.push(line);
+      line = word;
+    } else line += ` ${word}`;
+  }
+  lines.push(line);
+  return lines.map((l) => indent + l).join("\n");
+}
+
+/**
+ * --space-method and --space-params, checked against the methods' registry and the method's
+ * schema. Whether a problem offers the method is decided per problem, by its kernel.
+ */
+export function parseSpaceMethod(
+  method: string | undefined,
+  params: string | undefined,
+): { spaceMethod: string; spaceParams: Record<string, unknown> | null } {
+  const name = (method ?? "auto").trim();
+  if (name !== "auto" && !getMethod(name)) {
+    const names = listMethods().map((m) => m.name);
+    throw new OptionError(
+      `--space-method: "${name.slice(0, 40)}" is not a method of the other kinds; choose auto` +
+        (names.length ? ` or one of ${names.join(", ")}` : " (this version has no other method yet)"),
+    );
+  }
+  if (params === undefined) return { spaceMethod: name, spaceParams: null };
+  if (name === "auto")
+    throw new OptionError(
+      "--space-params needs --space-method NAME: auto, each kind's own search, takes no parameters",
+    );
+  let value: unknown;
+  try {
+    value = JSON.parse(params);
+  } catch {
+    throw new OptionError(
+      `--space-params must be a JSON object, for example '{"key": 1}'; "${params.slice(0, 40)}" is not JSON`,
+    );
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new OptionError(`--space-params must be a JSON object, for example '{"key": 1}'`);
+  try {
+    methodParams(getMethod(name)!, value as Record<string, unknown>);
+  } catch (error) {
+    throw new OptionError(`--space-params for ${name}: ${(error as Error).message}`);
+  }
+  return { spaceMethod: name, spaceParams: value as Record<string, unknown> };
+}
+
 function positiveInteger(name: string, text: string, max: number): number {
   if (!/^\d{1,9}$/.test(text.trim()) || Number(text) < 1 || Number(text) > max)
     throw new OptionError(`--${name} must be an integer from 1 to ${max}`);
@@ -193,6 +265,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
         dimensions: { type: "string" },
         "only-spaces": { type: "boolean", default: false },
         "only-dimensions": { type: "boolean", default: false },
+        "space-method": { type: "string" },
+        "space-params": { type: "string" },
         help: { type: "boolean", default: false },
         version: { type: "boolean", default: false },
       },
@@ -228,6 +302,11 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
     throw new OptionError(`${only} needs --${named} LIST (or --${other} LIST), for example --${named} all`);
   if (onlySpaces && (values.N !== undefined || values.M !== undefined))
     throw new OptionError(`--N and --M filter the polygon work list, which ${only} leaves out`);
+  const { spaceMethod, spaceParams } = parseSpaceMethod(values["space-method"], values["space-params"]);
+  if (spaceMethod !== "auto" && spaces === null)
+    throw new OptionError(
+      "--space-method applies to the other kinds: give --dimensions LIST too, for example --dimensions all",
+    );
 
   let stateDir = values.state ?? join(machine.homedir, ".polypack-volunteer");
   // a quoted or --state=~/... path reaches us unexpanded
@@ -256,6 +335,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
       once: values.once,
       spaces,
       onlySpaces,
+      spaceMethod,
+      spaceParams,
     },
   };
 }

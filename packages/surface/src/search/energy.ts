@@ -57,7 +57,8 @@ export function canonicalize(solid: Solid, s: number, p: SurfacePose): SurfacePo
   return { face, x, y, theta };
 }
 
-interface PartRec {
+/** A part of a piece on one face with its bounding box (exported for the methods kernel). */
+export interface PartRec {
   piece: number;
   poly: Float64Array;
   /** the half-planes the part was cut from (parts.ts Part.cuts), the separating axes */
@@ -68,7 +69,7 @@ interface PartRec {
   maxy: number;
 }
 
-function bbox(piece: number, poly: Float64Array, cuts: HalfPlanes): PartRec {
+export function bbox(piece: number, poly: Float64Array, cuts: HalfPlanes): PartRec {
   let minx = Infinity;
   let miny = Infinity;
   let maxx = -Infinity;

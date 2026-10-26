@@ -93,6 +93,57 @@ describe("the client with the spaces option", () => {
   });
 
   // Real space search: about 3 s on two threads.
+  // Real space search with a generic method: about 3 s on two threads.
+  it(
+    "runs --space-method with --space-params, names them in the log, the entry, the best file and the history",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [], spaces: [SPHERE] });
+      const { code, output } = await client([
+        "--once",
+        "--only-spaces",
+        "--spaces",
+        "sphere",
+        "--name",
+        "Test volunteer",
+        "--space-method",
+        "penalty",
+        "--space-params",
+        '{"seedShare": 0.25}',
+      ]);
+      expect(code, output).toBe(0);
+      expect(output).toContain('method sphere penalty {"seedShare":0.25}; up to');
+      const [body] = server.spaceSubmissions;
+      expect(body).toMatchObject({ space: "sphere", id: "sphere/3/13", method: 'sphere penalty {"seedShare":0.25}' });
+      expect(checkSpaceConfig("sphere", "sphere/3/13", body.config).valid).toBe(true);
+      const kept = JSON.parse(readFileSync(join(dir, "state", "best", "spaces", "sphere_3_13.json"), "utf8"));
+      expect(kept).toMatchObject({ method: "sphere penalty", params: { seedShare: 0.25 } });
+      expect(history()[0].best).toMatchObject({ method: "sphere penalty", params: { seedShare: 0.25 } });
+    },
+  );
+
+  // A nofold problem's one stand-in job, and about 3 s of the boundary search.
+  it(
+    "says when nofold problems ignore the method, and when a problem does not offer it",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [], spaces: [fixture("surface", "surface/cube/nofold/4/7", 1.05)] });
+      const nofold = await client(["--once", "--only-spaces", "--spaces", "surface", "--space-method", "penalty"]);
+      expect(nofold.output).toContain("method the polygon engine's methods");
+      expect(nofold.output).toContain(
+        "--space-method penalty does not apply here: nofold problems run the polygon engine's own methods",
+      );
+      await server.close();
+      // cubes have no soft shapes, which harden needs
+      server = await startFakeServer({ problems: [], spaces: [fixture("boundary", "boundary/tesseract/cube/4", 1)] });
+      const cubes = await client(["--once", "--only-spaces", "--spaces", "boundary", "--space-method", "harden"]);
+      expect(cubes.output).toContain("method boundary compression search; up to");
+      expect(cubes.output).toMatch(
+        /boundary\/tesseract\/cube\/4 does not offer harden \(harden needs a kernel capability \(shape\).*\), so it runs auto/,
+      );
+    },
+  );
+
   it("searches a sphere problem and submits a better configuration", { timeout: 60_000 }, async () => {
     server = await startFakeServer({ problems: [], spaces: [SPHERE] });
     const { code, output } = await client([

@@ -20,6 +20,7 @@
  */
 import { Worker } from "node:worker_threads";
 import { workerScript } from "./bundle";
+import { spaceMethodName } from "./spaces/model";
 import type { SpaceJob, SpaceJobResult } from "./spaces/run";
 import type { Control, Job, JobResult, RunJob } from "./types";
 import { type FromWorker, type ToWorker, WORKER_ROLE, type WorkerData } from "./worker";
@@ -65,6 +66,9 @@ export function emptyResult(job: Job | SpaceJob, termination: string, reason: st
 }
 
 type AnyJob = Job | SpaceJob;
+
+/** A job's method for the log: a polygon method's name, or a space method's ("sphere basin hopping" for auto). */
+const methodOf = (job: AnyJob) => ("space" in job ? spaceMethodName(job.space, job.method) : job.method);
 type AnyResult = JobResult | SpaceJobResult;
 
 /** Indices of a lane's shared flags. */
@@ -371,9 +375,12 @@ export class WorkerPool {
       this.sync(lane);
       if (!this.isPaused(r) || r.abortSentAt !== null) r.activeMs += dt;
       if (r.activeMs > r.limitMs)
-        this.replace(lane, `a ${r.job.method} job gave no answer within ${Math.round(r.limitMs / 1000)} s`);
+        this.replace(lane, `a ${methodOf(r.job)} job gave no answer within ${Math.round(r.limitMs / 1000)} s`);
       else if (r.abortSentAt !== null && t - r.abortSentAt > this.abortGraceMs)
-        this.replace(lane, `a ${r.job.method} job did not stop within ${this.abortGraceMs / 1000} s of being aborted`);
+        this.replace(
+          lane,
+          `a ${methodOf(r.job)} job did not stop within ${this.abortGraceMs / 1000} s of being aborted`,
+        );
     }
     this.dispatch();
   }

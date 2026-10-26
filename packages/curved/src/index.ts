@@ -11,3 +11,4 @@ export * from "./search";
 export * from "./engine";
 export * from "./sensitivity";
 export * from "./ideal";
+export * from "./kernel";

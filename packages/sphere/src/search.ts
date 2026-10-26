@@ -86,20 +86,20 @@ function mulberry32(seed: number): () => number {
 const gauss = (r: () => number) => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
 
 /** exp(w) as a unit quaternion: the rotation by |w| about w. */
-function expQuat(wx: number, wy: number, wz: number): Quat {
+export function expQuat(wx: number, wy: number, wz: number): Quat {
   const t = Math.hypot(wx, wy, wz);
   if (t < 1e-300) return [1, 0, 0, 0];
   const s = Math.sin(t / 2) / t;
   return [Math.cos(t / 2), wx * s, wy * s, wz * s];
 }
 
-function normalized(q: Quat): Quat {
+export function normalized(q: Quat): Quat {
   const n = Math.hypot(q[0], q[1], q[2], q[3]);
   return [q[0] / n, q[1] / n, q[2] / n, q[3] / n];
 }
 
 /** Uniformly random rotation (Shoemake). */
-function randomQuat(r: () => number): Quat {
+export function randomQuat(r: () => number): Quat {
   const u1 = r();
   const u2 = 2 * Math.PI * r();
   const u3 = 2 * Math.PI * r();
@@ -234,9 +234,70 @@ function lbfgs(
 }
 
 /** Largest admissible angular size: the piece must exist (and two disks must fit). */
-function maxAngle(N: number, P: number): number {
+export function maxAngle(N: number, P: number): number {
   if (N === 0) return P >= 2 ? Math.PI / 2 : Math.PI;
   return ((2 * Math.PI) / N) * (1 - 1e-9);
+}
+
+/**
+ * The tight size of fixed poses: the smallest rho at which they are valid by the float validator
+ * at tolerance 0 (every gap >= 0), by bisection to 1e-13 relative from rho0 (validity is monotone
+ * in rho, see the header); null when no valid rho is found within a factor of about 14 above rho0.
+ * `tick` is called before each validator call and may throw (the searches' budgets).
+ */
+export function tightRho(problem: SphereProblem, q: Quat[], rho0: number, tick: () => void = () => {}): number | null {
+  const { N, P } = problem;
+  const aMax = maxAngle(N, P);
+  /** Valid with every gap >= 0 at rho. */
+  const validAt = (rho: number): boolean => {
+    tick();
+    if (!(1 / rho < aMax) || !pieceExists(N, rho)) return false;
+    const v = validate(problem, { rho, pieces: q.map((x) => ({ q: x })) }, { tol: 0 });
+    return v.errors.length === 0 && v.minGap >= 0;
+  };
+  return tightSize(validAt, rho0, 1 / aMax);
+}
+
+/**
+ * The bisection of tightRho for any test of validity that is monotone in rho: from rho0 (raised
+ * to just above `floor`, the smallest admissible rho), up by steps of 1e-3, 2e-3, ... until valid
+ * or down by such steps until invalid, then bisection to 1e-13 relative; the smallest valid rho
+ * found, or null when none is found within a factor of about 14 above rho0.
+ */
+export function tightSize(validAt: (rho: number) => boolean, rho0: number, floor: number): number | null {
+  const bisect = (lo: number, hi: number): number => {
+    while (hi - lo > 1e-13 * hi) {
+      const mid = 0.5 * (lo + hi);
+      if (validAt(mid)) hi = mid;
+      else lo = mid;
+    }
+    return hi;
+  };
+  let hi = Math.max(rho0, floor * (1 + 1e-12));
+  let step = 1e-3;
+  if (!validAt(hi)) {
+    let lo = hi;
+    for (;;) {
+      if (step > 4) return null;
+      hi = lo * (1 + step);
+      if (validAt(hi)) break;
+      lo = hi;
+      step *= 2;
+    }
+    return bisect(lo, hi);
+  }
+  let lo = hi;
+  for (;;) {
+    const next = Math.max(floor * (1 + 1e-12), hi * (1 - step));
+    if (next >= hi) return hi;
+    if (!validAt(next)) {
+      lo = next;
+      break;
+    }
+    hi = next;
+    step = Math.min(0.5, step * 2);
+  }
+  return bisect(lo, hi);
 }
 
 /**
@@ -436,51 +497,7 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
     if (o.maxSeconds !== undefined && clock() - t0 > o.maxSeconds) throw new Stop("time");
   };
 
-  /** Valid with every gap >= 0 at rho. */
-  const validAt = (q: Quat[], rho: number): boolean => {
-    tick();
-    if (!(1 / rho < aMax) || !pieceExists(N, rho)) return false;
-    const v = validate(problem, { rho, pieces: q.map((x) => ({ q: x })) }, { tol: 0 });
-    return v.errors.length === 0 && v.minGap >= 0;
-  };
-
-  /** Smallest valid rho for fixed poses (bisection, 1e-13 relative), or null when none is near rho0. */
-  const tight = (q: Quat[], rho0: number): number | null => {
-    const floor = 1 / aMax;
-    let hi = Math.max(rho0, floor * (1 + 1e-12));
-    let step = 1e-3;
-    if (!validAt(q, hi)) {
-      let lo = hi;
-      for (;;) {
-        if (step > 4) return null;
-        hi = lo * (1 + step);
-        if (validAt(q, hi)) break;
-        lo = hi;
-        step *= 2;
-      }
-      return bisect(q, lo, hi);
-    }
-    let lo = hi;
-    for (;;) {
-      const next = Math.max(floor * (1 + 1e-12), hi * (1 - step));
-      if (next >= hi) return hi;
-      if (!validAt(q, next)) {
-        lo = next;
-        break;
-      }
-      hi = next;
-      step = Math.min(0.5, step * 2);
-    }
-    return bisect(q, lo, hi);
-  };
-  const bisect = (q: Quat[], lo: number, hi: number): number => {
-    while (hi - lo > 1e-13 * hi) {
-      const mid = 0.5 * (lo + hi);
-      if (validAt(q, mid)) hi = mid;
-      else lo = mid;
-    }
-    return hi;
-  };
+  const tight = (q: Quat[], rho0: number): number | null => tightRho(problem, q, rho0, tick);
 
   /** Penalty continuation from poses q at angular size a0; returns the relaxed poses and size. */
   const relax = (q: Quat[], a0: number, mus: number[]): { q: Quat[]; a: number } => {

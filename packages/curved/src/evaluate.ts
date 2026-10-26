@@ -47,6 +47,24 @@ export function pieceState(space: Space, pose: CurvedPose): PieceState {
   const { K } = space;
   const { G, centre, verts } = pieceWorld(space, pose);
   const Ginv = poseMotionInverse(K, pose.x, pose.y, pose.theta);
+  return pieceStateOf(space, G, Ginv, centre, verts, bodyJacobian(K, pose.x, pose.y, pose.theta));
+}
+
+/**
+ * A piece's state from its motion G (with inverse Ginv, centre G(O) and vertices G(V_k)) and the
+ * Jacobian Jb from the caller's variables to G's body velocity. The gradients of the rows built
+ * from it are then taken with respect to those variables: the pose (x, y, theta) in pieceState,
+ * the chart offsets at an anchor in the methods' kernel (kernel.ts).
+ */
+export function pieceStateOf(
+  space: Space,
+  G: Motion,
+  Ginv: Motion,
+  centre: LPoint,
+  verts: LPoint[],
+  Jb: Float64Array,
+): PieceState {
+  const { K } = space;
   const edges: [number, number, number][] = [];
   const N = space.N;
   for (let e = 0; e < N; e++) {
@@ -56,7 +74,7 @@ export function pieceState(space: Space, pose: CurvedPose): PieceState {
     const q = Math.sqrt(covectorNorm2(K, n));
     edges.push([n[0] / q, n[1] / q, n[2] / q]);
   }
-  return { G, Ginv, centre, verts, edges, Jb: bodyJacobian(K, pose.x, pose.y, pose.theta) };
+  return { G, Ginv, centre, verts, edges, Jb };
 }
 
 export function allStates(space: Space, poses: readonly CurvedPose[]): PieceState[] {
@@ -151,7 +169,8 @@ function toPose(Jb: Float64Array, body: [number, number, number]): [number, numb
 /**
  * Row for the signed distance of vertex k of piece Q from edge line e of piece P (value = asn(n . w)).
  * pi, qi are the piece indices of P and Q. The derivative with respect to P's body velocity is minus
- * that of moving w by the same spatial generator: -n . (G_P X G_P^{-1} w).
+ * that of moving w by the same spatial generator: -n . (G_P X G_P^{-1} w). With k < 0 the point is
+ * Q's centre instead of a vertex (as in wallRow).
  */
 export function vertexEdgeRow(
   space: Space,
@@ -165,13 +184,13 @@ export function vertexEdgeRow(
 ): Row {
   const { K } = space;
   const n = P.edges[e];
-  const w = Q.verts[k];
+  const w = k >= 0 ? Q.verts[k] : Q.centre;
   const y = lineValue(K, n, w);
   const value = asnK(K, y);
   const dval = 1 / Math.sqrt(Math.max(1e-300, 1 - K * y * y));
   const bodyQ: [number, number, number] = [0, 0, 0];
   const bodyP: [number, number, number] = [0, 0, 0];
-  const v0 = space.vertices[k];
+  const v0 = k >= 0 ? space.vertices[k] : ORIGIN;
   const wP = applyPoint(P.Ginv, w);
   for (let a = 0 as 0 | 1 | 2; a < 3; a = (a + 1) as 0 | 1 | 2) {
     bodyQ[a] = dval * lineTangent(K, n, applyTangent(Q.G, generator(K, a, v0)));
