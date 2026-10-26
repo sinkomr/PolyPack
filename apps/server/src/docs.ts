@@ -350,8 +350,8 @@ A nofold problem is the main site's planar problem of N-gons in the face polygon
 Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
 Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
 the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
-The whole list fits in one answer at the largest <code>limit</code> (12593 targets with the catalogues of 2026-10-25: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 11280; about 2.4 MB).
-The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 11286 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
+The whole list fits in one answer at the largest <code>limit</code> (16157 targets with the catalogues of 2026-10-26: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 14844; about 3.0 MB).
+The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 14850 problems share one share; ask for <code>spaces=polyhedra</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
 The ranking is kept until an entry changes.</p>
 <table>

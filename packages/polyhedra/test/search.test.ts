@@ -48,6 +48,18 @@ describe("searchPolyhedra", () => {
     expect(timed.stopped).toBe("time");
   });
 
+  it("packs bipyramids and trapezohedra from scratch: valid at tolerance 0, above the volume bound, reproducible", () => {
+    for (const [code, P] of [["bp5incub", 3], ["tz7intz7", 2]] as const) {
+      const p = getProblem(code)!;
+      const a = searchPolyhedra(p, P, { seed: 5, maxEvals: 20_000 });
+      expect(a.config, code).not.toBeNull();
+      expect(validatePolyhedra(p, a.config!, { tol: 0 }).valid, code).toBe(true);
+      expect(a.score, code).toBeGreaterThan(volumeBound(p, P));
+      expect(a.evaluations, code).toBeLessThanOrEqual(20_000);
+      expect(searchPolyhedra(p, P, { seed: 5, maxEvals: 20_000 }).config, code).toEqual(a.config);
+    }
+  });
+
   it("keeps a valid result on tiny budgets", () => {
     const p = getProblem("dodindod")!;
     for (const maxEvals of [50, 500, 5000]) {

@@ -64,7 +64,8 @@ describe.skipIf(!file)("data/polyhedra/records.json", () => {
         expect(r.wiki).toBeUndefined();
         expect(r).toMatchObject({ found_by: "PolyPack research", credit: "PolyPack research", sources: ["polypack"], literature: [] });
         expect(r.method!.length).toBeGreaterThan(20);
-        expect(r.origin.file).toBe(`prisms/${r.code}.json`);
+        // the research file: prisms/ for the prisms and antiprisms, duals/ for the bipyramids and trapezohedra
+        expect(r.origin.file).toBe(`${/^(bp|tz)\d/.test(r.code) ? "duals" : "prisms"}/${r.code}.json`);
       }
       for (const k of r.sources) expect(file!.sources[k], `${r.id} ${k}`).toBeDefined();
       expect(r.source.length).toBeGreaterThan(10);

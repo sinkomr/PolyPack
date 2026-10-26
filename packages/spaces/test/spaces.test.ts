@@ -47,7 +47,7 @@ const configOf = (p: SpaceProblemEntry) =>
 /**
  * The records of a space with their configurations, read as the server reads them (polyhedra
  * configurations on demand). Every polyhedra record up to P = 30 and every tenth above it, since a
- * float check of all 11,286 takes over a minute; the certifier checks every one (POLYHEDRA.md).
+ * float check of all 14,850 takes over a minute; the certifier checks every one (POLYHEDRA.md).
  * Yields to the event loop now and then, so that a long loop does not hold up the test runner.
  */
 async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, unknown]> {
@@ -78,7 +78,7 @@ describe("problem ids", () => {
         n++;
       }
     }
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 11286);
+    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 14850);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -136,7 +136,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 11286 });
+    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850 });
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 

@@ -47,7 +47,8 @@ import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
  * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
- * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25).
+ * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
+ * trapezohedra make 14,850, and 16,157 targets in all).
  */
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**

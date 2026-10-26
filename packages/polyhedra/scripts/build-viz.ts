@@ -2,7 +2,7 @@
  * Builds packages/polyhedra/viz/index.html: a standalone viewer (no external scripts) with the records of
  * data/polyhedra/records.json embedded and the drawing code bundled by esbuild. Every record's values are
  * embedded; poses, at display precision, up to P = EMBED_MAX_P only, which keeps the page near 4 MB (all
- * 11,286 would take about 40 MB). Above it the page reads the configuration from the site's API
+ * 14,850 would take about 50 MB). Above it the page reads the configuration from the site's API
  * (/api/spaces/polyhedra/problems/<id>) when the site serves it, and shows the values alone elsewhere.
  *
  * Usage: npx tsx packages/polyhedra/scripts/build-viz.ts [records.json]

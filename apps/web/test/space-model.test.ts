@@ -446,7 +446,7 @@ describe("3D in 3D: polyhedra on the board", () => {
     const pick = pickProblem("polyhedra", problems, fieldsOfId("polyhedra", DEFAULT_PROBLEM.polyhedra));
     expect(pick.id).toBe("polyhedra/cubincub/11");
     expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
-    expect(pick.fields[0].options).toHaveLength(114);
+    expect(pick.fields[0].options).toHaveLength(150);
     expect(pick.fields[0].options[4]).toEqual({ value: "cubincub", text: "Cubes in a cube" });
     const Ps = pick.fields[1].options.map((o) => Number(o.value));
     expect(Ps[0]).toBe(2);

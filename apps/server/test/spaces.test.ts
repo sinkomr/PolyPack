@@ -186,7 +186,7 @@ describe("GET /api/spaces", () => {
       ["sphere", 166],
       ["torus", 544],
       ["boundary", 32],
-      ["polyhedra", 11286],
+      ["polyhedra", 14850],
     ]);
     for (const s of r.spaces) {
       expect(s.viewer).toBe(`/spaces/${s.space}.html`);
@@ -1079,7 +1079,7 @@ describe("GET /api/spaces/targets", () => {
     expect(spaceTargetWeight(6)).toBe(1);
     expect(spaceTargetWeight(40)).toBe(1);
     // the default list is the head of the whole list and holds problems of every space but polyhedra:
-    // its 11,286 problems share one space's share of the priority, so they come after the others' head
+    // its 14,850 problems share one space's share of the priority, so they come after the others' head
     const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
     expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
     expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));

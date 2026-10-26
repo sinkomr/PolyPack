@@ -130,7 +130,7 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   const records = doc?.records ?? [];
 
   it("every record up to P = 30 and every tenth above is valid by the float validator at tolerance 0 at its certified scale", async () => {
-    // all 11,286 take about a minute (scripts/bench-validate.ts); the certifier checks every one
+    // all 14,850 take over a minute (scripts/bench-validate.ts); the certifier checks every one
     let minGap = Infinity;
     for (const [i, r] of records.entries()) {
       if (r.P > 30 && i % 10 !== 0) continue;
@@ -158,16 +158,85 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   });
 
   it("covers every problem for P = 2 to 100 with consistent ids", () => {
-    // the wiki's 86 problems and PolyPack's 28
+    // the wiki's 86 problems and PolyPack's 64
     const ids = new Set(records.map((r: { id: string }) => r.id));
     expect(POLYHEDRA_MAX_P).toBe(100);
-    expect(POLYHEDRA_PROBLEMS.length).toBe(114);
-    expect(records.length).toBe(114 * 99);
+    expect(POLYHEDRA_PROBLEMS.length).toBe(150);
+    expect(records.length).toBe(150 * 99);
     for (const p of POLYHEDRA_PROBLEMS)
       for (let n = 2; n <= POLYHEDRA_MAX_P; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
     for (const r of records) expect(r.id).toBe(`polyhedra/${r.code}/${r.P}`);
   });
 });
+
+describe("bipyramids and trapezohedra", () => {
+  /**
+   * Two pieces face to face: piece 1 is the mirror image of piece 0 in the plane of its face 0, moved off it by g
+   * along the face normal N (g < 0: into it). The mirror image is a proper copy because both families have the mirror
+   * y -> -y: it is R K + (2b + g) N with R = (I - 2 N N^T)(I - 2 e_y e_y^T). The faces coincide when g = 0, so the
+   * gap is exactly g, and a negative g is an overlap of depth -g. The container is the smallest with wall gap w.
+   */
+  const pair = (code: string, g: number, w: number) => {
+    const p = getProblem(code)!;
+    const S = getSolid(p.piece);
+    const C = getSolid(p.container);
+    const N = [S.N[0], S.N[1], S.N[2]];
+    const b = S.offsets[0];
+    const Rm = [0, 1, 2].map((i) => [0, 1, 2].map((j) => (i === j ? 1 : 0) - 2 * N[i] * N[j]));
+    for (const row of Rm) row[1] = -row[1]; // times (I - 2 e_y e_y^T): negate the second column
+    const q = quatOf(Rm);
+    const d = (2 * b + g) / 2;
+    const pieces: Pose[] = [
+      [-d * N[0], -d * N[1], -d * N[2], 1, 0, 0, 0],
+      [d * N[0], d * N[1], d * N[2], ...q],
+    ];
+    let s = 0;
+    for (const pose of pieces) {
+      const X = place(S, pose).X;
+      for (let v = 0; v < S.nv; v++)
+        for (let f = 0; f < C.faces.length; f++) {
+          const dist = C.N[3 * f] * X[3 * v] + C.N[3 * f + 1] * X[3 * v + 1] + C.N[3 * f + 2] * X[3 * v + 2];
+          s = Math.max(s, (dist + w) / C.offsets[f]);
+        }
+    }
+    return { p, config: { s, pieces } };
+  };
+
+  it("accepts two pieces 1e-7 apart face to face and rejects them overlapping or sticking out by 2e-7", () => {
+    for (const code of ["bp3inbp3", "bp7incub", "bp12inbp12", "tz4intz4", "tz11incub", "tz12intz12"]) {
+      const { p, config } = pair(code, 1e-7, 1e-7);
+      const ok = validatePolyhedra(p, config, { tol: 0 });
+      expect(ok.valid, code).toBe(true);
+      expect(Math.abs(ok.minPairSep - 1e-7), code).toBeLessThan(1e-12);
+      expect(Math.abs(ok.minWallGap - 1e-7), code).toBeLessThan(1e-12);
+      const over = validatePolyhedra(p, pair(code, -2e-7, 1e-7).config, { tol: 1e-9 });
+      expect(over.valid, code).toBe(false);
+      expect(Math.abs(over.minPairSep + 2e-7), code).toBeLessThan(1e-12);
+      const out = validatePolyhedra(p, pair(code, 1e-7, -2e-7).config, { tol: 1e-9 });
+      expect(out.valid, code).toBe(false);
+      expect(Math.abs(out.minWallGap + 2e-7), code).toBeLessThan(1e-12);
+    }
+  });
+});
+
+/** A unit quaternion [w, x, y, z] of a rotation matrix (Shepperd's method). */
+function quatOf(R: number[][]): [number, number, number, number] {
+  const t = R[0][0] + R[1][1] + R[2][2];
+  if (t > 0) {
+    const r = Math.sqrt(1 + t) * 2;
+    return [r / 4, (R[2][1] - R[1][2]) / r, (R[0][2] - R[2][0]) / r, (R[1][0] - R[0][1]) / r];
+  }
+  if (R[0][0] > R[1][1] && R[0][0] > R[2][2]) {
+    const r = Math.sqrt(1 + R[0][0] - R[1][1] - R[2][2]) * 2;
+    return [(R[2][1] - R[1][2]) / r, r / 4, (R[0][1] + R[1][0]) / r, (R[0][2] + R[2][0]) / r];
+  }
+  if (R[1][1] > R[2][2]) {
+    const r = Math.sqrt(1 + R[1][1] - R[0][0] - R[2][2]) * 2;
+    return [(R[0][2] - R[2][0]) / r, (R[0][1] + R[1][0]) / r, r / 4, (R[1][2] + R[2][1]) / r];
+  }
+  const r = Math.sqrt(1 + R[2][2] - R[0][0] - R[1][1]) * 2;
+  return [(R[1][0] - R[0][1]) / r, (R[0][2] + R[2][0]) / r, (R[1][2] + R[2][1]) / r, r / 4];
+}
 
 describe("work bounds", () => {
   it("validates 100 pieces of the largest solid, all in near contact, in bounded time", () => {
