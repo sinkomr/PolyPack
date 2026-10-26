@@ -221,9 +221,12 @@ describe("one job's method", () => {
   const names = [undefined, AUTO, "label"] as const;
   for (const [key, expected] of Object.entries(pinned)) {
     const [id, kind, evals] = key.split(" ");
-    it(`runs Auto as at bf769f2, under each of its names: ${key}`, () => {
+    // async, yielding after each job: these synchronous searches add up to over a minute on CI's
+    // 2-core runner, and Vitest's worker must answer its runner at least once a minute
+    it(`runs Auto as at bf769f2, under each of its names: ${key}`, async () => {
       const space = id.split("/")[0] as SpaceJob["space"];
-      const results = names.map((name) => {
+      const results = [];
+      for (const name of names) {
         const method = name === "label" ? SPACE_METHOD[space] : name;
         const r = runSpaceJob(
           {
@@ -242,8 +245,9 @@ describe("one job's method", () => {
           .update(JSON.stringify(r.config ?? null))
           .digest("hex")
           .slice(0, 16);
-        return { result: { score: r.score, evaluations: r.evaluations, termination: r.termination, config }, r };
-      });
+        results.push({ result: { score: r.score, evaluations: r.evaluations, termination: r.termination, config }, r });
+        await new Promise((resolve) => setImmediate(resolve));
+      }
       for (const { result } of results.slice(1)) expect(result).toEqual(results[0].result);
       if (recordedHere) expect(results[0].result).toEqual(expected);
       else if (results[0].r.config !== null) expect(results[0].r.valid).toBe(true);
