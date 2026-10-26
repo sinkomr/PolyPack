@@ -350,24 +350,33 @@ export function polyhedraRoundSeconds(P: number, code: string, evals: number): n
  * from the best so far, each a polish of a few thousand evaluations at most (10 penalty stages of up to 300 + 10 P
  * L-BFGS iterations for balls; 9 of up to 400 for solids, whose stages also list their near pairs).
  *
- * Costs [CALC], from the compute sweep's rounds on an Apple Silicon laptop at nice 10 beside other jobs
- * (2026-10-25): an evaluation of P balls took about 0.6 + 0.0018 P^2 microseconds (all P(P - 1)/2 pairs are
- * tested), one of P solids of v vertices about P (0.3 + 0.05 v) microseconds. A round is sized to about 2 s of that
- * (3 s for solids), at least 20,000 (10,000) and at most 300,000 (200,000) evaluations: so 300,000 at 13 balls
- * (about 0.3 s), 107,000 at 100 balls and 23,000 at 100 dodecahedra. A round with no start is as long:
- * its new start is one polish. The sizes depend on the problem only, so a run that ends on its evaluations stays
- * reproducible.
+ * Costs [CALC] (packages/balls/scripts/bench.ts: runs of 30,000 evaluations from a new start, wall time with the
+ * work between evaluations, Node 26 on an Apple Silicon laptop beside other jobs, 2026-10-25): an evaluation of P
+ * balls took about 0.6 + 0.15 P microseconds (2.2 at 10 balls, 15.4 at 100), one of P solids about k P with
+ * k = 1.8 for tetrahedra, 1.3 for cubes, 1.2 for octahedra and dodecahedra and 1.0 for icosahedra (the largest
+ * ratio over P = 10, 30, 60, 100; 182 microseconds at 100 tetrahedra, 118 at 100 dodecahedra). A round is sized to
+ * about 2 s of that (3 s for solids), at least 20,000 (10,000) and at most 300,000 (200,000) evaluations: so
+ * 300,000 at 13 balls (about 0.8 s), 128,000 at 100 balls, 25,000 at 100 dodecahedra and 16,000 at 100 tetrahedra.
+ * A round with no start is as long: its new start is one polish. The sizes depend on the problem only, so a run that
+ * ends on its evaluations stays reproducible.
  */
+const BALLS_SOLID_EVAL_US: Record<string, number> = {
+  tetrahedron: 1.8,
+  cube: 1.3,
+  octahedron: 1.2,
+  dodecahedron: 1.2,
+  icosahedron: 1.0,
+};
+
 export function ballsRound(P: number, code: string): { round: number; fresh: number; evalUs: number } {
   const problem = ballsProblemOf(code);
   const k = (n: number) => 1000 * Math.floor(n / 1000);
   if (!problem || problem.piece === "ball") {
-    const evalUs = 0.6 + 0.0018 * P * P;
+    const evalUs = 0.6 + 0.15 * P;
     const round = k(Math.max(20000, Math.min(300000, 2e6 / evalUs)));
     return { round, fresh: round, evalUs };
   }
-  const v = getPolyhedraSolid(problem.piece).nv;
-  const evalUs = P * (0.3 + 0.05 * v);
+  const evalUs = P * BALLS_SOLID_EVAL_US[problem.piece];
   const round = k(Math.max(10000, Math.min(200000, 3e6 / evalUs)));
   return { round, fresh: round, evalUs };
 }

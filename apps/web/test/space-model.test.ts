@@ -466,8 +466,9 @@ describe("3D in 3D: balls on the board", () => {
 
   it("sizes its rounds from P and the piece, within their limits", () => {
     expect(ballsRound(13, "ballinball").round).toBe(300000);
-    expect(ballsRound(100, "ballinball").round).toBe(107000);
-    expect(ballsRound(100, "dodinball").round).toBe(23000);
+    expect(ballsRound(100, "ballinball").round).toBe(128000);
+    expect(ballsRound(100, "dodinball").round).toBe(25000);
+    expect(ballsRound(100, "tetinball").round).toBe(16000);
     for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"])
       for (let P = 2; P <= 100; P++) {
         const { round, fresh } = ballsRound(P, code);
@@ -486,11 +487,11 @@ describe("3D in 3D: balls on the board", () => {
     const run = { seed: 5, budget: { evals: 100000, time_s: 60 }, fresh: false };
     const start = { s: 6, pieces: [] };
     const a = roundJob(p, rule, run, 0, { evals: 0, seconds: 0 }, start)!;
-    expect(a.evals).toBe(23000);
+    expect(a.evals).toBe(25000);
     expect(a.job).toMatchObject({ space: "balls", id: p.id, seed: mixSeed(5, 0), kind: "iterate" });
     expect(a.job.method).toBe("balls penalty basin hopping");
-    expect(roundJob(p, rule, run, 1, { evals: 23000, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
-    expect(roundJob(p, rule, run, 1, { evals: 23000, seconds: 5 }, start, 3)!.evals).toBe(46000);
+    expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 2 }, start, 0, true)!.job.polished).toBe(true);
+    expect(roundJob(p, rule, run, 1, { evals: 25000, seconds: 5 }, start, 3)!.evals).toBe(50000);
     expect(GROW_LIMIT.balls).toBe(2);
   });
 

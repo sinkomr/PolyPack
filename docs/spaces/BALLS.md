@@ -118,7 +118,7 @@ Packomania's references, Huang and Yu (2012, arXiv:1202.4149, introduction read)
 S. C. Glotzer, Clusters of polyhedra in spherical confinement, PNAS 113 (2016) E669-E678,
 doi:10.1073/pnas.1524875113: isobaric Monte Carlo compressions of hard Platonic solids in a spherical container,
 the densest of 50 runs for each N up to 60. It reports densities only as plots (its Fig. 4; the main text has no
-table, and its supplement could not be read here), so no numbers are compared. TEICH_NOTE
+table, and its supplement could not be read here), so no numbers are compared; the densities of PolyPack's records are in §6, to set beside their Fig. 4.
 
 ## 4. Certification
 
@@ -150,6 +150,13 @@ neighbour fails; an icosahedron 1e-10 inside and 1e-9 outside its ball, also wit
 numbers (strings, booleans, NaN, infinities, wrong lengths, zero quaternions, s <= 0); every field check, wrong P
 and ids out of range; `proven` without a proof; and a sample of the shipped records, which also fail when their
 container is shrunk by 1e-8 relative.
+
+**Validator and certifier agree** [CALC]. `python/balls/fixtures/crosscheck.json` (written by
+`packages/balls/scripts/gen-crosscheck.ts`) holds 140 near-contact cases: for each problem, two pieces in random
+orientations moved to separations of +-1e-7 and +-1e-9, and one piece at wall gaps of +-1e-7 and +-1e-9, with the
+validator's measured gaps. The certifier proves every case the validator measures as separated by more than 1e-10
+and refuses every case it measures as overlapping by more than 1e-10 (`test_certify.py`); a TypeScript test checks
+that the stored gaps are still the validator's (`test/crosscheck.test.ts`).
 
 **Independent check** [CALC]: SPOT_CHECK
 
@@ -212,7 +219,11 @@ RESULTS
 its `viewer` is the board (`/#space=balls`).
 
 **Server.** The configurations are kept apart and read on demand like the polyhedra space's (`CONFIGS_APART`):
-only the index stays in memory. SERVER_MEMORY A check is cheap (§5) and runs in one piece.
+only the index stays in memory. [CALC] (the server as the image runs it, `node --import tsx src/node.ts`, Apple
+Silicon, Node 26, 2026-10-25, with a probe that forced a full collection 10 s after the start): its heap was 49.8 to
+50.0 MB with the balls space and 49.3 to 49.4 MB without it, so the space adds about 0.5 MB; the index alone keeps
+0.38 to 0.43 MB (`loadSpacesIndex` of a folder with only `data/balls`). The resident memory, 172 to 180 MB, did not
+differ beyond its noise on the loaded machine. A check is cheap (§5) and runs in one piece.
 
 **Board.** Dimension 3D in 3D, kind Balls ([BOARD.md](BOARD.md)): a picker of the 7 problems and P, the values, a
 three.js drawing (instanced spheres or solids, the container a faint ball with three great circles or a cube's
