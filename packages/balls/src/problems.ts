@@ -36,8 +36,8 @@ export function pieceVolume(problem: BallsProblem): number {
 
 export interface BallsBound {
   value: number;
-  /** "volume", "two pieces" or "one piece": which of the bounds below is the largest. */
-  kind: "volume" | "two pieces" | "one piece";
+  /** "volume", "two-piece" or "one piece": which of the bounds below is the largest (a listing says "two piece bound"). */
+  kind: "volume" | "two-piece" | "one piece";
   /** What it rests on, with its label. */
   label: string;
 }
@@ -68,7 +68,7 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
       if (P >= 2)
         cands.push({
           value: 2,
-          kind: "two pieces",
+          kind: "two-piece",
           label: "[EST] two unit balls have centres at least 2 apart in the ball of radius s - 1, so s >= 2",
         });
     } else {
@@ -76,7 +76,7 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
       if (P >= 2)
         cands.push({
           value: 2 + 2 / Math.sqrt(3),
-          kind: "two pieces",
+          kind: "two-piece",
           label:
             "[EST] two unit balls have centres at least 2 apart in the cube of edge s - 2, whose diameter is (s - 2) sqrt 3, so s >= 2 + 2 / sqrt 3",
         });
@@ -91,7 +91,7 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
     if (P >= 2)
       cands.push({
         value: 2 * S.inradius,
-        kind: "two pieces",
+        kind: "two-piece",
         label: `[EST] two ${PLURAL[problem.piece]} contain disjoint balls of their inradius ${S.inradius.toPrecision(7)}, so s >= twice that`,
       });
   }

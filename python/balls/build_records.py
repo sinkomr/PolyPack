@@ -111,7 +111,7 @@ def bound_of(code, P):
         R, r = catalogue.SOLIDS[piece][1:]
         what = (f'one {piece} needs a ball of its circumradius' if value == R
                 else f'two {PLURAL[piece]} contain disjoint balls of their inradius, so s >= twice that')
-    return {'value': value, 'kind': 'two pieces' if 'two' in what else 'one piece', 'label': f'[EST] elementary: {what}'}
+    return {'value': value, 'kind': 'two-piece' if 'two' in what else 'one piece', 'label': f'[EST] elementary: {what}'}
 
 
 def main():

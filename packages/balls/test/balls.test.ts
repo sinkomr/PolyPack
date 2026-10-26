@@ -39,7 +39,7 @@ describe("ids and bounds", () => {
     expect(ballsBound(ballInCube, 2).value).toBeCloseTo(2 + 2 / Math.sqrt(3), 14);
     expect(ballsBound(ballInCube, 100).value).toBeCloseTo(Math.cbrt((400 * Math.PI) / 3), 12);
     // two cubes hold disjoint balls of radius 1/2: s >= 1, above the circumradius sqrt(3)/2
-    expect(ballsBound(cubes, 2)).toMatchObject({ value: 1, kind: "two pieces" });
+    expect(ballsBound(cubes, 2)).toMatchObject({ value: 1, kind: "two-piece" });
     expect(ballsBound(getBallsProblem("tetinball")!, 2).kind).toBe("one piece");
   });
 });

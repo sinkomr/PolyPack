@@ -119,7 +119,7 @@ const TURN_HELP: Record<SpaceName, string> = {
   polyhedra:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
   balls:
-    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint, a ball with three great circles. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+    "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint: a ball with three great circles, or a cube by its edges. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {
