@@ -47,6 +47,13 @@ licence. Please credit the original source when reusing them.
 - Erich Friedman, Packing Center, <https://erich-friedman.github.io/packing/>
 - David Ellsworth, Squares in Squares, <https://kingbird.myphotos.cc/packing/squares_in_squares.html>
 - Eckard Specht, Packomania, <http://www.packomania.com/>
+- T. Berthold, D. Kamp, G. Mexi, S. Pokutta, I. Polik, "Out-of-the-Box Global
+  Optimization for Packing Problems: New Models and Improved Solutions",
+  submitted to the Journal of Global Optimization, 2026, arXiv:2605.04850; online
+  supplement "Packing Solutions", <https://github.com/DominikKamp/Packing> at
+  commit `27f71632d8655ae4b6a049410a401976748b94e3`, directory `polygon/`
+  (`data/sources/kamp.json`). The repository states no licence; the data is
+  used here with citation to the paper and the repository.
 
 `docs/RECORDS.md` describes what was taken from each and how it was converted.
 

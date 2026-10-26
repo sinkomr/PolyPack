@@ -79,4 +79,4 @@ With thanks to **Yohei Nakajima**, who originated soft-to-rigid hardening and pu
 
 ## Licence
 
-PolyPack's code is released under the [MIT licence](LICENSE). The published records in `data/` were compiled by Erich Friedman, David Ellsworth and Eckard Specht and by the people credited in each record; they remain their authors' work and are included with attribution, not relicensed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+PolyPack's code is released under the [MIT licence](LICENSE). The published records in `data/` come from the compilations of Erich Friedman, David Ellsworth and Eckard Specht, from the online supplement of Berthold, Kamp, Mexi, Pokutta and Polik (2026) and from the people credited in each record; they remain their authors' work and are included with attribution, not relicensed. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
