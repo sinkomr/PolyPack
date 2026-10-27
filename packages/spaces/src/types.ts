@@ -34,15 +34,15 @@ export type SpaceProblemStatus = CertifiedStatus | "no_record";
 /**
  * Configurations, in each space's own format (the record files' format):
  *  - surface: `{ s, pieces: [{ face, x, y, theta }] }`, score s (edge of the solid);
- *  - curved:  `{ size, pieces: [{ x, y, theta }] }`, score size (container side or radius at curvature K);
+ *  - curved:  `{ size, pieces: [{ x, y, theta }] }`, score size (container side, or diameter of a disk container, at curvature K);
  *  - sphere:  `{ rho, pieces: [{ q: [w, x, y, z] }] }`, score rho (sphere radius);
  *  - torus:   `{ lattice: { L } | { b1: [x, y], b2: [x, y] }, poses: [[x, y, theta], ...] }`,
  *             score L (sq, hex) or sqrt|det(b1, b2)| (free);
  *  - boundary: `{ s, pieces: [{ cell, u: [u0, u1, u2], q?: [w, x, y, z] }] }`, score s (edge of the
  *             polytope).
  *  - polyhedra: `{ s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }`, score s (scale of the container solid).
- *  - balls:   `{ s, pieces: [[x, y, z], ...] }` for unit balls, `[[x, y, z, qw, qx, qy, qz], ...]` for
- *             unit-edge Platonic solids; score s (the container ball's radius, or the cube's edge).
+ *  - balls:   `{ s, pieces: [[x, y, z], ...] }` for balls of diameter 1, `[[x, y, z, qw, qx, qy, qz], ...]` for
+ *             unit-edge Platonic solids; score s (the container ball's diameter, or the cube's edge).
  */
 export type SpaceConfig = Record<string, unknown>;
 

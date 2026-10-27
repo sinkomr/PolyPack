@@ -217,7 +217,7 @@ describe("the catalogues", () => {
     expect(problem("surface", "surface/tetrahedron/fold/0/1").bound!.label).toBe("one piece bound; [CALC]");
     expect(problem("torus", "torus/sq/0/1").bound).toEqual({
       value: 2,
-      label: "[CALC] one disk: the shortest lattice vector L must be >= 2",
+      label: "[CALC] one disk: the shortest lattice vector L must be >= 2", // UNITS-DATA: becomes 1 and ">= 1" with the converted records (Part 10)
     });
     for (const s of SPACE_NAMES)
       for (const p of cat(s).problems)
@@ -487,19 +487,21 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     expect(check("surface", "surface/cube/fold/4/12", out).reasons[0]).toMatch(/centre of piece 1 is outside its face/);
   });
 
-  it("curved: two unit disks in a disk of radius 2 at K = -1", () => {
+  // UNITS-DEP: valid only once the curved package (Part 4) validates in site units.
+  it("curved: two disks of diameter 1 in a disk of diameter 2 at K = -1", () => {
+    // r is the distance between the two centres, on a geodesic through the container's centre
     const at = (r: number, size = 2) => ({
       size,
       pieces: [
-        { x: r, y: 0, theta: 0 },
-        { x: -r, y: 0, theta: 0 },
+        { x: r / 2, y: 0, theta: 0 },
+        { x: -r / 2, y: 0, theta: 0 },
       ],
     });
     expect(check("curved", "curved/-1/0/0/2", at(1)).valid).toBe(true);
     expect(check("curved", "curved/-1/0/0/2", at(1 - 2e-10)).valid).toBe(true);
     const v = check("curved", "curved/-1/0/0/2", at(1 - 1e-6));
     expect(v.valid).toBe(false);
-    expect(v.reasons.join(" ")).toMatch(/pieces overlap by 0\.00000199/);
+    expect(v.reasons.join(" ")).toMatch(/pieces overlap by 9\.99\d*e-7/);
     // pushed out through the rim
     expect(check("curved", "curved/-1/0/0/2", at(1 + 1e-6)).reasons.join(" ")).toMatch(/protrudes/);
     expect(check("curved", "curved/-1/0/0/2", at(3)).reasons[0]).toMatch(/outside the container/);
@@ -515,13 +517,14 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     }
   });
 
-  it("torus: two disks on the square torus of side 2 sqrt 2", () => {
-    const L = 2 * Math.SQRT2;
+  // UNITS-DEP: valid only once the torus package (Part 6) validates in site units.
+  it("torus: two disks of diameter 1 on the square torus of side sqrt 2", () => {
+    const L = Math.SQRT2;
     const at = (d: number) => ({
       lattice: { L },
       poses: [
         [0, 0, 0],
-        [Math.SQRT2 - d, Math.SQRT2 - d, 0],
+        [Math.SQRT2 / 2 - d, Math.SQRT2 / 2 - d, 0],
       ],
     });
     expect(check("torus", "torus/sq/0/2", at(0)).valid).toBe(true);
@@ -529,13 +532,13 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     const v = check("torus", "torus/sq/0/2", at(1e-6 / Math.SQRT2));
     expect(v.valid).toBe(false);
     expect(v.reasons[0]).toMatch(/pieces 0 and 1 overlap .* by 9\.99\d*e-7/);
-    // a piece and its own translate: one disk on a square torus of side below 2, overlapping
+    // a piece and its own translate: one disk on a square torus of side below 1, overlapping
     // itself by 0.9e-9 (touching within the tolerance) and by 1.1e-9 (an overlap)
     const one = (L: number) => check("torus", "torus/sq/0/1", { lattice: { L }, poses: [[0, 0, 0]] });
-    expect(one(2 - 0.9e-9).valid).toBe(true);
-    expect(one(2 - 1.1e-9).reasons[0]).toMatch(/overlaps its own translate/);
+    expect(one(1 - 0.9e-9).valid).toBe(true);
+    expect(one(1 - 1.1e-9).reasons[0]).toMatch(/overlaps its own translate/);
     expect(
-      validateSpaceSubmission("torus", "torus/sq/0/1", { lattice: { L: 2 - 1.1e-9 }, poses: [[0.3, 0.2, 0]] }).valid,
+      validateSpaceSubmission("torus", "torus/sq/0/1", { lattice: { L: 1 - 1.1e-9 }, poses: [[0.3, 0.2, 0]] }).valid,
     ).toBe(false);
   });
 });

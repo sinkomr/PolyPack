@@ -1,14 +1,14 @@
 /**
  * A generic method and a kernel for tests of the spaces' methods that do not depend on a space's
- * kernel: the reference kernel of packages/methods (unit disks in a circle) stands in for the
- * problem curved/-1e-06/0/0/7, unit disks in a disk at curvature -1e-6, in its format.
+ * kernel: the reference kernel of packages/methods (unit-radius disks in a circle, in working units)
+ * stands in for the problem curved/-1e-06/0/0/7, seven disks of diameter 1 in a disk at curvature
+ * -1e-6, in its format and in site units (the stand-in converts exactly: centres times 1/2, and the
+ * container's radius R in working units is the site diameter R).
  * [EST] At negative curvature the exponential map from the centre never shortens distances
  * (comparison with the flat plane), and a centre's distance from the centre is its geodesic one, so
  * a valid flat packing of the reference kernel is valid there too: the server's rule checks it.
  * Shared by the board's tests (apps/web/test).
  */
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   type MethodContext,
   type SpaceKernel,
@@ -21,25 +21,32 @@ import { type DisksConfig, disksKernel } from "@polypack/methods/reference";
 import { checkSpaceConfig, setKernelFactoryForTests } from "../src/search";
 
 export const DISKS = "curved/-1e-06/0/0/7";
-const records = JSON.parse(readFileSync(resolve(__dirname, "../../../data/curved/records.json"), "utf8"));
-const record = records.records.find((r: { id: string }) => r.id === DISKS);
-/** The problem's lower bound and certified size. */
-export const disksRule = { bound: record.bound.lower as number, certified: record.score_cert as number };
+// The curved disk records are archived by the units change (radius-1 records, not served), so this
+// fixture no longer reads one: the flat optimum is built here. Seven disks of diameter 1 touch in a
+// hexagon of side 1 inside a container of diameter 3. [EST] At K < 0 distances from the centre are
+// geodesic and other distances do not shrink, so the flat packing is valid at K = -1e-6.
+const HEX = [[0, 0], ...Array.from({ length: 6 }, (_, k) => [Math.cos((k * Math.PI) / 3), Math.sin((k * Math.PI) / 3)])];
+/** The problem's lower bound (the flat area bound sqrt 7, rounded down) and the certified size. */
+export const disksRule = { bound: 2.6, certified: 3 };
 
-/** The research record grown by 1 %: valid, and room to improve. */
+/** The flat optimum grown by 1 %: valid, and room to improve. */
 export const grownDisks = () => ({
-  size: record.config.size * 1.01,
-  pieces: record.config.pieces.map((q: { x: number; y: number; theta: number }) => ({ ...q })),
+  size: 3 * 1.01,
+  pieces: HEX.map(([x, y]) => ({ x, y, theta: 0 })),
 });
 
 /** The reference kernel of P unit disks in a circle, in the curved space's format, checked by the server's rule. */
 export function curvedDisks(P: number): SpaceKernel {
   const k = disksKernel(P);
-  const toCurved = (c: DisksConfig) => ({ size: c.R, pieces: c.centres.map(([x, y]) => ({ x, y, theta: 0 })) });
+  // working units (unit-radius disks, container radius R) to site units (diameter-1 disks, container diameter R)
+  const toCurved = (c: DisksConfig) => ({
+    size: c.R,
+    pieces: c.centres.map(([x, y]) => ({ x: x / 2, y: y / 2, theta: 0 })),
+  });
   const fromCurved = (c: unknown): DisksConfig | null => {
     const v = c as { size?: number; pieces?: { x: number; y: number }[] };
     return v && typeof v.size === "number" && Array.isArray(v.pieces)
-      ? { R: v.size, centres: v.pieces.map((q) => [q.x, q.y] as [number, number]) }
+      ? { R: v.size, centres: v.pieces.map((q) => [2 * q.x, 2 * q.y] as [number, number]) }
       : null;
   };
   return {

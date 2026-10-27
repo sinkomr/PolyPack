@@ -113,11 +113,13 @@ const id = (text: string) => {
   if (typeof p === "string") throw new Error(p);
   return p;
 };
+// Two disks of diameter 1 on the square torus of side sqrt 2, at centre distance k along the diagonal.
+// UNITS-DEP: valid only once the torus package (Part 6) validates in site units.
 const twoDisks = (k: number) => ({
-  lattice: { L: L2 * Math.max(1, k) },
+  lattice: { L: Math.SQRT2 * Math.max(1, k) },
   poses: [
     [0, 0, 0],
-    [Math.SQRT2 * k, Math.SQRT2 * k, 0],
+    [(Math.SQRT2 / 2) * k, (Math.SQRT2 / 2) * k, 0],
   ],
 });
 
@@ -169,7 +171,7 @@ describe("a catalogue with a domain", () => {
 
   it("asks the strict check of every entry of a problem without a record", () => {
     const pid = "torus/sq/0/2";
-    // an overlap of 4e-10: within the touching tolerance, not within the strict one
+    // an overlap of 2e-10: within the touching tolerance, not within the strict one
     const loose = twoDisks(1 - 2e-10);
     expect(validateSpaceSubmission("torus", pid, loose).valid).toBe(true);
     const v = validateSpaceSubmission("torus", pid, loose, { noRecord: true });
