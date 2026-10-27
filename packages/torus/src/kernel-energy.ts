@@ -27,7 +27,7 @@
  * offset enters through k F, an angle's through 1 / R.
  */
 import { type Pose, boundingRadius, inradius, pairPenetration, penaltyEdgeNormals } from "@polypack/geometry";
-import { type Lattice, type TorusFamily, familyLattice } from "./lattice";
+import { type Lattice, TORUS_DISK_RADIUS, type TorusFamily, familyLattice } from "./lattice";
 
 /** The kernel's state as this module reads it (kernel.ts owns the type). */
 export interface TorusStateView {
@@ -103,7 +103,7 @@ export class TorusEnergy {
     this.dim = N === 0 ? 2 : 3;
     this.globals = family === "free" ? 2 : 0;
     this.R = boundingRadius(N);
-    this.r = N === 0 ? 1 : inradius(N);
+    this.r = N === 0 ? TORUS_DISK_RADIUS : inradius(N);
     this.c = new Float64Array(2 * P);
     this.ab = new Float64Array(2 * P);
     this.theta = new Float64Array(P);

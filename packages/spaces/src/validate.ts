@@ -1,3 +1,4 @@
+import { runSteps, runStepsAsync } from "@polypack/methods";
 /**
  * Configuration parsing and validation of the spaces, with the work bounds the server needs for
  * untrusted input. Each space is checked by its own floating-point validator (packages/surface,
@@ -29,9 +30,9 @@
  *    linear in P.
  */
 import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
-import { CurvedConfig, containerCircumradius, validate as validateCurved } from "@polypack/curved";
+import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
-import { SphereConfig, validate as validateSphere } from "@polypack/sphere";
+import { SphereConfig, validationSteps as sphereSteps } from "@polypack/sphere";
 import {
   ChainLimitError,
   SolidName,
@@ -40,7 +41,15 @@ import {
   validate as validateSurface,
   validateAsync as validateSurfaceAsync,
 } from "@polypack/surface";
-import { Lattice, TorusFamily, gaussReduce, imageWindow, torusScore, validateTorusPacking } from "@polypack/torus";
+import {
+  Lattice,
+  TORUS_MAX_P,
+  TorusFamily,
+  gaussReduce,
+  maxImageCandidates,
+  torusScore,
+  validationSteps as torusSteps,
+} from "@polypack/torus";
 import {
   POLYHEDRA_MAX_P,
   type PolyhedraConfig,
@@ -68,16 +77,19 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: its catalogue or domain cap (polyhedra P <= 500, 2026-10-26),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface: its domain's P <= 100. [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
+ * Surface, curved and sphere have domains with P <= 100; torus P <= 500 (2026-10-27).
+ * Their server checks yield in slices, including torus storage rechecks; many-piece checks share
+ * the heavy queue (also many-sided sphere pairs at small P).
+ * Surface: [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
  * compares only parts closer than two circumradii; without that, 100 coincident 100-gons took up to
  * 0.57 s (random configurations of 100 pieces about 0.1 s). On a server the check runs in slices
  * (validateSpaceSubmissionAsync), and checks of many pieces are queued like the polyhedra ones.
  */
 export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
-  curved: 30,
-  sphere: 40,
-  torus: 49,
+  curved: 100,
+  sphere: 100,
+  torus: TORUS_MAX_P,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
@@ -372,7 +384,7 @@ function reasonsOf(errors: string[], fallback: string): string[] {
 }
 
 /** Runs the space's own validator on a parsed configuration at `tol`; reasons are empty when it is valid. */
-function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
+function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<void, string[]> {
   const f = id.fields;
   switch (id.space) {
     case "surface": {
@@ -397,11 +409,14 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
         const far = c.pieces.findIndex((p) => !(Math.hypot(p.x, p.y) <= reach * (1 + 1e-6) + 1e-6));
         if (far >= 0) return [`the centre of piece ${far} lies outside the container`];
       }
-      const v = validateCurved({ N: f.N as number, M, P: id.P }, K, c, { tol });
+      const v = yield* curvedSteps({ N: f.N as number, M, P: id.P }, K, c, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest gap ${v.minGap})`);
     }
     case "sphere": {
-      const v = validateSphere({ N: f.N as number, P: id.P }, config as unknown as SphereConfig, { tol });
+      const v = yield* sphereSteps({ N: f.N as number, P: id.P }, config as unknown as SphereConfig, {
+        tol,
+        maxErrors: MAX_REASONS,
+      });
       if (v.valid) return [];
       if (v.errors.length) return reasonsOf(v.errors, "");
       const [i, j] = v.worstPair ?? [-1, -1];
@@ -431,15 +446,15 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
         ];
       // the validator's enumeration window, per pair of pieces (see packages/torus/src/lattice.ts)
       const reachR = 2 * boundingRadius(N) + 2 * 1e-7;
-      const { X1, X2 } = imageWindow(lattice, reachR);
-      const translates = (2 * X1 + 3) * (2 * X2 + 3);
+      // the most candidates (m, n) that the loop of latticeImages visits for one pair, exactly its bound
+      const translates = maxImageCandidates(lattice, reachR);
       if (!(translates <= TORUS_MAX_TRANSLATES))
         return [
-          `the lattice basis is too skewed: about ${Math.ceil(translates)} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
+          `the lattice basis is too skewed: up to ${translates} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
         ];
-      const v = validateTorusPacking(
+      const v = yield* torusSteps(
         { family, N, lattice, poses: c.poses.map(([x, y, theta]) => ({ x, y, theta })) },
-        { tol },
+        { tol, maxErrors: MAX_REASONS },
       );
       if (v.valid && !v.errors.length) return [];
       if (v.errors.length) return reasonsOf(v.errors, "");
@@ -492,7 +507,7 @@ export function validateSpaceSubmission(
 }
 
 /**
- * validateSpaceSubmission for a server: the same checks, but a polyhedra or surface configuration is checked
+ * validateSpaceSubmission for a server: the same checks, with polyhedra, surface, curved, sphere and torus configurations checked
  * in slices that give the event loop a turn every `sliceMs` (validatePolyhedraAsync, the surface package's
  * validateAsync), so that no check of 100 large pieces holds the loop for long. `workMs` is the time the checks
  * took, without the turns.
@@ -535,6 +550,23 @@ export async function validateSpaceSubmissionAsync(
         ];
       }
     }
+    if (["curved", "sphere", "torus"].includes(prep.id.space)) {
+      try {
+        // Include preflights and geometry in the same timed slices as the synchronous check.
+        const v = await runStepsAsync(
+          (function* () {
+            return { reasons: yield* check(prep.id, prep.config, tol) };
+          })(),
+          opts.sliceMs,
+        );
+        workMs += v.workMs;
+        slices += v.slices;
+        longestSliceMs = Math.max(longestSliceMs, v.longestSliceMs);
+        return v.reasons;
+      } catch (e) {
+        return [`the check failed: ${e instanceof Error ? e.message : String(e)}`];
+      }
+    }
     if (prep.id.space !== "polyhedra") {
       const t = performance.now();
       const r = checked(prep.id, prep.config, tol);
@@ -562,7 +594,7 @@ export async function validateSpaceSubmissionAsync(
 /** check() that turns a thrown error into a reason. */
 function checked(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
   try {
-    return check(id, config, tol);
+    return runSteps(check(id, config, tol));
   } catch (e) {
     return [
       e instanceof ChainLimitError
@@ -674,12 +706,7 @@ export function improvesSpaceBest(
  * again by the same rule and replaces the one sent only when it passes with the same score (to
  * within SCORE_TIE); anything else is stored as it was sent.
  */
-export function storedSpaceConfig(
-  space: SpaceName,
-  id: string,
-  config: SpaceConfig,
-  opts: SpaceValidateOptions = {},
-): SpaceConfig {
+function reducedSpaceConfig(space: SpaceName, id: string, config: SpaceConfig): SpaceConfig {
   if (space !== "torus") return config;
   const parsed = parseSpaceId(space, id);
   if (typeof parsed === "string" || parsed.fields.family !== "free") return config;
@@ -692,8 +719,21 @@ export function storedSpaceConfig(
   const length2 = (u: readonly number[], v: readonly number[]) => u[0] ** 2 + u[1] ** 2 + v[0] ** 2 + v[1] ** 2;
   // a reduced, right-handed basis is kept as it was sent, so that stored records are not rewritten
   if (det0 > 0 && length2(b1, b2) >= length2(sent.b1, sent.b2) * (1 - 1e-12)) return config;
-  const before = validateSpaceSubmission(space, id, config, opts);
-  const after = validateSpaceSubmission(space, id, { ...config, lattice: { b1: [b1[0], b1[1]], b2 } }, opts);
+  return { ...config, lattice: { b1: [b1[0], b1[1]], b2 } };
+}
+
+export function storedSpaceConfig(
+  space: SpaceName,
+  id: string,
+  config: SpaceConfig,
+  opts: SpaceValidateOptions = {},
+  sentScore?: number,
+): SpaceConfig {
+  const candidate = reducedSpaceConfig(space, id, config);
+  if (candidate === config) return config;
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before = { score: sentScore ?? validateSpaceSubmission(space, id, config, opts).score };
+  const after = validateSpaceSubmission(space, id, candidate, opts);
   if (
     !after.valid ||
     !after.config ||
@@ -703,4 +743,36 @@ export function storedSpaceConfig(
   )
     return config;
   return after.config;
+}
+
+/** The storage recheck in slices too, including the work in the submission's heavy-check turn. */
+export async function storedSpaceConfigAsync(
+  space: SpaceName,
+  id: string,
+  config: SpaceConfig,
+  opts: SpaceValidateOptions & { sliceMs?: number } = {},
+  sentScore?: number,
+): Promise<{ config: SpaceConfig; workMs: number; slices: number; longestSliceMs: number }> {
+  const start = performance.now();
+  const candidate = reducedSpaceConfig(space, id, config);
+  const first = performance.now() - start;
+  if (candidate === config) return { config, workMs: first, slices: 1, longestSliceMs: first };
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before =
+    sentScore !== undefined
+      ? { score: sentScore, workMs: 0, slices: 0, longestSliceMs: 0 }
+      : await validateSpaceSubmissionAsync(space, id, config, opts);
+  const after = await validateSpaceSubmissionAsync(space, id, candidate, opts);
+  const keep =
+    after.valid &&
+    after.config &&
+    before.score !== null &&
+    after.score !== null &&
+    Math.abs(after.score - before.score) <= SCORE_TIE * before.score;
+  return {
+    config: keep ? after.config! : config,
+    workMs: first + before.workMs + after.workMs,
+    slices: 1 + before.slices + after.slices,
+    longestSliceMs: Math.max(first, before.longestSliceMs, after.longestSliceMs),
+  };
 }

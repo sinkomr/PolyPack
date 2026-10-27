@@ -1,4 +1,4 @@
-"""Certifier for packings on the general convex polyhedral surfaces: the 13 Catalan solids, the prisms
+"""Certifier for packings on the general convex polyhedral surfaces: the 13 Archimedean and 13 Catalan solids, the prisms
 with 3 and 5 to 12 sides and the antiprisms with 4 to 12 sides (the five Platonic solids keep their
 exact path in cert.py and geom.py).
 
@@ -10,7 +10,7 @@ field Q(alpha) (alpha given by its minimal polynomial and an isolating rational 
 Exact checks of each solid (numfield.El arithmetic, exact signs): the faces are planar convex
 polygons, counter-clockwise seen from outside; every other vertex lies strictly inside every face
 plane; every directed edge occurs once, so the faces glue into a closed surface; Euler's formula.
-Prism and antiprism faces are checked to be regular with their centre at the foot of the
+Archimedean, prism and antiprism faces are checked to be regular with their centre at the foot of the
 perpendicular from the origin. Interval checks: every cone angle is at least pi (the boundary rule
 of docs/spaces/SURFACE, section 1, needs it; a solid with a sharper vertex is refused).
 
@@ -49,13 +49,17 @@ from numfield import El, Field
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOLIDS_EXACT = os.path.join(HERE, "..", "polyhedra", "solids_exact.json")
 
+ARCHIMEDEAN = ("truncated_tetrahedron", "cuboctahedron", "truncated_cube", "truncated_octahedron",
+               "rhombicuboctahedron", "truncated_cuboctahedron", "snub_cube", "icosidodecahedron",
+               "truncated_dodecahedron", "truncated_icosahedron", "rhombicosidodecahedron",
+               "truncated_icosidodecahedron", "snub_dodecahedron")
 CATALAN = ("triakis_tetrahedron", "rhombic_dodecahedron", "triakis_octahedron", "tetrakis_hexahedron",
            "deltoidal_icositetrahedron", "disdyakis_dodecahedron", "pentagonal_icositetrahedron",
            "rhombic_triacontahedron", "triakis_icosahedron", "pentakis_dodecahedron",
            "deltoidal_hexecontahedron", "disdyakis_triacontahedron", "pentagonal_hexecontahedron")
 PRISMS = tuple("prism%d" % n for n in (3, 5, 6, 7, 8, 9, 10, 11, 12))
 ANTIPRISMS = tuple("antiprism%d" % n for n in range(4, 13))
-GENERAL_SOLIDS = CATALAN + PRISMS + ANTIPRISMS
+GENERAL_SOLIDS = ARCHIMEDEAN + CATALAN + PRISMS + ANTIPRISMS
 
 # filled lazily by load_data()
 _DATA = None
@@ -254,7 +258,7 @@ class GeneralSolid:
             self.adj.append(row)
         if self.V - self.E + self.F != 2:
             raise SolidError("%s: Euler characteristic" % name)
-        self.regular = [name.startswith("prism") or name.startswith("antiprism") for _ in faces]
+        self.regular = [name in ARCHIMEDEAN or name.startswith("prism") or name.startswith("antiprism") for _ in faces]
         if any(self.regular):
             self._check_regular()
         self._build_frames()
@@ -288,14 +292,17 @@ class GeneralSolid:
                     raise SolidError("%s: vertex %d is not strictly inside the plane of face %d" % (self.name, v, fi))
 
     def _check_regular(self):
-        """Prism and antiprism faces: all edges of one length, all vertices equidistant from the
-        vertex centroid, and that centroid is the foot of the perpendicular from the origin."""
+        """Regular unit-edge faces: all vertices equidistant from the vertex centroid, which is
+        the foot of the perpendicular from the origin. Raw edges have squared length D when
+        the source coordinates carry the common scale 1/sqrt(D)."""
         pts = self.pts
         for fi, f in enumerate(self.faces):
             P = [pts[v] for v in f]
             n = len(P)
             e0 = _sub3(P[1], P[0])
             L2 = _dot3(e0, e0)
+            if not (L2 - (self._D if self._D is not None else 1)).is_zero():
+                raise SolidError("%s: face %d does not have unit edges" % (self.name, fi))
             cen = tuple(sum((p[t] for p in P[1:]), P[0][t]) / n for t in range(3))
             r2 = _dot3(_sub3(P[0], cen), _sub3(P[0], cen))
             for k in range(n):

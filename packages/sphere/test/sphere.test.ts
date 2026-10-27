@@ -179,7 +179,7 @@ describe("float validator limits near the existence limit (documentation, not au
         const rho = (N / (2 * Math.PI)) * (1 + eps);
         const R = circumradiusAngle(N, rho);
         // pi/2 - R behaves like sqrt(2 eps (pi/N) cot(pi/N)): small, so the float asin loses digits
-        const predicted = Math.sqrt(2 * eps * (Math.PI / N) / Math.tan(Math.PI / N));
+        const predicted = Math.sqrt((2 * eps * (Math.PI / N)) / Math.tan(Math.PI / N));
         expect(Math.abs(Math.PI / 2 - R - predicted) / predicted).toBeLessThan(eps >= 1e-9 ? 1e-3 : 0.05);
         const res = validate({ N, P: 2 }, { rho, pieces: [{ q: [1, 0, 0, 0] }, { q: [0, 1, 0, 0] }] });
         expect(res.valid).toBe(true); // the decision with the 1e-9 tolerance is safe here
@@ -199,15 +199,20 @@ describe("validator input checks", () => {
     expect(validate({ N: 4, P: 2 }, { rho: NaN, pieces: good.pieces }).valid).toBe(false);
     expect(validate({ N: 4, P: 2 }, { rho: Infinity, pieces: good.pieces }).valid).toBe(false);
     expect(validate({ N: 4, P: 2 }, { rho: 1, pieces: [{ q: [1, 0, 0, 0] }, { q: [0, 0, 0, 0] }] }).valid).toBe(false);
-    expect(validate({ N: 4, P: 2 }, { rho: 1, pieces: [{ q: [1, 0, 0, 0] }, { q: [NaN, 1, 0, 0] }] }).valid).toBe(false);
+    expect(validate({ N: 4, P: 2 }, { rho: 1, pieces: [{ q: [1, 0, 0, 0] }, { q: [NaN, 1, 0, 0] }] }).valid).toBe(
+      false,
+    );
     expect(validate({ N: 6, P: 2 }, { rho: 0.95, pieces: good.pieces }).valid).toBe(false); // 6/(2 pi) = 0.9549
-    expect(validate({ N: 7, P: 2 }, good).valid).toBe(false); // outside the supported set {0, 3, 4, 5, 6, 8}
+    expect(validate({ N: 7, P: 2 }, good).valid).toBe(false); // 7/(2 pi) > 1: the piece does not exist at this radius
     expect(validate({ N: 0, P: 2 }, { rho: 0.6, pieces: good.pieces }).valid).toBe(false); // caps beyond a hemisphere
   });
   it("disks: overlap by 1e-6 rejected, gap accepted", () => {
     const rho = 2;
     const ang = 2 / rho;
-    const mk = (d: number): SphereConfig => ({ rho, pieces: [{ q: [1, 0, 0, 0] }, { q: quatFromCentreTheta([Math.sin(d), 0, Math.cos(d)], 0) }] });
+    const mk = (d: number): SphereConfig => ({
+      rho,
+      pieces: [{ q: [1, 0, 0, 0] }, { q: quatFromCentreTheta([Math.sin(d), 0, Math.cos(d)], 0) }],
+    });
     expect(validate({ N: 0, P: 2 }, mk(ang * (1 + 1e-6))).strictlyValid).toBe(true);
     expect(validate({ N: 0, P: 2 }, mk(ang * (1 - 1e-6))).valid).toBe(false);
   });

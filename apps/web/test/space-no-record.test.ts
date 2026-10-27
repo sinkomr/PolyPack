@@ -101,3 +101,20 @@ describe("the dimensions page", () => {
     );
   });
 });
+
+describe("the widened piece domains on the board", () => {
+  it("offers N = 0 or 3–100 and P = 1–100 (torus 1–500) from each real domain", async () => {
+    const { SPACE_DOMAINS } = await import("@polypack/spaces");
+    for (const space of ["curved", "sphere", "torus"] as const) {
+      const domain = SPACE_DOMAINS[space]!.info;
+      const top = space === "torus" ? 500 : 100;
+      const pick = pickFromDomain(space, domain, { K: "-1e-06", M: "0", family: "hex", N: "100", P: String(top) });
+      expect(pick.id).toContain("/100/");
+      const ns = pick.fields.find((f) => f.key === "N")!.options.map((o) => o.value);
+      expect(ns).toEqual(["0", ...Array.from({ length: 98 }, (_, i) => String(i + 3))]);
+      expect(pick.fields.find((f) => f.key === "P")!.options).toHaveLength(top);
+      expect(pick.fields.find((f) => f.key === "N")!.value).toBe("100");
+      expect(pick.fields.find((f) => f.key === "P")!.value).toBe(String(top));
+    }
+  });
+});

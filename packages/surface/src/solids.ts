@@ -1,21 +1,21 @@
 /**
- * Convex polyhedral surfaces: the five Platonic solids, the 13 Catalan solids, the prisms with 3 and 5
+ * Convex polyhedral surfaces: the five Platonic solids, the 13 Archimedean and 13 Catalan solids, the prisms with 3 and 5
  * to 12 sides and the antiprisms with 4 to 12 sides, each a closed surface of convex polygons glued
  * edge to edge, flat except at the vertices (cone points).
  *
  * Conventions (fixed; the Python certifier rebuilds them independently and the two must agree):
  * - Platonic solids: vertices in a documented order (see `vertexList`), at unit edge length. The other
  *   solids: the polyhedra space's canonical solids (python/polyhedra/solids_exact.json), in its vertex
- *   order and scale (unit edges for prisms and antiprisms; Catalan solids are the polar reciprocals of
+ *   order and scale (unit edges for Archimedean solids, prisms and antiprisms; Catalan solids are the polar reciprocals of
  *   the unit-edge Archimedean solids about the midsphere). The score s is the scale factor of that
- *   canonical solid, which for the Platonic solids and the prisms and antiprisms is the edge length.
+ *   canonical solid, which for the Platonic and Archimedean solids and the prisms and antiprisms is the edge length.
  * - A face is the cycle of its vertex ids, counter-clockwise seen from outside, rotated so that its
  *   smallest vertex id comes first. Faces are sorted lexicographically by these cycles.
  * - Face frame: the origin is the foot of the perpendicular from the solid's centre to the face plane,
  *   and the last edge (frame vertex M - 1 to frame vertex 0) is horizontal at the bottom, running in
  *   +x. Frame vertex k is the 3D vertex faces[f][k] and edge k runs from frame vertex k to k + 1, so
  *   frame vertex 0 is the bottom right corner. For a regular face (all faces
- *   of the Platonic solids, prisms and antiprisms: their centre is the foot) this is the regular M-gon
+ *   of the Platonic and Archimedean solids, prisms and antiprisms: their centre is the foot) this is the regular M-gon
  *   of side s centred at the origin with a horizontal bottom edge, PolyPack's container convention with
  *   phi = 0: frame vertex k at angle -pi/2 + pi/M + 2 pi k/M (`frameVertex`). Catalan faces are
  *   irregular but tangential (every edge touches the midsphere), and the foot is their incentre.
@@ -30,6 +30,20 @@
 import { GENERAL_SOLID_DATA } from "./general.data";
 
 export type PlatonicName = "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
+export type ArchimedeanName =
+  | "truncated_tetrahedron"
+  | "cuboctahedron"
+  | "truncated_cube"
+  | "truncated_octahedron"
+  | "rhombicuboctahedron"
+  | "truncated_cuboctahedron"
+  | "snub_cube"
+  | "icosidodecahedron"
+  | "truncated_dodecahedron"
+  | "truncated_icosahedron"
+  | "rhombicosidodecahedron"
+  | "truncated_icosidodecahedron"
+  | "snub_dodecahedron";
 export type CatalanName =
   | "triakis_tetrahedron"
   | "rhombic_dodecahedron"
@@ -46,12 +60,28 @@ export type CatalanName =
   | "pentagonal_hexecontahedron";
 export type PrismName = `prism${3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
 export type AntiprismName = `antiprism${4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
-export type SolidName = PlatonicName | CatalanName | PrismName | AntiprismName;
-export type SolidFamily = "platonic" | "catalan" | "prism" | "antiprism";
+export type SolidName = PlatonicName | ArchimedeanName | CatalanName | PrismName | AntiprismName;
+export type SolidFamily = "platonic" | "archimedean" | "catalan" | "prism" | "antiprism";
 
 /** The five Platonic solids (the solids of the space before 2026-10-26), in their catalogue order. */
 export const SOLID_NAMES: readonly PlatonicName[] = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
 export const PLATONIC_NAMES = SOLID_NAMES;
+/** The 13 Archimedean solids, in the polyhedra catalogue order. */
+export const ARCHIMEDEAN_NAMES: readonly ArchimedeanName[] = [
+  "truncated_tetrahedron",
+  "cuboctahedron",
+  "truncated_cube",
+  "truncated_octahedron",
+  "rhombicuboctahedron",
+  "truncated_cuboctahedron",
+  "snub_cube",
+  "icosidodecahedron",
+  "truncated_dodecahedron",
+  "truncated_icosahedron",
+  "rhombicosidodecahedron",
+  "truncated_icosidodecahedron",
+  "snub_dodecahedron",
+];
 /** The Catalan solids, by number of faces, then name. */
 export const CATALAN_NAMES: readonly CatalanName[] = [
   "rhombic_dodecahedron",
@@ -72,8 +102,8 @@ export const PRISM_NAMES: readonly PrismName[] = [3, 5, 6, 7, 8, 9, 10, 11, 12].
 export const ANTIPRISM_NAMES: readonly AntiprismName[] = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(
   (n) => `antiprism${n}` as AntiprismName,
 );
-/** Every solid of the space, grouped by family (Platonic, Catalan, prisms, antiprisms) and sorted within. */
-export const ALL_SOLID_NAMES: readonly SolidName[] = [...SOLID_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
+/** Every solid of the space, grouped by family (Platonic, Archimedean, Catalan, prisms, antiprisms) in catalogue order within each family. */
+export const ALL_SOLID_NAMES: readonly SolidName[] = [...SOLID_NAMES, ...ARCHIMEDEAN_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
 
 export interface EdgeRef {
   face: number;
@@ -324,7 +354,7 @@ export function getSolid(name: SolidName): Solid {
   const regular = faces.map((f, fi) => {
     if (uniform) return true;
     if (data!.family === "catalan") return false;
-    // prisms and antiprisms: every face is the regular polygon of its frame; check it
+    // Archimedean solids, prisms and antiprisms: every face is the regular polygon of its frame; check it
     const M = f.length;
     const flat = frames[fi].flat;
     for (let k = 0; k < M; k++) {

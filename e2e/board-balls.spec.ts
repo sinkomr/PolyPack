@@ -3,8 +3,8 @@ import { type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/sp
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
 import { LAZY_VIEW, openProblem } from "./helpers";
 
-// 3D in 3D > Balls on the board: unit balls in a ball or a cube, Platonic solids in a ball. The space ships without
-// research records, so every problem opens empty ("No record yet"), runs from a new arrangement, and its first valid
+// 3D in 3D > Balls on the board: unit balls in a ball or in one of 94 solids, and each of those solids in a ball.
+// The space ships without research records, so every problem opens empty ("No record yet"), runs from a new arrangement, and its first valid
 // entry is kept by the local server (playwright.config.ts).
 
 declare const polypack: {
@@ -58,7 +58,10 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
 }) => {
   test.setTimeout(180_000);
   await openProblem(page, 4, 4, 5);
-  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText(["Polyhedra", "Balls"]);
+  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText([
+    "3D in 3D: Polyhedra",
+    "3D in 3D: Balls",
+  ]);
   await page.selectOption("#family-select", "balls");
   await opened(page, DEFAULT_PROBLEM.balls);
   await expect(page).toHaveURL(/#space=balls\/ballinball\/13$/);

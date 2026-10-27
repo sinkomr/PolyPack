@@ -214,10 +214,9 @@ class TestPolygons(unittest.TestCase):
         self.assertFalse(pok(dict(r, display="1.000001")))  # the old rounded-up string is now rejected for rho = 1
 
     def test_supported_shapes_only(self):
-        # S4: N in {0, 3, 4, 5, 6, 8}; 7-gons are geometrically fine but outside the problem set
-        for N in (3, 4, 5, 6, 8):
+        for N in (3, 4, 5, 6, 7, 8, 12, 20, 100):
             self.assertTrue(ok(rec(N, N, [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]])), N)
-        for N in (7, 9, 10, 12, 100, 1, 2):
+        for N in (-1, 1, 2, 101, True, 3.5):
             self.assertFalse(ok(rec(N, N, [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]])), N)
 
     def test_witness_cannot_rescue_an_overlap(self):
@@ -448,6 +447,33 @@ def _mat(q):
 def _tet_R():
     a = math.acos(-1 / 3)
     return math.asin(math.sin(a / 2) / math.sin(PI / 3))
+
+
+class WidePieces(unittest.TestCase):
+    def test_certified_examples(self):
+        for N in (3, 7, 12, 20, 100):
+            for P in (1, 2, 5):
+                qs = [q_centre([math.cos(2*PI*i/P), math.sin(2*PI*i/P), 0]) for i in range(P)]
+                self.assertTrue(ok(rec(N, max(100, N*P), qs)), (N, P))
+
+    def test_capacity_with_near_pairs(self):
+        N, P, rho = 100, 100, 1000
+        step = 2*math.asin(math.tan(0.5/rho)/math.tan(PI/N))+1e-10
+        spin = qz(PI/N)
+        self.assertTrue(ok(rec(N, rho, [qmul(qy(i*step), spin) for i in range(P)])))
+
+    def test_large_touch_overlap_and_chart_boundary(self):
+        N, rho = 100, 100
+        r = math.asin(math.tan(0.5/rho)/math.tan(PI/N))
+        spin = qz(PI/N)
+        def case(gap):
+            return rec(N, rho, [spin, qmul(qy(2*r+gap/rho), spin)])
+        self.assertTrue(ok(case(1e-7)))
+        self.assertFalse(ok(case(-1e-7)))
+        # No chart boundary exists: one piece can cross the equator or sit at the south pole.
+        self.assertTrue(ok(rec(N, rho, [qy(PI/2), qy(PI)])))
+        self.assertFalse(ok(rec(N, rho, [[0, 0, 0, 0]])))
+        self.assertFalse(ok(rec(N, N/(2*PI)*(1-1e-7), [[1, 0, 0, 0]])))
 
 
 if __name__ == "__main__":

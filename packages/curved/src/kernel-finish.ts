@@ -13,7 +13,7 @@
  * finishCost, or when the caller's stop says so (polled before every simplex pivot).
  *
  * curvedServerRule: what packages/spaces/src/validate.ts does for curved, without importing it:
- * P at most 30, the configuration's form and limits (size at most 1e6, coordinates at most 1e4),
+ * P at most 100, the configuration's form and limits (size at most 1e6, coordinates at most 1e4),
  * the problem's lower bound (minus 1e-9 relative), the cheap far-centre test, then validate() of
  * validate.ts at the touching tolerance TOL = 1e-9 (the server's SPACE_TOL).
  */
@@ -29,7 +29,7 @@ import { containerCircumradius, maxContainerSize, sideFromApothem } from "./shap
 import { tForArea } from "./search";
 
 /** The server's limits for curved problems and configurations (SPACE_MAX_P, SPACE_MAX_SIZE, SPACE_MAX_COORD, SPACE_BOUND_SLACK). */
-export const MAX_P = 30;
+export const MAX_P = 100;
 const MAX_SIZE = 1e6;
 const MAX_COORD = 1e4;
 const BOUND_SLACK = 1e-9;
@@ -155,7 +155,8 @@ export function curvedFinish(g: KernelGeometry, poses: CurvedPose[], size: numbe
     if (o.stats) o.stats.work = work;
     return f;
   };
-  const finite = (ps: CurvedPose[]) => ps.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.theta));
+  const finite = (ps: CurvedPose[]) =>
+    ps.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.theta));
   // polish from `start`, then legalise
   const attempt = (start: CurvedPose[]): Finished | null => {
     let pol;
@@ -244,12 +245,7 @@ function repair(
  * stops before converging, which a growth of that order removes. Validity need not be monotone
  * in the factor: only an accepted configuration is returned. Null when no eps up to 1e-3 works.
  */
-function legalise(
-  g: KernelGeometry,
-  problem: CurvedProblem,
-  c: CurvedConfig,
-  count: () => void,
-): CurvedConfig | null {
+function legalise(g: KernelGeometry, problem: CurvedProblem, c: CurvedConfig, count: () => void): CurvedConfig | null {
   const { K } = g.space;
   const valid = (cfg: CurvedConfig) => (count(), validate(problem, K, cfg, { tol: 0 }).valid);
   count();

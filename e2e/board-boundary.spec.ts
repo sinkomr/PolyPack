@@ -78,7 +78,9 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
   await expect(page.locator("#family-select option[value='boundary']")).toBeEnabled();
   await page.selectOption("#family-select", "boundary");
   await expect(page.locator("#family-select")).toHaveValue("boundary");
-  await expect(page.locator("#family-select optgroup[label='3D on 4D'] option")).toHaveText(["Polytope boundaries"]);
+  await expect(page.locator("#family-select optgroup[label='3D on 4D'] option")).toHaveText([
+    "3D on 4D: Polytope boundaries",
+  ]);
   await shown(page, ID);
   await expect(page).toHaveURL(new RegExp(`#space=${ID}$`));
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-on-4");

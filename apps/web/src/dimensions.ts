@@ -6,6 +6,7 @@
  */
 import type { SpaceExhibit, SpaceInfo, SpaceName } from "@polypack/spaces";
 import * as api from "./api";
+import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { addOptions } from "./option-groups";
 import { safeHref } from "./atlas-model";
 import { foldGain, gainText, plainNofoldLabel, readFoldExtra } from "./boundary-model";
@@ -323,12 +324,11 @@ function renderTable(space: SpaceName, problems: ListedProblem[]): void {
       const board = el("td");
       if (isBoardSpace(space))
         board.append(link(`/${spaceAddress(space, p.id)}`, "Open on the board", `: ${p.id}`, false));
-      const face = nofoldFaceProblem(p.id);
-      if (face) {
-        const same = el("span", "", "cell-why same-as");
-        same.append(
-          link(face.href, `Same as N = ${face.N}, M = ${face.M}, P = ${face.k}`, ` in 2D in 2D, for ${p.id}`, false),
-        );
+      const same = el("span", "", "cell-why same-as");
+      renderNofoldNote(same, p.id, p.best_score ?? undefined, true);
+      if (!same.hidden) {
+        const face = nofoldFaceProblem(p.id);
+        if (face) same.querySelector("a")?.append(el("span", ` in 2D in 2D, for ${p.id}`, "visually-hidden"));
         board.append(same);
       }
       tr.append(board);
