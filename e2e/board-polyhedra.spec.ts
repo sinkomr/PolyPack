@@ -49,7 +49,7 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   });
   await openProblem(page, 4, 4, 5);
   const menu = page.locator("#family-select");
-  await expect(menu.locator('optgroup[label="3D in 3D"] option[value="polyhedra"]')).toHaveText("Polyhedra");
+  await expect(menu.locator('optgroup[label="3D in 3D"] option[value="polyhedra"]')).toHaveText("3D in 3D: Polyhedra");
   await expect(menu.locator('option[value="polyhedra"]')).toBeEnabled();
   expect(three).toEqual([]);
 

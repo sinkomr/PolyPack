@@ -20,9 +20,16 @@ declare const polypack: {
 /** Waits until the space mode shows a problem's packing; `wait` for the first one, while the mode's code loads. */
 async function shown(page: Page, id: string, wait: { timeout?: number } = {}): Promise<void> {
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${id}`, wait);
-  // the balls space ships without records: its problems show none until an entry is kept
-  if (id.startsWith("balls/")) await expect(page.locator("#space-empty")).toBeVisible();
-  else await expect(page.locator("#space-score")).not.toHaveText("—");
+  // a problem without a research record (all of balls, and range problems such as prism surfaces) shows
+  // the empty note until an entry is kept; one with a record shows its score
+  await expect
+    .poll(
+      async () =>
+        (await page.locator("#space-empty").isVisible()) ||
+        ((await page.locator("#space-score").textContent()) ?? "—").trim() !== "—",
+      wait,
+    )
+    .toBe(true);
 }
 
 /** Chooses a family in the Problem set menu, as a user would, when it is not the one shown. */
