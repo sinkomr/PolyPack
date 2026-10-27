@@ -1,3 +1,5 @@
+import { runSteps, runStepsAsync } from "@polypack/methods";
+import { hullFaces } from "./hull";
 /**
  * Chart-free float validator for whole-sphere packings.
  *
@@ -36,7 +38,7 @@ export interface MaxMargin {
   normal: Vec3;
 }
 
-export function maxMarginPlane(A: Vec3[], B: Vec3[]): MaxMargin {
+function* marginSteps(A: Vec3[], B: Vec3[]): Generator<void, MaxMargin> {
   const S: Vec3[] = [...A, ...B.map((b) => [-b[0], -b[1], -b[2]] as Vec3)];
   const m = S.length;
   let best = -Infinity;
@@ -52,15 +54,38 @@ export function maxMarginPlane(A: Vec3[], B: Vec3[]): MaxMargin {
       bestN = n;
     }
   };
-  for (let i = 0; i < m; i++) {
-    for (let j = i + 1; j < m; j++) {
-      consider([S[i][0] + S[j][0], S[i][1] + S[j][1], S[i][2] + S[j][2]]);
-      for (let k = j + 1; k < m; k++) {
-        const u: Vec3 = [S[j][0] - S[i][0], S[j][1] - S[i][1], S[j][2] - S[i][2]];
-        const w: Vec3 = [S[k][0] - S[i][0], S[k][1] - S[i][1], S[k][2] - S[i][2]];
-        const c = cross(u, w);
-        consider(c);
-        consider([-c[0], -c[1], -c[2]]);
+  if (m > 16) {
+    const faces = yield* hullFaces(S);
+    const edges = new Set<string>();
+    for (const [i, j, k] of faces) {
+      const u: Vec3 = [S[j][0] - S[i][0], S[j][1] - S[i][1], S[j][2] - S[i][2]];
+      const v: Vec3 = [S[k][0] - S[i][0], S[k][1] - S[i][1], S[k][2] - S[i][2]];
+      const n = cross(u, v);
+      consider(n);
+      consider([-n[0], -n[1], -n[2]]);
+      for (const [a, b] of [
+        [i, j],
+        [j, k],
+        [k, i],
+      ]) {
+        const key = a < b ? `${a},${b}` : `${b},${a}`;
+        if (edges.has(key)) continue;
+        edges.add(key);
+        consider([S[a][0] + S[b][0], S[a][1] + S[b][1], S[a][2] + S[b][2]]);
+      }
+      yield;
+    }
+  } else {
+    for (let i = 0; i < m; i++) {
+      for (let j = i + 1; j < m; j++) {
+        consider([S[i][0] + S[j][0], S[i][1] + S[j][1], S[i][2] + S[j][2]]);
+        for (let k = j + 1; k < m; k++) {
+          const u: Vec3 = [S[j][0] - S[i][0], S[j][1] - S[i][1], S[j][2] - S[i][2]];
+          const w: Vec3 = [S[k][0] - S[i][0], S[k][1] - S[i][1], S[k][2] - S[i][2]];
+          const c = cross(u, w);
+          consider(c);
+          consider([-c[0], -c[1], -c[2]]);
+        }
       }
     }
   }
@@ -86,18 +111,25 @@ export interface ValidationResult {
 }
 
 /** Gaps of all pairs; far pairs (circumscribed caps disjoint) are reported with kind "far". */
-export function pairGaps(problem: SphereProblem, config: SphereConfig): PairGap[] {
+function* pairSteps(
+  problem: SphereProblem,
+  config: SphereConfig,
+  opts: { tol?: number; maxErrors?: number } = {},
+): Generator<void, PairGap[]> {
   const { N } = problem;
   const rho = config.rho;
   const P = config.pieces.length;
   const C = config.pieces.map((p) => centreOf(p.q));
   const out: PairGap[] = [];
+  let overlaps = 0;
   if (N === 0) {
     const a = 1 / rho;
     for (let i = 0; i < P; i++)
       for (let j = i + 1; j < P; j++) {
         const ang = Math.acos(Math.max(-1, Math.min(1, dot(C[i], C[j]))));
         out.push({ i, j, gap: rho * (ang - 2 * a), kind: "disk" });
+        yield;
+        if (out[out.length - 1].gap < -(opts.tol ?? 1e-9) && ++overlaps >= (opts.maxErrors ?? Infinity)) return out;
       }
     return out;
   }
@@ -110,28 +142,38 @@ export function pairGaps(problem: SphereProblem, config: SphereConfig): PairGap[
         out.push({ i, j, gap: rho * (ang - 2 * R), kind: "far" });
         continue;
       }
-      const mm = maxMarginPlane(X[i], X[j]);
+      const mm = yield* marginSteps(X[i], X[j]);
       out.push({ i, j, gap: rho * Math.asin(Math.max(-1, Math.min(1, mm.value))), kind: "plane", normal: mm.normal });
+      yield;
+      if (out[out.length - 1].gap < -(opts.tol ?? 1e-9) && ++overlaps >= (opts.maxErrors ?? Infinity)) return out;
     }
   return out;
 }
 
-export function validate(problem: SphereProblem, config: SphereConfig, opts: { tol?: number } = {}): ValidationResult {
+export function* validationSteps(
+  problem: SphereProblem,
+  config: SphereConfig,
+  opts: { tol?: number; maxErrors?: number } = {},
+): Generator<void, ValidationResult> {
   const tol = opts.tol ?? 1e-9;
   const errors: string[] = [];
   const { N, P } = problem;
-  if (![0, 3, 4, 5, 6, 8].includes(N)) errors.push("N must be one of 0, 3, 4, 5, 6, 8");
+  if (!(N === 0 || (Number.isInteger(N) && N >= 3 && N <= 100))) errors.push("N must be 0 or an integer in [3, 100]");
   if (!Number.isInteger(P) || P < 1) errors.push("P must be a positive integer");
-  if (!config || !Array.isArray(config.pieces) || config.pieces.length !== P) errors.push("number of pieces differs from P");
+  if (!config || !Array.isArray(config.pieces) || config.pieces.length !== P)
+    errors.push("number of pieces differs from P");
   if (!(config?.rho > 0) || !Number.isFinite(config?.rho)) errors.push("rho must be positive and finite");
   else if (!pieceExists(N, config.rho)) errors.push("piece does not exist at this rho (needs rho > N/(2 pi))");
-  for (const [k, p] of (config?.pieces ?? []).entries()) {
-    if (!Array.isArray(p?.q) || p.q.length !== 4 || !p.q.every((c) => Number.isFinite(c))) errors.push(`piece ${k}: q must be 4 finite numbers`);
+  for (const [k, p] of (Array.isArray(config?.pieces) ? config.pieces : []).entries()) {
+    if (!Array.isArray(p?.q) || p.q.length !== 4 || !p.q.every((c) => Number.isFinite(c)))
+      errors.push(`piece ${k}: q must be 4 finite numbers`);
     else if (Math.hypot(...p.q) === 0) errors.push(`piece ${k}: zero quaternion`);
   }
-  if (N === 0 && P >= 2 && config?.rho > 0 && 1 / config.rho > Math.PI / 2) errors.push("disks larger than a hemisphere cannot both fit");
-  if (errors.length) return { valid: false, strictlyValid: false, minGap: -Infinity, worstPair: null, pairs: [], errors };
-  const pairs = pairGaps(problem, config);
+  if (N === 0 && P >= 2 && config?.rho > 0 && 1 / config.rho > Math.PI / 2)
+    errors.push("disks larger than a hemisphere cannot both fit");
+  if (errors.length)
+    return { valid: false, strictlyValid: false, minGap: -Infinity, worstPair: null, pairs: [], errors };
+  const pairs = yield* pairSteps(problem, config, opts);
   let minGap = Infinity;
   let worst: [number, number] | null = null;
   for (const g of pairs)
@@ -140,4 +182,25 @@ export function validate(problem: SphereProblem, config: SphereConfig, opts: { t
       worst = [g.i, g.j];
     }
   return { valid: minGap >= -tol, strictlyValid: minGap > 0, minGap, worstPair: worst, pairs, errors };
+}
+
+export function maxMarginPlane(A: Vec3[], B: Vec3[]): MaxMargin {
+  return runSteps(marginSteps(A, B));
+}
+export function pairGaps(problem: SphereProblem, config: SphereConfig): PairGap[] {
+  return runSteps(pairSteps(problem, config));
+}
+export function validate(
+  problem: SphereProblem,
+  config: SphereConfig,
+  opts: { tol?: number; maxErrors?: number } = {},
+): ValidationResult {
+  return runSteps(validationSteps(problem, config, opts));
+}
+export function validateAsync(
+  problem: SphereProblem,
+  config: SphereConfig,
+  opts: { tol?: number; maxErrors?: number; sliceMs?: number } = {},
+) {
+  return runStepsAsync(validationSteps(problem, config, opts), opts.sliceMs);
 }

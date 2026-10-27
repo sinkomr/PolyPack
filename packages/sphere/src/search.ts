@@ -482,7 +482,8 @@ interface Packing {
 
 export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): SphereSearchResult {
   const { N, P } = problem;
-  if (![0, 3, 4, 5, 6, 8].includes(N) || !Number.isInteger(P) || P < 1) throw new Error("bad sphere problem");
+  if (!(N === 0 || (Number.isInteger(N) && N >= 3 && N <= 100)) || !Number.isInteger(P) || P < 1 || P > 100)
+    throw new Error("bad sphere problem");
   const rand = mulberry32(o.seed);
   const maxEvals = o.maxEvals ?? 20_000;
   const clock = o.now ?? (() => performance.now() / 1000);

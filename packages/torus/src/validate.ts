@@ -1,3 +1,4 @@
+import { runSteps, runStepsAsync } from "@polypack/methods";
 /**
  * Float validator for packings on flat tori. Not a proof: the rigorous certificate is
  * python/torus/certify_torus.py (interval arithmetic). This module is the shared float
@@ -44,6 +45,7 @@ export interface TorusValidation {
 export interface ValidateOptions {
   /** overlap tolerance in piece units (default: the shared TOL = 1e-9) */
   tol?: number;
+  maxErrors?: number;
   /** shrink factor applied to every piece about its centre (certificate-style checks) */
   scale?: number;
   /** contacts reported when |sep| <= contactTol */
@@ -61,7 +63,7 @@ function shifted(p: Pose, v: readonly [number, number]): Pose {
  * because each piece lies in its bounding disk). Lattice vectors come from the Cramer window in
  * `latticeImages`, so an unreduced basis is handled correctly.
  */
-export function validateTorusPacking(p: TorusPacking, opts: ValidateOptions = {}): TorusValidation {
+export function* validationSteps(p: TorusPacking, opts: ValidateOptions = {}): Generator<void, TorusValidation> {
   const tol = opts.tol ?? TOL;
   const scale = opts.scale ?? 1;
   const contactTol = opts.contactTol ?? 1e-7;
@@ -76,10 +78,22 @@ export function validateTorusPacking(p: TorusPacking, opts: ValidateOptions = {}
     density: NaN,
     errors,
   });
+  if (
+    !p ||
+    !Array.isArray(p.poses) ||
+    !p.lattice ||
+    !Array.isArray(p.lattice.b1) ||
+    p.lattice.b1.length !== 2 ||
+    !Array.isArray(p.lattice.b2) ||
+    p.lattice.b2.length !== 2
+  ) {
+    errors.push("packing needs poses and a lattice with two vectors");
+    return empty();
+  }
   if (!isShapeCode(p.N)) errors.push(`invalid shape code ${p.N}`);
   if (p.poses.length === 0) errors.push("no pieces");
   for (const [k, q] of p.poses.entries()) {
-    if (![q.x, q.y, q.theta].every(Number.isFinite)) errors.push(`pose ${k} is not finite`);
+    if (!q || ![q.x, q.y, q.theta].every(Number.isFinite)) errors.push(`pose ${k} is not finite`);
   }
   const l = p.lattice;
   if (![l.b1[0], l.b1[1], l.b2[0], l.b2[1]].every(Number.isFinite)) errors.push("lattice is not finite");
@@ -97,20 +111,28 @@ export function validateTorusPacking(p: TorusPacking, opts: ValidateOptions = {}
   let pairsChecked = 0;
   const P = p.poses.length;
   try {
-    for (let i = 0; i < P; i++) {
+    pairs: for (let i = 0; i < P; i++) {
       const a = p.poses[i];
       for (let j = i; j < P; j++) {
         const b = p.poses[j];
         const imgs = latticeImages(l, [b.x - a.x, b.y - a.y], reach, i === j);
         for (const im of imgs) {
           // place piece i at the origin: pieceSeparation only uses relative positions
-          const sep = pieceSeparation(p.N, { x: 0, y: 0, theta: a.theta }, shifted({ x: 0, y: 0, theta: b.theta }, im.v), scale).sep;
+          const sep = pieceSeparation(
+            p.N,
+            { x: 0, y: 0, theta: a.theta },
+            shifted({ x: 0, y: 0, theta: b.theta }, im.v),
+            scale,
+          ).sep;
           pairsChecked++;
           if (sep < minSep) minSep = sep;
           const c = { i, j, m: im.m, n: im.n, sep };
           if (sep < -tol) overlaps.push(c);
           if (Math.abs(sep) <= contactTol) contacts.push(c);
+          yield;
+          if (overlaps.length >= (opts.maxErrors ?? Infinity)) break pairs;
         }
+        yield;
       }
     }
   } catch (e) {
@@ -142,4 +164,11 @@ export function scalePacking(p: TorusPacking, k: number): TorusPacking {
 export function areaScoreBound(family: TorusFamily, N: number, P: number, densityBound = 1): number {
   const area = (P * pieceArea(N)) / densityBound;
   return family === "hex" ? Math.sqrt(area / (Math.sqrt(3) / 2)) : Math.sqrt(area);
+}
+
+export function validateTorusPacking(p: TorusPacking, opts: ValidateOptions = {}): TorusValidation {
+  return runSteps(validationSteps(p, opts));
+}
+export function validateTorusPackingAsync(p: TorusPacking, opts: ValidateOptions & { sliceMs?: number } = {}) {
+  return runStepsAsync(validationSteps(p, opts), opts.sliceMs);
 }

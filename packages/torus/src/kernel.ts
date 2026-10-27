@@ -70,7 +70,7 @@ const finiteUpTo = (v: unknown, max: number): v is number =>
 
 export function torusKernel(problem: { family: TorusFamily; N: number; P: number }): SpaceKernel {
   const { family, N, P } = problem;
-  if (!TORUS_FAMILIES.includes(family) || !isShapeCode(N) || !Number.isInteger(P) || P < 1)
+  if (!TORUS_FAMILIES.includes(family) || !isShapeCode(N) || !Number.isInteger(P) || P < 1 || P > 100)
     throw new Error(`bad torus problem ${JSON.stringify(problem)}`);
   const model = new TorusEnergy(family, N, P);
   const { dim, globals, R } = model;

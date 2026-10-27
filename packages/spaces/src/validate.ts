@@ -1,3 +1,4 @@
+import { runSteps, runStepsAsync } from "@polypack/methods";
 /**
  * Configuration parsing and validation of the spaces, with the work bounds the server needs for
  * untrusted input. Each space is checked by its own floating-point validator (packages/surface,
@@ -29,9 +30,9 @@
  *    linear in P.
  */
 import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
-import { CurvedConfig, containerCircumradius, validate as validateCurved } from "@polypack/curved";
+import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
 import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
-import { SphereConfig, validate as validateSphere } from "@polypack/sphere";
+import { SphereConfig, validationSteps as sphereSteps } from "@polypack/sphere";
 import {
   ChainLimitError,
   SolidName,
@@ -40,7 +41,14 @@ import {
   validate as validateSurface,
   validateAsync as validateSurfaceAsync,
 } from "@polypack/surface";
-import { Lattice, TorusFamily, gaussReduce, imageWindow, torusScore, validateTorusPacking } from "@polypack/torus";
+import {
+  Lattice,
+  TorusFamily,
+  gaussReduce,
+  imageWindow,
+  torusScore,
+  validationSteps as torusSteps,
+} from "@polypack/torus";
 import {
   POLYHEDRA_MAX_P,
   type PolyhedraConfig,
@@ -75,9 +83,9 @@ import { SpaceConfig, SpaceName } from "./types";
  */
 export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
-  curved: 30,
-  sphere: 40,
-  torus: 49,
+  curved: 100,
+  sphere: 100,
+  torus: 100,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
@@ -372,7 +380,7 @@ function reasonsOf(errors: string[], fallback: string): string[] {
 }
 
 /** Runs the space's own validator on a parsed configuration at `tol`; reasons are empty when it is valid. */
-function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
+function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<void, string[]> {
   const f = id.fields;
   switch (id.space) {
     case "surface": {
@@ -397,11 +405,14 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
         const far = c.pieces.findIndex((p) => !(Math.hypot(p.x, p.y) <= reach * (1 + 1e-6) + 1e-6));
         if (far >= 0) return [`the centre of piece ${far} lies outside the container`];
       }
-      const v = validateCurved({ N: f.N as number, M, P: id.P }, K, c, { tol });
+      const v = yield* curvedSteps({ N: f.N as number, M, P: id.P }, K, c, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest gap ${v.minGap})`);
     }
     case "sphere": {
-      const v = validateSphere({ N: f.N as number, P: id.P }, config as unknown as SphereConfig, { tol });
+      const v = yield* sphereSteps({ N: f.N as number, P: id.P }, config as unknown as SphereConfig, {
+        tol,
+        maxErrors: MAX_REASONS,
+      });
       if (v.valid) return [];
       if (v.errors.length) return reasonsOf(v.errors, "");
       const [i, j] = v.worstPair ?? [-1, -1];
@@ -437,9 +448,9 @@ function check(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
         return [
           `the lattice basis is too skewed: about ${Math.ceil(translates)} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
         ];
-      const v = validateTorusPacking(
+      const v = yield* torusSteps(
         { family, N, lattice, poses: c.poses.map(([x, y, theta]) => ({ x, y, theta })) },
-        { tol },
+        { tol, maxErrors: MAX_REASONS },
       );
       if (v.valid && !v.errors.length) return [];
       if (v.errors.length) return reasonsOf(v.errors, "");
@@ -535,6 +546,23 @@ export async function validateSpaceSubmissionAsync(
         ];
       }
     }
+    if (["curved", "sphere", "torus"].includes(prep.id.space)) {
+      try {
+        // Include preflights and geometry in the same timed slices as the synchronous check.
+        const v = await runStepsAsync(
+          (function* () {
+            return { reasons: yield* check(prep.id, prep.config, tol) };
+          })(),
+          opts.sliceMs,
+        );
+        workMs += v.workMs;
+        slices += v.slices;
+        longestSliceMs = Math.max(longestSliceMs, v.longestSliceMs);
+        return v.reasons;
+      } catch (e) {
+        return [`the check failed: ${e instanceof Error ? e.message : String(e)}`];
+      }
+    }
     if (prep.id.space !== "polyhedra") {
       const t = performance.now();
       const r = checked(prep.id, prep.config, tol);
@@ -562,7 +590,7 @@ export async function validateSpaceSubmissionAsync(
 /** check() that turns a thrown error into a reason. */
 function checked(id: ParsedSpaceId, config: SpaceConfig, tol: number): string[] {
   try {
-    return check(id, config, tol);
+    return runSteps(check(id, config, tol));
   } catch (e) {
     return [
       e instanceof ChainLimitError

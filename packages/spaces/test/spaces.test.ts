@@ -35,7 +35,13 @@ import {
   validateSpaceSubmission,
   validateSpaceSubmissionAsync,
 } from "../src";
-import { CONFIG_CACHE_BYTES, CONFIG_READS_AT_ONCE, configLoader, loadSpacesIndex, readEntryConfigSync } from "../src/load";
+import {
+  CONFIG_CACHE_BYTES,
+  CONFIG_READS_AT_ONCE,
+  configLoader,
+  loadSpacesIndex,
+  readEntryConfigSync,
+} from "../src/load";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
@@ -146,7 +152,15 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
+    expect(counts).toEqual({
+      surface: 2038,
+      curved: 334,
+      sphere: 166,
+      torus: 544,
+      boundary: 32,
+      polyhedra: 14850,
+      balls: 0,
+    });
     expect(cat("balls").domain!.info.problems).toBe(693);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
@@ -172,7 +186,9 @@ describe("the catalogues", () => {
     // any problem of its domain is open, without a record and with its bound
     for (const id of cat("balls").domain!.sample(693)) {
       const p = problem("balls", id);
-      expect(p.status === "no_record" && p.certified === null && p.bound !== null && acceptsSubmissions(p), id).toBe(true);
+      expect(p.status === "no_record" && p.certified === null && p.bound !== null && acceptsSubmissions(p), id).toBe(
+        true,
+      );
     }
     expect(closed("sphere").map((p) => p.id)).toEqual([
       ...Array.from({ length: 13 }, (_, i) => `sphere/0/${i + 2}`),
@@ -236,14 +252,41 @@ describe("the catalogues", () => {
   it("list each space in its own field order: a named field by its space's list, a number ascending", () => {
     // written out apart from records.ts, so that a change of order shows here
     const keys: Record<SpaceName, [string, readonly string[] | null][]> = {
-      surface: [["solid", SURFACE_SOLIDS], ["mode", ["fold", "nofold"]], ["N", null], ["P", null]],
-      curved: [["K", null], ["N", null], ["M", null], ["P", null]],
-      sphere: [["N", null], ["P", null]],
-      torus: [["family", TORUS_FAMILIES], ["N", null], ["P", null]],
-      boundary: [["polytope", BOUNDARY_POLYTOPES], ["piece", ["ball", "cube"]], ["P", null]],
+      surface: [
+        ["solid", SURFACE_SOLIDS],
+        ["mode", ["fold", "nofold"]],
+        ["N", null],
+        ["P", null],
+      ],
+      curved: [
+        ["K", null],
+        ["N", null],
+        ["M", null],
+        ["P", null],
+      ],
+      sphere: [
+        ["N", null],
+        ["P", null],
+      ],
+      torus: [
+        ["family", TORUS_FAMILIES],
+        ["N", null],
+        ["P", null],
+      ],
+      boundary: [
+        ["polytope", BOUNDARY_POLYTOPES],
+        ["piece", ["ball", "cube"]],
+        ["P", null],
+      ],
       // polyhedra's fields include a piece, which is not a sort key there
-      polyhedra: [["code", PROBLEM_ORDER], ["P", null]],
-      balls: [["code", BALLS_CODES], ["P", null]],
+      polyhedra: [
+        ["code", PROBLEM_ORDER],
+        ["P", null],
+      ],
+      balls: [
+        ["code", BALLS_CODES],
+        ["P", null],
+      ],
     };
     for (const s of SPACE_NAMES) {
       const rank = (p: SpaceProblemEntry) =>
@@ -276,7 +319,7 @@ describe("the catalogues", () => {
     const logs: string[] = [];
     const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
     // the balls and surface spaces have a domain; balls ships no records file at all
-    expect(Object.keys(loaded).sort()).toEqual(["balls", "surface"]);
+    expect(Object.keys(loaded).sort()).toEqual(["balls", "curved", "sphere", "surface", "torus"]);
     expect(loaded.balls!.problems).toHaveLength(0);
     expect(loaded.balls!.domain!.info.problems).toBe(693);
     expect(loaded.surface!.problems).toHaveLength(0);
@@ -287,7 +330,9 @@ describe("the catalogues", () => {
           ? "[spaces] balls: a domain of 693 problems, 0 with a record (no records file)"
           : s === "surface"
             ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
-          : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
+            : loaded[s]?.domain
+              ? `[spaces] ${s}: a domain of ${loaded[s]!.domain!.info.problems} problems, 0 with a record (no records file)`
+              : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
       ),
     );
   });
@@ -320,12 +365,12 @@ describe("beating a research record needs the strict tolerance", () => {
           : space === "boundary"
             ? { s: c.s * f, pieces: c.pieces.map((q: any) => ({ ...q, u: q.u.map((x: number) => x * f) })) }
             : {
-              lattice:
-                "L" in c.lattice
-                  ? { L: c.lattice.L * f }
-                  : { b1: c.lattice.b1.map((x: number) => x * f), b2: c.lattice.b2.map((x: number) => x * f) },
-              poses: c.poses.map(([x, y, t]: number[]) => [x * f, y * f, t]),
-            };
+                lattice:
+                  "L" in c.lattice
+                    ? { L: c.lattice.L * f }
+                    : { b1: c.lattice.b1.map((x: number) => x * f), b2: c.lattice.b2.map((x: number) => x * f) },
+                poses: c.poses.map(([x, y, t]: number[]) => [x * f, y * f, t]),
+              };
 
   it(`every record passes at ${SPACE_STRICT_TOL} at its stated size`, async () => {
     const failures: string[] = [];
@@ -571,7 +616,7 @@ describe("tampered and malformed configurations are rejected", () => {
   });
 
   it("for a P above the catalogue's, an unknown id or another space's id", () => {
-    expect(validateSpaceSubmission("torus", "torus/sq/0/50", { lattice: { L: 99 }, poses: [] }).reasons[0]).toMatch(
+    expect(validateSpaceSubmission("torus", "torus/sq/0/101", { lattice: { L: 99 }, poses: [] }).reasons[0]).toMatch(
       /above the largest P/,
     );
     expect(validateSpaceSubmission("sphere", "sphere/0/3", {}, { maxP: 2 }).reasons[0]).toMatch(/above the largest P/);
@@ -618,7 +663,13 @@ describe("work limits", () => {
 });
 
 describe("balls submissions", () => {
-  const two = (d: number, s: number) => ({ s, pieces: [[d, 0, 0], [-d, 0, 0]] });
+  const two = (d: number, s: number) => ({
+    s,
+    pieces: [
+      [d, 0, 0],
+      [-d, 0, 0],
+    ],
+  });
   it("check balls and solids by the space's rule, and tell malformed input from invalid packings", () => {
     expect(check("balls", "balls/ballinball/2", two(1, 2)).valid).toBe(true);
     // an overlap within the touching tolerance passes, a deeper one does not
@@ -628,15 +679,50 @@ describe("balls submissions", () => {
     expect(v.reasons[0]).toMatch(/^pieces 0 and 1 overlap by/);
     // below the lower bound 2: refused unchecked
     expect(check("balls", "balls/ballinball/2", two(0.9, 1.9)).reasons[0]).toMatch(/below the lower bound/);
-    expect(check("balls", "balls/ballinball/2", { s: 2, pieces: [[1, 0, 0]] })).toMatchObject({ valid: false, malformed: false });
-    for (const bad of [{ s: 2 }, { s: "2", pieces: [] }, { s: 2, pieces: [[1, 0], [0, 1]] }, { s: 2, pieces: [[1, 0, NaN], [-1, 0, 0]] }])
+    expect(check("balls", "balls/ballinball/2", { s: 2, pieces: [[1, 0, 0]] })).toMatchObject({
+      valid: false,
+      malformed: false,
+    });
+    for (const bad of [
+      { s: 2 },
+      { s: "2", pieces: [] },
+      {
+        s: 2,
+        pieces: [
+          [1, 0],
+          [0, 1],
+        ],
+      },
+      {
+        s: 2,
+        pieces: [
+          [1, 0, NaN],
+          [-1, 0, 0],
+        ],
+      },
+    ])
       expect(check("balls", "balls/ballinball/2", bad).malformed, JSON.stringify(bad)).toBe(true);
     // a solid's pose has 7 numbers; extra fields are dropped from the stored configuration
-    const cubes = { s: Math.sqrt(1.5), pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]], extra: 1 };
+    const cubes = {
+      s: Math.sqrt(1.5),
+      pieces: [
+        [-0.5, 0, 0, 1, 0, 0, 0],
+        [0.5, 0, 0, 1, 0, 0, 0],
+      ],
+      extra: 1,
+    };
     const c = check("balls", "balls/cubinball/2", cubes);
     expect(c.valid).toBe(true);
     expect(c.config).toEqual({ s: cubes.s, pieces: cubes.pieces });
-    expect(check("balls", "balls/cubinball/2", { ...cubes, pieces: [[-0.5, 0, 0], [0.5, 0, 0]] }).malformed).toBe(true);
+    expect(
+      check("balls", "balls/cubinball/2", {
+        ...cubes,
+        pieces: [
+          [-0.5, 0, 0],
+          [0.5, 0, 0],
+        ],
+      }).malformed,
+    ).toBe(true);
     expect(validateSpaceSubmission("balls", "balls/ballinball/101", two(1, 2)).malformed).toBe(true);
   });
 });
@@ -741,7 +827,13 @@ describe("polyhedra (3D in 3D)", () => {
       fields: { code: "cubintet", piece: "cube", container: "tetrahedron", P: 12 },
       P: 12,
     });
-    for (const bad of ["polyhedra/cubintet/012", "polyhedra/blob/3", "polyhedra/cubintet", "polyhedra/cubintet/0", "polyhedra/CUBINTET/3"])
+    for (const bad of [
+      "polyhedra/cubintet/012",
+      "polyhedra/blob/3",
+      "polyhedra/cubintet",
+      "polyhedra/cubintet/0",
+      "polyhedra/CUBINTET/3",
+    ])
       expect(typeof parseSpaceId("polyhedra", bad), bad).toBe("string");
     expect(formatSpaceId("polyhedra", { code: "pr3l15incub", P: 7 })).toBe("polyhedra/pr3l15incub/7");
   });
@@ -776,7 +868,9 @@ describe("polyhedra (3D in 3D)", () => {
     expect(improvesSpaceBest("surface", 1 - 5e-7, 1, null)).toBe(true);
     // the strict check runs only below the record by the margin: an overlap of 5e-10 passes above it
     const c = row(2, -5e-10, 2);
-    expect(validateSpaceSubmission("polyhedra", "polyhedra/cubincub/2", c, { certified: 2 * (1 + 5e-7) }).valid).toBe(true);
+    expect(validateSpaceSubmission("polyhedra", "polyhedra/cubincub/2", c, { certified: 2 * (1 + 5e-7) }).valid).toBe(
+      true,
+    );
     const strict = validateSpaceSubmission("polyhedra", "polyhedra/cubincub/2", c, { certified: 2 * (1 + 2e-6) });
     expect(strict.valid).toBe(false);
     expect(strict.reasons[0]).toBe(SPACE_STRICT_REASON);
@@ -784,7 +878,8 @@ describe("polyhedra (3D in 3D)", () => {
 
   it("refuses malformed poses, a wrong count and a P above the catalogue's", () => {
     const base = row(2, 0, 2);
-    const bad = (piece: unknown[]) => check("polyhedra", "polyhedra/cubincub/2", { s: 2, pieces: [base.pieces[0], piece] });
+    const bad = (piece: unknown[]) =>
+      check("polyhedra", "polyhedra/cubincub/2", { s: 2, pieces: [base.pieces[0], piece] });
     expect(bad([0.5, 0, 0, 1e101, 0, 0, 0]).malformed).toBe(true);
     expect(bad([0.5, 0, 0, 0, 0, 0, 0]).reasons[0]).toMatch(/quaternion must have a norm of at least/);
     expect(bad([0.5, 0, Number.NaN, 1, 0, 0, 0]).malformed).toBe(true);
@@ -834,7 +929,10 @@ describe("the asynchronous check of a server", () => {
     const { workMs: _, slices: _s, longestSliceMs: _l, ...verdict } = v;
     expect(verdict).toEqual(validateSpaceSubmission("polyhedra", id, config, opts));
     // an overlap, a protrusion, malformed input and another space give the same answers as well
-    const moved = { ...config, pieces: config.pieces.map((q: number[], i: number) => (i === 1 ? [...config.pieces[0]] : q)) };
+    const moved = {
+      ...config,
+      pieces: config.pieces.map((q: number[], i: number) => (i === 1 ? [...config.pieces[0]] : q)),
+    };
     const cases: [SpaceName, string, unknown][] = [
       ["polyhedra", id, moved],
       ["polyhedra", id, { ...config, s: config.s * 0.99 }],
@@ -842,7 +940,12 @@ describe("the asynchronous check of a server", () => {
       ["sphere", "sphere/4/12", configOf(problem("sphere", "sphere/4/12"))],
     ];
     for (const [space, pid, c] of cases) {
-      const { workMs: __, slices: _s2, longestSliceMs: _l2, ...a } = await validateSpaceSubmissionAsync(space, pid, c, {
+      const {
+        workMs: __,
+        slices: _s2,
+        longestSliceMs: _l2,
+        ...a
+      } = await validateSpaceSubmissionAsync(space, pid, c, {
         bound: problem(space, pid).bound!.value,
       });
       expect(a, pid).toEqual(validateSpaceSubmission(space, pid, c, { bound: problem(space, pid).bound!.value }));
@@ -915,7 +1018,16 @@ describe("polyhedra configurations, read on demand", () => {
     const dir = mkdtempSync(join(tmpdir(), "polypack-configs-"));
     mkdirSync(join(dir, "data", "polyhedra", "configs"), { recursive: true });
     const lines = [
-      JSON.stringify({ P: 2, config: { s: 2, pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] } }),
+      JSON.stringify({
+        P: 2,
+        config: {
+          s: 2,
+          pieces: [
+            [-0.5, 0, 0, 1, 0, 0, 0],
+            [0.5, 0, 0, 1, 0, 0, 0],
+          ],
+        },
+      }),
       JSON.stringify({ P: 3, config: { s: 2, pieces: [[0, 0, 0, 1, 0, 0, 0]] } }),
       JSON.stringify({ P: 5, config: { s: 2, pieces: [] } }),
     ];
@@ -945,12 +1057,20 @@ describe("polyhedra configurations, read on demand", () => {
     expect(log.join("\n")).toMatch(/polyhedra\/cubincub\/2: configuration not read/);
     // once the file is there, the same loader reads it
     writeFileSync(join(dir, "data", "polyhedra", "configs", "cubincub.jsonl"), lines.join("\n") + "\n");
-    expect(JSON.parse((await load(e(2)))!)).toEqual({ s: 2, pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] });
+    expect(JSON.parse((await load(e(2)))!)).toEqual({
+      s: 2,
+      pieces: [
+        [-0.5, 0, 0, 1, 0, 0, 0],
+        [0.5, 0, 0, 1, 0, 0, 0],
+      ],
+    });
     // a configuration that is not valid input, and a line of another P, are left out and not kept
     expect(await load(e(3))).toBeNull();
     expect(log.join("\n")).toMatch(/polyhedra\/cubincub\/3: configuration left out: .*3 pieces/);
     expect(await load(e(4))).toBeNull();
-    expect(log.join("\n")).toMatch(/polyhedra\/cubincub\/4: configuration left out: the line at config_at is not the configuration of P = 4/);
+    expect(log.join("\n")).toMatch(
+      /polyhedra\/cubincub\/4: configuration left out: the line at config_at is not the configuration of P = 4/,
+    );
     expect(cached()).toEqual(["polyhedra/cubincub/2"]);
     // a line whose size is not the index's certified score is left out, logged once, and not kept
     const stale = buildSpaceCatalogue("polyhedra", {
@@ -963,7 +1083,9 @@ describe("polyhedra configurations, read on demand", () => {
     expect(await staleLoader.load(se)).toBeNull();
     expect(await staleLoader.load(se)).toBeNull();
     expect(staleLoader.cached()).toEqual([]);
-    expect(staleLog).toEqual(["[spaces] polyhedra/cubincub/2: configuration left out: its size 2 is not the certified 2.002 of the index"]);
+    expect(staleLog).toEqual([
+      "[spaces] polyhedra/cubincub/2: configuration left out: its size 2 is not the certified 2.002 of the index",
+    ]);
     expect(readEntryConfigSync(dir, stale, se)).toBeNull();
     // a record without config_at is left out of the catalogue
     const { config_at: _, ...bare } = rec(2, 0);

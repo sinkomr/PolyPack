@@ -78,9 +78,9 @@ export function domainTargetIds(cat: SpaceCatalogue, entered: readonly string[],
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
-  * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
-  * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
-  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 16,657 targets in all).
+ * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
+ * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
+ * trapezohedra make 14,850, and with the balls space's 500 sampled problems 16,657 targets in all).
  */
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
@@ -91,7 +91,7 @@ export const SPACE_TARGETS_MAX_LIMIT = 20000;
  */
 export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
 /**
- * Polyhedra and surface checks from this P on are heavy ([CALC] polyhedra up to 0.35 s of work at P = 100;
+ * Polyhedra, surface, curved, sphere and torus checks from this P on are heavy ([CALC] polyhedra up to 0.35 s of work at P = 100;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
  * parts, 0.57 s before): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
  * turn; another is refused with 503.
@@ -660,17 +660,21 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         ["an entry from this address is still being checked; send the next one when it is answered"],
         1,
       );
-    const heavy = (space === "polyhedra" || space === "surface") && parsedId.P >= SPACE_HEAVY_CHECK_P;
+    const heavy =
+      (["polyhedra", "surface", "curved", "sphere", "torus"].includes(space) && parsedId.P >= SPACE_HEAVY_CHECK_P) ||
+      (space === "sphere" && Number(parsedId.fields.N) >= 20);
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
-    // a surface check grows with P^2 N (pairs of parts of N sides): about 15 ms at P = N = 100
-    const sides = space === "surface" ? Math.max(8, Number(parsedId.fields.N)) : 0;
+    // Reserve work before checking; a many-sided sphere also queues at small P.
+    const sides = Math.max(8, Number(parsedId.fields.N) || 0);
     const estimate =
       space === "polyhedra"
         ? Math.min(400, 0.04 * parsedId.P * parsedId.P)
         : space === "surface"
           ? Math.min(100, 5 + 1e-5 * parsedId.P * parsedId.P * sides)
-          : 5;
+          : ["curved", "sphere", "torus"].includes(space)
+            ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
+            : 5;
     checking.add(address);
     ctx.verifyBudget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;
