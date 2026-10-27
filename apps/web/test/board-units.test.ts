@@ -2,14 +2,26 @@ import { describe, expect, it } from "vitest";
 import { boardFromOldUnits, readStoredBoard, taggedBoard } from "../src/board-units";
 import { decodeShare, encodeShare } from "../src/share";
 
-const disks = { N: 0, M: 0, P: 2, container_phi: 0, pieces: [{ x: -1, y: 0, theta: 0 }, { x: 1, y: 2, theta: 0 }] };
+const disks = {
+  N: 0,
+  M: 0,
+  P: 2,
+  container_phi: 0,
+  pieces: [
+    { x: -1, y: 0, theta: 0 },
+    { x: 1, y: 2, theta: 0 },
+  ],
+};
 const squares = { N: 4, M: 0, P: 1, container_phi: 0.5, pieces: [{ x: 0.25, y: 0.5, theta: 0.1 }] };
 const link = (o: object) => "#c=" + Buffer.from(JSON.stringify(o)).toString("base64url");
 
 describe("boards saved or shared before the unit change", () => {
   it("halves the centres of an untagged saved board of disks, once", () => {
     const r = readStoredBoard(JSON.parse(JSON.stringify(disks)));
-    expect(r.ok && r.config.pieces).toEqual([{ x: -0.5, y: 0, theta: 0 }, { x: 0.5, y: 1, theta: 0 }]);
+    expect(r.ok && r.config.pieces).toEqual([
+      { x: -0.5, y: 0, theta: 0 },
+      { x: 0.5, y: 1, theta: 0 },
+    ]);
     // a tagged save is read as it is, so a second load does not convert again
     const again = readStoredBoard(JSON.parse(JSON.stringify(taggedBoard(r.ok ? r.config : disks))));
     expect(again.ok && again.config.pieces[1]).toEqual({ x: 0.5, y: 1, theta: 0 });
