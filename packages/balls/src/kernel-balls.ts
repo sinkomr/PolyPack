@@ -15,7 +15,7 @@
  */
 import type { KernelCapability, KernelState, Rng, SpaceKernel } from "@polypack/methods";
 import { centreIn, latticeCut, legalizeBalls } from "./ball-pieces";
-import { BALL_DIAMETER, BALL_RADIUS, type BallsProblem, ballContainerRadius } from "./catalogue";
+import { BALL_DIAMETER, BALL_RADIUS, type BallsProblem, ballContainerRadius, ballContainerRadiusSlope, ballContainerScore } from "./catalogue";
 import { containerKind, containerOfProblem, wallGap } from "./container";
 import { ballsServerRule, finishBallsConfig } from "./kernel-rule";
 import { pieceVolume } from "./problems";
@@ -142,7 +142,7 @@ export function ballPiecesKernel(pb: BallsProblem, P: number, common: { id: stri
             grad[o + 1] += c * x[o + 1];
             grad[o + 2] += c * x[o + 2];
           }
-          gs -= 2 * wi * viol;
+          gs -= 2 * wi * viol * ballContainerRadiusSlope();
         }
       }
     };
@@ -223,7 +223,7 @@ export function ballPiecesKernel(pb: BallsProblem, P: number, common: { id: stri
         ? Math.max(Math.cbrt((P * v) / (START_FILL * C.volume)), (2 * BALL_RADIUS) / C.inradius)
         : cube
           ? Math.max(Math.cbrt((P * v) / START_FILL), 2 * BALL_DIAMETER)
-          : Math.max(BALL_RADIUS * Math.cbrt(P / START_FILL), BALL_DIAMETER);
+          : ballContainerScore(Math.max(BALL_RADIUS * Math.cbrt(P / START_FILL), BALL_DIAMETER));
       const x = new Float64Array(dim * P);
       for (let i = 0; i < P; i++) x.set(centreIn(pb, size, rng), 3 * i);
       return state(x, size);

@@ -56,7 +56,7 @@ import {
   unitQuat,
 } from "@polypack/polyhedra";
 import { latticeCut } from "./ball-pieces";
-import { BALL_RADIUS, type BallsProblem, ballContainerRadius, ballsProblemOf } from "./catalogue";
+import { BALL_RADIUS, type BallsProblem, ballContainerRadius, ballContainerRadiusSlope, ballContainerScore, ballsProblemOf } from "./catalogue";
 import { ballsServerRule, finishBallsConfig } from "./kernel-rule";
 import { BALLS_CLEARANCE } from "./search";
 import { cubeLatticeCut, legalizeSolids, solidsAt } from "./solid-pieces";
@@ -227,7 +227,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
           GT[3 * i + 1] += c2 * (lz * nx - lx * nz);
           GT[3 * i + 2] += c2 * (lx * ny - ly * nx);
         }
-        gs -= c2;
+        gs -= c2 * ballContainerRadiusSlope();
       }
     };
 
@@ -361,11 +361,12 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
     },
     randomStart(rng) {
       // roomy: the pieces fill START_FILL of the ball, and each lies in it whatever its orientation
-      const size = Math.max(Math.cbrt((P * piece.volume) / (START_FILL * ((4 * Math.PI) / 3))), Rc + rho);
+      const radius = Math.max(Math.cbrt((P * piece.volume) / (START_FILL * ((4 * Math.PI) / 3))), Rc + rho);
+      const size = ballContainerScore(radius);
       const x = new Float64Array(dim * P);
       const a = new Float64Array(4 * P);
       for (let i = 0; i < P; i++) {
-        centreIn(size - Rc, rng, x, dim * i);
+        centreIn(radius - Rc, rng, x, dim * i);
         randomQuat(rng, a, 4 * i);
       }
       return state(x, size, a);
@@ -375,7 +376,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
       // written as the chart's rotation D, uniformly random, so that the anchor stays and writing piece i's x back
       // undoes the move; D A_i is uniformly random for any anchor A_i (the uniform measure is invariant).
       const o = dim * i;
-      centreIn(Math.max(0, s.size - rho), rng, s.x, o);
+      centreIn(Math.max(0, ballContainerRadius(s.size) - rho), rng, s.x, o);
       randomQuat(rng, Q);
       logQuat(Q, 0, Rc, s.x, o + 3);
     },
@@ -397,7 +398,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
       const reach = 2 * (t * Rc + r);
       const o = dim * i;
       let Ci: SimPose | null = null;
-      const lim = s.size + tol;
+      const lim = ballContainerRadius(s.size) + tol;
       if (Math.hypot(x[o], x[o + 1], x[o + 2]) + t * Rc + r > lim) {
         Ci = placeCore(x, a, i, t);
         const X = Ci.X;

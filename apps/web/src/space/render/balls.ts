@@ -14,7 +14,7 @@
  * buffer, so that the board can release the drawing while it shows another kind.
  */
 import type * as T from "three";
-import { BALL_RADIUS, ballsProblemOf } from "@polypack/balls/catalogue";
+import { BALL_RADIUS, ballContainerRadius, ballsProblemOf } from "@polypack/balls/catalogue";
 import { getSolid, type Solid } from "@polypack/polyhedra";
 import type { SpaceConfig } from "@polypack/spaces";
 import { type SpaceRenderer, cssVar, fitCanvas, isDark, onDrag } from "./common";
@@ -176,7 +176,7 @@ export function ballsRenderer(
       for (let k = 0; k < n; k++)
         for (const t of [k, k + 1]) {
           const a = (2 * Math.PI * t) / n;
-          const p = [s * Math.cos(a), s * Math.sin(a)];
+          const p = [ballContainerRadius(s) * Math.cos(a), ballContainerRadius(s) * Math.sin(a)];
           const v = axis === 0 ? [p[0], p[1], 0] : axis === 1 ? [p[0], 0, p[1]] : [0, p[0], p[1]];
           out.set(v, o);
           o += 3;
@@ -234,7 +234,7 @@ export function ballsRenderer(
       faceGeometry = new T3.BufferGeometry();
       const { positions } = solidTriangles(contSolid);
       faceGeometry.setAttribute("position", new T3.BufferAttribute(positions.map((v) => v * s), 3));
-    } else faceGeometry = new T3.SphereGeometry(s, 48, 32);
+    } else faceGeometry = new T3.SphereGeometry(ballContainerRadius(s), 48, 32);
     const faces = new T3.Mesh(faceGeometry, boxFaceMaterial!);
     faces.renderOrder = 2;
     const outlineGeometry = new T3.BufferGeometry();
@@ -292,7 +292,7 @@ export function ballsRenderer(
     gl.setPixelRatio(window.devicePixelRatio || 1);
     gl.setSize(w, h, false);
     // the whole container in view, whatever its turn: a sphere of its circumradius
-    const r = contSolid ? config.s * contSolid.circumradius : config.s;
+    const r = contSolid ? config.s * contSolid.circumradius : ballContainerRadius(config.s);
     const fov = (camera.fov * Math.PI) / 180;
     const fit = Math.min(1, w / h);
     const d = (1.12 * r) / Math.sin(Math.atan(Math.tan(fov / 2) * fit));

@@ -27,7 +27,7 @@
  * a little and shake it; then a polish. A smaller result replaces the best.
  */
 import { type Pose, StopSearch, getSolid, lbfgs, place, separation, type Solid } from "@polypack/polyhedra";
-import { type BallsProblem, ballContainerRadius, ballContainerScore } from "./catalogue";
+import { type BallsProblem, ballContainerRadius, ballContainerRadiusSlope, ballContainerScore } from "./catalogue";
 import { type Rng, gauss, randomQuaternion } from "./random";
 import type { BallsConfig } from "./validate";
 
@@ -119,7 +119,7 @@ function makeObjective(
         G[k + 1] += c2 * X[k + 1];
         G[k + 2] += c2 * X[k + 2];
         touched[i * nv + v] = 1;
-        grad[0] -= 2 * mu * viol;
+        grad[0] -= 2 * mu * viol * ballContainerRadiusSlope();
       }
     // pairs
     for (let p = 0; p < pairs.length; p++) {

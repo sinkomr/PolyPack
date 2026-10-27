@@ -26,8 +26,15 @@ export const BALL_RADIUS = 1;
  * radius; when the score becomes the diameter, only these two functions (and BALL_RADIUS) change. Every ball-container
  * bound and wall test goes through them.
  */
-export const ballContainerScore = (radius: number): number => radius;
-export const ballContainerRadius = (score: number): number => score;
+let radiusPerScore = 1;
+export const ballContainerScore = (radius: number): number => radius / radiusPerScore;
+export const ballContainerRadius = (score: number): number => radiusPerScore * score;
+/** d(radius) / d(score): the factor of every gradient with respect to the size of a ball container. */
+export const ballContainerRadiusSlope = (): number => radiusPerScore;
+/** Test hook: a linear conversion radius = k score (2 for a score that is half the radius, 0.5 for the diameter). */
+export function setBallContainerConversionForTests(k: number | null): void {
+  radiusPerScore = k ?? 1;
+}
 /** The least distance of two ball centres. */
 export const BALL_DIAMETER = 2 * BALL_RADIUS;
 

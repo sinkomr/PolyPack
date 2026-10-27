@@ -33,7 +33,7 @@
  */
 import { StopSearch, lbfgs } from "@polypack/polyhedra";
 import type { BallsProblem } from "./catalogue";
-import { BALL_DIAMETER, BALL_RADIUS, ballContainerRadius, ballContainerScore } from "./catalogue";
+import { BALL_DIAMETER, BALL_RADIUS, ballContainerRadius, ballContainerRadiusSlope, ballContainerScore } from "./catalogue";
 import { type Container, containerKind, containerOfProblem, sizeFor } from "./container";
 import { ballsBound } from "./problems";
 import { type Rng, gauss, mulberry32, randomQuaternion, rotationOf } from "./random";
@@ -153,7 +153,7 @@ function objective(
         grad[1 + 3 * i] += c * x;
         grad[2 + 3 * i] += c * y;
         grad[3 + 3 * i] += c * q;
-        gs -= 2 * mu * viol;
+        gs -= 2 * mu * viol * ballContainerRadiusSlope();
       }
     }
     for (let p = 0; p < count; p++) {

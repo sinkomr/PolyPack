@@ -22,6 +22,7 @@ import {
   BALL_RADIUS,
   type BallsConfig,
   type BallsProblem,
+  setBallContainerConversionForTests,
   ballsBound,
   ballsDomain,
   ballsKernel,
@@ -341,7 +342,9 @@ describe("the lattice start for solids of any shape", () => {
         return g;
       };
       const all: number[] = [];
-      const m = 70;
+      // every point with a gauge up to the cut's largest lies within gauge x circumradius of the origin
+      const gMax = Math.max(...got.map(gauge));
+      const m = Math.ceil((gMax * C.circumradius + 2 * BALL_RADIUS * Math.sqrt(3)) / BALL_DIAMETER) + 1;
       for (let i = -m; i <= m; i++)
         for (let j = -m; j <= m; j++)
           for (let k = -m; k <= m; k++) all.push(gauge([BALL_DIAMETER * i + t[0], BALL_DIAMETER * j + t[1], BALL_DIAMETER * k + t[2]]));
@@ -366,6 +369,7 @@ describe("the search with a solid container", () => {
   it("returns a valid packing no smaller than the bound for balls in each of the 94 solids, P = 2 and 3", async () => {
     for (const p of containers)
       for (const P of [2, 3]) {
+        await tick();
         const r = searchBalls(p, P, { seed: 1, maxEvals: 3000 });
         expect(r.config, `${p.code} ${P}`).not.toBeNull();
         expect(validateBalls(p, r.config!, { tol: 0 }).valid, `${p.code} ${P}`).toBe(true);
@@ -378,6 +382,7 @@ describe("the search with a solid container", () => {
   it("returns a valid packing for each of the 94 solids in a ball, P = 2 and 3", async () => {
     for (const p of pieces)
       for (const P of [2, 3]) {
+        await tick();
         const r = searchBalls(p, P, { seed: 2, maxEvals: 2500 });
         expect(r.config, `${p.code} ${P}`).not.toBeNull();
         expect(validateBalls(p, r.config!, { tol: 0 }).valid, `${p.code} ${P}`).toBe(true);
@@ -557,4 +562,61 @@ describe("the certifier's fixtures", () => {
     expect(fixture.bounds).toHaveLength(189 * 3);
     for (const b of fixture.bounds) expect(ballsBound(problem(b.code), b.P), `${b.code} ${b.P}`).toMatchObject({ value: b.value, kind: b.kind });
   });
+});
+
+describe("a ball container scored by a multiple of its radius", () => {
+  // The score of a ball container is its radius today and will be its diameter: only ballContainerScore and
+  // ballContainerRadius change. A test-only hook swaps in radius = k score, and everything that depends on the
+  // conversion must stay right: bounds, validity, the kernel's contract, gradients in the size, clear() against the validator.
+  for (const k of [0.5, 2]) {
+    it(`keeps the bounds, the kernel's gradients and clear() right when the radius is ${k} times the score`, async () => {
+      try {
+        setBallContainerConversionForTests(k);
+        for (const code of ["ballinball", "tetinball", "pr3inball", "kttinball"]) {
+          const pb = problem(code);
+          // the bound is a score: the radius bound over k (here only for the ball containers)
+          setBallContainerConversionForTests(1);
+          const radiusBound = ballsBound(pb, 7).value;
+          setBallContainerConversionForTests(k);
+          expect(ballsBound(pb, 7).value, code).toBeCloseTo(radiusBound / k, 12);
+          expect(checkKernel(() => ballsKernel({ code, P: 4 }), { seed: 3, states: 3 }), code).toEqual([]);
+          await tick();
+          const kern = ballsKernel({ code, P: 5 });
+          const rng = mulberry32(9);
+          const st = kern.randomStart(rng);
+          kern.setSize(st, 0.5 * st.size);
+          for (let i = 0; i < 5; i++) kern.jiggle(st, i, 2, rng);
+          const n = kern.P * kern.dim;
+          const g = new Float64Array(n + 1);
+          expect(kern.energy(st, g), code).toBeGreaterThan(1e-3);
+          // the derivative in the size, by central differences
+          const h = 1e-6 * st.size;
+          const up = kern.clone(st);
+          const dn = kern.clone(st);
+          up.size += h;
+          dn.size -= h;
+          const fd = (kern.energy(up) - kern.energy(dn)) / (2 * h);
+          expect(Math.abs(fd - g[n]) / Math.max(1, Math.abs(fd)), `${code} ds`).toBeLessThan(1e-6);
+          // clear() against the validator at the size the pieces need, a few ulps either side
+          for (const f of [1 - 1e-9, 1 - 1e-13, 1, 1 + 1e-13, 1 + 1e-9]) {
+            const centres = Array.from({ length: 3 }, () => [2 * rng() - 1, 2 * rng() - 1, 2 * rng() - 1]);
+            const poses = kern.dim === 6 ? centres.map((c) => [...c, 1, 0, 0, 0]) : centres;
+            const sized = tightSize(pb, poses);
+            const cfg = { s: sized * f, pieces: poses };
+            const k3 = ballsKernel({ code, P: 3 });
+            const state = k3.fromConfig(cfg)!;
+            for (const tol of [0, 1e-9]) {
+              const v = validateBalls(pb, cfg, { tol }).errors.filter((e) => /sticks out/.test(e)).length === 0;
+              // clear() also looks at pairs, so compare only where the pairs are fine
+              const walls = [0, 1, 2].every((i) => k3.clear(state, i, tol));
+              const pairsOk = validateBalls(pb, cfg, { tol }).errors.every((e) => /sticks out/.test(e));
+              if (pairsOk) expect(walls, `${code} f=${f} tol=${tol}`).toBe(v);
+            }
+          }
+        }
+      } finally {
+        setBallContainerConversionForTests(null);
+      }
+    });
+  }
 });
