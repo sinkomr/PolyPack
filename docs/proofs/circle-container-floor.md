@@ -8,6 +8,8 @@ $$
 
 where $r_N$ is the inradius of the $N$-gon. If the bound is attained, the piece centres, scaled by $1/r_N$, form an optimal packing of unit circles in which the contact directions of each circle are congruent modulo $2\pi/N$, so that every piece meets each neighbour and the container face-on. Conversely, an optimal circle packing with this property gives a packing of polygons at the bound, provided its non-touching circles are far enough apart and its circles off the wall far enough from it (conditions (b) and (c) of Lemma 4). Using optimal circle packings that are proved here ($P \le 7$) or in the literature ($P = 8, 9, 11, 13, 19$), we obtain the exact value of $\rho(N,P)$ for 148 pairs with $N \le 100$, listed in [Section 10](#10-table-of-the-148-cases-of-theorem-2). For $P \le 7$ we determine every $N$ for which the bound is attained; for $P = 6$ this adds 30 further $N \le 100$ ([Section 11](#11-table-of-the-30-cases-of-theorem-3)).
 
+**Units.** The mathematics is stated for unit circles (radius 1). Since 2026-10-27 the site scores a circle container by its diameter, so the site value of $\rho_0(P)$ is the same number and the site value of $\rho(N,P)$ is $2\rho(N,P)$ (Section 1, *Units*); the tables of Sections 10 and 11 list these site scores.
+
 **Status.** Proved in this document, except that for $P = 8, 9, 11, 13, 19$ (25 of the 148 pairs) the optimal radius $\rho_0(P)$ of the circle packing is taken from the cited literature (Section 5.2). Of these sources, [Fo03] ($P = 13$, 10 pairs) was read in full; [Pi69] ($P = 8, 9$, 9 pairs) is known here through [Fo03] and [GLNÖ98], and [Me94] and [Fo99] ($P = 11, 19$, 6 pairs) through their zbMATH reviews. Reviewed by independent AI reviewers; not yet reviewed by a human mathematician. See the [changelog](#14-changelog).
 
 ## Contents
@@ -29,7 +31,12 @@ where $r_N$ is the inradius of the $N$-gon. If the bound is attained, the piece 
 
 ## 1. Conventions
 
-These are PolyPack's conventions (pieces of side 1, unit circles, the score of a circular container is its radius). Remarks labelled [EST] rest on a cited source and [CALC] on a computation; they appear after Theorem 2 and in Section 9, are outside the proofs, and nothing in the proofs depends on them. The proofs do depend on the cited theorems of Section 5.2; the notes "Source check" there say how each was verified.
+These are PolyPack's conventions as to pieces (polygons of side 1), with one change of units described next. The mathematics below is stated for unit circles (radius 1), as before. Remarks labelled [EST] rest on a cited source and [CALC] on a computation; they appear after Theorem 2 and in Section 9, are outside the proofs, and nothing in the proofs depends on them. The proofs do depend on the cited theorems of Section 5.2; the notes "Source check" there say how each was verified.
+
+**Units.** Since 2026-10-27 the site's circle pieces have *diameter* 1, and a circular container is scored by its *diameter*. This page keeps unit-radius circles and container radii in its mathematics, which is unchanged, and converts only the numbers that the site stores:
+
+- A circle container of $P$ disks of diameter 1 has score $\rho_0(P)$, the same number as before: the disks are the unit circles scaled by $1/2$, so the container's diameter $2 \cdot \rho_0(P)/2$ equals the radius $\rho_0(P)$ of the unit-circle packing. The coordinates stored in `data/records.json` for these records are half those of the configurations of Section 5 (the wall radius is $(\rho_0(P) - 1)/2$, touching centres are at distance 1).
+- A polygon packing in a circle container has score $2\rho$, the container's diameter, where $\rho$ is its radius as in the theorems below. So every site value of $\rho(N,P)$ is twice the value on the page before this change, and the bound of Theorem 1 reads $2\rho(N,P) \ge 2F(N,P) = \sqrt{\rho_0(P)^2\cot^2(\pi/N) + 1}$. Sections 10 and 11 list the scores $2F(N,P)$.
 
 **Angles.** $e(\varphi) = (\cos\varphi, \sin\varphi)$ is the unit vector at angle $\varphi$. Angles of points and directions in the configurations of Section 5 are given in degrees; formulas with $\pi/N$ are in radians. Two identities are used throughout: for all $\alpha, \beta$,
 
@@ -518,201 +525,201 @@ Let the packing have centres $p_i = r_N c_i$ with $(c_i)$ an isometric image of 
 - **[CALC] $P = 18$, conditional.** Removing $O$ from $C_{19}$ leaves 18 circles in the same disc; the proof of Theorem 2 still applies to them (removing a circle removes conditions). So if $\rho_0(18) = 1 + \sqrt2 + \sqrt6$, the best known value but not proved, then $\rho(N, 18) = F(N, 18)$ for $24 \mid N$.
 - **[CALC] $P = 37$, conditional.** In floating point, with contacts read from the best known configuration in `data/records.json` (Packomania), the congruence condition holds for $N = 18, 36, 54, 72, 90$ and no other $N \le 100$. $\rho_0(37)$ is not proved, and these cases are not proved here.
 - **[CALC] $P = 10, 12, 14$.** The configurations stored in `data/records.json` satisfy the congruence condition for no $N \le 100$ (same floating-point test).
-- **[CALC] Theorem 1 against the records.** Of the 60 polygon-in-circle records in `data/records.json` whose $P$ has a proven circle record, none lies below $F(N,P)$ beyond its printed precision, and exactly the seven listed after Theorem 2 equal it.
+- **[CALC] Theorem 1 against the records.** Of the 60 polygon-in-circle records in `data/records.json` whose $P$ has a proven circle record, none has a score below $2F(N,P)$ beyond its printed precision (the stored scores are diameters, so the precision printed by the source for the radius counts twice), and exactly the seven listed after Theorem 2 equal it.
 
 The last three items are printed by `python/proofs/circle_floor.py` (Section "Remarks of Section 9").
 
 ## 10. Table of the 148 cases of Theorem 2
 
-$\rho(N,P) = F(N,P) = \frac12\sqrt{\rho_0(P)^2\cot^2(\pi/N) + 1}$, with $\rho_0(P)$ from Theorem 2; values rounded to 15 decimals, computed to 90 digits by `python/proofs/circle_floor.py`, which also checks this table.
+The site score is the container diameter $2\rho(N,P) = 2F(N,P) = \sqrt{\rho_0(P)^2\cot^2(\pi/N) + 1}$, with $\rho_0(P)$ from Theorem 2 (the radius $F(N,P)$ is half of each value); values rounded to 15 decimals, computed to 90 digits by `python/proofs/circle_floor.py`, which also checks this table.
 
-| $P$ | $N$ | $\rho(N,P)$ |
+| $P$ | $N$ | score $2\rho(N,P)$ |
 |---:|---:|---:|
-| 2 | 4 | 1.118033988749895 |
-| 2 | 6 | 1.802775637731995 |
-| 2 | 8 | 2.465446637983915 |
-| 2 | 10 | 3.118033988749895 |
-| 2 | 12 | 3.765395494536465 |
-| 2 | 14 | 4.409724408405725 |
-| 2 | 16 | 5.052142354396616 |
-| 2 | 18 | 5.693280028026582 |
-| 2 | 20 | 6.333518626250451 |
-| 2 | 22 | 6.973101897915176 |
-| 2 | 24 | 7.612192886480284 |
-| 2 | 26 | 8.250904742487563 |
-| 2 | 28 | 8.889318435120386 |
-| 2 | 30 | 9.527493425228601 |
-| 2 | 32 | 10.165474357835814 |
-| 2 | 34 | 10.803295403601984 |
-| 2 | 36 | 11.440983158971080 |
-| 2 | 38 | 12.078558633715260 |
-| 2 | 40 | 12.716038644074203 |
-| 2 | 42 | 13.353436808958965 |
-| 2 | 44 | 13.990764275139566 |
-| 2 | 46 | 14.628030253677573 |
-| 2 | 48 | 15.265242422523343 |
-| 2 | 50 | 15.902407232669056 |
-| 2 | 52 | 16.539530143770939 |
-| 2 | 54 | 17.176615807492640 |
-| 2 | 56 | 17.813668211617242 |
-| 2 | 58 | 18.450690794382677 |
-| 2 | 60 | 19.087686535978307 |
-| 2 | 62 | 19.724658032352843 |
-| 2 | 64 | 20.361607555198130 |
-| 2 | 66 | 20.998537101037733 |
-| 2 | 68 | 21.635448431660979 |
-| 2 | 70 | 22.272343107631580 |
-| 2 | 72 | 22.909222516216125 |
-| 2 | 74 | 23.546087894787184 |
-| 2 | 76 | 24.182940350533929 |
-| 2 | 78 | 24.819780877142464 |
-| 2 | 80 | 25.456610368975782 |
-| 2 | 82 | 26.093429633179908 |
-| 2 | 84 | 26.730239400061629 |
-| 2 | 86 | 27.367040332018995 |
-| 2 | 88 | 28.003833031254689 |
-| 2 | 90 | 28.640618046461474 |
-| 2 | 92 | 29.277395878636064 |
-| 2 | 94 | 29.914166986151140 |
-| 2 | 96 | 30.550931789193665 |
-| 2 | 98 | 31.187690673659949 |
-| 2 | 100 | 31.824443994583519 |
-| 3 | 12 | 4.051695583578324 |
-| 3 | 24 | 8.198548542492089 |
-| 3 | 36 | 12.324316652353361 |
-| 3 | 48 | 16.444791691776539 |
-| 3 | 60 | 20.563147481682694 |
-| 3 | 72 | 24.680443237701417 |
-| 3 | 84 | 28.797133140706869 |
-| 3 | 96 | 32.913444342103767 |
-| 4 | 8 | 2.956795678960466 |
-| 4 | 16 | 6.089098803162305 |
-| 4 | 24 | 9.182509239858132 |
-| 4 | 32 | 12.266155703983003 |
-| 4 | 40 | 15.345893564681157 |
-| 4 | 48 | 18.423676551420114 |
-| 4 | 56 | 21.500342305020342 |
-| 4 | 64 | 24.576309729682075 |
-| 4 | 72 | 27.651811577267848 |
-| 4 | 80 | 30.726987509394712 |
-| 4 | 88 | 33.801926406192361 |
-| 4 | 96 | 36.876687523248588 |
-| 5 | 20 | 8.542319170279525 |
-| 5 | 40 | 17.168927836755335 |
-| 5 | 60 | 25.776802469192995 |
-| 5 | 80 | 34.379994638419700 |
-| 5 | 100 | 42.981313934088685 |
-| 6 | 3 | 1.000000000000000 |
-| 6 | 6 | 2.645751311064591 |
-| 6 | 9 | 4.151436183229765 |
-| 6 | 12 | 5.620360955323056 |
-| 6 | 15 | 7.074636036629398 |
-| 6 | 18 | 8.521603976038449 |
-| 6 | 21 | 9.964402312245569 |
-| 6 | 24 | 11.404596933570574 |
-| 6 | 27 | 12.843056747695772 |
-| 6 | 30 | 14.280302681578287 |
-| 6 | 33 | 15.716666046825241 |
-| 6 | 36 | 17.152367626618919 |
-| 6 | 39 | 18.587560223364076 |
-| 6 | 42 | 20.022352955495401 |
-| 6 | 45 | 21.456825828117799 |
-| 6 | 48 | 22.891038836003364 |
-| 6 | 51 | 24.325037851876286 |
-| 6 | 54 | 25.758858550913385 |
-| 6 | 57 | 27.192529095352826 |
-| 6 | 60 | 28.626072013384528 |
-| 6 | 63 | 30.059505541012938 |
-| 6 | 66 | 31.492844597832550 |
-| 6 | 69 | 32.926101508174337 |
-| 6 | 72 | 34.359286541914454 |
-| 6 | 75 | 35.792408325455083 |
-| 6 | 78 | 37.225474157840826 |
-| 6 | 81 | 38.658490256611459 |
-| 6 | 84 | 40.091461950961154 |
-| 6 | 87 | 41.524393834926104 |
-| 6 | 90 | 42.957289889929195 |
-| 6 | 93 | 44.390153583602414 |
-| 6 | 96 | 45.822987950077187 |
-| 6 | 99 | 47.255795655674350 |
-| 7 | 6 | 2.645751311064591 |
-| 7 | 12 | 5.620360955323056 |
-| 7 | 18 | 8.521603976038449 |
-| 7 | 24 | 11.404596933570574 |
-| 7 | 30 | 14.280302681578287 |
-| 7 | 36 | 17.152367626618919 |
-| 7 | 42 | 20.022352955495401 |
-| 7 | 48 | 22.891038836003364 |
-| 7 | 54 | 25.758858550913385 |
-| 7 | 60 | 28.626072013384528 |
-| 7 | 66 | 31.492844597832550 |
-| 7 | 72 | 34.359286541914454 |
-| 7 | 78 | 37.225474157840826 |
-| 7 | 84 | 40.091461950961154 |
-| 7 | 90 | 42.957289889929195 |
-| 7 | 96 | 45.822987950077187 |
-| 8 | 28 | 14.673820779578102 |
-| 8 | 56 | 29.427643287376319 |
-| 8 | 84 | 44.163680754186285 |
-| 9 | 16 | 9.095958102788304 |
-| 9 | 32 | 18.349155166109490 |
-| 9 | 48 | 27.567359254186036 |
-| 9 | 64 | 36.776832979972822 |
-| 9 | 80 | 45.982816340370584 |
-| 9 | 96 | 55.187054884832199 |
-| 11 | 36 | 22.430218291509717 |
-| 11 | 72 | 44.937729732663000 |
-| 13 | 10 | 6.537786000340482 |
-| 13 | 20 | 13.382084413661054 |
-| 13 | 30 | 20.157949277085492 |
-| 13 | 40 | 26.916817836676281 |
-| 13 | 50 | 33.668899044841224 |
-| 13 | 60 | 40.417588879862350 |
-| 13 | 70 | 47.164341464305991 |
-| 13 | 80 | 53.909883514685928 |
-| 13 | 90 | 60.654618647509784 |
-| 13 | 100 | 67.398788987899180 |
-| 19 | 24 | 18.478513043821246 |
-| 19 | 48 | 37.106255218766219 |
-| 19 | 72 | 55.700804277189936 |
-| 19 | 96 | 74.287065984037128 |
+| 2 | 4 | 2.236067977499790 |
+| 2 | 6 | 3.605551275463989 |
+| 2 | 8 | 4.930893275967830 |
+| 2 | 10 | 6.236067977499790 |
+| 2 | 12 | 7.530790989072930 |
+| 2 | 14 | 8.819448816811450 |
+| 2 | 16 | 10.104284708793232 |
+| 2 | 18 | 11.386560056053164 |
+| 2 | 20 | 12.667037252500902 |
+| 2 | 22 | 13.946203795830352 |
+| 2 | 24 | 15.224385772960568 |
+| 2 | 26 | 16.501809484975126 |
+| 2 | 28 | 17.778636870240772 |
+| 2 | 30 | 19.054986850457203 |
+| 2 | 32 | 20.330948715671628 |
+| 2 | 34 | 21.606590807203968 |
+| 2 | 36 | 22.881966317942161 |
+| 2 | 38 | 24.157117267430520 |
+| 2 | 40 | 25.432077288148406 |
+| 2 | 42 | 26.706873617917929 |
+| 2 | 44 | 27.981528550279132 |
+| 2 | 46 | 29.256060507355147 |
+| 2 | 48 | 30.530484845046686 |
+| 2 | 50 | 31.804814465338112 |
+| 2 | 52 | 33.079060287541878 |
+| 2 | 54 | 34.353231614985280 |
+| 2 | 56 | 35.627336423234483 |
+| 2 | 58 | 36.901381588765354 |
+| 2 | 60 | 38.175373071956613 |
+| 2 | 62 | 39.449316064705685 |
+| 2 | 64 | 40.723215110396260 |
+| 2 | 66 | 41.997074202075466 |
+| 2 | 68 | 43.270896863321959 |
+| 2 | 70 | 44.544686215263160 |
+| 2 | 72 | 45.818445032432249 |
+| 2 | 74 | 47.092175789574369 |
+| 2 | 76 | 48.365880701067858 |
+| 2 | 78 | 49.639561754284928 |
+| 2 | 80 | 50.913220737951564 |
+| 2 | 82 | 52.186859266359816 |
+| 2 | 84 | 53.460478800123258 |
+| 2 | 86 | 54.734080664037991 |
+| 2 | 88 | 56.007666062509378 |
+| 2 | 90 | 57.281236092922949 |
+| 2 | 92 | 58.554791757272127 |
+| 2 | 94 | 59.828333972302281 |
+| 2 | 96 | 61.101863578387330 |
+| 2 | 98 | 62.375381347319898 |
+| 2 | 100 | 63.648887989167037 |
+| 3 | 12 | 8.103391167156648 |
+| 3 | 24 | 16.397097084984178 |
+| 3 | 36 | 24.648633304706722 |
+| 3 | 48 | 32.889583383553078 |
+| 3 | 60 | 41.126294963365389 |
+| 3 | 72 | 49.360886475402833 |
+| 3 | 84 | 57.594266281413737 |
+| 3 | 96 | 65.826888684207534 |
+| 4 | 8 | 5.913591357920933 |
+| 4 | 16 | 12.178197606324611 |
+| 4 | 24 | 18.365018479716264 |
+| 4 | 32 | 24.532311407966006 |
+| 4 | 40 | 30.691787129362314 |
+| 4 | 48 | 36.847353102840228 |
+| 4 | 56 | 43.000684610040684 |
+| 4 | 64 | 49.152619459364149 |
+| 4 | 72 | 55.303623154535697 |
+| 4 | 80 | 61.453975018789425 |
+| 4 | 88 | 67.603852812384723 |
+| 4 | 96 | 73.753375046497176 |
+| 5 | 20 | 17.084638340559050 |
+| 5 | 40 | 34.337855673510670 |
+| 5 | 60 | 51.553604938385989 |
+| 5 | 80 | 68.759989276839400 |
+| 5 | 100 | 85.962627868177369 |
+| 6 | 3 | 2.000000000000000 |
+| 6 | 6 | 5.291502622129181 |
+| 6 | 9 | 8.302872366459530 |
+| 6 | 12 | 11.240721910646112 |
+| 6 | 15 | 14.149272073258796 |
+| 6 | 18 | 17.043207952076898 |
+| 6 | 21 | 19.928804624491137 |
+| 6 | 24 | 22.809193867141148 |
+| 6 | 27 | 25.686113495391545 |
+| 6 | 30 | 28.560605363156574 |
+| 6 | 33 | 31.433332093650483 |
+| 6 | 36 | 34.304735253237838 |
+| 6 | 39 | 37.175120446728151 |
+| 6 | 42 | 40.044705910990801 |
+| 6 | 45 | 42.913651656235598 |
+| 6 | 48 | 45.782077672006729 |
+| 6 | 51 | 48.650075703752572 |
+| 6 | 54 | 51.517717101826769 |
+| 6 | 57 | 54.385058190705652 |
+| 6 | 60 | 57.252144026769056 |
+| 6 | 63 | 60.119011082025876 |
+| 6 | 66 | 62.985689195665100 |
+| 6 | 69 | 65.852203016348674 |
+| 6 | 72 | 68.718573083828907 |
+| 6 | 75 | 71.584816650910166 |
+| 6 | 78 | 74.450948315681652 |
+| 6 | 81 | 77.316980513222918 |
+| 6 | 84 | 80.182923901922307 |
+| 6 | 87 | 83.048787669852208 |
+| 6 | 90 | 85.914579779858390 |
+| 6 | 93 | 88.780307167204827 |
+| 6 | 96 | 91.645975900154373 |
+| 6 | 99 | 94.511591311348700 |
+| 7 | 6 | 5.291502622129181 |
+| 7 | 12 | 11.240721910646112 |
+| 7 | 18 | 17.043207952076898 |
+| 7 | 24 | 22.809193867141148 |
+| 7 | 30 | 28.560605363156574 |
+| 7 | 36 | 34.304735253237838 |
+| 7 | 42 | 40.044705910990801 |
+| 7 | 48 | 45.782077672006729 |
+| 7 | 54 | 51.517717101826769 |
+| 7 | 60 | 57.252144026769056 |
+| 7 | 66 | 62.985689195665100 |
+| 7 | 72 | 68.718573083828907 |
+| 7 | 78 | 74.450948315681652 |
+| 7 | 84 | 80.182923901922307 |
+| 7 | 90 | 85.914579779858390 |
+| 7 | 96 | 91.645975900154373 |
+| 8 | 28 | 29.347641559156204 |
+| 8 | 56 | 58.855286574752637 |
+| 8 | 84 | 88.327361508372571 |
+| 9 | 16 | 18.191916205576609 |
+| 9 | 32 | 36.698310332218980 |
+| 9 | 48 | 55.134718508372071 |
+| 9 | 64 | 73.553665959945644 |
+| 9 | 80 | 91.965632680741168 |
+| 9 | 96 | 110.374109769664399 |
+| 11 | 36 | 44.860436583019433 |
+| 11 | 72 | 89.875459465326000 |
+| 13 | 10 | 13.075572000680965 |
+| 13 | 20 | 26.764168827322107 |
+| 13 | 30 | 40.315898554170984 |
+| 13 | 40 | 53.833635673352563 |
+| 13 | 50 | 67.337798089682447 |
+| 13 | 60 | 80.835177759724700 |
+| 13 | 70 | 94.328682928611982 |
+| 13 | 80 | 107.819767029371855 |
+| 13 | 90 | 121.309237295019568 |
+| 13 | 100 | 134.797577975798359 |
+| 19 | 24 | 36.957026087642492 |
+| 19 | 48 | 74.212510437532438 |
+| 19 | 72 | 111.401608554379873 |
+| 19 | 96 | 148.574131968074255 |
 
 ## 11. Table of the 30 cases of Theorem 3
 
 $P = 6$, $\rho_0(6) = 3$, $N$ even, $3 \nmid N$, $10 \le N \le 100$, $N \ne 14$.
 
-| $P$ | $N$ | $\rho(N,P)$ |
+| $P$ | $N$ | score $2\rho(N,P)$ |
 |---:|---:|---:|
-| 6 | 10 | 4.643523005084507 |
-| 6 | 16 | 7.557567090701108 |
-| 6 | 20 | 9.483816791007097 |
-| 6 | 22 | 10.444703809926518 |
-| 6 | 26 | 12.363725789850261 |
-| 6 | 28 | 13.322254315324606 |
-| 6 | 32 | 15.237960987927134 |
-| 6 | 34 | 16.195298115482390 |
-| 6 | 38 | 18.109211799612352 |
-| 6 | 40 | 19.065864451804280 |
-| 6 | 44 | 20.978699703644015 |
-| 6 | 46 | 21.934923192950536 |
-| 6 | 50 | 23.847059578398790 |
-| 6 | 52 | 24.802996373373762 |
-| 6 | 56 | 26.714654107728232 |
-| 6 | 58 | 27.670389937211126 |
-| 6 | 62 | 29.581705539232156 |
-| 6 | 64 | 30.537295067208859 |
-| 6 | 68 | 32.448357660872275 |
-| 6 | 70 | 33.403837382614350 |
-| 6 | 74 | 35.314707617157870 |
-| 6 | 76 | 36.270102825803164 |
-| 6 | 80 | 38.180823404232025 |
-| 6 | 82 | 39.136152181184733 |
-| 6 | 86 | 41.046754039781237 |
-| 6 | 88 | 42.002029653284378 |
-| 6 | 92 | 43.912535752645234 |
-| 6 | 94 | 44.867768158996981 |
-| 6 | 98 | 46.778195898311058 |
-| 6 | 100 | 47.733392714323813 |
+| 6 | 10 | 9.287046010169015 |
+| 6 | 16 | 15.115134181402215 |
+| 6 | 20 | 18.967633582014194 |
+| 6 | 22 | 20.889407619853035 |
+| 6 | 26 | 24.727451579700521 |
+| 6 | 28 | 26.644508630649212 |
+| 6 | 32 | 30.475921975854268 |
+| 6 | 34 | 32.390596230964779 |
+| 6 | 38 | 36.218423599224705 |
+| 6 | 40 | 38.131728903608560 |
+| 6 | 44 | 41.957399407288031 |
+| 6 | 46 | 43.869846385901072 |
+| 6 | 50 | 47.694119156797580 |
+| 6 | 52 | 49.605992746747523 |
+| 6 | 56 | 53.429308215456464 |
+| 6 | 58 | 55.340779874422251 |
+| 6 | 62 | 59.163411078464311 |
+| 6 | 64 | 61.074590134417718 |
+| 6 | 68 | 64.896715321744550 |
+| 6 | 70 | 66.807674765228700 |
+| 6 | 74 | 70.629415234315739 |
+| 6 | 76 | 72.540205651606327 |
+| 6 | 80 | 76.361646808464050 |
+| 6 | 82 | 78.272304362369467 |
+| 6 | 86 | 82.093508079562474 |
+| 6 | 88 | 84.004059306568755 |
+| 6 | 92 | 87.825071505290468 |
+| 6 | 94 | 89.735536317993961 |
+| 6 | 98 | 93.556391796622116 |
+| 6 | 100 | 95.466785428647627 |
 
 ## 12. References
 
@@ -750,7 +757,7 @@ npm run test:python
   - builds all 148 + 30 polygon packings from the same formulas (not from Packomania's coordinates), at 90 digits, and checks: every contact direction is within $10^{-60}$ of an outward face normal computed from the actual vertices; every contact closes (gap below $10^{-60}$); every other pair has centre distance at least $2R_N$ and a positive separating axis (at $N = 3$: separation $\ge -10^{-60}$); every wall piece reaches $F(N,P)$ to $10^{-60}$ and every other piece satisfies $D + R_N \le r_N\rho_0$; the radius equals $F(N,P)$;
   - checks the counting step of Theorem 3 for $P = 6$, $N \le 100$, over all admissible gap sequences of Lemma 5's configurations (not Lemma 5 itself), the vertex lemma on pseudo-random poses (and its equality case on face-on poses), and prints the floating-point remarks of Section 9.
 
-  `python/test_circle_floor.py` runs it under `unittest`, and `npm run test:python` runs that.
+  `python/test_circle_floor.py` runs it under `unittest`, and `npm run test:python` runs that. Its test of the Section 9 remark reads `data/records.json` in the site's units (circle records and polygon-in-circle records are both container diameters), expects 60 records checked, none below $2F(N,P)$ and exactly the seven listed after Theorem 2 equal to it, and fails on a deliberately wrong value (a polygon record halved, one lowered by $10^{-3}$, a circle record replaced), so that "below $2F$: 0" is not vacuous.
 - `packages/geometry/test/circle-floor.test.ts` builds the same 178 packings in floating point and checks them with the site's own code: `evaluate` (valid, and $\lvert\text{score} - F\rvert / F < 10^{-12}$), `strictVerify` (the shrink test) and `pieceSeparation` (contacts within $10^{-12}$ of touching, every other pair separated by more than $0.3$, except at $N = 3$, where separation $\ge -10^{-12}$ is required). `evaluate` alone allows overlaps up to $10^{-9}$; the separation checks allow at most $10^{-12}$.
 
 The machine checks repeat the proof's computations; the proof does not depend on them.
@@ -770,5 +777,7 @@ The machine checks repeat the proof's computations; the proof does not depend on
   - [EST] is now used only for remarks outside the proofs, and the notes on how each cited theorem was verified are labelled "Source check"; the status line says which sources were read in full;
   - added [Kr67], the zbMATH number of [GLNÖ98] and its Table 1, and the provenance of the page range of [CGG68];
   - the machine check now also verifies the page's numerical claims, closed forms and coordinates (each quoted from the page and recomputed; see Section 13), compares the value tables row by row, and checks that each direction-table row of a wall circle starts with the wall direction.
+
+- **2026-10-27.** Units: site circle pieces have diameter 1 and circular containers are scored by diameter. Added the *Units* paragraph of Section 1; the tables of Sections 10 and 11 now list the scores $2F(N,P)$ (all 178 values doubled), and the figure captions give diameters. The mathematics, the claims and their status are unchanged. `python/proofs/circle_floor.py` converts the data it reads from `data/records.json` (halved coordinates, bound $2F$, tolerance twice the printed unit).
 
 Not yet reviewed by a human mathematician.

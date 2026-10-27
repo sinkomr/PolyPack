@@ -4,7 +4,7 @@
 
 Status: research build, 2026-10-24. Package `packages/sphere` (`@polypack/sphere`), search, certifier and bounds in `python/sphere/`, data in `data/sphere/`, viewer `packages/sphere/viz/index.html`.
 
-[SPEC] The site domain is `sphere/<N>/<P>`: N = 0 (unit geodesic disks) or every integer 3–100, P = 1–100, giving 9,900 problems. New choices ship without research records; the sphere, geodesic side and quaternion conventions are unchanged. [CALC] Their lower bound reuses `areaBound`: the area requirement or the polygon existence infimum N/(2π). The disk P = 1 infimum is 1/π. Bounds are lowered slightly for floating-point rounding. The area inversion uses sin²(a/4) = sin(x(1−1/P)) sin(x/P) / cos(x(1−2/P)), x = π/N, to avoid cancellation in acos of a quotient near one; all 9,900 domain bounds were compared with 80-digit area/existence formulas.
+[SPEC] The site domain is `sphere/<N>/<P>`: N = 0 (geodesic disks of diameter 1) or every integer 3–100, P = 1–100, giving 9,900 problems. New choices ship without research records; the sphere, geodesic side and quaternion conventions are unchanged. [CALC] Their lower bound reuses `areaBound`: the area requirement or the polygon existence infimum N/(2π). The disk P = 1 infimum is 1/π. Bounds are lowered slightly for floating-point rounding. The area inversion uses sin²(a/4) = sin(x(1−1/P)) sin(x/P) / cos(x(1−2/P)), x = π/N, to avoid cancellation in acos of a quotient near one; all 9,900 domain bounds were compared with 80-digit area/existence formulas.
 
 [SPEC] `SPACE_DOMAINS` describes the ranges to the API and board picker. The volunteer list samples the domain; it never enumerates it all. Problems without a record have status `no_record`, null certified values/configurations, and require the strict float check on every entry. Existing record files are unchanged. Server validation shares the synchronous geometry through generators, yields between small units of work (8 ms default budget), stops after 20 overlapping pairs, and uses the shared heavy-check queue from P = 30. Sphere also queues N ≥ 20 at any P. No new records or optimisation runs accompany this change.
 
@@ -15,7 +15,7 @@ Status: research build, 2026-10-24. Package `packages/sphere` (`@polypack/sphere
 - **166 certified packings on the whole sphere** [CALC]: disks P = 2–40 (39), triangles, squares, pentagons and hexagons P = 2–30 (29 each), octagons P = 2–12 (11). Every record is proven strictly valid by an independent interval certifier (256-bit mpmath intervals) at `score_cert`, which exceeds the touching value `score_float` by at most 3·10⁻¹¹ relative (10⁻¹¹ for 165 of 166).
 - **Chart-free pair test.** Whole-sphere pieces need not share a hemisphere, so pairs are decided by a plane through the centre of the sphere that strictly separates the two cones over the pieces (cone lemma, §3); the float validator uses the exact max-margin plane. No margin re-solve is needed: on the whole sphere a larger ρ shrinks every piece inside itself.
 - **Disks = Tammes** [CALC/EST]: all 39 values agree with Cohn's table of spherical codes to within its 12-digit rounding (≤ 2.7·10⁻¹² relative); 14 records are `proven` (P = 2–14 and 24, published proofs cited in each record).
-- **Exact cases** [CALC]: the five Platonic tilings (4, 8, 20 triangles, 6 squares, 12 pentagons) are stored with closed forms and meet the area bound; P = 2 meets the existence limit ρ = N/(2π) (polygons, infimum) or 2/π (disks). Squares 3 and 5, pentagons 11, hexagons 3–5 and octagons 3, 5, 6 meet the inscribed-disk bound, so they are optimal by a short argument from published Tammes theorems (kept `best_known`, per policy).
+- **Exact cases** [CALC]: the five Platonic tilings (4, 8, 20 triangles, 6 squares, 12 pentagons) are stored with closed forms and meet the area bound; P = 2 meets the existence limit ρ = N/(2π) (polygons, infimum) or 1/π (disks). Squares 3 and 5, pentagons 11, hexagons 3–5 and octagons 3, 5, 6 meet the inscribed-disk bound, so they are optimal by a short argument from published Tammes theorems (kept `best_known`, per policy).
 - **Against de Oliveira Filho, Spomer & Vallentin 2026** (arXiv:2604.21451, Table 2; triangles 8–24, squares 3–24, pentagons 3–24; 61 comparable entries) [CALC]: 40 certified configurations have a larger circumradius than the printed (truncated) value by more than 10⁻⁵ (non-trivial gains), one more is the classical icosahedral tiling (20 triangles, which dOSV do not list; their 20-triangle row is a weaker configuration), 18 agree within 10⁻⁵, 2 are smaller (squares 16, 23; by 0.05–0.13 % in ρ). The largest gains are for triangles (P = 12, 22, 23, 24: +1.3 % to +2.5 % in circumradius). An independent review re-certified all 166 records of the first publication by two further methods (one rigorous) and reproduced every verdict (the 14 records replaced in the re-run of 2026-10-24 are certified by `certify.py` and checked by the TypeScript validator, not yet by that review); these remain comparisons with a printed table, not with the authors' configuration files.
 - **Lower bounds**: the headline `bound` of every record is rigorous (existence, area, Fejes Tóth, inscribed disks against Fejes Tóth or proven Tammes values, all decided in intervals); typical gaps are 2–9 % for polygons and 3–6 % for disks beyond P = 14. Higher published bounds from dOSV's maximality results that rest on floating-point SDP computations (squares P = 8–11, pentagons P = 6, 8) are kept separately as `bound_published` and labelled [EST, float-computed in the source].
 - **Viewer**: `packages/sphere/viz/index.html` (standalone): a draggable orthographic globe (back hemisphere seen faintly through the globe) and a two-hemisphere Lambert equal-area map, with the table of certified values, bounds and literature values.
@@ -24,11 +24,11 @@ Status: research build, 2026-10-24. Package `packages/sphere` (`@polypack/sphere
 
 **Space.** The whole sphere of radius ρ (curvature K = 1/ρ²); there is no container. Problem id `sphere/N/P`.
 
-**Pieces.** P congruent pieces: disks of geodesic radius 1 (N = 0) or regular spherical N-gons of geodesic side 1 (N = 3–100). Interiors must be disjoint; touching is allowed.
+**Pieces.** P congruent pieces: disks of geodesic diameter 1, radius 1/2 (N = 0; until 2026-10-26 radius 1, with every disk score twice as large) or regular spherical N-gons of geodesic side 1 (N = 3–100). Interiors must be disjoint; touching is allowed.
 
-**Score.** The sphere radius ρ, smaller is better. Equivalently, scale the sphere to radius 1: a piece then has angular size a = 1/ρ (side angle of a polygon, angular radius of a disk), and the problem is to make P congruent pieces as large as possible on the unit sphere.
+**Score.** The sphere radius ρ, smaller is better. Equivalently, scale the sphere to radius 1: a piece then has angular size a = 1/ρ for a polygon (its side angle) and a = 1/(2ρ) for a disk (its angular radius), and the problem is to make P congruent pieces as large as possible on the unit sphere.
 
-**Disks are the Tammes problem** [CALC]: caps of angular radius a are interior-disjoint iff their centres are at least 2a apart, so ρ_min(P) = 2/θ_P, where θ_P is the largest possible minimal angular distance of P points.
+**Disks are the Tammes problem** [CALC]: caps of angular radius a are interior-disjoint iff their centres are at least 2a apart, so ρ_min(P) = 1/θ_P (a = 1/(2ρ) ≤ θ_P/2), where θ_P is the largest possible minimal angular distance of P points.
 
 **Existence** [CALC]. A regular spherical N-gon with side a has angular circumradius R with sin(a/2) = sin R · sin(π/N), inradius r with tan(a/2) = sin r · tan(π/N), interior angle α with cos(π/N) = cos(a/2) · sin(α/2), and area Nα − (N − 2)π (Gauss–Bonnet, unit sphere). It is a convex polygon in an open hemisphere iff R < π/2, i.e. a < 2π/N, i.e. **ρ > N/(2π)** (0.477, 0.637, 0.796, 0.955, 1.273 for N = 3, 4, 5, 6, 8). So P = 1 and P = 2 have the same infimum N/(2π): two antipodal pieces fit for every ρ > N/(2π), and at ρ = N/(2π) the piece degenerates to a hemisphere (not attained). For disks, P = 2 is attained at ρ = 2/π (two closed hemispheres).
 
@@ -72,8 +72,8 @@ Every bound L is checked in interval arithmetic: the stated necessary condition 
 
 - **Existence** (polygons) [CALC]: ρ > N/(2π), checked as 1/L > 2π/N.
 - **Area** [CALC]: P·A(a) ≤ 4π. For polygons α(a) ≥ α\* = ((N − 2)π + 4π/P)/N, checked as cos(π/N)/cos(a/2) ≥ sin(α\*/2); for disks cos a ≥ 1 − 2/P. Sharp exactly for the tilings.
-- **Fejes Tóth** (disks, P ≥ 3) [CALC from EST theorem]: cos θ_P ≥ (cot²ω − 1)/2 with ω = πP/(6(P − 2)) (L. Fejes Tóth 1943), so ρ ≥ 2/θ_FT. Sharp for P = 3, 4, 6, 12.
-- **Published Tammes optimum** (disks; P = 3–14, 24) [EST]: ρ ≥ 2/θ_P with cos θ_P from Cohn's table minus 10⁻¹¹ (12 printed decimals).
+- **Fejes Tóth** (disks, P ≥ 3) [CALC from EST theorem]: cos θ_P ≥ (cot²ω − 1)/2 with ω = πP/(6(P − 2)) (L. Fejes Tóth 1943), so ρ ≥ 1/θ_FT. Sharp for P = 3, 4, 6, 12.
+- **Published Tammes optimum** (disks; P = 3–14, 24) [EST]: ρ ≥ 1/θ_P with cos θ_P from Cohn's table minus 10⁻¹¹ (12 printed decimals).
 - **Inscribed disks** (polygons) [CALC/EST]: the inscribed caps (angular radius r(a)) of the pieces are interior-disjoint, so their centres form a spherical code with minimal angle ≥ 2r: 2r ≤ θ_P ≤ θ_FT(P), or ≤ θ_P itself where the Tammes optimum is proven.
 - **Maximality** (polygons) [EST]: de Oliveira Filho, Spomer and Vallentin (arXiv:2604.21451, Table 2) show for several (N, n) that n copies at their circumradius ϱ_n admit no (n + 1)-th copy (marks † and ⋆; the triangle rows marked "conjectured" are excluded). Packability is monotone in the size, and ϱ_n is printed truncated to 6 decimals, so n + 1 copies need R < ϱ_n + 10⁻⁶: a published lower bound for P = n + 1. **Rigour**: their ϑ′ and 3-point values were "carried out in high-precision floating-point arithmetic; the bounds obtained can be rigorously verified using standard techniques", i.e. they are not rigorously verified in the paper. Where the printed volume bound is already below n + 1 (for example the triangle † rows n = 19, 20) maximality follows from the area argument and the bound is rigorous (and weaker than our own area bound). Otherwise (squares P = 8–11 from the ⋆ rows n = 7–10, pentagons P = 6 and 8 from n = 5 and 7, and the other rows whose volume bound does not settle it) the bound is labelled **[EST, float-computed in the source]**, stored with `rigorous: false`, and reported as `bound_published` when it exceeds the rigorous bound; it is never the headline bound.
 
@@ -97,7 +97,7 @@ Radial projections of the Platonic solids tile the sphere and meet the area boun
 | 6 squares (cube) | 2π/3 | 1/arccos(1/3) | 0.812374467 |
 | 12 pentagons (dodecahedron) | 2π/3 | 1/arccos(√5/3) | 1.370374264 |
 | 2 N-gons | π (hemispheres) | N/(2π), infimum | 0.477, 0.637, 0.796, 0.955, 1.273 |
-| 2 disks | — | 2/π | 0.636619772 |
+| 2 disks | — | 1/π | 0.318309886 |
 
 They are optimal by the area (or existence) argument, but stay `best_known` with a note (PolyPack's own derivation, per the proven-claims policy).
 
@@ -134,45 +134,45 @@ Bounds are rigorous (interval-checked). 'published ... (float-computed)' is a hi
 
 | P | rho (certified, 6 decimals) | lower bound (kind) | gap to bound | Tammes rho (Cohn table) | ours - lit (rel) | status |
 |---|---|---|---|---|---|---|
-| 2 | 0.636620 | 0.636620 (area) | 0.000% | 0.636619772 | +0.0e+00 | proven |
-| 3 | 0.954930 | 0.954930 (fejes toth) | 0.000% | 0.954929659 | +2.3e-16 | proven |
-| 4 | 1.046773 | 1.046773 (fejes toth) | 0.000% | 1.046773374 | +0.0e+00 | proven |
-| 5 | 1.273240 | 1.273240 (tammes proven) | 0.000% | 1.273239545 | +0.0e+00 | proven |
-| 6 | 1.273240 | 1.273240 (fejes toth) | 0.000% | 1.273239545 | +0.0e+00 | proven |
-| 7 | 1.471584 | 1.471584 (tammes proven) | 0.000% | 1.471583829 | -3.0e-13 | proven |
-| 8 | 1.530776 | 1.530776 (tammes proven) | 0.000% | 1.530775677 | -2.0e-13 | proven |
-| 9 | 1.624749 | 1.624749 (tammes proven) | 0.000% | 1.624748933 | -5.7e-13 | proven |
-| 10 | 1.732382 | 1.732382 (tammes proven) | 0.000% | 1.732381928 | -7.1e-13 | proven |
-| 11 | 1.806442 | 1.806442 (tammes proven) | 0.000% | 1.806442051 | -4.2e-14 | proven |
-| 12 | 1.806442 | 1.806442 (fejes toth) | 0.000% | 1.806442051 | -4.2e-14 | proven |
-| 13 | 2.005568 | 2.005568 (tammes proven) | 0.000% | 2.005568275 | -4.3e-13 | proven |
-| 14 | 2.058387 | 2.058387 (tammes proven) | 0.000% | 2.058386667 | -6.2e-13 | proven |
-| 15 | 2.135597 | 2.022031 (fejes toth) | 5.616% | 2.135597284 | -1.2e-12 | best_known |
-| 16 | 2.193375 | 2.088995 (fejes toth) | 4.997% | 2.193375143 | -4.2e-13 | best_known |
-| 17 | 2.242921 | 2.153890 (fejes toth) | 4.134% | 2.242920769 | -1.4e-12 | best_known |
-| 18 | 2.312334 | 2.216895 (fejes toth) | 4.305% | 2.312334429 | -1.3e-12 | best_known |
-| 19 | 2.402746 | 2.278166 (fejes toth) | 5.468% | 2.402746066 | -1.5e-12 | best_known |
-| 20 | 2.415962 | 2.337838 (fejes toth) | 3.342% | 2.415961534 | -5.7e-13 | best_known |
-| 21 | 2.512244 | 2.396030 (fejes toth) | 4.850% | 2.512244284 | -1.1e-12 | best_known |
-| 22 | 2.561268 | 2.452845 (fejes toth) | 4.420% | 2.561268356 | -5.6e-13 | best_known |
-| 23 | 2.621635 | 2.508377 (fejes toth) | 4.515% | 2.621634703 | -1.1e-12 | best_known |
-| 24 | 2.622787 | 2.622787 (tammes proven) | 0.000% | 2.622786612 | -9.3e-13 | proven |
-| 25 | 2.752325 | 2.615916 (fejes toth) | 5.215% | 2.752324770 | -1.4e-14 | best_known |
-| 26 | 2.792351 | 2.668063 (fejes toth) | 4.658% | 2.792351088 | -2.0e-12 | best_known |
-| 27 | 2.817068 | 2.719213 (fejes toth) | 3.599% | 2.817067799 | -9.1e-13 | best_known |
-| 28 | 2.911730 | 2.769419 (fejes toth) | 5.139% | 2.911730174 | -8.3e-14 | best_known |
-| 29 | 2.959978 | 2.818733 (fejes toth) | 5.011% | 2.959978082 | -6.7e-13 | best_known |
-| 30 | 2.968915 | 2.867200 (fejes toth) | 3.548% | 2.968915065 | -2.7e-14 | best_known |
-| 31 | 3.038772 | 2.914862 (fejes toth) | 4.251% | 3.038771631 | -8.1e-13 | best_known |
-| 32 | 3.057796 | 2.961758 (fejes toth) | 3.243% | 3.057795990 | -1.9e-12 | best_known |
-| 33 | 3.160749 | 3.007924 (fejes toth) | 5.081% | 3.160749468 | -1.2e-12 | best_known |
-| 34 | 3.200186 | 3.053392 (fejes toth) | 4.808% | 3.200185685 | -2.7e-12 | best_known |
-| 35 | 3.244399 | 3.098195 (fejes toth) | 4.719% | 3.244399300 | -7.4e-13 | best_known |
-| 36 | 3.256392 | 3.142359 (fejes toth) | 3.629% | 3.256391898 | -2.1e-12 | best_known |
-| 37 | 3.328981 | 3.185911 (fejes toth) | 4.491% | 3.328981488 | -2.3e-13 | best_known |
-| 38 | 3.345674 | 3.228876 (fejes toth) | 3.617% | 3.345674413 | -8.7e-13 | best_known |
-| 39 | 3.421762 | 3.271278 (fejes toth) | 4.600% | 3.421762359 | -1.9e-12 | best_known |
-| 40 | 3.455888 | 3.313137 (fejes toth) | 4.309% | 3.455887804 | -1.8e-12 | best_known |
+| 2 | 0.318310 | 0.318310 (area) | 0.000% | 0.318309886 | +0.0e+00 | proven |
+| 3 | 0.477465 | 0.477465 (fejes toth) | 0.000% | 0.477464830 | +2.3e-16 | proven |
+| 4 | 0.523387 | 0.523387 (fejes toth) | 0.000% | 0.523386687 | +0.0e+00 | proven |
+| 5 | 0.636620 | 0.636620 (tammes proven) | 0.000% | 0.636619773 | +0.0e+00 | proven |
+| 6 | 0.636620 | 0.636620 (fejes toth) | 0.000% | 0.636619773 | +0.0e+00 | proven |
+| 7 | 0.735792 | 0.735792 (tammes proven) | 0.000% | 0.735791915 | -3.0e-13 | proven |
+| 8 | 0.765388 | 0.765388 (tammes proven) | 0.000% | 0.765387839 | -2.0e-13 | proven |
+| 9 | 0.812374 | 0.812374 (tammes proven) | 0.000% | 0.812374467 | -5.7e-13 | proven |
+| 10 | 0.866191 | 0.866191 (tammes proven) | 0.000% | 0.866190964 | -7.1e-13 | proven |
+| 11 | 0.903221 | 0.903221 (tammes proven) | 0.000% | 0.903221026 | -4.2e-14 | proven |
+| 12 | 0.903221 | 0.903221 (fejes toth) | 0.000% | 0.903221026 | -4.2e-14 | proven |
+| 13 | 1.002784 | 1.002784 (tammes proven) | 0.000% | 1.002784138 | -4.3e-13 | proven |
+| 14 | 1.029193 | 1.029193 (tammes proven) | 0.000% | 1.029193334 | -6.2e-13 | proven |
+| 15 | 1.067799 | 1.011016 (fejes toth) | 5.616% | 1.067798642 | -1.2e-12 | best_known |
+| 16 | 1.096688 | 1.044497 (fejes toth) | 4.997% | 1.096687572 | -4.2e-13 | best_known |
+| 17 | 1.121460 | 1.076945 (fejes toth) | 4.134% | 1.121460385 | -1.4e-12 | best_known |
+| 18 | 1.156167 | 1.108447 (fejes toth) | 4.305% | 1.156167215 | -1.3e-12 | best_known |
+| 19 | 1.201373 | 1.139083 (fejes toth) | 5.468% | 1.201373033 | -1.5e-12 | best_known |
+| 20 | 1.207981 | 1.168919 (fejes toth) | 3.342% | 1.207980767 | -5.7e-13 | best_known |
+| 21 | 1.256122 | 1.198015 (fejes toth) | 4.850% | 1.256122142 | -1.1e-12 | best_known |
+| 22 | 1.280634 | 1.226423 (fejes toth) | 4.420% | 1.280634178 | -5.6e-13 | best_known |
+| 23 | 1.310817 | 1.254189 (fejes toth) | 4.515% | 1.310817352 | -1.1e-12 | best_known |
+| 24 | 1.311393 | 1.311393 (tammes proven) | 0.000% | 1.311393306 | -9.3e-13 | proven |
+| 25 | 1.376162 | 1.307958 (fejes toth) | 5.215% | 1.376162385 | -1.4e-14 | best_known |
+| 26 | 1.396176 | 1.334032 (fejes toth) | 4.658% | 1.396175544 | -2.0e-12 | best_known |
+| 27 | 1.408534 | 1.359606 (fejes toth) | 3.599% | 1.408533900 | -9.1e-13 | best_known |
+| 28 | 1.455865 | 1.384710 (fejes toth) | 5.139% | 1.455865087 | -8.3e-14 | best_known |
+| 29 | 1.479989 | 1.409366 (fejes toth) | 5.011% | 1.479989041 | -6.7e-13 | best_known |
+| 30 | 1.484458 | 1.433600 (fejes toth) | 3.548% | 1.484457533 | -2.7e-14 | best_known |
+| 31 | 1.519386 | 1.457431 (fejes toth) | 4.251% | 1.519385816 | -8.1e-13 | best_known |
+| 32 | 1.528898 | 1.480879 (fejes toth) | 3.243% | 1.528897995 | -1.9e-12 | best_known |
+| 33 | 1.580375 | 1.503962 (fejes toth) | 5.081% | 1.580374734 | -1.2e-12 | best_known |
+| 34 | 1.600093 | 1.526696 (fejes toth) | 4.808% | 1.600092843 | -2.7e-12 | best_known |
+| 35 | 1.622200 | 1.549097 (fejes toth) | 4.719% | 1.622199650 | -7.4e-13 | best_known |
+| 36 | 1.628196 | 1.571179 (fejes toth) | 3.629% | 1.628195949 | -2.1e-12 | best_known |
+| 37 | 1.664491 | 1.592955 (fejes toth) | 4.491% | 1.664490744 | -2.3e-13 | best_known |
+| 38 | 1.672837 | 1.614438 (fejes toth) | 3.617% | 1.672837207 | -8.7e-13 | best_known |
+| 39 | 1.710881 | 1.635639 (fejes toth) | 4.600% | 1.710881180 | -1.9e-12 | best_known |
+| 40 | 1.727944 | 1.656569 (fejes toth) | 4.309% | 1.727943902 | -1.8e-12 | best_known |
 
 #### triangles (N = 3)
 
@@ -340,7 +340,7 @@ Bounds are rigorous (interval-checked). 'published ... (float-computed)' is a hi
 - Rigorous lower bounds are elementary (existence, area, Fejes Tóth, inscribed disks); gaps of 2–9 % remain for most polygon entries. The dOSV maximality bounds that would tighten squares P = 8–11 and pentagons P = 6, 8 are float-computed in the source and kept only as `bound_published`. LP/SDP bounds (Delsarte–Goethals–Seidel, Bachoc–Vallentin 3-point, dOSV's ϑ′ as a function of the radius) would tighten them and are not implemented.
 - Literature comparisons for polygons depend on a table truncated at 6 decimals; "same" means within 10⁻⁵ in circumradius. Tarnai & Gáspár (2001) were not consulted directly.
 - `proven` is used only for disks (P = 2–14 and 24) where a published proof exists and our value matches within the certification gap. P = 15 is marked optimal in Cohn's table on the strength of a 2026 preprint; it stays `best_known`. Tilings, P = 2 limits and the inscribed-disk cases are optimal by PolyPack's own short arguments and stay `best_known` with notes.
-- Polygon P = 2 is an infimum that is not attained; the record certifies the antipodal pair at ρ = N/(2π)(1 + 10⁻¹¹). P = 1 is not stored (polygons: the same infimum N/(2π); a single disk: ρ = 1/π, the cap that covers the sphere).
+- Polygon P = 2 is an infimum that is not attained; the record certifies the antipodal pair at ρ = N/(2π)(1 + 10⁻¹¹). P = 1 is not stored (polygons: the same infimum N/(2π); a single disk: ρ = 1/(2π), the cap that covers the sphere).
 - The max-margin brute force costs O(N³) per near pair; fine for N ≤ 8 and P ≤ 40, not for large P.
 - The TypeScript validator is a float check (not authoritative); its strict decisions can be wrong for |gap| below about 10⁻¹¹ within about 10⁻⁷ relative of the existence limit (§3).
 - The (x, y, θ) pose of the curved package is singular at the south pole, so records store quaternions; the conversion helpers are given in the package.

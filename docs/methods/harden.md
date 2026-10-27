@@ -118,11 +118,11 @@ supports (morph's inscribed family): core `scale = gamma (1 - tau)` and
 `padding = gamma tau rho`. Pair terms use `pairPenetration`, whose `depth` is
 `2r - sd`; wall terms use `visitContainerProtrusions` in its full
 vertex-by-wall mode, as in the reference. Circle pieces are disks of radius
-`gamma`. A pure inscribed disk (`tau = 1`) of a polygon meets each wall once
+`gamma / 2` (diameter `gamma`). A pure inscribed disk (`tau = 1`) of a polygon meets each wall once
 with its radius, like the reference. Any regular N-gon (3 to 100 sides) or
 circle piece, in any regular M-gon or circular container, is handled by the
 same code with the repository's conventions: polygon pieces have side 1 and a
-vertex up at theta = 0, circle pieces have radius 1, and the moving container
+vertex up at theta = 0, circle pieces have diameter 1 (since 2026-10-27; before, radius 1), and the moving container
 is centred at the origin with a horizontal bottom edge (phi = 0). The final
 container always comes from the repository's own evaluation: assessments use
 `ctx.evaluate` at `container_phi = 0`, and the framework auto-orients and
@@ -134,9 +134,9 @@ for circles. Only `grow` changes a circle.
 
 **Piece length unit.** The reference states mu and the noise in absolute
 units for unit-side polygons and unit-diameter circles. Here both are
-multiplied by the piece's inscribed diameter `2 rho` (2 for PolyPack's
-radius-1 circles). This reproduces the reference exactly for unit squares
-(inscribed diameter 1) and, by similarity, for circles (every length doubles).
+multiplied by the piece's inscribed diameter `2 rho` (1 for PolyPack's
+diameter-1 circles, as in the reference; before 2026-10-27 the radius-1 circles had 2). This reproduces the reference exactly for unit squares
+(inscribed diameter 1) and for circles.
 For other polygons it is a deviation: the reference's absolute constants are
 rescaled by 0.577 for triangles, 1.376 for pentagons, 1.732 for hexagons and
 2.414 for octagons. It keeps pressure and noise proportionate for large N,
@@ -144,7 +144,7 @@ where a unit-side polygon is many units across. The step caps already scale
 with the circumradius in the reference. Angular noise stays in radians.
 
 **Container size variable.** The reference moves the side of a square or
-triangle and the radius of a circle. A polygon's side per unit of apothem
+triangle and the radius of a circle (PolyPack scores a circle container by its diameter, twice that radius). A polygon's side per unit of apothem
 shrinks as 1/M, which would make the same update ever stiffer for many-sided
 containers. Here L is PolyPack's size (side) while the apothem per unit side
 is at most 1 (M <= 6), and the apothem from M = 7 on, whose limit is the
@@ -346,7 +346,7 @@ triangles and on held-out families. Use it beside the other methods.
 2. Pressure and noise are in units of the inscribed diameter (exact for
    squares and circles, rescaled for other polygons); the size variable is
    the apothem for M >= 7.
-3. Arbitrary N and M, with PolyPack's orientation conventions and radius-1
+3. Arbitrary N and M, with PolyPack's orientation conventions and diameter-1
    circles.
 4. The budget is an evaluation count mapped to steps, with one legalised
    assessment every 32 steps; the reference legalises once, at the end.

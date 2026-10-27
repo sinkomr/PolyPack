@@ -36,7 +36,7 @@ These are fixed. Every computation, stored record and API payload uses them. The
 
 **Problem.** A problem is (N, M, P): P congruent pieces with N sides in a container with M sides. N = 0 denotes circle pieces and M = 0 a circle container; otherwise N and M are at least 3. P is a positive integer.
 
-**Units.** Polygon pieces have side length 1. Circle pieces have radius 1. Angles are radians internally, in storage and in the API; the UI shows degrees.
+**Units.** Polygon pieces have side length 1. Circle pieces (disks) have diameter 1, that is radius 1/2 (`DISK_RADIUS = 0.5` in `packages/geometry`). Angles are radians internally, in storage and in the API; the UI shows degrees.
 
 **Piece pose** (x, y, θ). For an N-gon the circumradius is R = 1 / (2 sin(π/N)), and vertex k = 0..N−1 is at
 
@@ -48,22 +48,41 @@ So at θ = 0 the piece has a vertex pointing straight up (+y). A circle piece ig
 
     (cx, cy) + (s / (2 sin(π/M)))·(cos(φ − π/2 + π/M + 2πk/M), sin(φ − π/2 + π/M + 2πk/M))
 
-So at φ = 0 the container has a horizontal bottom edge. A circle container is given by its centre and radius r.
+So at φ = 0 the container has a horizontal bottom edge. A circle container is given by its centre and radius r; its score is its diameter 2r.
 
-**Score.** The container side length s for a polygon container; the radius r for a circle container. Smaller is better. Scores are stored at full double precision and displayed with six decimals.
+**Score.** The container side length s for a polygon container; the diameter 2r for a circle container. Smaller is better. Scores are stored at full double precision and displayed with six decimals.
 
 **Validity.** Pieces may touch, but their interiors must not overlap. Every piece lies inside the closed container. The server's validation is authoritative.
 
 **Literature values.** Published sources differ (radius or diameter, side or circumradius). Every imported value is converted to these conventions and the conversion note is stored with the record; see [RECORDS.md](RECORDS.md).
 
+### Units
+
+[EST] On 2026-10-27 the unit of circle pieces changed. Before, a circle piece had radius 1 and a circle container was scored by its radius. Now **a disk has diameter 1** (radius 1/2), **a ball has diameter 1**, and **a circle or ball container is scored by its diameter**. Polygon pieces keep side 1; polygon and polyhedral containers keep their side, edge or scale; angles are unchanged. Statuses, citations and `proven` flags were carried over unchanged.
+
+How the stored scores moved ([CALC], exact in binary floating point, since every factor is a power of 2; coordinates of disks halve in every case):
+
+| Problem | Old score | New score | Factor |
+|---|---|---|---|
+| Circles in a polygon (N = 0, M >= 3) | container side s | s / 2 | 1/2 |
+| Circles in a circle (N = 0, M = 0) | container radius rho | container diameter, the same number rho | 1 |
+| Polygons in a circle (N >= 3, M = 0) | container radius | container diameter | 2 |
+| Polygons in a polygon; polyhedra | unchanged | unchanged | 1 |
+| Balls in a ball | container radius | container diameter | 1 (no research records; entries and code only) |
+| Curved, disk pieces (N = 0) | K = -1, 0, 1 | archived; K = +-1 disk problems are open again, see [CURVED.md](spaces/CURVED.md) | |
+
+Why: the container's diameter in disk diameters is the number Packomania lists as the "ratio" for circles in a circle and is Friedman's r for them (a container radius measured in circle radii), so a circle container's score now equals the published value, and the conversions in [RECORDS.md](RECORDS.md) lose their factor of 2. A disk of diameter 1 is also the same kind of "unit piece" as a polygon of side 1.
+
+Some code keeps radius 1 inside and converts exactly at its public edge (lengths times 2 on entry, times 1/2 on exit): the kernels of `packages/surface`, `curved`, `sphere`, `torus`, `boundary` and `balls`, and the certifiers under `python/`. Their documentation says which unit a statement uses. The API, the storage and the records are always in the units above, and a request that carries disk or ball data must say `units: "diameter"`.
+
 ## Geometry model
 
 - **Pieces are fixed in world coordinates; the container rotates.** The container orientation φ is part of the configuration. Rotating the whole arrangement by −φ is equivalent, but storing φ keeps piece coordinates stable while the user searches over orientations.
-- **Tolerance.** `TOL = 1e-9` in piece units (side or radius 1). Two pieces overlap when their separation is below −TOL. Separation in [−TOL, TOL] counts as touching and is valid.
+- **Tolerance.** `TOL = 1e-9` in piece units (side 1 for polygons, diameter 1 for disks). Two pieces overlap when their separation is below −TOL. Separation in [−TOL, TOL] counts as touching and is valid.
 - **Overlap test.** Separating-axis theorem. For regular polygons the support function is known in closed form, so a pair costs O(N), not O(N²). A vertex-array SAT is kept as the reference and cross-tested. **[CALC]** For pieces of 12 sides or more, the overlap search (`pairSeparation`, since 2026-10-21) evaluates the axes outward from the line of centres and stops once a bound shows that no axis left can reach the best gap: about 2 axes instead of 2N for pieces near contact, 0.8 µs per pair instead of 1.3 µs at N = 12 and 11.6 µs at N = 100. It returns the same double as the full test (the argument is in the code; 10⁷ fuzzed pairs agree).
-- **Broad phase.** Uniform grid with cell size 2R (R = circumradius, or 1 for circles); only neighbouring cells are tested.
+- **Broad phase.** Uniform grid with cell size 2R (R = circumradius, or 1/2 for circles); only neighbouring cells are tested.
 - **Enclosing M-gon at fixed φ [CALC].** Minimise the apothem a over (cx, cy, a) subject to hⱼ ≤ a + c·uⱼ. Solved exactly through the dual: a* is the maximum of Σλⱼhⱼ over antipodal pairs of normals and over triples of normals that positively span the plane, with λ fixed by the normals alone. No feasibility checks are needed, and for equally spaced normals the weights are a sine table. Then s = 2a·tan(π/M). The supports hⱼ are the largest projections of the hull of all N·P vertices. At one orientation (`enclose`, since 2026-10-21) they come from the vertices of the few pieces whose centre is within R − r of the highest along each normal, which gives the same doubles whenever the largest projection beats the second by 64 ε C (C bounding the coordinates; the proof is in `candidateSupports`); otherwise, as when a piece's edge lies along a container side exactly, the hull is built as before.
-- **Enclosing circle.** Welzl's algorithm on the convex hull of the piece vertices. Circle pieces are congruent, so the answer is the enclosing circle of the centres plus 1.
+- **Enclosing circle.** Welzl's algorithm on the convex hull of the piece vertices. Circle pieces are congruent, so the answer is the enclosing circle of the centres plus 1/2 (its diameter is the score).
 - **Auto-orient.** s(φ) has period 2π/M. Dense uniform sample over one period, then golden-section refinement around the best local minima. The current φ and φ = 0 are always candidates, so the result is never worse than either. This is a search, not a proof of the global minimum over φ.
 - **Strict verification.** Shrink every piece by (1 − ε) about its centre, require strictly positive separation and strict containment, and report s / (1 − ε).
 
@@ -113,6 +132,6 @@ The seven optimizers, the seed generators and contact polish are available on th
 
 ## 3D on 4D in the spaces registry (2026-10-25)
 
-**[EST]** The fifth space, `boundary` (unit balls and unit cubes on the boundary of a tesseract; [spaces/BOUNDARY.md](spaces/BOUNDARY.md)), goes through the same registry as the other four, `packages/spaces`, so the server, the board and the volunteer client need no space-specific code beyond their drawings. Its ids `boundary/tesseract/<ball|cube>/<P>` are read by the boundary package's own parser (`parseBoundaryId`); its configurations `{s, pieces: [{cell, u, q?}]}` are read by the registry (malformed input is a 400) and judged by the boundary package's float validator, `validateBoundary`, under the registry's rule: the touching tolerance 1e-9, the strict 1e-11 for an entry below the research record, P as in the id, the lower bound before any geometry, and the configuration stored as it was sent. A listing of a boundary problem also carries `extra: {nofold: {value, label}, fold_gain}`: the best edge with every piece inside one cell, and the research record's gain over it. Its search, `searchBoundary`, runs as one call per job of `runSpaceJob` (the board's rounds and the volunteer client's jobs), with the job's seed, its evaluation cap and the gate's stop, pause and active time; `BOUNDARY_ROUND_EVALS` = 300,000 evaluations make a round about as long as a sphere or torus round of 10,000. A job that ends at the search's own floor (aligned cubes at s = 1) ends the volunteer client's work on that problem. Source: `packages/spaces/src/{ids,info,validate,records}.ts`, `packages/spaces/src/search/{model,run,engine}.ts`.
+**[EST]** The fifth space, `boundary` (balls of diameter 1 and unit cubes on the boundary of a tesseract; [spaces/BOUNDARY.md](spaces/BOUNDARY.md)), goes through the same registry as the other four, `packages/spaces`, so the server, the board and the volunteer client need no space-specific code beyond their drawings. Its ids `boundary/tesseract/<ball|cube>/<P>` are read by the boundary package's own parser (`parseBoundaryId`); its configurations `{s, pieces: [{cell, u, q?}]}` are read by the registry (malformed input is a 400) and judged by the boundary package's float validator, `validateBoundary`, under the registry's rule: the touching tolerance 1e-9, the strict 1e-11 for an entry below the research record, P as in the id, the lower bound before any geometry, and the configuration stored as it was sent. A listing of a boundary problem also carries `extra: {nofold: {value, label}, fold_gain}`: the best edge with every piece inside one cell, and the research record's gain over it. Its search, `searchBoundary`, runs as one call per job of `runSpaceJob` (the board's rounds and the volunteer client's jobs), with the job's seed, its evaluation cap and the gate's stop, pause and active time; `BOUNDARY_ROUND_EVALS` = 300,000 evaluations make a round about as long as a sphere or torus round of 10,000. A job that ends at the search's own floor (aligned cubes at s = 1) ends the volunteer client's work on that problem. Source: `packages/spaces/src/{ids,info,validate,records}.ts`, `packages/spaces/src/search/{model,run,engine}.ts`.
 
 **[CALC]** Work bounds: P is at most 64 (the catalogue has 16), s at most 1e4, and one piece may cross at most 1024 chains of cells. Every research record and 1,449 random valid single balls and cubes need at most 79 chains. With the cheap tests the validator runs first (the volume bound, then each piece against its own cell's edges), checks of 64 pieces took 0.1 to 20 ms on an Apple Silicon laptop; the 64-ball grid at s = 4, which is valid, took the longest. The server keeps the 32 records in about 55 kB of heap (all five catalogues about 6 MB).

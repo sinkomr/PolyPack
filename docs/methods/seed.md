@@ -3,7 +3,7 @@
 [CALC] This method generates starting configurations rather than optimizing piece
 poses. It is registered alongside the other solver methods. Every proposed
 configuration is scored and validated by `ctx.evaluate`; the framework retains
-the best valid result. Unit polygon sides and unit circle radii follow Phase 1.
+the best valid result. Unit polygon sides and unit circle diameters follow the site's units (since 2026-10-27 a disk has diameter 1; before, radius 1).
 
 ```ts
 const result = await run(
@@ -21,7 +21,7 @@ const result = await run(
 ## Generators and applicability
 
 [CALC] Unless restricted below, shapes are `N,M ∈ {0,3,…,100}` and counts are
-`1 ≤ P ≤ 500`. Circle pieces use radius one, not diameter one.
+`1 ≤ P ≤ 500`. Circle pieces use diameter one (radius 1/2); a circle container is scored by its diameter. Where this page works with unit-radius circles (the derivation below), the container radius in those units is the same number as the diameter score in site units.
 
 | Kind                      | Construction and applicability                                                                                                                                                              | Useful cases and limitations                                                                                                                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -58,7 +58,7 @@ centre are tried for every P. For P≤12, the remaining pieces occupy a single
 outer ring; otherwise automatic populations are 6,12,18,… with an exact final
 remainder. `perRing` fixes a maximum count. Radial pieces use the requested
 orientation relative to the radial direction. Polygon-container rings preserve
-reflection-compatible orientations instead. Rings give radii 3.304764871,
+reflection-compatible orientations instead. Rings give container diameters (in site units) 3.304764871,
 3.613125930 and 3.923804400 for 8,9,10 circles respectively, below the sampled
 lattice cuts.
 
@@ -76,12 +76,12 @@ grid supplies a guaranteed free, in-range fallback.
 [CALC] Insertion cannot guarantee the optimal eight-circle radius for an
 arbitrary seven-circle record while preserving its poses. For the optimal
 seven-circle hexagonal cluster, put the original centre at zero and the six
-outer centres at radius 2. A free new centre has distance at least 2√3 from zero:
+outer centres at radius 2 (in unit-radius circles; distance 1 and the same container score in site units). A free new centre has distance at least 2√3 from zero:
 its angular distance from an outer centre is at most π/6 and non-overlap requires
 radial distance at least 4 cos(π/6). If all centres fit in a disk of radius q,
 its centre displacement c obeys c²+2√3c+4≤q², since a hexagon vertex lies within
 π/6 of the opposite direction. Thus c≤√(q²−1)−√3 and q≥2√3−c, giving
-q+√(q²−1)≥3√3 and q≥14/(3√3). Adding unit piece radius gives the sharp score
+q+√(q²−1)≥3√3 and q≥14/(3√3). Adding the piece radius (1 in these units) gives the sharp score
 1+14/(3√3)=3.69430125622279, attained by the two-contact insertion. A
 3.3048 target therefore needs a different source record or an optimizer that
 moves its original pieces. A seven-centre regular ring with radius
@@ -106,7 +106,7 @@ zero. The complete registered JSON Schema appears below.
 | `orientationRange`     | `0`      | Maximum random piece rotation in either direction, 0–π.                                                                           |
 | `offsetRange`          | `1`      | Maximum fractional lattice offset in each basis coordinate, 0–1.                                                                  |
 | `perRow`               | `0`      | Zero tries nearby square widths, a single row and a single column; otherwise integer 1–500.                                       |
-| `alternateRows`        | `false`  | Odd rows shift half a step; even rows align. Contact-derived pitch is √3 for circles, instead of 2. Triangle strips already tile. |
+| `alternateRows`        | `false`  | Odd rows shift half a step; even rows align. Contact-derived pitch is √3/2 for circles, instead of 1 (diameter-1 disks). Triangle strips already tile. |
 | `perRing`              | `0`      | Automatic ring counts, or a specified maximum count 1–500.                                                                        |
 | `recordTrials`         | `128`    | Maximum scored insertions and bounded sampling attempts, integer 1–4096. Occupied samples are skipped.                            |
 | `poolLimit`            | `8`      | Maximum distinct emitted classes, integer 0–64; score/pair-distance tolerance 1e−7. Emission consumes an evaluation.              |

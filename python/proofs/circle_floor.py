@@ -740,7 +740,7 @@ def compositions(total, parts, least):
             yield (first,) + rest
 
 
-def records_remarks():
+def records_remarks(recs=None):
     """Section 9 ([CALC], outside the proof), in floating point from data/records.json:
     (1) no polygon-in-circle record lies below F(N, P) where rho0(P) is proven, and which ones
     equal it; (2) for which N <= 100 the stored circle configurations for P = 10, 12, 14, 18,
@@ -748,7 +748,8 @@ def records_remarks():
     import json
     import math
 
-    recs = json.loads((ROOT / "data/records.json").read_text(encoding="utf-8"))["records"]
+    if recs is None:
+        recs = json.loads((ROOT / "data/records.json").read_text(encoding="utf-8"))["records"]
     circle = {r["P"]: r for r in recs if r["N"] == 0 and r["M"] == 0}
     checked, below, equal = 0, [], []
     for r in recs:
@@ -756,8 +757,13 @@ def records_remarks():
         if r["M"] != 0 or r["N"] < 3 or not c or c["status"] != "proven":
             continue
         N, P = r["N"], r["P"]
-        bound = math.hypot(c["value"] / (2 * math.tan(math.pi / N)), 0.5)
-        tol = 10.0 ** -r["display_precision"]
+        # Site units: the circle record is the container diameter of diameter-1 disks, which is
+        # the number rho0 of the proof; a polygon-in-circle record is the container diameter,
+        # 2 rho(N, P), so the bound is 2 F(N, P) = sqrt(rho0^2 cot^2(pi/N) + 1).
+        bound = math.hypot(c["value"] / math.tan(math.pi / N), 1.0)
+        # display_precision counts decimals of the source's printed radius; the stored value is
+        # now twice that radius, so its printed precision is two units of the last place.
+        tol = 2 * 10.0 ** -r["display_precision"]
         checked += 1
         if r["value"] + tol < bound:
             below.append((N, P))
@@ -766,11 +772,13 @@ def records_remarks():
     classes = {}
     for P in (10, 12, 14, 18, 37):
         pts = [(q["x"], q["y"]) for q in circle[P]["pieces"]]
-        a = circle[P]["value"] - 1
-        dirs = [[math.atan2(y, x)] if math.hypot(x, y) >= a - 1e-9 else [] for x, y in pts]
+        # Disks of diameter 1: the centres lie within a = (D - 1) / 2 of the container centre
+        # and touching centres are at distance 1; the old 1e-9 (unit circles) becomes 5e-10.
+        a = (circle[P]["value"] - 1) / 2
+        dirs = [[math.atan2(y, x)] if math.hypot(x, y) >= a - 5e-10 else [] for x, y in pts]
         for i, j in itertools.combinations(range(P), 2):
             dx, dy = pts[j][0] - pts[i][0], pts[j][1] - pts[i][1]
-            if math.hypot(dx, dy) <= 2 + 1e-9:
+            if math.hypot(dx, dy) <= 1 + 5e-10:
                 dirs[i].append(math.atan2(dy, dx))
                 dirs[j].append(math.atan2(-dy, -dx))
 
@@ -788,7 +796,8 @@ def table_rows(cfgs):
         rho0 = cfg.a.decimal()[0] + 1
         for N in cfg.classes:
             r = inradius(N)
-            rows.append((cfg.P, N, (r * r * rho0 * rho0 + Decimal(1) / 4).sqrt()))
+            # site score: the container diameter 2 F(N, P)
+            rows.append((cfg.P, N, 2 * (r * r * rho0 * rho0 + Decimal(1) / 4).sqrt()))
     return rows
 
 

@@ -4,7 +4,7 @@
 
 **Summary** (2026-10-25). `data/torus/records.json` holds 544 records, each proven valid by an interval-arithmetic certificate (`data/torus/certificates/`, checker `python/torus/certify_torus.py`). There are 336 records for P = 1–16 in each of the three torus families (square `sq`, hexagonal `hex`, free lattice `free`) and the seven shapes N = 0 (disk) and N = 3–8. Another 208 are exact constructions for P = 17–49 where a bound is attained. Every certified score exceeds its search value by at most 1.0003e-12 relative (shrink ε = 1e-12).
 
-[SPEC] The site domain is `torus/<family>/<N>/<P>`: families `sq`, `hex`, `free`, N = 0 (unit disks) or every integer 3–100, P = 1–500, giving 148,500 problems (29,700 up to P = 100; P = 101–500 was added on 2026-10-27). The lattice and pose conventions are unchanged. New choices ship without research records. [CALC] Their lower bound uses `areaScoreBound` with density bound 1: sqrt(P A_piece), or sqrt(P A_piece/(√3/2)) for `hex`, lowered slightly for floating-point rounding. Stronger bounds already attached to research records take precedence.
+[SPEC] The site domain is `torus/<family>/<N>/<P>`: families `sq`, `hex`, `free`, N = 0 (disks of diameter 1) or every integer 3–100, P = 1–500, giving 148,500 problems (29,700 up to P = 100; P = 101–500 was added on 2026-10-27). The lattice and pose conventions are unchanged. New choices ship without research records. [CALC] Their lower bound uses `areaScoreBound` with density bound 1: sqrt(P A_piece), or sqrt(P A_piece/(√3/2)) for `hex`, lowered slightly for floating-point rounding. Stronger bounds already attached to research records take precedence.
 
 [SPEC] `SPACE_DOMAINS` describes the ranges to the API and board picker. The volunteer list samples the domain; it never enumerates it all. Problems without a record have status `no_record`, null certified values/configurations, and require the strict float check on every entry. Existing record files are unchanged. Server validation shares the synchronous geometry through generators, yields between small units of work (8 ms default budget), stops after 20 overlapping pairs, and uses the shared heavy-check queue from P = 30. Sphere also queues N ≥ 20 at any P. No new records or optimisation runs accompany this change, nor the extension to P = 500 (see "Large P" below).
 
@@ -17,7 +17,7 @@
 
 ## 1. Problem
 
-**Pieces.** P congruent PolyPack pieces, with the conventions of `PROMPT.md` §2: N = 0 is a closed disk of radius 1; N ≥ 3 is a regular N-gon of side 1 with pose (x, y, θ), circumradius R = 1/(2 sin(π/N)), and vertex k at (x, y) + R (cos a_k, sin a_k), a_k = θ + π/2 + 2πk/N. At θ = 0 a vertex points up.
+**Pieces.** P congruent PolyPack pieces, with the conventions of `PROMPT.md` §2: N = 0 is a closed disk of diameter 1 (radius 1/2; until 2026-10-26 radius 1, with every disk score twice as large); N ≥ 3 is a regular N-gon of side 1 with pose (x, y, θ), circumradius R = 1/(2 sin(π/N)), and vertex k at (x, y) + R (cos a_k, sin a_k), a_k = θ + π/2 + 2πk/N. At θ = 0 a vertex points up.
 
 **Space.** A flat torus R²/Λ with Λ = Z b1 + Z b2. Three families:
 
@@ -40,7 +40,7 @@ Problem id: `torus/<family>/<N>/<P>`, for example `torus/hex/0/7`. Smaller score
 
 ## 2. Which lattice vectors matter
 
-Let K_i lie in the closed disk B(c_i, R) about its centre (R = circumradius, 1 for disks). If |c_j + λ − c_i| ≥ 2R the open disks are disjoint, hence so are the interiors of K_i and K_j + λ; if the distance is > 2R even the closed pieces are disjoint. So only
+Let K_i lie in the closed disk B(c_i, R) about its centre (R = circumradius, 1/2 for disks). If |c_j + λ − c_i| ≥ 2R the open disks are disjoint, hence so are the interiors of K_i and K_j + λ; if the distance is > 2R even the closed pieces are disjoint. So only
 
   v = c_j − c_i + λ with |v| < 2R
 
@@ -116,7 +116,7 @@ Disks on both tori, squares on the square torus and the odd-P free pentagons did
 
 `torusKernel({ family, N, P })` (`packages/torus/src/kernel.ts`) is the torus's kernel for the generic search methods (`docs/methods/dimensions/README.md`), in every family. The built-in search stays available as Auto.
 
-- **Variables.** As in the TypeScript search: a base packing (basis, centres and angles) mapped by kF. The factor k = size / score(base) scales the lattice and the centres together; pieces keep side 1 or radius 1. For `free`, F = [[e^t1, t2], [0, e^−t1]] has determinant 1 and shears the cell; t1 and t2 are the kernel's two globals. `sq` and `hex` have none. Per piece: the centre's offset in the base frame, and the angle's offset times the circumradius (disks: the centre only), so every variable is a length. The size is the score. Because the centres live in the base frame, a change of the globals deforms the whole packing with the cell, as in Torquato and Jiao's adaptive shrinking cell (§4). `rebase` folds offsets, scale and shear into the base packing. It, `fromConfig` and the starts also replace a skewed free basis by a reduced one and bring centres more than a cell away back into the cell; neither changes the packing. `fromConfig` refuses numbers beyond the server's limits, as the server does, and the energy brings far centres back into the cell too, so its enumeration stays a few lattice vectors per pair whatever the offsets. Moves (`jiggle`, `randomPose`, `swap`) change only the moved pieces' entries of x.
+- **Variables.** As in the TypeScript search: a base packing (basis, centres and angles) mapped by kF. The factor k = size / score(base) scales the lattice and the centres together; pieces keep side 1 or diameter 1. For `free`, F = [[e^t1, t2], [0, e^−t1]] has determinant 1 and shears the cell; t1 and t2 are the kernel's two globals. `sq` and `hex` have none. Per piece: the centre's offset in the base frame, and the angle's offset times the circumradius (disks: the centre only), so every variable is a length. The size is the score. Because the centres live in the base frame, a change of the globals deforms the whole packing with the cell, as in Torquato and Jiao's adaptive shrinking cell (§4). `rebase` folds offsets, scale and shear into the base packing. It, `fromConfig` and the starts also replace a skewed free basis by a reduced one and bring centres more than a cell away back into the cell; neither changes the packing. `fromConfig` refuses numbers beyond the server's limits, as the server does, and the energy brings far centres back into the cell too, so its enumeration stays a few lattice vectors per pair whatever the offsets. Moves (`jiggle`, `randomPose`, `swap`) change only the moved pieces' entries of x.
 - **Energy.** For every image pair within 2R (the window of §2), the squared penetration depth from `pairPenetration` of the shared geometry kernel. It is the validator's separating-axis value (`pieceSeparation`) negated, which is the exact penetration depth of two overlapping convex polygons, and it comes with analytic derivatives. A piece and its own translates count once per lattice vector. The gradient in the globals and the size follows from v = kFδ for an image vector v (δ in the base frame).
 - **finish().** The search's tight-scale bisection to 10⁻¹³ relative, after a free basis is Lagrange–Gauss reduced (as the server stores it) and the centres are brought into the cell. Each step uses the energy's pair test, which computes the same separating-axis values as the validator; the validator then checks the result at tolerance 0, and if rounding at a contact requires it the result moves up by at most 7·10⁻¹² relative; else the validator's own bisection decides, polling the run's stop. When the pair test finds no valid scale within a factor of about 14, the finish gives up at once. The results equalled the validator-driven bisection exactly on 18 squeezed states (P = 10 and 30, every family), and to 10⁻¹² on the records tested [CALC].
 - **validate().** The server's rule: format and ranges, the size against the kernel's bound with the server's slack of 10⁻⁹ relative, a shortest lattice vector at least the piece's width, at most 1,000 candidate translates per pair (`maxImageCandidates`), then `validateTorusPacking` at the touching tolerance 10⁻⁹. The server's strict check of a size below a research record (tolerance 10⁻¹¹) needs the record, so it stays with the server.
@@ -143,22 +143,22 @@ Certified score (rounded to 6 decimals), with density below. **Bold**: equal to 
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **2.000000**<br>0.7854 | **0.896575**<br>0.5387 | **1.000000** †<br>1.0000 | **1.558024**<br>0.7088 | **1.793151**<br>0.8080 | **2.204505**<br>0.7477 | **2.414214**<br>0.8284 |
-| 2 | **2.828427** †<br>0.7854 | 0.954747<br>0.9501 | **1.414214** †<br>1.0000 | 2.120995<br>0.7649 | 2.535898<br>0.8080 | 3.017103<br>0.7984 | 3.414214<br>0.8284 |
-| 3 | **3.863703** †<br>0.6313 | 1.344863<br>0.7182 | 2.000000<br>0.7500 | 2.774480<br>0.6705 | 3.464102<br>0.6495 | 4.079906<br>0.6549 | 4.765890<br>0.6377 |
-| 4 | **3.863703** †<br>0.8418 | 1.350217<br>0.9501 | **2.000000** †<br>1.0000 | 2.776418<br>0.8928 | 3.464102<br>0.8660 | 4.111522<br>0.8599 | 4.765890<br>0.8503 |
-| 5 | **4.472136**<br>0.7854 | 1.692811<br>0.7555 | **2.236068** †<br>1.0000 | 3.387248<br>0.7498 | 4.009607<br>0.8080 | 4.831473<br>0.7784 | 5.398346<br>0.8284 |
-| 6 | **4.994936** †<br>0.7555 | 1.791837<br>0.8092 | 2.683282<br>0.8333 | 3.503920<br>0.8408 | 4.437822<br>0.7915 | 5.325566<br>0.7688 | 6.161760<br>0.7630 |
-| 7 | **5.464102** †<br>0.7366 | 1.811733<br>0.9234 | 2.828427<br>0.8750 | 3.923707<br>0.7823 | 4.885776<br>0.7619 | 5.787543<br>0.7594 | 6.723128<br>0.7478 |
-| 8 | **5.464102** †<br>0.8418 | 1.872993<br>0.9875 | **2.828427** †<br>1.0000 | 3.926449<br>0.8928 | 4.898979<br>0.8660 | 5.814570<br>0.8599 | 6.739986<br>0.8503 |
-| 9 | 5.818626<br>0.8351 | 2.094070<br>0.8887 | **3.000000** †<br>1.0000 | 4.309276<br>0.8338 | 5.196152<br>0.8660 | 6.263837<br>0.8336 | 7.135642<br>0.8535 |
-| 10 | 6.324555<br>0.7854 | 2.134880<br>0.9501 | **3.162278** †<br>1.0000 | 4.638836<br>0.7995 | 5.670441<br>0.8080 | 6.746447<br>0.7984 | 7.634414<br>0.8284 |
-| 11 | 6.547757<br>0.8060 | 2.320508<br>0.8846 | 3.478505<br>0.9091 | 4.775184<br>0.8300 | 5.705771<br>0.8778 | 7.023959<br>0.8102 | 8.035534<br>0.8226 |
-| 12 | 6.656402<br>0.8508 | 2.356351<br>0.9358 | 3.535534<br>0.9600 | 4.792445<br>0.8989 | 5.776590<br>0.9343 | 7.139949<br>0.8554 | 8.190703<br>0.8637 |
-| 13 | 7.190416<br>0.7899 | 2.538946<br>0.8732 | **3.605551** †<br>1.0000 | 5.224367<br>0.8195 | 6.276028<br>0.8575 | 7.702229<br>0.7963 | 8.704571<br>0.8284 |
-| 14 | 7.241690<br>0.8387 | 2.562178<br>0.9234 | 3.882901<br>0.9286 | 5.320280<br>0.8510 | 6.276028<br>0.9234 | 7.827717<br>0.8303 | 8.949747<br>0.8439 |
-| 15 | 7.276069<br>0.8901 | 2.621425<br>0.9452 | 4.000000<br>0.9375 | 5.388975<br>0.8886 | 6.302152<br>0.9812 | 7.881092<br>0.8776 | 8.997243<br>0.8947 |
-| 16 | 7.727407<br>0.8418 | 2.648812<br>0.9875 | **4.000000** †<br>1.0000 | 5.552837<br>0.8928 | 6.928203<br>0.8660 | 8.223044<br>0.8599 | 9.525483<br>0.8514 |
+| 1 | **1.000000**<br>0.7854 | **0.896575**<br>0.5387 | **1.000000** †<br>1.0000 | **1.558024**<br>0.7088 | **1.793151**<br>0.8080 | **2.204505**<br>0.7477 | **2.414214**<br>0.8284 |
+| 2 | **1.414214** †<br>0.7854 | 0.954747<br>0.9501 | **1.414214** †<br>1.0000 | 2.120995<br>0.7649 | 2.535898<br>0.8080 | 3.017103<br>0.7984 | 3.414214<br>0.8284 |
+| 3 | **1.931852** †<br>0.6313 | 1.344863<br>0.7182 | 2.000000<br>0.7500 | 2.774480<br>0.6705 | 3.464102<br>0.6495 | 4.079906<br>0.6549 | 4.765890<br>0.6377 |
+| 4 | **1.931852** †<br>0.8418 | 1.350217<br>0.9501 | **2.000000** †<br>1.0000 | 2.776418<br>0.8928 | 3.464102<br>0.8660 | 4.111522<br>0.8599 | 4.765890<br>0.8503 |
+| 5 | **2.236068**<br>0.7854 | 1.692811<br>0.7555 | **2.236068** †<br>1.0000 | 3.387248<br>0.7498 | 4.009607<br>0.8080 | 4.831473<br>0.7784 | 5.398346<br>0.8284 |
+| 6 | **2.497468** †<br>0.7555 | 1.791837<br>0.8092 | 2.683282<br>0.8333 | 3.503920<br>0.8408 | 4.437822<br>0.7915 | 5.325566<br>0.7688 | 6.161760<br>0.7630 |
+| 7 | **2.732051** †<br>0.7366 | 1.811733<br>0.9234 | 2.828427<br>0.8750 | 3.923707<br>0.7823 | 4.885776<br>0.7619 | 5.787543<br>0.7594 | 6.723128<br>0.7478 |
+| 8 | **2.732051** †<br>0.8418 | 1.872993<br>0.9875 | **2.828427** †<br>1.0000 | 3.926449<br>0.8928 | 4.898979<br>0.8660 | 5.814570<br>0.8599 | 6.739986<br>0.8503 |
+| 9 | 2.909313<br>0.8351 | 2.094070<br>0.8887 | **3.000000** †<br>1.0000 | 4.309276<br>0.8338 | 5.196152<br>0.8660 | 6.263837<br>0.8336 | 7.135642<br>0.8535 |
+| 10 | 3.162278<br>0.7854 | 2.134880<br>0.9501 | **3.162278** †<br>1.0000 | 4.638836<br>0.7995 | 5.670441<br>0.8080 | 6.746447<br>0.7984 | 7.634414<br>0.8284 |
+| 11 | 3.273879<br>0.8060 | 2.320508<br>0.8846 | 3.478505<br>0.9091 | 4.775184<br>0.8300 | 5.705771<br>0.8778 | 7.023959<br>0.8102 | 8.035534<br>0.8226 |
+| 12 | 3.328201<br>0.8508 | 2.356351<br>0.9358 | 3.535534<br>0.9600 | 4.792445<br>0.8989 | 5.776590<br>0.9343 | 7.139949<br>0.8554 | 8.190703<br>0.8637 |
+| 13 | 3.595208<br>0.7899 | 2.538946<br>0.8732 | **3.605551** †<br>1.0000 | 5.224367<br>0.8195 | 6.276028<br>0.8575 | 7.702229<br>0.7963 | 8.704571<br>0.8284 |
+| 14 | 3.620845<br>0.8387 | 2.562178<br>0.9234 | 3.882901<br>0.9286 | 5.320280<br>0.8510 | 6.276028<br>0.9234 | 7.827717<br>0.8303 | 8.949747<br>0.8439 |
+| 15 | 3.638034<br>0.8901 | 2.621425<br>0.9452 | 4.000000<br>0.9375 | 5.388975<br>0.8886 | 6.302152<br>0.9812 | 7.881092<br>0.8776 | 8.997243<br>0.8947 |
+| 16 | 3.863703<br>0.8418 | 2.648812<br>0.9875 | **4.000000** †<br>1.0000 | 5.552837<br>0.8928 | 6.928203<br>0.8660 | 8.223044<br>0.8599 | 9.525483<br>0.8514 |
 
 ### Hexagonal torus (score L)
 
@@ -166,22 +166,22 @@ Certified score (rounded to 6 decimals), with density below. **Bold**: equal to 
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **2.000000** †<br>0.9069 | **0.866025**<br>0.6667 | 1.154701<br>0.8660 | 1.573220<br>0.8027 | **1.732051**<br>1.0000 | 2.215387<br>0.8550 | 2.499378<br>0.8925 |
-| 2 | **3.464102** †<br>0.6046 | **1.000000**<br>1.0000 | 2.000000<br>0.5774 | 2.503613<br>0.6339 | 3.000000<br>0.6667 | 3.732274<br>0.6025 | 4.266705<br>0.6125 |
-| 3 | **3.464102** †<br>0.9069 | 1.401259<br>0.7639 | 2.000000<br>0.8660 | 2.616618<br>0.8705 | **3.000000**<br>1.0000 | 3.780346<br>0.8809 | 4.329049<br>0.8925 |
-| 4 | **4.000000** †<br>0.9069 | 1.599947<br>0.7813 | 2.309401<br>0.8660 | 3.013137<br>0.8753 | **3.464102**<br>1.0000 | 4.368224<br>0.8796 | 4.998756<br>0.8925 |
-| 5 | 5.048676<br>0.7116 | 1.700840<br>0.8642 | 2.886751<br>0.6928 | 3.745645<br>0.7080 | 4.493572<br>0.7429 | 5.395121<br>0.7208 | 6.246889<br>0.7144 |
-| 6 | **5.291503**<br>0.7773 | **1.732051**<br>1.0000 | 3.000000<br>0.7698 | 3.907092<br>0.7808 | 4.582576<br>0.8571 | 5.747856<br>0.7620 | 6.556230<br>0.7782 |
-| 7 | **5.291503** †<br>0.9069 | 1.963961<br>0.9074 | 3.000000<br>0.8981 | 3.963368<br>0.8853 | **4.582576**<br>1.0000 | 5.778922<br>0.8795 | 6.612732<br>0.8925 |
-| 8 | 6.000000<br>0.8061 | **2.000000**<br>1.0000 | 3.055050<br>0.9897 | 4.416365<br>0.8149 | 5.196152<br>0.8889 | 6.434734<br>0.8107 | 7.318686<br>0.8327 |
-| 9 | **6.000000** †<br>0.9069 | 2.236068<br>0.9000 | 3.401680<br>0.8981 | 4.502288<br>0.8821 | **5.196152**<br>1.0000 | 6.544421<br>0.8817 | 7.498133<br>0.8925 |
-| 10 | 6.854068<br>0.7722 | 2.413241<br>0.8586 | 3.779645<br>0.8083 | 4.917678<br>0.8215 | 6.000000<br>0.8333 | 7.310700<br>0.7851 | 8.485113<br>0.7744 |
-| 11 | 6.928203<br>0.8313 | 2.500000<br>0.8800 | 3.983153<br>0.8006 | 5.146917<br>0.8249 | 6.000000<br>0.9167 | 7.539097<br>0.8121 | 8.642667<br>0.8211 |
-| 12 | **6.928203** †<br>0.9069 | 2.582838<br>0.8994 | 4.000000<br>0.8660 | 5.192395<br>0.8842 | **6.000000**<br>1.0000 | 7.557438<br>0.8816 | 8.658099<br>0.8925 |
-| 13 | **7.211103** †<br>0.9069 | 2.598076<br>0.9630 | 4.041452<br>0.9190 | 5.410898<br>0.8821 | **6.244998**<br>1.0000 | 7.862184<br>0.8825 | 9.011635<br>0.8925 |
-| 14 | 7.935884<br>0.8064 | **2.645751**<br>1.0000 | 4.041452<br>0.9897 | 5.750557<br>0.8411 | 6.928203<br>0.8750 | 8.474115<br>0.8181 | 9.728316<br>0.8248 |
-| 15 | 8.000000<br>0.8502 | 2.882307<br>0.9028 | 4.163332<br>0.9993 | 5.912063<br>0.8526 | 6.928203<br>0.9375 | 8.707970<br>0.8300 | 9.991605<br>0.8377 |
-| 16 | **8.000000** †<br>0.9069 | 2.884441<br>0.9615 | 4.437602<br>0.9382 | 5.912063<br>0.9094 | **6.928203**<br>1.0000 | 8.723434<br>0.8822 | 9.997511<br>0.8925 |
+| 1 | **1.000000** †<br>0.9069 | **0.866025**<br>0.6667 | 1.154701<br>0.8660 | 1.573220<br>0.8027 | **1.732051**<br>1.0000 | 2.215387<br>0.8550 | 2.499378<br>0.8925 |
+| 2 | **1.732051** †<br>0.6046 | **1.000000**<br>1.0000 | 2.000000<br>0.5774 | 2.503613<br>0.6339 | 3.000000<br>0.6667 | 3.732274<br>0.6025 | 4.266705<br>0.6125 |
+| 3 | **1.732051** †<br>0.9069 | 1.401259<br>0.7639 | 2.000000<br>0.8660 | 2.616618<br>0.8705 | **3.000000**<br>1.0000 | 3.780346<br>0.8809 | 4.329049<br>0.8925 |
+| 4 | **2.000000** †<br>0.9069 | 1.599947<br>0.7813 | 2.309401<br>0.8660 | 3.013137<br>0.8753 | **3.464102**<br>1.0000 | 4.368224<br>0.8796 | 4.998756<br>0.8925 |
+| 5 | 2.524338<br>0.7116 | 1.700840<br>0.8642 | 2.886751<br>0.6928 | 3.745645<br>0.7080 | 4.493572<br>0.7429 | 5.395121<br>0.7208 | 6.246889<br>0.7144 |
+| 6 | **2.645751**<br>0.7773 | **1.732051**<br>1.0000 | 3.000000<br>0.7698 | 3.907092<br>0.7808 | 4.582576<br>0.8571 | 5.747856<br>0.7620 | 6.556230<br>0.7782 |
+| 7 | **2.645751** †<br>0.9069 | 1.963961<br>0.9074 | 3.000000<br>0.8981 | 3.963368<br>0.8853 | **4.582576**<br>1.0000 | 5.778922<br>0.8795 | 6.612732<br>0.8925 |
+| 8 | 3.000000<br>0.8061 | **2.000000**<br>1.0000 | 3.055050<br>0.9897 | 4.416365<br>0.8149 | 5.196152<br>0.8889 | 6.434734<br>0.8107 | 7.318686<br>0.8327 |
+| 9 | **3.000000** †<br>0.9069 | 2.236068<br>0.9000 | 3.401680<br>0.8981 | 4.502288<br>0.8821 | **5.196152**<br>1.0000 | 6.544421<br>0.8817 | 7.498133<br>0.8925 |
+| 10 | 3.427034<br>0.7722 | 2.413241<br>0.8586 | 3.779645<br>0.8083 | 4.917678<br>0.8215 | 6.000000<br>0.8333 | 7.310700<br>0.7851 | 8.485113<br>0.7744 |
+| 11 | 3.464102<br>0.8313 | 2.500000<br>0.8800 | 3.983153<br>0.8006 | 5.146917<br>0.8249 | 6.000000<br>0.9167 | 7.539097<br>0.8121 | 8.642667<br>0.8211 |
+| 12 | **3.464102** †<br>0.9069 | 2.582838<br>0.8994 | 4.000000<br>0.8660 | 5.192395<br>0.8842 | **6.000000**<br>1.0000 | 7.557438<br>0.8816 | 8.658099<br>0.8925 |
+| 13 | **3.605551** †<br>0.9069 | 2.598076<br>0.9630 | 4.041452<br>0.9190 | 5.410898<br>0.8821 | **6.244998**<br>1.0000 | 7.862184<br>0.8825 | 9.011635<br>0.8925 |
+| 14 | 3.967942<br>0.8064 | **2.645751**<br>1.0000 | 4.041452<br>0.9897 | 5.750557<br>0.8411 | 6.928203<br>0.8750 | 8.474115<br>0.8181 | 9.728316<br>0.8248 |
+| 15 | 4.000000<br>0.8502 | 2.882307<br>0.9028 | 4.163332<br>0.9993 | 5.912063<br>0.8526 | 6.928203<br>0.9375 | 8.707970<br>0.8300 | 9.991605<br>0.8377 |
+| 16 | **4.000000** †<br>0.9069 | 2.884441<br>0.9615 | 4.437602<br>0.9382 | 5.912063<br>0.9094 | **6.928203**<br>1.0000 | 8.723434<br>0.8822 | 9.997511<br>0.8925 |
 
 ### Free lattice (score sqrt(cell area))
 
@@ -189,22 +189,22 @@ Certified score (rounded to 6 decimals), with density below. **Bold**: equal to 
 
 | P | disks | triangles | squares | pentagons | hexagons | heptagons | octagons |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | **1.861210** †<br>0.9069 | **0.805927** †<br>0.6667 | **1.000000**<br>1.0000 | 1.450927<br>0.8173 | **1.611855**<br>1.0000 | 2.055369<br>0.8602 | **2.308339**<br>0.9062 |
-| 2 | **2.632148**<br>0.9069 | **0.930605**<br>1.0000 | **1.414214**<br>1.0000 | **1.932575**<br>0.9213 | **2.279507**<br>1.0000 | 2.853328<br>0.8927 | **3.264484**<br>0.9062 |
-| 3 | **3.223710**<br>0.9069 | 1.231075<br>0.8571 | **1.732051**<br>1.0000 | 2.416616<br>0.8838 | **2.791815**<br>1.0000 | 3.516536<br>0.8816 | **3.998160**<br>0.9062 |
-| 4 | **3.722419**<br>0.9069 | **1.316074**<br>1.0000 | **2.000000**<br>1.0000 | **2.733074**<br>0.9213 | **3.223710**<br>1.0000 | 4.035215<br>0.8927 | **4.616677**<br>0.9062 |
-| 5 | **4.161791**<br>0.9069 | 1.543234<br>0.9091 | **2.236068**<br>1.0000 | 3.094331<br>0.8984 | **3.604217**<br>1.0000 | 4.528521<br>0.8860 | **5.161602**<br>0.9062 |
-| 6 | **4.559014**<br>0.9069 | **1.611855**<br>1.0000 | **2.449490**<br>1.0000 | **3.347319**<br>0.9213 | **3.948222**<br>1.0000 | 4.942109<br>0.8927 | **5.654252**<br>0.9062 |
-| 7 | **4.924298**<br>0.9069 | 1.802109<br>0.9333 | **2.645751**<br>1.0000 | 3.657910<br>0.9001 | **4.264567**<br>1.0000 | 5.364265<br>0.8840 | **6.107290**<br>0.9062 |
-| 8 | **5.264296**<br>0.9069 | **1.861210**<br>1.0000 | **2.828427**<br>1.0000 | **3.865151**<br>0.9213 | **4.559014**<br>1.0000 | 5.706656<br>0.8927 | **6.528968**<br>0.9062 |
-| 9 | **5.583629**<br>0.9069 | 2.028206<br>0.9474 | **3.000000**<br>1.0000 | 4.139025<br>0.9038 | **4.835565**<br>1.0000 | 6.075992<br>0.8859 | **6.925016**<br>0.9062 |
-| 10 | **5.885662**<br>0.9069 | **2.080896**<br>1.0000 | **3.162278**<br>1.0000 | **4.321370**<br>0.9213 | **5.097133**<br>1.0000 | 6.380236<br>0.8927 | **7.299608**<br>0.9062 |
-| 11 | **6.172934**<br>0.9069 | 2.231512<br>0.9565 | **3.316625**<br>1.0000 | 4.558445<br>0.9108 | **5.345918**<br>1.0000 | 6.712677<br>0.8871 | **7.655893**<br>0.9062 |
-| 12 | **6.447420**<br>0.9069 | **2.279507**<br>1.0000 | **3.464102**<br>1.0000 | **4.733823**<br>0.9213 | **5.583629**<br>1.0000 | 6.989198<br>0.8927 | **7.996319**<br>0.9062 |
-| 13 | **6.710687**<br>0.9069 | 2.417782<br>0.9630 | **3.605551**<br>1.0000 | 4.951189<br>0.9124 | **5.811625**<br>1.0000 | 7.293997<br>0.8879 | **8.322833**<br>0.9062 |
-| 14 | **6.964009**<br>0.9069 | **2.462149**<br>1.0000 | **3.741657**<br>1.0000 | **5.113114**<br>0.9213 | **6.031009**<br>1.0000 | 7.549197<br>0.8927 | **8.637012**<br>0.9062 |
-| 15 | **7.208434**<br>0.9069 | 2.590694<br>0.9677 | **3.872983**<br>1.0000 | 5.314990<br>0.9136 | **6.242687**<br>1.0000 | 7.832288<br>0.8886 | **8.940157**<br>0.9062 |
-| 16 | **7.444839**<br>0.9069 | **2.632148**<br>1.0000 | **4.000000**<br>1.0000 | **5.466148**<br>0.9213 | **6.447420**<br>1.0000 | 8.070431<br>0.8927 | **9.233354**<br>0.9062 |
+| 1 | **0.930605** †<br>0.9069 | **0.805927** †<br>0.6667 | **1.000000**<br>1.0000 | 1.450927<br>0.8173 | **1.611855**<br>1.0000 | 2.055369<br>0.8602 | **2.308339**<br>0.9062 |
+| 2 | **1.316074**<br>0.9069 | **0.930605**<br>1.0000 | **1.414214**<br>1.0000 | **1.932575**<br>0.9213 | **2.279507**<br>1.0000 | 2.853328<br>0.8927 | **3.264484**<br>0.9062 |
+| 3 | **1.611855**<br>0.9069 | 1.231075<br>0.8571 | **1.732051**<br>1.0000 | 2.416616<br>0.8838 | **2.791815**<br>1.0000 | 3.516536<br>0.8816 | **3.998160**<br>0.9062 |
+| 4 | **1.861210**<br>0.9069 | **1.316074**<br>1.0000 | **2.000000**<br>1.0000 | **2.733074**<br>0.9213 | **3.223710**<br>1.0000 | 4.035215<br>0.8927 | **4.616677**<br>0.9062 |
+| 5 | **2.080896**<br>0.9069 | 1.543234<br>0.9091 | **2.236068**<br>1.0000 | 3.094331<br>0.8984 | **3.604217**<br>1.0000 | 4.528521<br>0.8860 | **5.161602**<br>0.9062 |
+| 6 | **2.279507**<br>0.9069 | **1.611855**<br>1.0000 | **2.449490**<br>1.0000 | **3.347319**<br>0.9213 | **3.948222**<br>1.0000 | 4.942109<br>0.8927 | **5.654252**<br>0.9062 |
+| 7 | **2.462149**<br>0.9069 | 1.802109<br>0.9333 | **2.645751**<br>1.0000 | 3.657910<br>0.9001 | **4.264567**<br>1.0000 | 5.364265<br>0.8840 | **6.107290**<br>0.9062 |
+| 8 | **2.632148**<br>0.9069 | **1.861210**<br>1.0000 | **2.828427**<br>1.0000 | **3.865151**<br>0.9213 | **4.559014**<br>1.0000 | 5.706656<br>0.8927 | **6.528968**<br>0.9062 |
+| 9 | **2.791815**<br>0.9069 | 2.028206<br>0.9474 | **3.000000**<br>1.0000 | 4.139025<br>0.9038 | **4.835565**<br>1.0000 | 6.075992<br>0.8859 | **6.925016**<br>0.9062 |
+| 10 | **2.942831**<br>0.9069 | **2.080896**<br>1.0000 | **3.162278**<br>1.0000 | **4.321370**<br>0.9213 | **5.097133**<br>1.0000 | 6.380236<br>0.8927 | **7.299608**<br>0.9062 |
+| 11 | **3.086467**<br>0.9069 | 2.231512<br>0.9565 | **3.316625**<br>1.0000 | 4.558445<br>0.9108 | **5.345918**<br>1.0000 | 6.712677<br>0.8871 | **7.655893**<br>0.9062 |
+| 12 | **3.223710**<br>0.9069 | **2.279507**<br>1.0000 | **3.464102**<br>1.0000 | **4.733823**<br>0.9213 | **5.583629**<br>1.0000 | 6.989198<br>0.8927 | **7.996319**<br>0.9062 |
+| 13 | **3.355344**<br>0.9069 | 2.417782<br>0.9630 | **3.605551**<br>1.0000 | 4.951189<br>0.9124 | **5.811625**<br>1.0000 | 7.293997<br>0.8879 | **8.322833**<br>0.9062 |
+| 14 | **3.482005**<br>0.9069 | **2.462149**<br>1.0000 | **3.741657**<br>1.0000 | **5.113114**<br>0.9213 | **6.031009**<br>1.0000 | 7.549197<br>0.8927 | **8.637012**<br>0.9062 |
+| 15 | **3.604217**<br>0.9069 | 2.590694<br>0.9677 | **3.872983**<br>1.0000 | 5.314990<br>0.9136 | **6.242687**<br>1.0000 | 7.832288<br>0.8886 | **8.940157**<br>0.9062 |
+| 16 | **3.722419**<br>0.9069 | **2.632148**<br>1.0000 | **4.000000**<br>1.0000 | **5.466148**<br>0.9213 | **6.447420**<br>1.0000 | 8.070431<br>0.8927 | **9.233354**<br>0.9062 |
 
 **Beyond P = 16** (exact replications, `extend_torus.py`; every one attains its bound):
 
@@ -239,25 +239,25 @@ The record column is the record's status; the source's claim is that of the pape
 
 | problem | record | ours (score_float) | literature | source's claim | ours - literature | source |
 |---|---|---:|---:|---|---:|---|
-| torus/sq/0/1 | best known | 2.000000000 | 2.000000000 | proven | 0.00e+00 | Dickinson et al. 2011 (not read); one disk: the shortest lattice vector must be at least 2 (trivial); Connelly et al. 2017 report the square grid optimal for N = 1, 2 and 5 |
-| torus/sq/0/2 | proven | 2.828427125 | 2.828427125 | proven; proof checked | -4.44e-16 | Brandt et al. 2019, Thm 1.1; L = 2 sqrt2 |
-| torus/sq/0/2 | proven | 2.828427125 | 2.828427125 | proven | -4.44e-16 | Dickinson et al. 2011 (not read); d = sqrt2/2, L = 2 sqrt2 |
-| torus/sq/0/3 | proven | 3.863703305 | 3.863703305 | proven; proof checked | 4.44e-16 | Brandt et al. 2019, Thm 1.1; L = sqrt6 + sqrt2 |
-| torus/sq/0/3 | proven | 3.863703305 | 3.863703305 | proven | 4.44e-16 | Dickinson et al. 2011 (not read); d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2 |
-| torus/sq/0/4 | proven | 3.863703305 | 3.863703305 | proven; proof checked | 4.44e-16 | Brandt et al. 2019, Thm 1.1; L = sqrt6 + sqrt2 |
-| torus/sq/0/4 | proven | 3.863703305 | 3.863703305 | proven | 4.44e-16 | Dickinson et al. 2011 (not read); d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2 |
-| torus/sq/0/5 | best known | 4.472135955 | 4.472135955 | proven | 0.00e+00 | Dickinson et al. 2011 (not read); d = 1/sqrt5, L = 2 sqrt5 |
-| torus/sq/0/6 | proven | 4.994935777 | 4.994935777 | proven; proof checked | -1.78e-15 | Musin and Nikitenko 2016, Thm 1; d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6 |
-| torus/sq/0/7 | proven | 5.464101615 | 5.464101615 | proven; proof checked | 0.00e+00 | Musin and Nikitenko 2016, Thm 2; d7 = 1/(1 + sqrt3), three optimal arrangements |
-| torus/sq/0/8 | proven | 5.464101615 | 5.464101615 | proven; proof checked | 0.00e+00 | Musin and Nikitenko 2016, Thm 3; d8 = 1/(1 + sqrt3) |
-| torus/sq/0/9 | best known | 5.818625822 | 5.818625822 | conjecture | 0.00e+00 | Musin and Nikitenko 2016, Conjecture 2.1; d = 1/sqrt(5 + 2 sqrt3); Voloshinov and Smirnov reach the same arrangement with a floating-point branch and bound (V. V. Voloshinov, S. A. Smirnov, Optimal packings of congruent circles on a square flat torus as mixed-integer nonlinear optimization problem, Communications in Computer and Information Science (Springer, 2019) 87-97, doi:10.1007/978-3-030-36592-9_8), not a rigorous proof |
-| torus/sq/0/10 | best known | 6.324555320 | 6.324555320 | best known | 0.00e+00 | Connelly et al. 2017; square grid, conjectured optimal; table bracket L in [6.3241, 6.3282] |
-| torus/sq/0/11 | best known | 6.547757332 | — | best known |  | Connelly et al. 2017; table bracket L in [6.5459, 6.5500] (r = 0.153, delta = 0.806) |
-| torus/sq/0/12 | best known | 6.656402355 | 6.656402355 | best known | 0.00e+00 | Connelly et al. 2017; Type I (a, b) = (3, 2): L = 24/sqrt13; table bracket [6.6539, 6.6578] |
-| torus/sq/0/13 | best known | 7.190416372 | — | best known |  | Connelly et al. 2017; table bracket L in [7.1969, 7.2015] (r = 0.139, delta = 0.788) |
-| torus/sq/0/14 | best known | 7.241690393 | — | best known |  | Connelly et al. 2017; table bracket L in [7.2382, 7.2425] (r = 0.138, delta = 0.839) |
-| torus/sq/0/15 | best known | 7.276068751 | 7.276068751 | best known | 8.88e-16 | Connelly et al. 2017; Type II (a, b) = (4, 1): L = 30/sqrt17; table bracket [7.2745, 7.2786] |
-| torus/sq/0/16 | best known | 7.727406610 | 7.727406610 | best known | 8.88e-16 | Connelly et al. 2017; table bracket [7.7241, 7.7287]; 2 x 2 copy of the P = 4 optimum gives 2 (sqrt6 + sqrt2) [SPEC identification] |
+| torus/sq/0/1 | best known | 1.000000000 | 1.000000000 | proven | 0.00e+00 | Dickinson et al. 2011 (not read); one disk: the shortest lattice vector must be at least 1 (trivial); Connelly et al. 2017 report the square grid optimal for N = 1, 2 and 5 |
+| torus/sq/0/2 | proven | 1.414213563 | 1.414213563 | proven; proof checked | -2.22e-16 | Brandt et al. 2019, Thm 1.1; L = sqrt2 |
+| torus/sq/0/2 | proven | 1.414213563 | 1.414213563 | proven | -2.22e-16 | Dickinson et al. 2011 (not read); d = sqrt2/2, L = sqrt2 |
+| torus/sq/0/3 | proven | 1.931851653 | 1.931851653 | proven; proof checked | 2.22e-16 | Brandt et al. 2019, Thm 1.1; L = (sqrt6 + sqrt2)/2 |
+| torus/sq/0/3 | proven | 1.931851653 | 1.931851653 | proven | 2.22e-16 | Dickinson et al. 2011 (not read); d = (sqrt6 - sqrt2)/2, L = (sqrt6 + sqrt2)/2 |
+| torus/sq/0/4 | proven | 1.931851653 | 1.931851653 | proven; proof checked | 2.22e-16 | Brandt et al. 2019, Thm 1.1; L = (sqrt6 + sqrt2)/2 |
+| torus/sq/0/4 | proven | 1.931851653 | 1.931851653 | proven | 2.22e-16 | Dickinson et al. 2011 (not read); d = (sqrt6 - sqrt2)/2, L = (sqrt6 + sqrt2)/2 |
+| torus/sq/0/5 | best known | 2.236067977 | 2.236067977 | proven | 0.00e+00 | Dickinson et al. 2011 (not read); d = 1/sqrt5, L = sqrt5 |
+| torus/sq/0/6 | proven | 2.497467889 | 2.497467889 | proven; proof checked | -8.90e-16 | Musin and Nikitenko 2016, Thm 1; d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6 |
+| torus/sq/0/7 | proven | 2.732050807 | 2.732050807 | proven; proof checked | 0.00e+00 | Musin and Nikitenko 2016, Thm 2; d7 = 1/(1 + sqrt3), three optimal arrangements |
+| torus/sq/0/8 | proven | 2.732050807 | 2.732050807 | proven; proof checked | 0.00e+00 | Musin and Nikitenko 2016, Thm 3; d8 = 1/(1 + sqrt3) |
+| torus/sq/0/9 | best known | 2.909312911 | 2.909312911 | conjecture | 0.00e+00 | Musin and Nikitenko 2016, Conjecture 2.1; d = 1/sqrt(5 + 2 sqrt3); Voloshinov and Smirnov reach the same arrangement with a floating-point branch and bound (V. V. Voloshinov, S. A. Smirnov, Optimal packings of congruent circles on a square flat torus as mixed-integer nonlinear optimization problem, Communications in Computer and Information Science (Springer, 2019) 87-97, doi:10.1007/978-3-030-36592-9_8), not a rigorous proof |
+| torus/sq/0/10 | best known | 3.162277660 | 3.162277660 | best known | 0.00e+00 | Connelly et al. 2017; square grid, conjectured optimal; table bracket L in [3.16205, 3.1641] |
+| torus/sq/0/11 | best known | 3.273878666 | — | best known |  | Connelly et al. 2017; table bracket L in [3.27295, 3.2750] (r = 0.153, delta = 0.806) |
+| torus/sq/0/12 | best known | 3.328201177 | 3.328201177 | best known | 0.00e+00 | Connelly et al. 2017; Type I (a, b) = (3, 2): L = 12/sqrt13; table bracket [3.32695, 3.3289] |
+| torus/sq/0/13 | best known | 3.595208186 | — | best known |  | Connelly et al. 2017; table bracket L in [3.59845, 3.60075] (r = 0.139, delta = 0.788) |
+| torus/sq/0/14 | best known | 3.620845196 | — | best known |  | Connelly et al. 2017; table bracket L in [3.6191, 3.62125] (r = 0.138, delta = 0.839) |
+| torus/sq/0/15 | best known | 3.638034376 | 3.638034376 | best known | 4.44e-16 | Connelly et al. 2017; Type II (a, b) = (4, 1): L = 15/sqrt17; table bracket [3.63725, 3.6393] |
+| torus/sq/0/16 | best known | 3.863703305 | 3.863703305 | best known | 4.44e-16 | Connelly et al. 2017; table bracket [3.86205, 3.86435]; 2 x 2 copy of the P = 4 optimum gives (sqrt6 + sqrt2) [SPEC identification] |
 | torus/sq/4/1 | proven | 1.000000000 | 1.000000000 | proven; proof checked | 2.22e-16 | Blair et al. 2012, sec. II.A.1; density one (P is a sum of two squares) |
 | torus/sq/4/2 | proven | 1.414213562 | 1.414213562 | proven; proof checked | 0.00e+00 | Blair et al. 2012, sec. II.A.1; density one (P is a sum of two squares) |
 | torus/sq/4/3 | best known | 2.000000000 | 2.000000000 | best known | -4.44e-16 | Blair et al. 2012, Table I; density 0.75 (2^2 - 1); conjectured optimal |
@@ -288,38 +288,38 @@ The record column is the record's status; the source's claim is that of the pape
 | torus/sq/4/41 | proven | 6.403124237 | 6.403124237 | proven; proof checked | 1.78e-15 | Blair et al. 2012, sec. II.A.1; density one (P is a sum of two squares) |
 | torus/sq/4/45 | proven | 6.708203932 | 6.708203932 | proven; proof checked | 1.78e-15 | Blair et al. 2012, sec. II.A.1; density one (P is a sum of two squares) |
 | torus/sq/4/49 | proven | 7.000000000 | 7.000000000 | proven; proof checked | 1.78e-15 | Blair et al. 2012, sec. II.A.1; density one (P is a sum of two squares) |
-| torus/hex/0/1 | proven | 2.000000000 | 2.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/2 | proven | 3.464101615 | 3.464101615 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = 2 sqrt3 (3-point lattice minus one) |
-| torus/hex/0/2 | proven | 3.464101615 | 3.464101615 | proven | 0.00e+00 | Dickinson et al. 2011, J. Geom. (not read); L = 2 sqrt3 |
-| torus/hex/0/3 | proven | 3.464101615 | 3.464101615 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/3 | proven | 3.464101615 | 3.464101615 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = 2 sqrt3 |
-| torus/hex/0/4 | proven | 4.000000000 | 4.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/4 | proven | 4.000000000 | 4.000000000 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = 4 |
-| torus/hex/0/5 | best known | 5.048675598 | — | proven |  | Dickinson et al. 2011, J. Geom. (not read); optimal packing proven there; no published value seen |
-| torus/hex/0/6 | best known | 5.291502622 | 5.291502622 | proven | 0.00e+00 | Dickinson et al. 2011, J. Geom. (not read); 7-point lattice minus one disk, L = 2 sqrt7 (as described by Connelly-Dickinson 2014, sec. 1(d)) |
-| torus/hex/0/7 | proven | 5.291502622 | 5.291502622 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/8 | best known | 6.000000000 | 6.000000000 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
-| torus/hex/0/9 | proven | 6.000000000 | 6.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/11 | best known | 6.928203230 | 6.928203230 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
-| torus/hex/0/12 | proven | 6.928203230 | 6.928203230 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/13 | proven | 7.211102551 | 7.211102551 | proven; proof checked | 8.88e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/15 | best known | 8.000000000 | 8.000000000 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
-| torus/hex/0/16 | proven | 8.000000000 | 8.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/19 | proven | 8.717797887 | 8.717797887 | proven; proof checked | -1.78e-15 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/21 | proven | 9.165151390 | 9.165151390 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/25 | proven | 10.000000000 | 10.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/27 | proven | 10.392304845 | 10.392304845 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/28 | proven | 10.583005244 | 10.583005244 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/31 | proven | 11.135528726 | 11.135528726 | proven; proof checked | 1.78e-15 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/36 | proven | 12.000000000 | 12.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/37 | proven | 12.165525061 | 12.165525061 | proven; proof checked | 1.78e-15 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/39 | proven | 12.489995997 | 12.489995997 | proven; proof checked | -1.78e-15 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/43 | proven | 13.114877049 | 13.114877049 | proven; proof checked | 1.78e-15 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/48 | proven | 13.856406461 | 13.856406461 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/hex/0/49 | proven | 14.000000000 | 14.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
-| torus/free/0/1 | proven | 1.861209718 | 1.861209718 | proven; proof checked | 0.00e+00 | Fukshansky 2011, Thm 1.1; densest lattice packing of disks: the hexagonal lattice, density pi/sqrt12 (first proved by Lagrange 1773) |
-| torus/free/0/1 | proven | 1.861209718 | 1.861209718 | proven | 0.00e+00 | Lagrange 1773 (not read); the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof |
-| torus/free/0/1 | proven | 1.861209718 | 1.861209718 | proven | 0.00e+00 | Thue 1910; hexagonal lattice, density pi/sqrt12 (a theorem for the plane) |
+| torus/hex/0/1 | proven | 1.000000000 | 1.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/2 | proven | 1.732050808 | 1.732050808 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = sqrt3 (3-point lattice minus one) |
+| torus/hex/0/2 | proven | 1.732050808 | 1.732050808 | proven | 0.00e+00 | Dickinson et al. 2011, J. Geom. (not read); L = sqrt3 |
+| torus/hex/0/3 | proven | 1.732050808 | 1.732050808 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/3 | proven | 1.732050808 | 1.732050808 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = sqrt3 |
+| torus/hex/0/4 | proven | 2.000000000 | 2.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/4 | proven | 2.000000000 | 2.000000000 | proven; proof checked | 0.00e+00 | Brandt et al. 2019, Thm 1.1; L = 2 |
+| torus/hex/0/5 | best known | 2.524337799 | — | proven |  | Dickinson et al. 2011, J. Geom. (not read); optimal packing proven there; no published value seen |
+| torus/hex/0/6 | best known | 2.645751311 | 2.645751311 | proven | 0.00e+00 | Dickinson et al. 2011, J. Geom. (not read); 7-point lattice minus one disk, L = sqrt7 (as described by Connelly-Dickinson 2014, sec. 1(d)) |
+| torus/hex/0/7 | proven | 2.645751311 | 2.645751311 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/8 | best known | 3.000000000 | 3.000000000 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
+| torus/hex/0/9 | proven | 3.000000000 | 3.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/11 | best known | 3.464101615 | 3.464101615 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
+| torus/hex/0/12 | proven | 3.464101615 | 3.464101615 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/13 | proven | 3.605551275 | 3.605551275 | proven; proof checked | 4.44e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/15 | best known | 4.000000000 | 4.000000000 | conjecture | 0.00e+00 | Connelly and Dickinson 2014, Conjecture 1.3; density gap conjecture: (P + 1)-lattice minus one disk |
+| torus/hex/0/16 | proven | 4.000000000 | 4.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/19 | proven | 4.358898943 | 4.358898943 | proven; proof checked | -8.90e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/21 | proven | 4.582575695 | 4.582575695 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/25 | proven | 5.000000000 | 5.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/27 | proven | 5.196152422 | 5.196152422 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/28 | proven | 5.291502622 | 5.291502622 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/31 | proven | 5.567764363 | 5.567764363 | proven; proof checked | 8.90e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/36 | proven | 6.000000000 | 6.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/37 | proven | 6.082762531 | 6.082762531 | proven; proof checked | 8.90e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/39 | proven | 6.244997998 | 6.244997998 | proven; proof checked | -8.90e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/43 | proven | 6.557438525 | 6.557438525 | proven; proof checked | 8.90e-16 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/48 | proven | 6.928203231 | 6.928203231 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/hex/0/49 | proven | 7.000000000 | 7.000000000 | proven; proof checked | 0.00e+00 | Connelly and Dickinson 2014, Thm 1.1; triangular lattice, density pi/sqrt12 |
+| torus/free/0/1 | proven | 0.930604859 | 0.930604859 | proven; proof checked | 0.00e+00 | Fukshansky 2011, Thm 1.1; densest lattice packing of disks: the hexagonal lattice, density pi/sqrt12 (first proved by Lagrange 1773) |
+| torus/free/0/1 | proven | 0.930604859 | 0.930604859 | proven | 0.00e+00 | Lagrange 1773 (not read); the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof |
+| torus/free/0/1 | proven | 0.930604859 | 0.930604859 | proven | 0.00e+00 | Thue 1910; hexagonal lattice, density pi/sqrt12 (a theorem for the plane) |
 | torus/free/3/1 | proven | 0.805927449 | 0.805927449 | proven; proof checked | -3.33e-16 | Sriamorn 2016, Thm 1.1; densest lattice packing of a triangle, density 2/3 |
 | torus/free/3/1 | proven | 0.805927449 | 0.805927449 | proven | -3.33e-16 | Fary 1950, Theoreme 1; every convex domain has a lattice packing of density at least 2/3, denser unless it is a triangle; for a triangle this gives a lattice of density 2/3. The paper does not prove that no lattice packing of a triangle is denser (Sriamorn 2016 does) |
 | torus/free/3/1 | proven | 0.805927449 | 0.805927449 | best known | -3.33e-16 | Torda et al. 2022 (p1); densest lattice packing, numerical table density 0.66666; score from the [CALC] value 0.6666666666667 |
@@ -332,7 +332,7 @@ The record column is the record's status; the source's claim is that of the pape
 
 Notes on the comparison:
 
-- [CALC] **Disks on the square torus, P = 13.** Our certified packing has L ≤ 7.19041637230147, density 0.789924 and radius 0.139074 on the unit torus, with 26 contacts. Connelly–Funkhouser–Kuperberg–Solomonides (2017, table on p. 22) list δ = 0.788 and r = 0.139 for 13 disks, and offer their 10–16-disk packings as conjectured optimal. Our δ would print as 0.790, so the certified packing is denser than their table entry. That r column, rounded to 3 decimals, is consistent with both packings.
+- [CALC] **Disks on the square torus, P = 13.** Our certified packing has L ≤ 3.595208186150735, density 0.789924 and radius 0.139074 on the unit torus, with 26 contacts. Connelly–Funkhouser–Kuperberg–Solomonides (2017, table on p. 22) list δ = 0.788 and r = 0.139 for 13 disks, and offer their 10–16-disk packings as conjectured optimal. Our δ would print as 0.790, so the certified packing is denser than their table entry. That r column, rounded to 3 decimals, is consistent with both packings.
 - **Disks, P = 11 and 14.** Our values lie inside the brackets implied by the same table.
 - **Disks on the hexagonal torus, P = 5.** Our 5.0486756 equals an independent numerical maximisation run by the literature reviewer; the published optimum (Dickinson et al. 2011) was not read. Our packing has 9 contacts, as in W. Dickinson's 2011 Fields Institute slides, and L² = 14 + 2√33 to 5e-17 [CALC; SPEC closed form].
 - **New values.** P = 10 and 14 on the hexagonal torus have no published values that we found.
@@ -341,7 +341,7 @@ Notes on the comparison:
 
 ## 6. Literature (verified 2026-10-24; proofs checked 2026-10-25)
 
-Values are converted to PolyPack units (disks of radius 1: L = 1/r for radius r and L = 2/d for minimal distance d on the unit torus; squares of side 1: L = √(P/ρ) for density ρ). "Read" means the paper itself was read; "not read" means only abstracts or other papers' descriptions were.
+Values are converted to PolyPack units (disks of diameter 1: L = 1/(2r) for radius r and L = 1/d for minimal distance d on the unit torus; before 2026-10-27, disks of radius 1: L = 1/r and L = 2/d; squares of side 1: L = √(P/ρ) for density ρ). "Read" means the paper itself was read; "not read" means only abstracts or other papers' descriptions were.
 
 - **Disks, square torus.** [EST]
   - P = 2–4 on every flat torus: M. Brandt, W. Dickinson, A. Ellsworth, J. Kenkel, H. Smith, "Optimal packings of two to four equal circles on any flat torus", *Discrete Math.* 342(12) (2019) 111597, Theorem 1.1, doi:10.1016/j.disc.2019.111597, [arXiv:1708.05395](https://arxiv.org/abs/1708.05395) (read). With v1 = (1, 0) and v2 = (0, 1), regions R1₂, R1₃ and R1₄ of their Table 1 give r₂ = √2/4 and r₃ = r₄ = (√6 − √2)/4.

@@ -4,7 +4,7 @@
 
 Status: research build, 2026-10-24. Package `packages/curved` (`@polypack/curved`), certifier and bounds in `python/curved/`, data in `data/curved/`.
 
-[SPEC] The site domain is `curved/<K>/<N>/<M>/<P>`: N = 0 (unit disks) or every integer 3–100, P = 1–100. The existing curvature choices and containers M = 0, 3–10, 12 stay unchanged. The ten K values are listed in `packages/spaces/src/piece-domains.ts`, including the published sweep curvatures. This Cartesian domain has 990,000 problems; a choice whose unit piece does not exist is rejected by the geometry. New choices ship without research records. [CALC] Without a record, the bound reuses `curvedBound`: the area requirement, one-piece containment, and (disk containers with P ≥ 2) the two-inscribed-disks requirement. When these give no finite bound, the API returns null.
+[SPEC] The site domain is `curved/<K>/<N>/<M>/<P>`: N = 0 (disks of diameter 1) or every integer 3–100, P = 1–100. The existing curvature choices and containers M = 0, 3–10, 12 stay unchanged. The ten K values are listed in `packages/spaces/src/piece-domains.ts`, including the published sweep curvatures. This Cartesian domain has 990,000 problems; a choice whose unit piece does not exist is rejected by the geometry. New choices ship without research records. [CALC] Without a record, the bound reuses `curvedBound`: the area requirement, one-piece containment, and (disk containers with P ≥ 2) the two-inscribed-disks requirement. When these give no finite bound, the API returns null.
 
 [SPEC] `SPACE_DOMAINS` describes the ranges to the API and board picker. The volunteer list samples the domain; it never enumerates it all. Problems without a record have status `no_record`, null certified values/configurations, and require the strict float check on every entry. Existing record files are unchanged. Server validation shares the synchronous geometry through generators, yields between small units of work (8 ms default budget), stops after 20 overlapping pairs, and uses the shared heavy-check queue from P = 30. Sphere also queues N ≥ 20 at any P. No new records or optimisation runs accompany this change.
 
@@ -12,10 +12,12 @@ Status: research build, 2026-10-24. Package `packages/curved` (`@polypack/curved
 
 ## Summary
 
+- **Units (2026-10-27).** Disk pieces (N = 0) have geodesic diameter 1 (radius 1/2), and a disk container (M = 0) is scored by its geodesic diameter; polygon pieces keep side 1 and the labels K = −1, 0, 1 are unchanged. The 65 polygon-piece records in disk containers were doubled exactly (their configurations are unchanged; the size, `score_cert`, `score_float`, the bound, ds/dK and `display` double). The 52 disk-piece records (41 best known, 11 infeasible), their 12 catalogue entries, bounds, ideal-polygon entries, certificates and the 15 curvature sweeps of disks in a disk were made for disks of radius 1: they are **archived** in `data/curved/archive/` (with a README) and not served. A packing of radius-1 disks at curvature K is a packing of diameter-1 disks at curvature 4K with every length halved, so the archive is equivalent to diameter-1 disks at K = ±4 (and the near-flat K = ±10⁻⁶ ones to K = ±4·10⁻⁶). **Disk problems at K = ±1 (and at every other curvature) are open**: they have no records, only bounds. Where this page quotes disk results below, they are the archived radius-1 results in their original units, and each such passage says so.
+
 - **The engine works for every real K** (hyperbolic K < 0, Euclidean K = 0, spherical K > 0) with one set of formulas that never divides by K, so a curvature sweep can pass smoothly through K = 0. At K = ±10⁻⁶ it reproduces PolyPack's Euclidean records to O(|K|) (tests).
 - **Every table entry is proven valid.** An independent Python certifier re-derives the geometry and decides every inequality with 256-bit interval arithmetic; transcendental functions are built from power series with explicit remainder bounds, so only interval +, −, ×, ÷ and √ are trusted.
-- **Hyperbolic catalogues are finite and small** [CALC]. A regular hyperbolic M-gon is never bigger than the ideal M-gon, which is spiky: inradius acosh(1/sin(π/M)) = 0.549, 0.881, 1.124, 1.317, 1.615 for M = 3, 4, 5, 6, 8. Unit squares fit in no triangle (proved), two unit squares fit in no square (numerical), a unit disk needs M ≥ 5 and M ≤ 10 holds at most one (proved).
-- **Spherical catalogues (K = +1) are tiny**: containers must lie in an open hemisphere; disks, pentagons and hexagons fit only once (proved), squares three times in every container tried (upper bound 5), triangles up to about ten (bound 12).
+- **Hyperbolic catalogues are finite and small** [CALC]. A regular hyperbolic M-gon is never bigger than the ideal M-gon, which is spiky: inradius acosh(1/sin(π/M)) = 0.549, 0.881, 1.124, 1.317, 1.615 for M = 3, 4, 5, 6, 8. Unit squares fit in no triangle (proved), two unit squares fit in no square (numerical), a radius-1 disk (archived data; diameter-1 disks at K = −4) needs M ≥ 5 and M ≤ 10 holds at most one (proved).
+- **Spherical catalogues (K = +1) are tiny**: containers must lie in an open hemisphere; radius-1 disks (archived), pentagons and hexagons fit only once (proved), squares three times in every container tried (upper bound 5), triangles up to about ten (bound 12).
 - **Scale-free family** a\*(N, M, P) (largest side of P pieces in the ideal M-gon at K = −1) is computed and certified; it gives the finite catalogue at every negative curvature at once.
 
 The detailed tables follow; `packages/curved/viz/index.html` draws every certified packing (Poincaré or Klein disk for K < 0, globe or gnomonic view for K > 0).
@@ -24,9 +26,9 @@ The detailed tables follow; `packages/curved/viz/index.html` draws every certifi
 
 **Space.** The complete simply connected surface of constant curvature K: the hyperbolic plane (K < 0), the Euclidean plane (K = 0), the sphere of radius 1/√K (K > 0). Problem id `curved/K/N/M/P`.
 
-**Pieces.** P congruent pieces: regular N-gons of geodesic side 1 (N ≥ 3), or disks of geodesic radius 1 (N = 0). A unit N-gon exists at K > 0 if and only if √K < 2π/N, i.e. its perimeter N is below the length 2π/√K of a great circle: a convex regular N-gon with circumradius R < π/(2√K) has sin(√K a/2) = sin(√K R) sin(π/N), so its side a ranges over (0, 2π/(N√K)) [CALC]. At K = 1 this allows N ≤ 6 (no unit heptagon or octagon). The sine condition √K sn_K(1/2) < sin(π/N) is necessary but not sufficient (for triangles it holds again for K > 17.5); both checkers use the perimeter condition.
+**Pieces.** P congruent pieces: regular N-gons of geodesic side 1 (N ≥ 3), or disks of geodesic diameter 1, radius 1/2 (N = 0; until 2026-10-26 radius 1). A unit N-gon exists at K > 0 if and only if √K < 2π/N, i.e. its perimeter N is below the length 2π/√K of a great circle: a convex regular N-gon with circumradius R < π/(2√K) has sin(√K a/2) = sin(√K R) sin(π/N), so its side a ranges over (0, 2π/(N√K)) [CALC]. At K = 1 this allows N ≤ 6 (no unit heptagon or octagon). The sine condition √K sn_K(1/2) < sin(π/N) is necessary but not sufficient (for triangles it holds again for K > 17.5); both checkers use the perimeter condition.
 
-**Container.** Centred at the base point O with φ = 0 (horizontal bottom edge): a regular M-gon of geodesic side s (M ≥ 3), or a disk of radius r (M = 0). Wall k has outward normal angle −π/2 + 2πk/M at distance h (the apothem) from O, where tn_K(s/2) = sn_K(h) tan(π/M). For K > 0 the container (hence every piece) must lie in the open hemisphere around O: s < 2π/(M√K), r < π/(2√K).
+**Container.** Centred at the base point O with φ = 0 (horizontal bottom edge): a regular M-gon of geodesic side s (M ≥ 3), or a disk of radius r (M = 0), scored by its geodesic diameter s = 2r (until 2026-10-26 by r). Wall k has outward normal angle −π/2 + 2πk/M at distance h (the apothem) from O, where tn_K(s/2) = sn_K(h) tan(π/M). For K > 0 the container (hence every piece) must lie in the open hemisphere around O: s < 2π/(M√K), r < π/(2√K).
 
 **Score.** s or r, smaller is better. Validity: interiors disjoint, every piece in the closed container.
 
@@ -38,7 +40,7 @@ cs_K(x) = C(Kx²), sn_K(x) = x S(Kx²), tn_K = sn_K/cs_K, vs_K(x) = (1 − cs_K(
 
 | N | R at K = −1 | ρ at K = −1 | area at K = −1 | R at K = +1 | ρ at K = +1 | area at K = +1 |
 |---|---|---|---|---|---|---|
-| disk | 1 | 1 | 3.4123 | 1 | 1 | 2.8884 |
+| disk | 0.5 | 0.5 | 0.8019 | 0.5 | 0.5 | 0.7692 |
 | 3 | 0.5703 | 0.2637 | 0.3852 | 0.5867 | 0.3209 | 0.4956 |
 | 4 | 0.6827 | 0.4471 | 0.8608 | 0.7451 | 0.5779 | 1.2123 |
 | 5 | 0.7988 | 0.5995 | 1.4234 | 0.9538 | 0.8510 | 2.3040 |
@@ -63,12 +65,12 @@ A line at signed distance h from O with outward normal angle a is the covector n
 
 **Tolerance trap.** Chart lengths are not geodesic lengths (one Klein unit at distance ρ from the centre is about cosh²ρ hyperbolic units), so a tolerance applied to chart coordinates is meaningless far from O. Neither checker uses chart lengths: the float validator reports signed geodesic distances asn_K(n·v / √(Qd(n)Q(v))), and the certifier only decides signs. Both have a test with a real 10⁻⁴ overlap 8 units from the centre (rejected) and a real 10⁻⁴ gap there (accepted); the certifier also rejects a 10⁻⁸ overlap there.
 
-**Float validator** (`validate`, TypeScript). Gaps in geodesic length units: polygon pairs by the separating-axis value (largest over edge lines of either piece of the smallest signed distance of the other piece's vertices), disk pairs by d − 2, walls and rims by signed distances. A configuration is valid when every gap ≥ −10⁻⁹ (PolyPack's touching rule). Float accuracy is about 10⁻¹⁶ cosh²D for pieces at distance D from O.
+**Float validator** (`validate`, TypeScript). Gaps in geodesic length units: polygon pairs by the separating-axis value (largest over edge lines of either piece of the smallest signed distance of the other piece's vertices), disk pairs by d − 1, walls and rims by signed distances. A configuration is valid when every gap ≥ −10⁻⁹ (PolyPack's touching rule). Float accuracy is about 10⁻¹⁶ cosh²D for pieces at distance D from O.
 
 **Rigorous certifier** (`python/curved/certify.py`, separate code). Reads the stored floats as exact dyadic rationals and K as an exact rational. With 256-bit outward-rounded intervals it builds π (Machin's formula with alternating-series remainder), cos and sin (series with remainder), C, S, V (series with geometric tail bound), and the vertices T(c)R(θ)V_k. It then proves, all strictly:
 - for K > 0: the unit piece exists (√K < 2π/N, decided as (2π/N)² − K > 0), the container lies in an open hemisphere (K s² < (2π/M)² for polygons, K r² < (π/2)² for disks; without the polygon check a side near 4πk/√K would wrap around to a smaller polygon), and every vertex and centre has v0 > 0;
-- containment: n_k·v < 0 for every vertex and wall; sn_K(signed distance) < −sn_K(1) for disk centres; vs_K(d(O, v)) < vs_K(r) (or vs_K(r − 1)) in disk containers;
-- pairs: a stored witness (edge `edge` of piece `owner`) with the owner's other vertices on n·v < 0 and all vertices of the other piece on n·v > 0, or circumscribed disks disjoint (vs_K(d) > vs_K(2R) = 2 sn_K(R)²), or for disks vs_K(d) > vs_K(2). Without a witness, or if it fails, every axis is tried.
+- containment: n_k·v < 0 for every vertex and wall; sn_K(signed distance) < −sn_K(1/2) for disk centres; vs_K(d(O, v)) < vs_K(r) (or vs_K(r − 1/2)) in disk containers (r = s/2);
+- pairs: a stored witness (edge `edge` of piece `owner`) with the owner's other vertices on n·v < 0 and all vertices of the other piece on n·v > 0, or circumscribed disks disjoint (vs_K(d) > vs_K(2R) = 2 sn_K(R)²), or for disks vs_K(d) > vs_K(1). Without a witness, or if it fails, every axis is tried.
 For a published record it first checks the record itself: id = curved/K/N/M/P (optionally followed by `#tag`, as the sweep does for branches), `K_exact` (if present) equal to `K`, `score_cert` present and equal to the size of the published `config`, and `display` equal to `score_cert` rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value); it then certifies `config` (and `config_cert` too, if a record carries a different one). Angles are reduced modulo 2π with the rigorous π before the series, so large θ is handled. It rejects malformed input (wrong P, NaN, ∞, numbers outside the binary64 range, non-integer or out-of-range N or M, size ≤ 0, containers beyond the hemisphere, non-existent pieces, records that are not objects) without crashing, and the command line keeps going and reports every failure.
 
 **Margin re-solve.** Curved spaces have no similarity, so the PolyPack scaling trick does not apply. The touching optimum (`score_float`) is re-polished with every gap ≥ μ (μ = 4·10⁻¹¹, smaller where s is very sensitive to the apothem), and the resulting size is `score_cert`, at which the stored configuration is certified with clearance about μ. Over all 299 records `score_cert − score_float` is at most 1.7·10⁻¹⁰ relative (median 4·10⁻¹¹). In 26 degenerate cases the margin re-solve found a slightly better configuration than the float polish; there `score_float` is set to `score_cert` and the record says so.
@@ -97,38 +99,34 @@ Search method: random starts in a roomy container; penalty compression (L-BFGS o
 
 All values are `display` = score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value; a certified upper bound is score_cert itself, kept at full precision in the records); every listed packing is certified (`data/curved/certification.json`). Status is `best_known` throughout [CALC]; records also carry `score_float` (touching limit), a rigorous lower bound (`bound`), the Euclidean record for comparison, ds/dK and its multiplier range, seed and budget. Searches: seed 1, 6 restarts × 25 hops for polygon containers, 5 × 20 for disk containers, each P warm-started from P − 1, one retry with a doubled budget before a P counted as "not found"; total about 3 hours on two processes at nice 10 on a heavily shared machine.
 
-Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is the container; the inradius bound gives s ≥ 1); one disk needs exactly the container with inradius 1 (bound attained); two disks in a disk need r = 2 (both centres within r − 1 of O, 2 apart); at K = −1 ten disks fit in r = 3 exactly (nine around one, best found).
+Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is the container; the inradius bound gives s ≥ 1); for radius-1 disks (archived data, container radius r) one disk needs exactly the container with inradius 1 (bound attained), two disks in a disk need r = 2 (both centres within r − 1 of O, 2 apart) and at K = −1 ten disks fit in r = 3 exactly (nine around one, best found); the tables below hold polygon pieces only, and their disk containers are scored by the diameter 2r.
 
 #### K = -1: certified sizes s(P) (score_cert rounded to 6 decimals), P = 1, 2, ...
 
 | N \\ M | container | values |
 |---|---|---|
-| disk | disk | 1: 1.000000, 2: 2.000000, 3: 2.112735, 4: 2.281385, 5: 2.443354, 6: 2.590192, 7: 2.722022, 8: 2.840647, 9: 2.948004, 10: 3.000000, 11: 3.045799, 12: 3.135451, 13: 3.218124, 14: 3.294768, 15: 3.366166, 16: 3.432963, 17: 3.495699, 18: 3.554825, 19: 3.610725, 20: 3.663725, 21: 3.714105, 22: 3.762109, 23: 3.807946, 24: 3.851802, 25: 3.893838, 26: 3.934197, 27: 3.957884, 28: 3.975285, 29: 4.010382, 30: 4.046422 |
-| disk | 5-gon | 1: 2.540266 |
-| disk | 6-gon | 1: 1.652668 |
-| disk | 8-gon | 1: 1.063675 |
-| triangle | disk | 1: 0.570290, 2: 0.834025, 3: 0.932050, 4: 0.967039, 5: 0.992486, 6: 1.000000, 7: 1.016615, 8: 1.115510, 9: 1.207773, 10: 1.249682, 11: 1.306227, 12: 1.374281 |
+| triangle | disk | 1: 1.140580, 2: 1.668050, 3: 1.864100, 4: 1.934078, 5: 1.984972, 6: 2.000000, 7: 2.033229, 8: 2.231020, 9: 2.415545, 10: 2.499364, 11: 2.612453, 12: 2.748563 |
 | triangle | 3-gon | 1: 1.000000, 2: 3.594700 |
 | triangle | 4-gon | 1: 1.000000, 2: 1.240070, 3: 1.674709, 4: 1.949225, 5: 1.981453, 6: 2.843790, 7: 4.286247 |
 | triangle | 5-gon | 1: 0.843023, 2: 1.098573, 3: 1.234508, 4: 1.348015, 5: 1.552143, 6: 1.847531, 7: 1.965826, 8: 2.147089, 9: 2.297767, 10: 2.387892, 11: 2.767381, 12: 3.109604, 13: 3.817299 |
 | triangle | 6-gon | 1: 0.592983, 2: 0.903128, 3: 1.038830, 4: 1.102341, 5: 1.158886, 6: 1.199212, 7: 1.559220, 8: 1.724149, 9: 1.882524, 10: 1.942396, 11: 2.006671, 12: 2.207071, 13: 2.410355, 14: 2.549220, 15: 2.649973, 16: 2.662906, 17: 3.410023, 18: 3.885671, 19: 5.003810 |
 | triangle | 8-gon | 1: 0.489555, 2: 0.700543, 3: 0.825317, 4: 0.854190, 5: 0.931469, 6: 0.954101, 7: 0.975572, 8: 1.000000, 9: 1.205218, 10: 1.318218, 11: 1.463486, 12: 1.583595, 13: 1.707684, 14: 1.802338, 15: 1.868379, 16: 1.942748, 17: 1.989459, 18: 2.056760, 19: 2.218353, 20: 2.378572, 21: 2.530984, 22: 2.633464, 23: 2.802496, 24: 2.848648, 25: 3.101038, 26: 3.294997, 27: 3.813693, 28: 4.169243, 29: 4.396215 |
-| square | disk | 1: 0.682666, 2: 1.054331, 3: 1.226551, 4: 1.333568, 5: 1.427402, 6: 1.572471, 7: 1.632291, 8: 1.712552, 9: 1.799096, 10: 1.881536, 11: 1.928132, 12: 1.983350 |
+| square | disk | 1: 1.365333, 2: 2.108662, 3: 2.453102, 4: 2.667137, 5: 2.854804, 6: 3.144942, 7: 3.264582, 8: 3.425105, 9: 3.598192, 10: 3.763073, 11: 3.856265, 12: 3.966699 |
 | square | 4-gon | 1: 1.000000 |
 | square | 5-gon | 1: 0.979761, 2: 2.175862, 3: 2.462656, 4: 2.615087, 5: 2.898805 |
 | square | 6-gon | 1: 0.856117, 2: 1.348683, 3: 1.619232, 4: 2.117991, 5: 2.316920, 6: 2.474469 |
 | square | 8-gon | 1: 0.556809, 2: 0.960456, 3: 1.187279, 4: 1.299436, 5: 1.712314, 6: 2.038421, 7: 2.107384, 8: 2.177821, 9: 2.246180 |
-| pentagon | disk | 1: 0.798829, 2: 1.398319, 3: 1.493454, 4: 1.547386, 5: 1.735711, 6: 1.895273, 7: 2.022252, 8: 2.069616 |
+| pentagon | disk | 1: 1.597658, 2: 2.796639, 3: 2.986908, 4: 3.094771, 5: 3.471423, 6: 3.790546, 7: 4.044503, 8: 4.139232 |
 | pentagon | 4-gon | 1: 2.254010 |
 | pentagon | 5-gon | 1: 1.000000 |
 | pentagon | 6-gon | 1: 0.974860, 2: 2.239596, 3: 6.633999 |
 | pentagon | 8-gon | 1: 0.754510, 2: 1.349877, 3: 1.876196, 4: 2.205045, 5: 5.356534 |
-| hexagon | disk | 1: 0.910894, 2: 1.597895, 3: 1.767466, 4: 1.913845, 5: 2.087447, 6: 2.219235, 7: 2.321730, 8: 2.404011, 9: 2.473322, 10: 2.553216 |
+| hexagon | disk | 1: 1.821789, 2: 3.195789, 3: 3.534931, 4: 3.827691, 5: 4.174894, 6: 4.438470, 7: 4.643460, 8: 4.808023, 9: 4.946644, 10: 5.106431 |
 | hexagon | 4-gon | 1: 4.252460 |
 | hexagon | 5-gon | 1: 1.782123 |
 | hexagon | 6-gon | 1: 1.000000 |
 | hexagon | 8-gon | 1: 0.905338, 2: 2.507479, 3: 3.702222 |
-| octagon | disk | 1: 1.115510, 2: 2.046423, 3: 2.222714, 4: 2.398280, 5: 2.560481, 6: 2.690682, 7: 2.834433, 8: 2.951490 |
+| octagon | disk | 1: 2.231020, 2: 4.092845, 3: 4.445427, 4: 4.796561, 5: 5.120962, 6: 5.381364, 7: 5.668866, 8: 5.902980 |
 | octagon | 5-gon | 1: 3.920113 |
 | octagon | 6-gon | 1: 2.028031 |
 | octagon | 8-gon | 1: 1.000000 |
@@ -137,31 +135,25 @@ Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is 
 
 | N \\ M | container | values |
 |---|---|---|
-| disk | disk | 1: 1.000000 |
-| disk | 3-gon | 1: 1.938893 |
-| disk | 4-gon | 1: 1.399043 |
-| disk | 5-gon | 1: 1.097468 |
-| disk | 6-gon | 1: 0.904484 |
-| disk | 8-gon | 1: 0.670763 |
-| triangle | disk | 1: 0.586672, 2: 0.907559, 3: 0.975932, 4: 1.000000, 5: 1.000000, 6: 1.244336, 7: 1.280832, 8: 1.403255, 9: 1.491760, 10: 1.560514 |
+| triangle | disk | 1: 1.173345, 2: 1.815118, 3: 1.951863, 4: 2.000000, 5: 2.000000, 6: 2.488671, 7: 2.561663, 8: 2.806511, 9: 2.983521, 10: 3.121027 |
 | triangle | 3-gon | 1: 1.000000, 2: 1.728493, 3: 1.736194, 4: 1.882764, 5: 1.916475, 6: 1.991416, 7: 2.010640, 8: 2.074257, 9: 2.089147, 10: 2.094285 |
 | triangle | 4-gon | 1: 0.914420, 2: 1.182026, 3: 1.280680, 4: 1.316078, 5: 1.366961, 6: 1.491433, 7: 1.517498, 8: 1.549537, 9: 1.565878, 10: 1.570721 |
 | triangle | 5-gon | 1: 0.729465, 2: 1.003879, 3: 1.027907, 4: 1.037939, 5: 1.039687, 6: 1.197851, 7: 1.210201, 8: 1.240642, 9: 1.253136, 10: 1.256575 |
 | triangle | 6-gon | 1: 0.560917, 2: 0.809963, 3: 0.868360, 4: 0.883145, 5: 0.890946, 6: 0.986996, 7: 0.999330, 8: 1.032180, 9: 1.044191, 10: 1.047144 |
 | triangle | 8-gon | 1: 0.441898, 2: 0.612648, 3: 0.649779, 4: 0.661539, 5: 0.668269, 6: 0.744996, 7: 0.753888, 8: 0.774725, 9: 0.783018, 10: 0.785358 |
-| square | disk | 1: 0.745052, 2: 1.209208, 3: 1.436811 |
+| square | disk | 1: 1.490104, 2: 2.418417, 3: 2.873622 |
 | square | 3-gon | 1: 1.646957, 2: 2.000425, 3: 2.075759 |
 | square | 4-gon | 1: 1.000000, 2: 1.477478, 3: 1.557631 |
 | square | 5-gon | 1: 0.883221, 2: 1.184039, 3: 1.246252 |
 | square | 6-gon | 1: 0.733399, 2: 0.974376, 3: 1.038454 |
 | square | 8-gon | 1: 0.524933, 2: 0.735629, 3: 0.778634 |
-| pentagon | disk | 1: 0.953847 |
+| pentagon | disk | 1: 1.907695 |
 | pentagon | 3-gon | 1: 1.885017 |
 | pentagon | 4-gon | 1: 1.342108 |
 | pentagon | 5-gon | 1: 1.000000 |
 | pentagon | 6-gon | 1: 0.868309 |
 | pentagon | 8-gon | 1: 0.649576 |
-| hexagon | disk | 1: 1.282927 |
+| hexagon | disk | 1: 2.565855 |
 | hexagon | 3-gon | 1: 2.045876 |
 | hexagon | 4-gon | 1: 1.525907 |
 | hexagon | 5-gon | 1: 1.212644 |
@@ -172,11 +164,6 @@ Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is 
 
 | K | N | M | P_max found | upper bound | exact | arguments |
 |---|---|---|---|---|---|---|
-| 1 | disk | 3 | 1 | 1 | yes | area <= 2; near_wall <= 1 |
-| 1 | disk | 4 | 1 | 1 | yes | area <= 2; near_wall <= 1 |
-| 1 | disk | 5 | 1 | 1 | yes | area <= 2; near_wall <= 1 |
-| 1 | disk | 6 | 1 | 1 | yes | area <= 2; near_wall <= 1 |
-| 1 | disk | 8 | 1 | 1 | yes | area <= 2; near_wall <= 1 |
 | 1 | triangle | 3 | 10 | 12 | no | area <= 12 |
 | 1 | triangle | 4 | 10 | 12 | no | area <= 12 |
 | 1 | triangle | 5 | 10 | 12 | no | area <= 12 |
@@ -197,11 +184,6 @@ Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is 
 | 1 | hexagon | 5 | 1 | 1 | yes | area <= 1; near_wall <= 1 |
 | 1 | hexagon | 6 | 1 | 1 | yes | area <= 1; near_wall <= 1 |
 | 1 | hexagon | 8 | 1 | 1 | yes | area <= 1; near_wall <= 1 |
-| -1 | disk | 3 | 0 | 0 | yes | area <= 0; inradius <= 0; cusp <= 0; near_wall <= 1 |
-| -1 | disk | 4 | 0 | 0 | yes | area <= 1; inradius <= 0; cusp <= 0; near_wall <= 1 |
-| -1 | disk | 5 | 1 | 1 | yes | area <= 2; cusp <= 1; near_wall <= 1 |
-| -1 | disk | 6 | 1 | 1 | yes | area <= 3; cusp <= 2; near_wall <= 1 |
-| -1 | disk | 8 | 1 | 1 | yes | area <= 5; cusp <= 3; near_wall <= 1 |
 | -1 | triangle | 3 | 2 | 5 | no | area <= 8; cusp <= 5 |
 | -1 | triangle | 4 | 7 | 12 | no | area <= 16; cusp <= 12 |
 | -1 | triangle | 5 | 13 | 19 | no | area <= 24; cusp <= 19 |
@@ -228,7 +210,7 @@ Some exact facts visible in the tables [CALC]: s(1) = 1 for N = M (the piece is 
 | -1 | octagon | 6 | 1 | 1 | yes | area <= 3; cusp <= 2; near_wall <= 1 |
 | -1 | octagon | 8 | 1 | 1 | yes | area <= 5; cusp <= 3; near_wall <= 1 |
 
-Notes on the hyperbolic polygon containers: the found limits agree with the independent research run (§10); unit squares fit in no triangle (proved), two squares in no square (numerical only), and every pairing marked exact has P_max 0 or 1. At K = +1 hexagons, pentagons and disks fit once in every container (proved by the hemisphere argument), squares three times, triangles up to about ten; containers approach the hemisphere (s → 2π/M) at the last P.
+Notes on the hyperbolic polygon containers: the found limits agree with the independent research run (§10); unit squares fit in no triangle (proved), two squares in no square (numerical only), and every pairing marked exact has P_max 0 or 1. At K = +1 hexagons, pentagons and radius-1 disks (archived) fit once in every container (proved by the hemisphere argument), squares three times, triangles up to about ten; containers approach the hemisphere (s → 2π/M) at the last P.
 
 ## 5. P_max: how many unit pieces fit at all
 
@@ -264,13 +246,13 @@ At K = +1 the analogue is the hemisphere: s(P) approaches 2π/M (triangles in a 
 
 - **{3, q} tilings** [CALC]. q unit triangles around a vertex fill a regular q-gon of side 1 when the unit triangle's angle is 2π/q, i.e. cs_K(1/2) = 1/(2 sin(π/q)): K\* = +1.2258 (q = 5), 0 (q = 6), −1.1893 (7), −2.3365 (8), −3.4413 (9), −4.5052 (10), −6.5197 (12). The packing is optimal by area (a smaller container has smaller area). These K\* are where the sweep should see exact tilings; records with certified margins are in `data/curved/records.json` under K = K\* (binary64), built by `scripts/run-perfect.ts`.
 - **No exact tilings at K = ±1** [CALC]: the unit angles 52.643° (triangle), 77.669° (square), 91.689° (pentagon), 100.351° (hexagon), 110.03° (octagon) at K = −1 and 69.465°, 107.364°, 134.402°, 161.382° at K = +1 are not of the form 2π/q or π/q, so beyond P = 1 no container is tiled.
-- **Disk rings at K = −1**: for P ≤ 9 the optimum found is the ring with R = 1 + asinh(sinh 1 / sin(π/P)); P = 10 is nine around one at R = 3 exactly (2π divided by the ring gap angle 2 asin(sinh 1/sinh 2) is 9.52); P = 11 … 26 a (P − 1)-ring around one disk (R(P) = ring value for P − 1); P = 27 and 28: two inner disks inside a deformed ring of P − 2 (R = 3.957884 and 3.975285, below the (P − 1)-ring-plus-one values 3.973007 and 4.010382); P = 29, 30: a circular (P − 2)-ring around two (R = 4.010382, 4.046422), possible once the ring radius reaches 3 [CALC, best found]. The structural change therefore comes at P = 27, two earlier than a circular ring would allow.
+- **Disk rings at K = −1** (radius-1 disks, archived; diameter-1 disks at K = −4 with lengths halved): for P ≤ 9 the optimum found is the ring with R = 1 + asinh(sinh 1 / sin(π/P)); P = 10 is nine around one at R = 3 exactly (2π divided by the ring gap angle 2 asin(sinh 1/sinh 2) is 9.52); P = 11 … 26 a (P − 1)-ring around one disk (R(P) = ring value for P − 1); P = 27 and 28: two inner disks inside a deformed ring of P − 2 (R = 3.957884 and 3.975285, below the (P − 1)-ring-plus-one values 3.973007 and 4.010382); P = 29, 30: a circular (P − 2)-ring around two (R = 4.010382, 4.046422), possible once the ring radius reaches 3 [CALC, best found]. The structural change therefore comes at P = 27, two earlier than a circular ring would allow.
 - **Pieces around a common vertex.** Five unit triangles around one vertex fit in the unit-radius disk at K = +1 (5 × 69.465° < 360°) and six at K = −1 (6 × 52.643° < 360°), so the best found sizes for P = 4, 5 (K = +1) and P = 6 (K = −1) triangles in a disk container are exactly r = 1 [found values, not claimed optimal].
-- **Single disk** in any container (both signs of K): s(1) is the size whose inradius is 1; this is optimal because a disk inside a convex container needs inradius ≥ 1 [CALC].
+- **Single disk** in any container (both signs of K): s(1) is the size whose inradius is the disk's radius (1/2 now, 1 for the archived disks); this is optimal because a disk inside a convex container needs that inradius [CALC].
 
 ## 7. The scale-free family a\*(N, M, P)
 
-All ideal M-gons are congruent, and P pieces of side a at K = −1 are P unit pieces at curvature K = −a² (lengths scale by √−K). So the supremum a\*(N, M, P) of the side of P congruent regular N-gons (radius for disks) in the ideal M-gon at K = −1 settles the whole negative-curvature family at once [CALC], up to the boundary case: P unit pieces fit in some finite regular M-gon at curvature K < 0 **if** √−K < a\*(N, M, P) (take a packing with side a ∈ (√−K, a\*], shrink every piece about its centre to side √−K; the pieces stay disjoint and lie compactly inside the open ideal polygon, hence inside a finite M-gon), and **only if** √−K ≤ a\* (a finite M-gon lies inside the ideal one). Whether the pieces fit when √−K = a\* exactly depends on whether the supremum is attained by a packing that keeps away from the ideal vertices; we have not proved that [SPEC]. a\* is non-increasing in P. Hence P_max(N, M; K) = max{P : a\*(N, M, P) > √−K} at every K with √−K different from all the a\* values; the K = −1 catalogue is max{P : a\* > 1} (all our certified lower bounds for found P are strictly above 1).
+All ideal M-gons are congruent, and P pieces of side a at K = −1 are P unit pieces at curvature K = −a² (lengths scale by √−K). So the supremum a\*(N, M, P) of the side of P congruent regular N-gons (radius for the archived radius-1 disks, 1/2 of the side-1 scale now) in the ideal M-gon at K = −1 settles the whole negative-curvature family at once [CALC], up to the boundary case: P unit pieces fit in some finite regular M-gon at curvature K < 0 **if** √−K < a\*(N, M, P) (take a packing with side a ∈ (√−K, a\*], shrink every piece about its centre to side √−K; the pieces stay disjoint and lie compactly inside the open ideal polygon, hence inside a finite M-gon), and **only if** √−K ≤ a\* (a finite M-gon lies inside the ideal one). Whether the pieces fit when √−K = a\* exactly depends on whether the supremum is attained by a packing that keeps away from the ideal vertices; we have not proved that [SPEC]. a\* is non-increasing in P. Hence P_max(N, M; K) = max{P : a\*(N, M, P) > √−K} at every K with √−K different from all the a\* values; the K = −1 catalogue is max{P : a\* > 1} (all our certified lower bounds for found P are strictly above 1).
 
 `kPolish` computes a local maximum of a by sequential LP in (poses, K) with the container fixed to the ideal M-gon at the current K; `scripts/run-ideal.ts` starts it from each K = −1 optimum (plus seeded hops) and, for the first P without a K = −1 packing, from searches at K = −0.25 and −0.5. Every finite value is certified as a lower bound: the configuration is re-polished at K_c = K\*(1 − 10⁻⁹) inside a finite M-gon and checked by `certify.py`, which proves a\* ≥ √−K_c. a\* = ∞ is claimed only with a proof [CALC]: a regular N-gon of any size, concentric and aligned with an ideal regular N-gon, is the intersection of half-planes parallel-shifted inside the ideal one's, so it fits in it; an ideal triangulation gives M − 2 disjoint ideal triangles (so a\*(3, M, P) = ∞ for P ≤ M − 2), and every k-th vertex of the ideal kN-gon spans an ideal regular N-gon (so a\*(N, kN, 1) = ∞). Vertices 0, 1, 2, 4 of the ideal hexagon also span a regular ideal square (cross-ratio |z0 − z2||z1 − z4| / (|z0 − z4||z1 − z2|) = 2√3/√3 = 2, as for a square), so a\*(4, 6, 1) = ∞; our K-polish only reached 2.743 there. An enumeration of all vertex subsets (M ≤ 8, N ≥ 4) finds no two interior-disjoint regular ideal N-gons, so no other P ≥ 2 entry with N ≥ 4 is infinite by this construction. When K-polish runs past side 20 without such a proof the result is discarded ("n/d"): at that size the float coordinates (about e^20) are meaningless; this happened for squares in the octagon, P = 3 and 5, where the monotone envelope still gives a certified lower bound. "≥" marks a lower bound inherited from a larger P (a\* is non-increasing in P).
 
@@ -278,9 +260,6 @@ All ideal M-gons are congruent, and P pieces of side a at K = −1 are P unit pi
 
 | N | M | a* for P = 1, 2, ... |
 |---|---|---|
-| disk | 5 | 1: 1.124177, 2: 0.650581 |
-| disk | 6 | 1: 1.316957, 2: 0.748033 |
-| disk | 8 | 1: 1.614890, 2: 0.881373 |
 | triangle | 3 | 1: ∞, 2: 1.061275, 3: 0.977937 |
 | triangle | 4 | 1: ∞, 2: ∞, 3: 1.532936, 4: 1.368621, 5: 1.325032, 6: 1.127504, 7: 1.031069, 8: 0.977937 |
 | triangle | 5 | 1: ∞, 2: ∞, 3: ∞, 4: 1.865009, 5: ≥1.522099, 6: 1.522099, 7: 1.387608, 8: 1.248285, 9: 1.219164, 10: 1.181135, 11: 1.122002, 12: 1.089815, 13: 1.051882, 14: 0.934193 |
@@ -322,7 +301,7 @@ Continuation examples (20 steps, warm-started, [CALC]):
 |---|---|---|---|
 | 4 squares in a square, s = 2 | K = 0 → −1 | 2.0516 (K = −0.05), 2.7713 (−0.5), 3.9616 (−0.75), 4.6795 (−0.8) | infeasible at K = −0.85, consistent with a\*(4, 4, 4) = 0.9206 (catalogue change at K = −0.848) |
 | 4 triangles in a triangle, s = 2 | K = 0 → −1 | 2.0386 (−0.05), 2.5566 (−0.5), 4.3960 (−0.9), 6.5450 (−0.95) | infeasible at K = −1, consistent with a\*(3, 3, 4) = 0.9779 (change at K = −0.956) |
-| 7 disks in a disk, r = 3 | K = 0 → +1 | 3.1227 (0.1), 3.3366 (0.2) | the container must leave the open hemisphere between K = 0.2 and 0.3 (r = 3.34 at 0.2; the hemisphere radius π/(2√K) is 3.51 at 0.2 and 2.87 at 0.3), so the walk stops |
+| 7 radius-1 disks in a disk (archived), r = 3 | K = 0 → +1 | 3.1227 (0.1), 3.3366 (0.2) | the container must leave the open hemisphere between K = 0.2 and 0.3 (r = 3.34 at 0.2; the hemisphere radius π/(2√K) is 3.51 at 0.2 and 2.87 at 0.3), so the walk stops |
 
 The first step from K = 0 changes the active set and has a first-order prediction error of 0.03: the Euclidean tilings are kinked at K = 0. Near the end of each hyperbolic path ds/dK diverges (−158 at K = −0.95 for the triangles), the continuous version of the jump in §5.
 
@@ -335,20 +314,20 @@ Certified records at K = ±10⁻⁶ (in `records.json`) show the typical kinks o
 | problem | Euclidean | K = +10⁻⁶ | K = −10⁻⁶ | slope K > 0 | slope K < 0 |
 |---|---|---|---|---|---|
 | 5 squares in a square | 2.70710678 | 2.70710613 | 2.70710902 | −0.65 | −2.24 |
-| 7 disks in a disk | 3 | 3.0000010 | 3.0000000 | +1 | 0 |
+| 7 radius-1 disks in a disk (archived) | 3 | 3.0000010 | 3.0000000 | +1 | 0 |
 
-Seven disks are six around one at K = 0; for K > 0 the ring of six no longer fits at distance 2 and must move out (slope 1), for K < 0 it fits with room to spare (slope 0).
+Seven radius-1 disks (archived data) are six around one at K = 0; for K > 0 the ring of six no longer fits at distance 2 and must move out (slope 1), for K < 0 it fits with room to spare (slope 0).
 
 ## 10. Cross-checks
 
-An independent non-Euclidean research run (kept outside the repository, different code: SLSQP with separating-line variables, Poincaré-disk verification) found the same catalogue limits P_max = 2, 7, 13 (triangles in M = 3, 4, 5), 0, 1, 5, 6 (squares in M = 3, 4, 5, 6), 3 (pentagons in a hexagon), 1 for disks in M = 5, 6, 8, and the same disk-in-disk values to all printed digits. Where both searches have values our sizes are equal or smaller (for example triangles in a pentagon, P = 5: 1.552143 against 1.688292; squares in a hexagon, P = 3: 1.619232 against 2.117991; triangles in a square, P = 4 and 5: 1.949225 and 1.981453 against 1.950121 and 1.988888). Their a\* values agree with ours to 6 digits where both exist (for example a\*(3,3,2) = 1.061275, a\*(5,6,3) = 1.002615, r\*(6,1) = 1.316958); for squares in a pentagon, P = 2, our K-polish from the K = −1 optimum reached 1.21717 against their 1.253739, so our a\* entries are lower bounds from a modest search.
+An independent non-Euclidean research run (kept outside the repository, different code: SLSQP with separating-line variables, Poincaré-disk verification) found the same catalogue limits P_max = 2, 7, 13 (triangles in M = 3, 4, 5), 0, 1, 5, 6 (squares in M = 3, 4, 5, 6), 3 (pentagons in a hexagon), 1 for disks in M = 5, 6, 8, and the same disk-in-disk values to all printed digits. Where both searches have values our sizes are equal or smaller (for example triangles in a pentagon, P = 5: 1.552143 against 1.688292; squares in a hexagon, P = 3: 1.619232 against 2.117991; triangles in a square, P = 4 and 5: 1.949225 and 1.981453 against 1.950121 and 1.988888). Their a\* values agree with ours to 6 digits where both exist (for example a\*(3,3,2) = 1.061275, a\*(5,6,3) = 1.002615, r\*(6,1) = 1.316958 for a radius-1 disk, archived); for squares in a pentagon, P = 2, our K-polish from the K = −1 optimum reached 1.21717 against their 1.253739, so our a\* entries are lower bounds from a modest search.
 
 ## 11. Limitations and open questions
 
 - Values are best found, not proven optimal (except P = 1 disk cases and the {3, q} tilings, which meet the inradius or area bound). Status is `best_known` throughout.
 - Open P_max gaps at K = −1: triangles in M = 3, 4, 5, 6, 8 (found 2, 7, 13, 19, 29 against cusp bounds 5, 12, 19, 26, 40), squares in a square (1 against 4) and pentagon (5 against 7), pentagons in a pentagon (1 against 4) and hexagon (3 against 5), squares in a hexagon (6 against 10) and octagon (9 against 16), hexagons in an octagon (3 against 6), pentagons in an octagon (5 against 9). A two-piece branch-and-bound over separating lines would likely settle squares and pentagons in their own polygon.
 - At K = +1: squares fit three times in every container tried (bound 5); triangles about ten (bound 12).
-- The spherical problem is restricted to containers in an open hemisphere. Larger caps (r up to π/√K) are meaningful for disk containers (two unit disks need r = 2, three r = 1 + asin(sin 1 / sin 60°) = 2.3327 at K = 1) but need a chart-free pair test; not implemented.
+- The spherical problem is restricted to containers in an open hemisphere. Larger caps (r up to π/√K) are meaningful for disk containers (two radius-1 disks need r = 2, three r = 1 + asin(sin 1 / sin 60°) = 2.3327 at K = 1) but need a chart-free pair test; not implemented.
 - The float validator's accuracy degrades like cosh² of the distance from O; the certifier has no such limit. Containers far beyond s ≈ 30 at K = −1 were not needed.
 - `continueTo` follows one branch; it does not detect a better branch appearing elsewhere.
 
@@ -379,9 +358,9 @@ npx tsx packages/curved/scripts/build-viz.ts
 
 - **Variables.** Each piece has an anchor pose (x, y, θ) in the exponential coordinates of §1 and chart offsets (u, v, φ) in the anchor's own frame: the piece is A·T(u, v)·R(φ), with A = T(exp_O(x, y))·R(θ). A unit of u or v moves the piece by one geodesic unit wherever it is (exponential coordinates about O would stretch by about sinh(r)/r far out at K < 0). Disks have no φ. Steps are ρ, ρ and ρ/R (disks: 1, 1); `inradius` is ρ. `rebase` reads the pose of A·T(u, v)·R(φ) back into the anchor; the configuration changes only by rounding. `randomPose` and `jiggle` change only the piece's offsets (a new pose G is written as the offsets of A⁻¹G), so writing them back undoes a move.
 - **Starts.** `randomStart` takes the container at area density 0.45, as the package's search does (where that is too small, 95% of the way from the pieces' area to the largest container's). Its centres are uniform by area where a piece's inscribed disk fits, and each piece takes the best of 12 such centres: the one farthest from those placed before it. A near-ideal polygon at K < 0 keeps much of its room in its corners, which the search's placement (a disk about O) does not reach. On 13 problems near their P_max, finish succeeded from 76 of 104 relaxed random starts with that placement and from 86 with this one [CALC]. The capability `seeds` gives rings about O: none, one, or about a quarter or a third of the pieces inside, the rest on an outer ring, each ring as tight as its pieces allow, every piece with a vertex out, a vertex in or an edge in, the ring aligned with a wall, a corner or at random. One ring of triangles with a vertex at O is the {3, q} tiling (§6): from the seeds, finish reaches the tiling records at K* for q = 8, 9, 10 and 12, the disk rings for 7 and 10 disks at K = −1, and six squares in a hexagon at K = −1 (2.474469), none of which relaxed random starts reach reliably [CALC]. Where no ring fits, `seeds` returns fewer layouts.
-- **Energy.** The squared negative gaps of §2, as geodesic lengths: the separating-axis value per polygon pair, d − 2 per disk pair, one term per protruding vertex (or disk centre) and wall or rim. Gradients are the analytic row gradients, taken in (u, v, φ); dE/ds goes through the apothem. A gap that is not a number (a piece beyond float range, about 710/√−K from O) makes the energy infinite and the piece not clear.
+- **Energy.** The squared negative gaps of §2, as geodesic lengths: the separating-axis value per polygon pair, d − 1 per disk pair, one term per protruding vertex (or disk centre) and wall or rim. Gradients are the analytic row gradients, taken in (u, v, φ); dE/ds goes through the apothem. A gap that is not a number (a piece beyond float range, about 710/√−K from O) makes the energy infinite and the piece not clear.
 - **setSize.** Each centre's geodesic polar radius about O is multiplied by the ratio of the container's apothem (K ≤ 0) or circumradius (K > 0) at the new and old size; directions and θ are kept. At K = 0 this is the Euclidean homothety. For a growing container this ratio is the smaller of the wall and corner ratios, so the scaled points of the old container lie in the new one [CALC; checked numerically for K from −4 to 2, M = 3 to 8]. Sizes beyond the open hemisphere (K > 0) are evaluated at its limit.
-- **Growth is not monotone for polygons.** For disks in a disk container, growing never creates an overlap [CALC]: at K ≤ 0 the distance between two geodesics from O is convex, so centre distances grow at least by the factor [EST, Bridson and Haefliger, *Metric Spaces of Non-Positive Curvature*, II.2.2]; at K > 0 the spherical law of cosines shows they do not shrink inside the hemisphere; and d + 1 ≤ λ(r − 1) + 1 ≤ λr keeps disks inside. Polygons can overlap after a growth. Moving two pieces apart radially turns them against each other by K times the change of the area of the triangle O c_i c_j, and a turn δ opens an overlap of about δ times half an edge between pieces in flush contact. For flush pairs this beats their separation beyond a radius: [CALC, 6000 random flush pairs per case, growth by 10⁻⁶]
+- **Growth is not monotone for polygons.** For disks in a disk container, growing never creates an overlap [CALC]: at K ≤ 0 the distance between two geodesics from O is convex, so centre distances grow at least by the factor [EST, Bridson and Haefliger, *Metric Spaces of Non-Positive Curvature*, II.2.2]; at K > 0 the spherical law of cosines shows they do not shrink inside the hemisphere; and d + 1/2 ≤ λ(r − 1/2) + 1/2 ≤ λr keeps disks inside. Polygons can overlap after a growth. Moving two pieces apart radially turns them against each other by K times the change of the area of the triangle O c_i c_j, and a turn δ opens an overlap of about δ times half an edge between pieces in flush contact. For flush pairs this beats their separation beyond a radius: [CALC, 6000 random flush pairs per case, growth by 10⁻⁶]
   - K = −1: from 2.1 (triangles) or 3.5 (squares); none up to 4 for pentagons and larger.
   - K = −4: from 0.5 to 0.7; K = −6.5: from 0.26 to 0.32.
   - K = ±10⁻⁶: from about 1350 (|K|r² ≈ 1.8).
@@ -396,6 +375,6 @@ npx tsx packages/curved/scripts/build-viz.ts
 - **Work cap and stop.** A finish counts its work in energy evaluations: a row sweep (a pass over pairs and walls) or an L-BFGS evaluation is one, a validator call is three, and 1500P entries of simplex tableau work are one [CALC: LP work per energy time measured as 1·10⁴–2·10⁴ at P = 10, 3·10⁴–4·10⁴ at P = 20, 4.5·10⁴ at P = 30]. The repair and the polish end once the count passes 4 × finishCost, or when the caller's stop says so. The stop is polled at every simplex pivot. The point reached is then made valid as above, if it can be, and otherwise finish returns null.
 - **finishCost** = 100 + 8P² (disks) or 100 + 25P² (polygons) energy evaluations. The measurement used 3 relaxed and 3 squeezed random starts of each of 70 problems (K = ±1; N = 0, 3, 4, 6; M = 0, 3, 8; P = 1 to 30) [CALC]. A finish's counted work was a median 0.8 times finishCost (0.08 to 2.3 by problem), at most 3.8 times. Timed against energy() on the states a squeeze visits, finishes at P = 10 to 20 took 1400 to 7400 energy times. `validateCost` is 3: the validator took 1 to 4 energy times on records. One energy() with gradient took 0.11 ms (10 disks), 0.12 ms (10 triangles in an octagon), 0.16 ms (30 disks) and 0.41 ms (29 triangles in an octagon). These were at K = −1, on states a squeeze visits, on a heavily loaded machine.
 - **validate** is the server's rule (`packages/spaces/src/validate.ts`): P ≤ 30, the form and limits of the configuration (size ≤ 10⁶, coordinates ≤ 10⁴), the kernel's lower bound minus 10⁻⁹ relative, the far-centre test, then `validate` at TOL = 10⁻⁹. `fromConfig` refuses what the form, the limits or the far-centre test refuse. The server's strict check against a research record, and the record's own bound, are left to the server; finished configurations are valid at tolerance 0 and pass the strict check anyway.
-- **bound.** The largest of the record bounds that apply (area; inradius ≥ ρ for polygon containers; r ≥ R and, for P ≥ 2, r ≥ 2ρ for disk containers), lowered by 10⁻¹² relative; null when none is finite below the admissible limit. It holds for the true shapes only.
+- **bound.** The largest of the record bounds that apply (area; inradius ≥ ρ for polygon containers; for disk containers the score s = 2r, so s ≥ 2R and, for P ≥ 2, s ≥ 4ρ, with R and ρ the piece's circumradius and inradius), lowered by 10⁻¹² relative; null when none is finite below the admissible limit. It holds for the true shapes only.
 - **Capabilities.** `shape`: curved space has no scaling, so the soft piece at t is the polygon cut by the disk of radius ρ + t(R − ρ) about its centre. It has the inradius and circumradius of the Euclidean soft piece of `kernel.ts` (the piece scaled by t and dilated by (1 − t)ρ), runs from the inscribed disk (t = 0) to the polygon (t = 1) and always lies inside the polygon. Its gaps are the largest of separation certificates (the polygons' separating-axis value, d − 2r, an edge line of one piece against the other's disk; per vertex and wall, the vertex or the disk), so the soft energy never exceeds the true one. For disks `shape` changes nothing. `seeds`: the rings above. `swap` (polygons): two pieces exchange θ, their orientation relative to the frame carried from O.
 - **Problems that do not exist.** A unit piece that does not exist (K > 0 and √K ≥ 2π/N) makes the factory throw. Infeasible problems (P beyond P_max, §5) build a kernel whose finish returns null.

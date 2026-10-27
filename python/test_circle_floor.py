@@ -17,6 +17,37 @@ class CircleFloor(unittest.TestCase):
         self.assertEqual(rep.failures, [])
         self.assertEqual(sum(len(c.classes) for c in cfgs), 148)
 
+    def test_records_remark_compares_the_right_quantities(self):
+        # Site units: circle records are container diameters of diameter-1 disks, polygon records
+        # are container diameters. "below F: 0" must not be vacuous.
+        import copy
+        import json
+
+        recs = json.loads((cf.ROOT / "data/records.json").read_text(encoding="utf-8"))["records"]
+        checked, below, equal, classes = cf.records_remarks(recs)
+        self.assertEqual((checked, below), (60, []))
+        self.assertEqual(sorted(equal), sorted([(4, 2), (6, 2), (8, 2), (8, 4), (3, 6), (6, 6), (6, 7)]))
+        self.assertEqual(classes[37], [18, 36, 54, 72, 90])
+        # a deliberately wrong value (the radius, half the diameter) must be reported
+        bad = copy.deepcopy(recs)
+        for r in bad:
+            if (r["N"], r["P"], r["M"]) == (6, 2, 0):
+                r["value"] /= 2
+        self.assertIn((6, 2), cf.records_remarks(bad)[1])
+        # so must a polygon value just below the bound, by more than the printed precision
+        bad = copy.deepcopy(recs)
+        for r in bad:
+            if (r["N"], r["P"], r["M"]) == (8, 4, 0):
+                r["value"] -= 1e-3
+        self.assertIn((8, 4), cf.records_remarks(bad)[1])
+        # a wrong circle record (the unit-circle radius ratio replaced by its half) is caught too:
+        # it moves the bound, so records that equalled it no longer do
+        bad = copy.deepcopy(recs)
+        for r in bad:
+            if (r["N"], r["P"], r["M"]) == (0, 2, 0):
+                r["value"] = 1.0
+        self.assertNotIn((4, 2), cf.records_remarks(bad)[2])
+
     def test_field_arithmetic(self):
         F = cf.Field(36)
         self.assertEqual(cf.cyclotomic(36), (1, 0, 0, 0, 0, 0, -1, 0, 0, 0, 0, 0, 1))

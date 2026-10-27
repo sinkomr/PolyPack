@@ -1,12 +1,12 @@
 # 3D in 3D: balls in a ball or a solid, solids in a ball
 
-The second kind of 3D in 3D, beside Polyhedra ([POLYHEDRA.md](POLYHEDRA.md)): P unit balls (radius 1) packed in
+The second kind of 3D in 3D, beside Polyhedra ([POLYHEDRA.md](POLYHEDRA.md)): P balls of diameter 1 (radius 1/2) packed in
 the smallest ball or the smallest copy of any of the polyhedra space's 94 solids (a cube, a Catalan solid, a prism,
 an antiprism, ...), and P unit-edge solids, any of the 94 (tetrahedra, cubes, ..., triakis tetrahedra, prisms), packed
-in the smallest ball, for P = 2 to 100: 189 problems and 18,711 cases. The score is the container's size s: the radius
+in the smallest ball, for P = 2 to 100: 189 problems and 18,711 cases. The score is the container's size s: the diameter
 of the container ball, or the scale of the container solid (the edge of the cube); smaller is better. This follows
-PolyPack's 2D conventions (N = 0 for circle pieces of radius 1, M = 0 for circle containers, the score of a circle
-container its radius). In code and data the space is called `balls`.
+PolyPack's 2D conventions (N = 0 for circle pieces of diameter 1, M = 0 for circle containers, the score of a circle
+container its diameter). Since 2026-10-27 balls have diameter 1 and a ball container is scored by its diameter; before, balls had radius 1 and the score was the radius. The space had no records, so only entries and the test packings were affected (§4). In code and data the space is called `balls`.
 
 **Summary** (2026-10-25; the solids as containers and as pieces 2026-10-26).
 
@@ -43,13 +43,13 @@ board's menu groups the codes (balls in a ball or a Platonic solid, in an Archim
 antiprism, an elongated prism, a bipyramid, a trapezohedron; then the solids of each family in a ball; prisms by
 sides, elongated ones by sides and height).
 
-**Units and container.** Balls have radius `BALL_RADIUS` = 1 (`catalogue.ts`; `BALL_RADIUS` in
+**Units and container.** Balls have radius `BALL_RADIUS` = 1/2, diameter 1 (`catalogue.ts`; `BALL_RADIUS` in
 `python/balls/balls_catalogue.py`): every length in this space that is a ball's size is written through that one
 constant, in the validator, the bounds, the search, the kernel, the certifier and the drawing. The solids are the
 polyhedra space's canonical solids (`python/polyhedra/solids_exact.json`), centred at their vertex centroid, in their
 canonical orientation: edge 1 for the Platonic, Archimedean, prism and antiprism solids, the lateral edges 1.5, 2 or
 3 for the elongated prisms, the Catalan, bipyramid and trapezohedron solids the polar duals of unit-edge solids. The
-container is s times the canonical container, centred at the origin: the ball of radius s, or the canonical solid
+container is s times the canonical container, centred at the origin: the ball of diameter s (radius s / 2), or the canonical solid
 scaled by s (for the cube the cube [-s/2, s/2]^3 with its faces normal to the axes, the polyhedra space's unit cube
 scaled by s).
 
@@ -59,33 +59,21 @@ H(q) / |q|^2) and centred at (x, y, z), as in the polyhedra space.
 
 **Validity.** Pieces may touch; their interiors are disjoint and they lie in the closed container:
 
-- two balls: |c_i - c_j| >= 2;
-- a ball (radius r) in the ball: |c| <= s - r; in the cube: |c_k| <= s/2 - r for k = 1, 2, 3; in any other solid
+- two balls: |c_i - c_j| >= 2 r = 1;
+- a ball (radius r = 1/2) in the ball (radius s / 2): |c| <= s / 2 - r; in the cube: |c_k| <= s/2 - r for k = 1, 2, 3; in any other solid
   C: N_f . c <= s b_f - r for every face f, N_f the unit outward normal and b_f the offset of the canonical solid's
   face f [EST, elementary: the ball lies in the half-space N_f . x <= s b_f iff its centre is r inside the plane, and
   a convex polyhedron is the intersection of its face half-spaces]. So the centres lie in the container "shrunk
   inward by r", a polyhedron with the same normals and offsets s b_f - r (for a solid with all b_f equal to its
   inradius rho, the scaled solid (s - r / rho) C); the cube is the special case with N = +-e_k and b = 1/2;
-- a solid in the ball: every vertex has |x| <= s (a convex solid lies in a ball when its vertices do);
+- a solid in the ball: every vertex has |x| <= s / 2 (a convex solid lies in a ball when its vertices do);
 - two solids: disjoint interiors, decided by the separating-axis test of the polyhedra space (face normals of both
   and the Gauss-map pruned cross products of their edges, which decide the penetration depth exactly).
 
 The float validator (`packages/balls/src/validate.ts`) applies these at PolyPack's tolerance 1e-9: an overlap or
 protrusion deeper than 1e-9 rejects the configuration.
 
-**Score and bounds.** s. Every problem carries the largest of three elementary lower bounds [EST]: the volume bound
-(the pieces' total volume is at most the container's: s >= P^(1/3) for balls in a ball, s >= (4 pi P / 3)^(1/3)
-for balls in a cube, s >= (4 pi P / (3 V))^(1/3) for balls in another solid of volume V, s >= (3 P v / (4 pi))^(1/3)
-for solids of volume v in a ball); one piece (s >= the circumradius of a solid, the centre of its smallest
-enclosing ball being its vertex centroid; s >= r / rho for a ball in a solid of inradius rho, so s >= 2 for a ball in
-a cube); two pieces (two unit balls have centres at least 2 apart in the ball of radius s - 1, so s >= 2, or in the
-cube of edge s - 2 whose diameter is (s - 2) sqrt 3, so s >= 2 + 2 / sqrt 3; in a solid with all faces at its
-inradius rho and diameter D (the tangential solids: the Platonic, Catalan, bipyramid and trapezohedron ones) the
-centres lie in (s - r / rho) C, so s >= r / rho + 2 r / D, which two balls at the ends of a diameter attain
-exactly, a test checks it; in any solid the width of the shrunk container in every direction is the solid's less
-2 r, so a pair 2 r apart needs a direction of width 4 r, s >= 4 r / D; two solids hold disjoint balls of their
-inradius r, so s >= 2 r). The bounds are far below the best known values: they only refuse sizes that are plainly
-impossible.
+**Score and bounds.** s. Every problem carries the largest of three elementary lower bounds [EST], written with the ball radius r = 1/2 and, for a ball container, its radius rho_B = s / 2: the volume bound (the pieces' total volume is at most the container's: s >= P^(1/3) for balls in a ball, since (s/2)^3 >= P (1/2)^3; s >= (pi P / 6)^(1/3) for balls in a cube, s >= (pi P / (6 V))^(1/3) for balls in another solid of volume V, and s >= 2 (3 P v / (4 pi))^(1/3) for solids of volume v in a ball); one piece (s >= twice the circumradius of a solid, the centre of its smallest enclosing ball being its vertex centroid; s >= r / rho for a ball in a solid of inradius rho, so s >= 1 for a ball in a cube); two pieces (two balls have centres at least 1 apart in the ball of radius (s - 1) / 2, so s >= 2, or in the cube of edge s - 1 whose diameter is (s - 1) sqrt 3, so s >= 1 + 1 / sqrt 3; in a solid with all faces at its inradius rho and diameter D (the tangential solids: the Platonic, Catalan, bipyramid and trapezohedron ones) the centres lie in (s - r / rho) C, so s >= r / rho + 2 r / D, which two balls at the ends of a diameter attain exactly, a test checks it; in any solid the width of the shrunk container in every direction is the solid's less 2 r, so a pair 2 r apart needs a direction of width 4 r, s >= 4 r / D; two solids hold disjoint balls of their inradius, so a ball container has radius at least 2 times that inradius, s >= 4 times it). The bounds are far below the best known values: they only refuse sizes that are plainly impossible. (Before 2026-10-27, with radius-1 balls: balls in a ball and the solids' ball bounds were radii, so a solid's bound doubled, and every size for a ball in a solid was twice as large.)
 
 **Two facts about the 94 solids** [EST, and checked by a linear programme and a minimisation on the data to 4e-16]:
 the vertex centroid is the centre of each solid's largest inscribed ball and of its smallest enclosing ball, so the
@@ -121,31 +109,31 @@ about 4e-10 for tetrahedra and 1e-10 for balls], so the space's record margin is
 
 **Packomania** (E. Specht, https://www.packomania.com/): the best known packings of equal spheres in a sphere
 (`ssp`, page of 13 July 2026, complete to N = 1000) and in a cube (`scu`, 17 October 2026). Packomania normalises
-the container (radius 1, or edge 1) and gives the spheres' radius r; for unit balls the score is 1 / r. **Terms:**
+the container (radius 1, or edge 1) and gives the spheres' radius r; for balls of diameter 1 the score is 1 / r in a ball (the container's diameter over the ball's) and 1 / (2 r) in a cube (before 2026-10-27, with radius-1 balls, 1 / r for both). **Terms:**
 the pages carry no licence; they state a copyright of E. Specht (`<meta name="copyright">` and the footer
 "(c) E. Specht"). So the values are cited as benchmarks, and no coordinates were copied or used [EST, read
 2026-10-25]. Packomania marks proven optima in bold; no entry of N <= 100 is bold on either page. Some of its
-values, as 1 / r from r printed at 12 decimals (about 1e-11 absolute) [EST]:
+values, as 1 / r (balls in a ball) and 1 / (2 r) (cubes) from r printed at 12 decimals (about 1e-11 absolute; the cube column is half the former 6-decimal value and shows 7 decimals where needed) [EST]:
 
-| P | balls in a ball, R | balls in a cube, s |
+| P | balls in a ball, s | balls in a cube, s |
 |---|---|---|
-| 2 | 2.000000 | 3.154701 |
-| 3 | 2.154701 | 3.414214 |
-| 4 | 2.224745 | 3.414214 |
-| 5 | 2.414214 | 3.788854 |
-| 6 | 2.414214 | 3.885618 |
-| 7 | 2.591254 | 3.997823 |
-| 8 | 2.645329 | 4.000000 |
-| 9 | 2.732051 | 4.309401 |
-| 10 | 2.832465 | 4.666667 |
-| 11 | 2.902113 | 4.816440 |
-| 12 | 2.902113 | 4.828427 |
-| 13 | 3.000000 | 4.828427 |
-| 14 | 3.091145 | 4.828427 |
-| 20 | 3.473539 | 5.605155 |
-| 30 | 3.916492 | 6.242641 |
-| 50 | 4.550454 | 7.355401 |
-| 100 | 5.635733 | 8.978083 |
+| 2 | 2.000000 | 1.5773505 |
+| 3 | 2.154701 | 1.707107 |
+| 4 | 2.224745 | 1.707107 |
+| 5 | 2.414214 | 1.894427 |
+| 6 | 2.414214 | 1.942809 |
+| 7 | 2.591254 | 1.9989115 |
+| 8 | 2.645329 | 2.000000 |
+| 9 | 2.732051 | 2.1547005 |
+| 10 | 2.832465 | 2.3333335 |
+| 11 | 2.902113 | 2.408220 |
+| 12 | 2.902113 | 2.4142135 |
+| 13 | 3.000000 | 2.4142135 |
+| 14 | 3.091145 | 2.4142135 |
+| 20 | 3.473539 | 2.8025775 |
+| 30 | 3.916492 | 3.1213205 |
+| 50 | 4.550454 | 3.6777005 |
+| 100 | 5.635733 | 4.4890415 |
 
 Packomania's other references for these tables include Th. Gensane, Dense packings of equal spheres in a larger
 sphere, Cahiers du LMPA 188 (2003); H. Pfoertner's pages (2005, 2013); W. Huang, L. Yu, Serial symmetrical
@@ -154,22 +142,22 @@ equal spheres in a cube, Electron. J. Combin. 11 (2004) #R33; M. Tatarevic, On l
 spheres in a cube, Electron. J. Combin. 22 (2015) #P1.35.
 
 **Proven cases, balls in a cube** [EST]. With d_n the largest smallest distance of n points in the unit cube, the
-smallest cube for n unit balls has edge s = 2 + 2 / d_n. Gensane (2004, §3) states that Schaer (1966) "gave the
+smallest cube for n balls of diameter 1 has edge s = 1 + 1 / d_n (with radius-1 balls, 2 + 2 / d_n). Gensane (2004, §3) states that Schaer (1966) "gave the
 solutions for n = 2, 3, 4, 5, 6, 8, 9, the case n = 10 have been treated in [Schaer 1994]. These results are the
 only ones of optimality proved in the cube"; Tatarevic (2015, introduction) states "the optimality of d_n is
 proved for n=2,3,4,5,6,8,9 [Schaer 1966], n=10 [Schaer 1994] and n=14 [Joos 2009]". The case n = 7 is open by
 both (Gensane: Schaer's 1966 configuration is not optimal; the best known one is conjectured optimal).
 
-| n | d_n | s = 2 + 2 / d_n | proof |
+| n | d_n | s = 1 + 1 / d_n | proof |
 |---|---|---|---|
-| 2 | sqrt 3 | 3.154701 | J. Schaer, On the densest packing of spheres in a cube, Canad. Math. Bull. 9 (1966) 265-270, doi:10.4153/CMB-1966-033-0 |
-| 3, 4 | sqrt 2 | 3.414214 | the same |
-| 5 | sqrt 5 / 2 | 3.788854 | J. Schaer, The densest packing of five spheres in a cube, Canad. Math. Bull. 9 (1966) 271-274, doi:10.4153/CMB-1966-034-8 |
-| 6 | 3 sqrt 2 / 4 | 3.885618 | J. Schaer, The densest packing of six spheres in a cube, Canad. Math. Bull. 9 (1966) 275-280, doi:10.4153/CMB-1966-035-5 |
-| 8 | 1 | 4 | Schaer 1966 (265-270) |
-| 9 | sqrt 3 / 2 | 4.309401 | Schaer 1966 (265-270) |
-| 10 | 3 / 4 | 4.666667 | J. Schaer, The densest packing of ten congruent spheres in a cube, in: Intuitive Geometry (Szeged, 1991), Colloq. Math. Soc. János Bolyai 63, North-Holland (1994) 403-424 |
-| 14 | sqrt 2 / 2 | 4.828427 | A. Joós, On the packing of fourteen congruent spheres in a cube, Geom. Dedicata 140 (2009) 49-80, doi:10.1007/s10711-008-9308-3 |
+| 2 | sqrt 3 | 1.577350 | J. Schaer, On the densest packing of spheres in a cube, Canad. Math. Bull. 9 (1966) 265-270, doi:10.4153/CMB-1966-033-0 |
+| 3, 4 | sqrt 2 | 1.707107 | the same |
+| 5 | sqrt 5 / 2 | 1.894427 | J. Schaer, The densest packing of five spheres in a cube, Canad. Math. Bull. 9 (1966) 271-274, doi:10.4153/CMB-1966-034-8 |
+| 6 | 3 sqrt 2 / 4 | 1.942809 | J. Schaer, The densest packing of six spheres in a cube, Canad. Math. Bull. 9 (1966) 275-280, doi:10.4153/CMB-1966-035-5 |
+| 8 | 1 | 2 | Schaer 1966 (265-270) |
+| 9 | sqrt 3 / 2 | 2.154701 | Schaer 1966 (265-270) |
+| 10 | 3 / 4 | 2.333333 | J. Schaer, The densest packing of ten congruent spheres in a cube, in: Intuitive Geometry (Szeged, 1991), Colloq. Math. Soc. János Bolyai 63, North-Holland (1994) 403-424 |
+| 14 | sqrt 2 / 2 | 2.414214 | A. Joós, On the packing of fourteen congruent spheres in a cube, Geom. Dedicata 140 (2009) 49-80, doi:10.1007/s10711-008-9308-3 |
 
 Read for this: Gensane 2004 (full text) and the introduction of Tatarevic 2015 (arXiv:1503.07933). Schaer's and
 Joós's papers themselves were not read (they are behind paywalls); the attribution of each case rests on the two
@@ -188,7 +176,7 @@ doi:10.1073/pnas.1524875113: isobaric Monte Carlo compressions of hard Platonic 
 the densest of 50 runs for each N up to 60. It reports densities only as plots (its Fig. 4; the main text has no
 table, and its supplement could not be read here), so no numbers are listed. One construction is elementary
 [CALC]: up to 20 tetrahedra with a common vertex, one in the cone over each face of a regular icosahedron centred
-there, lie in the unit ball (seen from the centre, a face's vertices lie 37.38 degrees from its middle and a
+there, lie in the ball of radius 1 (diameter 2, the score; seen from the centre, a face's vertices lie 37.38 degrees from its middle and a
 tetrahedron's edges 35.26 degrees from its axis); `packages/balls/scripts/cones.ts` builds it, and a test checks it.
 
 ## 4. Certification
@@ -201,8 +189,8 @@ entry naming its proof with an optimum at most the score; literature entries num
 the configuration valid (`certify_config`, also usable on its own):
 
 - every JSON number is read as the exact rational it denotes;
-- balls (radius r = `BALL_RADIUS`), exactly in rationals: |c_i - c_j|^2 >= (2 r)^2 for every pair; s >= r and
-  |c_i|^2 <= (s - r)^2 in a ball; |c_ik| <= s/2 - r in a cube;
+- balls (radius r = `BALL_RADIUS`), exactly in rationals: |c_i - c_j|^2 >= (2 r)^2 for every pair; s >= 2 r and
+  |c_i|^2 <= (s/2 - r)^2 in a ball; |c_ik| <= s/2 - r in a cube;
 - balls in any other solid: for every ball and face, N_f . c + r |N_f| < s B_f, with the exact outward normals N_f
   (not unit) and offsets B_f of the container in its number field (`certify_general.Solid`, which checks the solid
   exactly: faces planar and supporting, the closed surface), decided with 170-bit fixed-point intervals with outward
@@ -211,7 +199,7 @@ the configuration valid (`certify_config`, also usable on its own):
   guessed (a cube's walls stay exact and closed);
 - solids: the solid is checked exactly in its number field; each rotation is the exact rational matrix
   H(q) / |q|^2; every world vertex is enclosed with 170-bit fixed-point intervals with outward rounding, and an
-  upper bound of |x|^2 must be below s^2 rounded down; every pair whose centres are closer than twice an upper bound
+  upper bound of |x|^2 must be below (s/2)^2 rounded down; every pair whose centres are closer than twice an upper bound
   of the circumradius is strictly separated by an explicit rational plane (floating point only proposes the axes),
   the others are farther apart than the sum of their circumradii.
 
@@ -273,7 +261,7 @@ synchronous for a worker; PolyPack's own code):
 
 1. Start: a given configuration is legalized and polished (or taken as it is when it is this search's own polished
    result). Without one: for balls, random centres in a container 30 % larger than the bound, or a cut of a lattice
-   packing of unit balls (face-centred cubic or hexagonal close-packed, turned and shifted at random; for a cube
+   packing of balls (face-centred cubic or hexagonal close-packed, turned and shifted at random; for a cube
    also the axis-aligned simple cubic and face-centred cubic lattices), the P lattice points nearest the centre in
    the container's norm; for balls in another solid also the axis-aligned hexagonal close-packed lattice (its layers
    lie along the canonical axis of the prisms and bipyramids) and the norm is the solid's gauge max_f N_f . x / b_f,
@@ -283,8 +271,8 @@ synchronous for a worker; PolyPack's own code):
    random centres in the container are drawn by rejection from its bounding box, and, if 60 draws fail, from the
    copy (s - r / rho) C that lies inside the shrunk container; for solids, their circumscribed balls placed as such a
    cut and turned at random (valid as placed), and for cubes also cuts of the cubic lattice.
-2. Polish. Balls: s and the centres are the variables, and s + mu (sum over pairs of (2 + g - |c_i - c_j|)_+^2 +
-   the walls' squared protrusions: |c| - (s - r - w) in a ball, one hinge per face N_f . c - (s b_f - r - w) in
+2. Polish. Balls: s and the centres are the variables, and s + mu (sum over pairs of (2 r + g - |c_i - c_j|)_+^2 +
+   the walls' squared protrusions: |c| - (s / 2 - r - w) in a ball, one hinge per face N_f . c - (s b_f - r - w) in
    another solid, with the gradient in s through b_f) is minimised by L-BFGS for mu = 1e1 to 1e10, the pairs read from a Verlet list
    (made again when a ball has moved a quarter of a radius; the same function as the sum over all pairs). Solids:
    the separating-plane penalty method of the polyhedra space (a plane per near pair as variables, the ball's radius
@@ -292,7 +280,7 @@ synchronous for a worker; PolyPack's own code):
 3. Legalization makes the result exactly valid with the clearance 1e-10: balls are scaled about the origin until
    every distance is 2 r + g (for a cube their bounding box is centred first) and s is set to the smallest size with
    wall gap w (for another solid the largest over the centres and faces of (N_f . c + r + w) / b_f); solids are moved apart by scaling their centres until the separating-axis test shows the clearance
-   between every pair, then s = the largest vertex distance + w.
+   between every pair, then s = 2 (the largest vertex distance + w) for a ball container.
 4. Hops from the best so far: move one to three balls to random places, move one or two of the loosest balls into
    the largest holes found by sampling, or shake all of them (balls); move and turn one to three solids or shake all
    of them a little (solids); one in ten a new start. Each in a container 0.5 to 4 % larger, polished and legalized;
@@ -301,7 +289,7 @@ synchronous for a worker; PolyPack's own code):
 Budget: `maxEvals` counts objective evaluations, so a run that ends on its evaluations is reproducible from its seed
 and start; `maxSeconds` and `shouldStop` are polled at every evaluation and between them, and the run returns its
 best so far. Tests (`packages/balls/test/balls.test.ts`): valid results at every budget, the small known optima
-(8 balls in a cube of edge 4, 4 balls in a ball of radius 1 + sqrt 6 / 2), reproducibility by seed, stops and time
+(8 balls in a cube of edge 2, 4 balls in a ball of diameter 1 + sqrt 6 / 2), reproducibility by seed, stops and time
 limits, warm starts from the test packings that never return worse, and the catalogue's ids and bounds.
 
 **Costs** [CALC] (`scripts/bench.ts`, runs of 30,000 evaluations from a new start, wall time including the work
@@ -329,7 +317,7 @@ microseconds a piece, 10 for 100 pentagonal hexecontahedra. The board sizes its 
   for most containers and solids at P = 100, but 1.73 for triangular prisms of height 3 and 3.4 for 100 12-gonal
   trapezohedra (circumradius 8.5, inradius 1.85): the start places the pieces' circumscribed balls as a lattice,
   which is loose for spiky and long solids, and the polish does not close it in so few evaluations. Thin containers
-  (the 12-gonal prism of height 1 and the triangular prism, whose inradii are 0.5 and 0.29) hold one ball only from s = r / rho on (2 for the 12-gonal prism of height 1, 3.46 for the
+  (the 12-gonal prism of height 1 and the triangular prism, whose inradii are 0.5 and 0.29) hold one ball only from s = r / rho on (1 for the 12-gonal prism of height 1, 1.73 for the
   triangular prism), and the lattice cut for them is large.
 - The kernel's `finishCost` for the solids is the Platonic fit with a floor of 30; its error is up to 7 times at P =
   5 for the solids with the most edges (§8).
@@ -388,12 +376,12 @@ quaternion components at most 1e100 and norms at least 1e-6), so a method never 
 could have.
 
 **Energy.** For balls, the validator's own distances: a pair's overlap 2 r - |c_i - c_j|, the protrusion
-|c_i| + r - s from the ball, one term per face of the cube, +-c_ik + r - s/2, and for another solid one term per face
+|c_i| + r - s / 2 from the ball, one term per face of the cube, +-c_ik + r - s/2, and for another solid one term per face
 f, N_f . c_i + r - s b_f (gradient N_f in the centre and -b_f in s). For solids, the polyhedra kernel's
 model with a ball for the container: at shape t a piece is the solid scaled by t about its centre and dilated by
 (1 - t) times its inradius rho (the solid at t = 1, its inscribed ball at t = 0); a pair's overlap is the soft
 pieces' exact penetration depth, twice the dilation minus the signed distance of the scaled solids by the
-separating-axis test; the protrusion from the ball is max |X_v| + (1 - t) rho - s over the scaled solid's vertices
+separating-axis test; the protrusion from the ball is max |X_v| + (1 - t) rho - s / 2 over the scaled solid's vertices
 X_v, since the farthest point of a convex body from a point is a vertex [EST, elementary]. The energy is the
 weighted sum of the squared overlaps and protrusions, with analytic gradients (for the wall, the unit vector to the
 farthest vertex and its lever arm about the centre). [CALC] They match central differences to 1e-6 relative on

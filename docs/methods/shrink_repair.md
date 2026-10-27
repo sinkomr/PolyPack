@@ -53,7 +53,7 @@ legalisation, the budgets) is PolyPack's and differs from all three.
 `F = sum_pairs w_ij d_ij^2 + sum_i v_i sum_walls p_ik^2`,
 
 with `d_ij` the penetration depth of the true pieces (the separating-axis
-depth of the shared `pairPenetration`; for circles `2 - distance`) and
+depth of the shared `pairPenetration`; for circles `1 - distance`) and
 `p_ik` the protrusion of piece i through wall k in the shared support form
 (the furthest vertex per polygon wall; for a circular container the vertex
 furthest from the centre). Both are zero for touching pieces, so zero overlap
@@ -136,7 +136,7 @@ disables restarts.
 [CALC] **Legalisation.** A feasible repair still has depths up to 1e-10. The
 centres are scaled about the container centre by
 `f = (1 + d / (2 r - d)) (1 + 4e-12)`, with d the deepest pair penetration
-found by `findOverlaps(N, pieces, 0)` and r the piece inradius (1 for
+found by `findOverlaps(N, pieces, 0)` and r the piece inradius (1/2 for
 circles): scaling centres by f moves a penetrating pair apart along its
 deepest separating axis u by `(f - 1) (c_b - c_a) . u`, and
 `(c_b - c_a) . u = r + R cos(delta) - d >= 2 r - d` because a regular polygon

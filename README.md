@@ -10,7 +10,7 @@ Pack P congruent regular polygons or circles into the smallest regular polygon o
 - Volunteer computing: a single-file program that searches in the background on spare cores and submits records under your name. Download it from `/volunteer.html` on the running site; see [docs/VOLUNTEER.md](docs/VOLUNTEER.md).
 - Downloads: every current record with its coordinates, refreshed nightly, in the [records release](https://github.com/sinkomr/PolyPack/releases/tag/records); published values with their sources in `data/records.json`.
 
-Problems are written (N, M, P): P pieces with N sides in a container with M sides, 0 meaning a circle. Polygon pieces have side 1 and circle pieces radius 1; the score is the container's side length, or its radius for a circle. The exact conventions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#conventions). Documentation labels claims **[EST]** (established, with a source), **[CALC]** (computed here) or **[SPEC]** (speculation).
+Problems are written (N, M, P): P pieces with N sides in a container with M sides, 0 meaning a circle. Polygon pieces have side 1 and circle pieces (and balls) diameter 1; the score is the container's side length, or its diameter for a circle. Until 2026-10-26 circles had radius 1 and a circle container was scored by its radius: see [Units](docs/ARCHITECTURE.md#units) for what changed and how to convert. The exact conventions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#conventions). Documentation labels claims **[EST]** (established, with a source), **[CALC]** (computed here) or **[SPEC]** (speculation).
 
 ## Run it locally
 
@@ -57,7 +57,7 @@ POLYPACK_E2E_PRODUCTION=1 npm run e2e -- e2e/solve.spec.ts e2e/mobile.spec.ts
 | `packages/geometry` | Shared geometry: overlap tests, enclosing container, auto-orient, no-overlap moves, validation. Used by browser and server. |
 | `packages/solver` | Search framework and methods (budgets, seeds, pause/stop, pipelines). See its [README](packages/solver/README.md). |
 | `packages/spaces` | The kinds beyond Flat, which the API and the code call spaces: their problem ids, the server's check of a configuration, and (`src/search`) the searches the board and the volunteer client share. The geometry of each space is in `packages/surface`, `curved`, `sphere`, `torus`, `boundary`, `polyhedra` and `balls`. |
-| `packages/balls` | 3D in 3D: unit balls in a ball or in one of 94 solids, and each of those solids in a ball (problems, validator, search). See [docs/spaces/BALLS.md](docs/spaces/BALLS.md). |
+| `packages/balls` | 3D in 3D: balls (diameter 1) in a ball or in one of 94 solids, and each of those solids in a ball (problems, validator, search). See [docs/spaces/BALLS.md](docs/spaces/BALLS.md). |
 | `packages/boundary`, `packages/view3d` | 3D on 4D: pieces on the boundary of a 4D polytope (its geometry, validator and search), and the 3D views of it. See [docs/spaces/BOUNDARY.md](docs/spaces/BOUNDARY.md). |
 | `apps/web` | The website (Vite, TypeScript, Canvas). |
 | `apps/server` | The API (Hono, SQLite). |

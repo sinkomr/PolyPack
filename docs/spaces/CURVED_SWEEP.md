@@ -4,6 +4,8 @@
 
 Status: research build, 2026-10-24. Code: `packages/curved/src/sweep.ts` and `packages/curved/scripts/sweep/`. Certification and curation: `python/curved/sweep_*.py`. Data: `data/curved/sweep/`. Viewer: `packages/curved/viz/sweep.html`. The engine and the certifier are described in `docs/spaces/CURVED.md`. Labels: [EST] established with a source, [CALC] computed here, [SPEC] speculation.
 
+**Units (2026-10-27).** Disks now have diameter 1 and a disk container is scored by its diameter ([CURVED.md](CURVED.md)). The sweeps of **disks in a disk** (P = 2 … 12 and 27 … 30; their 15 files, 633 records and summaries) were made for disks of radius 1 and are **archived** in `data/curved/archive/sweep/`, not served; `data/curved/sweep/` holds the polygon sweeps (triangles in a triangle and in other polygons, squares in a square), which are unchanged. Every disk result on this page (sections 1, 3, 4.1, 5 and the tables of crossings and branches) is quoted in its original radius-1 units: a radius-1 disk packing at curvature K is the packing of diameter-1 disks at curvature 4K with all lengths halved, so the container radius s\* quoted here is the diameter score of the same packing at 4K (K = −2 … 0.65 corresponds to K = −8 … 2.6). The sweeps of diameter-1 disks at K = ±1 are not yet made. Statements about triangles and squares are unchanged.
+
 ## 1. Answer
 
 **Question (Michael):** if the curvature K changes slowly, do the best packings also change smoothly, or are there sharp changes or discontinuities, and where?

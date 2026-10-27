@@ -4,7 +4,7 @@
 (called Platonic surfaces until 2026-10-26): flat pieces on a closed surface in 3D, with no
 container. The API calls it the space `surface`.
 
-PolyPack's pieces (unit disks, or regular N-gons of side 1, N = 3 to 100) packed on the surface of
+PolyPack's pieces (disks of diameter 1, or regular N-gons of side 1, N = 3 to 100) packed on the surface of
 a convex solid scaled by s: a Platonic solid, one of the 13 Archimedean or 13 Catalan solids, a prism (3 and 5 to 12
 sides) or an antiprism (4 to 12 sides). The score is the smallest s. Two tracks:
 
@@ -45,7 +45,7 @@ with a horizontal bottom edge (PolyPack's container convention with phi = 0): fr
 at angle -pi/2 + pi/M + 2 pi k/M and is the solid's vertex `faces[f][k]`; edge k runs from frame
 vertex k to k+1. The combinatorics is committed in `data/surface/solids.json`.
 
-**Pieces and poses.** Shape code N as in PolyPack: N = 0 is a disk of radius 1, N >= 3 a regular
+**Pieces and poses.** Shape code N as in PolyPack: N = 0 is a disk of diameter 1 (radius 1/2; until 2026-10-26 radius 1, with every disk score twice as large), N >= 3 a regular
 N-gon of side 1 whose vertex k sits at angle theta + pi/2 + 2 pi k/N about its centre. A pose is
 (face f, x, y, theta): the centre (x, y) in the closed face f, in f's frame, and the angle in that
 frame (radians).
@@ -76,7 +76,7 @@ pi) a disk or a polygon side through a vertex fills the whole angle there; its t
 rays then meet, which is touching, not overlap.
 
 **Score and ids.** The score is s, the scale of the canonical solid (the edge length for the
-Platonic and Archimedean solids, prisms and antiprisms), for side-1 polygons or radius-1 disks.
+Platonic and Archimedean solids, prisms and antiprisms), for side-1 polygons or disks of diameter 1.
 Problem id: `surface/<solid>/<mode>/<N>/<P>`, e.g. `surface/cube/fold/4/12`.
 
 **The other solids** (2026-10-26). The Archimedean and Catalan solids, prisms and antiprisms are the polyhedra
@@ -132,7 +132,7 @@ triangles and 12-gons on the truncated tetrahedron, cuboctahedron, snub cube and
 icosidodecahedron in both modes. Fold fixtures cross edges between face kinds and certify by
 chains; nofold fixtures use every face kind, share a face and also certify as fold packings.
 `python/surface/test_general.py` certifies each at eps = 1e-12. Both validators also test disks
-just inside and outside a vertex's unit-distance threshold and a polygon corner covering it,
+just inside and outside a vertex's distance threshold (1/2 from the centre) and a polygon corner covering it,
 on all 13 solids. The general methods kernels need no changes: tests exercise their contracts,
 charts, energy, gradients, conversion, validation and finish on the mixed faces.
 
@@ -227,28 +227,28 @@ fold record exists, s_fold <= s_nofold is all that is claimed.
 **2.3 Disks are geodesic balls** [CALC]. Let p be a disk's centre. On a convex polyhedral surface
 a shortest path never passes through a vertex in its interior, because every cone angle is below
 2 pi [EST: Mitchell, Mount, Papadimitriou 1987, doi:10.1137/0216045; Alexandrov]. Hence:
-- *No cone point in the interior* holds exactly when every vertex is at surface distance >= 1
-  from p: a vertex at distance d < 1 is reached by a straight shortest path of length d, which is
-  a radius of the disk; conversely a radius hitting a vertex at length t < 1 makes d <= t.
-- *Image = ball.* D(int K) is the open geodesic ball B(p, 1): every image point is reached by a
-  path of length < 1; every point q with d(p, q) < 1 is the end of a straight shortest path from
+- *No cone point in the interior* holds exactly when every vertex is at surface distance >= 1/2
+  from p: a vertex at distance d < 1/2 is reached by a straight shortest path of length d, which is
+  a radius of the disk; conversely a radius hitting a vertex at length t < 1/2 makes d <= t.
+- *Image = ball.* D(int K) is the open geodesic ball B(p, 1/2): every image point is reached by a
+  path of length < 1/2; every point q with d(p, q) < 1/2 is the end of a straight shortest path from
   p, i.e. of a radius.
-- *Disjointness.* Two such disks overlap exactly when d(p, q) < 2: if d < 2 the midpoint of a
-  shortest path lies in both open balls; if a point lies in both, d < 1 + 1.
+- *Disjointness.* Two such disks overlap exactly when d(p, q) < 1: if d < 1 the midpoint of a
+  shortest path lies in both open balls; if a point lies in both, d < 1/2 + 1/2.
 - *Embedding* (injectivity is not automatic). D is injective on the open disk exactly when every
-  geodesic loop at p (a straight path from p back to p avoiding the vertices) has length >= 2.
-  If a loop of length L < 2 exists, its midpoint is the image of two different radii of length
+  geodesic loop at p (a straight path from p back to p avoiding the vertices) has length >= 1.
+  If a loop of length L < 1 exists, its midpoint is the image of two different radii of length
   L/2. Conversely suppose D(a) = D(b) for a != b in the open disk. Such pairs do not accumulate
-  at the diagonal (D is a local isometry there), so max(|a|, |b|) attains a minimum rho < 1 at
+  at the diagonal (D is a local isometry there), so max(|a|, |b|) attains a minimum rho < 1/2 at
   some pair. Then |a| = |b| = rho, else the shorter one could be lengthened slightly while the
   longer one is shortened (local inverse of D). And the two radii meet head-on at D(a): otherwise
   some direction at D(a) shortens both, again lowering rho. Two radii meeting head-on form a
-  geodesic loop of length 2 rho < 2.
+  geodesic loop of length 2 rho < 1.
 
-So a disk packing is valid exactly when all vertex distances are >= 1, all centre distances are
->= 2, and all geodesic loops at the centres are >= 2. Both the validator and the certifier use
+So a disk packing is valid exactly when all vertex distances are >= 1/2, all centre distances are
+>= 1, and all geodesic loops at the centres are >= 1. Both the validator and the certifier use
 this form for disks. A "loop" that runs through a vertex (a limit case of the closed wedges below)
-has length d(p, V) + d(V, p) >= 2 whenever the vertex condition holds, so counting it changes
+has length d(p, V) + d(V, p) >= 1 whenever the vertex condition holds, so counting it changes
 nothing.
 
 **2.4 Developing a piece: chains and parts** [CALC]. A ray from c that avoids the vertices
@@ -281,7 +281,7 @@ by the earlier rule (`packages/surface/test/axes.test.ts`; the certifier
 rejected it). Every research record passes the new check, at the touching tolerance and at 1e-11.
 
 Enumeration: depth-first over chains from the anchor face; a branch is cut only when no
-vertex-avoiding ray of length <= reach (the piece's circumradius, or 2 for disk distances) can
+vertex-avoiding ray of length <= reach (the piece's circumradius, or 1 for disk distances) can
 follow it:
 - the edge lies farther than reach from c;
 - c lies strictly beyond the edge's line (no ray from c can cross it outwards);
@@ -309,14 +309,14 @@ bound; score_cert is the certified bound.
 
 **2.6 Lower bounds** [CALC].
 - Area: P a(N) <= area(S) = F M s^2 / (4 tan(pi/M)), with a(N) the piece area.
-- One piece: the inscribed disk of a piece (radius 1 for disks, the apothem for polygons) must
+- One piece: the inscribed disk of a piece (radius 1/2 for disks, the apothem for polygons) must
   contain no cone point, so some point is at distance >= r from every vertex. Each point of a
   face is within the face's circumradius R_f = s / (2 sin(pi/M)) of a corner of that face (a
   regular polygon is the union of the triangles (centre, v_k, v_k+1), and in such a triangle with
   apex angle 2 pi/M <= 2 pi/3 the apex is the farthest point from both base corners). So
-  s >= 2 sin(pi/M) r. For one disk this is attained at a face centre (the validator and
-  certifier accept s = 2 sin(pi/M)(1 + 1e-12)), so s_fold(H, 0, 1) = 2 sin(pi/M): sqrt(3) for the
-  deltahedra, sqrt(2) for the cube, 2 sin 36 deg for the dodecahedron.
+  s >= 2 sin(pi/M) r. For one disk (r = 1/2) this is attained at a face centre (the validator and
+  certifier accept s = sin(pi/M)(1 + 1e-12)), so s_fold(H, 0, 1) = sin(pi/M): sqrt(3)/2 for the
+  deltahedra, sqrt(2)/2 for the cube, sin 36 deg for the dodecahedron.
 - On any solid of the space the one-piece argument gives s >= r / max_f rho_f, with rho_f the largest
   distance from a point of face f to that face's nearest corner at scale 1 (attained at a vertex of
   the corners' Voronoi diagram in the face or where one of its edges meets the boundary;
@@ -404,7 +404,7 @@ P = 1..max(4F, 24).
 - **68 entries meet a lower bound** (listed in SURFACE_RESULTS.md with their gaps): score_cert /
   bound - 1 is at most 3 eps, the float rounding of s plus the certificate's shrink, so they are
   best possible [CALC]. With the one-piece replicas (section 3) these include, at the one-piece
-  bound 2 sin(pi/M) r_in(N): disks (2 sin(pi/M)) for P = 1 on the tetrahedron, P <= 2 on the cube
+  bound 2 sin(pi/M) r_in(N): disks (sin(pi/M)) for P = 1 on the tetrahedron, P <= 2 on the cube
   and octahedron, P <= 3 on the dodecahedron and P <= 4 on the icosahedron; squares and octagons
   on the cube for P = 1, 2 (1/sqrt 2
   and 1 + 1/sqrt 2: the face's corners sit at the midpoints of the piece's sides); pentagons on the
@@ -415,7 +415,7 @@ P = 1..max(4F, 24).
   octahedron at P = 4) are exact hexagon tilings (section 3), as are hexagons on the octahedron
   at P = 12 and 16.
 - Cross-checks: the cube disk values agree with the earlier exploratory experiment where both
-  exist (P = 6: 1.961568; P = 12: 2.730486); that experiment's P = 2 value sqrt 2 was missed by
+  exist (P = 6: 0.980784; P = 12: 1.365243; the experiment's radius-1 values 1.961568 and 2.730486 halved); that experiment's P = 2 value sqrt 2 / 2 was missed by
   the first search pass (two disks landed on adjacent faces) and found by the second.
 - A second certifier written separately (2026-10-24) re-checked the records and found no soundness
   defect in this one; it found ten fold entries that copies of the one-piece placement beat or settle, which led to the replica
@@ -512,8 +512,8 @@ without folding. All 67 certify at eps = 1e-12, and each fails 1e-7 smaller.
   finds empty need their own Farkas witness; otherwise they stay in the pair checks.
 - Cone points: each vertex of each chain's face is proved outside the closed wedge (exact) or
   strictly outside the scaled piece (interval).
-- nofold: every piece vertex strictly inside the face (interval), disks at distance > lam from
-  every edge line (exact), pairs on a face by the same witnesses.
+- nofold: every piece vertex strictly inside the face (interval), disks at distance > lam/2 from
+  every edge line (the disk radius 1/2 scaled by lam) (exact), pairs on a face by the same witnesses.
 
 - Work limits for untrusted input: before enumerating a piece's chains, the vertices of its
   anchor face are checked (a piece far too large for its solid always contains one, because
@@ -546,7 +546,7 @@ random starts pick a face by area on the solids beyond the Platonic ones. In its
 piece is its own polygon in its anchor face, and the cone-point term is replaced by the squared
 protrusion beyond the face's edges (disks: the shortfall of the distance to each edge line), with
 the same compression, hops and contact-LP polish and the nofold validator at the end. Pieces are developed
-on the solid of edge 1 and scaled by lam (the score is 1/lam). Energy: squared penetration depths
+on the solid of edge 1 and scaled by lam (the score is 1/lam; for a disk, whose radius is lam on the solid of edge 1, the site score is 1/(2 lam), since its diameter is 1). Energy: squared penetration depths
 of overlapping parts on every face (polygons, separating-axis depth), squared cone-point depths
 (each vertex counted once, at its deepest appearance, so the energy is continuous), and for disks
 the distance form of 2.3. Local solver: L-BFGS (analytic gradient for disks; for polygons central
@@ -570,13 +570,13 @@ that had hit their time limit were run again with the same seeds, start and hop 
 starts (the earlier results of the same run were replayed as the "P - 1" or "P + 1" starts): four
 with the same time limit, then all others with a 1500 s limit so that the run is decided by its
 counts. With the same 150 s limit, tetrahedron disks P = 13 and 22 and cube disks P = 19 gave the
-published values again (to 1e-12); cube disks P = 18 finished inside the limit at 3.427469 (from
-3.445888).
-Counted runs: tetrahedron P = 13 5.291355 -> 5.196152 (finished, 1224 s); cube P = 19 3.498175 ->
-3.491976, P = 22 3.747830 -> 3.744177, P = 23 3.839958 -> 3.839191 (finished); octahedron P = 22
-4.929035 -> 4.929022 (finished); octahedron P = 11 and 21 and icosahedron P = 23 finished with
+published values again (to 1e-12); cube disks P = 18 finished inside the limit at 1.713735 (from
+1.722944).
+Counted runs: tetrahedron P = 13 2.645678 -> 2.598076 (finished, 1224 s); cube P = 19 1.749087 ->
+1.745988, P = 22 1.873915 -> 1.872089, P = 23 1.919979 -> 1.919596 (finished); octahedron P = 22
+2.464517 -> 2.464511 (finished); octahedron P = 11 and 21 and icosahedron P = 23 finished with
 the published values (icosahedron 4e-11 above the published, polished value), so these are now
-reproducible from their seeds; cube P = 24 3.928892 -> 3.882425, tetrahedron P = 22 and
+reproducible from their seeds; cube P = 24 1.964446 -> 1.941213, tetrahedron P = 22 and
 dodecahedron P = 23 (unchanged) reached the 1500 s limit again. A record was replaced only by a
 certified better one; its seed, counts, limit and time are stored with it (`search_file` names the
 re-run). Machine load stayed high during the re-run (load average about 30), so times are not
@@ -726,7 +726,7 @@ as in section 1; gluing rotates by (direction of f's edge k) + pi - (direction o
   what the local `data/records.json` coordinates give.
 - Exploratory cube-surface experiment of the PolyPack generalisation note (2026-10-23), used only
   as a cross-check: its flat-disk values for the cube agree with this search where both exist
-  (P = 6: 1.961568; P = 12: 2.730486).
+  (P = 6: 0.980784; P = 12: 1.365243).
 - Mitchell, Mount, Papadimitriou (1987), The discrete geodesic problem, SIAM J. Comput. 16,
   647–668, doi:10.1137/0216045. Dutour, Deza (2004), Goldberg–Coxeter construction for 3- and
   4-valent plane graphs, Electron. J. Combin. 11, doi:10.37236/1773. Caspar, Klug (1962),
