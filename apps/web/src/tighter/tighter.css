@@ -14,6 +14,11 @@
 .t-elsewhere[hidden] {
   display: none;
 }
+/* the site's canvas#board rule sets display: block, which would keep the polygon board on screen
+   under a space problem's drawing */
+canvas#board[hidden] {
+  display: none;
+}
 .t-elsewhere p {
   margin: 0 0 12px;
 }
