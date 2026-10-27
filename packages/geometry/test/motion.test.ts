@@ -58,7 +58,7 @@ describe("slideMove", () => {
   it("does not tunnel through a piece on a long move", () => {
     const poses = [{ x: 0, y: 0, theta: 0 }, { x: 0, y: 5, theta: 0 }];
     const d = slideMove(0, poses, [1], 0, -50);
-    expect(5 + d.dy).toBeCloseTo(2, 9);
+    expect(5 + d.dy).toBeCloseTo(1, 9);
   });
 });
 
@@ -127,7 +127,7 @@ describe("snapDistance", () => {
   it("returns 0 when nothing is in the way", () => {
     const poses = [{ x: 0, y: 0, theta: 0 }, { x: 5, y: 0, theta: 0 }];
     expect(snapDistance(3, poses, [0], -1, 0)).toBe(0);
-    expect(snapDistance(0, poses, [0], 1, 0)).toBeCloseTo(3, 9);
+    expect(snapDistance(0, poses, [0], 1, 0)).toBeCloseTo(4, 9);
   });
 });
 
@@ -142,7 +142,7 @@ describe("helpers", () => {
     const sq = { x: 0, y: 0, theta: Math.PI / 4 };
     expect(pieceContainsPoint(4, sq, 0.49, 0.49)).toBe(true);
     expect(pieceContainsPoint(4, sq, 0.51, 0)).toBe(false);
-    expect(pieceContainsPoint(0, sq, 0.7, 0.7)).toBe(true);
-    expect(pieceContainsPoint(0, sq, 0.8, 0.8)).toBe(false);
+    expect(pieceContainsPoint(0, sq, 0.35, 0.35)).toBe(true);
+    expect(pieceContainsPoint(0, sq, 0.4, 0.4)).toBe(false);
   });
 });

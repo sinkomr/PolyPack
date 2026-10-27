@@ -63,17 +63,17 @@ describe("polygon separation (SAT)", () => {
 
 describe("circles", () => {
   it("circle-circle uses the centre distance", () => {
-    expect(circleSeparation({ x: 0, y: 0, theta: 0 }, { x: 3, y: 4, theta: 0 }).sep).toBeCloseTo(3, 12);
+    expect(circleSeparation({ x: 0, y: 0, theta: 0 }, { x: 3, y: 4, theta: 0 }).sep).toBeCloseTo(4, 12);
     expect(
       findOverlaps(0, [
         { x: 0, y: 0, theta: 0 },
-        { x: 2, y: 0, theta: 0 },
+        { x: 1, y: 0, theta: 0 },
       ]),
     ).toHaveLength(0);
     expect(
       findOverlaps(0, [
         { x: 0, y: 0, theta: 0 },
-        { x: 1.999, y: 0, theta: 0 },
+        { x: 0.999, y: 0, theta: 0 },
       ]),
     ).toHaveLength(1);
   });

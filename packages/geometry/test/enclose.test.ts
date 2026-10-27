@@ -11,6 +11,7 @@ import {
   pieceVertices,
   strictVerify,
   Pose,
+  DISK_RADIUS,
 } from "../src";
 import { poseArb, sidesArb } from "./helpers";
 
@@ -19,14 +20,14 @@ function maxViolation(N: number, poses: Pose[], c: Container): number {
   let worst = -Infinity;
   const pts: [number, number, number][] = [];
   for (const p of poses) {
-    if (N === 0) pts.push([p.x, p.y, 1]);
+    if (N === 0) pts.push([p.x, p.y, DISK_RADIUS]);
     else {
       const v = pieceVertices(N, p);
       for (let i = 0; i < N; i++) pts.push([v[2 * i], v[2 * i + 1], 0]);
     }
   }
   if (c.M === 0) {
-    for (const [x, y, pad] of pts) worst = Math.max(worst, Math.hypot(x - c.cx, y - c.cy) + pad - c.size);
+    for (const [x, y, pad] of pts) worst = Math.max(worst, Math.hypot(x - c.cx, y - c.cy) + pad - c.size / 2);
     return worst;
   }
   const apothem = c.size / (2 * Math.tan(Math.PI / c.M));
@@ -48,7 +49,7 @@ function bruteApothem(N: number, poses: Pose[], M: number, phi: number): number 
     u.push([Math.cos(ang), Math.sin(ang)]);
     let m = -Infinity;
     for (const p of poses) {
-      if (N === 0) m = Math.max(m, p.x * u[j][0] + p.y * u[j][1] + 1);
+      if (N === 0) m = Math.max(m, p.x * u[j][0] + p.y * u[j][1] + DISK_RADIUS);
       else {
         const v = pieceVertices(N, p);
         for (let i = 0; i < N; i++) m = Math.max(m, v[2 * i] * u[j][0] + v[2 * i + 1] * u[j][1]);
@@ -135,7 +136,7 @@ describe("enclosing circle", () => {
       fc.property(fc.constantFrom(0, 3, 4, 5), posesArb, (N, poses) => {
         const c = enclose(N, poses, 0, 0);
         expect(maxViolation(N, poses, c)).toBeLessThan(1e-9);
-        expect(maxViolation(N, poses, { ...c, size: c.size - 1e-9 })).toBeGreaterThan(0);
+        expect(maxViolation(N, poses, { ...c, size: c.size - 2e-9 })).toBeGreaterThan(0);
         // a minimal circle cannot be improved by moving its centre
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           const moved = { ...c, cx: c.cx + 1e-4 * dx, cy: c.cy + 1e-4 * dy };
@@ -194,8 +195,8 @@ describe("known answers", () => {
     }
   });
 
-  it("two unit circles in a circle: r = 2", () => {
-    const pieces = [{ x: -1, y: 0, theta: 0 }, { x: 1, y: 0, theta: 0 }];
+  it("two unit-diameter disks in a circle: diameter 2", () => {
+    const pieces = [{ x: -DISK_RADIUS, y: 0, theta: 0 }, { x: DISK_RADIUS, y: 0, theta: 0 }];
     const e = evaluate({ N: 0, M: 0, P: 2, pieces, container_phi: 0 });
     expect(e.valid).toBe(true);
     expect(e.score).toBeCloseTo(2, 12);

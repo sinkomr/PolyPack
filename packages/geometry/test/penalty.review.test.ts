@@ -3,6 +3,7 @@
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
 import {
+  DISK_RADIUS,
   circumradius,
   containerProtrusions,
   evaluate,
@@ -77,7 +78,7 @@ describe("review: pairPenetration", () => {
     const rnd = lcg(2);
     let checked = 0;
     for (const N of SHAPES) {
-      const R = N === 0 ? 1 : circumradius(N);
+      const R = N === 0 ? DISK_RADIUS : circumradius(N);
       for (let t = 0; t < 400; t++) {
         const a = { x: rnd() - 0.5, y: rnd() - 0.5, theta: N === 0 ? 0 : 14 * rnd() - 7 };
         const d = R * (0.05 + 2.5 * rnd());

@@ -157,7 +157,8 @@ function build(c: Config, N: number): { names: string[]; pieces: Pose[] } {
   return { names, pieces };
 }
 
-const floorOf = (c: Config, N: number) => Math.hypot(inradius(N) * (c.a + 1), 0.5);
+// the floor is a radius in the proof; the site scores a circle container by its diameter
+const floorOf = (c: Config, N: number) => 2 * Math.hypot(inradius(N) * (c.a + 1), 0.5);
 
 describe("circle-container floor (docs/proofs/circle-container-floor.md)", () => {
   it("has 148 cases in Theorem 2 and 30 more in Theorem 3", () => {

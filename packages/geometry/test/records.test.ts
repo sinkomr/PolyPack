@@ -31,6 +31,7 @@ describe("data/records.json", () => {
     for (const r of flagged) expect(Number(/\bProved by\b.*?\b(\d{4})\b/.exec(r.citation ?? "")?.[1])).toBeGreaterThanOrEqual(2023);
   });
 
+  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("holds no value below the bound from a proven circle record", () => {
     // an M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)) (scripts/build-records.ts)
     const below = records.filter((r) => {
@@ -75,6 +76,7 @@ describe("data/records.json", () => {
     }
   });
 
+  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("stores only coordinates that the site's checker accepts and that reproduce the value", () => {
     const bad: string[] = [];
     for (const r of records) {
@@ -87,6 +89,7 @@ describe("data/records.json", () => {
     expect(bad).toEqual([]);
   });
 
+  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("attaches solver-constructed coordinates only where they reach the published value", () => {
     // data/sources/constructed.json (scripts/construct-coordinates.ts): a packing of the published
     // size within 10^-display_precision, never above it, at the stored container angle

@@ -1,4 +1,4 @@
-import { Container, Pose, circumradius, inradius, pieceVertices } from "./shapes";
+import { Container, DISK_RADIUS, Pose, circumradius, inradius, pieceVertices } from "./shapes";
 
 /** Selected SAT feature; edge starts at vertex `edge` on `edgePiece`. */
 export interface PenetrationFeature {
@@ -104,7 +104,7 @@ export function pairPenetration(
     const ux = distance === 0 ? 1 : dx / distance;
     const uy = distance === 0 ? 0 : dy / distance;
     return {
-      depth: 2 * ((N === 0 ? scale : 0) + padding) - distance,
+      depth: 2 * ((N === 0 ? scale * DISK_RADIUS : 0) + padding) - distance,
       a: { x: -ux, y: -uy, theta: 0 },
       b: { x: ux, y: uy, theta: 0 },
     };
@@ -262,7 +262,7 @@ export function visitContainerProtrusions(
   const R = N === 0 ? 0 : circumradius(N) * scale;
   const step = N === 0 ? 0 : (2 * Math.PI) / N;
   const a0 = pose.theta + Math.PI / 2;
-  const radius = (N === 0 ? scale : 0) + padding;
+  const radius = (N === 0 ? scale * DISK_RADIUS : 0) + padding;
   if (container.M === 0) {
     for (let vertex = 0; vertex < count; vertex++) {
       const angle = a0 + vertex * step;
@@ -276,13 +276,13 @@ export function visitContainerProtrusions(
       const ux = distance === 0 ? 1 : dx / distance;
       const uy = distance === 0 ? 0 : dy / distance;
       visitor(
-        distance + radius - container.size,
+        distance + radius - container.size * DISK_RADIUS,
         ux,
         uy,
         ox * uy - oy * ux,
         -ux,
         -uy,
-        -1,
+        -DISK_RADIUS,
         0,
         vertex,
         N === 0 ? undefined : vertex,

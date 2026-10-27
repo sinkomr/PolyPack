@@ -7,7 +7,7 @@ export interface Pose {
 
 /**
  * Enclosing container. `size` is the side length s for a polygon container
- * and the radius r for a circle container (M = 0).
+ * and the diameter for a circle container (M = 0).
  */
 export interface Container {
   M: number;
@@ -16,6 +16,9 @@ export interface Container {
   phi: number;
   size: number;
 }
+
+/** Radius of a disk piece (N = 0): disk pieces have diameter 1. */
+export const DISK_RADIUS = 0.5;
 
 export const MAX_SIDES = 100;
 export const MAX_PIECES = 500;
@@ -38,15 +41,15 @@ export function inradius(n: number): number {
 
 /** Radius of the smallest circle about the piece centre that contains the piece. */
 export function boundingRadius(N: number): number {
-  return N === 0 ? 1 : circumradius(N);
+  return N === 0 ? DISK_RADIUS : circumradius(N);
 }
 
 export function pieceArea(N: number): number {
-  return N === 0 ? Math.PI : N / (4 * Math.tan(Math.PI / N));
+  return N === 0 ? Math.PI * DISK_RADIUS * DISK_RADIUS : N / (4 * Math.tan(Math.PI / N));
 }
 
 export function containerArea(M: number, size: number): number {
-  return M === 0 ? Math.PI * size * size : (M * size * size) / (4 * Math.tan(Math.PI / M));
+  return M === 0 ? (Math.PI * size * size) / 4 : (M * size * size) / (4 * Math.tan(Math.PI / M));
 }
 
 /**
@@ -87,9 +90,9 @@ export function containerVertices(c: Container): Float64Array {
 
 /**
  * Area lower bound on the container size: P * A_piece <= A_container.
- * Returns the side length (polygon container) or radius (circle container).
+ * Returns the side length (polygon container) or diameter (circle container).
  */
 export function areaLowerBound(N: number, M: number, P: number): number {
   const total = P * pieceArea(N);
-  return M === 0 ? Math.sqrt(total / Math.PI) : Math.sqrt((total * 4 * Math.tan(Math.PI / M)) / M);
+  return M === 0 ? 2 * Math.sqrt(total / Math.PI) : Math.sqrt((total * 4 * Math.tan(Math.PI / M)) / M);
 }

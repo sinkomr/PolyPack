@@ -5,12 +5,12 @@ import { Container, Pose } from "./shapes";
 
 export type RecordStatus = "proven" | "proven_unrefereed" | "best_known" | "trivial_tiling";
 
-/** One published value, already converted to the site conventions (piece side or radius 1). */
+/** One published value, already converted to the site conventions (polygon side 1, disk diameter 1). */
 export interface LiteratureRecord {
   N: number;
   M: number;
   P: number;
-  /** Container side (polygon) or radius (circle) in site conventions. */
+  /** Container side (polygon) or diameter (circle) in site conventions. */
   value: number;
   /** The value as it can be quoted from the source after conversion, e.g. "2.44719+". */
   display: string;

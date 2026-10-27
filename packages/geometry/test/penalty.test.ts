@@ -2,6 +2,7 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   Container,
+  DISK_RADIUS,
   PairPenetration,
   Pose,
   Protrusion,
@@ -196,7 +197,7 @@ describe("analytic protrusion constraints", () => {
               if (M === 0) {
                 fc.pre(Math.hypot(x - container.cx, y - container.cy) > 1e-3);
                 expect(constraint.depth).toBeCloseTo(
-                  Math.hypot(x - container.cx, y - container.cy) + (N === 0 ? 1 : 0) - container.size,
+                  Math.hypot(x - container.cx, y - container.cy) + (N === 0 ? DISK_RADIUS : 0) - container.size / 2,
                   12,
                 );
               } else {
@@ -207,7 +208,7 @@ describe("analytic protrusion constraints", () => {
                 const ex = containerPoly![2 * edge] - px;
                 const ey = containerPoly![2 * edge + 1] - py;
                 const length = Math.hypot(ex, ey);
-                expect(constraint.depth).toBeCloseTo(((x - px) * ey - (y - py) * ex) / length + (N === 0 ? 1 : 0), 11);
+                expect(constraint.depth).toBeCloseTo(((x - px) * ey - (y - py) * ex) / length + (N === 0 ? DISK_RADIUS : 0), 11);
               }
             }
 
@@ -251,7 +252,7 @@ describe("analytic protrusion constraints", () => {
   it("circle-centre radial degeneracy returns finite subgradients", () => {
     const container = { M: 0, cx: 2, cy: -1, phi: 0.7, size: 3 };
     const constraint = containerProtrusions(0, { x: 2, y: -1, theta: 0.4 }, container)[0];
-    expect(constraint.depth).toBe(-2);
+    expect(constraint.depth).toBe(-1);
     expect(Object.values(constraint.pose).every(Number.isFinite)).toBe(true);
     expect(Object.values(constraint.container).every(Number.isFinite)).toBe(true);
   });

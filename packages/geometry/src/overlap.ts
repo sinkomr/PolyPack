@@ -1,4 +1,4 @@
-import { Pose, boundingRadius, circumradius, inradius } from "./shapes";
+import { DISK_RADIUS, Pose, boundingRadius, circumradius, inradius } from "./shapes";
 
 /**
  * Tolerance in piece units (side length or radius 1).
@@ -168,8 +168,8 @@ export function circleSeparation(a: Pose, b: Pose, scale = 1): Contact {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   const d = Math.hypot(dx, dy);
-  if (d === 0) return { sep: -2 * scale, nx: 1, ny: 0 };
-  return { sep: d - 2 * scale, nx: dx / d, ny: dy / d };
+  if (d === 0) return { sep: -2 * DISK_RADIUS * scale, nx: 1, ny: 0 };
+  return { sep: d - 2 * DISK_RADIUS * scale, nx: dx / d, ny: dy / d };
 }
 
 /** Separation between two congruent pieces (N = 0 for circles). */
