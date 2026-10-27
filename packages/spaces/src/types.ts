@@ -159,6 +159,17 @@ export interface SpaceRecordsResponse {
   problems: SpaceProblemSummary[];
 }
 
+/**
+ * GET /api/spaces/:space/site-only?limit=&after=: the problems of the space's domain that have a site entry and no
+ * research record (the records listing holds neither), by id; `next` is the `after` of the following page, or null.
+ */
+export interface SpaceSiteOnlyResponse {
+  space: SpaceName;
+  generated_at: string;
+  problems: SpaceProblemSummary[];
+  next: string | null;
+}
+
 /** GET /api/spaces/:space/problems/<id>: one problem with its configurations. */
 export interface SpaceProblemResponse extends SpaceProblemSummary {
   conventions: Record<string, string>;

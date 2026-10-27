@@ -90,20 +90,83 @@ test("phone width: no page scroll on any tab, and the table scrolls in its own b
 });
 
 for (const scheme of ["light", "dark"] as const) {
-  test(`no automatic accessibility violations (${scheme})`, async ({ browser }) => {
-    const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
-    for (const hash of [
-      "#space=sphere&N=0",
-      "#space=balls&code=ballinball",
-      "#space=boundary&polytope=tesseract&piece=ball",
-    ]) {
-      await page.goto(`/records.html${hash}`);
+  test(`no automatic accessibility violations on any tab at phone width (${scheme})`, async ({ browser }) => {
+    const page = await (
+      await browser.newContext({ colorScheme: scheme, viewport: { width: 390, height: 844 } })
+    ).newPage();
+    for (const t of TABS) {
+      await page.goto(`/records.html${t.hash}`);
       await expect(page.locator("#pickers select").first()).toBeVisible();
       await page.waitForTimeout(300);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(
-        results.violations.map((v) => `${hash}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
+        results.violations.map((v) => `${t.hash}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
       ).toEqual([]);
     }
   });
 }
+
+test("each kind's problems are fetched once however fast the tabs change", async ({ page }) => {
+  const counts: Record<string, number> = {};
+  await page.route("**/api/spaces/**", (route) => {
+    const path = new URL(route.request().url()).pathname;
+    counts[path] = (counts[path] ?? 0) + 1;
+    return route.continue();
+  });
+  await page.goto("/records.html#space=surface");
+  const kinds = page.getByRole("navigation", { name: "Kind" });
+  await kinds.getByRole("link", { name: "Sphere" }).click();
+  await kinds.getByRole("link", { name: "Surfaces" }).click();
+  await kinds.getByRole("link", { name: "Torus" }).click();
+  await kinds.getByRole("link", { name: "Surfaces" }).click();
+  await expect(page.locator("#chart-title")).toContainText("cube");
+  await expect(page.locator("#rec-rows tr").first()).toBeVisible();
+  for (const path of ["/api/spaces/surface/records", "/api/spaces/surface/site-only", "/api/spaces/sphere/records"])
+    expect(counts[path] ?? 0, path).toBeLessThanOrEqual(1);
+});
+
+test("zoom stays where it is when a request is too narrow, and the table has no empty scroll box", async ({ page }) => {
+  await page.goto("/records.html#space=sphere&N=0");
+  const chart = page.locator("#chart");
+  await chart.focus();
+  await page.keyboard.press("Home");
+  await page.keyboard.press("+");
+  const range = page.locator("#chart-range");
+  await expect(range).toContainText("P = ");
+  const before = await range.textContent();
+  // halving again and again narrows the range; once it is under two P wide the zoom stays
+  for (let i = 0; i < 8; i++) await page.keyboard.press("+");
+  await expect(range).toContainText("P = ");
+  expect(before).not.toBe("");
+  await page.keyboard.press("0");
+  await expect(range).toHaveText("");
+  // balls have no records: no rows, no scroll box
+  await page.goto("/records.html#space=balls&code=ballinball");
+  await expect(page.locator("#table-note")).toContainText("No problem of this family");
+  await expect(page.locator("#rec-wrap")).toBeHidden();
+});
+
+test("a row's gap is the shown record minus the shown bound, a curved caption says K = value, and other hashes go to the polygons", async ({
+  page,
+}) => {
+  await page.goto("/records.html#space=curved&K=-1&N=0&M=0");
+  await expect(page.locator("#chart-title")).toContainText("K = −1, disk, disk");
+  const rows = page.locator("#rec-rows tr");
+  await expect(rows.first()).toBeVisible();
+  for (let i = 0; i < Math.min(await rows.count(), 12); i++) {
+    const cells = await rows.nth(i).locator("td").allTextContents();
+    // P, record, status, held by, lower bound, gap, links
+    const record = Number(cells[1]);
+    const bound = Number(cells[4].match(/^−?\d+\.\d{6}/)?.[0].replace("−", "-"));
+    const gap = Number(cells[5].replace("−", "-"));
+    if (Number.isFinite(record) && Number.isFinite(bound) && Number.isFinite(gap))
+      expect(Math.round((record - bound) * 1e6), cells.join("|")).toBe(Math.round(gap * 1e6));
+  }
+  // the polygons' page takes the hash on (and puts a hash it cannot read right itself)
+  await page.goto("/records.html#0,4");
+  await expect(page).toHaveURL(/\/browse\.html#0,4$/);
+  for (const hash of ["#space=polygon", "#space=nowhere"]) {
+    await page.goto(`/records.html${hash}`);
+    await expect(page).toHaveURL(/\/browse\.html#/);
+  }
+});

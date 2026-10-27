@@ -1,10 +1,14 @@
-import type { CertifiedStatus, SpaceInfo, SpaceName, SpaceTarget } from "@polypack/spaces";
+import type { CertifiedStatus, SpaceInfo, SpaceName } from "@polypack/spaces";
 import { describe, expect, it } from "vitest";
 import {
   chartPoints,
   chartScale,
   domainPRange,
-  entryOnlyIds,
+  collectPages,
+  gapText,
+  isPolygonHash,
+  nextZoom,
+  statusText,
   holderText,
   kindHref,
   pTicks,
@@ -191,18 +195,30 @@ describe("pickers and series", () => {
 });
 
 describe("entries on problems without a record", () => {
-  const t = (id: string, P: number, leader: SpaceTarget["leader"]): SpaceTarget =>
-    ({ space: "balls", id, P, priority: 1, best_score: 1, bound: null, leader, leader_id: null }) as SpaceTarget;
-  it("picks the site-led problems that the listing lacks, smallest P first, up to a cap", () => {
-    const targets = [
-      t("balls/a/9", 9, "site"),
-      t("balls/a/3", 3, "site"),
-      t("balls/a/5", 5, "none"),
-      t("balls/a/4", 4, "certified"),
-      t("balls/a/7", 7, "site"),
-    ];
-    expect(entryOnlyIds(targets, new Set(["balls/a/7"]), 5)).toEqual(["balls/a/3", "balls/a/9"]);
-    expect(entryOnlyIds(targets, new Set(), 1)).toEqual(["balls/a/3"]);
+  it("reads every page of the listing, however many, and stops at the last or on a failure", async () => {
+    const rows = Array.from({ length: 12_000 }, (_, i) => `balls/a/${String(i).padStart(5, "0")}`);
+    const calls: (string | undefined)[] = [];
+    const page = async (after: string | undefined) => {
+      calls.push(after);
+      const from = after === undefined ? 0 : rows.indexOf(after) + 1;
+      const problems = rows.slice(from, from + 5000);
+      return { problems, next: from + 5000 < rows.length ? problems[problems.length - 1] : null };
+    };
+    expect(await collectPages(page)).toEqual(rows);
+    expect(calls).toEqual([undefined, rows[4999], rows[9999]]);
+    // a failed page keeps what was read; a page that does not move on ends the loop
+    let n = 0;
+    expect(await collectPages(async () => (n++ ? null : { problems: [1], next: "x" }))).toEqual([1]);
+    expect(await collectPages(async (after) => ({ problems: [2], next: "same" }), 50)).toHaveLength(2);
+  });
+
+  it("sends the polygons' hashes and unknown kinds to the polygons' page", () => {
+    const kinds = ["torus", "curved"];
+    expect(isPolygonHash("#4,4", kinds)).toBe(true);
+    expect(isPolygonHash("#space=polygon", kinds)).toBe(true);
+    expect(isPolygonHash("#space=nowhere", kinds)).toBe(true);
+    expect(isPolygonHash("#space=torus&family=sq", kinds)).toBe(false);
+    expect(isPolygonHash("", kinds)).toBe(false);
   });
 });
 
@@ -272,5 +288,52 @@ describe("table", () => {
     expect(holderText(problem("torus/sq/0/4", { cert: 4.1 }))).toBe("Research record");
     expect(holderText(problem("balls/ballinball/4", { site: 3 }))).toBe("Site entry");
     expect(holderText(problem("balls/ballinball/5"))).toBe("—");
+  });
+});
+
+describe("the table's words and numbers", () => {
+  it("adds the gap up from the rounded values, with a minus sign below zero", () => {
+    // 2.0000004 shows as 2.000000 and 1.9999996 as 2.000000: the gap shown is 0, not a rounding of 0.0000008
+    expect(gapText(2.0000004, 1.9999996)).toBe("0.000000");
+    expect(gapText(1.2345674, 1.0000005)).toBe("0.234566");
+    expect(gapText(1.5, 1.5000004)).toBe("0.000000");
+    expect(gapText(1.0, 1.2)).toBe("−0.200000");
+    expect(
+      pointLines("t", { ...chartPoints([problem("torus/sq/0/1", { cert: 2.0000004, bound: 1.9999996 })])[0] }).lines.at(
+        -1,
+      ),
+    ).toEqual(["gap", "0.000000 above the bound"]);
+  });
+
+  it("names a problem that has only a site entry", () => {
+    expect(statusText(problem("balls/ballinball/2", { site: 2 }))).toBe("site entry, no research record");
+    expect(statusText(problem("balls/ballinball/3"))).toBe("no record yet");
+    expect(statusText(problem("torus/sq/0/2", { cert: 3, status: "proven" }))).toBe("proven optimal");
+  });
+
+  it("keeps the zoom when a request is under two P wide, and resets on the whole range", () => {
+    const all: [number, number] = [1, 40];
+    const z = { from: 10, to: 20 };
+    expect(nextZoom(null, all, 10, 20)).toEqual(z);
+    expect(nextZoom(z, all, 14, 15)).toEqual(z);
+    expect(nextZoom(null, all, 14, 15)).toBeNull();
+    expect(nextZoom(z, all, 0, 100)).toBeNull();
+    expect(nextZoom(z, all, null)).toBeNull();
+    expect(nextZoom(z, all, 5, 30)).toEqual({ from: 5, to: 30 });
+  });
+
+  it("words one problem in the singular, and K as K = value", () => {
+    const one = [problem("torus/sq/0/1", { cert: 2 })];
+    expect(seriesNote(undefined, one, 1, 1)).toBe(
+      "1 of this family's 1 problem has a record or an entry. The kind has 1 problems, all with a research record.",
+    );
+    const info = { space: "torus", problems: 99, records: 99 } as SpaceInfo;
+    expect(seriesNote(info, one, 99, 99)).toContain("1 of this family's 1 problem has");
+    const domain = {
+      problems: 99,
+      domain: { id: "", problems: 99, fields: [{ key: "P", label: "P", min: 2, max: 100 }] },
+    } as unknown as SpaceInfo;
+    expect(seriesNote(domain, one, 1, 99)).toContain("1 of this family's 99 problems has a record");
+    expect(seriesTitle(SPACE_FIELDS.curved, { K: "-1", N: "0", M: "4" })).toBe("K = −1, disk, square");
   });
 });

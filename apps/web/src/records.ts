@@ -16,7 +16,11 @@ import {
   SCORE_NAMES,
   chartPoints,
   domainPRange,
-  entryOnlyIds,
+  collectPages,
+  gapText,
+  isPolygonHash,
+  nextZoom,
+  statusText,
   holderText,
   parseRecordsHash,
   pickers,
@@ -35,7 +39,6 @@ import {
   FieldSpec,
   ListedProblem,
   SPACE_FIELDS,
-  configUrl,
   day,
   entriesText,
   fieldOf,
@@ -43,19 +46,15 @@ import {
   minus,
   nofoldFaceProblem,
   plainBoundLabel,
-  problemStatus,
   round6,
   sentence,
   siteBelowCertified,
-  statusLabel,
 } from "./spaces-model";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 /** Rows of a table of every record that show at once; a button shows the next ones. */
 const ROWS_PER_PAGE = 200;
-/** Problems without a research record whose site entries are looked up one by one, at most. */
-const ENTRY_LOOKUPS = 60;
 
 let infos: SpaceInfo[] = [];
 let state: RecordsState | null = null;
@@ -86,21 +85,27 @@ function follow(next: RecordsState): void {
   history.replaceState(history.state, "", `${location.pathname}${location.search}${recordsHash(next)}`);
 }
 
-async function load(space: SpaceName): Promise<ListedProblem[] | null> {
+/** Each kind's problems are fetched once, however fast the tabs are switched: the answer in flight is shared. */
+const loading = new Map<SpaceName, Promise<ListedProblem[] | null>>();
+
+function load(space: SpaceName): Promise<ListedProblem[] | null> {
   const known = loaded.get(space);
-  if (known) return known;
-  const data = await api.getSpaceRecords(space);
-  if (!data) return null;
-  const problems: ListedProblem[] = [...data.problems];
-  // a domain's problems without a research record are not in the listing; those with site entries are on the work list
-  if (infos.find((s) => s.space === space)?.domain) {
-    const targets = await api.getSpaceTargets(space);
-    const ids = targets ? entryOnlyIds(targets.targets, new Set(problems.map((p) => p.id)), ENTRY_LOOKUPS) : [];
-    const more = await Promise.all(ids.map((id) => api.getSpaceProblem(configUrl(space, id))));
-    for (const p of more) if (p) problems.push(p);
+  if (known) return Promise.resolve(known);
+  let pending = loading.get(space);
+  if (!pending) {
+    pending = (async () => {
+      const data = await api.getSpaceRecords(space);
+      if (!data) return null;
+      const problems: ListedProblem[] = [...data.problems];
+      // a domain's problems without a research record are not in the listing: those with site entries come by themselves
+      if (infos.find((s) => s.space === space)?.domain)
+        problems.push(...(await collectPages((after) => api.getSpaceSiteOnly(space, after))));
+      loaded.set(space, problems);
+      return problems;
+    })().finally(() => loading.delete(space));
+    loading.set(space, pending);
   }
-  loaded.set(space, problems);
-  return problems;
+  return pending;
 }
 
 /** The pickers are built again only for another kind, so that focus stays on the picker being used. */
@@ -167,13 +172,7 @@ function drawCharts(keep?: number, focusOn?: Element | null): void {
     : `${title}: no lower bound is known for the records of this family.`;
   const zoomTo = (from: number | null, to?: number, keepP?: number) => {
     const all = charted!.points;
-    if (from === null || !all.length || to === undefined) zoom = null;
-    else {
-      const lo = Math.max(all[0].P, from);
-      const hi = Math.min(all[all.length - 1].P, to);
-      // the whole range again, or too little to draw: no zoom
-      zoom = hi - lo < 2 || (lo <= all[0].P && hi >= all[all.length - 1].P) ? null : { from: lo, to: hi };
-    }
+    zoom = nextZoom(zoom, all.length ? [all[0].P, all[all.length - 1].P] : null, from, to);
     drawCharts(keepP, document.activeElement instanceof SVGElement ? document.activeElement : null);
   };
   for (const [id, mode] of [
@@ -226,6 +225,8 @@ function renderTable(
     : info?.domain && !all
       ? "No problem of this family has a record or an entry yet. All its problems are open: choose one on the board, or let the volunteer client search them."
       : "No problems.";
+  // a table with no rows has nothing to scroll or to reach: its box is left out
+  $("rec-wrap").hidden = !rows.length;
   const body = $("rec-rows");
   const shown = rows.slice(0, all ? shownRows : rows.length);
   body.replaceChildren(
@@ -238,7 +239,7 @@ function renderTable(
       const rec = el("td", scoreText(p), "num");
       if (siteBelowCertified(p)) rec.append(" ", el("span", "below research record", "badge"));
       tr.append(rec);
-      const status = el("td", statusLabel(problemStatus(p)), "state");
+      const status = el("td", statusText(p), "state");
       const why = entriesText(p).why;
       if (why && !p.accepts_submissions) {
         // a proven optimum cites its proofs, which can be long, so they open on demand
@@ -259,7 +260,7 @@ function renderTable(
       const bound = el("td", p.bound ? minus(round6(p.bound.value)) : "—", "num");
       if (p.bound?.label) bound.append(el("span", plainBoundLabel(p.bound.label), "cell-why"));
       tr.append(bound);
-      tr.append(el("td", p.best_score !== null && p.bound ? round6(p.best_score - p.bound.value) : "—", "num"));
+      tr.append(el("td", p.best_score !== null && p.bound ? gapText(p.best_score, p.bound.value) : "—", "num"));
       const links = el("td", "", "links");
       if (isBoardSpace(space)) links.append(link(`/${spaceAddress(space, p.id)}`, "Board", `: ${p.id}`));
       if (all) links.append(" ", link(seriesHash(space, specs, p), "Chart", `: family of ${p.id}`));
@@ -350,7 +351,15 @@ $("rec-more").addEventListener("click", () => {
 /** Kinds in the order of the dimensions; the Flat kind has its own page. */
 const ORDER: string[] = DIMENSIONS.flatMap((d) => d.families.map((f) => f.space));
 
+/** The polygons' problems, and kinds this page has no table for, are on browse.html: the hash goes along. */
+const sendToPolygons = (): boolean => {
+  if (!isPolygonHash(location.hash, Object.keys(SPACE_FIELDS))) return false;
+  location.replace(`/browse.html${location.search}${location.hash}`);
+  return true;
+};
+
 async function start(): Promise<void> {
+  if (sendToPolygons()) return;
   // the tabs are known without the server
   renderTabs($("records-tabs"), "curved");
   const data = await api.getSpaces();
@@ -363,6 +372,7 @@ async function start(): Promise<void> {
     .sort((a, b) => ORDER.indexOf(a.space) - ORDER.indexOf(b.space));
   const names = infos.map((s) => s.space);
   const follow = () => {
+    if (sendToPolygons()) return;
     const wish = parseRecordsHash(location.hash, names);
     if (wish) void show(wish);
   };

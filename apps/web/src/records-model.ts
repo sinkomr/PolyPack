@@ -9,9 +9,11 @@ import {
   fieldOf,
   fieldValues,
   parseHash,
+  minus,
   plainBoundLabel,
   problemStatus,
   round6,
+  statusLabel,
   stateHash,
 } from "./spaces-model";
 
@@ -168,7 +170,7 @@ export function seriesProblems(
 
 /** The family's name in a few words: "Cube, fold, square". */
 export const seriesTitle = (specs: readonly FieldSpec[], chosen: Filters): string =>
-  specs.map((f) => f.cell(chosen[f.key] ?? "")).join(", ");
+  specs.map((f) => (f.key === "K" ? `K = ${f.cell(chosen[f.key] ?? "")}` : f.cell(chosen[f.key] ?? ""))).join(", ");
 
 /** The hash that shows a problem's family. */
 export const seriesHash = (space: SpaceName, specs: readonly FieldSpec[], p: ListedProblem): string =>
@@ -205,7 +207,7 @@ export function seriesNote(
   const infeasible = series.filter((p) => problemStatus(p) === "infeasible").length;
   const parts = [
     valued
-      ? `${n(valued)} of this family's ${n(size)} ${size === 1 ? "problem has" : "problems have"} a record or an entry`
+      ? `${n(valued)} of this family's ${n(size)} ${size === 1 ? "problem" : "problems"} ${valued === 1 ? "has" : "have"} a record or an entry`
       : `None of this family's ${n(size)} ${size === 1 ? "problem has" : "problems have"} a record or an entry yet`,
   ];
   if (infeasible) parts.push(`${n(infeasible)} ${infeasible === 1 ? "is" : "are"} proved to have no packing`);
@@ -219,16 +221,31 @@ export function seriesNote(
 // ---------- entries on problems without a record ----------
 
 /**
- * Problems of a domain without a research record whose leader is a site entry: the volunteers'
- * work list names them, the records listing does not. At most `cap` ids, smallest P first.
+ * Reads a paginated listing to its end: `page(after)` answers a page of rows and the `after` of the next page (null
+ * on the last). Stops after `maxPages`, and on a page that fails (null), keeping what was read.
  */
-export function entryOnlyIds(targets: readonly SpaceTarget[], listed: ReadonlySet<string>, cap: number): string[] {
-  return targets
-    .filter((t) => t.leader === "site" && !listed.has(t.id))
-    .sort((a, b) => a.P - b.P || (a.id < b.id ? -1 : 1))
-    .slice(0, cap)
-    .map((t) => t.id);
+export async function collectPages<T>(
+  page: (after: string | undefined) => Promise<{ problems: T[]; next: string | null } | null>,
+  maxPages = 100,
+): Promise<T[]> {
+  const out: T[] = [];
+  let after: string | undefined;
+  for (let i = 0; i < maxPages; i++) {
+    const got = await page(after);
+    if (!got) break;
+    out.push(...got.problems);
+    if (got.next === null || got.next === after) break;
+    after = got.next;
+  }
+  return out;
 }
+
+/** The redirect of a hash that names the polygons' problems, or a kind this page does not have, to browse.html. */
+export const isPolygonHash = (hash: string, spaces: readonly string[]): boolean => {
+  if (/^#\d+,\d+$/.test(hash)) return true;
+  const named = new URLSearchParams(hash.replace(/^#/, "")).get("space");
+  return named !== null && !spaces.includes(named);
+};
 
 // ---------- chart ----------
 
@@ -327,7 +344,7 @@ export function pointLines(title: string, p: ChartPoint): { head: string; lines:
     ]);
   if (p.site) lines.push(["site best", `${round6(p.site.score)} by ${p.site.name}`]);
   if (p.bound !== null) lines.push(["lower bound", `${round6(p.bound)}${p.boundLabel ? ` (${p.boundLabel})` : ""}`]);
-  if (p.record !== null && p.bound !== null) lines.push(["gap", `${round6(p.record - p.bound)} above the bound`]);
+  if (p.record !== null && p.bound !== null) lines.push(["gap", `${gapText(p.record, p.bound)} above the bound`]);
   return { head: `${title}, P = ${p.P}`, lines };
 }
 
@@ -342,3 +359,37 @@ export function holderText(p: Pick<ListedProblem, "certified" | "site_best">): s
 /** The score of a row: the record's six decimals, or a dash. */
 export const scoreText = (p: Pick<ListedProblem, "best_score">): string =>
   p.best_score === null ? "—" : round6(p.best_score);
+
+/**
+ * The gap of a row from the two values as shown: the record and the bound each rounded to 6 decimals, then
+ * subtracted, so that the columns add up. A negative gap (a value rounded below its bound) takes a minus sign.
+ */
+export function gapText(record: number, bound: number): string {
+  const micro = (v: number) => Math.round(Number(round6(v)) * 1e6);
+  return minus(((micro(record) - micro(bound)) / 1e6).toFixed(6));
+}
+
+/** The status column: the research record's, or, for a problem that has only a site entry, that. */
+export function statusText(
+  p: Pick<ListedProblem, "status" | "certified" | "accepts_submissions" | "site_best">,
+): string {
+  const s = problemStatus(p);
+  return s === "no_record" && p.site_best ? "site entry, no research record" : statusLabel(s);
+}
+
+/**
+ * The range of P a chart is zoomed to after a request for [from, to] (null: every P) over the points spanning
+ * `all`. The whole range again is no zoom; a range under two P wide is too little to draw, and the zoom stays as it is.
+ */
+export function nextZoom(
+  current: { from: number; to: number } | null,
+  all: readonly [number, number] | null,
+  from: number | null,
+  to?: number,
+): { from: number; to: number } | null {
+  if (from === null || to === undefined || !all) return null;
+  const lo = Math.max(all[0], from);
+  const hi = Math.min(all[1], to);
+  if (lo <= all[0] && hi >= all[1]) return null;
+  return hi - lo < 2 ? current : { from: lo, to: hi };
+}
