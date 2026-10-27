@@ -13,11 +13,16 @@ its config_at locates), it checks the published fields and proves the configurat
            best_known, or proven with a literature entry that names its proof and gives an optimum <= score_cert;
            literature entries are numbers with a source.
   geometry Every JSON number is read as the exact rational it denotes (a binary64 float is a dyadic rational).
-           Balls (radius 1), exactly in rationals:
-             pairs      |c_i - c_j|^2 >= 4 for every two centres;
-             ball       s >= 1 and |c_i|^2 <= (s - 1)^2;
-             cube       |c_ik| <= s/2 - 1 for k = 1, 2, 3 (the cube [-s/2, s/2]^3).
-           Platonic solids (edge 1) in the ball of radius s, with the polyhedra space's vendored certify_general
+           Balls (radius r = BALL_RADIUS, balls_catalogue.py), exactly in rationals:
+             pairs      |c_i - c_j|^2 >= (2 r)^2 for every two centres;
+             ball       s >= r and |c_i|^2 <= (s - r)^2;
+             cube       |c_ik| <= s/2 - r for k = 1, 2, 3 (the cube [-s/2, s/2]^3);
+           and in any other solid C of the polyhedra space (s times the canonical solid about its vertex centroid; faces
+           N_f . x <= s b_f with N_f the exact outward normals, not unit, of solids_exact.json), for every ball and face
+           N_f . c + r |N_f| < s B_f, decided with 170-bit interval arithmetic with outward rounding on the exact N_f, B_f
+           and |N_f| (an upper bound of its square root); the walls are certified strictly, as the solids' are, so that a
+           ball touching a face of an irrational solid is refused rather than guessed.
+           Solids (edge 1) in the ball of radius s, with the polyhedra space's vendored certify_general
            machinery (python/polyhedra; MIT, see THIRD_PARTY_NOTICES.md): the solids are checked exactly in their
            number field (solids_exact.json); each rotation is the exact rational matrix H(q)/|q|^2 of the stored
            quaternion; every world vertex c + R v is enclosed with 170-bit fixed-point intervals with outward
@@ -46,6 +51,9 @@ sys.path.append(os.path.join(os.path.dirname(HERE), "polyhedra"))
 import balls_catalogue as catalogue  # noqa: E402
 import certify_general as cg  # noqa: E402
 
+R = catalogue.BALL_RADIUS
+D = catalogue.BALL_DIAMETER
+
 DEFAULT_RECORDS = os.path.join(ROOT, 'data', 'balls', 'records.json')
 STATUSES = ('best_known', 'proven')
 
@@ -68,10 +76,45 @@ def exact(v, what):
     return Fraction(v)
 
 
+def isqrt_up(n):
+    """An integer at least the square root of the integer n >= 0."""
+    return math.isqrt(n) + 1
+
+
+def certify_walls_in_solid(container, s, cs):
+    """The walls of a solid container (not the ball or the cube): bad_walls (indices of balls not proven inside) and the
+    smallest wall slack, a rigorous lower bound (float) of s b_f - r - N_f . c over balls and faces, in the unit
+    normals' terms. For every ball and face the inequality N_f . c + r |N_f| < s B_f is decided with fixed-point
+    intervals: the exact N_f and B_f enclosed by certify_general, c and s exact rationals, |N_f| bounded above by the
+    fixed-point square root of an upper bound of N_f . N_f. Never decided by floating point."""
+    if container not in cg.EXACT:
+        raise CertError(f'unknown container {container!r}')
+    C = cg.get_solid(container)
+    ONE, fx, fdot, fmul = cg.ONE, cg.fx, cg.fdot, cg.fmul
+    sf = fx(s)
+    rf = fx(R)
+    faces = []
+    for N, B in zip(C.N, C.B):
+        n2 = fdot(N, N)[1]                       # an upper bound of |N|^2, fixed point
+        nu = isqrt_up(n2 * ONE)                  # an upper bound of |N|, fixed point
+        faces.append((N, fmul(sf, B)[0], fmul(rf, (nu, nu))[1], nu))
+    bad, worst = [], math.inf
+    for i, c in enumerate(cs):
+        cf = [fx(x) for x in c]
+        for N, sB, rN, nu in faces:
+            slack = sB - fdot(N, cf)[1] - rN     # a lower bound of s B_f - N_f . c - r |N_f|
+            if slack <= 0 and (not bad or bad[-1] != i):
+                bad.append(i)
+            worst = min(worst, slack / ONE / (nu / ONE))
+    return bad, worst
+
+
 def certify_balls(container, s, pieces):
-    """Proves that unit balls at `pieces` (centres [x, y, z]) lie in the closed container of size s with disjoint
-    interiors, exactly in rationals. Returns ok, the smallest pair gap |c_i - c_j| - 2 and the smallest wall gap (both
-    as floats of exact values, for the report) and the failures. Raises CertError for malformed input."""
+    """Proves that balls of radius BALL_RADIUS at `pieces` (centres [x, y, z]) lie in the closed container of size s
+    ('ball', 'cube' or the name of another solid of the polyhedra space) with disjoint interiors: exactly in rationals
+    for the pairs, the ball and the cube, with interval arithmetic for the other solids' walls. Returns ok, the smallest
+    pair gap |c_i - c_j| - 2 r and the smallest wall gap (both as floats of exact values, for the report; the other
+    solids' is a lower bound) and the failures. Raises CertError for malformed input."""
     s = exact(s, 's')
     if s <= 0:
         raise CertError('s must be positive')
@@ -85,9 +128,9 @@ def certify_balls(container, s, pieces):
     bad_walls, bad_pairs = [], []
     min_wall = math.inf
     if container == 'ball':
-        r = s - 1
+        r = s - R
         if r < 0:
-            raise CertError('a ball container of radius below 1 holds no unit ball')
+            raise CertError(f'a ball container of radius below {R} holds no ball of radius {R}')
         r2 = r * r
         for i, c in enumerate(cs):
             d2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2]
@@ -95,15 +138,17 @@ def certify_balls(container, s, pieces):
                 bad_walls.append(i)
             # report only: the gap r - |c|, from the exact d2 in floating point
             min_wall = min(min_wall, float(r) - math.sqrt(float(d2)))
-    else:
-        h = s / 2 - 1
+    elif container == 'cube':
+        h = s / 2 - R
         if h < 0:
-            raise CertError('a cube of edge below 2 holds no unit ball')
+            raise CertError(f'a cube of edge below {D} holds no ball of radius {R}')
         for i, c in enumerate(cs):
             m = max(abs(x) for x in c)
             if m > h:
                 bad_walls.append(i)
             min_wall = min(min_wall, float(h - m))
+    else:
+        bad_walls, min_wall = certify_walls_in_solid(container, s, cs)
     min_pair = math.inf
     n = len(cs)
     for i in range(n):
@@ -111,9 +156,9 @@ def certify_balls(container, s, pieces):
         for j in range(i + 1, n):
             b = cs[j]
             d2 = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
-            if d2 < 4:
+            if d2 < D * D:
                 bad_pairs.append([i, j])
-            if d2 < 9:
+            if d2 < (1.5 * D) ** 2:
                 # report only
                 min_pair = min(min_pair, gap_of(d2))
     return {
@@ -126,8 +171,8 @@ def certify_balls(container, s, pieces):
 
 
 def gap_of(d2):
-    """|c_i - c_j| - 2 from the exact d2 = |c_i - c_j|^2, as (d2 - 4) / (|c_i - c_j| + 2) to keep its digits."""
-    return float(d2 - 4) / (math.sqrt(float(d2)) + 2)
+    """|c_i - c_j| - 2 r from the exact d2 = |c_i - c_j|^2, as (d2 - 4 r^2) / (|c_i - c_j| + 2 r) to keep its digits."""
+    return float(d2 - D * D) / (math.sqrt(float(d2)) + D)
 
 
 def certify_solids(piece, s, pieces):

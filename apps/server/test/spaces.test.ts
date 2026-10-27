@@ -195,7 +195,7 @@ describe("GET /api/spaces", () => {
       ["torus", 544],
       ["boundary", 32],
       ["polyhedra", 74850],
-      ["balls", 693],
+      ["balls", 18711],
     ]);
     for (const s of r.spaces) {
       // the balls space has no standalone viewer: its problems are drawn on the board

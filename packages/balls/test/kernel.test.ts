@@ -12,7 +12,7 @@ import { type KernelState, type SpaceKernel, methodsFor, mulberry32, runMethod, 
 import { checkKernel } from "@polypack/methods/contract";
 import {
   BALLS_CLEARANCE,
-  BALLS_CODES,
+  BALLS_ORIGINAL_CODES,
   BALLS_STRICT_REASON,
   type BallsConfig,
   ballsBound,
@@ -61,7 +61,7 @@ function gradientError(k: SpaceKernel, s: KernelState): number {
 const tick = () => new Promise((resolve) => setImmediate(resolve));
 
 describe("ballsKernel", () => {
-  for (const code of BALLS_CODES)
+  for (const code of BALLS_ORIGINAL_CODES)
     it(`passes the kernel contract: ${code}, P = 2, 5 and 13`, async () => {
       for (const P of [2, 5, 13]) {
         expect(checkKernel(() => ballsKernel({ code, P }), { seed: P }), `P = ${P}`).toEqual([]);
@@ -75,7 +75,7 @@ describe("ballsKernel", () => {
   });
 
   it("has the gradient of its energy for overlapping pieces and walls, true and soft, in charts turned away from their anchors", () => {
-    for (const code of BALLS_CODES) {
+    for (const code of BALLS_ORIGINAL_CODES) {
       const k = ballsKernel({ code, P: 6 });
       const rng = mulberry32(2);
       const s = k.randomStart(rng);
@@ -241,7 +241,7 @@ describe("ballsKernel", () => {
   });
 
   it("takes the test packings in and finishes them no worse", async () => {
-    for (const code of BALLS_CODES)
+    for (const code of BALLS_ORIGINAL_CODES)
       for (const P of [5, 13]) {
         const k = ballsKernel({ code, P });
         const config = packing(code, P);
@@ -562,7 +562,7 @@ describe("ballsKernel: every method", () => {
   // each method on each problem at a small P and a budget of a few finishes, from a valid start (the test packing,
   // grown by 3 %) and from nothing: a valid result by the server's rule and by the validator at tolerance 0, and
   // never worse than the start
-  for (const code of BALLS_CODES)
+  for (const code of BALLS_ORIGINAL_CODES)
     it(`runs each method it offers: ${code}`, async () => {
       const P = 5;
       const k = ballsKernel({ code, P });
@@ -612,7 +612,7 @@ describe("ballsKernel: costs", () => {
       }
       return (cpu() - t0) / n;
     };
-    const codes = (process.env.BALLS_KERNEL_BENCH_CODES ?? BALLS_CODES.join(",")).split(",");
+    const codes = (process.env.BALLS_KERNEL_BENCH_CODES ?? BALLS_ORIGINAL_CODES.join(",")).split(",");
     const Ps = (process.env.BALLS_KERNEL_BENCH_P ?? "2,3,5,10,20,40,80").split(",").map(Number);
     for (const code of codes)
       for (const P of Ps) {

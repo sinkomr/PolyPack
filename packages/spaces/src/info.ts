@@ -3,7 +3,7 @@
  * loaded catalogue. Pure data.
  */
 import { MAX_S } from "@polypack/boundary";
-import { BALLS_MAX_COORD, BALLS_MAX_SIZE } from "@polypack/balls";
+import { BALLS_MAX_COORD, BALLS_MAX_SIZE, BALL_RADIUS } from "@polypack/balls";
 import { SCORE_TIE } from "@polypack/geometry";
 import {
   POLYHEDRA_MAX_COORD,
@@ -233,22 +233,22 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "balls",
     title: "Balls",
     summary:
-      "3D in 3D: unit balls packed in the smallest ball or cube, and unit-edge Platonic solids packed in the smallest ball: the classic sphere-packing problems, and the polyhedra space's solids in a round container. The problems have no research records yet; the first valid entry of each is kept.",
-    score: "the container's size s: the radius of the container ball, or the edge of the cube; smaller is better",
+      "3D in 3D: unit balls packed in the smallest ball or in the smallest copy of any of the polyhedra space's 94 solids (the classic sphere-packing problems, and balls in a cube, a prism, a Catalan solid), and each of the 94 solids packed in the smallest ball. The problems have no research records yet; the first valid entry of each is kept.",
+    score:
+      "the container's size s: the radius of the container ball, or the scale of the container solid (the edge of the cube); smaller is better",
     problem_id: "balls/<code>/<P>",
     conventions: {
       problems:
-        "code is <piece>in<container>: ballinball (balls in a ball), ballincub (balls in a cube), and tetinball, cubinball, octinball, dodinball, icoinball (tetrahedra, cubes, octahedra, dodecahedra, icosahedra in a ball); P from 2 to 100",
-      units:
-        "balls have radius 1; the Platonic solids are the polyhedra space's canonical solids, of edge 1, centred at the origin",
+        "code is <piece>in<container>, 189 of them: ballinball (balls in a ball), ballin<solid> (balls in a solid: ballincub, ballinpkd, ballinpr3, ...) and <solid>inball (a solid in a ball: tetinball, kttinball, pr3l15inball, ...), with <solid> the polyhedra space's code of one of its 94 solids (GET /api/spaces lists all 189); P from 2 to 100",
+      units: `balls have radius ${BALL_RADIUS}; the solids are the polyhedra space's canonical solids (edge 1 for the Platonic, Archimedean, prism and antiprism solids, 1.5, 2 or 3 for the lateral edges of the elongated prisms, the Catalan, bipyramid and trapezohedron solids their duals), centred at their vertex centroid at the origin`,
       container:
-        "the ball of radius s about the origin, or the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes",
+        "the ball of radius s about the origin, or s times a canonical solid of the polyhedra space about its vertex centroid (for the cube the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes): the intersection of the half-spaces N_f . x <= s b_f over its faces, N_f the unit outward normal and b_f the offset of face f",
       pose: `a ball is its centre [x, y, z]; a solid is [x, y, z, qw, qx, qy, qz]: the canonical solid turned by the rotation of q / |q| (v -> q v q*) and centred at (x, y, z); x, y and z at most ${BALLS_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM.toExponential()}`,
       configuration: `{s, pieces: [...]} with P pieces; s positive and at most ${BALLS_MAX_SIZE}`,
       score: "s; smaller is better",
       validity:
         VALIDITY +
-        "; two balls overlap by 2 minus the distance of their centres, a ball sticks out of a ball by |c| + 1 - s and of a cube by |c_k| + 1 - s/2; a solid sticks out of the ball by the largest vertex distance minus s, and two solids overlap by their penetration depth (the polyhedra space's separating-axis test)",
+        "; two balls overlap by 2 r minus the distance of their centres, a ball sticks out of a ball by |c| + r - s, of a cube by |c_k| + r - s/2 and of another solid by the largest over faces of N_f . c + r - s b_f (r the ball radius); a solid sticks out of the ball by the largest vertex distance minus s, and two solids overlap by their penetration depth (the polyhedra space's separating-axis test)",
       scoring: SCORING,
       improvement: IMPROVEMENT,
     },

@@ -2,20 +2,23 @@
  * The floating-point validator of the balls space, as a server runs it on untrusted input.
  *
  * A configuration {s, pieces} of a problem is valid at tolerance tol when
- *  - balls: every two centres are at least 2 - tol apart; in a ball container every centre has |c| <= s - 1 + tol,
- *    in a cube container every coordinate |c_k| <= s / 2 - 1 + tol (the cube [-s/2, s/2]^3);
+ *  - balls (radius r = BALL_RADIUS): every two centres are at least 2 r - tol apart; in a ball container every
+ *    centre has |c| <= s - r + tol, in a cube container every coordinate |c_k| <= s / 2 - r + tol (the cube
+ *    [-s/2, s/2]^3), in any other solid C every face has N_f . c <= s b_f - r + tol (N_f the unit outward normal and
+ *    b_f the offset of face f of the canonical solid, container.ts);
  *  - Platonic solids: every vertex x of every piece has |x| <= s + tol, and no two pieces overlap by more than tol,
  *    i.e. the polyhedra space's separating-axis test (packages/polyhedra geom.ts: face normals of both pieces and
  *    the Gauss-map pruned edge cross products, which decide the penetration depth exactly up to rounding) shows a
  *    gap of at least -tol.
- * Pieces may touch. Gaps and protrusions are lengths in the pieces' units (ball radius 1, solid edge 1).
+ * Pieces may touch. Gaps and protrusions are lengths in the pieces' units (ball radius BALL_RADIUS, solid edge 1).
  *
  * Work: P is bounded by the caller (the registry's SPACE_MAX_P, 100). Ball pairs cost a few flops each; solid
  * pairs whose centres are more than twice the circumradius apart are skipped, and the others stop at the first axis
  * with a gap of 1e-3. The check ends after maxErrors errors.
  */
 import { type Pose, configErrors as polyhedraConfigErrors, getSolid, place, separation } from "@polypack/polyhedra";
-import type { BallsProblem } from "./catalogue";
+import { BALL_DIAMETER, BALL_RADIUS, type BallsProblem, ballContainerRadius, ballContainerScore } from "./catalogue";
+import { containerKind, containerOfProblem, sizeFor, wallGap } from "./container";
 
 /** PolyPack's touching tolerance. */
 export const BALLS_TOL = 1e-9;
@@ -28,7 +31,7 @@ export const BALLS_MAX_COORD = 1e4;
 export type BallsPose = number[];
 
 export interface BallsConfig {
-  /** The container's radius (ball) or edge (cube). */
+  /** The container's radius (ball), edge (cube) or scale (any other solid). */
   s: number;
   pieces: BallsPose[];
 }
@@ -40,7 +43,7 @@ export interface BallsValidation {
   minWallGap: number;
   /**
    * Smallest gap between two near pieces (negative: overlap depth); Infinity when no pair is near (balls: centres
-   * less than 2.5 apart; solids: centres less than twice the circumradius apart). A solid pair's test stops at the
+   * less than 2.5 radii apart; solids: centres less than twice the circumradius apart). A solid pair's test stops at the
    * first axis with a gap of 1e-3, so a gap above that is a lower bound.
    */
   minPairSep: number;
@@ -114,11 +117,22 @@ export function validateBalls(
     if (!(gap >= -tol)) out.errors.push(`piece ${i} sticks out of the container by ${-gap}`);
   };
   if (problem.piece === "ball") {
-    const half = s / 2 - 1;
+    const kind = containerKind(problem);
+    const C = containerOfProblem(problem);
+    const half = s / 2 - BALL_RADIUS;
     for (let i = 0; i < n && out.errors.length < maxErrors; i++) {
       const [x, y, z] = pieces[i];
-      wall(i, problem.container === "ball" ? s - 1 - Math.hypot(x, y, z) : half - Math.max(Math.abs(x), Math.abs(y), Math.abs(z)));
+      wall(
+        i,
+        kind === "ball"
+          ? ballContainerRadius(s) - BALL_RADIUS - Math.hypot(x, y, z)
+          : kind === "cube"
+            ? half - Math.max(Math.abs(x), Math.abs(y), Math.abs(z))
+            : wallGap(C!, s, BALL_RADIUS, x, y, z),
+      );
     }
+    // pairs 0.25 diameters or more beyond contact are valid at any tolerance and are not near
+    const near2 = (BALL_DIAMETER * 1.25) ** 2;
     for (let i = 0; i < n && out.errors.length < maxErrors; i++) {
       const a = pieces[i];
       for (let j = i + 1; j < n && out.errors.length < maxErrors; j++) {
@@ -127,9 +141,8 @@ export function validateBalls(
         const dy = a[1] - b[1];
         const dz = a[2] - b[2];
         const d2 = dx * dx + dy * dy + dz * dz;
-        // pairs 0.5 or more apart are valid at any tolerance and are not near
-        if (d2 >= 6.25) continue;
-        pair(i, j, Math.sqrt(d2) - 2);
+        if (d2 >= near2) continue;
+        pair(i, j, Math.sqrt(d2) - BALL_DIAMETER);
       }
     }
   } else {
@@ -139,7 +152,7 @@ export function validateBalls(
       const X = placed[i].X;
       let far = 0;
       for (let k = 0; k < X.length; k += 3) far = Math.max(far, Math.hypot(X[k], X[k + 1], X[k + 2]));
-      wall(i, s - far);
+      wall(i, ballContainerRadius(s) - far);
     }
     // pieces lie in their circumscribed balls: centres more than 2 R apart cannot overlap
     const reach = 2 * S.circumradius + tol;
@@ -158,13 +171,23 @@ export function validateBalls(
 
 /**
  * The smallest container size holding the pieces as placed (the container stays centred at the origin): for balls
- * max |c| + 1 (ball) or 2 max |c_k| + 2 (cube); for solids the largest vertex distance from the origin.
+ * max |c| + r (ball), 2 max |c_k| + 2 r (cube) or the largest over centres and faces of (N_f . c + r) / b_f (any
+ * other solid); for solids the largest vertex distance from the origin.
  */
 export function tightSize(problem: BallsProblem, pieces: BallsPose[]): number {
   let s = 0;
   if (problem.piece === "ball") {
+    const kind = containerKind(problem);
+    const C = containerOfProblem(problem);
     for (const [x, y, z] of pieces)
-      s = Math.max(s, problem.container === "ball" ? Math.hypot(x, y, z) + 1 : 2 * Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) + 2);
+      s = Math.max(
+        s,
+        kind === "ball"
+          ? ballContainerScore(Math.hypot(x, y, z) + BALL_RADIUS)
+          : kind === "cube"
+            ? 2 * Math.max(Math.abs(x), Math.abs(y), Math.abs(z)) + 2 * BALL_RADIUS
+            : sizeFor(C!, BALL_RADIUS, x, y, z),
+      );
     return s;
   }
   const S = getSolid(problem.piece);
@@ -172,5 +195,5 @@ export function tightSize(problem: BallsProblem, pieces: BallsPose[]): number {
     const X = place(S, p as Pose).X;
     for (let k = 0; k < X.length; k += 3) s = Math.max(s, Math.hypot(X[k], X[k + 1], X[k + 2]));
   }
-  return s;
+  return ballContainerScore(s);
 }

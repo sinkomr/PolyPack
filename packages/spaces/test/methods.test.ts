@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BALLS_CODES, type BallsConfig, ballsKernel, searchBalls } from "@polypack/balls";
+import { BALLS_FAMILY_SAMPLE, BALLS_ORIGINAL_CODES, type BallsConfig, ballsKernel, getBallsProblem, searchBalls } from "@polypack/balls";
 import { searchBoundary } from "@polypack/boundary";
 import { solve as solveCurved } from "@polypack/curved";
 import { listMethods, mulberry32, squeeze } from "@polypack/methods";
@@ -736,8 +736,47 @@ describe("the balls kernel", () => {
     expect(strictOnly).toBeGreaterThan(20);
   });
 
+  it("validates the new problems as the server does: a found packing and its variants", async () => {
+    let compared = 0;
+    for (const code of BALLS_FAMILY_SAMPLE) {
+      const P = 3;
+      const id = `balls/${code}/${P}`;
+      const rule = ruleOf(id);
+      const k = ballsKernel({ code, P });
+      expect(k.bound).toBe(rule.bound);
+      const found = searchBalls(getBallsProblem(code)!, P, { seed: 5, maxEvals: 2500 }).config!;
+      for (const [label, config] of variants(found, rule.bound)) {
+        const server = validateSpaceSubmission("balls", id, config, rule);
+        const mine = k.validate(config);
+        expect({ id, label, ...mine }).toEqual({ id, label, valid: server.valid, score: server.score, reasons: server.reasons });
+        compared++;
+      }
+      // the packing is valid by the server's rule, and so is the unchanged variant
+      expect(validateSpaceSubmission("balls", id, found, rule).valid, id).toBe(true);
+      await tick();
+    }
+    expect(compared).toBeGreaterThan(17 * 25);
+  });
+
+  it("runs Auto on the new problems at P = 2 to 4, and two generic methods, each result valid by the server's rule", async () => {
+    for (const code of BALLS_FAMILY_SAMPLE)
+      for (const P of [2, 3, 4]) {
+        const id = `balls/${code}/${P}`;
+        const rule = ruleOf(id);
+        const k = ballsKernel({ code, P });
+        const evals = 2 * (k.finishCost + k.validateCost!) + 1500;
+        for (const method of P === 3 ? [AUTO, "basin_hopping", "harden"] : [AUTO]) {
+          const r = runSpaceJob(job(id, { method, rule, kind: "fresh", budget: { time_s: 60, evals } }), go);
+          expect(r.valid, `${id} ${method}: ${r.reasons.join("; ")}`).toBe(true);
+          expect(validateSpaceSubmission("balls", id, r.config, rule), `${id} ${method}`).toMatchObject({ valid: true, score: r.score });
+          expect(r.score!, `${id} ${method}`).toBeGreaterThanOrEqual(rule.bound * (1 - 1e-9));
+        }
+        await tick();
+      }
+  });
+
   it("runs generic methods on balls problems, each result valid by the server's rule for a problem without records", async () => {
-    for (const code of BALLS_CODES) {
+    for (const code of BALLS_ORIGINAL_CODES) {
       const id = `balls/${code}/4`;
       const rule = ruleOf(id);
       const k = ballsKernel({ code, P: 4 });

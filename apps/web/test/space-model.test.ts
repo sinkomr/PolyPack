@@ -636,27 +636,43 @@ describe("3D on 4D on the board", () => {
 describe("3D in 3D: balls on the board", () => {
   const rule = { bound: null, certified: null };
 
-  it("picks one of the seven problems, then P from 2 to 100, from its domain", () => {
+  it("picks one of the 189 problems in groups, then P from 2 to 100, from its domain", () => {
     // no records: the picker is the domain's
     expect(catalogue("balls").problems).toHaveLength(0);
     const domain = catalogue("balls").domain!.info;
     const pick = pickFromDomain("balls", domain, fieldsOfId("balls", DEFAULT_PROBLEM.balls));
     expect(pick.id).toBe("balls/ballinball/13");
     expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
-    expect(pick.fields[0].options.map((o) => o.text)).toEqual([
-      "Balls in a ball",
-      "Balls in a cube",
-      "Tetrahedra in a ball",
-      "Cubes in a ball",
-      "Octahedra in a ball",
-      "Dodecahedra in a ball",
-      "Icosahedra in a ball",
-    ]);
+    const options = pick.fields[0].options;
+    expect(options).toHaveLength(189);
+    expect(options.slice(0, 3).map((o) => o.text)).toEqual(["Balls in a ball", "Balls in a tetrahedron", "Balls in a cube"]);
+    expect(options.find((o) => o.value === "ballinpkd")).toMatchObject({
+      text: "Balls in a pentakis dodecahedron",
+      group: "Balls in a Catalan solid",
+    });
+    expect(options.find((o) => o.value === "kttinball")).toMatchObject({
+      text: "Triakis tetrahedra in a ball",
+      group: "Catalan solids in a ball",
+    });
+    // every option has a group, and a group is one run of options (an optgroup each)
+    const runs: string[] = [];
+    for (const o of options) {
+      expect(o.group).toBeDefined();
+      if (runs[runs.length - 1] !== o.group) runs.push(o.group!);
+    }
+    expect(runs).toHaveLength(16);
+    expect(new Set(runs).size).toBe(16);
+    expect(["tetinball", "cubinball", "octinball", "dodinball", "icoinball"].map((c) => options.find((o) => o.value === c)!.group)).toEqual(
+      Array(5).fill("Platonic solids in a ball"),
+    );
     expect(pick.fields[1].options).toHaveLength(99);
     expect(pickFromDomain("balls", domain, { code: "icoinball", P: "100" }).id).toBe("balls/icoinball/100");
+    expect(pickFromDomain("balls", domain, { code: "ballinpr3l15", P: "7" }).id).toBe("balls/ballinpr3l15/7");
     expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container radius s");
     expect(scoreLabel(parseSearchProblem("balls/ballincub/13")!)).toBe("Cube edge s");
     expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/ballinpkd/13")!)).toBe("Container scale s");
+    expect(scoreLabel(parseSearchProblem("balls/pr3l15inball/13")!)).toBe("Container radius s");
   });
 
   it("sizes its rounds from P and the piece, within their limits", () => {
@@ -664,7 +680,13 @@ describe("3D in 3D: balls on the board", () => {
     expect(ballsRound(100, "ballinball").round).toBe(128000);
     expect(ballsRound(100, "dodinball").round).toBe(25000);
     expect(ballsRound(100, "tetinball").round).toBe(16000);
-    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"])
+    // also the new problems: any container solid, and any solid in a ball
+    expect(ballsRound(100, "ballinball").round).toBe(128000);
+    expect(ballsRound(100, "ballindtc").round).toBeLessThan(ballsRound(100, "ballinball").round);
+    expect(ballsRound(100, "ballinball").evalUs).toBeCloseTo(15.6, 10);
+    expect(ballsRound(100, "ballintet").evalUs).toBeCloseTo(15.6 * (1 + 4 / 150), 10);
+    expect(ballsRound(100, "phcinball").evalUs).toBe(500);
+    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball", "ballinpkd", "ballinpr12l3", "ballindtc", "phcinball", "pr3l3inball", "tz12inball"])
       for (let P = 2; P <= 100; P++) {
         const { round, fresh } = ballsRound(P, code);
         const search = parseSearchProblem(`balls/${code}/${P}`)!;
