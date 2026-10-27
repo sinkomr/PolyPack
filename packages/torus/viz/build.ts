@@ -13,13 +13,13 @@
  * Contacts (|separation| <= 1e-7 in floats) can be overlaid as segments between centres.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { TorusRecord, TorusRecordsFile, areaOf, recordPacking, recordsInSiteUnits, reachOf, validateTorusPacking } from "../src";
+import { TorusRecord, TorusRecordsFile, areaOf, recordPacking, reachOf, validateTorusPacking } from "../src";
 
 const root = new URL("../../../", import.meta.url);
 // optional arguments: input records file and output html (defaults: the repository paths)
 const input = process.argv[2] ?? new URL("data/torus/records.json", root);
 const output = process.argv[3] ?? new URL("packages/torus/viz/index.html", root);
-const file = recordsInSiteUnits(JSON.parse(readFileSync(input, "utf8")) as TorusRecordsFile);
+const file = JSON.parse(readFileSync(input, "utf8")) as TorusRecordsFile;
 
 interface VizRecord {
   id: string;

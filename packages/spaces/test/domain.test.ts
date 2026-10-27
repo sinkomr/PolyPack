@@ -114,7 +114,6 @@ const id = (text: string) => {
   return p;
 };
 // Two disks of diameter 1 on the square torus of side sqrt 2, at centre distance k along the diagonal.
-// UNITS-DEP: valid only once the torus package (Part 6) validates in site units.
 const twoDisks = (k: number) => ({
   lattice: { L: Math.SQRT2 * Math.max(1, k) },
   poses: [

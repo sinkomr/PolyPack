@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { type SurfaceRecordsFile, surfaceRecordsInSiteUnits, Solid, apply, applyDir, faceApothem, faceDepth, faceVertices, frameVertex, glue } from "../src/index";
+import { type SurfaceRecordsFile, Solid, apply, applyDir, faceApothem, faceDepth, faceVertices, frameVertex, glue } from "../src/index";
 
 /** Seeded generator (mulberry32) so that every test is reproducible. */
 export function rng(seed: number): () => number {
@@ -197,9 +197,9 @@ export function independentBounds(solid: Solid, N: number, P: number): { area: n
   return { area: Math.sqrt((P * a) / total), oneAtMost: r / rho };
 }
 
-/** data/surface/records.json in site units (converted by exact halving while the data is not: src/records.ts). */
+/** data/surface/records.json (site units: disks of diameter 1). */
 export function loadSurfaceFile(): any {
-  return surfaceRecordsInSiteUnits(JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")) as SurfaceRecordsFile);
+  return JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")) as SurfaceRecordsFile;
 }
 
 export function loadSurfaceRecords(): any[] {

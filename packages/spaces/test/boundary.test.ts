@@ -165,7 +165,7 @@ describe("the boundary catalogue", () => {
 
 describe("the nofold extras of a boundary summary", () => {
   it("give every problem its nofold value with its source, and the record's fold gain", () => {
-    // UNITS-DATA: ball values are in diameter-1 units, i.e. half the old radius-1 ones, once Part 10 converts the records
+    // ball values are in diameter-1 units (half the old radius-1 ones)
     const halfDiagonal = 1 + 1 / Math.sqrt(3);
     for (const p of cat.problems) {
       const r = raw.get(p.id);
@@ -364,7 +364,6 @@ describe("boundary work bounds", () => {
 
   it("checks 64 pieces, the largest P accepted: a valid grid and piles that overlap", () => {
     // 8 balls of diameter 1 per cell on the 2 x 2 x 2 grid of a cell of edge 2: the nofold packing f(8) = 2
-    // (UNITS-DEP: valid once the boundary package, Part 7, validates in site units)
     const grid = {
       s: 2,
       pieces: Array.from({ length: 64 }, (_, i) => {

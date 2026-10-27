@@ -10,7 +10,6 @@ import {
   regularFaceKinds,
   surfaceNofoldNote,
   type FaceKind,
-  halvePrinted,
   type PlanarValue,
   type NotePart,
 } from "../src/nofold";
@@ -24,29 +23,8 @@ describe("surface notes use the current 2D records", () => {
   it("keeps the browser index equal to the records, without copying coordinates", () => {
     const file = json("../../../data/records.json");
     const records = file.records as LiteratureRecord[];
-    // The index is in site units (disks of diameter 1). While data/records.json still has radius-1 disks (no header
-    // units "diameter") its disk entries are halved exactly: lengths and printed values. Geometry's enclose for
-    // disks follows its own convention, so the old-unit data is scored by it before the halving, and the
-    // converted copy after it has changed too.
-    const halve = (v: ReturnType<typeof planarValues>[number]) =>
-      v.N !== 0 ? v : { ...v, value: v.value / 2, ...(v.printed ? { printed: { ...v.printed, ...halvePrinted(v.printed.display, v.printed.precision) } } : {}) };
-    const geometryIsNew = "DISK_RADIUS" in geometry;
-    const converted =
-      file.units === "diameter"
-        ? records
-        : records.map((r) =>
-            r.N !== 0
-              ? r
-              : { ...r, value: r.value / 2, pieces: r.pieces?.map((p) => ({ ...p, x: p.x / 2, y: p.y / 2 })) },
-          );
-    const printedHalved = (v: ReturnType<typeof planarValues>[number]) =>
-      v.N !== 0 || !v.printed ? v : { ...v, printed: { ...v.printed, ...halvePrinted(v.printed.display, v.printed.precision) } };
-    const current =
-      file.units === "diameter"
-        ? planarValues(converted)
-        : geometryIsNew
-          ? planarValues(converted).map(printedHalved)
-          : planarValues(records).map(halve);
+    // The index and the records are both in site units (disks of diameter 1).
+    const current = planarValues(records);
     expect(PLANAR_VALUES).toHaveLength(current.length);
     PLANAR_VALUES.forEach(({ value, ...metadata }, i) => {
       const { value: expected, ...source } = current[i];

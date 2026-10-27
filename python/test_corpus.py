@@ -10,8 +10,7 @@ from geometry_reference import evaluate
 ROOT = Path(__file__).resolve().parents[1]
 
 
-# UNITS-DATA: reads data/corpus/**, which the units change (Part 10) converts to diameter units. Until then every
-# file with a circle piece or a circle container fails here; polygon-only files pass.
+# The fixtures are in site units (disks of diameter 1, circle containers scored by diameter).
 class CorpusAgreement(unittest.TestCase):
     def assertScore(self, score, expected):
         if expected is None:

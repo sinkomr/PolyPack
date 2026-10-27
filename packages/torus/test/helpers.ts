@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { type TorusRecordsFile, recordsInSiteUnits } from "../src";
+import { type TorusRecordsFile } from "../src";
 
-/** data/torus/records.json in site units (converted by exact halving while the data is not). */
+/** data/torus/records.json (site units: disks of diameter 1). */
 export function loadSiteRecords(): TorusRecordsFile | undefined {
   const url = new URL("../../../data/torus/records.json", import.meta.url);
-  return existsSync(url) ? recordsInSiteUnits(JSON.parse(readFileSync(url, "utf8"))) : undefined;
+  return existsSync(url) ? (JSON.parse(readFileSync(url, "utf8")) as TorusRecordsFile) : undefined;
 }

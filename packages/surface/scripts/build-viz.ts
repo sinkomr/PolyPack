@@ -7,11 +7,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { build } from "esbuild";
 import { polygonSeparation } from "@polypack/geometry";
-import { SOLID_NAMES, Rigid, apply, compose, frameVertex, getSolid, glue, IDENTITY, surfaceRecordsInSiteUnits } from "../src/index";
+import { SOLID_NAMES, Rigid, apply, compose, frameVertex, getSolid, glue, IDENTITY } from "../src/index";
 
 const root = new URL("../../../", import.meta.url);
 const recPath = process.argv[2] ?? new URL("data/surface/records.json", root).pathname;
-const doc = surfaceRecordsInSiteUnits(JSON.parse(readFileSync(recPath, "utf8")));
+const doc = JSON.parse(readFileSync(recPath, "utf8"));
 
 /** A net: for every face its parent face and edge in a spanning tree whose unfolding does not overlap. */
 function net(name: (typeof SOLID_NAMES)[number]): number[][] {

@@ -63,39 +63,6 @@ export interface TorusRecordsFile {
   records: TorusRecord[];
 }
 
-/**
- * A records file in site units (disk pieces of diameter 1). Until data/torus/records.json is
- * converted (its header says `units: "diameter"` once it is), the records of disks (N = 0) are
- * the radius-1 ones, and are converted here by exact halving of lengths, as
- * scripts/convert-units.ts does: score_float, score_cert, the bound, literature values, the
- * exact value, the lattice and the centres; `display` is recomputed. Densities, angles and eps
- * (relative) are unchanged. Polygon records are unchanged.
- */
-export function recordsInSiteUnits(file: TorusRecordsFile & { units?: string }): TorusRecordsFile {
-  if (file.units === "diameter") return file;
-  return { ...file, records: file.records.map((r) => (r.N === 0 ? halvedRecord(r) : r)) };
-}
-
-function halvedRecord(r: TorusRecord): TorusRecord {
-  const half = (v: number) => v / 2;
-  const lat = r.configuration.lattice;
-  const lattice =
-    "L" in lat ? { L: half(lat.L) } : { b1: [half(lat.b1[0]), half(lat.b1[1])] as const, b2: [half(lat.b2[0]), half(lat.b2[1])] as const };
-  return {
-    ...r,
-    score_float: half(r.score_float),
-    score_cert: half(r.score_cert),
-    display: displayScore(half(r.score_cert)),
-    bound: { ...r.bound, value: half(r.bound.value) },
-    exact: r.exact ? { ...r.exact, value: half(r.exact.value) } : r.exact,
-    literature: r.literature?.map((l) => (typeof l.value === "number" ? { ...l, value: half(l.value) } : l)),
-    configuration: {
-      lattice,
-      poses: r.configuration.poses.map(([x, y, t]) => [half(x), half(y), t] as [number, number, number]),
-    },
-  };
-}
-
 export function recordPacking(r: TorusRecord): TorusPacking {
   const poses: Pose[] = r.configuration.poses.map(([x, y, theta]) => ({ x, y, theta }));
   return { family: r.family, N: r.N, lattice: latticeFromSpec(r.family, r.configuration.lattice), poses };

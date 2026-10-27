@@ -21,7 +21,8 @@ function example(space: SpaceName, N: number, P: number) {
   if (space === "curved")
     return {
       id: `curved/-1e-06/${N}/0/${P}`,
-      config: { size: 3 * R * P + 1, pieces: Array.from({ length: P }, (_, i) => ({ x: 3 * R * i, y: 0, theta: 0 })) },
+      // a circle container is scored by its diameter
+      config: { size: 2 * (3 * R * P + 1), pieces: Array.from({ length: P }, (_, i) => ({ x: 3 * R * i, y: 0, theta: 0 })) },
     };
   if (space === "sphere")
     return {
@@ -101,7 +102,7 @@ describe("curved, sphere and torus range domains", () => {
     const spin: Quat = [Math.cos(theta / 2), 0, 0, Math.sin(theta / 2)];
     const configs = {
       curved: {
-        size: P * curvedStep,
+        size: 2 * P * curvedStep, // the container's diameter
         pieces: Array.from({ length: P }, (_, i) => ({ x: (i - 49.5) * curvedStep, y: 0, theta })),
       },
       sphere: {
@@ -177,7 +178,7 @@ describe("curved, sphere and torus range domains", () => {
       R = 0.5 / Math.sin(Math.PI / N),
       theta = Math.PI / N;
     const curved = (gap: number) => ({
-      size: 4 * R,
+      size: 8 * R, // a circle of radius 4 R: containers are scored by diameter
       pieces: [
         { x: 0, y: 0, theta },
         { x: 2 * r + gap, y: 0, theta },
@@ -191,7 +192,7 @@ describe("curved, sphere and torus range domains", () => {
     }
     for (const gap of [0, 1e-7, -1e-7]) {
       expect(
-        validateSpaceSubmission("curved", "curved/0/100/0/1", { size: R + gap, pieces: [{ x: 0, y: 0, theta: 0 }] })
+        validateSpaceSubmission("curved", "curved/0/100/0/1", { size: 2 * (R + gap), pieces: [{ x: 0, y: 0, theta: 0 }] })
           .valid,
       ).toBe(gap >= 0);
     }

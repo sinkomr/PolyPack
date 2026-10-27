@@ -31,13 +31,12 @@ describe("data/records.json", () => {
     for (const r of flagged) expect(Number(/\bProved by\b.*?\b(\d{4})\b/.exec(r.citation ?? "")?.[1])).toBeGreaterThanOrEqual(2023);
   });
 
-  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("holds no value below the bound from a proven circle record", () => {
-    // an M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)) (scripts/build-records.ts)
+    // an M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)); a circle record is its diameter (scripts/build-records.ts)
     const below = records.filter((r) => {
       const circle = find(r.N, 0, r.P);
       if (r.M === 0 || circle?.status !== "proven") return false;
-      return r.value + 2 * 10 ** -r.display_precision < 2 * Math.sin(Math.PI / r.M) * circle.value;
+      return r.value + 2 * 10 ** -r.display_precision < Math.sin(Math.PI / r.M) * circle.value;
     });
     expect(below.map((r) => `${r.N}/${r.M}/${r.P}: ${r.display}`)).toEqual([]);
   });
@@ -76,7 +75,6 @@ describe("data/records.json", () => {
     }
   });
 
-  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("stores only coordinates that the site's checker accepts and that reproduce the value", () => {
     const bad: string[] = [];
     for (const r of records) {
@@ -89,10 +87,10 @@ describe("data/records.json", () => {
     expect(bad).toEqual([]);
   });
 
-  // UNITS-DATA: reads data/records.json; valid only after Part 10 converts it to diameter units (passes vacuously or fails until then)
   it("attaches solver-constructed coordinates only where they reach the published value", () => {
     // data/sources/constructed.json (scripts/construct-coordinates.ts): a packing of the published
-    // size within 10^-display_precision, never above it, at the stored container angle
+    // size within 10^-display_precision, never above it, at the stored container angle. The tolerance is in the
+    // source's unit, so it is doubled for a circle container, whose size is the diameter (sourceTolerance in scripts/units.ts)
     const constructed = records.filter((r) => /^Coordinates constructed by PolyPack \(/.test(r.coordinates_note ?? ""));
     const { constructions } = JSON.parse(
       readFileSync(new URL("../../../data/sources/constructed.json", import.meta.url), "utf8"),
@@ -102,7 +100,7 @@ describe("data/records.json", () => {
     const bad: string[] = [];
     for (const r of constructed) {
       const e = evaluate({ N: r.N, M: r.M, P: r.P, pieces: r.pieces!, container_phi: r.container_phi! });
-      if (!e.valid || !(Math.abs(e.score! - r.value) <= 10 ** -r.display_precision)) bad.push(`${r.N}/${r.M}/${r.P}`);
+      if (!e.valid || !(Math.abs(e.score! - r.value) <= 10 ** -r.display_precision * (r.N > 0 && r.M === 0 ? 2 : 1))) bad.push(`${r.N}/${r.M}/${r.P}`);
       if (!constructions.some((c) => c.N === r.N && c.M === r.M && c.P === r.P)) bad.push(`${r.N}/${r.M}/${r.P}: not in constructed.json`);
     }
     expect(bad).toEqual([]);
