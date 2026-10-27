@@ -11,8 +11,11 @@
  * tetrahedron) or "pr3l15incub" (triangular prisms of height 1.5 in a cube), and a problem with P
  * pieces has the PolyPack id `polyhedra/<code>/<P>`, e.g. "polyhedra/cubintet/12". The wiki shows the
  * same case at https://polyhedrainpolyhedra.wiki/#cubintet_n12.
+ *
+ * Every other ordered pair of the 94 solids is a problem too (2026-10-26; family "pairs", no wiki page, no record):
+ * the same code scheme, e.g. "ktt" in "pkd" is "kttinpkd" (triakis tetrahedra in a pentakis dodecahedron).
  */
-import { PROBLEM_NAMES, type ProblemFamily, type ProblemName } from "./catalogue";
+import { PROBLEM_NAMES, type ProblemFamily, type ProblemName, problemNameOf } from "./catalogue";
 import { getSolid } from "./solids";
 
 export type { ProblemFamily };
@@ -20,16 +23,15 @@ export type { ProblemFamily };
 export type PolyhedraProblem = ProblemName;
 
 /**
- * The 150 problems: upstream's 86 in upstream's order, then PolyPack's 64 (catalogue.ts names them without loading
- * the solids; python/polyhedra/catalogue.py has the same list).
+ * The 150 problems of the research records: upstream's 86 in upstream's order, then PolyPack's 64 (catalogue.ts names
+ * them without loading the solids; python/polyhedra/catalogue.py has the same list). getProblem also knows the other
+ * pairs of solids.
  */
 export const POLYHEDRA_PROBLEMS: readonly PolyhedraProblem[] = PROBLEM_NAMES;
 
-const BY_CODE = new Map(POLYHEDRA_PROBLEMS.map((p) => [p.code, p]));
-
-/** The problem of a code, or null. */
+/** The problem of a code (any ordered pair of the solids), or null. */
 export function getProblem(code: string): PolyhedraProblem | null {
-  return BY_CODE.get(code) ?? null;
+  return problemNameOf(code);
 }
 
 /** Largest P an id may name (the work bounds of a check are set by the caller, see validate.ts). */
@@ -53,7 +55,7 @@ export function parsePolyhedraId(id: unknown): ParsedPolyhedraId | string {
   const m = /^polyhedra\/([a-z0-9]+)\/(0|[1-9]\d{0,3})$/.exec(id);
   if (!m) return `"${id}" is not a polyhedra problem id: the form is polyhedra/<code>/<P>, for example polyhedra/cubintet/12`;
   const problem = getProblem(m[1]);
-  if (!problem) return `"${m[1]}" is not a polyhedra problem code (for example cubincub, cubintet, tteintte, pr3l15incub)`;
+  if (!problem) return `"${m[1]}" is not a polyhedra problem code (a piece's and a container's solid codes joined by "in", for example cubincub, cubintet, tteintte, pr3l15incub, kttinpkd)`;
   const P = Number(m[2]);
   if (P < 1) return "P must be at least 1";
   return { id, code: m[1], P, problem };

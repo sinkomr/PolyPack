@@ -29,6 +29,7 @@ const PICK_LABELS: Record<string, string> = {
   family: "Torus",
   polytope: "Polytope",
   piece: "Piece",
+  container: "Container",
   code: "Problem",
   P: "Pieces (P)",
 };
@@ -109,17 +110,45 @@ export function pickProblem(
 }
 
 /**
+ * The wish with the parts of its joined fields (polyhedra's `code` "cubintet" is the piece "cub" and the container
+ * "tet"): the split of the joined value at its separator into values of the parts' menus. A wish that names the
+ * parts already is kept as it is.
+ */
+function withParts(domain: SpaceDomainInfo, wish: Record<string, string>): Record<string, string> {
+  const out = { ...wish };
+  for (const j of domain.joined ?? []) {
+    const value = wish[j.key];
+    if (value === undefined || j.parts.some((k) => out[k] !== undefined) || j.parts.length !== 2) continue;
+    const menus = j.parts.map((k) => domain.fields.find((f) => f.key === k)?.values);
+    if (!menus[0] || !menus[1]) continue;
+    for (let i = value.indexOf(j.separator, 1); i !== -1; i = value.indexOf(j.separator, i + 1)) {
+      const a = value.slice(0, i);
+      const b = value.slice(i + j.separator.length);
+      if (menus[0].includes(a) && menus[1].includes(b)) {
+        out[j.parts[0]] = a;
+        out[j.parts[1]] = b;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
  * The picker of a space whose problems are given by a domain (packages/spaces domain.ts), as the polygon board's N, M
  * and P menus are: each field offers its domain's values (or its range of integers) whatever the records, and takes
  * the wished value when it is offered; otherwise the value of the space's starting problem, or the first, and for P
- * the offered value nearest the wished one. The id is written from the domain's pattern.
+ * the offered value nearest the wished one. The id is written from the domain's pattern; a field written from several
+ * menus (polyhedra's piece and container make its code) is also read from a wish that names it whole, so that an old
+ * address with the code opens the same problem.
  */
 export function pickFromDomain(
   space: SpaceName,
   domain: SpaceDomainInfo,
-  wish: Record<string, string>,
+  wished: Record<string, string>,
 ): { fields: PickField[]; id: string } {
-  const start = fieldsOfId(space, DEFAULT_PROBLEM[space]);
+  const wish = withParts(domain, wished);
+  const start = withParts(domain, fieldsOfId(space, DEFAULT_PROBLEM[space]));
   const fields: PickField[] = domain.fields.map((f) => {
     const values =
       f.values ??
@@ -140,6 +169,7 @@ export function pickFromDomain(
       value,
     };
   });
-  const chosen = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+  const chosen: Record<string, string> = Object.fromEntries(fields.map((f) => [f.key, f.value]));
+  for (const j of domain.joined ?? []) chosen[j.key] = j.parts.map((k) => chosen[k]).join(j.separator);
   return { fields, id: domain.id.replace(/<([A-Za-z]+)>/g, (_, k: string) => chosen[k] ?? "") };
 }

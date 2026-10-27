@@ -6,11 +6,15 @@
  * cube; and the bipyramids and trapezohedra (the canonical duals of the unit-edge prisms and antiprisms,
  * docs/spaces/POLYHEDRA.md) in themselves and in a cube. No imports, so that a page can name problems without loading the solids' coordinates; problems.ts builds the
  * same list with the solids attached.
+ *
+ * Beyond those 150, every ordered pair (piece, container) of the 94 solids is a problem family too (8,836 in all,
+ * P = 2 to 500, no research records): problemNameOf reads the code `<piece code>in<container code>` of any pair,
+ * with the family "pairs" for the 8,686 that are not among the 150.
  */
 
 export type SolidFamily =
   "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "elongated_prism" | "bipyramid" | "trapezohedron";
-export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms" | "bipyramids" | "trapezohedra";
+export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms" | "bipyramids" | "trapezohedra" | "pairs";
 
 export interface SolidName {
   /** Upstream's name, e.g. "truncated_tetrahedron", "prism3_l15". */
@@ -145,6 +149,7 @@ function buildSolids(): SolidName[] {
 /** Every solid's name, code and title: upstream's 56 in upstream's order, then PolyPack's 38. */
 export const SOLID_NAMES_LIST: readonly SolidName[] = buildSolids();
 const SOLID_BY_NAME = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s]));
+const SOLID_BY_CODE = new Map(SOLID_NAMES_LIST.map((s) => [s.code, s]));
 
 /** "Cubes" for a cube, "tetrahedra", "triangular prisms of height 1.5". */
 export function pluralTitle(title: string): string {
@@ -216,18 +221,80 @@ function buildProblems(): ProblemName[] {
   return out;
 }
 
-/** The 150 problems: upstream's 86 in upstream's order, then PolyPack's 64 (wiki: false). */
+/** The 150 problems of the records: upstream's 86 in upstream's order, then PolyPack's 64 (wiki: false). */
 export const PROBLEM_NAMES: readonly ProblemName[] = buildProblems();
 const PROBLEM_BY_CODE = new Map(PROBLEM_NAMES.map((p) => [p.code, p]));
 
-/** The problem of a code, or null. */
-export function problemNameOf(code: string): ProblemName | null {
-  return PROBLEM_BY_CODE.get(code) ?? null;
+/** Problems of the other pairs, named when first asked for (at most one per ordered pair of solids). */
+const PAIR_CACHE = new Map<string, ProblemName | null>();
+
+/**
+ * The pair of solids a code names: the splits of the code at an "in" with a solid code on each side. [CALC] No code
+ * of two solids has a second reading (catalogue test).
+ */
+function pairOfCode(code: string): [SolidName, SolidName] | null {
+  for (let i = code.indexOf("in", 1); i !== -1; i = code.indexOf("in", i + 1)) {
+    const piece = SOLID_BY_CODE.get(code.slice(0, i));
+    const container = SOLID_BY_CODE.get(code.slice(i + 2));
+    if (piece && container) return [piece, container];
+  }
+  return null;
 }
+
+/** The problem of a code (one of the 150 or any other pair of solids), or null. */
+export function problemNameOf(code: string): ProblemName | null {
+  const known = PROBLEM_BY_CODE.get(code);
+  if (known) return known;
+  if (code.length > 24) return null;
+  let p = PAIR_CACHE.get(code);
+  if (p === undefined) {
+    const pair = pairOfCode(code);
+    p = pair ? problemName(pair[0].name, pair[1].name, "pairs", false) : null;
+    PAIR_CACHE.set(code, p);
+  }
+  return p;
+}
+
+/** The code of the problem of two solids, given by name ("cube", "tetrahedron" -> "cubintet"), or null. */
+export function pairCode(piece: string, container: string): string | null {
+  const p = SOLID_BY_NAME.get(piece);
+  const c = SOLID_BY_NAME.get(container);
+  return p && c ? `${p.code}in${c.code}` : null;
+}
+
+/** The number of problem families: every ordered pair of solids (the 150 of PROBLEM_NAMES among them). */
+export const PAIR_COUNT = SOLID_NAMES_LIST.length * SOLID_NAMES_LIST.length;
+
+/** Title of a solid's group in a menu, and the order of the groups. */
+export const SOLID_GROUPS: Record<SolidFamily, string> = {
+  platonic: "Platonic solids",
+  archimedean: "Archimedean solids",
+  catalan: "Catalan solids",
+  prism: "Prisms",
+  antiprism: "Antiprisms",
+  elongated_prism: "Prisms of height 1.5, 2 and 3",
+  bipyramid: "Bipyramids",
+  trapezohedron: "Trapezohedra",
+};
+
+/** Rank of a solid in a menu: by group, then (prisms, antiprisms, elongated prisms) by sides and height. */
+function solidRank(s: SolidName): [number, number, number, number] {
+  const group = Object.keys(SOLID_GROUPS).indexOf(s.family);
+  const m = /^(?:pr|ap|bp|tz)(\d+)(l15|l2|l3)?$/.exec(s.code);
+  const place = SOLID_NAMES_LIST.indexOf(s);
+  return m ? [group, Number(m[1]), ["", "l15", "l2", "l3"].indexOf(m[2] ?? ""), place] : [group, 0, 0, place];
+}
+
+/** The solids in the order of a menu of pieces or containers: grouped by family, prisms by their number of sides. */
+export const SOLIDS_BY_GROUP: readonly SolidName[] = [...SOLID_NAMES_LIST].sort((a, b) => {
+  const x = solidRank(a);
+  const y = solidRank(b);
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2] || x[3] - y[3];
+});
 
 /** The problem's title ("Cubes in a tetrahedron"), or the code itself when it is not a problem. */
 export function problemTitle(code: string): string {
-  return PROBLEM_BY_CODE.get(code)?.title ?? code;
+  return problemNameOf(code)?.title ?? code;
 }
 
 /** The problem codes in that order. */

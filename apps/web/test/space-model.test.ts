@@ -727,6 +727,33 @@ describe("3D in 3D: polyhedra on the board", () => {
         }
   });
 
+  it("picks the piece and the container in two menus of the 94 solids, grouped, and composes the code", () => {
+    const info = SPACE_DOMAINS.polyhedra!.info;
+    const pick = pickFromDomain("polyhedra", info, fieldsOfId("polyhedra", DEFAULT_PROBLEM.polyhedra));
+    expect(pick.id).toBe("polyhedra/cubincub/11");
+    expect(pick.fields.map((f) => [f.key, f.label, f.value])).toEqual([
+      ["piece", "Piece", "cub"],
+      ["container", "Container", "cub"],
+      ["P", "Pieces (P)", "11"],
+    ]);
+    for (const f of pick.fields.slice(0, 2)) {
+      expect(f.options).toHaveLength(94);
+      expect(new Set(f.options.map((o) => o.group)).size).toBe(8);
+    }
+    expect(pick.fields[0].options[0]).toEqual({ value: "tet", text: "tetrahedron", group: "Platonic solids" });
+    // a menu's change keeps the others
+    expect(pickFromDomain("polyhedra", info, { piece: "ktt", container: "pkd", P: "7" }).id).toBe("polyhedra/kttinpkd/7");
+    expect(pickFromDomain("polyhedra", info, { piece: "pr12l3", container: "cub", P: "500" }).id).toBe("polyhedra/pr12l3incub/500");
+    // an old address with the code alone opens the same problem, whether one of the 150 or another pair
+    for (const code of ["cubintet", "pr3l15incub", "tidintid", "kttinpkd", "pr12l3inbp7"]) {
+      const old = pickFromDomain("polyhedra", info, { code, P: "9" });
+      expect(old.id, code).toBe(`polyhedra/${code}/9`);
+      expect(old.fields.map((f) => f.value).slice(0, 2).join("in")).toBe(code);
+    }
+    // a code that is no pair falls back to the starting problem's solids
+    expect(pickFromDomain("polyhedra", info, { code: "nonsense", P: "9" }).id).toBe("polyhedra/cubincub/9");
+  });
+
   const rule = { bound: null, certified: null };
 
   it("picks a problem by its pair of solids, then P from 2 to 100", () => {
