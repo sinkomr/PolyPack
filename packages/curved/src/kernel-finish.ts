@@ -291,10 +291,10 @@ function legalise(g: KernelGeometry, problem: CurvedProblem, c: CurvedConfig, co
  */
 export function curvedBound(space: Space, P: number): number | null {
   const { K, M, piece } = space;
-  const sizeOfT = (t: number) => (M === 0 ? t : sideFromApothem(M, K, t));
+  const sizeOfT = (t: number) => sideFromApothem(M, K, t); // (a disk container's size is its diameter 2 t)
   let b = sizeOfT(tForArea(space, P * piece.area));
-  b = Math.max(b, M === 0 ? piece.R : sizeOfT(piece.rho));
-  if (M === 0 && P >= 2) b = Math.max(b, 2 * piece.rho);
+  b = Math.max(b, sizeOfT(M === 0 ? piece.R : piece.rho));
+  if (M === 0 && P >= 2) b = Math.max(b, sizeOfT(2 * piece.rho));
   if (!Number.isFinite(b) || !(b < maxContainerSize(M, K))) return null;
   return b * (1 - 1e-12);
 }

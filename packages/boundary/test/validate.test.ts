@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { BoundaryConfig, BoundaryProblem, PieceName } from "../src/index";
 import type { PolytopeName } from "../src/index";
 import {
+  BALL_RADIUS,
   RIDGE_SNAP,
   TesseractWords,
   boundaryVolume,
@@ -22,7 +23,7 @@ import {
   quaternionToMatrix,
   validateBoundary,
 } from "../src/index";
-import { cell16Vertices, cell24Vertices, loadFixtures, randomCellPoint, rng, simplexVertices, trace4d } from "./helpers";
+import { cell16Vertices, cell24Vertices, loadFixtures, randomCellPoint, rng, simplexVertices, trace4d, atSite } from "./helpers";
 
 const T = getPolytope("tesseract");
 const problem = (piece: PieceName, P: number): BoundaryProblem => ({ polytope: "tesseract", piece, P });
@@ -70,7 +71,7 @@ describe("research fixtures", () => {
       });
   }
 
-  it("ball contacts: closest pairs are 2 apart (lattice words agree), and a ball nudged 1e-6 towards a contact overlaps it", () => {
+  it("ball contacts: closest pairs are 1 apart (lattice words agree), and a ball nudged 1e-6 towards a contact overlaps it", () => {
     const W = new TesseractWords(2);
     let nudged = 0;
     for (const f of loadFixtures("balls")) {
@@ -80,28 +81,28 @@ describe("research fixtures", () => {
       let best = Infinity;
       for (let i = 0; i < pieces.length; i++)
         for (let j = i + 1; j < pieces.length; j++) {
-          const d = geodesicDistance(T, s, pieces[i], pieces[j], 2.5);
-          expect(Math.min(d, 2.5)).toBeCloseTo(Math.min(W.distance(pieces[i].cell, pieces[i].u, pieces[j].cell, pieces[j].u, s), 2.5), 12);
+          const d = geodesicDistance(T, s, pieces[i], pieces[j], 1.25);
+          expect(Math.min(d, 1.25)).toBeCloseTo(Math.min(W.distance(pieces[i].cell, pieces[i].u, pieces[j].cell, pieces[j].u, s), 1.25), 12);
           best = Math.min(best, d);
-          if (d < 2 + 1e-9) contacts.push([i, j], [j, i]);
+          if (d < 1 + 1e-9) contacts.push([i, j], [j, i]);
         }
-      expect(best).toBeGreaterThan(2 - 1e-9);
-      expect(best).toBeLessThan(2 + 1e-9);
+      expect(best).toBeGreaterThan(1 - 1e-9);
+      expect(best).toBeLessThan(1 + 1e-9);
       // nudge ball i towards the developed image of ball j, along a contact whose nudge keeps i's edge clearance
       for (const [i, j] of contacts) {
         const u = pieces[i].u as [number, number, number];
-        const imgs = enumerateChains(T, s, pieces[i].cell, u, 2.5)
+        const imgs = enumerateChains(T, s, pieces[i].cell, u, 1.25)
           .filter((n) => n.cell === pieces[j].cell)
           .map((n) => isoApply(n.toAnchor, pieces[j].u))
-          .filter((y) => Math.hypot(y[0] - u[0], y[1] - u[1], y[2] - u[2]) < 2 + 1e-9);
+          .filter((y) => Math.hypot(y[0] - u[0], y[1] - u[1], y[2] - u[2]) < 1 + 1e-9);
         const y = imgs[0];
         const d = Math.hypot(y[0] - u[0], y[1] - u[1], y[2] - u[2]);
         const v2 = u.map((x, k) => x + (1e-6 * (y[k] - x)) / d);
-        if (tesseractClearance(v2, s) < 1 || v2.some((x) => Math.abs(x) > s / 2)) continue;
+        if (tesseractClearance(v2, s) < 0.5 || v2.some((x) => Math.abs(x) > s / 2)) continue;
         const moved = pieces.map((p, k) => (k === i ? { ...p, u: v2 } : p));
         const v = validateBoundary(parseBoundaryId(f.id) as BoundaryProblem, { s, pieces: moved });
         expect(v.ok).toBe(false);
-        expect(v.reasons.join(" ")).toMatch(new RegExp(`Balls ${Math.min(i, j)} and ${Math.max(i, j)} overlap: their centres are 1\\.99999`));
+        expect(v.reasons.join(" ")).toMatch(new RegExp(`Balls ${Math.min(i, j)} and ${Math.max(i, j)} overlap: their centres are 0\\.99999`));
         nudged++;
         break;
       }
@@ -138,7 +139,7 @@ describe("parts against the R^4 ray tracer", () => {
       },
     ],
     ["cube crossing four faces", "cube", { s: 1.2, pieces: [{ cell: 2, u: [0, 0, 0], q: rotZ(45) }] }],
-    ["ball near a ridge", "ball", { s: 2.4, pieces: [{ cell: 7, u: [1.2, 0.05, -0.1] }] }],
+    ["ball near a ridge", "ball", atSite({ s: 2.4, pieces: [{ cell: 7, u: [1.2, 0.05, -0.1] }] })],
   ];
   for (const [label, piece, cfg] of configs)
     it(label, () => {
@@ -150,8 +151,10 @@ describe("parts against the R^4 ray tracer", () => {
       let tested = 0;
       for (let k = 0; k < 400; k++) {
         // a random point of the piece (piece-local)
+        // a ball is the unit ball under its part's place (whose A carries the radius 1/2); a cube is the cube of edge 1
         const x = [0, 1, 2].map(() => 2 * rand() - 1).map((v) => (piece === "ball" ? v : v / 2));
         if (piece === "ball" && Math.hypot(...x) >= 1) continue;
+        const xs = piece === "ball" ? x.map((v) => v * BALL_RADIUS) : x;
         const holders = parts.filter((part) => {
           const y = isoApply(isoFromAffine(part.place), x);
           const inCell = T.cells[part.cell].facets.every((f) => f.inside.n.reduce((a, n, i) => a + n * y[i], 0) <= f.inside.h * cfg.s + 1e-12);
@@ -159,7 +162,7 @@ describe("parts against the R^4 ray tracer", () => {
         });
         expect(holders.length).toBe(1);
         // where the development of the segment centre -> x ends in R^4
-        const d = [0, 1, 2].map((i) => R[3 * i] * x[0] + R[3 * i + 1] * x[1] + R[3 * i + 2] * x[2]);
+        const d = [0, 1, 2].map((i) => R[3 * i] * xs[0] + R[3 * i + 1] * xs[1] + R[3 * i + 2] * xs[2]);
         const L = Math.hypot(...d);
         const end = trace4d(T, cfg.s, p.cell, p.u, d, L);
         if (!end) continue;
@@ -184,19 +187,19 @@ describe("parts against the R^4 ray tracer", () => {
 
 describe("adversarial configurations", () => {
   it("a ball centre within 1 of an edge", () => {
-    const v = validateBoundary(problem("ball", 1), { s: 2, pieces: [{ cell: 0, u: [0.3, 0.3, 0] }] });
+    const v = validateBoundary(problem("ball", 1), { s: 1, pieces: [{ cell: 0, u: [0.15, 0.15, 0] }] });
     expect(v.ok).toBe(false);
-    expect(v.reasons.join(" ")).toMatch(/Ball 0 is 0\.98994949\d* from an edge of the tesseract/);
-    expect(validateBoundary(problem("ball", 1), { s: 2, pieces: [{ cell: 0, u: [0.29, 0.29, 0] }] }).ok).toBe(true);
+    expect(v.reasons.join(" ")).toMatch(/Ball 0 is 0\.49497474\d* from an edge of the tesseract/);
+    expect(validateBoundary(problem("ball", 1), { s: 1, pieces: [{ cell: 0, u: [0.145, 0.145, 0] }] }).ok).toBe(true);
   });
 
   it("two balls overlapping across a ridge (touching is allowed)", () => {
     // cell 0's facet +u0 is glued to cell 3's facet -u0; centres 0.995 from that ridge on each side
-    const s = 2.5;
-    const over = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [0.255, 0, 0] }, { cell: 3, u: [-0.255, 0, 0] }] });
+    const s = 1.25;
+    const over = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [0.1275, 0, 0] }, { cell: 3, u: [-0.1275, 0, 0] }] });
     expect(over.ok).toBe(false);
-    expect(over.reasons.join(" ")).toMatch(/Balls 0 and 1 overlap: their centres are 1\.99 apart/);
-    expect(validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [0.25, 0, 0] }, { cell: 3, u: [-0.25, 0, 0] }] }).ok).toBe(true);
+    expect(over.reasons.join(" ")).toMatch(/Balls 0 and 1 overlap: their centres are 0\.995 apart/);
+    expect(validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [0.125, 0, 0] }, { cell: 3, u: [-0.125, 0, 0] }] }).ok).toBe(true);
   });
 
   it("two balls overlapping only around a hinge (the path across their common ridge is exactly 2)", () => {
@@ -204,13 +207,14 @@ describe("adversarial configurations", () => {
     // cell 0 at 4D (-h, h - 0.1, h - 1, 0), ball B in cell 5 at (-h + 1, h - 0.1, h, 0): across the ridge
     // of cells 0 and 5 they are exactly 2 apart, but the path through cell 3, round the edge, has
     // length 1.1 sqrt 2 = 1.5556 (it crosses the two ridges that contain the edge).
-    const s = 4;
-    const A = { cell: 0, u: [1.9, 1.0, 0] };
-    const B = { cell: 5, u: [-1.0, 1.9, 0] };
-    expect(geodesicDistance(T, s, A, B, 2.5)).toBeCloseTo(1.1 * Math.SQRT2, 12);
+    // (drawn for balls of radius 1 and halved to site units: the geodesic is 1.1 sqrt 2 / 2 = 0.7778)
+    const s = 2;
+    const A = { cell: 0, u: [0.95, 0.5, 0] };
+    const B = { cell: 5, u: [-0.5, 0.95, 0] };
+    expect(geodesicDistance(T, s, A, B, 1.25)).toBeCloseTo(0.55 * Math.SQRT2, 12);
     const v = validateBoundary(problem("ball", 2), { s, pieces: [A, B] });
     expect(v.ok).toBe(false);
-    expect(v.reasons.join(" ")).toMatch(/Balls 0 and 1 overlap: their centres are 1\.555634919 apart/);
+    expect(v.reasons.join(" ")).toMatch(/Balls 0 and 1 overlap: their centres are 0\.7778174593 apart/);
   });
 
   it("a cube whose interior contains a hinge point", () => {
@@ -411,7 +415,7 @@ describe("review fixes", () => {
         const A = pt();
         const B = pt();
         if (Math.hypot(...A.map((x, i) => x - B[i])) > 1.95) continue;
-        const v = validateOn(P, "ball", 2, { s, pieces: [{ cell: c0, u: A }, { cell: facet.neighbor, u: isoApply(isoFromAffine(facet.toNeighbor, s), B) }] });
+        const v = validateOn(P, "ball", 2, atSite({ s, pieces: [{ cell: c0, u: A }, { cell: facet.neighbor, u: isoApply(isoFromAffine(facet.toNeighbor, s), B) }] }));
         expect(v.ok).toBe(false);
         if (v.reasons.some((r) => /overlap/.test(r))) seen++;
       }
@@ -454,9 +458,10 @@ describe("review fixes", () => {
             { cell: c0, u: B },
           ],
         ]) {
-          const v = validateOn(P24, "ball", 2, { s, pieces });
+          // (drawn for balls of radius 1, halved to site units: the centres are a apart in site units)
+          const v = validateOn(P24, "ball", 2, atSite({ s, pieces }));
           expect(v.ok, `half-distance ${a}: ${v.reasons.join(" ")}`).toBe(ok);
-          if (!ok) expect(v.reasons.join(" ")).toMatch(new RegExp(`centres are ${String(2 * a).replace(".", "\\.")}`));
+          if (!ok) expect(v.reasons.join(" ")).toMatch(new RegExp(`centres are ${String(a).replace(".", "\\.")}`));
         }
       }
     });

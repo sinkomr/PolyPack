@@ -16,24 +16,25 @@
 import { SOLID_NAMES_LIST, type SolidName, pluralTitle } from "@polypack/polyhedra/catalogue";
 
 /**
- * The radius of a ball piece, in the units of the space (the polyhedra space's solids have edge 1). Every length
+ * The radius of a ball piece, in the units of the space (balls have diameter 1; the polyhedra space's solids have edge 1). Every length
  * of the space that is a ball's size goes through this constant (the validator, the bounds, the search, the
  * kernel, the certifier's python/balls/balls_catalogue.py BALL_RADIUS and the board's drawing).
  */
-export const BALL_RADIUS = 1;
+export const BALL_RADIUS = 0.5;
 /**
- * The score of a ball container as a function of its radius, and back. Today the score s of a ball container is its
- * radius; when the score becomes the diameter, only these two functions (and BALL_RADIUS) change. Every ball-container
- * bound and wall test goes through them.
+ * The score of a ball container as a function of its radius, and back. The score s of a ball container is its
+ * DIAMETER (2026-10-27, option A of the unit change): radius = s / 2. Every ball-container bound and wall test goes
+ * through these functions.
  */
-let radiusPerScore = 1;
+const SCORE_TO_RADIUS = 0.5;
+let radiusPerScore = SCORE_TO_RADIUS;
 export const ballContainerScore = (radius: number): number => radius / radiusPerScore;
 export const ballContainerRadius = (score: number): number => radiusPerScore * score;
 /** d(radius) / d(score): the factor of every gradient with respect to the size of a ball container. */
 export const ballContainerRadiusSlope = (): number => radiusPerScore;
 /** Test hook: a linear conversion radius = k score (2 for a score that is half the radius, 0.5 for the diameter). */
 export function setBallContainerConversionForTests(k: number | null): void {
-  radiusPerScore = k ?? 1;
+  radiusPerScore = k ?? SCORE_TO_RADIUS;
 }
 /** The least distance of two ball centres. */
 export const BALL_DIAMETER = 2 * BALL_RADIUS;

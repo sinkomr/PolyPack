@@ -358,7 +358,7 @@ export function polishSolids(
     });
     const walls = placed.map((pl) => {
       const v: number[] = [];
-      for (let k = 0; k < Pc.nv; k++) if (Math.hypot(pl.X[3 * k], pl.X[3 * k + 1], pl.X[3 * k + 2]) >= s - delta) v.push(k);
+      for (let k = 0; k < Pc.nv; k++) if (Math.hypot(pl.X[3 * k], pl.X[3 * k + 1], pl.X[3 * k + 2]) >= ballContainerRadius(s) - delta) v.push(k);
       return v;
     });
     const z = new Float64Array(1 + 7 * n + 4 * pairs.length);

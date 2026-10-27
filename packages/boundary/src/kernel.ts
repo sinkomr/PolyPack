@@ -52,6 +52,7 @@ import type { PieceModel, State } from "./search/model";
 import { randInt } from "./search/random";
 import { finalizeState, modelOf } from "./search/search";
 import type { BoundaryConfig, BoundaryProblem, PieceName, PolytopeName } from "./types";
+import { BALL_RADIUS } from "./units";
 import { validateBoundary } from "./validate";
 
 export { BOUNDARY_SERVER_RULE, boundaryBound } from "./kernel-validate";
@@ -97,8 +98,8 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
   const model: PieceModel = modelOf(prob);
   const n = 3 * P;
   const ball = piece === "ball";
-  // a typical step: the piece's inradius (a ball's radius 1, half a cube's edge)
-  const step = ball ? 1 : 0.5;
+  // a typical step: the piece's inradius (a ball's radius 1/2, half a cube's edge: both 1/2)
+  const step = ball ? BALL_RADIUS : 0.5;
 
   // scratch for the centres of a state (nothing in it outlives one call)
   const placed: State = { cells: new Int32Array(P), U: new Float64Array(n) };
@@ -163,7 +164,7 @@ export function boundaryKernel(problem: { polytope: PolytopeName; piece: PieceNa
     P,
     dim: 3,
     steps: Float64Array.from([step, step, step]),
-    // s is the polytope's edge, a length; a ball's inradius is 1, a cube's 1/2
+    // s is the polytope's edge, a length; a ball's inradius is 1/2, a cube's 1/2
     inradius: step,
     globals: 0,
     globalSteps: new Float64Array(0),

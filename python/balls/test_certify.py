@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Tests of the balls certifier (python/balls/certify.py): exact contact rules, overlaps and protrusions of 1e-9,
-malformed input, the published fields and agreement with the float validator near contact. Run: python3 python/balls/test_certify.py"""
+malformed input, the published fields and agreement with the float validator near contact. Balls have diameter 1 and
+a ball container is scored by its diameter (2026-10-27). Run: python3 python/balls/test_certify.py"""
 import json
 import math
 import os
 import sys
 import unittest
+from fractions import Fraction
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -23,39 +25,39 @@ def q_of_axis_angle(axis, angle):
 
 class Balls(unittest.TestCase):
     def test_touching_balls_and_walls_are_valid(self):
-        # two unit balls touching each other and the container ball of radius 2, exactly
-        r = certify.certify_balls('ball', 2.0, [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])
+        # two balls of diameter 1 touching each other and the container ball of diameter 2, exactly
+        r = certify.certify_balls('ball', 2.0, [[0.5, 0.0, 0.0], [-0.5, 0.0, 0.0]])
         self.assertTrue(r['ok'])
         self.assertEqual(r['min_pair_gap'], 0.0)
         self.assertEqual(r['min_wall_gap'], 0.0)
-        # eight balls of the 2 x 2 x 2 grid in the cube of edge 4, all touching
-        grid = [[x, y, z] for x in (-1.0, 1.0) for y in (-1.0, 1.0) for z in (-1.0, 1.0)]
-        self.assertTrue(certify.certify_balls('cube', 4.0, grid)['ok'])
+        # eight balls of the 2 x 2 x 2 grid in the cube of edge 2, all touching
+        grid = [[x, y, z] for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+        self.assertTrue(certify.certify_balls('cube', 2.0, grid)['ok'])
 
     def test_overlap_of_1e9_is_rejected(self):
-        d = 1 - 0.5e-9
+        d = 0.5 - 0.5e-9
         r = certify.certify_balls('ball', 2.0, [[d, 0.0, 0.0], [-d, 0.0, 0.0]])
         self.assertFalse(r['ok'])
         self.assertEqual(r['failed_pairs'], [[0, 1]])
-        grid = [[x, y, z] for x in (-1.0, 1.0) for y in (-1.0, 1.0) for z in (-1.0, 1.0)]
-        grid[0] = [-1 + 1e-9, -1.0, -1.0]
-        self.assertFalse(certify.certify_balls('cube', 4.0, grid)['ok'])
+        grid = [[x, y, z] for x in (-0.5, 0.5) for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+        grid[0] = [-0.5 + 1e-9, -0.5, -0.5]
+        self.assertFalse(certify.certify_balls('cube', 2.0, grid)['ok'])
 
     def test_protrusion_of_1e9_is_rejected(self):
-        r = certify.certify_balls('ball', 2.0, [[1 + 1e-9, 0.0, 0.0], [-1.0, 0.0, 0.0]])
+        r = certify.certify_balls('ball', 2.0, [[0.5 + 1e-9, 0.0, 0.0], [-0.5, 0.0, 0.0]])
         self.assertFalse(r['ok'])
         self.assertEqual(r['failed_walls'], [0])
-        # a ball 1e-9 past the cube's face x = s/2 - 1, the others clear
-        r = certify.certify_balls('cube', 4.0, [[1 + 1e-9, -1.0, -1.0], [-1.0, 1.0, 1.0]])
+        # a ball 1e-9 past the cube's face x = s/2 - 1/2, the others clear
+        r = certify.certify_balls('cube', 2.0, [[0.5 + 1e-9, -0.5, -0.5], [-0.5, 0.5, 0.5]])
         self.assertFalse(r['ok'])
         self.assertEqual(r['failed_walls'], [0])
         # off by one ulp of s is enough
         s = math.nextafter(2.0, 0)
-        self.assertFalse(certify.certify_balls('ball', s, [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]])['ok'])
+        self.assertFalse(certify.certify_balls('ball', s, [[0.5, 0.0, 0.0], [-0.5, 0.0, 0.0]])['ok'])
 
     def test_clearance_of_1e10_is_reported(self):
         g = 1e-10
-        r = certify.certify_balls('ball', 2 + 2 * g, [[1 + g / 2, 0.0, 0.0], [-1 - g / 2, 0.0, 0.0]])
+        r = certify.certify_balls('ball', 2 + 3 * g, [[0.5 + g / 2, 0.0, 0.0], [-0.5 - g / 2, 0.0, 0.0]])
         self.assertTrue(r['ok'])
         self.assertAlmostEqual(r['min_pair_gap'], g, delta=1e-15)
         self.assertGreater(r['min_wall_gap'], 0.9 * g)
@@ -69,18 +71,19 @@ class Balls(unittest.TestCase):
             with self.assertRaises(certify.CertError, msg=repr(s)):
                 certify.certify_balls('ball', s, [[0.0, 0.0, 0.0]])
         with self.assertRaises(certify.CertError):
-            certify.certify_balls('ball', 0.5, [[0.0, 0.0, 0.0]])
+            certify.certify_balls('ball', 0.5, [[0.0, 0.0, 0.0]])    # a container of diameter below 1 holds no ball
         with self.assertRaises(certify.CertError):
-            certify.certify_balls('cube', 1.5, [[0.0, 0.0, 0.0]])
+            certify.certify_balls('cube', 0.75, [[0.0, 0.0, 0.0]])   # nor a cube of edge below 1
 
 
 class Solids(unittest.TestCase):
     def test_two_cubes_face_to_face(self):
         # cubes [-1, 0] x [-1/2, 1/2]^2 and [0, 1] x [-1/2, 1/2]^2: the farthest vertex is at sqrt(1 + 1/4 + 1/4)
+        # (the container is scored by its diameter: twice the radius that the vertices need)
         far = math.sqrt(1.5)
         for gap, s_extra, ok in ((1e-10, 1e-10, True), (-1e-9, 1e-9, False), (1e-10, -1e-9, False)):
             pieces = [[-0.5 - gap / 2, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.5 + gap / 2, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
-            s = math.sqrt((1 + gap / 2) ** 2 + 0.5) + s_extra
+            s = 2 * (math.sqrt((1 + gap / 2) ** 2 + 0.5) + s_extra)
             r = certify.certify_solids('cube', s, pieces)
             self.assertEqual(r['ok'], ok, (gap, s_extra))
         self.assertGreater(far, 1.2)
@@ -88,14 +91,14 @@ class Solids(unittest.TestCase):
     def test_touching_solids_are_not_certified(self):
         # exact contact cannot be shown by a strict plane: the certifier refuses rather than guess
         pieces = [[-0.5, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [0.5, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
-        r = certify.certify_solids('cube', 2.0, pieces)
+        r = certify.certify_solids('cube', 4.0, pieces)
         self.assertFalse(r['ok'])
         self.assertEqual(r['failed_pairs'], [[0, 1]])
 
     def test_a_piece_turned_by_1e3_rad_is_caught(self):
         # cubes face to face 1e-10 apart are valid; turning one by 1e-3 rad about z pushes its corners 5e-4 into the other
         g = 1e-10
-        s = math.sqrt((1 + g / 2) ** 2 + 0.5) + 1e-3
+        s = 2 * (math.sqrt((1 + g / 2) ** 2 + 0.5) + 1e-3)
         a = [-0.5 - g / 2, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
         b = [0.5 + g / 2, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
         self.assertTrue(certify.certify_solids('cube', s, [a, b])['ok'])
@@ -107,17 +110,17 @@ class Solids(unittest.TestCase):
         R = math.sqrt(6) / 4
         q = q_of_axis_angle([0.3, 1.0, 0.2], 0.7)
         tets = [[-R - 1e-9, 0.0, 0.0] + q, [R + 1e-9, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
-        self.assertTrue(certify.certify_solids('tetrahedron', 2 * R + 1e-6, tets)['ok'])
+        self.assertTrue(certify.certify_solids('tetrahedron', 2 * (2 * R + 1e-6), tets)['ok'])
 
     def test_protruding_vertex(self):
         # one icosahedron at the origin: circumradius sqrt(10 + 2 sqrt 5) / 4
         R = math.sqrt(10 + 2 * math.sqrt(5)) / 4
         one = [[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
-        self.assertTrue(certify.certify_solids('icosahedron', R + 1e-10, one)['ok'])
-        self.assertFalse(certify.certify_solids('icosahedron', R - 1e-9, one)['ok'])
+        self.assertTrue(certify.certify_solids('icosahedron', 2 * (R + 1e-10), one)['ok'])
+        self.assertFalse(certify.certify_solids('icosahedron', 2 * (R - 1e-9), one)['ok'])
         # the same with a large integer quaternion of the identity
         big = [[0.0, 0.0, 0.0, 5e48, 0.0, 0.0, 0.0]]
-        self.assertTrue(certify.certify_solids('icosahedron', R + 1e-10, big)['ok'])
+        self.assertTrue(certify.certify_solids('icosahedron', 2 * (R + 1e-10), big)['ok'])
 
     def test_malformed_solids(self):
         for pieces in ([[0.0] * 6], [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]], [[0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 'x']],
@@ -131,7 +134,7 @@ class Solids(unittest.TestCase):
 
 
 def a_record(code='ballinball', P=2, s=2.0000000003, pieces=None):
-    pieces = pieces or [[1.0000000001, 0.0, 0.0], [-1.0000000001, 0.0, 0.0]]
+    pieces = pieces or [[0.50000000005, 0.0, 0.0], [-0.50000000005, 0.0, 0.0]]
     prob = certify.catalogue.PROBLEMS[code]
     return {
         'id': f'balls/{code}/{P}', 'code': code, 'piece': prob['piece'], 'container': prob['container'], 'P': P,
@@ -162,20 +165,20 @@ class Fields(unittest.TestCase):
         r = a_record(); r['status'] = 'optimal'; bad.append(r)
         r = a_record(); r['status'] = 'proven'; bad.append(r)
         r = a_record(); r['literature'] = [{'value': '2', 'source': 'x'}]; bad.append(r)
-        r = a_record(); r['config']['pieces'][0] = [0.99, 0.0, 0.0]; bad.append(r)
+        r = a_record(); r['config']['pieces'][0] = [0.99, 0.0, 0.0]; bad.append(r)    # protrudes from the container
         for k, rec in enumerate(bad):
             self.assertFalse(certify.certify_record(rec)['ok'], k)
 
     def test_proven_needs_its_proof(self):
-        r = a_record('ballincub', 2, 2 + 2 / math.sqrt(3) + 4e-10,
-                     [[0.57735026924, 0.57735026924, 0.57735026924], [-0.57735026924, -0.57735026924, -0.57735026924]])
+        r = a_record('ballincub', 2, 1 + 1 / math.sqrt(3) + 2e-10,
+                     [[0.28867513462, 0.28867513462, 0.28867513462], [-0.28867513462, -0.28867513462, -0.28867513462]])
         r['bound']['value'] = bound('ballincub', 2)
         self.assertTrue(certify.certify_record(r)['ok'], certify.certify_record(r))
         r['status'] = 'proven'
         self.assertFalse(certify.certify_record(r)['ok'])
-        r['literature'] = [{'value': 2 + 2 / math.sqrt(3), 'source': 'J. Schaer 1966', 'short': 'Schaer 1966', 'proof': 'n = 2'}]
+        r['literature'] = [{'value': 1 + 1 / math.sqrt(3), 'source': 'J. Schaer 1966', 'short': 'Schaer 1966', 'proof': 'n = 2'}]
         self.assertTrue(certify.certify_record(r)['ok'])
-        r['literature'][0]['value'] = 3.2
+        r['literature'][0]['value'] = 1.6
         self.assertFalse(certify.certify_record(r)['ok'])
 
 
@@ -210,7 +213,8 @@ class Catalogue(unittest.TestCase):
         self.assertEqual(c.parse_id('balls/ballinpkd/100'), ('ballinpkd', 100))
         for bad in ('balls/ballinpkd/1', 'balls/ballinpkd/101', 'balls/ballinpkd/07', 'balls/ballinPKD/5', 'balls/3inball/5', 'balls/pr3l16inball/5'):
             self.assertIsNone(c.parse_id(bad), bad)
-        self.assertEqual(c.BALL_RADIUS, 1)
+        self.assertEqual(c.BALL_RADIUS, Fraction(1, 2))
+        self.assertEqual(c.BALL_DIAMETER, 1)
 
     def test_bounds_and_solid_geometry_match_the_typescript(self):
         with open(os.path.join(HERE, 'fixtures', 'bounds.json')) as f:
@@ -225,15 +229,15 @@ class Catalogue(unittest.TestCase):
         for b in d['bounds']:
             self.assertAlmostEqual(bound(b['code'], b['P']) / b['value'], 1.0, delta=1e-12, msg=str(b))
         # the bound of a ball in a tetrahedron at P = 2: the two far vertices of the shrunk tetrahedron
-        self.assertAlmostEqual(bound('ballintet', 2), 12 / math.sqrt(6) + 2, delta=1e-12)
+        self.assertAlmostEqual(bound('ballintet', 2), 6 / math.sqrt(6) + 1, delta=1e-12)
 
 
 class SolidContainers(unittest.TestCase):
     """Balls in a solid other than the ball and the cube: the walls are decided with interval arithmetic."""
 
     def test_a_centred_ball_needs_the_inradius(self):
-        # the octahedron (edge 1) has inradius sqrt 6 / 6: one ball of radius 1 fits from s = sqrt 6 on
-        s = math.sqrt(6)
+        # the octahedron (edge 1) has inradius sqrt 6 / 6: one ball of radius 1/2 fits from s = sqrt 6 / 2 on
+        s = math.sqrt(6) / 2
         for k, ok in ((1e-9, True), (1e-12, True), (1e-15, True), (-1e-15, False), (-1e-9, False)):
             r = certify.certify_balls('octahedron', s * (1 + k), [[0.0, 0.0, 0.0]])
             self.assertEqual(r['ok'], ok, k)
@@ -242,15 +246,15 @@ class SolidContainers(unittest.TestCase):
         self.assertEqual(r['failed_walls'], [0])
 
     def test_pairs_and_walls_together(self):
-        # two balls on the axis of a hexagonal prism (edge 1, height 1): the prism's ends are at 0.5, so s * 0.5 >= 1 + |c_z|
-        s = 4.5
-        z = s * 0.5 - 1
+        # two balls on the axis of a hexagonal prism (edge 1, height 1): the prism's ends are at 0.5, so s * 0.5 >= 1/2 + |c_z|
+        s = 2.25
+        z = s * 0.5 - 0.5
         ok = certify.certify_balls('prism6', s, [[0.0, 0.0, z * (1 - 1e-12)], [0.0, 0.0, -z * (1 - 1e-12)]])
         self.assertTrue(ok['ok'])
-        self.assertAlmostEqual(ok['min_pair_gap'], 2 * z - 2, delta=1e-9)
+        self.assertAlmostEqual(ok['min_pair_gap'], 2 * z - 1, delta=1e-9)
         bad = certify.certify_balls('prism6', s, [[0.0, 0.0, z * (1 + 1e-9)], [0.0, 0.0, -z * (1 - 1e-12)]])
         self.assertEqual(bad['failed_walls'], [0])
-        near = certify.certify_balls('prism6', s, [[0.0, 0.0, 0.0], [0.0, 0.0, 2 - 1e-9]])
+        near = certify.certify_balls('prism6', s, [[0.0, 0.0, 0.0], [0.0, 0.0, 1 - 1e-9]])
         self.assertEqual(near['failed_pairs'], [[0, 1]])
         self.assertFalse(near['ok'])
 
@@ -265,12 +269,12 @@ class SolidContainers(unittest.TestCase):
             certify.certify_balls('octahedron', 3.0, [[0.0, 0.0, float('nan')]])
 
     def test_a_record_of_a_new_problem_passes_its_field_checks(self):
-        s = 2 * math.sqrt(6) * (1 + 1e-9)
-        rec = a_record('ballinoct', 2, s, [[0.3, 0.0, 0.0], [-0.3, 0.0, 0.0]])
+        s = math.sqrt(6) * (1 + 1e-9)
+        rec = a_record('ballinoct', 2, s, [[0.15, 0.0, 0.0], [-0.15, 0.0, 0.0]])
         rec['bound']['value'] = bound('ballinoct', 2)
         res = certify.certify_record(rec)
         self.assertFalse(res['ok'], res)       # the balls overlap
-        rec['config']['pieces'] = [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]
+        rec['config']['pieces'] = [[0.5, 0.0, 0.0], [-0.5, 0.0, 0.0]]
         self.assertTrue(certify.certify_record(rec)['ok'], certify.certify_record(rec))
         rec['container'] = 'cube'
         self.assertFalse(certify.certify_record(rec)['ok'])

@@ -1,0 +1,2160 @@
+{
+ "archived": "Radius-1 disk data (disks of radius 1, N = 0), archived 2026-10-27 when disk pieces became diameter 1. Equivalent to diameter-1 disks at K = +-4 (K x 4, lengths x 1/2). Kept for reference, not served.",
+ "generated": "2026-10-24",
+ "problems": [
+  {
+   "id": "curved-sweep/0/0/2",
+   "title": "2 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 2,
+    "source": "euclidean record 2 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -2,
+     "K1": 0.609375
+    }
+   ],
+   "events": [
+    {
+     "kind": "end",
+     "K": 0.616850271821022,
+     "s": 2,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 2,
+     "left": 0,
+     "right": 0,
+     "leftFar": 1.1102230246251565e-13,
+     "rightFar": 0,
+     "contacts": 3,
+     "rattlers": [],
+     "sym": "D2",
+     "family": "2",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "43/43",
+   "worst_rel": 3.000022452681606e-11
+  },
+  {
+   "id": "curved-sweep/0/0/3",
+   "title": "3 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 2.1547005383792515,
+    "source": "euclidean record 2.1547005383792515 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -2,
+     "K1": 0.5
+    }
+   ],
+   "events": [
+    {
+     "kind": "end",
+     "K": 0.5094024837017059,
+     "s": 2.2008444332758414,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 2.154700538379252,
+     "left": 0.06414650187469562,
+     "right": 0.06415355837230408,
+     "leftFar": 0.06407955060416803,
+     "rightFar": 0.06422068089384503,
+     "contacts": 6,
+     "rattlers": [],
+     "sym": "D3",
+     "family": "3",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "41/41",
+   "worst_rel": 3.025500519069375e-11
+  },
+  {
+   "id": "curved-sweep/0/0/4",
+   "title": "4 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 2.414213562373095,
+    "source": "euclidean record 2.414213562373095 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -2,
+     "K1": 0.375
+    }
+   ],
+   "events": [
+    {
+     "kind": "end",
+     "K": 0.37881526350975037,
+     "s": 2.552149651168116,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 2.414213562373095,
+     "left": 0.23568222772496483,
+     "right": 0.2357222971083317,
+     "leftFar": 0.23530237398272646,
+     "rightFar": 0.23610376530580623,
+     "contacts": 8,
+     "rattlers": [],
+     "sym": "D4",
+     "family": "4",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "39/39",
+   "worst_rel": 3.127212065961327e-11
+  },
+  {
+   "id": "curved-sweep/0/0/5",
+   "title": "5 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 2.7013016167040798,
+    "source": "euclidean record 2.7013016167040798 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -2,
+     "K1": 0.28125
+    }
+   ],
+   "events": [
+    {
+     "kind": "end",
+     "K": 0.28237494826316833,
+     "s": 2.956016004175385,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 2.7013016167040798,
+     "left": 0.5370980713115259,
+     "right": 0.537232630399842,
+     "leftFar": 0.5358238930837089,
+     "rightFar": 0.5385151037098357,
+     "contacts": 10,
+     "rattlers": [],
+     "sym": "D5",
+     "family": "5",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "38/38",
+   "worst_rel": 3.304638804846383e-11
+  },
+  {
+   "id": "curved-sweep/0/0/6",
+   "title": "6 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3,
+    "source": "euclidean record 3 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -2,
+     "K1": 0
+    },
+    {
+     "b": 1,
+     "K0": 0.015625,
+     "K1": 0.265625
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": 2.842170943040401e-14,
+     "s": 3.0000000000000284,
+     "slopeLeft": 0.999650154256404,
+     "slopeRight": 0,
+     "kink": -0.999650154256404,
+     "branch": null,
+     "from": 0,
+     "to": 1,
+     "text": "branch 0 (shells 6, D6, 12 contacts) gives way to branch 1 (shells 5+1, C1, 10 contacts); slope jumps by -0.9997; metastable: branch 0 survives up to K = 0.2150 (hemisphere); branch 1 survives down to K = -2.0000 (infeasible)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "end",
+     "K": 0.21496909856796265,
+     "s": 3.387909879273622,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.2741556763648987,
+     "s": 3,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 1,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 1: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3,
+     "left": 0.9998250385745422,
+     "right": 1.0001750385901786,
+     "leftFar": 0.9965153566464657,
+     "rightFar": 1.003515510850983,
+     "contacts": 12,
+     "rattlers": [],
+     "sym": "D6",
+     "family": "6",
+     "optimal": true
+    },
+    {
+     "branch": 1,
+     "s0": 3,
+     "left": 0,
+     "right": 0,
+     "leftFar": 0,
+     "rightFar": 0,
+     "contacts": 10,
+     "rattlers": [],
+     "sym": "C1",
+     "family": "5+1",
+     "optimal": false
+    }
+   ],
+   "asymptote": null,
+   "certified": "44/44",
+   "worst_rel": 2.6850304320819277e-11
+  },
+  {
+   "id": "curved-sweep/0/0/7",
+   "title": "7 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3,
+    "source": "euclidean record 3 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -2,
+     "K1": -0.3125
+    },
+    {
+     "b": 0,
+     "K0": -0.296875,
+     "K1": 0.203125
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -0.2973246421438773,
+     "s": 2.999999999999985,
+     "slopeLeft": 0.6660053978779779,
+     "slopeRight": 0,
+     "kink": -0.6660053978779779,
+     "branch": null,
+     "from": 1,
+     "to": 0,
+     "text": "branch 1 (shells 7, D7, 14 contacts) gives way to branch 0 (shells 6+1, D6, 12 contacts); slope jumps by -0.6660; metastable: branch 1 survives up to K = 0.1676 (hemisphere); branch 0 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "contact",
+     "K": -1.0001031114370562e-09,
+     "s": 3,
+     "slopeLeft": 0,
+     "slopeRight": 1.0001650340596413,
+     "kink": 1.0001650340596413,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[p:0-1, p:0-2, p:1-4, p:2-5, p:4-6, p:5-6] -[none]; symmetry D6 -> D6; kink (slope 0.0000 | 1.0002)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 1.0001031114370562e-09,
+     "s": 3.0000000010001027,
+     "slopeLeft": 1.0001017791694267e-05,
+     "slopeRight": 1.0001750420984834,
+     "kink": 1.0001650410806917,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[none] -[p:0-3, p:1-3, p:2-3, p:3-4, p:3-5, p:3-6]; rattlers [] -> [3]; symmetry D6 -> D6; kink (slope 0.0000 | 1.0002)",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.21496909856796265,
+     "s": 3.3879098792736224,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3,
+     "left": 0,
+     "right": 1.0001750385901786,
+     "leftFar": 0,
+     "rightFar": 1.003515510850983,
+     "contacts": 18,
+     "rattlers": [],
+     "sym": "D6",
+     "family": "6+1",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "43/43",
+   "worst_rel": 3.386647035398346e-11
+  },
+  {
+   "id": "curved-sweep/0/0/8",
+   "title": "8 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3.3047648709624866,
+    "source": "euclidean record 3.304764870962486 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -2,
+     "K1": -0.59375
+    },
+    {
+     "b": 0,
+     "K0": -0.578125,
+     "K1": 0.15625
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -0.5841322639707585,
+     "s": 2.999999999999994,
+     "slopeLeft": 0.5013381471963285,
+     "slopeRight": 0,
+     "kink": -0.5013381471963285,
+     "branch": null,
+     "from": 1,
+     "to": 0,
+     "text": "branch 1 (shells 8, D8, 16 contacts) gives way to branch 0 (shells 7+1, D1, 14 contacts); slope jumps by -0.5013; metastable: branch 1 survives up to K = 0.1336 (hemisphere); branch 0 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "kink",
+     "K": -0.29732493892512285,
+     "s": 2.9999999999999996,
+     "slopeLeft": 0,
+     "slopeRight": 0.6663620065072706,
+     "kink": 0.6663620065072706,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 7+1, D1, 14 contacts): slope jumps from nan to 0.6664 with no change of the contact set at grid resolution (e.g. a floppy plateau ends, or a degenerate contact set switches)",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.16758471727371216,
+     "s": 3.8370960125826747,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3.3047648709624866,
+     "left": 1.6559475376265453,
+     "right": 1.6567228262553968,
+     "leftFar": 1.6486281805534464,
+     "rightFar": 1.6641345800025853,
+     "contacts": 14,
+     "rattlers": [
+      4
+     ],
+     "sym": "D7",
+     "family": "7+1",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "42/42",
+   "worst_rel": 3.516932118533663e-11
+  },
+  {
+   "id": "curved-sweep/0/0/9",
+   "title": "9 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3.6131259297527527,
+    "source": "euclidean record 3.6131259297527527 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -2,
+     "K1": -0.875
+    },
+    {
+     "b": 0,
+     "K0": -0.859375,
+     "K1": 0.125
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -0.8603277944959302,
+     "s": 2.9999999999999947,
+     "slopeLeft": 0.4036297354459428,
+     "slopeRight": 0,
+     "kink": -0.4036297354459428,
+     "branch": null,
+     "from": 1,
+     "to": 0,
+     "text": "branch 1 (shells 9, D9, 18 contacts) gives way to branch 0 (shells 8+1, D4, 16 contacts); slope jumps by -0.4036; metastable: branch 1 survives up to K = 0.1086 (hemisphere); branch 0 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "kink",
+     "K": -0.5841319649116298,
+     "s": 3.000000149953038,
+     "slopeLeft": -8.881784197001252e-12,
+     "slopeRight": 0.5015328676805098,
+     "kink": 0.5015328676893915,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 8+1, D4, 16 contacts): slope jumps from -0.0000 to 0.5015 with no change of the contact set at grid resolution (e.g. a floppy plateau ends, or a degenerate contact set switches)",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.13358275592327118,
+     "s": 4.297784748157133,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3.613125929752753,
+     "left": 2.5376353336303836,
+     "right": 2.5391699464627493,
+     "leftFar": 2.523174565623565,
+     "rightFar": 2.5538689315263152,
+     "contacts": 16,
+     "rattlers": [
+      4
+     ],
+     "sym": "D8",
+     "family": "8+1",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "41/41",
+   "worst_rel": 3.6945157260905646e-11
+  },
+  {
+   "id": "curved-sweep/0/0/10",
+   "title": "10 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3.8130256313981246,
+    "source": "euclidean record 3.8130256313981246 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -2,
+     "K1": -1.140625
+    },
+    {
+     "b": 2,
+     "K0": -1.125,
+     "K1": -0.0625
+    },
+    {
+     "b": 0,
+     "K0": -0.046875,
+     "K1": 0.125
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.1263047570215292,
+     "s": 3.0000000000000027,
+     "slopeLeft": 0.33909759039829623,
+     "slopeRight": 0,
+     "kink": -0.33909759039829623,
+     "branch": null,
+     "from": 1,
+     "to": 2,
+     "text": "branch 1 (shells 10, D10, 20 contacts) gives way to branch 2 (shells 9+1, C1, 18 contacts); slope jumps by -0.3391; metastable: branch 1 survives up to K = 0.0898 (hemisphere); branch 2 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.062477635321471325,
+     "s": 3.736029002388752,
+     "slopeLeft": 2.480836345974957,
+     "slopeRight": 1.2778592510920284,
+     "kink": -1.2029770948829288,
+     "branch": null,
+     "from": 2,
+     "to": 0,
+     "text": "branch 2 (shells 9+1, D9, 18 contacts, 1 rattler) gives way to branch 0 (shells 8+1+1, D1, 20 contacts); slope jumps by -1.2030; metastable: branch 2 survives up to K = 0.1086 (hemisphere); branch 0 survives down to K = -0.2100 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -0.20996983349323273,
+     "s": 3.5470402888461514,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 8+1+1, D1, 20 contacts) ceases to exist; descent jumps by -7.995e-02 in s to shells 9+1, D1, 18 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 0.08118175787524251,
+     "s": 3.895309975287309,
+     "slopeLeft": 0.8096465660800689,
+     "slopeRight": 4.9313474695855675,
+     "kink": 4.121700903505499,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[p:8-9] -[p:0-4, p:1-4, p:7-8, p:7-9]; symmetry D1 -> C1; kink (slope 0.8096 | 4.9313)",
+     "certified": null
+    },
+    {
+     "kind": "kink",
+     "K": -0.8603275393635331,
+     "s": 3.000000102991629,
+     "slopeLeft": -8.881784197001252e-12,
+     "slopeRight": 0.4037533116152403,
+     "kink": 0.4037533116241221,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2 (shells 9+1, D1, 20 contacts): slope jumps from -0.0000 to 0.4038 with no change of the contact set at grid resolution (e.g. a floppy plateau ends, or a degenerate contact set switches)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.20996983349323273,
+     "s": 3.5470402888461514,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 8+1+1, D1, 20 contacts) ceases to exist; descent jumps by -7.995e-02 in s to shells 9+1, D1, 18 contacts",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.13358275592327118,
+     "s": 4.297784748157133,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3.8130256313981246,
+     "left": 1.1681935332719107,
+     "right": 1.1679210953685626,
+     "leftFar": 1.1707583635163221,
+     "rightFar": 1.1653094596675295,
+     "contacts": 20,
+     "rattlers": [],
+     "sym": "D1",
+     "family": "8+2",
+     "optimal": true
+    },
+    {
+     "branch": 2,
+     "s0": 3.923804400163087,
+     "left": 3.677058012039325,
+     "right": 3.6798513457814153,
+     "leftFar": 3.6507921850683633,
+     "rightFar": 3.70666499482164,
+     "contacts": 18,
+     "rattlers": [
+      3
+     ],
+     "sym": "D9",
+     "family": "9+1",
+     "optimal": false
+    }
+   ],
+   "asymptote": null,
+   "certified": "47/47",
+   "worst_rel": 3.6945368813702073e-11
+  },
+  {
+   "id": "curved-sweep/0/0/11",
+   "title": "11 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 3.923804400163087,
+    "source": "euclidean record 3.923804400163087 (proven)"
+   },
+   "ground_runs": [
+    {
+     "b": 2,
+     "K0": -2,
+     "K1": -1.390625
+    },
+    {
+     "b": 1,
+     "K0": -1.375,
+     "K1": -0.140625
+    },
+    {
+     "b": 3,
+     "K0": -0.125,
+     "K1": 0
+    },
+    {
+     "b": 0,
+     "K0": 0.015625,
+     "K1": 0.125
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.382633169021318,
+     "s": 2.999999999999978,
+     "slopeLeft": 0.29336304323335227,
+     "slopeRight": 2.220446049250313e-12,
+     "kink": -0.2933630432311318,
+     "branch": null,
+     "from": 2,
+     "to": 1,
+     "text": "branch 2 (shells 11, D11, 22 contacts) gives way to branch 1 (shells 10+1, C1, 22 contacts); slope jumps by -0.2934; metastable: branch 2 survives up to K = 0.0754 (hemisphere); branch 1 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.1402044870959287,
+     "s": 3.7814178352379813,
+     "slopeLeft": 2.1606457853029504,
+     "slopeRight": 1.1531550216292707,
+     "kink": -1.0074907636736796,
+     "branch": null,
+     "from": 1,
+     "to": 3,
+     "text": "branch 1 (shells 10+1, D10, 20 contacts, 1 rattler) gives way to branch 3 (shells 9+1+1, C1, 22 contacts); slope jumps by -1.0075; metastable: branch 1 survives up to K = 0.0898 (hemisphere); branch 3 survives down to K = -0.3137 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": 2.842170943040401e-14,
+     "s": 3.923804400163192,
+     "slopeLeft": 0.7735220762739026,
+     "slopeRight": 2.132301074666554,
+     "kink": 1.3587789983926513,
+     "branch": null,
+     "from": 3,
+     "to": 0,
+     "text": "branch 3 (shells 9+2, D1, 23 contacts) gives way to branch 0 (shells 8+1+2, D1, 24 contacts); slope jumps by +1.3588; metastable: branch 3 survives up to K = 0.1086 (hemisphere); branch 0 survives down to K = -0.4314 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -0.31371332705020905,
+     "s": 3.581100952296681,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 9+1+1, C1, 22 contacts) ceases to exist; descent jumps by -7.783e-02 in s to shells 10+1, C1, 21 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.43135023117063187,
+     "s": 3.6650533090800237,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 8+1+2, D1, 22 contacts) ceases to exist; descent jumps by -2.854e-01 in s to shells 10+1, D10, 20 contacts, 1 rattler",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -5.582023732131347e-11,
+     "s": 3.9238044001199395,
+     "slopeLeft": 0.7732531837012502,
+     "slopeRight": 3.6798497223777815,
+     "kink": 2.9065965386765313,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[p:1-10] -[none]; symmetry C1 -> D1; kink (slope 0.7733 | 3.6798)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 2.816022970364429e-10,
+     "s": 3.923804401198948,
+     "slopeLeft": 0.7732613637490005,
+     "slopeRight": 3.679851353659558,
+     "kink": 2.9065899899105574,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[none] -[p:1-2, p:2-10, p:2-3, p:3-4, p:3-7]; rattlers [] -> [2, 3]; symmetry D1 -> D9; kink (slope 0.7733 | 3.6799)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 2.9319835448404774e-10,
+     "s": 3.923804400788329,
+     "slopeLeft": 0.6189293726688305,
+     "slopeRight": 2.132393616518513,
+     "kink": 1.5134642438496826,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[none] -[p:4-6, p:5-7]; symmetry D1 -> D1; kink (slope 0.6189 | 2.1324)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 0.11631566986932285,
+     "s": 4.118127634442294,
+     "slopeLeft": 0.8101389511594448,
+     "slopeRight": 8.392527318132892,
+     "kink": 7.582388366973447,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[p:9-10] -[p:2-4, p:3-5, p:4-8, p:5-8, p:8-10, p:8-9]; rattlers [] -> [8]; symmetry D1 -> C1; kink (slope 0.8101 | 8.3925)",
+     "certified": null
+    },
+    {
+     "kind": "kink",
+     "K": -1.1263042251079773,
+     "s": 3.000000180388971,
+     "slopeLeft": 0,
+     "slopeRight": 0.3391838691779725,
+     "kink": 0.3391838691779725,
+     "branch": 1,
+     "from": null,
+     "to": null,
+     "text": "branch 1 (shells 10+1, C1, 20 contacts): slope jumps from nan to 0.3392 with no change of the contact set at grid resolution (e.g. a floppy plateau ends, or a degenerate contact set switches)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.4313502311706543,
+     "s": 3.6650533090800126,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 8+1+2, D1, 22 contacts) ceases to exist; descent jumps by -2.854e-01 in s to shells 10+1, D10, 20 contacts, 1 rattler",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.13358275592327118,
+     "s": 4.297784748157134,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.31371332705020905,
+     "s": 3.5811009522966804,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 9+1+1, C1, 22 contacts) ceases to exist; descent jumps by -7.783e-02 in s to shells 10+1, C1, 21 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 3.9238044001630876,
+     "left": 0.6189249350230241,
+     "right": 2.132393617060302,
+     "leftFar": 0.6194471736920004,
+     "rightFar": 2.1305668389313137,
+     "contacts": 24,
+     "rattlers": [],
+     "sym": "D1",
+     "family": "8+1+2",
+     "optimal": false
+    },
+    {
+     "branch": 1,
+     "s0": 4.23606797749979,
+     "left": 5.106365483182884,
+     "right": 5.111129351140775,
+     "leftFar": 5.061676821171979,
+     "rightFar": 5.156970100678837,
+     "contacts": 20,
+     "rattlers": [
+      10
+     ],
+     "sym": "D10",
+     "family": "10+1",
+     "optimal": false
+    },
+    {
+     "branch": 3,
+     "s0": 3.9238044001630876,
+     "left": 0.7732531833992695,
+     "right": 3.6798513457769744,
+     "leftFar": 0.7783322508807533,
+     "rightFar": 3.706664994821418,
+     "contacts": 23,
+     "rattlers": [],
+     "sym": "D1",
+     "family": "9+2",
+     "optimal": true
+    }
+   ],
+   "asymptote": null,
+   "certified": "53/53",
+   "worst_rel": 3.6945368813702073e-11
+  },
+  {
+   "id": "curved-sweep/0/0/12",
+   "title": "12 disks in a disk",
+   "K_range": [
+    -2,
+    0.65
+   ],
+   "euclidean_record": {
+    "value": 4.029601930116184,
+    "source": "euclidean record 4.029601930116184 (best_known)"
+   },
+   "ground_runs": [
+    {
+     "b": 2,
+     "K0": -2,
+     "K1": -1.640625
+    },
+    {
+     "b": 1,
+     "K0": -1.625,
+     "K1": -0.234375
+    },
+    {
+     "b": 3,
+     "K0": -0.21875,
+     "K1": -0.0625
+    },
+    {
+     "b": 0,
+     "K0": -0.046875,
+     "K1": 0.09375
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.6299293598948736,
+     "s": 2.999999999999995,
+     "slopeLeft": 0.2592856456851145,
+     "slopeRight": -4.440892098500626e-12,
+     "kink": -0.25928564568955537,
+     "branch": null,
+     "from": 2,
+     "to": 1,
+     "text": "branch 2 (shells 12, D12, 24 contacts) gives way to branch 1 (shells 11+1, C1, 24 contacts); slope jumps by -0.2593; metastable: branch 2 survives up to K = 0.0641 (hemisphere); branch 1 survives down to K = -2.0000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.21996369131844062,
+     "s": 3.801978197439004,
+     "slopeLeft": 1.8715200374885832,
+     "slopeRight": 1.0049121657695892,
+     "kink": -0.866607871718994,
+     "branch": null,
+     "from": 1,
+     "to": 3,
+     "text": "branch 1 (shells 11+1, D11, 22 contacts, 1 rattler) gives way to branch 3 (shells 10+1+1, D1, 24 contacts); slope jumps by -0.8666; metastable: branch 1 survives up to K = 0.0754 (hemisphere); branch 3 survives down to K = -0.4202 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.06243828505145643,
+     "s": 3.985207822746282,
+     "slopeLeft": 3.2060903680708464,
+     "slopeRight": 0.7082519836232315,
+     "kink": -2.497838384447615,
+     "branch": null,
+     "from": 3,
+     "to": 0,
+     "text": "branch 3 (shells 10+2, C1, 20 contacts) gives way to branch 0 (shells 9+3, D3, 24 contacts); slope jumps by -2.4978; metastable: branch 3 survives up to K = 0.0898 (hemisphere); branch 0 survives down to K = -0.9122 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -0.42023105919361115,
+     "s": 3.597686137620173,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 10+1+1, D1, 24 contacts) ceases to exist; descent jumps by -7.652e-02 in s to shells 11+1, D1, 23 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.91216079890728,
+     "s": 3.521298239215232,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 9+3, D3, 24 contacts) ceases to exist; descent jumps by -2.598e-01 in s to shells 12, D12, 24 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.08364467819308175,
+     "s": 3.921230658790816,
+     "slopeLeft": 0.6564687205123931,
+     "slopeRight": 2.8406228787902776,
+     "kink": 2.1841541582778845,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[p:2-7] -[p:0-5, p:1-5, p:2-6, p:5-6, p:6-7]; symmetry D1 -> C1; kink (slope 0.6565 | 2.8406)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": 0.030461741841804724,
+     "s": 4.051163388346221,
+     "slopeLeft": 0.7038047399365865,
+     "slopeRight": 4.779272255328593,
+     "kink": 4.075467515392006,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[p:1-5, p:10-11, p:2-6] -[p:1-3, p:2-4, p:3-5, p:4-6, p:7-10, p:7-11]; symmetry D3 -> D3; kink (slope 0.7038 | 4.7793)",
+     "certified": null
+    },
+    {
+     "kind": "kink",
+     "K": -1.3826337221062903,
+     "s": 3,
+     "slopeLeft": 4.440892098500626e-12,
+     "slopeRight": 0.293426884585557,
+     "kink": 0.2934268845811161,
+     "branch": 1,
+     "from": null,
+     "to": null,
+     "text": "branch 1 (shells 11+1, C1, 28 contacts): slope jumps from 0.0000 to 0.2934 with no change of the contact set at grid resolution (e.g. a floppy plateau ends, or a degenerate contact set switches)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.91216079890728,
+     "s": 3.5212982392152314,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 9+3, D3, 24 contacts) ceases to exist; descent jumps by -2.598e-01 in s to shells 12, D12, 24 contacts",
+     "certified": null
+    },
+    {
+     "kind": "end",
+     "K": 0.10860201716423035,
+     "s": 4.766514570215201,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "high end of branch 0: hemisphere (container would leave the open hemisphere)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.42023105919361115,
+     "s": 3.597686137620173,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 10+1+1, D1, 24 contacts) ceases to exist; descent jumps by -7.652e-02 in s to shells 11+1, D1, 22 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [
+    {
+     "branch": 0,
+     "s0": 4.029601930116184,
+     "left": 0.7107360285729669,
+     "right": 0.7107237988002169,
+     "leftFar": 0.7108480506472503,
+     "rightFar": 0.710603415492006,
+     "contacts": 24,
+     "rattlers": [],
+     "sym": "D3",
+     "family": "9+3",
+     "optimal": true
+    },
+    {
+     "branch": 3,
+     "s0": 4.23606797749979,
+     "left": 5.106365483191766,
+     "right": 5.111129351140775,
+     "leftFar": 5.061676821172867,
+     "rightFar": 5.156970100679281,
+     "contacts": 20,
+     "rattlers": [
+      5,
+      6
+     ],
+     "sym": "D10",
+     "family": "10+2",
+     "optimal": false
+    }
+   ],
+   "asymptote": null,
+   "certified": "53/53",
+   "worst_rel": 3.493265482543324e-11
+  },
+  {
+   "id": "curved-sweep/0/0/27",
+   "title": "27 disks in a disk",
+   "K_range": [
+    -1.5,
+    -0.5
+   ],
+   "euclidean_record": {
+    "value": 5.906397847394154,
+    "source": "euclidean record 5.906397847394155 (best_known)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -1.5,
+     "K1": -1.046875
+    },
+    {
+     "b": 0,
+     "K0": -1.03125,
+     "K1": -0.859375
+    },
+    {
+     "b": 7,
+     "K0": -0.84375,
+     "K1": -0.65625
+    },
+    {
+     "b": 2,
+     "K0": -0.640625,
+     "K1": -0.5
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.0408962202793361,
+     "s": 3.9397963440882635,
+     "slopeLeft": 0.791271897029322,
+     "slopeRight": 0.4621086134837249,
+     "kink": -0.3291632835455971,
+     "branch": null,
+     "from": 1,
+     "to": 0,
+     "text": "branch 1 (shells 26+1, D26, 52 contacts, 1 rattler) gives way to branch 0 (shells 25+2, C1, 54 contacts); slope jumps by -0.3292; metastable: branch 1 survives up to K = -0.5000 (range); branch 0 survives down to K = -1.4581 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.8546999419131964,
+     "s": 4.064886349314101,
+     "slopeLeft": 0.9948005262350179,
+     "slopeRight": 0.37457056556000623,
+     "kink": -0.6202299606750117,
+     "branch": null,
+     "from": 0,
+     "to": 7,
+     "text": "branch 0 (shells 25+2, D25, 50 contacts, 2 rattlers) gives way to branch 7 (shells 24+3, D3, 54 contacts); slope jumps by -0.6202; metastable: branch 0 survives up to K = -0.5000 (range); branch 7 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.6493694852511283,
+     "s": 4.2571124798317825,
+     "slopeLeft": 1.3658048738074413,
+     "slopeRight": 0.9099646919175086,
+     "kink": -0.4558401818899327,
+     "branch": null,
+     "from": 7,
+     "to": 2,
+     "text": "branch 7 (shells 24+3, C1, 51 contacts) gives way to branch 2 (shells 23+4, D1, 54 contacts); slope jumps by -0.4558; metastable: branch 7 survives up to K = -0.5000 (range); branch 2 survives down to K = -0.9653 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -1.458055540919304,
+     "s": 3.7294566070398005,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 25+1+1, C1, 54 contacts) ceases to exist; descent jumps by -5.347e-02 in s to shells 26+1, C1, 53 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.9653489738702774,
+     "s": 4.076682777729981,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2 (shells 23+4, D1, 52 contacts) ceases to exist; descent jumps by -2.895e-02 in s to shells 23+2+2, C1, 53 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.9492339024976673,
+     "s": 3.976935625187361,
+     "slopeLeft": 0.3200953731630207,
+     "slopeRight": 0.8705880656645348,
+     "kink": 0.5504926925015141,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0: contacts +[p:10-17] -[p:10-25, p:16-26, p:17-25, p:19-26, p:25-26]; rattlers [] -> [25, 26]; symmetry C1 -> D25; kink (slope 0.3201 | 0.8706)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.7889491284430505,
+     "s": 4.088340398582973,
+     "slopeLeft": 0.3349577465172615,
+     "slopeRight": 1.0727324616155443,
+     "kink": 0.7377747150982827,
+     "branch": 7,
+     "from": null,
+     "to": null,
+     "text": "branch 7: contacts +[p:0-5, p:16-23, p:2-20] -[p:0-25, p:12-16, p:12-23, p:2-6, p:5-25, p:6-20]; symmetry D3 -> C3; kink (slope 0.3350 | 1.0727)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.5772016831346036,
+     "s": 4.308034377824555,
+     "slopeLeft": 0.3241404395915026,
+     "slopeRight": 1.5317966275052441,
+     "kink": 1.2076561879137415,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2: contacts +[p:4-23] -[p:1-10, p:14-25, p:2-10, p:2-13, p:2-14, p:4-6, p:6-10, p:6-14, p:6-23]; rattlers [] -> [2, 6, 10, 14]; symmetry D1 -> D23; kink (slope 0.3241 | 1.5318)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.458055555820465,
+     "s": 3.72945659426455,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 0,
+     "from": null,
+     "to": null,
+     "text": "branch 0 (shells 25+1+1, C1, 51 contacts, 1 rattler) ceases to exist; descent jumps by -5.347e-02 in s to shells 26+1, C1, 53 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.9653490334749222,
+     "s": 4.0766827406145625,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2 (shells 23+4, D1, 52 contacts) ceases to exist; descent jumps by -2.895e-02 in s to shells 23+2+2, C1, 53 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.4436195492744446,
+     "s": 3.736524964172884,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 25+1+1, C1, 54 contacts) ceases to exist; descent jumps by -5.315e-02 in s to shells 26+1, C1, 53 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.2533835172653198,
+     "s": 3.875384946914771,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 4,
+     "from": null,
+     "to": null,
+     "text": "branch 4 (shells 24+1+1+1, C1, 51 contacts, 1 rattler) ceases to exist; descent jumps by -4.161e-02 in s to shells 25+1+1, C1, 54 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.9305483549833298,
+     "s": 4.024314343507627,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 4,
+     "from": null,
+     "to": null,
+     "text": "branch 4 (shells 24+1+2, C1, 54 contacts) ceases to exist; descent jumps by -3.948e-03 in s to shells 24+3, D1, 54 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.8091497123241425,
+     "s": 4.090394577589337,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6 (shells 24+3, D1, 54 contacts) ceases to exist; descent jumps by -8.973e-03 in s to shells 24+3, D3, 54 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [],
+   "asymptote": null,
+   "certified": "35/35",
+   "worst_rel": 2.2097547566625675e-11
+  },
+  {
+   "id": "curved-sweep/0/0/28",
+   "title": "28 disks in a disk",
+   "K_range": [
+    -1.5,
+    -0.5
+   ],
+   "euclidean_record": {
+    "value": 6.0149380973715125,
+    "source": "euclidean record 6.0149380973715125 (best_known)"
+   },
+   "ground_runs": [
+    {
+     "b": 0,
+     "K0": -1.5,
+     "K1": -1.09375
+    },
+    {
+     "b": 1,
+     "K0": -1.078125,
+     "K1": -0.90625
+    },
+    {
+     "b": 2,
+     "K0": -0.890625,
+     "K1": -0.703125
+    },
+    {
+     "b": 6,
+     "K0": -0.6875,
+     "K1": -0.546875
+    },
+    {
+     "b": 3,
+     "K0": -0.53125,
+     "K1": -0.5
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.085226106735064,
+     "s": 3.941547224576625,
+     "slopeLeft": 0.7659862074405055,
+     "slopeRight": 0.44738871819882675,
+     "kink": -0.31859748924167874,
+     "branch": null,
+     "from": 0,
+     "to": 1,
+     "text": "branch 0 (shells 27+1, D27, 54 contacts, 1 rattler) gives way to branch 1 (shells 26+2, D1, 56 contacts); slope jumps by -0.3186; metastable: branch 0 survives up to K = -0.5000 (range); branch 1 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.9007331716602778,
+     "s": 4.061451215579055,
+     "slopeLeft": 0.9529818646170085,
+     "slopeRight": 0.35111014843547395,
+     "kink": -0.6018717161815346,
+     "branch": null,
+     "from": 1,
+     "to": 2,
+     "text": "branch 1 (shells 26+2, D26, 52 contacts, 2 rattlers) gives way to branch 2 (shells 25+3, D1, 56 contacts); slope jumps by -0.6019; metastable: branch 1 survives up to K = -0.5000 (range); branch 2 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.6941289252061722,
+     "s": 4.246717248878219,
+     "slopeLeft": 1.291919608608083,
+     "slopeRight": 0.5423456179842745,
+     "kink": -0.7495739906238086,
+     "branch": null,
+     "from": 2,
+     "to": 6,
+     "text": "branch 2 (shells 25+3, C1, 52 contacts) gives way to branch 6 (shells 24+4, D2, 58 contacts); slope jumps by -0.7496; metastable: branch 2 survives up to K = -0.5000 (range); branch 6 survives down to K = -1.2703 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.5314101598952163,
+     "s": 4.438969041549135,
+     "slopeLeft": 1.7436430835360284,
+     "slopeRight": 1.2787183845164307,
+     "kink": -0.46492469901959765,
+     "branch": null,
+     "from": 6,
+     "to": 3,
+     "text": "branch 6 (shells 24+4, C2, 52 contacts) gives way to branch 3 (shells 23+5, D1, 56 contacts); slope jumps by -0.4649; metastable: branch 6 survives up to K = -0.5000 (range); branch 3 survives down to K = -1.3726 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -1.270262897014618,
+     "s": 3.9296794791077194,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6 (shells 24+2+2, D2, 57 contacts) ceases to exist; descent jumps by -5.568e-02 in s to shells 26+2, D2, 55 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.3725731074810028,
+     "s": 3.985654177141271,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 23+5, D1, 56 contacts) ceases to exist; descent jumps by -1.846e-01 in s to shells 26+1+1, C1, 56 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.9956253847818743,
+     "s": 3.9766635614998966,
+     "slopeLeft": 0.30927302261396505,
+     "slopeRight": 0.8381896825904178,
+     "kink": 0.5289166599764528,
+     "branch": 1,
+     "from": null,
+     "to": null,
+     "text": "branch 1: contacts +[p:2-5] -[p:1-12, p:1-2, p:1-5, p:12-16, p:3-12]; rattlers [] -> [1, 12]; symmetry D1 -> D26; kink (slope 0.3093 | 0.8382)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.8861208264428342,
+     "s": 4.066519141511099,
+     "slopeLeft": 0.3423027937454748,
+     "slopeRight": 0.6023099101248874,
+     "kink": 0.26000711637941265,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2: contacts +[p:1-2, p:18-20] -[p:1-25, p:11-18]; symmetry D1 -> D1; kink (slope 0.3423 | 0.6023)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.8163110281105901,
+     "s": 4.104205456260484,
+     "slopeLeft": 0.4463703590307233,
+     "slopeRight": 1.0545879546697279,
+     "kink": 0.6082175956390046,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2: contacts +[p:10-12] -[p:10-15, p:11-15, p:11-20, p:11-25, p:12-15, p:15-25, p:2-25]; rattlers [] -> [11, 15, 25]; symmetry D1 -> D25; kink (slope 0.4464 | 1.0546)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.6361565552059574,
+     "s": 4.2753914678484195,
+     "slopeLeft": 0.4383664043405844,
+     "slopeRight": 1.4011597984087132,
+     "kink": 0.9627933940681288,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6: contacts +[p:14-24, p:8-9] -[p:1-16, p:10-16, p:13-15, p:14-27, p:24-27, p:7-13, p:8-25, p:9-25]; symmetry D2 -> C2; kink (slope 0.4384 | 1.4012)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.5359920845240822,
+     "s": 4.435819208709749,
+     "slopeLeft": 1.8216062076703565,
+     "slopeRight": -0.6181311972763837,
+     "kink": -2.43973740494674,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[p:12-20, p:2-16, p:3-23, p:4-14] -[p:10-12, p:14-26, p:16-22, p:3-7]; symmetry D1 -> D1; kink (slope 1.8216 | -0.6181)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.7082279622554779,
+     "s": 4.288099032832182,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 23+1+4, D1, 56 contacts) ceases to exist; descent jumps by -4.918e-02 in s to shells 24+4, D1, 57 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.9305494725704193,
+     "s": 4.090393024117926,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 5,
+     "from": null,
+     "to": null,
+     "text": "branch 5 (shells 24+1+3, D1, 56 contacts) ceases to exist; descent jumps by -3.964e-02 in s to shells 25+3, D1, 56 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.6657968461513519,
+     "s": 4.269862573326296,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 5,
+     "from": null,
+     "to": null,
+     "text": "branch 5 (shells 24+4, D1, 57 contacts) ceases to exist; descent jumps by -8.383e-03 in s to shells 24+4, D2, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.2702629119157791,
+     "s": 3.929679474302932,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6 (shells 24+2+2, D2, 53 contacts) ceases to exist; descent jumps by -5.568e-02 in s to shells 26+2, D2, 55 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [],
+   "asymptote": null,
+   "certified": "41/41",
+   "worst_rel": 2.18930443201855e-11
+  },
+  {
+   "id": "curved-sweep/0/0/29",
+   "title": "29 disks in a disk",
+   "K_range": [
+    -1.5,
+    -0.5
+   ],
+   "euclidean_record": {
+    "value": 6.138597903978145,
+    "source": "euclidean record 6.1385979039781455 (best_known)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -1.5,
+     "K1": -1.140625
+    },
+    {
+     "b": 5,
+     "K0": -1.125,
+     "K1": -0.9375
+    },
+    {
+     "b": 2,
+     "K0": -0.921875,
+     "K1": -0.734375
+    },
+    {
+     "b": 7,
+     "K0": -0.71875,
+     "K1": -0.5625
+    },
+    {
+     "b": 4,
+     "K0": -0.546875,
+     "K1": -0.515625
+    },
+    {
+     "b": 3,
+     "K0": -0.5,
+     "K1": -0.5
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.1256008045557166,
+     "s": 3.94533887080143,
+     "slopeLeft": 0.7453011109981311,
+     "slopeRight": 0.4367503638591508,
+     "kink": -0.30855074713898034,
+     "branch": null,
+     "from": 1,
+     "to": 5,
+     "text": "branch 1 (shells 28+1, D28, 56 contacts, 1 rattler) gives way to branch 5 (shells 27+2, C1, 58 contacts); slope jumps by -0.3086; metastable: branch 1 survives up to K = -0.5000 (range); branch 5 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.9349657820994537,
+     "s": 4.068229194309164,
+     "slopeLeft": 0.9289153373126524,
+     "slopeRight": 0.5914017105057567,
+     "kink": -0.3375136268068957,
+     "branch": null,
+     "from": 5,
+     "to": 2,
+     "text": "branch 5 (shells 27+2, C1, 55 contacts) gives way to branch 2 (shells 26+3, D1, 58 contacts); slope jumps by -0.3375; metastable: branch 5 survives up to K = -0.5000 (range); branch 2 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.7217217805894336,
+     "s": 4.25747794298819,
+     "slopeLeft": 1.2615737177945618,
+     "slopeRight": 0.48468248278421555,
+     "kink": -0.7768912350103463,
+     "branch": null,
+     "from": 2,
+     "to": 7,
+     "text": "branch 2 (shells 26+3, D26, 52 contacts, 3 rattlers) gives way to branch 7 (shells 25+4, D1, 58 contacts); slope jumps by -0.7769; metastable: branch 2 survives up to K = -0.5000 (range); branch 7 survives down to K = -0.8821 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.5493266534595875,
+     "s": 4.462449360684767,
+     "slopeLeft": 1.7229985934186232,
+     "slopeRight": 1.2066386642084481,
+     "kink": -0.516359929210175,
+     "branch": null,
+     "from": 7,
+     "to": 4,
+     "text": "branch 7 (shells 25+4, C1, 54 contacts) gives way to branch 4 (shells 24+5, D1, 58 contacts); slope jumps by -0.5164; metastable: branch 7 survives up to K = -0.5000 (range); branch 4 survives down to K = -0.6599 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.5134809719681641,
+     "s": 4.501528240941852,
+     "slopeLeft": 0.9185042140513744,
+     "slopeRight": 0.822735295304966,
+     "kink": -0.09576891874640836,
+     "branch": null,
+     "from": 4,
+     "to": 3,
+     "text": "branch 4 (shells 24+5, D1, 58 contacts) gives way to branch 3 (shells 24+5, C1, 53 contacts, 1 rattler); slope jumps by -0.0958; metastable: branch 4 survives up to K = -0.5000 (range); branch 3 survives down to K = -0.5708 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -0.8821222335100174,
+     "s": 4.1659235690737395,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 7,
+     "from": null,
+     "to": null,
+     "text": "branch 7 (shells 25+4, D1, 58 contacts) ceases to exist; descent jumps by -2.580e-03 in s to shells 25+4, C1, 57 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.6598754227161407,
+     "s": 4.32783724112628,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 4,
+     "from": null,
+     "to": null,
+     "text": "branch 4 (shells 24+1+4, D1, 58 contacts) ceases to exist; descent jumps by -3.421e-02 in s to shells 25+4, D1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.5708086043596268,
+     "s": 4.454175862104113,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 24+5, C1, 50 contacts, 2 rattlers) ceases to exist; descent jumps by -7.636e-03 in s to shells 24+5, D1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -1.0377489767980705,
+     "s": 3.9789889266572955,
+     "slopeLeft": 0.30313761632427827,
+     "slopeRight": 0.8119835598963121,
+     "kink": 0.5088459435720338,
+     "branch": 5,
+     "from": null,
+     "to": null,
+     "text": "branch 5: contacts +[p:18-22] -[p:0-14, p:0-27, p:17-18, p:17-22]; symmetry C1 -> C1; kink (slope 0.3031 | 0.8120)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.8544729234662327,
+     "s": 4.107046470534734,
+     "slopeLeft": 0.2845667503592608,
+     "slopeRight": 1.0194847405387009,
+     "kink": 0.73491799017944,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2: contacts +[p:19-20] -[p:15-22, p:15-26, p:19-26, p:2-15, p:2-26, p:2-28, p:20-26]; rattlers [] -> [2, 15, 26]; symmetry D1 -> D26; kink (slope 0.2846 | 1.0195)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.6878231508982253,
+     "s": 4.272889404275407,
+     "slopeLeft": 0.4212949877491212,
+     "slopeRight": 0.7934853433244626,
+     "kink": 0.3721903555753414,
+     "branch": 7,
+     "from": null,
+     "to": null,
+     "text": "branch 7: contacts +[p:0-14, p:8-17] -[p:0-27, p:8-13]; symmetry D1 -> D1; kink (slope 0.4213 | 0.7935)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.6581144350319619,
+     "s": 4.294813910982362,
+     "slopeLeft": 0.6695556928804081,
+     "slopeRight": 1.3806260622839517,
+     "kink": 0.7110703694035436,
+     "branch": 7,
+     "from": null,
+     "to": null,
+     "text": "branch 7: contacts +[p:3-24] -[p:13-17, p:13-23, p:14-27, p:23-24, p:23-27, p:3-23, p:4-10, p:4-13, p:4-27]; rattlers [] -> [4, 13, 23, 27]; symmetry D1 -> D25; kink (slope 0.6696 | 1.3806)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.5708086043596268,
+     "s": 4.45417586210411,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 24+5, C1, 50 contacts, 2 rattlers) ceases to exist; descent jumps by -7.636e-03 in s to shells 24+5, D1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.6598754227161407,
+     "s": 4.3278372411262795,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 4,
+     "from": null,
+     "to": null,
+     "text": "branch 4 (shells 24+1+4, D1, 58 contacts) ceases to exist; descent jumps by -3.421e-02 in s to shells 25+4, D1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.0492085963487625,
+     "s": 4.090562252141553,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6 (shells 24+3+2, D1, 57 contacts) ceases to exist; descent jumps by -1.001e-01 in s to shells 27+2, C1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.8821222335100174,
+     "s": 4.165923569073739,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 7,
+     "from": null,
+     "to": null,
+     "text": "branch 7 (shells 25+4, D1, 58 contacts) ceases to exist; descent jumps by -2.580e-03 in s to shells 25+4, C1, 57 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.283760741353035,
+     "s": 3.906529056970834,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 9,
+     "from": null,
+     "to": null,
+     "text": "branch 9 (shells 26+1+2, C1, 58 contacts) ceases to exist; descent jumps by -3.615e-02 in s to shells 27+2, C1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.058021199889481,
+     "s": 4.001803193477856,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 9,
+     "from": null,
+     "to": null,
+     "text": "branch 9 (shells 26+1+2, C1, 58 contacts) ceases to exist; descent jumps by -3.048e-03 in s to shells 26+1+2, D1, 58 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.9754650741815567,
+     "s": 4.048739076949613,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 10,
+     "from": null,
+     "to": null,
+     "text": "branch 10 (shells 26+3, D1, 57 contacts) ceases to exist; descent jumps by -3.947e-03 in s to shells 26+3, D1, 58 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [],
+   "asymptote": null,
+   "certified": "47/47",
+   "worst_rel": 2.1459452776921865e-11
+  },
+  {
+   "id": "curved-sweep/0/0/30",
+   "title": "30 disks in a disk",
+   "K_range": [
+    -1.5,
+    -0.5
+   ],
+   "euclidean_record": {
+    "value": 6.197741070879227,
+    "source": "euclidean record 6.197741070879227 (best_known)"
+   },
+   "ground_runs": [
+    {
+     "b": 1,
+     "K0": -1.5,
+     "K1": -1.171875
+    },
+    {
+     "b": 2,
+     "K0": -1.15625,
+     "K1": -1.0625
+    },
+    {
+     "b": 0,
+     "K0": -1.046875,
+     "K1": -0.984375
+    },
+    {
+     "b": 5,
+     "K0": -0.96875,
+     "K1": -0.78125
+    },
+    {
+     "b": 3,
+     "K0": -0.765625,
+     "K1": -0.59375
+    },
+    {
+     "b": 4,
+     "K0": -0.578125,
+     "K1": -0.5
+    }
+   ],
+   "events": [
+    {
+     "kind": "crossing",
+     "K": -1.1678883975492056,
+     "s": 3.9467972814302,
+     "slopeLeft": 0.7237878830101963,
+     "slopeRight": 0.42417306296504975,
+     "kink": -0.2996148200451465,
+     "branch": null,
+     "from": 1,
+     "to": 2,
+     "text": "branch 1 (shells 29+1, D29, 58 contacts, 1 rattler) gives way to branch 2 (shells 28+2, D1, 60 contacts); slope jumps by -0.2996; metastable: branch 1 survives up to K = -0.5000 (range); branch 2 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.9752578139373611,
+     "s": 4.068290573920638,
+     "slopeLeft": 0.8982329522932986,
+     "slopeRight": 0.3473337358750328,
+     "kink": -0.5508992164182658,
+     "branch": null,
+     "from": 0,
+     "to": 5,
+     "text": "branch 0 (shells 28+2, D28, 56 contacts, 2 rattlers) gives way to branch 5 (shells 27+3, D3, 60 contacts); slope jumps by -0.5509; metastable: branch 0 survives up to K = -0.5000 (range); branch 5 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.7719200589702666,
+     "s": 4.239224618033897,
+     "slopeLeft": 1.1862908195725552,
+     "slopeRight": 0.49347978685609917,
+     "kink": -0.692811032716456,
+     "branch": null,
+     "from": 5,
+     "to": 3,
+     "text": "branch 5 (shells 27+3, D27, 54 contacts, 3 rattlers) gives way to branch 3 (shells 26+4, D1, 61 contacts); slope jumps by -0.6928; metastable: branch 5 survives up to K = -0.5000 (range); branch 3 survives down to K = -1.1235 (fold)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "crossing",
+     "K": -0.5891096627268837,
+     "s": 4.44707469269662,
+     "slopeLeft": 1.623630518361452,
+     "slopeRight": 0.5915218877561301,
+     "kink": -1.0321086306053218,
+     "branch": null,
+     "from": 3,
+     "to": 4,
+     "text": "branch 3 (shells 26+4, C1, 53 contacts, 1 rattler) gives way to branch 4 (shells 25+5, D5, 60 contacts); slope jumps by -1.0321; metastable: branch 3 survives up to K = -0.5000 (range); branch 4 survives down to K = -1.5000 (range)",
+     "certified": "6/6"
+    },
+    {
+     "kind": "fold",
+     "K": -1.1235036551952362,
+     "s": 4.024884281923899,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 26+2+2, D1, 62 contacts) ceases to exist; descent jumps by -2.091e-02 in s to shells 27+3, D1, 60 contacts",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -1.081908784357779,
+     "s": 3.9787585117224844,
+     "slopeLeft": 0.29391857366167784,
+     "slopeRight": 0.7850242820817144,
+     "kink": 0.49110570842003654,
+     "branch": 2,
+     "from": null,
+     "to": null,
+     "text": "branch 2: contacts +[p:14-17] -[p:1-14, p:1-17, p:1-22, p:11-22, p:22-27]; rattlers [] -> [1, 22]; symmetry D1 -> D28; kink (slope 0.2939 | 0.7850)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.9132032487890456,
+     "s": 4.088755504627679,
+     "slopeLeft": 0.3087167091386789,
+     "slopeRight": 0.9576602326433203,
+     "kink": 0.6489435235046415,
+     "branch": 5,
+     "from": null,
+     "to": null,
+     "text": "branch 5: contacts +[p:13-19, p:17-24, p:6-29] -[p:13-20, p:4-7, p:7-17, p:7-24]; symmetry D3 -> C1; kink (slope 0.3087 | 0.9577)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.7684520614435542,
+     "s": 4.240926927457302,
+     "slopeLeft": 0.4881364165321145,
+     "slopeRight": 0.8172403285655605,
+     "kink": 0.329103912033446,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[p:9-28] -[p:16-20, p:5-29]; symmetry D1 -> D1; kink (slope 0.4881 | 0.8172)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.6964226854014441,
+     "s": 4.290120115202743,
+     "slopeLeft": 0.44586797236512155,
+     "slopeRight": 1.3195684673750208,
+     "kink": 0.8737004950098992,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3: contacts +[p:22-25] -[p:11-28, p:20-26, p:5-11, p:5-18, p:5-6, p:6-20, p:6-22, p:6-25, p:9-11]; rattlers [] -> [5, 6]; symmetry D1 -> C1; kink (slope 0.4459 | 1.3196)",
+     "certified": null
+    },
+    {
+     "kind": "contact",
+     "K": -0.5424730391179082,
+     "s": 4.4743512308175895,
+     "slopeLeft": 0.5765671933666283,
+     "slopeRight": 1.7500977186468702,
+     "kink": 1.173530525280242,
+     "branch": 4,
+     "from": null,
+     "to": null,
+     "text": "branch 4: contacts +[p:0-27, p:11-23, p:2-14, p:3-7, p:5-21] -[p:0-1, p:1-26, p:1-27, p:1-28, p:14-26, p:18-26, p:2-26, p:21-28, p:3-18, p:5-28, p:7-18, p:8-11, p:8-18, p:8-23, p:8-28]; rattlers [] -> [1, 8, 18, 26, 28]; symmetry D5 -> D25; kink (slope 0.5766 | 1.7501)",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -1.1235036551952362,
+     "s": 4.0248842819239,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 3,
+     "from": null,
+     "to": null,
+     "text": "branch 3 (shells 26+2+2, D1, 62 contacts) ceases to exist; descent jumps by -2.091e-02 in s to shells 27+3, D1, 60 contacts",
+     "certified": null
+    },
+    {
+     "kind": "fold",
+     "K": -0.932161346077919,
+     "s": 4.090441022116706,
+     "slopeLeft": null,
+     "slopeRight": null,
+     "kink": null,
+     "branch": 6,
+     "from": null,
+     "to": null,
+     "text": "branch 6 (shells 27+3, D1, 60 contacts) ceases to exist; descent jumps by -7.675e-03 in s to shells 27+3, D3, 60 contacts",
+     "certified": null
+    }
+   ],
+   "k0": [],
+   "asymptote": null,
+   "certified": "41/41",
+   "worst_rel": 2.1901550710609312e-11
+  }
+ ]
+}

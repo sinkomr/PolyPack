@@ -6,7 +6,6 @@ import {
   enclosingCircle,
   enclosingPolygon,
   regularPolygonSeparation,
-  circleSeparation,
   type Pose,
 } from "@polypack/geometry";
 import {
@@ -34,6 +33,7 @@ import {
   vertexEdgeRow,
   wallRow,
   applyPoint,
+  DISK_RADIUS,
   ORIGIN,
   type CurvedPose,
   type CurvedConfig,
@@ -88,7 +88,8 @@ describe("geometry", () => {
       const b: Pose = { x: 2 * rnd() - 1, y: 2 * rnd() - 1, theta: 7 * rnd() };
       const [A, B] = allStates(sp, [a, b]);
       const ours = pairGap(sp, A, B).gap;
-      const theirs = N === 0 ? circleSeparation(a, b).sep : regularPolygonSeparation(N, a, b).sep;
+      // (disks have diameter 1 here; packages/geometry's circleSeparation follows when the unit change lands there)
+      const theirs = N === 0 ? Math.hypot(a.x - b.x, a.y - b.y) - 2 * DISK_RADIUS : regularPolygonSeparation(N, a, b).sep;
       expect(Math.abs(ours - theirs)).toBeLessThan(1e-12);
     }
   });
@@ -142,8 +143,8 @@ describe("validator adversarial cases", () => {
   it("rejects overlaps and protrusions beyond 1e-9", () => {
     for (const K of [-1, 0, 1]) {
       const rho = sqRho(K);
-      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 1.4, pieces: facing(K, rho) }).valid).toBe(true);
-      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 1.4, pieces: facing(K, rho - 2e-9) }).valid).toBe(false);
+      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 2.8, pieces: facing(K, rho) }).valid).toBe(true);
+      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 2.8, pieces: facing(K, rho - 2e-9) }).valid).toBe(false);
       const th = Math.PI / 4;
       expect(validate({ N: 4, M: 4, P: 1 }, K, { size: 1, pieces: [{ x: 0, y: 0, theta: th }] }).valid).toBe(true);
       expect(validate({ N: 4, M: 4, P: 1 }, K, { size: 1 - 1e-8, pieces: [{ x: 0, y: 0, theta: th }] }).valid).toBe(
@@ -157,13 +158,13 @@ describe("validator adversarial cases", () => {
     const rho = sqRho(K);
     const bad = facing(K, rho - 0.5e-4, 8);
     expect(Math.hypot(bad[0].x, bad[0].y)).toBeGreaterThan(7.9);
-    const vb = validate({ N: 4, M: 0, P: 2 }, K, { size: 10, pieces: bad });
+    const vb = validate({ N: 4, M: 0, P: 2 }, K, { size: 20, pieces: bad });
     expect(vb.valid).toBe(false);
     // the facing edges are ultraparallel: 1e-4 apart on the axis, 1e-4 cosh(1/2) at the vertices
     expect(vb.minPairGap).toBeLessThan(-0.9e-4);
     expect(vb.minPairGap).toBeGreaterThan(-1.2e-4);
     const good = facing(K, rho + 0.5e-4, 8);
-    const vg = validate({ N: 4, M: 0, P: 2 }, K, { size: 10, pieces: good });
+    const vg = validate({ N: 4, M: 0, P: 2 }, K, { size: 20, pieces: good });
     expect(vg.valid).toBe(true);
     expect(vg.minPairGap).toBeGreaterThan(0.9e-4);
   });
@@ -203,7 +204,7 @@ describe("validator adversarial cases", () => {
     // no unit octagon on the unit sphere; containers stay in an open hemisphere
     expect(validate({ N: 8, M: 0, P: 1 }, 1, ok).valid).toBe(false);
     expect(validate({ N: 3, M: 4, P: 1 }, 1, { size: Math.PI / 2, pieces: ok.pieces }).valid).toBe(false);
-    expect(validate({ N: 3, M: 0, P: 1 }, 1, { size: 1.6, pieces: ok.pieces }).valid).toBe(false);
+    expect(validate({ N: 3, M: 0, P: 1 }, 1, { size: 3.2, pieces: ok.pieces }).valid).toBe(false);
   });
 });
 
@@ -217,17 +218,28 @@ function euclideanCases(): { N: number; M: number; P: number; value: number; pie
     pieces?: Pose[];
     container_phi?: number;
   }[];
+  // polygons in polygons from the 2D records (their units do not change); disks in a disk are closed forms below,
+  // so that this test does not depend on the 2D records' or the geometry package's disk and circle conventions
   const pick = [
     [4, 4, 5],
-    [0, 0, 5],
     [3, 3, 5],
     [6, 6, 4],
-    [0, 4, 6],
     [3, 4, 4],
-    [4, 0, 3],
-    [0, 6, 3],
   ];
   const out: { N: number; M: number; P: number; value: number; pieces: CurvedPose[] }[] = [];
+  // P disks of diameter 1 on a ring about O (neighbours touching) in the disk through their outer rims, and the
+  // hexagonal packing of 7: a centre disk and a ring of 6 at distance 1, in the disk of radius 3/2
+  const r = DISK_RADIUS;
+  for (const P of [5, 7]) {
+    const ringR = P === 7 ? 2 * r : r / Math.sin(Math.PI / P);
+    const ring = Array.from({ length: P === 7 ? 6 : P }, (_, i) => ({
+      x: ringR * Math.cos((2 * Math.PI * i) / (P === 7 ? 6 : P)),
+      y: ringR * Math.sin((2 * Math.PI * i) / (P === 7 ? 6 : P)),
+      theta: 0,
+    }));
+    out.push({ N: 0, M: 0, P, value: 2 * (ringR + r), // (a disk container is scored by its diameter)
+      pieces: P === 7 ? [{ x: 0, y: 0, theta: 0 }, ...ring] : ring });
+  }
   for (const [N, M, P] of pick) {
     const r = recs.find((q) => q.N === N && q.M === M && q.P === P && q.pieces && q.pieces.length === P);
     if (!r || !r.pieces) continue;
@@ -285,14 +297,15 @@ describe("solver", () => {
     expect(a.validation!.valid).toBe(true);
   });
 
-  it("hyperbolic disk rings: R = 1 + asinh(sinh 1 / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - 1)/6", () => {
+  it("hyperbolic disk rings: R = r + asinh(sinh r / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - r^2)/6, r = 1/2", () => {
     for (const P of [3, 4, 5]) {
       // the rings are analytic: P unit disks on a circle about O, neighbours touching, the outer rim on the wall
       const prob = { N: 0, M: 0, P };
+      const r = DISK_RADIUS; // (disks of diameter 1)
       const ring = (K: number): CurvedConfig => {
-        const rho = K === 0 ? 1 / Math.sin(Math.PI / P) : Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P));
+        const rho = K === 0 ? r / Math.sin(Math.PI / P) : Math.asinh(Math.sinh(r) / Math.sin(Math.PI / P));
         return {
-          size: 1 + rho,
+          size: 2 * (r + rho), // (a disk container is scored by its diameter)
           pieces: Array.from({ length: P }, (_, i) => ({
             x: rho * Math.cos((2 * Math.PI * i) / P),
             y: rho * Math.sin((2 * Math.PI * i) / P),
@@ -301,7 +314,7 @@ describe("solver", () => {
         };
       };
       const h = ring(-1);
-      expect(h.size).toBeCloseTo(1 + Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P)), 12);
+      expect(h.size).toBeCloseTo(2 * (r + Math.asinh(Math.sinh(r) / Math.sin(Math.PI / P))), 12);
       // valid at the analytic size, and polishing it neither loosens nor tightens it
       const v = validate(prob, -1, h);
       expect(v.valid).toBe(true);
@@ -310,9 +323,9 @@ describe("solver", () => {
       // and a ring any smaller does not fit
       expect(validate(prob, -1, { ...h, size: h.size * (1 - 1e-6) }).valid).toBe(false);
       const e = ring(0);
-      const r0 = e.size - 1; // ring radius
+      const r0 = e.size / 2 - r; // ring radius
       const s = sensitivity(prob, 0, e);
-      expect(s.dsdK).toBeCloseTo((r0 * (r0 * r0 - 1)) / 6, 5);
+      expect(s.dsdK).toBeCloseTo((2 * r0 * (r0 * r0 - r * r)) / 6, 5); // (s = 2 R)
     }
   });
 
@@ -344,13 +357,13 @@ describe("solver", () => {
 
   it("continuation in K reports sizes, slopes and active-set changes", () => {
     const prob = { N: 0, M: 0, P: 4 };
-    // four disks in a ring of radius sqrt 2 in a disk of radius 1 + sqrt 2
-    const rho = Math.SQRT2;
+    // four disks (diameter 1) in a ring of radius sqrt 2 / 2 in a disk of radius (1 + sqrt 2) / 2
+    const rho = Math.SQRT1_2;
     const start: CurvedConfig = {
-      size: 1 + rho,
+      size: 2 * (DISK_RADIUS + rho),
       pieces: [0, 1, 2, 3].map((i) => ({ x: rho * Math.cos((Math.PI * i) / 2), y: rho * Math.sin((Math.PI * i) / 2), theta: 0 })),
     };
-    const path = continueTo(prob, 0, -0.5, start, 5);
+    const path = continueTo(prob, 0, -2, start, 5); // (K = -2 for disks of diameter 1 is K = -1/2 for disks of radius 1)
     expect(path.length).toBe(6);
     for (const st of path) expect(st.feasible).toBe(true);
     for (let i = 1; i < path.length; i++) expect(path[i].size).toBeLessThan(path[i - 1].size);
@@ -386,12 +399,12 @@ describe("scale-free ideal family", () => {
     expect(a.feasibility).toBeGreaterThan(-1e-10);
   });
 
-  it("one-sided slopes are reported for a kinked record (6 disks, R = 3 at K = 0)", () => {
+  it("one-sided slopes are reported for a kinked record (6 disks, diameter 3 at K = 0)", () => {
     const prob = { N: 0, M: 0, P: 6 };
-    // six disks on a ring of radius 2 touch their neighbours and the wall of the disk of radius 3
+    // six disks of diameter 1 on a ring of radius 1 touch their neighbours and the wall of the disk of radius 3/2 (diameter 3)
     const ring: CurvedConfig = {
       size: 3,
-      pieces: Array.from({ length: 6 }, (_, i) => ({ x: 2 * Math.cos((Math.PI * i) / 3), y: 2 * Math.sin((Math.PI * i) / 3), theta: 0 })),
+      pieces: Array.from({ length: 6 }, (_, i) => ({ x: Math.cos((Math.PI * i) / 3), y: Math.sin((Math.PI * i) / 3), theta: 0 })),
     };
     expect(validate(prob, 0, ring).valid).toBe(true);
     const s = oneSidedSlopes(prob, 0, ring, 1e-3);

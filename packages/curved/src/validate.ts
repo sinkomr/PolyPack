@@ -120,7 +120,7 @@ export function* validationSteps(
     const s = states[i];
     tReq = Math.max(tReq, requiredT(space, s));
     const pts = N === 0 ? [s.centre] : s.verts;
-    const pad = N === 0 ? 1 : 0;
+    const pad = N === 0 ? space.piece.R : 0;
     for (const [k, p] of pts.entries()) {
       const vertex = N === 0 ? -1 : k;
       if (M === 0) {
@@ -138,7 +138,7 @@ export function* validationSteps(
     }
   }
   const minGap = Math.min(minPair, minCont);
-  const tightSize = M === 0 ? tReq : sideFromApothem(M, K, tReq);
+  const tightSize = sideFromApothem(M, K, tReq);
   const valid = errors.length === 0 && minGap >= -tol;
   if (minPair < -tol) errors.push(`pieces overlap by ${-minPair}`);
   if (minCont < -tol) errors.push(`a piece protrudes by ${-minCont}`);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cellFaces, cellPlanes, partMesh, type PieceShape } from "../src/clip";
+import { ballRadius, cellFaces, cellPlanes, partMesh, type PieceShape } from "../src/clip";
 import { invert4 } from "../src/math";
 import { getPolytope } from "./engine";
 
@@ -42,6 +42,22 @@ describe("clipped parts", () => {
     expect(cut.area).toBeCloseTo(Math.PI, 2);
     // beyond the cell: nothing
     expect(partMesh(ball, { A: I3, b: [s / 2 + 1, 0, 0] }, planes)).toBeNull();
+  });
+
+  it("draws a ball of the radius its place carries (balls of diameter 1: A = I / 2)", () => {
+    const s = 3;
+    const planes = cellPlanes(poly.cells[0], s);
+    const A = [[0.5, 0, 0], [0, 0.5, 0], [0, 0, 0.5]];
+    expect(ballRadius(A)).toBeCloseTo(0.5, 15);
+    const whole = partMesh(ball, { A, b: [0, 0, 0] }, planes)!;
+    expect(measure(whole.positions).volume).toBeCloseTo((4 / 3) * Math.PI * 0.125, 2);
+    // centre on the face x = s/2: half a ball of radius 1/2, closed by a disk of area pi / 4
+    const half = partMesh(ball, { A, b: [s / 2, 0, 0] }, planes)!;
+    expect(measure(half.positions).volume).toBeCloseTo((2 / 3) * Math.PI * 0.125, 2);
+    expect(measure(half.positions.slice(half.surfaceCount * 3)).area).toBeCloseTo(Math.PI / 4, 2);
+    // 0.6 beyond the face the ball of radius 1/2 is out, though the unit ball would not be
+    expect(partMesh(ball, { A, b: [s / 2 + 0.6, 0, 0] }, planes)).toBeNull();
+    expect(partMesh(ball, { A: I3, b: [s / 2 + 0.6, 0, 0] }, planes)).not.toBeNull();
   });
 
   it("clips a cube exactly and outlines its edges", () => {

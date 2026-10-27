@@ -9,6 +9,10 @@
  *     pieces are disjoint. With (2), (3) and (4) together say: in every cell, all parts (two parts
  *     of one piece included) have disjoint interiors (overlap depth <= tol allowed).
  *
+ * Units (units.ts): balls have diameter 1, radius 1/2. The ball code is written for radius 1 and runs on lengths x2;
+ * the text below states the rule in that working unit (clearance >= 1, centre distances >= 2), which in site units
+ * is clearance >= 1/2 and distances >= 1, and the reasons quote site lengths. The tolerance is a site length.
+ *
  * Balls use the equivalent distance form (the surface track's argument one dimension up; shortest
  * paths avoid the hinges [EST: Miller, Pak 2008, Prop. 1.2]): every centre at geodesic distance
  * >= 1 - tol from the hinges, centre distances >= 2 - tol, geodesic loops at each centre >= 2 - tol.
@@ -62,6 +66,7 @@ import { V3, isoApply, isoInverse, isoLinearT, norm3, pointSegmentDistance3, qua
 import { Development, PART_EPS, developPiece, partsOfDevelopment, pieceReach } from "./parts";
 import { SatShape, polyhedronThickness, satDepth, satShape } from "./polyhedron";
 import { boundaryVolume, cellExcess, getPolytope, isPolytopeName, topo } from "./polytope";
+import { BALL_RADIUS, BALL_WORK } from "./units";
 import type { BoundaryPiece, BoundaryProblem, BoundaryVerdict, PieceName, Polytope } from "./types";
 
 export interface ValidateOptions {
@@ -257,7 +262,23 @@ function develop(poly: Polytope, piece: PieceName, p: BoundaryPiece, s: number, 
   }
 }
 
-function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number): string[] {
+/**
+ * The ball rule in site units (balls of diameter 1): the working code below is written for balls of radius 1, so the
+ * lengths, the tolerance and the snaps are converted by BALL_WORK = 2 on entry (exact), and the reasons quote site
+ * lengths (units.ts).
+ */
+function validateBallsSite(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number): string[] {
+  const w = BALL_WORK;
+  const scaled = pieces.map((p) => ({ cell: p.cell, u: p.u.map((x) => x * w) }));
+  return validateBalls(poly, s * w, scaled, tol * w, maxChains, maxReasons, BALL_RADIUS);
+}
+
+/**
+ * The ball rule for balls of radius 1: `unit` is the site length of one working unit (1 / BALL_WORK), by which the
+ * lengths quoted in the reasons are multiplied.
+ */
+function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: number, maxChains: number, maxReasons: number, unit: number): string[] {
+  const q = (x: number) => fmt(x * unit);
   const reasons: string[] = [];
   const push = (r: string) => {
     if (reasons.length < maxReasons) reasons.push(r);
@@ -267,7 +288,7 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   const devs: Development[] = [];
   pieces.forEach((p, i) => {
     const d = inCellHingeDistance(poly, p.cell, [p.u[0], p.u[1], p.u[2]], s);
-    if (!(d >= 1 - tol)) push(`Ball ${i} is ${fmt(d)} from an edge of the ${name}; it must be at least 1, or the edge passes through the ball.`);
+    if (!(d >= 1 - tol)) push(`Ball ${i} is ${q(d)} from an edge of the ${name}; it must be at least ${q(1)}, or the edge passes through the ball.`);
   });
   if (reasons.length) return reasons;
   const snap = ridgeSnap(s, tol);
@@ -279,7 +300,7 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
   // clearance along the chains
   devs.forEach((dev, i) => {
     const d = hingeDistanceOverChains(poly, s, dev.nodes, dev.u);
-    if (!(d >= 1 - allowed(tol, dev.snapped))) push(`Ball ${i} is ${fmt(d)} from an edge of the ${name} along the boundary; it must be at least 1, or the edge passes through the ball.`);
+    if (!(d >= 1 - allowed(tol, dev.snapped))) push(`Ball ${i} is ${q(d)} from an edge of the ${name} along the boundary; it must be at least ${q(1)}, or the edge passes through the ball.`);
   });
   // Centres by cell, in a grid of side 2 (the interaction distance), for the pair checks. A centre
   // on a facet of its anchor (snapped there, chains.ts) is also entered in the neighbour across
@@ -354,8 +375,8 @@ function validateBalls(poly: Polytope, s: number, pieces: BoundaryPiece[], tol: 
       }
     });
     for (const [j, d] of [...pairMin].sort((a, b) => a[0] - b[0]))
-      push(`Balls ${i} and ${j} overlap: their centres are ${fmt(d)} apart along the boundary; they must be at least 2 apart.`);
-    if (!(loop >= loopLimit)) push(`Ball ${i} overlaps itself: a geodesic loop of length ${fmt(loop)} leaves and returns to its centre; it must be at least 2.`);
+      push(`Balls ${i} and ${j} overlap: their centres are ${q(d)} apart along the boundary; they must be at least ${q(2)} apart.`);
+    if (!(loop >= loopLimit)) push(`Ball ${i} overlaps itself: a geodesic loop of length ${q(loop)} leaves and returns to its centre; it must be at least ${q(2)}.`);
   });
   return reasons;
 }
@@ -465,7 +486,7 @@ function run(problem: BoundaryProblem, config: unknown, opts: ValidateOptions, g
   // Volume bound [CALC]: developments are injective on interiors and interiors are disjoint, so
   // the pieces' volumes add up to at most the boundary's (the relative margin 1e-6 absorbs
   // overlaps within tol). Cheap, and it keeps huge P at small s away from the chain stage.
-  const pieceVolume = problem.piece === "ball" ? (4 * Math.PI) / 3 : 1;
+  const pieceVolume = problem.piece === "ball" ? (4 * Math.PI * BALL_RADIUS ** 3) / 3 : 1;
   const volume = boundaryVolume(poly) * s ** 3;
   if (!(pieces.length * pieceVolume <= volume * (1 + 1e-6)))
     return {
@@ -473,6 +494,6 @@ function run(problem: BoundaryProblem, config: unknown, opts: ValidateOptions, g
       score: null,
       reasons: [`${pieces.length} ${problem.piece}s have a total volume of ${fmt(pieces.length * pieceVolume)}, more than the ${fmt(volume)} of the ${poly.name}'s boundary at s = ${fmt(s)}.`],
     };
-  const geo = problem.piece === "ball" ? validateBalls(poly, s, pieces, tol, maxChains, maxReasons) : validateCubes(poly, s, pieces, tol, maxChains, maxReasons);
+  const geo = problem.piece === "ball" ? validateBallsSite(poly, s, pieces, tol, maxChains, maxReasons) : validateCubes(poly, s, pieces, tol, maxChains, maxReasons);
   return geo.length ? { ok: false, score: null, reasons: geo } : { ok: true, score: s, reasons: [] };
 }

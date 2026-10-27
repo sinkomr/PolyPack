@@ -147,3 +147,11 @@ export function cell24Vertices(): number[][] {
         for (const sb of [-1, 1]) out.push([0, 1, 2, 3].map((i) => (i === a ? sa / Math.SQRT2 : i === b ? sb / Math.SQRT2 : 0)));
   return out;
 }
+
+/**
+ * A ball configuration drawn for balls of radius 1 (the engine's working unit, where the old tests were written),
+ * in site units (balls of diameter 1): s and every centre halved, exactly.
+ */
+export function atSite(c: BoundaryConfig): BoundaryConfig {
+  return { s: c.s / 2, pieces: c.pieces.map((p) => ({ ...p, u: p.u.map((x) => x / 2) })) };
+}

@@ -1,5 +1,6 @@
 /** The boundary space: (d-1)-dimensional pieces on the boundary of a convex d-polytope ("3D on 4D"). */
 export * from "./types";
+export { BALL_RADIUS } from "./units";
 export { ISO_IDENTITY, isoApply, isoCompose, isoFromAffine, isoInverse, isoLinear, isoToAffine, quaternionToMatrix } from "./linalg";
 export type { Iso3, V3 } from "./linalg";
 export { convexHull } from "./hull";

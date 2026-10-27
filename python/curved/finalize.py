@@ -47,7 +47,7 @@ def container_area(K, M, s):
     Ki = I(K)
     s = I(s)
     if M == 0:
-        return 2 * PI * (1 - rg.csK(Ki, s)) / Ki
+        return 2 * PI * (1 - rg.csK(Ki, s / 2)) / Ki  # a disk container's size s is its diameter
     cM, sM = rg.cos_sin(PI / M)
     y = cM / rg.csK(Ki, s / 2)
     alpha = 2 * bd.asin_iv(y)
@@ -151,18 +151,18 @@ def main(argv):
             lb_kind = [f"area bound failed: {e}"]
         if P == 1:
             if M == 0:
-                v = 1.0 if N == 0 else float(piece_data(K, N)["R"].a)
+                v = 1.0 if N == 0 else 2 * float(piece_data(K, N)["R"].a)  # the container's diameter is >= 2 R (a disk has R = 1/2)
                 if v >= lb:
-                    lb, lb_kind = v, ["P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)"]
+                    lb, lb_kind = v, ["P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)"]
             else:
                 v = inradius_side(K, N, M)
                 if v is not None and v >= lb:
                     lb, lb_kind = v, ["P = 1: container inradius >= piece inradius"]
         if M == 0 and P >= 2:
-            rho = 1.0 if N == 0 else float(piece_data(K, N)["rho"].a)
-            v = 2 * rho * (1 - 1e-15)
+            rho = 0.5 if N == 0 else float(piece_data(K, N)["rho"].a)
+            v = 4 * rho * (1 - 1e-15)
             if v > lb:
-                lb, lb_kind = v, ["two inscribed disks of radius rho in the container: r >= 2 rho"]
+                lb, lb_kind = v, ["two inscribed disks of radius rho in the container: diameter >= 4 rho"]
         prev = lower_prev.get((K, N, M, P - 1))
         if prev is not None and prev > lb:
             lb, lb_kind = prev, [f"monotonicity: s(P) >= lower bound for P - 1"]
@@ -281,10 +281,10 @@ def main(argv):
     conventions = {
         "space": "plane of constant curvature K: K < 0 hyperbolic, K = 0 Euclidean, K > 0 sphere of radius 1/sqrt(K)",
         "problem_id": "curved/K/N/M/P",
-        "units": "geodesic lengths at curvature K; polygon pieces have side 1, disk pieces (N = 0) radius 1",
+        "units": "geodesic lengths at curvature K; polygon pieces have side 1, disk pieces (N = 0) diameter 1 (radius 1/2); the container is a regular M-gon of side s or, for M = 0, a disk scored by its geodesic DIAMETER s = 2 r",
         "pose": "(x, y, theta): piece = T(exp_O(x, y)) R(theta) (standard piece); exp_O(x, y) is the point at distance sqrt(x^2+y^2) from the container centre O in direction (x, y); T the transvection along the geodesic from O; R(theta) the rotation about O; standard piece centred at O with a vertex straight up; at K = 0 this is PolyPack's Euclidean pose",
-        "container": "centred at O, phi = 0 (horizontal bottom edge): regular M-gon of geodesic side s (walls at apothem h with tn_K(s/2) = sn_K(h) tan(pi/M)), or disk of radius r (M = 0); for K > 0 the container lies in the open hemisphere around O",
-        "score": "s (M >= 3) or r (M = 0); smaller is better",
+        "container": "centred at O, phi = 0 (horizontal bottom edge): regular M-gon of geodesic side s (walls at apothem h with tn_K(s/2) = sn_K(h) tan(pi/M)), or disk of diameter s (radius s / 2) (M = 0); for K > 0 the container lies in the open hemisphere around O",
+        "score": "s (M >= 3, the side) or the container's geodesic DIAMETER (M = 0); smaller is better",
         "score_float": "touching limit found by the search (float64 polish)",
         "score_cert": "size at which the stored configuration `config` is proven valid with strictly positive clearance",
         "display": "score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value)",
@@ -356,7 +356,7 @@ def main(argv):
             json.dump(
                 {
                     "generated": TODAY,
-                    "definition": "a*(N, M, P): sup side (radius for N = 0) of P congruent regular N-gons in the ideal regular M-gon at K = -1; P unit pieces fit in some finite regular M-gon at curvature K < 0 iff sqrt(-K) < a*",
+                    "definition": "a*(N, M, P): sup side (diameter for N = 0) of P congruent regular N-gons in the ideal regular M-gon at K = -1; P unit pieces fit in some finite regular M-gon at curvature K < 0 iff sqrt(-K) < a*",
                     "certificate": "certified_lower_bound a_c = sqrt(-K_cert): config_cert is a certified packing of P unit pieces in a finite M-gon at curvature K_cert",
                     "entries": ideal_out,
                 },

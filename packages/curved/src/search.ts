@@ -51,7 +51,7 @@ export function tForArea(space: Space, A: number): number {
   const { M, K } = space;
   let lo = 0;
   let hi = Number.isFinite(space.tMax) ? space.tMax : 1;
-  const areaOfT = (t: number) => containerArea(M, K, M === 0 ? t : sideFromApothem(M, K, t));
+  const areaOfT = (t: number) => containerArea(M, K, sideFromApothem(M, K, t));
   if (!Number.isFinite(space.tMax)) {
     while (areaOfT(hi) < A && hi < 1e6) hi *= 2;
   } else if (areaOfT(hi * (1 - 1e-12)) < A) return Infinity;

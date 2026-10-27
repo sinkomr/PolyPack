@@ -9,7 +9,7 @@
  * piece is placed in one cell (its anchor) and may fold across ridges into neighbouring cells, but
  * no point of the (d-3)-skeleton may lie in its interior.
  *
- * Units: unit pieces (a ball has radius 1, a polytope piece has edge 1); the score s is the
+ * Units: a ball has diameter 1 (radius 1/2, BALL_RADIUS in units.ts), a polytope piece has edge 1; the score s is the
  * container's edge length, smaller is better. Every length below is given at s = 1 and scales
  * with s, except piece sizes, which stay 1.
  *
@@ -21,7 +21,7 @@
 export type PolytopeName = "tesseract";
 export const POLYTOPES: readonly PolytopeName[] = ["tesseract"];
 
-/** Pieces. A ball is the unit (d-1)-ball; the others are unit-edge regular (d-1)-polytopes. */
+/** Pieces. A ball is the (d-1)-ball of diameter 1; the others are unit-edge regular (d-1)-polytopes. */
 export type PieceName = "ball" | "cube";
 export const PIECES: readonly PieceName[] = ["ball", "cube"];
 

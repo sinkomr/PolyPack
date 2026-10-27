@@ -8,7 +8,7 @@
  *
  *   npx tsx scripts/gen-crosscheck.ts > ../../python/balls/fixtures/crosscheck.json
  */
-import { BALLS_ORIGINAL_CODES, type BallsConfig, getBallsProblem, validateBalls } from "../src";
+import { BALLS_ORIGINAL_CODES, BALL_RADIUS, type BallsConfig, getBallsProblem, validateBalls } from "../src";
 import { mulberry32, randomQuaternion } from "../src/random";
 import { getSolid } from "@polypack/polyhedra";
 
@@ -24,7 +24,7 @@ const unit = (): [number, number, number] => {
 // the first 7 problems; gen-crosscheck-solids.ts has the others
 for (const problem of BALLS_ORIGINAL_CODES.map((c) => getBallsProblem(c)!)) {
   const ball = problem.piece === "ball";
-  const R = ball ? 1 : getSolid(problem.piece).circumradius;
+  const R = ball ? BALL_RADIUS : getSolid(problem.piece).circumradius;
   for (let t = 0; t < 3; t++) {
     // two pieces in a large container
     const qa = ball ? [] : randomQuaternion(rng);
@@ -66,8 +66,8 @@ for (const problem of BALLS_ORIGINAL_CODES.map((c) => getBallsProblem(c)!)) {
     const c = [rng() - 0.5, rng() - 0.5, rng() - 0.5];
     const base: number[] = [...c, ...q];
     const wall = (s: number) => validateBalls(problem, { s, pieces: [base] }, { tol: 1 }).minWallGap;
-    // the gap grows with s at slope 1 (ball) or 1/2 (cube)
-    const slope = problem.container === "cube" ? 0.5 : 1;
+    // the gap grows with s at slope 1/2 (a ball container is scored by its diameter, a cube by its edge)
+    const slope = 0.5;
     const s0 = 20;
     const g0 = wall(s0);
     for (const want of [1e-7, -1e-7, 1e-9, -1e-9]) {
@@ -77,4 +77,4 @@ for (const problem of BALLS_ORIGINAL_CODES.map((c) => getBallsProblem(c)!)) {
     }
   }
 }
-process.stdout.write(JSON.stringify({ generated: "2026-10-25", cases }, null, 0) + "\n");
+process.stdout.write(JSON.stringify({ generated: "2026-10-27", cases }, null, 0) + "\n");
