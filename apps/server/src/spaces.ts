@@ -14,6 +14,8 @@ import {
   SpaceCatalogue,
   SpaceProblemEntry,
   SpaceRecordsResponse,
+  SpaceSiteOnlyResponse,
+  SpaceProblemSummary,
   SpaceSubmitResponse,
   SpaceTarget,
   SpaceTargetsResponse,
@@ -75,6 +77,9 @@ export function domainTargetIds(cat: SpaceCatalogue, entered: readonly string[],
   }
   return out;
 }
+/** Problems one /api/spaces/{space}/site-only page holds without a `limit`, and at most. */
+export const SPACE_SITE_ONLY_DEFAULT_LIMIT = 1000;
+export const SPACE_SITE_ONLY_MAX_LIMIT = 5000;
 /** Targets one /api/spaces/targets answer holds without a `limit`. */
 export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
@@ -778,6 +783,39 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (at === version) recordsCache.set(space, packed);
     return send(c, packed);
   };
+  // The problems of a space's domain that have a site entry and no research record: the listing above does not hold
+  // them. Each as in the listing, by problem id, a page at a time (`after` is the last id of the page before).
+  app.get("/api/spaces/:space/site-only", async (c) => {
+    const space = c.req.param("space") ?? "";
+    const cat = catalogue(space);
+    if (!cat || !isSpaceName(space)) return unknownSpace(c);
+    const errors: string[] = [];
+    for (const [name, values] of Object.entries(c.req.queries())) {
+      if (!["limit", "after"].includes(name)) errors.push(`unknown parameter ${name}: the parameters are limit and after`);
+      else if (values.length > 1) errors.push(`${name} is given more than once`);
+    }
+    const limitText = c.req.query("limit");
+    const limit = limitText === undefined ? SPACE_SITE_ONLY_DEFAULT_LIMIT : decimalInteger(limitText);
+    if (!(limit >= 1 && limit <= SPACE_SITE_ONLY_MAX_LIMIT))
+      errors.push(`limit must be an integer from 1 to ${SPACE_SITE_ONLY_MAX_LIMIT}`);
+    if (errors.length) return c.json({ error: errors.join("; ") }, 400);
+    const after = c.req.query("after");
+    const found: SpaceProblemSummary[] = [];
+    for (const l of await store.spaceBest(space)) {
+      if (after !== undefined && !(l.problem > after)) continue;
+      const parsed = parseSpaceId(space, l.problem);
+      const p = typeof parsed === "string" ? null : problemOf(cat, parsed);
+      if (p && !hasRecord(p)) found.push(spaceProblemSummary(p, siteBestOf(l)));
+    }
+    found.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const page = found.slice(0, limit);
+    return c.json({
+      space,
+      generated_at: new Date().toISOString(),
+      problems: page,
+      next: found.length > limit ? page[page.length - 1].id : null,
+    } satisfies SpaceSiteOnlyResponse);
+  });
   app.get("/api/spaces/:space/records", listing);
   app.get("/api/spaces/:space/problems", listing);
 

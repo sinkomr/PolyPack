@@ -266,6 +266,8 @@ test("the size, scale and layout choosers change the atlas and survive a reload"
   expect(await width(7)).toBeLessThan(medium * 0.8);
   await expect(tile(page, 7).locator(".tile-score")).toBeHidden();
 
+  // drawings are fetched only near the viewport: tile 100 is drawn once the small size brings it near
+  await expect(art(page, 100)).toHaveClass(/drawn/);
   // fixed: every container fills its tile. global: true size against the largest container shown
   const fixed = [await width(1, ".tile-art svg"), await width(100, ".tile-art svg")];
   expect(fixed[0]).toBeCloseTo(fixed[1], 0);

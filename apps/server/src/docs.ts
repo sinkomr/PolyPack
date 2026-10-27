@@ -39,6 +39,8 @@ import {
   SPACE_METHOD_LENGTH,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
+  SPACE_SITE_ONLY_DEFAULT_LIMIT,
+  SPACE_SITE_ONLY_MAX_LIMIT,
   SPACE_TARGETS_MAX_LIMIT,
 } from "./spaces";
 
@@ -347,6 +349,11 @@ Other spaces send no <code>extra</code>.</span> The answer is kept until an entr
 <p>One problem with its configurations: the fields of the listing, the space's <code>conventions</code>, <code>certified_config</code> (<code>null</code> for infeasible problems) and <code>site_config</code>, the configuration of <code>site_best</code>.
 The id has slashes, so the path is for example <code>/api/spaces/curved/problems/curved/-1/3/4/7</code>. 400 for an id that is not of the space's form (each problem has exactly one written form: no leading zeros, and K as the catalogue writes it), 404 for a problem that is not in the catalogue.</p>
 <pre tabindex="0"><code>${esc(SPACE_PROBLEM)}</code></pre>
+
+<h3 id="spaces-site-only"><code>GET /api/spaces/{space}/site-only?limit=&amp;after=</code></h3>
+<p>The problems of a space's domain that have a site entry but no research record, which <a href="#spaces"><code>/api/spaces/{space}/records</code></a> does not list.
+Each is a problem as in that listing (with its lower bound and <code>site_best</code>), sorted by id: <code>{space, generated_at, problems, next}</code>.
+At most <code>limit</code> problems (1 to ${SPACE_SITE_ONLY_MAX_LIMIT}, ${SPACE_SITE_ONLY_DEFAULT_LIMIT} by default) come in one answer; <code>next</code> is the last id of the page, to give as <code>after</code> for the next one, or <code>null</code> on the last page. Any other value or parameter is a 400, and 404 for an unknown space.</p>
 
 <h3 id="spaces-targets"><code>GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=</code></h3>
 <p>The optional work list of volunteer searches over the spaces; the <a href="/volunteer.html">volunteer client</a> uses it only when asked to. Highest <code>priority</code> first, then smaller <code>P</code>.</p>
