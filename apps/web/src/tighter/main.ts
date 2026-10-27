@@ -98,7 +98,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "./economy";
-import { Lane } from "./lanes";
+import { Lane, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
@@ -620,6 +620,8 @@ function ensureLanes(): void {
       progress: null,
     };
     lv.lane.onProgress = (s) => {
+      // (a space run's progress is for the lane that drives space runs)
+      if (isSpaceRunState(s)) return;
       lv.progress = s;
       scheduleRender();
     };
@@ -962,6 +964,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       say(`The run on ${problemTitle(p)} stopped (${t.message}).`);
       return false;
     }
+    if (isSpaceRunState(t.state)) throw new Error("not yet: space runs in the game");
     const done = Math.max(0, t.state.evaluations - run.evaluations);
     observeSpeed(run, p, done, t.ms);
     track(run, t.state);
