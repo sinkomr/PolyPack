@@ -127,6 +127,30 @@ describe("running a method", () => {
     expect(one.score).toBeCloseTo(1, 9);
   });
 
+  it("polls the stop with the evaluations charged so far, never decreasing, and a pausing poll changes nothing", () => {
+    const k = disksKernel(4);
+    const seen: number[] = [];
+    const plain = runMethod(k, "test_restarts", { seed: 3, budget: { evals: 400 } });
+    // a poll that does work of its own (as a pause that blocks) but never stops the run
+    const polled = runMethod(k, "test_restarts", {
+      seed: 3,
+      budget: { evals: 400 },
+      shouldStop: (used) => (seen.push(used), false),
+    });
+    expect(seen.length).toBeGreaterThan(10);
+    for (let i = 1; i < seen.length; i++) expect(seen[i]).toBeGreaterThanOrEqual(seen[i - 1]);
+    expect(seen[seen.length - 1]).toBeLessThanOrEqual(400);
+    expect(polled.stopped).toBe(plain.stopped);
+    expect(polled.evaluations).toBe(plain.evaluations);
+    expect(polled.score).toBe(plain.score);
+    expect(polled.config).toEqual(plain.config);
+    // a poll that ends the run once `used` reaches a limit, as a step does, ends before that charge
+    const cut = runMethod(k, "test_restarts", { seed: 3, budget: { evals: 400 }, shouldStop: (u) => u >= 120 });
+    expect(cut.stopped).toBe("stopped");
+    expect(cut.evaluations).toBeGreaterThanOrEqual(120);
+    expect(cut.evaluations).toBeLessThan(120 + 10);
+  });
+
   it("offers a method only to kernels with the capabilities it needs", () => {
     expect(getMethod("test_restarts")).toBeDefined();
     const needs: SpaceMethodDefinition = {

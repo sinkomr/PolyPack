@@ -11,6 +11,7 @@
   "dependencies": {
     "@polypack/balls": "*",
     "@polypack/geometry": "*",
+    "@polypack/methods": "*",
     "@polypack/polyhedra": "*",
     "@polypack/solver": "*",
     "@polypack/spaces": "*",

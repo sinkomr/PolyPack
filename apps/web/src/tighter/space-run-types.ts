@@ -29,6 +29,8 @@ export interface SpaceRunRequest {
 
 /** An open space run as the page sees it: the same fields as a polygon run's RunState, in game evaluations. */
 export interface SpaceRunState {
+  /** Tells it from a polygon run's RunState (isSpaceRunState, lanes.ts). */
+  kind: "space";
   /** Game evaluations done so far (kernel evaluations / unit, rounded down). */
   evaluations: number;
   /** The best configuration the run kept (strict, by the server's rule) and its score. */

@@ -454,3 +454,12 @@ test("tighter: a method change opens a new run", async ({ page }) => {
   // a problem allows any number of runs
   await expect(page.locator("#t-evolve")).toBeEnabled();
 });
+
+test("tighter: the game's page is cross-origin isolated (space runs share memory with their worker), the other pages are not", async ({
+  page,
+}) => {
+  await page.goto("/tighter.html");
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
+  await page.goto("/index.html");
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
+});
