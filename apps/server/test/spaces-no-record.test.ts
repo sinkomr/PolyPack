@@ -149,8 +149,11 @@ describe("a problem without a research record", () => {
     expect(first.body).toMatchObject({ valid: true, leader: true, beats_certified: false });
     expect(first.body.id).not.toBeNull();
     expect(first.body.best_score).toBeCloseTo(L2 * 1.01, 12);
+    // a worse entry is answered "not checked": the torus checks only entries that can be kept
     const worse = await submit(entry(twoDisks(1.02)));
-    expect(worse.body).toMatchObject({ valid: true, leader: false, id: null });
+    expect(worse.status).toBe(200);
+    expect(worse.body).toMatchObject({ valid: false, leader: false, id: null, checked: false });
+    expect(worse.body.best_score).toBeCloseTo(L2 * 1.01, 12);
     const better = await submit(entry(twoDisks(1)));
     expect(better.body).toMatchObject({ valid: true, leader: true });
     const one = await get(`/api/spaces/torus/problems/${ID}`);

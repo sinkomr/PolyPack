@@ -96,6 +96,26 @@ function weakTorusIndex(): SpacesIndex {
 }
 
 /**
+ * An index whose sphere/3/6 research record is three times larger than it really is, so that site entries can
+ * beat it. The sphere is a space whose checks are always run: its "valid, not kept" answers are the generic ones.
+ */
+function weakSphereIndex(): SpacesIndex {
+  const file = JSON.parse(readFileSync(join(root, "data/sphere/records.json"), "utf8"));
+  const r = file.records.find((x: { id: string }) => x.id === "sphere/3/6");
+  Object.assign(r, { status: "best_known", score_cert: r.score_cert * 3, display: "weak", config: { ...r.config, rho: r.config.rho * 3 } });
+  return { ...index, sphere: buildSpaceCatalogue("sphere", file) };
+}
+/** The sphere/3/6 record's pieces on a sphere k times its radius: valid, with the score rho0 k. */
+const SPHERE_RHO0 = (index.sphere!.byId.get("sphere/3/6")!.certified!.score);
+const sphereEntry = (k = 1, extra: object = {}) => ({
+  space: "sphere",
+  id: "sphere/3/6",
+  config: { rho: SPHERE_RHO0 * k, pieces: JSON.parse(index.sphere!.byId.get("sphere/3/6")!.config!).pieces },
+  name: "ann",
+  ...extra,
+});
+
+/**
  * The real catalogues with torus/sq/0/2 open: its research record is proven optimal (Brandt et al.
  * 2019), so the real catalogue closes it. `change` alters that record further.
  */
@@ -566,18 +586,32 @@ describe("POST /api/spaces/submit", () => {
   it("keeps an entry only when it beats the problem's best value by more than the tie tolerance", async () => {
     const opened = openedIndex();
     makeApp({}, opened);
-    // the research record of torus/sq/0/2 is 2 sqrt 2 to 1e-12: an entry at 2 sqrt 2 only ties it
-    const cert = opened.torus!.byId.get("torus/sq/0/2")!.certified!.score;
-    const tie = await submit(torusEntry());
+    // an entry that only ties the research record is valid and not kept (on a space whose entries are always checked)
+    const cert = index.sphere!.byId.get("sphere/3/6")!.certified!.score;
+    const tie = await submit(sphereEntry(1));
     expect(tie.body).toEqual({
       valid: true,
       reasons: [],
-      score: L2,
+      score: cert,
       leader: false,
       best_score: cert,
       id: null,
       beats_certified: false,
     });
+    // the torus answers the same entry without checking it
+    const torusCert = opened.torus!.byId.get("torus/sq/0/2")!.certified!.score;
+    const torusTie = await submit(torusEntry());
+    expect(torusTie.status).toBe(200);
+    expect(torusTie.body).toMatchObject({
+      valid: false,
+      score: L2,
+      leader: false,
+      best_score: torusCert,
+      id: null,
+      beats_certified: false,
+      checked: false,
+    });
+    expect(torusTie.body.reasons[0]).toMatch(/^not checked: a size of .* cannot be kept/);
     // a poor entry is valid and not kept, whatever its name
     const sphere = index.sphere!.byId.get("sphere/3/6")!;
     const poor = await submit({
@@ -593,47 +627,113 @@ describe("POST /api/spaces/submit", () => {
   });
 
   it("keeps the earliest of equally good entries and only the leader", async () => {
-    const a = await submit(torusEntry(1.001));
+    makeApp({}, weakSphereIndex());
+    const a = await submit(sphereEntry(1.001));
     expect(a.body.leader).toBe(true);
     // equal, and better only within the tie tolerance: not kept
-    const b = await submit(torusEntry(1.001, { name: "bob" }));
+    const b = await submit(sphereEntry(1.001, { name: "bob" }));
     expect(b.body).toMatchObject({ valid: true, leader: false, id: null });
-    const c = await submit(torusEntry(1.001 * (1 - SCORE_TIE / 2), { name: "cy" }));
+    const c = await submit(sphereEntry(1.001 * (1 - SCORE_TIE / 2), { name: "cy" }));
     expect(c.body).toMatchObject({ valid: true, leader: false, id: null });
-    expect(c.body.best_score).toBe(L2 * 1.001);
+    expect(c.body.best_score).toBe(SPHERE_RHO0 * 1.001);
     expect((await get(`/api/spaces/entries/${a.body.id}`)).status).toBe(200);
     // better by more than the tolerance: the new leader; the old one is deleted
+    const d = await submit(sphereEntry(1.0001, { name: "dee" }));
+    expect(d.body).toMatchObject({ leader: true, id: expect.any(Number), best_score: SPHERE_RHO0 * 1.0001 });
+    expect((await get(`/api/spaces/entries/${a.body.id}`)).status).toBe(404);
+    expect(await store.spaceLeaders()).toEqual([
+      expect.objectContaining({ id: d.body.id, name: "dee", problem: "sphere/3/6" }),
+    ]);
+    // worse: valid, not kept
+    const e = await submit(sphereEntry(1.01, { name: "eve" }));
+    expect(e.body).toMatchObject({ valid: true, leader: false, id: null, best_score: SPHERE_RHO0 * 1.0001 });
+    const listing = (await get("/api/spaces/sphere/records")).body as SpaceRecordsResponse;
+    expect(listing.problems.find((p) => p.id === "sphere/3/6")!.site_best!.name).toBe("dee");
+  });
+
+  it("answers a torus entry that is no better than the best without checking it, and keeps the earliest", async () => {
+    makeApp({}, testIndex);
+    const a = await submit(torusEntry(1.001));
+    expect(a.body.leader).toBe(true);
+    const notKept = async (k: number, name: string, best: number) => {
+      const r = await submit(torusEntry(k, { name }));
+      expect(r.status).toBe(200);
+      expect(r.body).toMatchObject({
+        valid: false,
+        score: L2 * k,
+        leader: false,
+        best_score: best,
+        id: null,
+        beats_certified: false,
+        checked: false,
+      });
+      expect(r.body.reasons[0]).toMatch(/^not checked: a size of .* cannot be kept/);
+    };
+    // equal, better only within the tie tolerance, and worse
+    await notKept(1.001, "bob", L2 * 1.001);
+    await notKept(1.001 * (1 - SCORE_TIE / 2), "cy", L2 * 1.001);
+    await notKept(1.01, "eve", L2 * 1.001);
+    expect((await get(`/api/spaces/entries/${a.body.id}`)).status).toBe(200);
+    // better by more than the tolerance: checked and kept, and the old leader is deleted
     const d = await submit(torusEntry(1.0001, { name: "dee" }));
-    expect(d.body).toMatchObject({ leader: true, id: expect.any(Number), best_score: L2 * 1.0001 });
+    expect(d.body).toMatchObject({ valid: true, leader: true, id: expect.any(Number), best_score: L2 * 1.0001 });
+    expect(d.body.checked).toBeUndefined();
     expect((await get(`/api/spaces/entries/${a.body.id}`)).status).toBe(404);
     expect(await store.spaceLeaders()).toEqual([
       expect.objectContaining({ id: d.body.id, name: "dee", problem: "torus/sq/0/2" }),
     ]);
-    // worse: valid, not kept
-    const e = await submit(torusEntry(1.01, { name: "eve" }));
-    expect(e.body).toMatchObject({ valid: true, leader: false, id: null, best_score: L2 * 1.0001 });
-    const listing = (await get("/api/spaces/torus/records")).body as SpaceRecordsResponse;
-    expect(listing.problems.find((p) => p.id === "torus/sq/0/2")!.site_best!.name).toBe("dee");
+  });
+
+  it("checks a torus entry that beats the best in full, and refuses an invalid one", async () => {
+    makeApp({}, testIndex);
+    // beats the research record (3) but overlaps: two disks a distance sqrt 2 apart on the torus of size 2 sqrt 2
+    const overlapping = { lattice: { L: L2 }, poses: [[0, 0, 0], [1, 1, 0]] };
+    const bad = await submit(torusEntry(1, { config: overlapping }));
+    expect(bad.status).toBe(422);
+    expect(bad.body).toMatchObject({ valid: false, leader: false, id: null });
+    expect(bad.body.checked).toBeUndefined();
+    expect(bad.body.reasons[0]).toMatch(/overlap/);
+    expect(await store.spaceLeaders()).toEqual([]);
+    // the same with a site leader to beat
+    expect((await submit(torusEntry(1.01))).body).toMatchObject({ valid: true, leader: true });
+    const worseBad = await submit(torusEntry(1, { config: overlapping, name: "bob" }));
+    expect(worseBad.status).toBe(422);
+    expect(worseBad.body.checked).toBeUndefined();
+    const good = await submit(torusEntry(1.001, { name: "cy" }));
+    expect(good.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
+    expect(good.body.checked).toBeUndefined();
+    expect(await store.spaceLeaders()).toEqual([expect.objectContaining({ name: "cy" })]);
   });
 
   it("keeps an entry that beats the research record, says so and logs it", async () => {
-    makeApp({}, weakTorusIndex());
-    const r = await submit(torusEntry(1.01));
-    expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: true, best_score: L2 * 1.01 });
+    makeApp({}, weakSphereIndex());
+    const weak = SPHERE_RHO0 * 3;
+    const r = await submit(sphereEntry(1.01));
+    expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: true, best_score: SPHERE_RHO0 * 1.01 });
     expect(
       logs.some((l) =>
-        /^\[spaces\] entry \d+ by "ann" leads torus\/sq\/0\/2: score .* below the certified 3 \(best_known\)/.test(l),
+        /^\[spaces\] entry \d+ by "ann" leads sphere\/3\/6: score .* below the certified [\d.]+ \(best_known\)/.test(l),
       ),
     ).toBe(true);
     // a worse entry does not lead; best_score stays the site leader's
-    const worse = await submit(torusEntry(1.02));
-    expect(worse.body).toMatchObject({ leader: false, beats_certified: true, best_score: L2 * 1.01 });
+    const worse = await submit(sphereEntry(1.02));
+    expect(worse.body).toMatchObject({ leader: false, beats_certified: true, best_score: SPHERE_RHO0 * 1.01 });
     // within the tie tolerance of the record it does not beat it, and is not kept
-    makeApp({}, weakTorusIndex());
-    const tie = await submit(torusEntry((3 / L2) * (1 - SCORE_TIE / 2)));
-    expect(tie.body).toMatchObject({ valid: true, leader: false, id: null, beats_certified: false, best_score: 3 });
-    expect(tie.body.score).toBeLessThan(3);
+    makeApp({}, weakSphereIndex());
+    const tie = await submit(sphereEntry(3 * (1 - SCORE_TIE / 2)));
+    expect(tie.body).toMatchObject({ valid: true, leader: false, id: null, beats_certified: false, best_score: weak });
+    expect(tie.body.score).toBeLessThan(weak);
     expect(logs).toEqual([]);
+    // the torus answers such entries without a check, and keeps one that beats the record
+    makeApp({}, weakTorusIndex());
+    const kept = await submit(torusEntry(1.01));
+    expect(kept.body).toMatchObject({ valid: true, leader: true, beats_certified: true, best_score: L2 * 1.01 });
+    const torusWorse = await submit(torusEntry(1.02));
+    expect(torusWorse.body).toMatchObject({ valid: false, leader: false, id: null, best_score: L2 * 1.01, checked: false });
+    makeApp({}, weakTorusIndex());
+    const torusTie = await submit(torusEntry((3 / L2) * (1 - SCORE_TIE / 2)));
+    expect(torusTie.body).toMatchObject({ valid: false, leader: false, id: null, beats_certified: false, best_score: 3, checked: false });
+    expect(torusTie.body.score).toBeLessThan(3);
   });
 
   it("does not let a record be beaten by the float tolerance alone (strict check at 1e-11)", async () => {
@@ -885,17 +985,37 @@ describe("POST /api/spaces/submit: torus (2D on 3D) up to 500 pieces", () => {
     const config = { lattice: { b1, b2: [b2[0] + lo * b1[0], b2[1] + lo * b1[1]] }, poses: base.poses };
     const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
     makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
-    const r = await submit({ space: "torus", id, name: "ann", config });
-    expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ valid: true, leader: true });
-    expect(checks[0].slices).toBeGreaterThan(5);
-    expect(checks[0].longestSliceMs).toBeLessThan(250);
-    console.log(`[CALC] server ${id} at ${Math.ceil(translates(lo))} translates per pair: ${checks[0].workMs.toFixed(0)} ms work (strict pass included), max slice ${checks[0].longestSliceMs.toFixed(1)} ms`);
+    // a leader 1% larger, so that the skewed entries (the same area, a smaller size) can be kept and are checked
+    const larger = {
+      lattice: { b1: b1.map((v) => v * 1.01), b2: b2.map((v) => v * 1.01) },
+      poses: base.poses.map(([x, y, t]) => [x * 1.01, y * 1.01, t]),
+    };
+    expect((await submit({ space: "torus", id, name: "cy", config: larger })).body).toMatchObject({ valid: true, leader: true });
     // one translate more is refused before any pair is checked
     const more = { lattice: { b1, b2: [b2[0] + (lo + 1) * b1[0], b2[1] + (lo + 1) * b1[1]] }, poses: base.poses };
     const refused = await submit({ space: "torus", id, name: "bob", config: more });
     expect(refused.status).toBe(422);
     expect(refused.body.reasons[0]).toMatch(/too skewed/);
+    const checked = checks.length;
+    const r = await submit({ space: "torus", id, name: "ann", config });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ valid: true, leader: true });
+    expect(r.body.checked).toBeUndefined();
+    const run = checks[checked];
+    expect(checks).toHaveLength(checked + 1);
+    expect(run.slices).toBeGreaterThan(5);
+    expect(run.longestSliceMs).toBeLessThan(250);
+    console.log(`[CALC] server ${id} at ${Math.ceil(translates(lo))} translates per pair: ${run.workMs.toFixed(0)} ms work (strict pass included), max slice ${run.longestSliceMs.toFixed(1)} ms`);
+    // with that leader in place the same two skewed entries cannot be kept: answered quickly, without a check
+    for (const [name, skewed] of [["dee", { lattice: config.lattice, poses: base.poses }], ["eve", more]] as const) {
+      const t0 = performance.now();
+      const answered = await submit({ space: "torus", id, name, config: skewed });
+      expect(performance.now() - t0).toBeLessThan(50);
+      expect(answered.status).toBe(200);
+      expect(answered.body).toMatchObject({ valid: false, leader: false, id: null, checked: false });
+      expect(answered.body.reasons[0]).toMatch(/^not checked: a size of .* cannot be kept/);
+    }
+    expect(checks).toHaveLength(checked + 1);
   }, 30000);
 
   it("refuses P = 501 and an overlap at P = 500", async () => {
@@ -1053,7 +1173,7 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect((await submit(entry(cubes(2.5, -0.5)))).body).toMatchObject({ checked: false });
     expect((await submit(entry({ s: 2, pieces: [[0, 0, 0, 1, 0, 0]] }))).status).toBe(400);
     // the other kinds keep answering "valid, not kept" for such an entry
-    expect(SPACES_CHECKED_ONLY_IF_KEPT).toEqual(new Set(["polyhedra"]));
+    expect(SPACES_CHECKED_ONLY_IF_KEPT).toEqual(new Set(["polyhedra", "torus"]));
   });
 
   it("keeps an entry only below the research record by more than a relative 1e-6, then by the tie rule", async () => {
