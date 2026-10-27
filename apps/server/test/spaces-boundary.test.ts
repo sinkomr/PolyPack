@@ -19,6 +19,7 @@ import { loadSpacesIndex } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { SqliteStore } from "../src/sqlite-store";
+import { withUnits } from "./units";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
@@ -70,7 +71,7 @@ async function submit(body: unknown): Promise<{ status: number; body: SpaceSubmi
   const r = await app.request("/api/spaces/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withUnits(body)),
   });
   return { status: r.status, body: (await r.json()) as SpaceSubmitResponse };
 }

@@ -19,10 +19,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { SPACE_DOMAIN_TARGETS, SPACE_GAP_CAP, domainTargetIds } from "../src/spaces";
 import { SqliteStore } from "../src/sqlite-store";
+import { withUnits } from "./units";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
-const L2 = 2 * Math.SQRT2;
+// two disks of diameter 1 on the square torus touch at the side sqrt 2
+const L2 = Math.SQRT2;
 const ID = "torus/sq/0/2";
 
 /**
@@ -50,12 +52,12 @@ function withoutRecord(): SpacesIndex {
   return { ...index, torus: buildSpaceCatalogue("torus", file, domain) };
 }
 
-/** Two disks on the square torus, touching at k = 1 (the optimum 2 sqrt 2), apart for k > 1, overlapping below. */
+/** Two disks of diameter 1 on the square torus, touching at k = 1 (the optimum sqrt 2), apart for k > 1, overlapping below. */
 const twoDisks = (k = 1) => ({
   lattice: { L: L2 * Math.max(k, 1) },
   poses: [
     [0, 0, 0],
-    [Math.SQRT2 * k, Math.SQRT2 * k, 0],
+    [(Math.SQRT2 / 2) * k, (Math.SQRT2 / 2) * k, 0],
   ],
 });
 const entry = (config: unknown) => ({ space: "torus", id: ID, config, name: "ann" });
@@ -80,7 +82,7 @@ async function submit(body: unknown): Promise<{ status: number; body: SpaceSubmi
   const r = await app.request("/api/spaces/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify(withUnits(body)),
   });
   return { status: r.status, body: (await r.json()) as SpaceSubmitResponse };
 }
@@ -140,7 +142,7 @@ describe("a problem without a research record", () => {
   });
 
   it("keeps the first valid entry, then only better ones, and refuses one valid only within the tolerance", async () => {
-    // 2e-10 too close: an overlap of 4e-10, within the touching tolerance but not the strict one
+    // 2e-10 too close: an overlap of 2e-10, within the touching tolerance but not the strict one
     const loose = await submit(entry(twoDisks(1 - 2e-10)));
     expect(loose.status).toBe(422);
     expect(loose.body.reasons[0]).toBe(SPACE_STRICT_NO_RECORD_REASON);
@@ -204,7 +206,7 @@ describe("a problem without a research record", () => {
 });
 
 describe("a balls entry", () => {
-  /** Two unit balls on the x axis at +-h in a ball of radius s. */
+  /** Two balls of diameter 1 on the x axis at +-h in a ball of diameter s (touching at h = 1/2, s = 2). */
   const two = (h: number, s: number) => ({
     s,
     pieces: [
@@ -216,26 +218,26 @@ describe("a balls entry", () => {
 
   it("is strictly checked, the first valid one kept, then only better ones", async () => {
     // 5e-10 of overlap: valid within the touching tolerance, not at the strict one
-    const loose = await submit(balls("balls/ballinball/2", two(1 - 2.5e-10, 2 - 2.5e-10)));
+    const loose = await submit(balls("balls/ballinball/2", two(0.5 - 1.25e-10, 2 - 2.5e-10)));
     expect(loose.status).toBe(422);
     expect(loose.body.reasons[0]).toBe(SPACE_STRICT_NO_RECORD_REASON);
-    const first = await submit(balls("balls/ballinball/2", two(1.01, 2.01)));
+    const first = await submit(balls("balls/ballinball/2", two(0.505, 2.01)));
     expect(first.body).toMatchObject({ valid: true, leader: true });
     expect(first.body.id).not.toBeNull();
-    const worse = await submit(balls("balls/ballinball/2", two(1.02, 2.02)));
+    const worse = await submit(balls("balls/ballinball/2", two(0.51, 2.02)));
     expect(worse.body).toMatchObject({ valid: true, leader: false, id: null });
-    const better = await submit(balls("balls/ballinball/2", two(1, 2)));
+    const better = await submit(balls("balls/ballinball/2", two(0.5, 2)));
     expect(better.body).toMatchObject({ valid: true, leader: true });
     const one = await get("/api/spaces/balls/problems/balls/ballinball/2");
     expect(one.body).toMatchObject({ status: "no_record", certified: null, best_score: 2 });
     // outside the domain
-    expect((await submit(balls("balls/ballinball/101", two(1, 2)))).status).toBe(400);
+    expect((await submit(balls("balls/ballinball/101", two(0.5, 2)))).status).toBe(400);
   });
 
   it("of Platonic solids is checked by their faces", async () => {
-    // two unit cubes, face to face 0.2 apart, in a ball of radius 1.4 (their far corners lie at sqrt 1.71)
+    // two unit cubes, face to face 0.2 apart, in a ball of diameter 2.8, radius 1.4 (their far corners lie at sqrt 1.71)
     const cubes = (x: number) => ({
-      s: 1.4,
+      s: 2.8,
       pieces: [
         [x, 0, 0, 1, 0, 0, 0],
         [-x, 0, 0, 1, 0, 0, 0],
@@ -252,8 +254,8 @@ describe("a balls entry", () => {
         (t) => t.id,
       );
     expect(await ids()).not.toContain(next);
-    // an entry above the bound (two balls in a ball of radius 2 would meet it, and leave nothing to search)
-    await submit(balls("balls/ballinball/2", two(1.1, 2.1)));
+    // an entry above the bound (two balls in a ball of diameter 2 would meet it, and leave nothing to search)
+    await submit(balls("balls/ballinball/2", two(0.55, 2.1)));
     const after = await ids();
     expect(after).toContain(next);
     expect(after).toContain("balls/ballinball/2");

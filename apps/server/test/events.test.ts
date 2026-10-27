@@ -59,7 +59,7 @@ async function lead(N: number, M: number, P: number) {
   const pieces = Array.from({ length: P }, (_, i) => ({ x: i * (N === 0 ? gap : gap * 20), y: 0, theta: 0 }));
   const r = await app.request("/api/submit", {
     method: "POST",
-    body: JSON.stringify({ N, M, P, pieces, container_phi: 0, name: "ann" }),
+    body: JSON.stringify({ N, M, P, pieces, container_phi: 0, name: "ann", units: "diameter" }),
   });
   expect(((await r.json()) as { leader: boolean }).leader).toBe(true);
 }

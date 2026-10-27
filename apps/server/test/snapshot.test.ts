@@ -53,6 +53,24 @@ function readPair(dir: string, file: string) {
 }
 
 describe("the records snapshot", () => {
+  it("is format 2 with its units in the manifest, and a format 1 build is not kept: every file is written again", async () => {
+    const store = new SqliteStore(":memory:");
+    const dir = freshDir();
+    await add(store, 0, 0, 2, 3);
+    await add(store, 4, 4, 2, 2.5);
+    expect(await buildSnapshot({ store, dir, closed, pause: noPause })).toEqual({ built: 2, kept: 0, removed: 0 });
+    expect(readManifest(dir)).toMatchObject({ format: 2, units: "diameter" });
+    // the night's manifest from before the unit change: same leaders, but its files hold radius-1 disks
+    const old = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
+    delete old.units;
+    old.format = 1;
+    writeFileSync(join(dir, "manifest.json"), JSON.stringify(old));
+    expect(readManifest(dir)).toBeNull();
+    expect(await buildSnapshot({ store, dir, closed, pause: noPause })).toEqual({ built: 2, kept: 0, removed: 0 });
+    expect(readManifest(dir)).toMatchObject({ format: 2, units: "diameter" });
+    expect(readPair(dir, "0-0.json.gz")).toMatchObject({ format: 2, N: 0, M: 0 });
+  });
+
   it("holds every open problem's leader with its coordinates, one file per shape pair", async () => {
     const store = new SqliteStore(":memory:");
     const dir = freshDir();
@@ -75,7 +93,7 @@ describe("the records snapshot", () => {
     }
 
     const squares = readPair(dir, "4-4.json.gz");
-    expect(squares).toMatchObject({ format: 1, N: 4, M: 4 });
+    expect(squares).toMatchObject({ format: 2, N: 4, M: 4 });
     expect(squares.records).toHaveLength(1);
     const stored = (await store.get(a))!;
     expect(squares.records[0]).toEqual({
@@ -246,7 +264,7 @@ describe("the spaces in the snapshot", () => {
     }
 
     const boundary = readPair(dir, "space-boundary.json.gz");
-    expect(boundary).toMatchObject({ format: 1, space: "boundary" });
+    expect(boundary).toMatchObject({ format: 2, space: "boundary" });
     // in catalogue order: balls before cubes
     expect(boundary.records.map((r: { id: number }) => r.id)).toEqual([ball, cube]);
     const stored = (await store.spaceGet(cube))!;

@@ -23,6 +23,7 @@ import {
 import type { SpaceConfig, SpaceProblemResponse, SpaceSubmitResponse, SpaceTarget } from "@polypack/spaces";
 import { checkSpaceConfig, parseSpaceId } from "../src/spaces/model";
 import { SOFTWARE_REFUSAL } from "../src/submit";
+import { planarFactors, spaceScoreFactor } from "../src/units";
 
 /** A problem of the new spaces. */
 export interface FakeSpaceProblem {
@@ -53,6 +54,8 @@ export interface FakeServerOptions {
   problems: FakeProblem[];
   /** Answer GET /api/targets with 404, like a server older than the client. */
   noTargets?: boolean;
+  /** Answer every request with 426 and this explanation, like the server to a client of the old units. */
+  upgradeRequired?: string;
   /** Refuse `software` with optimizer entries, like the live server before its update. */
   refuseSoftware?: boolean;
   /** Rewrites the body of a GET answer before it is sent, to serve malformed answers. */
@@ -211,6 +214,10 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
         body = raw;
       }
       requests.push({ method: req.method ?? "", path: url.pathname + url.search, body });
+      if (o.upgradeRequired) {
+        res.writeHead(426, { "content-type": "application/json" });
+        return void res.end(JSON.stringify({ error: o.upgradeRequired }));
+      }
       const send = (status: number, value: unknown) => {
         res.writeHead(status, { "content-type": "application/json" });
         res.end(JSON.stringify(value));
@@ -282,6 +289,7 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
           const sp = spaceProblems.get(String(b.id));
           const p = parseSpaceId(b.id);
           if (!sp || !p || p.space !== b.space) return refuse(400, ["no such problem"]);
+          if (spaceScoreFactor(p.space, p.id) !== null && b.units !== "diameter") return refuse(426, ["send units: diameter"]);
           if (!spaceOpen(sp)) return refuse(409, ["this problem is closed"]);
           if (typeof b.name !== "string" || !b.name) return refuse(400, ["name is required"]);
           // the server's rule: below the research record, also valid at the strict tolerance
@@ -397,6 +405,8 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
         const N = b.N as number;
         const M = b.M as number;
         const P = b.P as number;
+        // as the server since 2026-10-27: a disk or circle problem needs the confirmation of the units
+        if (planarFactors(N, M) && b.units !== "diameter") return refuse(426, ["send units: diameter"]);
         const p = problems.get(key(N, M, P));
         if (!p) return refuse(400, ["no such problem"]);
         if (p.closed) return refuse(409, ["this problem is closed"]);

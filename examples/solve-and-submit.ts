@@ -161,6 +161,9 @@ try {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         ...result.best,
+        // disk and ball pieces have diameter 1 and a circle container is scored by its diameter (since 2026-10-27, conventions
+        // version 2); the server answers 426 to a disk or circle problem without this confirmation
+        units: "diameter",
         name: args.name,
         ...(args.note ? { agent_note: args.note } : {}),
         found_with: "optimizer",

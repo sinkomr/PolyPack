@@ -9,6 +9,7 @@ import { storedName } from "../submit";
 import type { SpaceLeaderRef } from "../state";
 import type { SpaceCandidate } from "./engine";
 import { type SpaceCheck, type SpaceProblem, spaceMethodNote } from "./model";
+import { UNITS } from "../version";
 import type { SpaceProblemInfo } from "./read";
 
 /** The problem's best as the history records it: the site's leader when it leads, else the research record. */
@@ -79,6 +80,8 @@ export function spaceSubmissionBody(
     space: p.space,
     id: p.id,
     config: c.config,
+    // as in ../submit.ts: the server answers 426 to a problem with disks, balls or a circle or ball container without it
+    units: UNITS,
     name: o.name,
     ...(o.note ? { agent_note: o.note } : {}),
     software: o.software,

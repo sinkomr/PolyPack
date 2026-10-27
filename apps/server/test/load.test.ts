@@ -7,6 +7,7 @@ import { createApp } from "../src/app";
 import { MAX_REPORTED_OVERLAPS, TimeBudget, addressKey } from "../src/limits";
 import { LoadStats, LoopDelay } from "../src/load";
 import { SqliteStore } from "../src/sqlite-store";
+import { withUnits } from "./units";
 
 /**
  * The server's geometry call before it returned early on invalid boards and scored at the phi sent:
@@ -38,7 +39,7 @@ async function submit(body: unknown) {
   const r = await app.request("/api/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    body: typeof body === "string" ? body : JSON.stringify(withUnits(body)),
   });
   return { status: r.status, headers: r.headers, body: (await r.json()) as SubmitResponse };
 }

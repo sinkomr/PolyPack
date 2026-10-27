@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { LeaderboardEntry, SCORE_TIE } from "@polypack/geometry";
 import { blobFromJson, encodePieces, readPieces } from "./pieces";
+import { EPOCH_DIAMETER, UnitsReport, migrateUnits, setUnitsEpoch, unitsEpoch } from "./units-migration";
 import {
   EntryEdit,
   GET_MANY_LIMIT,
@@ -176,7 +177,15 @@ function toStored(r: Row): StoredSubmission {
 export class SqliteStore implements Store, SpaceStore {
   private db: DatabaseSync;
 
-  constructor(path: string) {
+  /** What the start-up unit conversion did (see units-migration.ts); "none" when the database was already converted. */
+  readonly unitsReport: UnitsReport | null = null;
+
+  /**
+   * `opts.units`: "migrate" (the default) converts a database in the old units (radius-1 disks and balls) to
+   * diameter units in one transaction before the constructor returns, and records it in meta.units_epoch so that it
+   * runs once; "leave" opens it as it is (the dry-run and rollback tools).
+   */
+  constructor(path: string, opts: { units?: "migrate" | "leave"; log?: (msg: string) => void } = {}) {
     this.db = new DatabaseSync(path);
     this.db.exec("PRAGMA journal_mode = WAL;");
     const fresh = !this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'submissions'").get();
@@ -202,6 +211,13 @@ export class SqliteStore implements Store, SpaceStore {
       for (const r of crowded) this.pruneSync(r.n as number, r.m as number, r.p as number);
     }
     this.db.exec(SPACES_SCHEMA);
+    // a new database holds nothing in the old units
+    if (fresh) setUnitsEpoch(this.db, EPOCH_DIAMETER);
+    else if ((opts.units ?? "migrate") === "migrate" && unitsEpoch(this.db) < EPOCH_DIAMETER) {
+      const report = migrateUnits(this.db);
+      this.unitsReport = report;
+      opts.log?.(`units: converted to diameter units in ${report.ms.toFixed(0)} ms: ${JSON.stringify(report)}`);
+    }
   }
 
   async submit(s: NewSubmission): Promise<Submitted> {

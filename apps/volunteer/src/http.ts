@@ -44,6 +44,8 @@ export interface HttpOptions {
   maxFailures?: number;
   timeoutMs?: number;
   maxAnswerBytes?: number;
+  /** Called once, with the server's explanation, when it answers 426: this client works in units the server has left. */
+  onUpgradeRequired?: (message: string) => void;
 }
 
 /** How one submission went. */
@@ -144,6 +146,8 @@ export class Api {
   private readonly maxFailures: number;
   private readonly timeoutMs: number;
   private readonly maxAnswerBytes: number;
+  private readonly onUpgradeRequired?: (message: string) => void;
+  private upgradeReported = false;
 
   constructor(
     readonly base: string,
@@ -157,6 +161,7 @@ export class Api {
     this.maxFailures = o.maxFailures ?? 10;
     this.timeoutMs = o.timeoutMs ?? 30_000;
     this.maxAnswerBytes = o.maxAnswerBytes ?? MAX_ANSWER_BYTES;
+    this.onUpgradeRequired = o.onUpgradeRequired;
     this.pacer = new Pacer(SUBMISSIONS_PER_MINUTE, 60_000, o.now ?? Date.now, (ms) => this.sleep(ms, this.signal));
   }
 
@@ -181,6 +186,12 @@ export class Api {
         parsed = JSON.parse(raw);
       } catch {
         // not JSON: keep the text
+      }
+      if (response.status === 426 && !this.upgradeReported) {
+        // 426: the server has changed units (2026-10-27) and takes this client's packings as valid but poor, or not at all
+        this.upgradeReported = true;
+        const said = (parsed as { error?: unknown; reasons?: unknown } | null)?.error;
+        this.onUpgradeRequired?.(typeof said === "string" ? said : "the server requires a newer client");
       }
       return { kind: "answer", answer: { status: response.status, body: parsed } };
     } catch (error) {
