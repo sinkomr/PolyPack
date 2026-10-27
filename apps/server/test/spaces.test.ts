@@ -1106,6 +1106,27 @@ describe("range-domain submissions", () => {
       expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: false });
     }
   });
+  it("includes reduced-basis storage rechecks of 100 free-torus pieces in the sliced check", async () => {
+    const checks: { slices: number }[] = [];
+    makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
+    const step = 1 / Math.tan(Math.PI / 100) + 1e-7,
+      L = 10 * step;
+    const id = "torus/free/100/100";
+    const config = {
+      lattice: { b1: [L, 0], b2: [0, -L] },
+      poses: Array.from({ length: 100 }, (_, i) => [
+        step * ((i % 10) - 4.5),
+        step * (Math.floor(i / 10) - 4.5),
+        Math.PI / 100,
+      ]),
+    };
+    const r = await submit({ space: "torus", id, config, name: "large torus" });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(checks).toHaveLength(1);
+    expect(checks[0].slices).toBeGreaterThan(3);
+    const stored = (await get(`/api/spaces/torus/problems/${id}`)).body.site_config.lattice;
+    expect(stored.b1[0] * stored.b2[1] - stored.b1[1] * stored.b2[0]).toBeGreaterThan(0);
+  });
   it("shares the heavy queue across all three spaces, including many-sided sphere pairs at small P", async () => {
     const checks: unknown[] = [];
     makeApp({ clientIp: (c) => c.req.header("x-test-ip") ?? ip }, index, undefined, { onCheck: (c) => checks.push(c) });

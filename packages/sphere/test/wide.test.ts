@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { maxMarginPlane, validate, validateAsync } from "../src/validate";
-import { placedVertices, cross, dot, norm, inradiusAngle, type Vec3, type Quat } from "../src/geometry";
+import { placedVertices, cross, dot, norm, inradiusAngle, areaBound, type Vec3, type Quat } from "../src/geometry";
 
 // Independent exhaustive oracle: retain every triple, including ones outside hull facets.
 function brute(A: Vec3[], B: Vec3[]) {
@@ -31,6 +31,20 @@ describe("many-sided spherical pieces", () => {
           const B = placedVertices(N, rho, qy(t));
           expect(maxMarginPlane(A, B).value).toBeCloseTo(brute(A, B), 10);
         }
+  });
+  it("keeps the area bound below its mathematical value after the domain's rounding allowance", () => {
+    // 80-digit evaluation of the area formula is 41.3085626430343708245… .
+    // acos(cos(pi/N)/sin(alpha/2)) used to lose more than the 1e-12 allowance here.
+    expect(areaBound(56, 85) * (1 - 1e-12)).toBeLessThan(41.30856264303437);
+    for (const N of [0, 3, 7, 12, 20, 56, 100]) {
+      let previous = 0;
+      for (let P = 1; P <= 100; P++) {
+        const b = areaBound(N, P);
+        expect(Number.isFinite(b)).toBe(true);
+        expect(b).toBeGreaterThanOrEqual(previous);
+        previous = b;
+      }
+    }
   });
   it("accepts a touching 100-gon and rejects a hair of overlap", () => {
     const N = 100,

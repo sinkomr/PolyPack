@@ -76,7 +76,10 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: the largest P of its catalogue (2026-10-24; polyhedra 2026-10-25),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface: its domain's P <= 100. [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
+ * Surface, curved, sphere and torus have domains with P <= 100.
+ * Their server checks yield in slices, including torus storage rechecks; many-piece checks share
+ * the heavy queue (also many-sided sphere pairs at small P).
+ * Surface: [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
  * compares only parts closer than two circumradii; without that, 100 coincident 100-gons took up to
  * 0.57 s (random configurations of 100 pieces about 0.1 s). On a server the check runs in slices
  * (validateSpaceSubmissionAsync), and checks of many pieces are queued like the polyhedra ones.
@@ -503,7 +506,7 @@ export function validateSpaceSubmission(
 }
 
 /**
- * validateSpaceSubmission for a server: the same checks, but a polyhedra or surface configuration is checked
+ * validateSpaceSubmission for a server: the same checks, with polyhedra, surface, curved, sphere and torus configurations checked
  * in slices that give the event loop a turn every `sliceMs` (validatePolyhedraAsync, the surface package's
  * validateAsync), so that no check of 100 large pieces holds the loop for long. `workMs` is the time the checks
  * took, without the turns.
@@ -702,12 +705,7 @@ export function improvesSpaceBest(
  * again by the same rule and replaces the one sent only when it passes with the same score (to
  * within SCORE_TIE); anything else is stored as it was sent.
  */
-export function storedSpaceConfig(
-  space: SpaceName,
-  id: string,
-  config: SpaceConfig,
-  opts: SpaceValidateOptions = {},
-): SpaceConfig {
+function reducedSpaceConfig(space: SpaceName, id: string, config: SpaceConfig): SpaceConfig {
   if (space !== "torus") return config;
   const parsed = parseSpaceId(space, id);
   if (typeof parsed === "string" || parsed.fields.family !== "free") return config;
@@ -720,8 +718,19 @@ export function storedSpaceConfig(
   const length2 = (u: readonly number[], v: readonly number[]) => u[0] ** 2 + u[1] ** 2 + v[0] ** 2 + v[1] ** 2;
   // a reduced, right-handed basis is kept as it was sent, so that stored records are not rewritten
   if (det0 > 0 && length2(b1, b2) >= length2(sent.b1, sent.b2) * (1 - 1e-12)) return config;
+  return { ...config, lattice: { b1: [b1[0], b1[1]], b2 } };
+}
+
+export function storedSpaceConfig(
+  space: SpaceName,
+  id: string,
+  config: SpaceConfig,
+  opts: SpaceValidateOptions = {},
+): SpaceConfig {
+  const candidate = reducedSpaceConfig(space, id, config);
+  if (candidate === config) return config;
   const before = validateSpaceSubmission(space, id, config, opts);
-  const after = validateSpaceSubmission(space, id, { ...config, lattice: { b1: [b1[0], b1[1]], b2 } }, opts);
+  const after = validateSpaceSubmission(space, id, candidate, opts);
   if (
     !after.valid ||
     !after.config ||
@@ -731,4 +740,31 @@ export function storedSpaceConfig(
   )
     return config;
   return after.config;
+}
+
+/** The storage recheck in slices too, including the work in the submission's heavy-check turn. */
+export async function storedSpaceConfigAsync(
+  space: SpaceName,
+  id: string,
+  config: SpaceConfig,
+  opts: SpaceValidateOptions & { sliceMs?: number } = {},
+): Promise<{ config: SpaceConfig; workMs: number; slices: number; longestSliceMs: number }> {
+  const start = performance.now();
+  const candidate = reducedSpaceConfig(space, id, config);
+  const first = performance.now() - start;
+  if (candidate === config) return { config, workMs: first, slices: 1, longestSliceMs: first };
+  const before = await validateSpaceSubmissionAsync(space, id, config, opts);
+  const after = await validateSpaceSubmissionAsync(space, id, candidate, opts);
+  const keep =
+    after.valid &&
+    after.config &&
+    before.score !== null &&
+    after.score !== null &&
+    Math.abs(after.score - before.score) <= SCORE_TIE * before.score;
+  return {
+    config: keep ? after.config! : config,
+    workMs: first + before.workMs + after.workMs,
+    slices: 1 + before.slices + after.slices,
+    longestSliceMs: Math.max(first, before.longestSliceMs, after.longestSliceMs),
+  };
 }

@@ -7,6 +7,8 @@ import {
   SPACE_MAX_P,
   buildSpaceCatalogue,
   problemOf,
+  storedSpaceConfig,
+  storedSpaceConfigAsync,
 } from "../src";
 import { pieceGeometry } from "@polypack/curved";
 import { quatFromCentreTheta, quatMul, inradiusAngle, type Quat } from "@polypack/sphere";
@@ -79,6 +81,13 @@ describe("curved, sphere and torus range domains", () => {
           expect(Number.isFinite(kernel.finishCost)).toBe(true);
           expect(Number.isFinite(kernel.validateCost)).toBe(true);
           expect(kernel.validate(config).valid).toBe(true);
+          const state = kernel.fromConfig(config);
+          expect(state).not.toBeNull();
+          if (!state) throw new Error(`kernel could not read ${id}`);
+          const gradient = new Float64Array(kernel.P * kernel.dim + kernel.globals + 1);
+          expect(Number.isFinite(kernel.energy(state, gradient))).toBe(true);
+          expect([...gradient].every(Number.isFinite)).toBe(true);
+          expect(kernel.validate(kernel.toConfig(state)).valid).toBe(true);
         }
   });
   it("checks N = 100, P = 100 in bounded slices for valid and adversarial configurations", async () => {
@@ -140,6 +149,26 @@ describe("curved, sphere and torus range domains", () => {
         );
         if (space === "sphere" && invalid) expect(turns).toBeGreaterThan(0);
       }
+  });
+  it("also slices the storage recheck of a large free torus", async () => {
+    const step = 1 / Math.tan(Math.PI / 100) + 1e-7,
+      L = 10 * step;
+    const config = {
+      lattice: { b1: [L, 0], b2: [0, -L] },
+      poses: Array.from({ length: 100 }, (_, i) => [
+        step * ((i % 10) - 4.5),
+        step * (Math.floor(i / 10) - 4.5),
+        Math.PI / 100,
+      ]),
+    };
+    const id = "torus/free/100/100",
+      opts = { noRecord: true, sliceMs: 1 };
+    const result = await storedSpaceConfigAsync("torus", id, config, opts);
+    expect(result.config).toEqual(storedSpaceConfig("torus", id, config, opts));
+    expect(result.config).not.toEqual(config);
+    expect(result.slices).toBeGreaterThan(3);
+    expect(result.longestSliceMs).toBeLessThan(150);
+    expect(validateSpaceSubmission("torus", id, result.config, opts).valid).toBe(true);
   });
   it("decides touching, hair overlaps, and containment or periodic boundary crossings for 100-gons", () => {
     const N = 100,

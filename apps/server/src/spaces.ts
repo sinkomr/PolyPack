@@ -29,7 +29,7 @@ import {
   parseSpaceConfig,
   parseSpaceId,
   spaceProblemSummary,
-  storedSpaceConfig,
+  storedSpaceConfigAsync,
   validateSpaceSubmissionAsync,
 } from "@polypack/spaces";
 import { Context, Hono } from "hono";
@@ -688,6 +688,23 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
           // without a research record, every entry must pass the strict check (validate.ts)
           noRecord: !hasRecord(p),
         });
+        if (
+          verdict.valid &&
+          verdict.score !== null &&
+          verdict.config &&
+          (best === null || improvesSpaceBest(space, verdict.score, cert, current?.score ?? null))
+        ) {
+          const stored = await storedSpaceConfigAsync(space, p.id, verdict.config, {
+            bound: p.bound?.value ?? null,
+            maxP: cat.maxP,
+            certified: cert,
+            noRecord: !hasRecord(p),
+          });
+          verdict.config = stored.config;
+          verdict.workMs += stored.workMs;
+          verdict.slices += stored.slices;
+          verdict.longestSliceMs = Math.max(verdict.longestSliceMs, stored.longestSliceMs);
+        }
       } finally {
         if (heavy) heavyDone();
       }
@@ -711,16 +728,6 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         200,
       );
 
-    // a free torus is stored in a reduced basis (the same lattice and score), so that every reader
-    // gets one it can draw; that check is charged to the address too
-    const storeStart = performance.now();
-    const stored = storedSpaceConfig(space, p.id, verdict.config, {
-      bound: p.bound?.value ?? null,
-      maxP: cat.maxP,
-      certified: cert,
-      noRecord: !hasRecord(p),
-    });
-    ctx.verifyBudget.charge(address, performance.now() - storeStart);
     const { id, before, leader, kept } = await store.spaceSubmit({
       space,
       problem: p.id,
@@ -730,7 +737,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       software,
       method,
       seed,
-      config: JSON.stringify(stored),
+      config: JSON.stringify(verdict.config),
       created_at: new Date().toISOString(),
     });
     if (kept || leader?.id !== before?.id) changed(space);
