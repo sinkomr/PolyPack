@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Records by dimension</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="scroll">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html" aria-current="page">Records</a>
+        <a href="/dimensions.html">Dimensions</a>
+        <a href="/volunteer.html">Volunteer</a>
+        <a href="/api">API</a>
+        <a href="/tighter.html">Tighter</a>
+      </nav>
+    </header>
+    <main class="page records-page">
+      <nav class="subnav" aria-label="Records">
+        <a href="/records.html" aria-current="page">Records across P</a>
+        <a href="/holders.html">Record holders</a>
+      </nav>
+      <h2 class="title">Records across P</h2>
+      <div id="records-tabs" class="records-tabs"></div>
+      <p id="kind-summary" class="note"></p>
+      <p id="status" class="note" role="status" aria-live="polite"></p>
+
+      <div id="records" hidden>
+        <form id="pickers" class="row wrap" aria-label="Problem"></form>
+        <p id="series-note" class="note"></p>
+        <p id="score-note" class="note"></p>
+
+        <section class="plot" aria-labelledby="charts-title">
+          <h3 id="charts-title" class="atlas-title">Charts</h3>
+          <p class="note chart-help">
+            Point at a chart for the values of the nearest P. Drag across a chart to zoom into a range of P;
+            double-click or Reset zoom to see every P. With the keyboard: arrow keys choose a P, + and − zoom, 0 resets.
+            <span id="chart-range" class="chart-range"></span>
+            <button id="chart-reset" type="button" hidden>Reset zoom</button>
+          </p>
+          <figure>
+            <svg id="chart" class="chart" role="img" aria-labelledby="chart-title" viewBox="0 0 900 380"></svg>
+            <figcaption id="chart-title" class="note"></figcaption>
+          </figure>
+          <figure>
+            <svg id="chart-gap" class="chart" role="img" aria-labelledby="chart-gap-title" viewBox="0 0 900 380"></svg>
+            <figcaption id="chart-gap-title" class="note"></figcaption>
+          </figure>
+        </section>
+
+        <h3 id="table-title" class="atlas-title">Table</h3>
+        <div class="seg table-scope" role="radiogroup" aria-labelledby="seg-scope">
+          <span id="seg-scope" class="seg-name">Table shows</span>
+          <span class="seg-track">
+            <label><input type="radio" name="scope" value="series" /><span>This family</span></label>
+            <label><input type="radio" name="scope" value="all" /><span>Every record of the kind</span></label>
+          </span>
+        </div>
+        <p id="same-as" class="note" hidden>
+          Without folding, each face holds its pieces on its own. So a no-fold problem with P pieces on a solid with F
+          faces is the same as packing &lceil;P / F&rceil; pieces in one face, a 2D in 2D problem. Each no-fold row
+          links to it.
+        </p>
+        <p id="table-note" class="note" role="status" aria-live="polite"></p>
+        <div class="table-wrap">
+          <table class="space-table" aria-labelledby="table-title">
+            <thead id="rec-head"></thead>
+            <tbody id="rec-rows"></tbody>
+          </table>
+        </div>
+        <p class="atlas-more"><button id="rec-more" type="button" hidden></button></p>
+        <dl class="note terms">
+          <dt>Record</dt>
+          <dd>
+            The smaller of the research record and the site's leading entry, at 6 decimals. A research record's packing
+            is proven valid with interval arithmetic, or for 3D on 4D with exact rational arithmetic.
+          </dd>
+          <dt>Status</dt>
+          <dd>
+            Best known; proven optimal, where a published proof covers the problem; or no packing exists, where it is
+            proved that the pieces do not fit.
+          </dd>
+          <dt>Held by</dt>
+          <dd>
+            A site entry is a packing sent to this site and checked by the server. Otherwise the record is PolyPack's
+            research record.
+          </dd>
+          <dt>Lower bound</dt>
+          <dd>No packing of the problem can be smaller. The gap is the record minus the bound.</dd>
+        </dl>
+      </div>
+    </main>
+    <script type="module" src="/src/records.ts"></script>
+  </body>
+</html>

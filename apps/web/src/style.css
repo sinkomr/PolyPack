@@ -1559,3 +1559,69 @@ figure {
 .viewer-links li + li {
   margin-top: 4px;
 }
+
+/* ---------- Records by dimension (records.html) ---------- */
+.records-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.dim-tabs,
+.kind-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+}
+.dim-tabs a,
+.dim-tabs .soon {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  text-decoration: none;
+  color: var(--muted);
+}
+.dim-tabs .soon {
+  border-style: dashed;
+}
+.dim-tabs a:hover {
+  color: var(--text);
+}
+.dim-tabs a[aria-current="page"] {
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.kind-tabs a {
+  padding: 3px 4px;
+  font-size: 14px;
+}
+.kind-tabs a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration-thickness: 2px;
+}
+.records-page .filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.records-page .plot figure {
+  margin: 0 0 12px;
+}
+.records-page .table-scope {
+  margin: 0 0 8px;
+}
+.records-page .table-scope .seg-track {
+  flex-wrap: wrap;
+}
+.records-page .table-wrap {
+  position: relative;
+}
+.chart .proven-mark {
+  fill: var(--container);
+  stroke: var(--container);
+  stroke-width: 2;
+}
