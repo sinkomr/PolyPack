@@ -290,7 +290,7 @@ describe("the curved kernel", () => {
     // [id, the size to reach]: a record's, or for disks of diameter 1 (no records yet) the analytic ring's
     const ring = (K: number, P: number) => {
       const r = DISK_RADIUS;
-      return r + Math.asinh(Math.sinh(Math.sqrt(-K) * r) / Math.sin(Math.PI / P)) / Math.sqrt(-K);
+      return 2 * (r + Math.asinh(Math.sinh(Math.sqrt(-K) * r) / Math.sin(Math.PI / P)) / Math.sqrt(-K)); // (diameter)
     };
     const targets: [string, number, string][] = [
       ...["curved/-3.4413111779836725/3/9/9", "curved/-4.50521902808615/3/10/10", "curved/-1/4/6/6"].map((id): [string, number, string] => {

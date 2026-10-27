@@ -5,10 +5,10 @@
  "conventions": {
   "space": "plane of constant curvature K: K < 0 hyperbolic, K = 0 Euclidean, K > 0 sphere of radius 1/sqrt(K)",
   "problem_id": "curved/K/N/M/P",
-  "units": "geodesic lengths at curvature K; polygon pieces have side 1, disk pieces (N = 0) diameter 1 (radius 1/2); the container is a regular M-gon of side s or, for M = 0, a disk scored by its geodesic RADIUS r",
+  "units": "geodesic lengths at curvature K; polygon pieces have side 1, disk pieces (N = 0) diameter 1 (radius 1/2); the container is a regular M-gon of side s or, for M = 0, a disk scored by its geodesic DIAMETER s = 2 r",
   "pose": "(x, y, theta): piece = T(exp_O(x, y)) R(theta) (standard piece); exp_O(x, y) is the point at distance sqrt(x^2+y^2) from the container centre O in direction (x, y); T the transvection along the geodesic from O; R(theta) the rotation about O; standard piece centred at O with a vertex straight up; at K = 0 this is PolyPack's Euclidean pose",
-  "container": "centred at O, phi = 0 (horizontal bottom edge): regular M-gon of geodesic side s (walls at apothem h with tn_K(s/2) = sn_K(h) tan(pi/M)), or disk of radius r (M = 0); for K > 0 the container lies in the open hemisphere around O",
-  "score": "s (M >= 3) or r (M = 0); smaller is better",
+  "container": "centred at O, phi = 0 (horizontal bottom edge): regular M-gon of geodesic side s (walls at apothem h with tn_K(s/2) = sn_K(h) tan(pi/M)), or disk of diameter s (radius s / 2) (M = 0); for K > 0 the container lies in the open hemisphere around O",
+  "score": "s (M >= 3, the side) or the container's geodesic DIAMETER (M = 0; its radius is s / 2); smaller is better",
   "score_float": "touching limit found by the search (float64 polish)",
   "score_cert": "size at which the stored configuration `config` is proven valid with strictly positive clearance",
   "display": "score_cert rounded to the nearest at 6 decimals (ties to even, from its exact binary64 value)"
@@ -1045,15 +1045,15 @@
    "N": 3,
    "M": 0,
    "P": 1,
-   "score_float": 0.5866724216086154,
-   "score_cert": 0.5866724216486153,
-   "cert_minus_float": 3.999989228731238e-11,
+   "score_float": 1.1733448432172309,
+   "score_cert": 1.1733448432972307,
+   "cert_minus_float": 7.999978457462475e-11,
    "cert_minus_float_relative": 6.818096575536212e-11,
-   "display": "0.586672",
+   "display": "1.173345",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.5866724216486153,
+    "size": 1.1733448432972307,
     "pieces": [
      {
       "x": 3.183341898123248e-17,
@@ -1063,7 +1063,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.5866724216086154,
+    "size": 1.1733448432172309,
     "pieces": [
      {
       "x": -1.5365558571787153e-17,
@@ -1081,8 +1081,8 @@
     "min_container_clearance_lb": 2.214374545331485e-11
    },
    "bound": {
-    "lower": 0.5866724216086052,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.1733448432172104,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -1095,10 +1095,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.010866591793057158,
+    "dsdK_envelope": 0.021733183586114316,
     "dsdK_multiplier_range": {
-     "min": 0.010866590706398088,
-     "max": 0.01086659287971645,
+     "min": 0.021733181412796176,
+     "max": 0.0217331857594329,
      "rows": 3
     },
     "kkt_residual": 1.0049169099791507e-14,
@@ -1106,7 +1106,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.577,
+    "value": 1.154,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -1119,15 +1119,15 @@
    "N": 3,
    "M": 0,
    "P": 2,
-   "score_float": 0.9075588746858815,
-   "score_cert": 0.9075588747486714,
-   "cert_minus_float": 6.278988440300282e-11,
+   "score_float": 1.815117749371763,
+   "score_cert": 1.8151177494973427,
+   "cert_minus_float": 1.2557976880600563e-10,
    "cert_minus_float_relative": 6.918546681033256e-11,
-   "display": "0.907559",
+   "display": "1.815118",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9075588747486714,
+    "size": 1.8151177494973427,
     "pieces": [
      {
       "x": -0.1258940249821668,
@@ -1142,7 +1142,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9075588746858815,
+    "size": 1.815117749371763,
     "pieces": [
      {
       "x": -0.1258940249821668,
@@ -1173,8 +1173,8 @@
     "min_container_clearance_lb": 3.152018645424572e-11
    },
    "bound": {
-    "lower": 0.6417729061545028,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 1.2835458123090056,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -1187,10 +1187,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.04791888382216567,
+    "dsdK_envelope": 0.09583776764433134,
     "dsdK_multiplier_range": {
-     "min": 0.047918870310869964,
-     "max": 0.04791889600743017,
+     "min": 0.09583774062173993,
+     "max": 0.09583779201486034,
      "rows": 4
     },
     "kkt_residual": 5.9511223364323413e-08,
@@ -1198,7 +1198,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.866,
+    "value": 1.732,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -1211,15 +1211,15 @@
    "N": 3,
    "M": 0,
    "P": 3,
-   "score_float": 0.9759317398118256,
-   "score_cert": 0.9759317398770437,
-   "cert_minus_float": 6.521816420246296e-11,
+   "score_float": 1.9518634796236511,
+   "score_cert": 1.9518634797540875,
+   "cert_minus_float": 1.3043632840492592e-10,
    "cert_minus_float_relative": 6.682656331582987e-11,
-   "display": "0.975932",
+   "display": "1.951863",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9759317398770437,
+    "size": 1.9518634797540875,
     "pieces": [
      {
       "x": -0.0848800073112239,
@@ -1239,7 +1239,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9759317398118256,
+    "size": 1.9518634796236511,
     "pieces": [
      {
       "x": -0.08488000733100678,
@@ -1289,7 +1289,7 @@
     "min_container_clearance_lb": 3.312894323703518e-11
    },
    "bound": {
-    "lower": 0.7022807996352357,
+    "lower": 1.4045615992704714,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -1303,10 +1303,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.022265846435048444,
+    "dsdK_envelope": 0.04453169287009689,
     "dsdK_multiplier_range": {
-     "min": 0.0222657977907467,
-     "max": 0.02226589599295162,
+     "min": 0.0445315955814934,
+     "max": 0.04453179198590324,
      "rows": 8
     },
     "kkt_residual": 1.973567708289922e-08,
@@ -1314,7 +1314,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.953,
+    "value": 1.906,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -1327,15 +1327,15 @@
    "N": 3,
    "M": 0,
    "P": 4,
-   "score_float": 1.0000000000000004,
-   "score_cert": 1.0000000000673988,
-   "cert_minus_float": 6.739830915591938e-11,
+   "score_float": 2.000000000000001,
+   "score_cert": 2.0000000001347975,
+   "cert_minus_float": 1.3479661831183876e-10,
    "cert_minus_float_relative": 6.739830915591935e-11,
-   "display": "1.000000",
+   "display": "2.000000",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.0000000000673988,
+    "size": 2.0000000001347975,
     "pieces": [
      {
       "x": -0.12631010983751303,
@@ -1360,7 +1360,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.0000000000000004,
+    "size": 2.000000000000001,
     "pieces": [
      {
       "x": -0.1263101098303352,
@@ -1436,7 +1436,7 @@
     "min_container_clearance_lb": 3.3658797919306626e-11
    },
    "bound": {
-    "lower": 0.8168862656716884,
+    "lower": 1.6337725313433769,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -1450,10 +1450,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": -8.43803403885457e-11,
+    "dsdK_envelope": -1.687606807770914e-10,
     "dsdK_multiplier_range": {
-     "min": -5.615273837057677e-09,
-     "max": 5.424817897409923e-09,
+     "min": -1.1230547674115354e-08,
+     "max": 1.0849635794819845e-08,
      "rows": 14
     },
     "kkt_residual": 2.6227810315984416e-14,
@@ -1461,7 +1461,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.98,
+    "value": 1.96,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -1474,15 +1474,15 @@
    "N": 3,
    "M": 0,
    "P": 5,
-   "score_float": 1.0000000000000004,
-   "score_cert": 1.0000000000686644,
-   "cert_minus_float": 6.866396340399206e-11,
+   "score_float": 2.000000000000001,
+   "score_cert": 2.000000000137329,
+   "cert_minus_float": 1.3732792680798411e-10,
    "cert_minus_float_relative": 6.866396340399203e-11,
-   "display": "1.000000",
+   "display": "2.000000",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.0000000000686644,
+    "size": 2.000000000137329,
     "pieces": [
      {
       "x": -0.12118844125662359,
@@ -1512,7 +1512,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.0000000000000004,
+    "size": 2.000000000000001,
     "pieces": [
      {
       "x": -0.12118844125739622,
@@ -1621,7 +1621,7 @@
     "min_container_clearance_lb": 3.3658909543945176e-11
    },
    "bound": {
-    "lower": 0.9202539263837721,
+    "lower": 1.8405078527675443,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -1635,10 +1635,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": -5.588658659114176e-11,
+    "dsdK_envelope": -1.1177317318228353e-10,
     "dsdK_multiplier_range": {
-     "min": -7.1227146444374084e-09,
-     "max": 2.0662479524244382e-07,
+     "min": -1.4245429288874817e-08,
+     "max": 4.1324959048488763e-07,
      "rows": 24
     },
     "kkt_residual": 2.803524452025582e-14,
@@ -1646,7 +1646,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -1659,15 +1659,15 @@
    "N": 3,
    "M": 0,
    "P": 6,
-   "score_float": 1.244335568848499,
-   "score_cert": 1.2443355689568292,
-   "cert_minus_float": 1.0833023367240457e-10,
+   "score_float": 2.488671137696998,
+   "score_cert": 2.4886711379136583,
+   "cert_minus_float": 2.1666046734480915e-10,
    "cert_minus_float_relative": 8.705869733568152e-11,
-   "display": "1.244336",
+   "display": "2.488671",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.2443355689568292,
+    "size": 2.4886711379136583,
     "pieces": [
      {
       "x": 0.5066238255076586,
@@ -1702,7 +1702,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.244335568848499,
+    "size": 2.488671137696998,
     "pieces": [
      {
       "x": 0.5066238254657592,
@@ -1835,7 +1835,7 @@
     "min_container_clearance_lb": 3.7887212629143626e-11
    },
    "bound": {
-    "lower": 1.0160334721608262,
+    "lower": 2.0320669443216524,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -1849,10 +1849,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.3059793888531928,
+    "dsdK_envelope": 0.6119587777063856,
     "dsdK_multiplier_range": {
-     "min": 0.3059790082938071,
-     "max": 0.30597976943082056,
+     "min": 0.6119580165876142,
+     "max": 0.6119595388616411,
      "rows": 19
     },
     "kkt_residual": 3.206966884158975e-14,
@@ -1860,7 +1860,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -1873,15 +1873,15 @@
    "N": 3,
    "M": 0,
    "P": 7,
-   "score_float": 1.2808315334656124,
-   "score_cert": 1.2808315335487022,
-   "cert_minus_float": 8.308975729676149e-11,
+   "score_float": 2.561663066931225,
+   "score_cert": 2.5616630670974043,
+   "cert_minus_float": 1.6617951459352298e-10,
    "cert_minus_float_relative": 6.487172990810214e-11,
-   "display": "1.280832",
+   "display": "2.561663",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.2808315335487022,
+    "size": 2.5616630670974043,
     "pieces": [
      {
       "x": 0.3899427087458862,
@@ -1921,7 +1921,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.2808315334656124,
+    "size": 2.561663066931225,
     "pieces": [
      {
       "x": 0.38994270869290765,
@@ -2099,7 +2099,7 @@
     "min_container_clearance_lb": 3.832995740798599e-11
    },
    "bound": {
-    "lower": 1.1064198922918416,
+    "lower": 2.212839784583683,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -2113,10 +2113,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.03315238585402644,
+    "dsdK_envelope": 0.06630477170805288,
     "dsdK_multiplier_range": {
-     "min": 0.033152210244794596,
-     "max": 0.033152561457823054,
+     "min": 0.06630442048958919,
+     "max": 0.06630512291564611,
      "rows": 24
     },
     "kkt_residual": 2.3271829004220826e-14,
@@ -2124,7 +2124,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.152,
+    "value": 2.304,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -2137,15 +2137,15 @@
    "N": 3,
    "M": 0,
    "P": 8,
-   "score_float": 1.4032552581631883,
-   "score_cert": 1.4032552582588231,
-   "cert_minus_float": 9.563483338581591e-11,
+   "score_float": 2.8065105163263766,
+   "score_cert": 2.8065105165176463,
+   "cert_minus_float": 1.9126966677163182e-10,
    "cert_minus_float_relative": 6.815212900823086e-11,
-   "display": "1.403255",
+   "display": "2.806511",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.4032552582588231,
+    "size": 2.8065105165176463,
     "pieces": [
      {
       "x": 0.39638724218740456,
@@ -2190,7 +2190,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.4032552581631883,
+    "size": 2.8065105163263766,
     "pieces": [
      {
       "x": 0.39638724218740456,
@@ -2426,7 +2426,7 @@
     "min_container_clearance_lb": 3.943975483928527e-11
    },
    "bound": {
-    "lower": 1.1928753212418228,
+    "lower": 2.3857506424836457,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -2440,10 +2440,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.0668709473423306,
+    "dsdK_envelope": 0.1337418946846612,
     "dsdK_multiplier_range": {
-     "min": 0.06687060289869867,
-     "max": 0.0668712917654554,
+     "min": 0.13374120579739734,
+     "max": 0.1337425835309108,
      "rows": 26
     },
     "kkt_residual": 8.72898193013496e-14,
@@ -2451,7 +2451,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.263,
+    "value": 2.526,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -2464,15 +2464,15 @@
    "N": 3,
    "M": 0,
    "P": 9,
-   "score_float": 1.4917603028711144,
-   "score_cert": 1.4917603028711144,
+   "score_float": 2.9835206057422288,
+   "score_cert": 2.9835206057422288,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.491760",
+   "display": "2.983521",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.4917603028711144,
+    "size": 2.9835206057422288,
     "pieces": [
      {
       "x": 0.23067413742204151,
@@ -2522,7 +2522,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.4917603028711144,
+    "size": 2.9835206057422288,
     "pieces": [
      {
       "x": 0.23067413742204151,
@@ -2801,7 +2801,7 @@
     "min_container_clearance_lb": 3.987503284812469e-11
    },
    "bound": {
-    "lower": 1.2764518275599928,
+    "lower": 2.5529036551199855,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -2815,10 +2815,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.11137116494050633,
+    "dsdK_envelope": 0.22274232988101267,
     "dsdK_multiplier_range": {
-     "min": 0.11136841342832364,
-     "max": 0.11136841343605898,
+     "min": 0.22273682685664728,
+     "max": 0.22273682687211796,
      "rows": 27
     },
     "kkt_residual": 2.2110993483659326e-05,
@@ -2826,7 +2826,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.314,
+    "value": 2.628,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -2839,15 +2839,15 @@
    "N": 3,
    "M": 0,
    "P": 10,
-   "score_float": 1.5605135498047382,
-   "score_cert": 1.5605135498047382,
+   "score_float": 3.1210270996094764,
+   "score_cert": 3.1210270996094764,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.560514",
+   "display": "3.121027",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.5605135498047382,
+    "size": 3.1210270996094764,
     "pieces": [
      {
       "x": 1.0272356227186625,
@@ -2902,7 +2902,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.5605135498047382,
+    "size": 3.1210270996094764,
     "pieces": [
      {
       "x": 1.0272356227186625,
@@ -3235,7 +3235,7 @@
     "min_container_clearance_lb": 3.9997601885952876e-11
    },
    "bound": {
-    "lower": 1.3579567743920014,
+    "lower": 2.7159135487840027,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -3249,10 +3249,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.1805685289017043,
+    "dsdK_envelope": 0.3611370578034086,
     "dsdK_multiplier_range": {
-     "min": 0.1805444870219772,
-     "max": 0.1805444870256369,
+     "min": 0.3610889740439544,
+     "max": 0.3610889740512738,
      "rows": 34
     },
     "kkt_residual": 0.0005321350030909321,
@@ -3260,7 +3260,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.38468,
+    "value": 2.76936,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -14409,15 +14409,15 @@
    "N": 4,
    "M": 0,
    "P": 1,
-   "score_float": 0.7450520880645614,
-   "score_cert": 0.7450520881045614,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 1.4901041761291227,
+   "score_cert": 1.4901041762091227,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 5.368752594670763e-11,
-   "display": "0.745052",
+   "display": "1.490104",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.7450520881045614,
+    "size": 1.4901041762091227,
     "pieces": [
      {
       "x": 3.9286527492335276e-17,
@@ -14427,7 +14427,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.7450520880645614,
+    "size": 1.4901041761291227,
     "pieces": [
      {
       "x": 2.212012183062394e-17,
@@ -14445,8 +14445,8 @@
     "min_container_clearance_lb": 2.712044387932341e-11
    },
    "bound": {
-    "lower": 0.7450520880645511,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.4901041761291023,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -14459,10 +14459,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.0495829257096673,
+    "dsdK_envelope": 0.0991658514193346,
     "dsdK_multiplier_range": {
-     "min": 0.049582920695864334,
-     "max": 0.04958293066796063,
+     "min": 0.09916584139172867,
+     "max": 0.09916586133592126,
      "rows": 4
     },
     "kkt_residual": 1.5154671371569455e-14,
@@ -14470,7 +14470,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.7071,
+    "value": 1.4142,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -14483,15 +14483,15 @@
    "N": 4,
    "M": 0,
    "P": 2,
-   "score_float": 1.2092084995796115,
-   "score_cert": 1.20920849963918,
-   "cert_minus_float": 5.956857229705292e-11,
+   "score_float": 2.418416999159223,
+   "score_cert": 2.41841699927836,
+   "cert_minus_float": 1.1913714459410585e-10,
    "cert_minus_float_relative": 4.92624492118293e-11,
-   "display": "1.209208",
+   "display": "2.418417",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.20920849963918,
+    "size": 2.41841699927836,
     "pieces": [
      {
       "x": -0.26077888470221255,
@@ -14506,7 +14506,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.2092084995796115,
+    "size": 2.418416999159223,
     "pieces": [
      {
       "x": -0.26077888469192934,
@@ -14537,8 +14537,8 @@
     "min_container_clearance_lb": 3.741362195450512e-11
    },
    "bound": {
-    "lower": 1.1558867519731306,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.3117735039462612,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -14551,10 +14551,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.11259590930904662,
+    "dsdK_envelope": 0.22519181861809323,
     "dsdK_multiplier_range": {
-     "min": 0.11259587155745224,
-     "max": 0.11259594706064512,
+     "min": 0.22519174311490447,
+     "max": 0.22519189412129023,
      "rows": 6
     },
     "kkt_residual": 1.2557660846237989e-14,
@@ -14562,7 +14562,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.11803,
+    "value": 2.23606,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -14575,15 +14575,15 @@
    "N": 4,
    "M": 0,
    "P": 3,
-   "score_float": 1.4368108049237873,
-   "score_cert": 1.4368108049910844,
-   "cert_minus_float": 6.729705681607356e-11,
+   "score_float": 2.8736216098475746,
+   "score_cert": 2.8736216099821688,
+   "cert_minus_float": 1.3459411363214713e-10,
    "cert_minus_float_relative": 4.6837799789265367e-11,
-   "display": "1.436811",
+   "display": "2.873622",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.4368108049910844,
+    "size": 2.8736216099821688,
     "pieces": [
      {
       "x": 0.8397616870305251,
@@ -14603,7 +14603,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.4368108049237873,
+    "size": 2.8736216098475746,
     "pieces": [
      {
       "x": 0.8397616869993252,
@@ -14653,8 +14653,8 @@
     "min_container_clearance_lb": 3.9641468134454725e-11
    },
    "bound": {
-    "lower": 1.1558867519731306,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.3117735039462612,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -14667,10 +14667,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.18900819235543534,
+    "dsdK_envelope": 0.3780163847108707,
     "dsdK_multiplier_range": {
-     "min": 0.1890080979759641,
-     "max": 0.18900828649575116,
+     "min": 0.3780161959519282,
+     "max": 0.3780165729915023,
      "rows": 8
     },
     "kkt_residual": 8.929540788086282e-08,
@@ -14678,7 +14678,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.28847,
+    "value": 2.57694,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -16101,15 +16101,15 @@
    "N": 5,
    "M": 0,
    "P": 1,
-   "score_float": 0.9538473955210639,
-   "score_cert": 0.9538473955610639,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 1.9076947910421278,
+   "score_cert": 1.9076947911221278,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 4.1935432751025964e-11,
-   "display": "0.953847",
+   "display": "1.907695",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9538473955610639,
+    "size": 1.9076947911221278,
     "pieces": [
      {
       "x": -2.828670543249178e-17,
@@ -16119,7 +16119,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9538473955210639,
+    "size": 1.9076947910421278,
     "pieces": [
      {
       "x": -2.828670543249178e-17,
@@ -16137,8 +16137,8 @@
     "min_container_clearance_lb": 3.262591132527121e-11
    },
    "bound": {
-    "lower": 0.9538473955210538,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.9076947910421076,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -16151,10 +16151,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.1682385780688005,
+    "dsdK_envelope": 0.336477156137601,
     "dsdK_multiplier_range": {
-     "min": 0.1682385612449445,
-     "max": 0.16823859489266013,
+     "min": 0.336477122489889,
+     "max": 0.33647718978532026,
      "rows": 5
     },
     "kkt_residual": 1.0960435271990497e-14,
@@ -16162,7 +16162,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.85065,
+    "value": 1.7013,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -16545,15 +16545,15 @@
    "N": 6,
    "M": 0,
    "P": 1,
-   "score_float": 1.2829273751703358,
-   "score_cert": 1.2829273752103358,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 2.5658547503406717,
+   "score_cert": 2.5658547504206717,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 3.117869653713172e-11,
-   "display": "1.282927",
+   "display": "2.565855",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.2829273752103358,
+    "size": 2.5658547504206717,
     "pieces": [
      {
       "x": -8.665138136270528e-18,
@@ -16563,7 +16563,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.2829273751703358,
+    "size": 2.5658547503406717,
     "pieces": [
      {
       "x": -1.3689105726784215e-17,
@@ -16581,8 +16581,8 @@
     "min_container_clearance_lb": 3.835433632760751e-11
    },
    "bound": {
-    "lower": 1.2829273751703223,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 2.5658547503406446,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -16595,10 +16595,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.9040684637584426,
+    "dsdK_envelope": 1.8081369275168853,
     "dsdK_multiplier_range": {
-     "min": 0.9040683733516098,
-     "max": 0.9040685542208136,
+     "min": 1.8081367467032197,
+     "max": 1.8081371084416271,
      "rows": 6
     },
     "kkt_residual": 1.498879555341384e-14,
@@ -16606,7 +16606,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -17335,15 +17335,15 @@
    "N": 3,
    "M": 0,
    "P": 1,
-   "score_float": 0.5702898271141296,
-   "score_cert": 0.5702898271541296,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 1.1405796542282591,
+   "score_cert": 1.1405796543082591,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 7.013978052533246e-11,
-   "display": "0.570290",
+   "display": "1.140580",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.5702898271541296,
+    "size": 1.1405796543082591,
     "pieces": [
      {
       "x": -1.3665876642753962e-17,
@@ -17353,7 +17353,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.5702898271141296,
+    "size": 1.1405796542282591,
     "pieces": [
      {
       "x": -1.3665876642753962e-17,
@@ -17371,8 +17371,8 @@
     "min_container_clearance_lb": 2.4068435169907297e-11
    },
    "bound": {
-    "lower": 0.5702898271141194,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.1405796542282387,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -17385,10 +17385,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.0062264140510137,
+    "dsdK_envelope": 0.0124528281020274,
     "dsdK_multiplier_range": {
-     "min": 0.006226413428372357,
-     "max": 0.006226414673655168,
+     "min": 0.012452826856744714,
+     "max": 0.012452829347310335,
      "rows": 3
     },
     "kkt_residual": 9.99309618313593e-15,
@@ -17396,7 +17396,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.577,
+    "value": 1.154,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -17409,15 +17409,15 @@
    "N": 3,
    "M": 0,
    "P": 2,
-   "score_float": 0.8340252289813315,
-   "score_cert": 0.834025229039068,
-   "cert_minus_float": 5.773648226181649e-11,
+   "score_float": 1.668050457962663,
+   "score_cert": 1.668050458078136,
+   "cert_minus_float": 1.1547296452363298e-10,
    "cert_minus_float_relative": 6.922630186179757e-11,
-   "display": "0.834025",
+   "display": "1.668050",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.834025229039068,
+    "size": 1.668050458078136,
     "pieces": [
      {
       "x": -0.20046202984106,
@@ -17432,7 +17432,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.8340252289813315,
+    "size": 1.668050457962663,
     "pieces": [
      {
       "x": -0.20046202981772546,
@@ -17463,7 +17463,7 @@
     "min_container_clearance_lb": 3.736554848512352e-11
    },
    "bound": {
-    "lower": 0.5702898271141194,
+    "lower": 1.1405796542282387,
     "kind": "monotonicity: s(P) >= lower bound for P - 1",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -17477,10 +17477,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.02841670409778804,
+    "dsdK_envelope": 0.05683340819557608,
     "dsdK_multiplier_range": {
-     "min": 0.028416695633025093,
-     "max": 0.028416711896446414,
+     "min": 0.056833391266050186,
+     "max": 0.05683342379289283,
      "rows": 4
     },
     "kkt_residual": 3.5406040540554284e-08,
@@ -17488,7 +17488,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.866,
+    "value": 1.732,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -17501,15 +17501,15 @@
    "N": 3,
    "M": 0,
    "P": 3,
-   "score_float": 0.9320500328449759,
-   "score_cert": 0.9320500329077069,
-   "cert_minus_float": 6.273104258269768e-11,
+   "score_float": 1.8641000656899518,
+   "score_cert": 1.8641000658154139,
+   "cert_minus_float": 1.2546208516539537e-10,
    "cert_minus_float_relative": 6.730437248225653e-11,
-   "display": "0.932050",
+   "display": "1.864100",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9320500329077069,
+    "size": 1.8641000658154139,
     "pieces": [
      {
       "x": -0.45167515871674546,
@@ -17529,7 +17529,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9320500328449759,
+    "size": 1.8641000656899518,
     "pieces": [
      {
       "x": -0.4516751587062357,
@@ -17579,7 +17579,7 @@
     "min_container_clearance_lb": 4.291913846350844e-11
    },
    "bound": {
-    "lower": 0.5975658090832552,
+    "lower": 1.1951316181665104,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -17593,10 +17593,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.020695668526298505,
+    "dsdK_envelope": 0.04139133705259701,
     "dsdK_multiplier_range": {
-     "min": 0.020695648557842578,
-     "max": 0.020695694824258908,
+     "min": 0.041391297115685156,
+     "max": 0.041391389648517816,
      "rows": 8
     },
     "kkt_residual": 1.2410248688287303e-07,
@@ -17604,7 +17604,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.953,
+    "value": 1.906,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -17617,15 +17617,15 @@
    "N": 3,
    "M": 0,
    "P": 4,
-   "score_float": 0.967039159404536,
-   "score_cert": 0.9670391594696719,
-   "cert_minus_float": 6.513589667633823e-11,
+   "score_float": 1.934078318809072,
+   "score_cert": 1.9340783189393438,
+   "cert_minus_float": 1.3027179335267647e-10,
    "cert_minus_float_relative": 6.735600729596753e-11,
-   "display": "0.967039",
+   "display": "1.934078",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9670391594696719,
+    "size": 1.9340783189393438,
     "pieces": [
      {
       "x": 0.4277804840077428,
@@ -17650,7 +17650,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.967039159404536,
+    "size": 1.934078318809072,
     "pieces": [
      {
       "x": 0.4277808698486614,
@@ -17726,7 +17726,7 @@
     "min_container_clearance_lb": 4.499872382459298e-11
    },
    "bound": {
-    "lower": 0.6867468516813723,
+    "lower": 1.3734937033627446,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -17740,10 +17740,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.0138793627863549,
+    "dsdK_envelope": 0.0277587255727098,
     "dsdK_multiplier_range": {
-     "min": 0.013879337019113595,
-     "max": 0.013879337019113596,
+     "min": 0.02775867403822719,
+     "max": 0.027758674038227193,
      "rows": 11
     },
     "kkt_residual": 9.913652576997642e-07,
@@ -17751,7 +17751,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.98,
+    "value": 1.96,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -17764,15 +17764,15 @@
    "N": 3,
    "M": 0,
    "P": 5,
-   "score_float": 0.9924859466349043,
-   "score_cert": 0.9924859467022143,
-   "cert_minus_float": 6.731004642546168e-11,
+   "score_float": 1.9849718932698086,
+   "score_cert": 1.9849718934044287,
+   "cert_minus_float": 1.3462009285092336e-10,
    "cert_minus_float_relative": 6.781964687125422e-11,
-   "display": "0.992486",
+   "display": "1.984972",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9924859467022143,
+    "size": 1.9849718934044287,
     "pieces": [
      {
       "x": 0.5511641093563282,
@@ -17802,7 +17802,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9924859466349043,
+    "size": 1.9849718932698086,
     "pieces": [
      {
       "x": 0.551164109328026,
@@ -17911,7 +17911,7 @@
     "min_container_clearance_lb": 4.6545641846157875e-11
    },
    "bound": {
-    "lower": 0.7642482236727637,
+    "lower": 1.5284964473455274,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -17925,10 +17925,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.029819040963645606,
+    "dsdK_envelope": 0.05963808192729121,
     "dsdK_multiplier_range": {
-     "min": 0.029819014913406956,
-     "max": 0.029819014913406935,
+     "min": 0.05963802982681391,
+     "max": 0.05963802982681387,
      "rows": 14
     },
     "kkt_residual": 6.143817680451014e-07,
@@ -17936,7 +17936,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -17949,15 +17949,15 @@
    "N": 3,
    "M": 0,
    "P": 6,
-   "score_float": 1.0000000000000002,
-   "score_cert": 1.0000000000785747,
-   "cert_minus_float": 7.857448025561098e-11,
+   "score_float": 2.0000000000000004,
+   "score_cert": 2.0000000001571494,
+   "cert_minus_float": 1.5714896051122196e-10,
    "cert_minus_float_relative": 7.857448025561097e-11,
-   "display": "1.000000",
+   "display": "2.000000",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.0000000000785747,
+    "size": 2.0000000001571494,
     "pieces": [
      {
       "x": -0.47429919729925235,
@@ -17992,7 +17992,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.0000000000000002,
+    "size": 2.0000000000000004,
     "pieces": [
      {
       "x": -0.4742991972631484,
@@ -18141,7 +18141,7 @@
     "min_container_clearance_lb": 4.700766656566091e-11
    },
    "bound": {
-    "lower": 0.8333879130586861,
+    "lower": 1.6667758261173722,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -18155,10 +18155,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 4.087894985623647e-10,
+    "dsdK_envelope": 8.175789971247294e-10,
     "dsdK_multiplier_range": {
-     "min": -4.363625417599937e-09,
-     "max": 1.7694052276986082e-07,
+     "min": -8.727250835199873e-09,
+     "max": 3.5388104553972163e-07,
      "rows": 32
     },
     "kkt_residual": 2.17050234023657e-14,
@@ -18166,7 +18166,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -18179,15 +18179,15 @@
    "N": 3,
    "M": 0,
    "P": 7,
-   "score_float": 1.0166145398053874,
-   "score_cert": 1.016614539871962,
-   "cert_minus_float": 6.657452367164751e-11,
+   "score_float": 2.033229079610775,
+   "score_cert": 2.033229079743924,
+   "cert_minus_float": 1.3314904734329502e-10,
    "cert_minus_float_relative": 6.548649568241667e-11,
-   "display": "1.016615",
+   "display": "2.033229",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.016614539871962,
+    "size": 2.033229079743924,
     "pieces": [
      {
       "x": -0.4297046233151331,
@@ -18227,7 +18227,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.0166145398053874,
+    "size": 2.033229079610775,
     "pieces": [
      {
       "x": -0.4297046232936066,
@@ -18409,7 +18409,7 @@
     "min_container_clearance_lb": 4.803982484043849e-11
    },
    "bound": {
-    "lower": 0.8961494206482088,
+    "lower": 1.7922988412964176,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -18423,10 +18423,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.09256636488867047,
+    "dsdK_envelope": 0.18513272977734094,
     "dsdK_multiplier_range": {
-     "min": 0.09256625789701442,
-     "max": 0.0925664718803327,
+     "min": 0.18513251579402884,
+     "max": 0.1851329437606654,
      "rows": 21
     },
     "kkt_residual": 1.079735056603483e-14,
@@ -18434,7 +18434,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.152,
+    "value": 2.304,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -18447,15 +18447,15 @@
    "N": 3,
    "M": 0,
    "P": 8,
-   "score_float": 1.115509863399353,
-   "score_cert": 1.1155098634679577,
-   "cert_minus_float": 6.860467749447707e-11,
+   "score_float": 2.231019726798706,
+   "score_cert": 2.2310197269359153,
+   "cert_minus_float": 1.3720935498895415e-10,
    "cert_minus_float_relative": 6.150073589256698e-11,
-   "display": "1.115510",
+   "display": "2.231020",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.1155098634679577,
+    "size": 2.2310197269359153,
     "pieces": [
      {
       "x": -0.5121663014101305,
@@ -18500,7 +18500,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.115509863399353,
+    "size": 2.231019726798706,
     "pieces": [
      {
       "x": -0.5121663013873831,
@@ -18726,7 +18726,7 @@
     "min_container_clearance_lb": 5.4467063342734226e-11
    },
    "bound": {
-    "lower": 0.9538330486166997,
+    "lower": 1.9076660972333994,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -18740,10 +18740,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.12171754627692331,
+    "dsdK_envelope": 0.24343509255384663,
     "dsdK_multiplier_range": {
-     "min": 0.12171739540389141,
-     "max": 0.1217176971499645,
+     "min": 0.24343479080778282,
+     "max": 0.243435394299929,
      "rows": 24
     },
     "kkt_residual": 1.1714676385631894e-14,
@@ -18751,7 +18751,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.263,
+    "value": 2.526,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -18764,15 +18764,15 @@
    "N": 3,
    "M": 0,
    "P": 9,
-   "score_float": 1.2077726836891902,
-   "score_cert": 1.2077726837594083,
-   "cert_minus_float": 7.021805359386235e-11,
+   "score_float": 2.4155453673783804,
+   "score_cert": 2.4155453675188165,
+   "cert_minus_float": 1.404361071877247e-10,
    "cert_minus_float_relative": 5.813846805955114e-11,
-   "display": "1.207773",
+   "display": "2.415545",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.2077726837594083,
+    "size": 2.4155453675188165,
     "pieces": [
      {
       "x": -0.6098195955835122,
@@ -18822,7 +18822,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.2077726836891902,
+    "size": 2.4155453673783804,
     "pieces": [
      {
       "x": -0.6098195955588788,
@@ -19097,7 +19097,7 @@
     "min_container_clearance_lb": 6.094285309556062e-11
    },
    "bound": {
-    "lower": 1.0073473497687884,
+    "lower": 2.0146946995375767,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -19111,10 +19111,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.151614603622803,
+    "dsdK_envelope": 0.303229207245606,
     "dsdK_multiplier_range": {
-     "min": 0.15161439017344716,
-     "max": 0.15161481707217211,
+     "min": 0.3032287803468943,
+     "max": 0.30322963414434423,
      "rows": 27
     },
     "kkt_residual": 1.2312197273853684e-14,
@@ -19122,7 +19122,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.314,
+    "value": 2.628,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -19135,15 +19135,15 @@
    "N": 3,
    "M": 0,
    "P": 10,
-   "score_float": 1.24968218739496,
-   "score_cert": 1.2496821874324322,
-   "cert_minus_float": 3.7472247527148284e-11,
+   "score_float": 2.49936437478992,
+   "score_cert": 2.4993643748648644,
+   "cert_minus_float": 7.494449505429657e-11,
    "cert_minus_float_relative": 2.998542181773552e-11,
-   "display": "1.249682",
+   "display": "2.499364",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.2496821874324322,
+    "size": 2.4993643748648644,
     "pieces": [
      {
       "x": -0.6573593586800892,
@@ -19198,7 +19198,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.24968218739496,
+    "size": 2.49936437478992,
     "pieces": [
      {
       "x": -0.6573554278337178,
@@ -19529,7 +19529,7 @@
     "min_container_clearance_lb": 6.405247236939639e-11
    },
    "bound": {
-    "lower": 1.0573576040480643,
+    "lower": 2.1147152080961287,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -19543,10 +19543,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.09967539452998198,
+    "dsdK_envelope": 0.19935078905996395,
     "dsdK_multiplier_range": {
-     "min": 0.09967601717955529,
-     "max": 0.09967601718796287,
+     "min": 0.19935203435911059,
+     "max": 0.19935203437592575,
      "rows": 35
     },
     "kkt_residual": 2.8641872494700968e-06,
@@ -19554,7 +19554,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.38468,
+    "value": 2.76936,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -19567,15 +19567,15 @@
    "N": 3,
    "M": 0,
    "P": 11,
-   "score_float": 1.3062265717529498,
-   "score_cert": 1.3062265718303177,
-   "cert_minus_float": 7.736788987244836e-11,
+   "score_float": 2.6124531435058995,
+   "score_cert": 2.6124531436606353,
+   "cert_minus_float": 1.5473577974489672e-10,
    "cert_minus_float_relative": 5.92300689218265e-11,
-   "display": "1.306227",
+   "display": "2.612453",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.3062265718303177,
+    "size": 2.6124531436606353,
     "pieces": [
      {
       "x": -0.008770960922392875,
@@ -19635,7 +19635,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.3062265717529498,
+    "size": 2.6124531435058995,
     "pieces": [
      {
       "x": -0.008770960926198354,
@@ -20031,7 +20031,7 @@
     "min_container_clearance_lb": 6.842706339719565e-11
    },
    "bound": {
-    "lower": 1.1043687753789018,
+    "lower": 2.2087375507578035,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -20045,10 +20045,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.13851794336509482,
+    "dsdK_envelope": 0.27703588673018964,
     "dsdK_multiplier_range": {
-     "min": 0.13851741433582834,
-     "max": 0.1385184723943469,
+     "min": 0.2770348286716567,
+     "max": 0.2770369447886938,
      "rows": 33
     },
     "kkt_residual": 2.6264481910471602e-14,
@@ -20056,7 +20056,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.466,
+    "value": 2.932,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -20069,15 +20069,15 @@
    "N": 3,
    "M": 0,
    "P": 12,
-   "score_float": 1.3742813040626234,
-   "score_cert": 1.3742813041455948,
-   "cert_minus_float": 8.297140752233645e-11,
+   "score_float": 2.7485626081252468,
+   "score_cert": 2.7485626082911896,
+   "cert_minus_float": 1.659428150446729e-10,
    "cert_minus_float_relative": 6.037439880543962e-11,
-   "display": "1.374281",
+   "display": "2.748563",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.3742813041455948,
+    "size": 2.7485626082911896,
     "pieces": [
      {
       "x": 0.3675134539269819,
@@ -20142,7 +20142,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.3742813040626234,
+    "size": 2.7485626081252468,
     "pieces": [
      {
       "x": 0.3675134538993461,
@@ -20604,7 +20604,7 @@
     "min_container_clearance_lb": 7.398393151122136e-11
    },
    "bound": {
-    "lower": 1.1487751975631815,
+    "lower": 2.297550395126363,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -20618,10 +20618,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.12494438869942236,
+    "dsdK_envelope": 0.2498887773988447,
     "dsdK_multiplier_range": {
-     "min": 0.12494393343029574,
-     "max": 0.12494484394607047,
+     "min": 0.24988786686059147,
+     "max": 0.24988968789214094,
      "rows": 40
     },
     "kkt_residual": 1.676830838060738e-14,
@@ -20629,7 +20629,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.507,
+    "value": 3.014,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -64343,15 +64343,15 @@
    "N": 4,
    "M": 0,
    "P": 1,
-   "score_float": 0.6826664571216058,
-   "score_cert": 0.6826664571616057,
-   "cert_minus_float": 3.999989228731238e-11,
+   "score_float": 1.3653329142432116,
+   "score_cert": 1.3653329143232114,
+   "cert_minus_float": 7.999978457462475e-11,
    "cert_minus_float_relative": 5.859361020309668e-11,
-   "display": "0.682666",
+   "display": "1.365333",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.6826664571616057,
+    "size": 1.3653329143232114,
     "pieces": [
      {
       "x": -2.2262956316428055e-17,
@@ -64361,7 +64361,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.6826664571216058,
+    "size": 1.3653329142432116,
     "pieces": [
      {
       "x": 3.433312632858626e-17,
@@ -64379,8 +64379,8 @@
     "min_container_clearance_lb": 2.947754367517202e-11
    },
    "bound": {
-    "lower": 0.6826664571215957,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.3653329142431914,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -64393,10 +64393,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.02039181329349629,
+    "dsdK_envelope": 0.04078362658699258,
     "dsdK_multiplier_range": {
-     "min": 0.02039181125431527,
-     "max": 0.020391815332677928,
+     "min": 0.04078362250863054,
+     "max": 0.040783630665355855,
      "rows": 4
     },
     "kkt_residual": 1.4988422020512076e-14,
@@ -64404,7 +64404,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.7071,
+    "value": 1.4142,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -64417,15 +64417,15 @@
    "N": 4,
    "M": 0,
    "P": 2,
-   "score_float": 1.0543311444739532,
-   "score_cert": 1.0543311445301038,
-   "cert_minus_float": 5.615063969344192e-11,
+   "score_float": 2.1086622889479063,
+   "score_cert": 2.1086622890602076,
+   "cert_minus_float": 1.1230127938688383e-10,
    "cert_minus_float_relative": 5.325711944273225e-11,
-   "display": "1.054331",
+   "display": "2.108662",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.0543311445301038,
+    "size": 2.1086622890602076,
     "pieces": [
      {
       "x": -0.19090216159204426,
@@ -64440,7 +64440,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.0543311444739532,
+    "size": 2.1086622889479063,
     "pieces": [
      {
       "x": -0.19090216158447054,
@@ -64471,8 +64471,8 @@
     "min_container_clearance_lb": 5.043256438266566e-11
    },
    "bound": {
-    "lower": 0.8941488054284507,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 1.7882976108569013,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -64485,10 +64485,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.0546706256075038,
+    "dsdK_envelope": 0.1093412512150076,
     "dsdK_multiplier_range": {
-     "min": 0.054670608142956066,
-     "max": 0.054670643072053424,
+     "min": 0.10934121628591213,
+     "max": 0.10934128614410685,
      "rows": 6
     },
     "kkt_residual": 1.2278517273258115e-14,
@@ -64496,7 +64496,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.11803,
+    "value": 2.23606,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -64509,15 +64509,15 @@
    "N": 4,
    "M": 0,
    "P": 3,
-   "score_float": 1.2265510707917648,
-   "score_cert": 1.226551070854407,
-   "cert_minus_float": 6.264211371842521e-11,
+   "score_float": 2.4531021415835297,
+   "score_cert": 2.453102141708814,
+   "cert_minus_float": 1.2528422743685041e-10,
    "cert_minus_float_relative": 5.1071753317200554e-11,
-   "display": "1.226551",
+   "display": "2.453102",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.226551070854407,
+    "size": 2.453102141708814,
     "pieces": [
      {
       "x": -0.1576414392434204,
@@ -64537,7 +64537,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.2265510707917648,
+    "size": 2.4531021415835297,
     "pieces": [
      {
       "x": -0.15764143923417032,
@@ -64587,8 +64587,8 @@
     "min_container_clearance_lb": 6.23227160459191e-11
    },
    "bound": {
-    "lower": 0.8941488054284507,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 1.7882976108569013,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -64601,10 +64601,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.054204467738989605,
+    "dsdK_envelope": 0.10840893547797921,
     "dsdK_multiplier_range": {
-     "min": 0.054204410258657326,
-     "max": 0.05420452521932109,
+     "min": 0.10840882051731465,
+     "max": 0.10840905043864218,
      "rows": 9
     },
     "kkt_residual": 1.5361493163913886e-14,
@@ -64612,7 +64612,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.28847,
+    "value": 2.57694,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -64625,15 +64625,15 @@
    "N": 4,
    "M": 0,
    "P": 4,
-   "score_float": 1.3335683391591457,
-   "score_cert": 1.3335683392221926,
-   "cert_minus_float": 6.304690103320354e-11,
+   "score_float": 2.6671366783182915,
+   "score_cert": 2.6671366784443853,
+   "cert_minus_float": 1.2609380206640708e-10,
    "cert_minus_float_relative": 4.727684302475003e-11,
-   "display": "1.333568",
+   "display": "2.667137",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.3335683392221926,
+    "size": 2.6671366784443853,
     "pieces": [
      {
       "x": -0.6078102089575773,
@@ -64658,7 +64658,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.3335683391591457,
+    "size": 2.6671366783182915,
     "pieces": [
      {
       "x": -0.6078102089379089,
@@ -64732,7 +64732,7 @@
     "min_container_clearance_lb": 7.062001133229495e-11
    },
    "bound": {
-    "lower": 1.0041973108045052,
+    "lower": 2.0083946216090105,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -64746,10 +64746,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.10146852639327393,
+    "dsdK_envelope": 0.20293705278654786,
     "dsdK_multiplier_range": {
-     "min": 0.10146843893491597,
-     "max": 0.10146861385163625,
+     "min": 0.20293687786983194,
+     "max": 0.2029372277032725,
      "rows": 12
     },
     "kkt_residual": 1.0562438592050446e-14,
@@ -64757,7 +64757,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.41421,
+    "value": 2.82842,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -64770,15 +64770,15 @@
    "N": 4,
    "M": 0,
    "P": 5,
-   "score_float": 1.4274017682906999,
-   "score_cert": 1.4274017683340994,
-   "cert_minus_float": 4.339950621101707e-11,
+   "score_float": 2.8548035365813997,
+   "score_cert": 2.8548035366681987,
+   "cert_minus_float": 8.679901242203414e-11,
    "cert_minus_float_relative": 3.040454844257869e-11,
-   "display": "1.427402",
+   "display": "2.854804",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.4274017683340994,
+    "size": 2.8548035366681987,
     "pieces": [
      {
       "x": -0.10350152087351605,
@@ -64808,7 +64808,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.4274017682906999,
+    "size": 2.8548035365813997,
     "pieces": [
      {
       "x": -0.10349513602051225,
@@ -64907,7 +64907,7 @@
     "min_container_clearance_lb": 7.85584105720826e-11
    },
    "bound": {
-    "lower": 1.1122705138920035,
+    "lower": 2.224541027784007,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -64921,10 +64921,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.16720342828450532,
+    "dsdK_envelope": 0.33440685656901065,
     "dsdK_multiplier_range": {
-     "min": 0.16720347245757664,
-     "max": 0.16720347245757658,
+     "min": 0.33440694491515327,
+     "max": 0.33440694491515316,
      "rows": 13
     },
     "kkt_residual": 1.3190663302054246e-06,
@@ -64932,7 +64932,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.58113,
+    "value": 3.16226,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -64945,15 +64945,15 @@
    "N": 4,
    "M": 0,
    "P": 6,
-   "score_float": 1.5724710838288134,
-   "score_cert": 1.5724710839050653,
-   "cert_minus_float": 7.625189368809515e-11,
+   "score_float": 3.144942167657627,
+   "score_cert": 3.1449421678101306,
+   "cert_minus_float": 1.525037873761903e-10,
    "cert_minus_float_relative": 4.849176208851437e-11,
-   "display": "1.572471",
+   "display": "3.144942",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.5724710839050653,
+    "size": 3.1449421678101306,
     "pieces": [
      {
       "x": 0.8587652062568283,
@@ -64988,7 +64988,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.5724710838288134,
+    "size": 3.144942167657627,
     "pieces": [
      {
       "x": 0.8587652062179225,
@@ -65125,7 +65125,7 @@
     "min_container_clearance_lb": 9.222020451879494e-11
    },
    "bound": {
-    "lower": 1.2075084244828083,
+    "lower": 2.4150168489656165,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -65139,10 +65139,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.08113346550375174,
+    "dsdK_envelope": 0.16226693100750347,
     "dsdK_multiplier_range": {
-     "min": 0.08113336424155711,
-     "max": 0.08113356676592555,
+     "min": 0.16226672848311421,
+     "max": 0.1622671335318511,
      "rows": 15
     },
     "kkt_residual": 5.719742462567347e-14,
@@ -65152,7 +65152,7 @@
     ]
    },
    "euclidean_record": {
-    "value": 1.688,
+    "value": 3.376,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -65165,15 +65165,15 @@
    "N": 4,
    "M": 0,
    "P": 7,
-   "score_float": 1.6322908097563513,
-   "score_cert": 1.6322908098184827,
-   "cert_minus_float": 6.213141112709764e-11,
+   "score_float": 3.2645816195127026,
+   "score_cert": 3.2645816196369655,
+   "cert_minus_float": 1.2426282225419527e-10,
    "cert_minus_float_relative": 3.806393490408236e-11,
-   "display": "1.632291",
+   "display": "3.264582",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.6322908098184827,
+    "size": 3.2645816196369655,
     "pieces": [
      {
       "x": 0.3316637215099967,
@@ -65213,7 +65213,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.6322908097563513,
+    "size": 3.2645816195127026,
     "pieces": [
      {
       "x": 0.3316637214723908,
@@ -65391,7 +65391,7 @@
     "min_container_clearance_lb": 9.840090156272062e-11
    },
    "bound": {
-    "lower": 1.2929841967625166,
+    "lower": 2.5859683935250333,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -65405,10 +65405,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.10387779966279524,
+    "dsdK_envelope": 0.20775559932559048,
     "dsdK_multiplier_range": {
-     "min": 0.1038777705641389,
-     "max": 0.10387777056413879,
+     "min": 0.2077555411282778,
+     "max": 0.20775554112827757,
      "rows": 20
     },
     "kkt_residual": 1.269251623614467e-06,
@@ -65416,7 +65416,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.80277,
+    "value": 3.60554,
     "status": "proven_unrefereed",
     "source": "data/records.json"
    },
@@ -65429,15 +65429,15 @@
    "N": 4,
    "M": 0,
    "P": 8,
-   "score_float": 1.7125524526013878,
-   "score_cert": 1.7125524526759106,
-   "cert_minus_float": 7.452283234954393e-11,
+   "score_float": 3.4251049052027756,
+   "score_cert": 3.425104905351821,
+   "cert_minus_float": 1.4904566469908787e-10,
    "cert_minus_float_relative": 4.351564954191205e-11,
-   "display": "1.712552",
+   "display": "3.425105",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.7125524526759106,
+    "size": 3.425104905351821,
     "pieces": [
      {
       "x": 0.3915731684632495,
@@ -65482,7 +65482,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.7125524526013878,
+    "size": 3.4251049052027756,
     "pieces": [
      {
       "x": 0.3915731684515098,
@@ -65704,7 +65704,7 @@
     "min_container_clearance_lb": 1.0725291874146721e-10
    },
    "bound": {
-    "lower": 1.3707195845873086,
+    "lower": 2.741439169174617,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -65718,10 +65718,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.16945274712666467,
+    "dsdK_envelope": 0.33890549425332933,
     "dsdK_multiplier_range": {
-     "min": 0.16945229015963534,
-     "max": 0.16945320405052228,
+     "min": 0.3389045803192707,
+     "max": 0.33890640810104455,
      "rows": 25
     },
     "kkt_residual": 1.2076388241648094e-14,
@@ -65729,7 +65729,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.97877,
+    "value": 3.95754,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -65742,15 +65742,15 @@
    "N": 4,
    "M": 0,
    "P": 9,
-   "score_float": 1.7990961320693069,
-   "score_cert": 1.7990961320894658,
-   "cert_minus_float": 2.0158985591933742e-11,
+   "score_float": 3.5981922641386137,
+   "score_cert": 3.5981922641789317,
+   "cert_minus_float": 4.0317971183867485e-11,
    "cert_minus_float_relative": 1.1205063049491984e-11,
-   "display": "1.799096",
+   "display": "3.598192",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.7990961320894658,
+    "size": 3.5981922641789317,
     "pieces": [
      {
       "x": -1.0055151376006388,
@@ -65800,7 +65800,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.7990961320693069,
+    "size": 3.5981922641386137,
     "pieces": [
      {
       "x": -1.0055219142168919,
@@ -66071,7 +66071,7 @@
     "min_container_clearance_lb": 1.1757471043426675e-10
    },
    "bound": {
-    "lower": 1.4421305132339293,
+    "lower": 2.8842610264678585,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -66085,10 +66085,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.14824025817586978,
+    "dsdK_envelope": 0.29648051635173955,
     "dsdK_multiplier_range": {
-     "min": 0.1482420193156279,
-     "max": 0.14824201931562872,
+     "min": 0.2964840386312558,
+     "max": 0.29648403863125744,
      "rows": 24
     },
     "kkt_residual": 2.186072744295425e-06,
@@ -66096,7 +66096,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.07759,
+    "value": 4.15518,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -66109,15 +66109,15 @@
    "N": 4,
    "M": 0,
    "P": 10,
-   "score_float": 1.8815363249930135,
-   "score_cert": 1.881536325008816,
-   "cert_minus_float": 1.5802470443304628e-11,
+   "score_float": 3.763072649986027,
+   "score_cert": 3.763072650017632,
+   "cert_minus_float": 3.1604940886609256e-11,
    "cert_minus_float_relative": 8.398706011356601e-12,
-   "display": "1.881536",
+   "display": "3.763073",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.881536325008816,
+    "size": 3.763072650017632,
     "pieces": [
      {
       "x": -0.08742808780602809,
@@ -66172,7 +66172,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.8815363249930135,
+    "size": 3.763072649986027,
     "pieces": [
      {
       "x": -0.08743120352238744,
@@ -66497,7 +66497,7 @@
     "min_container_clearance_lb": 1.2822017584893464e-10
    },
    "bound": {
-    "lower": 1.5082550682293276,
+    "lower": 3.0165101364586553,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -66511,10 +66511,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.24038124341304076,
+    "dsdK_envelope": 0.4807624868260815,
     "dsdK_multiplier_range": {
-     "min": 0.24038105629180936,
-     "max": 0.24038105629181658,
+     "min": 0.48076211258361873,
+     "max": 0.48076211258363316,
      "rows": 28
     },
     "kkt_residual": 3.132970944633056e-06,
@@ -66522,7 +66522,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.12132,
+    "value": 4.24264,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -66535,15 +66535,15 @@
    "N": 4,
    "M": 0,
    "P": 11,
-   "score_float": 1.928132491481423,
-   "score_cert": 1.928132491481423,
+   "score_float": 3.856264982962846,
+   "score_cert": 3.856264982962846,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.928132",
+   "display": "3.856265",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.928132491481423,
+    "size": 3.856264982962846,
     "pieces": [
      {
       "x": -1.1443547119397581,
@@ -66603,7 +66603,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.928132491481423,
+    "size": 3.856264982962846,
     "pieces": [
      {
       "x": -1.1443547119397581,
@@ -66989,7 +66989,7 @@
     "min_container_clearance_lb": 1.34622808957964e-10
    },
    "bound": {
-    "lower": 1.5698814171653357,
+    "lower": 3.1397628343306714,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -67003,10 +67003,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.1815149353664695,
+    "dsdK_envelope": 0.363029870732939,
     "dsdK_multiplier_range": {
-     "min": 0.1815200271983099,
-     "max": 0.18152002719831029,
+     "min": 0.3630400543966198,
+     "max": 0.36304005439662057,
      "rows": 31
     },
     "kkt_residual": 2.466529973194652e-05,
@@ -67014,7 +67014,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.21386,
+    "value": 4.42772,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -67027,15 +67027,15 @@
    "N": 4,
    "M": 0,
    "P": 12,
-   "score_float": 1.9833495436374782,
-   "score_cert": 1.9833495436374782,
+   "score_float": 3.9666990872749563,
+   "score_cert": 3.9666990872749563,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "1.983350",
+   "display": "3.966699",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.9833495436374782,
+    "size": 3.9666990872749563,
     "pieces": [
      {
       "x": -0.8875529864444871,
@@ -67100,7 +67100,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.9833495436374782,
+    "size": 3.9666990872749563,
     "pieces": [
      {
       "x": -0.8875529864444871,
@@ -67546,7 +67546,7 @@
     "min_container_clearance_lb": 1.4258761717668093e-10
    },
    "bound": {
-    "lower": 1.6276247344606987,
+    "lower": 3.2552494689213973,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -67560,10 +67560,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2945432375999844,
+    "dsdK_envelope": 0.5890864751999688,
     "dsdK_multiplier_range": {
-     "min": 0.2945323853647074,
-     "max": 0.294532385365559,
+     "min": 0.5890647707294148,
+     "max": 0.589064770731118,
      "rows": 36
     },
     "kkt_residual": 3.943973315776825e-06,
@@ -67571,7 +67571,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.23606,
+    "value": 4.47212,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -70819,15 +70819,15 @@
    "N": 5,
    "M": 0,
    "P": 1,
-   "score_float": 0.7988288737515571,
-   "score_cert": 0.7988288737915571,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 1.5976577475031142,
+   "score_cert": 1.5976577475831142,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 5.007330684200481e-11,
-   "display": "0.798829",
+   "display": "1.597658",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.7988288737915571,
+    "size": 1.5976577475831142,
     "pieces": [
      {
       "x": -3.0761311366877106e-17,
@@ -70837,7 +70837,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.7988288737515571,
+    "size": 1.5976577475031142,
     "pieces": [
      {
       "x": -3.0761311366877106e-17,
@@ -70855,8 +70855,8 @@
     "min_container_clearance_lb": 3.546161307256827e-11
    },
    "bound": {
-    "lower": 0.798828873751547,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.597657747503094,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -70869,10 +70869,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.04053275176607542,
+    "dsdK_envelope": 0.08106550353215083,
     "dsdK_multiplier_range": {
-     "min": 0.040532747712800674,
-     "max": 0.040532755819351035,
+     "min": 0.08106549542560135,
+     "max": 0.08106551163870207,
      "rows": 5
     },
     "kkt_residual": 1.0890803429100314e-14,
@@ -70880,7 +70880,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 0.85065,
+    "value": 1.7013,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -70893,15 +70893,15 @@
    "N": 5,
    "M": 0,
    "P": 2,
-   "score_float": 1.3983193992036065,
-   "score_cert": 1.398319399261343,
-   "cert_minus_float": 5.773648226181649e-11,
+   "score_float": 2.796638798407213,
+   "score_cert": 2.796638798522686,
+   "cert_minus_float": 1.1547296452363298e-10,
    "cert_minus_float_relative": 4.128991008399047e-11,
-   "display": "1.398319",
+   "display": "2.796639",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.398319399261343,
+    "size": 2.796638798522686,
     "pieces": [
      {
       "x": -0.5084606274313915,
@@ -70916,7 +70916,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.3983193992036065,
+    "size": 2.796638798407213,
     "pieces": [
      {
       "x": -0.5084606274104799,
@@ -70947,8 +70947,8 @@
     "min_container_clearance_lb": 7.602731150066108e-11
    },
    "bound": {
-    "lower": 1.198981050904071,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.397962101808142,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -70961,10 +70961,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.1119396922653809,
+    "dsdK_envelope": 0.2238793845307618,
     "dsdK_multiplier_range": {
-     "min": 0.1119396626096315,
-     "max": 0.11193971867395203,
+     "min": 0.223879325219263,
+     "max": 0.22387943734790405,
      "rows": 4
     },
     "kkt_residual": 5.850927080154649e-08,
@@ -70972,7 +70972,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.53884,
+    "value": 3.07768,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -70985,15 +70985,15 @@
    "N": 5,
    "M": 0,
    "P": 3,
-   "score_float": 1.493454247250503,
-   "score_cert": 1.4934542473113546,
-   "cert_minus_float": 6.085154602430976e-11,
+   "score_float": 2.986908494501006,
+   "score_cert": 2.986908494622709,
+   "cert_minus_float": 1.217030920486195e-10,
    "cert_minus_float_relative": 4.074550401282088e-11,
-   "display": "1.493454",
+   "display": "2.986908",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.4934542473113546,
+    "size": 2.986908494622709,
     "pieces": [
      {
       "x": 0.40644401824447707,
@@ -71013,7 +71013,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.493454247250503,
+    "size": 2.986908494501006,
     "pieces": [
      {
       "x": 0.4064440182095799,
@@ -71063,8 +71063,8 @@
     "min_container_clearance_lb": 8.455679332927847e-11
    },
    "bound": {
-    "lower": 1.198981050904071,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.397962101808142,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -71077,10 +71077,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.12354974628834998,
+    "dsdK_envelope": 0.24709949257669997,
     "dsdK_multiplier_range": {
-     "min": 0.12354967164518676,
-     "max": 0.12354982108509474,
+     "min": 0.24709934329037353,
+     "max": 0.24709964217018948,
      "rows": 8
     },
     "kkt_residual": 3.794619447603268e-09,
@@ -71088,7 +71088,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.61803,
+    "value": 3.23606,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -71101,15 +71101,15 @@
    "N": 5,
    "M": 0,
    "P": 4,
-   "score_float": 1.547385692854499,
-   "score_cert": 1.5473856929121779,
-   "cert_minus_float": 5.767897270914091e-11,
+   "score_float": 3.094771385708998,
+   "score_cert": 3.0947713858243557,
+   "cert_minus_float": 1.1535794541828182e-10,
    "cert_minus_float_relative": 3.7275110514133774e-11,
-   "display": "1.547386",
+   "display": "3.094771",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.5473856929121779,
+    "size": 3.0947713858243557,
     "pieces": [
      {
       "x": 0.7080844587052159,
@@ -71134,7 +71134,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.547385692854499,
+    "size": 3.094771385708998,
     "pieces": [
      {
       "x": 0.7080844586894169,
@@ -71206,7 +71206,7 @@
     "min_container_clearance_lb": 8.97276257082225e-11
    },
    "bound": {
-    "lower": 1.261006113487798,
+    "lower": 2.522012226975596,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -71220,10 +71220,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.19543557637794817,
+    "dsdK_envelope": 0.39087115275589634,
     "dsdK_multiplier_range": {
-     "min": 0.1954354634609468,
-     "max": 0.19543568929495567,
+     "min": 0.3908709269218936,
+     "max": 0.39087137858991133,
      "rows": 12
     },
     "kkt_residual": 8.096072476244775e-15,
@@ -71231,7 +71231,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.82971,
+    "value": 3.65942,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -71244,15 +71244,15 @@
    "N": 5,
    "M": 0,
    "P": 5,
-   "score_float": 1.7357112923129867,
-   "score_cert": 1.7357112923721985,
-   "cert_minus_float": 5.92117466169384e-11,
+   "score_float": 3.4714225846259734,
+   "score_cert": 3.471422584744397,
+   "cert_minus_float": 1.184234932338768e-10,
    "cert_minus_float_relative": 3.411382231548058e-11,
-   "display": "1.735711",
+   "display": "3.471423",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.7357112923721985,
+    "size": 3.471422584744397,
     "pieces": [
      {
       "x": -1.0050152753775734,
@@ -71282,7 +71282,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.7357112923129867,
+    "size": 3.4714225846259734,
     "pieces": [
      {
       "x": -1.0050152753580506,
@@ -71381,7 +71381,7 @@
     "min_container_clearance_lb": 1.0993269656090076e-10
    },
    "bound": {
-    "lower": 1.3903978172909666,
+    "lower": 2.780795634581933,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -71395,10 +71395,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.25103075192241986,
+    "dsdK_envelope": 0.5020615038448397,
     "dsdK_multiplier_range": {
-     "min": 0.2510305810450929,
-     "max": 0.25103092279975536,
+     "min": 0.5020611620901858,
+     "max": 0.5020618455995107,
      "rows": 15
     },
     "kkt_residual": 8.576779699481689e-15,
@@ -71406,7 +71406,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.03271,
+    "value": 4.06542,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -71419,15 +71419,15 @@
    "N": 5,
    "M": 0,
    "P": 6,
-   "score_float": 1.8952727630313138,
-   "score_cert": 1.89527276309172,
-   "cert_minus_float": 6.040634659143507e-11,
+   "score_float": 3.7905455260626275,
+   "score_cert": 3.79054552618344,
+   "cert_minus_float": 1.2081269318287013e-10,
    "cert_minus_float_relative": 3.187211243136354e-11,
-   "display": "1.895273",
+   "display": "3.790546",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.89527276309172,
+    "size": 3.79054552618344,
     "pieces": [
      {
       "x": -0.39015654178593256,
@@ -71462,7 +71462,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.8952727630313138,
+    "size": 3.7905455260626275,
     "pieces": [
      {
       "x": -0.3901565417790339,
@@ -71593,7 +71593,7 @@
     "min_container_clearance_lb": 1.3008016065801873e-10
    },
    "bound": {
-    "lower": 1.5032088475868597,
+    "lower": 3.0064176951737194,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -71607,10 +71607,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.3049048478328731,
+    "dsdK_envelope": 0.6098096956657462,
     "dsdK_multiplier_range": {
-     "min": 0.30490459831921934,
-     "max": 0.30490509734653903,
+     "min": 0.6098091966384387,
+     "max": 0.6098101946930781,
      "rows": 18
     },
     "kkt_residual": 1.0280168178302344e-14,
@@ -71618,7 +71618,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.22703,
+    "value": 4.45406,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -71631,15 +71631,15 @@
    "N": 5,
    "M": 0,
    "P": 7,
-   "score_float": 2.0222516678762035,
-   "score_cert": 2.0222516679449756,
-   "cert_minus_float": 6.877209912659055e-11,
+   "score_float": 4.044503335752407,
+   "score_cert": 4.044503335889951,
+   "cert_minus_float": 1.375441982531811e-10,
    "cert_minus_float_relative": 3.4007685699582564e-11,
-   "display": "2.022252",
+   "display": "4.044503",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.0222516679449756,
+    "size": 4.044503335889951,
     "pieces": [
      {
       "x": -0.5277926211605926,
@@ -71679,7 +71679,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.0222516678762035,
+    "size": 4.044503335752407,
     "pieces": [
      {
       "x": -0.5277926211467804,
@@ -71847,7 +71847,7 @@
     "min_container_clearance_lb": 1.4845833825395138e-10
    },
    "bound": {
-    "lower": 1.6035007912286487,
+    "lower": 3.2070015824572975,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -71861,10 +71861,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.26342584547311704,
+    "dsdK_envelope": 0.5268516909462341,
     "dsdK_multiplier_range": {
-     "min": 0.2634255101814183,
-     "max": 0.2634261807648228,
+     "min": 0.5268510203628366,
+     "max": 0.5268523615296457,
      "rows": 21
     },
     "kkt_residual": 1.445464680861954e-14,
@@ -71872,7 +71872,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.2947,
+    "value": 4.5894,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -71885,15 +71885,15 @@
    "N": 5,
    "M": 0,
    "P": 8,
-   "score_float": 2.0696159036195154,
-   "score_cert": 2.0696159036290234,
-   "cert_minus_float": 9.50794998288984e-12,
+   "score_float": 4.139231807239031,
+   "score_cert": 4.139231807258047,
+   "cert_minus_float": 1.901589996577968e-11,
    "cert_minus_float_relative": 4.594064998370737e-12,
-   "display": "2.069616",
+   "display": "4.139232",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.0696159036290234,
+    "size": 4.139231807258047,
     "pieces": [
      {
       "x": 1.005556798877502,
@@ -71938,7 +71938,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.0696159036195154,
+    "size": 4.139231807239031,
     "pieces": [
      {
       "x": 1.0055538182323498,
@@ -72160,7 +72160,7 @@
     "min_container_clearance_lb": 1.559097351990888e-10
    },
    "bound": {
-    "lower": 1.6939416225608765,
+    "lower": 3.387883245121753,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -72174,10 +72174,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.23609929471912308,
+    "dsdK_envelope": 0.47219858943824616,
     "dsdK_multiplier_range": {
-     "min": 0.23609921468641726,
-     "max": 0.23609921468642006,
+     "min": 0.4721984293728345,
+     "max": 0.4721984293728401,
      "rows": 23
     },
     "kkt_residual": 4.498339302097324e-06,
@@ -72185,7 +72185,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.48128,
+    "value": 4.96256,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -73228,15 +73228,15 @@
    "N": 6,
    "M": 0,
    "P": 1,
-   "score_float": 0.9108944290340608,
-   "score_cert": 0.9108944290740608,
-   "cert_minus_float": 4.000000330961484e-11,
+   "score_float": 1.8217888580681216,
+   "score_cert": 1.8217888581481216,
+   "cert_minus_float": 8.000000661922968e-11,
    "cert_minus_float_relative": 4.391288609815302e-11,
-   "display": "0.910894",
+   "display": "1.821789",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 0.9108944290740608,
+    "size": 1.8217888581481216,
     "pieces": [
      {
       "x": 2.013980015411976e-17,
@@ -73246,7 +73246,7 @@
     ]
    },
    "config_touching": {
-    "size": 0.9108944290340608,
+    "size": 1.8217888580681216,
     "pieces": [
      {
       "x": 2.013980015411976e-17,
@@ -73264,8 +73264,8 @@
     "min_container_clearance_lb": 4.168772386383909e-11
    },
    "bound": {
-    "lower": 0.9108944290340506,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 1.8217888580681012,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -73278,10 +73278,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.06509096867057708,
+    "dsdK_envelope": 0.13018193734115416,
     "dsdK_multiplier_range": {
-     "min": 0.06509096216148119,
-     "max": 0.06509097517967494,
+     "min": 0.13018192432296238,
+     "max": 0.13018195035934987,
      "rows": 6
     },
     "kkt_residual": 1.515475437366956e-14,
@@ -73289,7 +73289,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1,
+    "value": 2,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -73302,15 +73302,15 @@
    "N": 6,
    "M": 0,
    "P": 2,
-   "score_float": 1.5978945127968496,
-   "score_cert": 1.5978945128541522,
-   "cert_minus_float": 5.730260710379298e-11,
+   "score_float": 3.195789025593699,
+   "score_cert": 3.1957890257083044,
+   "cert_minus_float": 1.1460521420758596e-10,
    "cert_minus_float_relative": 3.5861320409376873e-11,
-   "display": "1.597895",
+   "display": "3.195789",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.5978945128541522,
+    "size": 3.1957890257083044,
     "pieces": [
      {
       "x": -0.6307542879744427,
@@ -73325,7 +73325,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.5978945127968496,
+    "size": 3.195789025593699,
     "pieces": [
      {
       "x": -0.6307542879591803,
@@ -73356,8 +73356,8 @@
     "min_container_clearance_lb": 9.480568297376098e-11
    },
    "bound": {
-    "lower": 1.4659773779095708,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.9319547558191417,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -73370,10 +73370,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.1548359396560985,
+    "dsdK_envelope": 0.309671879312197,
     "dsdK_multiplier_range": {
-     "min": 0.15483589660147312,
-     "max": 0.15483598271072918,
+     "min": 0.30967179320294624,
+     "max": 0.30967196542145836,
      "rows": 6
     },
     "kkt_residual": 1.3138580768927944e-14,
@@ -73381,7 +73381,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.802,
+    "value": 3.604,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -73394,15 +73394,15 @@
    "N": 6,
    "M": 0,
    "P": 3,
-   "score_float": 1.7674657384877215,
-   "score_cert": 1.7674657385477164,
-   "cert_minus_float": 5.999489793850898e-11,
+   "score_float": 3.534931476975443,
+   "score_cert": 3.5349314770954328,
+   "cert_minus_float": 1.1998979587701797e-10,
    "cert_minus_float_relative": 3.3944023146859866e-11,
-   "display": "1.767466",
+   "display": "3.534931",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.7674657385477164,
+    "size": 3.5349314770954328,
     "pieces": [
      {
       "x": -0.13556272955840018,
@@ -73422,7 +73422,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.7674657384877215,
+    "size": 3.534931476975443,
     "pieces": [
      {
       "x": -0.1355603372319045,
@@ -73472,8 +73472,8 @@
     "min_container_clearance_lb": 1.1370507945645952e-10
    },
    "bound": {
-    "lower": 1.4659773779095708,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 2.9319547558191417,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -73486,10 +73486,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.19494722548527488,
+    "dsdK_envelope": 0.38989445097054976,
     "dsdK_multiplier_range": {
-     "min": 0.19494718390263233,
-     "max": 0.19494718521588048,
+     "min": 0.38989436780526465,
+     "max": 0.38989437043176095,
      "rows": 8
     },
     "kkt_residual": 1.9460031413007404e-07,
@@ -73497,7 +73497,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2,
+    "value": 4,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -73510,15 +73510,15 @@
    "N": 6,
    "M": 0,
    "P": 4,
-   "score_float": 1.91384527195825,
-   "score_cert": 1.9138452719873857,
-   "cert_minus_float": 2.913580487984291e-11,
+   "score_float": 3.8276905439165,
+   "score_cert": 3.8276905439747715,
+   "cert_minus_float": 5.827160975968582e-11,
    "cert_minus_float_relative": 1.522369927535004e-11,
-   "display": "1.913845",
+   "display": "3.827691",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.9138452719873857,
+    "size": 3.8276905439747715,
     "pieces": [
      {
       "x": 0.8029184042958477,
@@ -73543,7 +73543,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.91384527195825,
+    "size": 3.8276905439165,
     "pieces": [
      {
       "x": 0.802922022419771,
@@ -73615,7 +73615,7 @@
     "min_container_clearance_lb": 1.326308603476808e-10
    },
    "bound": {
-    "lower": 1.4798397010827795,
+    "lower": 2.959679402165559,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -73629,10 +73629,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2804634279916236,
+    "dsdK_envelope": 0.5609268559832472,
     "dsdK_multiplier_range": {
-     "min": 0.2804633704450718,
-     "max": 0.280463370445072,
+     "min": 0.5609267408901436,
+     "max": 0.560926740890144,
      "rows": 10
     },
     "kkt_residual": 2.5834412677472414e-06,
@@ -73640,7 +73640,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.239,
+    "value": 4.478,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -73653,15 +73653,15 @@
    "N": 6,
    "M": 0,
    "P": 5,
-   "score_float": 2.087446850041833,
-   "score_cert": 2.087446850072134,
-   "cert_minus_float": 3.030109496648947e-11,
+   "score_float": 4.174893700083666,
+   "score_cert": 4.174893700144268,
+   "cert_minus_float": 6.060218993297894e-11,
    "cert_minus_float_relative": 1.4515864183982569e-11,
-   "display": "2.087447",
+   "display": "4.174894",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.087446850072134,
+    "size": 4.174893700144268,
     "pieces": [
      {
       "x": 1.1568562828883107,
@@ -73691,7 +73691,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.087446850041833,
+    "size": 4.174893700083666,
     "pieces": [
      {
       "x": 1.156857438284592,
@@ -73790,7 +73790,7 @@
     "min_container_clearance_lb": 1.588067285995326e-10
    },
    "bound": {
-    "lower": 1.6249106698964848,
+    "lower": 3.2498213397929696,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -73804,10 +73804,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2787251985244794,
+    "dsdK_envelope": 0.5574503970489588,
     "dsdK_multiplier_range": {
-     "min": 0.2787254631326283,
-     "max": 0.27872546313262847,
+     "min": 0.5574509262652566,
+     "max": 0.5574509262652569,
      "rows": 13
     },
     "kkt_residual": 3.053215960601119e-06,
@@ -73815,7 +73815,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.47134,
+    "value": 4.94268,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -73828,15 +73828,15 @@
    "N": 6,
    "M": 0,
    "P": 6,
-   "score_float": 2.2192350403501018,
-   "score_cert": 2.219235040414613,
-   "cert_minus_float": 6.45110631580792e-11,
+   "score_float": 4.4384700807002035,
+   "score_cert": 4.438470080829226,
+   "cert_minus_float": 1.290221263161584e-10,
    "cert_minus_float_relative": 2.9069053969110936e-11,
-   "display": "2.219235",
+   "display": "4.438470",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.219235040414613,
+    "size": 4.438470080829226,
     "pieces": [
      {
       "x": 1.2978214125527354,
@@ -73871,7 +73871,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.2192350403501018,
+    "size": 4.4384700807002035,
     "pieces": [
      {
       "x": 1.297821412529255,
@@ -74002,7 +74002,7 @@
     "min_container_clearance_lb": 1.818320673894766e-10
    },
    "bound": {
-    "lower": 1.7502681983142572,
+    "lower": 3.5005363966285143,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -74016,10 +74016,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.35146370180613834,
+    "dsdK_envelope": 0.7029274036122767,
     "dsdK_multiplier_range": {
-     "min": 0.35146319272664905,
-     "max": 0.3514642108856168,
+     "min": 0.7029263854532981,
+     "max": 0.7029284217712336,
      "rows": 18
     },
     "kkt_residual": 1.9169119608315155e-14,
@@ -74027,7 +74027,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.645,
+    "value": 5.29,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -74040,15 +74040,15 @@
    "N": 6,
    "M": 0,
    "P": 7,
-   "score_float": 2.321729942131736,
-   "score_cert": 2.32172994220702,
-   "cert_minus_float": 7.528377921062201e-11,
+   "score_float": 4.643459884263472,
+   "score_cert": 4.64345988441404,
+   "cert_minus_float": 1.5056755842124403e-10,
    "cert_minus_float_relative": 3.242572611244309e-11,
-   "display": "2.321730",
+   "display": "4.643460",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.32172994220702,
+    "size": 4.64345988441404,
     "pieces": [
      {
       "x": 1.45668881188806,
@@ -74088,7 +74088,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.321729942131736,
+    "size": 4.643459884263472,
     "pieces": [
      {
       "x": 1.4566888118528118,
@@ -74266,7 +74266,7 @@
     "min_container_clearance_lb": 2.0190312535319675e-10
    },
    "bound": {
-    "lower": 1.8608679959228724,
+    "lower": 3.721735991845745,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -74280,10 +74280,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.24975611082895283,
+    "dsdK_envelope": 0.49951222165790565,
     "dsdK_multiplier_range": {
-     "min": 0.2497559319661449,
-     "max": 0.24975628995972046,
+     "min": 0.4995118639322898,
+     "max": 0.4995125799194409,
      "rows": 30
     },
     "kkt_residual": 7.227688703905473e-14,
@@ -74291,7 +74291,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.645,
+    "value": 5.29,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -74304,15 +74304,15 @@
    "N": 6,
    "M": 0,
    "P": 8,
-   "score_float": 2.404011376260353,
-   "score_cert": 2.4040113763373374,
-   "cert_minus_float": 7.69841967951379e-11,
+   "score_float": 4.808022752520706,
+   "score_cert": 4.808022752674675,
+   "cert_minus_float": 1.539683935902758e-10,
    "cert_minus_float_relative": 3.202322482969837e-11,
-   "display": "2.404011",
+   "display": "4.808023",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.4040113763373374,
+    "size": 4.808022752674675,
     "pieces": [
      {
       "x": -0.256963856747613,
@@ -74357,7 +74357,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.404011376260353,
+    "size": 4.808022752520706,
     "pieces": [
      {
       "x": -0.256963856747613,
@@ -74577,7 +74577,7 @@
     "min_container_clearance_lb": 2.1954100371955285e-10
    },
    "bound": {
-    "lower": 1.9599491228836068,
+    "lower": 3.9198982457672136,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -74591,10 +74591,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2397215884253962,
+    "dsdK_envelope": 0.4794431768507924,
     "dsdK_multiplier_range": {
-     "min": 0.23972121582642383,
-     "max": 0.23972191943490143,
+     "min": 0.47944243165284767,
+     "max": 0.47944383886980285,
      "rows": 20
     },
     "kkt_residual": 6.565617585806219e-14,
@@ -74602,7 +74602,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.984,
+    "value": 5.968,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -74615,15 +74615,15 @@
    "N": 6,
    "M": 0,
    "P": 9,
-   "score_float": 2.4733220761249877,
-   "score_cert": 2.4733220761986914,
-   "cert_minus_float": 7.370370980197549e-11,
+   "score_float": 4.946644152249975,
+   "score_cert": 4.946644152397383,
+   "cert_minus_float": 1.4740741960395098e-10,
    "cert_minus_float_relative": 2.979947921600605e-11,
-   "display": "2.473322",
+   "display": "4.946644",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.4733220761986914,
+    "size": 4.946644152397383,
     "pieces": [
      {
       "x": -1.175003641187553,
@@ -74673,7 +74673,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.4733220761249877,
+    "size": 4.946644152249975,
     "pieces": [
      {
       "x": -1.1750036411603633,
@@ -74944,7 +74944,7 @@
     "min_container_clearance_lb": 2.355381092090035e-10
    },
    "bound": {
-    "lower": 2.049760990522878,
+    "lower": 4.099521981045756,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -74958,10 +74958,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.3402970498371903,
+    "dsdK_envelope": 0.6805940996743806,
     "dsdK_multiplier_range": {
-     "min": 0.34029647273944136,
-     "max": 0.3402976269349226,
+     "min": 0.6805929454788827,
+     "max": 0.6805952538698452,
      "rows": 27
     },
     "kkt_residual": 2.1738818252429077e-14,
@@ -74969,7 +74969,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 3.301,
+    "value": 6.602,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -74982,15 +74982,15 @@
    "N": 6,
    "M": 0,
    "P": 10,
-   "score_float": 2.553215580272159,
-   "score_cert": 2.553215580272159,
+   "score_float": 5.106431160544318,
+   "score_cert": 5.106431160544318,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.553216",
+   "display": "5.106431",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.553215580272159,
+    "size": 5.106431160544318,
     "pieces": [
      {
       "x": 1.390756325037083,
@@ -75045,7 +75045,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.553215580272159,
+    "size": 5.106431160544318,
     "pieces": [
      {
       "x": 1.390756325037083,
@@ -75370,7 +75370,7 @@
     "min_container_clearance_lb": 2.554072850808946e-10
    },
    "bound": {
-    "lower": 2.13193697618848,
+    "lower": 4.26387395237696,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -75384,10 +75384,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.48692539517587624,
+    "dsdK_envelope": 0.9738507903517525,
     "dsdK_multiplier_range": {
-     "min": 0.48692723160014356,
-     "max": 0.4869272316001517,
+     "min": 0.9738544632002871,
+     "max": 0.9738544632003034,
      "rows": 28
     },
     "kkt_residual": 5.437360924018157e-06,
@@ -75395,7 +75395,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 3.48172,
+    "value": 6.96344,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -75912,15 +75912,15 @@
    "N": 8,
    "M": 0,
    "P": 1,
-   "score_float": 1.1155098633993532,
-   "score_cert": 1.115509863439353,
-   "cert_minus_float": 3.9999781265009915e-11,
+   "score_float": 2.2310197267987064,
+   "score_cert": 2.231019726878706,
+   "cert_minus_float": 7.999956253001983e-11,
    "cert_minus_float_relative": 3.585784633326005e-11,
-   "display": "1.115510",
+   "display": "2.231020",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 1.115509863439353,
+    "size": 2.231019726878706,
     "pieces": [
      {
       "x": -1.4658475122935271e-16,
@@ -75930,7 +75930,7 @@
     ]
    },
    "config_touching": {
-    "size": 1.1155098633993532,
+    "size": 2.2310197267987064,
     "pieces": [
      {
       "x": -6.559240730825188e-17,
@@ -75948,8 +75948,8 @@
     "min_container_clearance_lb": 5.4467362111850266e-11
    },
    "bound": {
-    "lower": 1.1155098633993417,
-    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (r >= R)",
+    "lower": 2.2310197267986833,
+    "kind": "P = 1 in a disk: the disk contains the piece's circumscribed vertices (diameter >= 2 R)",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -75962,10 +75962,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.12171754615319758,
+    "dsdK_envelope": 0.24343509230639515,
     "dsdK_multiplier_range": {
-     "min": 0.12171753398144478,
-     "max": 0.12171755850101171,
+     "min": 0.24343506796288955,
+     "max": 0.24343511700202342,
      "rows": 8
     },
     "kkt_residual": 1.5101583983365715e-14,
@@ -75973,7 +75973,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 1.30656,
+    "value": 2.61312,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -75986,15 +75986,15 @@
    "N": 8,
    "M": 0,
    "P": 2,
-   "score_float": 2.046422586679126,
-   "score_cert": 2.046422586736695,
-   "cert_minus_float": 5.756906062970302e-11,
+   "score_float": 4.092845173358252,
+   "score_cert": 4.09284517347339,
+   "cert_minus_float": 1.1513812125940603e-10,
    "cert_minus_float_relative": 2.8131560413982913e-11,
-   "display": "2.046423",
+   "display": "4.092845",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.046422586736695,
+    "size": 4.09284517347339,
     "pieces": [
      {
       "x": -0.1674235668798886,
@@ -76009,7 +76009,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.046422586679126,
+    "size": 4.092845173358252,
     "pieces": [
      {
       "x": -0.16742356687679677,
@@ -76040,8 +76040,8 @@
     "min_container_clearance_lb": 1.5221812949181517e-10
    },
    "bound": {
-    "lower": 1.9216661087826594,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 3.843332217565319,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -76054,10 +76054,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2760937298948378,
+    "dsdK_envelope": 0.5521874597896756,
     "dsdK_multiplier_range": {
-     "min": 0.27609366436480914,
-     "max": 0.2760937954248734,
+     "min": 0.5521873287296183,
+     "max": 0.5521875908497468,
      "rows": 6
     },
     "kkt_residual": 1.4172186323884536e-14,
@@ -76065,7 +76065,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.46544,
+    "value": 4.93088,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -76078,15 +76078,15 @@
    "N": 8,
    "M": 0,
    "P": 3,
-   "score_float": 2.2227135798354953,
-   "score_cert": 2.2227135798967934,
-   "cert_minus_float": 6.129807772481399e-11,
+   "score_float": 4.445427159670991,
+   "score_cert": 4.445427159793587,
+   "cert_minus_float": 1.2259615544962799e-10,
    "cert_minus_float_relative": 2.757803717083094e-11,
-   "display": "2.222714",
+   "display": "4.445427",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.2227135798967934,
+    "size": 4.445427159793587,
     "pieces": [
      {
       "x": -1.1072461716079935,
@@ -76106,7 +76106,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.2227135798354953,
+    "size": 4.445427159670991,
     "pieces": [
      {
       "x": -1.1072461715795472,
@@ -76156,8 +76156,8 @@
     "min_container_clearance_lb": 1.824754484316423e-10
    },
    "bound": {
-    "lower": 1.9216661087826594,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 3.843332217565319,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -76170,10 +76170,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.2829398592174747,
+    "dsdK_envelope": 0.5658797184349494,
     "dsdK_multiplier_range": {
-     "min": 0.28293976417767586,
-     "max": 0.28293995437596037,
+     "min": 0.5658795283553517,
+     "max": 0.5658799087519207,
      "rows": 8
     },
     "kkt_residual": 1.891604952936568e-07,
@@ -76181,7 +76181,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.71611,
+    "value": 5.43222,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -76194,15 +76194,15 @@
    "N": 8,
    "M": 0,
    "P": 4,
-   "score_float": 2.3982804723811406,
-   "score_cert": 2.3982804723824547,
-   "cert_minus_float": 1.3140599719463353e-12,
+   "score_float": 4.796560944762281,
+   "score_cert": 4.796560944764909,
+   "cert_minus_float": 2.6281199438926706e-12,
    "cert_minus_float_relative": 5.479175547143852e-13,
-   "display": "2.398280",
+   "display": "4.796561",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.3982804723824547,
+    "size": 4.796560944764909,
     "pieces": [
      {
       "x": 0.6692069506204189,
@@ -76227,7 +76227,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.3982804723811406,
+    "size": 4.796560944762281,
     "pieces": [
      {
       "x": 0.6691991982385781,
@@ -76299,8 +76299,8 @@
     "min_container_clearance_lb": 2.182657580788199e-10
    },
    "bound": {
-    "lower": 1.9216661087826594,
-    "kind": "two inscribed disks of radius rho in the container: r >= 2 rho",
+    "lower": 3.843332217565319,
+    "kind": "two inscribed disks of radius rho in the container: diameter >= 4 rho",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
    "method": "packages/curved solve(): seeded multistart; random start in a roomy container, penalty compression (L-BFGS on squared overlaps at fixed container), sequential-LP polish with box trust region and second-order correction, basin hopping (re-place / jiggle / rotate pieces), each P warm-started from the P-1 optimum plus one piece; then margin re-solve (all gaps >= margin) for certification",
@@ -76313,10 +76313,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.4018238142480769,
+    "dsdK_envelope": 0.8036476284961538,
     "dsdK_multiplier_range": {
-     "min": 0.40182377512075906,
-     "max": 0.4018237751207593,
+     "min": 0.8036475502415181,
+     "max": 0.8036475502415186,
      "rows": 10
     },
     "kkt_residual": 3.311063316716405e-06,
@@ -76324,7 +76324,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 2.95679,
+    "value": 5.91358,
     "status": "proven",
     "source": "data/records.json"
    },
@@ -76337,15 +76337,15 @@
    "N": 8,
    "M": 0,
    "P": 5,
-   "score_float": 2.560480989036386,
-   "score_cert": 2.560480989036386,
+   "score_float": 5.120961978072772,
+   "score_cert": 5.120961978072772,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.560481",
+   "display": "5.120962",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.560480989036386,
+    "size": 5.120961978072772,
     "pieces": [
      {
       "x": 0.43805760728318693,
@@ -76375,7 +76375,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.560480989036386,
+    "size": 5.120961978072772,
     "pieces": [
      {
       "x": 0.43805760728318693,
@@ -76474,7 +76474,7 @@
     "min_container_clearance_lb": 2.572936736862516e-10
    },
    "bound": {
-    "lower": 2.003300321083124,
+    "lower": 4.006600642166248,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -76488,10 +76488,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.3939765992518567,
+    "dsdK_envelope": 0.7879531985037134,
     "dsdK_multiplier_range": {
-     "min": 0.39397609621961704,
-     "max": 0.39397609621961655,
+     "min": 0.7879521924392341,
+     "max": 0.7879521924392331,
      "rows": 12
     },
     "kkt_residual": 3.795572286158766e-06,
@@ -76499,7 +76499,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 3.37974,
+    "value": 6.75948,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -76512,15 +76512,15 @@
    "N": 8,
    "M": 0,
    "P": 6,
-   "score_float": 2.690681847888092,
-   "score_cert": 2.6906818479480763,
-   "cert_minus_float": 5.998446184207751e-11,
+   "score_float": 5.381363695776184,
+   "score_cert": 5.381363695896153,
+   "cert_minus_float": 1.1996892368415502e-10,
    "cert_minus_float_relative": 2.2293405624733795e-11,
-   "display": "2.690682",
+   "display": "5.381364",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.6906818479480763,
+    "size": 5.381363695896153,
     "pieces": [
      {
       "x": 1.459482453066839,
@@ -76555,7 +76555,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.690681847888092,
+    "size": 5.381363695776184,
     "pieces": [
      {
       "x": 1.459482453048342,
@@ -76686,7 +76686,7 @@
     "min_container_clearance_lb": 2.934784120748198e-10
    },
    "bound": {
-    "lower": 2.1448738358850097,
+    "lower": 4.289747671770019,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -76700,10 +76700,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.564875046645911,
+    "dsdK_envelope": 1.129750093291822,
     "dsdK_multiplier_range": {
-     "min": 0.5648744951012403,
-     "max": 0.5648755981906112,
+     "min": 1.1297489902024807,
+     "max": 1.1297511963812223,
      "rows": 18
     },
     "kkt_residual": 1.2666594271141807e-14,
@@ -76711,7 +76711,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 3.69797,
+    "value": 7.39594,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -76724,15 +76724,15 @@
    "N": 8,
    "M": 0,
    "P": 7,
-   "score_float": 2.834432815209069,
-   "score_cert": 2.834432815209069,
+   "score_float": 5.668865630418138,
+   "score_cert": 5.668865630418138,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.834433",
+   "display": "5.668866",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.834432815209069,
+    "size": 5.668865630418138,
     "pieces": [
      {
       "x": -1.7174907315898331,
@@ -76772,7 +76772,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.834432815209069,
+    "size": 5.668865630418138,
     "pieces": [
      {
       "x": -1.7174907315898331,
@@ -76940,7 +76940,7 @@
     "min_container_clearance_lb": 3.392389848273395e-10
    },
    "bound": {
-    "lower": 2.2684331619483538,
+    "lower": 4.5368663238967075,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -76954,10 +76954,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.5392821008969607,
+    "dsdK_envelope": 1.0785642017939214,
     "dsdK_multiplier_range": {
-     "min": 0.5392821019439584,
-     "max": 0.5392821019439584,
+     "min": 1.0785642038879169,
+     "max": 1.0785642038879169,
      "rows": 20
     },
     "kkt_residual": 7.41194547801553e-06,
@@ -76965,7 +76965,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 3.77329,
+    "value": 7.54658,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -76978,15 +76978,15 @@
    "N": 8,
    "M": 0,
    "P": 8,
-   "score_float": 2.951489846797466,
-   "score_cert": 2.951489846797466,
+   "score_float": 5.902979693594932,
+   "score_cert": 5.902979693594932,
    "cert_minus_float": 0.0,
    "cert_minus_float_relative": 0.0,
-   "display": "2.951490",
+   "display": "5.902980",
    "status": "best_known",
    "certified": true,
    "config": {
-    "size": 2.951489846797466,
+    "size": 5.902979693594932,
     "pieces": [
      {
       "x": 1.8429724158173832,
@@ -77031,7 +77031,7 @@
     ]
    },
    "config_touching": {
-    "size": 2.951489846797466,
+    "size": 5.902979693594932,
     "pieces": [
      {
       "x": 1.8429724158173832,
@@ -77241,7 +77241,7 @@
     "min_container_clearance_lb": 3.8163931817060845e-10
    },
    "bound": {
-    "lower": 2.3781257757022587,
+    "lower": 4.756251551404517,
     "kind": "area",
     "label": "[CALC] rigorous (interval arithmetic)"
    },
@@ -77255,10 +77255,10 @@
    "software": "PolyPack curved research build",
    "found_by": "PolyPack research",
    "sensitivity": {
-    "dsdK_envelope": 0.5278638929584398,
+    "dsdK_envelope": 1.0557277859168797,
     "dsdK_multiplier_range": {
-     "min": 0.527861983225351,
-     "max": 0.5278619832253504,
+     "min": 1.055723966450702,
+     "max": 1.0557239664507008,
      "rows": 21
     },
     "kkt_residual": 7.2078806151014726e-06,
@@ -77266,7 +77266,7 @@
     "rattlers": []
    },
    "euclidean_record": {
-    "value": 4.1246,
+    "value": 8.2492,
     "status": "best_known",
     "source": "data/records.json"
    },
@@ -79913,5 +79913,6 @@
    "found_by": "PolyPack research",
    "software": "PolyPack curved research build"
   }
- ]
+ ],
+ "circle_scores": "diameter"
 }

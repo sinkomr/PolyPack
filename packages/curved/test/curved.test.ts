@@ -143,8 +143,8 @@ describe("validator adversarial cases", () => {
   it("rejects overlaps and protrusions beyond 1e-9", () => {
     for (const K of [-1, 0, 1]) {
       const rho = sqRho(K);
-      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 1.4, pieces: facing(K, rho) }).valid).toBe(true);
-      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 1.4, pieces: facing(K, rho - 2e-9) }).valid).toBe(false);
+      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 2.8, pieces: facing(K, rho) }).valid).toBe(true);
+      expect(validate({ N: 4, M: 0, P: 2 }, K, { size: 2.8, pieces: facing(K, rho - 2e-9) }).valid).toBe(false);
       const th = Math.PI / 4;
       expect(validate({ N: 4, M: 4, P: 1 }, K, { size: 1, pieces: [{ x: 0, y: 0, theta: th }] }).valid).toBe(true);
       expect(validate({ N: 4, M: 4, P: 1 }, K, { size: 1 - 1e-8, pieces: [{ x: 0, y: 0, theta: th }] }).valid).toBe(
@@ -158,13 +158,13 @@ describe("validator adversarial cases", () => {
     const rho = sqRho(K);
     const bad = facing(K, rho - 0.5e-4, 8);
     expect(Math.hypot(bad[0].x, bad[0].y)).toBeGreaterThan(7.9);
-    const vb = validate({ N: 4, M: 0, P: 2 }, K, { size: 10, pieces: bad });
+    const vb = validate({ N: 4, M: 0, P: 2 }, K, { size: 20, pieces: bad });
     expect(vb.valid).toBe(false);
     // the facing edges are ultraparallel: 1e-4 apart on the axis, 1e-4 cosh(1/2) at the vertices
     expect(vb.minPairGap).toBeLessThan(-0.9e-4);
     expect(vb.minPairGap).toBeGreaterThan(-1.2e-4);
     const good = facing(K, rho + 0.5e-4, 8);
-    const vg = validate({ N: 4, M: 0, P: 2 }, K, { size: 10, pieces: good });
+    const vg = validate({ N: 4, M: 0, P: 2 }, K, { size: 20, pieces: good });
     expect(vg.valid).toBe(true);
     expect(vg.minPairGap).toBeGreaterThan(0.9e-4);
   });
@@ -204,7 +204,7 @@ describe("validator adversarial cases", () => {
     // no unit octagon on the unit sphere; containers stay in an open hemisphere
     expect(validate({ N: 8, M: 0, P: 1 }, 1, ok).valid).toBe(false);
     expect(validate({ N: 3, M: 4, P: 1 }, 1, { size: Math.PI / 2, pieces: ok.pieces }).valid).toBe(false);
-    expect(validate({ N: 3, M: 0, P: 1 }, 1, { size: 1.6, pieces: ok.pieces }).valid).toBe(false);
+    expect(validate({ N: 3, M: 0, P: 1 }, 1, { size: 3.2, pieces: ok.pieces }).valid).toBe(false);
   });
 });
 
@@ -237,7 +237,8 @@ function euclideanCases(): { N: number; M: number; P: number; value: number; pie
       y: ringR * Math.sin((2 * Math.PI * i) / (P === 7 ? 6 : P)),
       theta: 0,
     }));
-    out.push({ N: 0, M: 0, P, value: ringR + r, pieces: P === 7 ? [{ x: 0, y: 0, theta: 0 }, ...ring] : ring });
+    out.push({ N: 0, M: 0, P, value: 2 * (ringR + r), // (a disk container is scored by its diameter)
+      pieces: P === 7 ? [{ x: 0, y: 0, theta: 0 }, ...ring] : ring });
   }
   for (const [N, M, P] of pick) {
     const r = recs.find((q) => q.N === N && q.M === M && q.P === P && q.pieces && q.pieces.length === P);
@@ -304,7 +305,7 @@ describe("solver", () => {
       const ring = (K: number): CurvedConfig => {
         const rho = K === 0 ? r / Math.sin(Math.PI / P) : Math.asinh(Math.sinh(r) / Math.sin(Math.PI / P));
         return {
-          size: r + rho,
+          size: 2 * (r + rho), // (a disk container is scored by its diameter)
           pieces: Array.from({ length: P }, (_, i) => ({
             x: rho * Math.cos((2 * Math.PI * i) / P),
             y: rho * Math.sin((2 * Math.PI * i) / P),
@@ -313,7 +314,7 @@ describe("solver", () => {
         };
       };
       const h = ring(-1);
-      expect(h.size).toBeCloseTo(r + Math.asinh(Math.sinh(r) / Math.sin(Math.PI / P)), 12);
+      expect(h.size).toBeCloseTo(2 * (r + Math.asinh(Math.sinh(r) / Math.sin(Math.PI / P))), 12);
       // valid at the analytic size, and polishing it neither loosens nor tightens it
       const v = validate(prob, -1, h);
       expect(v.valid).toBe(true);
@@ -322,9 +323,9 @@ describe("solver", () => {
       // and a ring any smaller does not fit
       expect(validate(prob, -1, { ...h, size: h.size * (1 - 1e-6) }).valid).toBe(false);
       const e = ring(0);
-      const r0 = e.size - r; // ring radius
+      const r0 = e.size / 2 - r; // ring radius
       const s = sensitivity(prob, 0, e);
-      expect(s.dsdK).toBeCloseTo((r0 * (r0 * r0 - r * r)) / 6, 5);
+      expect(s.dsdK).toBeCloseTo((2 * r0 * (r0 * r0 - r * r)) / 6, 5); // (s = 2 R)
     }
   });
 
@@ -359,7 +360,7 @@ describe("solver", () => {
     // four disks (diameter 1) in a ring of radius sqrt 2 / 2 in a disk of radius (1 + sqrt 2) / 2
     const rho = Math.SQRT1_2;
     const start: CurvedConfig = {
-      size: DISK_RADIUS + rho,
+      size: 2 * (DISK_RADIUS + rho),
       pieces: [0, 1, 2, 3].map((i) => ({ x: rho * Math.cos((Math.PI * i) / 2), y: rho * Math.sin((Math.PI * i) / 2), theta: 0 })),
     };
     const path = continueTo(prob, 0, -2, start, 5); // (K = -2 for disks of diameter 1 is K = -1/2 for disks of radius 1)
@@ -398,18 +399,18 @@ describe("scale-free ideal family", () => {
     expect(a.feasibility).toBeGreaterThan(-1e-10);
   });
 
-  it("one-sided slopes are reported for a kinked record (6 disks, R = 3/2 at K = 0)", () => {
+  it("one-sided slopes are reported for a kinked record (6 disks, diameter 3 at K = 0)", () => {
     const prob = { N: 0, M: 0, P: 6 };
-    // six disks of diameter 1 on a ring of radius 1 touch their neighbours and the wall of the disk of radius 3/2
+    // six disks of diameter 1 on a ring of radius 1 touch their neighbours and the wall of the disk of radius 3/2 (diameter 3)
     const ring: CurvedConfig = {
-      size: 1.5,
+      size: 3,
       pieces: Array.from({ length: 6 }, (_, i) => ({ x: Math.cos((Math.PI * i) / 3), y: Math.sin((Math.PI * i) / 3), theta: 0 })),
     };
     expect(validate(prob, 0, ring).valid).toBe(true);
     const s = oneSidedSlopes(prob, 0, ring, 1e-3);
     expect(Number.isFinite(s.left) && Number.isFinite(s.right)).toBe(true);
     // the size grows with K: a positive K needs more room, a negative K less
-    expect(s.sMinus).toBeLessThan(1.5);
-    expect(s.sPlus).toBeGreaterThan(1.5);
+    expect(s.sMinus).toBeLessThan(3);
+    expect(s.sPlus).toBeGreaterThan(3);
   });
 });

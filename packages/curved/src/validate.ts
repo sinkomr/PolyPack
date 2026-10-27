@@ -138,7 +138,7 @@ export function* validationSteps(
     }
   }
   const minGap = Math.min(minPair, minCont);
-  const tightSize = M === 0 ? tReq : sideFromApothem(M, K, tReq);
+  const tightSize = sideFromApothem(M, K, tReq);
   const valid = errors.length === 0 && minGap >= -tol;
   if (minPair < -tol) errors.push(`pieces overlap by ${-minPair}`);
   if (minCont < -tol) errors.push(`a piece protrudes by ${-minCont}`);

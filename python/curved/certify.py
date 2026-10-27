@@ -18,7 +18,7 @@ Model (identical conventions to packages/curved, re-derived here):
     vertex k at direction pi/2 + 2 pi k/N; disk (N = 0) of DIAMETER 1, radius DISK_RADIUS = 1/2 (2026-10-27;
     the archived records of disks of radius 1 are in data/curved/archive and are not certified by this file).
   * Container centred at O, phi = 0: polygon walls at distance h with tn_K(s/2) = sn_K(h) tan(pi/M),
-    covectors n_k = (-sn_K(h), cs_K(h) u_k), u_k at angle -pi/2 + 2 pi k/M (outward); or a disk of radius r.
+    covectors n_k = (-sn_K(h), cs_K(h) u_k), u_k at angle -pi/2 + 2 pi k/M (outward); or a disk of diameter s (radius r = s/2).
   * K > 0: container (hence every piece) must lie in the open hemisphere around O.
 
 Usage:  python3 python/curved/certify.py data/curved/records.json [--out data/curved/certification.json]
@@ -156,7 +156,7 @@ class Geometry:
         K, M = self.K, self.M
         s = I(size_f)
         if M == 0:
-            r = s
+            r = s / 2  # a disk container is scored by its diameter (2026-10-27)
             if self.Kq > 0:
                 # open hemisphere: K r^2 < (pi/2)^2
                 if not rg.is_pos((self.pi / 2) ** 2 - K * r * r):

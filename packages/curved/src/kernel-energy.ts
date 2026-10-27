@@ -41,7 +41,6 @@ export function containerVariable(g: KernelGeometry, size: number): { t: number;
   const { M, K } = g.space;
   const capped = !(size < g.sizeCap);
   const s = capped ? g.sizeCap : size;
-  if (M === 0) return { t: s, dtds: capped ? 0 : 1 };
   const t = apothemFromSide(M, K, s);
   const dsdt = dSideDApothem(M, K, t);
   return { t, dtds: capped || !(dsdt < Infinity) ? 0 : 1 / dsdt };

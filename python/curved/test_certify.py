@@ -127,31 +127,31 @@ class Basic(unittest.TestCase):
 
     def test_disk_in_disk(self):
         for K in (-1, 0, 1):
-            # (disks have diameter 1: radius 1/2)
-            self.assertTrue(ok(rec(K, 0, 0, 0.5 + 1e-12, [(0.0, 0.0, 0.0)])))
-            self.assertFalse(ok(rec(K, 0, 0, 0.5 - 1e-12, [(0.0, 0.0, 0.0)])))
+            # (disks have diameter 1: radius 1/2; a disk container's size is its diameter)
+            self.assertTrue(ok(rec(K, 0, 0, 2 * (0.5 + 1e-12), [(0.0, 0.0, 0.0)])))
+            self.assertFalse(ok(rec(K, 0, 0, 2 * (0.5 - 1e-12), [(0.0, 0.0, 0.0)])))
 
     def test_disk_pair_distance(self):
         for K in (-4, 0, 2):
             for d, expect in ((1 + 1e-9, True), (1 - 1e-12, False), (1.0, False)):
                 poses = [(d / 2, 0.0, 0.0), (-d / 2, 0.0, 0.0)]
                 # at K = 2 the open hemisphere has radius pi / (2 sqrt 2) = 1.1107
-                self.assertEqual(ok(rec(K, 0, 0, 1.1, poses)), expect, (K, d))
+                self.assertEqual(ok(rec(K, 0, 0, 2 * (1.1), poses)), expect, (K, d))
         # beyond the hemisphere the container is rejected
-        self.assertFalse(ok(rec(2, 0, 0, 1.12, [(0.5 + 1e-9, 0.0, 0.0), (-0.5 - 1e-9, 0.0, 0.0)])))
+        self.assertFalse(ok(rec(2, 0, 0, 2 * (1.12), [(0.5 + 1e-9, 0.0, 0.0), (-0.5 - 1e-9, 0.0, 0.0)])))
 
     def test_square_pair_overlap_1e9(self):
         for K in (-1, 0, 1):
             rho = inradius(K, 4)
             good = [(rho + 1e-9, 0.0, math.pi / 4), (-(rho + 1e-9), 0.0, math.pi / 4)]
             bad = [(rho - 0.5e-9, 0.0, math.pi / 4), (-(rho - 0.5e-9), 0.0, math.pi / 4)]
-            self.assertTrue(ok(rec(K, 4, 0, 1.4, good)), K)
-            self.assertFalse(ok(rec(K, 4, 0, 1.4, bad)), K)
+            self.assertTrue(ok(rec(K, 4, 0, 2 * (1.4), good)), K)
+            self.assertFalse(ok(rec(K, 4, 0, 2 * (1.4), bad)), K)
             # bogus witness on the bad pair must not help; bogus witness on the good pair must not hurt
             w = [{"i": 0, "j": 1, "type": "axis", "owner": 0, "edge": 2}]
-            self.assertFalse(ok(rec(K, 4, 0, 1.4, bad, witnesses=w)))
-            self.assertTrue(ok(rec(K, 4, 0, 1.4, good, witnesses=w)))
-            self.assertFalse(ok(rec(K, 4, 0, 1.4, bad, witnesses=[{"i": 0, "j": 1, "type": "far"}])))
+            self.assertFalse(ok(rec(K, 4, 0, 2 * (1.4), bad, witnesses=w)))
+            self.assertTrue(ok(rec(K, 4, 0, 2 * (1.4), good, witnesses=w)))
+            self.assertFalse(ok(rec(K, 4, 0, 2 * (1.4), bad, witnesses=[{"i": 0, "j": 1, "type": "far"}])))
 
     def test_tolerance_trap_far_from_centre(self):
         # a real 1e-4 overlap 8 units from the container centre must be rejected,
@@ -161,10 +161,10 @@ class Basic(unittest.TestCase):
         for delta, expect in ((-0.5e-4, False), (0.5e-4, True)):
             poses = moved_pair(K, rho + delta, 8.0)
             self.assertGreater(math.hypot(poses[0][0], poses[0][1]), 7.9)
-            self.assertEqual(ok(rec(K, 4, 0, 10.0, poses)), expect, delta)
+            self.assertEqual(ok(rec(K, 4, 0, 2 * (10.0), poses)), expect, delta)
         # and much smaller overlaps there too
         poses = moved_pair(K, rho - 5e-9, 8.0)
-        self.assertFalse(ok(rec(K, 4, 0, 10.0, poses)))
+        self.assertFalse(ok(rec(K, 4, 0, 2 * (10.0), poses)))
 
 
 class Malformed(unittest.TestCase):
@@ -202,14 +202,14 @@ class Malformed(unittest.TestCase):
         self.assertFalse(ok(rec(1, 3, 4, math.pi / 2 + 1e-12, [(0.0, 0.0, 0.0)])))
         self.assertFalse(ok(rec(1, 3, 4, 2.0, [(0.0, 0.0, 0.0)])))
         # disk container radius below pi/2
-        self.assertFalse(ok(rec(1, 3, 0, 1.6, [(0.0, 0.0, 0.0)])))
-        self.assertTrue(ok(rec(1, 3, 0, 1.5, [(0.0, 0.0, 0.0)])))
+        self.assertFalse(ok(rec(1, 3, 0, 2 * (1.6), [(0.0, 0.0, 0.0)])))
+        self.assertTrue(ok(rec(1, 3, 0, 2 * (1.5), [(0.0, 0.0, 0.0)])))
         # no unit octagon on the unit sphere; unit hexagon exists
-        self.assertFalse(ok(rec(1, 8, 0, 1.5, [(0.0, 0.0, 0.0)])))
+        self.assertFalse(ok(rec(1, 8, 0, 2 * (1.5), [(0.0, 0.0, 0.0)])))
         self.assertTrue(ok(rec(1, 6, 6, 1.0 + 1e-9, [(0.0, 0.0, math.pi / 6)])))
         # a disk of diameter 1 does not fit in a hemisphere at K = 10 (pi / (2 sqrt 10) = 0.4967 < 1/2)
-        self.assertFalse(ok(rec(10, 0, 0, 0.9, [(0.0, 0.0, 0.0)])))
-        self.assertTrue(ok(rec(9, 0, 0, 0.5 + 1e-3, [(0.0, 0.0, 0.0)])))
+        self.assertFalse(ok(rec(10, 0, 0, 2 * (0.9), [(0.0, 0.0, 0.0)])))
+        self.assertTrue(ok(rec(9, 0, 0, 2 * (0.5 + 1e-3), [(0.0, 0.0, 0.0)])))
 
     def test_disk_in_polygon(self):
         # one disk of diameter 1 in the regular pentagon at K = -1 whose apothem is 1/2 + 1e-9
@@ -230,11 +230,11 @@ class ReviewRegressions(unittest.TestCase):
     def test_D1_no_unit_polygon_when_perimeter_too_long(self):
         # sin(sqrt K/2) < sin(pi/N) holds again for large K, but sqrt K < 2 pi / N is required
         for K, N in ((20, 3), (30, 3), (39, 3), (50, 3), (30, 4), (35, 6)):
-            self.assertFalse(ok(rec(K, N, 0, 0.3 if N == 3 else 0.25, [(0.0, 0.0, 0.0)])), (K, N))
+            self.assertFalse(ok(rec(K, N, 0, 2 * (0.3 if N == 3 else 0.25), [(0.0, 0.0, 0.0)])), (K, N))
         # just inside the limit a unit triangle exists and certifies in a slightly larger disk
         K = (2 * math.pi / 3) ** 2 * 0.98
         R = math.asin(math.sin(math.sqrt(K) / 2) / math.sin(math.pi / 3)) / math.sqrt(K)
-        self.assertTrue(ok(rec(K, 3, 0, R * 1.001, [(0.0, 0.0, 0.0)])))
+        self.assertTrue(ok(rec(K, 3, 0, 2 * (R * 1.001), [(0.0, 0.0, 0.0)])))
 
     def test_D2_polygon_container_must_stay_in_hemisphere(self):
         # side 1.5 + 4 pi at K = 1 used to wrap around to the polygon of side 1.5
@@ -364,13 +364,13 @@ class WidePieces(unittest.TestCase):
                 for K in (-1e-6, 1e-6):
                     R = math.asinh(math.sinh(0.0005)/math.sin(math.pi/N))/0.001 if K < 0 else math.asin(math.sin(0.0005)/math.sin(math.pi/N))/0.001
                     poses = [(3*R*i, 0, 0) for i in range(P)]
-                    self.assertTrue(ok(rec(K, N, 0, 3*R*P+1, poses)), (K, N, P))
+                    self.assertTrue(ok(rec(K, N, 0, 2 * (3*R*P+1), poses)), (K, N, P))
 
     def test_capacity_with_near_pairs(self):
         N, P = 100, 100
         step = 2*math.asinh(math.tanh(0.0005)/math.tan(math.pi/N))/0.001+1e-7
         poses = [((i-49.5)*step, 0, math.pi/N) for i in range(P)]
-        self.assertTrue(ok(rec(-1e-6, N, 0, P*step, poses)))
+        self.assertTrue(ok(rec(-1e-6, N, 0, 2 * (P*step), poses)))
 
     def test_large_touch_overlap_and_boundary(self):
         N = 100
@@ -378,11 +378,11 @@ class WidePieces(unittest.TestCase):
         R = 0.5/math.sin(math.pi/N)
         theta = math.pi/N
         # Strict certificates reject exact contact, then accept an explicit clearance.
-        self.assertTrue(ok(rec(0, N, 0, 4*R, [(0, 0, theta), (2*r+1e-7, 0, theta)])))
-        self.assertFalse(ok(rec(0, N, 0, 4*R, [(0, 0, theta), (2*r-1e-7, 0, theta)])))
-        self.assertTrue(ok(rec(0, N, 0, R+1e-7, [(0, 0, 0)])))
-        self.assertFalse(ok(rec(0, N, 0, R-1e-7, [(0, 0, 0)])))
-        bad = rec(0, N, 0, 100, [(0, 0, 0)])
+        self.assertTrue(ok(rec(0, N, 0, 2 * (4*R), [(0, 0, theta), (2*r+1e-7, 0, theta)])))
+        self.assertFalse(ok(rec(0, N, 0, 2 * (4*R), [(0, 0, theta), (2*r-1e-7, 0, theta)])))
+        self.assertTrue(ok(rec(0, N, 0, 2 * (R+1e-7), [(0, 0, 0)])))
+        self.assertFalse(ok(rec(0, N, 0, 2 * (R-1e-7), [(0, 0, 0)])))
+        bad = rec(0, N, 0, 2 * (100), [(0, 0, 0)])
         bad['config_cert']['pieces'] = [None]
         self.assertFalse(ok(bad))
 

@@ -23,3 +23,6 @@ What is here (the same layout and schemas as data/curved):
 Polygon-piece data (N >= 3) was not touched: those problems are unchanged. `python/curved/archive_disks.py` made the
 split. The archived certificates were made by the certifier for disks of radius 1 (git history before this date);
 `python/curved/certify.py` now certifies disks of diameter 1.
+
+Sizes in this folder: for a disk container (M = 0) the archived `size`/score is the container's geodesic RADIUS (the
+served polygon-piece M = 0 records are scored by the DIAMETER since 2026-10-27).

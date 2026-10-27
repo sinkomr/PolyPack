@@ -70,7 +70,7 @@ describe("sweep helpers", () => {
   it("contact keys and configuration identity", () => {
     const K = -1;
     const prob = { N: 0, M: 0, P: 4 };
-    const pc = polishAt(prob, K, { size: r + ringRadius(K, 4) + 1e-6, pieces: ring(K, 4) });
+    const pc = polishAt(prob, K, { size: 2 * (r + ringRadius(K, 4)) + 1e-6, pieces: ring(K, 4) });
     const keys = contactKeys(pc.polish.active, 0);
     // 4 neighbour contacts and 4 rim contacts
     expect(keys.filter((k) => k.startsWith("p:")).length).toBe(4);
@@ -100,35 +100,35 @@ describe("piece existence", () => {
 });
 
 describe("followBranch", () => {
-  it("tracks the 3-ring to the closed form R = r + r0(K) and stops at the hemisphere", () => {
+  it("tracks the 3-ring to the closed form s = 2 (r + r0(K)) and stops at the hemisphere", () => {
     const prob = { N: 0, M: 0, P: 3 };
-    const start = tryPolish(prob, 0, { size: r + ringRadius(0, 3) + 1e-9, pieces: ring(0, 3) });
+    const start = tryPolish(prob, 0, { size: 2 * (r + ringRadius(0, 3)) + 1e-9, pieces: ring(0, 3) });
     expect(start && feasibleAt(prob, 0, start)).toBe(true);
     const down = followBranch(prob, 0, start!, -2, { grid: 1 / 4 });
     expect(down.end.kind).toBe("range");
-    for (const p of down.points) expect(Math.abs(p.size - (r + ringRadius(p.K, 3)))).toBeLessThan(1e-9);
+    for (const p of down.points) expect(Math.abs(p.size - 2 * (r + ringRadius(p.K, 3)))).toBeLessThan(1e-9);
     // grid points are exact multiples of 1/4
     expect(down.points.every((p) => Number.isInteger(p.K * 4))).toBe(true);
     // 3 disks: the ring radius plus r reaches the hemisphere radius pi/(2 sqrt K) somewhere below K = 2.4
     const up = followBranch(prob, 0, start!, 4, { grid: 1 / 4 });
     expect(up.end.kind).toBe("hemisphere");
     const last = up.points[up.points.length - 1];
-    expect(Math.abs(last.size - Math.PI / (2 * Math.sqrt(last.K)))).toBeLessThan(1e-3);
+    expect(Math.abs(last.size - Math.PI / Math.sqrt(last.K))).toBeLessThan(1e-3);
   });
 
   it("locates the first-order transition of 7 disks (7-ring vs 6+1) at cosh(sqrt(-K) / 2) = 1/(2 sin(pi/7))", () => {
     const prob = { N: 0, M: 0, P: 7 };
     // (disks of diameter 1 at K are disks of radius 1 at K / 4: the curvatures here are 4 times the radius-1 ones)
     const K0 = -2;
-    const r7 = tryPolish(prob, K0, { size: r + ringRadius(K0, 7) + 1e-9, pieces: ring(K0, 7) })!;
-    const s61 = tryPolish(prob, K0, { size: 3 * r + 1e-9, pieces: sixPlusOne(K0) })!;
+    const r7 = tryPolish(prob, K0, { size: 2 * (r + ringRadius(K0, 7)) + 1e-9, pieces: ring(K0, 7) })!;
+    const s61 = tryPolish(prob, K0, { size: 6 * r + 1e-9, pieces: sixPlusOne(K0) })!;
     expect(r7.config.size).toBeLessThan(s61.config.size);
     const a = followBranch(prob, K0, r7, -0.5, { grid: 1 / 8 });
     const b = followBranch(prob, K0, s61, -0.5, { grid: 1 / 8 });
     expect(a.end.kind).toBe("range");
     expect(b.end.kind).toBe("range");
-    // the 6+1 branch is flat (s = 3 r) for K <= 0: ring disks touch the centre and the rim, not each other
-    for (const p of b.points) expect(Math.abs(p.size - 3 * r)).toBeLessThan(1e-9);
+    // the 6+1 branch is flat (s = 6 r, the container's diameter) for K <= 0: ring disks touch the centre and the rim, not each other
+    for (const p of b.points) expect(Math.abs(p.size - 6 * r)).toBeLessThan(1e-9);
     const near = (pts: typeof a.points, K: number) => pts.reduce((x, y) => (Math.abs(y.K - K) < Math.abs(x.K - K) ? y : x));
     const f = (K: number) => {
       const pa = tryPolish(prob, K, { size: near(a.points, K).size, pieces: near(a.points, K).pieces })!;
