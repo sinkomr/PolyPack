@@ -79,11 +79,13 @@ describe("Tighter space titles and score words", () => {
     expect(word("surface/cube/fold/4/30")).toBe("edge");
     expect(word("sphere/4/12")).toBe("radius");
     expect(word("torus/hex/5/8")).toBe("side");
-    expect(word("curved/-1/3/0/7")).toBe("radius");
+    expect(word("curved/-1/3/0/7")).toBe("diameter");
     expect(word("curved/-1/3/4/7")).toBe("side");
     expect(word("polyhedra/cubintet/12")).toBe("scale");
     expect(word("balls/ballincub/9")).toBe("edge");
-    expect(word("balls/tetinball/9")).toBe("radius");
+    expect(word("balls/tetinball/9")).toBe("diameter");
+    expect(word("balls/ballinball/9")).toBe("diameter");
+    expect(word("balls/ballinpkd/9")).toBe("scale");
   });
 
   it("read every id the packages write, and none that is another's", () => {
@@ -573,6 +575,7 @@ describe("Tighter space submissions", () => {
       software: "tighter/0.1",
       method: "sphere basin_hopping",
       seed: 1234,
+      units: "diameter",
     });
   });
 

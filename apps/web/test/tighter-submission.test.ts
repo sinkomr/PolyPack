@@ -1,5 +1,12 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { answerTrouble, classifyAnswer, troubleText } from "../src/tighter/submission";
+import { loadSpacesIndex } from "@polypack/spaces/load";
+import { createApp } from "../../server/src/app";
+import { SqliteStore } from "../../server/src/sqlite-store";
+import { SITE_UNITS } from "../src/api";
+import { spaceSubmissionBody } from "../src/tighter/space-submission";
+import { answerTrouble, classifyAnswer, submissionBody, troubleText } from "../src/tighter/submission";
 
 // Trouble with sending, as the notice line under the board tells it: what happened, then what the
 // game does next. Points waiting for the server's answer are not shown at all.
@@ -57,5 +64,86 @@ describe("Tighter trouble with sending", () => {
       troubleText({ kind: "lost", title: TITLE }),
     ];
     for (const t of all) expect(t).not.toMatch(/[;:—–]/);
+  });
+});
+
+// Since 2026-10-27 disks and balls have diameter 1, and the server refuses a board of a problem with disk
+// or ball pieces or a circle or ball container unless it says `"units": "diameter"`.
+describe("Tighter's sends", () => {
+  const ROOT = resolve(import.meta.dirname, "../../..");
+  const source = (path: string) => readFileSync(resolve(ROOT, path), "utf8");
+  const run = { method: "mc_compress", params: {}, seed: 1, budget: { evals: 100 } };
+  /** Two disks of diameter 1 in a circle of diameter 2. */
+  const disks = {
+    N: 0,
+    M: 0,
+    P: 2,
+    pieces: [
+      { x: -0.5, y: 0, theta: 0 },
+      { x: 0.5, y: 0, theta: 0 },
+    ],
+    container_phi: 0,
+  };
+  const balls = {
+    s: 2,
+    pieces: [
+      [0.5, 0, 0],
+      [-0.5, 0, 0],
+    ],
+  };
+
+  it("carry the units in both bodies", () => {
+    expect(SITE_UNITS).toBe("diameter");
+    expect(submissionBody(disks, "Ada", run).units).toBe("diameter");
+    // a polygon problem too: the field is harmless where the change did not reach
+    expect(submissionBody({ ...disks, N: 24, M: 30 }, "Ada", run).units).toBe("diameter");
+    expect(spaceSubmissionBody({ family: "balls", id: "balls/ballinball/2" }, balls, "Ada", run).units).toBe(
+      "diameter",
+    );
+  });
+
+  it("all go through those two bodies", () => {
+    const dir = "apps/web/src/tighter";
+    const files = (d: string): string[] =>
+      readdirSync(resolve(ROOT, d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? files(`${d}/${e.name}`) : /\.ts$/.test(e.name) ? [`${d}/${e.name}`] : [],
+      );
+    // the submit routes are named only where the two posts are: api.ts (outside Tighter) and space-submission.ts
+    const naming = files(dir).filter((f) => /["'`]\/api\/(?:spaces\/)?submit["'`]/.test(source(f)));
+    expect(naming).toEqual([`${dir}/space-submission.ts`]);
+    const main = source(`${dir}/main.ts`);
+    const count = (re: RegExp) => (main.match(re) ?? []).length;
+    expect(count(/api\.postSubmission\(/g)).toBe(1);
+    expect(count(/api\.postSubmission\(submissionBody\(/g)).toBe(1);
+    expect(count(/postSpaceSubmission\(/g)).toBe(1);
+    expect(count(/postSpaceSubmission\(spaceSubmissionBody\(/g)).toBe(1);
+    expect(count(/api\.submit\(/g)).toBe(0);
+  });
+
+  it("are taken by the server, which refuses the same boards without the units", async () => {
+    const store = new SqliteStore(":memory:");
+    const app = createApp({
+      store,
+      records: [],
+      clientIp: () => "1.1.1.1",
+      log: () => {},
+      spaces: { index: loadSpacesIndex(ROOT), store },
+    });
+    const post = (path: string, body: unknown) =>
+      app.request(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    const planar = submissionBody(disks, "Ada", run);
+    const { units: _, ...bare } = planar;
+    expect((await post("/api/submit", bare)).status).toBe(426);
+    const r = await post("/api/submit", planar);
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ valid: true, score: 2 });
+    const space = spaceSubmissionBody({ family: "balls", id: "balls/ballinball/2" }, balls, "Ada", run);
+    const { units: __, ...bareSpace } = space;
+    expect((await post("/api/spaces/submit", bareSpace)).status).toBe(426);
+    expect((await post("/api/spaces/submit", space)).status).toBe(200);
   });
 });

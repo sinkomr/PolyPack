@@ -1,4 +1,5 @@
 import type { SpaceConfig } from "@polypack/spaces";
+import { SITE_UNITS } from "../api";
 import { configUrl } from "../spaces-model";
 import type { SpaceFamily } from "./frontier";
 import type { Leader } from "./game";
@@ -113,7 +114,11 @@ export function spaceStands(r: SpaceRead | null, c: { tier: string; leader: { sc
 
 // ---------- sending ----------
 
-/** The POST /api/spaces/submit body: the board, the name, and how it was found. */
+/**
+ * The POST /api/spaces/submit body: the board, the name, and how it was found. `units` confirms the
+ * board is in the units of 2026-10-27 (disks and balls of diameter 1, circle and ball containers scored
+ * by their diameter), which the server asks of every problem the change touched.
+ */
 export function spaceSubmissionBody(
   p: { family: SpaceFamily; id: string },
   config: SpaceConfig,
@@ -128,6 +133,7 @@ export function spaceSubmissionBody(
     software: CLIENT_TAG,
     method: `${p.family} ${run.method}`,
     seed: run.seed,
+    units: SITE_UNITS,
   };
 }
 

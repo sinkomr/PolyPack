@@ -27,10 +27,13 @@ export function spaceScoreWord(p: Pick<SpaceKey, "family" | "id">): string {
     case "torus":
       return p.id.split("/")[1] === "free" ? "Cell size" : "Side L";
     case "curved":
-      // curved/<K>/<N>/<M>/<P>: M = 0 is a circle container
-      return p.id.split("/")[3] === "0" ? "Radius r" : "Side s";
-    case "balls":
-      return "Container size";
+      // curved/<K>/<N>/<M>/<P>: M = 0 is a circle container, scored by its diameter
+      return p.id.split("/")[3] === "0" ? "Diameter d" : "Side s";
+    case "balls": {
+      // balls/<piece>in<container>/<P>: a ball container is scored by its diameter, a cube by its edge
+      const code = p.id.split("/")[1] ?? "";
+      return code.endsWith("ball") ? "Diameter d" : code.endsWith("cub") ? "Edge s" : "Scale s";
+    }
     default:
       return "Scale s";
   }

@@ -24,7 +24,10 @@ export interface FamilyRules {
   family: Family;
   dimension: DimensionId;
   title(p: ProblemKey): string;
-  /** The word for the score: "radius" when the container is a circle, else "side" (a space's: "edge", "scale"). */
+  /**
+   * The word for the score: "diameter" when the container is a circle or a ball, else "side" (a space's:
+   * "edge", "scale", or "radius" for a sphere's radius).
+   */
   scoreWord(p: ProblemKey): string;
   /** Weight w of the problem's shape in the points. */
   weight(p: ProblemKey): number;
@@ -106,7 +109,7 @@ function spaceScoreWord(p: SpaceKey): string {
     case "surface":
       return "edge";
     case "curved":
-      return f.M === 0 ? "radius" : "side";
+      return f.M === 0 ? "diameter" : "side";
     case "sphere":
       return "radius";
     case "torus":
@@ -114,8 +117,9 @@ function spaceScoreWord(p: SpaceKey): string {
     case "polyhedra":
       return "scale";
     case "balls":
-      // the container of a code `<piece>in<container>`: a cube ends in "cub", a ball in "ball"
-      return f.code.endsWith("cub") ? "edge" : "radius";
+      // the container of a code `<piece>in<container>`: a cube ends in "cub", a ball in "ball", and
+      // any other solid is scored by its scale
+      return f.code.endsWith("ball") ? "diameter" : f.code.endsWith("cub") ? "edge" : "scale";
   }
 }
 
@@ -192,7 +196,7 @@ const POLYGON_RULES: FamilyRules = {
   family: "polygon",
   dimension: "2-in-2",
   title: (p) => polygonTitle(needPolygon(p, "title")),
-  scoreWord: (p) => (needPolygon(p, "score word").M === 0 ? "radius" : "side"),
+  scoreWord: (p) => (needPolygon(p, "score word").M === 0 ? "diameter" : "side"),
   weight: (p) => {
     const q = needPolygon(p, "shape weight");
     return shapeWeight(q.N, q.M);

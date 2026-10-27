@@ -522,6 +522,19 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     save.bank = 700;
     save.bankAt = Date.now() - 3_600_000;
     save.rp = 123.5;
+    // a problem left before the unit change of 2026-10-27: disks in a 30-gon, side 10 in radius-1 disks
+    save.past.push({
+      key: "0/30/40",
+      N: 0,
+      M: 30,
+      P: 40,
+      tier: "open",
+      best: 10,
+      verified: 10,
+      ourId: null,
+      rp: 0,
+      leftAt: 1,
+    });
     return JSON.stringify(save);
   });
   // leaving saves the page's own state (pagehide): the old save goes in before the game's script next runs
@@ -545,18 +558,24 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     pipeline: st.runplan.pipeline,
     autoDue: st.autoDue,
     auto: st.settings.auto,
+    disks: st.past.find((q: { key: string }) => q.key === "0/30/40"),
   }));
-  // read as version 5. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
+  // read as version 6. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
   // and the Seed counter's list price (300 RP), now that the Seeds row is gone. Version 4 multiplies every
   // amount by what the save could buy next costs now over then: Auto-eval: 2 a second and 5 evaluations
   // per click, 2,900 RP now and 815 then
   const f = 2900 / 815;
-  expect(s).toMatchObject({ version: 5, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 6, levels: {}, picks: 0, pipeline: [] });
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
   await expect(page.locator("#status")).toContainText(`${Math.round(81 * f)} RP of what you paid for yours came back`);
   await expect(page.locator("#status")).toContainText(
     `The Seeds upgrades have left the tech tree, so the ${Math.round(300 * f).toLocaleString("en-US")} RP they cost came back.`,
+  );
+  // version 6 is in diameter-1 disks: the side of disks in a polygon halves, once
+  expect(s.disks).toMatchObject({ best: 5, verified: 5 });
+  await expect(page.locator("#status")).toContainText(
+    "Disks and balls now have diameter 1, and a circle or ball container is measured by its diameter. 1 of your problems uses them and was converted.",
   );
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
   expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1"]);

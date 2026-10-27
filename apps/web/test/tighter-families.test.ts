@@ -75,7 +75,7 @@ describe("Tighter family rules", () => {
     expect(r.family).toBe("polygon");
     expect(r.dimension).toBe("2-in-2");
     expect(r.title(poly(60, 47, 80))).toBe(problemTitle(poly(60, 47, 80)));
-    expect(r.scoreWord(poly(60, 0, 80))).toBe("radius");
+    expect(r.scoreWord(poly(60, 0, 80))).toBe("diameter");
     expect(r.scoreWord(poly(60, 47, 80))).toBe("side");
     expect(r.weight(poly(40, 40, 80))).toBeCloseTo(0.25, 12);
     expect(r.bound(poly(24, 30, 60))!).toBeGreaterThan(0);

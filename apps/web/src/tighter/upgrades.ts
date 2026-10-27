@@ -932,7 +932,7 @@ const SLICE_CARDS: Upgrade[] = [
     "balls",
     ["poly-platonic"],
     "Deals packings of balls in solids, solids in a ball, and balls in a ball.",
-    `The dealer also deals packings with balls: unit balls in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
+    `The dealer also deals packings with balls: balls of diameter 1 in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
   ),
 ];
 

@@ -111,7 +111,7 @@ interface BuildStep {
  * is smaller). Once the build is over, by itself or with an error, its result goes on the problem,
  * so it never runs there again, and the event is returned. A build closed before its end (the lane
  * moved, a reload) records nothing and runs again at the next click or batch. `before` is the
- * problem's best when the build opened, `title` the problem's and `side` "side" or "radius".
+ * problem's best when the build opened, `title` the problem's and `side` "side" or "diameter".
  */
 export function latticeStep(
   p: ProblemState,
