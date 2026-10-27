@@ -77,26 +77,50 @@ const result = (job: SpaceJob, score: number | null, extra: Partial<SpaceJobResu
   ...extra,
 });
 
+/** A round's answer that depends on its job alone (its seed), so that bookkeeping can be compared without a solve. */
+const bySeed = (job: SpaceJob): SpaceJobResult => result(job, 1.5 + ((job.seed >>> 0) % 997) / 1000);
+
 describe("a search on a space problem, in rounds", () => {
   const sphere = problemOf("sphere/4/10");
 
-  it("gives the same result for the same seed, and every result passes the server's rule", async () => {
-    const run = async (seed: number) =>
+  it("gives the same result for the same seed, mixing the run's seed with each round's number", async () => {
+    const run = async (seed: number, runner = new LocalRunner(bySeed)) =>
       new SpaceSearch(
         sphere.search,
         sphere.start,
         { seed, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-        new LocalRunner(),
+        runner,
       ).done;
-    const a = await run(3);
+    const ra = new LocalRunner(bySeed);
+    const a = await run(3, ra);
     const b = await run(3);
-    expect(sphere.rule.bound).toBeLessThan(sphere.start.rho * 0.99);
+    const c = await run(4);
     expect(a.ended).toBe("evals");
     expect(a.rounds).toBe(2);
     expect(a.evaluations).toBe(20000);
     expect(a.best).not.toBeNull();
     expect(b.best).toEqual(a.best);
+    expect(c.best).not.toEqual(a.best);
+    expect(ra.jobs.map((j) => j.seed)).toEqual([mixSeed(3, 0), mixSeed(3, 1)]);
     expect(a.best!.seed).toBe(mixSeed(3, a.best!.round));
+    // the better of the two rounds is kept
+    expect(a.best!.score).toBe(Math.min(...ra.jobs.map((j) => bySeed(j).score!)));
+  });
+
+  it("runs the real shared job on a sphere problem: a result the server's rule accepts, never worse than the start", async () => {
+    expect(sphere.rule.bound).toBeLessThan(sphere.start.rho * 0.99);
+    const run = () =>
+      new SpaceSearch(
+        sphere.search,
+        sphere.start,
+        { seed: 3, budget: { evals: 1500 }, fresh: false, rule: sphere.rule },
+        new LocalRunner(),
+      ).done;
+    const a = await run();
+    expect(a.ended).toBe("evals");
+    expect(a.evaluations).toBeLessThanOrEqual(1500);
+    expect(a.best).not.toBeNull();
+    expect((await run()).best).toEqual(a.best);
     const v = validateSpaceSubmission("sphere", "sphere/4/10", a.best!.config, sphere.rule);
     expect(v.valid).toBe(true);
     expect(v.score).toBe(a.best!.score);
@@ -109,11 +133,11 @@ describe("a search on a space problem, in rounds", () => {
       sphere.search,
       sphere.start,
       { seed: 5, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-      new LocalRunner(),
+      new LocalRunner(bySeed),
     ).done;
     let search: SpaceSearch | null = null;
     const states: SpaceSearchProgress["state"][] = [];
-    const runner = new LocalRunner(undefined, 5, (_job, n) => {
+    const runner = new LocalRunner(bySeed, 5, (_job, n) => {
       // pause while the second round is in flight, resume a little later
       if (n === 2)
         setTimeout(() => {
@@ -256,11 +280,11 @@ describe("a search on a space problem, in rounds", () => {
       sphere.search,
       sphere.start,
       { seed: 9, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-      new LocalRunner(),
+      new LocalRunner(bySeed),
     ).done;
     // pause() then resume() while round 2 is in flight: it runs again, nothing counts as failed
     let search: SpaceSearch | null = null;
-    const quick = new LocalRunner(undefined, 5, (_job, n) => {
+    const quick = new LocalRunner(bySeed, 5, (_job, n) => {
       if (n === 2)
         setTimeout(() => {
           search!.pause();
@@ -283,7 +307,7 @@ describe("a search on a space problem, in rounds", () => {
     // resume() then pause() while paused: the run stays paused and starts no round
     let held: SpaceSearch | null = null;
     const states: string[] = [];
-    const runner = new LocalRunner(undefined, 5, (_job, n) => {
+    const runner = new LocalRunner(bySeed, 5, (_job, n) => {
       if (n === 2)
         setTimeout(() => {
           held!.pause();
