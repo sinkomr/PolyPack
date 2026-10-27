@@ -1,6 +1,6 @@
 import { areaLowerBound } from "@polypack/geometry";
 import { getSolid, isSolidName, type Solid } from "./solids";
-import planarData from "./planar-values.data.json";
+import planarData from "./planar-values.data";
 
 const names: Record<number, string> = {
   0: "disk",
