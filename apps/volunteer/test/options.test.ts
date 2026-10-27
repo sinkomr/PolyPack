@@ -6,6 +6,8 @@ import {
   DEFAULT_MINUTES_PER_PROBLEM,
   type Options,
   OptionError,
+  THREADS_PER_PROBLEM,
+  defaultParallelProblems,
   helpText,
   parseIntList,
   parseOptions,
@@ -26,6 +28,8 @@ describe("options", () => {
       name: null,
       base: DEFAULT_BASE,
       cores: 7,
+      // one problem at once per 4 threads, rounded: 7 threads search 2 problems (4 and 3 threads)
+      parallelProblems: 2,
       hours: Infinity,
       minutesPerProblem: DEFAULT_MINUTES_PER_PROBLEM,
       N: null,
@@ -82,6 +86,7 @@ describe("options", () => {
       name: "Ada",
       base: "http://localhost:9999",
       cores: 3,
+      parallelProblems: 1,
       hours: 1.5,
       minutesPerProblem: 0.5,
       N: [0, 3, 4, 5, 6],
@@ -98,6 +103,26 @@ describe("options", () => {
       spaceMethod: "auto",
       spaceParams: null,
     } satisfies Options);
+  });
+
+  it("searches one problem at once per 4 threads by default, and as many as --parallel-problems says", () => {
+    const parallel = (...argv: string[]) => run(...argv).parallelProblems;
+    expect(THREADS_PER_PROBLEM).toBe(4);
+    expect([1, 2, 3, 5, 6, 7, 10, 15, 31].map(defaultParallelProblems)).toEqual([1, 1, 1, 1, 2, 2, 3, 4, 8]);
+    expect(parallel("--cores", "15")).toBe(4);
+    expect(parallel("--cores", "15", "--parallel-problems", "1")).toBe(1);
+    expect(parallel("--cores", "15", "--parallel-problems", "15")).toBe(15);
+    // --once searches one problem with every thread
+    expect(parallel("--cores", "15", "--once")).toBe(1);
+    expect(parallel("--cores", "15", "--once", "--parallel-problems", "1")).toBe(1);
+    const bad =
+      (...argv: string[]) =>
+      () =>
+        parseOptions(argv, machine);
+    expect(bad("--cores", "4", "--parallel-problems", "5")).toThrow(/each problem needs a thread/);
+    expect(bad("--parallel-problems", "0")).toThrow(/--parallel-problems must be an integer/);
+    expect(bad("--once", "--parallel-problems", "2")).toThrow(/--once searches one problem/);
+    expect(helpText(machine)).toMatch(/--parallel-problems K +problems searched at once/);
   });
 
   it("runs dry with --dry-run even with a name", () => {

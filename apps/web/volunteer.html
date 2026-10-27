@@ -23,9 +23,9 @@
       <h2 class="title">Give spare computer time</h2>
       <p>
         The volunteer client searches for better packings on your computer, in the background, in the way volunteer
-        computing projects such as Folding@home work. It takes problems from this site's work list one at a time. On
-        each it tries many search methods, seeds and run lengths, keeps what works, and submits a packing only when it
-        beats the site's current best. Then it moves on to the next problem.
+        computing projects such as Folding@home work. It takes problems from this site's work list, several at once on
+        a computer with many cores. On each it tries many search methods, seeds and run lengths, keeps what works, and
+        submits a packing only when it beats the site's current best. Then it moves on to the next problem.
       </p>
 
       <h3>Download</h3>
@@ -44,7 +44,9 @@
       <pre><code>node polypack-volunteer.mjs --name "your name"</code></pre>
       <ul>
         <li>
-          It uses all cores but one, at low priority. On macOS and Linux it pauses while the computer runs on battery.
+          It uses all cores but one, at low priority, and searches one problem at once for every 4 of them
+          (<code>--parallel-problems</code> changes that). On macOS and Linux it pauses while the computer runs on
+          battery.
         </li>
         <li>It spends up to 10 minutes on a problem, less when the search stops making progress.</li>
         <li>

@@ -161,7 +161,7 @@ describe("engine memory in a search", () => {
   });
 
   /** One lane: each job ends (0.8 of its budget later) before the next starts. */
-  function run(problem: Problem, memory: unknown, improves: (job: Job) => boolean) {
+  function run(problem: Problem, memory: unknown, improves: (job: Job) => boolean, extra: Partial<SearchInput> = {}) {
     let clock = 0;
     let score = 10;
     const jobs: Job[] = [];
@@ -193,6 +193,7 @@ describe("engine memory in a search", () => {
       seed: 3,
       memory,
       now: () => clock,
+      ...extra,
     };
     return searchProblem(input, runJob, { aborted: false, paused: false }).then((outcome) => ({ outcome, jobs }));
   }
@@ -218,6 +219,31 @@ describe("engine memory in a search", () => {
     const harden = second.jobs[0];
     expect(harden.budget.evals).toBe(Math.floor((50000 / 12) * harden.budget.time_s * 0.8));
     expect(parseMemory(json(second.outcome.memory)).used).toBe(2);
+  });
+
+  it("adds its record to the memory as it stands at the end, which other searches may have changed", async () => {
+    const improves = (job: Job) => job.kind === "iterate" && job.method === "shrink_repair";
+    const start = sample();
+    // another search, of another family, finished while this one ran (--parallel-problems)
+    const meanwhile = remember(start, "c/c/50", { arms: [{ key: "fresh:asc", credit: 1 }], rates: [] });
+    let calls = 0;
+    const { outcome } = await run({ N: 4, M: 4, P: 10 }, json(start), improves, {
+      memoryNow: () => {
+        calls++;
+        return json(meanwhile);
+      },
+    });
+    expect(calls).toBe(1);
+    const after = parseMemory(json(outcome.memory));
+    expect(after.used).toBe(meanwhile.used + 1);
+    // the other search's family is kept, and this problem's is added to it
+    expect(after.families["c/c/50"]).toEqual(meanwhile.families["c/c/50"]);
+    expect(after.families["4/4/10"].arms["iterate:shrink_repair"].n).toBeGreaterThan(
+      meanwhile.families["4/4/10"].arms["iterate:shrink_repair"].n,
+    );
+    // without memoryNow, the record goes to the memory the search started from: the other family is not there
+    const alone = await run({ N: 4, M: 4, P: 10 }, json(start), improves);
+    expect(parseMemory(json(alone.outcome.memory)).families["c/c/50"]).toBeUndefined();
   });
 
   it("searches normally with memory that is not memory", async () => {

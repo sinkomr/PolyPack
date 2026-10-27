@@ -435,11 +435,13 @@ class Search {
 
   /**
    * Memory with this problem added: each arm's share of the reward (nothing when no job improved
-   * anything, which says nothing about the arms), each method's rate.
+   * anything, which says nothing about the arms), each method's rate. It is added to the host's
+   * memory as it is now (input.memoryNow), which other searches may have changed since the start.
    */
   private learned(): Memory {
     const total = this.states.reduce((sum, state) => sum + state.rewards, 0);
-    return remember(this.memory, this.family, {
+    const base = this.input.memoryNow ? parseMemory(this.input.memoryNow()) : this.memory;
+    return remember(base, this.family, {
       arms: this.states
         .filter((state) => state.jobs > 0 && total > 0)
         .map((state) => ({ key: state.arm.key, credit: state.rewards / total })),

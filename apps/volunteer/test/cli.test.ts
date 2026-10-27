@@ -440,6 +440,66 @@ describe("the client, end to end", () => {
     expect(server.leaderOf(0, 0, 2)!.name).toBe("Test volunteer");
   });
 
+  // Real solver work: one evaluation-capped job on each of the two threads, at the same time.
+  it(
+    "searches several problems at once with --parallel-problems, each on its share of the threads",
+    { timeout: 60_000 },
+    async () => {
+      server = await startFakeServer({ problems: [LOOSE_SQUARES, TWO_CIRCLES] });
+      let active = 0;
+      let most = 0;
+      const lanes: number[] = [];
+      const searched: string[] = [];
+      let release!: () => void;
+      const together = new Promise<void>((resolve) => (release = resolve));
+      const both: SearchProblem = async (input, runJob, control) => {
+        active++;
+        most = Math.max(most, active);
+        lanes.push(input.lanes);
+        searched.push(`${input.problem.N}/${input.problem.M}/${input.problem.P}`);
+        if (active === 2) release();
+        // the first search waits for the second to start, so that they run at the same time
+        await Promise.race([together, delay(10_000)]);
+        try {
+          return await oneJob(input, runJob, control);
+        } finally {
+          active--;
+        }
+      };
+      // a fake clock that moves on only while no search runs: the --hours limit ends the run once both are done
+      let offset = 0;
+      const run = await clientWith(["--name", "Test volunteer", "--hours", "1", "--parallel-problems", "2"], {
+        searchProblem: both,
+        random: () => 0,
+        statusEveryMs: 100,
+        now: () => Date.now() + offset,
+        sleep: async (ms, signal) => {
+          if (signal?.aborted) throw new Error("aborted");
+          if (active > 0) await delay(Math.min(ms, 20));
+          else offset += ms;
+        },
+      });
+      expect(run.code, run.output).toBe(0);
+      // two searches at once, one thread each (--cores 2), on different problems
+      expect(most).toBe(2);
+      expect(lanes).toEqual([1, 1]);
+      expect(searched.sort()).toEqual(["0/0/2", "4/4/3"]);
+      expect(run.output).toMatch(/2 search thread\(s\) on \d+ core\(s\), 2 problems at once \(1 and 1 threads\)/);
+      expect(run.output).toMatch(/Searching N=4 M=4 P=3 .* on 1 thread\(s\)/);
+      // their lines name their problem, and the status line shows both
+      expect(run.output).toMatch(/\n\[[^\]]+\]   N=4 M=4 P=3: best so far/);
+      expect(run.output).toMatch(/\n\[[^\]]+\]   N=0 M=0 P=2: best so far/);
+      expect(run.output).toMatch(/Status: 2 of 2 problems being searched; threads/);
+      expect(
+        history()
+          .map((l) => `${l.N}/${l.M}/${l.P}`)
+          .sort(),
+      ).toEqual(["0/0/2", "4/4/3"]);
+      expect(server.leaderOf(4, 4, 3)!.name).toBe("Test volunteer");
+      expect(server.leaderOf(0, 0, 2)!.name).toBe("Test volunteer");
+    },
+  );
+
   // Fix 7: threads that die as they start stop the client with an error instead of respawning forever.
   it("stops with exit code 1 when its search threads cannot start", { timeout: 30_000 }, async () => {
     server = await startFakeServer({ problems: [LOOSE_SQUARES] });
