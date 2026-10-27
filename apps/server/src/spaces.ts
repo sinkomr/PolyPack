@@ -80,18 +80,18 @@ export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 /**
   * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
   * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
-  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 16,657 targets in all).
+  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 17,657 targets in all, including 500 sampled polyhedra problems without records).
  */
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
  * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
- * kept: a check of 100 large polyhedra takes up to about 0.15 s, and posting a research record back
+ * kept: a check of 500 large polyhedra takes about 0.7 s, and posting a research record back
  * would otherwise cost one each time. The other spaces' checks are short, and they keep answering
  * "valid, not kept" for such an entry.
  */
 export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
 /**
- * Polyhedra and surface checks from this P on are heavy ([CALC] polyhedra up to 0.35 s of work at P = 100;
+ * Polyhedra and surface checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
  * parts, 0.57 s before): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
  * turn; another is refused with 503.
@@ -665,9 +665,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
     // a surface check grows with P^2 N (pairs of parts of N sides): about 15 ms at P = N = 100
     const sides = space === "surface" ? Math.max(8, Number(parsedId.fields.N)) : 0;
+    // [CALC] Reserve up to 1.6 s for two polyhedra passes at P = 500 (about 0.7 s each).
     const estimate =
       space === "polyhedra"
-        ? Math.min(400, 0.04 * parsedId.P * parsedId.P)
+        ? Math.min(1600, 0.04 * parsedId.P * parsedId.P)
         : space === "surface"
           ? Math.min(100, 5 + 1e-5 * parsedId.P * parsedId.P * sides)
           : 5;

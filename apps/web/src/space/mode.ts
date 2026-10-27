@@ -19,7 +19,7 @@ import { addOptions } from "../option-groups";
 import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
-import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod } from "@polypack/spaces/search";
+import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, spaceLatticeStart } from "@polypack/spaces/search";
 import { ParameterError, parameterForm, validityText } from "../solve-params";
 import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
 import { type BoardSpace, spaceAddress } from "../space-address";
@@ -80,7 +80,12 @@ interface Host {
 }
 
 /** Where a run started: the research record, a site entry, an earlier result or nothing. */
-type StartFrom = { kind: "certified" } | { kind: "site"; id: number } | { kind: "result" } | { kind: "fresh" };
+type StartFrom =
+  | { kind: "certified" }
+  | { kind: "site"; id: number }
+  | { kind: "result" }
+  | { kind: "fresh" }
+  | { kind: "lattice" };
 
 /** "from the research record", for the method a submission names. */
 const fromText = (f: StartFrom) =>
@@ -90,7 +95,9 @@ const fromText = (f: StartFrom) =>
       ? `from site entry ${f.id}`
       : f.kind === "result"
         ? "from an earlier board result"
-        : "from a new arrangement";
+        : f.kind === "lattice"
+          ? "from a lattice arrangement"
+          : "from a new arrangement";
 
 /** A checked result with the run that found it: its method, seed and start go with a submission. */
 interface Result {
@@ -323,6 +330,7 @@ class SpaceMode {
               { id: "space-solve-start" },
               h("option", { value: "shown" }, "Shown packing"),
               h("option", { value: "fresh" }, "New arrangement"),
+              h("option", { value: "lattice", hidden: true }, "Lattice arrangement"),
             ),
           ),
           row(
@@ -484,6 +492,7 @@ class SpaceMode {
     });
     time.addEventListener("input", () => ($("space-solve-time-value").textContent = `${time.value} s`));
     $("space-solve-budget").addEventListener("change", () => this.updateButtons());
+    $("space-solve-start").addEventListener("change", () => this.updateButtons());
     $("space-solve-method").addEventListener("change", () => this.methodChanged());
     $("space-solve-pause").addEventListener("click", () => this.pauseRun());
     $("space-solve-stop").addEventListener("click", () => this.run?.stop());
@@ -677,8 +686,12 @@ class SpaceMode {
       this.view = this.handle.render($("space-view-host"));
     }
     this.view.show(p.best?.config ?? null);
-    // a problem with no packing yet (no research record, no site entry) can only start from a new arrangement
-    if (!p.best && p.status === "no_record") $<HTMLSelectElement>("space-solve-start").value = "fresh";
+    const startPicker = $<HTMLSelectElement>("space-solve-start");
+    const latticeOption = startPicker.querySelector<HTMLOptionElement>('[value="lattice"]')!;
+    latticeOption.hidden = p.space !== "polyhedra";
+    latticeOption.disabled = p.space !== "polyhedra";
+    if (!p.best && p.status === "no_record") startPicker.value = p.space === "polyhedra" ? "lattice" : "fresh";
+    else if (startPicker.value === "lattice" && p.space !== "polyhedra") startPicker.value = "shown";
     this.setDefaults(p);
     this.setAddress();
     this.renderFacts();
@@ -703,7 +716,9 @@ class SpaceMode {
         (p.best
           ? "Choose a budget, then run."
           : p.status === "no_record"
-            ? "No record yet: a run starts from a new arrangement."
+            ? p.space === "polyhedra"
+              ? "No record yet: a run starts from a lattice arrangement."
+              : "No record yet: a run starts from a new arrangement."
             : "There is no packing to start from."),
     );
     this.updateButtons();
@@ -922,9 +937,9 @@ class SpaceMode {
     const running = !!this.run;
     const p = this.handle?.problem ?? null;
     $<HTMLFieldSetElement>("space-solve-settings").disabled = running;
-    const fresh = $<HTMLSelectElement>("space-solve-start").value === "fresh";
+    const start = $<HTMLSelectElement>("space-solve-start").value;
     $<HTMLButtonElement>("space-solve-run").disabled =
-      running || this.loading || !p || (!p.best && !fresh) || p.status === "infeasible";
+      running || this.loading || !p || (!this.shownConfig() && start === "shown") || p.status === "infeasible";
     $<HTMLButtonElement>("space-export").disabled = this.loading || !p?.best;
     $<HTMLButtonElement>("space-solve-pause").disabled = !running;
     $("space-solve-pause").textContent = this.run?.state === "paused" ? "Resume" : "Pause";
@@ -1009,7 +1024,8 @@ class SpaceMode {
     const settings = this.readSettings();
     if (typeof settings === "string") return this.solveStatus(settings);
     const shown = this.shownConfig();
-    const start = settings.fresh ? null : (shown?.config ?? null);
+    const lattice = $<HTMLSelectElement>("space-solve-start").value === "lattice";
+    const start = lattice ? spaceLatticeStart(handle.problem.search) : settings.fresh ? null : (shown?.config ?? null);
     if (!start && !settings.fresh)
       return this.solveStatus("There is no packing to start from. Choose New arrangement.");
     // as on the Flat board: a polish needs a packing
@@ -1017,13 +1033,15 @@ class SpaceMode {
       return this.solveStatus("Contact polish needs a packing to start from. Choose Shown packing.");
     const p = handle.problem;
     const running = `Running ${handle.methodName(settings.method)}…`;
-    const from: StartFrom = settings.fresh
-      ? { kind: "fresh" }
-      : shown?.source === "result"
-        ? { kind: "result" }
-        : shown?.source === "site" && p.site_best
-          ? { kind: "site", id: p.site_best.id }
-          : { kind: "certified" };
+    const from: StartFrom = lattice
+      ? { kind: "lattice" }
+      : settings.fresh
+        ? { kind: "fresh" }
+        : shown?.source === "result"
+          ? { kind: "result" }
+          : shown?.source === "site" && p.site_best
+            ? { kind: "site", id: p.site_best.id }
+            : { kind: "certified" };
     const trace: [number, number][] = [];
     this.runInfo = { settings, start, from, trace };
     this.preview = null;

@@ -160,11 +160,11 @@ describe.skipIf(!doc)("data/polyhedra/records.json", () => {
   it("covers every problem for P = 2 to 100 with consistent ids", () => {
     // the wiki's 86 problems and PolyPack's 64
     const ids = new Set(records.map((r: { id: string }) => r.id));
-    expect(POLYHEDRA_MAX_P).toBe(100);
+    expect(POLYHEDRA_MAX_P).toBe(500);
     expect(POLYHEDRA_PROBLEMS.length).toBe(150);
     expect(records.length).toBe(150 * 99);
     for (const p of POLYHEDRA_PROBLEMS)
-      for (let n = 2; n <= POLYHEDRA_MAX_P; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
+      for (let n = 2; n <= 100; n++) expect(ids.has(`polyhedra/${p.code}/${n}`)).toBe(true);
     for (const r of records) expect(r.id).toBe(`polyhedra/${r.code}/${r.P}`);
   });
 });
@@ -248,7 +248,7 @@ describe("work bounds", () => {
     const h = [0, 1, 2].map((k) => Math.max(...Array.from({ length: P.nv }, (_, v) => P.V[3 * v + k])));
     const pieces: Pose[] = [];
     // a 5 x 5 x 4 grid: 235 near pairs [CALC]
-    for (let i = 0; i < POLYHEDRA_MAX_P; i++)
+    for (let i = 0; i < 100; i++)
       pieces.push([(i % 5) * (2 * h[0] + 1e-9), (Math.floor(i / 5) % 5) * (2 * h[1] + 1e-9), Math.floor(i / 25) * (2 * h[2] + 1e-9), 1, 0, 0, 0]);
     const t0 = performance.now();
     const v = validatePolyhedra(p, { s: 1e3, pieces }, { stopAt: Infinity });

@@ -12,3 +12,5 @@ export * from "./kernel";
 // names are listed rather than re-exported wholesale.
 export { chartGradient, expQuat, logQuat, mulQuat, randomQuat, unitQuat } from "./kernel-rotation";
 export { GR as SD_GRADIENT, type SimPose, pose as simPose, prepShape, sdCores } from "./sim/geom";
+export * from "./domain";
+export * from "./start";

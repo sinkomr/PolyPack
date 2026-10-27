@@ -71,7 +71,7 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect(page.locator("#space-shown")).toHaveText("the research record");
   await expect(page.locator("#space-f-code")).toHaveValue("cubincub");
   await expect(page.locator("#space-f-code option")).toHaveCount(150);
-  await expect(page.locator("#space-f-P option")).toHaveCount(99);
+  await expect(page.locator("#space-f-P option")).toHaveCount(499);
 
   // the drawing turns with the keyboard and the views
   const draw = page.locator(".space-draw");
@@ -112,6 +112,22 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await page.selectOption("#family-select", "polyhedra");
   await shown(page, "polyhedra/tidintid/100");
   await drawn(page, 100);
+});
+
+test("P = 500 without a record offers a lattice start on the board", async ({ page }) => {
+  await page.goto("/#space=polyhedra/tidintid/500");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem polyhedra/tidintid/500");
+  await expect(page.locator("#space-f-P")).toHaveValue("500");
+  await expect(page.locator("#space-f-P option")).toHaveCount(499);
+  await expect(page.locator("#space-solve-start")).toHaveValue("lattice");
+  await expect(page.locator('#space-solve-start option[value="lattice"]')).toHaveText("Lattice arrangement");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await expect(page.locator("#space-solve-status")).toContainText("lattice arrangement");
+  // All three choices remain available, including the original fresh search.
+  await page.selectOption("#space-solve-start", "fresh");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await page.selectOption("#space-solve-start", "shown");
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
 });
 
 test("a polyhedra round runs in the browser and returns a valid result, and pause and stop act at once at P = 100", async ({
