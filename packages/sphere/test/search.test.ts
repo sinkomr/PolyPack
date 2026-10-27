@@ -67,13 +67,14 @@ describe("searchSphere: units", () => {
   // Pinned from the search before the unit change (disks of radius 1), halved: the search works in
   // the piece's angular size, which does not change, so a seed gives the same poses and half the rho.
   it("gives the radius-1 outcomes of a seed, halved, for disks", () => {
+    // recorded on Apple Silicon; Linux x64 differs near 1e-11 (last-bit Math differences), so 9 digits
     const six = searchSphere({ N: 0, P: 6 }, { seed: 5, maxEvals: 3000 });
-    expect(six.score).toBeCloseTo(1.2732395447356217 / 2, 12);
+    expect(six.score).toBeCloseTo(1.2732395447356217 / 2, 9);
     // a disk's quaternion carries a spin that differs between platforms, so check validity rather than q
     expect(validate({ N: 0, P: 6 }, six.config!).valid).toBe(true);
     const nine = searchSphere({ N: 0, P: 9 }, { seed: 5, maxEvals: 3000 });
-    expect(nine.score).toBeCloseTo(1.6247489461908833 / 2, 12);
+    expect(nine.score).toBeCloseTo(1.6247489461908833 / 2, 9);
     // polygons are unchanged
-    expect(searchSphere({ N: 4, P: 7 }, { seed: 5, maxEvals: 3000 }).score).toBeCloseTo(0.9332432371041922, 12);
+    expect(searchSphere({ N: 4, P: 7 }, { seed: 5, maxEvals: 3000 }).score).toBeCloseTo(0.9332432371041922, 9);
   });
 });
