@@ -11,9 +11,9 @@ import type { JobResult, RunJob } from "../src/types";
 
 const OPTIMUM = 2 + Math.SQRT1_2;
 
-// The real solver runs about 35,000 evaluations here: 13 s on an M1 Pro, more under load, hence a
-// per-test timeout well above that
-it("finds five squares in a square with the real solver", { timeout: 120_000 }, async () => {
+// A short smoke: about 8,000 evaluations of the real solver return a sound, strict packing. That it
+// reaches the known optimum (about 35,000 evaluations) is checked in engine.quality.test.ts.
+it("returns a strict five-square packing with the real solver", { timeout: 120_000 }, async () => {
   let clock = 0;
   const results: JobResult[] = [];
   const runJob: RunJob = async (job, control) => {
@@ -30,7 +30,7 @@ it("finds five squares in a square with the real solver", { timeout: 120_000 }, 
       leader: null,
       published: OPTIMUM,
       areaBound: Math.sqrt(5),
-      maxSeconds: 40,
+      maxSeconds: 8,
       lanes: 1,
       seed: 1,
       now: () => clock,
@@ -41,14 +41,13 @@ it("finds five squares in a square with the real solver", { timeout: 120_000 }, 
 
   expect(results.every((r) => r.termination !== "error" && r.termination !== "time")).toBe(true);
   expect(results.at(-1)!.job.method).toBe("polish");
-  expect(clock).toBeLessThanOrEqual(40);
+  expect(clock).toBeLessThanOrEqual(8);
   const best = outcome.best!;
   expect(best.strict).toBe(true);
   const assessed = evaluate(best.config);
   expect(assessed.valid).toBe(true);
   expect(Math.abs(assessed.score! - best.score)).toBeLessThan(1e-9);
   expect(findOverlaps(4, best.config.pieces, strictTolerance(best.config))).toEqual([]);
-  // The grid of four plus one (2 * sqrt 2 = 2.828) is beaten; the known optimum is 2 + 1/sqrt 2
-  expect(best.score).toBeLessThan(OPTIMUM + 1e-6);
+  // never below the known optimum, 2 + 1/sqrt 2; reaching it is the quality test's
   expect(best.score).toBeGreaterThan(OPTIMUM - 1e-9);
 });

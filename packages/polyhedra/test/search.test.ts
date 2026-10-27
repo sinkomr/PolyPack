@@ -3,7 +3,7 @@
  */
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra, volumeBound } from "../src";
+import { type Pose, getProblem, lbfgs, legalizeConfig, polishConfig, searchPolyhedra, validatePolyhedra, volumeBound } from "../src";
 import { readProblemConfigs, readRecordsFile } from "../src/records-file";
 
 const recUrl = new URL("../../../data/polyhedra/records.json", import.meta.url);
@@ -60,12 +60,25 @@ describe("searchPolyhedra", () => {
     }
   });
 
-  it("keeps a valid result on tiny budgets", () => {
+  it("keeps a valid result on tiny budgets: from scratch within the cap, and from a known valid start always", () => {
     const p = getProblem("dodindod")!;
     for (const maxEvals of [50, 500, 5000]) {
       const r = searchPolyhedra(p, 3, { seed: 2, maxEvals });
       expect(r.evaluations).toBeLessThanOrEqual(maxEvals);
+      // from nothing a tiny budget may find nothing; what it returns is valid
       if (r.config) expect(validatePolyhedra(p, r.config, { tol: 0 }).valid).toBe(true);
+    }
+    // two cubes touching in a cube of side 2 are valid; at any budget, down to a single evaluation, the search
+    // returns a configuration, valid at tolerance 0 and no larger than the start
+    const cubes = getProblem("cubincub")!;
+    const start = { s: 2, pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] as Pose[] };
+    expect(validatePolyhedra(cubes, start, { tol: 0 }).valid).toBe(true);
+    for (const maxEvals of [1, 50, 300]) {
+      const r = searchPolyhedra(cubes, 2, { seed: 2, start, maxEvals });
+      expect(r.evaluations, `${maxEvals}`).toBeLessThanOrEqual(maxEvals);
+      expect(r.config, `${maxEvals}`).not.toBeNull();
+      expect(validatePolyhedra(cubes, r.config!, { tol: 0 }).valid, `${maxEvals}`).toBe(true);
+      expect(r.score, `${maxEvals}`).toBeLessThanOrEqual(2 + 1e-9);
     }
   });
 
