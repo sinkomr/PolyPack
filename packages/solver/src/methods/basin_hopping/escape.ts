@@ -2,7 +2,7 @@ import {
   boundingRadius,
   containerProtrusions,
   enclose,
-  inradius,
+  pieceInradius,
   MAX_COORD,
   pieceSeparation,
   type PackingConfig,
@@ -44,7 +44,7 @@ export function* peelLayer(
   const nx = Math.cos(direction);
   const ny = Math.sin(direction);
   const depth = (x: number, y: number) => (x - container.cx) * nx + (y - container.cy) * ny;
-  const half = N === 0 ? 1 : inradius(N);
+  const half = pieceInradius(N);
   const outer = Math.max(...config.pieces.map((p) => depth(p.x, p.y)));
   const layer = config.pieces.flatMap((p, i) => (depth(p.x, p.y) > outer - half ? [i] : []));
   if (layer.length === config.P) return result;

@@ -1,0 +1,167 @@
+{
+ "archived": "Radius-1 disk data (disks of radius 1, N = 0), archived 2026-10-27 when disk pieces became diameter 1. Equivalent to diameter-1 disks at K = +-4 (K x 4, lengths x 1/2). Kept for reference, not served.",
+ "generated": "2026-10-24",
+ "definition": "a*(N, M, P): sup side (radius for N = 0) of P congruent regular N-gons in the ideal regular M-gon at K = -1; P unit pieces fit in some finite regular M-gon at curvature K < 0 iff sqrt(-K) < a*",
+ "certificate": "certified_lower_bound a_c = sqrt(-K_cert): config_cert is a certified packing of P unit pieces in a finite M-gon at curvature K_cert",
+ "entries": [
+  {
+   "N": 0,
+   "M": 5,
+   "P": 1,
+   "a_float": 1.1241772156979288,
+   "K_float": -1.2637744122943477,
+   "unbounded": false,
+   "how": "from the K = -1 optimum",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 1.1241772151358402,
+   "K_cert": -1.2637744110305733,
+   "config_cert": {
+    "size": 19.376458170404756,
+    "pieces": [
+     {
+      "x": -4.005212343290445e-17,
+      "y": 3.071939662143049e-17,
+      "theta": 0.632414776533896
+     }
+    ]
+   },
+   "certified": true
+  },
+  {
+   "N": 0,
+   "M": 5,
+   "P": 2,
+   "a_float": 0.6505816558902162,
+   "K_float": -0.42325649098085566,
+   "unbounded": false,
+   "how": "from searches at K = -0.25 and -0.5",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 0.6505816555649253,
+   "K_cert": -0.4232564905575992,
+   "config_cert": {
+    "size": 33.69820846266757,
+    "pieces": [
+     {
+      "x": 0.9937304925633733,
+      "y": 0.3228826097810674,
+      "theta": 4.659354413979266
+     },
+     {
+      "x": -0.9937304925633731,
+      "y": 0.3228826097810678,
+      "theta": 0.5328924040104641
+     }
+    ]
+   },
+   "certified": true
+  },
+  {
+   "N": 0,
+   "M": 6,
+   "P": 1,
+   "a_float": 1.3169578969248155,
+   "K_float": -1.7343781022726328,
+   "unbounded": false,
+   "how": "from the K = -1 optimum",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 1.3169578962663364,
+   "K_cert": -1.7343781005382548,
+   "config_cert": {
+    "size": 16.471593784592276,
+    "pieces": [
+     {
+      "x": -5.384974662597256e-17,
+      "y": -4.986211512676127e-17,
+      "theta": 3.142785382403164
+     }
+    ]
+   },
+   "certified": true
+  },
+  {
+   "N": 0,
+   "M": 6,
+   "P": 2,
+   "a_float": 0.7480339940338171,
+   "K_float": -0.5595548562301847,
+   "unbounded": false,
+   "how": "from searches at K = -0.25 and -0.5",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 0.7480339936598001,
+   "K_cert": -0.5595548556706299,
+   "config_cert": {
+    "size": 29.162439101862546,
+    "pieces": [
+     {
+      "x": 0.5000000000002501,
+      "y": -0.866025403784872,
+      "theta": 5.366242084059534
+     },
+     {
+      "x": -0.5000000000002498,
+      "y": 0.8660254037848719,
+      "theta": 3.8580672969031204
+     }
+    ]
+   },
+   "certified": true
+  },
+  {
+   "N": 0,
+   "M": 8,
+   "P": 1,
+   "a_float": 1.6148909161730935,
+   "K_float": -2.6078726711383737,
+   "unbounded": false,
+   "how": "from a search at K = -0.5",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 1.614890915365648,
+   "K_cert": -2.607872668530501,
+   "config_cert": {
+    "size": 13.346486092596875,
+    "pieces": [
+     {
+      "x": -1.0105890682544229e-17,
+      "y": -1.550935754967677e-17,
+      "theta": 4.750023393540487
+     }
+    ]
+   },
+   "certified": true
+  },
+  {
+   "N": 0,
+   "M": 8,
+   "P": 2,
+   "a_float": 0.881373587019542,
+   "K_float": -0.7768193998956943,
+   "unbounded": false,
+   "how": "from searches at K = -0.25 and -0.5",
+   "seed": 1,
+   "hops": 6,
+   "certified_lower_bound": 0.8813735865788552,
+   "K_cert": -0.7768193991188749,
+   "config_cert": {
+    "size": 24.57389130146447,
+    "pieces": [
+     {
+      "x": -0.38268343236528113,
+      "y": 0.9238795325117488,
+      "theta": 4.0643070856067185
+     },
+     {
+      "x": 0.3826834323652813,
+      "y": -0.923879532511749,
+      "theta": 3.9333971005660953
+     }
+    ]
+   },
+   "certified": true
+  }
+ ]
+}

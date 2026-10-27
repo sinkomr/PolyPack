@@ -1,4 +1,4 @@
-import { areaLowerBound } from "@polypack/geometry";
+import { faceAreaLowerBound } from "./disk";
 import { getSolid, isSolidName, type Solid } from "./solids";
 import planarData from "./planar-values.data";
 
@@ -84,6 +84,10 @@ export interface PlanarValue {
   value: number;
   printed?: { display: string; precision: number; name: string; href: string };
 }
+/**
+ * The 2D in 2D values the notes quote, in site units (disks of diameter 1). The index is generated from
+ * data/records.json (packages/surface/scripts/build-planar-values.ts), which is in site units.
+ */
 export const PLANAR_VALUES: readonly PlanarValue[] = planarData;
 
 /** Group regular faces by polygon, regardless of the solid's family or number of face kinds. */
@@ -123,7 +127,7 @@ export function bestFaceSplit(N: number, P: number, kinds: readonly FaceKind[], 
       for (let k = 0; k <= limit; k++) {
         const record = known.get(k);
         if (k > P && !record) continue;
-        const value = k === 0 ? 0 : (record?.value ?? areaLowerBound(N, M, k));
+        const value = k === 0 ? 0 : (record?.value ?? faceAreaLowerBound(N, M, k));
         const score = Math.max(state.value, value);
         const filled = Math.min(P, capacity + F * k);
         if (next.has(filled) && next.get(filled)!.value <= score) continue;

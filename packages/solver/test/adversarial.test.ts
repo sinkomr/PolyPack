@@ -10,8 +10,8 @@ const validStart = (): PackingConfig => ({
   ...problem,
   container_phi: 0,
   pieces: [
-    { x: -1, y: 0, theta: 0 },
-    { x: 1, y: 0, theta: 0 },
+    { x: -0.5, y: 0, theta: 0 },
+    { x: 0.5, y: 0, theta: 0 },
   ],
 });
 
@@ -116,7 +116,7 @@ describe("adversarial framework contracts", () => {
   it("leaves absent best and explicit reasons when only invalid candidates were seen", async () => {
     const methods = registry(async (context) => {
       const invalid = validStart();
-      invalid.pieces[1].x = -1;
+      invalid.pieces[1].x = -0.5;
       await context.evaluate(invalid);
       await context.evaluate({ ...validStart(), pieces: [] });
     });
@@ -150,7 +150,7 @@ describe("adversarial framework contracts", () => {
         ...validStart(),
         pieces: [
           { x: NaN, y: 0, theta: 0 },
-          { x: 1, y: 0, theta: 0 },
+          { x: 0.5, y: 0, theta: 0 },
         ],
       },
     ]) {
@@ -248,8 +248,8 @@ describe("adversarial polish contracts", () => {
       pieces: [
         { x: 0, y: 0, theta: 0 },
         ...Array.from({ length: 6 }, (_, i) => ({
-          x: 2.04 * Math.cos((i * Math.PI) / 3),
-          y: 2.04 * Math.sin((i * Math.PI) / 3),
+          x: 1.02 * Math.cos((i * Math.PI) / 3),
+          y: 1.02 * Math.sin((i * Math.PI) / 3),
           theta: 0,
         })),
       ],

@@ -1,6 +1,7 @@
 import {
   boundingRadius,
   circumradius,
+  containerInradius,
   convexHull,
   encloseSet,
   extremePoints,
@@ -77,7 +78,7 @@ export function shapeEnclose(config: PackingConfig, shape: MorphShape): Containe
     set.pad += shape.padding;
   }
   const container = encloseSet(set, config.M, config.container_phi);
-  const wallScale = config.M === 0 ? 1 : inradius(config.M);
+  const wallScale = containerInradius(config.M);
   return { ...container, size: container.size + (2e-12 * Math.max(1, container.size)) / wallScale };
 }
 
@@ -104,11 +105,11 @@ export function shapeContained(N: number, pose: Pose, container: Container, shap
     const dx = points[k] - container.cx;
     const dy = points[k + 1] - container.cy;
     if (container.M === 0) {
-      if (Math.hypot(dx, dy) > container.size) return false;
+      if (Math.hypot(dx, dy) > container.size * containerInradius(0)) return false;
     } else {
       for (let edge = 0; edge < container.M; edge++) {
         const a = container.phi - Math.PI / 2 + (2 * Math.PI * edge) / container.M;
-        if (dx * Math.cos(a) + dy * Math.sin(a) > container.size * inradius(container.M)) return false;
+        if (dx * Math.cos(a) + dy * Math.sin(a) > container.size * containerInradius(container.M)) return false;
       }
     }
   }

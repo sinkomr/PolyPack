@@ -238,7 +238,7 @@ function fmtRelative(x: number): string {
   return `${m} × 10${superscript(e)}`;
 }
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
-/** "side", or "radius" for a circle container. */
+/** "side", or "diameter" for a circle container (families.ts scoreWord). */
 /** GET /api/problems for a polygon problem. */
 const getProblem = (p: ProblemKey) => {
   const q = needPolygon(p, "the problem read");
@@ -302,6 +302,20 @@ const refundNote = (rp: number) =>
 /** Said once to a save that had reset, when it is read (save.ts migration 4). */
 const REBALANCED_NOTE =
   "Tighter is being rebalanced and expanded, and resets now work differently. Sorry: your standing has been cleared and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
+/** What the unit change of 2026-10-27 did to a save (save.ts migration 5), said once as it is read. */
+function unitsNote(u: { converted: number; dropped: number }): string {
+  const one = (n: number) => n === 1;
+  const parts = ["Disks and balls now have diameter 1, and a circle or ball container is measured by its diameter."];
+  if (u.converted > 0)
+    parts.push(
+      `${fmtInt(u.converted)} of your problems ${one(u.converted) ? "uses them and was" : "use them and were"} converted. The packings are the same, and only their numbers changed.`,
+    );
+  if (u.dropped > 0)
+    parts.push(
+      `${fmtInt(u.dropped)} curved ${one(u.dropped) ? "problem" : "problems"} with disk pieces left your game, because the change made ${one(u.dropped) ? "it a different problem" : "them different problems"}.`,
+    );
+  return parts.join(" ");
+}
 /** What a save's retired upgrades paid back (save.ts RETIRED), said once as it is read. */
 function retiredNote(r: RetiredRefund): string {
   const paid = [r.rp > 0 ? `${fmtInt(r.rp)} RP` : "", r.standing > 0 ? `${fmtInt(r.standing)} standing` : ""];
@@ -334,6 +348,7 @@ function initialState(): GameState {
         r.refunded ? refundNote(r.refunded) : "",
         r.retired ? retiredNote(r.retired) : "",
         r.rebalanced ? REBALANCED_NOTE : "",
+        r.units ? unitsNote(r.units) : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -522,8 +537,8 @@ function fitView(c: Container | null): void {
   const w = canvas.clientWidth,
     h = canvas.clientHeight;
   if (!c || !(c.size > 0) || !w || !h) return;
-  // distance from the centre to a vertex (polygon) or the rim (circle)
-  const reach = c.M === 0 ? c.size : c.size / (2 * Math.sin(Math.PI / c.M));
+  // distance from the centre to a vertex (polygon) or the rim (circle, whose size is its diameter)
+  const reach = c.M === 0 ? c.size / 2 : c.size / (2 * Math.sin(Math.PI / c.M));
   let zoom = (0.42 * Math.min(w, h)) / reach;
   // the trace and the score sit in the canvas's bottom corners: beside the packing when there is
   // room, otherwise the packing is fitted above them
@@ -2715,7 +2730,7 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
   const flat = isPolygon(p);
   for (const id of ["t-density-label", "t-density"]) show(id, flat);
   const sp = flat ? null : spaceScoreBox(p, p.best);
-  text("t-side-label", sp ? sp.label : sideWord(p) === "radius" ? "Radius r" : "Side s");
+  text("t-side-label", sp ? sp.label : sideWord(p) === "diameter" ? "Diameter d" : "Side s");
   text("t-bound-label", flat ? "Area bound" : "Lower bound");
   const b = sp ? sp.bound : rulesOf(p).bound(p)!;
   text("t-bound", b === null ? "—" : show6(b));
@@ -3876,6 +3891,7 @@ $("t-import").addEventListener("click", async () => {
     r.rescaled ? rescaleNote(r.rescaled) : "",
     r.refunded ? refundNote(r.refunded) : "",
     r.rebalanced ? REBALANCED_NOTE : "",
+    r.units ? unitsNote(r.units) : "",
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();

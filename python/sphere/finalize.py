@@ -89,6 +89,14 @@ def lit_values(lit):
     return tam, poly
 
 
+def site_run(r):
+    """A raw search run in site units. Runs written before 2026-10-27 have no "units" tag and disks
+    of radius 1: their rho is twice the diameter-1 value (exact halving; the poses do not change)."""
+    if r["N"] == 0 and r.get("units") != "diameter":
+        return {**r, "rho": r["rho"] / 2, "units": "diameter"}
+    return r
+
+
 def witnesses_for(N, P, a, Q):
     if N == 0:
         return []
@@ -103,7 +111,7 @@ def build(N, P, rho_float, Q, meta, tam, poly):
     chosen = None
     for eps in EPS:
         rho_cert = next_up(rho_float, eps)
-        a = 1 / rho_cert
+        a = sg.angle_of_rho(N, rho_cert)
         W = witnesses_for(N, P, a, np.array(Q))
         res = cert.certify_configuration(N, P, {"rho": rho_cert, "pieces": [{"q": q} for q in Q]}, W)
         if res["certified"]:
@@ -113,7 +121,7 @@ def build(N, P, rho_float, Q, meta, tam, poly):
         return None, f"certification failed for every eps (last: {res.get('error')})"
     eps, rho_cert, W, res = chosen
     gap_rel = float((Fraction(rho_cert) - Fraction(rho_float)) / Fraction(rho_float))
-    a_f = 1 / rho_float
+    a_f = sg.angle_of_rho(N, rho_float)
     # ---------------- bounds
     blist = []
 
@@ -124,11 +132,11 @@ def build(N, P, rho_float, Q, meta, tam, poly):
             blist.append({"kind": kind, "value": val, "label": label, "rigorous": rigorous, **({"source": src} if src else {})})
 
     if N == 0:
-        addb("area", bd.area_bound(0, P), "CALC: P caps of angular radius 1/rho have total area <= 4 pi")
+        addb("area", bd.area_bound(0, P), "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi")
         if P >= 3:
-            addb("fejes_toth", bd.fejes_toth_disk_bound(P), "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT", REF["ft1943"])
+            addb("fejes_toth", bd.fejes_toth_disk_bound(P), "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT", REF["ft1943"])
         if P in PROVEN_TAMMES and P in tam and P >= 3:
-            addb("tammes_proven", bd.tammes_disk_bound(P, tam[P]["cos"]), "EST: published Tammes optimum, rho >= 2/theta_P", "; ".join(REF[k] for k in PROVEN_TAMMES[P]))
+            addb("tammes_proven", bd.tammes_disk_bound(P, tam[P]["cos"]), "EST: published Tammes optimum, rho >= 1/theta_P", "; ".join(REF[k] for k in PROVEN_TAMMES[P]))
     else:
         addb("existence", bd.existence_bound(N), "CALC: a convex regular N-gon of side 1 needs rho > N/(2 pi)")
         addb("area", bd.area_bound(N, P), "CALC: P N-gons have total area <= 4 pi rho^2")
@@ -165,7 +173,7 @@ def build(N, P, rho_float, Q, meta, tam, poly):
     if N == 0 and P in tam:
         c = tam[P]["cos"]
         theta = math.acos(float(c))
-        rho_lit = 2 / theta
+        rho_lit = 1 / theta  # disks of diameter 1: rho = 1/(2a), theta = 2a
         litrec = {"quantity": "Tammes minimal angle", "cos_min_angle": str(tam[P]["cos"]) if P <= 6 else tam[P].get("refs") and str(float(c)),
                   "theta_deg": math.degrees(theta), "rho": rho_lit, "source": tam[P]["src"],
                   "rel_diff": (rho_float - rho_lit) / rho_lit}
@@ -213,7 +221,7 @@ def build(N, P, rho_float, Q, meta, tam, poly):
     if N >= 3 and P == 2:
         notes.append("Infimum, not attained: two antipodal pieces fit for every rho > N/(2 pi); at rho = N/(2 pi) the piece degenerates to a hemisphere (circumradius pi/2). Meets the existence bound and, in the limit, the area bound [CALC].")
     if N == 0 and P == 2:
-        notes.append("Two closed hemispheres (angular radius pi/2) touching along the equator: rho = 2/pi exactly [CALC].")
+        notes.append("Two closed hemispheres (angular radius pi/2) touching along the equator: rho = 1/pi exactly [CALC].")
     density = P * sg.area(N, a_f) / (4 * PI) if N == 0 or a_f < 2 * PI / N else 1.0
     rec = {
         "id": f"sphere/{N}/{P}", "N": N, "P": P,
@@ -250,7 +258,7 @@ def main():
     runs = {}
     for d in args.runs:
         for fn in glob.glob(os.path.join(d, "sphere_*_*.json")):
-            r = json.load(open(fn))
+            r = site_run(json.load(open(fn)))
             key = (r["N"], r["P"])
             exact = str(r.get("method") or "").startswith("exact construction")
             if key in runs and str(runs[key].get("method") or "").startswith("exact construction"):
@@ -259,7 +267,7 @@ def main():
                 runs[key] = r
     # exact P = 2 constructions
     for N in (0, 3, 4, 5, 6, 8):
-        runs[(N, 2)] = {"N": N, "P": 2, "rho": (2 / PI) if N == 0 else N / (2 * PI),
+        runs[(N, 2)] = {"N": N, "P": 2, "rho": (1 / PI) if N == 0 else N / (2 * PI), "units": "diameter",
                         "q": [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]], "seed": None,
                         "budget": None, "method": "exact construction (antipodal pair)"}
     keys = sorted(runs)
@@ -294,10 +302,11 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     out = {
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "units": "diameter",
         "conventions": {
-            "problem_id": "sphere/N/P: P congruent pieces on the whole sphere of radius rho (no container); N = 0 disks of geodesic radius 1, N >= 3 regular spherical N-gons of geodesic side 1",
+            "problem_id": "sphere/N/P: P congruent pieces on the whole sphere of radius rho (no container); N = 0 disks of geodesic diameter 1, N >= 3 regular spherical N-gons of geodesic side 1",
             "score": "rho, the sphere radius (smaller is better); curvature K = 1/rho^2",
-            "units": "lengths in units of the piece (side 1 / disk radius 1); poses on the unit sphere",
+            "units": "lengths in units of the piece (side 1 / disk diameter 1); poses on the unit sphere",
             "pose": "q = [w, x, y, z] (any nonzero quaternion; the piece is G(standard piece), G = rotation of q/|q|, v -> q v q*). Standard piece: centre e3 = (0,0,1), vertex k at (sin R cos phi_k, sin R sin phi_k, cos R), phi_k = pi/2 + 2 pi k/N (vertex up = +y), sin(1/(2 rho)) = sin R sin(pi/N). Gauge: piece 0 has q = [1,0,0,0]. G = T(c) R_z(theta) recovers the curved package's (centre, theta) pose away from the south pole.",
             "validity": "interiors disjoint (touching allowed); score_cert is a radius at which the stored configuration is proven strictly valid by python/sphere/certify.py (mpmath intervals, 256 bits)",
             "display": "score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64 value)",

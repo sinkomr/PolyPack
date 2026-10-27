@@ -330,7 +330,7 @@ test("a closed problem can be viewed but not submitted, and an impossible one ha
   await expect(page.locator("#space-facts")).toContainText("is proven");
   await expect(page.locator("#space-submit")).toBeDisabled();
   await expect(page.locator("#space-submit-note")).toContainText(
-    "This problem takes no entries: its optimum 1.806442 is proven",
+    "This problem takes no entries: its optimum 0.903221 is proven",
   );
 
   const curved = (await (await request.get("/api/spaces/curved/records")).json()) as {
@@ -800,8 +800,8 @@ test("words and focus: the globe turns both ways, an empty drawing takes no focu
 
   // no packing exists, so there is nothing to turn
   await page.goto("about:blank");
-  await page.goto("/#space=curved/1/0/4/2");
-  await expect(page.locator("#space-problem-note")).toHaveText("Problem curved/1/0/4/2");
+  await page.goto("/#space=curved/1/5/0/2");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem curved/1/5/0/2");
   await expect(draw).toHaveAttribute("role", "img");
   await expect(draw).not.toHaveAttribute("tabindex", /.*/);
   await expect(page.locator(".space-hint")).toBeHidden();

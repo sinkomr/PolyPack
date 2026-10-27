@@ -1,6 +1,7 @@
 import { LeaderboardEntry, Pose, containerVertices, enclose, findOverlaps, pieceVertices } from "@polypack/geometry";
 import { describe, expect, it } from "vitest";
 import {
+  matchTolerance,
   AtlasRow,
   DEFAULT_VIEW,
   ListedRecord,
@@ -355,7 +356,7 @@ describe("the packing a tile draws", () => {
       "P = 5, side 3.000000, best known, an entry at 2.500000 is pending verification, drawn from published coordinates",
     );
     expect(tileLabel(row({ site: claim, verified: site(3.4), lit: lit(3) }), 0)).toBe(
-      "P = 5, radius 3.000000, best known, an entry at 2.500000 is pending verification, drawing: entry by ann at 3.400000",
+      "P = 5, diameter 3.000000, best known, an entry at 2.500000 is pending verification, drawing: entry by ann at 3.400000",
     );
     expect(tileLabel(row({ site: claim }), 4)).toBe(
       "P = 5, no verified value, an entry at 2.500000 is pending verification, drawing: the pending entry by pat",
@@ -373,13 +374,22 @@ describe("the packing a tile draws", () => {
     expect(tileStatus({ site: site(7) })).toEqual({ best: 7, published: null, site: "only", pending: false });
     expect(tileStatus({ site: site(3.4), lit: lit(3) })).toMatchObject({ best: 3, site: "behind" });
     expect(tileStatus({ site: site(3.0000005), lit: lit(3) })).toMatchObject({ best: 3, site: "matches" });
+    // the printed value's tolerance follows its conversion: a polygon in a circle (value = diameter) has twice the radius's
+    const circle = (p: number) => lit(3, { N: 4, M: 0, display_precision: p });
+    expect(matchTolerance(circle(3))).toBe(0.002);
+    expect(matchTolerance(lit(3, { N: 0, M: 4, display_precision: 3 }))).toBe(0.001);
+    expect(matchTolerance(lit(3, { N: 0, M: 0, display_precision: 3 }))).toBe(0.001);
+    expect(tileStatus({ site: site(3.0015), lit: circle(3) })).toMatchObject({ site: "matches" });
+    expect(tileStatus({ site: site(3.0015), lit: lit(3, { display_precision: 3 }) })).toMatchObject({ site: "behind" });
+    expect(tileStatus({ site: site(2.9985), lit: circle(3) })).toMatchObject({ site: "matches" });
+    expect(tileStatus({ site: site(2.997), lit: circle(3) })).toMatchObject({ site: "beats" });
 
     const row = (r: Partial<AtlasRow>): AtlasRow => ({ P: 5, bound: 2.2, ...r });
     expect(tileLabel(row({ lit: lit(2.707107, { status: "proven" }) }), 4)).toBe(
       "P = 5, side 2.707107, proven, no coordinates",
     );
     expect(tileLabel(row({ lit: lit(3, { status: "trivial_tiling", has_coordinates: true }) }), 0)).toBe(
-      "P = 5, radius 3.000000, optimal tiling, drawn from published coordinates",
+      "P = 5, diameter 3.000000, optimal tiling, drawn from published coordinates",
     );
     expect(tileLabel(row({ site: site(2.5, { verification: "confirmed" }), lit: lit(3) }), 4)).toBe(
       "P = 5, side 2.500000, best known, site entry beats the published value, drawn from the entry by ann",
@@ -430,9 +440,9 @@ describe("the packing a tile draws", () => {
 });
 
 describe("drawing geometry", () => {
-  // seven circles: one in the middle and six around it, radius 3 (proved by Graham, 1968)
+  // seven disks: one in the middle and six around it, container diameter 3 (proved by Graham, 1968)
   const seven: Pose[] = [{ x: 0, y: 0, theta: 0 }];
-  for (let k = 0; k < 6; k++) seven.push({ x: 2 * Math.cos((k * PI) / 3), y: 2 * Math.sin((k * PI) / 3), theta: 0 });
+  for (let k = 0; k < 6; k++) seven.push({ x: Math.cos((k * PI) / 3), y: Math.sin((k * PI) / 3), theta: 0 });
 
   // five squares in a square of side 2 + 1/sqrt 2: four in the corners, one turned 45 degrees in the middle
   const s5 = 2 + Math.SQRT1_2;
@@ -451,19 +461,19 @@ describe("drawing geometry", () => {
       theta: p.theta + a,
     }));
 
-  it("draws 0/0/7 as seven unit circles in a circle of radius 3", () => {
+  it("draws 0/0/7 as seven disks of diameter 1 in a circle of diameter 3", () => {
     const d = drawPacking(0, 0, seven, 0)!;
     expect(d.size).toBeCloseTo(3, 9);
-    expect(d.circle).toBeCloseTo(3, 9);
+    expect(d.circle).toBeCloseTo(1.5, 9);
     expect(d.points).toBeUndefined();
-    expect(d.box.map((v) => +v.toFixed(6))).toEqual([-3, -3, 6, 6]);
+    expect(d.box.map((v) => +v.toFixed(6))).toEqual([-1.5, -1.5, 3, 3]);
     expect(d.paths).toHaveLength(1);
     expect(d.paths[0]).toMatchObject({ cls: 0, count: 7 });
     expect(d.paths[0].d.match(/M/g)).toHaveLength(7);
-    // the middle circle starts at its leftmost point and is drawn as two half turns of radius 1
-    expect(d.paths[0].d.startsWith("M-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0")).toBe(true);
+    // the middle circle starts at its leftmost point and is drawn as two half turns of radius 1/2
+    expect(d.paths[0].d.startsWith("M-0.5 0a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0")).toBe(true);
     // y is flipped: the circle at 60 degrees (up and to the right) is drawn above the middle
-    expect(d.paths[0].d).toContain("M0 -1.7321a");
+    expect(d.paths[0].d).toContain("M0 -0.866a");
     expect(d.tilts).toEqual([{ tilt: 0, cls: 0, count: 7 }]);
     // an off-centre copy gives the same picture
     expect(
@@ -526,7 +536,7 @@ describe("drawing geometry", () => {
 
   it("frames each container shape by its bounding box", () => {
     expect(drawPacking(4, 4, [], 0)).toBeNull();
-    expect(containerOutline(0, 2)).toEqual({ box: [-2, -2, 4, 4], circle: 2 });
+    expect(containerOutline(0, 4)).toEqual({ box: [-2, -2, 4, 4], circle: 2 });
     const tri = containerOutline(3, 2);
     // a triangle of side 2 with a horizontal bottom side: width 2, height sqrt 3
     expect(tri.box[2]).toBeCloseTo(2, 9);

@@ -24,8 +24,8 @@ const config: PackingConfig = {
   P: 2,
   container_phi: 0,
   pieces: [
-    { x: -2, y: 0, theta: 0 },
-    { x: 2, y: 0, theta: 0 },
+    { x: -1, y: 0, theta: 0 },
+    { x: 1, y: 0, theta: 0 },
   ],
 };
 function request(id = 1, overrides: Partial<RunRequest> = {}): RunRequest {
@@ -166,7 +166,7 @@ describe("browser solve runtime", () => {
     expect(message.type).toBe("result");
     if (message.type === "result") {
       expect(message.result.evaluations).toBe(1);
-      expect(message.result.best!.pieces[0].x).toBe(-2);
+      expect(message.result.best!.pieces[0].x).toBe(-1);
     }
   });
 
@@ -221,8 +221,8 @@ describe("browser solve runtime", () => {
   it("keeps the best strict complete preview through invalid, incomplete and worse progress", async () => {
     const { runtime, messages, terminal } = harness();
     const best = structuredClone(config);
-    best.pieces[0].x = -1;
-    best.pieces[1].x = 1;
+    best.pieces[0].x = -0.5;
+    best.pieces[1].x = 0.5;
     const initial = frame(config, { container: { ...evaluate(config).container!, phi: 0.2 } });
     const improved = frame(best);
     const toleranceOnly = structuredClone(best);

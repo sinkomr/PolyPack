@@ -109,21 +109,22 @@ describe("ballsKernel", () => {
       last = e;
     }
     // a soft piece's farthest point is its core's farthest vertex plus the dilation: an axis-aligned cube centred at
-    // distance 3 on a diagonal, so that a vertex lies 3 + sqrt(3) / 2 from the origin, in a ball of radius 3.5 (the
+    // distance 3 on a diagonal, so that a vertex lies 3 + sqrt(3) / 2 from the origin, in a ball of radius 3.5, scored by its
+    // diameter 7 (the
     // other cube well inside)
     const c = ballsKernel({ code: "cubinball", P: 2 });
     const far = 3 + Math.sqrt(3) / 2;
     const u = 1 / Math.sqrt(3);
-    const q = c.fromConfig({ s: 3.5, pieces: [[3 * u, 3 * u, 3 * u, 1, 0, 0, 0], [-2, 0, 0, 1, 0, 0, 0]] })!;
+    const q = c.fromConfig({ s: 7, pieces: [[3 * u, 3 * u, 3 * u, 1, 0, 0, 0], [-2, 0, 0, 1, 0, 0, 0]] })!;
     expect(c.energy(q)).toBeCloseTo((far - 3.5) ** 2, 13);
     // at t = 0.5: the core's vertex at 3 + sqrt(3) / 4, and the dilation half the inradius 1/2
     c.setShape!(q, 0.5);
     expect(c.energy(q)).toBeCloseTo((3 + 0.5 * (Math.sqrt(3) / 2) + 0.5 * 0.5 - 3.5) ** 2, 13);
     // balls: every t is the ball
     const b = ballsKernel({ code: "ballinball", P: 2 });
-    const two = b.fromConfig({ s: 2, pieces: [[0.9, 0, 0], [-0.9, 0, 0]] })!;
+    const two = b.fromConfig({ s: 2, pieces: [[0.45, 0, 0], [-0.45, 0, 0]] })!;
     const e = b.energy(two);
-    expect(e).toBeCloseTo(0.2 ** 2, 14);
+    expect(e).toBeCloseTo(0.1 ** 2, 14);
     b.setShape!(two, 0);
     expect(b.energy(two)).toBe(e);
   });
@@ -203,30 +204,30 @@ describe("ballsKernel", () => {
       }
       expect(k.toConfig(k.seeds!(rng, 1)[0])).not.toEqual(k.toConfig(seeds[0]));
     }
-    // 8 balls of the simple cubic lattice, axis-aligned (the second seed in a cube): the cube of edge 4, all touching
+    // 8 balls of the simple cubic lattice, axis-aligned (the second seed in a cube): the cube of edge 2, all touching
     const k = ballsKernel({ code: "ballincub", P: 8 });
-    expect(k.seeds!(mulberry32(2), 2)[1].size).toBeCloseTo(4, 8);
+    expect(k.seeds!(mulberry32(2), 2)[1].size).toBeCloseTo(2, 8);
   });
 
   it("validates as the server does: touching tolerance, the strict check of a problem without records, the bound", () => {
     const k = ballsKernel({ code: "ballinball", P: 2 });
     const two = (d: number, s: number) => ({ s, pieces: [[d, 0, 0], [-d, 0, 0]] });
-    expect(k.validate(two(1, 2))).toEqual({ valid: true, score: 2, reasons: [] });
+    expect(k.validate(two(0.5, 2))).toEqual({ valid: true, score: 2, reasons: [] });
     // within the strict tolerance 1e-11
-    expect(k.validate(two(1 - 0.25e-11, 2)).valid).toBe(true);
+    expect(k.validate(two(0.5 - 0.125e-11, 2)).valid).toBe(true);
     // within the touching tolerance, not the strict one: refused, since the space has no records
-    const loose = k.validate(two(1 - 0.25e-9, 2));
+    const loose = k.validate(two(0.5 - 0.125e-9, 2));
     expect(loose.valid).toBe(false);
     expect(loose.score).toBe(2);
     expect(loose.reasons[0]).toBe(BALLS_STRICT_REASON);
     expect(loose.reasons[1]).toMatch(/^pieces 0 and 1 overlap by /);
-    expect(k.validate(two(1 - 1e-8, 2)).reasons[0]).toMatch(/^pieces 0 and 1 overlap by /);
+    expect(k.validate(two(0.5 - 0.5e-8, 2)).reasons[0]).toMatch(/^pieces 0 and 1 overlap by /);
     // below the bound 2 by more than 1e-9 relative
-    const low = k.validate(two(0.999, 1.998));
+    const low = k.validate(two(0.4995, 1.998));
     expect(low).toMatchObject({ valid: false, score: 1.998 });
     expect(low.reasons[0]).toMatch(/lower bound 2 /);
     // malformed, or the wrong number of pieces: no score
-    expect(k.validate([two(1, 2)])).toEqual({ valid: false, score: null, reasons: ["config must be an object"] });
+    expect(k.validate([two(0.5, 2)])).toEqual({ valid: false, score: null, reasons: ["config must be an object"] });
     expect(k.validate({ s: "2", pieces: [] })).toMatchObject({ valid: false, score: null });
     expect(k.validate({ s: 2, pieces: [[1, 0, 0]] })).toEqual({
       valid: false,
@@ -465,12 +466,12 @@ describe("ballsKernel: finishing", () => {
   it("never finishes a valid input to something worse, or to nothing", () => {
     for (const [code, config] of [
       // legalization scales centres about the origin: from these, past the server's coordinate limit 1e4
-      ["cubinball", { s: 10002, pieces: [[1e4, 0, 0, 1, 0, 0, 0], [1e4 - 1, 0, 0, 1, 0, 0, 0]] }],
-      ["cubinball", { s: 10002, pieces: [[1e4, 0, 0, 1, 0, 0, 0], [1e4 - 1.5, 0, 0, 1, 0, 0, 0]] }],
-      ["ballinball", { s: 10001, pieces: [[1e4, 0, 0], [1e4 - 2, 0, 0]] }],
+      ["cubinball", { s: 20004, pieces: [[1e4, 0, 0, 1, 0, 0, 0], [1e4 - 1, 0, 0, 1, 0, 0, 0]] }],
+      ["cubinball", { s: 20004, pieces: [[1e4, 0, 0, 1, 0, 0, 0], [1e4 - 1.5, 0, 0, 1, 0, 0, 0]] }],
+      ["ballinball", { s: 20001, pieces: [[1e4, 0, 0], [1e4 - 1, 0, 0]] }],
       // optima, touching
-      ["ballinball", { s: 2, pieces: [[1, 0, 0], [-1, 0, 0]] }],
-      ["cubinball", { s: Math.sqrt(1.5), pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] }],
+      ["ballinball", { s: 2, pieces: [[0.5, 0, 0], [-0.5, 0, 0]] }],
+      ["cubinball", { s: 2 * Math.sqrt(1.5), pieces: [[-0.5, 0, 0, 1, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] }],
     ] as const) {
       const k = ballsKernel({ code, P: 2 });
       expect(strictlyValid(code, config), code).toBe(true);

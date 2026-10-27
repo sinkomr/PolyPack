@@ -13,8 +13,7 @@
  * Contacts (|separation| <= 1e-7 in floats) can be overlaid as segments between centres.
  */
 import { readFileSync, writeFileSync } from "node:fs";
-import { circumradius, pieceArea } from "@polypack/geometry";
-import { TorusRecord, TorusRecordsFile, recordPacking, validateTorusPacking } from "../src";
+import { TorusRecord, TorusRecordsFile, areaOf, recordPacking, reachOf, validateTorusPacking } from "../src";
 
 const root = new URL("../../../", import.meta.url);
 // optional arguments: input records file and output html (defaults: the repository paths)
@@ -87,7 +86,7 @@ for (const r of file.records) {
 }
 // circumradius / area tables for the page
 const shapes = [...new Set(recs.map((r) => r.N))].sort((a, b) => a - b);
-const shapeInfo = Object.fromEntries(shapes.map((N) => [N, { R: N === 0 ? 1 : circumradius(N), A: pieceArea(N) }]));
+const shapeInfo = Object.fromEntries(shapes.map((N) => [N, { R: reachOf(N), A: areaOf(N) }]));
 
 const html = `<!doctype html>
 <html lang="en">
@@ -129,7 +128,7 @@ small, .muted { color:var(--muted); }
 <body>
 <main>
 <h1>PolyPack pieces on flat tori</h1>
-<p class="lede">P congruent pieces (disks of radius 1, regular polygons of side 1) packed on a square torus, a hexagonal torus or a torus with any lattice. Pieces may touch; interiors of all pieces and their lattice translates are disjoint. Every score is certified with interval arithmetic and shown rounded to 6 decimals. Green: equal to a lower bound.</p>
+<p class="lede">P congruent pieces (disks of diameter 1, regular polygons of side 1) packed on a square torus, a hexagonal torus or a torus with any lattice. Pieces may touch; interiors of all pieces and their lattice translates are disjoint. Every score is certified with interval arithmetic and shown rounded to 6 decimals. Green: equal to a lower bound.</p>
 <div class="controls">
   <div class="seg" id="fam" role="group" aria-label="torus family"></div>
   <label>Shape <select id="shape"></select></label>
@@ -178,7 +177,7 @@ small, .muted { color:var(--muted); }
     return pts.join(" ");
   }
   function piece(N, x, y, th, color, strokeW) {
-    if (N === 0) return '<circle cx="' + x.toFixed(4) + '" cy="' + (-y).toFixed(4) + '" r="1" fill="' + color + '" stroke="var(--bg)" stroke-width="' + strokeW + '"/>';
+    if (N === 0) return '<circle cx="' + x.toFixed(4) + '" cy="' + (-y).toFixed(4) + '" r="' + shapeInfo[0].R + '" fill="' + color + '" stroke="var(--bg)" stroke-width="' + strokeW + '"/>';
     return '<polygon points="' + outline(N, x, y, th) + '" fill="' + color + '" stroke="var(--bg)" stroke-width="' + strokeW + '"/>';
   }
   const add = (a, b, m, n) => [a[0] + m * b[0][0] + n * b[1][0], a[1] + m * b[0][1] + n * b[1][1]];

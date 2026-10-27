@@ -67,8 +67,8 @@ describe("review round 3: held up", () => {
             const over = tol + extra;
             const cases: [PieceName, BoundaryPiece[]][] = [
               ["cube", [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 1 + over, 0, 0] }]],
-              ["ball", [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 2 + over, 0, 0] }]],
-              ["ball", [{ cell: 0, u: [h - d - 2 + over, 0, 0] }, { cell: 0, u: [h - d, 0, 0] }]],
+              ["ball", [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 1 + over, 0, 0] }]],
+              ["ball", [{ cell: 0, u: [h - d - 1 + over, 0, 0] }, { cell: 0, u: [h - d, 0, 0] }]],
               ["cube", [{ cell: 0, u: [h - d, -h + 0.8, 0] }, { cell: 0, u: [h - d - 1 + over, -h + 0.8, 0] }]],
               ["cube", [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 0.5 - Math.SQRT1_2 + over, 0, 0], q: turned45 }]],
             ];

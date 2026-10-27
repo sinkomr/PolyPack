@@ -77,7 +77,7 @@ describe("shrink_repair kernel", () => {
         const ua = new Float64Array(2 * N);
         const ub = new Float64Array(2 * N);
         for (let t = 0; t < 1500; t++) {
-          const reach = N === 0 ? 2 : 1 / Math.sin(Math.PI / N);
+          const reach = N === 0 ? 1 : 1 / Math.sin(Math.PI / N);
           const a = { x: reach * (2 * random() - 1), y: reach * (2 * random() - 1), theta: N ? 20 * random() - 10 : 0 };
           const b = { x: reach * (2 * random() - 1), y: reach * (2 * random() - 1), theta: N ? 20 * random() - 10 : 0 };
           kernel.normals(a.theta, ua);

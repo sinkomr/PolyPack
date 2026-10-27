@@ -1,4 +1,6 @@
 {
+ "units": "diameter",
+ "units_date": "2026-10-27",
  "summary": {
   "records": 166,
   "certified": 166,
@@ -10,7 +12,7 @@
   {
    "index": 0,
    "id": "sphere/0/2",
-   "rho_cert": 0.6366197723739476,
+   "rho_cert": 0.3183098861869738,
    "certified": true,
    "stats": {
     "far": 1,
@@ -24,7 +26,7 @@
   {
    "index": 1,
    "id": "sphere/0/3",
-   "rho_cert": 0.9549296585609215,
+   "rho_cert": 0.47746482928046075,
    "certified": true,
    "stats": {
     "far": 3,
@@ -38,7 +40,7 @@
   {
    "index": 2,
    "id": "sphere/0/4",
-   "rho_cert": 1.0467733744370677,
+   "rho_cert": 0.5233866872185339,
    "certified": true,
    "stats": {
     "far": 6,
@@ -52,7 +54,7 @@
   {
    "index": 3,
    "id": "sphere/0/5",
-   "rho_cert": 1.27323954477336,
+   "rho_cert": 0.63661977238668,
    "certified": true,
    "stats": {
     "far": 10,
@@ -66,7 +68,7 @@
   {
    "index": 4,
    "id": "sphere/0/6",
-   "rho_cert": 1.2732395447478952,
+   "rho_cert": 0.6366197723739476,
    "certified": true,
    "stats": {
     "far": 15,
@@ -80,7 +82,7 @@
   {
    "index": 5,
    "id": "sphere/0/7",
-   "rho_cert": 1.471583829253703,
+   "rho_cert": 0.7357919146268515,
    "certified": true,
    "stats": {
     "far": 21,
@@ -94,7 +96,7 @@
   {
    "index": 6,
    "id": "sphere/0/8",
-   "rho_cert": 1.5307756766349885,
+   "rho_cert": 0.7653878383174942,
    "certified": true,
    "stats": {
     "far": 28,
@@ -108,7 +110,7 @@
   {
    "index": 7,
    "id": "sphere/0/9",
-   "rho_cert": 1.62474893310502,
+   "rho_cert": 0.81237446655251,
    "certified": true,
    "stats": {
     "far": 36,
@@ -122,7 +124,7 @@
   {
    "index": 8,
    "id": "sphere/0/10",
-   "rho_cert": 1.7323819283152992,
+   "rho_cert": 0.8661909641576496,
    "certified": true,
    "stats": {
     "far": 45,
@@ -136,7 +138,7 @@
   {
    "index": 9,
    "id": "sphere/0/11",
-   "rho_cert": 1.8064420505357668,
+   "rho_cert": 0.9032210252678834,
    "certified": true,
    "stats": {
     "far": 55,
@@ -150,7 +152,7 @@
   {
    "index": 10,
    "id": "sphere/0/12",
-   "rho_cert": 1.8064420505357663,
+   "rho_cert": 0.9032210252678832,
    "certified": true,
    "stats": {
     "far": 66,
@@ -164,7 +166,7 @@
   {
    "index": 11,
    "id": "sphere/0/13",
-   "rho_cert": 2.005568274944426,
+   "rho_cert": 1.002784137472213,
    "certified": true,
    "stats": {
     "far": 78,
@@ -178,7 +180,7 @@
   {
    "index": 12,
    "id": "sphere/0/14",
-   "rho_cert": 2.05838666707104,
+   "rho_cert": 1.02919333353552,
    "certified": true,
    "stats": {
     "far": 91,
@@ -192,7 +194,7 @@
   {
    "index": 13,
    "id": "sphere/0/15",
-   "rho_cert": 2.1355972844574893,
+   "rho_cert": 1.0677986422287447,
    "certified": true,
    "stats": {
     "far": 105,
@@ -206,7 +208,7 @@
   {
    "index": 14,
    "id": "sphere/0/16",
-   "rho_cert": 2.193375143425662,
+   "rho_cert": 1.096687571712831,
    "certified": true,
    "stats": {
     "far": 120,
@@ -220,7 +222,7 @@
   {
    "index": 15,
    "id": "sphere/0/17",
-   "rho_cert": 2.2429207694664486,
+   "rho_cert": 1.1214603847332243,
    "certified": true,
    "stats": {
     "far": 136,
@@ -234,7 +236,7 @@
   {
    "index": 16,
    "id": "sphere/0/18",
-   "rho_cert": 2.3123344294074757,
+   "rho_cert": 1.1561672147037378,
    "certified": true,
    "stats": {
     "far": 153,
@@ -248,7 +250,7 @@
   {
    "index": 17,
    "id": "sphere/0/19",
-   "rho_cert": 2.4027460664709945,
+   "rho_cert": 1.2013730332354973,
    "certified": true,
    "stats": {
     "far": 171,
@@ -262,7 +264,7 @@
   {
    "index": 18,
    "id": "sphere/0/20",
-   "rho_cert": 2.415961533700987,
+   "rho_cert": 1.2079807668504936,
    "certified": true,
    "stats": {
     "far": 190,
@@ -276,7 +278,7 @@
   {
    "index": 19,
    "id": "sphere/0/21",
-   "rho_cert": 2.512244284110265,
+   "rho_cert": 1.2561221420551325,
    "certified": true,
    "stats": {
     "far": 210,
@@ -290,7 +292,7 @@
   {
    "index": 20,
    "id": "sphere/0/22",
-   "rho_cert": 2.5612683557209883,
+   "rho_cert": 1.2806341778604942,
    "certified": true,
    "stats": {
     "far": 231,
@@ -304,7 +306,7 @@
   {
    "index": 21,
    "id": "sphere/0/23",
-   "rho_cert": 2.6216347029978633,
+   "rho_cert": 1.3108173514989316,
    "certified": true,
    "stats": {
     "far": 253,
@@ -318,7 +320,7 @@
   {
    "index": 22,
    "id": "sphere/0/24",
-   "rho_cert": 2.6227866117548424,
+   "rho_cert": 1.3113933058774212,
    "certified": true,
    "stats": {
     "far": 276,
@@ -332,7 +334,7 @@
   {
    "index": 23,
    "id": "sphere/0/25",
-   "rho_cert": 2.752324770399098,
+   "rho_cert": 1.376162385199549,
    "certified": true,
    "stats": {
     "far": 300,
@@ -346,7 +348,7 @@
   {
    "index": 24,
    "id": "sphere/0/26",
-   "rho_cert": 2.792351087773853,
+   "rho_cert": 1.3961755438869266,
    "certified": true,
    "stats": {
     "far": 325,
@@ -360,7 +362,7 @@
   {
    "index": 25,
    "id": "sphere/0/27",
-   "rho_cert": 2.817067798917884,
+   "rho_cert": 1.408533899458942,
    "certified": true,
    "stats": {
     "far": 351,
@@ -374,7 +376,7 @@
   {
    "index": 26,
    "id": "sphere/0/28",
-   "rho_cert": 2.911730173890389,
+   "rho_cert": 1.4558650869451946,
    "certified": true,
    "stats": {
     "far": 378,
@@ -388,7 +390,7 @@
   {
    "index": 27,
    "id": "sphere/0/29",
-   "rho_cert": 2.959978082498404,
+   "rho_cert": 1.479989041249202,
    "certified": true,
    "stats": {
     "far": 406,
@@ -402,7 +404,7 @@
   {
    "index": 28,
    "id": "sphere/0/30",
-   "rho_cert": 2.968915065163779,
+   "rho_cert": 1.4844575325818894,
    "certified": true,
    "stats": {
     "far": 435,
@@ -416,7 +418,7 @@
   {
    "index": 29,
    "id": "sphere/0/31",
-   "rho_cert": 3.038771631412307,
+   "rho_cert": 1.5193858157061535,
    "certified": true,
    "stats": {
     "far": 465,
@@ -430,7 +432,7 @@
   {
    "index": 30,
    "id": "sphere/0/32",
-   "rho_cert": 3.0577959902816967,
+   "rho_cert": 1.5288979951408483,
    "certified": true,
    "stats": {
     "far": 496,
@@ -444,7 +446,7 @@
   {
    "index": 31,
    "id": "sphere/0/33",
-   "rho_cert": 3.1607494679327948,
+   "rho_cert": 1.5803747339663974,
    "certified": true,
    "stats": {
     "far": 528,
@@ -458,7 +460,7 @@
   {
    "index": 32,
    "id": "sphere/0/34",
-   "rho_cert": 3.200185684792258,
+   "rho_cert": 1.600092842396129,
    "certified": true,
    "stats": {
     "far": 561,
@@ -472,7 +474,7 @@
   {
    "index": 33,
    "id": "sphere/0/35",
-   "rho_cert": 3.244399300119991,
+   "rho_cert": 1.6221996500599956,
    "certified": true,
    "stats": {
     "far": 595,
@@ -486,7 +488,7 @@
   {
    "index": 34,
    "id": "sphere/0/36",
-   "rho_cert": 3.2563918982829696,
+   "rho_cert": 1.6281959491414848,
    "certified": true,
    "stats": {
     "far": 630,
@@ -500,7 +502,7 @@
   {
    "index": 35,
    "id": "sphere/0/37",
-   "rho_cert": 3.328981487808203,
+   "rho_cert": 1.6644907439041015,
    "certified": true,
    "stats": {
     "far": 666,
@@ -514,7 +516,7 @@
   {
    "index": 36,
    "id": "sphere/0/38",
-   "rho_cert": 3.345674412646444,
+   "rho_cert": 1.672837206323222,
    "certified": true,
    "stats": {
     "far": 703,
@@ -528,7 +530,7 @@
   {
    "index": 37,
    "id": "sphere/0/39",
-   "rho_cert": 3.421762359014507,
+   "rho_cert": 1.7108811795072536,
    "certified": true,
    "stats": {
     "far": 741,
@@ -542,7 +544,7 @@
   {
    "index": 38,
    "id": "sphere/0/40",
-   "rho_cert": 3.455887804392393,
+   "rho_cert": 1.7279439021961964,
    "certified": true,
    "stats": {
     "far": 780,

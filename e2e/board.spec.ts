@@ -60,7 +60,8 @@ test("build a packing, submit it, and a second browser sees the leaderboard upda
   const [sent] = await Promise.all([page.waitForRequest("**/api/submit"), page.click("#submit")]);
   const body = sent.postDataJSON();
   expect(body.found_with).toBe("hand");
-  for (const key of ["agent", "agent_note", "method", "method_params", "seed", "budget"]) expect(body).not.toHaveProperty(key);
+  for (const key of ["agent", "agent_note", "method", "method_params", "seed", "budget"])
+    expect(body).not.toHaveProperty(key);
   await expect(page.locator("#submit-result")).toContainText("Accepted");
   await expect(page.locator("#submit-result")).toContainText("This is now the best entry for this problem.");
   await expect(page.locator("#leaderboard li")).toHaveCount(1);
@@ -142,7 +143,8 @@ test("a link to an entry that is no longer kept says why it cannot be loaded", a
 });
 
 test("a problem with a proven optimum takes no submissions, and an open one does again", async ({ page, request }) => {
-  const closedNote = "This problem is solved: its optimum is proven, so the leaderboard is closed. You can still play it.";
+  const closedNote =
+    "This problem is solved: its optimum is proven, so the leaderboard is closed. You can still play it.";
   // seven circles in a circle: proven
   await openProblem(page, 0, 0, 7);
   await expect(page.locator("#show-record")).toHaveText("Show proven minimum");
@@ -159,7 +161,7 @@ test("a problem with a proven optimum takes no submissions, and an open one does
 
   // the server refuses on its own account, whatever the page does
   const r = await request.post("/api/submit", {
-    data: { N: 0, M: 0, P: 7, name: "x", container_phi: 0, pieces: await pieces(page) },
+    data: { N: 0, M: 0, P: 7, units: "diameter", name: "x", container_phi: 0, pieces: await pieces(page) },
   });
   expect(r.status()).toBe(409);
   expect((await r.json()).reasons[0]).toMatch(/^this problem is closed: its optimum 3 is proven \(.+\)$/);
@@ -201,7 +203,17 @@ test("a refusal of a closed problem is shown when the page did not know", async 
 test("an invalid submission is refused by the server with a reason", async ({ request }) => {
   const r = await request.post("/api/submit", {
     // an open problem: a closed one is refused before the packing is looked at
-    data: { N: 4, M: 7, P: 2, name: "x", container_phi: 0, pieces: [{ x: 0, y: 0, theta: 0 }, { x: 0.2, y: 0, theta: 0 }] },
+    data: {
+      N: 4,
+      M: 7,
+      P: 2,
+      name: "x",
+      container_phi: 0,
+      pieces: [
+        { x: 0, y: 0, theta: 0 },
+        { x: 0.2, y: 0, theta: 0 },
+      ],
+    },
   });
   expect(r.status()).toBe(422);
   expect((await r.json()).reasons[0]).toContain("overlapping");
@@ -244,4 +256,40 @@ test("share link and JSON export round-trip the configuration", async ({ page, c
   await page.setInputFiles("#import-file", path);
   await expect(page.locator("#status")).toContainText("Imported 4 pieces");
   expect(await pieces(page)).toEqual(saved);
+});
+
+test("a board saved or linked before the unit change reopens at the new scale, once", async ({ page }) => {
+  const old = { N: 0, M: 0, P: 2, phi: 0, p: [-1, 0, 0, 1, 0, 0] };
+  const link = "#c=" + Buffer.from(JSON.stringify(old)).toString("base64url");
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/" + link);
+  await page.reload();
+  await page.locator("#count").filter({ hasText: "2 / 2" }).waitFor();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
+  // an old untagged save is converted, and what the board saves now is tagged
+  await page.evaluate(() =>
+    localStorage.setItem(
+      "polypack.board",
+      JSON.stringify({
+        N: 0,
+        M: 0,
+        P: 2,
+        container_phi: 0,
+        pieces: [
+          { x: -1, y: 0, theta: 0 },
+          { x: 1, y: 0, theta: 0 },
+        ],
+      }),
+    ),
+  );
+  await page.goto("/");
+  await page.reload();
+  await page.locator("#count").filter({ hasText: "2 / 2" }).waitFor();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
+  await expect
+    .poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("polypack.board")!).units))
+    .toBe("diameter");
+  await page.reload();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
 });

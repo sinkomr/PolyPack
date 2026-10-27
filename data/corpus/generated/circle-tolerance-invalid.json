@@ -11,14 +11,15 @@
         "theta": 0
       },
       {
-        "x": 1.9999999989,
+        "x": 0.9999999989,
         "y": 0,
         "theta": 0
       }
     ]
   },
-  "expected_score": 1.99999999945,
+  "units": "diameter",
+  "expected_score": 1.9999999989,
   "expected_valid": false,
-  "oriented_score": 1.99999999945,
+  "oriented_score": 1.9999999989,
   "auto_oriented_phi": 0
 }

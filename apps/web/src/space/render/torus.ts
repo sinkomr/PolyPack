@@ -7,7 +7,7 @@
  *    opposite side (drawn lighter), and arrows mark which sides are glued.
  * The layout (torus-layout.ts) reduces the basis first, so a skewed basis draws as fast as any.
  */
-import { circumradius } from "@polypack/geometry";
+import { DISK_RADIUS, circumradius } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
 import { type SearchProblem, torusPackingOf } from "@polypack/spaces/search";
 import { SVG_NS, type SpaceRenderer, isDark, piecesText } from "./common";
@@ -41,7 +41,7 @@ function para(B: readonly [V2, V2], s0: number, s1: number): string {
 
 export function torusRenderer(problem: SearchProblem & { space: "torus" }): SpaceRenderer {
   const { N, P, family } = problem;
-  const R = N === 0 ? 1 : circumradius(N);
+  const R = N === 0 ? DISK_RADIUS : circumradius(N);
   const svg = document.createElementNS(SVG_NS, "svg");
   svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
   const clipId = `torus-clip-${++drawings}`;
@@ -59,7 +59,7 @@ export function torusRenderer(problem: SearchProblem & { space: "torus" }): Spac
   };
   const piece = (x: number, y: number, th: number, color: string, sw: string) => {
     if (N === 0)
-      return `<circle cx="${x.toFixed(4)}" cy="${(-y).toFixed(4)}" r="1" fill="${color}" stroke="var(--panel)" stroke-width="${sw}"/>`;
+      return `<circle cx="${x.toFixed(4)}" cy="${(-y).toFixed(4)}" r="${DISK_RADIUS}" fill="${color}" stroke="var(--panel)" stroke-width="${sw}"/>`;
     const pts: string[] = [];
     for (let k = 0; k < N; k++) {
       const a = th + Math.PI / 2 + (2 * Math.PI * k) / N;

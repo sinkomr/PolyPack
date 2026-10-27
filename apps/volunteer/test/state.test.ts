@@ -202,7 +202,7 @@ describe("the state directory", () => {
     }
     writeFileSync(join(dir, "lock.fresh.tmp"), "another copy starting");
     const state = StateDir.open(dir);
-    expect(readdirSync(dir).sort()).toEqual(["best", "lock", "lock.fresh.tmp"]);
+    expect(readdirSync(dir).sort()).toEqual(["best", "lock", "lock.fresh.tmp", "state.json"]);
     expect(readdirSync(join(dir, "best"))).toEqual([]);
     state.close();
   });

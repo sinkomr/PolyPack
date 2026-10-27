@@ -24,7 +24,8 @@
  *  - Capabilities: shape (rounded polygons; a no-op for disks), seeds (lattice placements,
  *    kernel-seeds.ts) and, for polygons, swap (the angles of two pieces).
  */
-import { type Pose, boundingRadius, inradius, isShapeCode, pieceArea } from "@polypack/geometry";
+import { type Pose, inradius, isShapeCode } from "@polypack/geometry";
+import { areaOf, reachOf } from "./disk";
 import type { Finished, KernelCapability, KernelState, SpaceKernel, Validation } from "@polypack/methods";
 import { TorusEnergy, type TorusKernelAux, type TorusStateView, familyBasis } from "./kernel-energy";
 import { latticeSeed } from "./kernel-seeds";
@@ -78,7 +79,7 @@ export function torusKernel(problem: { family: TorusFamily; N: number; P: number
   const { dim, globals, R } = model;
   const r = N === 0 ? TORUS_DISK_RADIUS : inradius(N);
   // one step moves a piece by about its inradius
-  const steps = Float64Array.from(dim === 3 ? [r, r, r] : [1, 1]);
+  const steps = Float64Array.from(dim === 3 ? [r, r, r] : [r, r]);
   // Thue's density pi / sqrt(12) bounds disks in the plane, hence on every torus (TORUS.md section 1)
   const bound = areaScoreBound(family, N, P, N === 0 ? Math.PI / Math.sqrt(12) : 1);
   const capabilities: KernelCapability[] = N === 0 ? ["shape", "seeds"] : ["shape", "seeds", "swap"];
@@ -212,7 +213,7 @@ export function torusKernel(problem: { family: TorusFamily; N: number; P: number
     const len = Math.hypot(shortest[0], shortest[1]);
     if (len < width - rule.tol)
       return fail([`the lattice has a vector of length ${len}, shorter than the piece's width ${width}`], score);
-    if (!(maxImageCandidates(lattice, 2 * boundingRadius(N) + 2e-7) <= rule.maxTranslates))
+    if (!(maxImageCandidates(lattice, 2 * reachOf(N) + 2e-7) <= rule.maxTranslates))
       return fail([`the lattice basis is too skewed (at most ${rule.maxTranslates} translates per pair)`], score);
     const poses = (list as number[][]).map(([x, y, theta]) => ({ x, y, theta }));
     const v = validateTorusPacking({ family, N, lattice, poses }, { tol: rule.tol });
@@ -290,7 +291,7 @@ export function torusKernel(problem: { family: TorusFamily; N: number; P: number
     },
     randomStart(rng) {
       // the search's start: random poses in a cell of density 0.45 (free: square or hexagonal)
-      const area = (P * pieceArea(N)) / 0.45;
+      const area = (P * areaOf(N)) / 0.45;
       const shape: "sq" | "hex" = family === "free" ? (rng() < 0.5 ? "sq" : "hex") : family;
       const l = familyLattice(shape, shape === "sq" ? Math.sqrt(area) : Math.sqrt(area / SQRT3_2));
       const poses = Array.from({ length: P }, () => {

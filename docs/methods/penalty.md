@@ -3,14 +3,14 @@
 [CALC] `penalty` is a local packing optimizer. Variables are each piece's centre
 and rotation (omitted for circles), plus the container centre, size and orientation
 (omitted for a circle container). Polygon pieces have side 1; circle pieces have
-radius 1. The minimized size is the container side or radius.
+diameter 1 (radius 1/2). The minimized size is the container side or, for a circle container, its diameter.
 
 [CALC] The quadratic objective is `size + weight * sum(max(0, depth)^2)`.
-Pair depth is negative shared SAT separation for polygons, or `2 - centreDistance`
+Pair depth is negative shared SAT separation for polygons, or `1 - centreDistance`
 for circles. For each polygon-container edge, containment uses the piece's support
 vertex, selected analytically in O(1), giving O(M) constraints per piece. Circle
 containers constrain all polygon vertices. Circle pieces contribute their centre
-plus radius 1. Support constraints have the same feasible set as all vertex-edge
+plus radius 1/2. Support constraints have the same feasible set as all vertex-edge
 constraints, but their squared penalties differ away from feasibility.
 
 [CALC] The augmented objective uses the inequality Powell–Hestenes–Rockafellar term

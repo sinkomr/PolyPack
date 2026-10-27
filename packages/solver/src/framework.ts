@@ -43,7 +43,7 @@ export interface Sketch {
   /**
    * Every piece is drawn as its polygon scaled by `scale` about its centre and dilated by a disk
    * of radius `padding` (scale 0 is a disk of radius `padding`); a circle piece is a disk of
-   * radius `scale`. Scale 1 and padding 0 are the true pieces.
+   * diameter `scale`. Scale 1 and padding 0 are the true pieces.
    */
   scale: number;
   padding: number;

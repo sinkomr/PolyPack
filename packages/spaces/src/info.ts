@@ -84,7 +84,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     score: "the scale s of the solid (its edge length for the Platonic and Archimedean solids, prisms and antiprisms); smaller is better",
     problem_id: "surface/<solid>/<mode>/<N>/<P>",
     conventions: {
-      units: "polygon pieces have side 1, disks (N = 0) radius 1; angles in radians",
+      units: "polygon pieces have side 1, disks (N = 0) diameter 1; angles in radians",
       solid:
         "solid is a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron) of edge s, an Archimedean solid (the same names and unit-edge normalisation as the polyhedra space) of edge s, a Catalan solid (rhombic_dodecahedron, triakis_tetrahedron, deltoidal_icositetrahedron, pentagonal_icositetrahedron, tetrakis_hexahedron, triakis_octahedron, rhombic_triacontahedron, disdyakis_dodecahedron, deltoidal_hexecontahedron, pentagonal_hexecontahedron, pentakis_dodecahedron, triakis_icosahedron, disdyakis_triacontahedron) scaled by s from the polyhedra space's canonical one (the polar reciprocal of the unit-edge Archimedean solid about the midsphere), a prism (prism3, prism5 to prism12) or an antiprism (antiprism4 to antiprism12) of edge s. A face's frame has its origin at the foot of the perpendicular from the solid's centre and its last edge (frame vertex M - 1 to frame vertex 0) horizontal at the bottom; a regular face is the regular M-gon of side s centred at the origin, frame vertex k at angle -pi/2 + pi/M + 2 pi k/M. data/surface/solids.json lists the faces and how their edges are glued",
       pose: "{face, x, y, theta}: the piece centre (x, y) lies in the closed face `face`, in that face's frame; piece vertex k is at angle theta + pi/2 + 2 pi k/N about the centre",
@@ -104,17 +104,17 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "curved",
     title: "Constant curvature",
     summary:
-      "Unit pieces in the smallest regular polygon or disk on a surface of constant curvature K: the hyperbolic plane (K < 0), the flat plane (K = 0) or a sphere of radius 1/sqrt(K) (K > 0). Some problems have no packing at all, because the pieces do not fit in any container.",
-    score: "the container's side s (polygon) or radius r (disk) as a geodesic length at curvature K; smaller is better",
+      "Unit pieces (polygons of side 1, disks of diameter 1) in the smallest regular polygon or disk on a surface of constant curvature K: the hyperbolic plane (K < 0), the flat plane (K = 0) or a sphere of radius 1/sqrt(K) (K > 0). Some problems have no packing at all, because the pieces do not fit in any container.",
+    score: "the container's side s (polygon) or diameter d (disk) as a geodesic length at curvature K; smaller is better",
     problem_id: "curved/<K>/<N>/<M>/<P>",
     conventions: {
       space:
         "the complete surface of constant curvature K: hyperbolic plane for K < 0, Euclidean plane for K = 0, sphere of radius 1/sqrt(K) for K > 0",
-      units: "geodesic lengths at curvature K; polygon pieces have side 1, disks (N = 0) radius 1; angles in radians",
+      units: "geodesic lengths at curvature K; polygon pieces have side 1, disks (N = 0) diameter 1; angles in radians",
       container:
-        "centred at the origin O with a horizontal bottom edge: a regular M-gon of geodesic side s, or a disk of radius r (M = 0); for K > 0 the container lies in the open hemisphere around O",
+        "centred at the origin O with a horizontal bottom edge: a regular M-gon of geodesic side s, or a disk of diameter d (M = 0); for K > 0 the container lies in the open hemisphere around O",
       pose: "{x, y, theta}: the centre is the point at geodesic distance sqrt(x^2 + y^2) from O in direction (x, y); theta is the piece's angle relative to the frame carried from O along that geodesic, and a vertex points up at theta = 0; at K = 0 this is PolyPack's usual pose",
-      configuration: "{size, pieces: [{x, y, theta}, ...]} with P pieces; size is s, or r for a disk container",
+      configuration: "{size, pieces: [{x, y, theta}, ...]} with P pieces; size is s, or d (the diameter) for a disk container",
       score: "size; smaller is better",
       validity: VALIDITY + "; gaps and protrusions are signed geodesic distances",
       scoring: SCORING,
@@ -134,7 +134,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     conventions: {
       space: "the whole sphere of radius rho (curvature 1/rho^2); there is no container",
       units:
-        "disks (N = 0) of geodesic radius 1, or regular spherical N-gons of geodesic side 1, on the sphere of radius rho",
+        "disks (N = 0) of geodesic diameter 1, or regular spherical N-gons of geodesic side 1, on the sphere of radius rho",
       pose: `{q: [w, x, y, z]}: a quaternion of norm at least ${SPACE_MIN_QUATERNION_NORM.toExponential()}, each component at most ${SPACE_MAX_COORD} in absolute value; the piece is the standard piece turned by the rotation of q/|q| (v -> q v q*)`,
       standard_piece:
         "centred at the north pole (0, 0, 1) of the unit sphere, vertex k at (sin R cos phi_k, sin R sin phi_k, cos R) with phi_k = pi/2 + 2 pi k/N and sin(1/(2 rho)) = sin R sin(pi/N)",
@@ -157,7 +157,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     conventions: {
       families:
         "sq: lattice b1 = L (1, 0), b2 = L (0, 1), score L; hex: b1 = L (1, 0), b2 = L (1/2, sqrt(3)/2), score L; free: any basis b1, b2, score sqrt|det(b1, b2)|",
-      units: "polygon pieces have side 1, disks (N = 0) radius 1; angles in radians",
+      units: "polygon pieces have side 1, disks (N = 0) diameter 1; angles in radians",
       pose: "[x, y, theta] in the plane; positions count modulo the lattice; piece vertex k at (x, y) + R (cos a_k, sin a_k), a_k = theta + pi/2 + 2 pi k/N, R = 1/(2 sin(pi/N))",
       configuration:
         "{lattice: {L} for sq and hex or {b1: [x, y], b2: [x, y]} for free, poses: [[x, y, theta], ...]} with P poses",
@@ -178,7 +178,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "boundary",
     title: "Polytope boundaries",
     summary:
-      "Unit balls or unit cubes on the boundary of a 4D polytope, starting with the tesseract: its boundary is 8 solid cubes glued face to face, a closed 3D space. A piece may fold across the square faces where two cells meet, but no edge of the polytope may pass through it.",
+      "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope, starting with the tesseract: its boundary is 8 solid cubes glued face to face, a closed 3D space. A piece may fold across the square faces where two cells meet, but no edge of the polytope may pass through it.",
     score: "the edge length s of the polytope; smaller is better",
     problem_id: "boundary/<polytope>/<piece>/<P>",
     conventions: {
@@ -189,7 +189,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
       frame:
         "a point of a cell has local coordinates u = its other three R^4 coordinates in increasing order of index, so the cell is the cube [-s/2, s/2]^3 centred at the origin (in cell 5, x_2 = +s/2, u = (x_0, x_1, x_3))",
       units:
-        "balls have radius 1, cubes edge 1 (the cube [-1/2, 1/2]^3 about its centre); lengths scale with s, the pieces do not",
+        `balls have diameter 1 (radius ${BALL_RADIUS}), cubes edge 1 (the cube [-1/2, 1/2]^3 about its centre); lengths scale with s, the pieces do not`,
       pose: `{cell, u, q?}: cell is the anchor cell, which holds the piece's centre; u = [u0, u1, u2] is the centre in that cell's local coordinates at s and must lie in the closed cell (each component at most ${SPACE_MAX_COORD} in absolute value); q = [w, x, y, z] is a unit quaternion (norm within 1e-9 of 1) that turns a cube in the anchor's frame, absent for an axis-aligned cube; balls have no q`,
       fold: "a piece is laid out from its centre by straight segments that continue across the square faces into the next cells, unfolded flat; no point of the edges or vertices may lie inside a piece, and a piece may not overlap itself",
       configuration: "{s, pieces: [{cell, u, q?}, ...]} with P pieces",
@@ -233,22 +233,22 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "balls",
     title: "Balls",
     summary:
-      "3D in 3D: unit balls packed in the smallest ball or in the smallest copy of any of the polyhedra space's 94 solids (the classic sphere-packing problems, and balls in a cube, a prism, a Catalan solid), and each of the 94 solids packed in the smallest ball. The problems have no research records yet; the first valid entry of each is kept.",
+      "3D in 3D: balls of diameter 1 packed in the smallest ball or in the smallest copy of any of the polyhedra space's 94 solids (the classic sphere-packing problems, and balls in a cube, a prism, a Catalan solid), and each of the 94 solids packed in the smallest ball. The problems have no research records yet; the first valid entry of each is kept.",
     score:
-      "the container's size s: the radius of the container ball, or the scale of the container solid (the edge of the cube); smaller is better",
+      "the container's size s: the diameter of the container ball, or the scale of the container solid (the edge of the cube); smaller is better",
     problem_id: "balls/<code>/<P>",
     conventions: {
       problems:
         "code is <piece>in<container>, 189 of them: ballinball (balls in a ball), ballin<solid> (balls in a solid: ballincub, ballinpkd, ballinpr3, ...) and <solid>inball (a solid in a ball: tetinball, kttinball, pr3l15inball, ...), with <solid> the polyhedra space's code of one of its 94 solids (GET /api/spaces lists all 189); P from 2 to 100",
-      units: `balls have radius ${BALL_RADIUS}; the solids are the polyhedra space's canonical solids (edge 1 for the Platonic, Archimedean, prism and antiprism solids, 1.5, 2 or 3 for the lateral edges of the elongated prisms, the Catalan, bipyramid and trapezohedron solids their duals), centred at their vertex centroid at the origin`,
+      units: `balls have diameter 1 (radius ${BALL_RADIUS}); the solids are the polyhedra space's canonical solids (edge 1 for the Platonic, Archimedean, prism and antiprism solids, 1.5, 2 or 3 for the lateral edges of the elongated prisms, the Catalan, bipyramid and trapezohedron solids their duals), centred at their vertex centroid at the origin`,
       container:
-        "the ball of radius s about the origin, or s times a canonical solid of the polyhedra space about its vertex centroid (for the cube the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes): the intersection of the half-spaces N_f . x <= s b_f over its faces, N_f the unit outward normal and b_f the offset of face f",
+        "the ball of diameter s about the origin, or s times a canonical solid of the polyhedra space about its vertex centroid (for the cube the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes): the intersection of the half-spaces N_f . x <= s b_f over its faces, N_f the unit outward normal and b_f the offset of face f",
       pose: `a ball is its centre [x, y, z]; a solid is [x, y, z, qw, qx, qy, qz]: the canonical solid turned by the rotation of q / |q| (v -> q v q*) and centred at (x, y, z); x, y and z at most ${BALLS_MAX_COORD} and quaternion components at most ${POLYHEDRA_MAX_QUATERNION} in absolute value, |q| at least ${POLYHEDRA_MIN_QUATERNION_NORM.toExponential()}`,
       configuration: `{s, pieces: [...]} with P pieces; s positive and at most ${BALLS_MAX_SIZE}`,
       score: "s; smaller is better",
       validity:
         VALIDITY +
-        "; two balls overlap by 2 r minus the distance of their centres, a ball sticks out of a ball by |c| + r - s, of a cube by |c_k| + r - s/2 and of another solid by the largest over faces of N_f . c + r - s b_f (r the ball radius); a solid sticks out of the ball by the largest vertex distance minus s, and two solids overlap by their penetration depth (the polyhedra space's separating-axis test)",
+        "; two balls overlap by 2 r minus the distance of their centres, a ball sticks out of a ball by |c| + r - s/2, of a cube by |c_k| + r - s/2 and of another solid by the largest over faces of N_f . c + r - s b_f (r the ball radius); a solid sticks out of the ball by the largest vertex distance minus s/2, and two solids overlap by their penetration depth (the polyhedra space's separating-axis test)",
       scoring: SCORING,
       improvement: IMPROVEMENT,
     },

@@ -43,19 +43,20 @@ class PieceConstants(unittest.TestCase):
 
 class Arguments(unittest.TestCase):
     def test_disks_in_polygons(self):
-        # no unit disk in a hyperbolic triangle or square; exactly one fits for M = 5, 6, 8
-        self.assertEqual(bd.bounds_for(-1, 0, 3)["P_max_upper"], 0)
-        self.assertEqual(bd.bounds_for(-1, 0, 4)["P_max_upper"], 0)
-        for M in (5, 6, 8):
-            self.assertEqual(bd.bounds_for(-1, 0, M)["P_max_upper"], 1)
-        # cot(pi/M) < e sinh 1 exactly for M <= 10
-        self.assertLess(1 / math.tan(math.pi / 10), math.e * math.sinh(1))
-        self.assertGreater(1 / math.tan(math.pi / 11), math.e * math.sinh(1))
+        # disks of diameter 1 (radius 1/2) at K = -1: the upper bounds (area, cusp, near-wall) of bounds.py
+        for M, want in ((3, 1), (4, 4), (5, 7), (6, 10), (8, 17)):
+            self.assertEqual(bd.bounds_for(-1, 0, M)["P_max_upper"], want, M)
+        # near-wall: a_rho < rho exactly when cot(pi/M) < e^rho sinh rho (rho = 1/2): M = 3 only among M <= 8
+        self.assertLess(1 / math.tan(math.pi / 3), math.exp(0.5) * math.sinh(0.5))
+        self.assertGreater(1 / math.tan(math.pi / 4), math.exp(0.5) * math.sinh(0.5))
 
     def test_sphere(self):
-        for N in (0, 5, 6):
+        # K = 1: pieces N = 5, 6 are bounded by one (inradius) and disks (diameter 1) by area (8 disks of area 0.77 fit below the hemisphere's 2 pi, 9 do not)
+        for N in (5, 6):
             for M in (0, 3, 4, 6):
                 self.assertEqual(bd.bounds_for(1, N, M)["P_max_upper"], 1)
+        for M in (0, 3, 4, 6):
+            self.assertEqual(bd.bounds_for(1, 0, M)["P_max_upper"], 8)
 
     def test_ystar_disk_and_triangle(self):
         old = iv.prec

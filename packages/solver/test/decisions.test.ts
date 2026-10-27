@@ -11,12 +11,13 @@ import {
 } from "../src";
 
 const problem = { N: 0, M: 0, P: 2 };
+// Two disks; the container diameter is `half` + 1 (so `half` = 1 is the touching pair, score 2).
 const pair = (half = 1.1): PackingConfig => ({
   ...problem,
   container_phi: 0,
   pieces: [
-    { x: -half, y: 0, theta: 0 },
-    { x: half, y: 0, theta: 0 },
+    { x: -half / 2, y: 0, theta: 0 },
+    { x: half / 2, y: 0, theta: 0 },
   ],
 });
 

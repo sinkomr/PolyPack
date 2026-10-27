@@ -19,6 +19,36 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 RECORDS = os.path.join(HERE, "..", "..", "data", "sphere", "records.json")
 
 
+def site_records():
+    """data/sphere/records.json in site units: while the file still has radius-1 disks (no header
+    units "diameter"), the records of disks are converted by exact halving, as
+    scripts/convert-units.ts does (score_float, score_cert, config.rho, bounds, literature rho,
+    min_clearance; K_cert x 4; display recomputed with the certifier's rounding)."""
+    import copy
+    import json
+
+    data = json.load(open(RECORDS))
+    if data.get("units") == "diameter":
+        return data
+    data = copy.deepcopy(data)
+    for r in data["records"]:
+        if r["N"] != 0:
+            continue
+        for k in ("score_float", "score_cert"):
+            r[k] = r[k] / 2
+        r["config"]["rho"] = r["config"]["rho"] / 2
+        r["K_cert"] = r["K_cert"] * 4
+        r["display"] = certify.display_6(r["score_cert"])
+        r["certificate"]["min_clearance"] = r["certificate"]["min_clearance"] / 2
+        for b in [r["bound"]] + list(r.get("bounds") or []):
+            if b:
+                b["value"] = b["value"] / 2
+        if r.get("literature"):
+            r["literature"]["rho"] = r["literature"]["rho"] / 2
+    data["units"] = "diameter"
+    return data
+
+
 def qmul(p, q):
     w1, x1, y1, z1 = p
     w2, x2, y2, z2 = q
@@ -231,24 +261,26 @@ class TestDisks(unittest.TestCase):
 
     def test_overlap_by_1e9(self):
         rho = 1.7
-        self.assertTrue(ok(self.pair(rho, (2 / rho) * (1 + 1e-9))))
-        self.assertFalse(ok(self.pair(rho, (2 / rho) * (1 - 1e-9))))
+        # disks of diameter 1: the centres of touching disks are 1/rho apart (the angle 2a, a = 1/(2 rho))
+        self.assertTrue(ok(self.pair(rho, (1 / rho) * (1 + 1e-9))))
+        self.assertFalse(ok(self.pair(rho, (1 / rho) * (1 - 1e-9))))
 
     def test_hemispheres(self):
         qs = [[1.0, 0, 0, 0], [0.0, 1.0, 0, 0]]
-        self.assertTrue(ok(rec(0, (2 / PI) * (1 + 1e-12), qs)))
-        # the binary64 value of 2/pi is 3e-17 above 2/pi (strictly valid, correctly certified); one ulp lower
-        # is below 2/pi: the caps exceed hemispheres and must be rejected
-        self.assertTrue(ok(rec(0, 2 / PI, qs)))
-        self.assertFalse(ok(rec(0, math.nextafter(2 / PI, 0.0), qs)))
-        self.assertFalse(ok(rec(0, (2 / PI) * (1 - 1e-9), qs)))
+        # disks of diameter 1: two hemispheres at rho = 1/pi
+        self.assertTrue(ok(rec(0, (1 / PI) * (1 + 1e-12), qs)))
+        # the binary64 value of 1/pi is 1.5e-17 above 1/pi (strictly valid, correctly certified); one ulp
+        # lower is below 1/pi: the caps exceed hemispheres and must be rejected
+        self.assertTrue(ok(rec(0, 1 / PI, qs)))
+        self.assertFalse(ok(rec(0, math.nextafter(1 / PI, 0.0), qs)))
+        self.assertFalse(ok(rec(0, (1 / PI) * (1 - 1e-9), qs)))
 
     def test_octahedron_codes(self):
-        # six disks at +-e_i: angle pi/2 = 2a -> rho = 4/pi
+        # six disks at +-e_i: angle pi/2 = 2a = 1/rho -> rho = 2/pi
         cs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]
         qs = [q_centre(c) for c in cs]
-        self.assertTrue(ok(rec(0, (4 / PI) * (1 + 1e-12), qs)))
-        self.assertFalse(ok(rec(0, (4 / PI) * (1 - 1e-12), qs)))
+        self.assertTrue(ok(rec(0, (2 / PI) * (1 + 1e-12), qs)))
+        self.assertFalse(ok(rec(0, (2 / PI) * (1 - 1e-12), qs)))
 
 
 class TestNeverRaises(unittest.TestCase):
@@ -331,7 +363,7 @@ class TestMalformed(unittest.TestCase):
         # identical pieces overlap
         self.assertFalse(ok(self.variant(pieces=[{"q": [1.0, 0, 0, 0]}, {"q": [2.0, 0, 0, 0]}])))
         # disks larger than a hemisphere
-        self.assertFalse(ok({"N": 0, "P": 2, "config": {"rho": 0.6, "pieces": self.base["config"]["pieces"]}}))
+        self.assertFalse(ok({"N": 0, "P": 2, "config": {"rho": 0.3, "pieces": self.base["config"]["pieces"]}}))
 
 
 class TestBounds(unittest.TestCase):
@@ -345,7 +377,7 @@ class TestBounds(unittest.TestCase):
 
     def test_fejes_toth_sharp_cases(self):
         # sharp for P = 3, 4, 6, 12 (Fejes Toth 1943)
-        exact = {3: 2 / (2 * PI / 3), 4: 2 / math.acos(-1 / 3), 6: 4 / PI, 12: 2 / math.atan(2)}
+        exact = {3: 1 / (2 * PI / 3), 4: 1 / math.acos(-1 / 3), 6: 2 / PI, 12: 1 / math.atan(2)}  # disks of diameter 1
         for P, rho in exact.items():
             L = bd.fejes_toth_disk_bound(P)
             self.assertLessEqual(L, rho)
@@ -361,7 +393,7 @@ class TestBounds(unittest.TestCase):
             self.skipTest("no records yet")
         import json
 
-        data = json.load(open(RECORDS))
+        data = site_records()
         for r in data["records"]:
             for b in r.get("bounds") or []:
                 # every bound (including the published maximality bounds) must lie below the found value
@@ -378,7 +410,7 @@ class TestBounds(unittest.TestCase):
             self.skipTest("no records yet")
         import json
 
-        by = {r["id"]: r for r in json.load(open(RECORDS))["records"]}
+        by = {r["id"]: r for r in site_records()["records"]}
         for rid in ("sphere/4/8", "sphere/4/9", "sphere/4/10", "sphere/4/11", "sphere/5/6", "sphere/5/8"):
             mx = [b for b in by[rid]["bounds"] if b["kind"] == "maximality_dosv2026"]
             self.assertTrue(mx and not any(b["rigorous"] for b in mx), rid)
@@ -394,7 +426,7 @@ class TestBounds(unittest.TestCase):
             self.skipTest("no records yet")
         import json
 
-        recs = json.load(open(RECORDS))["records"]
+        recs = site_records()["records"]
         by = {r["id"]: r for r in recs}
         self.assertEqual(by["sphere/3/20"]["literature"]["verdict"], "tiling")
         comp = [r for r in recs if r["N"] > 0 and r["literature"] and r["literature"].get("verdict")]
@@ -407,8 +439,20 @@ class TestBounds(unittest.TestCase):
         self.assertEqual(verdicts.count("better"), expect)
         self.assertGreaterEqual(expect, 34)
 
+    def test_converted_disk_records_certify_and_a_smaller_radius_does_not(self):
+        # site units: the certifier accepts the records of disks halved, and rejects them slightly smaller
+        if not os.path.exists(RECORDS):
+            self.skipTest("no records yet")
+        by = {r["id"]: r for r in site_records()["records"]}
+        for rid in ("sphere/0/2", "sphere/0/6", "sphere/0/12", "sphere/0/24"):
+            r = by[rid]
+            res = certify.certify_record(r)
+            self.assertTrue(res["certified"], (rid, res))
+            small = {**r, "config": {**r["config"], "rho": r["score_float"] * (1 - 1e-6)}}
+            self.assertFalse(ok(small), rid)
+
     def test_proven_tammes_against_exact_optima(self):
-        # reviewer's check: for proven Tammes P, score_cert >= 2/theta_P with cos theta_P the exact root of
+        # reviewer's check: for proven Tammes P, score_cert >= 1/theta_P (disks of diameter 1) with cos theta_P the exact root of
         # Cohn's minimal polynomial (closed forms for P <= 6), and score_float within 1e-12 of it
         if not os.path.exists(RECORDS):
             self.skipTest("no records yet")
@@ -419,7 +463,7 @@ class TestBounds(unittest.TestCase):
         polys = {7: [3, -9, -3, 1], 8: [7, 2, -1], 9: [3, -1], 10: [7, -4, -2, 1], 11: [5, 0, -1], 12: [5, 0, -1],
                  13: [1, -24, -12, 8, 38, 24, -12, -8, 1], 14: [4, -2, 3, 0, -1], 24: [7, 1, -3, -1]}
         closed = {2: mpf(-1), 3: mpf(-1) / 2, 4: mpf(-1) / 3, 5: mpf(0), 6: mpf(0)}
-        by = {r["id"]: r for r in json.load(open(RECORDS))["records"]}
+        by = {r["id"]: r for r in site_records()["records"]}
         proven = [r for r in by.values() if r["N"] == 0 and r["status"] == "proven"]
         self.assertEqual(sorted(r["P"] for r in proven), list(range(2, 15)) + [24])
         for r in proven:
@@ -431,7 +475,7 @@ class TestBounds(unittest.TestCase):
                 roots = [z.real for z in polyroots(polys[P], maxsteps=200, extraprec=200) if abs(z.imag) < mpf(10) ** -30]
                 c = min(roots, key=lambda z: abs(z - table))
                 self.assertLess(abs(c - table), mpf(10) ** -11, P)
-            opt = 2 / acos(c)
+            opt = 1 / acos(c)
             self.assertGreaterEqual(mpf(r["score_cert"]), opt, P)
             self.assertLess(abs(mpf(r["score_float"]) / opt - 1), mpf(10) ** -12, P)
 

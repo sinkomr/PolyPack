@@ -103,7 +103,8 @@ describe("problem ids", () => {
       }
     }
     // the balls space has a domain and no records
-    expect(n).toBe(2038 + 334 + 166 + 544 + 32 + 14850);
+    // curved: 282 (the 52 records of radius-1 disks are archived in data/curved/archive)
+    expect(n).toBe(2038 + 282 + 166 + 544 + 32 + 14850);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -165,7 +166,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
+    expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
     expect(cat("balls").domain!.info.problems).toBe(18711);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
@@ -183,7 +184,7 @@ describe("the catalogues", () => {
     expect(torus.length).toBe(52);
     expect(torus.every((p) => p.status === "proven" && /is proven \(.+, doi:10\./.test(p.closed_reason!))).toBe(true);
     expect(torus.find((p) => p.id === "torus/sq/0/2")!.closed_reason).toBe(
-      "its optimum 2.828427 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
+      "its optimum 1.414214 is proven (Brandt et al. 2019, Thm 1.1, doi:10.1016/j.disc.2019.111597)",
     );
     expect(closed("boundary")).toEqual([]);
     // the balls space has no records yet: every problem is open, without a certified value
@@ -201,7 +202,7 @@ describe("the catalogues", () => {
     ]);
     expect(closed("sphere").every((p) => p.status === "proven" && /is proven/.test(p.closed_reason!))).toBe(true);
     const infeasible = closed("curved");
-    expect(infeasible.length).toBe(35);
+    expect(infeasible.length).toBe(24);
     for (const p of infeasible) {
       expect(p.status).toBe("infeasible");
       expect(p.certified).toBeNull();
@@ -211,13 +212,15 @@ describe("the catalogues", () => {
   });
 
   it("normalise bounds to {value, label} from `value` or, for curved, `lower`", () => {
-    const curved = problem("curved", "curved/-1/0/0/2");
-    expect(curved.bound!.value).toBe(1.999999999999998);
-    expect(curved.bound!.label).toMatch(/2 rho; \[CALC\] rigorous/);
+    // a curved record: its bound is the record's `lower`; a disk problem has no record, only its domain's bound
+    const curved = problem("curved", "curved/-1/3/0/2");
+    expect(curved.bound!.value).toBe(1.1405796542282387);
+    expect(curved.bound!.label).toMatch(/\[CALC\] rigorous/);
+    expect(problem("curved", "curved/-1/0/0/2").bound!.value).toBe(1.999999999998);
     expect(problem("surface", "surface/tetrahedron/fold/0/1").bound!.label).toBe("one piece bound; [CALC]");
     expect(problem("torus", "torus/sq/0/1").bound).toEqual({
-      value: 2,
-      label: "[CALC] one disk: the shortest lattice vector L must be >= 2",
+      value: 1,
+      label: "[CALC] one disk: the shortest lattice vector L must be >= 1 (the diameter)",
     });
     for (const s of SPACE_NAMES)
       for (const p of cat(s).problems)
@@ -231,7 +234,7 @@ describe("the catalogues", () => {
     const s = configOf(problem("surface", "surface/cube/fold/4/12"));
     expect(Object.keys(s)).toEqual(["s", "pieces"]);
     expect(Object.keys(s.pieces[0])).toEqual(["face", "x", "y", "theta"]);
-    expect(Object.keys(configOf(problem("curved", "curved/-1/0/0/2")))).toEqual(["size", "pieces"]);
+    expect(Object.keys(configOf(problem("curved", "curved/-1/3/0/2")))).toEqual(["size", "pieces"]);
     expect(Object.keys(configOf(problem("sphere", "sphere/4/12")))).toEqual(["rho", "pieces"]);
     const t = configOf(problem("torus", "torus/free/5/8"));
     expect(Object.keys(t)).toEqual(["lattice", "poses"]);
@@ -487,19 +490,20 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     expect(check("surface", "surface/cube/fold/4/12", out).reasons[0]).toMatch(/centre of piece 1 is outside its face/);
   });
 
-  it("curved: two unit disks in a disk of radius 2 at K = -1", () => {
+  it("curved: two disks of diameter 1 in a disk of diameter 2 at K = -1", () => {
+    // r is the distance between the two centres, on a geodesic through the container's centre
     const at = (r: number, size = 2) => ({
       size,
       pieces: [
-        { x: r, y: 0, theta: 0 },
-        { x: -r, y: 0, theta: 0 },
+        { x: r / 2, y: 0, theta: 0 },
+        { x: -r / 2, y: 0, theta: 0 },
       ],
     });
     expect(check("curved", "curved/-1/0/0/2", at(1)).valid).toBe(true);
     expect(check("curved", "curved/-1/0/0/2", at(1 - 2e-10)).valid).toBe(true);
     const v = check("curved", "curved/-1/0/0/2", at(1 - 1e-6));
     expect(v.valid).toBe(false);
-    expect(v.reasons.join(" ")).toMatch(/pieces overlap by 0\.00000199/);
+    expect(v.reasons.join(" ")).toMatch(/pieces overlap by 0\.000001/);
     // pushed out through the rim
     expect(check("curved", "curved/-1/0/0/2", at(1 + 1e-6)).reasons.join(" ")).toMatch(/protrudes/);
     expect(check("curved", "curved/-1/0/0/2", at(3)).reasons[0]).toMatch(/outside the container/);
@@ -515,13 +519,13 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     }
   });
 
-  it("torus: two disks on the square torus of side 2 sqrt 2", () => {
-    const L = 2 * Math.SQRT2;
+  it("torus: two disks of diameter 1 on the square torus of side sqrt 2", () => {
+    const L = Math.SQRT2;
     const at = (d: number) => ({
       lattice: { L },
       poses: [
         [0, 0, 0],
-        [Math.SQRT2 - d, Math.SQRT2 - d, 0],
+        [Math.SQRT2 / 2 - d, Math.SQRT2 / 2 - d, 0],
       ],
     });
     expect(check("torus", "torus/sq/0/2", at(0)).valid).toBe(true);
@@ -529,13 +533,14 @@ describe("the touching rule: touching and overlaps up to 1e-9 pass, an overlap o
     const v = check("torus", "torus/sq/0/2", at(1e-6 / Math.SQRT2));
     expect(v.valid).toBe(false);
     expect(v.reasons[0]).toMatch(/pieces 0 and 1 overlap .* by 9\.99\d*e-7/);
-    // a piece and its own translate: one disk on a square torus of side below 2, overlapping
+    // a piece and its own translate: one disk on a square torus of side below 1, overlapping
     // itself by 0.9e-9 (touching within the tolerance) and by 1.1e-9 (an overlap)
     const one = (L: number) => check("torus", "torus/sq/0/1", { lattice: { L }, poses: [[0, 0, 0]] });
-    expect(one(2 - 0.9e-9).valid).toBe(true);
-    expect(one(2 - 1.1e-9).reasons[0]).toMatch(/overlaps its own translate/);
+    expect(one(1 - 0.9e-9).valid).toBe(true);
+    // the problem's lower bound is L >= 1 (the diameter), checked before any geometry
+    expect(one(1 - 1.1e-9).reasons[0]).toMatch(/below the lower bound 1 of this problem/);
     expect(
-      validateSpaceSubmission("torus", "torus/sq/0/1", { lattice: { L: 2 - 1.1e-9 }, poses: [[0.3, 0.2, 0]] }).valid,
+      validateSpaceSubmission("torus", "torus/sq/0/1", { lattice: { L: 1 - 1.1e-9 }, poses: [[0.3, 0.2, 0]] }).valid,
     ).toBe(false);
   });
 });
@@ -601,11 +606,11 @@ describe("tampered and malformed configurations are rejected", () => {
   });
 
   it("with a size below the problem's lower bound, before any geometry", () => {
-    // torus/sq/0/1 meets its bound L = 2 exactly
-    const v = check("torus", "torus/sq/0/1", { lattice: { L: 2 * (1 - 1e-6) }, poses: [[0, 0, 0]] });
+    // torus/sq/0/1 meets its bound L = 1 (the diameter) exactly
+    const v = check("torus", "torus/sq/0/1", { lattice: { L: 1 - 1e-6 }, poses: [[0, 0, 0]] });
     expect(v.valid).toBe(false);
     expect(v.malformed).toBe(false);
-    expect(v.reasons[0]).toMatch(/below the lower bound 2 of this problem/);
+    expect(v.reasons[0]).toMatch(/below the lower bound 1 of this problem/);
     for (const [space, id] of records) {
       const p = problem(space, id);
       const c = configOf(p);
@@ -657,19 +662,20 @@ describe("work limits", () => {
     const mild = { ...c, lattice: { b1, b2: [b2[0] + b1[0], b2[1] + b1[1]] } };
     expect(check("torus", p.id, mild).valid).toBe(true);
     const thin = {
-      lattice: { b1: [1.5, 0], b2: [0.3, 5] },
+      lattice: { b1: [0.75, 0], b2: [0.15, 2.5] },
       poses: [
         [0, 0, 0],
-        [0, 2.5, 0],
+        [0, 1.25, 0],
       ],
     };
     expect(check("torus", p.id, thin).reasons[0]).toMatch(
-      /shorter than the piece's width 2: every piece overlaps its own translate/,
+      /shorter than the piece's width 1: every piece overlaps its own translate/,
     );
   });
 });
 
 describe("balls submissions", () => {
+  // balls have diameter 1: two of them touch with centres at +-1/2, and a ball container is scored by its diameter
   const two = (d: number, s: number) => ({
     s,
     pieces: [
@@ -678,14 +684,14 @@ describe("balls submissions", () => {
     ],
   });
   it("check balls and solids by the space's rule, and tell malformed input from invalid packings", () => {
-    expect(check("balls", "balls/ballinball/2", two(1, 2)).valid).toBe(true);
+    expect(check("balls", "balls/ballinball/2", two(0.5, 2)).valid).toBe(true);
     // an overlap within the touching tolerance passes, a deeper one does not
-    expect(check("balls", "balls/ballinball/2", two(1 - 2e-10, 2)).valid).toBe(true);
-    const v = check("balls", "balls/ballinball/2", two(1 - 2e-9, 2));
+    expect(check("balls", "balls/ballinball/2", two(0.5 - 2e-10, 2)).valid).toBe(true);
+    const v = check("balls", "balls/ballinball/2", two(0.5 - 2e-9, 2));
     expect(v).toMatchObject({ valid: false, malformed: false });
     expect(v.reasons[0]).toMatch(/^pieces 0 and 1 overlap by/);
     // below the lower bound 2: refused unchecked
-    expect(check("balls", "balls/ballinball/2", two(0.9, 1.9)).reasons[0]).toMatch(/below the lower bound/);
+    expect(check("balls", "balls/ballinball/2", two(0.45, 1.9)).reasons[0]).toMatch(/below the lower bound/);
     expect(check("balls", "balls/ballinball/2", { s: 2, pieces: [[1, 0, 0]] })).toMatchObject({
       valid: false,
       malformed: false,
@@ -711,7 +717,7 @@ describe("balls submissions", () => {
       expect(check("balls", "balls/ballinball/2", bad).malformed, JSON.stringify(bad)).toBe(true);
     // a solid's pose has 7 numbers; extra fields are dropped from the stored configuration
     const cubes = {
-      s: Math.sqrt(1.5),
+      s: 2 * Math.sqrt(1.5), // a ball container is scored by its diameter
       pieces: [
         [-0.5, 0, 0, 1, 0, 0, 0],
         [0.5, 0, 0, 1, 0, 0, 0],
@@ -730,7 +736,7 @@ describe("balls submissions", () => {
         ],
       }).malformed,
     ).toBe(true);
-    expect(validateSpaceSubmission("balls", "balls/ballinball/101", two(1, 2)).malformed).toBe(true);
+    expect(validateSpaceSubmission("balls", "balls/ballinball/101", two(0.5, 2)).malformed).toBe(true);
   });
 });
 

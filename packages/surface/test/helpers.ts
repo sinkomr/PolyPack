@@ -1,4 +1,5 @@
-import { Solid, apply, applyDir, faceApothem, faceDepth, faceVertices, frameVertex, glue } from "../src/index";
+import { readFileSync } from "node:fs";
+import { type SurfaceRecordsFile, Solid, apply, applyDir, faceApothem, faceDepth, faceVertices, frameVertex, glue } from "../src/index";
 
 /** Seeded generator (mulberry32) so that every test is reproducible. */
 export function rng(seed: number): () => number {
@@ -173,7 +174,7 @@ export function independentBounds(solid: Solid, N: number, P: number): { area: n
     }
     total += Math.hypot(c[0], c[1], c[2]) / 2;
   }
-  const a = N === 0 ? Math.PI : N / (4 * Math.tan(Math.PI / N));
+  const a = N === 0 ? Math.PI / 4 : N / (4 * Math.tan(Math.PI / N)); // disks have diameter 1
   let rho = sampledCornerRadius.get(solid.name);
   if (rho === undefined) {
     rho = 0;
@@ -192,6 +193,15 @@ export function independentBounds(solid: Solid, N: number, P: number): { area: n
           }
     sampledCornerRadius.set(solid.name, rho);
   }
-  const r = N === 0 ? 1 : 1 / (2 * Math.tan(Math.PI / N));
+  const r = N === 0 ? 0.5 : 1 / (2 * Math.tan(Math.PI / N));
   return { area: Math.sqrt((P * a) / total), oneAtMost: r / rho };
+}
+
+/** data/surface/records.json (site units: disks of diameter 1). */
+export function loadSurfaceFile(): any {
+  return JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")) as SurfaceRecordsFile;
+}
+
+export function loadSurfaceRecords(): any[] {
+  return loadSurfaceFile().records;
 }

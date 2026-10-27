@@ -37,6 +37,7 @@ from mpmath import iv, mpf  # noqa: E402
 
 I = rg.I
 PI = rg.pi_iv()
+DISK_RADIUS = Fraction(1, 2)  # a disk piece (N = 0) has diameter 1 (packages/curved/src/shapes.ts)
 
 
 def exp_iv(x):
@@ -72,8 +73,8 @@ def piece_data(K, N):
     """Interval circumradius, inradius and area of the unit piece at K = +-1."""
     Ki = I(K)
     if N == 0:
-        one = I(1)
-        area = 2 * PI * (1 - rg.csK(Ki, one)) / Ki if K != 0 else PI
+        one = I(DISK_RADIUS)  # a disk of diameter 1 (2026-10-27)
+        area = 2 * PI * (1 - rg.csK(Ki, one)) / Ki if K != 0 else PI * one * one
         return {"R": one, "rho": one, "area": area}
     cN, sN = rg.cos_sin(PI / N)
     half = I(Fraction(1, 2))
@@ -326,7 +327,7 @@ def bounds_for(K, N, M, run_bb=False):
             out["args"]["inradius"] = 0
             best = 0
         if N == 0:
-            Y = 1 / (1 - exp_iv(I(-2)))  # exact for a disk: e / (2 sinh 1)
+            Y = 1 / (1 - exp_iv(I(-2 * DISK_RADIUS)))  # exact for a disk of radius r: e^r / (2 sinh r)
             ystar = Y.b
         else:
             old_prec = iv.prec

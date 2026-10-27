@@ -92,6 +92,7 @@ export async function submitSpaceConfig(
     space: p.space,
     id: p.id,
     config,
+    units: "diameter",
     name: fields.name,
     ...(fields.note ? { agent_note: fields.note } : {}),
     ...(fields.software ? { software: fields.software } : {}),

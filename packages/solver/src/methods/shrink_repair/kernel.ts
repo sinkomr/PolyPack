@@ -13,7 +13,7 @@
 // Results agree with the shared functions to rounding (tested in shrink_repair.test.ts). The
 // strict verdicts of the method never come from here: legalisation and scoring use the shared
 // findOverlaps and evaluate.
-import { boundingRadius, inradius } from "@polypack/geometry";
+import { boundingRadius, containerInradius, DISK_RADIUS, pieceInradius } from "@polypack/geometry";
 
 /** Distance from `rel` to the nearest multiple of `step`, in [0, step / 2]. */
 function offset(rel: number, step: number): number {
@@ -51,7 +51,7 @@ export class Kernel {
     this.N = N;
     this.M = M;
     this.R = boundingRadius(N);
-    this.r = N === 0 ? 1 : inradius(N);
+    this.r = pieceInradius(N);
     this.step = N === 0 ? 2 * Math.PI : (2 * Math.PI) / N;
     this.baseCos = new Float64Array(N);
     this.baseSin = new Float64Array(N);
@@ -99,7 +99,7 @@ export class Kernel {
     const dx = xb - xa;
     const dy = yb - ya;
     if (this.N === 0) {
-      const d = 2 - Math.hypot(dx, dy);
+      const d = 2 * this.R - Math.hypot(dx, dy);
       return d > 0 ? d : 0;
     }
     const { N, r, R, step } = this;
@@ -148,7 +148,7 @@ export class Kernel {
       this.bx = ux;
       this.by = uy;
       this.bt = 0;
-      return 2 - distance;
+      return 2 * this.R - distance;
     }
     const { N, r, R, step } = this;
     const extra = Math.PI + Math.PI / N;
@@ -219,9 +219,11 @@ export class Kernel {
     this.wy = 0;
     this.wt = 0;
     const { N, M, R, step } = this;
+    // radius of the circle container, or the apothem of a polygon container
+    const limit = size * containerInradius(M);
     if (M === 0) {
       const distance = Math.hypot(x, y);
-      if (distance + R <= size) return;
+      if (distance + R <= limit) return;
       let px = x;
       let py = y;
       let ox = 0;
@@ -237,7 +239,7 @@ export class Kernel {
         py += oy;
       }
       const reach = Math.hypot(px, py);
-      const depth = reach + (N === 0 ? 1 : 0) - size;
+      const depth = reach + (N === 0 ? DISK_RADIUS : 0) - limit;
       if (!(depth > 0)) return;
       this.wallSum = depth * depth;
       this.wallMax = depth;
@@ -250,7 +252,6 @@ export class Kernel {
       }
       return;
     }
-    const limit = size * inradius(M);
     const a0 = theta + Math.PI / 2;
     for (let j = 0; j < M; j++) {
       const wx = this.wallCos[j];
@@ -260,7 +261,7 @@ export class Kernel {
       let depth: number;
       let ox = 0;
       let oy = 0;
-      if (N === 0) depth = h + 1 - limit;
+      if (N === 0) depth = h + DISK_RADIUS - limit;
       else {
         const vertex = Math.round((this.wallAngle[j] - a0) / step);
         const angle = a0 + vertex * step;

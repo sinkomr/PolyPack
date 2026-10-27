@@ -10,6 +10,7 @@ from geometry_reference import evaluate
 ROOT = Path(__file__).resolve().parents[1]
 
 
+# The fixtures are in site units (disks of diameter 1, circle containers scored by diameter).
 class CorpusAgreement(unittest.TestCase):
     def assertScore(self, score, expected):
         if expected is None:

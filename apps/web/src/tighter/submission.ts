@@ -1,5 +1,6 @@
 import { MAX_METHOD_PARAMS_BYTES, evaluate, improvesOn, utf8Length } from "@polypack/geometry";
 import type { PackingConfig, RunBudget, SubmitResponse } from "@polypack/geometry";
+import { SITE_UNITS } from "../api";
 import { OFFLINE_BACKOFF_MS, RATE_LIMITED_BACKOFF_MS } from "./pacer";
 
 /**
@@ -49,6 +50,9 @@ export function orientBoard(board: PackingConfig, best: number): { board: Packin
  * The client is named in `agent_note`, not in `software`: the server accepts `software` only with
  * found_with "external" (packages/geometry/src/provenance.ts) and refuses it beside an optimizer
  * run, and this task makes no server changes. See the report's list of wanted server changes.
+ *
+ * `units` confirms the board is in the units of 2026-10-27 (disks of diameter 1, a circle container
+ * scored by its diameter): the server refuses a board with disks or a circle container without it.
  */
 export function submissionBody(board: PackingConfig, name: string, run: RunRecord): Record<string, unknown> {
   const params = utf8Length(JSON.stringify(run.params)) <= MAX_METHOD_PARAMS_BYTES ? run.params : undefined;
@@ -65,6 +69,7 @@ export function submissionBody(board: PackingConfig, name: string, run: RunRecor
     ...(params ? { method_params: params } : {}),
     seed: run.seed,
     budget: { ...run.budget },
+    units: SITE_UNITS,
   };
 }
 

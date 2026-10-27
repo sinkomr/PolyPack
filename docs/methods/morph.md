@@ -28,9 +28,9 @@ are hard-coded. Corner radius is `(1-t)r` or `(1-t)R`, respectively.
 arguments `scale=1, padding=0` were added to geometry `pairPenetration`,
 `visitContainerProtrusions`, `containerProtrusions`, and the solver's
 `createPenaltyObjective`. Existing callers retain their original arithmetic and
-selected SAT branches. Circle pieces use radius `scale+padding`. A collapsed
+selected SAT branches. Circle pieces use radius `scale/2+padding` (`scale * DISK_RADIUS + padding`). A collapsed
 polygon core uses an exact disk test with radius padding and zero angular
-pair derivatives. Broad-phase reach is `2*(scale*boundingRadius+padding)`.
+pair derivatives. Broad-phase reach is `2*(scale*boundingRadius+padding)`, with the bounding radius 1/2 for circle pieces.
 Polygon walls use support of the scaled core plus padding; circular walls use
 the maximum vertex radius plus padding. These containment tests are exact.
 

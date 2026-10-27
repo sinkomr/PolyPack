@@ -47,6 +47,7 @@ import {
   sanitizeText,
 } from "./limits";
 import { LoadStats } from "./load";
+import { UNITS_MISSING_MESSAGE, spaceAffected } from "./units-gate";
 import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
 /** Problems of a space's domain without a record or a site entry that the targets list holds at most. */
@@ -155,6 +156,8 @@ export interface SpacesOptions {
 /** What the spaces routes share with the rest of the API: the limits of /api/submit, the log and the admin check. */
 export interface SpaceRouteContext {
   spaces: SpacesOptions;
+  /** Whether submissions to problems of the unit change must carry units (see AppOptions.unitsGate). */
+  unitsGate?: boolean;
   ipLimit: RateLimiter;
   verifyBudget: TimeBudget;
   /** True while the event loop lags (submissions are then refused with 503). */
@@ -558,13 +561,13 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     let verifyMs: number | null = null;
     const answer = (
       body: SpaceSubmitResponse,
-      status: 200 | 400 | 409 | 413 | 422 | 429 | 503,
+      status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503,
       retryAfter?: number,
     ) => {
       ctx.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
       return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    const reject = (status: 400 | 409 | 413 | 422 | 429 | 503, reasons: string[], retryAfter?: number) =>
+    const reject = (status: 400 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
       answer(
         { valid: false, reasons, score: null, leader: false, best_score: null, id: null, beats_certified: false },
         status,
@@ -600,6 +603,11 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         `${parsedId.id} is not in the ${space} catalogue: submissions are accepted for its problems only`,
       ]);
     problem = p.id;
+    // the same confirmation as /api/submit, for the problems the unit change touched (disks, balls, ball and circle containers)
+    if (ctx.unitsGate !== false && spaceAffected(space, p.id)) {
+      if (body.units === undefined) return reject(426, [UNITS_MISSING_MESSAGE]);
+      if (body.units !== "diameter") return reject(400, ['units must be "diameter" (the only unit system of this API)']);
+    }
     // decided before the packing is looked at
     if (!acceptsSubmissions(p)) return reject(409, [`this problem is closed: ${p.closed_reason}`]);
 

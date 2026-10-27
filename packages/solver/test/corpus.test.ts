@@ -10,6 +10,7 @@ function files(dir: string): string[] {
   });
 }
 
+// The fixtures are in site units (disks of diameter 1, circle containers scored by diameter).
 describe("cross-language corpus reference", () => {
   for (const file of files(resolve(import.meta.dirname, "../../../data/corpus"))) {
     it(file.split("data/corpus/")[1], () => {

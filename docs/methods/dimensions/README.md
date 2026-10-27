@@ -25,7 +25,7 @@ as **Auto** and stays the default.
   - `seeds`: structured starts;
   - `swap`: exchanging two pieces' orientations.
 - `packages/methods/src/contract.ts` checks the rules. Every kernel's test calls `checkKernel` and expects no failures.
-- The reference kernel, unit disks in a circle (`packages/methods/src/reference/disks.ts`), is the methods' test bed. It has known optima.
+- The reference kernel, unit disks in a circle (`packages/methods/src/reference/disks.ts`), is the methods' test bed. It has known optima. [CALC] It is in working units on purpose (disk radius 1, container radius R; the score is R) and is no space of the site and is not served, so every disk number in these pages about the reference kernel (best known radius, `DISKS_IN_CIRCLE_BEST`, R = 3.9 tanh(L / 3.9)) is in those units. Since 2026-10-27 the site's units are disk diameter 1 and a circle container scored by its diameter; for unit-radius disks in a circle the radius R is the same number as the site's diameter score, and a kernel for a space converts exactly at the API edge.
 
 | Space | Factory | Package |
 |---|---|---|

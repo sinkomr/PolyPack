@@ -137,7 +137,7 @@ function tableCard(f: Family): HTMLLIElement {
       f.name,
       f.summary,
       [
-        ["Score", "the container's side s, or its radius r for a disk; smaller is better"],
+        ["Score", "the container's side s, or its diameter d for a disk; smaller is better"],
         ["Problem", "N, M, P: the sides of the piece and of the container (0 for a disk), and the number of pieces"],
       ],
       { records: "/browse.html", board: "/" },

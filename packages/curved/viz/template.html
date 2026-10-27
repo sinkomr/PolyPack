@@ -251,8 +251,8 @@
           </table>
         </div>
         <div class="note">
-          N = 0 means disks of radius 1 (pieces) or a disk container (M = 0). Size is the container side s (or radius
-          r), certified; shown to 6 decimals (rounded to the nearest).
+          N = 0 means disks of diameter 1 (radius 1/2, pieces) or a disk container (M = 0). Size is the container side s (or diameter
+          s), certified; shown to 6 decimals (rounded to the nearest).
         </div>
       </aside>
     </main>
@@ -328,7 +328,7 @@
       function pieceOutline(K, N, pose) {
         if (N === 0) {
           const pts = [];
-          for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 1, (2 * Math.PI * i) / 96)));
+          for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 0.5, (2 * Math.PI * i) / 96)));
           return pts;
         }
         const R = asn(K, sn(K, 0.5) / Math.sin(Math.PI / N));
@@ -341,7 +341,7 @@
       function containerOutline(K, M, size, ideal) {
         if (M === 0) {
           const pts = [];
-          for (let i = 0; i < 160; i++) pts.push(polar(K, size, (2 * Math.PI * i) / 160));
+          for (let i = 0; i < 160; i++) pts.push(polar(K, size / 2, (2 * Math.PI * i) / 160)); // (a disk container's size is its diameter)
           return pts;
         }
         let R;
@@ -456,7 +456,7 @@
         const f = [
           ["problem", r.id],
           ["pieces", `${r.P} unit ${NAMES[N] || N + "-gon"}${r.P > 1 ? "s" : ""}`],
-          ["container", M === 0 ? "disk, radius r" : `regular ${M}-gon, side s`],
+          ["container", M === 0 ? "disk, diameter s" : `regular ${M}-gon, side s`],
           ["size (certified)", r.display],
           ["touching limit", r.score_float.toPrecision(12)],
           [

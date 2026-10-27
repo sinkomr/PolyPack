@@ -165,11 +165,12 @@ describe("the boundary catalogue", () => {
 
 describe("the nofold extras of a boundary summary", () => {
   it("give every problem its nofold value with its source, and the record's fold gain", () => {
-    const halfDiagonal = 2 + 2 / Math.sqrt(3);
+    // ball values are in diameter-1 units (half the old radius-1 ones)
+    const halfDiagonal = 1 + 1 / Math.sqrt(3);
     for (const p of cat.problems) {
       const r = raw.get(p.id);
       const extra = spaceProblemSummary(p, null).extra!;
-      const nofold = p.fields.piece === "ball" ? (p.P <= 8 ? 2 : halfDiagonal) : p.P <= 8 ? 1 : 2;
+      const nofold = p.fields.piece === "ball" ? (p.P <= 8 ? 1 : halfDiagonal) : p.P <= 8 ? 1 : 2;
       expect(extra.nofold!.value, p.id).toBeCloseTo(nofold, 14);
       expect(extra.nofold!.label).toBe(r.nofold.source);
       expect(extra.nofold!.label).toMatch(/^\[(CALC|EST)\] /);
@@ -362,16 +363,16 @@ describe("boundary work bounds", () => {
   });
 
   it("checks 64 pieces, the largest P accepted: a valid grid and piles that overlap", () => {
-    // 8 balls per cell on the 2 x 2 x 2 grid of a cell of edge 4: the nofold packing f(8) = 4
+    // 8 balls of diameter 1 per cell on the 2 x 2 x 2 grid of a cell of edge 2: the nofold packing f(8) = 2
     const grid = {
-      s: 4,
+      s: 2,
       pieces: Array.from({ length: 64 }, (_, i) => {
         const k = i % 8;
-        return { cell: i >> 3, u: [k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1] };
+        return { cell: i >> 3, u: [k & 1 ? 0.5 : -0.5, k & 2 ? 0.5 : -0.5, k & 4 ? 0.5 : -0.5] };
       }),
     };
     expect(validateSpaceSubmission("boundary", "boundary/tesseract/ball/64", grid).valid).toBe(true);
-    const pile = { s: 4, pieces: Array.from({ length: 64 }, () => ({ cell: 0, u: [0, 0, 0] })) };
+    const pile = { s: 2, pieces: Array.from({ length: 64 }, () => ({ cell: 0, u: [0, 0, 0] })) };
     const v = validateSpaceSubmission("boundary", "boundary/tesseract/ball/64", pile);
     expect(v.valid).toBe(false);
     expect(v.reasons.length).toBe(20);

@@ -34,13 +34,13 @@ def load(path):
 
 
 def piece_area(N):
-    return math.pi if N == 0 else N / (4 * math.tan(math.pi / N))
+    return math.pi / 4 if N == 0 else N / (4 * math.tan(math.pi / N))  # a disk has diameter 1
 
 
 def bounds(solid, N, P):
     F, M = FACES[solid]
     area = math.sqrt(P * piece_area(N) * 4 * math.tan(math.pi / M) / (F * M))
-    r = 1.0 if N == 0 else 1 / (2 * math.tan(math.pi / N))
+    r = 0.5 if N == 0 else 1 / (2 * math.tan(math.pi / N))
     one = 2 * math.sin(math.pi / M) * r
     return area, one
 
@@ -256,10 +256,11 @@ def cmd_assemble(out_path, certdir_in, certdir_out, certified_paths):
                 fh.write(json.dumps(certs, separators=(",", ":"), sort_keys=True).encode())
     doc = {
         "generated": "2026-10-24",
+        "units": "diameter",
         "conventions": {
             "problem_id": "surface/<solid>/<mode>/<N>/<P>; solid in tetrahedron, cube, octahedron, dodecahedron, icosahedron; "
                           "mode fold (pieces may cross edges) or nofold (each piece in one closed face)",
-            "units": "polygon pieces have side 1, disks (N = 0) radius 1",
+            "units": "polygon pieces have side 1, disks (N = 0) diameter 1",
             "score": "edge length s of the solid (smaller is better)",
             "pose": "face f and (x, y, theta) in f's frame: the regular M-gon of side s centred at the origin with a "
                     "horizontal bottom edge; frame vertex k at angle -pi/2 + pi/M + 2 pi k/M is solids.json faces[f][k]; "

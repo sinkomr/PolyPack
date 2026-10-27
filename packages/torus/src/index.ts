@@ -4,3 +4,4 @@ export * from "./records";
 export * from "./search";
 export * from "./kernel";
 export * from "./start";
+export * from "./disk";

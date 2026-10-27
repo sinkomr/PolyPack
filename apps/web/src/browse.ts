@@ -219,7 +219,7 @@ function drawChart(
   const hover = svg("g", { class: "hover", visibility: "hidden" });
   hover.append(guide, spot);
   chart.append(hover);
-  const letter = M === 0 ? "r" : "s";
+  const letter = M === 0 ? "d" : "s";
   const fmt = (v: number) => v.toFixed(6);
   let at = -1;
   const show = (i: number) => {
@@ -474,9 +474,9 @@ async function refresh(): Promise<void> {
   // where the best entry awaits review, the best reviewed one stands for the site in the atlas
   for (const s of data.site_verified ?? []) row(s.P).verified = s;
   const rows = [...byP.values()].sort((a, b) => a.P - b.P);
-  const sizeName = M === 0 ? "container radius r" : "container side s";
+  const sizeName = M === 0 ? "container diameter d" : "container side s";
   $("note").textContent = rows.length
-    ? `${rows.length} values of P for ${shapeLabel(N)}s in a ${shapeLabel(M)}. Sizes are the ${sizeName}, for pieces of ${N === 0 ? "radius" : "side"} 1.`
+    ? `${rows.length} values of P for ${shapeLabel(N)}s in a ${shapeLabel(M)}. Sizes are the ${sizeName}, for pieces of ${N === 0 ? "diameter" : "side"} 1.`
     : `No published values or site entries yet for ${shapeLabel(N)}s in a ${shapeLabel(M)}.`;
   if (charted.N !== N || charted.M !== M) zoom = null;
   charted = { rows, N, M, sizeName };

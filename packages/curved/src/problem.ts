@@ -23,9 +23,9 @@ import { polarPoint, poseMotion, applyPoint, lineCovector, type LPoint, type Mot
 import { pieceEdgeAngle, pieceVertexAngle, wallAngle } from "./shapes";
 
 export interface CurvedProblem {
-  /** 0 = disk of radius 1, else regular N-gon of side 1 */
+  /** 0 = disk of diameter 1 (radius 1/2, DISK_RADIUS), else regular N-gon of side 1 */
   N: number;
-  /** 0 = disk container of radius r, else regular M-gon of side s */
+  /** 0 = disk container (scored by its diameter), else regular M-gon of side s */
   M: number;
   P: number;
 }
@@ -37,7 +37,7 @@ export interface CurvedPose {
 }
 
 export interface CurvedConfig {
-  /** container size: side s (M >= 3) or radius r (M = 0) */
+  /** container size: side s (M >= 3) or DIAMETER (M = 0; its radius is size / 2) */
   size: number;
   pieces: CurvedPose[];
 }
@@ -81,7 +81,7 @@ export function makeSpace(K: number, N: number, M: number): Space {
   }
   const wallAngles = M === 0 ? [] : Array.from({ length: M }, (_, k) => wallAngle(M, k));
   let tMax = Infinity;
-  if (K > 0) tMax = M === 0 ? maxContainerSize(0, K) : Math.PI / (2 * Math.sqrt(K));
+  if (K > 0) tMax = Math.PI / (2 * Math.sqrt(K));
   if (K < 0 && M > 0) tMax = idealApothem(M, K);
   const space: Space = { K, N, M, piece, vertices, edges, wallAngles, tMax };
   spaceCache.set(key, space);
@@ -90,7 +90,7 @@ export function makeSpace(K: number, N: number, M: number): Space {
 
 /** Container variable t (apothem h or radius r) from the size. */
 export function containerT(space: Space, size: number): number {
-  return space.M === 0 ? size : apothemFromSide(space.M, space.K, size);
+  return apothemFromSide(space.M, space.K, size);
 }
 
 /** World-frame lifted vertices of one piece (the centre for a disk). */

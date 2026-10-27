@@ -31,10 +31,10 @@ class PrecisionRegression(unittest.TestCase):
 
     def test_pair_cache_rebuilds_before_new_overlap(self):
         config = {"N": 0, "M": 0, "P": 2, "pieces": [{}, {}]}
-        variables = list(map(D, [0, 0, 0, 3, 0, 0, 0, 0, 0, 4]))
+        variables = list(map(D, [0, 0, 0, 2, 0, 0, 0, 0, 0, 4]))
         cache = FeasibilityContacts(config)
         self.assertFalse(any(c["kind"] == "pair" for c in cache.get(variables)))
-        variables[3] = D("1.9")
+        variables[3] = D("0.9")
         self.assertTrue(any(c["kind"] == "pair" for c in cache.get(variables)))
         gaps = residuals(config, variables, cache.get(variables))
         self.assertLess(min(gaps), D(0))
@@ -46,8 +46,8 @@ class PrecisionRegression(unittest.TestCase):
             "P": 2,
             "container_phi": 0,
             "pieces": [
-                {"x": -1.0, "y": 0.0, "theta": 0.0},
-                {"x": 1.0, "y": 0.0, "theta": 0.0},
+                {"x": -0.5, "y": 0.0, "theta": 0.0},
+                {"x": 0.5, "y": 0.0, "theta": 0.0},
             ],
         }
         data = {

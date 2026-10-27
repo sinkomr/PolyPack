@@ -586,7 +586,7 @@ export class Atlas {
         let list = groups.get(k);
         if (!list) {
           const section = el("div", "", "tile-group");
-          if (layout === "rows") section.append(el("span", `${this.M === 0 ? "r" : "s"} ≤ ${k}`, "group-label"));
+          if (layout === "rows") section.append(el("span", `${this.M === 0 ? "d" : "s"} ≤ ${k}`, "group-label"));
           list = el("ul", "", "tile-list");
           section.append(list);
           section.hidden = true;
@@ -862,7 +862,7 @@ export class Atlas {
     if (shown === this.detailShown) return;
     this.detailShown = shown;
 
-    const sizeName = M === 0 ? "radius r" : "side s";
+    const sizeName = M === 0 ? "diameter d" : "side s";
     dialog.querySelector("#detail-title")!.textContent =
       `P = ${t.P}: ${t.P} ${t.P === 1 ? shapeLabel(N) : plural(N)} in ${withArticle(M)}`;
     const reviewed = verifiedEntry(row);

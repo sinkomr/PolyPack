@@ -27,8 +27,9 @@ const sevenCircles: PackingConfig = {
   pieces: [
     { x: 0, y: 0, theta: 0 },
     ...Array.from({ length: 6 }, (_, k) => ({
-      x: 2 * Math.cos((k * Math.PI) / 3),
-      y: 2 * Math.sin((k * Math.PI) / 3),
+      // disks have diameter 1 (since 2026-10-27), so neighbours touch at distance 1
+      x: Math.cos((k * Math.PI) / 3),
+      y: Math.sin((k * Math.PI) / 3),
       theta: 0,
     })),
   ],
@@ -51,7 +52,7 @@ const pair = (N: number, gap: number): PackingConfig => ({
   container_phi: 0,
   pieces: [
     { x: 0, y: 0, theta: N === 0 ? 0 : Math.PI / 4 },
-    { x: (N === 0 ? 2 : 1) + gap, y: 0, theta: N === 0 ? 0 : Math.PI / 4 },
+    { x: 1 + gap, y: 0, theta: N === 0 ? 0 : Math.PI / 4 },
   ],
 });
 
@@ -101,6 +102,8 @@ function exportDirectory(dir: string): void {
       }
       const out = {
         config: saved.config,
+        // the fixtures are in site units: disks of diameter 1, circle containers scored by their diameter
+        units: "diameter",
         expected_score: saved.expected_score ?? sent.score,
         expected_valid: sent.valid,
         oriented_score: saved.oriented_score ?? oriented.score,

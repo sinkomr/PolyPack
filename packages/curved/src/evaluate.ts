@@ -98,12 +98,12 @@ export interface PairGap {
   witness: PairWitness;
 }
 
-/** Signed separation of two pieces (SAT value for polygons, distance - 2 for disks). */
+/** Signed separation of two pieces (SAT value for polygons, distance - 2 DISK_RADIUS = distance - 1 for disks). */
 export function pairGap(space: Space, A: PieceState, B: PieceState): PairGap {
   const { K, N } = space;
   if (N === 0) {
     const vs = pairVs(K, A.centre, B.centre);
-    return { gap: distFromVs(K, vs) - 2, witness: { owner: -1, edge: -1, vertex: -1 } };
+    return { gap: distFromVs(K, vs) - 2 * space.piece.R, witness: { owner: -1, edge: -1, vertex: -1 } };
   }
   let best = -Infinity;
   let w: PairWitness = { owner: 0, edge: 0, vertex: 0 };
@@ -216,7 +216,7 @@ export function vertexEdgeRow(
   return r;
 }
 
-/** Disk pair row: distance(c_i, c_j) - 2. */
+/** Disk pair row: distance(c_i, c_j) - 2 R (R = DISK_RADIUS). */
 export function diskPairRow(space: Space, A: PieceState, B: PieceState, i: number, j: number): Row {
   const { K } = space;
   const vs = pairVs(K, A.centre, B.centre);
@@ -243,7 +243,7 @@ export function diskPairRow(space: Space, A: PieceState, B: PieceState, i: numbe
     vertex: -1,
     owner: -1,
     edge: -1,
-    value: d - 2,
+    value: d - 2 * space.piece.R,
     gi: toPose(A.Jb, bodyA),
     gj: toPose(B.Jb, bodyB),
     gt: 0,
@@ -276,14 +276,14 @@ export function wallRow(space: Space, S: PieceState, i: number, k: number, wall:
     vertex: k,
     owner: -1,
     edge: -1,
-    value: -sd - (k >= 0 ? 0 : 1),
+    value: -sd - (k >= 0 ? 0 : space.piece.R),
     gi: toPose(S.Jb, body),
     gj: [0, 0, 0],
     gt: -dval * dndt,
   };
 }
 
-/** Rim row for a disk container of radius t: t - d(O, p) (minus 1 for a disk piece centre). */
+/** Rim row for a disk container of radius t: t - d(O, p) (minus the disk's radius for a disk piece centre). */
 export function rimRow(space: Space, S: PieceState, i: number, k: number, t: number): Row {
   const { K } = space;
   const p = k >= 0 ? S.verts[k] : S.centre;
@@ -304,7 +304,7 @@ export function rimRow(space: Space, S: PieceState, i: number, k: number, t: num
     vertex: k,
     owner: -1,
     edge: -1,
-    value: t - d - (k >= 0 ? 0 : 1),
+    value: t - d - (k >= 0 ? 0 : space.piece.R),
     gi: toPose(S.Jb, body),
     gj: [0, 0, 0],
     gt: 1,
@@ -316,7 +316,7 @@ export function containerGap(space: Space, S: PieceState, walls: [number, number
   const { K, N, M } = space;
   let g = Infinity;
   const pts = N === 0 ? [S.centre] : S.verts;
-  const pad = N === 0 ? 1 : 0;
+  const pad = N === 0 ? space.piece.R : 0;
   for (const p of pts) {
     if (M === 0) {
       g = Math.min(g, t - distFromVs(K, p.e) - pad);
@@ -331,17 +331,17 @@ export function containerGap(space: Space, S: PieceState, walls: [number, number
  * Smallest container variable t (apothem or radius) that contains the piece, at the fixed centre O
  * and orientation phi = 0. For wall direction u write the point as v = (c0, X = u . v_vec, ...) and
  * A = sqrt(c0^2 + K X^2), a = ang_K(X, c0). Then n(t) . v = A sn_K(a - t), so a vertex needs t >= a
- * and a unit disk centre needs t >= a + asn_K(sn_K(1) / A).
+ * and a disk centre needs t >= a + asn_K(sn_K(R) / A), R the disk's radius.
  */
 export function requiredT(space: Space, S: PieceState): number {
   const { K, N, M } = space;
   let t = -Infinity;
   const pts = N === 0 ? [S.centre] : S.verts;
   if (M === 0) {
-    for (const p of pts) t = Math.max(t, distFromVs(K, p.e) + (N === 0 ? 1 : 0));
+    for (const p of pts) t = Math.max(t, distFromVs(K, p.e) + (N === 0 ? space.piece.R : 0));
     return t;
   }
-  const s1 = snK(K, 1);
+  const s1 = snK(K, space.piece.R); // (used by disks only)
   for (const p of pts) {
     const c0 = 1 - K * p.e;
     for (const ang of space.wallAngles) {

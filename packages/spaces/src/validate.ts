@@ -31,7 +31,7 @@ import { runSteps, runStepsAsync } from "@polypack/methods";
  */
 import { BoundaryConfig, PieceName, PolytopeName, getPolytope, validateBoundary } from "@polypack/boundary";
 import { CurvedConfig, containerCircumradius, validationSteps as curvedSteps } from "@polypack/curved";
-import { SCORE_TIE, boundingRadius, inradius } from "@polypack/geometry";
+import { SCORE_TIE, boundingRadius, pieceInradius } from "@polypack/geometry";
 import { SphereConfig, validationSteps as sphereSteps } from "@polypack/sphere";
 import {
   ChainLimitError,
@@ -438,7 +438,7 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
       // least 2r - l. A lattice vector shorter than 2r - TOL is therefore an overlap the validator
       // would reject as well, and refusing it first keeps the enumeration below small.
       const shortest = gaussReduce(lattice).lattice.b1;
-      const width = 2 * (N === 0 ? 1 : inradius(N));
+      const width = 2 * pieceInradius(N);
       const len = Math.hypot(shortest[0], shortest[1]);
       if (len < width - tol)
         return [

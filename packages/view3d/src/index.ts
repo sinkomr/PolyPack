@@ -3,6 +3,7 @@ export { createBoundaryView, VIEWS, type BoundaryView, type BoundaryViewOptions,
 export type { Engine } from "./model";
 export { engineFor } from "./engine";
 export type { PieceShape } from "./clip";
+export { ballRadius } from "./clip";
 // the pure parts, for tests and for other drawings
 export { gridLayout, type GridLayout, type Tile } from "./layout";
 export { Folder, foldAlignment, INNER_RATIO } from "./fold";

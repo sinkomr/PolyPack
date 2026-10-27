@@ -67,6 +67,7 @@
   ],
   "container_phi": 0.4494695612229407
  },
+ "units": "diameter",
  "expected_score": 2.318729562702766,
  "expected_valid": true,
  "oriented_score": 2.3139607229165606,

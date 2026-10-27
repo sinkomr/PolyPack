@@ -1,13 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { pieceArea } from "@polypack/geometry";
-import { TorusRecordsFile, cellArea, certifiedPacking, displayScore, recordPacking, torusScore, validateTorusPacking } from "../src";
+import { areaOf, cellArea, certifiedPacking, displayScore, recordPacking, torusScore, validateTorusPacking } from "../src";
+import { loadSiteRecords } from "./helpers";
 
 // data/torus/records.json is written by python/torus/build_records.py after the interval
 // certifier (python/torus/certify_torus.py) has proven every entry. These float checks are an
 // independent second opinion with separate code: they must agree with the certificates.
-const url = new URL("../../../data/torus/records.json", import.meta.url);
-const file: TorusRecordsFile | undefined = existsSync(url) ? JSON.parse(readFileSync(url, "utf8")) : undefined;
+const file = loadSiteRecords();
 
 describe("displayScore", () => {
   it("rounds the exact binary value to the nearest at 6 decimals", () => {
@@ -88,7 +86,7 @@ describe.skipIf(!file)("data/torus/records.json", () => {
     for (const r of records) {
       const p = recordPacking(r);
       expect(torusScore(r.family, p.lattice)).toBeCloseTo(r.score_float, 12);
-      expect((r.P * pieceArea(r.N)) / cellArea(p.lattice)).toBeCloseTo(r.density, 12);
+      expect((r.P * areaOf(r.N)) / cellArea(p.lattice)).toBeCloseTo(r.density, 12);
     }
   });
 

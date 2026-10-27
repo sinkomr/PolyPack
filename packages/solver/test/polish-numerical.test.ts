@@ -31,8 +31,8 @@ function circles(expansion: number): PackingConfig {
     pieces: [
       { x: 0, y: 0, theta: 0 },
       ...Array.from({ length: 6 }, (_, k) => ({
-        x: 2 * expansion * Math.cos((k * Math.PI) / 3),
-        y: 2 * expansion * Math.sin((k * Math.PI) / 3),
+        x: expansion * Math.cos((k * Math.PI) / 3),
+        y: expansion * Math.sin((k * Math.PI) / 3),
         theta: 0,
       })),
     ],
@@ -103,8 +103,8 @@ describe("polish precision and numerical work", () => {
       P: 2,
       container_phi: 0,
       pieces: [
-        { x: -1, y: 0, theta: 0 },
-        { x: 1, y: 0, theta: 0 },
+        { x: -0.5, y: 0, theta: 0 },
+        { x: 0.5, y: 0, theta: 0 },
       ],
     };
     const out = await polish(start, {
@@ -126,7 +126,7 @@ describe("polish precision and numerical work", () => {
       container_phi: 0,
       pieces: [
         { x: 0, y: 0, theta: 0 },
-        { x: 2 - 9e-10, y: 0, theta: 0 },
+        { x: 1 - 9e-10, y: 0, theta: 0 },
       ],
     };
     expect(evaluate(start).valid).toBe(true);

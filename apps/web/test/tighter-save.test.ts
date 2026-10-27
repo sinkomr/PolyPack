@@ -132,7 +132,7 @@ describe("Tighter saves", () => {
       [101, 6.4 + 1e-13],
     ]);
     expect(a).toMatchObject({ evaluations: 101, sinceGain: 0, runs: 1, endedRuns: 0, nextSeed: 2, unconfirmed: 0 });
-    expect(r.state).toMatchObject({ version: 5 });
+    expect(r.state).toMatchObject({ version: 6 });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
@@ -334,7 +334,7 @@ describe("Tighter saves", () => {
   it("round-trip through an export string", async () => {
     const s = played();
     const text = await exportString(s);
-    expect(text).toMatch(/^tighter:5:[zj]:[A-Za-z0-9_-]+$/);
+    expect(text).toMatch(/^tighter:6:[zj]:[A-Za-z0-9_-]+$/);
     const r = await importString(text, T0 + 5000);
     expect(r.ok && r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // whitespace from a copy and paste is ignored

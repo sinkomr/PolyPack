@@ -13,16 +13,16 @@ its config_at locates), it checks the published fields and proves the configurat
            best_known, or proven with a literature entry that names its proof and gives an optimum <= score_cert;
            literature entries are numbers with a source.
   geometry Every JSON number is read as the exact rational it denotes (a binary64 float is a dyadic rational).
-           Balls (radius r = BALL_RADIUS, balls_catalogue.py), exactly in rationals:
+           Balls (radius r = BALL_RADIUS = 1/2, diameter 1, balls_catalogue.py), exactly in rationals:
              pairs      |c_i - c_j|^2 >= (2 r)^2 for every two centres;
-             ball       s >= r and |c_i|^2 <= (s - r)^2;
+             ball       a container scored by its DIAMETER s (radius s/2): s >= 2 r and |c_i|^2 <= (s/2 - r)^2;
              cube       |c_ik| <= s/2 - r for k = 1, 2, 3 (the cube [-s/2, s/2]^3);
            and in any other solid C of the polyhedra space (s times the canonical solid about its vertex centroid; faces
            N_f . x <= s b_f with N_f the exact outward normals, not unit, of solids_exact.json), for every ball and face
            N_f . c + r |N_f| < s B_f, decided with 170-bit interval arithmetic with outward rounding on the exact N_f, B_f
            and |N_f| (an upper bound of its square root); the walls are certified strictly, as the solids' are, so that a
            ball touching a face of an irrational solid is refused rather than guessed.
-           Solids (edge 1) in the ball of radius s, with the polyhedra space's vendored certify_general
+           Solids (edge 1) in the ball of diameter s (radius s/2), with the polyhedra space's vendored certify_general
            machinery (python/polyhedra; MIT, see THIRD_PARTY_NOTICES.md): the solids are checked exactly in their
            number field (solids_exact.json); each rotation is the exact rational matrix H(q)/|q|^2 of the stored
            quaternion; every world vertex c + R v is enclosed with 170-bit fixed-point intervals with outward
@@ -128,9 +128,9 @@ def certify_balls(container, s, pieces):
     bad_walls, bad_pairs = [], []
     min_wall = math.inf
     if container == 'ball':
-        r = s - R
+        r = s / 2 - R
         if r < 0:
-            raise CertError(f'a ball container of radius below {R} holds no ball of radius {R}')
+            raise CertError(f'a ball container of diameter below {D} holds no ball of radius {R}')
         r2 = r * r
         for i, c in enumerate(cs):
             d2 = c[0] * c[0] + c[1] * c[1] + c[2] * c[2]
@@ -177,8 +177,8 @@ def gap_of(d2):
 
 def certify_solids(piece, s, pieces):
     """Proves that `pieces` (poses [x, y, z, qw, qx, qy, qz]) of the canonical `piece` lie in the closed ball of
-    radius s about the origin with disjoint interiors (see the module comment). Returns ok, the smallest wall slack
-    (a rigorous lower bound of s - |x|), the near and far pair counts, the smallest pair gap (a rigorous lower bound
+    diameter s (radius s/2) about the origin with disjoint interiors (see the module comment). Returns ok, the smallest wall slack
+    (a rigorous lower bound of s/2 - |x|), the near and far pair counts, the smallest pair gap (a rigorous lower bound
     along the plane normal, |u| = 1 to about 1e-12) and the failures. Raises CertError for malformed input."""
     if piece not in cg.EXACT:
         raise CertError(f'unknown solid {piece!r}')
@@ -206,7 +206,8 @@ def certify_solids(piece, s, pieces):
         X.append([tuple(fadd(fdot(Rf[k], v), cf[k]) for k in range(3)) for v in P.V])
     # (1) containment: an upper bound of |x|^2 below a lower bound of s^2. fmul(a, a)[1] bounds a^2 from above
     # whatever the signs of a's ends.
-    s2lo = fx(s * s)[0]
+    rad = s / 2                                  # the container is scored by its diameter
+    s2lo = fx(rad * rad)[0]
     bad_walls, worst = [], math.inf
     for i in range(n):
         for x in X[i]:
@@ -214,7 +215,7 @@ def certify_solids(piece, s, pieces):
             if not up < s2lo and (not bad_walls or bad_walls[-1] != i):
                 bad_walls.append(i)
             # report only: s - |x| >= (s^2 - up) / (2 s), a lower bound since |x| <= sqrt(up) <= s when it holds
-            worst = min(worst, (s2lo - up) / ONE / (2 * float(s)))
+            worst = min(worst, (s2lo - up) / ONE / (2 * float(rad)))
     # (2) disjointness, as certify_general does it
     lim = 4 * P.R2up
     Vf = [[[float(sum(float(R[k][j]) * P.Vf[v][j] for j in range(3)) + float(c[k])) for k in range(3)]

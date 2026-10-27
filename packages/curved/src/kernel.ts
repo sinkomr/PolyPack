@@ -72,7 +72,7 @@ export function curvedKernel(problem: { K: number; N: number; M: number; P: numb
   const sMax = maxContainerSize(M, K);
   const g: KernelGeometry = { space, P, dim, sizeCap: K > 0 ? sMax * (1 - 1e-12) : Infinity };
   const bound = curvedBound(space, P);
-  const sizeOfT = (t: number) => (M === 0 ? t : sideFromApothem(M, K, t));
+  const sizeOfT = (t: number) => sideFromApothem(M, K, t);
   const { rho, R } = space.piece;
 
   // A roomy start: area density 0.45 as the package's search, or, when the space has too little
@@ -107,7 +107,7 @@ export function curvedKernel(problem: { K: number; N: number; M: number; P: numb
     id: `curved/${formatCurvature(K)}/${N}/${M}/${P}`,
     P,
     dim,
-    steps: Float64Array.from(N === 0 ? [1, 1] : [rho, rho, rho / R]),
+    steps: Float64Array.from(N === 0 ? [rho, rho] : [rho, rho, rho / R]),
     globals: 0,
     globalSteps: new Float64Array(0),
     inradius: rho,

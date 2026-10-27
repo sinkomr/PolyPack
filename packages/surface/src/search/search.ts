@@ -1,4 +1,4 @@
-import { pieceArea } from "@polypack/geometry";
+import { SURFACE_DISK_RADIUS, innerArea, sizeFor } from "../disk";
 import { SurfacePose } from "../parts";
 import { Solid, faceApothem, faceArea, faceDepth, surfaceArea } from "../solids";
 import { validate } from "../validate";
@@ -69,7 +69,7 @@ function randomPoseGeneral(solid: Solid, rand: () => number): SurfacePose {
 
 /** Largest piece scale allowed by area on the unit solid. */
 export function areaScale(solid: Solid, N: number, P: number): number {
-  return Math.sqrt(surfaceArea(solid, 1) / (P * pieceArea(N)));
+  return Math.sqrt(surfaceArea(solid, 1) / (P * innerArea(N)));
 }
 
 export interface Start {
@@ -146,7 +146,7 @@ export function searchProblem(solid: Solid, N: number, P: number, opts: SearchOp
     history.push({ label, lam });
     if (!best || lam > best.lam) {
       best = { lam, poses: poses.map((p) => ({ ...p })), label, history, evals };
-      log(`  ${label}: s = ${(1 / lam).toFixed(7)}`);
+      log(`  ${label}: s = ${sizeFor(N, lam).toFixed(7)}`);
     }
   };
   const starts: Start[] = [...opts.warm];
@@ -176,10 +176,13 @@ export function searchProblem(solid: Solid, N: number, P: number, opts: SearchOp
   const pk = new Packing(solid, N, fin.lam, fin.poses, mode);
   const f0 = finalize(pk, fin.lam, fin.poses);
   const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120, mode });
-  log(`  slp polish: s = ${(1 / pol.lam).toFixed(10)} (${pol.iterations} iterations)`);
+  log(`  slp polish: s = ${sizeFor(N, pol.lam).toFixed(10)} (${pol.iterations} iterations)`);
   const f = pol.lam >= f0.lam ? { lam: pol.lam, poses: pol.poses, energy: 0 } : f0;
-  const poses = f.poses.map((p) => ({ face: p.face, x: p.x / f.lam, y: p.y / f.lam, theta: p.theta }));
-  const v = validate({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, mode, { tol: 1e-10 });
+  const sSite = sizeFor(N, f.lam);
+  // positions on the solid of edge s: the unit-solid ones times s, as (x / lam) times the disk radius for a disk
+  const k = N === 0 ? SURFACE_DISK_RADIUS : 1;
+  const poses = f.poses.map((p) => ({ face: p.face, x: (p.x / f.lam) * k, y: (p.y / f.lam) * k, theta: p.theta }));
+  const v = validate({ solid: solid.name, N, s: sSite, pieces: poses }, mode, { tol: 1e-10 });
   if (!v.ok) {
     log(`  finalize failed the float check: ${v.errors[0]}`);
     return null;

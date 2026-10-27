@@ -6,6 +6,7 @@
     "container_phi": 0,
     "pieces": []
   },
+  "units": "diameter",
   "expected_score": null,
   "expected_valid": false,
   "oriented_score": null,

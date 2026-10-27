@@ -90,7 +90,7 @@ export const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 /**
  * What a run that ended did to the board, for its end's event: "It made the side 0.494 % smaller.",
  * from the board's score when it opened (`before`) to the run's best (`after`), or "" when it did not
- * beat it by more than the smallest improvement that counts. `side` is "side", or "radius" for a
+ * beat it by more than the smallest improvement that counts. `side` is "side", or "diameter" for a
  * circle container.
  */
 export function smallerText(side: string, before: number | null, after: number | null): string {
@@ -148,7 +148,7 @@ const POINTS: How[] = [
       ],
       [
         "<var>s</var><sub>new</sub>",
-        "your board's new side, in units where each piece has side 1 (circle pieces have radius 1). For a circle container it is the radius.",
+        "your board's new side, in units where a polygon piece has side 1 and a circle piece has diameter 1. For a circle container it is the diameter.",
       ],
       ["<var>t</var><sub>step</sub>", "the step term, in points"],
       ["<var>t</var><sub>size</sub>", "the size term, in points"],

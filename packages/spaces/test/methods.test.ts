@@ -318,7 +318,7 @@ describe("Auto, the space's own search", () => {
     ["sphere/4/4", 300],
     ["torus/sq/4/4", 300],
     // a curved job's evaluations are its rounds' restarts and hops
-    ["curved/-1/0/0/3", 1],
+    ["curved/-1/3/0/3", 1],
     // the fold search's are its compressions, its start's included
     ["surface/cube/fold/0/4", 1],
     ["boundary/tesseract/ball/4", 2000],

@@ -56,6 +56,8 @@ export interface TorusRecord {
 }
 
 export interface TorusRecordsFile {
+  /** "diameter" once the data is in site units (disks of diameter 1) */
+  units?: string;
   generated: string;
   conventions: Record<string, unknown>;
   records: TorusRecord[];

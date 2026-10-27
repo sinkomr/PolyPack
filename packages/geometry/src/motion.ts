@@ -1,5 +1,5 @@
 import { Contact, TOL, pieceSeparation } from "./overlap";
-import { Pose, boundingRadius, inradius } from "./shapes";
+import { DISK_RADIUS, Pose, boundingRadius, inradius } from "./shapes";
 
 /**
  * Interactive moves keep separations above -MOVE_TOL, ten times tighter than TOL, so a board
@@ -23,7 +23,7 @@ export function defaultTheta(N: number): number {
 export function pieceContainsPoint(N: number, pose: Pose, x: number, y: number): boolean {
   const dx = x - pose.x;
   const dy = y - pose.y;
-  if (N === 0) return dx * dx + dy * dy <= 1;
+  if (N === 0) return dx * dx + dy * dy <= DISK_RADIUS * DISK_RADIUS;
   const r = inradius(N);
   const step = (2 * Math.PI) / N;
   for (let k = 0; k < N; k++) {

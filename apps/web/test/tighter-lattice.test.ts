@@ -199,8 +199,8 @@ describe("Tighter's Lattice build", () => {
     });
     expect(at(p)).toEqual({ score: 6.440089, at: 2013 });
     p = compacted(40);
-    expect(latticeStep(p, { ...ended, found: 6.5 }, 6.5, title, "radius")!.text).toBe(
-      "Lattice packed 21-gons in a 24-gon, 40 pieces, with radius 6.500000. Your board is as small, so it stays.",
+    expect(latticeStep(p, { ...ended, found: 6.5 }, 6.5, title, "diameter")!.text).toBe(
+      "Lattice packed 21-gons in a 24-gon, 40 pieces, with diameter 6.500000. Your board is as small, so it stays.",
     );
     // no strict lattice packing at all
     p = compacted(40);

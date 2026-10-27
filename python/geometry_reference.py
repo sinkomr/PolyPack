@@ -5,6 +5,8 @@ import math
 from functools import cache
 
 TOL = 1e-9
+# Radius of a disk piece (N = 0): disk pieces have diameter 1. A circle container is scored by its diameter.
+DISK_RADIUS = 0.5
 
 
 def vertices(n, pose):
@@ -22,7 +24,7 @@ def vertices(n, pose):
 
 def separation(n, a, b):
     if n == 0:
-        return math.hypot(a["x"] - b["x"], a["y"] - b["y"]) - 2
+        return math.hypot(a["x"] - b["x"], a["y"] - b["y"]) - 2 * DISK_RADIUS
     pa, pb = vertices(n, a), vertices(n, b)
     best = -math.inf
     for polygon in (pa, pb):
@@ -175,7 +177,8 @@ def enclosing_circle(points, pad):
         b2, d2 = bx * bx + by * by, dx * dx + dy * dy
         ux, uy = (dy * b2 - by * d2) / det, (bx * d2 - dx * b2) / det
         consider(a[0] + ux, a[1] + uy, math.hypot(ux, uy))
-    return best + pad
+    # the site scores a circle container by its diameter
+    return 2 * (best + pad)
 
 
 def evaluate(config, phi=None, *, auto_orient=True):
@@ -190,7 +193,7 @@ def evaluate(config, phi=None, *, auto_orient=True):
         if n == 0
         else [v for p in ps for v in vertices(n, p)]
     )
-    pad = 1 if n == 0 else 0
+    pad = DISK_RADIUS if n == 0 else 0
     phi = config.get("container_phi", 0) if phi is None else phi
     if m == 0:
         score = enclosing_circle(points, pad)

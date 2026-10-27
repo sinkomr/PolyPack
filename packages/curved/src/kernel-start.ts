@@ -160,6 +160,6 @@ export function ringLayout(
   let t = -Infinity;
   for (const p of pieces) t = Math.max(t, requiredT(space, pieceState(space, p)));
   if (!(t < space.tMax)) return null;
-  const size = M === 0 ? t : sideFromApothem(M, K, t);
+  const size = sideFromApothem(M, K, t);
   return Number.isFinite(size) ? { size, pieces } : null;
 }

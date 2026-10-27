@@ -1,6 +1,7 @@
 import {
   evaluate as geometryEvaluate,
   areaLowerBound,
+  DISK_RADIUS,
   parseConfig,
   pieceSeparation,
   pieceVertices,
@@ -45,7 +46,7 @@ export function contactResiduals(
     const pose = config.pieces[contact.i];
     let x = pose.x,
       y = pose.y;
-    const pad = config.N === 0 ? 1 : 0;
+    const pad = config.N === 0 ? DISK_RADIUS : 0;
     if (contact.vertex !== undefined) {
       let v = vertices.get(contact.i);
       if (!v) {
@@ -55,7 +56,7 @@ export function contactResiduals(
       x = v[2 * contact.vertex];
       y = v[2 * contact.vertex + 1];
     }
-    if (contact.kind === "radial") return container.size - Math.hypot(x - container.cx, y - container.cy) - pad;
+    if (contact.kind === "radial") return container.size / 2 - Math.hypot(x - container.cx, y - container.cy) - pad;
     const angle = container.phi - Math.PI / 2 + (2 * Math.PI * contact.edge) / container.M;
     return (
       container.size / (2 * Math.tan(Math.PI / container.M)) -
@@ -76,7 +77,7 @@ function* contactCandidates(
     const angle = c.phi - Math.PI / 2 + (2 * Math.PI * edge) / c.M;
     return [Math.cos(angle), Math.sin(angle)];
   });
-  const apothem = c.M === 0 ? c.size : c.size / (2 * Math.tan(Math.PI / c.M));
+  const apothem = c.M === 0 ? c.size / 2 : c.size / (2 * Math.tan(Math.PI / c.M));
   for (let i = 0; i < config.pieces.length; i++) {
     for (let j = i + 1; j < config.pieces.length; j++) {
       yield pieceSeparation(config.N, config.pieces[i], config.pieces[j]).sep <= tolerance
@@ -85,7 +86,7 @@ function* contactCandidates(
     }
     const pose = config.pieces[i];
     const vertices = config.N === 0 ? new Float64Array([pose.x, pose.y]) : pieceVertices(config.N, pose);
-    const pad = config.N === 0 ? 1 : 0;
+    const pad = config.N === 0 ? DISK_RADIUS : 0;
     for (let vertex = 0; vertex < (config.N || 1); vertex++) {
       const point = config.N === 0 ? {} : { vertex };
       const dx = vertices[2 * vertex] - c.cx,
@@ -94,7 +95,7 @@ function* contactCandidates(
         const contact: ContactConstraint =
           c.M === 0 ? { kind: "radial", i, ...point } : { kind: "wall", i, edge, ...point };
         const gap =
-          c.M === 0 ? c.size - Math.hypot(dx, dy) - pad : apothem - dx * normals[edge][0] - dy * normals[edge][1] - pad;
+          c.M === 0 ? c.size / 2 - Math.hypot(dx, dy) - pad : apothem - dx * normals[edge][0] - dy * normals[edge][1] - pad;
         yield gap <= tolerance ? contact : undefined;
       }
     }

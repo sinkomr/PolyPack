@@ -2,8 +2,8 @@
 
 [CALC] ASC interleaves hard-particle Monte Carlo with explicit movement of a
 fixed-shape container and collective movement of piece centres. Polygon pieces
-keep side one, circles keep radius one, and rotations follow the shared Phase 1
-conventions. The objective is polygon-container side or circle-container radius.
+keep side one, circles keep diameter one (radius 1/2, since 2026-10-27), and rotations follow the shared Phase 1
+conventions. The objective is polygon-container side or circle-container diameter.
 
 ```ts
 const result = await run({ N: 5, M: 5, P: 6 }, { method: "asc", budget: { evals: 3000 }, seed: 1 });
@@ -32,7 +32,7 @@ and rigid orientations; vertices are never strained.
 | Balanced strain       | About container centre c, with random unit axis u and perpendicular v, map d=x−c to (1−a)(d·u)u+(d·v)v/(1−a). This imitates an anisotropic, area-preserving cell deformation, since its determinant is one. Only particle centres change; walls retain their regular shape.                                            |
 | Uniaxial strain       | Map d to (1−a)(d·u)u+(d·v)v. This is the centre-motion part of a compressive axial cell strain, with determinant 1−a, while regular hard walls stay fixed.                                                                                                                                                             |
 | Sector strain         | Contract d to (1−a)d only when d·u≥‖d‖cos(w). Random w is π/2 for a half-plane half the time; otherwise it is uniform in [0.1π,0.5π). This regional displacement has no single global cell-strain tensor; it is an extra finite-boundary heuristic.                                                                    |
-| Radial strain         | Map every d to (1−a)d and explicitly propose size s′=(1−a)s+aB/q, where B is piece bounding radius and q is unit container apothem (q=1 for a circle). This mimics isotropic compression while allowing for rigid pieces. It is also tried before diffusion to preserve the contact topology of loose supplied starts. |
+| Radial strain         | Map every d to (1−a)d and explicitly propose size s′=(1−a)s+aB/q, where B is piece bounding radius and q is unit container apothem (q=1/2 for a circle container, whose size is its diameter). This mimics isotropic compression while allowing for rigid pieces. It is also tried before diffusion to preserve the contact topology of loose supplied starts. |
 
 [CALC] For the radial trial, a piece offset z has ‖z‖≤B. Its support after
 centre contraction is f times the original support plus (1−f)z·u. Consequently
@@ -92,7 +92,7 @@ and with a strict enclosure where it lies, initializes the chain as given. A
 complete start valid only within the evaluator's 1e−9 pair tolerance is first
 parted in place. Every centre is dilated about the centroid by
 1+(d+2e−12)/(2a), where d is the deepest penetration and a the piece apothem
-(1 for a circle); this leaves each gap at least about 2e−12. The shared
+(1/2 for a circle); this leaves each gap at least about 2e−12. The shared
 `restore(config, "separate")` repair then clears any pair that roundoff left,
 limited to 64 stop polls per piece. Neither step draws random numbers. The
 parted state costs one counted assessment, and that assessment, not the
@@ -117,7 +117,7 @@ machine). Stop and pause are not observed inside a synchronous stretch.
 tolerance used to be replaced by the seed generator's result, and is now
 parted in place and used. At very small budgets this is sometimes worse than
 before. An independent review counted 286 worse of 1,595 cells, for example
-N=0, M=4, P=7 at 12 evaluations: 6.297 against 5.864. Those counts were
+N=0, M=4, P=7 at 12 evaluations: 3.149 against 2.932. Those counts were
 measured on the first version of this change, which used the pairwise repair
 without the dilation, and were not rerun afterwards.
 
@@ -214,7 +214,7 @@ node --import tsx packages/solver/src/methods/asc/benchmark.mjs --report
 the stored record size, and each polygon angle uniformly over its symmetry
 period. Negative pair separation rejects the new piece. The same start for
 each seed goes to all methods. The box side is twice the record size, including
-when the record size denotes a circle radius. Default-seed rows give each
+when the record size denotes a circle diameter (before 2026-10-27, a radius). Default-seed rows give each
 method its own normal automatic bootstrap; no record poses are supplied.
 The raw file preserves every returned arrangement for rechecking.
 Random insertion retries the whole start after 100,000 draws if it jams;
@@ -240,7 +240,7 @@ not a controlled machine-isolated timing comparison or browser claim.
 | 4/4/10 |  3.70710678118654 |
 | 0/0/12 | 4.029601930116184 |
 | 0/0/19 | 4.863703305156274 |
-| 0/4/10 |  6.74744152324853 |
+| 0/4/10 |  3.37372076162426 |
 | 5/5/6  |           2.61803 |
 
 ### Comparisons
@@ -297,18 +297,18 @@ not a controlled machine-isolated timing comparison or browser claim.
 | 0/0/19 | 30000 | scatter | asc         |    16 |    16 | 4.8637033052 | 5.0996827098 |         1403 |    1.794 |  36.043 | 130.643 |
 | 0/0/19 | 30000 | scatter | mc_compress |    15 |    15 | 4.8637033052 | 5.1785814689 |         1509 |    0.371 |   6.190 |  21.989 |
 | 0/0/19 | 30000 | scatter | penalty     |    16 |    16 | 4.8637033052 | 5.1785814689 |          340 |    0.219 |   0.755 |   5.869 |
-| 0/4/10 |  3000 | seed    | asc         |     2 |     2 | 6.8142879708 | 6.9068582057 |         3000 |    1.669 |   4.531 |  40.551 |
-| 0/4/10 |  3000 | seed    | mc_compress |     2 |     2 | 6.8142877381 | 6.9662667708 |         2907 |    0.883 |   1.574 |  17.052 |
-| 0/4/10 |  3000 | seed    | penalty     |    19 |    19 | 6.7474415232 | 6.8700652018 |        798.5 |    0.241 |   0.320 |   4.905 |
-| 0/4/10 |  3000 | scatter | asc         |     6 |     4 | 6.7602787773 | 6.8228756555 |         2947 |    1.543 |   3.370 |  32.252 |
-| 0/4/10 |  3000 | scatter | mc_compress |     3 |     3 | 6.7602787773 | 6.9201002936 |       2845.5 |    0.445 |   0.609 |   8.367 |
-| 0/4/10 |  3000 | scatter | penalty     |     8 |     8 | 6.7602787773 | 7.0225095034 |          651 |    0.154 |   0.260 |   3.274 |
-| 0/4/10 | 30000 | seed    | asc         |     2 |     2 | 6.8142877381 | 6.9068582057 |        27391 |   16.040 |  33.473 | 286.608 |
-| 0/4/10 | 30000 | seed    | mc_compress |     2 |     2 | 6.8142877381 | 6.9662667708 |         3029 |    0.502 |   4.063 |  27.702 |
-| 0/4/10 | 30000 | seed    | penalty     |    19 |    19 | 6.7474415232 | 6.8700652018 |        798.5 |    0.199 |   0.221 |   3.978 |
-| 0/4/10 | 30000 | scatter | asc         |     6 |     6 | 6.7602787773 | 6.8228756555 |       5492.5 |    2.723 |  15.489 | 137.627 |
-| 0/4/10 | 30000 | scatter | mc_compress |     3 |     3 | 6.7602787773 | 6.9201002936 |       4164.5 |    0.660 |   4.402 |  32.886 |
-| 0/4/10 | 30000 | scatter | penalty     |     8 |     8 | 6.7602787773 | 7.0225095034 |          651 |    0.146 |   0.216 |   2.877 |
+| 0/4/10 |  3000 | seed    | asc         |     2 |     2 | 3.4071439854 | 3.4534291028 |         3000 |    1.669 |   4.531 |  40.551 |
+| 0/4/10 |  3000 | seed    | mc_compress |     2 |     2 | 3.4071438690 | 3.4831333854 |         2907 |    0.883 |   1.574 |  17.052 |
+| 0/4/10 |  3000 | seed    | penalty     |    19 |    19 | 3.3737207616 | 3.4350326009 |        798.5 |    0.241 |   0.320 |   4.905 |
+| 0/4/10 |  3000 | scatter | asc         |     6 |     4 | 3.3801393886 | 3.4114378278 |         2947 |    1.543 |   3.370 |  32.252 |
+| 0/4/10 |  3000 | scatter | mc_compress |     3 |     3 | 3.3801393886 | 3.4600501468 |       2845.5 |    0.445 |   0.609 |   8.367 |
+| 0/4/10 |  3000 | scatter | penalty     |     8 |     8 | 3.3801393886 | 3.5112547517 |          651 |    0.154 |   0.260 |   3.274 |
+| 0/4/10 | 30000 | seed    | asc         |     2 |     2 | 3.4071438690 | 3.4534291028 |        27391 |   16.040 |  33.473 | 286.608 |
+| 0/4/10 | 30000 | seed    | mc_compress |     2 |     2 | 3.4071438690 | 3.4831333854 |         3029 |    0.502 |   4.063 |  27.702 |
+| 0/4/10 | 30000 | seed    | penalty     |    19 |    19 | 3.3737207616 | 3.4350326009 |        798.5 |    0.199 |   0.221 |   3.978 |
+| 0/4/10 | 30000 | scatter | asc         |     6 |     6 | 3.3801393886 | 3.4114378278 |       5492.5 |    2.723 |  15.489 | 137.627 |
+| 0/4/10 | 30000 | scatter | mc_compress |     3 |     3 | 3.3801393886 | 3.4600501468 |       4164.5 |    0.660 |   4.402 |  32.886 |
+| 0/4/10 | 30000 | scatter | penalty     |     8 |     8 | 3.3801393886 | 3.5112547517 |          651 |    0.146 |   0.216 |   2.877 |
 | 5/5/6  |  3000 | seed    | asc         |    20 |     0 | 2.6180341198 | 2.6180342860 |         3000 |    1.217 |   4.085 |  30.705 |
 | 5/5/6  |  3000 | seed    | mc_compress |    20 |     0 | 2.6180339964 | 2.6180343057 |         3000 |    1.169 |   2.040 |  25.853 |
 | 5/5/6  |  3000 | seed    | penalty     |    20 |     0 | 2.6180341702 | 2.6180349409 |         3000 |    0.498 |   0.622 |  10.087 |
@@ -340,8 +340,8 @@ identical trial trajectories. These comparisons assess the whole variants.
 | 0/0/12 | scatter | 4.0296131180 / 11 |  4.0296019301 / 19 |        4.0296019301 / 19 |
 | 0/0/19 | seed    | 4.8637033052 / 20 |  4.8637033052 / 20 |        4.8637033052 / 20 |
 | 0/0/19 | scatter | 4.8637033052 / 16 |  4.8637033052 / 15 |        4.8637033052 / 19 |
-| 0/4/10 | seed    |  6.8142879708 / 2 |   6.7485110774 / 5 |         6.7602787773 / 2 |
-| 0/4/10 | scatter |  6.7602787773 / 6 |   6.7484541640 / 7 |         6.7568765031 / 3 |
+| 0/4/10 | seed    |  3.4071439854 / 2 |   3.3742555387 / 5 |         3.3801393886 / 2 |
+| 0/4/10 | scatter |  3.3801393886 / 6 |   3.3742270820 / 7 |         3.3784382516 / 3 |
 | 5/5/6  | seed    | 2.6180341198 / 20 |  2.6180341513 / 20 |        2.6180341149 / 20 |
 | 5/5/6  | scatter | 2.6180342614 / 12 |  2.8090190200 / 10 |        2.6180341211 / 16 |
 

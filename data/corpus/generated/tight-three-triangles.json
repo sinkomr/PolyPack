@@ -22,6 +22,7 @@
       }
     ]
   },
+  "units": "diameter",
   "expected_score": 2.0000000000000004,
   "expected_valid": true,
   "oriented_score": 2.0000000000000004,

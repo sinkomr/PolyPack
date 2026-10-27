@@ -1,9 +1,9 @@
-import { Container, Pose, circumradius, inradius, pieceVertices } from "./shapes";
+import { Container, DISK_RADIUS, Pose, circumradius, inradius, pieceVertices } from "./shapes";
 
 /**
  * What an enclosing computation needs to know about an arrangement: the convex hull
  * of the piece vertices (polygon pieces, pad = 0) or of the piece centres
- * (circle pieces, pad = radius). `pts` is a flat [x0, y0, x1, y1, ...] array.
+ * (circle pieces, pad = the disk radius times the scale). `pts` is a flat [x0, y0, x1, y1, ...] array.
  */
 export interface PointSet {
   pts: Float64Array;
@@ -48,7 +48,7 @@ export function extremePoints(N: number, poses: readonly Pose[], scale = 1): Poi
       c[2 * i] = p.x;
       c[2 * i + 1] = p.y;
     });
-    return { pts: convexHull(c), pad: scale };
+    return { pts: convexHull(c), pad: scale * DISK_RADIUS };
   }
   const all = new Float64Array(2 * N * poses.length);
   poses.forEach((p, i) => pieceVertices(N, p, scale, all.subarray(2 * N * i, 2 * N * (i + 1))));
@@ -212,7 +212,7 @@ function shuffledOrder(n: number): Uint32Array {
   return order;
 }
 
-/** Smallest enclosing circle of the arrangement (Welzl's algorithm, iterative form). */
+/** Smallest enclosing circle of the arrangement (Welzl's algorithm, iterative form). Its size is the diameter. */
 export function enclosingCircle(set: PointSet): Container {
   const { pts, pad } = set;
   const n = pts.length / 2;
@@ -258,7 +258,7 @@ export function enclosingCircle(set: PointSet): Container {
       }
     }
   }
-  return { M: 0, cx, cy, phi: 0, size: r + pad };
+  return { M: 0, cx, cy, phi: 0, size: 2 * (r + pad) };
 }
 
 /** Smallest enclosing container of shape M at orientation phi (phi is ignored for circles). */

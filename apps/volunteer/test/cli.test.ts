@@ -169,7 +169,7 @@ describe("the client, end to end", () => {
     expect(after.name).toBe("Test volunteer");
 
     const state = join(dir, "state");
-    expect(readdirSync(state).sort()).toEqual(["best", "history.jsonl", "memory.json"]); // the lock is gone
+    expect(readdirSync(state).sort()).toEqual(["best", "history.jsonl", "memory.json", "state.json"]); // the lock is gone
     const best = JSON.parse(readFileSync(join(state, "best", "4-4-3.json"), "utf8"));
     expect(best).toMatchObject({ N: 4, M: 4, P: 3, strict: true, method: "asc", seed: 1 });
     const [line] = history();

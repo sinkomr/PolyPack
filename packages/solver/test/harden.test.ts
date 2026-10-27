@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   boundingRadius,
   circumradius,
+  containerInradius,
   containerProtrusions,
   enclose,
   evaluate,
@@ -214,7 +215,7 @@ function bruteEnergy(state: HardenDynamics, shape: SoftShape): number {
     // A pure inscribed disk meets each wall once, like a circle piece of that radius.
     const walls =
       N !== 0 && shape.scale === 0
-        ? containerProtrusions(0, pose, container, shape.padding, 0)
+        ? containerProtrusions(0, pose, container, 0, shape.padding)
         : containerProtrusions(N, pose, container, shape.scale, shape.padding);
     for (const wall of walls) if (wall.depth > 0) energy += wall.depth * wall.depth;
   }
@@ -256,7 +257,7 @@ describe("harden energy and dynamics", () => {
                 y: 2.4 * R * (random() - 0.5),
                 theta: 6 * (random() - 0.5),
               }));
-              const size = (extent * R) / (M === 0 ? 1 : inradius(M));
+              const size = (extent * R) / containerInradius(M);
               const shape = softShape(N, { gamma, tau });
               const energyAt = (index: number, delta: number): number => {
                 const moved = spread.map((p) => ({ ...p }));
@@ -295,13 +296,13 @@ describe("harden energy and dynamics", () => {
 
   it("equals energies and gradients computed by hand, without the shared geometry", () => {
     const far = 50;
-    // Two radius-1 circles 1.8 apart: overlap 0.2, E = 0.04, each pushed outward by 2 * 0.2.
+    // Two unit-diameter disks 0.8 apart: overlap 0.2, E = 0.04, each pushed outward by 2 * 0.2.
     const circles = loaded(
       0,
       0,
       [
-        { x: -0.9, y: 0, theta: 0 },
-        { x: 0.9, y: 0, theta: 0 },
+        { x: -0.4, y: 0, theta: 0 },
+        { x: 0.4, y: 0, theta: 0 },
       ],
       far,
     );
@@ -310,7 +311,7 @@ describe("harden energy and dynamics", () => {
     expect([circles.gx[0], circles.gx[1], circles.gy[0], circles.gy[1]].map((g) => +g.toFixed(12))).toEqual([
       0.4, -0.4, 0, 0,
     ]);
-    // The same circles grown to scale 0.5 (radius 0.5) no longer touch.
+    // The same disks grown to scale 0.5 (diameter 0.5) no longer touch.
     expect(circles.gradient(softShape(0, { gamma: 0.5, tau: 0 })).energy).toBe(0);
 
     // Two axis-aligned unit squares (theta = pi/4 in the vertex-up convention), centres 0.9 apart
@@ -358,7 +359,7 @@ describe("harden energy and dynamics", () => {
     expect(round.report.energy).toBeCloseTo(0.04, 13);
     expect(round.report.sizeGradient).toBeCloseTo(-0.2, 12);
 
-    // A radius-1 circle 0.3 from the centre of a radius-1 circular container: 0.3 outside.
+    // A unit-diameter disk 0.3 from the centre of a circular container of diameter 1: 0.3 outside.
     const inCircle = loaded(0, 0, [{ x: 0.3, y: 0, theta: 0 }], 1);
     const pressed = inCircle.gradient(disk);
     expect(pressed.energy).toBeCloseTo(0.09, 13);
@@ -380,7 +381,7 @@ describe("harden energy and dynamics", () => {
         theta: 6 * random(),
       }));
       for (const tau of [0, 0.4, 0.99995, 1]) {
-        const state = loaded(N, M, poses, (4 * boundingRadius(N)) / (M === 0 ? 1 : inradius(M)));
+        const state = loaded(N, M, poses, (4 * boundingRadius(N)) / containerInradius(M));
         const shape = softShape(N, { gamma: 1, tau });
         const report = state.gradient(shape);
         expect(report.energy).toBeGreaterThan(0);
@@ -392,12 +393,12 @@ describe("harden energy and dynamics", () => {
   });
 
   it("uses the reference length and size units", () => {
-    // Unit squares and unit-diameter circles are the reference's unit; PolyPack circles have radius 1.
+    // Unit squares and unit-diameter circles are the reference's unit; PolyPack disks have diameter 1.
     expect(lengthUnit(4)).toBeCloseTo(1, 15);
-    expect(lengthUnit(0)).toBe(2);
+    expect(lengthUnit(0)).toBe(1);
     expect(lengthUnit(3)).toBeCloseTo(1 / Math.sqrt(3), 15);
-    // Side for triangles and squares, radius for circles; apothem once it exceeds the side.
-    expect([sizeUnit(0), sizeUnit(3), sizeUnit(4), sizeUnit(6)]).toEqual([1, 1, 1, 1]);
+    // Side for triangles and squares, radius (half the diameter) for circles; apothem once it exceeds the side.
+    expect([sizeUnit(0), sizeUnit(3), sizeUnit(4), sizeUnit(6)]).toEqual([0.5, 1, 1, 1]);
     expect(sizeUnit(12)).toBeCloseTo(inradius(12), 15);
     const state = loaded(4, 12, [{ x: 0, y: 0, theta: 0 }], 2);
     expect(state.size).toBeCloseTo(2, 15);
@@ -405,13 +406,13 @@ describe("harden energy and dynamics", () => {
   });
 
   it("takes the reference momentum step: rates, caps, pressure on the container and seeded noise", () => {
-    // Two radius-1 circles overlapping by 0.2 in a container far too large to touch them.
+    // Two unit-diameter disks overlapping by 0.2 in a container far too large to touch them.
     const state = loaded(
       0,
       0,
       [
-        { x: -0.9, y: 0, theta: 0 },
-        { x: 0.9, y: 0, theta: 0 },
+        { x: -0.4, y: 0, theta: 0 },
+        { x: 0.4, y: 0, theta: 0 },
       ],
       50,
     );
@@ -424,24 +425,28 @@ describe("harden energy and dynamics", () => {
     state.advance(report, 0.3, 0, () => {
       throw new Error("no noise requested");
     });
-    expect(state.poses[0].x).toBeCloseTo(-0.9 - POSE_RATE * 0.4, 14);
-    expect(state.poses[1].x).toBeCloseTo(0.9 + POSE_RATE * 0.4, 14);
-    expect(state.L).toBeCloseTo(50 - SIZE_RATE * 0.3, 13);
+    expect(state.poses[0].x).toBeCloseTo(-0.4 - POSE_RATE * 0.4, 14);
+    expect(state.poses[1].x).toBeCloseTo(0.4 + POSE_RATE * 0.4, 14);
+    // L is the container radius for a circle: half the size of 50
+    expect(state.L).toBeCloseTo(25 - SIZE_RATE * 0.3, 13);
     // Second step: momentum carries 0.85 of the velocity.
     const next = state.gradient(shape);
-    const expected = MOMENTUM * (-POSE_RATE * 0.4) - POSE_RATE * state.gx[0];
+    // the step cap is 0.03 sqrt(2) times the bounding radius, 1/2 for a disk: it binds here
+    const diskCap = STEP_CAP * Math.SQRT2 * boundingRadius(0);
+    const raw = MOMENTUM * (-POSE_RATE * 0.4) - POSE_RATE * state.gx[0];
+    const expected = Math.sign(raw) * Math.min(Math.abs(raw), diskCap);
     const before = state.poses[0].x;
     state.advance(next, 0.3, 0, () => 0.5);
     expect(state.poses[0].x - before).toBeCloseTo(expected, 14);
-    expect(state.vL).toBeCloseTo(MOMENTUM * (-SIZE_RATE * 0.3) - SIZE_RATE * 0.3, 15);
+    expect(state.vL).toBeCloseTo(-Math.min(diskCap, MOMENTUM * SIZE_RATE * 0.3 + SIZE_RATE * 0.3), 15);
 
     // A circle pressed through the wall pushes the container outward: dE/dL < 0 and L grows.
-    const pressed = loaded(0, 4, [{ x: 0.3, y: 0, theta: 0 }], 2.2);
+    const pressed = loaded(0, 4, [{ x: 0.8, y: 0, theta: 0 }], 2.2);
     const push = pressed.gradient(shape);
     expect(push.sizeGradient).toBeCloseTo(-2 * 0.2 * 0.5, 13);
     pressed.advance(push, 0, 0, () => 0.5);
     expect(pressed.L).toBeCloseTo(2.2 + SIZE_RATE * 0.2, 13);
-    expect(pressed.poses[0].x).toBeCloseTo(0.3 - POSE_RATE * 0.4, 13);
+    expect(pressed.poses[0].x).toBeCloseTo(0.8 - POSE_RATE * 0.4, 13);
 
     // A deep overlap and a strong pressure are both capped at 0.03 * sqrt(2) * circumradius.
     const deep = loaded(

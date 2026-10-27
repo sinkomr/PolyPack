@@ -58,6 +58,9 @@ export const getSpaceSiteOnly = (space: SpaceName, after?: string) =>
     `/api/spaces/${encodeURIComponent(space)}/site-only?limit=5000${after === undefined ? "" : `&after=${encodeURIComponent(after)}`}`,
   );
 
+/** The units of everything the board sends (disk and ball pieces of diameter 1; circle and ball containers by diameter). */
+export const SITE_UNITS = "diameter";
+
 /** POST /api/submit: a configuration with its name, note and how it was found (see submissionFields). */
 export async function submit(
   config: PackingConfig & Record<string, unknown>,
@@ -66,7 +69,8 @@ export async function submit(
     const r = await fetch("/api/submit", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(config),
+      // the unit confirmation the server asks for on problems with disk or ball pieces or a circle or ball container
+      body: JSON.stringify({ ...config, units: SITE_UNITS }),
     });
     const body = await r.json();
     if (!r.ok && !("valid" in body)) return { error: body.error ?? `server answered ${r.status}` };

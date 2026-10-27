@@ -88,9 +88,10 @@ for (const code of BALLS_FAMILY_SAMPLE.filter((c) => c.endsWith("inball"))) {
   const wall = (s: number) => validateBalls(problem, { s, pieces: [base] }, { tol: 1 }).minWallGap;
   for (const want of GAPS) {
     let s = 20;
-    s += want - wall(s);
-    s += want - wall(s);
+    // a solid in a ball: the gap is s / 2 - the farthest vertex, so it grows at slope 1/2
+    s += 2 * (want - wall(s));
+    s += 2 * (want - wall(s));
     cases.push({ code, what: `wall, gap ${want}`, config: { s, pieces: [base] }, gap: wall(s) });
   }
 }
-process.stdout.write(JSON.stringify({ generated: "2026-10-26", cases }, null, 0) + "\n");
+process.stdout.write(JSON.stringify({ generated: "2026-10-27", cases }, null, 0) + "\n");

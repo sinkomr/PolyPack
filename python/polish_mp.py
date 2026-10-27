@@ -12,6 +12,7 @@ except ImportError:
         "mpmath is required; use a virtual environment and python/requirements.txt"
     )
 
+from geometry_reference import DISK_RADIUS as DISK_RADIUS_FLOAT
 from geometry_reference import evaluate as float_evaluate
 
 mp.mp.dps = 50
@@ -20,6 +21,12 @@ mp.mp.dps = 50
 def D(value):
     """Preserve the exact binary value of JSON float64 inputs."""
     return mp.mpf(value)
+
+
+# Site units: a disk piece (N = 0) has diameter 1, and a circle container (M = 0) is scored by its
+# diameter. Both factors are exact in binary.
+DISK_RADIUS = D(DISK_RADIUS_FLOAT)
+CIRCLE_APOTHEM = D("0.5")
 
 
 def points(n, poses):
@@ -49,7 +56,7 @@ def pair_feature(n, a, b, pa, pb):
         dx, dy = a[0] - b[0], a[1] - b[1]
         distance = mp.sqrt(dx * dx + dy * dy)
         nx, ny = (dx / distance, dy / distance) if distance else (D(1), D(0))
-        return distance - 2, (nx, ny, D(0)), (-nx, -ny, D(0))
+        return distance - 2 * DISK_RADIUS, (nx, ny, D(0)), (-nx, -ny, D(0))
     best = -mp.inf
     derivatives = None
     for reverse, (owner, other, poly, opposite) in enumerate(
@@ -95,12 +102,13 @@ def residuals(config, variables, contacts, derivatives=False):
             x, y = vertices[i][contact.get("vertex", 0)]
             dx, dy = x - cx, y - cy
             vx, vy = x - poses[i][0], y - poses[i][1]
-            pad = 1 if n == 0 else 0
+            pad = DISK_RADIUS if n == 0 else 0
             if contact["kind"] == "radial":
                 distance = mp.sqrt(dx * dx + dy * dy)
                 ux, uy = (dx / distance, dy / distance) if distance else (D(0), D(0))
-                gap = size - distance - pad
-                dphi, dsize = D(0), D(1)
+                # the container radius is half the size (its diameter)
+                gap = size * CIRCLE_APOTHEM - distance - pad
+                dphi, dsize = D(0), CIRCLE_APOTHEM
             else:
                 edge = contact["edge"]
                 if edge not in walls:
@@ -131,7 +139,7 @@ class FeasibilityContacts:
         self.config = config
         self.anchor = None
         self.skin = D("0.25")
-        self.radius = 1 if config["N"] == 0 else 1 / (2 * mp.sin(mp.pi / config["N"]))
+        self.radius = DISK_RADIUS if config["N"] == 0 else 1 / (2 * mp.sin(mp.pi / config["N"]))
         self.boundary = []
         for i in range(config["P"]):
             for vertex in range(config["N"] or 1):
@@ -168,9 +176,9 @@ def initial_container(config):
     cy = sum(p[1] for p in poses) / len(poses)
     phi = D(config.get("container_phi", 0))
     vertices = [point for polygon in points(n, poses) for point in polygon]
-    pad = 1 if n == 0 else 0
+    pad = DISK_RADIUS if n == 0 else 0
     if m == 0:
-        size = max(mp.sqrt((x - cx) ** 2 + (y - cy) ** 2) + pad for x, y in vertices)
+        size = 2 * max(mp.sqrt((x - cx) ** 2 + (y - cy) ** 2) + pad for x, y in vertices)
     else:
         apothem = max(
             (x - cx) * mp.cos(phi - mp.pi / 2 + 2 * mp.pi * edge / m)
@@ -273,7 +281,7 @@ def solve(data, iterations):
     cache = FeasibilityContacts(config)
     safety = D("1e-44")
     convergence = D("1e-40")
-    conversion = 1 if config["M"] == 0 else 2 * mp.tan(mp.pi / config["M"])
+    conversion = 2 if config["M"] == 0 else 2 * mp.tan(mp.pi / config["M"])
     baseline_valid, baseline_score = float_evaluate(config)
 
     def restore(trial):

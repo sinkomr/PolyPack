@@ -122,7 +122,7 @@ async function freeSlot(request: APIRequestContext): Promise<{ M: number; P: num
 async function submitRow(request: APIRequestContext, slot: { M: number; P: number }, gap: number, name = "atlas test") {
   const pieces = Array.from({ length: slot.P }, (_, i) => ({ x: gap * i, y: 0, theta: 0 }));
   const r = await request.post("/api/submit", {
-    data: { N: 0, ...slot, container_phi: 0, name, found_with: "external", software: "e2e", pieces },
+    data: { N: 0, ...slot, units: "diameter", container_phi: 0, name, found_with: "external", software: "e2e", pieces },
   });
   const body = await r.json();
   expect(body.valid).toBe(true);
@@ -142,12 +142,12 @@ test("the atlas draws circles in a circle from published coordinates", async ({ 
     "https://jlevy.github.io/squares/",
   );
 
-  // real drawings: seven unit circles in the circle of radius 3
+  // real drawings: seven disks of diameter 1 in the circle of diameter 3
   await expect(art(page, 7)).toHaveClass(/drawn/);
   expect(await piecesDrawn(page, 7)).toBe(7);
   expect(await piecesDrawn(page, 19)).toBe(19);
-  await expect(tile(page, 7).locator("circle.container")).toHaveAttribute("r", "3");
-  await expect(tile(page, 7)).toHaveAttribute("aria-label", /^P = 7, radius 3\.000000, proven, drawn from/);
+  await expect(tile(page, 7).locator("circle.container")).toHaveAttribute("r", "1.5");
+  await expect(tile(page, 7)).toHaveAttribute("aria-label", /^P = 7, diameter 3.000000, proven, drawn from/);
   await expect(tile(page, 7).locator(".tile-score")).toHaveText("3.000000");
   // the marks follow the status of the record, whatever it is today
   for (const r of records.literature.filter((l: { P: number }) => l.P <= 30 && l.P !== 7)) {
@@ -284,17 +284,17 @@ test("the size, scale and layout choosers change the atlas and survive a reload"
   await expect(page.locator("#atlas-tiles .tile-group")).toHaveCount(1);
   await page.getByRole("radio", { name: "Rows" }).check();
   await expect(page).toHaveURL(/\?size=small&scale=global&layout=rows#0,0$/);
-  // row k holds every P whose radius is in (k - 1, k]
+  // row k holds every P whose diameter is in (k - 1, k]
   const rowOf = (P: number) => Math.max(1, Math.ceil(r.get(P)! - 1e-9));
   const first100 = Array.from({ length: 100 }, (_, i) => i + 1);
   expect(await page.locator("#atlas-tiles .tile-group:visible").count()).toBe(new Set(first100.map(rowOf)).size);
-  const third = page.locator("#atlas-tiles .tile-group", { has: page.locator(".group-label", { hasText: /^r ≤ 3$/ }) });
+  const third = page.locator("#atlas-tiles .tile-group", { has: page.locator(".group-label", { hasText: /^d ≤ 3$/ }) });
   expect(
     await third.locator("a.tile").evaluateAll((links) => links.map((a) => Number(a.getAttribute("data-p")))),
   ).toEqual(first100.filter((P) => rowOf(P) === 3));
   await page.getByRole("radio", { name: "Row", exact: true }).check();
   await expect(page).toHaveURL(/scale=row&layout=rows/);
-  // three circles against seven, the largest of their row (radius 3)
+  // three circles against seven, the largest of their row (diameter 3)
   expect((await width(3, ".tile-art svg")) / (await width(7, ".tile-art svg"))).toBeCloseTo(r.get(3)! / r.get(7)!, 2);
 
   await page.reload();
@@ -303,7 +303,7 @@ test("the size, scale and layout choosers change the atlas and survive a reload"
   await expect(page.getByRole("radio", { name: "Rows" })).toBeChecked();
   await expect(page.locator("#n-select")).toHaveValue("0");
   await expect(page.locator("#m-select")).toHaveValue("0");
-  await expect(page.locator("#atlas-tiles .group-label").nth(2)).toHaveText("r ≤ 3");
+  await expect(page.locator("#atlas-tiles .group-label").nth(2)).toHaveText("d ≤ 3");
   expect(await width(7)).toBeLessThan(medium * 0.8);
 
   // back to the grid, the row scale falls back to fixed; another problem keeps the display state
@@ -451,7 +451,7 @@ test("a new site best appears on its tile without a reload", async ({ page, requ
   await page.goto(`/browse.html#0,${slot.M}`);
   await expect(page.locator("#atlas-lede")).not.toBeEmpty();
   await expect(tile(page, P)).toHaveCount(0);
-  const first = await submitRow(request, slot, 3);
+  const first = await submitRow(request, slot, 1.5);
   // live update, or the 10 s polling fallback
   await expect(tile(page, P)).toBeVisible({ timeout: 20_000 });
   await expect(art(page, P)).toHaveClass(/drawn/);
@@ -465,7 +465,7 @@ test("a new site best appears on its tile without a reload", async ({ page, requ
   const before = await tile(page, P).locator(".tile-art svg").getAttribute("viewBox");
 
   // a better entry replaces the drawing
-  const second = await submitRow(request, slot, 2.4);
+  const second = await submitRow(request, slot, 1.2);
   expect(second.score).toBeLessThan(first.score);
   await expect(tile(page, P).locator(".tile-score")).toHaveText(second.score.toFixed(6), { timeout: 20_000 });
   await expect.poll(() => tile(page, P).locator(".tile-art svg").getAttribute("viewBox")).not.toBe(before);
@@ -680,7 +680,7 @@ test("an answer that was overtaken by a new site best does not stick", async ({ 
   // a live update: P = 5 has a new best with another drawing (a real submission elsewhere triggers the refresh)
   best = { id: 2005, gap: 2 };
   fixture.site!.splice(0, fixture.site!.length, ...site());
-  await submitRow(request, slot, 3, "atlas nudge");
+  await submitRow(request, slot, 1.5, "atlas nudge");
   await expect(tile(page, 5).locator(".tile-score")).toHaveText("2.000000", { timeout: 20_000 });
 
   // now the overtaken answer arrives; back at the tile, the drawing is the new one
@@ -817,7 +817,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
 
   // a live event for the same problem, with nothing new about this P: the panel is not rebuilt
   const seen = listings;
-  await submitRow(request, slot, 3, "atlas nudge");
+  await submitRow(request, slot, 1.5, "atlas nudge");
   await expect.poll(() => listings, { timeout: 20_000 }).toBeGreaterThan(seen);
   await page.waitForTimeout(300);
   expect(await page.evaluate(() => (document.activeElement as HTMLElement & { marked?: boolean }).marked)).toBe(true);
@@ -826,7 +826,7 @@ test("a refresh leaves an open record and its focus alone", async ({ page, reque
   // a new best for this P: the panel is rebuilt and the focus is on the same control again
   best = { id: 2005, score: 8, name: "bea" };
   fixture.site![0] = { P: 5, ...best };
-  await submitRow(request, slot, 2.5, "atlas nudge");
+  await submitRow(request, slot, 1.25, "atlas nudge");
   await expect(detail).toContainText("8.000000 by bea (by hand)", { timeout: 20_000 });
   await expect(board).toHaveAttribute("href", "/#s=2005");
   await expect(board).toBeFocused();

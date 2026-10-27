@@ -313,8 +313,8 @@ describe("boundary kernel: configurations", () => {
           expect(k.validate(k.toConfig(q)).reasons).toEqual([]);
         }
       }
-    // P = 8 balls: one per cell at s = 2; cubes: the rings and one per cell, both at s = 1 (1 + 1e-6)
-    expect(kernel("ball", 8).seeds!(rng, 1)[0].size).toBe(2);
+    // P = 8 balls (diameter 1): one per cell at s = 1; cubes: the rings and one per cell, both at s = 1 (1 + 1e-6)
+    expect(kernel("ball", 8).seeds!(rng, 1)[0].size).toBe(1);
     expect(kernel("cube", 8).seeds!(rng, 2).map((q) => q.size)).toEqual([1 + 1e-6, 1 + 1e-6]);
   });
 });

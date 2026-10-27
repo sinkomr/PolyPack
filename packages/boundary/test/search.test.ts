@@ -266,18 +266,18 @@ describe("search: behaviour", () => {
 });
 
 describe("search: quick convergence", () => {
-  it("balls: P = 4 reaches 1 + 1/sqrt 2, and P = 2 ends on the bound sqrt 2", () => {
+  it("balls (diameter 1): P = 4 reaches (1 + 1/sqrt 2) / 2, and P = 2 ends on the bound sqrt 2 / 2", () => {
     const r = searchBoundary(problem("ball", 4), { seed: 1, budget: { evals: 150_000 } });
-    expect(rel(r.score!, 1 + Math.SQRT1_2)).toBeLessThan(1e-9);
+    expect(rel(r.score!, (1 + Math.SQRT1_2) / 2)).toBeLessThan(1e-9);
     const two = searchBoundary(problem("ball", 2), { seed: 1, budget: { evals: 150_000 } });
     expect(two.ended).toBe("bound");
-    expect(rel(two.score!, Math.SQRT2)).toBeLessThan(1e-9);
+    expect(rel(two.score!, Math.SQRT1_2)).toBeLessThan(1e-9);
   });
 
-  it("balls on the generic chain metric: P = 1 ends on sqrt 2, and a valid start is kept or bettered", () => {
+  it("balls on the generic chain metric: P = 1 ends on sqrt 2 / 2, and a valid start is kept or bettered", () => {
     const one = searchBoundary(problem("ball", 1), { seed: 1, budget: { evals: 20_000 }, ballMetric: "chains" });
     expect(one.ended).toBe("bound");
-    expect(rel(one.score!, Math.SQRT2)).toBeLessThan(1e-9);
+    expect(rel(one.score!, Math.SQRT1_2)).toBeLessThan(1e-9);
     const start = fixture("balls", 4);
     const r = searchBoundary(problem("ball", 4), { seed: 1, start, budget: { evals: 400 }, ballMetric: "chains" });
     expect(r.score!).toBeLessThanOrEqual(start.s);

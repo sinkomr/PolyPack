@@ -69,7 +69,7 @@ function describeText(title: string, container: string, P: number, s: number): s
   const at = title.lastIndexOf(" in ");
   const what = title.slice(0, at).toLowerCase();
   const into = title.slice(at + 4).toLowerCase();
-  const how = container === "ball" ? "of radius" : container === "cube" ? "of edge" : "scaled by";
+  const how = container === "ball" ? "of diameter" : container === "cube" ? "of edge" : "scaled by";
   return `${P} ${what} in ${into} ${how} ${s.toFixed(6)}, drawn in 3D.`;
 }
 

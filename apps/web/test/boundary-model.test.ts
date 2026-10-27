@@ -71,7 +71,7 @@ describe("the nofold comparison", () => {
       const nofold = readFoldExtra(s.extra)!.nofold!.value;
       // nofold(P) = f(ceil(P / 8)): one piece per cell, then two
       const two = p.P > 8;
-      const f = p.fields.piece === "ball" ? (two ? 2 + 2 / Math.sqrt(3) : 2) : two ? 2 : 1;
+      const f = p.fields.piece === "ball" ? (two ? 1 + 1 / Math.sqrt(3) : 1) : two ? 2 : 1;
       expect(nofold, p.id).toBeCloseTo(f, 12);
       // the page's gain is the file's, to the decimal shown (the file's uses the search value)
       const record = records.get(p.id)!;
@@ -111,7 +111,7 @@ describe("the nofold comparison", () => {
   it("says what a nofold value rests on in plain words", () => {
     const label = readFoldExtra(listed("boundary/tesseract/ball/9").extra)!.nofold!.label;
     const plain = plainNofoldLabel(label);
-    expect(plain).toMatch(/^Two unit balls in one cell: /);
+    expect(plain).toMatch(/^Two balls of diameter 1 in one cell: /);
     expect(plain).not.toMatch(/\[(CALC|EST)\]|BOUNDARY\.md/);
     expect(plain).toMatch(/\.$/);
     expect(plainNofoldLabel("[EST] two cubes need edge 2; upper bound [CALC] side by side")).toBe(
@@ -160,7 +160,7 @@ describe("a configuration and a problem from the server", () => {
     expect(viewerPacking(p, null)).toBe("certified");
     expect(viewerPacking(p, "site")).toBe("certified");
     const facts = Object.fromEntries(problemFacts(p).map((f) => [f.label, f]));
-    expect(facts["Without folding"].value).toBe("3.154701");
+    expect(facts["Without folding"].value).toBe("1.577350");
     expect(facts["Without folding"].details).toBe(true);
     expect(facts["Folding gains"].value).toBe(gainText(1 - p.certified!.score / p.extra!.nofold!.value));
     expect(facts["Certified value"].value).toBe(listed(id).certified!.display);
@@ -175,7 +175,7 @@ describe("a configuration and a problem from the server", () => {
     expect(viewerPacking(q, "certified")).toBe("certified");
     expect(q.best_score).toBe(site.s);
     expect(Object.fromEntries(problemFacts(q).map((f) => [f.label, f.value]))["Folding gains"]).toBe(
-      gainText(1 - site.s / (2 + 2 / Math.sqrt(3))),
+      gainText(1 - site.s / (1 + 1 / Math.sqrt(3))),
     );
   });
 

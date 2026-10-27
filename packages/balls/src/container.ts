@@ -1,7 +1,7 @@
 /**
  * The container of a balls problem, as the validator, the search and the kernel read it.
  *
- *  - "ball": the ball of radius s about the origin;
+ *  - "ball": the ball of DIAMETER s about the origin (radius s / 2, catalogue.ts ballContainerRadius);
  *  - "cube": the cube [-s/2, s/2]^3 (an axis-aligned special case with its own, simpler code in every file, kept as
  *    it was before the other solids were containers);
  *  - "polyhedron": s times a canonical solid of the polyhedra space (centred at its vertex centroid, which is the

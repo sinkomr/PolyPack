@@ -167,23 +167,23 @@ describe("mc_compress review: tolerance exploitation", () => {
       P: 2,
       container_phi: 0,
       pieces: [
-        { x: -1, y: 0, theta: 0 },
-        { x: 1, y: 0, theta: 0 },
+        { x: -0.5, y: 0, theta: 0 },
+        { x: 0.5, y: 0, theta: 0 },
       ],
     };
     const state = new CompressionState(config, { M: 0, cx: 0, cy: 0, size: 3, phi: 0 });
-    expect(state.move(1, { x: 1 - TOL / 2, y: 0, theta: 0 })).toBe(false);
+    expect(state.move(1, { x: 0.5 - TOL / 2, y: 0, theta: 0 })).toBe(false);
   });
 
   // DEFECT: the containment test admits a protrusion of 5e-10 (contained compares with +TOL).
   it("rejects a single-piece move that protrudes from the container by half the tolerance", () => {
     for (const M of [0, 4]) {
       const config: PackingConfig = { N: 0, M, P: 1, container_phi: 0, pieces: [{ x: 0, y: 0, theta: 0 }] };
-      // circle of radius 1: a circular container of radius 2, or a square of side 4, leaves exactly 1 of room
-      const container: Container = { M, cx: 0, cy: 0, size: M === 0 ? 2 : 4, phi: 0 };
+      // a disk of diameter 1: a circular container of diameter 2, or a square of side 2, leaves exactly 1/2 of room
+      const container: Container = { M, cx: 0, cy: 0, size: 2, phi: 0 };
       const state = new CompressionState(config, container);
-      expect(state.move(0, { x: 1, y: 0, theta: 0 })).toBe(true);
-      expect(state.move(0, { x: 1 + TOL / 2, y: 0, theta: 0 }), `M=${M}`).toBe(false);
+      expect(state.move(0, { x: 0.5, y: 0, theta: 0 })).toBe(true);
+      expect(state.move(0, { x: 0.5 + TOL / 2, y: 0, theta: 0 }), `M=${M}`).toBe(false);
     }
   });
 
@@ -237,8 +237,8 @@ describe("mc_compress review: search behaviour", () => {
 
   it("improves a random scattered start substantially and never returns worse than the start", async () => {
     for (const [N, M, P, half, bound] of [
-      [0, 0, 7, 3, 3.3],
-      [0, 4, 10, 6.75, 7.6],
+      [0, 0, 7, 1.5, 3.3],
+      [0, 4, 10, 3.375, 3.8],
       [5, 5, 6, 2.62, 3.3],
     ]) {
       const start = scatter(N, M, P, half, 1000 + P);

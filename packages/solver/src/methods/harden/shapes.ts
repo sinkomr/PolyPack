@@ -17,7 +17,7 @@ export interface ShapeState {
 export interface SoftShape extends ShapeState {
   /** Core scale gamma (1 - tau) about the piece centre; gamma for circle pieces. */
   scale: number;
-  /** Disk radius gamma tau rho added to the core; 0 for circle pieces, whose radius is the scale. */
+  /** Disk radius gamma tau rho added to the core; 0 for circle pieces, whose diameter is the scale. */
   padding: number;
 }
 
@@ -50,7 +50,7 @@ export function pathShape(path: HardenPath, u: number, N: number, options: PathO
   return { gamma: Math.sqrt(1 - (1 - diskShare) * t * t), tau: 0 };
 }
 
-/** Core scale and disk padding of a shape state; a circle piece is a disk of radius gamma. */
+/** Core scale and disk padding of a shape state; a circle piece is a disk of diameter gamma. */
 export function softShape(N: number, state: ShapeState): SoftShape {
   if (N === 0) return { gamma: state.gamma, tau: 0, scale: state.gamma, padding: 0 };
   return {
@@ -68,7 +68,7 @@ export function shapeReach(N: number, shape: SoftShape): number {
 
 /** Area of a shape state; at gamma = 1 this is A - (A - pi rho^2) tau^2. */
 export function shapeArea(N: number, state: ShapeState): number {
-  if (N === 0) return Math.PI * state.gamma * state.gamma;
+  if (N === 0) return pieceArea(0) * state.gamma * state.gamma;
   const rho = inradius(N);
   const area = pieceArea(N);
   return state.gamma * state.gamma * (area - (area - Math.PI * rho * rho) * state.tau * state.tau);

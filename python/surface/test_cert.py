@@ -29,6 +29,27 @@ def load(*parts):
         return json.load(fh)
 
 
+def to_site(r):
+    """A radius-1 disk record (an old fixture) in site units: the edge, the centres and s_star halve
+    exactly; records of polygons and everything else are returned as they are."""
+    if isinstance(r, dict) and r.get("N") == 0 and "pieces" in r:
+        r = copy.deepcopy(r)
+        r["s"] = r["s"] / 2
+        for p in r["pieces"]:
+            p["x"] = p["x"] / 2
+            p["y"] = p["y"] / 2
+        for k in ("score_float", "score_cert"):
+            if isinstance(r.get(k), (int, float)):
+                r[k] = r[k] / 2
+        if isinstance(r.get("score_cert"), (int, float)):
+            r["display"] = display_6(r["score_cert"])
+        if isinstance(r.get("nofold_score_cert"), float):
+            r["nofold_score_cert"] = r["nofold_score_cert"] / 2
+        if isinstance(r.get("bound"), dict):
+            r["bound"] = {k: (v / 2 if k in ("value", "area", "one_piece") else v) for k, v in r["bound"].items()}
+    return r
+
+
 def rec(solid, mode, N, s, pieces, P=None):
     return {"id": "test", "solid": solid, "mode": mode, "N": N, "P": len(pieces) if P is None else P, "s": s,
             "pieces": [dict(face=f, x=x, y=y, theta=t) for f, x, y, t in pieces]}
@@ -117,8 +138,8 @@ class Solids(unittest.TestCase):
 
 class KnownPackings(unittest.TestCase):
     def test_simple_valid(self):
-        self.assertTrue(ok(rec("cube", "fold", 0, 2.0, [(f, 0.0, 0.0, 0.0) for f in range(6)])))
-        self.assertTrue(ok(rec("cube", "nofold", 0, 2.0, [(f, 0.0, 0.0, 0.0) for f in range(6)])))
+        self.assertTrue(ok(rec("cube", "fold", 0, 1.0, [(f, 0.0, 0.0, 0.0) for f in range(6)])))
+        self.assertTrue(ok(rec("cube", "nofold", 0, 1.0, [(f, 0.0, 0.0, 0.0) for f in range(6)])))
         self.assertTrue(ok(rec("cube", "fold", 4, 1.0, [(f, 0.0, 0.0, math.pi / 4) for f in range(6)])))
         self.assertTrue(ok(rec("tetrahedron", "fold", 3, 1.0, [(f, 0.0, 0.0, 0.0) for f in range(4)])))
         # dodecahedron: pentagon pieces equal to the faces (theta = pi/5 - pi)
@@ -137,18 +158,18 @@ class KnownPackings(unittest.TestCase):
         self.assertTrue(ok(dict(r, mode="fold"), "1e-12"))
 
     def test_single_disk_thresholds(self):
-        # unit disk at a face centre: needs face circumradius >= 1, i.e. s >= 2 sin(pi/M)
+        # disk of diameter 1 at a face centre: needs face circumradius >= 1/2, i.e. s >= sin(pi/M)
         for name in SOLIDS:
             S = get_solid(name)
-            s0 = 2 * math.sin(math.pi / S.M)
+            s0 = math.sin(math.pi / S.M)
             self.assertTrue(ok(rec(name, "fold", 0, s0 * (1 + 1e-8), [(0, 0.0, 0.0, 0.0)]), "1e-10"), name)
             self.assertFalse(ok(rec(name, "fold", 0, s0 * (1 - 1e-8), [(0, 0.0, 0.0, 0.0)]), "1e-12"), name)
 
     def test_score_rounding(self):
-        c = certify(rec("cube", "fold", 0, 2.0, [(f, 0.0, 0.0, 0.0) for f in range(6)]), "1e-9")
-        self.assertGreaterEqual(Fr(c["score_cert"]), Fr(2) / (1 - Fr("1e-9")))
+        c = certify(rec("cube", "fold", 0, 1.0, [(f, 0.0, 0.0, 0.0) for f in range(6)]), "1e-9")
+        self.assertGreaterEqual(Fr(c["score_cert"]), Fr(1) / (1 - Fr("1e-9")))
         # display: score_cert rounded to the nearest at 6 decimals (not up), always 6 decimals
-        self.assertEqual(c["display"], "2.000000")
+        self.assertEqual(c["display"], "1.000000")
 
     def test_display_rule(self):
         from cert import display_6
@@ -173,35 +194,35 @@ class Adversarial(unittest.TestCase):
 
     def test_outside_face_by_1e9(self):
         p = [(0, 1e-9, 0.0, 0.0)]
-        self.assertFalse(ok(rec("cube", "nofold", 0, 2.0, p), "1e-12"))
-        self.assertTrue(ok(rec("cube", "nofold", 0, 2.0, p), "1e-8"))
+        self.assertFalse(ok(rec("cube", "nofold", 0, 1.0, p), "1e-12"))
+        self.assertTrue(ok(rec("cube", "nofold", 0, 1.0, p), "1e-8"))
 
     def test_disks_overlap_by_1e9(self):
-        # two disks on one face of a large cube, centre distance 2 - 1e-9
-        p = [(0, -1.0 + 5e-10, 0.0, 0.0), (0, 1.0 - 5e-10, 0.0, 0.0)]
-        self.assertFalse(ok(rec("cube", "fold", 0, 5.0, p), "1e-12"))
-        self.assertFalse(ok(rec("cube", "nofold", 0, 5.0, p), "1e-12"))
-        self.assertTrue(ok(rec("cube", "fold", 0, 5.0, p), "1e-8"))
+        # two disks of diameter 1 on one face of a large cube, centre distance 1 - 1e-9
+        p = [(0, -0.5 + 5e-10, 0.0, 0.0), (0, 0.5 - 5e-10, 0.0, 0.0)]
+        self.assertFalse(ok(rec("cube", "fold", 0, 2.5, p), "1e-12"))
+        self.assertFalse(ok(rec("cube", "nofold", 0, 2.5, p), "1e-12"))
+        self.assertTrue(ok(rec("cube", "fold", 0, 2.5, p), "1e-8"))
 
     def test_cone_point_inside_by_1e9(self):
-        # disk at distance 1 - 1e-9 from the corner (2.5, 2.5) of a cube face of side 5
-        d = (1 - 1e-9) / math.sqrt(2)
-        p = [(0, 2.5 - d, 2.5 - d, 0.0)]
-        self.assertFalse(ok(rec("cube", "fold", 0, 5.0, p), "1e-12"))
+        # disk of diameter 1 at distance 1/2 - 1e-9 from the corner (1.25, 1.25) of a cube face of side 2.5
+        d = (0.5 - 1e-9) / math.sqrt(2)
+        p = [(0, 1.25 - d, 1.25 - d, 0.0)]
+        self.assertFalse(ok(rec("cube", "fold", 0, 2.5, p), "1e-12"))
         # a square whose corner pokes 1e-9 over the same vertex
         h = 0.5 - 1e-9
         self.assertFalse(ok(rec("cube", "fold", 4, 5.0, [(0, 2.5 - h, 2.5 - h, math.pi / 4)]), "1e-12"))
         self.assertTrue(ok(rec("cube", "fold", 4, 5.0, [(0, 2.5 - h, 2.5 - h, math.pi / 4)]), "1e-8"))
 
     def test_disks_overlapping_across_an_edge(self):
-        # adjacent faces of the cube with s = 2: centres 2 apart through the edge; move one 1e-9 closer
+        # adjacent faces of the cube with s = 1: centres 1 apart (one diameter) through the edge; move one 1e-9 closer
         S = get_solid("cube")
         g, l = S.adj[0][0]
         a = math.pi * (l + 1) / 2 - math.pi / 2  # outward normal of edge l in face g
         good = [(0, 0.0, 0.0, 0.0), (g, 0.0, 0.0, 0.0)]
-        self.assertTrue(ok(rec("cube", "fold", 0, 2.0, good), "1e-9"))
+        self.assertTrue(ok(rec("cube", "fold", 0, 1.0, good), "1e-9"))
         bad = [(0, 2e-9, 0.0, 0.0), (g, 2e-9 * math.cos(a), 2e-9 * math.sin(a), 0.0)]
-        self.assertFalse(ok(rec("cube", "fold", 0, 2.0, bad), "1e-12"))
+        self.assertFalse(ok(rec("cube", "fold", 0, 1.0, bad), "1e-12"))
 
     def test_malformed(self):
         good = rec("cube", "fold", 0, 2.0, [(0, 0.0, 0.0, 0.0)])
@@ -245,7 +266,8 @@ class CrossCheck(unittest.TestCase):
         data = load(HERE, "fixtures", "crosscheck.json")["cases"]
         self.assertGreater(len(data), 200)
         for c in data:
-            self.assertEqual(ok(c, "1e-9"), c["ts_valid"], c["id"])
+            # the fixture was made with radius-1 disks; the converted copy (exact halving) has the same verdict
+            self.assertEqual(ok(to_site(c), "1e-9"), c["ts_valid"], c["id"])
 
 
 class RecordsMode(unittest.TestCase):
@@ -325,13 +347,14 @@ class ReviewFixtures(unittest.TestCase):
         n = 0
         for kind, cases in data.items():
             for c in cases:
-                self.assertTrue(ok(c["accept_at"], c["eps"]), (kind, c["s_star"]))
-                self.assertFalse(ok(c["reject_at"], c["eps"]), (kind, c["s_star"]))
+                self.assertTrue(ok(to_site(c["accept_at"]), c["eps"]), (kind, c["s_star"]))
+                self.assertFalse(ok(to_site(c["reject_at"]), c["eps"]), (kind, c["s_star"]))
                 n += 1
         self.assertEqual(n, 14)
 
     def test_reviewer_constructions(self):
         for r in load(HERE, "fixtures", "review", "constructions_records.json")["records"]:
+            r = to_site(r)
             c = certify(r, r["eps"])
             self.assertEqual(c["score_cert"], r["score_cert"], r["id"])
             # the fixture's display strings follow the old round-up rule (e.g. "0.500001"); the
@@ -347,6 +370,9 @@ class RecordsFile(unittest.TestCase):
         if not os.path.exists(path):
             self.skipTest("no records file yet")
         self.doc = load(path)
+        if self.doc.get("units") != "diameter":
+            # the data still has radius-1 disks: test converted copies (exact halving)
+            self.doc = dict(self.doc, records=[to_site(r) for r in self.doc["records"]])
 
     def test_fields_and_ordering(self):
         recs = {(r["solid"], r["mode"], r["N"], r["P"]): r for r in self.doc["records"]}

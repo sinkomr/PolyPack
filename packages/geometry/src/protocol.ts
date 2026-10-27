@@ -5,12 +5,12 @@ import { Container, Pose } from "./shapes";
 
 export type RecordStatus = "proven" | "proven_unrefereed" | "best_known" | "trivial_tiling";
 
-/** One published value, already converted to the site conventions (piece side or radius 1). */
+/** One published value, already converted to the site conventions (polygon side 1, disk diameter 1). */
 export interface LiteratureRecord {
   N: number;
   M: number;
   P: number;
-  /** Container side (polygon) or radius (circle) in site conventions. */
+  /** Container side (polygon) or diameter (circle) in site conventions. */
   value: number;
   /** The value as it can be quoted from the source after conversion, e.g. "2.44719+". */
   display: string;
@@ -79,7 +79,7 @@ export interface ProblemInfo {
   N: number;
   M: number;
   P: number;
-  conventions: Record<string, string>;
+  conventions: Record<string, string | number>;
   area_bound: number;
   literature: LiteratureRecord | null;
   /** The leader of the problem; null when there is none or the problem is closed. */
@@ -264,9 +264,18 @@ export function isProven(status: RecordStatus): boolean {
   return status !== "best_known";
 }
 
-/** True when a score is below the published value by more than the source's display precision. */
+/**
+ * The uncertainty of a published value, 10^-display_precision in the source's own unit, in the unit of the value. A
+ * polygon-in-circle value is the container diameter, twice the radius the source printed, so its tolerance is doubled
+ * (the same rule as sourceTolerance in scripts/units.ts).
+ */
+export function literatureTolerance(rec: Pick<LiteratureRecord, "N" | "M" | "display_precision">): number {
+  return Math.pow(10, -rec.display_precision) * (rec.N > 0 && rec.M === 0 ? 2 : 1);
+}
+
+/** True when a score is below the published value by more than the source's display precision (see literatureTolerance). */
 export function beatsLiterature(score: number, rec: LiteratureRecord): boolean {
-  return score < rec.value - Math.pow(10, -rec.display_precision);
+  return score < rec.value - literatureTolerance(rec);
 }
 
 /**
@@ -275,5 +284,5 @@ export function beatsLiterature(score: number, rec: LiteratureRecord): boolean {
  * reaches 3.
  */
 export function reachesLiterature(score: number, rec: LiteratureRecord): boolean {
-  return score <= rec.value + Math.max(Math.pow(10, -rec.display_precision), 1e-9);
+  return score <= rec.value + Math.max(literatureTolerance(rec), 1e-9);
 }

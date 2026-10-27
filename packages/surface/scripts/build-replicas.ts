@@ -2,7 +2,7 @@
  * One-piece replica constructions (fold track).
  *
  * For each solid and shape, take the best one-piece placement: the closed form where the one-piece
- * lower bound s = 2 sin(pi/M) r_in(N) is attained (disks, and polygons with N a multiple of M,
+ * lower bound s = 2 sin(pi/M) r_in(N) is attained (disks, r_in = 1/2, and polygons with N a multiple of M,
  * centred on a face with the face's corners at the midpoints of its sides), and the best P = 1
  * search result. A rotation or reflection of the solid maps a placement on one face to any face
  * (the symmetry group acts transitively on flags), so the variants are
@@ -18,7 +18,7 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { inradius } from "@polypack/geometry";
-import { SOLID_NAMES, SolidName, SurfacePose, getSolid, insideFaceDepth, validateFold } from "../src/index";
+import { SOLID_NAMES, SURFACE_DISK_RADIUS, SolidName, SurfacePose, getSolid, insideFaceDepth, validateFold } from "../src/index";
 
 const [outPath, ...searchFiles] = process.argv.slice(2);
 if (!outPath) throw new Error("usage: build-replicas.ts <out.json> <search.jsonl> ...");
@@ -111,11 +111,11 @@ for (const solidName of SOLID_NAMES) {
   for (const N of NS) {
     const bases: Base[] = [];
     if (N === 0 || N % S.M === 0) {
-      const r = N === 0 ? 1 : inradius(N);
+      const r = N === 0 ? SURFACE_DISK_RADIUS : inradius(N); // a disk of diameter 1
       const sExact = 2 * Math.sin(Math.PI / S.M) * r;
       // edge 0's outward normal of the piece points at the face's frame vertex 0
       const theta = N === 0 ? 0 : -Math.PI + Math.PI / S.M - Math.PI / N;
-      const closed = N === 0 ? `2 sin(pi/${S.M})` : `2 sin(pi/${S.M}) * r_in(${N})`;
+      const closed = N === 0 ? `sin(pi/${S.M})` : `2 sin(pi/${S.M}) * r_in(${N})`;
       bases.push({ s: up(up(sExact)), pose: { face: 0, x: 0, y: 0, theta }, label: "closed-form one-piece placement", closed });
     }
     const p1 = bestP1.get(`${solidName}/${N}`);

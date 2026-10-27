@@ -363,7 +363,7 @@ describe("Tighter's methods table", () => {
 
   it("say at a run's end how much smaller it made the side, only when that counts", () => {
     expect(smallerText("side", 10, 9.9506)).toBe("It made the side 0.494 % smaller.");
-    expect(smallerText("radius", 2, 1.5)).toBe("It made the radius 25.000 % smaller.");
+    expect(smallerText("diameter", 2, 1.5)).toBe("It made the diameter 25.000 % smaller.");
     // nothing when the run did not beat its start by more than 10⁻⁹
     expect(smallerText("side", 10, 10)).toBe("");
     expect(smallerText("side", 10, 10 * (1 - 5e-10))).toBe("");

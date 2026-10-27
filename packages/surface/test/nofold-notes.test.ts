@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { areaLowerBound, type LiteratureRecord } from "@polypack/geometry";
+import * as geometry from "@polypack/geometry";
+import { type LiteratureRecord } from "@polypack/geometry";
+import { faceAreaLowerBound as areaLowerBound } from "../src/disk";
 import { planarValues } from "../scripts/planar-values";
 import {
   PLANAR_VALUES,
@@ -19,7 +21,9 @@ const json = (path: string) => JSON.parse(readFileSync(new URL(path, import.meta
 
 describe("surface notes use the current 2D records", () => {
   it("keeps the browser index equal to the records, without copying coordinates", () => {
-    const records = json("../../../data/records.json").records as LiteratureRecord[];
+    const file = json("../../../data/records.json");
+    const records = file.records as LiteratureRecord[];
+    // The index and the records are both in site units (disks of diameter 1).
     const current = planarValues(records);
     expect(PLANAR_VALUES).toHaveLength(current.length);
     PLANAR_VALUES.forEach(({ value, ...metadata }, i) => {

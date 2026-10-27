@@ -3,7 +3,9 @@ import {
   LiteratureRecord,
   Pose,
   RecordStatus,
+  DISK_RADIUS,
   beatsLiterature,
+  literatureTolerance,
   containerVertices,
   enclose,
   pieceVertices,
@@ -43,8 +45,8 @@ export function pendingEntry(row: Entries): LeaderboardEntry | undefined {
 }
 
 /** Slack within which a site score counts as matching a published value: what the source prints, never finer than 1e-9. */
-export function matchTolerance(lit: Pick<LiteratureRecord, "display_precision">): number {
-  return Math.max(Math.pow(10, -lit.display_precision), 1e-9);
+export function matchTolerance(lit: Pick<LiteratureRecord, "N" | "M" | "display_precision">): number {
+  return Math.max(literatureTolerance(lit), 1e-9);
 }
 
 export type Drawable =
@@ -143,7 +145,7 @@ export function tileLabel(row: AtlasRow, M: number): string {
   if (!st) return `P = ${row.P}`;
   const pending = pendingEntry(row);
   const parts = [`P = ${row.P}`];
-  parts.push(st.best === null ? "no verified value" : `${M === 0 ? "radius" : "side"} ${st.best.toFixed(6)}`);
+  parts.push(st.best === null ? "no verified value" : `${M === 0 ? "diameter" : "side"} ${st.best.toFixed(6)}`);
   if (st.published) parts.push(STATUS_TEXT[st.published]);
   if (st.site !== "none" && st.site !== "behind") parts.push(SITE_TEXT[st.site]);
   if (pending) parts.push(`an entry at ${pending.score.toFixed(6)} is pending verification`);
@@ -274,13 +276,13 @@ export function tiltGroups(N: number, M: number, pieces: readonly Pose[], phi: n
 export interface Outline {
   /** viewBox x, y, width, height, in piece units with y pointing down. */
   box: [number, number, number, number];
-  /** Radius of a circle container, or the corner points of a polygon container. */
+  /** Radius of the circle drawn for a circle container (half its size), or the corner points of a polygon container. */
   circle?: number;
   points?: string;
 }
 
 export interface Drawing extends Outline {
-  /** Container side or radius computed from the coordinates. */
+  /** Container side or diameter computed from the coordinates. */
   size: number;
   /** One path per tilt class present, all its pieces as sub-paths. */
   paths: { cls: TiltClass; count: number; d: string }[];
@@ -296,7 +298,8 @@ const f = (v: number) => String(+v.toFixed(4));
  * differ only by scale.
  */
 export function containerOutline(M: number, size: number): Outline {
-  if (M === 0) return { box: [-size, -size, 2 * size, 2 * size], circle: size };
+  // a circle container's size is its diameter
+  if (M === 0) return { box: [-size / 2, -size / 2, size, size], circle: size / 2 };
   const v = containerVertices({ M, cx: 0, cy: 0, phi: 0, size });
   let x0 = Infinity,
     x1 = -Infinity,
@@ -329,6 +332,7 @@ export function drawPacking(N: number, M: number, pieces: readonly Pose[], phi: 
   const parts: string[][] = [[], [], []];
   const counts = [0, 0, 0];
   const verts = new Float64Array(2 * Math.max(N, 1));
+  const R = DISK_RADIUS;
   for (const p of pieces) {
     const dx = p.x - c.cx,
       dy = p.y - c.cy;
@@ -337,7 +341,7 @@ export function drawPacking(N: number, M: number, pieces: readonly Pose[], phi: 
     const y = -dx * sin + dy * cos;
     if (N === 0) {
       counts[0]++;
-      parts[0].push(`M${f(x - 1)} ${f(-y)}a1 1 0 1 0 2 0a1 1 0 1 0 -2 0`);
+      parts[0].push(`M${f(x - DISK_RADIUS)} ${f(-y)}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0`);
       continue;
     }
     const cls = tiltClass(N, M, tiltOf(N, M, p.theta, turn));

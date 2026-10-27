@@ -49,17 +49,19 @@ import {
   spaceTargetWeight,
 } from "../src/spaces";
 import { SqliteStore } from "../src/sqlite-store";
+import { withUnits } from "./units";
 
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
 
-const L2 = 2 * Math.SQRT2;
-/** Two disks on the square torus: touching at k = 1, scaled up (valid, worse) for k > 1. */
+// two disks of diameter 1 on the square torus touch at the side sqrt 2
+const L2 = Math.SQRT2;
+/** Two disks of diameter 1 on the square torus: touching at k = 1, scaled up (valid, worse) for k > 1. */
 const twoDisks = (k = 1) => ({
   lattice: { L: L2 * k },
   poses: [
     [0, 0, 0],
-    [Math.SQRT2 * k, Math.SQRT2 * k, 0],
+    [(Math.SQRT2 / 2) * k, (Math.SQRT2 / 2) * k, 0],
   ],
 });
 
@@ -121,12 +123,24 @@ const sphereEntry = (k = 1, extra: object = {}) => ({
  */
 function openedIndex(change: object = {}): SpacesIndex {
   const file = JSON.parse(readFileSync(join(root, "data/torus/records.json"), "utf8"));
-  for (const r of file.records) if (r.problem === "torus/sq/0/2") Object.assign(r, { status: "best_known" }, change);
+  for (const r of file.records) if (r.problem === "torus/sq/0/2")
+      // the bound is the optimum in the diameter units (two disks of diameter 1 on the square torus: sqrt 2)
+      // (the record's certified size is the optimum plus 2.8e-12, halved exactly as the data was)
+      Object.assign(
+        r,
+        {
+          status: "best_known",
+          bound: { value: L2, label: "a test bound" },
+          score_float: 2.82842712474619 / 2,
+          score_cert: 2.8284271247490187 / 2,
+        },
+        change,
+      );
   return { ...index, torus: buildSpaceCatalogue("torus", file) };
 }
 /**
  * The real catalogues, but with torus/sq/0/2 open and its research record made much worse (size 3,
- * against the optimum 2 sqrt 2), so that site entries can beat it: an entry is kept only when it does.
+ * against the optimum sqrt 2), so that site entries can beat it: an entry is kept only when it does.
  */
 const testIndex = openedIndex({ score_cert: 3, display: "3.000000", configuration: twoDisks(3 / L2) });
 
@@ -183,7 +197,7 @@ async function submit(body: unknown): Promise<{ status: number; body: SpaceSubmi
   const r = await app.request("/api/spaces/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    body: typeof body === "string" ? body : JSON.stringify(withUnits(body)),
   });
   return { status: r.status, body: (await r.json()) as SpaceSubmitResponse };
 }
@@ -256,9 +270,10 @@ describe("GET /api/spaces/:space/records", () => {
     expect(status).toBe(200);
     const r = body as SpaceRecordsResponse;
     expect(r.space).toBe("curved");
-    expect(r.problems.length).toBe(334);
+    // 334 before the unit change: its 52 radius-1 disk records are archived, not served
+    expect(r.problems.length).toBe(282);
     expect(JSON.stringify(r)).not.toMatch(/_config|"pieces"|"poses"/);
-    const infeasible = r.problems.find((p) => p.id === "curved/1/0/0/2")!;
+    const infeasible = r.problems.find((p) => p.id === "curved/1/5/0/2")!;
     expect(infeasible).toMatchObject({
       status: "infeasible",
       certified: null,
@@ -266,7 +281,9 @@ describe("GET /api/spaces/:space/records", () => {
       best_score: null,
     });
     expect(infeasible.closed_reason).toMatch(/^no packing exists/);
-    const open = r.problems.find((p) => p.id === "curved/-1/0/0/2")!;
+    // curved disks (N = 0) at K = +-1 have no record since the unit change: new open problems, in the domain
+    expect(r.problems.some((p) => p.id === "curved/1/0/0/2" || p.id === "curved/-1/0/0/2")).toBe(false);
+    const open = r.problems.find((p) => p.id === "curved/-1/3/4/7")!;
     expect(open).toMatchObject({
       status: "best_known",
       accepts_submissions: true,
@@ -274,7 +291,7 @@ describe("GET /api/spaces/:space/records", () => {
       site_best: null,
     });
     expect(open.best_score).toBe(open.certified!.score);
-    expect(open.fields).toEqual({ K: -1, N: 0, M: 0, P: 2 });
+    expect(open.fields).toEqual({ K: -1, N: 3, M: 4, P: 7 });
   });
 
   it("answers 404 for an unknown space and compresses for clients that accept it", async () => {
@@ -439,16 +456,16 @@ describe("POST /api/spaces/submit", () => {
               [1.5, 1.5, 0],
             ],
           },
-          bound: { value: 2.5, label: "a test bound" },
+          bound: { value: 1.25, label: "a test bound" },
         },
       ],
     };
     makeApp({}, { torus: buildSpaceCatalogue("torus", file) });
     const poses = [
       [0, 0, 0],
-      [Math.SQRT2, Math.SQRT2, 0],
+      [Math.SQRT2 / 2, Math.SQRT2 / 2, 0],
     ];
-    // the square lattice of side 2 sqrt 2, written as b2 + 100 b1 and left-handed
+    // the square lattice of side sqrt 2, written as b2 + 100 b1 and left-handed
     const sent = { lattice: { b1: [L2, 0], b2: [-100 * L2, -L2] }, poses };
     const r = await submit({ space: "torus", id: "torus/free/0/2", config: sent, name: "ann" });
     expect(r.status).toBe(200);
@@ -463,7 +480,7 @@ describe("POST /api/spaces/submit", () => {
     expect(e.score).toBe(r.body.score);
     const p = (await get("/api/spaces/torus/problems/torus/free/0/2")).body as SpaceProblemResponse;
     expect(p.site_config).toEqual(e.config);
-    const v = validateSpaceSubmission("torus", "torus/free/0/2", e.config, { bound: 2.5, certified: 3 });
+    const v = validateSpaceSubmission("torus", "torus/free/0/2", e.config, { bound: 1.25, certified: 3 });
     expect(v.valid).toBe(true);
     expect(Math.abs(v.score! - r.body.score!)).toBeLessThanOrEqual(1e-12 * L2);
   });
@@ -478,8 +495,8 @@ describe("POST /api/spaces/submit", () => {
   it("refuses closed problems with 409 before looking at the packing, and stores nothing", async () => {
     const proven = await submit({ space: "sphere", id: "sphere/0/2", config: { rho: 1, pieces: [] }, name: "x" });
     expect(proven.status).toBe(409);
-    expect(proven.body.reasons[0]).toMatch(/^this problem is closed: its optimum 0\.636620 is proven \(R\. A\. Rankin/);
-    const infeasible = await submit({ space: "curved", id: "curved/1/0/0/2", config: "anything", name: "x" });
+    expect(proven.body.reasons[0]).toMatch(/^this problem is closed: its optimum 0\.318310 is proven \(R\. A\. Rankin/);
+    const infeasible = await submit({ space: "curved", id: "curved/1/5/0/2", config: "anything", name: "x" });
     expect(infeasible.status).toBe(409);
     expect(infeasible.body.reasons[0]).toMatch(/no packing exists/);
     expect(await store.spaceLeaders()).toEqual([]);
@@ -492,7 +509,7 @@ describe("POST /api/spaces/submit", () => {
         lattice: { L: L2 },
         poses: [
           [0, 0, 0],
-          [1.4, 1.4, 0],
+          [0.7, 0.7, 0],
         ],
       },
     });
@@ -505,7 +522,7 @@ describe("POST /api/spaces/submit", () => {
     const small = await submit({
       space: "torus",
       id: "torus/sq/0/1",
-      config: { lattice: { L: 1.9 }, poses: [[0, 0, 0]] },
+      config: { lattice: { L: 0.9 }, poses: [[0, 0, 0]] },
       name: "a",
     });
     expect(small.status).toBe(422);
@@ -686,7 +703,7 @@ describe("POST /api/spaces/submit", () => {
 
   it("checks a torus entry that beats the best in full, and refuses an invalid one", async () => {
     makeApp({}, testIndex);
-    // beats the research record (3) but overlaps: two disks a distance sqrt 2 apart on the torus of size 2 sqrt 2
+    // beats the research record (3) but overlaps: two disks of diameter 1 less than 1 apart on the torus of side sqrt 2
     const overlapping = { lattice: { L: L2 }, poses: [[0, 0, 0], [1, 1, 0]] };
     const bad = await submit(torusEntry(1, { config: overlapping }));
     expect(bad.status).toBe(422);
@@ -806,7 +823,7 @@ describe("POST /api/spaces/submit", () => {
       expect(sent, path).toBeLessThanOrEqual(MAX_BODY_BYTES + 4 * chunk.length);
     }
     // a chunked body within the limit is read as usual
-    const text = new TextEncoder().encode(JSON.stringify(torusEntry()));
+    const text = new TextEncoder().encode(JSON.stringify(withUnits(torusEntry())));
     const parts = [text.slice(0, 40), text.slice(40)];
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
@@ -956,7 +973,7 @@ describe("POST /api/spaces/submit: torus (2D on 3D) up to 500 pieces", () => {
     makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
     const p = (await get(`/api/spaces/torus/problems/${id}`)).body as SpaceProblemResponse;
     expect(p).toMatchObject({ status: "no_record", certified: null, certified_config: null, best_score: null });
-    const body = `{"space":"torus","id":"${id}","name":"ann","config":${fullPrecision(configOf(family, N, 500))}}`;
+    const body = `{"space":"torus","id":"${id}","name":"ann","units":"diameter","config":${fullPrecision(configOf(family, N, 500))}}`;
     expect(Buffer.byteLength(body)).toBeGreaterThan(30000);
     expect(Buffer.byteLength(body)).toBeLessThan(MAX_BODY_BYTES);
     const r = await app.request("/api/spaces/submit", { method: "POST", headers: { "content-type": "application/json" }, body });
@@ -974,7 +991,7 @@ describe("POST /api/spaces/submit: torus (2D on 3D) up to 500 pieces", () => {
     const { b1, b2 } = base.lattice as { b1: number[]; b2: number[] };
     // the unreduced basis (b1, b2 + m b1) with the most candidates per pair that the server allows
     const translates = (m: number) =>
-      maxImageCandidates({ b1: [b1[0], b1[1]], b2: [b2[0] + m * b1[0], b2[1] + m * b1[1]] }, 2 + 2e-7);
+      maxImageCandidates({ b1: [b1[0], b1[1]], b2: [b2[0] + m * b1[0], b2[1] + m * b1[1]] }, 1 + 2e-7);
     let lo = 0;
     let hi = 1e5;
     while (hi - lo > 1) {
@@ -1358,7 +1375,7 @@ describe("range-domain submissions", () => {
   it("serves new problems without records and keeps a first valid entry with its lower bound", async () => {
     makeApp({}, index);
     const cases = [
-      { space: "curved", id: "curved/-1e-06/100/0/1", config: { size: 20, pieces: [{ x: 0, y: 0, theta: 0 }] } },
+      { space: "curved", id: "curved/-1e-06/100/0/1", config: { size: 40, pieces: [{ x: 0, y: 0, theta: 0 }] } },
       { space: "sphere", id: "sphere/100/1", config: { rho: 100, pieces: [{ q: [1, 0, 0, 0] }] } },
       { space: "torus", id: "torus/hex/100/1", config: { lattice: { L: 100 }, poses: [[0, 0, 0]] } },
     ];
@@ -1426,7 +1443,7 @@ describe("range-domain submissions", () => {
         const r = await app.request("/api/spaces/submit", {
           method: "POST",
           headers: { "content-type": "application/json", "x-test-ip": `7.7.7.${i}` },
-          body: JSON.stringify({ ...c, name: "overlap" }),
+          body: JSON.stringify({ ...c, name: "overlap", units: "diameter" }),
         });
         return r.status;
       }),
@@ -1484,7 +1501,7 @@ describe("GET /api/spaces/targets", () => {
       expect(r.targets[i].priority).toBeLessThanOrEqual(r.targets[i - 1].priority);
     // closed problems, problems at their bound, P = 1 and the surface's nofold problems that are 2D in 2D never
     const ids = new Set(r.targets.map((t) => t.id));
-    for (const id of ["sphere/0/2", "curved/1/0/0/2", "torus/sq/0/2", "torus/free/3/1", "surface/cube/nofold/4/12"])
+    for (const id of ["sphere/0/2", "curved/1/5/0/2", "torus/sq/0/2", "torus/free/3/1", "surface/cube/nofold/4/12"])
       expect(ids.has(id), id).toBe(false);
     expect(r.targets.some((t) => t.P === 1)).toBe(false);
     const nofold = r.targets.filter((t) => t.id.includes("/nofold/"));

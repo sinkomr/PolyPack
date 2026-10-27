@@ -8,7 +8,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { type KernelState, mulberry32, relax, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
-import { curvedKernel, makeSpace, validate, type CurvedConfig } from "../src/index";
+import { DISK_RADIUS, curvedKernel, makeSpace, validate, type CurvedConfig } from "../src/index";
 import { FINISH_CAP, FINISH_ITER, VALIDATE_WORK, curvedFinish } from "../src/kernel-finish";
 
 interface CurvedRecord {
@@ -119,9 +119,9 @@ describe("the curved kernel", () => {
   });
 
   it("validates research records by the server's rule, and finishes them at no more than their size", () => {
+    // (polygon pieces only: the records of disks of radius 1 are archived, data/curved/archive/README.md; disks of
+    // diameter 1 have no records yet)
     const ids = [
-      "curved/-1/0/0/7",
-      "curved/-1/0/0/10",
       "curved/-1/3/4/5",
       "curved/-1/4/0/5",
       "curved/1/3/3/5",
@@ -180,11 +180,12 @@ describe("the curved kernel", () => {
   });
 
   it("runs on infeasible problems without throwing, and finish gives null", () => {
-    // two disks at K = 1 need r = 2 > pi/2; no unit disk fits in a hyperbolic triangle; two unit
-    // pentagons do not fit in any disk at K = 1 (docs/spaces/CURVED.md, the catalogue)
-    for (const id of ["1/0/0/2", "-1/0/3/1", "1/5/0/2"]) {
+    // twelve disks of diameter 1 at K = 1 have more area than the open hemisphere (12 * 0.77 > 2 pi); no unit square
+    // fits in a hyperbolic triangle of the family's range; two unit pentagons do not fit in any disk at K = 1
+    // (docs/spaces/CURVED.md, the catalogue)
+    for (const id of ["1/0/0/12", "-1/5/3/1", "1/5/0/2"]) {
       const k = curvedKernel(problem(id));
-      expect(RECORDS.find((r) => r.id === `curved/${id}`)?.status).toBe("infeasible");
+      expect(RECORDS.find((r) => r.id === `curved/${id}`)?.status ?? "infeasible").toBe("infeasible");
       const s = k.randomStart(mulberry32(1));
       expect(Number.isFinite(k.energy(s))).toBe(true);
       squeeze(k, s, { mus: [10, 100] });
@@ -286,14 +287,21 @@ describe("the curved kernel", () => {
   });
 
   it("seeds rings that finish to the tilings at K*, the hyperbolic disk rings and six squares in a hexagon", () => {
-    for (const id of [
-      "curved/-3.4413111779836725/3/9/9",
-      "curved/-4.50521902808615/3/10/10",
-      "curved/-1/0/0/7",
-      "curved/-1/0/0/10",
-      "curved/-1/4/6/6",
-    ]) {
-      const r = RECORDS.find((q) => q.id === id)!;
+    // [id, the size to reach]: a record's, or for disks of diameter 1 (no records yet) the analytic ring's
+    const ring = (K: number, P: number) => {
+      const r = DISK_RADIUS;
+      return 2 * (r + Math.asinh(Math.sinh(Math.sqrt(-K) * r) / Math.sin(Math.PI / P)) / Math.sqrt(-K)); // (diameter)
+    };
+    const targets: [string, number, string][] = [
+      ...["curved/-3.4413111779836725/3/9/9", "curved/-4.50521902808615/3/10/10", "curved/-1/4/6/6"].map((id): [string, number, string] => {
+        const r = RECORDS.find((q) => q.id === id)!;
+        return [id, r.score_cert, id];
+      }),
+      ["-1/0/0/5", ring(-1, 5), "5 disks in a ring"],
+      ["-1/0/0/10", ring(-1, 10), "10 disks in a ring"],
+    ];
+    for (const [id, want] of targets) {
+      const r = id.startsWith("curved/") ? RECORDS.find((q) => q.id === id)! : { ...problem(id) };
       const k = curvedKernel({ K: r.K, N: r.N, M: r.M, P: r.P });
       const seeds = k.seeds!(mulberry32(1), 12);
       expect(seeds.length, id).toBeGreaterThan(0);
@@ -305,7 +313,7 @@ describe("the curved kernel", () => {
           best = Math.min(best, f.score);
         }
       }
-      expect(best, id).toBeLessThanOrEqual(r.score_cert * (1 + 1e-9));
+      expect(best, id).toBeLessThanOrEqual(want * (1 + 1e-9));
     }
   });
 

@@ -466,7 +466,7 @@
           out.push(mapPt(K, [(1 - u) * a[0] + u * b[0], (1 - u) * a[1] + u * b[1], (1 - u) * a[2] + u * b[2]], model));
         }
       }
-      const pieceR = (N, K) => (N === 0 ? 1 : asn(K, sn(K, 0.5) / Math.sin(Math.PI / N)));
+      const pieceR = (N, K) => (N === 0 ? 0.5 : asn(K, sn(K, 0.5) / Math.sin(Math.PI / N)));
       function containerVerts(M, K, s) {
         const Rc = asn(K, sn(K, s / 2) / Math.sin(Math.PI / M));
         const out = [];
@@ -995,8 +995,8 @@
           const rat = cur.sm.rat.includes(i);
           const pts = [];
           if (P.N === 0) {
-            const s1 = sn(K, 1),
-              c1 = cs(K, 1);
+            const s1 = sn(K, 0.5),
+              c1 = cs(K, 0.5);
             for (let a = 0; a <= 72; a++) pts.push(mapPt(K, act(K, p, [c1, s1 * Math.cos((2 * Math.PI * a) / 72), s1 * Math.sin((2 * Math.PI * a) / 72)]), model));
           } else {
             const vs = [];

@@ -1,8 +1,8 @@
 # Monte Carlo compression (`mc_compress`)
 
 [CALC] Hard particles settle inside an explicit container with centre `(cx, cy)`,
-size and orientation `phi`. Polygon pieces have side one; circles have radius
-one. The score is container side length for polygons and radius for circles.
+size and orientation `phi`. Polygon pieces have side one; circles have diameter
+one (radius 1/2; before 2026-10-27, radius one). The score is container side length for polygons and diameter for circles.
 The implementation is registered in `packages/solver/src/index.ts`; its schema
 and defaults are exported as `mcCompressMethod` in
 `packages/solver/src/methods/mc_compress.ts`.

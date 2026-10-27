@@ -56,7 +56,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Flat",
         short: "Flat",
         summary:
-          "Unit polygons or disks in the smallest regular polygon or disk in the flat plane: the board's classic problems.",
+          "Polygons of side 1 or disks of diameter 1 in the smallest regular polygon or disk in the flat plane: the board's classic problems.",
         available: true,
       },
       {
@@ -117,7 +117,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Balls",
         short: "Balls",
         summary:
-          "Unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball, up to 100 pieces.",
+          "Balls of diameter 1 in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball, up to 100 pieces.",
         available: true,
       },
     ],
@@ -133,7 +133,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Polytope boundaries",
         short: "Boundaries",
         summary:
-          "Unit balls or cubes on the boundary of a 4D polytope, starting with the tesseract, the 4D cube: its boundary is eight cubes glued face to face.",
+          "Balls of diameter 1 or unit cubes on the boundary of a 4D polytope, starting with the tesseract, the 4D cube: its boundary is eight cubes glued face to face.",
         available: true,
       },
     ],

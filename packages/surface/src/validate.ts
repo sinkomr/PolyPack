@@ -1,4 +1,5 @@
-import { TOL, boundingRadius, inradius, pieceSeparation, pieceVertices } from "@polypack/geometry";
+import { TOL, boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
+import { SURFACE_DISK_RADIUS, pieceAreaOf, pieceReach, planarSeparation } from "./disk";
 import { ChainNode, enumerateChains, inWedge } from "./chains";
 import { Part, SurfacePose, partSeparation, pieceChains, pieceParts } from "./parts";
 import { apply } from "./rigid";
@@ -6,7 +7,7 @@ import { Solid, SolidName, faceApothem, faceDepth, faceVertex, getSolid, isSolid
 
 export type Mode = "fold" | "nofold";
 
-/** A configuration on a solid of edge s. Pieces have side 1 (N >= 3) or radius 1 (N = 0). */
+/** A configuration on a solid of edge s. Pieces have side 1 (N >= 3) or diameter 1 (N = 0, radius 1/2). */
 export interface SurfaceConfig {
   solid: SolidName;
   N: number;
@@ -94,7 +95,7 @@ function* nofoldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void
   let minPair = Infinity;
   cfg.pieces.forEach((p, i) => {
     let depth: number;
-    if (N === 0) depth = faceDepth(solid, s, p.face, p.x, p.y) - scale;
+    if (N === 0) depth = faceDepth(solid, s, p.face, p.x, p.y) - scale * SURFACE_DISK_RADIUS;
     else {
       const v = pieceVertices(N, p, scale);
       depth = Infinity;
@@ -105,7 +106,7 @@ function* nofoldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void
   });
   const result = (): Validation => ({ ok: errors.length === 0, errors, minPairSep: minPair, minConeSep: Infinity, minWallSep: minWall });
   if (errors.length >= maxErrors) return result();
-  const reach = 2 * scale * (N === 0 ? 1 : boundingRadius(N)) * (1 + 1e-9) + 1e-12;
+  const reach = 2 * scale * pieceReach(N) * (1 + 1e-9) + 1e-12;
   let work = 0;
   for (let i = 0; i < cfg.pieces.length; i++)
     for (let j = i + 1; j < cfg.pieces.length; j++) {
@@ -113,7 +114,7 @@ function* nofoldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void
       const b = cfg.pieces[j];
       if (a.face !== b.face || Math.hypot(a.x - b.x, a.y - b.y) > reach) continue;
       if (++work % PAIRS_PER_STEP === 0) yield;
-      const sep = pieceSeparation(N, a, b, scale).sep;
+      const sep = planarSeparation(N, a, b, scale);
       minPair = Math.min(minPair, sep);
       if (sep < -tol) {
         errors.push(`pieces ${i} and ${j} overlap on face ${a.face} by ${-sep}`);
@@ -160,7 +161,7 @@ export function surfaceDistance(solid: Solid, s: number, p: { face: number; x: n
 /** Cone-point clearance of piece i: smallest distance of a vertex to the piece's boundary (negative = inside). */
 function coneClearance(solid: Solid, s: number, N: number, pose: SurfacePose, nodes: ChainNode[], scale: number, tol: number): number {
   let worst = Infinity;
-  const rin = N === 0 ? scale : inradius(N) * scale;
+  const rin = N === 0 ? scale * SURFACE_DISK_RADIUS : inradius(N) * scale;
   for (const node of nodes) {
     const M = solid.sides[node.face];
     for (let k = 0; k < M; k++) {
@@ -168,7 +169,7 @@ function coneClearance(solid: Solid, s: number, N: number, pose: SurfacePose, no
       const [x, y] = apply(node.toAnchor, fx, fy);
       if (!inWedge(node.wedge, pose.x, pose.y, x, y, tol)) continue;
       let out: number;
-      if (N === 0) out = Math.hypot(x - pose.x, y - pose.y) - scale;
+      if (N === 0) out = Math.hypot(x - pose.x, y - pose.y) - scale * SURFACE_DISK_RADIUS;
       else {
         // largest support excess over the apothem: > 0 means outside the polygon
         out = -Infinity;
@@ -188,8 +189,8 @@ function coneClearance(solid: Solid, s: number, N: number, pose: SurfacePose, no
  * Valid when (1) every centre lies in its closed anchor face, (2) no cone point lies in the open
  * interior of a piece, (3) on every face, the parts of all pieces (two parts of one piece included)
  * have disjoint interiors. (3) for parts of one piece is the embedding condition.
- * Disks use the equivalent distance form (see docs): vertex distance >= 1, centre distance >= 2,
- * geodesic loops at a centre >= 2.
+ * Disks use the equivalent distance form (see docs): vertex distance >= 1/2, centre distance >= 1,
+ * geodesic loops at a centre >= 1 (disks of diameter 1).
  */
 export function validateFold(cfg: SurfaceConfig, opts: ValidateOptions = {}): Validation {
   return drain(foldCheck(cfg, opts));
@@ -216,7 +217,7 @@ function* foldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void, 
   if (errors.length) return { ok: false, errors, minPairSep: NaN, minConeSep: NaN, minWallSep: Infinity };
 
   if (N === 0) {
-    const reach = 2 * scale;
+    const reach = 2 * scale * SURFACE_DISK_RADIUS;
     const nodes = cfg.pieces.map((p) => enumerateChains(solid, s, p.face, p.x, p.y, reach, maxChains));
     for (let i = 0; i < cfg.pieces.length; i++) {
       const p = cfg.pieces[i];
@@ -226,17 +227,17 @@ function* foldCheck(cfg: SurfaceConfig, opts: ValidateOptions): Generator<void, 
       minCone = Math.min(minCone, c);
       if (c < -tol) push(`a cone point lies inside disk ${i} (by ${-c})`);
       // Images use the exact wedge (tolerance 0): an image on a wedge boundary is a path through a
-      // vertex, of length d(p, V) + d(V, q), which the vertex check already bounds below by 2, and
-      // a tolerance would admit paths that do not exist (slightly shorter than 2 near a touched vertex).
+      // vertex, of length d(p, V) + d(V, q), which the vertex check already bounds below by one diameter, and
+      // a tolerance would admit paths that do not exist (slightly shorter than a diameter near a touched vertex).
       for (const [, , d] of chainImages(nodes[i], p.x, p.y, p.face, p.x, p.y, 0, true)) {
-        const sep = d - 2 * scale;
+        const sep = d - 2 * scale * SURFACE_DISK_RADIUS;
         minPair = Math.min(minPair, sep);
         if (sep < -tol) push(`disk ${i} wraps onto itself (geodesic loop ${d})`);
       }
       for (let j = i + 1; j < cfg.pieces.length; j++) {
         const q = cfg.pieces[j];
         for (const [, , d] of chainImages(nodes[i], p.x, p.y, q.face, q.x, q.y, 0)) {
-          const sep = d - 2 * scale;
+          const sep = d - 2 * scale * SURFACE_DISK_RADIUS;
           minPair = Math.min(minPair, sep);
           if (sep < -tol) push(`disks ${i} and ${j} overlap (centre distance ${d})`);
         }
@@ -326,7 +327,7 @@ export async function validateAsync(
 /** Area lower bound on the scale s (the edge, for unit-edge solids): P * pieceArea <= surface area. */
 export function areaBoundEdge(solidName: SolidName, N: number, P: number): number {
   const solid = getSolid(solidName);
-  const A = N === 0 ? Math.PI : N / (4 * Math.tan(Math.PI / N));
+  const A = N === 0 ? pieceAreaOf(0) : N / (4 * Math.tan(Math.PI / N));
   // Platonic: surface area at edge s is F * M s^2 / (4 tan(pi/M)), computed as before
   if (solid.uniform) return Math.sqrt((P * A * 4 * Math.tan(Math.PI / solid.M)) / (solid.F * solid.M));
   return Math.sqrt((P * A) / surfaceArea(solid, 1));

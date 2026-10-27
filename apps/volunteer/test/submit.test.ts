@@ -92,6 +92,7 @@ describe("the request body", () => {
       P: 2,
       pieces,
       container_phi: 0,
+      units: "diameter",
       name: "Ada",
       agent_note: "spare laptop",
       found_with: "optimizer",

@@ -1,0 +1,159 @@
+{
+ "archived": "Radius-1 disk data (disks of radius 1, N = 0), archived 2026-10-27 when disk pieces became diameter 1. Equivalent to diameter-1 disks at K = +-4 (K x 4, lengths x 1/2). Kept for reference, not served.",
+ "generated_by": "python/curved/bounds.py",
+ "bounds": [
+  {
+   "K": -1,
+   "N": 0,
+   "M": 0,
+   "args": {
+    "note": "disk containers hold any number of pieces"
+   },
+   "P_max_upper": null
+  },
+  {
+   "K": -1,
+   "N": 0,
+   "M": 3,
+   "args": {
+    "area": 0,
+    "inradius": 0,
+    "Ystar_upper": 1.1565176427496655,
+    "cusp": 0,
+    "near_wall": 1
+   },
+   "P_max_upper": 0,
+   "rho": 1.0,
+   "area": 3.412276265284902
+  },
+  {
+   "K": -1,
+   "N": 0,
+   "M": 4,
+   "args": {
+    "area": 1,
+    "inradius": 0,
+    "Ystar_upper": 1.1565176427496655,
+    "cusp": 0,
+    "near_wall": 1
+   },
+   "P_max_upper": 0,
+   "rho": 1.0,
+   "area": 3.412276265284902
+  },
+  {
+   "K": -1,
+   "N": 0,
+   "M": 5,
+   "args": {
+    "area": 2,
+    "Ystar_upper": 1.1565176427496655,
+    "cusp": 1,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 3.412276265284902
+  },
+  {
+   "K": -1,
+   "N": 0,
+   "M": 6,
+   "args": {
+    "area": 3,
+    "Ystar_upper": 1.1565176427496655,
+    "cusp": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 3.412276265284902
+  },
+  {
+   "K": -1,
+   "N": 0,
+   "M": 8,
+   "args": {
+    "area": 5,
+    "Ystar_upper": 1.1565176427496655,
+    "cusp": 3,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 3.412276265284902
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 0,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 3,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 4,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 5,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 6,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  },
+  {
+   "K": 1,
+   "N": 0,
+   "M": 8,
+   "args": {
+    "area": 2,
+    "near_wall": 1
+   },
+   "P_max_upper": 1,
+   "rho": 1.0,
+   "area": 2.88836579751364
+  }
+ ]
+}

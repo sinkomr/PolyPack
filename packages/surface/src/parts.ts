@@ -1,4 +1,5 @@
-import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
+import { inradius, pieceVertices } from "@polypack/geometry";
+import { innerReach } from "./disk";
 import { ChainNode, Wedge, enumerateChains } from "./chains";
 import { apply, inverse } from "./rigid";
 import { Solid, faceApothem, faceVertex } from "./solids";
@@ -114,7 +115,11 @@ export function polygonHalfPlanes(poly: Float64Array): HalfPlane[] {
   return out;
 }
 
-/** The piece polygon (disks approximated by DISK_SIDES sides, for drawing) in its anchor frame. */
+/**
+ * The piece polygon (disks approximated by DISK_SIDES sides, for drawing) in its anchor frame. `scale`
+ * is the kernels' convention (disk.ts): a disk has radius `scale`; the validator passes the radius
+ * for a disk (scale * SURFACE_DISK_RADIUS).
+ */
 export function piecePolygon(N: number, pose: SurfacePose, scale = 1): Float64Array {
   if (N === 0) {
     const out = new Float64Array(2 * DISK_SIDES);
@@ -132,7 +137,7 @@ export function piecePolygon(N: number, pose: SurfacePose, scale = 1): Float64Ar
 
 /** Chains of a piece: every chain a ray of length <= scale * boundingRadius(N) from its centre can follow. */
 export function pieceChains(solid: Solid, s: number, N: number, pose: SurfacePose, scale = 1, maxChains = Infinity): ChainNode[] {
-  return enumerateChains(solid, s, pose.face, pose.x, pose.y, scale * boundingRadius(N), maxChains);
+  return enumerateChains(solid, s, pose.face, pose.x, pose.y, scale * innerReach(N), maxChains);
 }
 
 /**

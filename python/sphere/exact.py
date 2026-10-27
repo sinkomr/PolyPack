@@ -83,7 +83,7 @@ def main():
 
     for (N, P) in CASES:
         rho, Q = construct(N, P)
-        g, _ = sg.validate(N, P, (1 / rho) * (1 - 1e-12), np.array(Q))
+        g, _ = sg.validate(N, P, sg.angle_of_rho(N, rho) * (1 - 1e-12), np.array(Q))
         print(f"N={N} P={P}: rho={rho:.15f} min max-margin at rho(1+1e-12): {g:.3e}")
         json.dump({"N": N, "P": P, "rho": rho, "q": [list(map(float, q)) for q in Q], "seed": None, "budget": None,
                    "method": "exact construction: radial projection of the Platonic solid"},

@@ -32,7 +32,7 @@ function rng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
-const bounding = (N) => (N === 0 ? 1 : 1 / (2 * Math.sin(Math.PI / N)));
+const bounding = (N) => (N === 0 ? 0.5 : 1 / (2 * Math.sin(Math.PI / N)));
 
 /**
  * Scattered valid start: centres uniform in [-v, v]^2 with v the published size, angles uniform

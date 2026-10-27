@@ -29,6 +29,7 @@ import { normalizeRunPlan } from "./runplan";
 import { plainConfig } from "./space-submission";
 import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
+import { UnitsReport, convertSaveUnits } from "./units";
 import {
   EvolveMethod,
   SWITCHES,
@@ -122,7 +123,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -268,6 +269,16 @@ export const MIGRATIONS: Record<number, Migration> = {
       },
       rebalanced: back,
     };
+  },
+  /**
+   * Version 6 is in the units of 2026-10-27: disk and ball pieces have diameter 1 (they had radius 1),
+   * and a circle or ball container is scored by its diameter (it was by its radius). Every board, score
+   * and bound of an affected problem is converted once, by the server's factors (units.ts); curved disk
+   * problems at K != 0, which the change made other problems, leave the save. `unitsConverted` tells the page.
+   */
+  5: (save) => {
+    const { save: out, report } = convertSaveUnits(save);
+    return { ...out, unitsConverted: report };
   },
 };
 
@@ -437,8 +448,9 @@ export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Recor
 /**
  * A save read; the factor its record points were multiplied by for version 4's points and prices
  * (none if it was already of version 4); the record points it was given back for auto-eval's lower
- * prices as it was read (none if it was already of version 3); and what its retired upgrades paid back
- * (none if it owned none). Every amount is in today's points.
+ * prices as it was read (none if it was already of version 3); what its retired upgrades paid back
+ * (none if it owned none); and how many of its problems version 6's units converted or dropped (none
+ * if it was already of version 6, or had none). Every amount is in today's points.
  */
 export type LoadResult =
   | {
@@ -448,6 +460,7 @@ export type LoadResult =
       refunded?: number;
       retired?: RetiredRefund;
       rebalanced?: { rp: number };
+      units?: UnitsReport;
     }
   | { ok: false; error: string };
 
@@ -778,6 +791,9 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const rescaled = (raw.version as number) < 4 ? num(m.save.pointsScale, 0, 0) : 0;
   const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0));
   const rebalanced = (raw.version as number) < 5 && m.save.rebalanced !== undefined;
+  const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
+  const converted = units ? int(units.converted, 0) : 0;
+  const dropped = units ? int(units.dropped, 0) : 0;
   return {
     ok: true,
     state: normalize(m.save, now),
@@ -785,6 +801,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
     ...(rebalanced ? { rebalanced: { rp: Math.round(num(m.save.rebalanced, 0, 0)) } } : {}),
+    ...(converted + dropped > 0 ? { units: { converted, dropped } } : {}),
   };
 }
 

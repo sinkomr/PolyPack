@@ -86,6 +86,7 @@ const SCHEMA = `{
   "N": 5, "M": 4, "P": 7,
   "pieces": [{"x": 0.0, "y": 0.0, "theta": 0.0}],
   "container_phi": 0.0,
+  "units": "diameter",
   "name": "display name",
   "agent_note": "optional free text",
   "found_with": "hand | optimizer | optimizer_edited | external",
@@ -123,7 +124,7 @@ const TARGETS = `{
 
 const PROBLEM = `{
   "N": 4, "M": 4, "P": 11,
-  "conventions": {"units": "...", "piece_pose": "...", "container": "...", "score": "...",
+  "conventions": {"version": 2, "units": "...", "piece_pose": "...", "container": "...", "score": "...",
                   "shapes": "...", "validity": "...", "scoring": "..."},
   "area_bound": 3.3166247903554,
   "literature": {"value": 3.87708359002281, "display": "3.87708359002281", "status": "best_known",
@@ -325,7 +326,7 @@ Closed problems are listed with <code>accepts_submissions: false</code> and a <c
 <p id="spaces-no-record">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: "no_record"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.
 Its <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.
 Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
-<p>Curved, Sphere and Torus use domains with N = 0 (unit disks) or every integer 3–100; P = 1–100, and for Torus 1–500.
+<p>Curved, Sphere and Torus use domains with N = 0 (disks of diameter 1) or every integer 3–100; P = 1–100, and for Torus 1–500.
 Curved keeps its existing curvature and container choices; Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.
 New choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer work list samples them.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
@@ -381,7 +382,7 @@ The ranking is kept until an entry changes.</p>
 
 <h3 id="spaces-submit"><code>POST /api/spaces/submit</code></h3>
 <p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most ${MAX_NOTE_LENGTH} characters), <code>software</code> (at most ${MAX_SOFTWARE_LENGTH}), <code>method</code> (free text, at most ${SPACE_METHOD_LENGTH}) and <code>seed</code> (a non-negative integer) are optional.
-Submissions are accepted for the problems of the catalogues only.</p>
+Submissions are accepted for the problems of the catalogues only. A problem with disk or ball pieces or a circle or ball container needs <code>"units": "diameter"</code> in the body (426 without it; see <a href="/api#units-change">the unit change</a>).</p>
 <pre tabindex="0"><code>${esc(SPACE_SUBMIT)}</code></pre>
 <p id="spaces-methods">The server does not check <code>method</code>; the site's own clients name the search that found the entry.
 On the board and in the <a href="/volunteer.html">volunteer client</a> (<code>--space-method</code>) a search runs <em>Auto</em>, the space's own search, named as in <code>"sphere basin hopping"</code>,
@@ -463,18 +464,25 @@ The source is public at <a href="https://github.com/sinkomr/PolyPack">github.com
 <table>
 <tr><th scope="row">Problem</th><td>Pack <code>P</code> congruent pieces of shape <code>N</code> into the smallest container of shape <code>M</code>.
 <code>N</code> and <code>M</code> are <code>0</code> for a circle or an integer from 3 to ${MAX_SIDES} for a regular polygon. <code>P</code> is from 1 to ${MAX_PIECES}.</td></tr>
-<tr><th scope="row">Units</th><td>Polygon pieces have side length 1. Circle pieces have radius 1. Angles are in radians.</td></tr>
+<tr><th scope="row">Units</th><td>Polygon pieces have side length 1. <strong>Disk (circle) pieces have diameter 1, radius 1/2.</strong> Angles are in radians. <code>conventions.version</code> is <code>2</code> since 2026-10-27; before it, disks had radius 1 and a circle container was scored by its radius. A submission to a problem with disk pieces (<code>N = 0</code>) or a circle container (<code>M = 0</code>) must carry <code>"units": "diameter"</code> (see <a href="#units-change">the unit change</a>).</td></tr>
 <tr><th scope="row">Piece pose</th><td><code>(x, y, theta)</code>. With <code>R = 1 / (2 sin(π/N))</code>, vertex <code>k</code> is at
 <code>(x, y) + R·(cos(theta + π/2 + 2πk/N), sin(theta + π/2 + 2πk/N))</code>. At <code>theta = 0</code> a vertex points straight up. Circles ignore <code>theta</code>.</td></tr>
 <tr><th scope="row">Container</th><td>A regular M-gon with centre <code>(cx, cy)</code>, orientation <code>phi</code> and side <code>s</code>; vertex <code>k</code> is at
 <code>(cx, cy) + (s / (2 sin(π/M)))·(cos(phi − π/2 + π/M + 2πk/M), sin(phi − π/2 + π/M + 2πk/M))</code>.
-At <code>phi = 0</code> the bottom edge is horizontal. A circle container has a centre and a radius <code>r</code>.</td></tr>
-<tr><th scope="row">Score</th><td>The container side <code>s</code> (polygon) or radius <code>r</code> (circle). Smaller is better. In responses it is <code>container.size</code>.</td></tr>
+At <code>phi = 0</code> the bottom edge is horizontal. A circle container has a centre and a <code>size</code>, its diameter (radius <code>size / 2</code>).</td></tr>
+<tr><th scope="row">Score</th><td>The container side <code>s</code> (polygon) or diameter (circle). Smaller is better. In responses it is <code>container.size</code>.</td></tr>
 <tr><th scope="row">Validity</th><td>Exactly <code>P</code> pieces. Pieces may touch; two pieces overlap when their separation is below −${TOL} (in piece units).</td></tr>
 <tr><th scope="row" id="orientation">Orientation</th><td><strong>The score is computed at the <code>container_phi</code> you send</strong> (0 when it is missing): the server finds the smallest container at that orientation and does not search for a better one.
 So turn the container to its best orientation before you submit: <code>autoOrient</code> or <code>evaluate(config, {autoOrient: true})</code> in <code>packages/geometry</code> does it, the board does it when you press Submit, and the optimizers' results come oriented.
 The server's answer is then exactly the score your client computed. <code>container.phi</code> in the answer is the <code>phi</code> it used. (Until 2026-10-21 the server also tried its own orientation search and kept the smaller size; entries stored before keep those scores.)</td></tr>
 </table>
+
+<h3 id="units-change">The unit change of 2026-10-27</h3>
+<p>Disk pieces (<code>N = 0</code>), and in the dimensions the ball pieces, have diameter 1 instead of radius 1; a circle container (<code>M = 0</code>) and a ball container are scored by their diameter instead of their radius.
+Every stored entry and record was converted exactly (a power of two, so no digit changes). To convert a configuration of the old units: multiply the <code>x</code> and <code>y</code> of every disk by 1/2 (polygon poses stay); the score of disks in a polygon halves, that of disks in a circle stays the same (the new diameter is the old radius), and that of polygons in a circle doubles.</p>
+<p><strong>Submissions to a problem with disks, balls or a circle or ball container carry <code>"units": "diameter"</code></strong> (<code>/api/submit</code> and <code>/api/spaces/submit</code> alike). Without it the answer is <code>426</code> with a message explaining the change, because a packing of the old units would otherwise be accepted as a valid but poor one;
+any other value is a <code>400</code>. The volunteer client <code>polypack-volunteer/0.1.x</code> and older is answered <code>426</code> by every route except this page, <code>/api/health</code>, <code>/api/snapshot</code> and the problems that the change did not touch; use version 0.2.0 or later.
+The snapshot is format 2 (every file rebuilt in the new units).</p>
 
 <h2 id="leader">One leader per problem</h2>
 <p>For each problem the server keeps one entry, its <em>leader</em>, and shows it. Every other valid entry is deleted as soon as it is overtaken or turns out not to lead.
@@ -522,6 +530,7 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
+<tr><td>426</td><td>The request is from a client of the old units: a volunteer client older than 0.2.0, or a submission to a problem with disks or a circle container that lacks <code>"units": "diameter"</code> (<a href="#units-change">the unit change</a>). Nothing was examined or stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
@@ -622,16 +631,16 @@ Values of <code>P</code> with no coordinates at all are simply absent. The answe
 <h3 id="snapshot"><code>GET /api/snapshot</code></h3>
 <p>Every current record at once: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, rebuilt each night and mirrored into the GitHub release
 <a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads.
-This route answers the manifest: <code>{format, generated_at, completed_at, records, pieces, files, spaces}</code>, where each of <code>files</code> is
+This route answers the manifest: <code>{format, units, generated_at, completed_at, records, pieces, files, spaces}</code>, where each of <code>files</code> is
 <code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read.
 <code>spaces</code> lists the files of the <a href="#spaces">other dimensions</a>, one per space, each <code>{space, file, records, pieces, bytes, sha256, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone. A manifest written before the space files existed has no <code>spaces</code>.
 <code>completed_at</code> equals <code>generated_at</code> once a build has finished; while one runs, the files already rebuilt sit beside those of the night before. 404 before the first build, and on a server without snapshots.</p>
 <p><code>GET /api/snapshot/{N}-{M}.json.gz</code> answers one file of the manifest, gzip-compressed JSON:
-<code>{"format": 1, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
+<code>{"format": 2, "N": …, "M": …, "records": [ … ]}</code> with one record per line, by increasing <code>P</code>. A record is
 <code>{P, score, id, name, found_with, verification, created_at, container_phi, pieces}</code>, with <code>pieces</code> as <code>[x, y, theta]</code> in the <a href="#conventions">conventions</a> above and every number at full precision.
 How the entry was found in detail (method, seed, budget, note) is at <code>/api/submissions/{id}</code>. A file holds no timestamp, so an unchanged pair keeps the same bytes and SHA-256 from night to night.</p>
 <p><code>GET /api/snapshot/space-{space}.json.gz</code> answers the file of one space (<code>surface</code>, <code>curved</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code> or <code>polyhedra</code>): the leading site entry of each of its <a href="#spaces-closed">open</a> problems that has one,
-<code>{"format": 1, "space": …, "records": [ … ]}</code> with one record per line, in the order of <a href="#spaces"><code>/api/spaces/{space}/records</code></a>. A record is
+<code>{"format": 2, "space": …, "records": [ … ]}</code> with one record per line, in the order of <a href="#spaces"><code>/api/spaces/{space}/records</code></a>. A record is
 <code>{problem, P, score, id, name, software, method, created_at, config}</code>, with <code>config</code> in the space's submission format and every number at full precision; the whole entry is at <code>/api/spaces/entries/{id}</code>.
 A space with no such entry has no file. A space's file is rebuilt whole when any of its leaders changes.</p>
 

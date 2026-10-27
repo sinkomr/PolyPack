@@ -12,7 +12,7 @@ import {
   areaLowerBound,
   enclose,
   findOverlaps,
-  inradius,
+  pieceInradius,
   type Container,
   type PackingConfig,
   type Pose,
@@ -232,7 +232,7 @@ export async function legaliseStrict(
   const overlaps = findOverlaps(N, config.pieces, 0);
   if (!overlaps.length) return config;
   for (const o of overlaps) deepest = Math.max(deepest, -o.sep);
-  const r = N === 0 ? 1 : inradius(N);
+  const r = pieceInradius(N);
   if (deepest < r) {
     let margin = 4e-12;
     for (let attempt = 0; attempt < 4; attempt++) {

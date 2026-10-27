@@ -4,7 +4,7 @@
  * Usage: node --import tsx packages/surface/scripts/build-archimedean-packings.ts
  */
 import { writeFileSync } from "node:fs";
-import { boundingRadius } from "@polypack/geometry";
+import { pieceReach } from "../src/disk";
 import { apply, faceVertex, getSolid, glue, inverse, validate, type SolidName, type SurfacePose } from "../src/index";
 
 const packings = [];
@@ -12,7 +12,7 @@ for (const solid of ["truncated_tetrahedron", "cuboctahedron", "snub_cube", "tru
   const S = getSolid(solid);
   const kinds = [...new Set(S.sides)].sort((a, b) => a - b);
   for (const N of [0, 3, 12]) {
-    const R = boundingRadius(N);
+    const R = pieceReach(N);
     const s = 16 * R;
     for (const mode of ["fold", "nofold"] as const) {
       let pieces: SurfacePose[];

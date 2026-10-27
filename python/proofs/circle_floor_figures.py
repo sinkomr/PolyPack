@@ -18,7 +18,7 @@ CONTACT = "#c2410c"
 FILL = "#dbeafe"
 WALL = "#64748b"
 # rho0(P) as printed in the panel titles
-TITLES = {11: "radius 1 + 1/sin 20°", 13: "radius 2 + √5", 19: "radius 1 + √2 + √6"}
+TITLES = {11: "diameter 1 + 1/sin 20°", 13: "diameter 2 + √5", 19: "diameter 1 + √2 + √6"}
 
 
 def svg(width, height, body):
@@ -88,7 +88,7 @@ def polygon_panel(cfg, N, ox):
         ]
         pts = " ".join(f"{a:.5f},{b:.5f}" for a, b in v)
         items.append(f'<polygon points="{pts}" fill="{FILL}" stroke="{INK}" stroke-width="{w:.4f}"/>')
-    return panel(ox, scale, f"N = {N}, P = {cfg.P}: radius {floor:.6f}", items)
+    return panel(ox, scale, f"N = {N}, P = {cfg.P}: diameter {2 * floor:.6f}", items)
 
 
 def main():

@@ -130,7 +130,8 @@ describe("the catalogue of the solids", () => {
   });
 
   it("states the ball radius once", () => {
-    expect(BALL_RADIUS).toBe(1);
+    expect(BALL_RADIUS).toBe(0.5);
+    expect(BALL_DIAMETER).toBe(1);
     expect(BALL_DIAMETER).toBe(2 * BALL_RADIUS);
   });
 });
@@ -197,9 +198,9 @@ describe("the container's geometry", () => {
   });
 
   it("holds exactly the centres at least a ball's radius inside: the octahedron, the triakis tetrahedron, a prism", () => {
-    // octahedron (edge 1): inradius sqrt 6 / 6, so one ball fits from s = sqrt 6 on, centred
+    // octahedron (edge 1): inradius sqrt 6 / 6, so one ball of radius 1/2 fits from s = sqrt 6 / 2 on, centred
     const oct = problem("ballinoct");
-    const s = Math.sqrt(6);
+    const s = Math.sqrt(6) / 2;
     const at = (p: BallsProblem, size: number, c = [0, 0, 0]) => validateBalls(p, { s: size, pieces: [c] }, { tol: 0 }).valid;
     expect(at(oct, s * (1 + 1e-12))).toBe(true);
     expect(at(oct, s * (1 - 1e-9))).toBe(false);
@@ -313,12 +314,12 @@ describe("the validator with a solid container", () => {
     }
   });
 
-  it("validates the solids in a ball for all 94 solids: one at the origin needs its circumradius", () => {
+  it("validates the solids in a ball for all 94 solids: one at the origin needs a container of diameter twice its circumradius", () => {
     for (const p of pieces) {
       const S = getSolid(p.piece);
       const one = (s: number) => validateBalls(p, { s, pieces: [[0, 0, 0, 1, 0, 0, 0]] }, { tol: 0 }).valid;
-      expect(one(S.circumradius * (1 + 1e-12)), p.code).toBe(true);
-      expect(one(S.circumradius * (1 - 1e-9)), p.code).toBe(false);
+      expect(one(2 * S.circumradius * (1 + 1e-12)), p.code).toBe(true);
+      expect(one(2 * S.circumradius * (1 - 1e-9)), p.code).toBe(false);
     }
   });
 });

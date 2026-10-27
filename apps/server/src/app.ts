@@ -46,6 +46,14 @@ import {
   sanitizeText,
 } from "./limits";
 import { LoadStats } from "./load";
+import {
+  CONVENTIONS_VERSION,
+  UNITS_MISSING_MESSAGE,
+  UPGRADE_MESSAGE,
+  isOldVolunteer,
+  oldClientMayRead,
+  planarAffected,
+} from "./units-gate";
 import type { SnapshotSource } from "./snapshot";
 import { SpacesOptions, registerSpaceRoutes } from "./spaces";
 import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
@@ -79,6 +87,11 @@ export interface AppOptions {
   holdersRefreshMs?: number;
   /** Least age at which /api/targets is ranked again after an entry changed; TARGETS_REFRESH_MS by default. */
   targetsRefreshMs?: number;
+  /**
+   * Whether a submission to a problem with disk or ball pieces or a circle or ball container must carry
+   * `"units": "diameter"` (426 without it). On by default; the gate stays until its sunset date.
+   */
+  unitsGate?: boolean;
   /** The nightly records snapshot; without it /api/snapshot answers 404. */
   snapshots?: SnapshotSource;
   /**
@@ -89,12 +102,15 @@ export interface AppOptions {
 }
 
 const CONVENTIONS = {
-  units: "polygon pieces have side length 1; circle pieces have radius 1; angles in radians",
+  version: CONVENTIONS_VERSION,
+  units:
+    "polygon pieces have side length 1; disk (circle) pieces have diameter 1 (radius 1/2); angles in radians; " +
+    'a submission to a problem with disk or ball pieces or a circle or ball container carries "units": "diameter"',
   piece_pose:
     "N-gon vertex k = (x, y) + R (cos(theta + pi/2 + 2 pi k / N), sin(theta + pi/2 + 2 pi k / N)), R = 1 / (2 sin(pi / N)); circles ignore theta",
   container:
-    "regular M-gon vertex k = (cx, cy) + s / (2 sin(pi / M)) (cos(phi - pi/2 + pi/M + 2 pi k / M), sin(...)); circle given by centre and radius",
-  score: "container side length s (polygon) or radius r (circle); smaller is better",
+    "regular M-gon vertex k = (cx, cy) + s / (2 sin(pi / M)) (cos(phi - pi/2 + pi/M + 2 pi k / M), sin(...)); circle given by centre and size (its diameter)",
+  score: "container side length s (polygon) or diameter (circle); smaller is better",
   shapes: `N and M are 0 for a circle or an integer from 3 to ${MAX_SIDES}; P is from 1 to ${MAX_PIECES}`,
   validity: `pieces may touch; two pieces overlap when their separation is below -${TOL}`,
   scoring:
@@ -195,7 +211,15 @@ function constantTimeEqual(a: string, b: string): boolean {
 /** The HTTP API. Host-neutral: everything it needs comes in through the options. */
 export function createApp(opts: AppOptions): Hono {
   const { store } = opts;
+  const unitsGate = opts.unitsGate !== false;
   const app = new Hono();
+  // Volunteer clients older than the unit change would read new-unit leaders as old ones and send old-unit packings that
+  // pass as valid but poor: they are told to update (426) before anything else; the index, health and snapshot stay open.
+  app.use("/api/*", async (c, next) => {
+    if (isOldVolunteer(c.req.header("user-agent")) && !oldClientMayRead(c.req.method, c.req.path))
+      return c.json({ error: UPGRADE_MESSAGE, reasons: [UPGRADE_MESSAGE], conventions_version: CONVENTIONS_VERSION }, 426);
+    await next();
+  });
   const windowMs = opts.limits?.windowMs ?? 60_000;
   const ipLimit = new RateLimiter(opts.limits?.perIp ?? SUBMISSIONS_PER_MINUTE, windowMs);
   const verifyBudget = new TimeBudget(opts.limits?.verifyMsPerMinute ?? VERIFY_MS_PER_MINUTE);
@@ -580,11 +604,11 @@ export function createApp(opts: AppOptions): Hono {
     // what the log line says about this submission, filled in as the body is read
     let problem: string | null = null;
     let verifyMs: number | null = null;
-    const answer = (body: SubmitResponse, status: 200 | 400 | 409 | 413 | 422 | 429 | 503, retryAfter?: number) => {
+    const answer = (body: SubmitResponse, status: 200 | 400 | 409 | 413 | 422 | 426 | 429 | 503, retryAfter?: number) => {
       opts.stats?.submission({ status, ms: performance.now() - started, verifyMs, problem });
       return c.json(body, status, retryAfter === undefined ? {} : { "retry-after": String(retryAfter) });
     };
-    const reject = (status: 400 | 409 | 413 | 422 | 429 | 503, reasons: string[], retryAfter?: number) =>
+    const reject = (status: 400 | 409 | 413 | 422 | 426 | 429 | 503, reasons: string[], retryAfter?: number) =>
       answer(
         {
           valid: false,
@@ -630,6 +654,13 @@ export function createApp(opts: AppOptions): Hono {
     const config = parsed.config;
     const provenance = found.provenance;
     problem = `${config.N}/${config.M}/${config.P}`;
+    // Disk pieces and circle containers changed units on 2026-10-27; a body without the confirmation is from a client that
+    // may still work in the old ones, which would be scored without error as a valid but poor packing.
+    if (unitsGate && planarAffected(config.N, config.M)) {
+      const units = (json as Record<string, unknown>).units;
+      if (units === undefined) return reject(426, [UNITS_MISSING_MESSAGE]);
+      if (units !== "diameter") return reject(400, ['units must be "diameter" (the only unit system of this API)']);
+    }
     const lit = literature.get(problem);
     // decided before the packing is looked at: nothing can improve on a proven optimum
     if (closedToSubmissions(lit))
@@ -877,6 +908,7 @@ export function createApp(opts: AppOptions): Hono {
       log,
       stats: opts.stats,
       admin,
+      unitsGate,
     });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));

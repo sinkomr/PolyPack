@@ -305,7 +305,8 @@ def face_constraints(S, s):
 def piece_radii(N):
     """(circumradius, inradius) as intervals, and exact circumradius^2 when rational."""
     if N == 0:
-        return iv.mpf(1), iv.mpf(1), Fr(1)
+        # disks have diameter 1 (site units since 2026-10-27; radius 1 before)
+        return iv.mpf(1) / 2, iv.mpf(1) / 2, Fr(1, 4)
     R = 1 / (2 * iv.sin(iv.pi / N))
     r = 1 / (2 * iv.tan(iv.pi / N))
     R2 = {3: Fr(1, 3), 4: Fr(1, 2), 6: Fr(1)}.get(N)
@@ -633,9 +634,9 @@ def certify_nofold(cfg, lam):
             worst = None
             for j, (a, b) in enumerate(fc):
                 gap = b - dot(a, c)  # = |a| * distance to the edge line, exact
-                if gap.sign() <= 0 or (gap * gap - lam * lam * dot(a, a)).sign() <= 0:
+                if gap.sign() <= 0 or (gap * gap - lam * lam * Fr(1, 4) * dot(a, a)).sign() <= 0:
                     raise CertError("disk %d is not strictly inside face %d (edge %d)" % (i, f, j))
-                g = float(gap) / math.sqrt(float(dot(a, a))) - float(lam)
+                g = float(gap) / math.sqrt(float(dot(a, a))) - float(lam) / 2  # radius lam / 2
                 worst = g if worst is None else min(worst, g)
             walls.append(sig_down(worst))
         else:
@@ -659,7 +660,7 @@ def certify_nofold(cfg, lam):
                 pi, pj = cfg.poses[i], cfg.poses[j]
                 if N == 0:
                     d = (F(pi[1] - pj[1]), F(pi[2] - pj[2]))
-                    gap = dot(d, d) - 4 * lam * lam
+                    gap = dot(d, d) - lam * lam  # centres closer than the shrunk diameter lam overlap
                     if gap.sign() <= 0:
                         raise CertError("disks %d and %d are not strictly separated" % (i, j))
                     pairs.append([f, i, j, "dist", sig_down(float(gap))])
@@ -809,8 +810,8 @@ def certify_fold_disks(cfg, lam):
     """Disks: exact distance form. Every quantity here is exact (no intervals)."""
     S, s = cfg.S, cfg.s
     F = S.field
-    reach_sq = F(4 * lam * lam)
-    lam_sq = lam * lam
+    reach_sq = F(lam * lam)  # (2 * lam / 2)^2: the shrunk diameter squared
+    lam_sq = lam * lam * Fr(1, 4)  # the shrunk radius squared
     nodes_all = []
     cone_rows = []
     pair_rows = []

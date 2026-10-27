@@ -21,28 +21,28 @@ const one = (solid: any, N: number, s: number, x: number, y: number, theta = 0, 
 describe("fold validator", () => {
   for (const name of SOLID_NAMES) {
     const S = getSolid(name);
-    const s0 = 2 * Math.sin(Math.PI / S.M); // face circumradius 1: a unit disk at the centre touches the face's vertices
-    it(`${name}: a disk at a face centre needs s >= 2 sin(pi/M) (cone point exactly on the boundary is allowed)`, () => {
+    const s0 = Math.sin(Math.PI / S.M); // face circumradius 1/2: a disk of diameter 1 at the centre touches the face's vertices
+    it(`${name}: a disk at a face centre needs s >= sin(pi/M) (cone point exactly on the boundary is allowed)`, () => {
       expect(one(name, 0, s0 * (1 - 1e-6), 0, 0).ok).toBe(false);
       expect(one(name, 0, s0 * (1 + 1e-12), 0, 0).ok).toBe(true);
       expect(one(name, 0, s0 * (1 + 1e-6), 0, 0).ok).toBe(true);
     });
 
-    it(`${name}: disks on two adjacent faces overlap across the edge exactly when the centres are closer than 2`, () => {
+    it(`${name}: disks on two adjacent faces overlap across the edge exactly when the centres are closer than 1`, () => {
       // adjacent face centres are 2 * apothem apart through the shared edge
-      const sTouch = 2 * Math.tan(Math.PI / S.M);
+      const sTouch = Math.tan(Math.PI / S.M);
       const s = Math.max(sTouch, s0) * 1.0000001;
       const g = S.adj[0][0].face;
       const sep = 2 * faceApothem(S.M, s);
       const cfg = { solid: name, N: 0, s, pieces: [{ face: 0, x: 0, y: 0, theta: 0 }, { face: g, x: 0, y: 0, theta: 0 }] };
       const v = validateFold(cfg);
-      expect(v.ok).toBe(sep >= 2 - 1e-9);
-      // push the second disk towards the first by 0.01: shared edge k = 0 of face 0 has outward normal angle 2 pi/M - pi/2
+      expect(v.ok).toBe(sep >= 1 - 1e-9);
+      // push the second disk towards the first by 0.005: shared edge k = 0 of face 0 has outward normal angle 2 pi/M - pi/2
       const a = (2 * Math.PI) / S.M - Math.PI / 2;
       const near = { ...cfg, s: sTouch * 1.0000001 };
       if (s0 <= sTouch) {
         expect(validateFold(near).ok).toBe(true);
-        const moved = { ...near, pieces: [{ face: 0, x: 0.01 * Math.cos(a), y: 0.01 * Math.sin(a), theta: 0 }, near.pieces[1]] };
+        const moved = { ...near, pieces: [{ face: 0, x: 0.005 * Math.cos(a), y: 0.005 * Math.sin(a), theta: 0 }, near.pieces[1]] };
         const w = validateFold(moved);
         expect(w.ok).toBe(false);
         expect(w.errors.join(" ")).toMatch(/overlap/);
@@ -78,11 +78,11 @@ describe("fold validator", () => {
     expect(validateFold({ solid: "octahedron", N: 3, s: 0.5 * (1 - 1e-6), pieces: [{ face: 0, x: 0, y: 0, theta: thTri }] }).ok).toBe(false);
   });
 
-  it("tetrahedron: a single disk is limited at s = sqrt(3) by both its vertices and the loop through a vertex", () => {
-    const v = one("tetrahedron", 0, Math.sqrt(3) * (1 + 1e-6), 0, 0);
+  it("tetrahedron: a single disk (diameter 1) is limited at s = sqrt(3)/2 by both its vertices and the loop through a vertex", () => {
+    const v = one("tetrahedron", 0, (Math.sqrt(3) / 2) * (1 + 1e-6), 0, 0);
     expect(v.ok).toBe(true);
-    expect(v.minConeSep).toBeCloseTo(1e-6, 8);
-    expect(v.minPairSep).toBeCloseTo(2e-6, 8);
+    expect(v.minConeSep).toBeCloseTo(0.5e-6, 8);
+    expect(v.minPairSep).toBeCloseTo(1e-6, 8);
   });
 
   it("a square with a corner exactly at a cube vertex is valid; pushed over the vertex it is not", () => {
@@ -95,15 +95,15 @@ describe("fold validator", () => {
   });
 
   it("a disk next to a cube vertex crosses all three edges at that vertex and stays valid", () => {
-    const s = 3;
-    // centre on the face diagonal at distance 1 + 1e-6 from the corner (1.5, 1.5)
-    const d = (1 + 1e-6) / Math.SQRT2;
-    const x = 1.5 - d;
+    const s = 1.5;
+    // centre on the face diagonal at distance 1/2 + 0.5e-6 (radius plus a gap) from the corner (0.75, 0.75)
+    const d = (0.5 + 0.5e-6) / Math.SQRT2;
+    const x = 0.75 - d;
     const S = getSolid("cube");
-    const parts = pieceParts(S, s, 0, { face: 0, x, y: x, theta: 0 }, 0).filter((p) => p.poly.length >= 6);
+    const parts = pieceParts(S, s, 0, { face: 0, x, y: x, theta: 0 }, 0, 0.5).filter((p) => p.poly.length >= 6);
     expect(new Set(parts.map((p) => p.face)).size).toBe(3);
     expect(one("cube", 0, s, x, x).ok).toBe(true);
-    expect(one("cube", 0, s, x + 2e-6, x + 2e-6).ok).toBe(false);
+    expect(one("cube", 0, s, x + 1e-6, x + 1e-6).ok).toBe(false);
   });
 
   it("a piece containing a cone point is rejected and, on a small solid, also wraps onto itself", () => {
@@ -228,7 +228,7 @@ describe("fold validator", () => {
 
 describe("nofold validator", () => {
   it("accepts pieces inside their faces and rejects a piece leaving its face by 1e-8", () => {
-    const s = 2;
+    const s = 1; // a face of side 1 holds one disk of diameter 1 exactly
     const ok = validateNofold({ solid: "cube", N: 0, s, pieces: [{ face: 0, x: 0, y: 0, theta: 0 }] }, { tol: 1e-12 });
     expect(ok.ok).toBe(true);
     const bad = validateNofold({ solid: "cube", N: 0, s, pieces: [{ face: 0, x: 1e-8, y: 0, theta: 0 }] }, { tol: 1e-12 });
@@ -236,21 +236,21 @@ describe("nofold validator", () => {
   });
 
   it("pieces on different faces never interact; on one face they must be disjoint", () => {
-    const s = 2;
+    const s = 1;
     const p = [
       { face: 0, x: 0, y: 0, theta: 0 },
       { face: 1, x: 0, y: 0, theta: 0 },
     ];
     expect(validateNofold({ solid: "cube", N: 0, s, pieces: p }).ok).toBe(true);
     const q = [
-      { face: 0, x: -1, y: 0, theta: 0 },
-      { face: 0, x: 1, y: 0, theta: 0 },
+      { face: 0, x: -0.5, y: 0, theta: 0 },
+      { face: 0, x: 0.5, y: 0, theta: 0 },
     ];
-    expect(validateNofold({ solid: "cube", N: 0, s: 4, pieces: q }).ok).toBe(true);
+    expect(validateNofold({ solid: "cube", N: 0, s: 2, pieces: q }).ok).toBe(true);
     const r = [
-      { face: 0, x: -0.99, y: 0, theta: 0 },
-      { face: 0, x: 0.99, y: 0, theta: 0 },
+      { face: 0, x: -0.495, y: 0, theta: 0 },
+      { face: 0, x: 0.495, y: 0, theta: 0 },
     ];
-    expect(validateNofold({ solid: "cube", N: 0, s: 4, pieces: r }).ok).toBe(false);
+    expect(validateNofold({ solid: "cube", N: 0, s: 2, pieces: r }).ok).toBe(false);
   });
 });

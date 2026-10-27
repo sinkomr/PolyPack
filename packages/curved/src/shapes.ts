@@ -5,16 +5,25 @@
  *   tn_K(b) = sn_K(a) tan(pi/n)        sn_K(b) = sn_K(R) sin(pi/n)        cos(pi/n) = cs_K(b) sin(alpha/2)
  * where alpha is the interior angle. For K = 0 these are the Euclidean formulas of PROMPT.md §2.
  */
+import { DISK_RADIUS } from "@polypack/geometry";
 import { asnK, atnK, csK, snK, tnK, vsK } from "./kfun";
+
+/**
+ * The radius of a disk piece (N = 0): disks have DIAMETER 1 (2026-10-27, the unit change), so radius 1/2; the one
+ * constant of packages/geometry, re-exported here. Every disk length of this package derives from it
+ * (PieceGeometry.R and .rho of a disk). Polygon pieces keep side 1. A disk problem at curvature K is the radius-1
+ * problem at curvature K/4 scaled by 1/2.
+ */
+export { DISK_RADIUS };
 
 export interface PieceGeometry {
   N: number;
   K: number;
-  /** circumradius (radius 1 for a disk piece) */
+  /** circumradius (DISK_RADIUS = 1/2 for a disk piece) */
   R: number;
   snR: number;
   csR: number;
-  /** inradius (apothem; 1 for a disk) */
+  /** inradius (apothem; DISK_RADIUS for a disk) */
   rho: number;
   snRho: number;
   csRho: number;
@@ -31,7 +40,7 @@ export interface PieceGeometry {
  * sqrt K sn_K(1/2) < sin(pi/N) alone is necessary but not sufficient (it holds again for large K).
  */
 export function pieceExists(N: number, K: number): boolean {
-  if (N === 0) return !(K > 0) || 1 < Math.PI / (2 * Math.sqrt(K));
+  if (N === 0) return !(K > 0) || DISK_RADIUS < Math.PI / (2 * Math.sqrt(K));
   if (!(K > 0)) return true;
   return Math.sqrt(K) * N < 2 * Math.PI && Math.sqrt(K) * snK(K, 0.5) < Math.sin(Math.PI / N);
 }
@@ -50,14 +59,14 @@ export function pieceGeometry(N: number, K: number): PieceGeometry {
     return {
       N,
       K,
-      R: 1,
-      snR: snK(K, 1),
-      csR: csK(K, 1),
-      rho: 1,
-      snRho: snK(K, 1),
-      csRho: csK(K, 1),
+      R: DISK_RADIUS,
+      snR: snK(K, DISK_RADIUS),
+      csR: csK(K, DISK_RADIUS),
+      rho: DISK_RADIUS,
+      snRho: snK(K, DISK_RADIUS),
+      csRho: csK(K, DISK_RADIUS),
       alpha: NaN,
-      area: 2 * Math.PI * vsK(K, 1),
+      area: 2 * Math.PI * vsK(K, DISK_RADIUS),
     };
   }
   const snR = snK(K, 0.5) / Math.sin(Math.PI / N);
@@ -82,7 +91,8 @@ export function pieceGeometry(N: number, K: number): PieceGeometry {
 /** Largest admissible container size: Infinity except K > 0, where the container stays in an open hemisphere. */
 export function maxContainerSize(M: number, K: number): number {
   if (!(K > 0)) return Infinity;
-  return M === 0 ? Math.PI / (2 * Math.sqrt(K)) : (2 * Math.PI) / (M * Math.sqrt(K));
+  // a disk container is scored by its geodesic DIAMETER (2026-10-27): the open hemisphere has radius pi / (2 sqrt K)
+  return M === 0 ? Math.PI / Math.sqrt(K) : (2 * Math.PI) / (M * Math.sqrt(K));
 }
 
 /** Apothem h of the ideal regular M-gon (K < 0): sn_K(h) = 1 / (sqrt(-K) tan(pi/M)). Infinity otherwise. */
@@ -92,23 +102,23 @@ export function idealApothem(M: number, K: number): number {
 }
 
 /**
- * Container "radius variable" t used internally: the apothem h for polygon containers, the radius r
- * for disk containers. Walls of a polygon container are the lines at distance h from O.
+ * Container "radius variable" t used internally: the apothem h for polygon containers, the radius r = s / 2
+ * for disk containers (a disk container's size s is its diameter). Walls of a polygon container are the lines at distance h from O.
  */
 export function apothemFromSide(M: number, K: number, s: number): number {
-  if (M === 0) return s;
+  if (M === 0) return s / 2;
   return asnK(K, tnK(K, s / 2) / Math.tan(Math.PI / M));
 }
 
 /** Inverse of apothemFromSide; Infinity at or beyond the ideal apothem (K < 0). */
 export function sideFromApothem(M: number, K: number, h: number): number {
-  if (M === 0) return h;
+  if (M === 0) return 2 * h;
   return 2 * atnK(K, snK(K, h) * Math.tan(Math.PI / M));
 }
 
-/** ds/dh for a polygon container (1 for a disk container). */
+/** ds/dh for a polygon container (2 for a disk container: s = 2 r). */
 export function dSideDApothem(M: number, K: number, h: number): number {
-  if (M === 0) return 1;
+  if (M === 0) return 2;
   // s = 2 atn(y), y = sn(h) tan(pi/M); d atn/dy = 1/(1 + K y^2); dy/dh = cs(h) tan(pi/M)
   const T = Math.tan(Math.PI / M);
   const y = snK(K, h) * T;
@@ -117,13 +127,13 @@ export function dSideDApothem(M: number, K: number, h: number): number {
 
 /** Circumradius of a regular M-gon container with side s. */
 export function containerCircumradius(M: number, K: number, s: number): number {
-  if (M === 0) return s;
+  if (M === 0) return s / 2;
   return asnK(K, snK(K, s / 2) / Math.sin(Math.PI / M));
 }
 
-/** Area of a regular M-gon of side s (or disk of radius s for M = 0) at curvature K. */
+/** Area of a regular M-gon of side s (or disk of diameter s for M = 0) at curvature K. */
 export function containerArea(M: number, K: number, s: number): number {
-  if (M === 0) return 2 * Math.PI * vsK(K, s);
+  if (M === 0) return 2 * Math.PI * vsK(K, s / 2);
   const h = apothemFromSide(M, K, s);
   return 2 * M * rightTriangleArea(K, h, s / 2);
 }

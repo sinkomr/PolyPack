@@ -36,29 +36,16 @@ import { hostname } from "node:os";
 import { join } from "node:path";
 import type { PackingConfig } from "@polypack/geometry";
 import { type SpaceConfig, type SpaceName, isSpaceName } from "@polypack/spaces";
+import { writeFileAtomic } from "./atomic";
 import { problemKey } from "./format";
+import { migrateStateUnits } from "./state-units";
+import { UNITS } from "./version";
 import type { SpaceCandidate } from "./spaces/engine";
 import { type SpaceProblem, readSpaceConfig, spaceMethodName } from "./spaces/model";
 import type { Candidate, Problem } from "./types";
 import { isFiniteNumber, readPieces } from "./validate";
 
-/** Writes `data` to `path` through a temporary file in the same directory and a rename. */
-export function writeFileAtomic(path: string, data: string): void {
-  const tmp = `${path}.${process.pid}-${randomBytes(4).toString("hex")}.tmp`;
-  const fd = openSync(tmp, "w");
-  try {
-    writeSync(fd, data);
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-  try {
-    renameSync(tmp, path);
-  } catch (error) {
-    rmSync(tmp, { force: true });
-    throw error;
-  }
-}
+export { writeFileAtomic } from "./atomic";
 
 /** Blocks the thread for `ms`: the lock is taken synchronously, before anything else runs. */
 function sleepSync(ms: number): void {
@@ -310,6 +297,8 @@ export interface BestFile {
   kind: string;
   found_at: string;
   version: string;
+  /** The units of the lengths in this file: "diameter" (since 0.2.0; older files have none, and state.json says they were converted). */
+  units?: typeof UNITS;
   config: PackingConfig;
 }
 
@@ -328,6 +317,7 @@ export function bestFileOf(c: Candidate, version: string, at = new Date()): Best
     kind: c.job.kind,
     found_at: at.toISOString(),
     version,
+    units: UNITS,
     config: c.config,
   };
 }
@@ -406,6 +396,8 @@ export interface SpaceBestFile {
   kind: string;
   found_at: string;
   version: string;
+  /** As BestFile.units. */
+  units?: typeof UNITS;
   config: SpaceConfig;
 }
 
@@ -423,6 +415,7 @@ export function spaceBestFileOf(c: SpaceCandidate, P: number, version: string, a
     kind: c.job.kind,
     found_at: at.toISOString(),
     version,
+    units: UNITS,
     config: c.config,
   };
 }
@@ -490,10 +483,12 @@ export class StateDir {
   }
 
   /** Creates the directory if needed and takes its lock; throws LockHeld when another copy runs. */
-  static open(dir: string, o: { lock?: LockOptions; maxHistory?: number } = {}): StateDir {
+  static open(dir: string, o: { lock?: LockOptions; maxHistory?: number; log?: (message: string) => void } = {}): StateDir {
     mkdirSync(join(dir, "best"), { recursive: true });
     const lock = acquireLock(join(dir, "lock"), o.lock);
     try {
+      // with the lock held: files of the units before 2026-10-27 are converted or set aside before anything reads them
+      migrateStateUnits(dir, o.log);
       return new StateDir(dir, lock, o.maxHistory ?? MAX_HISTORY_LINES);
     } catch (error) {
       lock.release();

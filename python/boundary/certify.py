@@ -1,7 +1,13 @@
 """Exact certifier for PolyPack's boundary space on the tesseract ("3D on 4D").
 
-Problem boundary/tesseract/<piece>/<P>: P unit balls (radius 1) or unit cubes (edge 1) on the
-boundary of the tesseract [-s/2, s/2]^4; the score is the edge s. Conventions are those of
+Problem boundary/tesseract/<piece>/<P>: P balls of diameter 1 (radius 1/2) or unit cubes (edge 1) on the
+boundary of the tesseract [-s/2, s/2]^4; the score is the edge s.
+
+Units (2026-10-27): the configurations, records and reports are in SITE units (a ball has diameter 1). The ball
+checks below were written for a ball of radius 1 and still run in that WORKING unit: Config multiplies s and every
+centre of a ball configuration by BALL_WORK = 2 (exact in rationals), and everything reported is converted back by
+Config.unit = 1/2 (squared lengths by 1/4). The statements below ("clearance >= 1", "centres >= 2 apart") are in the
+working unit; in site units they read 1/2 and 1. Conventions are those of
 packages/boundary/src/types.ts and docs/spaces/BOUNDARY.md:
   * cell c = 2 i + (sigma > 0) is the cube x_i = sigma s/2 (i = 0..3, sigma = -1 or +1);
   * its local coordinates u are the other three coordinates of R^4 in increasing order, so the
@@ -51,7 +57,9 @@ from fractions import Fraction
 VERSION = "boundary-cert 1"
 CHECKER = "python/boundary/certify.py"
 MAX_P = 9999
-MAX_S = Fraction(10) ** 4  # the engine's MAX_S (packages/boundary/src/validate.ts)
+MAX_S = Fraction(10) ** 4  # the engine's MAX_S (packages/boundary/src/validate.ts), in site units
+BALL_RADIUS = Fraction(1, 2)  # a ball piece, site units (packages/boundary/src/units.ts)
+BALL_WORK = 1 / BALL_RADIUS  # working length per site length for balls: the ball code below has radius 1
 MMAX = 2
 POLYTOPES = ("tesseract",)
 PIECES = ("ball", "cube")
@@ -328,7 +336,13 @@ class Config:
             raise CertError("the configuration needs a list of pieces")
         if len(pieces) != P:
             raise CertError(f"the configuration has {len(pieces)} pieces; the problem needs {P}")
-        self.polytope, self.piece, self.P, self.s = polytope, piece, P, s
+        self.polytope, self.piece, self.P = polytope, piece, P
+        self.s_site = s
+        # the working unit: balls have radius 1 in it (header); cubes are in site units already
+        w = BALL_WORK if piece == "ball" else Fraction(1)
+        self.unit = 1 / w
+        self.s = s * w
+        s = self.s
         self.h = s / 2
         self.cells = []
         self.u = []
@@ -357,7 +371,7 @@ class Config:
                 if not (abs(qq[0]) == 1 and qq[1] == qq[2] == qq[3] == 0):
                     raise CertError(f"piece {n}: rotated cubes are outside this certifier (q must be absent or +-(1, 0, 0, 0))")
             self.cells.append(c)
-            self.u.append(uu)
+            self.u.append([x * w for x in uu])
         # one common denominator for h, 1/2 and every coordinate: all tests are then integer tests
         D = math.lcm(2, self.h.denominator)
         for uu in self.u:
@@ -427,13 +441,14 @@ def _check_balls(cfg, v):
     H, D, strict = cfg.H, cfg.D, v.strict
     # volume: P (4 pi/3) <= 8 s^3, tested with a lower bound of pi (a failure here is certain)
     if cfg.P * Fraction(4, 3) * PI_LO > 8 * cfg.s ** 3:
-        v.fail(f"{cfg.P} balls have more volume than the boundary of the tesseract at s = {fmt(cfg.s)}")
+        v.fail(f"{cfg.P} balls have more volume than the boundary of the tesseract at s = {fmt(cfg.s_site)}")
         return
     one = D * D
+    u2 = cfg.unit ** 2  # site length squared per working length squared
     cl = [clearance_sq(U, H) for U in cfg.U]
     for n, c in enumerate(cl):
         if _bad(c, one, strict):
-            v.fail(f"ball {n} is {fmt(sqrt_down(Fraction(c, one)))} from an edge of the tesseract; it must be {'more than' if strict else 'at least'} 1")
+            v.fail(f"ball {n} is {fmt(sqrt_down(Fraction(c, one) * u2))} from an edge of the tesseract; it must be {'more than' if strict else 'at least'} {fmt(cfg.unit)}")
     v.margins["clearance_sq"] = Fraction(min(cl), one)
     if not v.ok:
         return
@@ -452,7 +467,7 @@ def _check_balls(cfg, v):
         if best_pair is None or m < best_pair:
             best_pair = m
         if _bad(m, four, strict):
-            v.fail(f"balls {a} and {b} overlap: a path of length {fmt(sqrt_down(Fraction(m, one)))} joins their centres; they must be {'more than' if strict else 'at least'} 2 apart")
+            v.fail(f"balls {a} and {b} overlap: a path of length {fmt(sqrt_down(Fraction(m, one) * u2))} joins their centres; they must be {'more than' if strict else 'at least'} {fmt(2 * cfg.unit)} apart")
     best_loop = None
     for a in range(cfg.P):
         L = [x for x, _ in path_lengths_sq(cfg.cells[a], cfg.U[a], cfg.X[a], H, exclude_empty=True)]
@@ -462,7 +477,7 @@ def _check_balls(cfg, v):
         if best_loop is None or m < best_loop:
             best_loop = m
         if _bad(m, four, strict):
-            v.fail(f"ball {a} overlaps itself: a geodesic loop of length {fmt(sqrt_down(Fraction(m, one)))} leaves and returns to its centre")
+            v.fail(f"ball {a} overlaps itself: a geodesic loop of length {fmt(sqrt_down(Fraction(m, one) * u2))} leaves and returns to its centre")
     v.margins["distance_sq"] = None if best_pair is None else Fraction(best_pair, one)
     v.margins["loop_sq"] = None if best_loop is None else Fraction(best_loop, one)
     v.stats["pairs_within_2_in_R4"] = pairs
@@ -600,14 +615,16 @@ def certify(problem, config):
 
 
 def summary(v):
-    """Readable margins of a verdict, rounded down (lengths) so that they are never overstated."""
+    """Readable margins of a verdict, rounded down (lengths) so that they are never overstated. Ball margins are in site
+    units (the verdict's squared working lengths times Config.unit squared)."""
     out = {"checker": CHECKER, "version": VERSION, "strict": v.strict, "valid": v.ok}
     m = v.margins
     if v.cfg.piece == "ball":
+        u2 = v.cfg.unit ** 2
         out["words_per_cell"] = sum(len(ws) for ws in words_by_end(0).values())
-        out["min_clearance"] = sqrt_down(m["clearance_sq"]) if "clearance_sq" in m else None
-        out["min_distance"] = sqrt_down(m["distance_sq"]) if m.get("distance_sq") is not None else None
-        out["min_loop"] = sqrt_down(m["loop_sq"]) if m.get("loop_sq") is not None else None
+        out["min_clearance"] = sqrt_down(m["clearance_sq"] * u2) if "clearance_sq" in m else None
+        out["min_distance"] = sqrt_down(m["distance_sq"] * u2) if m.get("distance_sq") is not None else None
+        out["min_loop"] = sqrt_down(m["loop_sq"] * u2) if m.get("loop_sq") is not None else None
         out["pairs_within_2_in_R4"] = v.stats.get("pairs_within_2_in_R4")
     else:
         out["min_edge_slack"] = float_down(m["edge_slack"]) if "edge_slack" in m else None
@@ -620,20 +637,20 @@ def summary(v):
 
 
 def ball_distances(problem, config):
-    """For cross-checks: the least realized-word length (exact, squared) between every two centres
+    """For cross-checks: the least realized-word length (exact, squared, in site units) between every two centres
     and of the loops at every centre, without the R^4 shortcut. Complete for lengths < 2 s (BOUNDARY.md 4.1)."""
     cfg = parse(problem, config)
-    one = cfg.D * cfg.D
+    one = cfg.D * cfg.D / cfg.unit ** 2
     pairs = {}
     for a in range(cfg.P):
         for b in range(a + 1, cfg.P):
             L = [x for x, _ in path_lengths_sq(cfg.cells[a], cfg.U[a], cfg.X[b], cfg.H)]
-            pairs[(a, b)] = Fraction(min(L), one) if L else None
+            pairs[(a, b)] = Fraction(min(L)) / one if L else None
     loops = {}
     for a in range(cfg.P):
         L = [x for x, _ in path_lengths_sq(cfg.cells[a], cfg.U[a], cfg.X[a], cfg.H, exclude_empty=True)]
-        loops[a] = Fraction(min(L), one) if L else None
-    clear = [Fraction(clearance_sq(U, cfg.H), one) for U in cfg.U]
+        loops[a] = Fraction(min(L)) / one if L else None
+    clear = [Fraction(clearance_sq(U, cfg.H)) / one for U in cfg.U]
     return pairs, loops, clear
 
 
@@ -654,7 +671,8 @@ def cube_part_boxes(problem, config, strict=False):
 
 
 def check_field_balls(cells, U, s):
-    """Validity (touching allowed) of unit balls whose numbers lie in a field other than Q, here
+    """Validity (touching allowed) of balls, in the WORKING unit (radius 1: the caller has multiplied the site numbers
+    by BALL_WORK), whose numbers lie in a field other than Q, here
     Q(sqrt 2, sqrt 3) (qfield.Q23). The same exact tests as _check_balls, run on field elements
     with the generic routines: h and the centres are put over one common denominator D, so the
     elements have integer coefficients, and squared lengths are compared with D^2 and 4 D^2. Every
@@ -680,7 +698,7 @@ def check_field_balls(cells, U, s):
     cl = [clearance_sq(u, H) for u in U]
     for n, c in enumerate(cl):
         if c < one:
-            reasons.append(f"ball {n} is closer than 1 to an edge")
+            reasons.append(f"ball {n} is closer than 1/2 to an edge")
     unit = lambda x: None if x is None else x / one  # noqa: E731
     margins = {"clearance_sq": unit(min(cl))}
     if reasons:
@@ -717,7 +735,7 @@ def check_exact(problem, exact):
     if field == "Q":
         cfg = {"s": exact.get("s"), "pieces": exact["pieces"]}
         v = check(problem, cfg, strict=False)
-        return v.ok, v.reasons, v.margins, v.cfg.s
+        return v.ok, v.reasons, v.margins, v.cfg.s_site
     if field == "Q(sqrt 2, sqrt 3)":
         from qfield import Q23
 
@@ -740,7 +758,9 @@ def check_exact(problem, exact):
             raise CertError(f"bad field element: {e}") from None
         if len(cells) != p.P:
             raise CertError(f"the construction has {len(cells)} pieces; the problem needs {p.P}")
-        ok, reasons, margins = check_field_balls(cells, U, s)
+        # the stored numbers are site lengths (balls of diameter 1): the checks run on them times BALL_WORK
+        w = int(BALL_WORK)
+        ok, reasons, margins = check_field_balls(cells, [[x * w for x in u] for u in U], s * w)
         return ok, reasons, margins, s
     raise CertError(f"unknown field {field!r}")
 
@@ -762,8 +782,8 @@ def lower_bounds(piece, P):
     decides exactly whether the rational x is <= the bound."""
     if piece == "ball":
         return [
-            ("volume", "(P pi/6)^(1/3)", lambda x: x ** 3 * 6 <= P * PI_LO),
-            ("one piece", "sqrt 2", lambda x: x * x <= 2),
+            ("volume", "(P pi/48)^(1/3)", lambda x: x ** 3 * 48 <= P * PI_LO),
+            ("one piece", "1/sqrt 2", lambda x: 2 * x * x <= 1),
         ]
     return [
         ("volume", "(P/8)^(1/3)", lambda x: x ** 3 * 8 <= P),

@@ -24,7 +24,7 @@ describe("Tighter space board", () => {
   });
 
   it("tells a circle container from a polygon one on a curved problem", () => {
-    expect(spaceScoreWord({ family: "curved", id: "curved/-1/3/0/5" })).toBe("Radius r");
+    expect(spaceScoreWord({ family: "curved", id: "curved/-1/3/0/5" })).toBe("Diameter d");
     expect(spaceScoreWord({ family: "curved", id: "curved/-1/3/4/5" })).toBe("Side s");
   });
 

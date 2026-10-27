@@ -236,7 +236,7 @@ export const DEFAULT_PATIENCE = 1000;
 export function newGame(now: number, seed: number): GameState {
   return {
     // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
-    version: 5,
+    version: 6,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
@@ -357,7 +357,7 @@ export function seenKeys(s: GameState): Set<string> {
 /** Problems in the queue that hold a slot (those leaving do not). */
 export const slotted = (s: GameState) => s.queue.filter((p) => !p.leaving);
 
-/** Density of a packing of side (or radius) s: the pieces' area over the container's. */
+/** Density of a packing of side (or diameter, for a circle container) s: the pieces' area over the container's. */
 export function density(p: ProblemKey, s: number): number {
   if (!isPolygon(p)) throw new Error(`not yet: density for ${p.family}`);
   return (p.P * pieceArea(p.N)) / containerArea(p.M, s);

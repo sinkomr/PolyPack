@@ -38,7 +38,7 @@
  * piece i and +u for piece j, u = (c_i x c_j) / |c_i x c_j|. The size enters through the factor
  * rho, through w = x / rho and through the shapes' R(a) and r(a), whose derivatives are closed forms.
  */
-import { type Quat, type Vec3, circumradiusAngle, inradiusAngle } from "./geometry";
+import { type Quat, type Vec3, circumradiusAngle, inradiusAngle, pieceAngle, rhoForAngle } from "./geometry";
 import { maxMarginPlane } from "./validate";
 
 /** The kernel's state as this module reads it (kernel.ts owns the type). */
@@ -102,7 +102,7 @@ export class SphereEnergy {
     this.N = N;
     this.P = P;
     this.aCap = aCap;
-    this.rhoCap = 1 / aCap;
+    this.rhoCap = rhoForAngle(N, aCap);
     const k = Math.max(1, N);
     this.stdV = new Float64Array(3 * k);
     this.stdDV = new Float64Array(3 * k);
@@ -146,10 +146,10 @@ export class SphereEnergy {
     const rho = s.size;
     if (!(rho > 0) || !Number.isFinite(rho)) return false;
     this.rho = rho;
-    const a = 1 / rho;
+    const N = this.N;
+    const a = pieceAngle(N, rho);
     this.live = a < this.aCap ? 1 : 0;
     const aEff = Math.min(a, this.aCap);
-    const N = this.N;
     this.t = N === 0 ? 1 : Math.max(0, Math.min(1, s.aux.t));
     if (N === 0) {
       // disks of angular radius a overlap only when their centres are closer than 2a
@@ -207,7 +207,7 @@ export class SphereEnergy {
       const uz = C[ci] * C[cj + 1] - C[ci + 1] * C[cj];
       const sn = Math.hypot(ux, uy, uz);
       const theta = Math.atan2(sn, dot);
-      const capR = N === 0 ? 1 / rho : this.capR;
+      const capR = N === 0 ? pieceAngle(0, rho) : this.capR;
       const mCap = rho * (2 * capR - theta);
       if (mCap <= 0 && N !== 0) return mCap;
       this.kind = CAP;

@@ -72,8 +72,19 @@ export interface FoldOptions {
 }
 
 /**
+ * The engine below (packages/surface/src/search) works in working units, where a disk piece has
+ * radius 1; the site's disks have diameter 1. A disk packing in site units is the working one
+ * scaled by 1/2, so on the unit solid the piece scale lam is halved: lam_working = lam_site / 2
+ * (poses on the unit solid do not change). This is the exact conversion of the units change
+ * (factor 2, exact in binary64); polygon pieces (side 1 in both) need none. `lam` in and out of
+ * surfaceFoldSearch, the public validator and the poses it builds are in site units.
+ */
+export const surfaceWorkingScale = (N: number): number => (N === 0 ? 0.5 : 1);
+
+/**
  * The best fold packing on the unit solid (pieces scaled by lam, so the edge is 1/lam), and the
  * number of compressions run; null when none produced a packing or the final check failed.
+ * lam is in site units (see surfaceWorkingScale).
  */
 export function surfaceFoldSearch(
   solid: Solid,
@@ -83,6 +94,7 @@ export function surfaceFoldSearch(
 ): { lam: number; poses: SurfacePose[]; compressions: number } | null {
   const mode = o.mode ?? "fold";
   const rand = mulberry32(o.seed);
+  const U = surfaceWorkingScale(N);
   const la = areaScale(solid, N, P);
   let best: { lam: number; poses: SurfacePose[] } | null = null;
   let compressions = 0;
@@ -90,7 +102,7 @@ export function surfaceFoldSearch(
     compressions++;
     if (!best || lam > best.lam) best = { lam, poses: poses.map((p) => ({ ...p })) };
   };
-  const starts: Start[] = [...o.warm];
+  const starts: Start[] = o.warm.map((st) => ({ ...st, lam: st.lam * U }));
   for (let k = 0; k < o.randomStarts; k++)
     starts.push({
       label: `random#${k}`,
@@ -128,7 +140,8 @@ export function surfaceFoldSearch(
   }
   const pol = slpPolish(solid, N, f0.lam, f0.poses, { iterations: 120, shouldStop: o.finalStop, mode });
   const f = pol.lam >= f0.lam ? pol : f0;
-  const poses = f.poses.map((p) => ({ face: p.face, x: p.x / f.lam, y: p.y / f.lam, theta: p.theta }));
-  const v = validate({ solid: solid.name, N, s: 1 / f.lam, pieces: poses }, mode, { tol: 1e-10 });
-  return v.ok ? { lam: f.lam, poses: f.poses, compressions } : null;
+  // the site's edge s = U / lam_working and the poses on the solid of that edge
+  const poses = f.poses.map((p) => ({ face: p.face, x: (p.x * U) / f.lam, y: (p.y * U) / f.lam, theta: p.theta }));
+  const v = validate({ solid: solid.name, N, s: U / f.lam, pieces: poses }, mode, { tol: 1e-10 });
+  return v.ok ? { lam: f.lam / U, poses: f.poses, compressions } : null;
 }

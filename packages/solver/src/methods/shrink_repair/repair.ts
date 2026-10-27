@@ -3,7 +3,7 @@
 // and guided-local-search weights. Penetration depths and protrusions are the shared ones
 // (separating-axis depth of `pairPenetration`, support-form walls of `visitContainerProtrusions`),
 // evaluated by the allocation-free kernel in kernel.ts. See docs/methods/shrink_repair.md.
-import { boundingRadius, inradius, type Container, type Pose } from "@polypack/geometry";
+import { boundingRadius, containerInradius, pieceInradius, type Container, type Pose } from "@polypack/geometry";
 import { gaussian } from "../harden/dynamics";
 import { Kernel } from "./kernel";
 
@@ -43,11 +43,11 @@ export class RepairState {
   readonly P: number;
   readonly poses: Pose[];
   readonly container: Container;
-  /** Bounding radius, inradius (1 for a circle) and symmetry period of a piece. */
+  /** Bounding radius, inradius (the disk radius for a circle) and symmetry period of a piece. */
   readonly R: number;
   readonly rin: number;
   readonly period: number;
-  /** Apothem of the container per unit size (1 for a circle). */
+  /** Apothem of the container per unit size (1/2 for a circle container, whose size is its diameter). */
   readonly apothem: number;
   /** Counted pair and wall feature tests since the caller last reset it. */
   work = 0;
@@ -98,9 +98,9 @@ export class RepairState {
     this.poses = Array.from({ length: P }, () => ({ x: 0, y: 0, theta: 0 }));
     this.container = { M, cx: 0, cy: 0, phi: 0, size: 1 };
     this.R = boundingRadius(N);
-    this.rin = N === 0 ? 1 : inradius(N);
+    this.rin = pieceInradius(N);
     this.period = N === 0 ? 2 * Math.PI : (2 * Math.PI) / N;
-    this.apothem = M === 0 ? 1 : inradius(M);
+    this.apothem = containerInradius(M);
     this.axes = Array.from({ length: P }, () => new Float64Array(2 * N));
     this.candidateAxes = new Float64Array(2 * N);
     this.trialAxes = new Float64Array(2 * N);
@@ -122,7 +122,7 @@ export class RepairState {
   setSize(size: number): void {
     this.container.size = size;
     // Half-width of the container's bounding box: its circumradius (radius for a circle).
-    const half = this.M === 0 ? size : size / (2 * Math.sin(Math.PI / this.M));
+    const half = this.M === 0 ? size / 2 : size / (2 * Math.sin(Math.PI / this.M));
     this.cellSize = 2 * this.R;
     this.G = Math.max(1, Math.min(256, Math.ceil((2 * (half + this.R)) / this.cellSize)));
     this.gridOrigin = -this.G * this.cellSize * 0.5;
@@ -481,7 +481,7 @@ export class RepairState {
   private sampleCentre(random: () => number, out: Pose): void {
     const s = this.container.size;
     if (this.M === 0) {
-      const radius = Math.max(0, s - this.rin) * Math.sqrt(random());
+      const radius = Math.max(0, this.apothem * s - this.rin) * Math.sqrt(random());
       const angle = 2 * Math.PI * random();
       out.x = radius * Math.cos(angle);
       out.y = radius * Math.sin(angle);

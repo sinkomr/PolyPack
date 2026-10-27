@@ -36,8 +36,8 @@ function circles(expansion: number): PackingConfig {
     pieces: [
       { x: 0, y: 0, theta: 0 },
       ...Array.from({ length: 6 }, (_, k) => ({
-        x: 2 * expansion * Math.cos((k * Math.PI) / 3),
-        y: 2 * expansion * Math.sin((k * Math.PI) / 3),
+        x: expansion * Math.cos((k * Math.PI) / 3),
+        y: expansion * Math.sin((k * Math.PI) / 3),
         theta: 0,
       })),
     ],
@@ -58,8 +58,8 @@ describe("contact active-set polish", () => {
     expect(e.score!).toBeLessThan(evaluate(start, { autoOrient: true }).score! - 0.01);
   });
 
-  // [CALC] Six centres on a radius-two hexagon and one central unit circle fit radius 3.
-  it("tightens the seven-circle ring to radius 3", async () => {
+  // [CALC] Six centres on a unit hexagon and one central unit-diameter disk fit a circle of diameter 3.
+  it("tightens the seven-circle ring to diameter 3", async () => {
     const result = await polish(circles(1.02));
     expect(result).toBeDefined();
     const e = evaluate(result!, { autoOrient: true });

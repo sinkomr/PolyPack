@@ -42,6 +42,7 @@ import { isPieceCount, isPieceName } from "../ids";
 import type { BoundaryConfig, BoundaryProblem } from "../types";
 import { validateBoundary } from "../validate";
 import { BallModel, ChainMetric } from "./balls";
+import { SiteBallModel } from "./ball-site";
 import { chartsOf } from "./chart";
 import { AlignedCubeModel } from "./cubes";
 import { lbfgs } from "./lbfgs";
@@ -156,7 +157,8 @@ function cloneConfig(c: BoundaryConfig): BoundaryConfig {
 export function modelOf(problem: BoundaryProblem, ballMetric?: "words" | "chains"): PieceModel {
   const poly = getPolytope(problem.polytope);
   if (problem.piece === "cube") return new AlignedCubeModel(poly, problem.P, chartsOf(poly));
-  return ballMetric === "chains" ? new BallModel(poly, problem.P, new ChainMetric(poly)) : new BallModel(poly, problem.P);
+  // balls: the working model (radius 1) behind its site-unit wrapper (ball-site.ts)
+  return new SiteBallModel(ballMetric === "chains" ? new BallModel(poly, problem.P, new ChainMetric(poly)) : new BallModel(poly, problem.P));
 }
 
 /** Relative steps by which finalizeState nudges a scale up until the validator accepts it. */

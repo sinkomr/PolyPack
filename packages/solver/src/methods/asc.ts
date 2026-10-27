@@ -1,4 +1,4 @@
-import { boundingRadius, findOverlaps, inradius, TOL, type Container, type PackingConfig } from "@polypack/geometry";
+import { boundingRadius, containerInradius, findOverlaps, pieceInradius, TOL, type Container, type PackingConfig } from "@polypack/geometry";
 import type { MethodContext, MethodDefinition } from "../framework";
 import type { ParameterSchema } from "../schema";
 import { adaptStep, feasible, MIN_STEP, strictEnclose } from "./mc_compress/state";
@@ -246,7 +246,7 @@ export async function executeAsc(ctx: MethodContext, observe?: (event: AscObserv
     let depth = 0;
     for (const overlap of findOverlaps(c.N, c.pieces, 0)) depth = Math.max(depth, -overlap.sep);
     if (depth > TOL) return undefined;
-    const factor = 1 + (depth + 2e-12) / (2 * (c.N === 0 ? 1 : inradius(c.N)));
+    const factor = 1 + (depth + 2e-12) / (2 * pieceInradius(c.N));
     const cx = c.pieces.reduce((sum, p) => sum + p.x, 0) / c.P;
     const cy = c.pieces.reduce((sum, p) => sum + p.y, 0) / c.P;
     const dilated = {
@@ -417,7 +417,7 @@ export async function executeAsc(ctx: MethodContext, observe?: (event: AscObserv
     if (configurationKey(trial) === configurationKey(state.config)) return false;
     // A unit piece lies in a bounding disk B. Scaling centres by f needs
     // wall size f*s+(1-f)*B/apothem, rather than scaling the rigid pieces.
-    const unitWall = boundingRadius(config.N) / (config.M === 0 ? 1 : inradius(config.M));
+    const unitWall = boundingRadius(config.N) / containerInradius(config.M);
     const size = (1 - a) * state.container.size + a * unitWall;
     return state.replace(trial, { ...state.container, size }, temperature, ctx.random);
   };
