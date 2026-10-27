@@ -3,12 +3,15 @@
 // Usage: npx tsx scripts/import-friedman.ts <path to a clone of erich-friedman/erich-friedman.github.io> <access date>
 //
 // Each page lists "n unit <pieces> packed inside the smallest known <container>" with the
-// container radius r or side s. Friedman's units are the site's units (side 1, radius 1), so no
-// numeric conversion is applied; the importer checks the page's own sentence to confirm that.
+// container radius r or side s. Friedman's units are disks of radius 1 and polygons of side 1; the site's since
+// 2026-10-27 are disks of DIAMETER 1 and circle containers scored by their diameter, so a value is converted
+// exactly by scripts/units.ts (scoreFactor): disks in a circle unchanged, disks in a polygon halved, polygons in
+// a circle doubled, polygons in polygons unchanged. The importer checks the page's own sentence for his units.
 // Nothing is guessed: an entry whose number cannot be read is skipped and reported.
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LiteratureRecord, RecordStatus, areaLowerBound } from "@polypack/geometry";
+import { UNITS_HEADER, friedmanNote, scalePrinted, scoreFactor, sourceTolerance } from "./units";
 
 const [repo, accessed] = process.argv.slice(2);
 if (!repo || !/^\d{4}-\d\d-\d\d$/.test(accessed ?? "")) {
@@ -153,29 +156,28 @@ for (const [a, piece] of Object.entries(SHAPES)) {
           skipped.push(`${dir}: n = ${from}${to !== from ? "-" + to : ""}: proof claim not understood, entry kept as best_known: "${rest.slice(0, 90)}"`);
         }
         for (let P = from; P <= to; P++) {
-          const value = Number(digits);
-          if (value < areaLowerBound(piece.sides, container.sides, P) - 10 ** -decimals) {
+          const factor = scoreFactor(piece.sides, container.sides);
+          const value = Number(digits) * factor;
+          if (value < areaLowerBound(piece.sides, container.sides, P) - sourceTolerance(piece.sides, container.sides, decimals)) {
             skipped.push(`${dir}: n = ${P}: value ${digits} is below the area bound, so the page was misread`);
             continue;
           }
+          // an exact value with no "+" (such as "r = 3") is trusted to double precision
+          const printed = scalePrinted(digits + (truncated ? "+" : ""), truncated || decimals > 0 ? decimals : 12, factor);
           records.push({
             N: piece.sides,
             M: container.sides,
             P,
             value,
-            display: digits + (truncated ? "+" : ""),
-            // an exact value with no "+" (such as "r = 3") is trusted to double precision
-            display_precision: truncated || decimals > 0 ? decimals : 12,
+            display: printed.display,
+            display_precision: printed.precision,
             status,
             source_name: `Erich Friedman, Packing Center: ${title}`,
             source_url: url,
             ...(label[3] ? { picture_url: url + label[3] } : {}),
             accessed,
             citation: text.replace(/\n/g, " ").replace(/\s+/g, " "),
-            conversion_note:
-              `None needed: the source uses ${container.sides === 0 ? "container radius r" : "container side s"} for unit pieces ` +
-              `(${piece.sides === 0 ? "radius" : "side"} 1), as this site does.` +
-              (truncated ? " The source prints a truncated decimal (marked +), stored as printed." : ""),
+            conversion_note: friedmanNote(piece.sides, container.sides) + (truncated ? " The source prints a truncated decimal (marked +), stored as printed." : ""),
             ...(note ? { note } : {}),
           });
         }
@@ -185,7 +187,7 @@ for (const [a, piece] of Object.entries(SHAPES)) {
 }
 
 records.sort((x, y) => x.N - y.N || x.M - y.M || x.P - y.P);
-writeFileSync("data/sources/friedman.json", JSON.stringify({ records, skipped }, null, 1) + "\n");
+writeFileSync("data/sources/friedman.json", JSON.stringify({ ...UNITS_HEADER, records, skipped }, null, 1) + "\n");
 const by: Record<string, number> = {};
 for (const r of records) by[`${r.N}in${r.M}`] = (by[`${r.N}in${r.M}`] ?? 0) + 1;
 console.log(`${records.length} records`, by);

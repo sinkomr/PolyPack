@@ -8,15 +8,20 @@
 // To attach cci coordinates to an existing data/sources/packomania.json without the tables, use
 // scripts/attach-packomania-coords.ts.
 //
-// Conversions (the source normalises the container, this site normalises the pieces):
-//   cci: circles of radius `radius` in a circle of radius 1. "ratio" = 1 / radius is the
-//        container radius for unit circles, which is this site's r. Coordinates are divided by radius.
-//   csq: circles of radius `radius` in a square of side 1 centred on the origin. "ratio" = 1 / radius
-//        is the container side for unit circles, this site's s. Coordinates are divided by radius.
+// Conversions (the source normalises the container, this site normalises the pieces; since 2026-10-27 the
+// site's disks have DIAMETER 1 and a circle container is scored by its diameter):
+//   cci: circles of radius `radius` in a circle of radius 1. "ratio" = 1 / radius is the container
+//        diameter for circles of diameter 1 (the container of radius 1 scaled by 1 / (2 radius)), this site's size.
+//        Coordinates are divided by the circle diameter 2 radius.
+//   csq: circles of radius `radius` in a square of side 1 centred on the origin. The container side for
+//        circles of diameter 1 is 1 / (2 radius) = ratio / 2, this site's s. Coordinates are divided by 2 radius.
+// (Before 2026-10-27 the disks had radius 1: value = ratio for both, coordinates divided by radius;
+// scripts/convert-units.ts converted the stored data exactly, and this importer gives the same files.)
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LiteratureRecord } from "@polypack/geometry";
 import { MAX_P_WITH_COORDINATES, coordinatesProblem, readCoordinates } from "./packomania-coords";
+import { PACKOMANIA, UNITS_HEADER, halvePrinted } from "./units";
 
 const [dir, accessed] = process.argv.slice(2);
 if (!dir || !/^\d{4}-\d\d-\d\d$/.test(accessed ?? "")) {
@@ -53,11 +58,13 @@ for (const fam of FAMILIES) {
       skipped.push(`${fam.key} n = ${P}: not in the radius or ratio table`);
       continue;
     }
-    // The radius has more digits than the ratio in the csq tables, so the value is 1 / radius;
-    // the two columns must agree to the digits the ratio prints.
-    const value = 1 / Number(rad);
+    // The radius has more digits than the ratio in the csq tables, so the value is 1 / radius (the circle
+    // container's diameter) or 1 / (2 radius) (the square's side); the radius and ratio columns must agree to
+    // the digits the ratio prints. Halving is exact in binary64.
+    const fromRadius = 1 / Number(rad);
+    const value = fam.M === 0 ? fromRadius : fromRadius / 2;
     const ratioDecimals = rat.split(".")[1].length;
-    if (Math.abs(value - Number(rat)) > 2 * 10 ** -Math.min(ratioDecimals, 9)) {
+    if (Math.abs(fromRadius - Number(rat)) > 2 * 10 ** -Math.min(ratioDecimals, 9)) {
       skipped.push(`${fam.key} n = ${P}: radius ${rad} and ratio ${rat} disagree`);
       continue;
     }
@@ -67,7 +74,7 @@ for (const fam of FAMILIES) {
       M: fam.M,
       P,
       value,
-      display: Number(rat).toFixed(precision),
+      display: fam.M === 0 ? Number(rat).toFixed(precision) : halvePrinted(Number(rat).toFixed(precision), precision).display,
       display_precision: precision,
       status: "best_known",
       source_name: `Eckard Specht, Packomania: ${fam.title}`,
@@ -77,11 +84,11 @@ for (const fam of FAMILIES) {
       citation: `radius = ${rad}, ratio = ${rat} (tables radius.txt and ratio.txt)`,
       conversion_note:
         `The source fixes the container (${fam.M === 0 ? "radius 1" : "side 1"}) and lists the circle radius. ` +
-        `This site fixes the circle radius at 1, so the ${fam.what} is 1 / radius, the source's "ratio" column.`,
+        PACKOMANIA[fam.key as "cci" | "csq"].neu,
     };
     const coords = resolve(dir, `${fam.key}-coords`, `${fam.key}${P}.txt`);
     if (P <= MAX_P_WITH_COORDINATES[fam.key] && existsSync(coords)) {
-      const pieces = readCoordinates(readFileSync(coords, "utf8"), 1 / Number(rad));
+      const pieces = readCoordinates(readFileSync(coords, "utf8"), 1 / (2 * Number(rad)));
       // the one-circle file of csq has no coordinates; the circle sits at the centre
       if (P === 1 && pieces.length === 0) pieces.push({ x: 0, y: 0, theta: 0 });
       // coordinates are only kept when this site's own checker accepts them and reproduces the value
@@ -89,7 +96,7 @@ for (const fam of FAMILIES) {
       if (!problem) {
         rec.pieces = pieces;
         rec.container_phi = 0;
-        rec.conversion_note += " Coordinates are the source's, divided by the circle radius.";
+        rec.conversion_note += ` ${PACKOMANIA.coordinates.neu}`;
       } else {
         skipped.push(`${fam.key} n = ${P}: coordinates not kept (${problem})`);
       }
@@ -97,6 +104,6 @@ for (const fam of FAMILIES) {
     records.push(rec);
   }
 }
-writeFileSync("data/sources/packomania.json", JSON.stringify({ records, skipped }, null, 1) + "\n");
+writeFileSync("data/sources/packomania.json", JSON.stringify({ ...UNITS_HEADER, records, skipped }, null, 1) + "\n");
 console.log(`${records.length} records, ${records.filter((r) => r.pieces).length} with coordinates`);
 console.log(`${skipped.length} skipped:\n` + skipped.join("\n"));

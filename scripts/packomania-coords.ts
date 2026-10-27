@@ -10,7 +10,8 @@ export const MAX_P_WITH_COORDINATES: Record<string, number> = { cci: 500, csq: 1
 
 /**
  * Reads the "index x y ..." lines of a coordinate file. The source normalises the container, so
- * every coordinate is multiplied by `scale` = 1 / circle radius to give pieces of radius 1.
+ * every coordinate is multiplied by `scale` = 1 / (2 circle radius) to give pieces of diameter 1 (site units
+ * since 2026-10-27; they had radius 1 and scale 1 / circle radius).
  * Lines that do not start with an index and two decimals (headers, the empty csq1 line) are ignored.
  */
 export function readCoordinates(text: string, scale: number): Pose[] {

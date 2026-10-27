@@ -16,7 +16,8 @@
 //   - strict: no pair penetrates by more than the solver's strict margin (1e-12, `strictTolerance`),
 //     so the packing does not lean on the 1e-9 validity allowance, and it passes the server's
 //     shrink test `strictVerify` (the test applied to submissions that beat a published value);
-//   - published - tol <= score <= published + tol, tol = 10^-display_precision.
+//   - published - tol <= score <= published + tol, tol = 10^-display_precision (doubled for a circle container, whose size
+//     is the diameter: sourceTolerance in scripts/units.ts).
 //     A score above that is never kept. A score below it is not stored as a drawing; it is logged
 //     as "below" and listed by `--report`.
 //
@@ -57,6 +58,7 @@ import {
   strictVerify,
 } from "@polypack/geometry";
 import { identifyContacts, run, strictTolerance } from "@polypack/solver";
+import { sourceTolerance } from "./units";
 
 const RECORDS = "data/records.json";
 const OUTPUT = "data/sources/constructed.json";
@@ -127,7 +129,7 @@ interface JobResult {
   seconds: number;
 }
 
-const tolerance = (r: { display_precision: number }) => 10 ** -r.display_precision;
+const tolerance = (r: { N: number; M: number; display_precision: number }) => sourceTolerance(r.N, r.M, r.display_precision);
 const keyOf = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 
 // ---------- acceptance ----------
@@ -154,7 +156,7 @@ export function check(config: PackingConfig, value: number, display_precision: n
   const score = fixed.score!;
   if (findOverlaps(stored.N, stored.pieces, strictTolerance(stored)).length) return { verdict: "not_strict", score };
   if (!strictVerify(stored.N, stored.pieces, fixed.container).ok) return { verdict: "not_strict", score };
-  const tol = 10 ** -display_precision;
+  const tol = sourceTolerance(config.N, config.M, display_precision);
   if (score > value + tol) return { verdict: "above", score };
   if (score < value - tol) return { verdict: "below", score, config: stored };
   return { verdict: "reached", score, config: stored };

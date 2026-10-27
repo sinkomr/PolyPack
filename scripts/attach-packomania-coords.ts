@@ -11,7 +11,7 @@
 //   - Only n up to MAX_P_WITH_COORDINATES.cci (the site's cap on P) is read.
 //   - The file is data: every non-empty line must be "index x y" with the indices 1..n in order,
 //     otherwise nothing is taken from it. Nothing is guessed.
-//   - Conversion as in import-packomania.ts: coordinates times 1 / radius, theta 0, container_phi 0.
+//   - Conversion as in import-packomania.ts: coordinates times 1 / (2 radius) (the circles have diameter 1), theta 0, container_phi 0.
 //   - Coordinates are stored only if the site's checker accepts them and they reproduce the
 //     published value to 1e-8 (coordinatesProblem). The published value and display never change.
 //   - A record whose stored coordinates already equal the archive's is left exactly as it is, so
@@ -20,6 +20,7 @@ import { lstatSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LiteratureRecord } from "@polypack/geometry";
 import { MAX_P_WITH_COORDINATES, coordinatesProblem, readCoordinates } from "./packomania-coords";
+import { PACKOMANIA } from "./units";
 
 const [dir, accessed] = process.argv.slice(2);
 if (!dir || !/^\d{4}-\d\d-\d\d$/.test(accessed ?? "")) {
@@ -41,7 +42,8 @@ for (const rec of file.records) {
   if (rec.N !== 0 || rec.M !== 0 || rec.P > MAX_P_WITH_COORDINATES.cci) continue;
   const fail = (why: string) => problems.push(`${PREFIX}${rec.P}: ${why}`);
 
-  // the printed radius, as the importer stored it; it must give exactly the stored value
+  // the printed radius, as the importer stored it; it must give exactly the stored value (the container
+  // diameter, 1 / radius, since circles of diameter 1 are scored by it)
   const radius = /^radius = (\d+\.\d+), ratio = /.exec(rec.citation ?? "")?.[1];
   if (!radius || 1 / Number(radius) !== rec.value) {
     fail("the record's citation does not give the radius behind its value; coordinates not attached");
@@ -60,7 +62,7 @@ for (const rec of file.records) {
     fail(`file is not ${rec.P} lines "index x y" numbered 1 to ${rec.P}; coordinates not attached`);
     continue;
   }
-  const pieces = readCoordinates(text, 1 / Number(radius));
+  const pieces = readCoordinates(text, 1 / (2 * Number(radius)));
   const problem = pieces.length === rec.P ? coordinatesProblem(0, rec.P, pieces, rec.value) : `${pieces.length} centres read`;
   if (problem) {
     fail(`coordinates not attached (${problem})`);
@@ -82,7 +84,7 @@ for (const rec of file.records) {
   rec.container_phi = 0;
   rec.coordinates_note =
     `Coordinates from the source's coordinate archive cci_coords.tar (local copy, read ${accessed}), ` +
-    `printed there to ${decimals} decimals and divided by the circle radius.`;
+    `printed there to ${decimals}${PACKOMANIA.attached.neu}`;
 }
 
 file.skipped = [...file.skipped.filter((s) => !s.startsWith(PREFIX)), ...problems];

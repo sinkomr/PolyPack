@@ -20,6 +20,7 @@
 // found valid at a size within the record's tolerance of its value.
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { LiteratureRecord, Pose, areaLowerBound, evaluate, isProven } from "@polypack/geometry";
+import { ONE_DISK, UNITS_HEADER, sourceTolerance } from "./units";
 
 // --date stamps the build with a given day instead of today, so that a rebuild that changes
 // nothing else does not restamp the derived entries
@@ -49,12 +50,13 @@ for (const file of readdirSync("data/sources")
 for (const [k, list] of gaps) if (!groups.has(k)) groups.set(k, list);
 
 const report: string[] = [];
-const tolerance = (r: LiteratureRecord) => 10 ** -r.display_precision;
+const tolerance = (r: LiteratureRecord) => sourceTolerance(r.N, r.M, r.display_precision);
 
 // ---------- literature values below a bound [CALC] ----------
 // An M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)), so P pieces that fit the
-// M-gon fit that circle too: s ≥ 2 sin(π/M)·ρ, where ρ is the smallest radius of a circle holding
-// the same P pieces. With ρ proven, a source value below this bound is wrong, whatever the source
+// M-gon fit that circle too: s ≥ sin(π/M)·D, where D is the smallest DIAMETER of a circle holding
+// the same P pieces (a circle container is scored by its diameter since 2026-10-27; this was
+// 2 sin(π/M)·ρ with the radius ρ). With D proven, a source value below this bound is wrong, whatever the source
 // says. It is left out and reported, so that the site neither shows an impossible value nor closes
 // the problem on it. Printed values are truncated, so both sides are allowed their printed precision.
 for (const [k, list] of groups) {
@@ -62,12 +64,12 @@ for (const [k, list] of groups) {
   if (M === 0) continue;
   const circle = (groups.get(key({ N, M: 0, P })) ?? []).filter((r) => r.status === "proven");
   if (!circle.length) continue;
-  const rho = Math.min(...circle.map((r) => r.value));
-  const bound = 2 * Math.sin(Math.PI / M) * rho;
+  const diameter = Math.min(...circle.map((r) => r.value));
+  const bound = Math.sin(Math.PI / M) * diameter;
   const kept = list.filter((r) => r.value + 2 * tolerance(r) >= bound);
   for (const r of list.filter((r) => !kept.includes(r))) {
     report.push(
-      `${k}: ${r.source_name.split(":")[0]} gives ${r.display} (${r.status}), below ${bound.toFixed(7)}, the bound from ${rho} for a circle; left out`,
+      `${k}: ${r.source_name.split(":")[0]} gives ${r.display} (${r.status}), below ${bound.toFixed(7)}, the bound from ${diameter} for a circle; left out`,
     );
   }
   if (kept.length) groups.set(k, kept);
@@ -192,7 +194,7 @@ function derive(
 }
 
 // One piece in a container of its own shape: the piece is the container.
-derive(0, 0, 1, 1, "trivial_tiling", "One circle fills a circle of the same radius, so r = 1.", [
+derive(0, 0, 1, 1, "trivial_tiling", ONE_DISK.neu.replace("[CALC] ", ""), [
   { x: 0, y: 0, theta: 0 },
 ]);
 for (let n = 3; n <= 20; n++) {
@@ -318,7 +320,7 @@ for (const r of records) {
   }
 }
 
-writeFileSync("data/records.json", JSON.stringify({ generated: TODAY, records }) + "\n");
+writeFileSync("data/records.json", JSON.stringify({ generated: TODAY, ...UNITS_HEADER, records }) + "\n");
 const count = (f: (r: LiteratureRecord) => boolean) => records.filter(f).length;
 console.log(
   `${records.length} records: ${count((r) => r.status === "proven")} proven, ${count((r) => r.status === "proven_unrefereed")} proven (unrefereed), ` +
