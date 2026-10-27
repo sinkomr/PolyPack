@@ -50,19 +50,32 @@ const problem = (space: SpaceName, id: string): SpaceProblemEntry => {
 const configOf = (p: SpaceProblemEntry) =>
   JSON.parse(p.configApart ? readEntryConfigSync(root, cat(p.id.split("/")[0] as SpaceName), p)! : p.config!);
 /**
- * The records of a space with their configurations, read as the server reads them (polyhedra
- * configurations on demand). Every polyhedra record up to P = 30 and every tenth above it, since a
- * float check of all 14,850 takes over a minute; the certifier checks every one (POLYHEDRA.md).
+ * A fixed sample of a space's records, with their configurations read as the server reads them
+ * (polyhedra configurations on demand): per family (the string fields of the id: solid and mode, lattice
+ * family, polyhedron code, ...) its smallest and largest P and the middle one,
+ * and a dozen spread over the catalogue. Every family and both ends of
+ * every range are met; the validators themselves are checked against every stored record by
+ * packages/polyhedra/test/validate.test.ts (float rule) and the certifiers' Python tests (interval rule).
  * Yields to the event loop now and then, so that a long loop does not hold up the test runner.
  */
 async function* recordsOf(space: SpaceName): AsyncGenerator<[SpaceProblemEntry, unknown]> {
+  const families = new Map<string, SpaceProblemEntry[]>();
+  for (const p of cat(space).problems) {
+    const key = Object.values(p.fields).filter((v) => typeof v === "string").join("/");
+    families.set(key, [...(families.get(key) ?? []), p]);
+  }
+  // and, for the spaces whose ids are numbers only, a dozen spread over the whole catalogue
+  const all = cat(space).problems;
+  const picks = new Set<SpaceProblemEntry>(all.filter((_, i) => i % Math.ceil(all.length / 12) === 0));
+  for (const list of families.values()) for (const p of [list[0], list[list.length >> 1], list[list.length - 1]]) picks.add(p);
   let n = 0;
-  for (const [i, p] of cat(space).problems.entries()) {
-    if (space === "polyhedra" && p.P > 30 && i % 10 !== 0) continue;
-    const text = await entryConfig(cat(space), p);
-    if (text === null) continue;
-    if (++n % 50 === 0) await new Promise((r) => setImmediate(r));
-    yield [p, JSON.parse(text)];
+  for (const list of [picks]) {
+    for (const p of list) {
+      const text = await entryConfig(cat(space), p);
+      if (text === null) continue;
+      if (++n % 20 === 0) await new Promise((r) => setImmediate(r));
+      yield [p, JSON.parse(text)];
+    }
   }
 }
 /** The wrapper as the server calls it: with the problem's bound and the catalogue's largest P. */

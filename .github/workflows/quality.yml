@@ -1,0 +1,39 @@
+name: Quality benchmarks
+# Search-quality benchmarks (*.quality.test.ts): seed-success rates, races between methods and known
+# packings. They take minutes and are not part of CI's `npm test`. They run every night, and on pull
+# requests that touch the solver, the methods or the space search.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packages/solver/**"
+      - "packages/methods/**"
+      - "packages/spaces/**"
+      - "packages/sphere/**"
+      - "packages/torus/**"
+      - "packages/polyhedra/**"
+      - "packages/curved/**"
+      - "packages/surface/**"
+      - "packages/boundary/**"
+      - "packages/balls/**"
+      - "apps/web/src/space/**"
+      - "apps/volunteer/src/engine/**"
+      - "vitest.quality.config.ts"
+      - ".github/workflows/quality.yml"
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:quality

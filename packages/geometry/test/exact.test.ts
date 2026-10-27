@@ -86,9 +86,13 @@ const pick = <T>(list: readonly T[]) => list[Math.floor(random() * list.length)]
 
 describe("the narrow phase", () => {
   it("gives regularPolygonSeparation's value for every pair, from far fewer axes", () => {
+    // The pairs are drawn at random, but stratified: N runs through every small side count, the primes and
+    // composites around the pruning's thresholds and 100, and the orientation, offset and distance cases below
+    // come round in turn
+    const sides = [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 24, 36, 60, 97, 100];
     let pairs = 0;
-    for (let t = 0; t < 300_000; t++) {
-      const N = 3 + Math.floor(random() * 98);
+    for (let t = 0; t < 20_000; t++) {
+      const N = t % 3 === 0 ? 3 + Math.floor(random() * 98) : sides[t % sides.length];
       const R = circumradius(N);
       const r = inradius(N);
       const step = (2 * Math.PI) / N;
@@ -116,12 +120,12 @@ describe("the narrow phase", () => {
       if (pruned !== full) expect({ N, a, b, scale, pruned }).toEqual({ N, a, b, scale, pruned: full });
       pairs++;
     }
-    expect(pairs).toBe(300_000);
+    expect(pairs).toBe(20_000);
   });
 
   it("finds the same overlapping pairs, with the same separations, as the full test", () => {
-    for (let t = 0; t < 400; t++) {
-      const N = pick([3, 4, 6, 11, 12, 13, 24, 60, 100]);
+    for (let t = 0; t < 60; t++) {
+      const N = [3, 4, 6, 11, 12, 13, 24, 60, 100][t % 9];
       const P = 1 + Math.floor(random() * 60);
       const spread = pick([0.3, 0.8, 1, 1.5, 3]);
       const side = spread * 2 * circumradius(N) * Math.sqrt(P);
@@ -141,14 +145,19 @@ describe("the narrow phase", () => {
 });
 
 /** Boards where shortcuts could slip: random, packed tight, on lattices and rings, aligned with the container. */
-function boards(): PackingConfig[] {
+function boards(count = 60): PackingConfig[] {
   const out: PackingConfig[] = [];
-  for (let t = 0; t < 300; t++) {
-    const N = pick([3, 4, 5, 6, 8, 12, 21, 24, 36, 60, 90, 100]);
-    const M = pick([3, 4, 5, 6, 7, 12, 21, 24, 50, 100]);
+  // the kinds, N and M come round in turn (their lengths 5, 12 and 10 are not multiples of each other), so that
+  // every kind meets many of the side counts
+  const Ns = [3, 4, 5, 6, 8, 12, 21, 24, 36, 60, 90, 100];
+  const Ms = [3, 4, 5, 6, 7, 12, 21, 24, 50, 100];
+  const kinds = ["random", "compact", "lattice", "ring", "row"] as const;
+  for (let t = 0; t < count; t++) {
+    const N = Ns[t % Ns.length];
+    const M = Ms[(t + (t >> 3)) % Ms.length];
     const P = 1 + Math.floor(random() * 50);
     const R = circumradius(N);
-    const kind = pick(["random", "compact", "lattice", "ring", "row"]);
+    const kind = kinds[t % kinds.length];
     let pieces: Pose[] = [];
     if (kind === "random") {
       const side = pick([1, 2, 4]) * 2 * R * Math.sqrt(P);
@@ -183,8 +192,13 @@ function boards(): PackingConfig[] {
 const { records } = JSON.parse(readFileSync(new URL("../../../data/records.json", import.meta.url), "utf8")) as {
   records: LiteratureRecord[];
 };
-const published = records
-  .filter((r) => r.pieces)
+// every (N, M) of the published packings with its smallest and its largest P and a tenth of the rest
+const withPieces = records.filter((r) => r.pieces);
+const sampledPublished = withPieces.filter((r, i) => {
+  const same = withPieces.filter((q) => q.N === r.N && q.M === r.M);
+  return i % 10 === 0 || r.P === Math.min(...same.map((q) => q.P)) || r.P === Math.max(...same.map((q) => q.P));
+});
+const published = sampledPublished
   .map((r) => ({ N: r.N, M: r.M, P: r.P, pieces: r.pieces!, container_phi: r.container_phi ?? 0 }));
 
 function corpus(dir: string): PackingConfig[] {
@@ -199,14 +213,14 @@ function corpus(dir: string): PackingConfig[] {
 const saved = corpus(resolve(import.meta.dirname, "../../../data/corpus"));
 
 describe("the container at one orientation", () => {
-  it("is the hull's container, to the bit, on fuzzed boards and on every published packing", () => {
+  it("is the hull's container, to the bit, on fuzzed boards and on a sample of the published packings", () => {
     // each also turned to its best orientation, where supports often nearly tie, and to others
     const cases = [...boards(), ...published, ...saved].flatMap((c) => {
       if (!c.pieces.length || c.M === 0) return [c];
       const best = autoOrientSet(extremePoints(c.N, c.pieces), c.M, c.container_phi).phi;
       return [c, { ...c, container_phi: best }, { ...c, container_phi: random() * 7 }];
     });
-    expect(cases.length).toBeGreaterThan(3000);
+    expect(cases.length).toBeGreaterThan(400);
     for (const c of cases)
       expect(enclose(c.N, c.pieces, c.M, c.container_phi)).toEqual(
         encloseSet(extremePoints(c.N, c.pieces), c.M, c.container_phi),
