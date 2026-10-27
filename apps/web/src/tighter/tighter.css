@@ -1621,3 +1621,21 @@ html {
     display: none;
   }
 }
+
+/* ---- space board ---- */
+/* a space problem's drawing takes the canvas's place; the drawing's own toolbar is left out */
+.t-space-board {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.t-space-board[hidden] {
+  display: none;
+}
+.t-space-board .space-tools {
+  display: none;
+}
+.t-score-list [hidden] {
+  display: none;
+}

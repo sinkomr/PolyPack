@@ -1,4 +1,5 @@
 import { MAX_PIECES, evaluate, eventKeys } from "@polypack/geometry";
+import type { SpaceConfig } from "@polypack/spaces";
 import type { Container, LeaderboardEvent, PackingConfig, ProblemInfo } from "@polypack/geometry";
 import * as api from "../api";
 import { Board } from "../board";
@@ -20,12 +21,14 @@ import {
   retakeTier,
   takeToken,
 } from "./dealer";
+import { SpaceBoard, mountSpaceBoard, spaceScoreBox } from "./board-space";
 import { rulesOf } from "./families";
 import {
   FRONTIER,
   FRONTIER_P,
   ProblemKey,
   STARTER,
+  SpaceKey,
   isPolygon,
   keyOf,
   keyPart,
@@ -230,7 +233,8 @@ const sizeOfPolygon = (p: ProblemKey): number => {
   return q.N + q.M + q.P;
 };
 /** The gap of a score to the problem's lower bound, s / b − 1. */
-const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number => s / rulesOf(p).bound(p)! - 1;
+const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number =>
+  s / (isPolygon(p) ? rulesOf(p).bound(p)! : (p.bound ?? NaN)) - 1;
 const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
 /**
  * Auto-eval's target from its evaluations a second: "up to 1 evaluation a second", "up to 2.5
@@ -395,6 +399,39 @@ function ghost(p: ProblemState, around: Container | null): Container {
   };
 }
 
+/** The drawing of the focused space problem, in the place of the canvas (board-space.ts); null while a polygon problem is shown. */
+let spaceBoard: { key: string; board: SpaceBoard } | null = null;
+const spaceHost = $("t-space-board");
+const boardCanvas = $<HTMLCanvasElement>("board");
+
+/** Shows the canvas again, and drops the space drawing. */
+function useCanvas(): void {
+  if (!spaceBoard) return;
+  spaceBoard.board.destroy();
+  spaceBoard = null;
+  spaceHost.hidden = true;
+  boardCanvas.hidden = false;
+}
+
+/** A space problem's board (the board field holds a SpaceConfig for these), null while its pieces are being placed. */
+const spaceConfig = (p: ProblemState): SpaceConfig | null =>
+  p.phase === "bare" ? null : (p.board as unknown as SpaceConfig | null);
+
+/** Shows a space problem's packing with the site's own drawing, in the canvas's place. */
+function showSpace(p: ProblemState & SpaceKey): void {
+  if (spaceBoard?.key !== p.key) {
+    spaceBoard?.board.destroy();
+    boardCanvas.hidden = true;
+    spaceHost.hidden = false;
+    spaceBoard = {
+      key: p.key,
+      board: mountSpaceBoard(spaceHost, { family: p.family, id: p.id, P: p.P, board: spaceConfig(p) }),
+    };
+  }
+  // a configuration the page has not made yet is drawn as empty
+  spaceBoard.board.show(spaceConfig(p));
+}
+
 let shown = "";
 /** Puts the focused problem's board on the canvas, when it changed; a new problem is placed at once. */
 function showFocus(force = false): void {
@@ -405,6 +442,11 @@ function showFocus(force = false): void {
   const refit = !p || !shown.startsWith(`${p.key}|`) || force;
   shown = sig;
   view.setPreview(null);
+  if (p && !isPolygon(p)) {
+    showSpace(p);
+    return;
+  }
+  useCanvas();
   if (!p) {
     board.load({ N: 0, M: 0, P: 1, pieces: [], container_phi: 0 }, false);
     view.ghost = null;
@@ -426,6 +468,8 @@ function showFocus(force = false): void {
  * leaves large frontier problems (300 pieces of up to 100 sides) overflowing the canvas.
  */
 function fitView(c: Container | null): void {
+  // the space drawing fits itself to its box
+  if (spaceBoard) return;
   view.fit();
   const canvas = $<HTMLCanvasElement>("board");
   const w = canvas.clientWidth,
@@ -2101,7 +2145,7 @@ function renderProblem(p: ProblemState | undefined): void {
     show("t-next", false);
     return;
   }
-  text("t-title", problemTitle(p));
+  text("t-title", isPolygon(p) ? problemTitle(p) : rulesOf(p).title(p));
   text("t-problem-count", countText(p));
   let note: string;
   if (p.closed) note = "This problem is closed. The server takes no more entries for it.";
@@ -2118,7 +2162,7 @@ function renderProblem(p: ProblemState | undefined): void {
       (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
     note =
-      `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapTo(p, p.leader.score))} above the area bound. ` +
+      `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapTo(p, p.leader.score))} above the ${isPolygon(p) ? "area bound" : "bound"}. ` +
       `Improvements here pay ${CONTEST[p.tier]} times as much as on an open problem.`;
   else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
@@ -2225,15 +2269,20 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
   show("t-score", !!p);
   show("t-pip", !!p);
   if (!p) return;
-  text("t-side-label", sideWord(p) === "radius" ? "Radius r" : "Side s");
-  const b = rulesOf(p).bound(p)!;
-  text("t-bound", show6(b));
+  // density is the pieces' area over the container's: for polygons only
+  const flat = isPolygon(p);
+  for (const id of ["t-density-label", "t-density"]) show(id, flat);
+  const sp = flat ? null : spaceScoreBox(p, p.best);
+  text("t-side-label", sp ? sp.label : sideWord(p) === "radius" ? "Radius r" : "Side s");
+  text("t-bound-label", flat ? "Area bound" : "Lower bound");
+  const b = sp ? sp.bound : rulesOf(p).bound(p)!;
+  text("t-bound", b === null ? "—" : show6(b));
   if (p.best === null || p.phase === "bare") {
     for (const id of ["t-side", "t-delta", "t-gap", "t-density"]) text(id, "—");
   } else {
     text("t-side", show6(p.best));
-    text("t-gap", fmtPct(p.best / b - 1));
-    text("t-density", density(p, p.best).toFixed(3));
+    text("t-gap", b === null ? "—" : fmtPct(p.best / b - 1));
+    if (flat) text("t-density", density(p, p.best).toFixed(3));
     const c = lastChange.get(p.key);
     const delta = $("t-delta");
     if (c && c.improved && c.before !== null && c.after !== null) {
@@ -3201,7 +3250,17 @@ if (import.meta.env.DEV)
       canChange: () => ownsGame,
       changed: () => {
         persist();
+        showFocus(true);
         render();
+      },
+      now,
+      spaceStart: async (id) => {
+        const k = parseKey(id);
+        if (!k || isPolygon(k)) return `${id} is not a space problem id.`;
+        const { loadSpaceProblem } = await import("../space/load");
+        const p = await loadSpaceProblem(k.family, id);
+        if (typeof p === "string") return p;
+        return { bound: p.bound?.value ?? null, best: p.best ? { config: p.best.config, score: p.best.score } : null };
       },
     }),
   );

@@ -104,6 +104,7 @@
         <p id="t-banner" class="t-banner" hidden></p>
         <div id="t-board-view" class="t-boardwrap" role="tabpanel" aria-labelledby="t-tab-board">
           <canvas id="board" tabindex="0" role="img" aria-label="The board of the current problem"></canvas>
+          <div id="t-space-board" class="t-space-board" hidden></div>
           <figure id="t-pip" class="t-pip t-overlay">
             <svg
               id="t-trace"
@@ -136,13 +137,16 @@
               <dd id="t-side" class="t-score-big">—</dd>
               <dt title="How much the last click shrank the side, and the RP it paid.">Last step</dt>
               <dd id="t-delta">—</dd>
-              <dt title="The side the container would have if the pieces filled it completely. No packing is smaller.">
+              <dt
+                id="t-bound-label"
+                title="The smallest value the problem allows by a bound, no packing is smaller. For a polygon problem it is the side the container would have if the pieces filled it completely."
+              >
                 Area bound
               </dt>
               <dd id="t-bound">—</dd>
               <dt title="How far your side is above the area bound.">Gap</dt>
               <dd id="t-gap">—</dd>
-              <dt title="The share of the container's area that the pieces cover.">Density</dt>
+              <dt id="t-density-label" title="The share of the container's area that the pieces cover.">Density</dt>
               <dd id="t-density">—</dd>
               <dt title="The current record for this problem on PolyPack, as last seen.">Record</dt>
               <dd id="t-record">—</dd>
