@@ -8,6 +8,7 @@ import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
 import {
   type SpaceName,
   SPACE_RECORD_MARGIN,
+  SPACE_DOMAINS,
   type ParsedSpaceId,
   parseSpaceId,
   problemOf,
@@ -708,6 +709,24 @@ describe("3D in 3D: balls on the board", () => {
 });
 
 describe("3D in 3D: polyhedra on the board", () => {
+  it("offers the entire domain through 500 regardless of records", () => {
+    const pick = pickFromDomain("polyhedra", SPACE_DOMAINS.polyhedra!.info, { code: "tidintid", P: "500" });
+    expect(pick.id).toBe("polyhedra/tidintid/500");
+    expect(pick.fields.at(-1)!.options).toHaveLength(499);
+    expect(pick.fields.at(-1)!.options.at(-1)!.value).toBe("500");
+    for (const code of ["cubincub", "tetintet", "tidintid", "dtcindtc", "pr12l3incub"])
+      for (const method of ["auto", "basin_hopping"])
+        for (const fresh of [false, true]) {
+          const p = parseSearchProblem(`polyhedra/${code}/500`)!;
+          const plan = roundJob(p, rule, { seed: 1, fresh, method, budget: { evals: 1e6 } },
+            0, { evals: 0, seconds: 0 }, fresh ? null : { s: 10, pieces: [] }, 20)!;
+          const { stepMs } = polyhedraRound(500, code);
+          const seconds = method !== "auto" ? plan.evals * stepMs / 1000
+            : fresh ? 0.4 * plan.evals * 1.5 * stepMs / 1000 : polyhedraRoundSeconds(500, code, plan.evals);
+          expect(seconds, `${code} ${method} fresh=${fresh}`).toBeLessThanOrEqual(20);
+        }
+  });
+
   const rule = { bound: null, certified: null };
 
   it("picks a problem by its pair of solids, then P from 2 to 100", () => {
@@ -724,7 +743,7 @@ describe("3D in 3D: polyhedra on the board", () => {
     expect(scoreLabel(parseSearchProblem("polyhedra/tidintid/100")!)).toBe("Container scale s");
   });
 
-  it("sizes its rounds from P and the solid's size, at most about 20 s on a slow machine up to P = 100", () => {
+  it("sizes its rounds from P and the solid's size, at most about 20 s on a slow machine up to P = 500", () => {
     // two hops for small problems; for 100 of the largest solids, a polish of the start and jiggles
     expect(polyhedraRound(11, "cubincub").round).toBe(16800);
     expect(polyhedraRound(100, "cubincub").round).toBe(7100);
@@ -732,10 +751,10 @@ describe("3D in 3D: polyhedra on the board", () => {
     expect(polyhedraRound(100, "phcinphc").round).toBe(2600);
     expect(polyhedraRound(100, "dtcindtc").round).toBe(2400);
     for (const code of PROBLEM_CODES)
-      for (let P = 2; P <= 100; P++) {
+      for (let P = 2; P <= 500; P++) {
         const { round, fresh, stepMs } = polyhedraRound(P, code);
         const at = `${code}/${P}`;
-        if (round > 2 * (7000 + 130 * P) || round < 1000) throw new Error(`${at}: round ${round}`);
+        if (round > 2 * (7000 + 130 * P) || round < (P > 100 ? 100 : 1000)) throw new Error(`${at}: round ${round}`);
         // [CALC] at most about 20 s on a machine 3.5 times slower than the measured costs (3.4 times was seen under load)
         if (!(polyhedraRoundSeconds(P, code, round) < 20))
           throw new Error(`${at}: ${polyhedraRoundSeconds(P, code, round)} s`);
@@ -744,7 +763,7 @@ describe("3D in 3D: polyhedra on the board", () => {
         if (fresh > round && !((0.4 * fresh * 1.5 * stepMs) / 1000 < 21)) throw new Error(`${at}: fresh ${fresh}`);
       }
     for (const code of ["tetintet", "cubincub", "tidintid", "phcinphc", "dtcindtc", "sndinsnd", "pr12l3incub"])
-      for (const P of [2, 11, 30, 31, 64, 100]) {
+      for (const P of [2, 11, 30, 31, 64, 100, 101, 257, 500]) {
         const { round, fresh } = polyhedraRound(P, code);
         const at = `${code}/${P}`;
         const search = parseSearchProblem(`polyhedra/${code}/${P}`)!;

@@ -65,7 +65,7 @@ import {
 import { SpaceConfig, SpaceName } from "./types";
 
 /**
- * Largest P each space accepts: the largest P of its catalogue (2026-10-24; polyhedra 2026-10-25),
+ * Largest P each space accepts: its catalogue or domain cap (polyhedra P <= 500, 2026-10-26),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
  * Surface: its domain's P <= 100. [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and

@@ -23,6 +23,72 @@ import {
 import { loadSpacesIndex } from "../src/load";
 import { checkSpaceConfig } from "../src/search";
 import { TORUS_TEST_DOMAIN } from "./testing-domain";
+import { getProblem, latticeStart, volumeBound } from "@polypack/polyhedra";
+import { SPACE_MAX_P, formatSpaceId, parseSpaceConfig, validateSpaceSubmissionAsync } from "../src";
+import { parseSearchProblem, readSpaceConfig, searchSpaceProblem, spaceLatticeStart } from "../src/search";
+
+describe("polyhedra domain", () => {
+  it("has 74,850 problems and only 14,850 unchanged research records", () => {
+    const c = loadSpacesIndex(join(__dirname, "../../.." )).polyhedra!;
+    const d = SPACE_DOMAINS.polyhedra!;
+    expect(d.info.problems).toBe(150 * 499);
+    expect(c.maxP).toBe(500);
+    expect(SPACE_MAX_P.polyhedra).toBe(500);
+    expect(c.problems).toHaveLength(14850);
+    expect(c.problems.every((p) => p.P <= 100 && hasRecord(p))).toBe(true);
+    expect(d.sample(500)).toHaveLength(500);
+    expect(new Set(d.sample(500)).size).toBe(500);
+    expect(d.sample(1)).toEqual(d.sample(500).slice(0, 1));
+    expect(d.sample(500).every((s) => Number(s.split("/").at(-1)) > 100)).toBe(true);
+    for (const P of [2, 100, 101, 499, 500]) {
+      const parsed = parseSpaceId("polyhedra", `polyhedra/cubincub/${P}`);
+      if (typeof parsed === "string") throw new Error(parsed);
+      expect(formatSpaceId("polyhedra", parsed.fields)).toBe(parsed.id);
+      expect(domainId(d.info, parsed.fields)).toBe(parsed.id);
+      const p = problemOf(c, parsed)!;
+      expect(hasRecord(p)).toBe(P <= 100);
+      expect(p.bound!.value).toBeCloseTo(volumeBound(getProblem("cubincub")!, P), 12);
+      if (P > 100) expect(p).toMatchObject({ status: "no_record", certified: null, config: null });
+    }
+    for (const P of [1, 501]) {
+      const parsed = parseSpaceId("polyhedra", `polyhedra/cubincub/${P}`);
+      if (typeof parsed === "string") throw new Error(parsed);
+      expect(problemOf(c, parsed)).toBeNull();
+    }
+    expect(parseSearchProblem("polyhedra/cubincub/501")).toBeNull();
+    expect(parseSearchProblem("polyhedra/cubincub/050")).toBeNull();
+  });
+
+  it.each(["cubincub", "tetintet", "tidintid", "dtcindtc", "pr12l3incub"])("reads and strictly validates %s at 500", async (code) => {
+    const p = parseSearchProblem(`polyhedra/${code}/500`)!;
+    const c = spaceLatticeStart(p)!;
+    const parsed = parseSpaceId("polyhedra", p.id);
+    if (typeof parsed === "string") throw new Error(parsed);
+    expect(parseSpaceConfig(parsed, c).ok).toBe(true);
+    expect(readSpaceConfig(p, c)).toEqual(c);
+    const v = await validateSpaceSubmissionAsync("polyhedra", p.id, c, { noRecord: true });
+    expect(v.valid, v.reasons.join("; ")).toBe(true);
+    if (code === "tidintid" || code === "dtcindtc") {
+      expect(v.slices).toBeGreaterThan(2);
+      expect(v.longestSliceMs).toBeLessThan(v.workMs / 2);
+    }
+  });
+
+  it("starts a volunteer job without a record from the generated lattice", async () => {
+    let seconds = 0;
+    const starts: unknown[] = [];
+    await searchSpaceProblem({
+      space: "polyhedra", id: "polyhedra/cubincub/500", noRecord: true,
+      bound: null, maxSeconds: 1, lanes: 1, seed: 1, now: () => seconds,
+    }, async (job) => {
+      starts.push(job.start);
+      expect(job.kind).toBe("iterate");
+      seconds = 2;
+      return { job, score: null, valid: false, evaluations: 0, wallTime: 2, termination: "time", reasons: [] };
+    }, { aborted: false, paused: false });
+    expect(starts).toEqual([latticeStart(getProblem("cubincub")!, 500)]);
+  });
+});
 
 const L2 = 2 * Math.SQRT2;
 const record = (P: number) => ({

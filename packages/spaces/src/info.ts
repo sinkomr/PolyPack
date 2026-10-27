@@ -213,7 +213,7 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     problem_id: "polyhedra/<code>/<P>",
     conventions: {
       problems:
-        "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron) or pr3l15incub (triangular prisms of height 1.5 in a cube); P from 2 to 100",
+        "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron) or pr3l15incub (triangular prisms of height 1.5 in a cube); P from 2 to 500",
       solids:
         "the wiki's canonical solids, centred at the origin: unit edges, except the Catalan solids (polar reciprocals of the unit-edge Archimedean solids about the midsphere) and the elongated prisms (base edges 1, lateral edges 1.5, 2 or 3); PolyPack's bipyramids and trapezohedra are likewise the polar reciprocals of the unit-edge prisms and antiprisms about the midsphere",
       container: "s times the canonical container solid, centred at the origin in its canonical orientation",

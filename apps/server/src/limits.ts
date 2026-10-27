@@ -126,13 +126,15 @@ export function sanitizeText(raw: string, maxLength: number): string {
 export const SUBMISSIONS_PER_MINUTE = 120;
 /**
  * Milliseconds of verification (the geometry check of submissions) one address may cause a
- * minute, saved up to a minute's worth. 2 s is 3% of a core's minute. Checking a valid board at
+ * minute, saved up to a minute's worth. 4 s is 6.7% of a core's minute. Checking a valid board at
  * the orientation sent took 15 ms at most (500 100-gons on a ring, the largest hull a valid board
  * can have, when the hull of all its vertices has to be built; 1.5 ms otherwise) and 0.4 ms on
  * average over Tighter's largest problems (measured 2026-10-21), so even 120 boards a minute, all
  * the count limit lets through, stay below it. Boards of contested problems take under 1 ms.
  */
-export const VERIFY_MS_PER_MINUTE = 2000;
+// [CALC] A strict P = 500 polyhedra entry needs two passes, about 1.4 s together.
+// Four seconds per minute allows a few such entries, at most 6.7% of a core.
+export const VERIFY_MS_PER_MINUTE = 4000;
 /**
  * Event-loop delay (ms) above which new submissions are answered 503 with Retry-After. Ordinary
  * requests hold the loop for a few milliseconds at a time (a verification for 15 ms at most here,
