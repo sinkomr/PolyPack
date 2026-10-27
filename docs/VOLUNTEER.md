@@ -96,6 +96,7 @@ Exit codes:
 - 0: normal end (`--once`, `--hours`, or Ctrl-C).
 - 1: the server has no work list (with `--only-dimensions`: no work list for the other kinds); another copy is using the state directory; the search threads cannot start; or, with `--once`, the work list cannot be read or its problem could not be searched.
 - 2: wrong options.
+- 1 also when the server answers 426 (upgrade required): see [The unit change](#the-unit-change).
 - 130: a second Ctrl-C.
 
 ### Why 10 minutes per problem
@@ -147,6 +148,7 @@ node polypack-volunteer.mjs --name "your name" --dimensions boundary --only-dime
 - **Reads.** `GET /api/targets`, `GET /api/problems/{N}/{M}/{P}` and `GET /api/submissions/{id}`, and with `--dimensions` also `GET /api/spaces/targets` and `GET /api/spaces/<space>/problems/<id>`. They are public and need no account or key. Every request carries the header `User-Agent: polypack-volunteer/<version> (Node <version>)`.
 - **Submissions.** `POST /api/submit`, only with `--name` and without `--dry-run`, and only for a packing that passes the checks above. The body holds:
   - the packing (`N`, `M`, `P`, `pieces`, `container_phi`);
+  - `units: "diameter"`, which confirms that disk and ball pieces have diameter 1 and circle and ball containers are scored by their diameter (version 0.2.0 and later; see [The unit change](#the-unit-change));
   - `name` from `--name`;
   - `agent_note` from `--note`, when one is given;
   - `found_with: "optimizer"`;
@@ -205,6 +207,14 @@ Names, reasons and other text from the server are printed without control charac
 
 A problem interrupted this way does not count as searched: it may come up again.
 
+## The unit change
+
+Since 2026-10-27 disk pieces (`N = 0`) and ball pieces have diameter 1 (they had radius 1), and a circle or ball container is scored by its diameter (it was scored by its radius); the API's `conventions.version` is 2. Version 0.2.0 of the client works in these units and sends `units: "diameter"` with every submission. [EST] `apps/server/src/docs.ts`.
+
+- **Older clients.** The server answers a request from `polypack-volunteer/0.1.x` to a disk, ball or circle-container problem with HTTP 426 and the explanation. Version 0.2.0 and later stop when they get a 426 (exit code 1) and print where to download the current client: https://polypack.fly.dev/volunteer.html. A submission to such a problem without `units` is answered 426 as well, so a packing of the old units can never be taken for a new one.
+- **Your state directory.** Files written before 0.2.0 are in the old units. At the first start with 0.2.0 the client converts them exactly (every factor is a power of two): the `best/N-M-P.json` of disks and of polygons in a circle (scores and the `x`, `y` of disks), the `best/spaces/` files of the other kinds, and the scores in `history.jsonl`; then it writes `state.json`. A saved configuration it cannot convert (a curved disk problem at a curvature other than 0, whose problem has no equivalent at the same curvature, or a file it cannot read) is moved to `best-old-units/`, not deleted. `memory.json` has no lengths and is kept.
+- **Converting a packing by hand.** Multiply the `x` and `y` of every disk by 1/2. The score of disks in a polygon halves, that of disks in a circle stays the same (the new diameter is the old radius), and that of polygons in a circle doubles.
+
 ## State directory
 
 The client keeps its state in `--state`, by default `~/.polypack-volunteer`:
@@ -215,6 +225,8 @@ The client keeps its state in `--state`, by default `~/.polypack-volunteer`:
 | `memory.json`     | What the engine learned across problems, for example which methods found bests. It is rewritten after each problem.                                                                                                                                                                                                                                                                                                                                                                                        |
 | `history.jsonl`   | One JSON line per problem; see below. It is cut back to its last 20,000 lines, months of searching.                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `best/N-M-P.json` | The best strict packing this machine found for the problem, with the method, resolved parameters, seed, budget and time that produced it.                                                                                                                                                                                                                                                                                                                                                                  |
+| `state.json`      | `{"state_version": 2, "units": "diameter"}`: the units of the files in this directory. A directory without it is from before the unit change and is converted at the first start (see below).                                          |
+| `best-old-units/` | Only after such a conversion: the saved packings that could not be converted exactly, set aside and never read again.                                                                                                                         |
 | `best/spaces/`    | With `--dimensions` only: the same for each problem of the other kinds (the spaces), one file per problem id.                                                                                                                                                                                                                                                                                                                                                                                              |
 
 Each `history.jsonl` line holds:

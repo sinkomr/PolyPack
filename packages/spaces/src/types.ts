@@ -229,6 +229,8 @@ export interface SpaceSubmission {
   /** Free text naming the search, such as "sphere basin hopping". */
   method?: string;
   seed?: number;
+  /** "diameter": the configuration is in the units of 2026-10-27 (disks and balls of diameter 1); required for problems with disks, balls or a circle or ball container. */
+  units?: "diameter";
 }
 
 export interface SpaceSubmitResponse {

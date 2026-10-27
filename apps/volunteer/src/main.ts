@@ -66,7 +66,7 @@ import {
 } from "./submit";
 import type { Candidate, Control, Problem, SearchInput, SearchOutcome, SearchProblem } from "./types";
 import { cleanText, readProblemInfo, readStoredEntry, readSubmitResponse, readTarget } from "./validate";
-import { SOFTWARE, VERSION } from "./version";
+import { SOFTWARE, UNITS, UPGRADE_URL, VERSION } from "./version";
 
 /** The work list is read again after this long; a problem that could not be read is skipped as long. */
 export const TARGETS_TTL_MS = 10 * 60_000;
@@ -210,6 +210,8 @@ class Volunteer {
   private stopReason: string | null = null;
   /** Set when the client cannot go on (its threads do not start): it exits with code 1. */
   private fatal: string | null = null;
+  /** Set when the server answered 426: it works in other units than this client. */
+  private upgrade: string | null = null;
   private hardTimer: NodeJS.Timeout | null = null;
   private current: Current | null = null;
   private readonly started: number;
@@ -230,12 +232,20 @@ class Volunteer {
       now: this.now,
       log: (m: string) => this.log(m),
       userAgent: `${SOFTWARE} (Node ${process.version})`,
+      onUpgradeRequired: (message: string) => this.upgradeRequired(message),
     };
     this.reader = new Api(o.base, { ...http, signal: this.stop.signal });
     this.submitter = new Api(o.base, { ...http, signal: this.hard.signal });
     this.sleep = deps.sleep ?? realSleep;
     this.search = deps.searchProblem ?? engineSearch;
     this.random = deps.random ?? Math.random;
+  }
+
+  /** The server asks for a newer client (426): there is nothing useful this one can send or read, so it stops. */
+  private upgradeRequired(message: string): void {
+    if (this.upgrade !== null) return;
+    this.upgrade = message;
+    this.requestStop("The server answered 426 (upgrade required)");
   }
 
   private log(message: string): void {
@@ -248,7 +258,7 @@ class Volunteer {
 
   async run(): Promise<number> {
     try {
-      this.state = StateDir.open(this.o.stateDir);
+      this.state = StateDir.open(this.o.stateDir, { log: (m) => this.log(m) });
     } catch (error) {
       if (error instanceof LockHeld)
         this.log(
@@ -295,6 +305,11 @@ class Volunteer {
       ticker.unref();
       cleanups.push(() => clearInterval(ticker));
       const code = await this.loop();
+      if (this.upgrade !== null)
+        this.log(
+          `This client (${VERSION}) is out of date: ${this.upgrade} Download the current client from ${UPGRADE_URL} ` +
+            "(or run `npm run build` in a current checkout), and start it again.",
+        );
       if (this.fatal)
         this.log(
           `Stopped with an error: ${this.fatal}. The file may be incomplete, or this Node version too old ` +
@@ -305,7 +320,7 @@ class Volunteer {
           `searched, ${this.counts.sent} submission(s) sent, ${this.counts.accepted} accepted, ` +
           `${this.counts.leading} took the lead. State is in ${this.o.stateDir}.`,
       );
-      return this.fatal ? 1 : code;
+      return this.fatal || this.upgrade !== null ? 1 : code;
     } finally {
       for (const cleanup of cleanups) cleanup();
       if (this.hardTimer) clearTimeout(this.hardTimer);

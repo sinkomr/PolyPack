@@ -33,6 +33,7 @@ import {
 import { SOLVER_METHODS } from "../src/docs";
 import { SqliteStore } from "../src/sqlite-store";
 import { GET_MANY_LIMIT, NewSubmission } from "../src/store";
+import { withUnits } from "./units";
 
 const SQ = Math.PI / 4;
 const row = (n: number, gap = 1): PackingConfig["pieces"] =>
@@ -74,7 +75,7 @@ async function submit(body: unknown): Promise<{ status: number; body: SubmitResp
   const r = await app.request("/api/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: typeof body === "string" ? body : JSON.stringify(body),
+    body: typeof body === "string" ? body : JSON.stringify(withUnits(body)),
   });
   return { status: r.status, body: (await r.json()) as SubmitResponse };
 }
@@ -417,14 +418,14 @@ async function listen() {
   return { until, count: () => seen.split("event: leaderboard").length - 1, close: () => reader.cancel() };
 }
 
-/** Two unit circles with centres `d` apart in a circle: the score is 1 + d / 2. */
+/** Two disks of diameter 1 with centres `d` apart in a circle: the score (the circle's diameter) is 1 + d. */
 const twoCircles = (score: number, name: string) => ({
   N: 0,
   M: 0,
   P: 2,
   pieces: [
     { x: 0, y: 0, theta: 0 },
-    { x: 2 * (score - 1), y: 0, theta: 0 },
+    { x: score - 1, y: 0, theta: 0 },
   ],
   container_phi: 0,
   name,

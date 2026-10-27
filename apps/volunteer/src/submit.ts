@@ -11,6 +11,7 @@ import {
   improvesOn,
   utf8Length,
 } from "@polypack/geometry";
+import { UNITS } from "./version";
 import type { Candidate, SearchInput } from "./types";
 
 /** The leader's stored packing, from GET /api/submissions/{id}. */
@@ -98,6 +99,8 @@ export function submissionBody(
     P,
     pieces: poses(pieces),
     container_phi,
+    // the lengths are in the units of 2026-10-27 (disks and balls of diameter 1): the server answers 426 to a disk or circle problem without this
+    units: UNITS,
     name: o.name,
     ...(o.note ? { agent_note: o.note } : {}),
     found_with: "optimizer",

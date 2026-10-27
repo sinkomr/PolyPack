@@ -38,7 +38,15 @@ import { SpaceStore, Store, StoredSpaceEntry, StoredSubmission } from "./store";
  * open problem with an entry, rebuilt only when its leaders' (problem, P, id, name) changed. A
  * space's file is rebuilt whole; the build pauses inside it as it does between pairs.
  */
-export const SNAPSHOT_FORMAT = 1;
+/**
+ * Format 2 (2026-10-27, the unit change): disk and ball pieces have diameter 1 and circle and ball containers are scored by
+ * their diameter. A pair's file used to depend on its leaders alone, because "every other field never changes"; a unit
+ * change breaks that, so the format number is part of every fingerprint and a manifest of another format is not read: the
+ * first build after the change writes every file again.
+ */
+export const SNAPSHOT_FORMAT = 2;
+/** The length units of the snapshot's coordinates and scores (the manifest's `units`). */
+export const SNAPSHOT_UNITS = "diameter";
 const MANIFEST = "manifest.json";
 /** Entries read at once: at most 25 × 500 pieces, a few milliseconds of work. */
 const CHUNK = 25;
@@ -78,6 +86,8 @@ export interface SpaceSnapshotFile {
 
 export interface SnapshotManifest {
   format: number;
+  /** "diameter": disk and ball pieces have diameter 1, circle and ball containers are scored by their diameter. */
+  units: string;
   /** When the manifest was last written. */
   generated_at: string;
   /**
@@ -113,7 +123,7 @@ export const spaceFileName = (space: string) => `space-${space}.json.gz`;
 export function readManifest(dir: string): SnapshotManifest | null {
   try {
     const m = JSON.parse(readFileSync(join(dir, MANIFEST), "utf8")) as SnapshotManifest;
-    return m.format === SNAPSHOT_FORMAT && Array.isArray(m.files) && (m.spaces === undefined || Array.isArray(m.spaces))
+    return m.format === SNAPSHOT_FORMAT && m.units === SNAPSHOT_UNITS && Array.isArray(m.files) && (m.spaces === undefined || Array.isArray(m.spaces))
       ? m
       : null;
   } catch {
@@ -318,6 +328,7 @@ export async function buildSnapshot(opts: BuildOptions): Promise<{ built: number
     const at = now().toISOString();
     return {
       format: SNAPSHOT_FORMAT,
+      units: SNAPSHOT_UNITS,
       generated_at: at,
       completed_at: completed ? at : (before?.completed_at ?? null),
       records: list.reduce((n, f) => n + f.records, 0),

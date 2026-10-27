@@ -79,7 +79,7 @@ export interface ProblemInfo {
   N: number;
   M: number;
   P: number;
-  conventions: Record<string, string>;
+  conventions: Record<string, string | number>;
   area_bound: number;
   literature: LiteratureRecord | null;
   /** The leader of the problem; null when there is none or the problem is closed. */

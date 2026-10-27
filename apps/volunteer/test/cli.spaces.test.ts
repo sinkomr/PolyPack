@@ -179,7 +179,7 @@ describe("the client with the spaces option", () => {
     expect(server.spaceBest("sphere/3/13")!.site!.name).toBe("Test volunteer");
 
     const state = join(dir, "state");
-    expect(readdirSync(state).sort()).toEqual(["best", "history.jsonl", "memory.json"]);
+    expect(readdirSync(state).sort()).toEqual(["best", "history.jsonl", "memory.json", "state.json"]);
     const kept = JSON.parse(readFileSync(join(state, "best", "spaces", "sphere_3_13.json"), "utf8"));
     expect(kept).toMatchObject({ space: "sphere", id: "sphere/3/13", P: 13, method: "sphere basin hopping" });
     const [line] = history();
@@ -303,7 +303,7 @@ describe("the client with the spaces option", () => {
     "searches a problem without a research record from a new arrangement and submits it",
     { timeout: 60_000 },
     async () => {
-      server = await startFakeServer({ problems: [], spaces: [{ id: "sphere/0/5", certified: null, bound: 1.2 }] });
+      server = await startFakeServer({ problems: [], spaces: [{ id: "sphere/0/5", certified: null, bound: 0.6 }] });
       const { code, output } = await client([
         "--once",
         "--only-spaces",

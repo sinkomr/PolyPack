@@ -80,11 +80,17 @@ export interface Asset {
   digest?: string | null;
 }
 
-/** Throws unless `m` is a snapshot manifest this script understands. */
+/** The manifest formats this script reads: 1 (radius-1 disks and balls, before 2026-10-27) and 2 (diameter 1). */
+export const KNOWN_FORMATS: readonly number[] = [1, 2];
+
+/**
+ * Throws unless `m` is a snapshot manifest this script understands. A release manifest of format 1 is accepted: the
+ * digest comparison then finds every file changed and uploads the format 2 files over it.
+ */
 export function checkManifest(m: unknown): Manifest {
   const x = m as Manifest;
-  if (!x || x.format !== 1 || !Array.isArray(x.files) || (x.spaces !== undefined && !Array.isArray(x.spaces)))
-    throw new Error("not a format 1 snapshot manifest");
+  if (!x || !KNOWN_FORMATS.includes(x.format) || !Array.isArray(x.files) || (x.spaces !== undefined && !Array.isArray(x.spaces)))
+    throw new Error(`not a snapshot manifest of format ${KNOWN_FORMATS.join(" or ")}`);
   const fine = (f: ManifestEntry, name: RegExp) =>
     !!f && name.test(f.file) && /^[0-9a-f]{64}$/.test(f.sha256) && Number.isInteger(f.bytes) && f.bytes > 0;
   for (const [list, name] of [
@@ -186,11 +192,13 @@ and ${count(spaceRecords)} records of the other kinds of problem in ${count(spac
 
 **Download everything** with the GitHub CLI: \`gh release download ${TAG} --repo ${REPO}\`. \`manifest.json\` lists every file with its size and SHA-256.
 
-**Format.** Each pair's file is \`{"format": 1, "N": …, "M": …, "records": [ … ]}\`, one record per line. A record has \`P\`, \`score\` (container side, or radius for a circle container), \`id\`, \`name\`, \`found_with\`, \`verification\`, \`created_at\`, \`container_phi\` and \`pieces\` as \`[x, y, theta]\`, every number at full precision. Polygon pieces have side length 1 and circle pieces radius 1; angles are in radians. The conventions are on the API page, ${SITE}/api#snapshot, and the full entry of a record, with how it was found, is at \`${SITE}/api/submissions/{id}\`.
+**Units.** Since 2026-10-27 (format 2, \`"units": "diameter"\` in the manifest) disk and ball pieces have diameter 1 (they had radius 1) and a circle or ball container is scored by its diameter (it was scored by its radius). Every file was rebuilt in the new units; a file of format 1 uses the old ones.
+
+**Format.** Each pair's file is \`{"format": 2, "N": …, "M": …, "records": [ … ]}\`, one record per line. A record has \`P\`, \`score\` (container side, or diameter for a circle container), \`id\`, \`name\`, \`found_with\`, \`verification\`, \`created_at\`, \`container_phi\` and \`pieces\` as \`[x, y, theta]\`, every number at full precision. Polygon pieces have side length 1 and circle pieces diameter 1; angles are in radians. The conventions are on the API page, ${SITE}/api#snapshot, and the full entry of a record, with how it was found, is at \`${SITE}/api/submissions/{id}\`.
 
 **The other kinds of problem** (curved 2D in 2D, 2D on 3D, 3D in 3D and 3D on 4D) have one file per space, \
 named \`space-{space}.json.gz\` (\`surface\`, \`curved\`, \`sphere\`, \`torus\`, \`boundary\`, \`polyhedra\`), listed under \`spaces\` in \`manifest.json\`. \
-Each is \`{"format": 1, "space": …, "records": [ … ]}\`, one record per line in the order the site lists the problems. A record has \`problem\` (its id, such as \`boundary/tesseract/cube/12\`), \`P\`, \`score\`, \`id\`, \`name\`, \`software\`, \`method\`, \`created_at\` and \`config\`, the configuration in its space's submission format (${SITE}/api#spaces), every number at full precision. The full entry is at \`${SITE}/api/spaces/entries/{id}\`.
+Each is \`{"format": 2, "space": …, "records": [ … ]}\`, one record per line in the order the site lists the problems. A record has \`problem\` (its id, such as \`boundary/tesseract/cube/12\`), \`P\`, \`score\`, \`id\`, \`name\`, \`software\`, \`method\`, \`created_at\` and \`config\`, the configuration in its space's submission format (${SITE}/api#spaces), every number at full precision. The full entry is at \`${SITE}/api/spaces/entries/{id}\`.
 
 Published values from the literature, with their sources, are in [\`data/records.json\`](https://github.com/${REPO}/blob/main/data/records.json). Closed problems take no entries and are left out: those with a proven optimum, and for the spaces also those that are infeasible.
 `;

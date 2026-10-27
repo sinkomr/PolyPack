@@ -43,7 +43,7 @@ function wholeNumber(name: string, fallback: number): number {
   return fallback;
 }
 
-const store = new SqliteStore(databasePath);
+const store = new SqliteStore(databasePath, { log: (msg) => console.log(msg) });
 // Rewrites the pieces of older rows in small steps while the site runs (see docs/DEPLOY_FLY.md).
 // Each step is one short transaction, so requests wait at most for one step.
 // PIECES_MIGRATION_BATCH=0 switches it off.

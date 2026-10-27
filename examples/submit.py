@@ -65,6 +65,9 @@ result = post(
         "P": P,
         "pieces": pieces,
         "container_phi": 0.0,
+        # disk pieces have diameter 1 and a circle container is scored by its diameter (conventions version 2); the server
+        # answers 426 to a problem with disks or a circle container unless the body says so. Harmless for polygons.
+        "units": "diameter",
         "name": "python example",
         # a hand-written arrangement; scripts that run an optimizer send "optimizer" with the method
         "found_with": "hand",

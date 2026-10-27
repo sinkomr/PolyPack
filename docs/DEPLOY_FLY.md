@@ -111,6 +111,22 @@ fly machine restart
 
 The first line runs on the server (in `fly ssh console`), the second on your Mac.
 
+## The unit change (2026-10-27)
+
+Disk and ball pieces now have diameter 1 (they had radius 1), and circle and ball containers are scored by their diameter (they were scored by their radius). Every stored entry of an affected problem is the old one scaled by a power of two, so the conversion is exact and reversible. The classes and factors are listed at the top of `apps/server/src/units-migration.ts`; in short, 2D disks in a polygon halve score and pieces, disks in a circle keep their score and halve their pieces, polygons in a circle double their score, and the spaces' disk and ball entries convert the same way (curved disks at K other than 0 have no equivalent and are set aside in `space_entries_units_archive`, which the reverse restores).
+
+The server converts by itself at start-up: one `BEGIN IMMEDIATE` transaction, before it listens, that rewrites the scores, pieces, `literature_value`, `strict_check.certifiedSize` and the spaces' `config` of the affected rows and sets `meta.units_epoch = 2` in the same transaction. A crash leaves all old or all new, a second start does nothing, and a new database starts at 2. Leaders and ranks are read from the rows, so they are consistent as soon as it commits. The log says `units: converted to diameter units in N ms` with the counts. On the 1.3 GB backup of 2026-10-27 (182,480 rows, 18,548 of them affected) it took about 0.8 s [CALC].
+
+Before deploying:
+
+1. Take a backup (`./deploy/fly/backup-to-mac.sh`), and avoid the nightly jobs (trim at 10:30 UTC, the records mirror).
+2. Dry-run the conversion on a copy of the volume file, never on the live file: `npx tsx scripts/units-migrate.ts --dry-run <copy>`. It converts inside a transaction, checks row counts, that every leader keeps its id, that the real validators accept every converted 2D row (and a sample of the spaces' entries) with the stored score, that a second run changes nothing and that the reverse restores every row bit for bit, prints five entries before and after, and rolls back.
+3. Deploy the image that holds the converted `data/*` (the server reads `data/records.json` at start-up, so data and database must switch together).
+4. Rebuild the snapshot (format 2, every file written again, `units: "diameter"` in the manifest) and run `scripts/mirror-snapshot.ts` once; it reads a format 1 or 2 release manifest and uploads every changed file.
+5. Smoke tests: `GET /api` says `conventions.version` 2; a disk submission without `"units": "diameter"` answers 426; a request with `User-Agent: polypack-volunteer/0.1.x` to a disk problem answers 426.
+
+Rollback: redeploy the previous image and run `npx tsx scripts/units-migrate.ts --reverse <database file>` with the server stopped (it sets `units_epoch` to 1), or restore the backup if no new entry was accepted. Entries made after the conversion at curved K other than 0 for disks (new problems in the new units) go to the archive with epoch 2 and return if the conversion is run again.
+
 ## Database size
 
 Since 2026-10-18 the server keeps the database small in two ways:
