@@ -38,7 +38,7 @@
  */
 import type { SpaceConfig, SpaceName } from "../types";
 import { AUTO, isAutoMethod, offersSpaceMethod, searchKind } from "./methods";
-import { parseSearchProblem } from "./model";
+import { parseSearchProblem, spaceLatticeStart } from "./model";
 import type { SpaceJob, SpaceJobResult } from "./run";
 import { mixSeed, seededStream, toUint32 } from "./seed";
 
@@ -163,6 +163,8 @@ export async function searchSpaceProblem(
   const base = Math.min(P.baseMaxSeconds, Math.max(P.baseMinSeconds, maxSeconds * P.baseShare));
   const cap = Math.max(base, maxSeconds * P.capShare);
   const known = input.known && Number.isFinite(input.known.score) && input.known.score > 0 ? input.known : undefined;
+  const problem = parseSearchProblem(input.id);
+  const lattice = !known && input.noRecord && problem ? spaceLatticeStart(problem) : null;
   const kinds: Record<Kind, KindState> = {
     iterate: { level: 0, misses: 0, evaluations: 0, seconds: 0 },
     fresh: { level: 0, misses: 0, evaluations: 0, seconds: 0 },
@@ -201,7 +203,7 @@ export async function searchSpaceProblem(
     const available = maxSeconds - t;
     if (available < base / 2) return "time";
     if (t - lastProgress >= Math.max(maxSeconds * P.stagnationShare, t / 2)) return "stagnation";
-    const start = best?.config ?? known?.config;
+    const start = best?.config ?? known?.config ?? lattice;
     // the first job always tries the start, so that a short search still begins from the problem's best
     const kind: Kind = !start || (jobs > 0 && random() < P.freshShare) ? "fresh" : "iterate";
     const st = kinds[kind];

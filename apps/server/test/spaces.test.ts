@@ -28,6 +28,7 @@ import { loadSpacesIndex, readEntryConfigSync } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { MAX_BODY_BYTES } from "../src/limits";
+import { getProblem, latticeStart } from "@polypack/polyhedra";
 import type { LoadStats } from "../src/load";
 import {
   SPACES_CHECKED_ONLY_IF_KEPT,
@@ -193,7 +194,7 @@ describe("GET /api/spaces", () => {
       ["sphere", 166],
       ["torus", 544],
       ["boundary", 32],
-      ["polyhedra", 14850],
+      ["polyhedra", 74850],
       ["balls", 18711],
     ]);
     for (const s of r.spaces) {
@@ -828,6 +829,29 @@ describe("POST /api/spaces/submit: boundary records are beaten by the tie tolera
 });
 
 describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
+  it.each(["cubincub", "tetintet", "tidintid", "dtcindtc", "pr12l3incub"])("accepts %s/500 without a record in short slices", async (code) => {
+    const id = `polyhedra/${code}/500`;
+    const config = latticeStart(getProblem(code)!, 500);
+    const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
+    makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
+    const p = (await get(`/api/spaces/polyhedra/problems/${id}`)).body as SpaceProblemResponse;
+    expect(p).toMatchObject({ status: "no_record", certified: null, certified_config: null, best_score: null });
+    // Full-precision numeric spelling models a large entry, including all seven numbers per pose.
+    const rawConfig = `{"s":${config.s.toExponential(16)},"pieces":[${config.pieces.map((pose) => `[${pose.map((v) => v.toExponential(16)).join(",")}]`).join(",")}]}`;
+    const body = `{"space":"polyhedra","id":"${id}","name":"ann","config":${rawConfig}}`;
+    expect(Buffer.byteLength(body)).toBeGreaterThan(70000);
+    expect(Buffer.byteLength(body)).toBeLessThan(MAX_BODY_BYTES);
+    const r = await app.request("/api/spaces/submit", { method: "POST", headers: { "content-type": "application/json" }, body });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ valid: true, leader: true, beats_certified: false });
+    expect(checks).toHaveLength(1);
+    if (code === "tidintid" || code === "dtcindtc") {
+      expect(checks[0].slices).toBeGreaterThan(2);
+      expect(checks[0].longestSliceMs).toBeLessThan(checks[0].workMs / 2);
+    }
+    console.log(`[CALC] server ${code}/500: ${checks[0].workMs.toFixed(1)} ms work, max slice ${checks[0].longestSliceMs.toFixed(1)} ms, body ${Buffer.byteLength(body)} bytes`);
+  });
+
   /** Two unit cubes side by side along x, `gap` apart (negative: overlapping), in a cube of edge s. */
   const cubes = (s: number, gap = 0) => ({
     s,
@@ -934,7 +958,7 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 0, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
     // a wrong count is an invalid packing, not a malformed body
     expect(await bad({ s: 3, pieces: cubes(3).pieces }, "polyhedra/cubincub/3")).toBe(422);
-    const big = await submit(entry(row(101, 120), "polyhedra/cubincub/101"));
+    const big = await submit(entry(row(501, 600), "polyhedra/cubincub/501"));
     expect(big.status).toBe(400);
     expect(big.body.reasons[0]).toMatch(/is not in the polyhedra catalogue/);
     const huge = await submit({ ...entry(cubes(2)), agent_note: "x".repeat(300 * 1024) });
@@ -942,7 +966,7 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect(await store.spaceLeaders()).toEqual([]);
   });
 
-  it("checks P = 100, the cap: an overlap is refused, 100 cubes in a row below a record of 101 are kept", async () => {
+  it("checks P = 100: an overlap is refused, 100 cubes in a row below a record of 101 are kept", async () => {
     const id = "polyhedra/cubincub/100";
     makeApp({}, replaced(id, 101, row(100, 101, 0.01)));
     const over = await submit(entry(row(100, 100, -1e-6), id));
@@ -973,11 +997,10 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
   });
 
   it("checks one entry at a time per address, and the heavy checks one at a time", async () => {
-    const id = "polyhedra/tidintid/100";
-    const real = index.polyhedra!.byId.get(id)!;
-    const config = JSON.parse(readEntryConfigSync(root, index.polyhedra!, real)!);
-    // a copy of piece 0 as the last piece: below the record, so it is checked in full, and refused
-    const forged = { s: real.certified!.score * 0.999, pieces: [...config.pieces.slice(0, 99), [...config.pieces[0]]] };
+    const id = "polyhedra/tidintid/500";
+    const config = latticeStart(getProblem("tidintid")!, 500);
+    // No record: a complete near-pair scan is required, then the duplicate is refused.
+    const forged = { ...config, pieces: [...config.pieces.slice(0, 499), [...config.pieces[0]]] };
     const checks: { workMs: number }[] = [];
     makeApp({ clientIp: (c) => c.req.header("x-test-ip") ?? ip }, index, undefined, { onCheck: (c) => checks.push(c) });
     const from = async (address: string) => {
@@ -999,6 +1022,31 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect(checks).toHaveLength(9);
     expect(SPACE_HEAVY_CHECK_P).toBe(30);
     expect(SPACE_HEAVY_CHECKS_WAITING).toBe(8);
+  }, 30000);
+
+  it("refuses a malformed heavy body before the heavy queue and the address's one check", async () => {
+    const id = "polyhedra/tidintid/500";
+    const config = latticeStart(getProblem("tidintid")!, 500);
+    const checks: { workMs: number }[] = [];
+    makeApp({ clientIp: () => "4.4.4.4" }, index, undefined, { onCheck: (c) => checks.push(c) });
+    const post = async (cfg: unknown) => {
+      const r = await app.request("/api/spaces/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(entry(cfg, id)),
+      });
+      return r.status;
+    };
+    const bad = [
+      { ...config, s: "big" },
+      { ...config, pieces: [...config.pieces.slice(0, 499), [NaN, 0, 0, 1, 0, 0, 0]] },
+      { ...config, pieces: config.pieces.slice(0, 10) },
+      "nope",
+    ];
+    // all at once from one address: none is told to wait (none took the address's slot), none reached the check
+    const statuses = await Promise.all(bad.map(post));
+    expect(statuses.every((s) => s === 400 || s === 422)).toBe(true);
+    expect(checks).toHaveLength(0);
   });
 
   it("serves a research configuration kept apart, read on demand, the same as its file", async () => {
@@ -1140,7 +1188,7 @@ describe("GET /api/spaces/targets", () => {
     // 256 queries of the whole list under different max_P and limit: one answer, compressed once
     const whole = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
     for (let k = 0; k < 256; k++) {
-      const r = await app.request(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT - (k % 150)}&max_P=${100 + k}`, {
+      const r = await app.request(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT - (k % 150)}&max_P=${500 + k}`, {
         headers: { "accept-encoding": "gzip" },
       });
       const body = JSON.parse(gunzipSync(Buffer.from(await r.arrayBuffer())).toString("utf8")) as SpaceTargetsResponse;

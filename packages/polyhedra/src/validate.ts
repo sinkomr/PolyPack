@@ -121,7 +121,11 @@ function* validateSteps(
   const C = getSolid(problem.container);
   const n = config.pieces.length;
   const s = config.s;
-  const placed: Placed[] = config.pieces.map((p) => place(P, p));
+  const placed: Placed[] = [];
+  for (let i = 0; i < n; i++) {
+    placed.push(place(P, config.pieces[i]));
+    if (i % 8 === 7) yield;
+  }
   for (let i = 0; i < n && out.errors.length < maxErrors; i++) {
     const g = wallGap(C, s, placed[i].X);
     if (g < out.minWallGap) out.minWallGap = g;
@@ -136,7 +140,11 @@ function* validateSteps(
     for (let j = i + 1; j < n && out.errors.length < maxErrors; j++) {
       const b = placed[j].c;
       const d2 = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
-      if (d2 > reach2) continue;
+      if (d2 > reach2) {
+        // Distant pairs are cheap, but a whole sparse P = 500 scan must yield too.
+        if (j % 256 === 255) yield;
+        continue;
+      }
       out.pairsTested++;
       const r = separation(placed[i], placed[j], stopAt);
       if (r.sep < out.minPairSep) {
@@ -166,8 +174,8 @@ export function validatePolyhedra(
 
 /**
  * validatePolyhedra, the same checks in the same order, that gives the event loop a turn after every `sliceMs`
- * of work (default 20 ms; after a near pair or 16 wall checks at the most), so that a server's check of 100 of
- * the largest solids never holds the loop for long. `workMs` is the time spent checking, without the turns;
+ * of work (default 20 ms; after 8 placements, 16 wall checks or one near pair at the most), so that a server's
+ * check of 500 of the largest solids never holds the loop for long. `workMs` is the time spent checking, without the turns;
  * `slices` the pieces of work between turns and `longestSliceMs` the longest of them.
  */
 export async function validatePolyhedraAsync(

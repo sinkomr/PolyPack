@@ -288,8 +288,10 @@ describe("the catalogues", () => {
     const empty = mkdtempSync(join(tmpdir(), "polypack-spaces-"));
     const logs: string[] = [];
     const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
-    // the balls and surface spaces have a domain; balls ships no records file at all
-    expect(Object.keys(loaded).sort()).toEqual(["balls", "surface"]);
+    // Domain spaces load even without records; balls ships no records file at all
+    expect(Object.keys(loaded).sort()).toEqual(["balls", "polyhedra", "surface"]);
+    expect(loaded.polyhedra!.problems).toHaveLength(0);
+    expect(loaded.polyhedra!.domain!.info.problems).toBe(74850);
     expect(loaded.balls!.problems).toHaveLength(0);
     expect(loaded.balls!.domain!.info.problems).toBe(18711);
     expect(loaded.surface!.problems).toHaveLength(0);
@@ -300,6 +302,8 @@ describe("the catalogues", () => {
           ? "[spaces] balls: a domain of 18711 problems, 0 with a record (no records file)"
           : s === "surface"
             ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
+          : s === "polyhedra"
+            ? "[spaces] polyhedra: a domain of 74850 problems, 0 with a record (no records file)"
           : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
       ),
     );
@@ -808,14 +812,14 @@ describe("polyhedra (3D in 3D)", () => {
     const short = check("polyhedra", "polyhedra/cubincub/3", base);
     expect(short.malformed).toBe(false);
     expect(short.reasons[0]).toMatch(/expected 3 pieces/);
-    const big = validateSpaceSubmission("polyhedra", "polyhedra/cubincub/101", row(101, 0, 120));
+    const big = validateSpaceSubmission("polyhedra", "polyhedra/cubincub/501", row(501, 0, 600));
     expect(big.malformed).toBe(true);
-    expect(big.reasons[0]).toMatch(/P = 101 is above the largest P of the polyhedra catalogue \(100\)/);
+    expect(big.reasons[0]).toMatch(/P = 501 is above the largest P of the polyhedra catalogue \(500\)/);
   });
 
-  it("accepts P = 100, the cap, and checks the largest records within the work bound", () => {
-    expect(SPACE_MAX_P.polyhedra).toBe(100);
-    expect(cat("polyhedra").maxP).toBe(100);
+  it("accepts P = 100 records, and checks the largest records within the work bound", () => {
+    expect(SPACE_MAX_P.polyhedra).toBe(500);
+    expect(cat("polyhedra").maxP).toBe(500);
     // 100 cubes in a row in a cube of edge 100, touching
     expect(check("polyhedra", "polyhedra/cubincub/100", row(100, 0, 100)).valid).toBe(true);
     // the largest solids (120 and 92 vertices) at P = 100

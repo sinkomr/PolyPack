@@ -39,6 +39,8 @@ import {
   SPACE_METHOD_LENGTH,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
+  SPACE_SITE_ONLY_DEFAULT_LIMIT,
+  SPACE_SITE_ONLY_MAX_LIMIT,
   SPACE_TARGETS_MAX_LIMIT,
 } from "./spaces";
 
@@ -348,6 +350,11 @@ Other spaces send no <code>extra</code>.</span> The answer is kept until an entr
 The id has slashes, so the path is for example <code>/api/spaces/curved/problems/curved/-1/3/4/7</code>. 400 for an id that is not of the space's form (each problem has exactly one written form: no leading zeros, and K as the catalogue writes it), 404 for a problem that is not in the catalogue.</p>
 <pre tabindex="0"><code>${esc(SPACE_PROBLEM)}</code></pre>
 
+<h3 id="spaces-site-only"><code>GET /api/spaces/{space}/site-only?limit=&amp;after=</code></h3>
+<p>The problems of a space's domain that have a site entry but no research record, which <a href="#spaces"><code>/api/spaces/{space}/records</code></a> does not list.
+Each is a problem as in that listing (with its lower bound and <code>site_best</code>), sorted by id: <code>{space, generated_at, problems, next}</code>.
+At most <code>limit</code> problems (1 to ${SPACE_SITE_ONLY_MAX_LIMIT}, ${SPACE_SITE_ONLY_DEFAULT_LIMIT} by default) come in one answer; <code>next</code> is the last id of the page, to give as <code>after</code> for the next one, or <code>null</code> on the last page. Any other value or parameter is a 400, and 404 for an unknown space.</p>
+
 <h3 id="spaces-targets"><code>GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=</code></h3>
 <p>The optional work list of volunteer searches over the spaces; the <a href="/volunteer.html">volunteer client</a> uses it only when asked to. Highest <code>priority</code> first, then smaller <code>P</code>.</p>
 <p id="spaces-priority">Listed are the open problems whose best value is above its lower bound, except those with P = 1 and the surface's <code>nofold</code> problems.
@@ -356,7 +363,7 @@ Each problem counts with g · w, where g = min((best_score − bound) / best_sco
 Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
 the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
 The whole list fits in one answer at the largest <code>limit</code> (16657 targets with the catalogues of 2026-10-26: surface 715, curved 233, sphere 133, torus 204, boundary 28, polyhedra 14844, and balls 500, a sample of its domain; about 3.1 MB).
-The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose 14850 problems share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
+The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose records and bounded sample of problems without records share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
 <code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
 A problem <a href="#spaces-no-record">without a research record</a> and without an entry yet is listed with <code>best_score: null</code>, <code>leader: "none"</code> and the largest room, g = ${SPACE_GAP_CAP}.
 A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain with neither a record nor an entry, in the order of the domain's own sample (small P first): never the whole domain. As those get entries, the next problems of the sample take their place, so every problem of the domain comes up in turn.
@@ -385,7 +392,7 @@ Response (this example only ties the research record, so it is valid and <a href
 <tr><th scope="row"><code>best_score</code></th><td>The problem's best value after this submission, the research record's or the site leader's, whichever is smaller: the value a new entry has to beat by more than the tie tolerance to be kept.</td></tr>
 <tr><th scope="row"><code>id</code></th><td>The stored entry, at <code>/api/spaces/entries/{id}</code> while it leads; <code>null</code> when the entry was valid but not kept.</td></tr>
 <tr><th scope="row"><code>beats_certified</code></th><td><code>true</code> when the score is below the research record's certified size by more than the tie tolerance (for <code>polyhedra</code>, by more than ${SPACE_RECORD_MARGIN.polyhedra.toExponential()}) and the entry passed the <a href="#spaces-strict">strict check</a>.</td></tr>
-<tr><th scope="row"><code>checked</code></th><td><code>false</code> (and otherwise absent) when the server did not check the configuration, because its stated score could not be kept anyway: for <code>polyhedra</code>, a score not below the research record by more than ${SPACE_RECORD_MARGIN.polyhedra.toExponential()} or not below the site's best by more than ${SCORE_TIE}. The answer is then 200 with <code>valid: false</code>, the stated score and a reason; a check of 100 large solids is long, and this keeps posting a record back from costing one.</td></tr>
+<tr><th scope="row"><code>checked</code></th><td><code>false</code> (and otherwise absent) when the server did not check the configuration, because its stated score could not be kept anyway: for <code>polyhedra</code>, a score not below the research record by more than ${SPACE_RECORD_MARGIN.polyhedra.toExponential()} or not below the site's best by more than ${SCORE_TIE}. The answer is then 200 with <code>valid: false</code>, the stated score and a reason; a check of 500 large solids is long, and this keeps posting a record back from costing one.</td></tr>
 </table>
 <p>The statuses are those of <a href="#submit"><code>/api/submit</code></a>: 200 valid; 400 a malformed body (an unknown space, an id that is not of the catalogue, a missing name, a configuration that is not of the space's format, numbers out of range); 409 a <a href="#spaces-closed">closed</a> problem, not examined;
 413 a body over ${MAX_BODY_BYTES / 1024} kB (also without a Content-Length: the body is read no further than the limit); 422 a well-formed configuration that is not a valid packing, whose size is below the problem's lower bound, or that beats the research record but fails the <a href="#spaces-strict">strict check</a> (with the reasons); 429 and 503 as for <code>/api/submit</code>, and also 429 while another entry from the same address is being checked (one check at a time per address), and 503 when ${SPACE_HEAVY_CHECKS_WAITING} heavy checks (polyhedra from P = ${SPACE_HEAVY_CHECK_P}) already wait their turn.

@@ -8,7 +8,7 @@ import {
   ProblemInfo,
   SubmitResponse,
 } from "@polypack/geometry";
-import type { SpaceName, SpaceRecordsResponse, SpacesResponse } from "@polypack/spaces";
+import type { SpaceName, SpaceRecordsResponse, SpaceSiteOnlyResponse, SpacesResponse } from "@polypack/spaces";
 
 async function getJson<T>(url: string): Promise<T | null> {
   try {
@@ -51,6 +51,12 @@ export const getSpaces = () => getJson<SpacesResponse>("/api/spaces");
 /** Every problem of one space, with its research value and site best, without configurations. */
 export const getSpaceRecords = (space: SpaceName) =>
   getJson<SpaceRecordsResponse>(`/api/spaces/${encodeURIComponent(space)}/records`);
+
+/** One page of a space's problems that have a site entry and no research record (see collectPages). */
+export const getSpaceSiteOnly = (space: SpaceName, after?: string) =>
+  getJson<SpaceSiteOnlyResponse>(
+    `/api/spaces/${encodeURIComponent(space)}/site-only?limit=5000${after === undefined ? "" : `&after=${encodeURIComponent(after)}`}`,
+  );
 
 /** POST /api/submit: a configuration with its name, note and how it was found (see submissionFields). */
 export async function submit(

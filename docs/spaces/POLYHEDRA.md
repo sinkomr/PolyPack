@@ -10,8 +10,10 @@ in a cube, and their prisms of height 1.5, 2 and 3 in a cube; and the bipyramids
 prisms and antiprisms, in themselves and in a cube (150 problems). The score is s; smaller is better. In code and
 data the space is called `polyhedra`.
 
-**Summary** (2026-10-25).
+**Summary** (2026-10-26).
 
+- The domain covers **74,850 problems**, the 150 solid pairs at P = 2 to 500. P = 101 to 500 starts
+  without research records; entries use the same volume bound and must pass the strict check [CALC].
 - `data/polyhedra/records.json` holds **14,850 records**, one for each of the 150 problems and P = 2 to 100 (the
   wiki's range), every one with coordinates: 8,514 of the wiki's problems and 6,336 of PolyPack's (2,772 of prisms
   and antiprisms, 3,564 of bipyramids and trapezohedra). The file is the index (values, bounds, provenance;
@@ -684,10 +686,31 @@ the volume bound ignores their length of 17 against a width of 3.9).
 ## 8. On the site: board, API and volunteer client
 
 **Registry.** `@polypack/spaces` lists the space as `polyhedra` (user-facing: dimension 3D in 3D, kind Polyhedra):
-ids `polyhedra/<code>/<P>`, the configuration `{s, pieces}`, P from 2 to `POLYHEDRA_MAX_P` = 100 (P = 101 and
+ids `polyhedra/<code>/<P>`, the configuration `{s, pieces}`, P from 2 to `POLYHEDRA_MAX_P` = 500 (P = 501 and
 above are refused as malformed), the validator above at the touching tolerance 1e-9, and the strict check at
-1e-11 for an entry below a research record by more than the margin. The search registry runs
+1e-11 for an entry below a research record by more than the margin, or any entry without a research record.
+`polyhedraDomain` defines the range, volume bounds and a bounded volunteer sample (500 ids, starting
+at P = 101). The 14,850 existing records and their configurations are unchanged. The search registry runs
 `searchPolyhedra` for a job (`@polypack/spaces/search`, method "polyhedra soft-to-rigid search").
+
+**Large problems (P up to 500, 2026-10-26).** The board's domain picker offers every P from 2 to 500.
+"Start from → Lattice arrangement" constructs a deterministic patch of the existing box lattice in the
+piece's canonical orientation: non-overlapping axis-aligned bounding boxes separate the pieces, face supports
+choose the smallest container about the origin for that patch, and a relative dilation of 1e-10 keeps clearance
+through rounding. It uses code only, with no saved packing or optimization. The volunteer scheduler uses this
+start when neither a record nor a site packing exists [CALC].
+
+The validator yields during placement, wall checks and pair scans, targeting 20 ms per slice. Every P = 500
+entry uses the existing heavy-check queue (one running, eight waiting). The address reserves up to 1,600 ms
+for the two passes, reconciled against measured work; the shared verification budget is 4,000 ms/minute
+(6.7% of one core). The unchanged 256 KiB body limit fits a full-precision 500-pose entry, tested at about
+79 kB [CALC].
+
+Board rounds above P = 100 increase the existing step-cost model's safety factor to 1.8 times its old value at
+P = 500, on top of its 3.5-times slow-machine allowance. The 1,000-evaluation floor is relaxed for large P;
+regular, fresh, grown and generic rounds are capped to the existing roughly 20-second slow-machine bound.
+The sizing is deterministic and tested across all 150 solid pairs through P = 500; these bounds are cost-model
+calculations, not a timing guarantee for arbitrary hardware [CALC].
 
 **Keep rule.** An entry is kept when it beats the site's leader by more than the tie tolerance 1e-9 and the
 research record's certified s by more than `POLYHEDRA_RECORD_MARGIN` = 1e-6 relative (`SPACE_RECORD_MARGIN`,
@@ -753,7 +776,7 @@ asks for, so polyhedra get their share of its searches.
 
 `polyhedraKernel({ code, P })` (`packages/polyhedra/src/kernel.ts`) is the space's kernel for the generic search
 methods (`docs/methods/dimensions/README.md`). The space's own search (§5) stays the default, "Auto". P runs from 1
-to 100, the largest P the server accepts; the factory refuses a larger one.
+to 500, the largest P the server accepts; the factory refuses a larger one.
 
 **State.** Six numbers per piece: its centre, then a rotation vector times the piece's circumradius, so that it
 reads as a length. The rotation turns the piece's anchor orientation, a unit quaternion the kernel keeps in the

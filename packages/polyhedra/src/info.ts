@@ -4,8 +4,8 @@
  */
 import { POLYHEDRA_MAX_COORD, POLYHEDRA_MAX_QUATERNION, POLYHEDRA_MIN_QUATERNION_NORM, POLYHEDRA_TOL } from "./validate";
 
-/** Largest P of the catalogue (data/polyhedra/records.json covers P = 2 to 100, as the wiki does). */
-export const POLYHEDRA_MAX_P = 100;
+/** Largest P of the domain; research records cover P = 2 to 100 only. */
+export const POLYHEDRA_MAX_P = 500;
 
 /**
  * Relative margin by which an entry must beat a research record's certified scale to count as better. The
@@ -25,7 +25,7 @@ export const POLYHEDRA_INFO = {
   problem_id: "polyhedra/<code>/<P>",
   conventions: {
     problems:
-      "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron), pr3l15incub (triangular prisms of height 1.5 in a cube); P pieces",
+      "code is the wiki's <piece>in<container>, e.g. cubintet (cubes in a tetrahedron), pr3l15incub (triangular prisms of height 1.5 in a cube); P from 2 to 500, records through P = 100",
     solids:
       "the wiki's canonical solids, centred at the origin: unit edges, except Catalan solids (the polar reciprocals of the unit-edge Archimedean solids about the midsphere) and elongated prisms (base edges 1, lateral edges 1.5, 2 or 3); PolyPack's bipyramids and trapezohedra are likewise the polar reciprocals of the unit-edge prisms and antiprisms about the midsphere",
     container: "s times the canonical container solid, centred at the origin in its canonical orientation",

@@ -14,6 +14,7 @@ import { MAX_PIECES } from "@polypack/geometry";
 import { type PlatonicName, type SolidName, isSolidName } from "@polypack/surface";
 import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torusScore } from "@polypack/torus";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
+import { POLYHEDRA_MAX_P, getProblem, latticeStart } from "@polypack/polyhedra";
 import { ballsProblemOf, parseBallsId } from "@polypack/balls/catalogue";
 import type { SpaceConfig, SpaceName } from "../types";
 import { type SpaceValidateOptions, validateSpaceSubmission } from "../validate";
@@ -110,7 +111,7 @@ export function parseSearchProblem(id: unknown): SearchProblem | null {
   m = /^polyhedra\/([a-z0-9]{6,16})\/(\d{1,3})$/.exec(id);
   if (m) {
     const P = count(m[2]);
-    if (!problemNameOf(m[1]) || P === null) return null;
+    if (!problemNameOf(m[1]) || P === null || P > POLYHEDRA_MAX_P || String(P) !== m[2]) return null;
     return { space: "polyhedra", id, P, code: m[1] };
   }
   if (id.startsWith("balls/")) {
@@ -334,4 +335,9 @@ export const SOLID_FACES: Record<PlatonicName, { F: number; M: number }> = {
 /** True for a nofold surface problem on a Platonic solid: a planar problem of one face, for the polygon engine. */
 export function nofoldOnPolygonEngine(p: SearchProblem): boolean {
   return p.space === "surface" && p.mode === "nofold" && Object.hasOwn(SOLID_FACES, p.solid);
+}
+
+/** A cheap generated start for polyhedra; offered separately from records and site entries. */
+export function spaceLatticeStart(p: SearchProblem) {
+  return p.space === "polyhedra" ? { ...latticeStart(getProblem(p.code)!, p.P) } : null;
 }

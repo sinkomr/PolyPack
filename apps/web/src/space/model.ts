@@ -317,7 +317,8 @@ export const GENERIC_ROUND_MAX = 300_000;
 /**
  * Evaluations of a generic method's round on the problem, from a start or without one: K / P
  * (GENERIC_ROUND_K, GENERIC_ROUND_K_SURFACE_DISKS or GENERIC_ROUND_K_BALL_PIECES) in hundreds,
- * clamped to [GENERIC_ROUND_MIN, GENERIC_ROUND_MAX], and at least two finishes and checks of its
+ * clamped to [GENERIC_ROUND_MIN, GENERIC_ROUND_MAX] (large polyhedra use a smaller cost-based cap),
+ * and at least two finishes and checks of its
  * kernel, so that a round can offer more than its start.
  */
 export function genericRound(p: SearchProblem): number {
@@ -327,7 +328,9 @@ export function genericRound(p: SearchProblem): number {
       : ballPieces(p)
         ? GENERIC_ROUND_K_BALL_PIECES
         : GENERIC_ROUND_K[p.space];
-  const round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
+  let round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
+  if (p.space === "polyhedra" && p.P > 100)
+    round = Math.max(100, 100 * Math.floor(8000 / polyhedraRound(p.P, p.code).stepMs / 100));
   const k = spaceKernel(p);
   const offers = k ? 2 * (k.finishCost + (k.validateCost ?? k.finishCost)) : 0;
   return Math.max(round, 100 * Math.ceil(offers / 100));
@@ -438,7 +441,8 @@ export const GROW_LIMIT: Record<SearchKind, number> = {
  * soft hop longer than about 18 s there is cut to one that cannot. So a round of 100 of the largest
  * solids has about 2,600 evaluations, too few for a soft hop: it jiggles, a second or two on the
  * laptop. The sizes depend on the problem only, so a run that ends on its evaluations stays
- * reproducible.
+ * reproducible. Above P = 100 a safety factor grows to 1.8 at P = 500, the floor
+ * drops to 100, and polish-only rounds are capped at 8 s in this model.
  *
  * A round with no start first runs the simulator's soft-to-rigid schedule (search.ts: up to 53,000
  * steps at P = 100), shortened to 40 % of the round: it gets the whole schedule when that fits in
@@ -449,7 +453,10 @@ export function polyhedraRound(P: number, code: string): { round: number; fresh:
   const solid = problem ? getPolyhedraSolid(problem.piece) : null;
   const v = solid?.nv ?? 8;
   const f = solid?.faces.length ?? 6;
-  const stepMs = (3.5 * P * (3.3 + 0.14 * f + 0.0021 * v * f)) / 1000;
+  // [CALC] At P = 500 a step costs up to 25 ms (tid), above the old linear fit.
+  // Grow its safety factor continuously beyond the measured P <= 100 range.
+  const large = 1 + 0.8 * Math.max(0, P - 100) / 400;
+  const stepMs = (large * 3.5 * P * (3.3 + 0.14 * f + 0.0021 * v * f)) / 1000;
   const polish = Math.min(1800, 300 + 15 * P);
   const hop = 7000 + 130 * P;
   const k = (n: number) => 100 * Math.floor(n / 100);
@@ -459,7 +466,9 @@ export function polyhedraRound(P: number, code: string): { round: number; fresh:
   // one that would take more than 18 s there is cut: to 15 s of steps, or to jiggles alone
   if (round >= softFrom && 1.2 * round * stepMs > 18000)
     round = Math.max(15000 / stepMs, Math.min(round, softFrom - 1));
-  round = Math.max(1000, k(round));
+  // At large P, a fixed 1,000-evaluation floor alone can exceed the slow-machine bound.
+  if (P > 100) round = Math.min(round, 8000 * 5 / stepMs);
+  round = Math.max(P > 100 ? 100 : 1000, k(round));
   const schedule = Math.min(5000, 600 + 60 * P) + Math.min(45000, 4000 + 600 * P) + Math.min(3000, 500 + 50 * P);
   const fresh = Math.max(round, k(Math.min(schedule / 0.4, 33000 / stepMs)));
   return { round, fresh, stepMs };
@@ -640,7 +649,14 @@ export function roundJob(
   const left = run.budget.evals - used.evals;
   if (left < least) return null;
   const grow = generic ? GENERIC_GROW_LIMIT : GROW_LIMIT[kind];
-  const size = (start ? roundSize(p, method) : freshSize(p, method)) * Math.min(grow, 2 ** Math.min(tries, 20));
+  let size = (start ? roundSize(p, method) : freshSize(p, method)) * Math.min(grow, 2 ** Math.min(tries, 20));
+  if (p.space === "polyhedra" && p.P > 100) {
+    // Growing a stalled round must still fit the same slow-machine bound.
+    const stepMs = polyhedraRound(p.P, p.code).stepMs;
+    const seconds = (n: number) => generic ? n * stepMs / 1000
+      : start ? polyhedraRoundSeconds(p.P, p.code, n) : 0.4 * n * 1.5 * stepMs / 1000;
+    while (size > 100 && seconds(size) > 20) size = Math.max(100, size - 100);
+  }
   const evals = Math.max(least, Math.min(size, left));
   const time_s =
     run.budget.time_s === undefined
