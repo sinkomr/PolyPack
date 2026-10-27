@@ -526,7 +526,7 @@ describe("Tighter dimension cards", () => {
     const T2 = resetThreshold(2);
     expect(
       (
-        ["poly-catalan", "poly-platonic", "poly-prisms", "poly-cube", "poly-elongated", "poly-duals", "balls"] as const
+        ["poly-catalan", "poly-platonic", "poly-prisms", "poly-antiprisms", "poly-elongated", "poly-duals", "balls"] as const
       ).map((id) => costOf(o(2), id)),
     ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.4 * T2, 0.5 * T2]);
     // Quick study takes its 10 % a level off these prices as off any price in record points

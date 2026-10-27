@@ -1,15 +1,16 @@
-import { BALLS_CODES } from "@polypack/balls/catalogue";
-import { PROBLEM_NAMES } from "@polypack/polyhedra/catalogue";
+import { BALLS_CODES, BALLS_PROBLEMS } from "@polypack/balls/catalogue";
+import { SOLID_NAMES_LIST, problemNameOf } from "@polypack/polyhedra/catalogue";
 import { DealerState, nextRandom } from "./dealer";
 import { ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
 import { spaceFields } from "./families";
-import { SliceId } from "./slices";
+import { SLICES, SOLID_FAMILY_SLICE, SliceId, laterSlice } from "./slices";
 
 /**
  * The problems each slice (slices.ts) may deal, enumerated lazily: surfaces are 712,800 problems
  * and balls are 693, so those are drawn from parameter ranges with the dealer's seeded generator.
- * The other spaces (sphere, torus, curved, polyhedra) have only their research records for
- * problems, so they are drawn from the records listing of the server (GET /api/spaces/<space>/records),
+ * Polyhedra problems are every ordered pair of the 94 solids (8,836, of which 150 have records), drawn
+ * from the solids of the open families. The other spaces (sphere, torus, curved) have only their
+ * research records for problems, so they are drawn from the records listing of the server (GET /api/spaces/<space>/records),
  * read once a session by the page and passed in.
  */
 
@@ -49,30 +50,50 @@ const SURFACE_SOLIDS: Partial<Record<SliceId, readonly string[]>> = {
   "surf-nofold-catalan": SURFACE_CATALAN,
 };
 
-// ---------- the groups of polyhedra problems ----------
+// ---------- the solids and families of the polyhedra and balls problems ----------
 
-const POLY_GROUPS: Partial<Record<SliceId, (p: (typeof PROBLEM_NAMES)[number]) => boolean>> = {
-  "poly-archimedean": (p) => p.family === "archimedean",
-  "poly-catalan": (p) => p.family === "catalan",
-  "poly-platonic": (p) => p.family === "platonic",
-  // prisms and antiprisms in themselves, without the elongated ones (which are only ever in a cube)
-  "poly-prisms": (p) => p.family === "prisms" && p.piece === p.container,
-  "poly-cube": (p) => p.family === "prisms" && p.container === "cube" && /^(anti)?prism\d+$/.test(p.piece),
-  "poly-elongated": (p) => p.family === "prisms" && /_l\d+$/.test(p.piece),
-  "poly-duals": (p) => p.family === "bipyramids" || p.family === "trapezohedra",
+const SOLID_BY_NAME = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s]));
+const BALLS_BY_CODE = new Map(BALLS_PROBLEMS.map((p) => [p.code, p]));
+
+/** The slice of the solid's family, or null for "ball" or a name that is no solid. */
+const solidSlice = (name: string): SliceId | null => {
+  const s = SOLID_BY_NAME.get(name);
+  return s ? SOLID_FAMILY_SLICE[s.family] : null;
 };
 
-/** The polyhedra codes of a poly-* slice: each of the 150 codes is in one slice. */
-export function polyhedraCodes(slice: SliceId): string[] {
-  const keep = POLY_GROUPS[slice];
-  return keep ? PROBLEM_NAMES.filter(keep).map((p) => p.code) : [];
+/** The solids of the families open in `open`. */
+const openSolids = (open: readonly SliceId[]) =>
+  SOLID_NAMES_LIST.filter((s) => open.includes(SOLID_FAMILY_SLICE[s.family]));
+
+/**
+ * The slices a problem needs open to be dealt: for a pair of solids the slices of the piece's and the
+ * container's family, for a balls problem the Balls slice and the slice of the solid's family (if it has
+ * a solid). Null when the id is none of these.
+ */
+export function requiredSlices(id: string): SliceId[] | null {
+  const f = spaceFields(id);
+  if (!f) return null;
+  if (f.family === "polyhedra") {
+    const pair = problemNameOf(f.code);
+    if (!pair) return null;
+    const a = solidSlice(pair.piece);
+    const b = solidSlice(pair.container);
+    return a && b ? [...new Set([a, b])] : null;
+  }
+  if (f.family === "balls") {
+    const p = BALLS_BY_CODE.get(f.code);
+    if (!p) return null;
+    const solid = solidSlice(p.piece === "ball" ? p.container : p.piece);
+    return solid ? ["balls", solid] : ["balls"];
+  }
+  return null;
 }
 
-const POLY_SLICE_OF: ReadonlyMap<string, SliceId> = (() => {
-  const m = new Map<string, SliceId>();
-  for (const slice of Object.keys(POLY_GROUPS) as SliceId[]) for (const c of polyhedraCodes(slice)) m.set(c, slice);
-  return m;
-})();
+/** Whether a polyhedra or balls problem may be dealt with these slices open: every slice it requires is. */
+export function dealableIn(id: string, open: readonly SliceId[]): boolean {
+  const need = requiredSlices(id);
+  return need !== null && need.every((s) => open.includes(s));
+}
 
 // ---------- which slice a problem is in ----------
 
@@ -90,9 +111,11 @@ export function sliceOfId(id: string): SliceId | null {
     case "curved":
       return f.family;
     case "balls":
-      return BALLS_CODES.includes(f.code) ? "balls" : null;
-    case "polyhedra":
-      return POLY_SLICE_OF.get(f.code) ?? null;
+    case "polyhedra": {
+      // the later opened (dearer) of the slices the problem needs, so a problem is in the slice that opens it last
+      const need = requiredSlices(id);
+      return need ? need.reduce(laterSlice) : null;
+    }
     case "surface": {
       if (f.mode === "nofold") return f.solid in CATALAN_FACES ? "surf-nofold-catalan" : null;
       if (SURFACE_PLATONIC.includes(f.solid)) return "surf-platonic";
@@ -132,12 +155,13 @@ export interface ListedSpaceProblem {
 
 /** The spaces whose problems are their records. */
 export type ListedSpace = "sphere" | "torus" | "curved" | "polyhedra";
+// (polyhedra stays a listed space for the page's other uses; no slice draws from it now)
 export type SpaceListings = Partial<Record<ListedSpace, readonly ListedSpaceProblem[]>>;
 
 /** The records listing a slice draws from, or null for a slice drawn from parameter ranges. */
 export function listingOf(slice: SliceId): ListedSpace | null {
-  if (slice === "sphere" || slice === "torus" || slice === "curved") return slice;
-  return slice.startsWith("poly-") ? "polyhedra" : null;
+  // polyhedra pairs are drawn from the solids, not from the 150 records
+  return slice === "sphere" || slice === "torus" || slice === "curved" ? slice : null;
 }
 
 /** A record within this relative distance of its bound is done for the game's purposes: nothing is left to gain. */
@@ -165,6 +189,8 @@ export const STARTER_P = { min: 8, max: 20 } as const;
 const STARTER_SIDES = [3, 4, 5, 6] as const;
 const STARTER_SOLIDS = ["tetrahedron", "cube", "octahedron"] as const;
 const STARTER_BALLS = ["ballinball", "ballincub"] as const;
+/** P of a polyhedra pair, from 2 to 500. */
+export const POLY_P = { min: 2, max: 500 } as const;
 
 // ---------- drawing ----------
 
@@ -178,6 +204,8 @@ export interface DrawOptions {
   exclude: ReadonlySet<string>;
   /** The slice's starter corner (the first deal after its dimension opens). */
   starter?: boolean;
+  /** The slices open now (polyhedra pairs and balls problems are dealt by their families); every slice when absent. */
+  open?: readonly SliceId[];
   attempts?: number;
 }
 
@@ -201,9 +229,41 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
     return keyFor(p.id, p.P, listed);
   }
   const attempts = o.attempts ?? 24;
-  if (slice === "balls") {
+  const open = o.open ?? SLICES.map((s) => s.id);
+  if (slice.startsWith("poly-")) {
+    // The slice's own family supplies the piece or the container (a coin says which), the other comes
+    // from any open family, so each card's solids are dealt as soon as it is bought. A starter is
+    // Archimedean in Archimedean.
+    const own = SOLID_NAMES_LIST.filter(
+      (s) => SOLID_FAMILY_SLICE[s.family] === (o.starter ? "poly-archimedean" : slice),
+    );
+    const any = o.starter ? own : openSolids(open);
+    if (!own.length || !any.length) return null;
     for (let i = 0; i < attempts; i++) {
-      const code = pick(d, o.starter ? STARTER_BALLS : BALLS_CODES);
+      const focus = pick(d, own);
+      const other = pick(d, any);
+      const [piece, container] = nextRandom(d) < 0.5 ? [focus, other] : [other, focus];
+      // P is log-uniform in [2, 500]: the cost of an evaluation grows with P, so the many small problems
+      // that can be improved quickly are dealt as often as the few large ones that take long
+      const P = o.starter
+        ? span(d, STARTER_P.min, STARTER_P.max)
+        : Math.min(
+            POLY_P.max,
+            Math.max(
+              POLY_P.min,
+              Math.round(Math.exp(Math.log(POLY_P.min) + nextRandom(d) * Math.log(POLY_P.max / POLY_P.min))),
+            ),
+          );
+      const id = `polyhedra/${piece.code}in${container.code}/${P}`;
+      if (!o.exclude.has(id)) return keyFor(id, P, "polyhedra");
+    }
+    return null;
+  }
+  if (slice === "balls") {
+    const codes = (o.starter ? STARTER_BALLS : BALLS_CODES).filter((c) => dealableIn(`balls/${c}/2`, open));
+    if (!codes.length) return null;
+    for (let i = 0; i < attempts; i++) {
+      const code = pick(d, codes);
       const P = o.starter ? span(d, STARTER_P.min, STARTER_P.max) : span(d, 2, 100);
       const id = `balls/${code}/${P}`;
       if (!o.exclude.has(id)) return keyFor(id, P, "balls");

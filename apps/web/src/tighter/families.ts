@@ -61,7 +61,7 @@ export function spaceFields(id: string): SpaceFields | null {
   if ((m = /^torus\/(sq|hex|free)\/(\d+)\/(\d+)$/.exec(id)))
     return { family: "torus", lattice: m[1] as "sq" | "hex" | "free", N: Number(m[2]), P: Number(m[3]) };
   if ((m = /^polyhedra\/([a-z0-9]+)\/(\d+)$/.exec(id))) return { family: "polyhedra", code: m[1], P: Number(m[2]) };
-  if ((m = /^balls\/([a-z]+)\/(\d+)$/.exec(id))) return { family: "balls", code: m[1], P: Number(m[2]) };
+  if ((m = /^balls\/([a-z0-9]+)\/(\d+)$/.exec(id))) return { family: "balls", code: m[1], P: Number(m[2]) };
   return null;
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { PROBLEM_NAMES } from "@polypack/polyhedra/catalogue";
+import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { SURFACE_CATALAN as PKG_CATALAN, SURFACE_PLATONIC as PKG_PLATONIC, SURFACE_SOLIDS } from "@polypack/spaces";
 import {
   CLOSE_TO_BOUND,
@@ -11,8 +11,10 @@ import {
   dealtFromListing,
   drawSliceProblem,
   inSlice,
-  polyhedraCodes,
+  dealableIn,
+  listingOf,
   parseDealtKey,
+  requiredSlices,
   sliceOfId,
 } from "../src/tighter/catalogue";
 import { newDealer } from "../src/tighter/dealer";
@@ -178,7 +180,13 @@ describe("Tighter catalogue", () => {
     expect(sliceOfId("polyhedra/cubintet/12")).toBe("poly-platonic");
     expect(sliceOfId("polyhedra/kttinktt/12")).toBe("poly-catalan");
     expect(sliceOfId("polyhedra/pr3inpr3/12")).toBe("poly-prisms");
-    expect(sliceOfId("polyhedra/pr3incub/12")).toBe("poly-cube");
+    expect(sliceOfId("polyhedra/ap5inap5/12")).toBe("poly-antiprisms");
+    // a pair is in the later opened of its two families' slices
+    expect(sliceOfId("polyhedra/pr3incub/12")).toBe("poly-prisms");
+    expect(sliceOfId("polyhedra/ap5intte/12")).toBe("poly-antiprisms");
+    expect(sliceOfId("polyhedra/tteinap5/500")).toBe("poly-antiprisms");
+    expect(sliceOfId("polyhedra/cubinkti/7")).toBe("poly-platonic");
+    expect(sliceOfId("balls/pr3inball/12")).toBe("balls");
     expect(sliceOfId("polyhedra/pr3l15incub/12")).toBe("poly-elongated");
     expect(sliceOfId("polyhedra/bp3inbp3/12")).toBe("poly-duals");
     expect(sliceOfId("polyhedra/tz4incub/12")).toBe("poly-duals");
@@ -186,12 +194,75 @@ describe("Tighter catalogue", () => {
     expect(sliceOfId("24/30/60")).toBeNull();
   });
 
-  it("puts each of the 150 polyhedra codes in exactly one slice", () => {
-    const slices = SLICES.filter((s) => s.family === "polyhedra").map((s) => s.id);
-    const all = slices.flatMap((s) => polyhedraCodes(s));
-    expect(all).toHaveLength(PROBLEM_NAMES.length);
-    expect(new Set(all).size).toBe(all.length);
-    expect(polyhedraCodes("poly-platonic")).toHaveLength(25);
+  it("deals a pair of solids iff both families are open, and a balls problem iff Balls and its solid's family are", () => {
+    const open = (...ids: SliceId[]) => ids;
+    expect(dealableIn("polyhedra/tteintte/9", open("poly-archimedean"))).toBe(true);
+    expect(dealableIn("polyhedra/tteincub/9", open("poly-archimedean"))).toBe(false);
+    expect(dealableIn("polyhedra/cubintte/9", open("poly-archimedean"))).toBe(false);
+    expect(dealableIn("polyhedra/cubintte/9", open("poly-archimedean", "poly-platonic"))).toBe(true);
+    expect(dealableIn("polyhedra/cubincub/9", open("poly-platonic"))).toBe(true);
+    expect(dealableIn("polyhedra/pr3l15inap4/9", open("poly-archimedean", "poly-elongated"))).toBe(false);
+    expect(dealableIn("polyhedra/pr3l15inap4/9", open("poly-elongated", "poly-antiprisms"))).toBe(true);
+    expect(dealableIn("polyhedra/bp3intz4/9", open("poly-duals"))).toBe(true);
+    expect(
+      dealableIn(
+        "polyhedra/nonsense/9",
+        SLICES.map((s) => s.id),
+      ),
+    ).toBe(false);
+    // balls: the card is needed, and the solid's family if there is a solid
+    expect(dealableIn("balls/ballinball/9", open("poly-archimedean"))).toBe(false);
+    expect(dealableIn("balls/ballinball/9", open("balls"))).toBe(true);
+    expect(dealableIn("balls/ballintte/9", open("balls"))).toBe(false);
+    expect(dealableIn("balls/ballintte/9", open("balls", "poly-archimedean"))).toBe(true);
+    expect(dealableIn("balls/tteinball/9", open("poly-archimedean"))).toBe(false);
+    expect(dealableIn("balls/tteinball/9", open("balls", "poly-archimedean"))).toBe(true);
+    expect(dealableIn("balls/tz4inball/9", open("balls", "poly-archimedean"))).toBe(false);
+  });
+
+  it("draws pairs of the open families with P log-uniform in 2 to 500, and balls of the open ones", () => {
+    const open: SliceId[] = ["poly-archimedean", "poly-platonic", "poly-prisms", "balls"];
+    const draw = (slice: SliceId, n: number, starter = false) => {
+      const d = newDealer(11);
+      const exclude = new Set<string>();
+      const out: SpaceKey[] = [];
+      for (let i = 0; i < n; i++) {
+        const k = drawSliceProblem(d, slice, { listings: {}, exclude, starter, open });
+        if (!k) break;
+        exclude.add(k.id);
+        out.push(k);
+      }
+      return out;
+    };
+    let big = 0;
+    let small = 0;
+    for (const slice of ["poly-archimedean", "poly-platonic", "poly-prisms", "balls"] as const) {
+      const ks = draw(slice, 300);
+      expect(ks.length).toBeGreaterThan(100);
+      for (const k of ks) {
+        const f = spaceFields(k.id)!;
+        expect(parseDealtKey(k.id)).not.toBeNull();
+        expect(dealableIn(k.id, open)).toBe(true);
+        expect(open).toContain(sliceOfId(k.id));
+        if (f.family === "polyhedra") {
+          const name = problemNameOf(f.code)!;
+          expect(name).not.toBeNull();
+          expect(k.P).toBeGreaterThanOrEqual(2);
+          expect(k.P).toBeLessThanOrEqual(500);
+          if (k.P >= 100) big++;
+          if (k.P < 10) small++;
+        } else expect(k.P).toBeLessThanOrEqual(100);
+      }
+    }
+    // log-uniform on [2, 500]: 1 - ln(50)/ln(250) = 29 % are 100 or more and ln(5)/ln(250) = 29 % are below 10
+    expect(big).toBeGreaterThan(150);
+    expect(small).toBeGreaterThan(150);
+    // a starter is Archimedean in Archimedean with 8 to 20 pieces
+    for (const k of draw("poly-archimedean", 40, true)) {
+      expect(k.P).toBeGreaterThanOrEqual(STARTER_P.min);
+      expect(k.P).toBeLessThanOrEqual(STARTER_P.max);
+      expect(requiredSlices(k.id)).toEqual(["poly-archimedean"]);
+    }
   });
 
   it("draws the same problems from the same seed, and none twice", () => {
@@ -266,15 +337,7 @@ describe("Tighter catalogue", () => {
     expect(sample("sphere", 1, true, listings)[0].P).toBeLessThanOrEqual(STARTER_P.max);
     // without a listing, nothing
     expect(sample("sphere", 3)).toEqual([]);
-    expect(sample("poly-platonic", 3)).toEqual([]);
-  });
-
-  it("deals a polyhedra slice's problems from the listing by code group", () => {
-    const listings = {
-      polyhedra: [entry("polyhedra/cubintet/12"), entry("polyhedra/tteintte/9"), entry("polyhedra/pr3incub/10")],
-    };
-    expect(sample("poly-platonic", 5, false, listings).map((k) => k.id)).toEqual(["polyhedra/cubintet/12"]);
-    expect(sample("poly-cube", 5, false, listings).map((k) => k.id)).toEqual(["polyhedra/pr3incub/10"]);
+    expect(listingOf("poly-platonic")).toBeNull();
   });
 });
 
@@ -302,7 +365,6 @@ describe("Tighter space problems of every slice", () => {
     sphere: [listed("sphere/4/1"), listed("sphere/4/12")],
     torus: [listed("torus/sq/3/1"), listed("torus/sq/3/9")],
     curved: [listed("curved/-1/3/4/1"), listed("curved/-1/3/4/7")],
-    polyhedra: PROBLEM_NAMES.flatMap((n) => [listed(`polyhedra/${n.code}/1`), listed(`polyhedra/${n.code}/6`)]),
   };
 
   it("are each in the slice that dealt them, with at least 2 pieces", () => {
@@ -310,7 +372,11 @@ describe("Tighter space problems of every slice", () => {
       const ks = draw(s.id, 60, false);
       for (const starter of [false, true]) {
         for (const k of starter ? draw(s.id, 20, true) : ks) {
-          expect(sliceOfId(k.id)).toBe(s.id);
+          // a pair or a balls problem is in the later opened of the slices it needs, one of which is the dealing slice
+          if (s.family === "polyhedra" || s.family === "balls")
+            expect(requiredSlices(k.id)).toContain(starter && s.family === "polyhedra" ? "poly-archimedean" : s.id);
+          else expect(sliceOfId(k.id)).toBe(s.id);
+          expect(sliceOfId(k.id)).not.toBeNull();
           expect(k.P).toBeGreaterThanOrEqual(2);
           expect(parseDealtKey(k.id)).not.toBeNull();
         }
@@ -330,8 +396,7 @@ describe("Tighter space problems of every slice", () => {
       ["surface/cube/nofold/4/20", "surface", 20],
       ["polyhedra/nope/6", "polyhedra", 6],
     ] as const;
-    for (const [id, family, P] of hostile)
-      raw.queue.push({ ...raw.queue[0], key: id, id, family, P });
+    for (const [id, family, P] of hostile) raw.queue.push({ ...raw.queue[0], key: id, id, family, P });
     raw.past = [{ key: "surface/cube/nofold/4/20", tier: "open", best: 2, verified: null, rp: 0 }];
     const r = fromJson(JSON.stringify(raw), T0);
     if (!r.ok) throw new Error("save not read");

@@ -6,7 +6,9 @@ import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from ".
 import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { RESET_GROWTH, RESET_MIN } from "./points";
-import { SliceId, sliceById } from "./slices";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
+import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
+import { SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
 
 /**
@@ -747,7 +749,7 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   "poly-catalan": 0.01,
   "poly-platonic": 0.03,
   "poly-prisms": 0.1,
-  "poly-cube": 0.15,
+  "poly-antiprisms": 0.15,
   "poly-elongated": 0.25,
   "poly-duals": 0.4,
   balls: 0.5,
@@ -818,6 +820,16 @@ function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what:
   };
 }
 
+/**
+ * The text of a solid family's card. 3D in 3D opens with the Archimedean solids; each card opens a family,
+ * and a pair of solids (the piece, the container) is dealt when both of its families are open, with 2 to 500
+ * pieces. The counts come from the catalogue, so they follow it.
+ */
+function polyWhat(id: SliceId, what: string): string {
+  const n = solidsOfSlice(id);
+  return `The dealer also deals ${what} (${n} solids) as pieces and as containers, in pairs with any solid of a family that is open, itself included. Every ordered pair of solids is a problem, with 2 to 500 pieces: ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem with every family open.`;
+}
+
 const SURFACE_PIECES =
   "Pieces are disks or polygons of 3 to 100 sides, with 1 to 100 of them, so each solid holds 9,900 problems.";
 
@@ -873,44 +885,44 @@ const SLICE_CARDS: Upgrade[] = [
   sliceCard(
     "poly-catalan",
     [],
-    "Deals packings of Catalan solids inside a bigger copy of themselves.",
-    "The dealer also deals the 13 Catalan solids packed in the smallest scaled copy of the same solid, with 2 to 100 pieces each.",
+    "Opens the Catalan solids as pieces and containers.",
+    polyWhat("poly-catalan", "the Catalan solids"),
   ),
   sliceCard(
     "poly-platonic",
     [],
-    "Deals packings of Platonic solids inside the other Platonic solids.",
-    "The dealer also deals each of the 5 Platonic solids packed in each of the 5, which is 25 problems for each of 2 to 100 pieces.",
+    "Opens the Platonic solids as pieces and containers.",
+    polyWhat("poly-platonic", "the Platonic solids"),
   ),
   sliceCard(
     "poly-prisms",
     ["poly-catalan"],
-    "Deals packings of prisms and antiprisms inside a bigger copy of themselves.",
-    "The dealer also deals the 9 prisms and 9 antiprisms packed in the smallest scaled copy of the same solid, with 2 to 100 pieces each.",
+    "Opens the prisms as pieces and containers.",
+    polyWhat("poly-prisms", "the prisms"),
   ),
   sliceCard(
-    "poly-cube",
+    "poly-antiprisms",
     ["poly-prisms"],
-    "Deals packings of prisms and antiprisms inside a cube.",
-    "The dealer also deals the same 18 prisms and antiprisms packed in the smallest cube, with 2 to 100 pieces each.",
+    "Opens the antiprisms as pieces and containers.",
+    polyWhat("poly-antiprisms", "the antiprisms"),
   ),
   sliceCard(
     "poly-elongated",
-    ["poly-cube"],
-    "Deals packings of elongated prisms inside a cube.",
-    "The dealer also deals the 27 elongated prisms, whose sides are 1.5, 2 or 3 times the base edge, packed in the smallest cube, with 2 to 100 pieces each.",
+    ["poly-antiprisms"],
+    "Opens the elongated prisms as pieces and containers.",
+    polyWhat("poly-elongated", "the prisms of height 1.5, 2 and 3"),
   ),
   sliceCard(
     "poly-duals",
     ["poly-elongated"],
-    "Deals packings of bipyramids and trapezohedra inside themselves and a cube.",
-    "The dealer also deals the 9 bipyramids and 9 trapezohedra, the duals of the prisms and antiprisms, packed in the smallest scaled copy of themselves and in the smallest cube, with 2 to 100 pieces each.",
+    "Opens the bipyramids and trapezohedra as pieces and containers.",
+    polyWhat("poly-duals", "the bipyramids and trapezohedra"),
   ),
   sliceCard(
     "balls",
     ["poly-platonic"],
-    "Deals packings of balls, and of Platonic solids in a ball.",
-    "The dealer also deals the 7 ball problems: unit balls in the smallest ball or cube, and unit Platonic solids in the smallest ball, with 2 to 100 pieces each. Most of them have no record yet.",
+    "Deals packings of balls in solids, solids in a ball, and balls in a ball.",
+    `The dealer also deals packings with balls: unit balls in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
   ),
 ];
 

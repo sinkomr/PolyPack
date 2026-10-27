@@ -1894,7 +1894,12 @@ async function spaceCandidate(
   if (!slice) return null;
   const listed = listingOf(slice);
   if (listed && !(await spaceListing(io, listed))) return null;
-  const k = drawSliceProblem(d, slice, { listings: spaceListings, exclude, starter: starter !== undefined });
+  const k = drawSliceProblem(d, slice, {
+    listings: spaceListings,
+    exclude,
+    starter: starter !== undefined,
+    open: dealableSlices(),
+  });
   if (!k) return null;
   if (!allowed({ ...k, tier: "open" })) {
     exclude.add(k.id);
