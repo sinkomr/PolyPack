@@ -245,3 +245,23 @@ test("share link and JSON export round-trip the configuration", async ({ page, c
   await expect(page.locator("#status")).toContainText("Imported 4 pieces");
   expect(await pieces(page)).toEqual(saved);
 });
+
+test("a board saved or linked before the unit change reopens at the new scale, once", async ({ page }) => {
+  const old = { N: 0, M: 0, P: 2, phi: 0, p: [-1, 0, 0, 1, 0, 0] };
+  const link = "#c=" + Buffer.from(JSON.stringify(old)).toString("base64url");
+  await page.goto("/");
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/" + link);
+  await page.reload();
+  await page.locator("#count").filter({ hasText: "2 / 2" }).waitFor();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
+  // an old untagged save is converted, and what the board saves now is tagged
+  await page.evaluate(() => localStorage.setItem("polypack.board", JSON.stringify({ N: 0, M: 0, P: 2, container_phi: 0, pieces: [{ x: -1, y: 0, theta: 0 }, { x: 1, y: 0, theta: 0 }] })));
+  await page.goto("/");
+  await page.reload();
+  await page.locator("#count").filter({ hasText: "2 / 2" }).waitFor();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("polypack.board")!).units)).toBe("diameter");
+  await page.reload();
+  expect((await pieces(page)).map((p) => p.x)).toEqual([-0.5, 0.5]);
+});
