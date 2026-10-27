@@ -680,7 +680,7 @@ def certify_nofold(cfg, lam):
         worst = None
         if N == 0:
             for lab, ax, ay, b in fcons[f]:
-                gap = b - (ax * cx + ay * cy) - lam_iv * iv.sqrt(ax * ax + ay * ay)
+                gap = b - (ax * cx + ay * cy) - lam_iv * iv.sqrt(ax * ax + ay * ay) / 2  # radius lam / 2
                 if not pos(gap):
                     raise CertError("disk %d is not strictly inside face %d (edge %d)" % (i, f, lab[1]))
                 g = float(gap.a) / math.hypot(float(ax.mid), float(ay.mid))
@@ -704,7 +704,7 @@ def certify_nofold(cfg, lam):
                 pi, pj = cfg.poses[i], cfg.poses[j]
                 if N == 0:
                     dx, dy = ivf(pi[1]) - ivf(pj[1]), ivf(pi[2]) - ivf(pj[2])
-                    gap = dx * dx + dy * dy - 4 * lam_iv * lam_iv
+                    gap = dx * dx + dy * dy - lam_iv * lam_iv
                     if not pos(gap):
                         raise CertError("disks %d and %d are not strictly separated" % (i, j))
                     pairs.append([f, i, j, "dist", sig_down(float(gap.a))])
@@ -812,8 +812,8 @@ def certify_fold_disks(cfg, lam):
 
     S, s = cfg.S, cfg.s
     lam_iv = ivf(lam)
-    reach_sq = 4 * lam_iv * lam_iv
-    lam_sq = lam_iv * lam_iv
+    reach_sq = lam_iv * lam_iv  # the shrunk diameter squared (disks have diameter 1)
+    lam_sq = lam_iv * lam_iv / 4  # the shrunk radius squared
     centres = [(ivf(x), ivf(y)) for (_, x, y, _) in cfg.poses]
     nodes_all, cone_rows, pair_rows, loop_rows = [], [], [], []
     for i, (f, x, y, th) in enumerate(cfg.poses):

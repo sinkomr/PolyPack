@@ -3,7 +3,7 @@
  * its face). Properties only: seeded outcomes differ between Node versions.
  */
 import { describe, expect, it } from "vitest";
-import { type SolidName, getSolid, validate, validateNofold } from "../src/index";
+import { type SolidName, getSolid, scaleFor, sizeFor, validate, validateNofold } from "../src/index";
 import { PolygonEnergy, diskEnergyNofold } from "../src/search/energy";
 import { Packing } from "../src/search/optimize";
 import { mulberry32, randomPose, searchProblem } from "../src/search/search";
@@ -20,8 +20,8 @@ describe("nofold energies", () => {
         const lam = 0.05 + 0.25 * rand();
         const poses = Array.from({ length: 1 + (t % 3) }, () => randomPose(S, rand));
         const E = N === 0 ? diskEnergyNofold(S, 1, lam, poses) : new PolygonEnergy(S, 1, N, lam, poses, "nofold").total();
-        // the energy is in the unit solid with pieces scaled by lam: the same packing at s = 1 / lam
-        const s = 1 / lam;
+        // the energy is in the unit solid with pieces scaled by lam (a disk of radius lam): the same packing at the edge sizeFor
+        const s = sizeFor(N, lam);
         const v = validateNofold({ solid: name, N, s, pieces: poses.map((p) => ({ ...p, x: p.x * s, y: p.y * s })) }, { tol: 0 });
         if (E === 0) zero++;
         else positive++;
@@ -90,5 +90,20 @@ describe("searches on the new solids", () => {
     // the starts and hops end at the deadline; the final tightening and polish run on
     expect(Date.now() - t).toBeLessThan(45_000);
     if (r) expect(r.lam).toBeGreaterThan(0);
+  });
+});
+
+describe("units: disks of diameter 1", () => {
+  // Pinned from the search before the unit change (disks of radius 1): the search works on the unit
+  // solid with the disk radius lam, unchanged, so a seed gives the same lam and poses; the edge in
+  // piece units is sizeFor(0, lam) = 1/2 of what it was (1 / lam).
+  it("searchProblem gives the radius-1 outcome of a seed, with the edge halved", () => {
+    const r = searchProblem(getSolid("cube"), 0, 5, { seed: 3, randomStarts: 2, hops: 3, warm: [], mode: "fold" })!;
+    expect(r.lam).toBeCloseTo(0.524883415704319, 12);
+    expect(r.poses[1].x).toBeCloseTo(-0.042847231396033705, 12);
+    expect(sizeFor(0, r.lam)).toBeCloseTo(0.5 / 0.524883415704319, 12);
+    expect(scaleFor(0, sizeFor(0, r.lam))).toBe(r.lam);
+    // polygons are not rescaled
+    expect(sizeFor(4, 0.5)).toBe(2);
   });
 });

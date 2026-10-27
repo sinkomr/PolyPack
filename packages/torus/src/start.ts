@@ -7,9 +7,10 @@
  * this one picks the lattice whose shortest vector is longest, so the cell is as small as these
  * lattice placements allow.
  */
-import { type Pose, boundingRadius } from "@polypack/geometry";
+import { type Pose } from "@polypack/geometry";
+import { reachOf } from "./disk";
 import { superlatticePoints, superlattices } from "./kernel-seeds";
-import { type Lattice, TORUS_DISK_RADIUS, TORUS_MAX_P, type TorusFamily, cellArea, familyLattice, gaussReduce } from "./lattice";
+import { type Lattice, TORUS_MAX_P, type TorusFamily, cellArea, familyLattice, gaussReduce } from "./lattice";
 import type { TorusPacking } from "./validate";
 
 /** Relative dilation of the start beyond touching circumscribed disks. */
@@ -29,7 +30,7 @@ function shortest(unit: Lattice, a: number, b: number, d: number): number {
 export function torusLatticeStart(problem: { family: TorusFamily; N: number; P: number }): TorusPacking {
   const { family, N, P } = problem;
   if (!Number.isInteger(P) || P < 1 || P > TORUS_MAX_P) throw new RangeError(`P must be an integer from 1 to ${TORUS_MAX_P}`);
-  const R = N === 0 ? TORUS_DISK_RADIUS : boundingRadius(N);
+  const R = reachOf(N);
   const shapes: ("sq" | "hex")[] = family === "free" ? ["sq", "hex"] : [family];
   let best: { shape: "sq" | "hex"; abd: [number, number, number]; k: number; score: number } | null = null;
   for (const shape of shapes) {

@@ -7,12 +7,13 @@
  * Each problem's lower bound is the larger of two [CALC] bounds (docs/spaces/SURFACE.md 2.6), which
  * hold with and without folding:
  *  - area: P pieces of area a(N) fit on a surface of area s^2 A(1), so s >= sqrt(P a(N) / A(1));
- *  - one piece: a piece's inscribed disk (radius r = 1 for a disk, the apothem for a polygon) holds no
+ *  - one piece: a piece's inscribed disk (radius r = 1/2 for a disk of diameter 1, the apothem for a polygon) holds no
  *    vertex, and every point of a face f is within rho_f s of one of its corners (faceCornerRadius),
  *    so s >= r / max_f rho_f.
  * On the Platonic solids these are the bounds the records carry, computed as the records were (to the last bit).
  */
-import { inradius, pieceArea } from "@polypack/geometry";
+import { inradius } from "@polypack/geometry";
+import { SURFACE_DISK_RADIUS, pieceAreaOf } from "./disk";
 import { GENERAL_SOLID_DATA } from "./general.data";
 import { ALL_SOLID_NAMES, type SolidName, faceCornerRadius, getSolid, isSolidName, surfaceArea } from "./solids";
 
@@ -66,12 +67,12 @@ export function surfaceBounds(solid: SolidName, N: number, P: number): { area: n
     // the Platonic solids, with the records' float operations (tables.py bounds): area F M s^2 / (4 tan(pi/M)),
     // and every point of a face within its circumradius s / (2 sin(pi/M)) of a corner
     const M = S.M;
-    const a = N === 0 ? Math.PI : N / (4 * tanPi(N));
+    const a = N === 0 ? Math.PI / 4 : N / (4 * tanPi(N));  // a disk of diameter 1: pi / 4
     area = Math.sqrt((P * a * 4 * tanPi(M)) / (S.F * M));
-    one = 2 * Math.sin(Math.PI / M) * (N === 0 ? 1 : 1 / (2 * tanPi(N)));
+    one = 2 * Math.sin(Math.PI / M) * (N === 0 ? SURFACE_DISK_RADIUS : 1 / (2 * tanPi(N)));
   } else {
-    area = Math.sqrt((P * pieceArea(N)) / surfaceArea(S, 1));
-    one = (N === 0 ? 1 : inradius(N)) / maxCornerRadius(solid);
+    area = Math.sqrt((P * pieceAreaOf(N)) / surfaceArea(S, 1));
+    one = (N === 0 ? SURFACE_DISK_RADIUS : inradius(N)) / maxCornerRadius(solid);
   }
   return { area, one };
 }

@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   type Quat,
   type SphereConfig,
@@ -12,8 +10,10 @@ import {
   expFromQuat,
   inradiusAngle,
   maxMarginPlane,
+  pieceAngle,
   pieceArea,
   pieceExists,
+  rhoForAngle,
   quatFromCentreTheta,
   quatFromExp,
   quatMul,
@@ -22,9 +22,8 @@ import {
   standardVertices,
   validate,
 } from "../src";
+import { loadSiteRecords } from "./helpers";
 
-const root = join(__dirname, "../../..");
-const recordsPath = join(root, "data/sphere/records.json");
 
 /** Deterministic PRNG (mulberry32). */
 function rng(seed: number) {
@@ -80,8 +79,9 @@ describe("piece geometry", () => {
     expect(pieceExists(3, 1 / (2 * Math.PI - 0.1))).toBe(false); // small sin(a/2) but a > pi
     expect(pieceExists(3, 1 / Math.sqrt(20))).toBe(false); // K = 20: perimeter 3 > 2 pi rho (curved-package regression)
     expect(validate({ N: 3, P: 1 }, { rho: 1 / Math.sqrt(20), pieces: [{ q: [1, 0, 0, 0] }] }).valid).toBe(false);
-    expect(pieceExists(0, 1.01 / Math.PI)).toBe(true);
-    expect(pieceExists(0, 0.99 / Math.PI)).toBe(false);
+    // disks of diameter 1: the cap exists for angular radius 1/(2 rho) < pi
+    expect(pieceExists(0, 1.01 / (2 * Math.PI))).toBe(true);
+    expect(pieceExists(0, 0.99 / (2 * Math.PI))).toBe(false);
   });
   it("side of the standard piece is 1/rho on the unit sphere", () => {
     for (const N of [3, 4, 5, 6, 8]) {
@@ -92,6 +92,30 @@ describe("piece geometry", () => {
       expect(V[0][0]).toBeCloseTo(0, 15); // vertex 0 straight up (+y)
       expect(V[0][1]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("disks of diameter 1", () => {
+  it("have angular radius 1/(2 rho) and the area bound of P caps", () => {
+    expect(pieceAngle(0, 2)).toBe(0.25);
+    expect(pieceAngle(4, 2)).toBe(0.5);
+    expect(rhoForAngle(0, 0.25)).toBe(2);
+    for (const P of [2, 3, 6, 12, 24]) {
+      const rho = areaBound(0, P);
+      expect(P * pieceArea(0, rho)).toBeCloseTo(4 * Math.PI * rho * rho, 10);
+    }
+    // two disks that touch: antipodal, angular radius pi/2, so rho = 1 / pi; one disk: the whole sphere
+    expect(areaBound(0, 2)).toBeCloseTo(1 / Math.PI, 14);
+  });
+  it("touch when the centres are one diameter apart on the sphere (gap = rho * angle - 1)", () => {
+    const rho = 1.5;
+    const mk = (gap: number): SphereConfig => {
+      const d = (1 + gap) / rho;
+      return { rho, pieces: [{ q: [1, 0, 0, 0] }, { q: quatFromCentreTheta([Math.sin(d), 0, Math.cos(d)], 0) }] };
+    };
+    expect(validate({ N: 0, P: 2 }, mk(0)).minGap).toBeCloseTo(0, 12);
+    expect(validate({ N: 0, P: 2 }, mk(-0.5e-9)).valid).toBe(true);
+    expect(validate({ N: 0, P: 2 }, mk(-2e-9)).valid).toBe(false);
   });
 });
 
@@ -204,11 +228,11 @@ describe("validator input checks", () => {
     );
     expect(validate({ N: 6, P: 2 }, { rho: 0.95, pieces: good.pieces }).valid).toBe(false); // 6/(2 pi) = 0.9549
     expect(validate({ N: 7, P: 2 }, good).valid).toBe(false); // 7/(2 pi) > 1: the piece does not exist at this radius
-    expect(validate({ N: 0, P: 2 }, { rho: 0.6, pieces: good.pieces }).valid).toBe(false); // caps beyond a hemisphere
+    expect(validate({ N: 0, P: 2 }, { rho: 0.3, pieces: good.pieces }).valid).toBe(false); // caps beyond a hemisphere (1/(2 rho) > pi/2)
   });
   it("disks: overlap by 1e-6 rejected, gap accepted", () => {
     const rho = 2;
-    const ang = 2 / rho;
+    const ang = 1 / rho; // centres of touching disks of diameter 1 are 1 apart: the angle 1 / rho
     const mk = (d: number): SphereConfig => ({
       rho,
       pieces: [{ q: [1, 0, 0, 0] }, { q: quatFromCentreTheta([Math.sin(d), 0, Math.cos(d)], 0) }],
@@ -219,11 +243,11 @@ describe("validator input checks", () => {
 });
 
 describe("stored records (data/sphere/records.json)", () => {
-  const have = existsSync(recordsPath);
+  const records = loadSiteRecords();
+  const have = records.length > 0;
   it.runIf(have)("every record is strictly valid at score_cert and overlaps when slightly smaller", () => {
-    const data = JSON.parse(readFileSync(recordsPath, "utf8"));
-    expect(data.records.length).toBeGreaterThan(0);
-    for (const r of data.records) {
+    expect(records.length).toBeGreaterThan(0);
+    for (const r of records) {
       const cfg: SphereConfig = { rho: r.score_cert, pieces: r.config.pieces };
       const res = validate({ N: r.N, P: r.P }, cfg);
       expect(res.errors, r.id).toEqual([]);
@@ -240,19 +264,17 @@ describe("stored records (data/sphere/records.json)", () => {
     }
   });
   it.runIf(have)("exact cases: Platonic tilings and P = 2", () => {
-    const data = JSON.parse(readFileSync(recordsPath, "utf8"));
-    const by = new Map<string, any>(data.records.map((r: any) => [r.id, r]));
+    const by = new Map<string, any>(records.map((r: any) => [r.id, r]));
     for (const [N, P, rho] of TILINGS) {
       const r = by.get(`sphere/${N}/${P}`);
       expect(r, `sphere/${N}/${P}`).toBeTruthy();
       expect(Math.abs(r.score_float - rho) / rho).toBeLessThan(1e-11);
     }
     for (const N of [3, 4, 5, 6]) expect(by.get(`sphere/${N}/2`).score_float).toBeCloseTo(N / (2 * Math.PI), 14);
-    expect(by.get("sphere/0/2").score_float).toBeCloseTo(2 / Math.PI, 14);
+    expect(by.get("sphere/0/2").score_float).toBeCloseTo(1 / Math.PI, 14); // two disks of diameter 1: rho = 1 / pi
   });
   it.runIf(have)("a cube-tiling square rotated by 1e-6 overlaps", () => {
-    const data = JSON.parse(readFileSync(recordsPath, "utf8"));
-    const r = data.records.find((x: any) => x.id === "sphere/4/6");
+    const r = records.find((x: any) => x.id === "sphere/4/6");
     const pieces = r.config.pieces.map((p: any) => ({ q: p.q as Quat }));
     const d = 1e-6;
     pieces[1] = { q: quatMul(pieces[1].q, [Math.cos(d / 2), 0, 0, Math.sin(d / 2)]) };

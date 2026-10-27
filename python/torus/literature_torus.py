@@ -1,6 +1,7 @@
 """Lower bounds and literature values for the torus tables (converted to PolyPack units).
 
-Units: disks of radius 1, polygons of side 1. Scores: sq/hex side L, free sqrt(cell area).
+Units: disks of DIAMETER 1 (radius 1/2; before 2026-10-27 they had radius 1 and every disk score was twice as
+large), polygons of side 1. Scores: sq/hex side L, free sqrt(cell area).
 A packing on a torus lifts to a periodic packing of the plane with the same density, so any
 density bound for packings of congruent copies in the plane applies.
 
@@ -19,7 +20,7 @@ ACCESSED = "2026-10-24"
 
 
 def piece_area(N):
-    return math.pi if N == 0 else N / (4.0 * math.tan(math.pi / N))
+    return math.pi / 4.0 if N == 0 else N / (4.0 * math.tan(math.pi / N))
 
 
 # Density upper bounds delta(N) for packings of congruent copies in the plane.
@@ -71,7 +72,7 @@ def score_bound(fam, N, P):
         out = {"value": score_from_area(fam, A), "label": AREA_LABEL, "kind": "area"}
     if P == 1 and fam in ("sq", "hex"):
         if N == 0:
-            out = {"value": 2.0, "label": "[CALC] one disk: the shortest lattice vector L must be >= 2", "kind": "exact"}
+            out = {"value": 1.0, "label": "[CALC] one disk: the shortest lattice vector L must be >= 1 (the diameter)", "kind": "exact"}
         else:
             b = p1_bounds().get("%s/%d" % (fam, N))
             if b and b["lower_bound"] > out["value"]:
@@ -86,8 +87,8 @@ def score_bound(fam, N, P):
     return out
 
 
-# Literature entries keyed by (family, N, P), values converted to radius-1 disks and side-1
-# polygons (L = 2/d for disks at minimal distance d on the unit torus, L = 1/r for disks of
+# Literature entries keyed by (family, N, P), values converted to diameter-1 disks and side-1
+# polygons (L = 1/d for disks at minimal distance d on the unit torus, L = 1/(2r) for disks of
 # radius r on it, L = sqrt(P / rho) for squares at density rho).
 #
 # Fields of an entry: value (PolyPack units, or None), status (the source's own claim: proven,
@@ -185,50 +186,50 @@ def _dgkx(value, note):
 
 
 def _mn(value, k, note):
-    proof = "Theorem %d: optimal minimal distance on the unit square torus, %s; L = 2/d" % (k - 5, note)
+    proof = "Theorem %d: optimal minimal distance on the unit square torus, %s; L = 1/d" % (k - 5, note)
     return _e(value, "proven", "Musin and Nikitenko 2016, Thm %d" % (k - 5), MN, MN_URL, note, MN_DOI, proof, AUDITED)
 
 
 S2, S3, S5, S6 = math.sqrt(2.0), SQ3, math.sqrt(5.0), math.sqrt(6.0)
 _d6 = S3 / 2 - S2 * math.sqrt(3 * S3 + 2) / 6 + 1 / 6.0
-_SQ_R = "on the square torus (v2 = (0, 1)); L = 1/r"
-_HEX_R = "on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/r"
+_SQ_R = "on the square torus (v2 = (0, 1)); L = 1/(2r)"
+_HEX_R = "on the triangular torus (v2 = (1/2, sqrt3/2)); L = 1/(2r)"
 LIT = {
     ("sq", 0, 1): [
-        _dgkx(2.0, "one disk: the shortest lattice vector must be at least 2 (trivial); Connelly et al. 2017 report the square grid optimal for N = 1, 2 and 5"),
+        _dgkx(1.0, "one disk: the shortest lattice vector must be at least 1 (trivial); Connelly et al. 2017 report the square grid optimal for N = 1, 2 and 5"),
     ],
     ("sq", 0, 2): [
-        _brandt(2 * S2, "Theorem 1.1, region R1_2: r2 = sqrt2/4 " + _SQ_R, "L = 2 sqrt2"),
-        _dgkx(2 * S2, "d = sqrt2/2, L = 2 sqrt2"),
+        _brandt(S2, "Theorem 1.1, region R1_2: r2 = sqrt2/4 " + _SQ_R, "L = sqrt2"),
+        _dgkx(S2, "d = sqrt2/2, L = sqrt2"),
     ],
     ("sq", 0, 3): [
-        _brandt(S6 + S2, "Theorem 1.1, region R1_3: r3 = (sqrt6 - sqrt2)/4 " + _SQ_R, "L = sqrt6 + sqrt2"),
-        _dgkx(S6 + S2, "d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2"),
+        _brandt((S6 + S2) / 2, "Theorem 1.1, region R1_3: r3 = (sqrt6 - sqrt2)/4 " + _SQ_R, "L = (sqrt6 + sqrt2)/2"),
+        _dgkx((S6 + S2) / 2, "d = (sqrt6 - sqrt2)/2, L = (sqrt6 + sqrt2)/2"),
     ],
     ("sq", 0, 4): [
-        _brandt(S6 + S2, "Theorem 1.1, region R1_4: r4 = (sqrt6 - sqrt2)/4 " + _SQ_R, "L = sqrt6 + sqrt2"),
-        _dgkx(S6 + S2, "d = (sqrt6 - sqrt2)/2, L = sqrt6 + sqrt2"),
+        _brandt((S6 + S2) / 2, "Theorem 1.1, region R1_4: r4 = (sqrt6 - sqrt2)/4 " + _SQ_R, "L = (sqrt6 + sqrt2)/2"),
+        _dgkx((S6 + S2) / 2, "d = (sqrt6 - sqrt2)/2, L = (sqrt6 + sqrt2)/2"),
     ],
-    ("sq", 0, 5): [_dgkx(2 * S5, "d = 1/sqrt5, L = 2 sqrt5")],
-    ("sq", 0, 6): [_mn(2 / _d6, 6, "d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6")],
-    ("sq", 0, 7): [_mn(2 * (1 + S3), 7, "d7 = 1/(1 + sqrt3), three optimal arrangements")],
-    ("sq", 0, 8): [_mn(2 * (1 + S3), 8, "d8 = 1/(1 + sqrt3)")],
-    ("sq", 0, 9): [_e(2 * math.sqrt(5 + 2 * S3), "conjecture", "Musin and Nikitenko 2016, Conjecture 2.1", MN, MN_URL,
+    ("sq", 0, 5): [_dgkx(S5, "d = 1/sqrt5, L = sqrt5")],
+    ("sq", 0, 6): [_mn(1 / _d6, 6, "d6 = sqrt3/2 - sqrt2 sqrt(3 sqrt3 + 2)/6 + 1/6")],
+    ("sq", 0, 7): [_mn(1 + S3, 7, "d7 = 1/(1 + sqrt3), three optimal arrangements")],
+    ("sq", 0, 8): [_mn(1 + S3, 8, "d8 = 1/(1 + sqrt3)")],
+    ("sq", 0, 9): [_e(math.sqrt(5 + 2 * S3), "conjecture", "Musin and Nikitenko 2016, Conjecture 2.1", MN, MN_URL,
                       "d = 1/sqrt(5 + 2 sqrt3); Voloshinov and Smirnov reach the same arrangement with a floating-point "
                       "branch and bound (" + SV + "), not a rigorous proof", MN_DOI)],
-    ("sq", 0, 10): [_e(2 * math.sqrt(10.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "square grid, conjectured optimal; table bracket L in [6.3241, 6.3282]", CFKS_DOI)],
-    ("sq", 0, 11): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [6.5459, 6.5500] (r = 0.153, delta = 0.806)", CFKS_DOI)],
-    ("sq", 0, 12): [_e(24 / math.sqrt(13.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "Type I (a, b) = (3, 2): L = 24/sqrt13; table bracket [6.6539, 6.6578]", CFKS_DOI)],
-    ("sq", 0, 13): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [7.1969, 7.2015] (r = 0.139, delta = 0.788)", CFKS_DOI)],
-    ("sq", 0, 14): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [7.2382, 7.2425] (r = 0.138, delta = 0.839)", CFKS_DOI)],
-    ("sq", 0, 15): [_e(30 / math.sqrt(17.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "Type II (a, b) = (4, 1): L = 30/sqrt17; table bracket [7.2745, 7.2786]", CFKS_DOI)],
-    ("sq", 0, 16): [_e(2 * (S6 + S2), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket [7.7241, 7.7287]; 2 x 2 copy of the P = 4 optimum gives 2 (sqrt6 + sqrt2) [SPEC identification]", CFKS_DOI)],
+    ("sq", 0, 10): [_e(math.sqrt(10.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "square grid, conjectured optimal; table bracket L in [3.16205, 3.1641]", CFKS_DOI)],
+    ("sq", 0, 11): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [3.27295, 3.275] (r = 0.153, delta = 0.806)", CFKS_DOI)],
+    ("sq", 0, 12): [_e(12 / math.sqrt(13.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "Type I (a, b) = (3, 2): L = 12/sqrt13; table bracket [3.32695, 3.3289]", CFKS_DOI)],
+    ("sq", 0, 13): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [3.59845, 3.60075] (r = 0.139, delta = 0.788)", CFKS_DOI)],
+    ("sq", 0, 14): [_e(None, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket L in [3.6191, 3.62125] (r = 0.138, delta = 0.839)", CFKS_DOI)],
+    ("sq", 0, 15): [_e(15 / math.sqrt(17.0), "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "Type II (a, b) = (4, 1): L = 15/sqrt17; table bracket [3.63725, 3.6393]", CFKS_DOI)],
+    ("sq", 0, 16): [_e(S6 + S2, "best_known", "Connelly et al. 2017", CFKS, CFKS_URL, "table bracket [3.86205, 3.86435]; 2 x 2 copy of the P = 4 optimum gives sqrt6 + sqrt2 [SPEC identification]", CFKS_DOI)],
     ("hex", 0, 2): [
-        _brandt(2 * S3, "Theorem 1.1, region R1_2: r2 = 1/(2 sqrt3) " + _HEX_R, "L = 2 sqrt3 (3-point lattice minus one)"),
-        _e(2 * S3, "proven", "Dickinson et al. 2011, J. Geom. (not read)", DGKX6, CD_URL, "L = 2 sqrt3", DGKX6_DOI),
+        _brandt(S3, "Theorem 1.1, region R1_2: r2 = 1/(2 sqrt3) " + _HEX_R, "L = sqrt3 (3-point lattice minus one)"),
+        _e(S3, "proven", "Dickinson et al. 2011, J. Geom. (not read)", DGKX6, CD_URL, "L = sqrt3", DGKX6_DOI),
     ],
     ("hex", 0, 5): [_e(None, "proven", "Dickinson et al. 2011, J. Geom. (not read)", DGKX6, CD_URL, "optimal packing proven there; no published value seen", DGKX6_DOI)],
-    ("hex", 0, 6): [_e(2 * math.sqrt(7.0), "proven", "Dickinson et al. 2011, J. Geom. (not read)", DGKX6, CD_URL, "7-point lattice minus one disk, L = 2 sqrt7 (as described by Connelly-Dickinson 2014, sec. 1(d))", DGKX6_DOI)],
+    ("hex", 0, 6): [_e(math.sqrt(7.0), "proven", "Dickinson et al. 2011, J. Geom. (not read)", DGKX6, CD_URL, "7-point lattice minus one disk, L = sqrt7 (as described by Connelly-Dickinson 2014, sec. 1(d))", DGKX6_DOI)],
 }
 # square-torus squares (Blair, Santangelo, Machta 2012): L = sqrt(P / rho). Density one, when P is a
 # sum of two squares, is proven optimal there (sec. II.A.1); the other entries of Table I are conjectures.
@@ -246,22 +247,22 @@ for _P in _SUMSQ:
                                  "optimal, since no packing has density above 1; L = sqrt(P)", AUDITED)]
 # hexagonal torus disks: density pi/sqrt12 iff P = a^2 + ab + b^2 (Connelly-Dickinson 2014, Theorem 1.1;
 # Theorem 1 in arXiv:1201.5965); density gap conjecture (their Conjecture 1.3): if P + 1 has that form
-# and P does not, the optimum is the (P + 1)-lattice minus one disk, L = 2 sqrt(P + 1)
+# and P does not, the optimum is the (P + 1)-lattice minus one disk, L = sqrt(P + 1)
 _EIS = {a * a + a * b + b * b for a in range(0, 8) for b in range(0, 8)}
 _CD_PROOF = ("Theorem 1.1: on the triangular torus the density pi/sqrt12 is reached exactly when n = a^2 + ab + b^2; "
-             "n pi / ((sqrt3/2) L^2) = pi/sqrt12 gives L = 2 sqrt(n)")
+             "n (pi/4) / ((sqrt3/2) L^2) = pi/sqrt12 gives L = sqrt(n)")
 for _P in range(1, 50):
     if _P in _EIS:
         LIT.setdefault(("hex", 0, _P), []).insert(0, _e(
-            2 * math.sqrt(_P), "proven", "Connelly and Dickinson 2014, Thm 1.1", CD, CD_URL,
+            math.sqrt(_P), "proven", "Connelly and Dickinson 2014, Thm 1.1", CD, CD_URL,
             "triangular lattice, density pi/sqrt12", CD_DOI, _CD_PROOF, AUDITED))
     elif (_P + 1) in _EIS and ("hex", 0, _P) not in LIT:
         LIT[("hex", 0, _P)] = [
-            _e(2 * math.sqrt(_P + 1), "conjecture", "Connelly and Dickinson 2014, Conjecture 1.3", CD, CD_URL,
+            _e(math.sqrt(_P + 1), "conjecture", "Connelly and Dickinson 2014, Conjecture 1.3", CD, CD_URL,
                "density gap conjecture: (P + 1)-lattice minus one disk", CD_DOI, None, AUDITED)
         ]
-LIT[("hex", 0, 3)].append(_brandt(2 * S3, "Theorem 1.1, region R2_3: r3 = sqrt3/6 " + _HEX_R, "L = 2 sqrt3"))
-LIT[("hex", 0, 4)].append(_brandt(4.0, "Theorem 1.1, region R2_4: r4 = 1/4 " + _HEX_R, "L = 4"))
+LIT[("hex", 0, 3)].append(_brandt(S3, "Theorem 1.1, region R2_3: r3 = sqrt3/6 " + _HEX_R, "L = sqrt3"))
+LIT[("hex", 0, 4)].append(_brandt(2.0, "Theorem 1.1, region R2_4: r4 = 1/4 " + _HEX_R, "L = 2"))
 # free lattice: P = 1 is the densest lattice packing; P = 2 double lattices
 # Torda et al. give 5 decimals; the score uses our 13-digit critical-determinant value
 # (python/torus/lattice_density.py, [CALC]), which agrees with the table to its precision.
@@ -301,7 +302,7 @@ LIT[("free", 0, 1)] = [
        FUKSHANSKY_DOI,
        "Theorem 1.1: every lattice packing of congruent circles in the plane has density at most pi/(2 sqrt3) = "
        "pi/sqrt12, with equality only for lattices similar to the hexagonal one. A single disk on a torus is a "
-       "lattice packing, so L = sqrt(pi/(pi/sqrt12)) = sqrt(2 sqrt3) directly", AUDITED),
+       "lattice packing, so L = sqrt((pi/4)/(pi/sqrt12)) = sqrt(sqrt3/2) directly", AUDITED),
     _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Lagrange 1773 (not read)", LAGRANGE, FT_URL,
        "the origin of the densest lattice packing of disks; the record cites Fukshansky 2011 for a proof"),
     _e(_dens_score("free", 0, 1, math.pi / math.sqrt(12.0)), "proven", "Thue 1910", "A. Thue 1910 (Handbook ch. 2, Table 2.1.1)", FT_URL,
@@ -318,8 +319,8 @@ def literature(fam, N, P):
 EXACT_C = {
     ("sq", 4): ("1", 1.0),
     ("free", 4): ("1", 1.0),
-    ("hex", 0): ("4", 4.0),
-    ("free", 0): ("2 sqrt(3)", 2.0 * SQ3),
+    ("hex", 0): ("1", 1.0),
+    ("free", 0): ("sqrt(3) / 2", SQ3 / 2.0),
     ("hex", 6): ("3", 3.0),
     ("free", 6): ("3 sqrt(3) / 2", 1.5 * SQ3),
     ("hex", 3): ("1/2", 0.5),

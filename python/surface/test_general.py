@@ -31,6 +31,17 @@ def load(*parts):
         return json.load(fh)
 
 
+def to_site(r):
+    """A radius-1 disk record (an old fixture) in site units: the edge and the centres halve exactly."""
+    if isinstance(r, dict) and r.get("N") == 0 and "pieces" in r:
+        r = copy.deepcopy(r)
+        r["s"] = r["s"] / 2
+        for p in r["pieces"]:
+            p["x"] = p["x"] / 2
+            p["y"] = p["y"] / 2
+    return r
+
+
 def rec(solid, mode, N, s, pieces):
     return {"id": "test", "solid": solid, "mode": mode, "N": N, "P": len(pieces), "s": s,
             "pieces": [dict(face=f, x=x, y=y, theta=t) for f, x, y, t in pieces]}
@@ -277,7 +288,8 @@ class CrossCheck(unittest.TestCase):
         self.assertGreaterEqual(len(data), 150)
         self.assertGreaterEqual(sum(1 for c in data if c["ts_valid"]), 60)
         for c in data:
-            self.assertEqual(ok(c, "1e-9"), c["ts_valid"], c["id"])
+            # made with radius-1 disks; the converted copy (exact halving) has the same verdict
+            self.assertEqual(ok(to_site(c), "1e-9"), c["ts_valid"], c["id"])
 
 
 class Adversarial(unittest.TestCase):
@@ -321,7 +333,7 @@ class Adversarial(unittest.TestCase):
             f, k = 0, 0
             m = edge_point(S, s, f, k, 0.5)
             nx, ny = inward(S, s, f, k)
-            for d, want in ((1 - 1e-9, False), (1 + 1e-9, True)):
+            for d, want in ((0.5 - 0.5e-9, False), (0.5 + 0.5e-9, True)):  # disks of diameter 1: centres 2 d apart
                 p = (m[0] + d * nx, m[1] + d * ny)
                 g, q, _ = to_neighbour(S, s, f, k, (m[0] - d * nx, m[1] - d * ny))
                 r = rec(name, "fold", 0, s, [(f, p[0], p[1], 0.0), (g, q[0], q[1], 0.0)])
@@ -363,7 +375,7 @@ class Adversarial(unittest.TestCase):
 
     def test_piece_over_a_vertex(self):
         # the sharpest vertex of the new solids (triakis tetrahedron, cone angle 1.119 pi) and the
-        # other kinds: a disk 1 - 1e-9 from the vertex covers it; 1 + 1e-9 away it is fine
+        # other kinds: a disk of diameter 1 at 1/2 - 1e-9/2 from the vertex covers it; 1/2 + 1e-9/2 away it is fine
         for name in ("triakis_tetrahedron", "deltoidal_icositetrahedron", "rhombic_dodecahedron", "prism3", "antiprism4") + general.ARCHIMEDEAN:
             S = get_general(name)
             s = 8.0
@@ -376,7 +388,7 @@ class Adversarial(unittest.TestCase):
                 V = S.frame_vertex(Fr(s), f, k)
                 vx, vy = mid(V[0]), mid(V[1])
                 L = math.hypot(vx, vy)
-                for d, want in ((1 - 1e-9, False), (1 + 1e-9, True)):
+                for d, want in ((0.5 - 0.5e-9, False), (0.5 + 0.5e-9, True)):  # the disk radius is 1/2
                     r = rec(name, "fold", 0, s, [(f, vx * (1 - d / L), vy * (1 - d / L), 0.0)])
                     self.assertEqual(ok(r, "1e-12"), want, (name, v, d))
                 # a square with a corner 1e-9 over the vertex, pointing at it
@@ -396,7 +408,7 @@ class Adversarial(unittest.TestCase):
                 P = [S.frame_vertex(Fr(1), f, k) for k in range(S.sides[f])]
                 area += sum(mid(P[k][0] * P[(k + 1) % len(P)][1] - P[(k + 1) % len(P)][0] * P[k][1]) for k in range(len(P))) / 2
             for N in (0, 3, 8):
-                a = math.pi if N == 0 else N / (4 * math.tan(math.pi / N))
+                a = math.pi / 4 if N == 0 else N / (4 * math.tan(math.pi / N))
                 for k in (0.3, 0.95):
                     s = k * math.sqrt(a / area)
                     for th in (0.0, 0.7):

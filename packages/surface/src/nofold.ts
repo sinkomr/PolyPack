@@ -1,6 +1,6 @@
-import { areaLowerBound } from "@polypack/geometry";
+import { faceAreaLowerBound } from "./disk";
 import { getSolid, isSolidName, type Solid } from "./solids";
-import planarData from "./planar-values.data";
+import planarData, { planarDataUnits } from "./planar-values.data";
 
 const names: Record<number, string> = {
   0: "disk",
@@ -84,7 +84,44 @@ export interface PlanarValue {
   value: number;
   printed?: { display: string; precision: number; name: string; href: string };
 }
-export const PLANAR_VALUES: readonly PlanarValue[] = planarData;
+/**
+ * Half of a printed decimal, exactly: "3.464+" is "1.732+", "3.465+" is "1.7325+" (one more decimal when the
+ * last digit is odd); the trailing "+" (a truncated value) stays. `precision` is the number of decimals.
+ */
+export function halvePrinted(display: string, precision: number): { display: string; precision: number } {
+  const m = /^(-?)(\d+)(?:\.(\d+))?(\+?)$/.exec(display);
+  if (!m) throw new Error(`cannot halve printed value ${display}`);
+  const [, sign, whole, frac = "", plus] = m;
+  // digits as an integer, halved with one more decimal
+  const digits = BigInt(whole + frac);
+  const doubled = digits * 5n; // digits / 2 = digits * 5 / 10: one more decimal
+  let decimals = frac.length + 1;
+  let text = doubled.toString().padStart(decimals + 1, "0");
+  let out = text.slice(0, text.length - decimals) + "." + text.slice(text.length - decimals);
+  // drop the extra decimal when it is zero (the last digit was even)
+  if (out.endsWith("0")) {
+    out = out.slice(0, -1);
+    decimals--;
+  }
+  if (out.endsWith(".")) out = out.slice(0, -1);
+  return { display: sign + out + plus, precision: precision + (decimals > frac.length ? 1 : 0) };
+}
+
+/** A disk entry of the radius-1 index in site units (diameter 1): every length halves. */
+function siteEntry(v: PlanarValue): PlanarValue {
+  if (v.N !== 0) return v;
+  const printed = v.printed && { ...v.printed, ...halvePrinted(v.printed.display, v.printed.precision) };
+  return { ...v, value: v.value / 2, ...(printed ? { printed } : {}) };
+}
+
+/**
+ * The 2D in 2D values the notes quote, in site units. The index is generated from data/records.json
+ * (scripts/build-planar-values.ts) and says which units it is in: while the data is the radius-1 one
+ * (planarDataUnits "radius1") the entries of disks are halved here, exactly; once it is regenerated
+ * from site-unit records ("diameter") they are used as they are.
+ */
+export const PLANAR_VALUES: readonly PlanarValue[] =
+  planarDataUnits === "diameter" ? planarData : planarData.map(siteEntry);
 
 /** Group regular faces by polygon, regardless of the solid's family or number of face kinds. */
 export function regularFaceKinds(solid: Pick<Solid, "sides" | "regular">): FaceKind[] | null {
@@ -123,7 +160,7 @@ export function bestFaceSplit(N: number, P: number, kinds: readonly FaceKind[], 
       for (let k = 0; k <= limit; k++) {
         const record = known.get(k);
         if (k > P && !record) continue;
-        const value = k === 0 ? 0 : (record?.value ?? areaLowerBound(N, M, k));
+        const value = k === 0 ? 0 : (record?.value ?? faceAreaLowerBound(N, M, k));
         const score = Math.max(state.value, value);
         const filled = Math.min(P, capacity + F * k);
         if (next.has(filled) && next.get(filled)!.value <= score) continue;

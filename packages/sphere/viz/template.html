@@ -53,7 +53,7 @@ footer { margin-top: 18px; font-size: 0.82rem; color: var(--muted); }
 <body>
 <main>
   <h1>Packings on the whole sphere</h1>
-  <p class="lede">P congruent pieces (disks of radius 1 or regular spherical N-gons of side 1) on a sphere of radius &rho;, no container. Smaller &rho; is better. Every listed packing is proven valid by an interval-arithmetic certifier at its certified radius; values are shown rounded to 6 decimals.</p>
+  <p class="lede">P congruent pieces (disks of diameter 1 or regular spherical N-gons of side 1) on a sphere of radius &rho;, no container. Smaller &rho; is better. Every listed packing is proven valid by an interval-arithmetic certifier at its certified radius; values are shown rounded to 6 decimals.</p>
   <div class="layout">
     <section class="viewer">
       <div class="controls">
@@ -99,7 +99,7 @@ function rotAxis(ax, t) {
 
 /** Boundary of a piece sampled on the unit sphere (world coordinates). */
 function boundary(rec, q) {
-  const M = qmat(q), a = 1 / rec.score_cert, pts = [];
+  const M = qmat(q), a = (rec.N === 0 ? 0.5 : 1) / rec.score_cert, pts = []; // disks have diameter 1: angular radius 1/(2 rho)
   if (rec.N === 0) {
     const n = 96;
     for (let k = 0; k < n; k++) { const t = 2 * Math.PI * k / n; pts.push(mv(M, [Math.sin(a) * Math.cos(t), Math.sin(a) * Math.sin(t), Math.cos(a)])); }

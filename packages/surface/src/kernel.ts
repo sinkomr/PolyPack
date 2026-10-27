@@ -31,7 +31,8 @@
  * in both modes) and, for polygons,
  * "swap" (the two pieces exchange their angles in their own faces' frames).
  */
-import { boundingRadius, inradius } from "@polypack/geometry";
+import { inradius } from "@polypack/geometry";
+import { SURFACE_DISK_RADIUS, pieceReach, scaleFor } from "./disk";
 import type { Finished, KernelCapability, KernelState, Rng, SpaceKernel, Validation } from "@polypack/methods";
 import { PolygonModel, TooLarge, diskClear, diskTerms, jumpAwareDifference } from "./kernel-energy";
 import {
@@ -113,8 +114,8 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
   const dim = N === 0 ? 2 : 3;
   const n = P * dim;
   const bound = surfaceBound(solid, N, P);
-  const rIn = N === 0 ? 1 : inradius(N);
-  const R = boundingRadius(N);
+  const rIn = N === 0 ? SURFACE_DISK_RADIUS : inradius(N);
+  const R = pieceReach(N);
   // (u, v) are lengths on the unit solid, so a move by the inradius at the bound's edge is rIn / bound
   const steps = Float64Array.from(dim === 2 ? [rIn / bound, rIn / bound] : [rIn / bound, rIn / bound, rIn / R]);
   // Research records exist only for the Platonic solids with N in RECORD_NS (domain.ts,
@@ -156,7 +157,8 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
     const size = s.size;
     const poses = canonical(s);
     const g = grad ? new Float64Array(2 * P) : undefined;
-    const { e, dlam } = diskTerms(solid, 1 / size, poses, w, g);
+    // the disk of diameter 1 on the solid of edge `size` is the disk of radius lam = scaleFor(0, size) on the unit solid
+    const { e, dlam } = diskTerms(solid, scaleFor(0, size), poses, w, g);
     const s2 = size * size;
     if (grad && g) {
       for (let i = 0; i < P; i++) {
@@ -168,8 +170,8 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
         grad[2 * i] = s2 * (c * g[2 * i] + sn * g[2 * i + 1]);
         grad[2 * i + 1] = s2 * (-sn * g[2 * i] + c * g[2 * i + 1]);
       }
-      // E(s) = s^2 E1(1 / s), so dE/ds = 2 s E1 - dE1/dlam
-      grad[n] = 2 * size * e - dlam;
+      // E(s) = s^2 E1(lam(s)) with lam = RD / s, so dE/ds = 2 s E1 - RD dE1/dlam
+      grad[n] = 2 * size * e - SURFACE_DISK_RADIUS * dlam;
     }
     return s2 * e;
   };
@@ -219,7 +221,7 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
   /** Without folding: the energy and its gradient by central differences of each piece's own terms. */
   const nofoldEnergy = (m: NofoldModel, s: KernelState, grad?: Float64Array, w?: Float64Array): number => {
     const size = s.size;
-    const lam = 1 / size;
+    const lam = scaleFor(N, size);
     const t = aux(s).t;
     const poses = canonical(s);
     const { geoms, byFace } = m.layout(poses, lam, t);
@@ -250,8 +252,8 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
       }
       const hs = 1e-7 * size;
       const at = (sz: number) => {
-        const l = m.layout(poses, 1 / sz, t);
-        return sz * sz * m.total(l.geoms, l.byFace, 1 / sz, w);
+        const l = m.layout(poses, scaleFor(N, sz), t);
+        return sz * sz * m.total(l.geoms, l.byFace, scaleFor(N, sz), w);
       };
       grad[n] = jumpAwareDifference(at(size - hs), s2 * e, at(size + hs), hs);
     }
@@ -435,7 +437,7 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
     },
     pieceEnergy(s, i, w) {
       if (!(s.size > 0) || !Number.isFinite(s.size) || !s.x.every(Number.isFinite)) return Infinity;
-      const lam = 1 / s.size;
+      const lam = scaleFor(N, s.size);
       const s2 = s.size * s.size;
       return guard(() => {
         const poses = canonical(s);
@@ -450,17 +452,19 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
     },
     clear(s, i, tol) {
       if (!(s.size > 0) || !Number.isFinite(s.size) || !s.x.every(Number.isFinite)) return false;
-      const lam = 1 / s.size;
-      // tol is a length in piece units; the model's lengths are lam times shorter
+      const lam = scaleFor(N, s.size);
+      // tol is a length in piece units; the model's lengths are those of the unit solid, s times shorter
+      // (lam times for polygons; a disk's lam is its radius on the unit solid, RD / s)
+      const tolU = N === 0 ? tol / s.size : tol * lam;
       return guard(() => {
         const poses = canonical(s);
         if (flat) {
           const { geoms, byFace } = flat.layout(poses, lam, aux(s).t);
-          return flat.clear(i, geoms, byFace, lam, tol * lam);
+          return flat.clear(i, geoms, byFace, lam, tolU);
         }
-        if (!model) return diskClear(solid, lam, poses, i, tol * lam);
+        if (!model) return diskClear(solid, lam, poses, i, tolU);
         const { geoms, byFace } = model.layout(poses, lam, aux(s).t);
-        return model.clear(i, geoms[i], byFace, tol * lam);
+        return model.clear(i, geoms[i], byFace, tolU);
       }, false);
     },
     finish(s, shouldStop): Finished | null {
@@ -469,7 +473,7 @@ export function surfaceKernel(problem: { solid: SolidName; N: number; P: number;
       // no valid packing is smaller than the bound, so the tightening starts there at the latest;
       // finish always uses the true shape; the stop ends the polish early
       const size = Math.max(s.size, bound);
-      const r = guard(() => finishSurface(solid, N, 1 / size, canonical(s), { shouldStop, mode }), null);
+      const r = guard(() => finishSurface(solid, N, scaleFor(N, size), canonical(s), { shouldStop, mode }), null);
       if (!r) return null;
       const config = {
         s: r.s,

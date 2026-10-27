@@ -559,6 +559,7 @@ def to_json(geo, st, msep, meta):
         "basis": [[float(B[0, 0]), float(B[1, 0])], [float(B[0, 1]), float(B[1, 1])]],
         "poses": [[float(X[i, 0]), float(X[i, 1]), float(st.TH[i])] for i in range(geo.P)],
         "frac": [[float(v) for v in st.U[i]] for i in range(geo.P)],
+        "units": "working",  # disks of radius 1; build_records.py halves them (polygons: no change)
         "min_sep": msep,
         "density": geo.P * geo.area_piece / area,
         **meta,

@@ -1,9 +1,8 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { ALL_SOLID_NAMES, ARCHIMEDEAN_NAMES, CATALAN_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceBounds, surfaceDomain } from "../src/index";
-import { independentBounds } from "./helpers";
+import { independentBounds, loadSurfaceRecords } from "./helpers";
 
-const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records;
+const records = loadSurfaceRecords();
 
 describe("the surface domain", () => {
   it("holds every solid, both modes, N = 0 and 3 to 100, P = 1 to 100", () => {

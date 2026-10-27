@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { boundingRadius, circumradius, inradius } from "@polypack/geometry";
 import {
   Lattice,
+  TORUS_DISK_RADIUS,
   TorusPacking,
   areaScoreBound,
   cellArea,
@@ -105,13 +106,13 @@ describe("validator: valid packings with contacts", () => {
   });
 
   it("accepts disks in self-contact through the shortest lattice vector", () => {
-    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 2), [pose(0, 0)]));
+    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 1), [pose(0, 0)]));
     expect(v.valid).toBe(true);
     expect(v.contacts.length).toBe(2);
   });
 
   it("accepts disks touching inside the cell and across its boundary", () => {
-    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 4), [pose(0.5, 1), pose(2.5, 1)]));
+    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 2), [pose(0.25, 0.5), pose(1.25, 0.5)]));
     expect(v.valid).toBe(true);
     const pair = v.contacts.filter((c) => c.i === 0 && c.j === 1);
     expect(pair.map((c) => [c.m, c.n])).toEqual(expect.arrayContaining([[0, 0], [-1, 0]]));
@@ -124,7 +125,7 @@ describe("validator: valid packings with contacts", () => {
   });
 
   it("accepts pieces given far outside the fundamental cell", () => {
-    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 4), [pose(400.5, 1), pose(2.5 - 4000, 41)]));
+    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 2), [pose(200.25, 0.5), pose(1.25 - 2000, 20.5)]));
     expect(v.valid).toBe(true);
   });
 
@@ -136,7 +137,7 @@ describe("validator: valid packings with contacts", () => {
 
 describe("validator: adversarial overlaps", () => {
   it("rejects self-overlap through a short lattice vector", () => {
-    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 2 - 1e-6), [pose(0, 0)]));
+    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 1 - 5e-7), [pose(0, 0)]));
     expect(v.valid).toBe(false);
     expect(v.overlaps.every((o) => o.i === 0 && o.j === 0)).toBe(true);
   });
@@ -148,13 +149,13 @@ describe("validator: adversarial overlaps", () => {
   });
 
   it("rejects overlap through the self-image of an unreduced basis", () => {
-    const v = validateTorusPacking(pack("free", 0, { b1: [2.5, 0], b2: [2500.3, 1.9] }, [pose(0, 0)]));
+    const v = validateTorusPacking(pack("free", 0, { b1: [1.25, 0], b2: [1250.15, 0.95] }, [pose(0, 0)]));
     expect(v.valid).toBe(false);
     expect(v.overlaps[0].m).toBe(1000);
   });
 
   it("rejects overlap across the cell boundary only", () => {
-    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 4), [pose(0.5, 1), pose(2.5 + 1e-6, 1)]));
+    const v = validateTorusPacking(pack("sq", 0, familyLattice("sq", 2), [pose(0.25, 0.5), pose(1.25 + 5e-7, 0.5)]));
     expect(v.valid).toBe(false);
     expect(v.overlaps.map((o) => [o.m, o.n])).toEqual([[-1, 0]]);
   });
@@ -174,11 +175,17 @@ describe("validator: adversarial overlaps", () => {
   });
 
   it("treats a 1e-9 overlap as touching at the shared tolerance and as overlap when strict", () => {
-    const p = pack("sq", 0, familyLattice("sq", 10), [pose(0, 0), pose(2 - 1e-10, 0)]);
+    // disks of diameter 1 (site units): the tolerance 1e-9 is in site lengths
+    const p = pack("sq", 0, familyLattice("sq", 5), [pose(0, 0), pose(1 - 1e-10, 0)]);
     expect(validateTorusPacking(p).valid).toBe(true);
     expect(validateTorusPacking(p, { tol: 0 }).valid).toBe(false);
     // shrinking the pieces by 1e-9 clears it, the certificate-style check
     expect(validateTorusPacking(p, { tol: 0, scale: 1 - 1e-9 }).valid).toBe(true);
+    // 2e-9 deep is an overlap even at the shared tolerance, and 0.9e-9 is still touching
+    const deep = pack("sq", 0, familyLattice("sq", 5), [pose(0, 0), pose(1 - 2e-9, 0)]);
+    expect(validateTorusPacking(deep).valid).toBe(false);
+    const edge = pack("sq", 0, familyLattice("sq", 5), [pose(0, 0), pose(1 - 0.9e-9, 0)]);
+    expect(validateTorusPacking(edge).valid).toBe(true);
   });
 });
 
@@ -233,7 +240,7 @@ describe("validator: invariances (property tests)", () => {
         const v = validateTorusPacking(pack("sq", N, l, poses), { tol: 0 });
         // brute force with bounding disks only (an exact test is not needed: a pair is a
         // candidate iff its centres are within 2R, and the validator must test it)
-        const R = boundingRadius(N);
+        const R = N === 0 ? TORUS_DISK_RADIUS : boundingRadius(N);
         let candidates = 0;
         for (let i = 0; i < poses.length; i++)
           for (let j = i; j < poses.length; j++)

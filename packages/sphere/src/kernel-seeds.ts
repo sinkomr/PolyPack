@@ -6,7 +6,7 @@
  * The size is the one at which the circumscribed caps of the closest centres touch, so every seed
  * is a valid packing (loose for polygons) that the methods then tighten.
  */
-import { type Quat, type Vec3, dot, quatFromCentreTheta, quatToMatrix, rotate, unit } from "./geometry";
+import { type Quat, type Vec3, dot, quatFromCentreTheta, quatToMatrix, rhoForAngle, rotate, unit } from "./geometry";
 import { maxAngle, randomQuat } from "./search";
 
 /** Face centres of the Platonic solid with P faces as unit vectors, or null (python/sphere/search.py platonic_centres). */
@@ -99,5 +99,5 @@ export function touchingRho(N: number, P: number, C: Vec3[]): number {
   for (let i = 0; i < C.length; i++) for (let j = i + 1; j < C.length; j++) cmax = Math.max(cmax, dot(C[i], C[j]));
   const half = C.length > 1 ? Math.acos(Math.max(-1, Math.min(1, cmax))) / 2 : Math.PI / 2;
   const a = N === 0 ? half : 2 * Math.asin(Math.sin(half) * Math.sin(Math.PI / N));
-  return 1 / Math.min(a, maxAngle(N, P) * (1 - 1e-9));
+  return rhoForAngle(N, Math.min(a, maxAngle(N, P) * (1 - 1e-9)));
 }

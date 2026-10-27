@@ -5,7 +5,9 @@ rigorous certifier (certify_torus.py), which uses mpmath interval arithmetic and
 no numpy. Nothing here is a proof.
 
 Conventions (PolyPack PROMPT.md section 2):
-  N = 0: disk of radius 1.  N >= 3: regular N-gon of side 1, circumradius
+  N = 0: disk of radius 1 (WORKING units of the search: site disks have diameter 1, so the
+  search's lengths for disks are twice the site's; build_records.py converts at its entry, by
+  exact halving, from raw results tagged "units": "working").  N >= 3: regular N-gon of side 1, circumradius
   R = 1/(2 sin(pi/N)), inradius r = 1/(2 tan(pi/N)); vertex k of a piece with
   pose (x, y, theta) is at (x, y) + R (cos a_k, sin a_k), a_k = theta + pi/2 + 2 pi k/N.
   Edge k joins vertices k and k+1; its outward normal has angle

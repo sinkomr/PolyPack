@@ -3,7 +3,7 @@
  * turn). Bundled into index.html by scripts/build-viz.ts together with the records.
  * Parts are recomputed here from the stored poses with the same development code as the validator.
  */
-import { SolidName, Rigid, apply, compose, faceTo3D, frameVertex, getSolid, glue, pieceParts, IDENTITY } from "../src/index";
+import { SolidName, Rigid, apply, compose, faceTo3D, frameVertex, getSolid, glue, partsScale, pieceParts, IDENTITY } from "../src/index";
 import { renderNofoldNote } from "../src/nofold-note";
 import { canonicalize } from "../src/search/energy";
 
@@ -66,7 +66,7 @@ function partsOf(r: VizRecord): DrawPart[] {
   for (let i = 0; i < r.P; i++) {
     // canonicalize: a centre stored on an edge may round to just outside its face
     const pose = canonicalize(S, r.s, { face: r.p[4 * i], x: r.p[4 * i + 1], y: r.p[4 * i + 2], theta: r.p[4 * i + 3] });
-    for (const part of pieceParts(S, r.s, r.N, pose, i)) if (part.poly.length >= 6) out.push({ piece: i, face: part.face, poly: part.poly });
+    for (const part of pieceParts(S, r.s, r.N, pose, i, partsScale(r.N))) if (part.poly.length >= 6) out.push({ piece: i, face: part.face, poly: part.poly });
   }
   partCache.set(r.id, out);
   return out;

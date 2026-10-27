@@ -5,10 +5,11 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { recordsInSiteUnits } from "../src/records";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "../../..");
-const data = JSON.parse(readFileSync(join(root, "data/sphere/records.json"), "utf8"));
+const data = recordsInSiteUnits(JSON.parse(readFileSync(join(root, "data/sphere/records.json"), "utf8")));
 const slim = {
   generated: data.generated,
   records: data.records.map((r: any) => ({

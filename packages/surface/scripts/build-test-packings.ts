@@ -12,7 +12,7 @@
  * Usage: npx tsx packages/surface/scripts/build-test-packings.ts python/surface/fixtures/general_packings.json
  */
 import { writeFileSync } from "node:fs";
-import { type SolidName, getSolid, validate } from "../src/index";
+import { type SolidName, getSolid, sizeFor, validate } from "../src/index";
 import { searchProblem } from "../src/search/search";
 
 const out = process.argv[2];
@@ -38,7 +38,7 @@ for (const c of cases) {
   const search = c.N > 8 ? { seed: 1, randomStarts: 1, hops: 1 } : SEARCH;
   const r = searchProblem(getSolid(c.solid), c.N, c.P, { ...search, warm: [], mode: c.mode });
   if (!r) throw new Error(`no packing for ${c.solid} ${c.N} ${c.P} ${c.mode}`);
-  const s = 1 / r.lam;
+  const s = sizeFor(c.N, r.lam);
   const pieces = r.poses.map((p) => ({ face: p.face, x: p.x * s, y: p.y * s, theta: p.theta }));
   const cfg = { solid: c.solid, N: c.N, s, pieces };
   const v = validate(cfg, c.mode);

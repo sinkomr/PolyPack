@@ -29,7 +29,7 @@ import finalize as fin  # noqa: E402
 
 def circumradius(N, rho):
     if N == 0:
-        return 1 / rho
+        return 1 / (2 * rho)  # angular radius of a disk of diameter 1
     return math.asin(math.sin(1 / (2 * rho)) / math.sin(math.pi / N))
 
 
@@ -44,11 +44,13 @@ def main():
     data = json.loads(raw)
     if json.dumps(data, indent=1, allow_nan=False) != raw.rstrip("\n"):
         sys.exit("records.json is not in the json.dump(indent=1) format; refusing to rewrite it")
+    if data.get("units") != "diameter":
+        sys.exit("records.json is not in site units (header units != \"diameter\"): convert it first (scripts/convert-units.ts)")
     by = {(r["N"], r["P"]): i for i, r in enumerate(data["records"])}
     best = {}
     for d in args.runs:
         for fn in glob.glob(os.path.join(d, "sphere_*_*.json")):
-            r = json.load(open(fn))
+            r = fin.site_run(json.load(open(fn)))
             key = (r["N"], r["P"])
             if key not in best or r["rho"] < best[key][0]["rho"]:
                 best[key] = (r, fn)

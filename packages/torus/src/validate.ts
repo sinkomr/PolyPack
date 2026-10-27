@@ -4,12 +4,13 @@ import { runSteps, runStepsAsync } from "@polypack/methods";
  * python/torus/certify_torus.py (interval arithmetic). This module is the shared float
  * check used by tests and viewers, built on the PolyPack geometry kernel.
  */
-import { Pose, TOL, boundingRadius, isShapeCode, pieceArea, pieceSeparation } from "@polypack/geometry";
-import { Lattice, TorusFamily, cellArea, latticeImages, torusScore } from "./lattice";
+import { Pose, TOL, isShapeCode } from "@polypack/geometry";
+import { areaOf, reachOf, separationOf } from "./disk";
+import { Lattice, TORUS_DISK_RADIUS, TorusFamily, cellArea, latticeImages, torusScore } from "./lattice";
 
 export interface TorusPacking {
   family: TorusFamily;
-  /** 0 = disk of radius 1, N >= 3 = regular N-gon of side 1 */
+  /** 0 = disk of diameter 1 (radius 1/2), N >= 3 = regular N-gon of side 1 */
   N: number;
   lattice: Lattice;
   poses: readonly Pose[];
@@ -50,6 +51,12 @@ export interface ValidateOptions {
   scale?: number;
   /** contacts reported when |sep| <= contactTol */
   contactTol?: number;
+  /**
+   * Disk radius of the units the packing is in (default TORUS_DISK_RADIUS = 1/2, the site's
+   * diameter-1 disks). Only the stand-alone search passes 1, for its radius-1 working units;
+   * tol and contactTol are then in those units too. Ignored for polygons.
+   */
+  diskRadius?: number;
 }
 
 /** Shift a pose by a vector (pieces are translated, never rotated, by lattice vectors). */
@@ -66,6 +73,7 @@ function shifted(p: Pose, v: readonly [number, number]): Pose {
 export function* validationSteps(p: TorusPacking, opts: ValidateOptions = {}): Generator<void, TorusValidation> {
   const tol = opts.tol ?? TOL;
   const scale = opts.scale ?? 1;
+  const rd = opts.diskRadius ?? TORUS_DISK_RADIUS;
   const contactTol = opts.contactTol ?? 1e-7;
   const errors: string[] = [];
   const empty = (): TorusValidation => ({
@@ -104,7 +112,7 @@ export function* validationSteps(p: TorusPacking, opts: ValidateOptions = {}): G
 
   // centres at least 2R apart cannot overlap; the small margin keeps exact contacts
   // (disks at distance exactly 2) in the reported contact list
-  const reach = 2 * boundingRadius(p.N) * scale + 2 * Math.max(contactTol, tol);
+  const reach = 2 * reachOf(p.N, rd) * scale + 2 * Math.max(contactTol, tol);
   const overlaps: ImageContact[] = [];
   const contacts: ImageContact[] = [];
   let minSep = Infinity;
@@ -118,12 +126,13 @@ export function* validationSteps(p: TorusPacking, opts: ValidateOptions = {}): G
         const imgs = latticeImages(l, [b.x - a.x, b.y - a.y], reach, i === j);
         for (const im of imgs) {
           // place piece i at the origin: pieceSeparation only uses relative positions
-          const sep = pieceSeparation(
+          const sep = separationOf(
             p.N,
             { x: 0, y: 0, theta: a.theta },
             shifted({ x: 0, y: 0, theta: b.theta }, im.v),
             scale,
-          ).sep;
+            rd,
+          );
           pairsChecked++;
           if (sep < minSep) minSep = sep;
           const c = { i, j, m: im.m, n: im.n, sep };
@@ -146,7 +155,7 @@ export function* validationSteps(p: TorusPacking, opts: ValidateOptions = {}): G
     contacts,
     pairsChecked,
     score: torusScore(p.family, l),
-    density: (P * pieceArea(p.N)) / area,
+    density: (P * areaOf(p.N, rd)) / area,
     errors,
   };
 }
@@ -161,8 +170,14 @@ export function scalePacking(p: TorusPacking, k: number): TorusPacking {
 }
 
 /** Lower bound on the score from the area: P * A_piece / densityBound <= cell area. */
-export function areaScoreBound(family: TorusFamily, N: number, P: number, densityBound = 1): number {
-  const area = (P * pieceArea(N)) / densityBound;
+export function areaScoreBound(
+  family: TorusFamily,
+  N: number,
+  P: number,
+  densityBound = 1,
+  rd = TORUS_DISK_RADIUS,
+): number {
+  const area = (P * areaOf(N, rd)) / densityBound;
   return family === "hex" ? Math.sqrt(area / (Math.sqrt(3) / 2)) : Math.sqrt(area);
 }
 

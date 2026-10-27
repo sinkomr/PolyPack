@@ -26,7 +26,8 @@
  * dv/dk = v / k, dv/dt1 = k (e^t1 delta_x, -e^-t1 delta_y), dv/dt2 = k (delta_y, 0); a centre's
  * offset enters through k F, an angle's through 1 / R.
  */
-import { type Pose, boundingRadius, inradius, pairPenetration, penaltyEdgeNormals } from "@polypack/geometry";
+import { type Pose, inradius, penaltyEdgeNormals } from "@polypack/geometry";
+import { penetrationOf, reachOf } from "./disk";
 import { type Lattice, TORUS_DISK_RADIUS, type TorusFamily, familyLattice } from "./lattice";
 
 /** The kernel's state as this module reads it (kernel.ts owns the type). */
@@ -102,7 +103,7 @@ export class TorusEnergy {
     this.P = P;
     this.dim = N === 0 ? 2 : 3;
     this.globals = family === "free" ? 2 : 0;
-    this.R = boundingRadius(N);
+    this.R = reachOf(N);
     this.r = N === 0 ? TORUS_DISK_RADIUS : inradius(N);
     this.c = new Float64Array(2 * P);
     this.ab = new Float64Array(2 * P);
@@ -245,7 +246,7 @@ export class TorusEnergy {
         // piece i at the origin, as in the validator: only relative positions matter
         pb.x = vx;
         pb.y = vy;
-        const pen = pairPenetration(this.N, pa, pb, this.axes[i], this.axes[j], this.scale, this.padding);
+        const pen = penetrationOf(this.N, pa, pb, this.axes[i], this.axes[j], this.scale, this.padding);
         const depth = pen.depth;
         if (!(depth > 0)) continue;
         if (mode === CLEAR) {
@@ -296,7 +297,7 @@ export class TorusEnergy {
     i: number,
     j: number,
     dEdd: number,
-    pen: ReturnType<typeof pairPenetration>,
+    pen: ReturnType<typeof penetrationOf>,
     vx: number,
     vy: number,
   ): void {

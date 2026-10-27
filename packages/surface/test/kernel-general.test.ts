@@ -12,7 +12,7 @@ import { checkKernel } from "@polypack/methods/contract";
 import { describe, expect, it } from "vitest";
 import { ALL_SOLID_NAMES, type SolidName, getSolid, surfaceKernel, validate } from "../src/index";
 import { chartPoint, faceShapes, randomSurfacePoint, unfoldChart } from "../src/kernel-solid";
-import { independentBounds } from "./helpers";
+import { independentBounds, loadSurfaceRecords } from "./helpers";
 
 type Mode = "fold" | "nofold";
 interface Packing {
@@ -73,9 +73,7 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
 
   it("states the records' bounds to the last bit, and on the other solids bounds checked independently", () => {
     // every Platonic record, fold and nofold (python/surface/tables.py computed their bounds)
-    const records: { id: string; solid: SolidName; mode: Mode; N: number; P: number; bound: { value: number } }[] = JSON.parse(
-      readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8"),
-    ).records;
+    const records: { id: string; solid: SolidName; mode: Mode; N: number; P: number; bound: { value: number } }[] = loadSurfaceRecords();
     for (const r of records) expect(surfaceKernel({ solid: r.solid, N: r.N, P: r.P, mode: r.mode }).bound, r.id).toBe(r.bound.value);
     // the other solids, against the area from 3D cross products and a sampled corner radius
     for (const solid of ALL_SOLID_NAMES.filter((n) => !getSolid(n).uniform))
@@ -183,9 +181,7 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
       );
     }
     // a Platonic problem with a record: the touching tolerance, as the server's (no strict check below the record's margin)
-    const rec = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records.find(
-      (q: { id: string }) => q.id === "surface/cube/fold/4/7",
-    );
+    const rec = loadSurfaceRecords().find((q: { id: string }) => q.id === "surface/cube/fold/4/7");
     expect(surfaceKernel({ solid: "cube", N: 4, P: 7 }).validate(between("cube", 4, "fold", rec)).valid).toBe(true);
   });
 
@@ -209,7 +205,8 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
       const p = { face: 2, x: 0.1, y: 0.05, theta: 0 };
       const s = k.fromConfig({ s: 6, pieces: [p, { ...p }] })!;
       const g = new Float64Array(5);
-      expect(k.energy(s, g), mode).toBeGreaterThan(3.9);
+      // two disks of diameter 1 on top of each other: penetration depth 1 (a full overlap), squared
+      expect(k.energy(s, g), mode).toBeGreaterThan(0.97);
       expect(g.every(Number.isFinite)).toBe(true);
       expect(k.pieceEnergy(s, 0)).toBeGreaterThan(0);
       expect(k.clear(s, 0, 1e-9)).toBe(false);
