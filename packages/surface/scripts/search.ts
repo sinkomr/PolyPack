@@ -10,7 +10,7 @@
  * best fold result of P+1 (minus one piece) and of P-1 (plus one piece) when present in OUT.jsonl.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { SolidName, SurfacePose, getSolid } from "../src/index";
+import { SolidName, SurfacePose, getSolid, scaleFor, sizeFor } from "../src/index";
 import { Start, mulberry32, randomPose, searchProblem } from "../src/search/search";
 
 const args = new Map<string, string>();
@@ -38,9 +38,10 @@ if (existsSync(out))
       if (!done.has(key) || r.s < done.get(key).s) done.set(key, r);
     }
 
-const toStart = (label: string, rec: { s: number; pieces: SurfacePose[] }): Start => ({
+// a record is in site units (disks of diameter 1); the search works on the unit solid with the scale lam (disk.ts)
+const toStart = (N: number, label: string, rec: { s: number; pieces: SurfacePose[] }): Start => ({
   label,
-  lam: 1 / rec.s,
+  lam: scaleFor(N, rec.s),
   poses: rec.pieces.map((p) => ({ face: p.face, x: p.x / rec.s, y: p.y / rec.s, theta: p.theta })),
 });
 
@@ -55,20 +56,20 @@ for (const solidName of solids) {
       const key = `${solidName}/${N}/${P}`;
       if (done.has(key) && done.get(key).seed === seed) continue;
       const warm: Start[] = [];
-      for (const r of warmRecs) if (r.solid === solidName && r.N === N && r.P === P) warm.push(toStart(r.id ?? "warm", r));
+      for (const r of warmRecs) if (r.solid === solidName && r.N === N && r.P === P) warm.push(toStart(N, r.id ?? "warm", r));
       const rand = mulberry32(seed * 7919 + P);
       const up = done.get(`${solidName}/${N}/${P + 1}`);
       if (up) {
         // record + 1, minus one piece (two choices)
         for (let t = 0; t < 2; t++) {
-          const st = toStart(`from P+1 (${up.s.toFixed(6)})`, up);
+          const st = toStart(N, `from P+1 (${up.s.toFixed(6)})`, up);
           st.poses.splice(Math.floor(rand() * st.poses.length), 1);
           warm.push(st);
         }
       }
       const down = done.get(`${solidName}/${N}/${P - 1}`);
       if (down) {
-        const st = toStart(`from P-1 (${down.s.toFixed(6)})`, down);
+        const st = toStart(N, `from P-1 (${down.s.toFixed(6)})`, down);
         st.lam *= 0.95;
         st.poses.push(randomPose(S, rand));
         warm.push(st);
@@ -91,7 +92,7 @@ for (const solidName of solids) {
         console.log(key, "no result", secs.toFixed(1));
         continue;
       }
-      const s = 1 / res.lam;
+      const s = sizeFor(N, res.lam);
       const rec = {
         solid: solidName,
         N,

@@ -4,7 +4,6 @@
  * starts, and the pieces of the model that the contract does not reach (charts far outside their
  * faces, soft outlines, seeds, the server's rule).
  */
-import { readFileSync } from "node:fs";
 import { pieceVertices } from "@polypack/geometry";
 import { type KernelState, mulberry32, runMethod, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
@@ -13,7 +12,7 @@ import { type SolidName, getSolid, surfaceKernel, validateFold } from "../src/in
 import { pieceOutline } from "../src/kernel-energy";
 import { chartPoint, faceShapes, surfaceBound, unfoldChart } from "../src/kernel-solid";
 import { canonicalize } from "../src/search/energy";
-import { randomFacePoint, rng, walkRay } from "./helpers";
+import { loadSurfaceRecords, randomFacePoint, rng, walkRay } from "./helpers";
 
 interface FoldRecord {
   id: string;
@@ -24,9 +23,7 @@ interface FoldRecord {
   pieces: { face: number; x: number; y: number; theta: number }[];
   bound: { value: number };
 }
-const records: FoldRecord[] = JSON.parse(
-  readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8"),
-).records;
+const records: FoldRecord[] = loadSurfaceRecords();
 const record = (id: string) => records.find((r) => r.id === id)!;
 
 describe("the surface kernel (fold)", () => {
@@ -63,9 +60,7 @@ describe("the surface kernel (fold)", () => {
 
   it("states every record's lower bound to the last bit, as the server checks it", () => {
     // all 2038 records, fold and nofold; the bound depends on the solid, N and P only
-    const all: { id: string; solid: SolidName; N: number; P: number; bound: { value: number } }[] = JSON.parse(
-      readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8"),
-    ).records;
+    const all: { id: string; solid: SolidName; N: number; P: number; bound: { value: number } }[] = records;
     const off = all.filter((r) => surfaceBound(getSolid(r.solid), r.N, r.P) !== r.bound.value).map((r) => r.id);
     expect(off).toEqual([]);
     expect(all.length).toBeGreaterThan(2000);
@@ -413,7 +408,7 @@ describe("the surface kernel (fold)", () => {
   it("states its piece's inradius and costs, and ends a finish's polish on the stop", () => {
     const k = surfaceKernel({ solid: "cube", N: 4, P: 7 });
     expect(k.inradius).toBeCloseTo(0.5, 15);
-    expect(surfaceKernel({ solid: "cube", N: 0, P: 7 }).inradius).toBe(1);
+    expect(surfaceKernel({ solid: "cube", N: 0, P: 7 }).inradius).toBe(0.5); // a disk of diameter 1
     expect(k.validateCost).toBeLessThan(k.finishCost);
     // a valid start shrunk by 1e-4: the polish grows it back, a stopped finish only tightens it
     const r = record("surface/cube/fold/4/7");

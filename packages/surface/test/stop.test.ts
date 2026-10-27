@@ -2,21 +2,19 @@
  * The optional shouldStop of the contact-LP polish (slp.ts), which it also polls inside an
  * iteration (per piece of the derivatives, in the simplex, per trial step).
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { getSolid, validateFold } from "../src/index";
+import { getSolid, scaleFor, validateFold } from "../src/index";
+import { loadSurfaceRecords } from "./helpers";
 import { simplex, slpPolish } from "../src/search/slp";
 
-const records = JSON.parse(
-  readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8"),
-).records;
+const records = loadSurfaceRecords();
 /** A record on the unit solid: pieces scaled by lam = 1/s, as the search works. */
 function unit(id: string) {
   const r = records.find((x: { id: string }) => x.id === id);
   return {
     solid: getSolid(r.solid),
     N: r.N as number,
-    lam: 1 / r.s,
+    lam: scaleFor(r.N, r.s),
     poses: r.pieces.map((p: { face: number; x: number; y: number; theta: number }) => ({
       ...p,
       x: p.x / r.s,

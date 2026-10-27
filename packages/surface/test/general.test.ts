@@ -442,14 +442,16 @@ describe("general solids: float validator, adversarial", () => {
         const [vx, vy] = faceVertex(S, s, f, k);
         // the centre 0.5 from the vertex towards the face's origin: a unit disk (or hexagon) covers the vertex
         const L = Math.hypot(vx, vy);
-        const c = { face: f, x: vx * (1 - 0.5 / L), y: vy * (1 - 0.5 / L), theta: 0.2 };
         for (const N of [0, 6]) {
+          // a disk has radius 1/2 (diameter 1), a hexagon circumradius 1: the centre is half the piece's radius from the vertex
+          const d = N === 0 ? 0.25 : 0.5;
+          const c = { face: f, x: vx * (1 - d / L), y: vy * (1 - d / L), theta: 0.2 };
           const r = validate(cfg(name, N, s, [c]), "fold");
           expect(r.ok).toBe(false);
           expect(r.errors[0]).toMatch(/cone point/);
         }
-        // a disk whose boundary passes through the vertex (distance exactly 1): touching, allowed
-        const t = { face: f, x: vx * (1 - 1 / L), y: vy * (1 - 1 / L), theta: 0 };
+        // a disk whose boundary passes through the vertex (distance exactly its radius 1/2): touching, allowed
+        const t = { face: f, x: vx * (1 - 0.5 / L), y: vy * (1 - 0.5 / L), theta: 0 };
         expect(validate(cfg(name, 0, s, [t]), "fold").ok).toBe(true);
       }
     }
@@ -458,7 +460,7 @@ describe("general solids: float validator, adversarial", () => {
   it("fold: a disk wrapping around a small solid overlaps itself or covers a vertex, never passes", () => {
     for (const name of ["prism3", "antiprism4", "rhombic_dodecahedron"] as SolidName[]) {
       const S = getSolid(name);
-      for (const s of [0.5, 0.8, 1.2].map((k) => k / meanEdge(name))) {
+      for (const s of [0.25, 0.4, 0.6].map((k) => k / meanEdge(name))) { // disks of diameter 1: half the radius-1 sizes
         const r = validate(cfg(name, 0, s, [{ face: 0, x: 0, y: 0, theta: 0 }]), "fold");
         // the one-piece bound: some corner of the face is within its corner radius, so a disk this big covers one
         expect(r.ok).toBe(false);

@@ -22,7 +22,7 @@
  * instead of the old one's, and its pair terms move from one face's pieces to the other's. The energy
  * is a model; finish decides validity.
  */
-import { boundingRadius } from "@polypack/geometry";
+import { innerReach } from "./disk";
 import { pieceOutline } from "./kernel-energy";
 import { type HalfPlanes, type SurfacePose, faceCutsOf, partSeparation } from "./parts";
 import { WALL_WEIGHT } from "./search/energy";
@@ -53,7 +53,7 @@ export class NofoldModel {
     readonly N: number,
     readonly P: number,
   ) {
-    this.reach = 2 * boundingRadius(N);
+    this.reach = 2 * innerReach(N);
     this.edges = Array.from({ length: solid.F }, (_, f) => faceCutsOf(solid, 1, f));
   }
 

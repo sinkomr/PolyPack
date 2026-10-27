@@ -5,7 +5,7 @@
  * Usage: npx tsx packages/surface/scripts/polish.ts <out.jsonl> <in.jsonl> [more.jsonl ...]
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { SolidName, getSolid, validateFold } from "../src/index";
+import { SolidName, getSolid, scaleFor, sizeFor, validateFold } from "../src/index";
 import { slpPolish } from "../src/search/slp";
 
 const [out, ...inputs] = process.argv.slice(2);
@@ -22,8 +22,9 @@ if (existsSync(out)) for (const line of readFileSync(out, "utf8").split("\n")) i
 for (const [k, r] of best) {
   if (done.has(k)) continue;
   const S = getSolid(r.solid as SolidName);
-  const lam = 1 / r.s;
-  const poses = r.pieces.map((p: any) => ({ face: p.face, x: p.x * lam, y: p.y * lam, theta: p.theta }));
+  // the unit solid with the scale lam of disk.ts (a record is in site units: disks of diameter 1)
+  const lam = scaleFor(r.N, r.s);
+  const poses = r.pieces.map((p: any) => ({ face: p.face, x: p.x / r.s, y: p.y / r.s, theta: p.theta }));
   const t0 = Date.now();
   let res;
   try {
@@ -32,7 +33,7 @@ for (const [k, r] of best) {
     console.log(k, "polish error", String(e).slice(0, 120));
     continue;
   }
-  const s = 1 / res.lam;
+  const s = sizeFor(r.N, res.lam);
   const pieces = res.poses.map((p) => ({ face: p.face, x: p.x * s, y: p.y * s, theta: p.theta }));
   const v = validateFold({ solid: r.solid, N: r.N, s, pieces }, { tol: 1e-10 });
   if (!v.ok || s > r.s) {

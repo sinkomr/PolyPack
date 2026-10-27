@@ -15,7 +15,7 @@
  *  2. polish: the fold search's contact-LP polish (search/slp.ts) within a work budget, which keeps
  *     the packing valid and never lowers the scale; a stop poll ends it early with its last valid
  *     packing;
- *  3. check: the configuration at scale s = 1 / lam must pass the mode's validator at tolerance 0. Float
+ *  3. check: the configuration at edge s = sizeFor(N, lam) (1 / lam for polygons, 1 / (2 lam) for disks, disk.ts) must pass the mode's validator at tolerance 0. Float
  *     rounding at the new scale can leave a touching pair overlapping by about 1e-16, so the
  *     scale is lowered by 1e-13, 1e-12, ... (relative) until it passes, as the certificates' shrink
  *     does. A centre that rounding puts just outside its face is moved back in. Should the polished
@@ -28,6 +28,7 @@
  */
 import { boundingRadius } from "@polypack/geometry";
 import { ChainLimitError, enumerateChains } from "./chains";
+import { sizeFor } from "./disk";
 import { centreDepth } from "./kernel-solid";
 import type { SurfacePose } from "./parts";
 import { canonicalize } from "./search/energy";
@@ -176,7 +177,7 @@ export function finishSurface(solid: Solid, N: number, lam0: number, poses0: Sur
 /** The configuration at the first scale of the ladder at which it passes the validator at tolerance 0, or null. */
 function checked(solid: Solid, N: number, lam: number, best: SurfacePose[], mode: Mode): SurfaceSubmission | null {
   for (const eps of LADDER) {
-    const s = 1 / (lam * (1 - eps));
+    const s = sizeFor(N, lam * (1 - eps));
     const pieces = best.map((p) => inFace(solid, p.face, s, p.x * s, p.y * s, p.theta));
     const cfg: SurfaceConfig = { solid: solid.name, N, s, pieces };
     try {
