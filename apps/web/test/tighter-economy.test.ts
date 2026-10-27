@@ -60,7 +60,7 @@ function game(): { s: GameState; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = "Ada";
   s.consent = true;
-  const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   applyLoadAll(p, board(3), 1.28 * B, null);
   return { s, p };
@@ -116,11 +116,14 @@ describe("Tighter points multiplier", () => {
     expect(without).toBeCloseTo(1.2 * 1.5 * 1.5, 12);
     s.owned.push("collections");
     expect(pointsMultiplier(s, ownedSet(s), p, "mc_compress")).toBeCloseTo(1.2 * 1.05 * 2.25, 12);
-    expect(pointsMultiplier(s, ownedSet(s), { N: 0, M: 40, P: 200 }, "basin_hopping")).toBeCloseTo(
+    expect(pointsMultiplier(s, ownedSet(s), { family: "polygon", N: 0, M: 40, P: 200 }, "basin_hopping")).toBeCloseTo(
       1.2 * 1.05 * 1.5,
       12,
     );
-    expect(pointsMultiplier(s, ownedSet(s), { N: 40, M: 40, P: 200 }, null)).toBeCloseTo(1.2 * 1.05, 12);
+    expect(pointsMultiplier(s, ownedSet(s), { family: "polygon", N: 40, M: 40, P: 200 }, null)).toBeCloseTo(
+      1.2 * 1.05,
+      12,
+    );
   });
 });
 
@@ -136,7 +139,7 @@ describe("Tighter records", () => {
     applyAnswer(s, p, p.leader, 1.19 * B, { kind: "leader", score: 1.19 * B, id: 8, pending: false }, T0);
     expect(s.economy.recorded).toEqual([p.key]);
     // a lost answer settled from the leader counts too
-    const q = newProblem({ N: 21, M: 21, P: 40 }, "loose", T0);
+    const q = newProblem({ family: "polygon", N: 21, M: 21, P: 40 }, "loose", T0);
     addToQueue(s, q);
     q.phase = "ready";
     q.board = { ...board(3), N: 21, M: 21, P: 40 };
@@ -286,7 +289,7 @@ describe("Tighter collections", () => {
     expect(collectionsBonus(s, ownedSet(s))).toBeCloseTo(0.13, 12);
     // counted again when a record is added
     s.owned.push("rent");
-    const p = newProblem({ N: 21, M: 21, P: 250 }, "batch", T0);
+    const p = newProblem({ family: "polygon", N: 21, M: 21, P: 250 }, "batch", T0);
     noteRecorded(s, ownedSet(s), p, T0);
     expect(collections(s.economy).tiers).toEqual(["open", "loose", "batch"]);
     expect(s.economy.checks[p.key]).toBe(T0);

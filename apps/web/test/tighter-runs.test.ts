@@ -93,10 +93,10 @@ describe("Tighter method match", () => {
   const rand = (seed: number) => planRandom(newRunPlan(), seed);
 
   it("sorts problems into kinds by tier, size and piece shape", () => {
-    expect(problemKind({ N: 21, M: 24, P: 40, tier: "open" })).toBe("open|t80|r");
-    expect(problemKind({ N: 0, M: 6, P: 400, tier: "batch" })).toBe("batch|t300|c");
-    expect(problemKind({ N: 4, M: 4, P: 10, tier: "published" })).toBe("published|t0|f");
-    expect(problemKind({ N: 12, M: 5, P: 20, tier: "loose" })).toBe("loose|t30|m");
+    expect(problemKind({ family: "polygon", N: 21, M: 24, P: 40, tier: "open" })).toBe("open|t80|r");
+    expect(problemKind({ family: "polygon", N: 0, M: 6, P: 400, tier: "batch" })).toBe("batch|t300|c");
+    expect(problemKind({ family: "polygon", N: 4, M: 4, P: 10, tier: "published" })).toBe("published|t0|f");
+    expect(problemKind({ family: "polygon", N: 12, M: 5, P: 20, tier: "loose" })).toBe("loose|t30|m");
     expect(parseArm(armKey(kind, "mc_compress", 2))).toEqual({ kind, method: "mc_compress", level: 2 });
     expect(parseArm("nonsense")).toBeNull();
   });
@@ -248,7 +248,7 @@ describe("Tighter transfers", () => {
     // a compacted 21-gons in a 24-gon with 40 pieces, as a record would be
     const start = loadAll(21, 24, 40);
     const r = new OpenRun({
-      problem: { N: 21, M: 24, P: 40 },
+      problem: { family: "polygon", N: 21, M: 24, P: 40 },
       method: "mc_compress",
       params: { sweepsPerEvaluation: 5 },
       budget: { evals: 1000 },
@@ -258,11 +258,11 @@ describe("Tighter transfers", () => {
     const s = await r.step(100);
     await r.close();
     const neighbour = s.best!;
-    const board = transferBoard(neighbour, { N: 21, M: 24, P: 60 })!;
+    const board = transferBoard(neighbour, { family: "polygon", N: 21, M: 24, P: 60 })!;
     expect(board.pieces.length).toBe(60);
     expect(board.pieces.slice(0, 40)).toEqual(neighbour.pieces);
     expect(findOverlaps(21, board.pieces)).toEqual([]);
-    const t = scoredTransfer(neighbour, { N: 21, M: 24, P: 60 })!;
+    const t = scoredTransfer(neighbour, { family: "polygon", N: 21, M: 24, P: 60 })!;
     expect(t.from).toBe(40);
     expect(t.score).toBe(evaluate(t.board, { autoOrient: true }).score);
     // many pieces added: they go around the centre (cheap); the start is then often larger than
@@ -272,12 +272,12 @@ describe("Tighter transfers", () => {
       t.score < TRANSFER_MARGIN * laScore,
     );
     // one piece added: placed where it grows the container least, never larger than going around the centre
-    const near = scoredTransfer({ ...neighbour, P: 40 }, { N: 21, M: 24, P: 41 })!;
+    const near = scoredTransfer({ ...neighbour, P: 40 }, { family: "polygon", N: 21, M: 24, P: 41 })!;
     expect(near.board.pieces.length).toBe(41);
     expect(findOverlaps(21, near.board.pieces)).toEqual([]);
     // not a neighbour: other shapes, or as many pieces
-    expect(transferBoard(neighbour, { N: 21, M: 21, P: 60 })).toBeNull();
-    expect(transferBoard(neighbour, { N: 21, M: 24, P: 40 })).toBeNull();
+    expect(transferBoard(neighbour, { family: "polygon", N: 21, M: 21, P: 60 })).toBeNull();
+    expect(transferBoard(neighbour, { family: "polygon", N: 21, M: 24, P: 40 })).toBeNull();
   });
 
   it("start from a transfer only when it is clearly smaller than Load all, the floor below both", () => {

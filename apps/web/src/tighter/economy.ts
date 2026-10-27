@@ -1,4 +1,5 @@
-import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, parseKey } from "./frontier";
+import { parseDealtKey } from "./catalogue";
+import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, isPolygon, parseKey } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
 import { ruleRewardFactor, standingMultiplier } from "./standing";
 import { level } from "./upgrades";
@@ -43,7 +44,7 @@ export const newEconomy = (): EconomyState => ({
 });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const isKey = (k: unknown): k is string => typeof k === "string" && /^\d+\/\d+\/\d+$/.test(k);
+const isKey = (k: unknown): k is string => typeof k === "string" && parseDealtKey(k) !== null;
 
 /** Most problems remembered as recorded. */
 export const RECORDED_LIMIT = 20000;
@@ -117,7 +118,8 @@ export function collections(e: EconomyState): Collections {
   const shapes = new Map<number, number>();
   for (const k of e.recorded) {
     const p = parseKey(k);
-    if (!p) continue;
+    // collections count polygon problems only for now
+    if (!p || !isPolygon(p)) continue;
     shapes.set(p.N, (shapes.get(p.N) ?? 0) + 1);
     if (FRONTIER_SIDE_SET.has(p.N) && FRONTIER_SIDE_SET.has(p.M) && FRONTIER_P_SET.has(p.P)) {
       const id = `${p.N}/${p.M}`;
@@ -158,7 +160,11 @@ export function collectionsBonus(s: GameState, o: Owned): number {
  * the rewards of the rules finished that apply to it (and to the method that found it).
  */
 export function pointsMultiplier(s: GameState, o: Owned, p: ProblemKey, method: string | null): number {
-  return standingMultiplier(s.standing) * (1 + collectionsBonus(s, o)) * ruleRewardFactor(s.standing, p, method);
+  // the rewards of "circles only" and "small problems only" are polygons' (they do not apply to space problems)
+  const rules = isPolygon(p)
+    ? s.standing
+    : { ...s.standing, rulesDone: s.standing.rulesDone.filter((r) => r === "method") };
+  return standingMultiplier(s.standing) * (1 + collectionsBonus(s, o)) * ruleRewardFactor(rules, p, method);
 }
 
 /**
@@ -171,7 +177,8 @@ export function noteRecorded(s: GameState, o: Owned, p: ProblemState, now: numbe
     e.recorded.push(p.key);
     if (e.recorded.length > RECORDED_LIMIT) e.recorded.splice(0, e.recorded.length - RECORDED_LIMIT);
   }
-  if (!e.tiers.includes(p.tier)) e.tiers.push(p.tier);
+  // tier firsts count polygon problems only, as the other collections do
+  if (isPolygon(p) && !e.tiers.includes(p.tier)) e.tiers.push(p.tier);
   if (o.has("rent") && e.checks[p.key] === undefined) e.checks[p.key] = now;
 }
 
@@ -200,7 +207,7 @@ export function syncEconomy(s: GameState): void {
   for (const p of [...s.past, ...s.queue]) {
     if (p.verified === null) continue;
     if (!s.economy.recorded.includes(p.key)) s.economy.recorded.push(p.key);
-    if (!s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
+    if (isPolygon(p) && !s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
   }
   if (s.standing.resets === 0 && s.standing.cycleEarned < s.rpEarned) s.standing.cycleEarned = s.rpEarned;
 }

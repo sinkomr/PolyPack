@@ -1,5 +1,6 @@
 import { Bandit, normalizeBandit } from "./bandit";
-import { keyOf, parseKey } from "./frontier";
+import { parseDealtKey } from "./catalogue";
+import { isPolygon, keyOf } from "./frontier";
 import { CONTEST, Tier } from "./points";
 import { Candidate, Filters, learn, normalizeFilters } from "./rank";
 
@@ -10,7 +11,7 @@ import { Candidate, Filters, learn, normalizeFilters } from "./rank";
  */
 
 /** A candidate offered to the player (Your pick), with its ranking. */
-export interface Offer extends Candidate {
+export interface OfferFields {
   /** The ranking score when it was offered (expected record points per second of solver time). */
   score: number;
   /** Expected record points per evaluation (the prior). */
@@ -18,6 +19,7 @@ export interface Offer extends Candidate {
   bucket: string;
   at: number;
 }
+export type Offer = Candidate & OfferFields;
 
 /** What a problem in play was dealt under: the learning dealer learns from it when it leaves. */
 export interface Dealt {
@@ -46,21 +48,23 @@ export const MAX_RETAKES = 200;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const pos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const KEY = /^\d+\/\d+\/\d+$/;
+const validKey = (k: string): boolean => parseDealtKey(k) !== null;
 
 function leader(v: unknown): Candidate["leader"] {
-  if (!isObj(v) || !pos(v.score) || !Number.isSafeInteger(v.id) || (v.id as number) < 1) return null;
+  if (!isObj(v) || !pos(v.score)) return null;
+  // a space problem's research record leads without an entry: its id is null
+  if (v.id !== null && (!Number.isSafeInteger(v.id) || (v.id as number) < 1)) return null;
   return {
     score: v.score,
     name: typeof v.name === "string" ? v.name.slice(0, 40) : "another name",
-    id: v.id as number,
+    id: v.id as number | null,
   };
 }
 
 /** An offer read from a save, or null when it is not one. */
 export function normalizeOffer(v: unknown): Offer | null {
   if (!isObj(v)) return null;
-  const k = parseKey(`${v.N}/${v.M}/${v.P}`);
+  const k = parseDealtKey(typeof v.id === "string" && v.family !== "polygon" ? v.id : `${v.N}/${v.M}/${v.P}`);
   if (!k || typeof v.tier !== "string" || !(v.tier in CONTEST)) return null;
   const tier = v.tier as Tier;
   const lead = leader(v.leader);
@@ -76,6 +80,8 @@ export function normalizeOffer(v: unknown): Offer | null {
     target: tier === "published" ? (v.target as number) : null,
     source: typeof v.source === "string" ? v.source.slice(0, 200) : null,
     retake: v.retake === true,
+    // a space problem's bound as the server gave it when the offer was drawn
+    ...(!isPolygon(k) && pos(v.bound) ? { bound: v.bound } : {}),
     score: v.score,
     prior: v.prior,
     bucket: v.bucket.slice(0, 120),
@@ -98,14 +104,14 @@ export function normalizePicks(v: unknown): PicksState {
   const dealt: Record<string, Dealt> = {};
   if (isObj(v.dealt))
     for (const [k, x] of Object.entries(v.dealt))
-      if (KEY.test(k) && isObj(x) && typeof x.bucket === "string" && pos(x.prior))
+      if (validKey(k) && isObj(x) && typeof x.bucket === "string" && pos(x.prior))
         dealt[k] = { bucket: x.bucket.slice(0, 120), prior: x.prior };
   return {
     offers,
     filters: normalizeFilters(v.filters),
     bandit: normalizeBandit(v.bandit),
     retake: Array.isArray(v.retake)
-      ? [...new Set(v.retake.filter((k): k is string => typeof k === "string" && KEY.test(k)))].slice(-MAX_RETAKES)
+      ? [...new Set(v.retake.filter((k): k is string => typeof k === "string" && validKey(k)))].slice(-MAX_RETAKES)
       : [],
     dealt,
   };
@@ -124,6 +130,8 @@ export function offerFits(
   if (!allowed(x)) return false;
   if (x.retake) return tree.retake;
   if (x.tier === "open") return true;
+  // a space problem's site record needs no card: its tier is only what the server holds
+  if (!isPolygon(x)) return true;
   return tree.tiers.has(x.tier) && x.N + x.M + x.P >= tree.ringMin;
 }
 

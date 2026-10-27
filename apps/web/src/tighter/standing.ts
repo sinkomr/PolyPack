@@ -1,5 +1,15 @@
-import { FRONTIER, FRONTIER_P, FRONTIER_SIDES, ProblemKey } from "./frontier";
-import { RESET_MIN } from "./points";
+import {
+  FRONTIER,
+  FRONTIER_P,
+  FRONTIER_SIDES,
+  DimensionId,
+  ProblemKey,
+  isPolygon,
+  keyOf,
+  needPolygon,
+  poly,
+} from "./frontier";
+import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
 import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
@@ -52,7 +62,11 @@ export interface StandingState {
   marks: Record<string, number>;
   /** Past cycles, the latest last. */
   history: CycleRecord[];
+  /** The dimensions opened for good (a reset opens the next, see dimensionOpenedBy). */
+  dimensions: DimensionId[];
 }
+
+const DIMENSION_IDS: readonly DimensionId[] = ["2-in-2", "2-on-3", "3-in-3", "3-on-4"];
 
 export const HISTORY_LIMIT = 20;
 
@@ -67,6 +81,7 @@ export const newStanding = (now: number): StandingState => ({
   nextRule: null,
   marks: {},
   history: [],
+  dimensions: ["2-in-2"],
 });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -80,6 +95,12 @@ function marks(v: unknown): Record<string, number> {
   for (const [k, t] of Object.entries(v))
     if (MARKS.some((m) => m.id === k) && typeof t === "number" && Number.isFinite(t) && t >= 0) out[k] = t;
   return out;
+}
+
+/** The dimensions opened, in the table's order, with the first always among them. */
+function dimensionsOf(v: unknown): DimensionId[] {
+  const got = Array.isArray(v) ? v : [];
+  return DIMENSION_IDS.filter((id) => id === "2-in-2" || got.includes(id));
 }
 
 export function normalizeStanding(v: unknown, now: number): StandingState {
@@ -110,6 +131,7 @@ export function normalizeStanding(v: unknown, now: number): StandingState {
           }))
           .slice(-HISTORY_LIMIT)
       : [],
+    dimensions: dimensionsOf(v.dimensions),
   };
 }
 
@@ -135,14 +157,14 @@ export const RULES: readonly Rule[] = [
     id: "circles",
     name: "Circles only",
     limit:
-      "Only problems with circle pieces or a circle container are dealt. The open ones are circles in a polygon, or polygons in a circle, of 21 to 100 sides.",
-    reward: "Every problem with circle pieces or a circle container pays 1.5 times the points.",
+      "Only problems with circle pieces or a circle container are dealt. The open ones are circles in a polygon, or polygons in a circle, of 21 to 100 sides. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.",
+    reward: "Every polygon problem with circle pieces or a circle container pays 1.5 times the points.",
   },
   {
     id: "small",
     name: "Small problems only",
-    limit: `Only problems with N + M + P at most ${SMALL_TOTAL} are dealt, where N and M are the sides of the piece and of the container (0 for a circle) and P is the number of pieces.`,
-    reward: `Every problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
+    limit: `Only problems with N + M + P at most ${SMALL_TOTAL} are dealt, where N and M are the sides of the piece and of the container (0 for a circle) and P is the number of pieces. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.`,
+    reward: `Every polygon problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
   },
   {
     id: "clicks",
@@ -159,14 +181,22 @@ export const RULES: readonly Rule[] = [
 ];
 export const ruleById = (id: string | null) => RULES.find((r) => r.id === id) ?? null;
 
-const hasCircles = (p: ProblemKey) => p.N === 0 || p.M === 0;
-const isSmall = (p: ProblemKey) => p.N + p.M + p.P <= SMALL_TOTAL;
+const hasCircles = (p: ProblemKey) => {
+  const q = needPolygon(p, "cycle rule circles");
+  return q.N === 0 || q.M === 0;
+};
+const isSmall = (p: ProblemKey) => {
+  const q = needPolygon(p, "cycle rule small");
+  return q.N + q.M + q.P <= SMALL_TOTAL;
+};
 
 /**
  * Whether the cycle's rule lets the dealer deal or offer this problem (circles only, small problems
  * only, ...). The dealer calls it on every candidate.
  */
 export function ruleAllowsProblem(s: StandingState, p: ProblemKey): boolean {
+  // circles only and small problems only are rules of 2D in 2D's polygon problems
+  if (!isPolygon(p)) return true;
   if (s.rule === "circles") return hasCircles(p);
   if (s.rule === "small") return isSmall(p);
   return true;
@@ -189,18 +219,17 @@ export function ruleOpenProblems(s: StandingState): readonly ProblemKey[] | null
   return null;
 }
 const CIRCLE_FRONTIER: readonly ProblemKey[] = FRONTIER_SIDES.flatMap((side) =>
-  FRONTIER_P.flatMap((P) => [
-    { N: 0, M: side, P },
-    { N: side, M: 0, P },
-  ]),
+  FRONTIER_P.flatMap((P) => [poly(0, side, P), poly(side, 0, P)]),
 );
 const SMALL_FRONTIER: readonly ProblemKey[] = FRONTIER.filter(isSmall);
 
 /** The rules' rewards on one improvement's points: the product of those finished that apply. */
 export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string | null): number {
   let f = 1;
-  if (s.rulesDone.includes("circles") && hasCircles(p)) f *= 1.5;
-  if (s.rulesDone.includes("small") && isSmall(p)) f *= 1.5;
+  if (isPolygon(p)) {
+    if (s.rulesDone.includes("circles") && hasCircles(p)) f *= 1.5;
+    if (s.rulesDone.includes("small") && isSmall(p)) f *= 1.5;
+  }
   if (s.rulesDone.includes("method") && method === "mc_compress") f *= 1.5;
   return f;
 }
@@ -209,31 +238,50 @@ export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string
 
 /** Record points a cycle must earn before it can be reset (points.ts, beside the weights it scales with). */
 export { RESET_MIN } from "./points";
-/** Records held per point of standing at a reset [SPEC]. */
-export const HELD_PER_STANDING = 50;
+/**
+ * The confirmed cycle RP a reset needs, by the number of resets so far [SPEC, Michael's ladder of
+ * 2026-10-26]: 200,000,000 in the first cycle and 5 times the last one's after: 1,000,000,000,
+ * then 5,000,000,000.
+ */
+export const resetThreshold = (resets: number): number => RESET_MIN * Math.pow(RESET_GROWTH, resets);
+
+/** The dimension a reset opens, by the number of resets after it (null: it opens none). */
+export function dimensionOpenedBy(resets: number): DimensionId | null {
+  return resets === 1 ? "2-on-3" : resets === 2 ? "3-in-3" : null;
+}
+
+/** The dimensions as the player reads them: the label, and a sentence on what it holds. */
+export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what: string }>> = {
+  "2-in-2": { label: "2D in 2D", what: "polygons and circles packed in polygons and circles" },
+  "2-on-3": { label: "2D on 3D", what: "pieces packed on the surfaces of solids" },
+  "3-in-3": { label: "3D in 3D", what: "solids packed in solids" },
+  "3-on-4": { label: "3D on 4D", what: "solids packed on the boundary of a four-dimensional solid" },
+};
 
 /** Records the player leads, as far as the game has seen (queue and past). */
 export const heldCount = (s: GameState) =>
   s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 
+/** Standing points a reset gives at its threshold, and the root's factor [SPEC]. */
+export const GAIN_AT_THRESHOLD = 5;
+
 /**
- * Standing a reset gives now [SPEC]: √(cycle RP / RESET_MIN) + records held / 50, floored; nothing
- * before the cycle has earned RESET_MIN, so held records alone never pay for a reset.
+ * Standing a reset gives now [SPEC]: ⌊5 √(cycle RP / threshold)⌋, nothing before the cycle has
+ * earned the threshold (resetThreshold). The records held no longer count.
  */
-export function standingGain(cycleEarned: number, held: number): number {
-  if (!(cycleEarned >= RESET_MIN)) return 0;
-  return Math.max(1, Math.floor(Math.sqrt(cycleEarned / RESET_MIN) + held / HELD_PER_STANDING + 1e-9));
+export function standingGain(cycleEarned: number, threshold = RESET_MIN): number {
+  if (!(cycleEarned >= threshold)) return 0;
+  return Math.floor(GAIN_AT_THRESHOLD * Math.sqrt(cycleEarned / threshold) + 1e-9);
 }
 
 /** Standing for finishing a cycle under a rule, on top of the gain: half again, at least one. */
 export const ruleBonus = (gain: number) => (gain > 0 ? Math.max(1, Math.ceil(gain / 2)) : 0);
 
-/** Record points of this cycle at which the next point of standing comes (the held count kept). */
-export function nextStandingAt(cycleEarned: number, held: number): number {
-  const g = standingGain(cycleEarned, held);
-  if (g === 0) return RESET_MIN;
-  const root = g + 1 - held / HELD_PER_STANDING;
-  return Math.max(RESET_MIN, Math.ceil(RESET_MIN * root * root));
+/** Record points of this cycle at which the next point of standing comes. */
+export function nextStandingAt(cycleEarned: number, threshold = RESET_MIN): number {
+  const g = standingGain(cycleEarned, threshold);
+  if (g === 0) return threshold;
+  return Math.max(threshold, Math.ceil((threshold * (g + 1) ** 2) / GAIN_AT_THRESHOLD ** 2 - 1e-6));
 }
 
 /** Upgrades a reset never takes: the Standing row, Standing itself, and records' own (rent, collections). */
@@ -290,6 +338,8 @@ export interface ResetPreview {
   /** Record points of this cycle at which the next point of standing comes. */
   nextAt: number;
   held: number;
+  /** The dimension this reset opens (null: none, or it is open already). */
+  opens: DimensionId | null;
   /** Upgrades the next cycle begins with. */
   keeps: UpgradeId[];
   /** Upgrades the reset takes away. */
@@ -309,15 +359,18 @@ export function confirmedCycleEarned(s: GameState): number {
 export function resetPreview(s: GameState): ResetPreview {
   const held = heldCount(s);
   const earned = confirmedCycleEarned(s);
-  const gain = standingGain(earned, held);
+  const threshold = resetThreshold(s.standing.resets);
+  const gain = standingGain(earned, threshold);
+  const opened = dimensionOpenedBy(s.standing.resets + 1);
   const bonus = s.standing.rule ? ruleBonus(gain) : 0;
   const next = nextCycleTree(s).owned;
   return {
     gain: gain + bonus,
     ruleBonus: bonus,
-    short: gain > 0 ? 0 : Math.max(0, RESET_MIN - earned),
-    nextAt: nextStandingAt(earned, held),
+    short: gain > 0 ? 0 : Math.max(0, threshold - earned),
+    nextAt: nextStandingAt(earned, threshold),
     held,
+    opens: opened && !s.standing.dimensions.includes(opened) ? opened : null,
     keeps: next,
     loses: s.owned.filter((id) => !next.includes(id)),
   };
@@ -348,6 +401,9 @@ export function resetCycle(s: GameState, now: number): number {
   st.points += preview.gain;
   st.total += preview.gain;
   st.resets++;
+  // the dimension this reset opens stays open for good
+  const opened = dimensionOpenedBy(st.resets);
+  if (opened && !st.dimensions.includes(opened)) st.dimensions.push(opened);
   // points still waiting for the server are not traded for standing: they carry into the next
   // cycle, where a confirmation keeps them and a take-back takes them from there
   const waiting = st.cycleEarned - confirmedCycleEarned(s);
@@ -362,7 +418,7 @@ export function resetCycle(s: GameState, now: number): number {
   st.marks = {};
   s.autoDue = 0;
   // offers were drawn for the old tree; the new cycle draws its own (lost records stay owed a retake)
-  const retakes = s.picks.offers.filter((x) => x.retake).map((x) => `${x.N}/${x.M}/${x.P}`);
+  const retakes = s.picks.offers.filter((x) => x.retake).map(keyOf);
   s.picks.retake = [...retakes, ...s.picks.retake.filter((k) => !retakes.includes(k))];
   s.picks.offers = [];
   s.autoAt = now;
@@ -380,7 +436,7 @@ export const MARKS: readonly { id: string; label: string }[] = [
   { id: "click10", label: "10 evaluations per click" },
   { id: "basin", label: "Basin hopping" },
   { id: "advance", label: "Auto-advance" },
-  { id: "ready", label: `${RESET_MIN.toLocaleString("en-US")} RP earned` },
+  { id: "ready", label: "Reset threshold earned" },
 ];
 
 /** Times the milestones of the cycle reached by now (an upgrade owned, or a reset possible). */
@@ -388,7 +444,7 @@ export function markProgress(s: GameState, now: number): void {
   const st = s.standing;
   for (const { id } of MARKS) {
     if (st.marks[id] !== undefined) continue;
-    const reached = id === "ready" ? st.cycleEarned >= RESET_MIN : s.owned.includes(id as UpgradeId);
+    const reached = id === "ready" ? st.cycleEarned >= resetThreshold(st.resets) : s.owned.includes(id as UpgradeId);
     if (reached) st.marks[id] = Math.max(0, now - st.cycleStartedAt);
   }
 }

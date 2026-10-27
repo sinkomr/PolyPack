@@ -12,6 +12,7 @@ import {
   cardState,
   cores,
   costOf,
+  exists,
   currencyOf,
   inUse,
   isRevealed,
@@ -27,7 +28,8 @@ import {
  * The shop: the whole tech tree, row by row. Owned upgrades fold into one line per row; the rest
  * show as cards, buyable or not yet. A mystery upgrade shows as ?????? (its name, its effect, its
  * explanation and its price) until every prerequisite is owned; its card still says what it needs,
- * a prerequisite that is itself an unrevealed mystery reading ?????? too. The Standing row (paid in
+ * a prerequisite that is itself an unrevealed mystery reading ?????? too. A dimension's cards (the
+ * Dimensions row) exist only while the dimension is open (upgrades.ts exists). The Standing row (paid in
  * standing) shows only once Standing is owned.
  *
  * `shopView` and `treeView` are pure (the tests read them); `TreeRenderer` draws the tree in its
@@ -192,7 +194,7 @@ export function shopView(o: Owned, funds: Funds, coreCount = cores()): ShopView 
   for (const { id: row, title } of ROWS) {
     // standing is paid in standing: its row shows once Standing is owned
     if (row === "standing" && !o.has("standing")) continue;
-    const list = UPGRADES.filter((u) => u.row === row);
+    const list = UPGRADES.filter((u) => u.row === row && exists(o, u.id));
     const owned: string[] = [];
     const cards: CardView[] = [];
     let ownedCount = 0;
@@ -285,7 +287,7 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
   let mysteries = 0;
   const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
   for (const { id: row } of rows)
-    for (const u of UPGRADES.filter((x) => x.row === row)) {
+    for (const u of UPGRADES.filter((x) => x.row === row && exists(o, x.id))) {
       const done = u.id === "lanesx" && lanesMaxed(o, coreCount);
       const state: CardState = done ? "owned" : cardState(o, funds, u.id);
       const depth = DEPTH.get(u.id) ?? 0;

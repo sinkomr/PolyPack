@@ -75,8 +75,14 @@ export interface MethodRunOptions {
   /** A configuration in the space's format to start from (any size, valid or not). */
   start?: unknown;
   budget: { evals?: number; time_s?: number };
-  /** Polled at every kernel call: true ends the run with its best so far. */
-  shouldStop?: () => boolean;
+  /**
+   * Polled at every kernel call, before the call is charged, with the evaluations charged so far
+   * (never decreasing): true ends the run with its best so far. A caller that pauses the run
+   * blocks inside it; a pause that ends on `used` reaching a number does not change a seeded run.
+   * `finishing` is true when the poll comes from inside a finish, whose result is not kept yet: the
+   * caller must not block or report then, only answer whether to stop.
+   */
+  shouldStop?: (used: number, finishing?: boolean) => boolean;
   /** Called with every improvement of the best. */
   onImprove?: (best: Finished) => void;
   /** Seconds, monotonic; default performance.now() / 1000. */
@@ -155,13 +161,13 @@ export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions
     best !== null && kernel.bound !== null && kernel.bound > 0 && best.score <= kernel.bound * (1 + 1e-9);
 
   const check = () => {
-    if (o.shouldStop?.()) throw new Stop("stopped");
+    if (o.shouldStop?.(used)) throw new Stop("stopped");
     if (used >= evalLimit) throw new Stop("evals");
     if (timeLimit < Infinity && now() - t0 >= timeLimit) throw new Stop("time");
     if (atBound()) throw new Stop("bound");
   };
   /** For a finish under way: true once the external stop or the clock says so (the budget was charged before it began). */
-  const polled = () => !!o.shouldStop?.() || (timeLimit < Infinity && now() - t0 >= timeLimit);
+  const polled = () => !!o.shouldStop?.(used, true) || (timeLimit < Infinity && now() - t0 >= timeLimit);
   const charge = (cost: number) => {
     check();
     used += cost;

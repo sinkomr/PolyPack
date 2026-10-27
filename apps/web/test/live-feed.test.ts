@@ -122,13 +122,13 @@ describe("Tighter follows", () => {
       [21, 21, 100],
       [33, 36, 300],
     ])
-      addToQueue(s, newProblem({ N, M, P }, "open", 0));
+      addToQueue(s, newProblem({ family: "polygon", N, M, P }, "open", 0));
     // the first two leave: one held, one not; then an older held record
     s.queue[0].ourId = 7;
     leave(s, "24/30/40", 10);
     leave(s, "21/21/100", 20);
-    s.past.unshift({ ...s.past[0], N: 4, M: 4, P: 9, key: "4/4/9", ourId: 3, leftAt: 5 });
-    addToQueue(s, newProblem({ N: 60, M: 66, P: 200 }, "open", 30));
+    s.past.unshift({ ...s.past[0], family: "polygon", N: 4, M: 4, P: 9, key: "4/4/9", ourId: 3, leftAt: 5 });
+    addToQueue(s, newProblem({ family: "polygon", N: 60, M: 66, P: 200 }, "open", 30));
     s.focus = "60/66/200";
     expect(eventKeys(followed(s))).toEqual(["60/66/200", "33/36/300", "24/30/40", "4/4/9"]);
   });

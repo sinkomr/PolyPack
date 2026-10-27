@@ -58,7 +58,7 @@ function advanced(): GameState {
 /** A problem with a record that is ours and sent: nothing is left to send. */
 function held(s: GameState, key: string, best = 10): ProblemState {
   const [N, M, P] = key.split("/").map(Number);
-  const p = newProblem({ N, M, P }, "open", T0);
+  const p = newProblem({ family: "polygon", N, M, P }, "open", T0);
   p.phase = "ready";
   p.board = board(3);
   p.best = best;
@@ -75,7 +75,7 @@ describe("Tighter progress", () => {
   it("counts evaluations since the best last beat its mark by the tolerance; the first record sets the mark", () => {
     const s = advanced();
     expect(s.settings.tolerance).toBe(1e-6);
-    const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
     addToQueue(s, p);
     applyLoadAll(p, board(3), 10, null);
     // before the first record every evaluation counts, and there is no mark
@@ -102,7 +102,7 @@ describe("Tighter progress", () => {
   it("is the old rule with τ = 10⁻⁹: progress is exactly an improvement that counts", () => {
     const s = advanced();
     s.settings.tolerance = 1e-9;
-    const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
     addToQueue(s, p);
     applyLoadAll(p, board(3), 10, null);
     applyStep(s, p, step(9.5, 100, { compact: true }), T0);
@@ -124,7 +124,7 @@ describe("Tighter progress", () => {
 
   it("measures a dealt record from its own best", () => {
     const s = advanced();
-    const p = newProblem({ N: 24, M: 30, P: 3 }, "loose", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
     addToQueue(s, p);
     p.phase = "ready";
     p.board = board(3);
@@ -140,7 +140,7 @@ describe("Tighter progress", () => {
   it("takes any improvement that counts as progress until Auto-advance is owned", () => {
     const s = newGame(T0, 1);
     s.settings.tolerance = 1e-3;
-    const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
     addToQueue(s, p);
     applyLoadAll(p, board(3), 10, null);
     applyStep(s, p, step(9.5, 100, { compact: true }), T0);
@@ -188,8 +188,8 @@ describe("Tighter Auto-advance", () => {
     countEvaluations(s, 1, false);
     expect(advancePlan(s, o).replace).toBe(q[0]);
     // the page deals the replacement, then drops the problem as Drop does: the queue stays full
-    const next = drawProblem(s.dealer, [q[0], { N: 30, M: 30, P: 60 }], seenKeys(s))!;
-    expect(next).toEqual({ N: 30, M: 30, P: 60 });
+    const next = drawProblem(s.dealer, [q[0], { family: "polygon", N: 30, M: 30, P: 60 }], seenKeys(s))!;
+    expect(next).toEqual({ family: "polygon", N: 30, M: 30, P: 60 });
     expect(drop(s, q[0].key, T0)).toBe(true);
     takeToken(s.dealer);
     addToQueue(s, newProblem(next, "open", T0));
@@ -257,7 +257,7 @@ describe("Tighter lanes with Auto-advance", () => {
   function queue(sinceGain: number[]): ProblemState[] {
     return ["24/30/60", "21/21/40", "27/27/80"].map((k, i) => {
       const [N, M, P] = k.split("/").map(Number);
-      const p = newProblem({ N, M, P }, "open", T0);
+      const p = newProblem({ family: "polygon", N, M, P }, "open", T0);
       p.phase = "ready";
       p.run = run(1);
       p.sinceGain = sinceGain[i];

@@ -31,7 +31,7 @@ const loadAll = (N: number, M: number, P: number): PackingConfig => {
 /** A problem in the queue whose board is Load all's, at `score`. */
 function loaded(N: number, M: number, P: number, score = 9.5) {
   const s = newGame(1_000, 7);
-  const p = newProblem({ N, M, P }, "open", 1_000);
+  const p = newProblem({ family: "polygon", N, M, P }, "open", 1_000);
   addToQueue(s, p);
   const board = loadAll(N, M, P);
   applyLoadAll(p, board, score, null);

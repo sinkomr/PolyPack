@@ -10,7 +10,7 @@ import type { HostReply } from "../src/tighter/run-host";
 // A click is one evaluation of a run that stays open: these tests check that the open run does
 // exactly the evaluations it is allowed, and that pausing it between clicks changes nothing.
 
-const problem = { N: 21, M: 24, P: 40 };
+const problem = { family: "polygon", N: 21, M: 24, P: 40 };
 
 function loadAll(): PackingConfig {
   const pieces: Pose[] = [];
@@ -116,7 +116,7 @@ describe("Tighter open runs", () => {
   });
 
   it("report the latest sub-run the method started, how many of its kind, and when", async () => {
-    const small = { N: 4, M: 4, P: 9 };
+    const small = { family: "polygon", N: 4, M: 4, P: 9 };
     const pieces: Pose[] = [];
     for (let k = 0; k < small.P; k++) pieces.push(findFreeSpot(small.N, pieces, 0, 0));
     const r = new OpenRun(

@@ -29,7 +29,7 @@ const record = (method: string, seed = 1): RunRecord => ({ method, params: {}, s
 /** A loaded problem in a game, its board at side 10. */
 function loaded(N = 21, M = 24, P = 8): { s: GameState; p: ProblemState } {
   const s = newGame(1_000, 7);
-  const p = newProblem({ N, M, P }, "open", 1_000);
+  const p = newProblem({ family: "polygon", N, M, P }, "open", 1_000);
   addToQueue(s, p);
   applyLoadAll(p, board(N, M, P), 10, null);
   return { s, p };
@@ -73,7 +73,7 @@ describe("Tighter ls_growth: one growth a run", () => {
     "ends a run by itself at its jam, well within its budget, on 8 pieces after Compact",
     { timeout: 60_000 },
     async () => {
-      const problem = { N: 21, M: 24, P: 8 };
+      const problem = { family: "polygon" as const, N: 21, M: 24, P: 8 };
       const compact = new OpenRun({
         problem,
         method: "mc_compress",

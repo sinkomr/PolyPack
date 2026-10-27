@@ -23,7 +23,7 @@ import { OpenRun, resolvedParams } from "../src/tighter/open-run";
 import { pipelineMethod } from "../src/tighter/runplan";
 import { RUN_BUDGET, methodParams, owning, upgrade } from "../src/tighter/upgrades";
 
-const small = { N: 4, M: 4, P: 9 };
+const small = { family: "polygon" as const, N: 4, M: 4, P: 9 };
 
 /** A problem loaded as the game loads it: every piece at the first free spot from the centre. */
 function loaded() {

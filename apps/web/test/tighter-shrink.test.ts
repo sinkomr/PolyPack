@@ -82,7 +82,7 @@ describe("Tighter shrink_repair's stop rule", () => {
 
   it("ends a run that cannot improve after its start and 1,000 more evaluations, without another click", async () => {
     // 4 squares in a square, in the 2 × 2 grid (side 2, the optimum): touching squares
-    const problem = { N: 4, M: 4, P: 4 };
+    const problem = { family: "polygon" as const, N: 4, M: 4, P: 4 };
     const start: PackingConfig = {
       ...problem,
       pieces: [
@@ -112,7 +112,7 @@ describe("Tighter shrink_repair's stop rule", () => {
 
 describe("Tighter shrink_repair runs, as the site's solver replays them", () => {
   it("are the solver's own run with the same budget, stepped as clicks", async () => {
-    const problem = { N: 21, M: 24, P: 40 };
+    const problem = { family: "polygon" as const, N: 21, M: 24, P: 40 };
     const start = loadAll(21, 24, 40);
     const params = presetParams("shrink_repair", 0);
     const r = new OpenRun({ problem, method: "shrink_repair", params, budget: { evals: 100_000 }, seed: 5, start });
@@ -139,7 +139,7 @@ describe("Tighter shrink_repair runs, as the site's solver replays them", () => 
 
   it("end by the stop rule exactly where a run of that budget ends", async () => {
     // 5 squares from Load all: the run gets close to the optimum (about 2.7071) and then stalls
-    const problem = { N: 4, M: 4, P: 5 };
+    const problem = { family: "polygon" as const, N: 4, M: 4, P: 5 };
     const start = loadAll(4, 4, 5);
     const params = presetParams("shrink_repair", 0);
     const r = new OpenRun({ problem, method: "shrink_repair", params, budget: { evals: 100_000 }, seed: 7, start });

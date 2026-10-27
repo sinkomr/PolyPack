@@ -96,7 +96,7 @@ describe("harden in Tighter", () => {
 
   it("opens a run with its noise, path and budget, while the player's parameters stay as they were", () => {
     const s = newGame(1_000, 7);
-    const p = newProblem({ N: 21, M: 24, P: 40 }, "open", 1_000);
+    const p = newProblem({ family: "polygon", N: 21, M: 24, P: 40 }, "open", 1_000);
     addToQueue(s, p);
     const board = loadAll(21, 24, 40);
     applyLoadAll(p, board, 9.5, null);
@@ -114,7 +114,7 @@ describe("harden in Tighter", () => {
       expect(JSON.stringify(base)).toBe(asked);
       expect(JSON.stringify(methodParams(o, "harden"))).toBe(asked);
     }
-    const big = newProblem({ N: 12, M: 30, P: 80 }, "open", 1_000);
+    const big = newProblem({ family: "polygon", N: 12, M: 30, P: 80 }, "open", 1_000);
     addToQueue(s, big);
     applyLoadAll(big, loadAll(12, 30, 80), 20, null);
     expect(runSetup("harden", {}, big).params).toEqual({ noise: 2, path: "harden" });
@@ -177,7 +177,7 @@ describe("harden in Tighter", () => {
     "ends a run by itself after its last step, with the packing a closed solver run makes",
     { timeout: 60_000 },
     async () => {
-      const problem = { N: 21, M: 24, P: 6 };
+      const problem = { family: "polygon" as const, N: 21, M: 24, P: 6 };
       const start = loadAll(21, 24, 6);
       const seed = 12_345;
       const pass = async (base: Record<string, unknown>) => {
