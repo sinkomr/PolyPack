@@ -10,6 +10,12 @@
 export type TorusFamily = "sq" | "hex" | "free";
 export const TORUS_FAMILIES: readonly TorusFamily[] = ["sq", "hex", "free"];
 
+/** Largest P of a torus problem (the domain, the server and the search). */
+export const TORUS_MAX_P = 500;
+
+/** Radius of a disk piece (N = 0). The one place to change when disks become diameter 1. */
+export const TORUS_DISK_RADIUS = 1;
+
 export type Vec2 = readonly [number, number];
 
 export interface Lattice {

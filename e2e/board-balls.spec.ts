@@ -3,8 +3,8 @@ import { type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/sp
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
 import { LAZY_VIEW, openProblem } from "./helpers";
 
-// 3D in 3D > Balls on the board: unit balls in a ball or a cube, Platonic solids in a ball. The space ships without
-// research records, so every problem opens empty ("No record yet"), runs from a new arrangement, and its first valid
+// 3D in 3D > Balls on the board: unit balls in a ball or in one of 94 solids, and each of those solids in a ball.
+// The space ships without research records, so every problem opens empty ("No record yet"), runs from a new arrangement, and its first valid
 // entry is kept by the local server (playwright.config.ts).
 
 declare const polypack: {

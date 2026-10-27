@@ -31,7 +31,9 @@ import { latticeSeed } from "./kernel-seeds";
 import {
   type Lattice,
   SQRT3_2,
+  TORUS_DISK_RADIUS,
   TORUS_FAMILIES,
+  TORUS_MAX_P,
   type TorusFamily,
   familyLattice,
   gaussReduce,
@@ -70,11 +72,11 @@ const finiteUpTo = (v: unknown, max: number): v is number =>
 
 export function torusKernel(problem: { family: TorusFamily; N: number; P: number }): SpaceKernel {
   const { family, N, P } = problem;
-  if (!TORUS_FAMILIES.includes(family) || !isShapeCode(N) || !Number.isInteger(P) || P < 1 || P > 100)
+  if (!TORUS_FAMILIES.includes(family) || !isShapeCode(N) || !Number.isInteger(P) || P < 1 || P > TORUS_MAX_P)
     throw new Error(`bad torus problem ${JSON.stringify(problem)}`);
   const model = new TorusEnergy(family, N, P);
   const { dim, globals, R } = model;
-  const r = N === 0 ? 1 : inradius(N);
+  const r = N === 0 ? TORUS_DISK_RADIUS : inradius(N);
   // one step moves a piece by about its inradius
   const steps = Float64Array.from(dim === 3 ? [r, r, r] : [1, 1]);
   // Thue's density pi / sqrt(12) bounds disks in the plane, hence on every torus (TORUS.md section 1)

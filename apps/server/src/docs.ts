@@ -300,7 +300,7 @@ function spacesSection(): string {
   return `<h2 id="spaces">Other dimensions: the spaces</h2>
 <p>The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension (see the <a href="/dimensions.html">Dimensions</a> page).
 Polygons in polygons, the problems above, are Flat, in 2D in 2D. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces (on a Platonic or Catalan solid, a prism or an antiprism), Sphere and Torus (2D on 3D);
-Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems); and Balls (3D in 3D: unit balls in a ball or a cube, Platonic solids in a ball).
+Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D, with the problems and records of polyhedrainpolyhedra.wiki and PolyPack's own prism and antiprism problems); and Balls (3D in 3D: unit balls in a ball or in one of 94 solids, and each of those solids in a ball).
 The API calls a dimension's kinds <em>spaces</em>: <code>curved</code>, <code>surface</code>, <code>sphere</code>, <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, under <code>/api/spaces</code>.
 Each problem has its own id, and each space its own configuration format and conventions, listed below and with every problem.
 The viewers draw them, and the notes on GitHub explain the geometry, the methods and the results.</p>
@@ -325,7 +325,7 @@ Closed problems are listed with <code>accepts_submissions: false</code> and a <c
 <p id="spaces-no-record">A space may give its problems by a <em>domain</em>, ranges of parameters (<code>/api/spaces</code> describes it as <code>domain</code>: an id pattern, its fields with their values or a range of integers, and the number of problems), rather than by its records. Then any id of the domain is a problem: one without a research record yet has <code>status: "no_record"</code>, <code>certified</code> and <code>certified_config</code> <code>null</code>, its <code>bound</code>, and takes entries; records are stored only where they exist.
 Its <code>best_score</code> is the site leader's, or <code>null</code> before the first entry, which is then kept when it is valid.
 Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
-<p>Curved, Sphere and Torus use domains with N = 0 (unit disks) or every integer 3–100 and P = 1–100.
+<p>Curved, Sphere and Torus use domains with N = 0 (unit disks) or every integer 3–100; P = 1–100, and for Torus 1–500.
 Curved keeps its existing curvature and container choices; Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.
 New choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer work list samples them.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:

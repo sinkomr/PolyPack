@@ -43,6 +43,7 @@ import {
 } from "@polypack/surface";
 import {
   Lattice,
+  TORUS_MAX_P,
   TorusFamily,
   gaussReduce,
   imageWindow,
@@ -76,7 +77,7 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: its catalogue or domain cap (polyhedra P <= 500, 2026-10-26),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface, curved, sphere and torus have domains with P <= 100.
+ * Surface, curved and sphere have domains with P <= 100; torus P <= 500 (2026-10-27).
  * Their server checks yield in slices, including torus storage rechecks; many-piece checks share
  * the heavy queue (also many-sided sphere pairs at small P).
  * Surface: [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
@@ -88,7 +89,7 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
   curved: 100,
   sphere: 100,
-  torus: 100,
+  torus: TORUS_MAX_P,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms

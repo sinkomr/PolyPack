@@ -12,7 +12,7 @@ The site files every kind of problem under a **dimension**: the pieces' dimensio
 | 2D on 3D | Sphere | `sphere` | yes |
 | 2D on 3D | Torus | `torus` | yes |
 | 3D in 3D | Polyhedra | `polyhedra` | yes |
-| 3D in 3D | Balls (balls in a ball or a cube, Platonic solids in a ball) | `balls` | yes |
+| 3D in 3D | Balls (balls in a ball or in a solid, each solid in a ball) | `balls` | yes |
 | 3D on 4D | Polytope boundaries (the tesseract first) | `boundary` | yes |
 
 A flat torus is filed under 2D on 3D because a torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth ([TORUS.md](TORUS.md)).
@@ -34,7 +34,7 @@ For any solid whose faces are all regular polygons, the value without folding is
 | Torus | the tiled plane, or one cell with its glued sides | torus basin hopping | yes | no |
 | Polytope boundaries (3D on 4D) | the eight cells side by side, the net with a Fold slider that folds it into the fourth dimension, or slices across one axis (three.js) | boundary compression search | yes | no |
 | Polyhedra | the solids in their container in 3D, solid or see-through, which turns | polyhedra soft-to-rigid search | yes | no |
-| Balls | the balls or solids in their ball or cube in 3D, solid or see-through, which turns | balls penalty basin hopping | yes | no |
+| Balls | the balls or solids in their ball or solid in 3D, solid or see-through, which turns | balls penalty basin hopping | yes | no |
 
 - **The problem.** One field per part of the id (solid, folding, piece, P; curvature, piece, container, P; piece, P; torus, piece, P; polytope, piece, P; for polyhedra and balls the problem, such as "Cubes in a cube" or "Balls in a ball", and P from 2 to 100). Each field offers only values that occur in the catalogue (`GET /api/spaces/<space>/records`) with the fields before it.
 - **The address.** `/#space=<problem id>`, such as `/#space=sphere/4/12` or `/#space=curved/-1/3/4/5`, opens a problem; `/#space=torus` opens a kind at its starting problem (an open one with room above its lower bound). The address keeps the API's name, so that older links still work, and choosing a kind writes the same address as the former Space menu did. Each row of the dimensions page links to it ("Open on the board").

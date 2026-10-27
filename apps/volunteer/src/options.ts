@@ -101,7 +101,7 @@ The work list above is Flat (2D in 2D): polygons in polygons. These options add 
 at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a polyhedron,
 on a whole sphere, on a flat torus); boundary (3D on 4D: unit balls and cubes on the boundary of
 a tesseract); polyhedra (3D in 3D: solids in a solid); and balls (3D in 3D: unit balls in a ball
-or a cube, Platonic solids in a ball). The API calls these kinds spaces.
+or in one of 94 solids, and each of those solids in a ball). The API calls these kinds spaces.
 Without these options the client never asks for them.
 
   --dimensions LIST        also search problems of these kinds: surface, curved, sphere, torus,

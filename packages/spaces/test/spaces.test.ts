@@ -623,7 +623,7 @@ describe("tampered and malformed configurations are rejected", () => {
   });
 
   it("for a P above the catalogue's, an unknown id or another space's id", () => {
-    expect(validateSpaceSubmission("torus", "torus/sq/0/101", { lattice: { L: 99 }, poses: [] }).reasons[0]).toMatch(
+    expect(validateSpaceSubmission("torus", "torus/sq/0/501", { lattice: { L: 99 }, poses: [] }).reasons[0]).toMatch(
       /above the largest P/,
     );
     expect(validateSpaceSubmission("sphere", "sphere/0/3", {}, { maxP: 2 }).reasons[0]).toMatch(/above the largest P/);

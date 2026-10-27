@@ -102,7 +102,7 @@ export const DIMENSIONS: readonly Dimension[] = [
   {
     id: "3-in-3",
     label: "3D in 3D",
-    summary: "Polyhedra packed inside a polyhedron, and balls and Platonic solids packed inside a ball or a cube.",
+    summary: "Polyhedra packed inside a polyhedron, balls packed inside a ball or a solid, and solids packed inside a ball.",
     families: [
       {
         space: "polyhedra",
@@ -117,7 +117,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Balls",
         short: "Balls",
         summary:
-          "Unit balls in the smallest ball or cube, and unit-edge Platonic solids in the smallest ball, up to 100 pieces.",
+          "Unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball, up to 100 pieces.",
         available: true,
       },
     ],

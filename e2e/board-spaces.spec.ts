@@ -844,3 +844,20 @@ test("a large fold surface starts with a smaller budget, says why, and shows a l
   await page.click("#space-solve-stop");
   await expect(page.locator("#space-solve-run")).toBeEnabled({ timeout: 1000 });
 });
+
+test("2D on 3D > Torus offers P up to 500 and a lattice start where there is no record", async ({ page }) => {
+  await page.goto("/#space=torus/hex/6/500");
+  await shown(page, "torus/hex/6/500", { timeout: 60_000 });
+  await expect(page.locator("#space-f-P")).toHaveValue("500");
+  await expect(page.locator("#space-f-P option")).toHaveCount(500);
+  await expect(page.locator("#space-solve-start")).toHaveValue("lattice");
+  await expect(page.locator('#space-solve-start option[value="lattice"]')).toHaveText("Lattice arrangement");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  // a run of a few evaluations from the lattice start returns a valid packing at once
+  const status = await runFor(page, 60);
+  expect(status).not.toMatch(/no valid|error/i);
+  // up to P = 100 there is no lattice option: the start is a new arrangement, as before
+  await page.selectOption("#space-f-P", "20");
+  await shown(page, "torus/hex/6/20");
+  await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
+});
