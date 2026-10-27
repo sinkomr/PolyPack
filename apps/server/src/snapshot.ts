@@ -18,7 +18,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { createGzip } from "node:zlib";
 import type { LeaderboardEntry } from "@polypack/geometry";
-import { SPACE_NAMES, type SpacesIndex, acceptsSubmissions, isSpaceName } from "@polypack/spaces";
+import { SPACE_NAMES, type SpacesIndex, acceptsSubmissions, isSpaceName, parseSpaceId, problemOf } from "@polypack/spaces";
 import { SpaceStore, Store, StoredSpaceEntry, StoredSubmission } from "./store";
 
 /**
@@ -245,7 +245,7 @@ export interface SnapshotSpaces {
   place(space: string, problem: string): { P: number; order: number } | null;
 }
 
-/** The spaces' entries by their catalogues: open problems only, as the listings show them, in catalogue order. */
+/** The spaces' entries by their catalogues and domains: open problems only, as the listings show them, in catalogue order (domain problems without a record after the records, by P). */
 export function snapshotSpaces(index: SpacesIndex, store: SpaceStore): SnapshotSpaces {
   const order = new Map<string, Map<string, number>>();
   return {
@@ -253,11 +253,15 @@ export function snapshotSpaces(index: SpacesIndex, store: SpaceStore): SnapshotS
     names: SPACE_NAMES.filter((s) => index[s]),
     place(space, problem) {
       const cat = isSpaceName(space) ? index[space] : undefined;
-      const p = cat?.byId.get(problem);
-      if (!cat || !p || !acceptsSubmissions(p)) return null;
+      if (!cat || !isSpaceName(space)) return null;
       let at = order.get(space);
       if (!at) order.set(space, (at = new Map(cat.problems.map((q, i) => [q.id, i]))));
-      return { P: p.P, order: at.get(problem)! };
+      const listed = cat.byId.get(problem);
+      if (listed) return acceptsSubmissions(listed) ? { P: listed.P, order: at.get(problem)! } : null;
+      // a problem of the space's domain without a record: after the records, by its piece count
+      const parsed = parseSpaceId(space, problem);
+      const p = typeof parsed === "string" ? null : problemOf(cat, parsed);
+      return p && acceptsSubmissions(p) ? { P: p.P, order: cat.problems.length + p.P } : null;
     },
   };
 }

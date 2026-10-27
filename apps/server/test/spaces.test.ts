@@ -194,7 +194,7 @@ describe("GET /api/spaces", () => {
       ["sphere", 166],
       ["torus", 544],
       ["boundary", 32],
-      ["polyhedra", 74850],
+      ["polyhedra", 4409164],
       ["balls", 18711],
     ]);
     for (const s of r.spaces) {
@@ -850,6 +850,28 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
       expect(checks[0].longestSliceMs).toBeLessThan(checks[0].workMs / 2);
     }
     console.log(`[CALC] server ${code}/500: ${checks[0].workMs.toFixed(1)} ms work, max slice ${checks[0].longestSliceMs.toFixed(1)} ms, body ${Buffer.byteLength(body)} bytes`);
+  });
+
+  it.each(["kttinpkd", "pr12l3intet", "bp12inap4"])("takes %s, a pair without a record, as a problem of the domain", async (code) => {
+    const id = `polyhedra/${code}/7`;
+    makeApp({}, index);
+    const p = (await get(`/api/spaces/polyhedra/problems/${id}`)).body as SpaceProblemResponse;
+    expect(p).toMatchObject({ id, status: "no_record", certified: null, certified_config: null, best_score: null });
+    expect(p.bound!.label).toBe("volume bound; [CALC]");
+    const config = latticeStart(getProblem(code)!, 7);
+    const r = await submit({ space: "polyhedra", id, config, name: "ann" });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: false });
+    // below the volume bound: refused
+    const low = await submit({ space: "polyhedra", id, config: { ...config, s: p.bound!.value * 0.9 }, name: "ann" });
+    expect(low.status).toBe(422);
+    // a code that is no pair is no problem
+    expect((await get("/api/spaces/polyhedra/problems/polyhedra/kttinxyz/7")).status).toBe(400);
+    // the domain tells the board its two menus, not 8,836 codes
+    const listing = (await get("/api/spaces")).body as { spaces: { space: string; domain?: { fields: { key: string }[]; problems: number } }[] };
+    const d = listing.spaces.find((x) => x.space === "polyhedra")!.domain!;
+    expect(d.fields.map((f) => f.key)).toEqual(["piece", "container", "P"]);
+    expect(d.problems).toBe(94 * 94 * 499);
   });
 
   /** Two unit cubes side by side along x, `gap` apart (negative: overlapping), in a cube of edge s. */

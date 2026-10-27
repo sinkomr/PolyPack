@@ -28,10 +28,10 @@ import { SPACE_MAX_P, formatSpaceId, parseSpaceConfig, validateSpaceSubmissionAs
 import { parseSearchProblem, readSpaceConfig, searchSpaceProblem, spaceLatticeStart } from "../src/search";
 
 describe("polyhedra domain", () => {
-  it("has 74,850 problems and only 14,850 unchanged research records", () => {
+  it("has 4,409,164 problems (94 x 94 pairs) and only 14,850 unchanged research records", () => {
     const c = loadSpacesIndex(join(__dirname, "../../.." )).polyhedra!;
     const d = SPACE_DOMAINS.polyhedra!;
-    expect(d.info.problems).toBe(150 * 499);
+    expect(d.info.problems).toBe(94 * 94 * 499);
     expect(c.maxP).toBe(500);
     expect(SPACE_MAX_P.polyhedra).toBe(500);
     expect(c.problems).toHaveLength(14850);

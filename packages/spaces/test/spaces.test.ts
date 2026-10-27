@@ -291,7 +291,7 @@ describe("the catalogues", () => {
     // Domain spaces load even without records; balls ships no records file at all
     expect(Object.keys(loaded).sort()).toEqual(["balls", "polyhedra", "surface"]);
     expect(loaded.polyhedra!.problems).toHaveLength(0);
-    expect(loaded.polyhedra!.domain!.info.problems).toBe(74850);
+    expect(loaded.polyhedra!.domain!.info.problems).toBe(4409164);
     expect(loaded.balls!.problems).toHaveLength(0);
     expect(loaded.balls!.domain!.info.problems).toBe(18711);
     expect(loaded.surface!.problems).toHaveLength(0);
@@ -303,7 +303,7 @@ describe("the catalogues", () => {
           : s === "surface"
             ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
           : s === "polyhedra"
-            ? "[spaces] polyhedra: a domain of 74850 problems, 0 with a record (no records file)"
+            ? "[spaces] polyhedra: a domain of 4409164 problems, 0 with a record (no records file)"
           : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,
       ),
     );
