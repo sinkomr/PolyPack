@@ -159,7 +159,11 @@ export function collectionsBonus(s: GameState, o: Owned): number {
  * the rewards of the rules finished that apply to it (and to the method that found it).
  */
 export function pointsMultiplier(s: GameState, o: Owned, p: ProblemKey, method: string | null): number {
-  return standingMultiplier(s.standing) * (1 + collectionsBonus(s, o)) * ruleRewardFactor(s.standing, p, method);
+  // the rewards of "circles only" and "small problems only" are polygons' (a space problem is not allowed under them)
+  const rules = isPolygon(p)
+    ? s.standing
+    : { ...s.standing, rulesDone: s.standing.rulesDone.filter((r) => r === "method") };
+  return standingMultiplier(s.standing) * (1 + collectionsBonus(s, o)) * ruleRewardFactor(rules, p, method);
 }
 
 /**

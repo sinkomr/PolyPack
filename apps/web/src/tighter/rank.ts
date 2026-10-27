@@ -1,6 +1,6 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
 import { rulesOf } from "./families";
-import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, keyOf, needPolygon, poly } from "./frontier";
+import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, poly } from "./frontier";
 import { CONTEST, TIERS, Tier } from "./points";
 
 /**
@@ -56,11 +56,12 @@ export const LOOSE_WEAKNESS = 0.005;
 /** Neighbours of P: the same pair's records at P − NEIGHBOURS … P + NEIGHBOURS. */
 export const NEIGHBOURS = 3;
 
-/** N + M + P, the size that rings and the speed factor go by (polygons only for now). */
-const sizeOf = (c: ProblemKey): number => {
-  const q = needPolygon(c, "size");
-  return q.N + q.M + q.P;
-};
+/**
+ * N + M + P, the size that rings and the speed factor go by. A space problem's evaluations are sized
+ * to the CPU time of a 2D one (families.ts unitsPerEvaluation), so it counts as the size the speed
+ * term is 1 at.
+ */
+const sizeOf = (c: ProblemKey): number => (isPolygon(c) ? c.N + c.M + c.P : 85);
 
 /** A problem the dealer may deal, with what is known about its record. */
 export interface CandidateFields {
@@ -68,13 +69,15 @@ export interface CandidateFields {
   /** The record's gap less its neighbours' median gap (contested problems); null when not judged. */
   weakness: number | null;
   /** The site leader the board starts from and must beat (contested problems, retakes). */
-  leader: { score: number; name: string; id: number } | null;
+  leader: { score: number; name: string; id: number | null } | null;
   /** Published values: the score a record must beat (the value less its printed precision). */
   target: number | null;
   /** Published values: the value as printed, and its source. */
   source: string | null;
   /** A record the player lost, offered again. */
   retake: boolean;
+  /** A space problem's lower bound as the server gave it (polygons' is computed). */
+  bound?: number | null;
 }
 export type Candidate = ProblemKey & CandidateFields;
 
@@ -121,8 +124,9 @@ export function shapeClass(n: number): "c" | "f" | "m" | "n" {
 
 /** The learning dealer's bucket: tier × size ring × the classes of piece and container. */
 export function bucketOf(c: ProblemKey & { tier: Tier }): string {
-  const p = needPolygon(c, "learning bucket");
-  return `${c.tier}|r${sizeRing(sizeOf(p))}|${shapeClass(p.N)}${shapeClass(p.M)}`;
+  // a space problem's bucket: its tier, its family and the ring of its piece count
+  if (!isPolygon(c)) return `${c.tier}|${c.family}|r${sizeRing(c.P)}`;
+  return `${c.tier}|r${sizeRing(sizeOf(c))}|${shapeClass(c.N)}${shapeClass(c.M)}`;
 }
 
 /**
@@ -219,12 +223,16 @@ export function normalizeFilters(v: unknown): Filters | null {
   };
 }
 
-/** Whether a candidate passes the filters (null: no filters). */
+/**
+ * Whether a candidate passes the filters (null: no filters). The shape filters are polygon shapes:
+ * a space problem passes them (its own filter fields come later), and is held to the piece count and the tiers.
+ */
 export function passes(f: Filters | null, c: ProblemKey & { tier?: Tier }): boolean {
   if (!f) return true;
-  const q = needPolygon(c, "dealer filters");
-  if (f.pieces && !f.pieces.includes(q.N)) return false;
-  if (f.containers && !f.containers.includes(q.M)) return false;
+  if (isPolygon(c)) {
+    if (f.pieces && !f.pieces.includes(c.N)) return false;
+    if (f.containers && !f.containers.includes(c.M)) return false;
+  }
   if (c.P < f.minP || c.P > f.maxP) return false;
   if (f.tiers && c.tier && !f.tiers.includes(c.tier)) return false;
   return true;
