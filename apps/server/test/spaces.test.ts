@@ -8,6 +8,7 @@ import {
   SPACE_BOUND_SLACK,
   SPACE_NAMES,
   SURFACE_CATALAN,
+  SURFACE_ARCHIMEDEAN,
   SPACE_RECORD_MARGIN,
   SPACE_STRICT_REASON,
   SpaceName,
@@ -35,6 +36,7 @@ import {
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
   SPACE_DOMAIN_TARGETS,
+  domainTargetIds,
   SPACE_GAP_CAP,
   SPACE_SETTLED_GAP,
   SPACE_TARGETS_DEFAULT_LIMIT,
@@ -183,16 +185,17 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 
 describe("GET /api/spaces", () => {
   it("lists the seven spaces with their catalogues and the curvature sweeps", async () => {
+    makeApp({}, index);
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
     const r = body as SpacesResponse;
     // surface: the problems of its domain, 2038 of them with a record
     expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
-      ["surface", 712800],
-      ["curved", 334],
-      ["sphere", 166],
-      ["torus", 544],
+      ["surface", 970200],
+      ["curved", 990000],
+      ["sphere", 9900],
+      ["torus", 29700],
       ["boundary", 32],
       ["polyhedra", 4409164],
       ["balls", 18711],
@@ -357,7 +360,7 @@ describe("GET /api/spaces/:space/problems/<id>", () => {
     expect((await get("/api/spaces/torus/problems/sphere/0/2")).status).toBe(400);
     expect((await get("/api/spaces/torus/problems/torus/sq/00/2")).status).toBe(400);
     expect((await get("/api/spaces/curved/problems/curved/1.0/0/0/2")).body.error).toMatch(/written 1/);
-    expect((await get("/api/spaces/torus/problems/torus/sq/0/99")).status).toBe(404);
+    expect((await get("/api/spaces/torus/problems/torus/sq/0/101")).status).toBe(404);
     expect((await get("/api/spaces/cone/problems/cone/1")).status).toBe(404);
     expect((await get("/api/spaces/torus/problems/%E0%A4%A")).status).toBe(400);
   });
@@ -894,9 +897,27 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
         const family = "platonic";
         if (q.id !== p.id) {
           // the others keep their place in the files of configurations
-          return { ...base, family, score_float: q.certified!.score, score_cert: q.certified!.score, display: q.certified!.display, status: q.status, config_at: q.configAt, bound: { value: q.bound!.value, kind: "volume" } };
+          return {
+            ...base,
+            family,
+            score_float: q.certified!.score,
+            score_cert: q.certified!.score,
+            display: q.certified!.display,
+            status: q.status,
+            config_at: q.configAt,
+            bound: { value: q.bound!.value, kind: "volume" },
+          };
         }
-        return { ...base, family, score_float: cert, score_cert: cert, display: cert.toFixed(6), status: "best_known", config, bound: { value: q.bound!.value, kind: "volume" } };
+        return {
+          ...base,
+          family,
+          score_float: cert,
+          score_cert: cert,
+          display: cert.toFixed(6),
+          status: "best_known",
+          config,
+          bound: { value: q.bound!.value, kind: "volume" },
+        };
       }),
     };
     return { ...index, polyhedra: buildSpaceCatalogue("polyhedra", file) };
@@ -921,7 +942,14 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     // two touching cubes in a cube of edge 2, below the record of 2.1: valid and kept
     const touching = await submit(entry(cubes(2)));
     expect(touching.status).toBe(200);
-    expect(touching.body).toMatchObject({ valid: true, reasons: [], score: 2, leader: true, best_score: 2, beats_certified: true });
+    expect(touching.body).toMatchObject({
+      valid: true,
+      reasons: [],
+      score: 2,
+      leader: true,
+      best_score: 2,
+      beats_certified: true,
+    });
   });
 
   it("answers an entry that cannot be kept without checking it: the research record posted back", async () => {
@@ -953,7 +981,14 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     makeApp({}, polyhedraIndex(2.00001));
     // 5e-7 below the record: not kept, and so not checked
     const near = await submit(entry(cubes(2.000009, 0.000009)));
-    expect(near.body).toMatchObject({ valid: false, checked: false, leader: false, id: null, beats_certified: false, best_score: 2.00001 });
+    expect(near.body).toMatchObject({
+      valid: false,
+      checked: false,
+      leader: false,
+      id: null,
+      beats_certified: false,
+      best_score: 2.00001,
+    });
     // 4.25e-6 below: kept, and it beats the record
     const kept = await submit(entry(cubes(2.0000015, 0.0000015)));
     expect(kept.body).toMatchObject({ valid: true, leader: true, beats_certified: true, best_score: 2.0000015 });
@@ -974,10 +1009,34 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
   it("refuses malformed configurations, a P above the catalogue's and oversized bodies", async () => {
     makeApp({}, index);
     const bad = async (config: unknown, id?: string) => (await submit(entry(config, id))).status;
-    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 1e101, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
-    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 1, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
+    expect(
+      await bad({
+        s: 2,
+        pieces: [
+          [-0.5, 0, 0, 1e101, 0, 0, 0],
+          [0.5, 0, 0, 1, 0, 0, 0],
+        ],
+      }),
+    ).toBe(400);
+    expect(
+      await bad({
+        s: 2,
+        pieces: [
+          [-0.5, 0, 0, 1, 0, 0],
+          [0.5, 0, 0, 1, 0, 0, 0],
+        ],
+      }),
+    ).toBe(400);
     expect(await bad({ s: "2", pieces: cubes(2).pieces })).toBe(400);
-    expect(await bad({ s: 2, pieces: [[-0.5, 0, 0, 0, 0, 0, 0], [0.5, 0, 0, 1, 0, 0, 0]] })).toBe(400);
+    expect(
+      await bad({
+        s: 2,
+        pieces: [
+          [-0.5, 0, 0, 0, 0, 0, 0],
+          [0.5, 0, 0, 1, 0, 0, 0],
+        ],
+      }),
+    ).toBe(400);
     // a wrong count is an invalid packing, not a malformed body
     expect(await bad({ s: 3, pieces: cubes(3).pieces }, "polyhedra/cubincub/3")).toBe(422);
     const big = await submit(entry(row(501, 600), "polyhedra/cubincub/501"));
@@ -1006,9 +1065,14 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     const real = index.polyhedra!.byId.get(id)!;
     const config = JSON.parse(readEntryConfigSync(root, index.polyhedra!, real)!);
     const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
-    makeApp({}, replaced(id, real.certified!.score * 1.001, { ...config, s: real.certified!.score * 1.001 }), undefined, {
-      onCheck: (c) => checks.push(c),
-    });
+    makeApp(
+      {},
+      replaced(id, real.certified!.score * 1.001, { ...config, s: real.certified!.score * 1.001 }),
+      undefined,
+      {
+        onCheck: (c) => checks.push(c),
+      },
+    );
     const r = await submit(entry(config, id));
     expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
     // [CALC] about 0.3 s of work for both checks, in slices of 20 ms measured inside the slicer: one block of
@@ -1091,6 +1155,89 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
   });
 });
 
+describe("range-domain submissions", () => {
+  it("serves new problems without records and keeps a first valid entry with its lower bound", async () => {
+    makeApp({}, index);
+    const cases = [
+      { space: "curved", id: "curved/-1e-06/100/0/1", config: { size: 20, pieces: [{ x: 0, y: 0, theta: 0 }] } },
+      { space: "sphere", id: "sphere/100/1", config: { rho: 100, pieces: [{ q: [1, 0, 0, 0] }] } },
+      { space: "torus", id: "torus/hex/100/1", config: { lattice: { L: 100 }, poses: [[0, 0, 0]] } },
+    ];
+    for (const c of cases) {
+      const p = await get(`/api/spaces/${c.space}/problems/${c.id}`);
+      expect(p.body).toMatchObject({
+        status: "no_record",
+        certified: null,
+        certified_config: null,
+        accepts_submissions: true,
+      });
+      expect(p.body.bound.value).toBeGreaterThan(0);
+      const r = await submit({ ...c, name: "new shape" });
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      expect(r.body).toMatchObject({ valid: true, leader: true, beats_certified: false });
+    }
+  });
+  it("includes reduced-basis storage rechecks of 100 free-torus pieces in the sliced check", async () => {
+    const checks: { slices: number }[] = [];
+    makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
+    const step = 1 / Math.tan(Math.PI / 100) + 1e-7,
+      L = 10 * step;
+    const id = "torus/free/100/100";
+    const config = {
+      lattice: { b1: [L, 0], b2: [0, -L] },
+      poses: Array.from({ length: 100 }, (_, i) => [
+        step * ((i % 10) - 4.5),
+        step * (Math.floor(i / 10) - 4.5),
+        Math.PI / 100,
+      ]),
+    };
+    const r = await submit({ space: "torus", id, config, name: "large torus" });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(checks).toHaveLength(1);
+    expect(checks[0].slices).toBeGreaterThan(3);
+    const stored = (await get(`/api/spaces/torus/problems/${id}`)).body.site_config.lattice;
+    expect(stored.b1[0] * stored.b2[1] - stored.b1[1] * stored.b2[0]).toBeGreaterThan(0);
+  });
+  it("shares the heavy queue across all three spaces, including many-sided sphere pairs at small P", async () => {
+    const checks: unknown[] = [];
+    makeApp({ clientIp: (c) => c.req.header("x-test-ip") ?? ip }, index, undefined, { onCheck: (c) => checks.push(c) });
+    const cases = Array.from({ length: 11 }, (_, i) => {
+      if (i % 3 === 0) {
+        const P = i === 0 ? 100 : 2;
+        return {
+          space: "sphere",
+          id: `sphere/100/${P}`,
+          config: { rho: 100, pieces: Array.from({ length: P }, () => ({ q: [1, 0, 0, 0] })) },
+        };
+      }
+      if (i % 3 === 1)
+        return {
+          space: "curved",
+          id: "curved/-1e-06/100/0/100",
+          config: { size: 1000, pieces: Array.from({ length: 100 }, () => ({ x: 0, y: 0, theta: 0 })) },
+        };
+      return {
+        space: "torus",
+        id: "torus/sq/100/100",
+        config: { lattice: { L: 1000 }, poses: Array.from({ length: 100 }, () => [0, 0, 0]) },
+      };
+    });
+    const results = await Promise.all(
+      cases.map(async (c, i) => {
+        const r = await app.request("/api/spaces/submit", {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-test-ip": `7.7.7.${i}` },
+          body: JSON.stringify({ ...c, name: "overlap" }),
+        });
+        return r.status;
+      }),
+    );
+    expect(results.filter((s) => s === 503)).toHaveLength(2);
+    expect(results.filter((s) => s === 422)).toHaveLength(9);
+    expect(checks).toHaveLength(9);
+  });
+});
+
 describe("GET /api/spaces/targets", () => {
   /** The work list as the rule says it should be, from the research records alone (no site entries). */
   function expected(): Map<string, { space: SpaceName; P: number; raw: number }> {
@@ -1099,13 +1246,14 @@ describe("GET /api/spaces/targets", () => {
       // a space with a domain: its records and the first SPACE_DOMAIN_TARGETS of its sample (no site entries here)
       const cat = index[space]!;
       const problems = [...cat.problems];
-      for (const id of cat.domain?.sample(SPACE_DOMAIN_TARGETS) ?? []) {
+      for (const id of domainTargetIds(cat, [], SPACE_DOMAIN_TARGETS)) {
         const parsed = parseSpaceId(space, id);
         if (typeof parsed !== "string" && !cat.byId.has(id)) problems.push(problemOf(cat, parsed)!);
       }
       for (const p of problems) {
         // nofold problems are 2D in 2D problems, except on the Catalan solids (irregular faces)
-        const nofold2D = space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid));
+        const nofold2D =
+          space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid));
         if (!acceptsSubmissions(p) || nofold2D) continue;
         const w = spaceTargetWeight(p.P);
         // a problem without a record (and without site entries here) has the largest room
@@ -1115,7 +1263,10 @@ describe("GET /api/spaces/targets", () => {
         }
         const gap = (p.certified!.score - p.bound!.value) / p.certified!.score;
         // a record within its space's margin of the lower bound cannot be beaten by a kept entry
-        const unbeatable = !(p.certified!.score * (1 - SPACE_RECORD_MARGIN[space]) > p.bound!.value * (1 - SPACE_BOUND_SLACK));
+        const unbeatable = !(
+          p.certified!.score * (1 - SPACE_RECORD_MARGIN[space]) >
+          p.bound!.value * (1 - SPACE_BOUND_SLACK)
+        );
         if (gap > SPACE_SETTLED_GAP && w > 0 && !unbeatable)
           out.set(p.id, { space, P: p.P, raw: Math.min(gap, SPACE_GAP_CAP) * w });
       }
@@ -1152,13 +1303,30 @@ describe("GET /api/spaces/targets", () => {
         leader: p.certified ? "certified" : "none",
         leader_id: null,
         best_score: p.certified ? p.certified.score : null,
-        bound: p.bound!.value,
+        bound: p.bound?.value ?? null,
       });
     }
     // the balls space's domain is sampled, never listed whole: small P first
     const balls = r.targets.filter((t) => t.space === "balls");
     expect(balls.length).toBe(SPACE_DOMAIN_TARGETS);
     expect(balls.every((t) => t.P <= 73)).toBe(true);
+  });
+
+  it("offers Archimedean fold targets and excludes nofold even with site entries", async () => {
+    makeApp({}, index);
+    const packings = JSON.parse(readFileSync(join(root, "python/surface/fixtures/archimedean_packings.json"), "utf8")).packings;
+    for (const p of packings.filter((p: { N: number }) => p.N === 0)) {
+      const before = await get(`/api/spaces/surface/problems/${p.id}`);
+      expect(before.status).toBe(200);
+      expect(before.body.status).toBe("no_record");
+      expect(before.body.certified_config).toBeNull();
+      expect((await submit({ space: "surface", id: p.id, config: { s: p.s, pieces: p.pieces }, name: "test" })).status).toBe(200);
+    }
+    const r = (await get(`/api/spaces/targets?spaces=surface&limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
+    const ids = new Set(r.targets.map((t) => t.id));
+    for (const p of packings.filter((p: { N: number }) => p.N === 0)) expect(ids.has(p.id), p.id).toBe(p.mode === "fold");
+    for (const solid of SURFACE_ARCHIMEDEAN) expect(ids.has(`surface/${solid}/fold/0/2`), solid).toBe(true);
+    expect(r.targets.some((t) => t.id.includes("/nofold/") && SURFACE_ARCHIMEDEAN.includes(t.id.split("/")[1]))).toBe(false);
   });
 
   it("gives every space an equal share of the priority: capped gap times min(1, (P - 1) / 5), scaled per space", async () => {

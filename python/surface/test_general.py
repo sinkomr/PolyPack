@@ -90,7 +90,7 @@ class Structure(unittest.TestCase):
             self.assertLess(max(abs(float(d.a)), abs(float(d.b))), 1e-30, name)
 
     def test_regular_faces_are_the_regular_frames(self):
-        for name in general.PRISMS + general.ANTIPRISMS:
+        for name in general.ARCHIMEDEAN + general.PRISMS + general.ANTIPRISMS:
             S = get_general(name)
             for f in range(S.F):
                 M = S.sides[f]
@@ -118,7 +118,7 @@ class Structure(unittest.TestCase):
 
     def test_gluing_matches_edges_and_holonomy_is_the_cone_angle(self):
         for name in ("deltoidal_icositetrahedron", "rhombic_dodecahedron", "triakis_tetrahedron",
-                     "pentagonal_icositetrahedron", "prism5", "antiprism4", "antiprism9"):
+                     "pentagonal_icositetrahedron", "prism5", "antiprism4", "antiprism9") + general.ARCHIMEDEAN:
             S = get_general(name)
             s = Fr(7, 5)
             for f in range(S.F):
@@ -166,6 +166,42 @@ class Structure(unittest.TestCase):
         bad["needle"]["faces"] = bad["needle"]["faces"][:3]
         with self.assertRaises(SolidError):
             GeneralSolid("needle", bad)
+
+
+class ArchimedeanPackings(unittest.TestCase):
+    def test_constructed_packings_certify(self):
+        packings = load(HERE, "fixtures", "archimedean_packings.json")["packings"]
+        self.assertEqual(len(packings), 24)
+        for name in ("truncated_tetrahedron", "cuboctahedron", "snub_cube", "truncated_icosidodecahedron"):
+            S = get_general(name)
+            for N in (0, 3, 12):
+                for mode in ("fold", "nofold"):
+                    r = next(p for p in packings if (p["solid"], p["N"], p["mode"]) == (name, N, mode))
+                    c = certify(r, "1e-12")
+                    if mode == "fold":
+                        self.assertEqual(c["method"], "chains", r["id"])
+                        self.assertFalse(ok(dict(r, mode="nofold"), "1e-12"), r["id"])
+                    else:
+                        self.assertEqual({S.sides[p["face"]] for p in r["pieces"]}, set(S.sides))
+                        self.assertLess(len({p["face"] for p in r["pieces"]}), r["P"])
+                        self.assertEqual(certify(dict(r, mode="fold"), "1e-12")["method"], "inside_faces")
+
+    def test_exact_cone_angles_and_unit_normalisation(self):
+        expected = (Fr(5, 3), Fr(5, 3), Fr(11, 6), Fr(11, 6), Fr(11, 6), Fr(23, 12),
+                    Fr(11, 6), Fr(28, 15), Fr(29, 15), Fr(29, 15), Fr(29, 15), Fr(59, 30), Fr(29, 15))
+        for name, want in zip(general.ARCHIMEDEAN, expected, strict=True):
+            S = get_general(name)
+            for v in range(S.V):
+                exact = sum((S.corner_pi[f][k] for f, face in enumerate(S.faces)
+                             for k, w in enumerate(face) if w == v), Fr(0))
+                self.assertEqual(exact, want, (name, v))
+        name = "truncated_tetrahedron"
+        bad = {name: copy.deepcopy(general.load_data()[name])}
+        for p in bad[name]["V"]:
+            for coords in p:
+                coords[:] = [str(2 * Fr(c)) for c in coords]
+        with self.assertRaisesRegex(SolidError, "unit edges"):
+            GeneralSolid(name, bad)
 
 
 class TestPackings(unittest.TestCase):
@@ -328,7 +364,7 @@ class Adversarial(unittest.TestCase):
     def test_piece_over_a_vertex(self):
         # the sharpest vertex of the new solids (triakis tetrahedron, cone angle 1.119 pi) and the
         # other kinds: a disk 1 - 1e-9 from the vertex covers it; 1 + 1e-9 away it is fine
-        for name in ("triakis_tetrahedron", "deltoidal_icositetrahedron", "rhombic_dodecahedron", "prism3", "antiprism4"):
+        for name in ("triakis_tetrahedron", "deltoidal_icositetrahedron", "rhombic_dodecahedron", "prism3", "antiprism4") + general.ARCHIMEDEAN:
             S = get_general(name)
             s = 8.0
             kinds = {}
@@ -378,7 +414,7 @@ class Adversarial(unittest.TestCase):
             certify(on_edge, "1e-12")
         good = rec("prism5", "fold", 0, 3.0, [(0, 0.0, 0.0, 0.0)])
         self.assertTrue(ok(good))
-        for change in ({"solid": "prism4"}, {"solid": "truncated_cube"}, {"solid": 5}, {"N": 2}, {"N": -1},
+        for change in ({"solid": "prism4"}, {"solid": "elongated_cube"}, {"solid": 5}, {"N": 2}, {"N": -1},
                        {"s": -1.0}, {"s": float("nan")}, {"P": 2}, {"mode": "flat"}, {"pieces": "x"}):
             with self.assertRaises(CertError):
                 certify(dict(good, **change), "1e-12")

@@ -93,11 +93,14 @@ export function pieceArea(N: number, rho: number): number {
 
 /** Area bound (float): the rho at which P pieces have total area 4 pi rho^2; for P <= 2 polygons the existence limit N/(2 pi). */
 export function areaBound(N: number, P: number): number {
-  if (N === 0) return 1 / Math.acos(1 - 2 / P);
-  const alphaStar = ((N - 2) * Math.PI + (4 * Math.PI) / P) / N;
-  if (alphaStar >= Math.PI) return N / (2 * Math.PI);
-  const ca = Math.cos(Math.PI / N) / Math.sin(alphaStar / 2);
-  return 1 / (2 * Math.acos(Math.min(1, ca)));
+  if (N === 0) return 1 / (2 * Math.asin(1 / Math.sqrt(P)));
+  if (P <= 2) return N / (2 * Math.PI);
+  // cos(a/2) = cos(x)/cos(y), x=pi/N, y=x(1-2/P). Avoid acos of a quotient
+  // almost equal to one: sin²(a/4) = sin(x(1-1/P)) sin(x/P) / cos(y).
+  // The quotient loses enough digits at large N, P to overstate a lower bound.
+  const x = Math.PI / N;
+  const t = (Math.sin(x * (1 - 1 / P)) * Math.sin(x / P)) / Math.cos(x * (1 - 2 / P));
+  return 1 / (4 * Math.asin(Math.sqrt(t)));
 }
 
 export function quatMul(p: Quat, q: Quat): Quat {

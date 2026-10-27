@@ -195,7 +195,8 @@ describe("a problem without a research record", () => {
     expect(domainTargetIds({ ...cat, byId: new Map([[ID, cat.byId.values().next().value!]]) }, [], 1)).toEqual([
       "torus/sq/0/49",
     ]);
-    expect(domainTargetIds(index.sphere!, [], 5)).toEqual([]);
+    expect(domainTargetIds(index.boundary!, [], 5)).toEqual([]);
+    expect(domainTargetIds(index.sphere!, [], 5)).toHaveLength(5);
   });
 });
 

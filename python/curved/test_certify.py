@@ -355,5 +355,35 @@ class ReviewRegressions(unittest.TestCase):
             self.assertTrue(ok(rec(-1, 4, 4, 1 + 1e-6, [(0.0, 0.0, th0)])), th0)
 
 
+class WidePieces(unittest.TestCase):
+    def test_certified_examples(self):
+        for N in (3, 7, 12, 20, 100):
+            for P in (1, 2, 5):
+                for K in (-1e-6, 1e-6):
+                    R = math.asinh(math.sinh(0.0005)/math.sin(math.pi/N))/0.001 if K < 0 else math.asin(math.sin(0.0005)/math.sin(math.pi/N))/0.001
+                    poses = [(3*R*i, 0, 0) for i in range(P)]
+                    self.assertTrue(ok(rec(K, N, 0, 3*R*P+1, poses)), (K, N, P))
+
+    def test_capacity_with_near_pairs(self):
+        N, P = 100, 100
+        step = 2*math.asinh(math.tanh(0.0005)/math.tan(math.pi/N))/0.001+1e-7
+        poses = [((i-49.5)*step, 0, math.pi/N) for i in range(P)]
+        self.assertTrue(ok(rec(-1e-6, N, 0, P*step, poses)))
+
+    def test_large_touch_overlap_and_boundary(self):
+        N = 100
+        r = 0.5/math.tan(math.pi/N)
+        R = 0.5/math.sin(math.pi/N)
+        theta = math.pi/N
+        # Strict certificates reject exact contact, then accept an explicit clearance.
+        self.assertTrue(ok(rec(0, N, 0, 4*R, [(0, 0, theta), (2*r+1e-7, 0, theta)])))
+        self.assertFalse(ok(rec(0, N, 0, 4*R, [(0, 0, theta), (2*r-1e-7, 0, theta)])))
+        self.assertTrue(ok(rec(0, N, 0, R+1e-7, [(0, 0, 0)])))
+        self.assertFalse(ok(rec(0, N, 0, R-1e-7, [(0, 0, 0)])))
+        bad = rec(0, N, 0, 100, [(0, 0, 0)])
+        bad['config_cert']['pieces'] = [None]
+        self.assertFalse(ok(bad))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

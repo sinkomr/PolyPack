@@ -279,7 +279,7 @@ describe("the API page", () => {
       "<code>{nofold, fold_gain}</code>",
       "boundary 64",
       "one piece may cross at most 1024 chains of cells",
-      "boundary 28",
+      "the full domains are never enumerated",
       "/api/spaces/boundary/problems/boundary/tesseract/ball/9",
     ])
       expect(html).toContain(part);

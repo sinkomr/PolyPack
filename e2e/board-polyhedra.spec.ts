@@ -49,12 +49,12 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   });
   await openProblem(page, 4, 4, 5);
   const menu = page.locator("#family-select");
-  await expect(menu.locator('optgroup[label="3D in 3D"] option[value="polyhedra"]')).toHaveText("Polyhedra");
+  await expect(menu.locator('optgroup[label="3D in 3D"] option[value="polyhedra"]')).toHaveText("3D in 3D: Polyhedra");
   await expect(menu.locator('option[value="polyhedra"]')).toBeEnabled();
   expect(three).toEqual([]);
 
   await page.selectOption("#family-select", "polyhedra");
-  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText(["Polyhedra", "Balls"]);
+  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText(["3D in 3D: Polyhedra", "3D in 3D: Balls"]);
   await expect(page.locator("#family-select")).toHaveValue("polyhedra");
   await shown(page, DEFAULT_PROBLEM.polyhedra);
   await expect(page).toHaveURL(/#space=polyhedra\/cubincub\/11$/);

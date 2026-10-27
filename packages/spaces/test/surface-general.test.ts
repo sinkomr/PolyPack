@@ -6,9 +6,9 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ALL_SOLID_NAMES, getSolid, pieceChains, pieceParts, surfaceBound } from "@polypack/surface";
+import { ALL_SOLID_NAMES, ARCHIMEDEAN_NAMES, CATALAN_NAMES, getSolid, pieceChains, pieceParts, surfaceBound } from "@polypack/surface";
 import { describe, expect, it } from "vitest";
-import { SURFACE_SOLIDS, formatSpaceId, parseSpaceId, validateSpaceSubmission, validateSpaceSubmissionAsync } from "../src";
+import { SURFACE_SOLIDS, SURFACE_ARCHIMEDEAN, SURFACE_CATALAN, formatSpaceId, parseSpaceId, validateSpaceSubmission, validateSpaceSubmissionAsync } from "../src";
 import {
   SPACE_METHOD,
   SURFACE_NOFOLD_METHOD,
@@ -54,6 +54,8 @@ const yieldToRunner = () => new Promise((r) => setTimeout(r, 0));
 describe("surface ids beyond the Platonic solids", () => {
   it("lists every solid of the surface package, and parses and writes back their ids", () => {
     expect([...SURFACE_SOLIDS]).toEqual([...ALL_SOLID_NAMES]);
+    expect(SURFACE_ARCHIMEDEAN).toEqual(ARCHIMEDEAN_NAMES);
+    expect(SURFACE_CATALAN).toEqual(CATALAN_NAMES);
     for (const solid of SURFACE_SOLIDS)
       for (const mode of ["fold", "nofold"]) {
         const id = `surface/${solid}/${mode}/6/24`;
@@ -66,7 +68,7 @@ describe("surface ids beyond the Platonic solids", () => {
         expect(q).toMatchObject({ space: "surface", solid, mode, N: 6, P: 24 });
         expect(nofoldOnPolygonEngine(q!)).toBe(mode === "nofold" && getSolid(solid as never).uniform);
       }
-    for (const id of ["surface/prism4/fold/0/3", "surface/antiprism3/fold/0/3", "surface/Prism5/fold/0/3", "surface/prism05/fold/0/3", "surface/truncated_cube/fold/0/3", "surface/prism5/fold/2/3"]) {
+    for (const id of ["surface/prism4/fold/0/3", "surface/antiprism3/fold/0/3", "surface/Prism5/fold/0/3", "surface/prism05/fold/0/3", "surface/elongated_cube/fold/0/3", "surface/prism5/fold/2/3"]) {
       expect(typeof parseSpaceId("surface", id)).toBe("string");
       expect(parseSearchProblem(id)).toBeNull();
     }

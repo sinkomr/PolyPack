@@ -2,7 +2,7 @@
  * The board's search thread for the spaces: runs one round (a SpaceJob) and answers with its
  * result. Fold surfaces, curved, sphere, torus and polyhedra problems run the shared job of the volunteer
  * client (runSpaceJob, packages/spaces/src/search/run.ts), and so do the nofold problems of the
- * Catalan solids, prisms and antiprisms (the surface search in its nofold mode); nofold problems of the
+ * Archimedean and Catalan solids, prisms and antiprisms (the surface search in its nofold mode); nofold problems of the
  * Platonic solids run the polygon solver on one face (nofold-round.ts). The page ends a round by ending this worker (search.ts),
  * so the stop and pause flags passed here never change.
  */

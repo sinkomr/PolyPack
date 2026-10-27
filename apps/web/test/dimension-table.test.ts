@@ -68,14 +68,14 @@ describe("the table of dimensions", () => {
   it("gives the board one menu: a group per dimension, an option per family, the ones to come disabled", () => {
     expect(menuGroups().map((g) => g.label)).toEqual(["2D in 2D", "2D on 3D", "3D in 3D", "3D on 4D"]);
     expect(menuGroups().flatMap((g) => g.options.map((o) => o.text))).toEqual([
-      "Flat",
-      "Curved",
-      "Polyhedral surfaces",
-      "Sphere",
-      "Torus",
-      "Polyhedra",
-      "Balls",
-      "Polytope boundaries",
+      "2D in 2D: Flat",
+      "2D in 2D: Curved",
+      "2D on 3D: Polyhedral surfaces",
+      "2D on 3D: Sphere",
+      "2D on 3D: Torus",
+      "3D in 3D: Polyhedra",
+      "3D in 3D: Balls",
+      "3D on 4D: Polytope boundaries",
     ]);
     // the value is what the board shows: "polygon" or the space, as in the address
     expect(menuGroups()[1].options.map((o) => o.value)).toEqual(["surface", "sphere", "torus"]);
@@ -100,8 +100,8 @@ describe("the table of dimensions", () => {
       {
         label: "4D in 4D",
         options: [
-          { text: "Polytopes (coming soon)", value: "polytopes", disabled: true },
-          { text: "Flat", value: "polygon", disabled: false },
+          { text: "4D in 4D: Polytopes (coming soon)", value: "polytopes", disabled: true },
+          { text: "4D in 4D: Flat", value: "polygon", disabled: false },
         ],
       },
     ]);
