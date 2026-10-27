@@ -34,7 +34,7 @@ import {
   validateBoundary,
   validateOn,
 } from "../src/index";
-import { cell16Vertices, cell24Vertices, rng, simplexVertices } from "./helpers";
+import { cell16Vertices, cell24Vertices, rng, simplexVertices, atSite } from "./helpers";
 
 const T = getPolytope("tesseract");
 const problem = (piece: PieceName, P: number): BoundaryProblem => ({ polytope: "tesseract", piece, P });
@@ -68,7 +68,7 @@ describe("review round 2: defects", () => {
     for (const tol of [1e-9, 1e-11]) {
       const over = tol + 0.9 * d;
       const cubes = validateBoundary(problem("cube", 2), { s, pieces: [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 1 + over, 0, 0] }] }, { tol });
-      const balls = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 2 + over, 0, 0] }] }, { tol });
+      const balls = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [h - d, 0, 0] }, { cell: 0, u: [h - d - 1 + over, 0, 0] }] }, { tol });
       expect(cubes.ok, `cubes, tol ${tol}`).toBe(false);
       expect(balls.ok, `balls, tol ${tol}`).toBe(false);
     }
@@ -87,9 +87,10 @@ describe("review round 2: held up", () => {
         expect(validateBoundary(problem("cube", 2), { s, pieces: [A, B] }).ok, `cubes s ${s} delta ${delta}`).toBe(false);
         expect(validateBoundary(problem("cube", 2), { s, pieces: [A, { cell: 3, u: [-h + 0.7, 0.1, 0] }] }).ok).toBe(false);
         if (s >= 2.2) {
-          expect(validateBoundary(problem("ball", 2), { s, pieces: [A, B] }).ok, `balls s ${s} delta ${delta}`).toBe(false);
-          expect(validateBoundary(problem("ball", 2), { s, pieces: [B, A] }).ok).toBe(false);
-          expect(validateBoundary(problem("ball", 2), { s, pieces: [A, { cell: 3, u: [-h + 1, 0.1, 0] }] }).ok).toBe(false);
+          // (balls of radius 1 drawn, halved to site units)
+          expect(validateBoundary(problem("ball", 2), atSite({ s, pieces: [A, B] })).ok, `balls s ${s} delta ${delta}`).toBe(false);
+          expect(validateBoundary(problem("ball", 2), atSite({ s, pieces: [B, A] })).ok).toBe(false);
+          expect(validateBoundary(problem("ball", 2), atSite({ s, pieces: [A, { cell: 3, u: [-h + 1, 0.1, 0] }] })).ok).toBe(false);
         }
       }
     }
@@ -246,10 +247,10 @@ describe("review round 2: held up", () => {
         const b4 = toAmbient(P, B.cell, B.u, s);
         const d = Math.hypot(...a4.map((x, i) => x - b4[i]));
         if (!(d < 2 - 1e-7)) continue;
-        if (!validateOn(P, "ball", 1, { s, pieces: [A] }).ok || !validateOn(P, "ball", 1, { s, pieces: [B] }).ok) continue;
+        if (!validateOn(P, "ball", 1, atSite({ s, pieces: [A] })).ok || !validateOn(P, "ball", 1, atSite({ s, pieces: [B] })).ok) continue;
         // the segment inside the flat ridge is a path of length d < 2
-        expect(validateOn(P, "ball", 2, { s, pieces: [A, B] }).ok, name).toBe(false);
-        expect(validateOn(P, "ball", 2, { s, pieces: [B, A] }).ok, name).toBe(false);
+        expect(validateOn(P, "ball", 2, atSite({ s, pieces: [A, B] })).ok, name).toBe(false);
+        expect(validateOn(P, "ball", 2, atSite({ s, pieces: [B, A] })).ok, name).toBe(false);
         n++;
       }
       expect(n, name).toBeGreaterThan(name === "24-cell" ? 20 : 100);
@@ -306,7 +307,7 @@ describe("review round 2: held up", () => {
     const over = { s: 3, pieces: [{ cell: 0, u: [0, 0, 0] }, { cell: 0, u: [0, 0, 0] }] };
     for (const tol of [NaN, -1, Infinity, "1e-9" as unknown as number]) expect(() => validateBoundary(problem("ball", 2), over, { tol })).toThrow(RangeError);
     for (const maxReasons of [0, -5, NaN, 0.5]) expect(validateBoundary(problem("ball", 2), over, { maxReasons }).ok).toBe(false);
-    for (const maxChains of [0, -1, NaN]) expect(validateBoundary(problem("ball", 1), { s: 3, pieces: [{ cell: 0, u: [0, 0, 0] }] }, { maxChains }).ok).toBe(false);
+    for (const maxChains of [0, -1, NaN]) expect(validateBoundary(problem("ball", 1), atSite({ s: 3, pieces: [{ cell: 0, u: [0, 0, 0] }] }), { maxChains }).ok).toBe(false);
     // holes in the pieces list itself
     expect(validateBoundary(problem("ball", 2), { s: 3, pieces: [{ cell: 0, u: [0, 0, 0] }, ,] }).ok).toBe(false);
     const sparse = new Array(2);

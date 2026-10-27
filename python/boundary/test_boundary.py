@@ -142,24 +142,25 @@ class Words(unittest.TestCase):
 
 class Closures(unittest.TestCase):
     def test_clearance_closed_form(self):
-        cfg = C.parse(pid("ball", 1), {"s": 3.0, "pieces": [ball(5, [0.5, -0.25, 1.0])]})
-        # h = 1.5: slacks (1, 1.25, 0.5); min over pairs: hypot(1, 0.5)
+        # (drawn for balls of radius 1 and halved to site units; the certifier works on the doubled numbers)
+        cfg = C.parse(pid("ball", 1), {"s": 1.5, "pieces": [ball(5, [0.25, -0.125, 0.5])]})
+        # h = 1.5 in the working unit: slacks (1, 1.25, 0.5); min over pairs: hypot(1, 0.5)
         self.assertEqual(Fr(C.clearance_sq(cfg.U[0], cfg.H), cfg.D ** 2), Fr(5, 4))
 
-    def test_one_ball_bound_attained_only_above_sqrt2(self):
-        s2 = math.sqrt(2)  # binary64 sqrt 2 is above sqrt 2
-        self.assertGreater(Fr(s2) ** 2, 2)
+    def test_one_ball_bound_attained_only_above_sqrt2_over_2(self):
+        s2 = math.sqrt(2) / 2  # binary64 sqrt 2 / 2 is above sqrt 2 / 2
+        self.assertGreater(Fr(s2) ** 2, Fr(1, 2))
         self.assertTrue(valid(pid("ball", 1), {"s": s2, "pieces": [ball(0, [0, 0, 0])]}, strict=True))
         below = math.nextafter(s2, 0)
-        self.assertLess(Fr(below) ** 2, 2)
+        self.assertLess(Fr(below) ** 2, Fr(1, 2))
         self.assertFalse(valid(pid("ball", 1), {"s": below, "pieces": [ball(0, [0, 0, 0])]}))
 
     def test_two_opposite_balls_and_a_third_that_does_not_fit(self):
-        s = math.sqrt(2) * (1 + 1e-12)
+        s = math.sqrt(2) / 2 * (1 + 1e-12)
         two = {"s": s, "pieces": [ball(0, [0, 0, 0]), ball(1, [0, 0, 0])]}
         self.assertTrue(valid(pid("ball", 2), two, strict=True))
         adj = {"s": s, "pieces": [ball(0, [0, 0, 0]), ball(2, [0, 0, 0])]}
-        self.assertFalse(valid(pid("ball", 2), adj))  # adjacent cell centres are s < 2 apart
+        self.assertFalse(valid(pid("ball", 2), adj))  # adjacent cell centres are s < 1 apart
 
     def test_exact_rational_input(self):
         # strings are exact rationals: a cube filling its cell at s = 1 is valid, not strictly
@@ -252,12 +253,12 @@ class Records(unittest.TestCase):
             nf = r["nofold"]
             per = -(-r["P"] // 8)
             self.assertEqual(nf["pieces_per_cell"], per)
-            want = {("ball", 1): 2.0, ("ball", 2): 2 + 2 / math.sqrt(3), ("cube", 1): 1.0, ("cube", 2): 2.0}[(r["piece"], per)]
+            want = {("ball", 1): 1.0, ("ball", 2): (2 + 2 / math.sqrt(3)) / 2, ("cube", 1): 1.0, ("cube", 2): 2.0}[(r["piece"], per)]
             self.assertEqual(nf["value"], want)
             self.assertAlmostEqual(r["fold_gain"], 1 - r["score_float"] / want, places=15)
             self.assertGreaterEqual(r["fold_gain"], 0)
         by = {r["id"]: r for r in self.recs}
-        for P in (1, 2):  # meet the one-ball bound sqrt 2 to 1e-12, still best_known
+        for P in (1, 2):  # meet the one-ball bound 1/sqrt 2 to 1e-12, still best_known
             self.assertLess(by[pid("ball", P)]["bound_gap_rel"], 2e-12)
             self.assertEqual(by[pid("ball", P)]["bound"]["kind"], "one piece")
 
@@ -304,7 +305,7 @@ class Records(unittest.TestCase):
 def above_bounds(piece, P, x):
     """x >= every proven lower bound, exactly (x rational or a qfield.Q23 element)."""
     if piece == "ball":
-        return x ** 3 * 6 >= P * C.PI_HI and x * x >= 2
+        return x ** 3 * 48 >= P * C.PI_HI and x * x * 2 >= 1
     return x ** 3 * 8 >= P and x * x * 2 >= 1
 
 
@@ -325,18 +326,20 @@ class Sources(unittest.TestCase):
         for key, e in self.runs.items():
             self.assertEqual(key, f"{e['piece']}/{e['P']}")
             self.assertEqual(e["value"], e["config"]["s"])
+            # (the search sources are in the radius-1 units they were found in; the records halve the ball ones)
             self.assertEqual((e["method"], e["seed"], e["date"]), ("PolyPack boundary search", 1, "2026-10-25"))
             self.assertIn(f"seed: 1, budget: {{evals: {e['evals_budget']}}}", e["call"])
             self.assertLessEqual(e["evals_used"], e["evals_budget"])
             # every search configuration certifies on its own (a few 1e-12 above its s)
-            self.assertIsNotNone(build_records.ladder(pid(e["piece"], e["P"]), e["config"], max_k=10), key)
+            cfg = build_records.half_ball(e["config"]) if e["piece"] == "ball" else e["config"]
+            self.assertIsNotNone(build_records.ladder(pid(e["piece"], e["P"]), cfg, max_k=10), key)
 
     def test_values_above_the_proven_bounds(self):
         for key, e in self.runs.items():
-            self.assertTrue(above_bounds(e["piece"], e["P"], Fr(e["value"])), key)
+            self.assertTrue(above_bounds(e["piece"], e["P"], Fr(e["value"]) / (2 if e["piece"] == "ball" else 1)), key)
         for piece, src in (("ball", self.research["balls"]), ("cube", self.research["cubes"])):
             for P, e in src.items():
-                self.assertTrue(above_bounds(piece, int(P), Fr(e["s"])), (piece, P))
+                self.assertTrue(above_bounds(piece, int(P), Fr(e["s"]) / (2 if piece == "ball" else 1)), (piece, P))
         for r in self.recs.values():
             self.assertTrue(above_bounds(r["piece"], r["P"], Fr(r["score_cert"])), r["id"])
 
@@ -350,7 +353,7 @@ class Sources(unittest.TestCase):
             self.assertIn("Improves on the research value", r["notes"][0])
             root = r["provenance"]
             self.assertEqual(root.get("source"), "PolyPack boundary search", r["id"])
-            self.assertEqual(root["value"], self.runs[f"{piece}/{P}"]["value"])
+            self.assertEqual(root["value"], self.runs[f"{piece}/{P}"]["value"] / (2 if piece == "ball" else 1))
         for r in self.recs.values():  # records without an improvement carry no previous
             if (r["piece"], r["P"]) not in self.IMPROVED and "previous" in r:
                 self.assertLess(r["score_cert"], r["previous"]["score_cert"])
@@ -410,7 +413,7 @@ class Exact(unittest.TestCase):
             else:
                 bad["s"] = (Q23.from_json(r["exact"]["s"]) * Fr(999999999, 10 ** 9)).to_json()
             self.assertFalse(C.check_exact(i, bad)[0], i)
-        want = {pid("ball", 4): "1 + 1/sqrt 2", pid("ball", 8): "2 cos 15 deg"}
+        want = {pid("ball", 4): "(1 + 1/sqrt 2)/2", pid("ball", 8): "cos 15 deg"}
         for i, text in want.items():
             self.assertIn(text, self.recs[i]["exact"]["statement"])
         self.assertEqual({self.recs[pid("cube", P)]["exact"]["s"] for P in (9, 10, 11, 12)}, {"5/4"})
@@ -451,9 +454,9 @@ class Adversarial(unittest.TestCase):
         a, _, _ = self.verdicts("adv/ball-pair-across-ridge-overlap")
         self.assertFalse(a.ok)
         c = self.cases["adv/ball-pair-across-ridge-overlap"]
-        d = 2 * (2 - Fr(1.1))  # straight through the 2-face: (h - u) twice, exactly (1.1 as a binary64)
+        d = 2 * (2 - Fr(1.1))  # straight through the 2-face: (h - u) twice, exactly (1.1 as a binary64), in the working unit
         self.assertEqual(a.margins["distance_sq"], d * d)
-        self.assertEqual(C.ball_distances(pid("ball", 2), c["config"])[0][(0, 1)], d * d)
+        self.assertEqual(C.ball_distances(pid("ball", 2), c["config"])[0][(0, 1)], d * d / 4)  # site units
 
     def test_balls_overlapping_around_an_edge(self):
         a, _, c = self.verdicts("adv/ball-pair-around-an-edge")
@@ -543,17 +546,18 @@ class CrossCheck(unittest.TestCase):
         on its cell's boundary (excess exactly 0, which binary64 also gets exactly) is no margin."""
         p = pid(c["piece"], c["P"])
         cfg = C.parse(p, c["config"])
-        s = float(cfg.s)
-        ex = max(abs(x) for U in cfg.u for x in U) - cfg.h
+        s = float(cfg.s_site)
+        ex = (max(abs(x) for U in cfg.u for x in U) - cfg.h) * cfg.unit  # a site length
         ms = [math.inf]
         if ex > 0:
             return -float(ex), False
         if c["piece"] == "ball":
-            if c["P"] * 4 * math.pi / 3 > 8 * s ** 3 * (1 + 1e-6):
+            # balls of diameter 1: volume P pi/6, clearance 1/2, distances and loops 1
+            if c["P"] * math.pi / 6 > 8 * s ** 3 * (1 + 1e-6):
                 return -math.inf, True
             pairs, loops, clear = C.ball_distances(p, c["config"])
-            ms += [math.sqrt(x) - 1 for x in clear]
-            ms += [math.sqrt(x) - 2 for x in list(pairs.values()) + list(loops.values()) if x is not None]
+            ms += [math.sqrt(x) - 0.5 for x in clear]
+            ms += [math.sqrt(x) - 1 for x in list(pairs.values()) + list(loops.values()) if x is not None]
             return min(ms), True
         if c["P"] > 8 * s ** 3 * (1 + 1e-6):
             return -math.inf, True
@@ -636,7 +640,7 @@ class CrossCheck(unittest.TestCase):
             for (i, j, d) in c["pairs"]:
                 py = pairs[(i, j)]
                 py = None if py is None else math.sqrt(py)
-                if (d is not None and d < 2.5 - 1e-9) or (py is not None and py < 2.5 - 1e-9):
+                if (d is not None and d < 1.25 - 1e-9) or (py is not None and py < 1.25 - 1e-9):
                     self.assertIsNotNone(d, (c["id"], i, j, py))
                     self.assertIsNotNone(py, (c["id"], i, j, d))
                     self.assertAlmostEqual(py, d, delta=1e-9, msg=(c["id"], i, j))
@@ -644,14 +648,14 @@ class CrossCheck(unittest.TestCase):
             for (i, d) in c["loops"]:
                 py = loops[i]
                 py = None if py is None else math.sqrt(py)
-                if (d is not None and d < 2.5 - 1e-9) or (py is not None and py < 2.5 - 1e-9):
+                if (d is not None and d < 1.25 - 1e-9) or (py is not None and py < 1.25 - 1e-9):
                     self.assertAlmostEqual(py, d, delta=1e-9, msg=(c["id"], "loop", i))
                     n += 1
             for i, x in enumerate(clear):
                 py = math.sqrt(x)
                 self.assertAlmostEqual(py, c["clearance_closed"][i], delta=1e-12)
                 ch = c["clearance_chains"][i]
-                if ch is not None or py < 1.5 - 1e-9:
+                if ch is not None or py < 0.75 - 1e-9:
                     self.assertAlmostEqual(py, ch, delta=1e-9, msg=(c["id"], "clearance", i))
         self.assertGreater(n, 500)
 

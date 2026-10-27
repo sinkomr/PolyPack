@@ -132,16 +132,16 @@ function planeBasisInto(a0: number, a1: number, a2: number, basis: Float64Array)
 const BASIS = new Float64Array(6);
 
 /**
- * The section of a unit ball (centre q, cell-local) by the plane, cut by the planes: a polygon of
- * `segments` points on the circle before clipping, CCW about a. Returns the point count (0: empty).
+ * The section of a ball of the given radius (default 1; centre q, cell-local) by the plane, cut by the planes: a
+ * polygon of `segments` points on the circle before clipping, CCW about a. Returns the point count (0: empty).
  */
-export function ballSection(sc: SliceScratch, q: ArrayLike<number>, plane: PlaneBuf, planes: Float64Array, segments = 96, nPlanes?: number): number {
+export function ballSection(sc: SliceScratch, q: ArrayLike<number>, plane: PlaneBuf, planes: Float64Array, segments = 96, nPlanes?: number, radius = 1): number {
   const a0 = plane[0];
   const a1 = plane[1];
   const a2 = plane[2];
   const d = a0 * q[0] + a1 * q[1] + a2 * q[2] - plane[3];
-  if (Math.abs(d) >= 1) return 0;
-  const r = Math.sqrt(1 - d * d);
+  if (Math.abs(d) >= radius) return 0;
+  const r = Math.sqrt(radius * radius - d * d);
   const cx = q[0] - d * a0;
   const cy = q[1] - d * a1;
   const cz = q[2] - d * a2;

@@ -23,7 +23,7 @@ import {
   MAX_S,
   validateBoundary,
 } from "../src/index";
-import { rng } from "./helpers";
+import { rng, atSite } from "./helpers";
 
 const T = getPolytope("tesseract");
 const problem = (piece: PieceName, P: number): BoundaryProblem => ({ polytope: "tesseract", piece, P });
@@ -126,9 +126,10 @@ describe("review: confirmed defects", () => {
       const A = { cell: 0, u: [h2 - d, 0.1, 0] };
       const B = { cell: 3, u: [-h2 + d, 0.1, 0] };
       expect(validateBoundary(problem("cube", 2), { s: s2, pieces: [A, B] }).ok).toBe(false);
-      expect(validateBoundary(problem("ball", 2), { s: s2, pieces: [A, B] }).ok).toBe(false);
-      expect(validateBoundary(problem("ball", 2), { s: s2, pieces: [B, A] }).ok).toBe(false);
-      expect(validateBoundary(problem("ball", 2), { s: s2, pieces: [A, { cell: 3, u: [-h2 + 1, 0.1, 0] }] }).ok).toBe(false);
+      // (balls of radius 1 drawn, halved to site units)
+      expect(validateBoundary(problem("ball", 2), atSite({ s: s2, pieces: [A, B] })).ok).toBe(false);
+      expect(validateBoundary(problem("ball", 2), atSite({ s: s2, pieces: [B, A] })).ok).toBe(false);
+      expect(validateBoundary(problem("ball", 2), atSite({ s: s2, pieces: [A, { cell: 3, u: [-h2 + 1, 0.1, 0] }] })).ok).toBe(false);
     }
     expect(fake.ok).toBe(false);
   });
@@ -258,7 +259,7 @@ describe("review: held up", () => {
         [A, B],
         [B, A],
       ]) {
-        expect(validateBoundary(problem("ball", 2), { s, pieces }).ok).toBe(d >= 2);
+        expect(validateBoundary(problem("ball", 2), atSite({ s, pieces })).ok).toBe(d >= 2);
         compared++;
       }
     }
@@ -361,9 +362,9 @@ describe("review: held up", () => {
     for (const s of [1e5, 1e6]) expect(validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [0, 0, 0] }, { cell: 1, u: [0, 0, 0] }] }).reasons.join(" ")).toMatch(/at most 10000/);
     for (const s of [3, 1e3, MAX_S]) {
       const h = s / 2;
-      const over = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [h - 1 + 2.5e-9, 0.3, -0.2] }, { cell: 3, u: [-h + 1, 0.3, -0.2] }] });
+      const over = validateBoundary(problem("ball", 2), atSite({ s, pieces: [{ cell: 0, u: [h - 1 + 2.5e-9, 0.3, -0.2] }, { cell: 3, u: [-h + 1, 0.3, -0.2] }] }));
       expect(over.ok).toBe(false);
-      const touch = validateBoundary(problem("ball", 2), { s, pieces: [{ cell: 0, u: [h - 1, 0.3, -0.2] }, { cell: 3, u: [-h + 1, 0.3, -0.2] }] });
+      const touch = validateBoundary(problem("ball", 2), atSite({ s, pieces: [{ cell: 0, u: [h - 1, 0.3, -0.2] }, { cell: 3, u: [-h + 1, 0.3, -0.2] }] }));
       expect(touch.ok).toBe(true);
     }
   });

@@ -45,10 +45,11 @@ describe("ids and bounds", () => {
   it("gives the elementary bounds", () => {
     expect(ballsBound(ballInBall, 2).value).toBe(2);
     expect(ballsBound(ballInBall, 100).value).toBeCloseTo(Math.cbrt(100), 12);
-    expect(ballsBound(ballInCube, 2).value).toBeCloseTo(2 + 2 / Math.sqrt(3), 14);
-    expect(ballsBound(ballInCube, 100).value).toBeCloseTo(Math.cbrt((400 * Math.PI) / 3), 12);
-    // two cubes hold disjoint balls of radius 1/2: s >= 1, above the circumradius sqrt(3)/2
-    expect(ballsBound(cubes, 2)).toMatchObject({ value: 1, kind: "two-piece" });
+    expect(ballsBound(ballInCube, 2).value).toBeCloseTo(1 + 1 / Math.sqrt(3), 14);
+    expect(ballsBound(ballInCube, 100).value).toBeCloseTo(Math.cbrt((50 * Math.PI) / 3), 12);
+    // two cubes hold disjoint balls of radius 1/2: a container of radius at least 1, diameter s >= 2 (above 2 times the
+    // circumradius sqrt(3)/2)
+    expect(ballsBound(cubes, 2)).toMatchObject({ value: 2, kind: "two-piece" });
     expect(ballsBound(getBallsProblem("tetinball")!, 2).kind).toBe("one piece");
   });
 });
@@ -105,25 +106,26 @@ describe("validateBalls", () => {
   const two = (d: number, s: number): BallsConfig => ({ s, pieces: [[d, 0, 0], [-d, 0, 0]] });
 
   it("accepts touching balls and walls, and overlaps and protrusions within the tolerance", () => {
-    expect(validateBalls(ballInBall, two(1, 2)).valid).toBe(true);
-    expect(validateBalls(ballInBall, two(1, 2), { tol: 0 }).valid).toBe(true);
-    // 1e-9 / 2 deep: within the touching tolerance, not at tolerance 0
-    expect(validateBalls(ballInBall, two(1 - 0.25e-9, 2)).valid).toBe(true);
-    expect(validateBalls(ballInBall, two(1 - 0.25e-9, 2), { tol: 0 }).valid).toBe(false);
+    // balls of diameter 1 at +-1/2 touch, and the container of diameter 2 holds them
+    expect(validateBalls(ballInBall, two(0.5, 2)).valid).toBe(true);
+    expect(validateBalls(ballInBall, two(0.5, 2), { tol: 0 }).valid).toBe(true);
+    // 0.25e-9 deep: within the touching tolerance, not at tolerance 0
+    expect(validateBalls(ballInBall, two(0.5 - 0.125e-9, 2)).valid).toBe(true);
+    expect(validateBalls(ballInBall, two(0.5 - 0.125e-9, 2), { tol: 0 }).valid).toBe(false);
   });
 
   it("rejects an overlap or a protrusion deeper than 1e-9", () => {
-    const v = validateBalls(ballInBall, two(1 - 1e-9, 2));
+    const v = validateBalls(ballInBall, two(0.5 - 1e-9, 2));
     expect(v.valid).toBe(false);
     expect(v.errors[0]).toMatch(/^pieces 0 and 1 overlap by (2\.0|1\.99)\d*e-9$/);
-    expect(validateBalls(ballInBall, two(1 + 2e-9, 2 + 2e-9)).valid).toBe(true);
-    expect(validateBalls(ballInBall, two(1 + 3e-9, 2 + 1e-9)).valid).toBe(false);
+    expect(validateBalls(ballInBall, two(0.5 + 2e-9, 2 + 4e-9)).valid).toBe(true);
+    expect(validateBalls(ballInBall, two(0.5 + 3e-9, 2 + 2e-9)).valid).toBe(false);
     const grid = (h: number): BallsConfig => ({
-      s: 4,
-      pieces: [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => [x * h, y, z]))),
+      s: 2,
+      pieces: [-1, 1].flatMap((x) => [-0.5, 0.5].flatMap((y) => [-0.5, 0.5].map((z) => [x * h, y, z]))),
     });
-    expect(validateBalls(ballInCube, grid(1)).valid).toBe(true);
-    expect(validateBalls(ballInCube, grid(1 + 2e-9)).errors[0]).toMatch(/sticks out of the container by (2\.0|1\.99)\d*e-9$/);
+    expect(validateBalls(ballInCube, grid(0.5)).valid).toBe(true);
+    expect(validateBalls(ballInCube, grid(0.5 + 2e-9)).errors[0]).toMatch(/sticks out of the container by (2\.0|1\.99)\d*e-9$/);
   });
 
   it("refuses malformed input", () => {
@@ -159,10 +161,11 @@ describe("validateBalls", () => {
         [0.5 + g / 2, 0, 0, 1, 0, 0, 0],
       ],
     });
-    expect(validateBalls(cubes, pair(0, far)).valid).toBe(true);
-    expect(validateBalls(cubes, pair(-2e-9, far)).errors[0]).toMatch(/^pieces 0 and 1 overlap by (2\.0|1\.99)\d*e-9$/);
-    expect(validateBalls(cubes, pair(0, far - 2e-9)).errors[0]).toMatch(/sticks out of the container/);
-    expect(tightSize(cubes, pair(0, far).pieces)).toBeCloseTo(far, 14);
+    // the container is scored by its diameter, twice the radius sqrt(1.5) that the vertices need
+    expect(validateBalls(cubes, pair(0, 2 * far)).valid).toBe(true);
+    expect(validateBalls(cubes, pair(-2e-9, 2 * far)).errors[0]).toMatch(/^pieces 0 and 1 overlap by (2\.0|1\.99)\d*e-9$/);
+    expect(validateBalls(cubes, pair(0, 2 * far - 4e-9)).errors[0]).toMatch(/sticks out of the container/);
+    expect(tightSize(cubes, pair(0, 2 * far).pieces)).toBeCloseTo(2 * far, 14);
   });
 });
 
@@ -180,25 +183,25 @@ describe("legalizeBalls and latticeCut", () => {
     }
   });
 
-  it("cuts lattice packings: 27 balls of the simple cubic lattice fill a cube of edge 6", () => {
+  it("cuts lattice packings: 27 balls of the simple cubic lattice fill a cube of edge 3", () => {
     const rng = mulberry32(1);
     const c = latticeCut(ballInCube, 27, () => 0.5 + 0 * rng(), "sc", false);
-    expect(legalizeBalls(ballInCube, c, 0, 0).s).toBeCloseTo(6, 12);
-    // an fcc cut of 13 balls holds the cuboctahedral shell of 12 round one: radius 3 when centred
+    expect(legalizeBalls(ballInCube, c, 0, 0).s).toBeCloseTo(3, 12);
+    // an fcc cut of 13 balls holds the cuboctahedral shell of 12 round one: a ball container of diameter 3 when centred
     const d = latticeCut(ballInBall, 13, () => 0.5, "fcc", false);
     expect(tightSize(ballInBall, d)).toBeCloseTo(3, 12);
   });
 });
 
 describe("the cone construction of tetrahedra", () => {
-  it("puts 20 tetrahedra with a common vertex in the unit ball, touching only along the cones' walls", () => {
+  it("puts 20 tetrahedra with a common vertex in the ball of radius 1, touching only along the cones' walls", () => {
     const tet = getBallsProblem("tetinball")!;
-    const v = validateBalls(tet, { s: 1, pieces: conePoses(20) });
+    const v = validateBalls(tet, { s: 2, pieces: conePoses(20) });
     expect(v.valid, v.errors.join("; ")).toBe(true);
     // they touch (the common vertex), so the gaps are zero up to rounding, and every vertex is at distance 1
     expect(Math.abs(v.minPairSep)).toBeLessThan(1e-12);
     expect(Math.abs(v.minWallGap)).toBeLessThan(1e-12);
-    expect(tightSize(tet, conePoses(20))).toBeCloseTo(1, 12);
+    expect(tightSize(tet, conePoses(20))).toBeCloseTo(2, 12);
     expect(() => conePoses(21)).toThrow(RangeError);
   });
 });
@@ -229,6 +232,8 @@ describe("searchBalls", () => {
     // [EST] eight balls in a cube of edge 4 (Schaer 1966); 13 balls in a ball of radius 3 (twelve round one)
     expect(searchBalls(ballInCube, 8, { seed: 1, maxEvals: 150000 }).score).toBeLessThan(4 * (1 + 1e-8));
     expect(searchBalls(ballInBall, 4, { seed: 1, maxEvals: 60000 }).score).toBeLessThan((1 + Math.sqrt(6) / 2) * (1 + 1e-8));
+    // two unit cubes face to face in a ball of radius sqrt(1.5), diameter 2 sqrt(1.5)
+    expect(searchBalls(cubes, 2, { seed: 1, maxEvals: 30000 }).score).toBeLessThan(2 * Math.sqrt(1.5) * (1 + 1e-6));
   });
 
   it("is reproducible by seed when it ends on evaluations", () => {

@@ -2,9 +2,9 @@
  * Structured starts of the boundary kernel (kernel.ts, capability "seeds"): the cell layouts, the
  * nofold packings of docs/spaces/BOUNDARY.md section 6. Each of the 8 cells holds floor(P / 8) or
  * ceil(P / 8) = n pieces (P mod 8 random cells hold one more), at points of one local layout:
- *  - balls: one at the cell's centre (s = 2); two on a random main diagonal of the inner cube of
- *    edge s - 2, 2 apart (s = 2 + 2 / sqrt 3); more on the k^3 grid of spacing 2, k = ceil(cbrt n)
- *    (s = 2 k);
+ *  - balls (diameter 1): one at the cell's centre (s = 1); two on a random main diagonal of the inner
+ *    cube of edge s - 1, 1 apart (s = 1 + 1 / sqrt 3); more on the k^3 grid of spacing 1,
+ *    k = ceil(cbrt n) (s = k);
  *  - cubes: the k^3 grid of unit cubes (s = k, with the two rings' hair of room).
  * Every piece lies in the closed cell that anchors it, so the layout is valid at its edge (pieces
  * may touch across a 2-face). The cubes' other structured start, the search's two rings, is the
@@ -13,6 +13,10 @@
 import type { State } from "./search/model";
 import { randInt } from "./search/random";
 import type { PieceName } from "./types";
+import { BALL_RADIUS } from "./units";
+
+/** A ball's diameter, the least distance of two centres. */
+const D = 2 * BALL_RADIUS;
 
 /** Room the cube layouts get over their exact edge, as the search's two rings (1e-6 relative). */
 const ROOM = 1 + 1e-6;
@@ -40,19 +44,20 @@ export function cellLayout(piece: PieceName, P: number, rand: () => number): { s
     s = k * ROOM;
     local = () => grid(k, s / k);
   } else if (n === 1) {
-    s = 2;
+    // one ball per cell, centred: the cell's edges are at s sqrt 2 / 2 >= the radius, so s = 2 r (site units)
+    s = D;
     local = () => [[0, 0, 0]];
   } else if (n === 2) {
-    // the two centres on a main diagonal of the inner cube of edge s - 2, 2 apart
-    s = 2 + 2 / Math.sqrt(3);
+    // the two centres on a main diagonal of the inner cube of edge s - D, D apart
+    s = D + D / Math.sqrt(3);
     local = (r) => {
-      const a = s / 2 - 1;
+      const a = s / 2 - BALL_RADIUS;
       const d = [0, 1, 2].map(() => (r() < 0.5 ? -a : a));
       return [d, d.map((x) => -x)];
     };
   } else {
-    s = 2 * k;
-    local = () => grid(k, 2);
+    s = D * k;
+    local = () => grid(k, D);
   }
   const counts = perCell(P, rand);
   const cells = new Int32Array(P);

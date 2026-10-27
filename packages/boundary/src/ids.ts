@@ -38,8 +38,8 @@ export function formatBoundaryId(p: BoundaryProblem): string {
 }
 
 /**
- * A piece in its standard pose (piece-local coordinates, centred at the origin): the unit ball
- * (radius 1), or the unit cube [-1/2, 1/2]^3 with its 8 vertices (vertex v has coordinate k = +1/2
+ * A piece in its standard pose (piece-local coordinates, centred at the origin): the ball (radius
+ * BALL_RADIUS = 1/2; the shape {kind: "ball"} is the UNIT ball and the parts' place.A carries the radius, parts.ts), or the unit cube [-1/2, 1/2]^3 with its 8 vertices (vertex v has coordinate k = +1/2
  * exactly when bit k of v is set) and 6 faces (-x, +x, -y, +y, -z, +z, counter-clockwise seen
  * from outside). Pieces have dimension d - 1; only d = 4 is supported.
  */

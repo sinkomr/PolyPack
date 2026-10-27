@@ -12,8 +12,17 @@
 import type { Affine, Cell, HalfSpace } from "@polypack/boundary";
 import { type Vec3, det3, dot, normalize3, planeBasis, sub3 } from "./math";
 
-/** The shape of a piece in its standard pose, as the engine's standardPiece returns it. */
+/**
+ * The shape of a piece in its standard pose, as the engine's standardPiece returns it. A ball is the UNIT ball of this
+ * file's meshes: a ball piece's radius is carried by the place's A (an isometry times the radius, 1/2 for balls of
+ * diameter 1: ballRadius), so a place with an orthogonal A draws a ball of radius 1.
+ */
 export type PieceShape = { kind: "ball" } | { kind: "polytope"; vertices: number[][]; faces: number[][] };
+
+/** The radius of the ball a place draws: A is the radius times an isometry, so the radius is |det A|^(1/3). */
+export function ballRadius(A: readonly (readonly number[])[]): number {
+  return Math.cbrt(Math.abs(det3(A)));
+}
 
 /** A closed half-space n . y <= h of R^3 with unit n. */
 export interface Plane {
@@ -281,12 +290,13 @@ export function partMesh(shape: PieceShape, place: Affine, planes: Plane[], opts
 
 function ballPart(place: Affine, planes: Plane[], opts: MeshOptions): PartMesh | null {
   const c = place.b as Vec3;
-  // planes the unit ball reaches; a ball wholly beyond one plane has no part here
+  const R = ballRadius(place.A);
+  // planes the ball reaches; a ball wholly beyond one plane has no part here
   const live: Plane[] = [];
   for (const pl of planes) {
     const d = dot(pl.n, c) - pl.h;
-    if (d >= 1 - SLIVER) return null;
-    if (d > -1) live.push(pl);
+    if (d >= R - SLIVER) return null;
+    if (d > -R) live.push(pl);
   }
   const sink = new Sink();
   const flip = det3(place.A) < 0;
@@ -339,8 +349,8 @@ function ballPart(place: Affine, planes: Plane[], opts: MeshOptions): PartMesh |
   const K = opts.circleSegments ?? 96;
   live.forEach((pl, j) => {
     const d = dot(pl.n, c) - pl.h;
-    if (Math.abs(d) >= 1) return;
-    const r = Math.sqrt(1 - d * d);
+    if (Math.abs(d) >= R) return;
+    const r = Math.sqrt(R * R - d * d);
     const q: Vec3 = [c[0] - d * pl.n[0], c[1] - d * pl.n[1], c[2] - d * pl.n[2]];
     const [u, v] = planeBasis(pl.n);
     let poly: Vec3[] = [];

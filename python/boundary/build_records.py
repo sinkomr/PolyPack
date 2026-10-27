@@ -1,5 +1,10 @@
 """Builds data/boundary/records.json: the 32 problems boundary/tesseract/{ball,cube}/{1..16}.
 
+Units (2026-10-27): the records are in site units, where a ball has diameter 1. The research prototype's and the search's
+ball results (data/boundary/sources) are in the radius-1 units they were found in; they are halved exactly on read
+(half_ball), which keeps every certificate and scaling rule (s lam_k, u lam_k are binary64 products, and halving
+commutes with them), so a ball record is the old record with every length halved. Cube records are unchanged.
+
 Candidates per problem, all binary64 configurations:
   * the exact constructions of the research note (one ball at a cell centre, opposite balls, one
     cube per cell);
@@ -8,8 +13,8 @@ Candidates per problem, all binary64 configurations:
   * exact versions of those: cube layouts whose value is within 1e-5 of 5/4, 4/3 or 3/2, with
     every coordinate within 1e-6 of a multiple of 1/24 snapped to it, when they are valid at
     exactly that edge (rational arithmetic); and the two ball layouts with every coordinate
-    +-a, a = (2 - sqrt 2)/4 (P = 4, s = 1 + 1/sqrt 2) and a = sin 15 deg (P = 8,
-    s = 2 cos 15 deg), when they are valid at exactly that edge (arithmetic in Q(sqrt 2, sqrt 3));
+    +-a, a = (2 - sqrt 2)/8 (P = 4, s = (1 + 1/sqrt 2)/2) and a = sin 15 deg / 2 (P = 8,
+    s = cos 15 deg), when they are valid at exactly that edge (arithmetic in Q(sqrt 2, sqrt 3));
     the stored float configuration is then the exact one rounded to binary64;
   * the record for P + 1 with its last piece removed (a subset of a valid packing is valid).
 Each candidate is scaled about the tesseract's centre by lam_k = 1 + k 1e-12 for k = 1, 2, ...
@@ -41,15 +46,15 @@ from qfield import COS15, SIN15, Q23  # noqa: E402
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 RESEARCH = os.path.join(REPO, "data", "boundary", "sources", "research_round2.json")
 SEARCH = os.path.join(REPO, "data", "boundary", "sources", "search_2026-10-25.json")
-GENERATED = "2026-10-25"
+GENERATED = "2026-10-27"
 SQRT2 = math.sqrt(2)
 MAX_K = 100000
 GRID = Fraction(1, 24)  # contains the 1/8, 1/6 and 1/4 grids of the cube layouts
 CUBE_TARGETS = ((Fraction(5, 4), "5/4"), (Fraction(4, 3), "4/3"), (Fraction(3, 2), "3/2"))
 # ball layouts with every coordinate +-a: (P, a, s, text)
 BALL_FORMS = (
-    (4, Q23(Fraction(1, 2), Fraction(-1, 4)), Q23(1, Fraction(1, 2)), "s = 1 + 1/sqrt 2 = 1.707107, every coordinate +-(2 - sqrt 2)/4"),
-    (8, SIN15, 2 * COS15, "s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2 = 1.931852, every coordinate +-sin 15 deg = +-(sqrt 6 - sqrt 2)/4"),
+    (4, Q23(Fraction(1, 4), Fraction(-1, 8)), Q23(Fraction(1, 2), Fraction(1, 4)), "s = (1 + 1/sqrt 2)/2 = 0.853553, every coordinate +-(2 - sqrt 2)/8"),
+    (8, SIN15 / 2, COS15, "s = cos 15 deg = (sqrt 6 + sqrt 2)/4 = 0.965926, every coordinate +-sin 15 deg / 2 = +-(sqrt 6 - sqrt 2)/8"),
 )
 PRIORITY = {"exact": 0, "search": 1, "research": 2, "subset": 3}
 
@@ -66,6 +71,11 @@ SEARCH_METHOD = (
     "PolyPack boundary search (packages/boundary/src/search): penalty relaxation over exact tesseract geodesics "
     "(balls) or box parts (aligned cubes), L-BFGS in cell charts, compression of s, random starts and hops, final "
     "polish valid at tolerance 0; one deterministic call {call}")
+
+
+def half_ball(config):
+    """A ball configuration of the sources (balls of radius 1) in site units (diameter 1): every length halved, exactly."""
+    return {"s": config["s"] / 2, "pieces": [dict(p, u=[x / 2 for x in p["u"]]) for p in config["pieces"]]}
 
 
 def scaled(config, k):
@@ -103,13 +113,13 @@ def bounds_of(piece, P):
     mp.dps = 50
     checks = {k: ok for k, _, ok in C.lower_bounds(piece, P)}
     if piece == "ball":
-        vol = largest_float(checks["volume"], cbrt(P * mpi / 6))
-        one = largest_float(checks["one piece"], mpf(2).sqrt())
+        vol = largest_float(checks["volume"], cbrt(P * mpi / 48))
+        one = largest_float(checks["one piece"], 1 / mpf(2).sqrt())
         out = [
-            {"kind": "volume", "value": vol, "exact": f"({P} pi/6)^(1/3)",
-             "label": "[CALC] volume: the developed balls have disjoint interiors, so P (4 pi/3) <= 8 s^3", "rigorous": True},
-            {"kind": "one piece", "value": one, "exact": "sqrt 2",
-             "label": "[CALC] one ball: its centre must be at distance >= 1 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges", "rigorous": True},
+            {"kind": "volume", "value": vol, "exact": f"({P} pi/48)^(1/3)",
+             "label": "[CALC] volume: the developed balls have disjoint interiors, so P (pi/6) <= 8 s^3", "rigorous": True},
+            {"kind": "one piece", "value": one, "exact": "1/sqrt 2",
+             "label": "[CALC] one ball: its centre must be at distance >= 1/2 from the edges, and every point of a cell lies within s/sqrt 2 of the cell's edges", "rigorous": True},
         ]
     else:
         vol = largest_float(checks["volume"], cbrt(mpf(P) / 8))
@@ -128,11 +138,12 @@ def nofold_of(piece, P):
     k = -(-P // 8)
     if piece == "ball":
         if k == 1:
-            return {"value": 2.0, "exact": "2", "pieces_per_cell": 1,
-                    "source": "[CALC] one unit ball per cell; a unit ball in a cube needs edge 2 (its centre is at distance >= 1 from every face)"}
-        return {"value": 2 + 2 / math.sqrt(3), "exact": "2 + 2/sqrt 3", "pieces_per_cell": 2,
-                "source": ("[CALC] two unit balls in one cell: their centres lie in the inner cube of edge s - 2, whose diameter "
-                           "sqrt 3 (s - 2) must be >= 2; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)")}
+            return {"value": 1.0, "exact": "1", "pieces_per_cell": 1,
+                    "source": "[CALC] one ball of diameter 1 per cell; a ball in a cube needs edge 1 (its centre is at distance >= 1/2 from every face)"}
+        # (2 + 2/sqrt 3) / 2 as a binary64 expression: exactly half of the value for balls of radius 1
+        return {"value": (2 + 2 / math.sqrt(3)) / 2, "exact": "1 + 1/sqrt 3", "pieces_per_cell": 2,
+                "source": ("[CALC] two balls of diameter 1 in one cell: their centres lie in the inner cube of edge s - 1, whose diameter "
+                           "sqrt 3 (s - 1) must be >= 1; equality on a main diagonal. nofold(P) = f(ceil(P/8)) (BOUNDARY.md 6)")}
     if k == 1:
         return {"value": 1.0, "exact": "1", "pieces_per_cell": 1,
                 "source": "[CALC] one unit cube per cell, filling it; a cube of edge < 1 holds no unit cube"}
@@ -144,10 +155,10 @@ def nofold_of(piece, P):
 
 def exact_configs():
     out = {}
-    out[("ball", 1)] = ({"s": SQRT2, "pieces": [{"cell": 0, "u": [0.0, 0.0, 0.0]}]},
-                        "exact construction: a unit ball at the centre of cell 0, s = sqrt 2 (score_float is the binary64 value of sqrt 2)")
-    out[("ball", 2)] = ({"s": SQRT2, "pieces": [{"cell": 0, "u": [0.0, 0.0, 0.0]}, {"cell": 1, "u": [0.0, 0.0, 0.0]}]},
-                        "exact construction: unit balls at the centres of the opposite cells 0 and 1, s = sqrt 2")
+    out[("ball", 1)] = ({"s": SQRT2 / 2, "pieces": [{"cell": 0, "u": [0.0, 0.0, 0.0]}]},
+                        "exact construction: a ball at the centre of cell 0, s = sqrt 2 / 2 (score_float is the binary64 value of sqrt 2 / 2)")
+    out[("ball", 2)] = ({"s": SQRT2 / 2, "pieces": [{"cell": 0, "u": [0.0, 0.0, 0.0]}, {"cell": 1, "u": [0.0, 0.0, 0.0]}]},
+                        "exact construction: balls at the centres of the opposite cells 0 and 1, s = sqrt 2 / 2")
     for P in range(1, 9):
         out[("cube", P)] = ({"s": 1.0, "pieces": [{"cell": c, "u": [0.0, 0.0, 0.0]} for c in range(P)]},
                             "exact construction: one axis-aligned unit cube filling each of the cells 0 to P-1, s = 1")
@@ -163,17 +174,18 @@ def research_config(entry):
 
 def research_candidate(piece, P, e):
     if piece == "ball":
-        other = e["sB"] if e["seed"] == e["seeds"][0] else e["sA"]
+        other = (e["sB"] if e["seed"] == e["seeds"][0] else e["sA"]) / 2
         prov = {"source": "PolyPack research, round 2", "date": "2026-10-24", "kind": "search", "program": "balls_round2.py",
                 "seed": e["seed"], "seeds": e["seeds"], "other_seed_score": other, "seeds_rel_spread": e["rel_spread"],
-                "file": f"data/boundary/sources/research_round2.json#balls/{P}"}
+                "file": f"data/boundary/sources/research_round2.json#balls/{P}",
+                "units": "the source is in balls of radius 1; lengths here are exactly half of it (diameter 1)"}
         budget = {"screen_s": e["screen_s"], "extra_rounds": e["extra_rounds"], "extra_s": e["extra_s"],
                   "starts": [e["startsA"], e["startsB"]], "wall_s": round(e["wall_s"], 1)}
         if e["rel_spread"] <= 1e-6:
             note = f"The research search's two independent seeds ({e['seeds'][0]}, {e['seeds'][1]}) agree to {e['rel_spread']:.1e} relative: evidence of the best basin found, not a proof."
         else:
             note = f"Not converged: the research search's two seeds ({e['seeds'][0]}, {e['seeds'][1]}) differ by {e['rel_spread']:.1e} relative; an upper bound only."
-        return dict(kind="research", config=research_config(e), method=RESEARCH_BALL_METHOD, seed=e["seed"], budget=budget,
+        return dict(kind="research", config=half_ball(research_config(e)), method=RESEARCH_BALL_METHOD, seed=e["seed"], budget=budget,
                     provenance=prov, notes=[note], software="PolyPack boundary research prototype (float search)", found_by="PolyPack research")
     prov = {"source": "PolyPack research, round 2", "date": "2026-10-24", "kind": "search", "program": "cubes_aligned.py",
             "seed": e["seed"], "file": f"data/boundary/sources/research_round2.json#cubes/{P}"}
@@ -183,11 +195,14 @@ def research_candidate(piece, P, e):
 
 
 def search_candidate(piece, P, e):
+    ball = piece == "ball"
     prov = {"source": "PolyPack boundary search", "method": e["method"], "date": e["date"], "kind": "search",
-            "call": e["call"], "seed": e["seed"], "evals": e["evals_budget"], "value": e["value"],
+            "call": e["call"], "seed": e["seed"], "evals": e["evals_budget"], "value": e["value"] / 2 if ball else e["value"],
             "file": f"data/boundary/sources/search_2026-10-25.json#{piece}/{P}"}
+    if ball:
+        prov["units"] = "the source is in balls of radius 1; lengths here are exactly half of it (diameter 1)"
     budget = {"evals": e["evals_budget"], "evals_used": e["evals_used"], "ended": e["ended"], "starts": e["starts"], "wall_s": e["wall_s"]}
-    return dict(kind="search", config=e["config"], method=SEARCH_METHOD.format(call=e["call"]), seed=e["seed"], budget=budget,
+    return dict(kind="search", config=half_ball(e["config"]) if ball else e["config"], method=SEARCH_METHOD.format(call=e["call"]), seed=e["seed"], budget=budget,
                 provenance=prov, notes=[], software="PolyPack boundary search (packages/boundary/src/search)", found_by="PolyPack boundary search")
 
 
@@ -249,8 +264,8 @@ def ball_form(pid, P, base):
         c.update(kind="exact", config=fcfg, exact=exact, exact_value=text.split(",")[0],
                  provenance=dict(base["provenance"], exact=f"exact form of the {base['kind']} layout: {text}"),
                  notes=list(base["notes"]) + [
-                     f"[CALC] Exact construction: {text}, in the cells of the {base['kind']} layout, is valid at exactly that s: every clearance is exactly 1 "
-                     f"(h - a = 1/sqrt 2 in every axis) and the least centre distance is exactly 2 (certified in Q(sqrt 2, sqrt 3); field exact). "
+                     f"[CALC] Exact construction: {text}, in the cells of the {base['kind']} layout, is valid at exactly that s: every clearance is exactly 1/2 "
+                     f"(h - a = 1/(2 sqrt 2) in every axis) and the least centre distance is exactly 1 (certified in Q(sqrt 2, sqrt 3); field exact). "
                      f"The stored configuration is that construction in binary64. [SPEC] that this s is the optimum: no matching lower bound is known."])
         return c
     return None
@@ -343,8 +358,9 @@ def build(bases=None):
         by_piece[piece] = [chosen[P][0] for P in range(1, 17)]
     return {
         "generated": GENERATED,
+        "units": "diameter",
         "conventions": {
-            "problem_id": "boundary/<polytope>/<piece>/<P>: P congruent pieces on the boundary of a convex 4-polytope; polytope tesseract; piece ball (unit 3-ball, radius 1) or cube (unit cube, edge 1)",
+            "problem_id": "boundary/<polytope>/<piece>/<P>: P congruent pieces on the boundary of a convex 4-polytope; polytope tesseract; piece ball (3-ball of diameter 1, radius 1/2) or cube (unit cube, edge 1)",
             "score": "s, the polytope's edge (smaller is better)",
             "cells": "the tesseract is [-s/2, s/2]^4; cell 2 i + (sigma > 0) is the cube x_i = sigma s/2 (i = 0..3, sigma = -1 or +1)",
             "pose": "{cell, u, q?}: u = the centre in the cell's local coordinates at s (the other three R^4 coordinates in increasing order, the cell's centre at the origin), in the closed cell; q = rotation (unit quaternion w, x, y, z) of a cube in that frame, absent = axis-aligned; balls have no q",
@@ -355,7 +371,7 @@ def build(bases=None):
             "exact": "where present, an exact construction valid at exactly its s (touching allowed), checked by the certifier in records mode: field Q (numbers or rational strings) or Q(sqrt 2, sqrt 3) (each number [a, b, c, d] = a + b sqrt 2 + c sqrt 3 + d sqrt 6); config is its binary64 rounding, scaled to strict validity",
             "previous": "where the record improves on the research prototype's round-2 value: that value certified the same way, and improvement_rel = 1 - score_cert / previous.score_cert",
             "display": "score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64 value)",
-            "bound": "the larger proven lower bound on s: volume, or one piece (sqrt 2 for balls, 1/sqrt 2 for cubes), as a binary64 value rounded down",
+            "bound": "the larger proven lower bound on s: volume, or one piece (1/sqrt 2 for balls and for cubes), as a binary64 value rounded down",
             "nofold": "the best value when every piece must lie in one closed cell: f(ceil(P/8)), the smallest cube holding ceil(P/8) pieces",
             "fold_gain": "1 - score_float / nofold.value",
             "status": "best_known everywhere: PolyPack calls a value proven only with a published proof",

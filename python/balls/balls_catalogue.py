@@ -10,6 +10,7 @@ import math
 import os
 import re
 import sys
+from fractions import Fraction
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 POLYHEDRA = os.path.join(os.path.dirname(HERE), 'polyhedra')
@@ -28,10 +29,12 @@ def _polyhedra(module):
 
 _poly = _polyhedra('catalogue')            # the polyhedra space's solids and codes
 
-# The radius of a ball piece: the one place in this module and the certifier where it is written (packages/balls/src/
-# catalogue.ts BALL_RADIUS). An integer, so that the exact checks stay in rationals.
-BALL_RADIUS = 1
+# The radius of a ball piece (balls have diameter 1): the one place in this module and the certifier where it is written
+# (packages/balls/src/catalogue.ts BALL_RADIUS). A Fraction, so that the exact checks stay in rationals.
+BALL_RADIUS = Fraction(1, 2)
 BALL_DIAMETER = 2 * BALL_RADIUS
+# The score of a ball container is its DIAMETER (2026-10-27): radius = score / 2 (ballContainerRadius in catalogue.ts).
+SCORE_PER_RADIUS = 2
 
 MIN_P, MAX_P = 2, 100
 
@@ -152,17 +155,19 @@ def parse_id(text):
 
 def bound(code, P):
     """The largest of the volume, one-piece and two-piece bounds (problems.ts), as a float. Balls (radius r =
-    BALL_RADIUS): volume, in a ball s >= (P)^(1/3) r, in a solid s >= (P 4 pi r^3 / (3 V))^(1/3); one piece, s >= r in
-    a ball, s >= 2 r in a cube, s >= r / rho in another solid; two pieces, s >= 2 r in a ball, s >= 2 r + 2 r / sqrt 3
-    in a cube, in another solid s >= r / rho + 2 r / D when all its faces are at the inradius rho (D the diameter) and
-    always s >= 4 r / D. Solids in a ball: volume, circumradius, twice the inradius."""
+    BALL_RADIUS = 1/2): volume, in a ball container of radius rho >= (P)^(1/3) r, in a solid s >= (P 4 pi r^3 / (3 V))^(1/3);
+    one piece, rho >= r in a ball, s >= 2 r in a cube, s >= r / rho in another solid; two pieces, rho >= 2 r in a ball, s >= 2 r +
+    2 r / sqrt 3 in a cube, in another solid s >= r / rho + 2 r / D when all its faces are at the inradius rho (D the
+    diameter) and always s >= 4 r / D. Solids in a ball: volume, circumradius, twice the inradius, all radii.
+    A ball container is scored by its diameter, so its bounds are doubled: score = 2 rho."""
     prob = PROBLEMS[code]
     piece, container = prob['piece'], prob['container']
-    R, D2 = BALL_RADIUS, BALL_DIAMETER
+    R, D2 = float(BALL_RADIUS), float(BALL_DIAMETER)
     if piece == 'ball':
         v = 4 * math.pi * R ** 3 / 3
         if container == 'ball':
             vals = [(3 * P * v / (4 * math.pi)) ** (1 / 3), R] + ([D2] if P >= 2 else [])
+            return float(max(vals)) * SCORE_PER_RADIUS
         elif container == 'cube':
             vals = [(P * v) ** (1 / 3), D2] + ([D2 + D2 / math.sqrt(3)] if P >= 2 else [])
         else:
@@ -175,4 +180,4 @@ def bound(code, P):
         return float(max(vals))
     v, Rc, r = CLOSED_FORMS[piece] if piece in CLOSED_FORMS else (lambda g: (g['volume'], g['circumradius'], g['inradius']))(geometry(piece))
     vals = [(3 * P * v / (4 * math.pi)) ** (1 / 3), Rc] + ([2 * r] if P >= 2 else [])
-    return float(max(vals))
+    return float(max(vals)) * SCORE_PER_RADIUS

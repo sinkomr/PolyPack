@@ -28,6 +28,7 @@ import { gridLayout, type Tile } from "./layout";
 import type { Model } from "./model";
 import { axisName, fmt } from "./palette";
 import { type Ctx, type Layers, type SceneView, toNdc } from "./scene";
+import { ballRadius } from "./clip";
 import { MAX_SECTION, SLICE_CUT, SLICE_WHOLE, SliceScratch, ballSection, polytopeSection, slicePlane, stripPositions } from "./slice";
 
 const FOV = 26;
@@ -194,7 +195,7 @@ class SliceGroup {
         n =
           verts && model.edges
             ? polytopeSection(sc, verts, model.edges, plane, model.planes[x.part])
-            : ballSection(sc, model.parts[x.part].place.b, plane, model.planes[x.part], 96);
+            : ballSection(sc, model.parts[x.part].place.b, plane, model.planes[x.part], 96, undefined, ballRadius(model.parts[x.part].place.A));
       }
       this.write(x.cell, n, x.pos, x.lines, eps, CAP);
       x.mesh.visible = n >= 3;

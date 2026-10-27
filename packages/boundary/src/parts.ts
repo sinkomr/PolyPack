@@ -27,6 +27,7 @@ import {
 } from "./linalg";
 import { Polyhedron, clipPolyhedron, polyhedronFrom, polyhedronThickness, polyhedronVertices } from "./polyhedron";
 import { topo } from "./polytope";
+import { BALL_RADIUS } from "./units";
 import type { BoundaryConfig, BoundaryPiece, HalfSpace, PieceName, PiecePart, Polytope } from "./types";
 
 /** Unit cube vertices, vertex v having coordinate k = +1/2 exactly when bit k of v is set. */
@@ -41,9 +42,9 @@ export const CUBE_FACES: number[][] = [
   [4, 5, 7, 6],
 ];
 
-/** The piece's circumradius: the reach of its development from its centre. */
+/** The piece's circumradius: the reach of its development from its centre (a ball's radius 1/2, site units). */
 export function pieceReach(piece: PieceName): number {
-  return piece === "ball" ? 1 : Math.sqrt(3) / 2;
+  return piece === "ball" ? BALL_RADIUS : Math.sqrt(3) / 2;
 }
 
 /** Piece-local -> anchor-local coordinates: y = R(q) p + u (no rotation for balls or an absent q). */
@@ -145,7 +146,10 @@ export function partsOfDevelopment(poly: Polytope, piece: PieceName, index: numb
       P = partPolyhedron(poly, node.cell, place, clip, s);
       if (!P.faces.length || polyhedronThickness(P) <= PART_EPS) continue;
     }
-    out.push({ part: { piece: index, cell: node.cell, chain: node.cells.slice(), place: isoToAffine(place), clip }, place, poly: P });
+    // a ball is drawn as the unit ball under place.A, so its A carries the radius (the isometry times BALL_RADIUS)
+    const affine = isoToAffine(place);
+    if (piece === "ball") affine.A = affine.A.map((row) => row.map((x) => x * BALL_RADIUS));
+    out.push({ part: { piece: index, cell: node.cell, chain: node.cells.slice(), place: affine, clip }, place, poly: P });
   }
   return out;
 }

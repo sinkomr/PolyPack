@@ -20,4 +20,4 @@ const bounds = BALLS_PROBLEMS.flatMap((p) =>
     return { code: p.code, P, value: b.value, kind: b.kind };
   }),
 );
-process.stdout.write(JSON.stringify({ generated: "2026-10-26", solids, bounds }) + "\n");
+process.stdout.write(JSON.stringify({ generated: "2026-10-27", solids, bounds }) + "\n");

@@ -1,2 +1,2 @@
 /** The engine functions the tests use. */
-export { defaultNet, getPolytope, pieceParts, standardPiece, toAmbient } from "@polypack/boundary";
+export { BALL_RADIUS, defaultNet, getPolytope, pieceParts, standardPiece, toAmbient } from "@polypack/boundary";

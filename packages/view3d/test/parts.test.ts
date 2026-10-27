@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { cellPlanes, icosphere, partMesh, toPlane } from "../src/clip";
 import { FIXTURES } from "../demo/fixtures";
-import { getPolytope, pieceParts, standardPiece } from "./engine";
+import { BALL_RADIUS, getPolytope, pieceParts, standardPiece } from "./engine";
 
 /** Volume of a closed triangle soup (divergence theorem). */
 function volume(pos: Float32Array): number {
@@ -30,7 +30,8 @@ describe("drawn parts of the engine's pieces", () => {
       // A ball is drawn as the icosphere of detail 4, its cut faces as exact 96-gons: where they meet
       // the surface leaves gaps of 0.2% of the volume. One part missing or counted twice would be
       // 5% or more (a cap of the ball beyond a cell face at s = sqrt 2). Cubes are exact.
-      const whole = fx.piece === "ball" ? volume(Float32Array.from(icosphere(4))) : 1;
+      // (the engine's ball parts carry the radius 1/2 in their place: the icosphere scaled by it)
+      const whole = fx.piece === "ball" ? BALL_RADIUS ** 3 * volume(Float32Array.from(icosphere(4))) : 1;
       const tol = fx.piece === "ball" ? 5e-3 : 2e-4;
       for (const t of total) expect(Math.abs(t - whole) / whole).toBeLessThan(tol);
     });

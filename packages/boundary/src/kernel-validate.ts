@@ -120,17 +120,17 @@ export function serverRule(problem: BoundaryProblem, config: unknown, bound: num
 /**
  * The problem's lower bound on s as the records store it (python/boundary/build_records.py
  * bounds_of; docs/spaces/BOUNDARY.md section 5): the larger of the volume bound and the one-piece
- * bound, each the largest binary64 value not above its exact value. Balls: (P pi / 6)^(1/3) and
- * sqrt 2; cubes: (P / 8)^(1/3) and 1 / sqrt 2. Each comparison is decided exactly, with integers.
+ * bound, each the largest binary64 value not above its exact value. Balls (diameter 1): (P pi / 48)^(1/3) and
+ * 1 / sqrt 2, exactly half the values for balls of radius 1; cubes: (P / 8)^(1/3) and 1 / sqrt 2. Each comparison is decided exactly, with integers.
  */
 export function boundaryBound(piece: PieceName, P: number): number {
   if (piece === "ball") {
-    // x^3 <= P pi / 6, with pi bracketed to 60 decimals (no binary64 cube lies in the bracket's width)
+    // x^3 <= P pi / 48, with pi bracketed to 60 decimals (no binary64 cube lies in the bracket's width)
     const volume = largestFloat(
-      (x) => compare(x, 3, BigInt(P) * PI_60, 6n * 10n ** 60n) <= 0,
-      Math.cbrt((P * Math.PI) / 6),
+      (x) => compare(x, 3, BigInt(P) * PI_60, 48n * 10n ** 60n) <= 0,
+      Math.cbrt((P * Math.PI) / 48),
     );
-    const one = largestFloat((x) => compare(x, 2, 2n, 1n) <= 0, Math.SQRT2);
+    const one = largestFloat((x) => compare(x, 2, 1n, 2n) <= 0, Math.SQRT1_2);
     return Math.max(volume, one);
   }
   const volume = largestFloat((x) => compare(x, 3, BigInt(P), 8n) <= 0, Math.cbrt(P / 8));
