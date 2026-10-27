@@ -2,8 +2,8 @@
 
 [CALC] ASC interleaves hard-particle Monte Carlo with explicit movement of a
 fixed-shape container and collective movement of piece centres. Polygon pieces
-keep side one, circles keep radius one, and rotations follow the shared Phase 1
-conventions. The objective is polygon-container side or circle-container radius.
+keep side one, circles keep diameter one (radius 1/2, since 2026-10-27), and rotations follow the shared Phase 1
+conventions. The objective is polygon-container side or circle-container diameter.
 
 ```ts
 const result = await run({ N: 5, M: 5, P: 6 }, { method: "asc", budget: { evals: 3000 }, seed: 1 });
@@ -32,7 +32,7 @@ and rigid orientations; vertices are never strained.
 | Balanced strain       | About container centre c, with random unit axis u and perpendicular v, map d=x−c to (1−a)(d·u)u+(d·v)v/(1−a). This imitates an anisotropic, area-preserving cell deformation, since its determinant is one. Only particle centres change; walls retain their regular shape.                                            |
 | Uniaxial strain       | Map d to (1−a)(d·u)u+(d·v)v. This is the centre-motion part of a compressive axial cell strain, with determinant 1−a, while regular hard walls stay fixed.                                                                                                                                                             |
 | Sector strain         | Contract d to (1−a)d only when d·u≥‖d‖cos(w). Random w is π/2 for a half-plane half the time; otherwise it is uniform in [0.1π,0.5π). This regional displacement has no single global cell-strain tensor; it is an extra finite-boundary heuristic.                                                                    |
-| Radial strain         | Map every d to (1−a)d and explicitly propose size s′=(1−a)s+aB/q, where B is piece bounding radius and q is unit container apothem (q=1 for a circle). This mimics isotropic compression while allowing for rigid pieces. It is also tried before diffusion to preserve the contact topology of loose supplied starts. |
+| Radial strain         | Map every d to (1−a)d and explicitly propose size s′=(1−a)s+aB/q, where B is piece bounding radius and q is unit container apothem (q=1/2 for a circle container, whose size is its diameter). This mimics isotropic compression while allowing for rigid pieces. It is also tried before diffusion to preserve the contact topology of loose supplied starts. |
 
 [CALC] For the radial trial, a piece offset z has ‖z‖≤B. Its support after
 centre contraction is f times the original support plus (1−f)z·u. Consequently
@@ -92,7 +92,7 @@ and with a strict enclosure where it lies, initializes the chain as given. A
 complete start valid only within the evaluator's 1e−9 pair tolerance is first
 parted in place. Every centre is dilated about the centroid by
 1+(d+2e−12)/(2a), where d is the deepest penetration and a the piece apothem
-(1 for a circle); this leaves each gap at least about 2e−12. The shared
+(1/2 for a circle); this leaves each gap at least about 2e−12. The shared
 `restore(config, "separate")` repair then clears any pair that roundoff left,
 limited to 64 stop polls per piece. Neither step draws random numbers. The
 parted state costs one counted assessment, and that assessment, not the
@@ -214,7 +214,7 @@ node --import tsx packages/solver/src/methods/asc/benchmark.mjs --report
 the stored record size, and each polygon angle uniformly over its symmetry
 period. Negative pair separation rejects the new piece. The same start for
 each seed goes to all methods. The box side is twice the record size, including
-when the record size denotes a circle radius. Default-seed rows give each
+when the record size denotes a circle diameter (before 2026-10-27, a radius). Default-seed rows give each
 method its own normal automatic bootstrap; no record poses are supplied.
 The raw file preserves every returned arrangement for rechecking.
 Random insertion retries the whole start after 100,000 draws if it jams;

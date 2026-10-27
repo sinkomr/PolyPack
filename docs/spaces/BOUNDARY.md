@@ -1,11 +1,11 @@
-# 3D on 4D, tesseract boundary: unit balls and cubes on the boundary of a tesseract
+# 3D on 4D, tesseract boundary: balls (diameter 1) and cubes on the boundary of a tesseract
 
 **Dimension.** Under Dimensions this is **3D on 4D**: solid 3D pieces packed on the 3-dimensional
 boundary of a 4D polytope, with no container around them. Problem ids and records use the space
 name `boundary`.
 
-P unit balls (radius 1) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
-edge s. The score is the smallest s. Every record is certified by an exact checker
+P balls of diameter 1 (radius 1/2) or P unit cubes (edge 1) are packed on the boundary of a tesseract of
+edge s. The score is the smallest s. Since 2026-10-27 balls have diameter 1; before, radius 1, and every ball score was twice as large (cube scores are unchanged). The sections below are stated in the site's units; the certifier and the ball code may work in radius-1 units internally (a factor of 2, exact) and convert at their edges. Every record is certified by an exact checker
 (`python/boundary/certify.py`, exact arithmetic only), so its validity is proven, not just
 tested. Records: `data/boundary/records.json`, from the PolyPack research prototype (2026-10-24),
 the PolyPack boundary search (2026-10-25) and exact constructions (section 4.6).
@@ -44,7 +44,7 @@ These are the conventions of the engine's contract (`packages/boundary/src/types
   holds the piece's centre; `u` is the centre in the anchor's local coordinates at this s, and it
   must lie in the closed cell. `q` is a unit quaternion (w, x, y, z) rotating a cube in the
   anchor's frame; absent means axis-aligned. Balls have no `q`.
-- **Units.** Balls have radius 1; cubes have edge 1 (the cube [-1/2, 1/2]^3 about its centre).
+- **Units.** Balls have radius 1/2 (diameter 1); cubes have edge 1 (the cube [-1/2, 1/2]^3 about its centre).
   Lengths scale with s, piece sizes do not.
 - **Ids.** `boundary/tesseract/ball/<P>` and `boundary/tesseract/cube/<P>`, P without leading zeros.
 - **Score.** s, the tesseract's edge. Smaller is better. Stored at full precision; shown at 6
@@ -127,7 +127,7 @@ on a lattice line, are curves through an edge. They are kept: they only add cand
 **Completeness** [CALC]. *Every straight path of length L < 2s is realised by a word with at most
 2 crossings per lattice axis.* Proof: 3 crossings in one axis means crossing three consecutive
 planes, for example y_k = h, 3h and 5h. The segment then spans at least 5h - h = 4h = 2s in that
-coordinate, so L >= 2s. For s > 1 this covers every path of length <= 2, which is all the ball
+coordinate, so L >= 2s. For s > 1/2 this covers every path of length <= 1, which is all the ball
 test needs. The certifier enumerates all such words: 1957 per start cell. A test repeats two ball
 records (P = 8 and 9) with up to 3 crossings per axis (41179 words per cell) and finds the same
 paths shorter than 2s.
@@ -138,12 +138,12 @@ expected quarter-turn holonomy.
 
 ### 4.2 Balls
 
-[CALC] A unit-ball packing is valid exactly when
+[CALC] A packing of balls of diameter 1 is valid exactly when
 
-- every centre is at distance >= 1 from the 1-skeleton;
-- every two centres are >= 2 apart (intrinsic distance);
+- every centre is at distance >= 1/2 from the 1-skeleton;
+- every two centres are >= 1 apart (intrinsic distance);
 - every geodesic loop at a centre (a straight path from the centre back to itself that avoids the
-  skeleton) is >= 2 long.
+  skeleton) is >= 1 long.
 
 The proof is that of [SURFACE.md](SURFACE.md) section 2.3, one dimension up. It uses one fact
 about shortest paths [EST: Miller, Pak 2008, Prop. 1.2: a shortest path between two points that
@@ -159,19 +159,19 @@ How each condition is checked:
   the skeleton is a straight developed segment ending on a lattice line. The odd multiple of h
   nearest to u_a (which lies in [-h, h]) is +-h, so no lattice line is closer than this minimum,
   and an edge of the anchor cube itself attains it. The certifier compares the squared value
-  with 1.
-- **Pairs.** Intrinsic distance is never below the R^4 distance. So only pairs at most 2 apart in
+  with 1/4.
+- **Pairs.** Intrinsic distance is never below the R^4 distance. So only pairs at most 1 apart in
   R^4 are examined; for those, every realised word from one centre to the other must give
-  squared length >= 4. By completeness and Prop. 1.2, a pair closer than 2 always shows up as a
-  shorter realised word. A realised word through an edge is at least clearance + clearance >= 2
+  squared length >= 1. By completeness and Prop. 1.2, a pair closer than 1 always shows up as a
+  shorter realised word. A realised word through an edge is at least clearance + clearance >= 1
   long, so it never causes a false rejection.
-- **Loops.** Every realised non-empty word from a centre back to itself must give length >= 2.
+- **Loops.** Every realised non-empty word from a centre back to itself must give length >= 1.
   [CALC] Every word that ends in its own start cell (264 per cell) crosses two axes twice. So any
-  loop shorter than 2s is at least s sqrt 2 long, which is >= 2 whenever a ball fits at all. The
+  loop shorter than 2s is at least s sqrt 2 long, which is >= 1 whenever a ball fits at all. The
   check is kept anyway. No record has a loop shorter than 2s (`min_loop` is null).
 
-[CALC] Clearance <= h sqrt 2 = s / sqrt 2 for every point, so a ball needs s >= sqrt 2 > 1. The
-word stage therefore always runs at s > 1, where completeness holds.
+[CALC] Clearance <= h sqrt 2 = s / sqrt 2 for every point, so a ball needs s >= 1/sqrt 2 > 1/2. The
+word stage therefore always runs at s > 1/2, where completeness holds.
 
 ### 4.3 Axis-aligned cubes
 
@@ -257,16 +257,16 @@ and the record's configuration is that construction rounded to binary64 and scal
   P = 10, 12, 13 and 15, whose contacts run through coordinates off the grid. Those problems
   take a better or equal exact value from another candidate.
 - **Balls, in Q(sqrt 2, sqrt 3)** [CALC]. Two layouts have every centre coordinate equal to
-  +-a with h - a = 1/sqrt 2, so every clearance is exactly 1:
-  P = 4, s = 1 + 1/sqrt 2, a = (2 - sqrt 2)/4 (the research layout), and
-  P = 8, s = 2 cos 15 deg = (sqrt 6 + sqrt 2)/2, a = sin 15 deg = (sqrt 6 - sqrt 2)/4 (the
+  +-a with h - a = 1/(2 sqrt 2), so every clearance is exactly 1/2:
+  P = 4, s = 1/2 + 1/(2 sqrt 2) = (2 + sqrt 2)/4, a = (2 - sqrt 2)/8 (the research layout), and
+  P = 8, s = cos 15 deg = (sqrt 6 + sqrt 2)/4, a = sin 15 deg / 2 = (sqrt 6 - sqrt 2)/8 (the
   search layout, one ball per cell). The certifier runs the same tests (clearance, words, loops)
   on elements a + b sqrt 2 + c sqrt 3 + d sqrt 6 with rational a..d (`python/boundary/qfield.py`).
   Signs are exact: a binary64 evaluation decides only when it exceeds 1e-12 times the sum of the
   terms' magnitudes, far above its proven error (2e-15 of that sum); otherwise sign(p + q sqrt 3)
   with p, q in Q(sqrt 2) follows from the signs of p, q and p^2 - 3 q^2, and the same one level
-  down. Both layouts are valid at exactly their s, with every clearance exactly 1 and the least
-  centre distance exactly 2. Whether these s are optimal is open [SPEC]: no matching lower bound.
+  down. Both layouts are valid at exactly their s, with every clearance exactly 1/2 and the least
+  centre distance exactly 1. Whether these s are optimal is open [SPEC]: no matching lower bound.
 - **P + 1 minus a piece.** A subset of a valid packing is valid, so the record for P + 1 with its
   last piece removed is a candidate for P. Cubes P = 10 (from 11) and 15 (from 16) use it.
 
@@ -280,14 +280,14 @@ Only proven bounds are stored [CALC]. Each is stored as a binary64 value rounded
 record's `bound` is the larger one.
 
 - **Volume.** Developments are local isometries, injective on interiors, with disjoint images, so
-  the pieces' volumes add up to at most the boundary's, 8 s^3. Balls: s >= (P pi / 6)^(1/3).
+  the pieces' volumes add up to at most the boundary's, 8 s^3. Balls: s >= (P pi / 48)^(1/3).
   Cubes: s >= (P / 8)^(1/3).
 - **One piece.** Every point of a cell lies within s / sqrt 2 of the cell's edges (the clearance
   formula is at most h sqrt 2 = s / sqrt 2, reached at the centre). A ball's centre needs
-  clearance >= 1, so s >= sqrt 2. A cube contains the ball of radius 1/2 about its centre, which
+  clearance >= 1/2, so s >= 1/sqrt 2. A cube contains the ball of radius 1/2 about its centre, which
   must avoid the edges, so s >= 1 / sqrt 2.
 
-Balls P = 1 and 2 meet sqrt 2, and cubes P = 8 meet the volume bound 1 (the 8 cubes fill the
+Balls P = 1 and 2 meet 1/sqrt 2, and cubes P = 8 meet the volume bound 1 (the 8 cubes fill the
 boundary). These values are therefore optimal by our own derivation [CALC]. PolyPack calls a value
 proven only with a published proof, so they stay `best_known`, with a note. Every other value,
 the search values and the exact constructions included, lies above both bounds; the tests check
@@ -305,7 +305,7 @@ ceil(P / 8) pieces inside it, which is an ordinary 3D packing.
 
 | pieces | P = 1..8 (one per cell) | P = 9..16 (two per cell) |
 |---|---|---|
-| balls | 2 [CALC: a unit ball in a cube needs edge 2] | 2 + 2/sqrt 3 = 3.154701 [CALC: the two centres lie in the inner cube of edge s - 2, of diameter sqrt 3 (s - 2) >= 2; equality on a diagonal] |
+| balls | 1 [CALC: a ball of diameter 1 in a cube needs edge 1] | 1 + 1/sqrt 3 = 1.577350 [CALC: the two centres lie in the inner cube of edge s - 1, of diameter sqrt 3 (s - 1) >= 1; equality on a diagonal] |
 | cubes | 1 [CALC] | 2 [EST: two unit cubes in a cube, the cube-in-cube table of polyhedrainpolyhedra.wiki, as cited by the research note; upper bound CALC] |
 
 ## 7. Results
@@ -319,22 +319,22 @@ search (2026-10-25, one deterministic call with seed 1, below). "made exact" = s
 
 | P | fold | nofold | gain | lower bound | source |
 |---|---|---|---|---|---|
-| 1 | 1.414214 | 2 | 29.3% | 1.414214 (one ball) | exact: centre of cell 0 |
-| 2 | 1.414214 | 2 | 29.3% | 1.414214 (one ball) | exact: centres of cells 0 and 1 |
-| 3 | 1.680142 | 2 | 16.0% | 1.414214 (one ball) | research (seeds agree) |
-| 4 | 1.707107 | 2 | 14.6% | 1.414214 (one ball) | research, made exact: 1 + 1/sqrt 2 |
-| 5 | 1.787226 | 2 | 10.6% | 1.414214 (one ball) | search |
-| 6 | 1.865835 | 2 | 6.7% | 1.464592 (volume) | research (seeds agree) |
-| 7 | 1.925404 | 2 | 3.7% | 1.541815 (volume) | research (seeds differ by 5.1e-4) |
-| 8 | 1.931852 | 2 | 3.4% | 1.611992 (volume) | search, made exact: 2 cos 15 deg |
-| 9 | 2.220596 | 3.154701 | 29.6% | 1.676539 (volume) | research (seeds agree) |
-| 10 | 2.269267 | 3.154701 | 28.1% | 1.736466 (volume) | search |
-| 11 | 2.315918 | 3.154701 | 26.6% | 1.792519 (volume) | search |
-| 12 | 2.328171 | 3.154701 | 26.2% | 1.845270 (volume) | research (seeds agree) |
-| 13 | 2.397495 | 3.154701 | 24.0% | 1.895166 (volume) | search |
-| 14 | 2.435431 | 3.154701 | 22.8% | 1.942565 (volume) | research (seeds agree) |
-| 15 | 2.503240 | 3.154701 | 20.7% | 1.987757 (volume) | search |
-| 16 | 2.526574 | 3.154701 | 19.9% | 2.030983 (volume) | search |
+| 1 | 0.707107 | 1 | 29.3% | 0.707107 (one ball) | exact: centre of cell 0 |
+| 2 | 0.707107 | 1 | 29.3% | 0.707107 (one ball) | exact: centres of cells 0 and 1 |
+| 3 | 0.840071 | 1 | 16.0% | 0.707107 (one ball) | research (seeds agree) |
+| 4 | 0.853553 | 1 | 14.6% | 0.707107 (one ball) | research, made exact: (2 + sqrt 2)/4 |
+| 5 | 0.893613 | 1 | 10.6% | 0.707107 (one ball) | search |
+| 6 | 0.932917 | 1 | 6.7% | 0.732296 (volume) | research (seeds agree) |
+| 7 | 0.962702 | 1 | 3.7% | 0.770907 (volume) | research (seeds differ by 2.6e-4) |
+| 8 | 0.965926 | 1 | 3.4% | 0.805996 (volume) | search, made exact: cos 15 deg |
+| 9 | 1.110298 | 1.577350 | 29.6% | 0.838270 (volume) | research (seeds agree) |
+| 10 | 1.134634 | 1.577350 | 28.1% | 0.868233 (volume) | search |
+| 11 | 1.157959 | 1.577350 | 26.6% | 0.896260 (volume) | search |
+| 12 | 1.164086 | 1.577350 | 26.2% | 0.922635 (volume) | research (seeds agree) |
+| 13 | 1.198748 | 1.577350 | 24.0% | 0.947583 (volume) | search |
+| 14 | 1.217715 | 1.577350 | 22.8% | 0.971282 (volume) | research (seeds agree) |
+| 15 | 1.251620 | 1.577350 | 20.7% | 0.993879 (volume) | search |
+| 16 | 1.263287 | 1.577350 | 19.9% | 1.015491 (volume) | search |
 
 Mean gain 19.5%. "Seeds agree" means the research search's two independent seeds differ by at
 most 1e-6 relative: evidence of the best basin found, not a proof. The gain falls from 29% to 3%
@@ -365,19 +365,19 @@ It beat the research values at 11 problems. Improvement = 1 - new score_cert / r
 
 | problem | evaluations E | research | now | improvement |
 |---|---|---|---|---|
-| ball 5 | 2,617,672 | 1.787248 | 1.787226 | 0.0012% |
-| ball 8 | 65,479 | 1.936630 | 1.931852 (2 cos 15 deg) | 0.25% |
-| ball 10 | 654,968 | 2.270488 | 2.269267 | 0.054% |
-| ball 11 | 1,358,135 | 2.315950 | 2.315918 | 0.0014% |
-| ball 13 | 7,650,384 | 2.397624 | 2.397495 | 0.0054% |
-| ball 15 | 5,026,907 | 2.504811 | 2.503240 | 0.063% |
-| ball 16 | 779,083 | 2.528105 | 2.526574 | 0.061% |
+| ball 5 | 2,617,672 | 0.893624 | 0.893613 | 0.0012% |
+| ball 8 | 65,479 | 0.968315 | 0.965926 (cos 15 deg) | 0.25% |
+| ball 10 | 654,968 | 1.135244 | 1.134634 | 0.054% |
+| ball 11 | 1,358,135 | 1.157975 | 1.157959 | 0.0014% |
+| ball 13 | 7,650,384 | 1.198812 | 1.198748 | 0.0054% |
+| ball 15 | 5,026,907 | 1.252406 | 1.251620 | 0.063% |
+| ball 16 | 779,083 | 1.264053 | 1.263287 | 0.061% |
 | cube 11 | 156,372 | 1.333333 | 1.250000 (5/4) | 6.25% |
 | cube 12 | 490,433 | 1.500000 | 1.250000 (5/4) | 16.7% |
 | cube 13 | 298,374 | 1.500000 | 1.333333 (4/3) | 11.1% |
 | cube 14 | 2,007,977 | 1.500000 | 1.333333 (4/3) | 11.1% |
 
-The exact constructions also moved balls P = 4 (by 5e-11 relative, to 1 + 1/sqrt 2) and cubes
+The exact constructions also moved balls P = 4 (by 5e-11 relative, to (2 + sqrt 2)/4) and cubes
 P = 9, 10, 15, 16 (by 1e-7 to 3e-7, onto 5/4 and 3/2). Each record keeps the research value in
 its field `previous`.
 
@@ -388,8 +388,8 @@ its field `previous`.
   forms of the nofold values; the word maps.
 - **Float:** the search values (score_float) of the ball records that are not exact
   constructions; the engine's validator; the cross-check numbers.
-- The exact constructions sit on their exact values: balls P = 1, 2 at sqrt 2, P = 4 at
-  1 + 1/sqrt 2, P = 8 at 2 cos 15 deg; cubes P = 1..8 at 1, P = 9..12 at 5/4, 13, 14 at 4/3, 15, 16
+- The exact constructions sit on their exact values: balls P = 1, 2 at 1/sqrt 2, P = 4 at
+  (2 + sqrt 2)/4, P = 8 at cos 15 deg; cubes P = 1..8 at 1, P = 9..12 at 5/4, 13, 14 at 4/3, 15, 16
   at 3/2. Their records store the binary64 rounding, scaled to strict validity, so score_cert is
   about 1e-12 above the exact value.
 

@@ -1,9 +1,9 @@
 # Lubachevsky–Stillinger style growth (`ls_growth`)
 
 [CALC] Registered portable TypeScript dynamics grow congruent pieces inside a
-fixed container. A simulation scale `q` means disc radius `q`, or polygon side
+fixed container. A simulation scale `q` means disc diameter `q` (radius `q/2`), or polygon side
 `q`. Assessments divide all centre coordinates and container size by `q`, leaving
-unit pieces. Scores are the radius for circle containers and side for polygon
+unit pieces. Scores are the diameter for circle containers and side for polygon
 containers. The shared framework appends its contact polish; this method never
 calls polish itself.
 
@@ -42,7 +42,7 @@ operation even with bounded-density local searches.
 
 [CALC] Polygon steps advance centres, angles and size together. The maximum
 step is reduced so the largest translational-plus-angular-plus-growth surface
-speed advances at most `0.025qR`, where R is the unit circumradius. Four samples
+speed advances at most `0.025qR`, where R is the unit circumradius (1/2 for disks). Four samples
 within a step detect overlap with the shared zero-tolerance SAT function and
 containment constraints. On detecting a contact, 40 bisections keep the feasible
 side, then the constraints at the final infeasible endpoint identify the
@@ -156,7 +156,7 @@ below gives bounds and a title and description on every node.
     "growthRate": {
       "type": "number",
       "title": "Growth rate",
-      "description": "Constant side/radius increase per simulation time. Slow growth permits more rearrangement; fast growth generally jams sooner.",
+      "description": "Constant side/diameter increase per simulation time. Slow growth permits more rearrangement; fast growth generally jams sooner.",
       "default": 0.01,
       "minimum": 0.000001,
       "maximum": 1

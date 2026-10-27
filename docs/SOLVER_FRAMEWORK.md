@@ -40,7 +40,7 @@ This page records the design decisions behind `packages/solver` and the measurem
 | Seven circles, expanded 1.5 | 3.0000000000002305 | +2.305e-13 | 145 | 11.735 |
 | Two circles, centres ten apart | 2.0000000000001 | +9.992e-14 | 122 | 1.459 |
 
-All returned configurations validate. The five-square target is `2 + 1/sqrt(2)`; the circle targets are 3 and 2. Three-triangle tests also pass the floor `2 - 1e-11` and strict pair/protrusion checks.
+All returned configurations validate. The five-square target is `2 + 1/sqrt(2)`; the circle targets are 3 and 2. (Units: these runs predate 2026-10-27, when circle pieces became diameter 1 and circle containers were scored by their diameter. Seven circles and two circles in a circle have the same scores, 3 and 2, in both units, as the container's diameter in disk diameters equals its radius in radii; the measurements themselves are timings and were not repeated.) Three-triangle tests also pass the floor `2 - 1e-11` and strict pair/protrusion checks.
 
 ## Framework overhead
 
@@ -59,7 +59,7 @@ All returned configurations validate. The five-square target is `2 + 1/sqrt(2)`;
 |---|---:|---|---:|---:|
 | Five squares, expanded 1.03 | 2.478 | Yes | 2.7071067811865475 | 43 |
 | Seven circles, expanded 1.03 | 0.479 | Yes | 3 | 41 |
-| `data/corpus/N6-M0-P10.json` | 98.443 | No: valid-input fallback | 3.8255588437382846 | Not achieved/reported |
+| `data/corpus/N6-M0-P10.json` | 98.443 | No: valid-input fallback | 7.651117687476569 (3.8255588437382846 as a radius when measured) | Not achieved/reported |
 
 Square/circle maximum active residuals were `1.0000022551442983e-44` and `1.0726152134101705e-42`. Residual digits are not certified score digits. The ten-hexagon refinement failed its float64 validity/score acceptance; its high-precision size and residual fields are null. No refinement or precision certificate is claimed for that case.
 
