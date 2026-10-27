@@ -81,8 +81,10 @@ describe("Tighter family rules", () => {
     expect(r.bound(poly(24, 30, 60))!).toBeGreaterThan(0);
   });
 
-  it("say not yet for a space family", () => {
-    expect(() => rulesOf(sphere)).toThrow("not yet: family rules for sphere");
+  it("give every space family its rules", () => {
+    expect(rulesOf(sphere).family).toBe("sphere");
+    expect(rulesOf(sphere).dimension).toBe("2-on-3");
+    expect(rulesOf({ family: "polyhedra", id: "polyhedra/cubintet/12", P: 12 }).dimension).toBe("3-in-3");
   });
 });
 
@@ -90,10 +92,15 @@ describe("Tighter polygon-only paths given a space problem", () => {
   it("throw 'not yet' where a polygon's N and M are needed", () => {
     expect(() => problemTitle(sphere)).toThrow("not yet");
     expect(() => density(sphere, 2)).toThrow("not yet: density for sphere");
-    expect(() => bucketOf({ ...sphere, tier: "open" })).toThrow("not yet");
-    expect(() => priorPerEval({ ...sphere, tier: "open", weakness: null })).toThrow("not yet");
-    expect(() => passes({ pieces: [3], containers: null, minP: 1, maxP: 500, tiers: null }, sphere)).toThrow("not yet");
-    expect(() => recordPoints({ ...sphere, bound: 1, sPrev: 2, sNew: 1.5, tier: "open" })).toThrow("not yet");
+  });
+
+  it("are handled by the rank, the filters and the points", () => {
+    expect(bucketOf({ ...sphere, tier: "open" })).toBe("open|sphere|r6");
+    expect(priorPerEval({ ...sphere, tier: "open", weakness: null })).toBeGreaterThan(0);
+    // the shape filters are polygon shapes, so a space problem passes them
+    expect(passes({ pieces: [3], containers: null, minP: 1, maxP: 500, tiers: null }, sphere)).toBe(true);
+    expect(passes({ pieces: null, containers: null, minP: 1, maxP: 5, tiers: null }, sphere)).toBe(false);
+    expect(recordPoints({ ...sphere, bound: 1, sPrev: 2, sNew: 1.5, tier: "open" })!.total).toBeGreaterThan(0);
   });
 
   it("throw under a cycle rule that reads N and M, and pass without one", () => {

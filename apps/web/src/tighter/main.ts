@@ -1,5 +1,6 @@
-import { MAX_PIECES, evaluate, eventKeys } from "@polypack/geometry";
+import { MAX_PIECES, evaluate, eventKeys, improvesOn } from "@polypack/geometry";
 import type { Container, LeaderboardEvent, PackingConfig, ProblemInfo } from "@polypack/geometry";
+import type { SpaceConfig, SpaceProblemSummary } from "@polypack/spaces";
 import * as api from "../api";
 import { Board } from "../board";
 import { BoardView } from "../view";
@@ -20,7 +21,8 @@ import {
   retakeTier,
   takeToken,
 } from "./dealer";
-import { rulesOf } from "./families";
+import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listingOf } from "./catalogue";
+import { problemTitle, rulesOf } from "./families";
 import {
   FRONTIER,
   FRONTIER_P,
@@ -32,8 +34,10 @@ import {
   needPolygon,
   parseKey,
   poly,
-  problemTitle,
   shapeName,
+  DimensionId,
+  SpaceKey,
+  familyDimension,
 } from "./frontier";
 import {
   AdvancePlan,
@@ -66,6 +70,7 @@ import {
   newProblem,
   openedRun,
   ownedSet,
+  polygonBoard,
   pay,
   payAll,
   withdrawConsent,
@@ -73,6 +78,7 @@ import {
   recordsHeld,
   reveal,
   reserveSeed,
+  runSeed,
   revealed,
   seenKeys,
   slotted,
@@ -109,6 +115,8 @@ import {
   recordSend,
 } from "./pacer";
 import { Offer, addRetake, offerFits } from "./picks";
+import { SLICES, SliceId, sliceById } from "./slices";
+import { openSlices } from "./unlocks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { renderHow } from "./how";
@@ -154,6 +162,17 @@ import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKi
 import { renderRunsPanel } from "./runs-ui";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
+import {
+  SpaceRead,
+  classifySpaceAnswer,
+  fetchSpaceProblem,
+  postSpaceSubmission,
+  spaceDealable,
+  spaceStands,
+  spaceSubmissionBody,
+  spaceTier,
+} from "./space-submission";
+import type { SpaceRunState } from "./space-run-types";
 import {
   COMPACT_EVALS,
   EvolveMethod,
@@ -224,14 +243,44 @@ const getProblem = (p: ProblemKey) => {
   const q = needPolygon(p, "the problem read");
   return api.getProblem(q.N, q.M, q.P);
 };
-/** N + M + P of a polygon problem, the size the speed of an evaluation goes by. */
-const sizeOfPolygon = (p: ProblemKey): number => {
-  const q = needPolygon(p, "evaluation speed");
-  return q.N + q.M + q.P;
-};
 /** The gap of a score to the problem's lower bound, s / b − 1. */
 const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number => s / rulesOf(p).bound(p)! - 1;
 const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
+
+/**
+ * The milliseconds of one evaluation that auto-eval's speed terms count from: a polygon problem's by
+ * its size (rank.ts), and about 5 ms for a space problem, whose evaluations are sized to that
+ * (families.ts unitsPerEvaluation).
+ */
+const SPACE_EVAL_MS = 5;
+const tableMsOf = (p: ProblemKey): number => (isPolygon(p) ? msPerEval(p.N + p.M + p.P) : SPACE_EVAL_MS);
+/** The kind of problem the bandit learns a space problem's methods for: its tier and its family. */
+const kindOf = (p: ProblemKey & { tier: string }): string => (isPolygon(p) ? problemKind(p) : `${p.tier}|${p.family}`);
+
+/** What a read of a problem's leader gives: whether it takes entries, and who leads it. */
+interface LeaderRead {
+  accepts: boolean;
+  leader: Leader | null;
+}
+/** Space problems have no live feed: their leaders and rents are read at most once in this time, across all of them. */
+const SPACE_READ_MS = 10_000;
+let spaceReadAt = -Infinity;
+
+/** A problem's leader from the server just now, whatever its family; null when it could not be read. */
+async function readLeader(p: ProblemKey): Promise<LeaderRead | null> {
+  if (isPolygon(p)) {
+    const info = await getProblem(p);
+    if (!info) return null;
+    const lead = info.site_best;
+    return {
+      accepts: info.accepts_submissions,
+      leader: lead ? { score: lead.score, name: lead.name, id: lead.id } : null,
+    };
+  }
+  spaceReadAt = now();
+  const { read } = await fetchSpaceProblem(p.family, p.id);
+  return read ? { accepts: read.accepts, leader: read.leader } : null;
+}
 /**
  * Auto-eval's target from its evaluations a second: "up to 1 evaluation a second", "up to 2.5
  * evaluations a second". A target, never a claim: a computer that cannot keep up runs fewer.
@@ -412,7 +461,7 @@ function showFocus(force = false): void {
     return;
   }
   const q = needPolygon(p, "the board");
-  const config: PackingConfig = p.board ?? { N: q.N, M: q.M, P: q.P, pieces: [], container_phi: 0 };
+  const config: PackingConfig = polygonBoard(p) ?? { N: q.N, M: q.M, P: q.P, pieces: [], container_phi: 0 };
   if (board.load(config, false)) board.load({ N: q.N, M: q.M, P: q.P, pieces: [], container_phi: 0 }, false);
   // the dashed area bound frames a board that has no record yet
   view.ghost = p.phase === "ready" ? null : ghost(p, board.container);
@@ -501,7 +550,7 @@ interface OpenRunView {
   found: number | null;
   stage?: RunStage;
   /** The board it opened from (the method's startFrom), and the problem's best then. */
-  origin: PackingConfig;
+  origin: PackingConfig | SpaceConfig | null;
   startScore: number | null;
   /** For the bandit: the kind of problem, the problem's RP and the run's evaluations when it opened. */
   kind: string;
@@ -510,7 +559,7 @@ interface OpenRunView {
 }
 
 /** The run's counters from a state the worker sent (after a step). */
-function track(run: OpenRunView, st: RunState): void {
+function track(run: OpenRunView, st: RunState | SpaceRunState): void {
   run.evaluations = st.evaluations;
   run.last = st.last;
   run.runBest = st.score;
@@ -618,7 +667,7 @@ async function findTransfer(p0: ProblemState): Promise<TransferStart | null> {
         q !== p0 && isPolygon(q) && q.N === p.N && q.M === p.M && q.P < p.P && q.board && q.phase !== "bare" && !!q.run,
     )
     .sort((a, b) => b.P - a.P)[0];
-  let best = own?.board ? scoredTransfer(own.board, p) : null;
+  let best = own && polygonBoard(own) ? scoredTransfer(polygonBoard(own)!, p) : null;
   for (const P2 of neighbourPs(p.P, owned().has("wide"))) {
     if (best && best.from >= P2) break;
     const info = await api.getProblem(p.N, p.M, P2);
@@ -640,6 +689,7 @@ async function findTransfer(p0: ProblemState): Promise<TransferStart | null> {
  * free floor is then the smallest of the two (and of the trim floor), so neither is sent unimproved.
  */
 async function loadAll(p0: ProblemState): Promise<boolean> {
+  if (!isPolygon(p0)) return loadAllSpace(p0);
   const p = needPolygon(p0, "Load all");
   if (p.phase !== "bare") return true;
   if (loading.has(p.key) || !ownsGame) return false;
@@ -691,11 +741,60 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
   }
 }
 
+/** Space problems whose start could not be made, so that it is not tried again this session. */
+const startFailed = new Set<string>();
+/** The Load all of a space problem under way, so that a click on it waits for the start. */
+const spaceLoads = new Map<string, Promise<boolean>>();
+/** The worker that makes space problems' starts: a lane's worker is blocked while it holds a paused space run. */
+let startLane: Lane | null = null;
+
+/**
+ * Load all for a space problem: the worker's start (a finished seed layout, else a finished random
+ * start), which is the free floor and is never sent, as for polygons. When none can be made the
+ * problem stays bare, and its first run opens fresh: its Compact gives the board.
+ */
+function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
+  if (p.phase !== "bare") return Promise.resolve(true);
+  if (startFailed.has(p.key) || !ownsGame) return Promise.resolve(false);
+  const known = spaceLoads.get(p.key);
+  if (known) return known;
+  loading.add(p.key);
+  const load = (async (): Promise<boolean> => {
+    try {
+      startLane ??= new Lane(-1);
+      const a = await startLane.spaceStart({ family: p.family, id: p.id, seed: runSeed(state.dealer.seed, p.key, 0) });
+      if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
+      if (!a.ok) {
+        startFailed.add(p.key);
+        event(`${problemTitle(p)} could not be placed (${a.message}). Its first run starts from nothing.`, false);
+        return false;
+      }
+      applyLoadAll(p, a.config, a.score, null);
+      reveal(state, "score");
+      if (p.key === state.focus)
+        say(
+          `${p.P} pieces placed. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
+            `This ${sideWord(p)} is the starting score your first record must beat, and this board is never sent as it is. Your first press of Evolve compacts it.`,
+        );
+      persist();
+      return true;
+    } finally {
+      spaceLoads.delete(p.key);
+      loading.delete(p.key);
+      render();
+    }
+  })();
+  spaceLoads.set(p.key, load);
+  return load;
+}
+
 /** A Compact of the problem is queued or running (the player's first click, or Auto-advance's). */
 const compacting = (key: string) =>
   lanes.some((l) => (l.current?.key === key && l.current.compact) || l.jobs.some((j) => j.key === key && j.compact));
 /** The next Evolve click on the problem compacts it first: its board is the start, not yet a run's. */
-const compactsFirst = (p: ProblemState) => p.phase === "loaded" && !p.run && !compacting(p.key);
+const compactsFirst = (p: ProblemState) =>
+  // a space problem whose start could not be made is compacted bare: the run opens fresh
+  (p.phase === "loaded" || (p.phase === "bare" && !isPolygon(p))) && !p.run && !compacting(p.key);
 
 /**
  * Queues an Evolve click on the focused problem. The first click on a board that has only been
@@ -752,6 +851,7 @@ const levelFits = (o: Owned, r: OpenRunView) =>
  * its choice still holds, so the bandit draws only when a new run opens.
  */
 function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, evals: number): WantedRun {
+  if (!isPolygon(p)) return wantedSpaceRun(p, o, lv, compact);
   if (compact) return { method: "mc_compress", level: tuningLevel(o, "mc_compress"), mode: "compact" };
   const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
   const owns = o.has("lattice");
@@ -788,6 +888,38 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
 }
 
 /**
+ * The run a job on a space problem wants: the polygon rules above with the family's methods
+ * (families.ts) that the player owns, at tuning level 0 (the presets are polygon only for now), and
+ * without the Lattice build.
+ */
+function wantedSpaceRun(p: ProblemState & SpaceKey, o: Owned, lv: LaneView, compact: boolean): WantedRun {
+  if (compact) return { method: "mc_compress", level: 0, mode: "compact" };
+  const family = rulesOf(p).methods;
+  const ok = (m: EvolveMethod) => family.includes(m) && allowedMethod(o, m);
+  const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
+  const draw = (ms: readonly EvolveMethod[]) =>
+    chooseRun(state.runplan, {
+      kind: kindOf(p),
+      methods: ms,
+      levelOf: () => 0,
+      tune: false,
+      allowed: ok,
+      rand: planRandom(state.runplan, state.dealer.seed),
+    });
+  if (piped(o)) {
+    const stage = pipelineMethod(state.runplan.pipeline, p.endedRuns, ok);
+    if (stage) return { method: stage.method, level: 0, mode: "pipeline" };
+  }
+  if (autoMethods(o)) {
+    if (r && r.mode === "auto" && ok(r.method)) return { method: r.method, level: 0, mode: "auto" };
+    const c = draw(methods(o));
+    if (c) return { ...c, level: 0, mode: "auto" };
+  }
+  const m = chosenMethod(o);
+  return { method: ok(m) ? m : "mc_compress", level: 0, mode: "select" };
+}
+
+/**
  * A run that ends or is replaced: the bandit learns what it paid per evaluation (Compact's and a
  * Lattice build excepted, and a run closed within its warm-up, which has had no chance to pay).
  */
@@ -800,6 +932,7 @@ function finishRun(run: OpenRunView | null): void {
 
 /** Opens a run on the problem (closing whatever the lane held), with a new random seed. */
 async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job): Promise<boolean> {
+  if (!isPolygon(p)) return openSpaceRun(lv, p, want, job);
   const { method, level } = want;
   const params = methodParams(owned(), method, level);
   // drawn before anything awaits, so that two runs opening at once on one problem never share a seed
@@ -861,6 +994,65 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   return true;
 }
 
+/** Opens a run on a space problem: through the lane's space worker, with the family's unit of kernel evaluations. */
+async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: WantedRun, job: Job): Promise<boolean> {
+  const { method } = want;
+  const seed = reserveSeed(state, p);
+  for (const other of lanes)
+    if (other !== lv && other.run?.key === p.key) {
+      finishRun(other.run);
+      other.run = null;
+      void other.lane.close();
+    }
+  finishRun(lv.run);
+  lv.run = null;
+  if (lv.lane.open) await lv.lane.close();
+  const startScore = p.best;
+  const start = p.board ? structuredClone(p.board as SpaceConfig) : null;
+  const a = await lv.lane.openSpace({
+    family: p.family,
+    id: p.id,
+    method,
+    params: {},
+    budget: { evals: RUN_BUDGET },
+    unit: rulesOf(p).unitsPerEvaluation(p),
+    seed,
+    start,
+  });
+  if (problem(state, p.key) !== p) {
+    void lv.lane.close();
+    return false;
+  }
+  if (!a.ok) {
+    say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
+    return false;
+  }
+  openedRun(state, p, now());
+  lv.run = {
+    key: p.key,
+    method,
+    level: 0,
+    mode: want.mode,
+    asked: "{}",
+    params: a.params,
+    seed,
+    budget: RUN_BUDGET,
+    warmup: 0,
+    evaluations: a.state.evaluations,
+    last: a.state.last,
+    runBest: a.state.score,
+    found: a.state.found,
+    stage: a.state.stage,
+    origin: start,
+    startScore,
+    kind: kindOf(p),
+    rpAt: basePoints(p),
+    evalsAt: 0,
+  };
+  settle(lv.run, p, { ...job, click: false }, a.state, a.state.evaluations, 0);
+  return true;
+}
+
 /**
  * Runs one job: opens a run when the lane has none on the problem (or the method or its parameters
  * changed), then steps it. Returns whether the job's evaluations were run. The job is the lane's
@@ -872,13 +1064,17 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
   try {
     let p = problem(state, job.key);
     if (!p || p.leaving || p.closed) return false;
-    // auto-eval's Compact of a problem that has not been loaded yet (Auto-advance)
-    if (job.compact && p.phase === "bare" && !(await loadAll(p))) return false;
+    // auto-eval's Compact of a problem that has not been loaded yet (Auto-advance); a space problem whose
+    // start could not be made is compacted from nothing
+    if (job.compact && p.phase === "bare" && !(await loadAll(p)) && isPolygon(p)) return false;
     p = problem(state, job.key);
-    if (!p || !p.board || (job.compact ? p.phase !== "loaded" : !evolvable(p))) return false;
+    if (!p || p.leaving || p.closed) return false;
+    const fresh = !isPolygon(p) && job.compact && p.phase === "bare";
+    if (!fresh && (!p.board || (job.compact ? p.phase !== "loaded" : !evolvable(p)))) return false;
     const o = owned();
     let want = wantedRun(p, o, lv, job.compact, job.evals);
-    let asked = JSON.stringify(methodParams(o, want.method, want.level));
+    const askedOf = (w: WantedRun) => (isPolygon(p!) ? JSON.stringify(methodParams(o, w.method, w.level)) : "{}");
+    let asked = askedOf(want);
     // the open run goes on when it is on the problem with the method, setting and mode wanted; Compact's
     // run goes on under the select's method when that is the same method and setting
     const goesOn = (r: OpenRunView | null): r is OpenRunView =>
@@ -899,7 +1095,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
       await endStalledRun(lv, p, lv.run);
       if (problem(state, job.key) !== p) return false;
       want = wantedRun(p, o, lv, false, job.evals);
-      asked = JSON.stringify(methodParams(o, want.method, want.level));
+      asked = askedOf(want);
     }
     const r = lv.run;
     if (!goesOn(r)) {
@@ -957,7 +1153,17 @@ async function endStalledRun(lv: LaneView, p: ProblemState, run: OpenRunView): P
 }
 
 /** A step's result applied to the game: the board, the counters, the points, the messages. */
-function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done: number, ms: number): void {
+function settle(
+  run: OpenRunView,
+  p: ProblemState,
+  job: Job,
+  st: RunState | SpaceRunState,
+  done: number,
+  ms: number,
+): void {
+  // a space problem compacted from nothing (its start could not be made): the Compact's board is its free floor, as Load all's
+  if (!isPolygon(p) && p.phase === "bare" && st.best && st.score !== null && st.score > 0)
+    applyLoadAll(p, st.best, st.score, null);
   const record: RunRecord = {
     method: run.method,
     params: run.params,
@@ -998,7 +1204,7 @@ function settle(run: OpenRunView, p: ProblemState, job: Job, st: RunState, done:
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (run.mode === "lattice") {
-    const built = latticeStep(p, st, run.startScore, problemTitle(p), sideWord(p));
+    const built = latticeStep(p, st as RunState, run.startScore, problemTitle(p), sideWord(p));
     if (built) event(built.text, built.notice);
   } else if (st.ended && !st.closed && !st.error) {
     const title = problemTitle(p);
@@ -1129,10 +1335,12 @@ function accrueAuto(): void {
 const speeds = new Speeds();
 /** The kind of run a speed is kept for: its method at its tuning level. */
 const speedKey = (method: EvolveMethod, level: number) => `${method}@${level}`;
+/** The speed key of a run on a problem: a space family's evaluations are sized by their own units, so they are kept apart. */
+const runSpeedKey = (p: ProblemKey, method: EvolveMethod, level: number) =>
+  isPolygon(p) ? speedKey(method, level) : `${p.family}:${speedKey(method, level)}`;
 
 function observeSpeed(run: OpenRunView, p: ProblemKey, done: number, ms: number): void {
-  const q = needPolygon(p, "evaluation speed");
-  speeds.observe(speedKey(run.method, run.level), msPerEval(q.N + q.M + q.P), done, ms);
+  speeds.observe(runSpeedKey(p, run.method, run.level), tableMsOf(p), done, ms);
 }
 
 /**
@@ -1141,10 +1349,10 @@ function observeSpeed(run: OpenRunView, p: ProblemKey, done: number, ms: number)
  * match will draw it.
  */
 function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
-  if (lv.run && lv.lane.open && lv.run.key === p.key) return speedKey(lv.run.method, lv.run.level);
+  if (lv.run && lv.lane.open && lv.run.key === p.key) return runSpeedKey(p, lv.run.method, lv.run.level);
   const stage = piped(o) ? pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m)) : null;
   const m = stage ? stage.method : autoMethods(o) ? null : chosenMethod(o);
-  return m ? speedKey(m, tuningLevel(o, m)) : null;
+  return m ? runSpeedKey(p, m, isPolygon(p) ? tuningLevel(o, m) : 0) : null;
 }
 
 /**
@@ -1186,7 +1394,7 @@ function autoJob(lv: LaneView): Job | null {
   }
   const tp = problem(state, target.key);
   // at most a quarter second of this device's time on that problem, with that run's method
-  const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), msPerEval(sizeOfPolygon(tp))) : 0;
+  const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), tableMsOf(tp)) : 0;
   const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msEach) : n;
   state.autoDue -= evals;
   return { key: target.key, evals, click: false, compact: false };
@@ -1290,8 +1498,9 @@ async function submitTick(): Promise<void> {
  */
 function orient(p: ProblemState): void {
   needPolygon(p, "container orientation");
-  if (!p.board || p.best === null) return;
-  const turned = orientBoard(p.board, p.best);
+  const current = polygonBoard(p);
+  if (!current || p.best === null) return;
+  const turned = orientBoard(current, p.best);
   if (!turned) return;
   p.board = turned.board;
   p.best = turned.score;
@@ -1306,14 +1515,14 @@ function orient(p: ProblemState): void {
 async function submit(p: ProblemState): Promise<void> {
   const name = state.name;
   // the leader just before: the server's exact check decides
-  const read = await within(SEND_TIMEOUT_MS, getProblem(p), null);
+  const read = await within(SEND_TIMEOUT_MS, readLeader(p), null);
   const info = read.answer;
   if (problem(state, p.key) !== p || !ownsGame) return;
   if (!info) {
     pauseSending(read.timedOut ? { kind: "timeout", waitedMs: SEND_TIMEOUT_MS } : { kind: "unreachable" });
     return;
   }
-  if (!info.accepts_submissions) {
+  if (!info.accepts) {
     sendingWorks();
     p.closed = true;
     event(
@@ -1322,11 +1531,10 @@ async function submit(p: ProblemState): Promise<void> {
     leave(state, p.key, now());
     return;
   }
-  const leaderBefore: Leader | null = info.site_best
-    ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
-    : null;
+  const leaderBefore: Leader | null = info.leader;
   noteLeader(p, leaderBefore);
-  orient(p);
+  // the server scores a space board as it is: no turning of the container
+  if (isPolygon(p)) orient(p);
   const best = p.best!;
   if (!shouldSubmit(best, submitTarget(p, leaderBefore?.score ?? null))) {
     // the server answered, and the board does not go: sending has nothing wrong left to report
@@ -1346,15 +1554,17 @@ async function submit(p: ProblemState): Promise<void> {
   inFlight.add(p.key);
   let posted: { answer: { status: number | null; body: unknown }; timedOut: boolean };
   try {
-    posted = await within(SEND_TIMEOUT_MS, api.postSubmission(submissionBody(board0, name, run)), {
-      status: null,
-      body: null,
-    });
+    const post = isPolygon(p)
+      ? api.postSubmission(submissionBody(board0 as PackingConfig, name, run))
+      : postSpaceSubmission(spaceSubmissionBody(p, board0 as SpaceConfig, name, run));
+    posted = await within(SEND_TIMEOUT_MS, post, { status: null, body: null });
   } finally {
     inFlight.delete(p.key);
   }
   const answer = posted.answer;
-  const outcome = classifyAnswer(answer.status, answer.body);
+  const outcome = isPolygon(p)
+    ? classifyAnswer(answer.status, answer.body)
+    : classifySpaceAnswer(answer.status, answer.body);
   if (problem(state, p.key) !== p) return;
   const a = applyAnswer(state, p, leaderBefore, best, outcome, now());
   const title = problemTitle(p);
@@ -1409,7 +1619,7 @@ async function settleLost(): Promise<void> {
   if (!p) return;
   lostChecking = true;
   try {
-    const { answer: info } = await within(SEND_TIMEOUT_MS, getProblem(p), null);
+    const { answer: info } = await within(SEND_TIMEOUT_MS, readLeader(p), null);
     if (problem(state, p.key) !== p || !p.sending || inFlight.has(p.key) || !ownsGame) return;
     if (!info) {
       lostCheckAfter = now() + OFFLINE_BACKOFF_MS;
@@ -1418,8 +1628,7 @@ async function settleLost(): Promise<void> {
     }
     sendingWorks();
     // ours: its points are confirmed; not ours: they wait for the board's next send
-    const lead = info.site_best;
-    noteLeader(p, lead ? { score: lead.score, name: lead.name, id: lead.id } : null);
+    noteLeader(p, info.leader);
     persist();
     render();
   } finally {
@@ -1487,8 +1696,13 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
 }
 
 const dealerFilters = () => (inUse(owned(), "filters") ? state.picks.filters : null);
+/** The cycle's rule allows a problem: "circles only" and "small problems only" are polygon rules, so a space problem is not allowed under them. */
+const ruleOk = (p: ProblemKey): boolean =>
+  isPolygon(p)
+    ? ruleAllowsProblem(state.standing, p)
+    : state.standing.rule !== "circles" && state.standing.rule !== "small";
 /** The player's filters and the cycle's rule allow a candidate. */
-const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleAllowsProblem(state.standing, c);
+const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleOk(c);
 
 const openCandidateOf = (k: ProblemKey): Candidate => ({
   ...keyPart(k),
@@ -1539,6 +1753,141 @@ async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<strin
   return null;
 }
 
+// ---------- space problems ----------
+
+/** The records listings of the spaces drawn from them, read once a session (not saved). */
+const spaceListings: SpaceListings = {};
+
+/** One problem of a records listing as the catalogue reads it, or none for an entry that is not one. */
+function listedProblem(x: SpaceProblemSummary): ListedSpaceProblem[] {
+  if (typeof x?.id !== "string" || !Number.isSafeInteger(x.P)) return [];
+  const c = x.certified;
+  return [
+    {
+      id: x.id,
+      P: x.P,
+      status: typeof x.status === "string" ? x.status : undefined,
+      accepts_submissions: x.accepts_submissions === true,
+      certified: c && typeof c.score === "number" ? { score: c.score, status: c.status } : null,
+      bound: x.bound && typeof x.bound.value === "number" ? { value: x.bound.value } : null,
+    },
+  ];
+}
+
+/** Reads a space's records listing once; false when the server could not be reached. */
+async function spaceListing(io: DealIo, space: ListedSpace): Promise<boolean> {
+  if (spaceListings[space]) return true;
+  io.gets++;
+  const r = await api.getSpaceRecords(space);
+  if (!r || !Array.isArray(r.problems)) {
+    io.offline = true;
+    return false;
+  }
+  spaceListings[space] = r.problems.flatMap(listedProblem);
+  return true;
+}
+
+/** A space problem's GET (just before it is dealt); null when it could not be read, and `io` says so when the server was not reached. */
+async function spaceInfo(io: DealIo, k: SpaceKey): Promise<SpaceRead | null> {
+  io.gets++;
+  const { status, read } = await fetchSpaceProblem(k.family, k.id);
+  if (status === null || status >= 500) io.offline = true;
+  return read;
+}
+
+/** The slices a space problem may be drawn from now: those open in the dimensions opened, unless the cycle's rule is a polygon one. */
+function dealableSlices(): SliceId[] {
+  return state.standing.rule === "circles" || state.standing.rule === "small"
+    ? []
+    : openSlices(owned(), state.standing);
+}
+
+/** Problems of a dimension dealt, offered or left so far. */
+const dimensionDealt = (dim: DimensionId): number =>
+  [...state.queue, ...state.past, ...state.picks.offers].filter((p) => familyDimension(p.family) === dim).length;
+
+/** The dimension opened last, when it is not the first. */
+const newestDimension = (): DimensionId | null => {
+  const dim = state.standing.dimensions.at(-1) ?? null;
+  return dim && dim !== "2-in-2" ? dim : null;
+};
+
+/** Deals of a new dimension that are weighted up: its first problems are drawn more often than the older kinds. */
+const FRESH_DEALS = 5;
+
+/** A slice drawn by weight: those of the newest dimension count three times. */
+function pickSlice(d: DealerState, slices: readonly SliceId[]): SliceId | null {
+  if (!slices.length) return null;
+  const newest = newestDimension();
+  const weight = (id: SliceId) => (sliceById(id).dimension === newest ? 3 : 1);
+  let x = nextRandom(d) * slices.reduce((t, id) => t + weight(id), 0);
+  for (const id of slices) {
+    x -= weight(id);
+    if (x < 0) return id;
+  }
+  return slices[slices.length - 1];
+}
+
+/** The share of draws that go to space problems: low in general, high while the newest dimension is fresh. */
+function spaceShare(): number {
+  const newest = newestDimension();
+  return newest && dimensionDealt(newest) < FRESH_DEALS ? 0.7 : 0.3;
+}
+
+/**
+ * A space problem of an open slice (the given one for a starter), checked with GET just before it
+ * counts: open without a leader, else a site record. Never a closed problem, and none without a bound.
+ */
+async function spaceCandidate(
+  io: DealIo,
+  d: DealerState,
+  exclude: Set<string>,
+  starter?: SliceId,
+): Promise<Candidate | null> {
+  const slice = starter ?? pickSlice(d, dealableSlices());
+  if (!slice) return null;
+  const listed = listingOf(slice);
+  if (listed && !(await spaceListing(io, listed))) return null;
+  const k = drawSliceProblem(d, slice, { listings: spaceListings, exclude, starter: starter !== undefined });
+  if (!k) return null;
+  if (!allowed({ ...k, tier: "open" })) {
+    exclude.add(k.id);
+    return null;
+  }
+  const read = await spaceInfo(io, k);
+  if (!spaceDealable(read)) {
+    exclude.add(k.id);
+    if (!io.offline) skipped.add(k.id);
+    return null;
+  }
+  return {
+    ...keyPart(k),
+    tier: spaceTier(read),
+    weakness: null,
+    leader: read.leader,
+    target: null,
+    source: null,
+    retake: false,
+    bound: read.bound,
+  };
+}
+
+/**
+ * The first deal after a reset that opened a dimension comes from that dimension's free slice, from
+ * its starter corner: few pieces and simple shapes, so that the first record comes within a few clicks.
+ */
+async function starterCandidate(io: DealIo, d: DealerState, exclude: Set<string>): Promise<Candidate | null> {
+  const dim = newestDimension();
+  if (!dim || dimensionDealt(dim) > 0) return null;
+  const slice = SLICES.find((s) => s.dimension === dim && s.free);
+  if (!slice || !dealableSlices().includes(slice.id)) return null;
+  for (let attempt = 0; attempt < 4 && !spentIo(io); attempt++) {
+    const c = await spaceCandidate(io, d, exclude, slice.id);
+    if (c) return c;
+  }
+  return null;
+}
+
 /** The first record the player lost that can be taken back, started from its new leader (Retake). */
 async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
   while (state.picks.retake.length && !spentIo(io)) {
@@ -1548,6 +1897,25 @@ async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
       state.picks.retake.shift();
       continue;
     }
+    if (!isPolygon(k)) {
+      const read = await spaceInfo(io, k);
+      if (!read && io.offline) return null;
+      state.picks.retake.shift();
+      const lead = read?.leader;
+      // nothing to take back: closed, no site entry leads (a research record has no entry to retake), or the player's own name leads again
+      if (!spaceDealable(read) || !lead || lead.id === null || !ruleOk(k)) continue;
+      if (state.name && sanitizeName(lead.name) === sanitizeName(state.name)) continue;
+      return {
+        ...k,
+        tier: "batch",
+        weakness: null,
+        leader: lead,
+        target: null,
+        source: null,
+        retake: true,
+        bound: read.bound,
+      };
+    }
     const info = await problemInfo(io, k);
     if (!info) return null;
     state.picks.retake.shift();
@@ -1555,7 +1923,7 @@ async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
     // nothing to take back: closed, no leader, in review, or the player's own name leads again
     if (!info.accepts_submissions || !lead || lead.verification === "pending") continue;
     if (state.name && sanitizeName(lead.name) === sanitizeName(state.name)) continue;
-    if (!ruleAllowsProblem(state.standing, k)) continue;
+    if (!ruleOk(k)) continue;
     const pk = needPolygon(k, "Retake");
     const records = pk.N <= 20 && pk.M <= 20 ? await pairRecords(io, pk.N, pk.M) : null;
     const tier = retakeTier(pk.N, pk.M, pk.P, records);
@@ -1609,14 +1977,19 @@ async function gatherCandidates(
   };
   if (inUse(o, "retake")) forced = await retakeCandidate(io);
   if (!forced && inUse(o, "collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
+  if (!forced) forced = await starterCandidate(io, d, exclude);
   if (forced) exclude.add(keyOf(forced));
+  const slices = dealableSlices();
+  const share = spaceShare();
   const contested = Number.isFinite(ringMin(o)) && contestedTiers(o).size > 0;
   const room = want - (forced ? 1 : 0);
   for (let attempt = 0; list.length < room && attempt < Math.max(6, room * 3) && !spentIo(io); attempt++)
     add(
-      contested && nextRandom(d) < 2 / 3
-        ? await contestedCandidate(io, d, exclude)
-        : await openCandidate(io, d, exclude),
+      slices.length && nextRandom(d) < share
+        ? await spaceCandidate(io, d, exclude)
+        : contested && nextRandom(d) < 2 / 3
+          ? await contestedCandidate(io, d, exclude)
+          : await openCandidate(io, d, exclude),
     );
   return { list, forced, offline: io.offline };
 }
@@ -1637,6 +2010,7 @@ function plainRanked(c: Candidate): Ranked {
  * for a published value) and must be improved on. Null when that packing cannot be read.
  */
 async function materialize(c0: Candidate): Promise<ProblemState | null> {
+  if (!isPolygon(c0)) return materializeSpace(c0);
   if (c0.tier === "open" && !c0.retake) return newProblem(c0, "open", now());
   const c = needPolygon(c0, "contested problems");
   let config: PackingConfig | null = null;
@@ -1653,7 +2027,7 @@ async function materialize(c0: Candidate): Promise<ProblemState | null> {
         score = e.score;
       }
     }
-  } else if (c.leader) {
+  } else if (c.leader?.id != null) {
     // 404 when the entry is no longer kept (only the leader of a problem is)
     const entry = await api.getSubmission(c.leader.id);
     if (entry && entry.N === c.N && entry.M === c.M && entry.P === c.P) {
@@ -1674,6 +2048,29 @@ async function materialize(c0: Candidate): Promise<ProblemState | null> {
   return p;
 }
 
+/**
+ * A space problem as dealt, from its GET just before: open without a leader (it starts bare), else a site
+ * record that starts from the leader's board and must be improved on. It keeps the server's bound.
+ * Null when it cannot be dealt now, or the leader's board is missing.
+ */
+async function materializeSpace(c: Candidate & SpaceKey): Promise<ProblemState | null> {
+  const { read } = await fetchSpaceProblem(c.family, c.id);
+  if (!spaceDealable(read)) return null;
+  const p = newProblem(c, spaceTier(read), now());
+  p.bound = read.bound;
+  if (read.leader) {
+    if (!read.config) return null;
+    p.phase = "ready";
+    p.board = read.config;
+    p.best = read.leader.score;
+    p.floor = read.leader.score;
+    p.leader = { ...read.leader };
+  }
+  // a retaken problem comes back from the past
+  if (c.retake) state.past = state.past.filter((q) => q.key !== p.key);
+  return p;
+}
+
 /** A problem dealt: into the queue, with what the learning dealer will learn from. */
 function dealt(p: ProblemState, r: { bucket: string; prior: number }, retake = false): void {
   takeToken(state.dealer);
@@ -1689,6 +2086,7 @@ function dealtNote(p: ProblemState): string {
   if (p.tier === "open") return "";
   if (p.tier === "published")
     return `, a published value to beat${p.leader ? ` (site record by ${p.leader.name})` : ""}`;
+  if (p.leader?.id === null && !isPolygon(p)) return ", the research record to beat";
   return `, a ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "another name"}`;
 }
 
@@ -1826,6 +2224,20 @@ function offerStands(info: ProblemInfo | null, x: Offer): boolean {
   return contestedDealable(info, x);
 }
 
+/**
+ * The offer checked against the server just before it is taken: whether it stands, or null when the
+ * server could not be reached. A space offer stands while it takes entries and has the same leader.
+ */
+async function offerCheck(x: Offer): Promise<boolean | null> {
+  if (isPolygon(x)) {
+    const info = await getProblem(x);
+    return info ? offerStands(info, x) : null;
+  }
+  const { status, read } = await fetchSpaceProblem(x.family, x.id);
+  if (status === null || status >= 500) return null;
+  return spaceStands(read, x);
+}
+
 /** Takes an offer into the queue (the player's pick, or Auto-advance's, in place of `out` when given). */
 async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null): Promise<void> {
   if (!offerAllowed(owned(), x)) {
@@ -1843,15 +2255,15 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
       );
     return;
   }
-  const info = await getProblem(x);
-  if (!info) {
+  const stands = await offerCheck(x);
+  if (stands === null) {
     pauseDealing(true);
     say("The server cannot be reached. The offer stays until it can be checked.");
     return;
   }
   state.picks.offers = state.picks.offers.filter((y) => y !== x);
   const title = problemTitle(x);
-  if (!offerStands(info, x)) {
+  if (!stands) {
     skipped.add(keyOf(x));
     event(`${title} changed since it was offered, so the offer is gone. Someone took it, or its record moved.`);
     persist();
@@ -1953,13 +2365,12 @@ async function refreshHeld(): Promise<void> {
     ...[...state.queue, ...state.past].filter((p) => p.ourId !== null && !("sending" in p && p.sending)).slice(-30),
   ];
   for (const p of check) {
-    const info = await getProblem(p);
+    // space problems are followed by followSpace, at most one read every 10 s
+    if (!isPolygon(p)) continue;
+    const info = await readLeader(p);
     if (!info) return;
     if (inFlight.has(p.key)) continue;
-    const leader = info.site_best
-      ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
-      : null;
-    noteLeader(p, leader);
+    noteLeader(p, info.leader);
     payRent(p);
     persist();
     render();
@@ -1984,19 +2395,44 @@ async function rentTick(): Promise<void> {
   tidyRent(state, o, now());
   const p = nextRentCheck(state, o, now());
   if (!p || inFlight.has(p.key) || ("sending" in p && p.sending)) return;
+  // a space problem is read at most once in SPACE_READ_MS with the others
+  if (!isPolygon(p) && now() - spaceReadAt < SPACE_READ_MS) return;
   rentChecking = true;
   rentCheckedAt = now();
   try {
-    const info = await getProblem(p);
+    const info = await readLeader(p);
     if (!info || inFlight.has(p.key) || !ownsGame) return;
-    const leader = info.site_best
-      ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
-      : null;
-    noteLeader(p, leader);
+    noteLeader(p, info.leader);
     payRent(p);
     persist();
   } finally {
     rentChecking = false;
+  }
+}
+
+let spaceFollowing = false;
+/** When each space problem was last read for its leader, by key. */
+const spaceFollowedAt = new Map<string, number>();
+
+/**
+ * Space problems have no live feed: the queue's are read for their leader one at a time, the one
+ * read longest ago first, and all together at most once every SPACE_READ_MS (readLeader).
+ */
+async function followSpace(): Promise<void> {
+  if (!ownsGame || spaceFollowing || now() - spaceReadAt < SPACE_READ_MS) return;
+  const next = state.queue
+    .filter((p) => !isPolygon(p) && !p.sending && !inFlight.has(p.key) && !p.leaving && !p.closed)
+    .sort((a, b) => (spaceFollowedAt.get(a.key) ?? 0) - (spaceFollowedAt.get(b.key) ?? 0))[0];
+  if (!next) return;
+  spaceFollowing = true;
+  spaceFollowedAt.set(next.key, now());
+  try {
+    const info = await readLeader(next);
+    if (!info || inFlight.has(next.key) || !ownsGame || problem(state, next.key) !== next) return;
+    noteLeader(next, info.leader);
+    persist();
+  } finally {
+    spaceFollowing = false;
   }
 }
 
@@ -2561,7 +2997,9 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
             : p.tier === "published"
               ? " · published value"
               : p.tier !== "open"
-                ? ` · ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
+                ? p.leader?.id === null && !isPolygon(p)
+                  ? " · research record to beat"
+                  : ` · ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
                 : p.phase === "bare"
                   ? " · no record yet"
                   : "";
@@ -2705,7 +3143,7 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
       // what the dealer knows, not a promise: the ranking itself is an estimate
       meta.textContent =
         `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · contest weight ${CONTEST[x.tier]}` +
-        ` · about ${msPerEval(sizeOfPolygon(x)).toFixed(1)} ms an evaluation`;
+        ` · about ${tableMsOf(x).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
       btn.textContent = "Take";
       btn.disabled = !due || dealing;
@@ -2886,7 +3324,7 @@ function renderRuns(o: Owned): void {
       owned: o,
       methods: methods(o),
       allowed: (m) => allowedMethod(o, m),
-      focusKind: p ? problemKind(needPolygon(p, "run kinds")) : null,
+      focusKind: p ? kindOf(p) : null,
     },
     (next) => {
       state.runplan.pipeline = next;
@@ -3427,6 +3865,7 @@ function start(): void {
     void submitTick();
     void settleLost();
     void rentTick();
+    void followSpace();
     autoTick();
     render();
   }, 1000);

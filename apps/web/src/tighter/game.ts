@@ -1,5 +1,6 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
+import type { SpaceConfig } from "@polypack/spaces";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
@@ -75,8 +76,11 @@ export interface ProblemFields {
    */
   published: number | null;
   phase: Phase;
-  /** The best strict board found here (after Load all: the Load-all board), and its score. */
-  board: PackingConfig | null;
+  /**
+   * The best strict board found here (after Load all: the Load-all board), and its score. A polygon
+   * problem's board is a PackingConfig and a space problem's a SpaceConfig (polygonBoard tells them apart).
+   */
+  board: PackingConfig | SpaceConfig | null;
   best: number | null;
   /** The run that produced `board`; null for Load all and for a dealt site record. */
   run: RunRecord | null;
@@ -133,6 +137,10 @@ export interface ProblemFields {
 
 /** A problem of any family: its identity (frontier.ts) and what the game keeps on it. */
 export type ProblemState = ProblemKey & ProblemFields;
+
+/** A polygon problem's board; null for a bare one, and for a space problem's (whose board is no PackingConfig). */
+export const polygonBoard = (p: ProblemState): PackingConfig | null =>
+  isPolygon(p) ? (p.board as PackingConfig | null) : null;
 
 /** A problem that left the queue: enough to count records held and never deal it again. */
 export interface PastFields {
@@ -356,7 +364,12 @@ export function density(p: ProblemKey, s: number): number {
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
 /** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
-export function applyLoadAll(p: ProblemState, board: PackingConfig, score: number, trimFloor: number | null): void {
+export function applyLoadAll(
+  p: ProblemState,
+  board: PackingConfig | SpaceConfig,
+  score: number,
+  trimFloor: number | null,
+): void {
   if (p.phase !== "bare") return;
   p.board = board;
   p.best = score;
@@ -437,7 +450,7 @@ export function openedRun(s: GameState, p: ProblemState, now: number): void {
 /** One step of an open run: the evaluations it did and the run's best strict packing so far. */
 export interface StepOutcome {
   evaluations: number;
-  best: PackingConfig | null;
+  best: PackingConfig | SpaceConfig | null;
   score: number | null;
   /** The run as a board it found records it (budget: the evaluations the run had done). */
   run: RunRecord;

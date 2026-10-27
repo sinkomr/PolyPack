@@ -1,5 +1,5 @@
 import { Bandit, normalizeBandit } from "./bandit";
-import { keyOf, needPolygon, parseKey } from "./frontier";
+import { isPolygon, keyOf, parseKey } from "./frontier";
 import { CONTEST, Tier } from "./points";
 import { Candidate, Filters, learn, normalizeFilters } from "./rank";
 
@@ -50,11 +50,13 @@ const finite = (v: unknown): v is number => typeof v === "number" && Number.isFi
 const validKey = (k: string): boolean => parseKey(k) !== null;
 
 function leader(v: unknown): Candidate["leader"] {
-  if (!isObj(v) || !pos(v.score) || !Number.isSafeInteger(v.id) || (v.id as number) < 1) return null;
+  if (!isObj(v) || !pos(v.score)) return null;
+  // a space problem's research record leads without an entry: its id is null
+  if (v.id !== null && (!Number.isSafeInteger(v.id) || (v.id as number) < 1)) return null;
   return {
     score: v.score,
     name: typeof v.name === "string" ? v.name.slice(0, 40) : "another name",
-    id: v.id as number,
+    id: v.id as number | null,
   };
 }
 
@@ -77,6 +79,8 @@ export function normalizeOffer(v: unknown): Offer | null {
     target: tier === "published" ? (v.target as number) : null,
     source: typeof v.source === "string" ? v.source.slice(0, 200) : null,
     retake: v.retake === true,
+    // a space problem's bound as the server gave it when the offer was drawn
+    ...(!isPolygon(k) && pos(v.bound) ? { bound: v.bound } : {}),
     score: v.score,
     prior: v.prior,
     bucket: v.bucket.slice(0, 120),
@@ -125,8 +129,9 @@ export function offerFits(
   if (!allowed(x)) return false;
   if (x.retake) return tree.retake;
   if (x.tier === "open") return true;
-  const q = needPolygon(x, "size ring");
-  return tree.tiers.has(x.tier) && q.N + q.M + q.P >= tree.ringMin;
+  // a space problem's site record needs no card: its tier is only what the server holds
+  if (!isPolygon(x)) return true;
+  return tree.tiers.has(x.tier) && x.N + x.M + x.P >= tree.ringMin;
 }
 
 /**

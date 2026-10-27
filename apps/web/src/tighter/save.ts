@@ -25,6 +25,7 @@ import type { RunRecord } from "./submission";
 import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
+import { plainConfig } from "./space-submission";
 import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
 import {
@@ -522,10 +523,12 @@ function problemState(v: unknown, now: number): ProblemState | null {
   const k = parseKey(str(v.key, ""));
   if (!k) return null;
   if (isPolygon(k) ? k.N !== v.N || k.M !== v.M || k.P !== v.P : k.family !== v.family || k.P !== v.P) return null;
+  // a space problem's points need the server's bound
+  if (!isPolygon(k) && posOrNull(v.bound) === null) return null;
   const key = keyOf(k);
   let phase: Phase = v.phase === "loaded" || v.phase === "ready" ? v.phase : "bare";
-  // a space problem's board is read once its package stores one: until then it starts bare
-  const b = isPolygon(k) ? board(v.board, key) : null;
+  // a space problem's board is an object of bounded size; one that is not takes the problem back to the start
+  const b = isPolygon(k) ? board(v.board, key) : plainConfig(v.board);
   const best = posOrNull(v.best);
   // a board that cannot be read takes the problem back to the start
   if (phase !== "bare" && (!b || best === null)) phase = "bare";

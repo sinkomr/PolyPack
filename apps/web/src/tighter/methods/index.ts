@@ -71,6 +71,6 @@ export function runSetup(m: EvolveMethod, base: Record<string, unknown>, p: Prob
   const q = needPolygon(p, "run parameters");
   const params = g.runParams ? g.runParams(base, { N: q.N, M: q.M, P: q.P, score: p.best }) : base;
   const budget = g.runBudget ? g.runBudget(params) : RUN_BUDGET;
-  const start = g.startFrom ? g.startFrom(p) : p.board!;
+  const start = g.startFrom ? g.startFrom(p) : (p.board as PackingConfig);
   return { params, budget: Math.max(1, Math.floor(budget)), start };
 }
