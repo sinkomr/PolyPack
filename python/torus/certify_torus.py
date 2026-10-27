@@ -8,7 +8,7 @@ which separating axis to try first.
 
 Problem (see docs/spaces/TORUS.md):
   P congruent pieces on the torus R^2 / Lambda, Lambda = Z b1 + Z b2.
-  N = 0: closed disk of radius 1; N >= 3: regular N-gon of side 1 with pose
+  N = 0: closed disk of diameter 1 (radius 1/2, site units; before 2026-10-27 radius 1); N >= 3: regular N-gon of side 1 with pose
   (x, y, theta), vertex k at (x, y) + R (cos a_k, sin a_k),
   a_k = theta + pi/2 + 2 pi k / N, R = 1 / (2 sin(pi/N)).
   Families: sq  Lambda = L Z^2 (score L);
@@ -130,9 +130,9 @@ def lattice_basis(family, lattice):
 
 
 def shape_constants(N):
-    """Interval (R, r): bounding (circum) radius and inradius; disks: (1, 1)."""
+    """Interval (R, r): bounding (circum) radius and inradius; disks (diameter 1): (1/2, 1/2)."""
     if N == 0:
-        return iv.mpf(1), iv.mpf(1)
+        return iv.mpf(1) / 2, iv.mpf(1) / 2
     if isinstance(N, bool) or not isinstance(N, int) or N < 3 or N > MAX_SIDES:
         raise CertError("N must be 0 or an integer in [3, %d]" % MAX_SIDES)
     t = iv.pi / N
@@ -261,7 +261,7 @@ def _certify(record, eps, collect):
     b1, b2, score_iv = lattice_basis(family, record.get("lattice"))
     s = 1 - iv.mpf(eps)
     sR = s * R
-    sRf = (1 - eps) * (1.0 if N == 0 else 1.0 / (2 * math.sin(math.pi / N)))
+    sRf = (1 - eps) * (0.5 if N == 0 else 1.0 / (2 * math.sin(math.pi / N)))
     pieces = [_Piece(N, p, sR, sRf) for p in poses]
     det = b1[0] * b2[1] - b1[1] * b2[0]
     adet = abs(det)

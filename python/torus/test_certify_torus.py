@@ -49,22 +49,22 @@ class ValidCases(unittest.TestCase):
         self.assertLess(float(c["score_cert_upper"]), 1.0 + 1e-11)
 
     def test_disk_self_contact(self):
-        c = C.certify(rec("sq", 0, [[0.0, 0.0, 0.0]], L=2.0))
+        c = C.certify(rec("sq", 0, [[0.0, 0.0, 0.0]], L=1.0))
         self.assertEqual(c["P"], 1)
 
     def test_disk_hex_lattice(self):
-        C.certify(rec("hex", 0, [[1.0, 1.0, 0.0]], L=2.0))
+        C.certify(rec("hex", 0, [[0.5, 0.5, 0.0]], L=1.0))
 
     def test_disks_touching_across_the_boundary(self):
-        # distance 2 inside the cell and 4 - 2 = 2 through the boundary
-        C.certify(rec("sq", 0, [[0.5, 1.0, 0.0], [2.5, 1.0, 0.0]], L=4.0))
+        # distance 1 (one diameter) inside the cell and 2 - 1 = 1 through the boundary
+        C.certify(rec("sq", 0, [[0.25, 0.5, 0.0], [1.25, 0.5, 0.0]], L=2.0))
 
     def test_triangle_tiling_of_hex_torus(self):
         C.certify(two_triangles())
 
     def test_unreduced_basis_valid(self):
-        # b2 - 1000 b1 = (0.3, 2.1) has length > 2: valid for unit disks
-        C.certify(rec("free", 0, [[0.0, 0.0, 0.0]], b1=[2.5, 0.0], b2=[2500.3, 2.1]))
+        # b2 - 1000 b1 = (0.15, 1.05) has length > 1: valid for disks of diameter 1
+        C.certify(rec("free", 0, [[0.0, 0.0, 0.0]], b1=[1.25, 0.0], b2=[1250.15, 1.05]))
 
     def test_unreduced_basis_square_tiling(self):
         # b2 - 1000 b1 = (0, 1): the unit-square tiling with a very skewed basis
@@ -93,20 +93,20 @@ class Overlaps(unittest.TestCase):
         self.assertRejects(rec("sq", 4, [[0.0, 0.0, 0.0]], L=1.0))
 
     def test_disk_self_overlap_short_vector(self):
-        self.assertRejects(rec("sq", 0, [[0.0, 0.0, 0.0]], L=2.0 - 1e-9))
+        self.assertRejects(rec("sq", 0, [[0.0, 0.0, 0.0]], L=1.0 - 1e-9))
 
     def test_disk_self_overlap_hex(self):
-        self.assertRejects(rec("hex", 0, [[0.0, 0.0, 0.0]], L=2.0 - 1e-9))
+        self.assertRejects(rec("hex", 0, [[0.0, 0.0, 0.0]], L=1.0 - 1e-9))
 
     def test_disks_overlap_inside(self):
-        self.assertRejects(rec("sq", 0, [[0.5, 1.0, 0.0], [2.5 - 1e-9, 1.0, 0.0]], L=4.0))
+        self.assertRejects(rec("sq", 0, [[0.25, 0.5, 0.0], [1.25 - 1e-9, 0.5, 0.0]], L=2.0))
 
     def test_disks_overlap_across_boundary(self):
-        self.assertRejects(rec("sq", 0, [[0.5, 1.0, 0.0], [2.5 + 1e-9, 1.0, 0.0]], L=4.0))
+        self.assertRejects(rec("sq", 0, [[0.25, 0.5, 0.0], [1.25 + 1e-9, 0.5, 0.0]], L=2.0))
 
     def test_disks_overlap_far_outside_cell(self):
         # centres given far outside the fundamental cell: images still found
-        self.assertRejects(rec("sq", 0, [[0.5 + 400.0, 1.0, 0.0], [2.5 + 1e-9 - 4000.0, 1.0 + 40.0, 0.0]], L=4.0))
+        self.assertRejects(rec("sq", 0, [[0.25 + 200.0, 0.5, 0.0], [1.25 + 1e-9 - 2000.0, 0.5 + 20.0, 0.0]], L=2.0))
 
     def test_triangles_lattice_too_small(self):
         self.assertRejects(two_triangles(L=1.0 - 1e-9))
@@ -115,8 +115,8 @@ class Overlaps(unittest.TestCase):
         self.assertRejects(two_triangles(shift=1e-9))
 
     def test_unreduced_basis_overlap(self):
-        # b2 - 1000 b1 = (0.3, 1.9) is shorter than 2
-        self.assertRejects(rec("free", 0, [[0.0, 0.0, 0.0]], b1=[2.5, 0.0], b2=[2500.3, 1.9]))
+        # b2 - 1000 b1 = (0.15, 0.95) is shorter than 1
+        self.assertRejects(rec("free", 0, [[0.0, 0.0, 0.0]], b1=[1.25, 0.0], b2=[1250.15, 0.95]))
 
     def test_unreduced_basis_square_overlap(self):
         self.assertRejects(rec("free", 4, [[0.1, 0.1, math.pi / 4]], b1=[1.0, 0.0], b2=[1000.0, 1.0 - 1e-9]))
@@ -124,7 +124,7 @@ class Overlaps(unittest.TestCase):
     def test_eps_too_small_for_contact(self):
         # exact touching, but a float-rounded contact needs some shrink:
         # a 1e-9 overlap is not cleared by eps = 1e-12
-        r = rec("sq", 0, [[0.0, 0.0, 0.0], [2.0 - 1e-9, 0.0, 0.0]], L=10.0, eps=1e-12)
+        r = rec("sq", 0, [[0.0, 0.0, 0.0], [1.0 - 1e-9, 0.0, 0.0]], L=5.0, eps=1e-12)
         self.assertRejects(r)
 
     def test_coincident_pieces(self):
@@ -267,7 +267,7 @@ class RandomisedAgainstExact(unittest.TestCase):
 
     def exact_valid(self, L, pts, eps):
         s = 1 - Fraction(eps)
-        lim = (2 * s) ** 2
+        lim = s**2  # disks of diameter 1: centres closer than s (shrunk diameter) overlap
         Lf = Fraction(L)
         for i in range(len(pts)):
             for j in range(i, len(pts)):
@@ -286,7 +286,7 @@ class RandomisedAgainstExact(unittest.TestCase):
         agree = 0
         for _ in range(120):
             P = rnd.randint(1, 5)
-            L = rnd.choice([2.0, 3.0, 4.0, 4.5, 5.25])
+            L = rnd.choice([1.0, 1.5, 2.0, 2.25, 2.625])
             pts = [[rnd.randint(0, 64) / 16 * L / 4, rnd.randint(0, 64) / 16 * L / 4, 0.0] for _ in range(P)]
             eps = 1e-12
             ex = self.exact_valid(L, pts, eps)
@@ -301,14 +301,14 @@ class RandomisedAgainstExact(unittest.TestCase):
 
 
 PROOF = {
-    "value": 2 * math.sqrt(2),
+    "value": math.sqrt(2),
     "status": "proven",
     "short": "Brandt et al. 2019, Thm 1.1",
     "source": "M. Brandt et al., Optimal packings of two to four equal circles on any flat torus, Discrete Math. 342(12) (2019) 111597",
     "doi": "10.1016/j.disc.2019.111597",
     "proof": "Theorem 1.1, region R1_2",
 }
-CERT_SQ02 = 2.8284271247490187  # torus/sq/0/2: 2 sqrt2 (1 + 1e-12)
+CERT_SQ02 = 2.8284271247490187 / 2  # torus/sq/0/2: sqrt2 (1 + 1e-12), exactly half the radius-1 value
 
 
 def status_rec(status, literature, score_cert=CERT_SQ02):
@@ -361,7 +361,7 @@ class StatusRules(unittest.TestCase):
         with self.assertRaises(C.CertError):
             C.check_status(status_rec("proven", [dict(PROOF)], score_cert=PROOF["value"] * (1 + 1e-6)))
         # a proof of another case (a smaller optimum) does not make this record proven
-        e = dict(PROOF, value=2.0)
+        e = dict(PROOF, value=1.0)
         with self.assertRaises(C.CertError):
             C.check_status(status_rec("proven", [e]))
 

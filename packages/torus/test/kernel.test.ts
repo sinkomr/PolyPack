@@ -4,14 +4,12 @@
  * fromConfig, validate and finish, the local solves from random starts, the soft shapes, seeds,
  * swap, rebase, and the server's rule.
  */
-import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type KernelState, type SpaceKernel, mulberry32, registerMethod, runMethod, squeeze } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
 import {
   type TorusConfig,
   type TorusFamily,
-  type TorusRecordsFile,
   TORUS_FAMILIES,
   recordPacking,
   scalePacking,
@@ -20,9 +18,9 @@ import {
   torusScore,
   validateTorusPacking,
 } from "../src";
+import { loadSiteRecords } from "./helpers";
 
-const url = new URL("../../../data/torus/records.json", import.meta.url);
-const file: TorusRecordsFile | undefined = existsSync(url) ? JSON.parse(readFileSync(url, "utf8")) : undefined;
+const file = loadSiteRecords();
 const records = file?.records ?? [];
 
 /** The largest relative difference between the gradient and central differences, over every entry. */
@@ -271,15 +269,15 @@ describe("torusKernel", () => {
   it("validates by the server's rule", () => {
     const sq = torusKernel({ family: "sq", N: 0, P: 2 });
     const good = {
-      lattice: { L: 4 },
+      lattice: { L: 2 },
       poses: [
         [0, 0, 0],
-        [2, 0, 0],
+        [1, 0, 0],
       ],
     };
-    expect(sq.validate(good)).toEqual({ valid: true, score: 4, reasons: [] });
-    expect(sq.validate({ ...good, lattice: { L: -4 } }).valid).toBe(false);
-    expect(sq.validate({ ...good, lattice: { b1: [4, 0], b2: [0, 4] } }).valid).toBe(false);
+    expect(sq.validate(good)).toEqual({ valid: true, score: 2, reasons: [] });
+    expect(sq.validate({ ...good, lattice: { L: -2 } }).valid).toBe(false);
+    expect(sq.validate({ ...good, lattice: { b1: [2, 0], b2: [0, 2] } }).valid).toBe(false);
     expect(sq.validate({ ...good, poses: [[0, 0, 0]] }).valid).toBe(false);
     expect(
       sq.validate({
@@ -295,7 +293,7 @@ describe("torusKernel", () => {
         ...good,
         poses: [
           [0, 0, 0],
-          [2, 0],
+          [1, 0],
         ],
       }).valid,
     ).toBe(false);
@@ -305,7 +303,7 @@ describe("torusKernel", () => {
         ...good,
         poses: [
           [0, 0, 0],
-          [2 - 1e-10, 0, 0],
+          [1 - 1e-10, 0, 0],
         ],
       }).valid,
     ).toBe(true);
@@ -314,27 +312,27 @@ describe("torusKernel", () => {
         ...good,
         poses: [
           [0, 0, 0],
-          [2 - 1e-8, 0, 0],
+          [1 - 1e-8, 0, 0],
         ],
       }).valid,
     ).toBe(false);
-    // through the cell's side: the image at x - 4
+    // through the cell's side: the image at x - 2
     expect(
       sq.validate({
         ...good,
         poses: [
           [0, 0, 0],
-          [2 + 1e-8, 0, 0],
+          [1 + 1e-8, 0, 0],
         ],
       }).valid,
     ).toBe(false);
     const free = torusKernel({ family: "free", N: 0, P: 1 });
-    expect(free.validate({ lattice: { b1: [2, 0], b2: [0, 2] }, poses: [[0, 0, 0]] }).valid).toBe(true);
-    expect(free.validate({ lattice: { L: 2 }, poses: [[0, 0, 0]] }).valid).toBe(false);
-    expect(free.validate({ lattice: { b1: [2, 0], b2: [4, 0] }, poses: [[0, 0, 0]] }).valid).toBe(false);
+    expect(free.validate({ lattice: { b1: [1, 0], b2: [0, 1] }, poses: [[0, 0, 0]] }).valid).toBe(true);
+    expect(free.validate({ lattice: { L: 1 }, poses: [[0, 0, 0]] }).valid).toBe(false);
+    expect(free.validate({ lattice: { b1: [1, 0], b2: [2, 0] }, poses: [[0, 0, 0]] }).valid).toBe(false);
     // a lattice vector shorter than the width, and a basis too skewed to enumerate
-    expect(free.validate({ lattice: { b1: [1.5, 0], b2: [0, 3] }, poses: [[0, 0, 0]] }).valid).toBe(false);
-    const skewed = { lattice: { b1: [2, 0], b2: [2000, 2] }, poses: [[0, 0, 0]] };
+    expect(free.validate({ lattice: { b1: [0.75, 0], b2: [0, 1.5] }, poses: [[0, 0, 0]] }).valid).toBe(false);
+    const skewed = { lattice: { b1: [1, 0], b2: [1000, 1] }, poses: [[0, 0, 0]] };
     expect(free.validate(skewed).valid).toBe(false);
     expect(free.validate(skewed).reasons[0]).toMatch(/skewed/);
   });
@@ -437,21 +435,21 @@ describe("torusKernel", () => {
 
   it("reduces a skewed free basis on the way in", () => {
     const k = torusKernel({ family: "free", N: 0, P: 1 });
-    // the lattice spanned by (2, 0) and (2000, 2) is that of (2, 0) and (0, 2)
-    const s = k.fromConfig({ lattice: { b1: [2, 0], b2: [2000, 2] }, poses: [[0, 0, 0]] })!;
+    // the lattice spanned by (1, 0) and (1000, 1) is that of (1, 0) and (0, 1)
+    const s = k.fromConfig({ lattice: { b1: [1, 0], b2: [1000, 1] }, poses: [[0, 0, 0]] })!;
     expect(k.energy(s)).toBe(0);
     const c = k.toConfig(s) as { lattice: { b1: number[]; b2: number[] } };
-    expect(Math.hypot(c.lattice.b2[0], c.lattice.b2[1])).toBeCloseTo(2, 9);
-    expect(k.finish(s)!.score).toBeCloseTo(2, 9);
+    expect(Math.hypot(c.lattice.b2[0], c.lattice.b2[1])).toBeCloseTo(1, 9);
+    expect(k.finish(s)!.score).toBeCloseTo(1, 9);
   });
 
   it("refuses sizes below the bound, names overlaps as the server does, and gives up hopeless finishes", () => {
     // one disk on the hexagonal free lattice is at Thue's bound
     const free = torusKernel({ family: "free", N: 0, P: 1 });
-    const hex = { b1: [2, 0], b2: [1, Math.sqrt(3)] };
+    const hex = { b1: [1, 0], b2: [0.5, Math.sqrt(3) / 2] };
     expect(free.validate({ lattice: hex, poses: [[0, 0, 0]] }).valid).toBe(true);
     const f = 1 - 2e-9;
-    const below = free.validate({ lattice: { b1: [2 * f, 0], b2: [f, Math.sqrt(3) * f] }, poses: [[0, 0, 0]] });
+    const below = free.validate({ lattice: { b1: [f, 0], b2: [f / 2, (Math.sqrt(3) / 2) * f] }, poses: [[0, 0, 0]] });
     expect(below.valid).toBe(false);
     expect(below.reasons[0]).toMatch(/below the lower bound/);
     // one square at theta = 0 stands on a corner: 1.414 wide, against a cell of 1.2

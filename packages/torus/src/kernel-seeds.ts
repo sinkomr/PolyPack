@@ -8,7 +8,8 @@
  * (square or hexagonal at random for free), scaled so that the circumscribed disks of the
  * closest pair touch: every seed is a valid packing, loose for polygons, that the methods tighten.
  */
-import { type Pose, boundingRadius } from "@polypack/geometry";
+import { type Pose } from "@polypack/geometry";
+import { reachOf } from "./disk";
 import { type Lattice, type TorusFamily, familyLattice, latticeImages } from "./lattice";
 
 /**
@@ -71,7 +72,7 @@ export function latticeSeed(
     for (let j = i; j < P; j++)
       for (const im of latticeImages(unit, [poses[j].x - poses[i].x, poses[j].y - poses[i].y], 1.5, i === j))
         dmin = Math.min(dmin, Math.hypot(im.v[0], im.v[1]));
-  const k = (2 * boundingRadius(N)) / dmin;
+  const k = (2 * reachOf(N)) / dmin;
   return {
     lattice: { b1: [unit.b1[0] * k, unit.b1[1] * k], b2: [unit.b2[0] * k, unit.b2[1] * k] },
     poses: poses.map((p) => ({ x: p.x * k, y: p.y * k, theta: p.theta })),

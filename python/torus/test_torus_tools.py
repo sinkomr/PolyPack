@@ -12,7 +12,8 @@ from decimal import Decimal
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import literature_torus as LIT  # noqa: E402
 import p1_bound  # noqa: E402
-from build_records import display  # noqa: E402
+import certify_torus as C  # noqa: E402
+from build_records import candidate, display  # noqa: E402
 
 
 class Display(unittest.TestCase):
@@ -77,25 +78,25 @@ class Literature(unittest.TestCase):
     def test_conversions(self):
         # square torus, 6 disks: Musin-Nikitenko d6
         v = LIT.literature("sq", 0, 6)[0]["value"]
-        self.assertAlmostEqual(v, 4.994935776886, places=9)
+        self.assertAlmostEqual(v, 4.994935776886 / 2, places=9)
         # 7 and 8 disks share d = 1/(1 + sqrt3)
-        self.assertAlmostEqual(LIT.literature("sq", 0, 8)[0]["value"], 2 * (1 + math.sqrt(3)), places=12)
+        self.assertAlmostEqual(LIT.literature("sq", 0, 8)[0]["value"], 1 + math.sqrt(3), places=12)
         # squares: Blair et al. P = 12, density 24/25
         self.assertAlmostEqual(LIT.literature("sq", 4, 12)[0]["value"], 5 / math.sqrt(2), places=12)
 
     def test_bounds(self):
-        # hexagonal torus with P = 7 disks: 2 sqrt7 from the Thue density bound
-        self.assertAlmostEqual(LIT.score_bound("hex", 0, 7)["value"], 2 * math.sqrt(7), places=12)
+        # hexagonal torus with P = 7 disks of diameter 1: sqrt7 from the Thue density bound
+        self.assertAlmostEqual(LIT.score_bound("hex", 0, 7)["value"], math.sqrt(7), places=12)
         # octagon lattice density bound for the free family
         b = LIT.score_bound("free", 8, 3)["value"]
         self.assertAlmostEqual(b, math.sqrt(3 * (5 + 4 * math.sqrt(2)) / 2), places=12)
-        # one disk: L >= 2
-        self.assertEqual(LIT.score_bound("sq", 0, 1)["value"], 2.0)
+        # one disk: L >= 1 (its diameter)
+        self.assertEqual(LIT.score_bound("sq", 0, 1)["value"], 1.0)
 
     def test_exact_forms(self):
-        e = LIT.exact_form("free", 0, 7, math.sqrt(7 * 2 * math.sqrt(3)))
+        e = LIT.exact_form("free", 0, 7, math.sqrt(7 * math.sqrt(3) / 2))
         self.assertIsNotNone(e)
-        self.assertIsNone(LIT.exact_form("free", 0, 7, 1.0001 * math.sqrt(7 * 2 * math.sqrt(3))))
+        self.assertIsNone(LIT.exact_form("free", 0, 7, 1.0001 * math.sqrt(7 * math.sqrt(3) / 2)))
         # one triangle on a free torus: Fary's lattice optimum, density 2/3
         e = LIT.exact_form("free", 3, 1, math.sqrt(3 * math.sqrt(3) / 8))
         self.assertEqual(e["expr"], "sqrt(3 sqrt(3) / 8)")
@@ -144,19 +145,19 @@ class ProofEntries(unittest.TestCase):
 
     def test_values_of_the_proofs(self):
         r2, r34 = math.sqrt(2) / 4, (math.sqrt(6) - math.sqrt(2)) / 4
-        self.assertAlmostEqual(proofs("sq", 0, 2)[0]["value"], 1 / r2, places=13)
-        self.assertAlmostEqual(proofs("sq", 0, 3)[0]["value"], 1 / r34, places=13)
-        self.assertAlmostEqual(proofs("sq", 0, 4)[0]["value"], 1 / r34, places=13)
-        self.assertAlmostEqual(proofs("hex", 0, 2)[0]["value"], 2 * math.sqrt(3), places=13)
+        self.assertAlmostEqual(proofs("sq", 0, 2)[0]["value"], 1 / (2 * r2), places=13)
+        self.assertAlmostEqual(proofs("sq", 0, 3)[0]["value"], 1 / (2 * r34), places=13)
+        self.assertAlmostEqual(proofs("sq", 0, 4)[0]["value"], 1 / (2 * r34), places=13)
+        self.assertAlmostEqual(proofs("hex", 0, 2)[0]["value"], math.sqrt(3), places=13)
         for n in self.LOESCHIAN:
             if n <= 49:
                 for e in proofs("hex", 0, n):
-                    self.assertAlmostEqual(e["value"], 2 * math.sqrt(n), places=12)
+                    self.assertAlmostEqual(e["value"], math.sqrt(n), places=12)
         for P in self.SUMSQ:
             if P <= 49:
                 self.assertAlmostEqual(proofs("sq", 4, P)[0]["value"], math.sqrt(P), places=13)
-        # one disk: area pi at density pi/sqrt12; one triangle: area sqrt3/4 at density 2/3
-        self.assertAlmostEqual(proofs("free", 0, 1)[0]["value"], math.sqrt(2 * math.sqrt(3)), places=13)
+        # one disk (diameter 1): area pi/4 at density pi/sqrt12; one triangle: area sqrt3/4 at density 2/3
+        self.assertAlmostEqual(proofs("free", 0, 1)[0]["value"], math.sqrt(math.sqrt(3) / 2), places=13)
         self.assertAlmostEqual(proofs("free", 3, 1)[0]["value"], math.sqrt(3 * math.sqrt(3) / 8), places=13)
         self.assertEqual(proofs("free", 0, 1)[0]["doi"], "10.4171/EM/163")
         self.assertEqual(proofs("free", 3, 1)[0]["doi"], "10.1007/s00454-015-9748-0")
@@ -182,7 +183,64 @@ class ProofEntries(unittest.TestCase):
         self.assertTrue(cd["proof"].startswith("Theorem 1.1"))
         self.assertEqual(LIT.literature("hex", 0, 8)[0]["short"], "Connelly and Dickinson 2014, Conjecture 1.3")
         self.assertTrue(LIT.literature("sq", 4, 5)[0]["source"].startswith("D. W. Blair, C. Santangelo, J. Machta"))
-        self.assertEqual(LIT.literature("sq", 0, 1)[0]["value"], 2.0)
+        self.assertEqual(LIT.literature("sq", 0, 1)[0]["value"], 1.0)
+
+
+class SiteUnits(unittest.TestCase):
+    """Disk records in site units (diameter 1): converted copies of radius-1 records by exact halving."""
+
+    PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "data", "torus", "records.json")
+
+    def halved(self, r):
+        import json  # noqa: F401
+
+        lat = r["configuration"]["lattice"]
+        lattice = {"L": lat["L"] / 2} if "L" in lat else {"b1": [v / 2 for v in lat["b1"]], "b2": [v / 2 for v in lat["b2"]]}
+        poses = [[x / 2, y / 2, t] for x, y, t in r["configuration"]["poses"]]
+        return {"family": r["family"], "N": 0, "P": r["P"], "lattice": lattice, "poses": poses, "eps": r["eps"]}
+
+    def test_converted_records_certify_and_a_shrunk_copy_does_not(self):
+        import json
+
+        if not os.path.exists(self.PATH):
+            self.skipTest("no records file")
+        with open(self.PATH) as f:
+            data = json.load(f)
+        if data.get("units") == "diameter":
+            self.skipTest("the data is already converted; test_certify_torus covers site units")
+        want = {"torus/sq/0/2", "torus/hex/0/7", "torus/free/0/1", "torus/sq/0/5", "torus/hex/0/4"}
+        done = 0
+        for r in data["records"]:
+            if r["problem"] not in want:
+                continue
+            rec = self.halved(r)
+            cert = C.certify(rec)
+            # the certified upper bound is exactly half the radius-1 one (rounding aside)
+            self.assertAlmostEqual(float(cert["score_upper_float"]) * 2, r["score_cert"], places=12)
+            # shrinking the lattice and the centres by 1e-9 overlaps disks that touch
+            if r["problem"] in ("torus/sq/0/2", "torus/hex/0/4", "torus/free/0/1"):
+                k = 1 - 1e-9
+                small = dict(rec, poses=[[x * k, y * k, t] for x, y, t in rec["poses"]])
+                small["lattice"] = (
+                    {"L": rec["lattice"]["L"] * k}
+                    if "L" in rec["lattice"]
+                    else {"b1": [v * k for v in rec["lattice"]["b1"]], "b2": [v * k for v in rec["lattice"]["b2"]]}
+                )
+                with self.assertRaises(C.CertError, msg=r["problem"]):
+                    C.certify(small)
+            done += 1
+        self.assertEqual(done, len(want))
+
+    def test_raw_search_results_are_converted_at_the_build_edge(self):
+        raw = {"family": "sq", "params": [4.0], "poses": [[0.5, 1.0, 0.7], [2.5, 1.0, 0.1]], "units": "working"}
+        c = candidate("sq", 0, 2, raw, "x")
+        self.assertEqual(c["lattice"], {"L": 2.0})
+        self.assertEqual(c["poses"], [[0.25, 0.5, 0.0], [1.25, 0.5, 0.0]])
+        self.assertEqual(c["score_float"], 2.0)
+        # polygons and results already in diameter units are not scaled
+        self.assertEqual(candidate("sq", 4, 2, dict(raw), "x")["lattice"], {"L": 4.0})
+        self.assertEqual(candidate("sq", 0, 2, dict(raw, units="diameter"), "x")["lattice"], {"L": 4.0})
+        C.certify({**{k: c[k] for k in ("family", "N", "P", "lattice", "poses")}, "eps": 1e-12})
 
 
 if __name__ == "__main__":

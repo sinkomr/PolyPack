@@ -26,8 +26,16 @@
  * Budget and seeding as in the sphere search: `maxEvals` counts objective and gradient
  * evaluations, `maxSeconds` is a wall-clock ceiling, `shouldStop` an external stop; all random
  * choices come from mulberry32(seed).
+ *
+ * Units: the search's interface is in site units (a disk has diameter 1, so the scores and the
+ * lattice are half of what they were with radius-1 disks). Inside, searchTorus runs the
+ * unchanged radius-1 search on the packing scaled by 2 (WORKING_DISK_RADIUS, disk.ts) and
+ * scales its result back by 1/2, both exact; the penalty weights, finite-difference steps and
+ * thresholds below are tuned in those working units, so a seed gives the same trajectory as
+ * before the change. Polygons are not scaled.
  */
-import { type Pose, boundingRadius, pieceArea, pieceSeparation } from "@polypack/geometry";
+import { type Pose } from "@polypack/geometry";
+import { WORKING_DISK_RADIUS, areaOf, reachOf, separationOf } from "./disk";
 import {
   type Lattice,
   type TorusFamily,
@@ -35,9 +43,10 @@ import {
   familyLattice,
   gaussReduce,
   latticeImages,
+  TORUS_DISK_RADIUS,
   torusScore,
 } from "./lattice";
-import { type TorusPacking, validateTorusPacking } from "./validate";
+import { type TorusPacking, scalePacking, validateTorusPacking } from "./validate";
 
 export interface TorusProblem {
   family: TorusFamily;
@@ -212,6 +221,7 @@ export function tightScale(
   problem: TorusProblem,
   s: { lattice: Lattice; poses: readonly Pose[] },
   tick: () => void = () => {},
+  rd = TORUS_DISK_RADIUS,
 ): { lattice: Lattice; poses: Pose[]; score: number } | null {
   const { family, N } = problem;
   const packingAt = (k: number): TorusPacking => ({
@@ -223,7 +233,7 @@ export function tightScale(
   const validAt = (k: number): boolean => {
     tick();
     try {
-      const v = validateTorusPacking(packingAt(k), { tol: 0 });
+      const v = validateTorusPacking(packingAt(k), { tol: 0, diskRadius: rd });
       return v.errors.length === 0 && v.valid && v.minSep >= 0;
     } catch {
       return false;
@@ -278,7 +288,27 @@ export function scaleSearch(validAt: (k: number) => boolean): number | null {
 }
 
 export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): TorusSearchResult {
+  const { N } = problem;
+  // site -> working: disks (N = 0) scale by 2; polygons stay
+  const up = N === 0 ? WORKING_DISK_RADIUS / TORUS_DISK_RADIUS : 1;
+  const down = 1 / up;
+  if (up === 1) return searchWorking(problem, o, 1);
+  // a start of another shape is ignored by the search, so it is passed on as it is
+  const start = o.start && o.start.N === N && o.start.lattice && Array.isArray(o.start.poses) ? scalePacking(o.start, up) : o.start;
+  const r = searchWorking(problem, { ...o, start }, up);
+  return {
+    ...r,
+    packing: r.packing && scalePacking(r.packing, down),
+    score: r.score * down,
+    startScore: r.startScore === null ? null : r.startScore * down,
+  };
+}
+
+/** The search in working units (see the header); `up` converts site lengths to them, for the log. */
+function searchWorking(problem: TorusProblem, o: TorusSearchOptions, up: number): TorusSearchResult {
   const { family, N, P } = problem;
+  const rd = N === 0 ? WORKING_DISK_RADIUS : TORUS_DISK_RADIUS;
+  const site = (x: number) => x / up;
   if (!["sq", "hex", "free"].includes(family) || !(N === 0 || (N >= 3 && N <= 100)) || !Number.isInteger(P) || P < 1)
     throw new Error("bad torus problem");
   const rand = mulberry32(o.seed);
@@ -286,7 +316,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
   const clock = o.now ?? (() => performance.now() / 1000);
   const t0 = clock();
   const log = o.log ?? (() => {});
-  const R = boundingRadius(N);
+  const R = reachOf(N, rd);
   const thetaScale = N === 0 ? 1 : R;
   let evaluations = 0;
   const tick = () => {
@@ -296,7 +326,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
     if (o.maxSeconds !== undefined && clock() - t0 > o.maxSeconds) throw new Stop("time");
   };
 
-  const tight = (s: { lattice: Lattice; poses: Pose[] }): State | null => tightScale(problem, s, tick);
+  const tight = (s: { lattice: Lattice; poses: Pose[] }): State | null => tightScale(problem, s, tick, rd);
 
   /** Penalty continuation from a packing (lattice, poses) scaled by k0. */
   const relax = (
@@ -366,7 +396,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
           const p = pairs[idx];
           const vx = xj + p.m * lat.b1[0] + p.n * lat.b2[0];
           const vy = yj + p.m * lat.b1[1] + p.n * lat.b2[1];
-          const sep = pieceSeparation(N, { x: xi, y: yi, theta: ti }, { x: vx, y: vy, theta: tj }).sep;
+          const sep = separationOf(N, { x: xi, y: yi, theta: ti }, { x: vx, y: vy, theta: tj }, 1, rd);
           return sep < 0 ? sep * sep : 0;
         };
         const totalEnergy = (): number => {
@@ -463,7 +493,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
 
   /** Cell of area P A / density in the family's shape (free: square or hexagonal at random). */
   const freshLattice = (density: number): Lattice => {
-    const area = (P * pieceArea(N)) / density;
+    const area = (P * areaOf(N, rd)) / density;
     const shape: "sq" | "hex" = family === "free" ? (rand() < 0.5 ? "sq" : "hex") : family;
     return familyLattice(shape, shape === "sq" ? Math.sqrt(area) : Math.sqrt(area / (Math.sqrt(3) / 2)));
   };
@@ -519,7 +549,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
       if (t) {
         best = t;
         startScore = t.score;
-        log(`start: score ${t.score}`);
+        log(`start: score ${site(t.score)}`);
       }
       const r = local(best ?? s0, 1, [1e4, 1e5, 1e6, 1e7, 1e8]);
       if (r && (!best || r.score < best.score)) best = r;
@@ -533,7 +563,7 @@ export function searchTorus(problem: TorusProblem, o: TorusSearchOptions): Torus
       if (!r) continue;
       if (r.score < best.score * (1 - 1e-13)) {
         best = r;
-        log(`hop ${hops}: score ${r.score}`);
+        log(`hop ${hops}: score ${site(r.score)}`);
       }
       if (r.score < cur.score * (1 - 1e-13) || rand() < Math.exp(-(r.score / cur.score - 1) / 1e-3)) {
         cur = r;
