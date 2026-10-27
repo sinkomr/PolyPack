@@ -86,8 +86,8 @@ async function axeClean(page: Page): Promise<void> {
 }
 
 /**
- * Whether Playwright's WebKit is installed. CI installs Chromium only, so there the WebKit tests are
- * skipped (they run wherever `npx playwright install webkit` has been run, as on the developer's Mac).
+ * Whether Playwright's WebKit is installed. CI installs it (since 2026-10-27); elsewhere the WebKit
+ * tests are skipped unless `npx playwright install webkit` has been run, as on the developer's Mac.
  */
 function hasWebkit(playwright: { webkit: { executablePath(): string } }): boolean {
   try {
@@ -102,7 +102,7 @@ async function webkitPage(
   playwright: { webkit: { launch(): Promise<Browser>; executablePath(): string } },
   device: string,
 ): Promise<{ browser: Browser; page: Page }> {
-  test.skip(!hasWebkit(playwright), "WebKit is not installed here (CI installs Chromium only)");
+  test.skip(!hasWebkit(playwright), "WebKit is not installed here (npx playwright install webkit)");
   const browser = await playwright.webkit.launch();
   const page = await (await browser.newContext({ ...devices[device] })).newPage();
   return { browser, page };
