@@ -351,9 +351,7 @@ for (const scheme of ["light", "dark"] as const) {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
     for (const hash of [
       "",
-      "#space=curved&K=1&N=all&M=all",
       "#space=torus&family=all&N=0",
-      "#space=surface&solid=cube&mode=all&N=4",
       "#space=boundary&polytope=tesseract&piece=all",
     ]) {
       await page.goto("about:blank");

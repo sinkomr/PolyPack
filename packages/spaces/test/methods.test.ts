@@ -1,18 +1,23 @@
 /**
  * The methods a space problem offers and one job's dispatch to them (src/search/methods.ts,
- * kernels.ts, run.ts): Auto runs the space's own search unchanged, an unknown method or bad
- * parameters give an error result, and a generic method runs end to end on a kernel: on a test
- * kernel that stands in for one problem (generic-fixtures.ts), so that the tests do not depend on a
- * space's kernel, and on the real ones. The balls kernel's validate() rebuilds the server's rule, because
- * the balls package does not depend on this one; here the two are compared.
+ * kernels.ts, run.ts): every name of Auto calls the space's own search with the same arguments,
+ * an unknown method or bad parameters give an error result, and a generic method runs end to end
+ * on a kernel: on a test kernel that stands in for one problem (generic-fixtures.ts), so that the
+ * tests do not depend on a space's kernel, and on the real ones. The balls kernel's validate()
+ * rebuilds the server's rule, because the balls package does not depend on this one; here the two
+ * are compared.
  */
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { BALLS_FAMILY_SAMPLE, BALLS_ORIGINAL_CODES, type BallsConfig, ballsKernel, searchBalls, getBallsProblem } from "@polypack/balls";
+import { BALLS_FAMILY_SAMPLE, BALLS_ORIGINAL_CODES, type BallsConfig, ballsKernel, getBallsProblem, searchBalls } from "@polypack/balls";
+import { searchBoundary } from "@polypack/boundary";
+import { solve as solveCurved } from "@polypack/curved";
 import { listMethods, mulberry32, squeeze } from "@polypack/methods";
+import { searchPolyhedra } from "@polypack/polyhedra";
 import { registry as polygonRegistry } from "@polypack/solver";
-import { afterEach, describe, expect, it } from "vitest";
+import { searchSphere } from "@polypack/sphere";
+import { searchTorus } from "@polypack/torus";
+import { type MockInstance, afterEach, describe, expect, it, vi } from "vitest";
 import {
   AUTO,
   AUTO_TEXT,
@@ -35,6 +40,7 @@ import {
   spaceMethodNote,
   spaceMethodsFor,
 } from "../src/search";
+import { surfaceFoldSearch } from "../src/search/surface-fold";
 import { SPACE_DOMAINS } from "../src/domain";
 import { parseSpaceId } from "../src/ids";
 import { loadSpacesIndex, readEntryConfigSync } from "../src/load";
@@ -52,6 +58,83 @@ import {
   withoutKernels,
 } from "./generic-fixtures";
 
+// The spaces' own searches, as run.ts calls them, spied on: each runs as it is unless a test stubs it.
+vi.mock("@polypack/sphere", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/sphere")>();
+  return { ...actual, searchSphere: vi.fn(actual.searchSphere) };
+});
+vi.mock("@polypack/torus", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/torus")>();
+  return { ...actual, searchTorus: vi.fn(actual.searchTorus) };
+});
+vi.mock("@polypack/curved", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/curved")>();
+  return { ...actual, solve: vi.fn(actual.solve) };
+});
+vi.mock("../src/search/surface-fold", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/search/surface-fold")>();
+  return { ...actual, surfaceFoldSearch: vi.fn(actual.surfaceFoldSearch) };
+});
+vi.mock("@polypack/boundary", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/boundary")>();
+  return { ...actual, searchBoundary: vi.fn(actual.searchBoundary) };
+});
+vi.mock("@polypack/polyhedra", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/polyhedra")>();
+  return { ...actual, searchPolyhedra: vi.fn(actual.searchPolyhedra) };
+});
+vi.mock("@polypack/balls", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@polypack/balls")>();
+  return { ...actual, searchBalls: vi.fn(actual.searchBalls) };
+});
+
+/**
+ * Each space's own search: its spy, the start a call of it was given, and a stub that answers at
+ * once with no configuration, its whole budget spent.
+ */
+const ENGINES: Record<
+  SpaceJob["space"],
+  { fn: MockInstance; start: (args: any[]) => unknown; stub: (...args: any[]) => unknown }
+> = {
+  sphere: {
+    fn: vi.mocked(searchSphere) as unknown as MockInstance,
+    start: (a) => a[1].start,
+    stub: (_p, o) => ({ config: null, evaluations: o.maxEvals, stopped: "evals" }),
+  },
+  torus: {
+    fn: vi.mocked(searchTorus) as unknown as MockInstance,
+    start: (a) => a[1].start,
+    stub: (_p, o) => ({ packing: null, evaluations: o.maxEvals, stopped: "evals" }),
+  },
+  // in rounds: the first round's start
+  curved: {
+    fn: vi.mocked(solveCurved) as unknown as MockInstance,
+    start: (a) => a[2].start,
+    stub: (_p, _K, o) => ({ restartsDone: 1, hopsDone: o.hops, found: false }),
+  },
+  // the start comes as a warm start of the fold search
+  surface: {
+    fn: vi.mocked(surfaceFoldSearch) as unknown as MockInstance,
+    start: (a) => a[3].warm[0],
+    stub: () => null,
+  },
+  boundary: {
+    fn: vi.mocked(searchBoundary) as unknown as MockInstance,
+    start: (a) => a[1].start,
+    stub: (_p, o) => ({ config: null, evals: o.budget.evals, ended: "evals" }),
+  },
+  polyhedra: {
+    fn: vi.mocked(searchPolyhedra) as unknown as MockInstance,
+    start: (a) => a[2].start,
+    stub: (_p, _P, o) => ({ config: null, evaluations: o.maxEvals, stopped: "evals" }),
+  },
+  balls: {
+    fn: vi.mocked(searchBalls) as unknown as MockInstance,
+    start: (a) => a[2].start,
+    stub: (_p, _P, o) => ({ config: null, evaluations: o.maxEvals, stopped: "evals" }),
+  },
+};
+
 const root = resolve(__dirname, "../../..");
 const index = loadSpacesIndex(root);
 /** A problem's research record, from the catalogue. */
@@ -60,8 +143,21 @@ const recordOf = (id: string) => {
   const cat = index[space]!;
   return JSON.parse(readEntryConfigSync(root, cat, cat.byId.get(id)!)!);
 };
+/** The balls space's test packings, shared with its certifier's tests (python/balls/fixtures/packings.json). */
+const ballsPackings = JSON.parse(readFileSync(resolve(root, "python/balls/fixtures/packings.json"), "utf8"))
+  .packings as { id: string; code: string; P: number; config: BallsConfig }[];
+/** The rule the server applies to a balls problem: its domain's bound, and the strict check (no research records). */
+const ruleOf = (id: string) => {
+  const parsed = parseSpaceId("balls", id);
+  if (typeof parsed === "string") throw new Error(parsed);
+  return { bound: SPACE_DOMAINS.balls!.bound(parsed)!.value, noRecord: true };
+};
 
-afterEach(() => setKernelFactoryForTests(null));
+afterEach(() => {
+  setKernelFactoryForTests(null);
+  // a spy made with vi.fn(search) resets to that search
+  for (const e of Object.values(ENGINES)) e.fn.mockReset();
+});
 useNofoldMethods();
 
 const go = { aborted: false, paused: false };
@@ -216,53 +312,133 @@ describe("a method and its parameters", () => {
   });
 });
 
-describe("one job's method", () => {
-  // Auto is the spaces' own search, bit for bit as at commit bf769f2, under any of its names. The
-  // stored results were recorded on Apple Silicon (darwin arm64): V8's Math functions may differ in
-  // the last bit on other platforms, and a seeded search amplifies that, so elsewhere (CI's Linux
-  // runner) the test checks what holds everywhere: the same result under every name, valid by the
-  // server's rule.
-  const pinned = JSON.parse(readFileSync(resolve(__dirname, "auto-bf769f2.json"), "utf8")).jobs as Record<
-    string,
-    { score: number | null; evaluations: number; termination: string; config: string }
-  >;
-  const recordedHere = process.platform === "darwin" && process.arch === "arm64";
-  const names = [undefined, AUTO, "label"] as const;
-  for (const [key, expected] of Object.entries(pinned)) {
-    const [id, kind, evals] = key.split(" ");
-    // async, yielding after each job: these synchronous searches add up to over a minute on CI's
-    // 2-core runner, and Vitest's worker must answer its runner at least once a minute
-    it(`runs Auto as at bf769f2, under each of its names: ${key}`, async () => {
-      const space = id.split("/")[0] as SpaceJob["space"];
-      const results = [];
-      for (const name of names) {
-        const method = name === "label" ? SPACE_METHOD[space] : name;
+describe("Auto, the space's own search", () => {
+  /** A small problem of each space and the evaluations of a short job on it. */
+  const SMALL = [
+    ["sphere/4/4", 300],
+    ["torus/sq/4/4", 300],
+    // a curved job's evaluations are its rounds' restarts and hops
+    ["curved/-1/0/0/3", 1],
+    // the fold search's are its compressions, its start's included
+    ["surface/cube/fold/0/4", 1],
+    ["boundary/tesseract/ball/4", 2000],
+    ["polyhedra/cubincub/3", 200],
+    ["balls/ballinball/5", 300],
+  ] as const;
+  const spaceOf = (id: string) => id.split("/")[0] as SpaceJob["space"];
+  /** A valid start: the research record, or for balls, which has none, a test packing. */
+  const startOf = (id: string) =>
+    spaceOf(id) === "balls" ? ballsPackings.find((p) => p.id === id)!.config : recordOf(id);
+  const ruleFor = (id: string) => (spaceOf(id) === "balls" ? ruleOf(id) : {});
+  const autoJob = (id: string, evals: number, o: Partial<SpaceJob> = {}): SpaceJob => ({
+    space: spaceOf(id),
+    id,
+    seed: 5,
+    // ample time: the curved rounds' time limits, read from the clock, then stay the same
+    budget: { time_s: 60, evals },
+    kind: "iterate",
+    rule: ruleFor(id),
+    ...o,
+  });
+  const stubEngines = () => {
+    for (const e of Object.values(ENGINES)) e.fn.mockImplementation(e.stub);
+  };
+  /** The arguments of each call, without the callbacks (new closures in every job). */
+  const callsOf = (fn: MockInstance) =>
+    fn.mock.calls.map((args) =>
+      args.map((a) =>
+        a && typeof a === "object" && !Array.isArray(a)
+          ? Object.fromEntries(Object.entries(a).filter(([, v]) => typeof v !== "function"))
+          : a,
+      ),
+    );
+  const tick = () => new Promise((r) => setImmediate(r));
+
+  it("calls the space's own search alone under each of its names, with the same arguments", () => {
+    stubEngines();
+    const cases: [string, number, SpaceJob["start"]][] = [
+      ...SMALL.map(([id, evals]): [string, number, SpaceJob["start"]] => [id, evals, startOf(id)]),
+      // nofold off the Platonic solids: the fold search in its nofold mode (no record, so no start)
+      ["surface/prism5/nofold/0/3", 1, undefined],
+    ];
+    for (const [id, evals, start] of cases) {
+      const space = spaceOf(id);
+      const seen: unknown[] = [];
+      for (const method of [undefined, AUTO, SPACE_METHOD[space]]) {
+        for (const e of Object.values(ENGINES)) e.fn.mockClear();
         const r = runSpaceJob(
-          {
-            space,
-            id,
-            ...(method === undefined ? {} : { method }),
-            seed: 12345,
-            budget: { time_s: 3000, evals: Number(evals) },
-            kind: kind as SpaceJob["kind"],
-            rule: {},
-            ...(kind === "iterate" ? { start: recordOf(id) } : {}),
-          },
+          autoJob(id, evals, { ...(method === undefined ? {} : { method }), ...(start ? { start } : {}) }),
           go,
         );
-        const config = createHash("sha1")
-          .update(JSON.stringify(r.config ?? null))
-          .digest("hex")
-          .slice(0, 16);
-        results.push({ result: { score: r.score, evaluations: r.evaluations, termination: r.termination, config }, r });
-        await new Promise((resolve) => setImmediate(resolve));
+        const what = `${id}, method ${method}`;
+        expect(r.termination, `${what}: ${r.reasons.join("; ")}`).not.toBe("error");
+        expect(ENGINES[space].fn, what).toHaveBeenCalled();
+        for (const [other, e] of Object.entries(ENGINES))
+          if (other !== space) expect(e.fn, `${what}: ${other}`).not.toHaveBeenCalled();
+        seen.push(callsOf(ENGINES[space].fn));
       }
-      for (const { result } of results.slice(1)) expect(result).toEqual(results[0].result);
-      if (recordedHere) expect(results[0].result).toEqual(expected);
-      else if (results[0].r.config !== null) expect(results[0].r.valid).toBe(true);
-    });
-  }
+      for (const calls of seen.slice(1)) expect(calls, id).toEqual(seen[0]);
+    }
+  });
 
+  it("gives the search the job's start in an iterate job and none in a fresh one, the start still a candidate", () => {
+    stubEngines();
+    for (const [id, evals] of SMALL) {
+      const space = spaceOf(id);
+      const start = startOf(id);
+      const startScore = checkSpaceConfig(space, id, start, ruleFor(id)).score;
+      const given = (o: Partial<SpaceJob>) => {
+        ENGINES[space].fn.mockClear();
+        const r = runSpaceJob(autoJob(id, evals, o), go);
+        return { r, start: ENGINES[space].start(ENGINES[space].fn.mock.calls[0]) };
+      };
+      const iterate = given({ kind: "iterate", start });
+      expect(iterate.start, id).toBeDefined();
+      expect(iterate.r).toMatchObject({ valid: true, score: startScore });
+      // the board's and the volunteer client's fresh jobs carry no start
+      const fresh = given({ kind: "fresh" });
+      expect(fresh.start, id).toBeUndefined();
+      expect(fresh.r).toMatchObject({ valid: false, score: null, reasons: ["no valid configuration found"] });
+      // the boundary and curved searches build their own starts in a fresh job, given one or not
+      if (space === "boundary" || space === "curved") {
+        const both = given({ kind: "fresh", start });
+        expect(both.start, id).toBeUndefined();
+        expect(both.r).toMatchObject({ valid: true, score: startScore });
+      }
+    }
+  });
+
+  // async, yielding after each job, so that Vitest's worker can answer its runner on a slow machine
+  it("runs a short job of each space from a small valid start, within its budget, to a result the server's rule accepts", async () => {
+    for (const [id, evals] of SMALL) {
+      const space = spaceOf(id);
+      const rule = ruleFor(id);
+      const start = startOf(id);
+      const given = checkSpaceConfig(space, id, start, rule);
+      expect(given.valid, id).toBe(true);
+      const job = autoJob(id, evals, { start });
+      const r = runSpaceJob(job, go);
+      // the search itself, not the other tests' stub
+      expect(ENGINES[space].fn.getMockImplementation(), id).not.toBe(ENGINES[space].stub);
+      expect(ENGINES[space].fn, id).toHaveBeenCalled();
+      expect(Object.keys(r).sort(), id).toEqual(
+        ["config", "evaluations", "job", "reasons", "score", "termination", "valid", "wallTime"].sort(),
+      );
+      expect(r, id).toMatchObject({ job, valid: true, reasons: [] });
+      // never worse than its start, and valid by the server's rule at the score it states
+      expect(r.score!, id).toBeLessThanOrEqual(given.score!);
+      expect(checkSpaceConfig(space, id, r.config, rule), id).toMatchObject({ valid: true, score: r.score });
+      // the budget: its evaluations (one more for the fold search's start), unless the search ended first
+      expect(["evals", "bound", "done"], id).toContain(r.termination);
+      if (r.termination === "evals") expect(r.evaluations, id).toBeGreaterThanOrEqual(evals);
+      expect(r.evaluations, id).toBeLessThanOrEqual(evals + (space === "surface" ? 1 : 0));
+      expect(r.wallTime, id).toBeLessThan(job.budget.time_s);
+      await tick();
+    }
+  });
+});
+
+describe("one job's method", () => {
   it("gives an error result for an unknown method or bad parameters, and does not run", () => {
     withoutKernels();
     const bad: [Partial<SpaceJob>, RegExp][] = [
@@ -466,21 +642,16 @@ describe("a method's name in a submission", () => {
 });
 
 describe("the balls kernel", () => {
-  /** The balls space's test packings, shared with its certifier's tests (python/balls/fixtures/packings.json). */
-  const packings = JSON.parse(readFileSync(resolve(root, "python/balls/fixtures/packings.json"), "utf8"))
-    .packings as { id: string; code: string; P: number; config: BallsConfig }[];
-  /** The rule the server applies to a balls problem: its domain's bound, and the strict check (no research records). */
-  const ruleOf = (id: string) => {
-    const parsed = parseSpaceId("balls", id);
-    if (typeof parsed === "string") throw new Error(parsed);
-    return { bound: SPACE_DOMAINS.balls!.bound(parsed)!.value, noRecord: true };
-  };
+  const packings = ballsPackings;
   const tick = () => new Promise((r) => setImmediate(r));
 
   /** A packing and its variants: valid, within each tolerance and beyond it, below the bound, malformed. */
   function variants(base: BallsConfig, bound: number): [string, unknown][] {
     const withS = (s: unknown) => ({ s, pieces: base.pieces });
-    const first = (f: (p: number[]) => unknown) => ({ s: base.s, pieces: base.pieces.map((p, i) => (i === 0 ? f(p) : p)) });
+    const first = (f: (p: number[]) => unknown) => ({
+      s: base.s,
+      pieces: base.pieces.map((p, i) => (i === 0 ? f(p) : p)),
+    });
     const holed: unknown[] = base.pieces.slice();
     delete holed[0];
     const solid = base.pieces[0].length === 7;

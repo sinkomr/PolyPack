@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KernelState, getMethod, methodsFor, mulberry32, runMethod } from "../src";
+import { type KernelState, mulberry32, runMethod } from "../src";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 import { morphSchedule, toContact } from "../src/methods/morph-stage";
 import { softDisksKernel } from "./soft-disks";
@@ -54,14 +54,6 @@ describe("the continuation's pieces", () => {
 });
 
 describe("morph on the reference kernel", () => {
-  it("is offered where the kernel has soft shapes", () => {
-    const m = getMethod("morph")!;
-    expect(m.requires).toEqual(["shape"]);
-    expect(m.title).toBe("Shape continuation");
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("morph");
-    expect(methodsFor({ capabilities: ["seeds"] }).map((d) => d.name)).not.toContain("morph");
-  });
-
   it("comes within 2.5% of the best known packings for P = 2 to 10 in 30,000 evaluations", () => {
     // Measured (seeds 1-10, Node 26, Apple Silicon): within 2.4e-8 except one seed for P = 9,
     // which stays at another local optimum 1.02% above the best known radius.

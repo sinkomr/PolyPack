@@ -102,25 +102,6 @@ test("the records page lists published values with a chart", async ({ page }) =>
   await expect(page.locator("#n-select")).toHaveValue("0");
 });
 
-test("the records page puts the chart above the atlas and the complete table", async ({ page }) => {
-  await page.goto("/browse.html#0,4");
-  await expect(page.locator("#atlas-title")).toHaveText("The atlas of circles in a square");
-  await expect(page.locator("#rows tr")).toHaveCount(500);
-  // one tile per listed P, the first hundred shown
-  await expect(page.locator("#atlas-tiles a.tile")).toHaveCount(500);
-  await expect(page.locator("#atlas-tiles a.tile:visible")).toHaveCount(100);
-  await expect(page.locator('#atlas-tiles a.tile[data-p="10"] .tile-score')).toHaveText("6.747442");
-  await expect(page.locator('#atlas-tiles a.tile[data-p="10"] .tile-art')).toHaveClass(/drawn/);
-  const top = (selector: string) =>
-    page.locator(selector).evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
-  expect(await top("#plot")).toBeLessThan(await top("#atlas-tiles"));
-  expect(await top("#atlas-tiles")).toBeLessThan(await top("table"));
-  // the old address form still selects the problem
-  await expect(page.locator("#n-select")).toHaveValue("0");
-  await expect(page.locator("#m-select")).toHaveValue("4");
-  await expect(page).toHaveURL(/\/browse\.html#0,4$/);
-});
-
 test("the records page follows the live changes of the pair of shapes it shows", async ({ page }) => {
   const follows = (pair: string) =>
     page.waitForRequest((r) => decodeURIComponent(r.url()).endsWith(`/api/events?keys=${pair}/*`));

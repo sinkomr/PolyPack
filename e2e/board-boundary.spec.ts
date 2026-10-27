@@ -357,20 +357,29 @@ test("a 3D drawing that cannot be loaded says so and loads on Try again", async 
   await shown(page, ID);
 });
 
+// The whole board once per theme, with the drawing in Cells, then the drawing alone in each other
+// view: Net with its fold, Slice with its axes and position (the viewer scans its own page once).
 for (const scheme of ["light", "dark"] as const) {
   test(`3D on 4D on the board has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
     const errors = pageErrors(page);
     await page.goto(`/#space=${ID}`);
     await shown(page, ID);
-    for (const view of ["Cells", "Net", "Slice"]) {
-      await button(page, view).click();
-      await page.waitForTimeout(300);
-      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
+    const scan = async (what: string, region?: string) => {
+      const axe = new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]);
+      const results = await (region ? axe.include(region) : axe).analyze();
       expect(
-        results.violations.map((v) => `${view}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
+        results.violations.map((v) => `${what}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
       ).toEqual([]);
-    }
+    };
+    await expect(button(page, "Cells")).toHaveAttribute("aria-pressed", "true");
+    await scan("Cells, the whole board");
+    await button(page, "Net").click();
+    await expect(page.getByRole("slider", { name: "Fold" })).toBeVisible();
+    await scan("Net", ".pp3");
+    await button(page, "Slice").click();
+    await expect(page.getByRole("slider", { name: "Position" })).toBeVisible();
+    await scan("Slice", ".pp3");
     expect(errors).toEqual([]);
   });
 }

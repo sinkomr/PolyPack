@@ -23,7 +23,7 @@ async function problemOf(page: Page, id: string): Promise<SpaceProblemResponse> 
   return (await (await page.request.get(`/api/spaces/boundary/problems/${id}`)).json()) as SpaceProblemResponse;
 }
 
-test("the viewer opens from the dimensions page, draws any problem and links to the board and the notes", async ({
+test("the viewer opens from the dimensions page, draws a problem and links to the board and the notes", async ({
   page,
 }) => {
   const errors = pageErrors(page);
@@ -45,16 +45,16 @@ test("the viewer opens from the dimensions page, draws any problem and links to 
   ]);
   await expect(page.getByRole("heading", { name: "3D on 4D viewer" })).toBeVisible();
 
-  // all three views
-  for (const view of ["Cells", "Net", "Slice"]) {
-    await button(page, view).click();
-    await expect(button(page, view)).toHaveAttribute("aria-pressed", "true");
-    await page.waitForTimeout(200);
-    expect(await distinctColours(page, await page.locator(".pp3 canvas").screenshot()), view).toBeGreaterThan(30);
-  }
-  await button(page, "Net").click();
-  await page.getByRole("slider", { name: "Fold" }).fill("1000");
-  await expect(page.getByRole("slider", { name: "Fold" })).toHaveAttribute("aria-valuetext", "folded");
+  // the drawing, in its first view, beside the values; the board's tests turn every view of it, fold it and slice it
+  const canvas = page.locator(".pp3 canvas");
+  await expect(button(page, "Cells")).toHaveAttribute("aria-pressed", "true");
+  expect(await distinctColours(page, await canvas.screenshot())).toBeGreaterThan(30);
+  const drawing = (await canvas.boundingBox())!;
+  const panel = (await page.getByRole("complementary", { name: "Problem and values" }).boundingBox())!;
+  expect(drawing.width).toBeGreaterThan(300);
+  expect(drawing.height).toBeGreaterThan(300);
+  expect(drawing.x + drawing.width).toBeLessThanOrEqual(panel.x + 1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   // the values, in the board's words
   const api = await problemOf(page, "boundary/tesseract/ball/9");
@@ -83,12 +83,12 @@ test("the viewer opens from the dimensions page, draws any problem and links to 
   );
 
   // another P keeps the drawing and its view; another piece opens a new one in the same view
-  await page.locator(".pp3 canvas").evaluate((c) => ((c as HTMLCanvasElement & { kept?: boolean }).kept = true));
+  await button(page, "Net").click();
+  await expect(button(page, "Net")).toHaveAttribute("aria-pressed", "true");
+  await canvas.evaluate((c) => ((c as HTMLCanvasElement & { kept?: boolean }).kept = true));
   await page.selectOption("#viewer-f-P", "12");
   await shown(page, "boundary/tesseract/ball/12");
-  expect(await page.locator(".pp3 canvas").evaluate((c) => (c as HTMLCanvasElement & { kept?: boolean }).kept)).toBe(
-    true,
-  );
+  expect(await canvas.evaluate((c) => (c as HTMLCanvasElement & { kept?: boolean }).kept)).toBe(true);
   await expect(button(page, "Net")).toHaveAttribute("aria-pressed", "true");
   await expect(page).toHaveURL(/#id=boundary\/tesseract\/ball\/12$/);
   await page.selectOption("#viewer-f-piece", "cube");
@@ -98,11 +98,12 @@ test("the viewer opens from the dimensions page, draws any problem and links to 
   await expect(page.locator("#viewer-score")).toHaveText(twelve);
   await expect(page.locator(".pp3-status")).toContainText(`12 cubes, edge ${twelve}.`);
 
-  // to the board, with the same problem
-  await page.locator("#viewer-board").click();
-  await expect(page).toHaveURL(/\/#space=boundary\/tesseract\/cube\/12$/);
-  await expect(page.locator("#space-problem-note")).toHaveText("Problem boundary/tesseract/cube/12", LAZY_VIEW);
-  await expect(page.locator(".pp3 canvas")).toBeVisible(LAZY_VIEW);
+  // the links follow it (the board's own tests open its addresses)
+  await expect(page.locator("#viewer-board")).toHaveAttribute("href", "/#space=boundary/tesseract/cube/12");
+  await expect(page.locator("#viewer-json")).toHaveAttribute(
+    "href",
+    "/api/spaces/boundary/problems/boundary/tesseract/cube/12",
+  );
   expect(errors).toEqual([]);
 });
 
@@ -173,23 +174,20 @@ test("the viewer says when the catalogue cannot be read, and Try again reads it"
   await expect(page.locator("#viewer-busy")).toBeHidden();
 });
 
+// One scan of the whole page per theme, with the help open and the drawing in Slice, its view with the
+// most controls: the board's scans cover the drawing's controls in each of its views (board-boundary.spec.ts).
 for (const scheme of ["light", "dark"] as const) {
   test(`the viewer has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
     const errors = pageErrors(page);
     await page.goto("/spaces/boundary.html#id=boundary/tesseract/cube/9");
     await shown(page, "boundary/tesseract/cube/9");
-    for (const view of ["Cells", "Net", "Slice"]) {
-      await button(page, view).click();
-      await page.waitForTimeout(300);
-      const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-      expect(
-        results.violations.map((v) => `${view}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`),
-      ).toEqual([]);
-    }
+    await button(page, "Slice").click();
+    await expect(page.getByRole("slider", { name: "Position" })).toBeVisible();
     await page.locator("details summary", { hasText: "How to read the drawing" }).click();
+    await expect(page.locator(".help")).toBeVisible();
     const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-    expect(results.violations.map((v) => `${v.id} ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
+    expect(results.violations.map((v) => `${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
     expect(errors).toEqual([]);
   });
 }

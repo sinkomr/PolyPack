@@ -356,21 +356,71 @@ describe("boundary kernel: a method run", () => {
 });
 
 describe("boundary kernel: every method", () => {
-  it("runs each method it offers from an absurd start, briefly, to a result the server's rule accepts", () => {
-    const start = { s: 1e300, pieces: Array.from({ length: 5 }, () => ({ cell: 0, u: [1e17, 0, 0] })) };
+  /** The generic methods a kernel offers, without this file's own. */
+  const offered = (k: SpaceKernel) =>
+    methodsFor(k)
+      .map((m) => m.name)
+      .filter((n) => !n.startsWith("test_"));
+
+  it("takes an absurd start for none, or as a start to repair, and ends each method it offers soon, with no error", () => {
+    const P = 5;
+    const absurd = [
+      // outside the server's limits: refused, so the method runs from no start
+      { s: 1e300, pieces: Array.from({ length: P }, () => ({ cell: 0, u: [1e17, 0, 0] })) },
+      // read, but every piece on one point of a tesseract far too small
+      { s: 0.01, pieces: Array.from({ length: P }, () => ({ cell: 0, u: [0, 0, 0] })) },
+    ];
     for (const piece of PIECES) {
-      const k = kernel(piece, 5);
-      const names = methodsFor(k)
-        .map((m) => m.name)
-        .filter((n) => !n.startsWith("test_"));
+      const k = kernel(piece, P);
+      expect(k.fromConfig(absurd[0])).toBeNull();
+      expect(k.fromConfig(absurd[1])).not.toBeNull();
+      const names = offered(k);
       expect(names.length).toBeGreaterThanOrEqual(piece === "ball" ? 8 : 6);
-      for (const name of names) {
-        const t0 = performance.now();
-        const r = runMethod(k, name, { seed: 1, start, budget: { evals: 12_000, time_s: 20 } });
-        expect(performance.now() - t0).toBeLessThan(25_000);
-        expect(r.reasons.filter((x) => x !== "no valid configuration found")).toEqual([]);
-        if (r.config) expect(k.validate(r.config).valid).toBe(true);
+      for (const name of names)
+        for (const start of absurd) {
+          const t0 = performance.now();
+          // two offers' worth: enough to start, finish and check, not to search
+          const r = runMethod(k, name, { seed: 1, start, budget: { evals: 4000, time_s: 5 } });
+          expect(performance.now() - t0, `${piece} ${name}`).toBeLessThan(10_000);
+          expect(r.stopped, `${piece} ${name}`).not.toBe("error");
+          expect(
+            r.reasons.filter((x) => x !== "no valid configuration found"),
+            `${piece} ${name}`,
+          ).toEqual([]);
+          if (r.config) expect(k.validate(r.config).valid, `${piece} ${name}`).toBe(true);
+        }
+    }
+  });
+
+  it("returns from a small valid start a result the server's rule accepts, never worse than the start", () => {
+    for (const piece of PIECES) {
+      const P = 3;
+      const k = kernel(piece, P);
+      // the research record: valid, and hard to beat in a short run
+      const start = records().find((r) => r.piece === piece && r.P === P)!.config;
+      const given = k.validate(start);
+      expect(given.valid).toBe(true);
+      for (const name of offered(k)) {
+        // about one offer: a method's own first result is seldom better than the start
+        const r = runMethod(k, name, { seed: 1, start, budget: { evals: 2500 } });
+        expect(r.stopped, `${piece} ${name}`).not.toBe("error");
+        expect(r.reasons, `${piece} ${name}`).toEqual([]);
+        expect(r.score!, `${piece} ${name}`).toBeLessThanOrEqual(given.score!);
+        expect(validateBoundary(problem(piece, P), r.config, BOUNDARY_SERVER_RULE).reasons, `${piece} ${name}`).toEqual(
+          [],
+        );
+        expect(k.validate(r.config), `${piece} ${name}`).toMatchObject({ valid: true, score: r.score });
       }
     }
+  });
+
+  it("ends a long run of the largest problem on its time limit, with its best so far", () => {
+    const k = kernel("ball", 64);
+    const t0 = performance.now();
+    const r = runMethod(k, "basin_hopping", { seed: 1, budget: { evals: 1e9, time_s: 0.25 } });
+    // the limit is polled at every kernel call, a finish under way included
+    expect(performance.now() - t0).toBeLessThan(5_000);
+    expect(r.stopped).toBe("time");
+    if (r.config) expect(validateBoundary(problem("ball", 64), r.config, BOUNDARY_SERVER_RULE).reasons).toEqual([]);
   });
 });
