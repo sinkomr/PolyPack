@@ -691,7 +691,8 @@ class SpaceMode {
     latticeOption.hidden = p.space !== "polyhedra";
     latticeOption.disabled = p.space !== "polyhedra";
     if (!p.best && p.status === "no_record") startPicker.value = p.space === "polyhedra" ? "lattice" : "fresh";
-    else if (startPicker.value === "lattice" && p.space !== "polyhedra") startPicker.value = "shown";
+    // "lattice" is offered only where nothing is shown yet; a problem with a record starts from its packing
+    else if (startPicker.value === "lattice") startPicker.value = "shown";
     this.setDefaults(p);
     this.setAddress();
     this.renderFacts();

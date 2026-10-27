@@ -1024,6 +1024,31 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect(SPACE_HEAVY_CHECKS_WAITING).toBe(8);
   }, 30000);
 
+  it("refuses a malformed heavy body before the heavy queue and the address's one check", async () => {
+    const id = "polyhedra/tidintid/500";
+    const config = latticeStart(getProblem("tidintid")!, 500);
+    const checks: { workMs: number }[] = [];
+    makeApp({ clientIp: () => "4.4.4.4" }, index, undefined, { onCheck: (c) => checks.push(c) });
+    const post = async (cfg: unknown) => {
+      const r = await app.request("/api/spaces/submit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(entry(cfg, id)),
+      });
+      return r.status;
+    };
+    const bad = [
+      { ...config, s: "big" },
+      { ...config, pieces: [...config.pieces.slice(0, 499), [NaN, 0, 0, 1, 0, 0, 0]] },
+      { ...config, pieces: config.pieces.slice(0, 10) },
+      "nope",
+    ];
+    // all at once from one address: none is told to wait (none took the address's slot), none reached the check
+    const statuses = await Promise.all(bad.map(post));
+    expect(statuses.every((s) => s === 400 || s === 422)).toBe(true);
+    expect(checks).toHaveLength(0);
+  });
+
   it("serves a research configuration kept apart, read on demand, the same as its file", async () => {
     makeApp({}, index);
     const id = "polyhedra/phcinphc/100";

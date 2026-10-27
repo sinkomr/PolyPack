@@ -660,6 +660,10 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         ["an entry from this address is still being checked; send the next one when it is answered"],
         1,
       );
+    // A body that is not a configuration of this problem (types, ids, sizes, finite numbers, piece count)
+    // is refused here, before it takes a place in the heavy queue or any of the budget.
+    const shape = parseSpaceConfig(parsedId, body.config);
+    if (!shape.ok) return reject(shape.malformed ? 400 : 422, shape.errors.slice(0, 20));
     const heavy = (space === "polyhedra" || space === "surface") && parsedId.P >= SPACE_HEAVY_CHECK_P;
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);

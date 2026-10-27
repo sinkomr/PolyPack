@@ -128,6 +128,11 @@ test("P = 500 without a record offers a lattice start on the board", async ({ pa
   await expect(page.locator("#space-solve-run")).toBeEnabled();
   await page.selectOption("#space-solve-start", "shown");
   await expect(page.locator("#space-solve-run")).toBeDisabled();
+  // Moving to a problem with a record resets a "lattice" choice to the shown packing.
+  await page.selectOption("#space-solve-start", "lattice");
+  await page.selectOption("#space-f-P", "100");
+  await shown(page, "polyhedra/tidintid/100");
+  await expect(page.locator("#space-solve-start")).toHaveValue("shown");
 });
 
 test("a polyhedra round runs in the browser and returns a valid result, and pause and stop act at once at P = 100", async ({
