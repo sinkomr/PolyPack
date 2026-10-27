@@ -31,6 +31,14 @@ const packings: Packing[] = JSON.parse(
 describe("the surface kernel on the Catalan solids, prisms and antiprisms", () => {
   // every family, both modes, disks, triangles, squares, hexagons and 12-gons, P = 1, 5 and 30
   const problems: [SolidName, Mode, number, number][] = [
+    ["truncated_tetrahedron", "fold", 0, 2],
+    ["truncated_tetrahedron", "nofold", 3, 3],
+    ["cuboctahedron", "fold", 3, 2],
+    ["cuboctahedron", "nofold", 0, 3],
+    ["snub_cube", "fold", 12, 2],
+    ["snub_cube", "nofold", 3, 3],
+    ["truncated_icosidodecahedron", "fold", 3, 2],
+    ["truncated_icosidodecahedron", "nofold", 12, 4],
     ["rhombic_dodecahedron", "fold", 4, 5],
     ["rhombic_dodecahedron", "nofold", 0, 30],
     ["triakis_tetrahedron", "fold", 3, 1],

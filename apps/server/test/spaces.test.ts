@@ -8,6 +8,7 @@ import {
   SPACE_BOUND_SLACK,
   SPACE_NAMES,
   SURFACE_CATALAN,
+  SURFACE_ARCHIMEDEAN,
   SPACE_RECORD_MARGIN,
   SPACE_STRICT_REASON,
   SpaceName,
@@ -191,7 +192,7 @@ describe("GET /api/spaces", () => {
     // surface: the problems of its domain, 2038 of them with a record
     expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
-      ["surface", 712800],
+      ["surface", 970200],
       ["curved", 990000],
       ["sphere", 9900],
       ["torus", 29700],
@@ -1309,6 +1310,23 @@ describe("GET /api/spaces/targets", () => {
     const balls = r.targets.filter((t) => t.space === "balls");
     expect(balls.length).toBe(SPACE_DOMAIN_TARGETS);
     expect(balls.every((t) => t.P <= 73)).toBe(true);
+  });
+
+  it("offers Archimedean fold targets and excludes nofold even with site entries", async () => {
+    makeApp({}, index);
+    const packings = JSON.parse(readFileSync(join(root, "python/surface/fixtures/archimedean_packings.json"), "utf8")).packings;
+    for (const p of packings.filter((p: { N: number }) => p.N === 0)) {
+      const before = await get(`/api/spaces/surface/problems/${p.id}`);
+      expect(before.status).toBe(200);
+      expect(before.body.status).toBe("no_record");
+      expect(before.body.certified_config).toBeNull();
+      expect((await submit({ space: "surface", id: p.id, config: { s: p.s, pieces: p.pieces }, name: "test" })).status).toBe(200);
+    }
+    const r = (await get(`/api/spaces/targets?spaces=surface&limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
+    const ids = new Set(r.targets.map((t) => t.id));
+    for (const p of packings.filter((p: { N: number }) => p.N === 0)) expect(ids.has(p.id), p.id).toBe(p.mode === "fold");
+    for (const solid of SURFACE_ARCHIMEDEAN) expect(ids.has(`surface/${solid}/fold/0/2`), solid).toBe(true);
+    expect(r.targets.some((t) => t.id.includes("/nofold/") && SURFACE_ARCHIMEDEAN.includes(t.id.split("/")[1]))).toBe(false);
   });
 
   it("gives every space an equal share of the priority: capped gap times min(1, (P - 1) / 5), scaled per space", async () => {

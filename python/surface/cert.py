@@ -1,5 +1,5 @@
 """Rigorous certifier for PolyPack packings on the surfaces of Platonic solids, and (general.py) of
-the Catalan solids, prisms and antiprisms.
+the Archimedean and Catalan solids, prisms and antiprisms.
 
 It decides every inequality exactly (chain topology, disk distances, cone points against
 wedges; arithmetic in Q, Q(sqrt 3) or Q(sqrt(10 + 2 sqrt 5))) or with mpmath interval
@@ -31,7 +31,7 @@ describe the two parts, whose combination proves that the half-planes have no co
 The multipliers are found with floating point (untrusted) and then checked with intervals,
 including the residual of the combination, so the check does not rely on exact cancellation.
 
-The other solids (13 Catalan solids, prisms, antiprisms) are certified by general.py, which builds
+The other solids (13 Archimedean and 13 Catalan solids, prisms, antiprisms) are certified by general.py, which builds
 them from python/polyhedra/solids_exact.json and decides with intervals and keyed wedge rays (see its
 docstring); the Platonic solids keep the exact path below.
 

@@ -330,13 +330,13 @@ describe("the catalogues", () => {
     expect(loaded.balls!.problems).toHaveLength(0);
     expect(loaded.balls!.domain!.info.problems).toBe(18711);
     expect(loaded.surface!.problems).toHaveLength(0);
-    expect(loaded.surface!.domain!.info.problems).toBe(712800);
+    expect(loaded.surface!.domain!.info.problems).toBe(970200);
     expect(logs).toEqual(
       SPACE_NAMES.map((s) =>
         s === "balls"
           ? "[spaces] balls: a domain of 18711 problems, 0 with a record (no records file)"
           : s === "surface"
-            ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
+            ? "[spaces] surface: a domain of 970200 problems, 0 with a record (no records file)"
             : loaded[s]?.domain
               ? `[spaces] ${s}: a domain of ${loaded[s]!.domain!.info.problems} problems, 0 with a record (no records file)`
               : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,

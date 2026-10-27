@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   ALL_SOLID_NAMES,
   ANTIPRISM_NAMES,
+  ARCHIMEDEAN_NAMES,
   CATALAN_NAMES,
   PRISM_NAMES,
   type SolidName,
@@ -34,7 +35,7 @@ import {
 } from "../src/index";
 import { randomPointOf, rng, walkRayOf } from "./helpers";
 
-const NEW: SolidName[] = [...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
+const NEW: SolidName[] = [...ARCHIMEDEAN_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
 /** A kite, a rhombic, an irregular-pentagon (chiral) and a sharp-vertex Catalan solid, prisms and antiprisms. */
 const SAMPLE: SolidName[] = [
   "deltoidal_icositetrahedron",
@@ -61,16 +62,17 @@ function meanEdge(name: SolidName): number {
 }
 
 describe("general solids: structure", () => {
-  it("lists 36 solids, grouped by family", () => {
-    expect(ALL_SOLID_NAMES.length).toBe(36);
-    expect(new Set(ALL_SOLID_NAMES).size).toBe(36);
+  it("lists 49 solids, grouped by family", () => {
+    expect(ALL_SOLID_NAMES.length).toBe(49);
+    expect(new Set(ALL_SOLID_NAMES).size).toBe(49);
     expect(CATALAN_NAMES.length).toBe(13);
+    expect(ARCHIMEDEAN_NAMES.length).toBe(13);
     expect(PRISM_NAMES).toEqual(["prism3", "prism5", "prism6", "prism7", "prism8", "prism9", "prism10", "prism11", "prism12"]);
     expect(ANTIPRISM_NAMES.length).toBe(9);
     for (const n of ALL_SOLID_NAMES) expect(isSolidName(n)).toBe(true);
     expect(isSolidName("prism4")).toBe(false);
     expect(isSolidName("antiprism3")).toBe(false);
-    expect(isSolidName("truncated_cube")).toBe(false);
+    expect(isSolidName("elongated_cube")).toBe(false);
   });
 
   for (const name of NEW) {
@@ -173,6 +175,25 @@ describe("general solids: structure", () => {
       }
     });
   }
+
+  it("has the Archimedean vertex configurations, with regular unit-edge faces", () => {
+    const configurations = [
+      [3, 6, 6], [3, 4, 3, 4], [3, 8, 8], [4, 6, 6], [3, 4, 4, 4], [4, 6, 8], [3, 3, 3, 3, 4],
+      [3, 5, 3, 5], [3, 10, 10], [5, 6, 6], [3, 4, 5, 4], [4, 6, 10], [3, 3, 3, 3, 5],
+    ];
+    ARCHIMEDEAN_NAMES.forEach((name, i) => {
+      const S = getSolid(name);
+      expect(S.family).toBe("archimedean");
+      expect(S.regular.every(Boolean)).toBe(true);
+      expect(meanEdge(name)).toBeCloseTo(1, 14);
+      for (let v = 0; v < S.V; v++) {
+        const incident = S.faces.filter((f) => f.includes(v)).map((f) => f.length).sort((a, b) => a - b);
+        expect(incident, `${name} vertex ${v}`).toEqual([...configurations[i]].sort((a, b) => a - b));
+        const cone = configurations[i].reduce((sum, m) => sum + (m - 2) / m, 0);
+        expect(S.vertexCone[v] / Math.PI).toBeCloseTo(cone, 14);
+      }
+    });
+  });
 
   it("prisms and antiprisms have regular faces in the regular frame; Catalan faces are tangential at the origin", () => {
     for (const name of [...PRISM_NAMES, ...ANTIPRISM_NAMES]) {
@@ -409,7 +430,7 @@ describe("general solids: float validator, adversarial", () => {
   });
 
   it("fold: a piece over a vertex is rejected at every kind of vertex, even the sharpest; touching it is allowed", () => {
-    for (const name of ["triakis_tetrahedron", "deltoidal_icositetrahedron", "rhombic_dodecahedron", "prism3", "antiprism4"] as SolidName[]) {
+    for (const name of ["triakis_tetrahedron", "deltoidal_icositetrahedron", "rhombic_dodecahedron", "prism3", "antiprism4", ...ARCHIMEDEAN_NAMES] as SolidName[]) {
       const S = getSolid(name);
       const s = 3 / meanEdge(name);
       // each kind of vertex: distinct cone angles

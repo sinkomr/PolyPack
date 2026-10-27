@@ -36,7 +36,7 @@
  *    solids in a ball by separating planes), budgeted by its objective evaluations.
  * Surface problems in the nofold mode on the Platonic solids are planar problems and run on the
  * polygon solver instead (nofold.ts has the conversion); they never reach this file. On the other
- * solids (Catalan solids, prisms, antiprisms) the faces are not all one regular polygon, and their
+ * solids (Archimedean and Catalan solids, prisms, antiprisms) the faces are not all one regular polygon, and their
  * nofold problems run here: the surface search above in its nofold mode, every piece kept inside
  * its own face.
  *

@@ -329,8 +329,8 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   // its lower bound, g = (best - bound) / best capped at SPACE_GAP_CAP (best: the smaller of the
   // certified and the site value), times spaceTargetWeight(P). Problems whose best value meets the
   // bound (g at most SPACE_SETTLED_GAP), P = 1, and the surface in nofold mode on the Platonic solids,
-  // prisms and antiprisms are left out: such a nofold problem is the main site's planar problem N in M
-  // (on a prism or antiprism, the best split between its two kinds of face), which the polygon work list
+  // Archimedean solids, prisms and antiprisms are left out: such a nofold problem is the main site's planar problem N in M
+  // (the best split between two or three regular face kinds), which the polygon work list
   // covers; it stays listed and open to submissions. Catalan nofold problems (irregular faces) are offered. The priorities are then
   // scaled so that those of each space sum to 1 / (number of spaces with targets): drawn in
   // proportion to priority, every space gets the same share of the searches. A problem without a
@@ -360,7 +360,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       for (const p of candidates(space)) {
         if (!acceptsSubmissions(p)) continue;
         // nofold problems of solids whose faces are regular polygons are 2D in 2D problems (the polygon
-        // work list's, or a split between two of them on prisms and antiprisms); a Catalan face is not
+        // work list's, or a split among two or three of them); a Catalan face is not
         if (space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid)))
           continue;
         const weight = spaceTargetWeight(p.P);

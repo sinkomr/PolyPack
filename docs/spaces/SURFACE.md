@@ -5,7 +5,7 @@
 container. The API calls it the space `surface`.
 
 PolyPack's pieces (unit disks, or regular N-gons of side 1, N = 3 to 100) packed on the surface of
-a convex solid scaled by s: a Platonic solid, one of the 13 Catalan solids, a prism (3 and 5 to 12
+a convex solid scaled by s: a Platonic solid, one of the 13 Archimedean or 13 Catalan solids, a prism (3 and 5 to 12
 sides) or an antiprism (4 to 12 sides). The score is the smallest s. Two tracks:
 
 - **nofold**: every piece lies in one closed face;
@@ -16,8 +16,8 @@ Every table entry carries a certificate checked by an independent rigorous certi
 `data/surface/records.json`; results summary: [SURFACE_RESULTS.md](SURFACE_RESULTS.md). The tables
 cover the Platonic solids with N in {0, 3, 4, 5, 6, 8}; the other solids, and N = 7 and 9 to 100,
 have problems but no records yet. The problems are a domain of ranges (`packages/surface/src/domain.ts`,
-registered in `packages/spaces/src/domain.ts`): 36 solids, both modes, 99 shapes and P = 1 to 100,
-712,800 problems, each with the larger of its area and one-piece bounds (2.6); 2038 have a record.
+registered in `packages/spaces/src/domain.ts`): 49 solids, both modes, 99 shapes and P = 1 to 100,
+970,200 problems, each with the larger of its area and one-piece bounds (2.6); 2038 have a record.
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -76,16 +76,16 @@ pi) a disk or a polygon side through a vertex fills the whole angle there; its t
 rays then meet, which is touching, not overlap.
 
 **Score and ids.** The score is s, the scale of the canonical solid (the edge length for the
-Platonic solids, prisms and antiprisms), for side-1 polygons or radius-1 disks.
+Platonic and Archimedean solids, prisms and antiprisms), for side-1 polygons or radius-1 disks.
 Problem id: `surface/<solid>/<mode>/<N>/<P>`, e.g. `surface/cube/fold/4/12`.
 
-**The other solids** (2026-10-26). The Catalan solids, prisms and antiprisms are the polyhedra
+**The other solids** (2026-10-26). The Archimedean and Catalan solids, prisms and antiprisms are the polyhedra
 space's canonical solids (`python/polyhedra/solids_exact.json`, [POLYHEDRA.md](POLYHEDRA.md)
-section 1), in its vertex order and scale: prisms and antiprisms have unit edges, so s is their
+section 1), in its vertex order and scale: Archimedean solids, prisms and antiprisms have unit edges, so s is their
 edge; a Catalan solid is the polar reciprocal of the unit-edge Archimedean solid about the
 midsphere, and s scales it (its edges are not of length 1). Ids keep the scheme:
 `surface/rhombic_dodecahedron/fold/4/6`, `surface/prism5/nofold/0/9`, `surface/antiprism4/fold/3/3`.
-Their faces are convex polygons of up to two shapes, and the vertices of a Catalan solid have two
+Their faces are convex polygons of up to three shapes, and the vertices of a Catalan solid have two
 or three cone angles [CALC]:
 
 | solids | faces | cone angle / pi |
@@ -94,15 +94,51 @@ or three cone angles [CALC]:
 | antiprism n (n = 4 to 12) | 2 regular n-gons, 2n triangles | 1 + (n - 2)/n at every vertex |
 | Catalan solids | 12 to 120 congruent faces: isosceles or scalene triangles, kites, rhombi, irregular pentagons | 2 or 3 values per solid, from 1.1186 (triakis tetrahedron, 6-valent vertices) to 1.9840 |
 
-Every cone angle of the 36 solids lies in [pi, 2 pi) [CALC: `packages/surface/test/general.test.ts`,
+Every cone angle of the 49 solids lies in [pi, 2 pi) [CALC: `packages/surface/test/general.test.ts`,
 `python/surface/test_general.py`], so the boundary rule below holds on all of them; the certifier
 refuses a solid with a sharper vertex. A Catalan face is tangential: every edge of a Catalan solid
 touches the midsphere, which meets a face plane in a circle tangent to the face's edges, centred at
 the foot of the perpendicular from the centre [EST, standard; checked to 1e-30 in the tests].
 
+**Archimedean solids** [CALC]. All edges have unit length before scaling. Each vertex has the
+same multiset of incident regular faces, so its cone angle divided by pi is the sum of
+(M - 2)/M over those faces:
+
+| solid | regular faces | cone angle / pi |
+|---|---|---|
+| truncated tetrahedron | 4 × 3-gon, 4 × 6-gon | 5/3 |
+| cuboctahedron | 8 × 3-gon, 6 × 4-gon | 5/3 |
+| truncated cube | 8 × 3-gon, 6 × 8-gon | 11/6 |
+| truncated octahedron | 6 × 4-gon, 8 × 6-gon | 11/6 |
+| rhombicuboctahedron | 8 × 3-gon, 18 × 4-gon | 11/6 |
+| truncated cuboctahedron | 12 × 4-gon, 8 × 6-gon, 6 × 8-gon | 23/12 |
+| snub cube | 32 × 3-gon, 6 × 4-gon | 11/6 |
+| icosidodecahedron | 20 × 3-gon, 12 × 5-gon | 28/15 |
+| truncated dodecahedron | 20 × 3-gon, 12 × 10-gon | 29/15 |
+| truncated icosahedron | 12 × 5-gon, 20 × 6-gon | 29/15 |
+| rhombicosidodecahedron | 20 × 3-gon, 30 × 4-gon, 12 × 5-gon | 29/15 |
+| truncated icosidodecahedron | 30 × 4-gon, 20 × 6-gon, 12 × 10-gon | 59/30 |
+| snub dodecahedron | 80 × 3-gon, 12 × 5-gon | 29/15 |
+
+`general.py` checks every face exactly in the source number field: planarity, strict convexity,
+unit edges, a common circumcircle and centre at the perpendicular foot. This includes the
+non-quadratic fields of both snub solids. Every edge has exactly one reverse partner; the tests
+compare all face cycles and partners with `data/surface/solids.json`, check every gluing's endpoints,
+and compose the gluing around every vertex to recover its cone angle. No searches or records
+are added for these solids.
+
+The 24 constructed fixtures in `python/surface/fixtures/archimedean_packings.json` use disks,
+triangles and 12-gons on the truncated tetrahedron, cuboctahedron, snub cube and truncated
+icosidodecahedron in both modes. Fold fixtures cross edges between face kinds and certify by
+chains; nofold fixtures use every face kind, share a face and also certify as fold packings.
+`python/surface/test_general.py` certifies each at eps = 1e-12. Both validators also test disks
+just inside and outside a vertex's unit-distance threshold and a polygon corner covering it,
+on all 13 solids. The general methods kernels need no changes: tests exercise their contracts,
+charts, energy, gradients, conversion, validation and finish on the mixed faces.
+
 **Frames of any face.** The origin is the foot of the perpendicular from the solid's centre to the
 face plane, and the last edge (frame vertex M - 1 to frame vertex 0) runs along +x at the bottom.
-On a regular face (Platonic solids, prisms, antiprisms: the vertices lie on a sphere about the
+On a regular face (Platonic and Archimedean solids, prisms, antiprisms: the vertices lie on a sphere about the
 centre, so the foot is the face centre) this is the regular frame above; a Catalan face's origin is
 its incentre. Gluing maps rotate by (direction of f's edge k) + pi - (direction of g's edge l).
 
@@ -137,25 +173,30 @@ On the Platonic solids the site's board (beside a nofold problem's values), the 
 nofold row) and the viewer at `/spaces/surface.html` say this and link to the equivalent 2D in 2D
 problem N/M/ceil(P/F) on the polygon board, `/#p=N,M,k` (disks are N = 0 there too).
 
-**2.1b Prisms and antiprisms: nofold is a 2D in 2D value** [CALC]. Their faces are regular polygons
-of two kinds, both of side s: F1 faces that are M1-gons and F2 that are M2-gons (a prism with n sides:
-2 n-gons and n squares; an antiprism: 2 n-gons and 2n triangles). Write s2(N, M, 0) = 0. Then
+**2.1b Mixed regular faces: nofold reduces to 2D in 2D** [CALC]. Archimedean solids have q = 2
+or 3 face kinds; prisms and antiprisms have q = 2. Kind i has Fi regular Mi-gons, all of side s.
+Write s2(N, M, 0) = 0, and let s2(N, M, k) be the true optimum for k pieces in a regular M-gon.
+Then, for either two or three kinds,
 
-  s_nofold(H, N, P) = min over k1, k2 >= 0 with F1 k1 + F2 k2 >= P of max(s2(N, M1, k1), s2(N, M2, k2)).
+  s_nofold(H, N, P) = min over integers k1, ..., kq >= 0 with sum_i Fi ki >= P of max_i s2(N, Mi, ki).
 
-Proof. Upper bound: take a split (k1, k2) and s = max(s2(N, M1, k1), s2(N, M2, k2)). Each face of
-kind i is a regular Mi-gon of side s >= s2(N, Mi, ki); it contains the regular Mi-gon of side
-s2(N, Mi, ki) with the same centre and orientation (a homothety about the centre with ratio at most
-1 maps a convex polygon about that centre into itself), so it holds an optimal ki-piece packing.
-Keep P of the F1 k1 + F2 k2 >= P pieces. Lower bound: in a nofold packing of P pieces let ki be the
-largest number of pieces on one face of kind i. Then F1 k1 + F2 k2 >= P, and a face of kind i with
-ki > 0 pieces holds a 2D packing in its regular Mi-gon of side s, so s >= s2(N, Mi, ki) for both
-kinds; s is at least the maximum for this split, hence at least the minimum over splits. For the
-true 2D optima (non-decreasing in k) the formula is exact; with best-known 2D values it is an upper
-bound, best taken over the envelope min over k' >= k of s2_best(N, M, k') as in 2.1. The board and
-the volunteer client run the surface search in its nofold mode on them; a link to the 2D in 2D
-problems of the best split is not built yet, and PolyPack's 2D records (`data/records.json`) do not
-yet cover containers with 9 to 12 sides.
+Proof. For the upper bound choose any such split, and set s to its maximum. Every face of kind i
+contains a concentric regular Mi-gon of side s2(N, Mi, ki), by convexity and homothety about its
+centre. Put a planar optimal ki-piece packing in every such face, and keep P pieces. Different
+open faces are disjoint, so these pieces give a nofold packing. Empty kinds contribute zero.
+For the lower bound, in any nofold packing let ki be the largest occupancy of a face of kind i
+(or zero if every such face is empty). Then sum_i Fi ki >= P. A face attaining ki contains a
+planar ki-piece packing, hence s >= s2(N, Mi, ki) for every i. Thus s is at least this split's
+maximum, and at least the minimum of those maxima. The argument applies to q = 2 and q = 3
+without requiring equal occupancy within a kind. It suffices to consider ki <= P, so the minimum
+has finitely many splits. For true optima the formula is exact; using best-known planar packings
+instead gives an upper bound, with the envelope min over k' >= k of s2_best(N, M, k') as in 2.1.
+
+Consequently the server's work targets omit these nofold problems, including ones with site
+entries, just as they omit Platonic nofold problems. They remain available on the board and accept
+submissions. The board and volunteer client use the surface kernel in nofold mode; links to the
+planar problems of the best split are not built yet. PolyPack's planar records do not yet cover
+containers with 9 to 12 sides.
 
 **2.1c Catalan solids: nofold problems are new 2D problems** [CALC]. All faces of a Catalan solid
 are congruent (by rotations or reflections, which map regular pieces to regular pieces), so the
@@ -533,7 +574,7 @@ comparable with the first build.
 ## 5b. Kernel for the generic methods
 
 `surfaceKernel({ solid, N, P, mode })` (`packages/surface/src/kernel.ts`) lets the generic search
-methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 36 solids: with
+methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 49 solids: with
 folding (`mode` "fold", the default) and without ("nofold"). The nofold problems of the Platonic
 solids are planar problems of one face and keep the polygon solver's methods; on the other solids
 the kernel's nofold mode serves them, so every problem offers Auto and the generic methods.
@@ -689,8 +730,9 @@ as in section 1; gluing rotates by (direction of f's edge k) + pi - (direction o
 npx tsc -p packages/surface --noEmit
 npx vitest run packages/surface
 python3 python/surface/test_cert.py
-npx tsx packages/surface/scripts/gen-solids.ts
 npx tsx packages/surface/scripts/gen-general.ts
+npx tsx packages/surface/scripts/gen-solids.ts
+node --import tsx packages/surface/scripts/build-archimedean-packings.ts
 npx tsx packages/surface/scripts/build-test-packings.ts python/surface/fixtures/general_packings.json
 npx tsx packages/surface/scripts/gen-crosscheck.ts --general python/surface/fixtures/crosscheck_general.json
 python3 python/surface/test_general.py
@@ -714,8 +756,8 @@ is served by the site, at `/spaces/surface.html`.
 
 ## 9. Limitations and open questions
 
-- The Catalan solids, prisms and antiprisms, and N = 7 and 9 to 100 on every solid, have no records:
-  their problems are open, and only test packings exist. Prism and antiprism nofold values are 2D in
+- The Archimedean and Catalan solids, prisms and antiprisms, and N = 7 and 9 to 100 on every solid, have no records:
+  their problems are open, and only test packings exist. Archimedean, prism and antiprism nofold values are 2D in
   2D values (2.1b); Catalan nofold problems are new 2D problems with irregular containers (2.1c).
 - The certifier of the other solids refuses degenerate configurations (a centre exactly in line with
   two developed vertices, or on the line of an unfolded edge) rather than decide them; exact
