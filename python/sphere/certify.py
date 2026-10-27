@@ -7,7 +7,8 @@ power series with explicit remainder bounds, so only interval +, -, *, / and sqr
 
 Model (re-derived here; same conventions as packages/sphere and docs/spaces/SPHERE.md):
   * Unit sphere in R^3; the problem sphere of radius rho is scaled to radius 1, so a piece has
-    angular size a = 1/rho (polygon side angle; disk angular radius).
+    angular size a = 1/rho (polygon side angle) or a = 1/(2 rho) (disk angular radius: disks have
+    diameter 1 since 2026-10-27, radius 1 before).
   * Standard N-gon: centre e3, vertex k = (sin R cos phi_k, sin R sin phi_k, cos R),
     phi_k = pi/2 + 2 pi k/N, sin(a/2) = sin R sin(pi/N); it exists (convex, R < pi/2) iff
     sin(a/2) < sin(pi/N).
@@ -281,7 +282,7 @@ def _certify_core(N, P, cfg, witness_list):
     rho = _num(cfg.get("rho"), "rho")
     if rho <= 0:
         raise CertError("rho must be positive")
-    a = I(1) / I(rho)
+    a = I(1) / (I(2 * rho) if N == 0 else I(rho))
     Q = []
     for k, p in enumerate(pieces):
         q = p.get("q") if isinstance(p, dict) else None

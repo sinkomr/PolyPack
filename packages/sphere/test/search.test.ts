@@ -2,14 +2,11 @@
  * The TypeScript sphere search (src/search.ts): budgets, seeding, and that what it returns is
  * valid by the float validator at the rho it states.
  */
-import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { type SphereConfig, searchSphere, validate } from "../src";
+import { loadSiteRecords } from "./helpers";
 
-const url = new URL("../../../data/sphere/records.json", import.meta.url);
-const records: { id: string; N: number; P: number; config: SphereConfig }[] = existsSync(url)
-  ? JSON.parse(readFileSync(url, "utf8")).records
-  : [];
+const records: { id: string; N: number; P: number; config: SphereConfig }[] = loadSiteRecords();
 const record = (id: string) => records.find((r) => r.id === id)!;
 const enlarged = (c: SphereConfig, f: number): SphereConfig => ({ rho: c.rho * f, pieces: c.pieces });
 
@@ -58,10 +55,24 @@ describe.skipIf(records.length === 0)("searchSphere", () => {
   });
 
   it("finds a valid packing from scratch", () => {
-    // six disks: the octahedral code, rho = 4 / pi
+    // six disks of diameter 1: the octahedral code, rho = 2 / pi
     const res = searchSphere({ N: 0, P: 6 }, { seed: 2, maxEvals: 8000 });
     expect(res.config).not.toBeNull();
     expect(validate({ N: 0, P: 6 }, res.config!).valid).toBe(true);
-    expect(res.score).toBeLessThan((4 / Math.PI) * 1.01);
+    expect(res.score).toBeLessThan((2 / Math.PI) * 1.01);
+  });
+});
+
+describe("searchSphere: units", () => {
+  // Pinned from the search before the unit change (disks of radius 1), halved: the search works in
+  // the piece's angular size, which does not change, so a seed gives the same poses and half the rho.
+  it("gives the radius-1 outcomes of a seed, halved, for disks", () => {
+    const six = searchSphere({ N: 0, P: 6 }, { seed: 5, maxEvals: 3000 });
+    expect(six.score).toBeCloseTo(1.2732395447356217 / 2, 12);
+    expect(six.config!.pieces[1].q[0]).toBeCloseTo(0.1700713443743218, 12);
+    const nine = searchSphere({ N: 0, P: 9 }, { seed: 5, maxEvals: 3000 });
+    expect(nine.score).toBeCloseTo(1.6247489461908833 / 2, 12);
+    // polygons are unchanged
+    expect(searchSphere({ N: 4, P: 7 }, { seed: 5, maxEvals: 3000 }).score).toBeCloseTo(0.9332432371041922, 12);
   });
 });

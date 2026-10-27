@@ -37,7 +37,9 @@ import {
   type SphereProblem,
   areaBound,
   circumradiusAngle,
+  pieceAngle,
   pieceExists,
+  rhoForAngle,
   quatMul,
   standardVertices,
 } from "./geometry";
@@ -251,11 +253,11 @@ export function tightRho(problem: SphereProblem, q: Quat[], rho0: number, tick: 
   /** Valid with every gap >= 0 at rho. */
   const validAt = (rho: number): boolean => {
     tick();
-    if (!(1 / rho < aMax) || !pieceExists(N, rho)) return false;
+    if (!(pieceAngle(N, rho) < aMax) || !pieceExists(N, rho)) return false;
     const v = validate(problem, { rho, pieces: q.map((x) => ({ q: x })) }, { tol: 0 });
     return v.errors.length === 0 && v.minGap >= 0;
   };
-  return tightSize(validAt, rho0, 1 / aMax);
+  return tightSize(validAt, rho0, rhoForAngle(N, aMax));
 }
 
 /**
@@ -564,18 +566,18 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
   /** Relax, then the tight size; null when no valid size was found near the relaxed one. */
   const local = (q: Quat[], a0: number, mus: number[]): Packing | null => {
     const r = relax(q, a0, mus);
-    const rho = tight(r.q, 1 / r.a);
+    const rho = tight(r.q, rhoForAngle(N, r.a));
     return rho === null ? null : { q: r.q, rho };
   };
 
   const randomStart = (): Packing | null => {
     const q = Array.from({ length: P }, () => randomQuat(rand));
-    return local(q, 0.7 / areaBound(N, P), [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
+    return local(q, 0.7 / (N === 0 ? 2 * areaBound(N, P) : areaBound(N, P)), [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
   };
 
   const perturb = (pk: Packing): Quat[] => {
     const q = pk.q.map((x) => [...x] as Quat);
-    const a = 1 / pk.rho;
+    const a = pieceAngle(N, pk.rho);
     const kind = rand();
     if (kind < 0.4) {
       const sigma = (0.05 + 0.15 * rand()) * a;
@@ -611,7 +613,7 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
         startScore = rho;
         log(`start: rho ${rho}`);
       }
-      const r = local(best?.q ?? q, best ? 1 / best.rho : 1 / o.start.rho, [1e4, 1e5, 1e6, 1e7, 1e8]);
+      const r = local(best?.q ?? q, best ? pieceAngle(N, best.rho) : pieceAngle(N, o.start.rho), [1e4, 1e5, 1e6, 1e7, 1e8]);
       if (r && (!best || r.rho < best.rho)) best = r;
     }
     while (!best) best = randomStart();
@@ -620,7 +622,7 @@ export function searchSphere(problem: SphereProblem, o: SphereSearchOptions): Sp
     for (;;) {
       hops++;
       const q = perturb(cur);
-      const r = local(q, (1 / cur.rho) * 0.99, [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
+      const r = local(q, pieceAngle(N, cur.rho) * 0.99, [1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8]);
       if (!r) continue;
       if (r.rho < best.rho * (1 - 1e-13)) {
         best = r;

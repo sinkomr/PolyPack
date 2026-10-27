@@ -3,7 +3,6 @@
  * gradient (soft shapes included), the research records through fromConfig, validate and finish,
  * the local solves from random starts, the soft shapes, seeds and swap, and the server's rule.
  */
-import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   type KernelState,
@@ -16,10 +15,10 @@ import {
 } from "@polypack/methods";
 import { checkKernel } from "@polypack/methods/contract";
 import { type SphereConfig, quatFromCentreTheta, sphereKernel, tightRho, validate } from "../src";
+import { loadSiteRecords } from "./helpers";
 
-const url = new URL("../../../data/sphere/records.json", import.meta.url);
 const records: { id: string; N: number; P: number; score_float: number; score_cert: number; config: SphereConfig }[] =
-  existsSync(url) ? JSON.parse(readFileSync(url, "utf8")).records : [];
+  loadSiteRecords();
 
 /** The largest relative difference between the gradient and central differences, over every entry. */
 function gradientError(k: SpaceKernel, s: KernelState): number {
@@ -254,7 +253,7 @@ describe("sphereKernel", () => {
     expect(k.validate({ rho: 1, pieces: [{ q: [1, 0, 0, 0] }, { q: [1, 0, 0, 0] }] }).valid).toBe(false);
     const disks = sphereKernel({ N: 0, P: 2 });
     const pair = (gap: number) => {
-      const d = 2 / 2 + gap / 2; // rho 2: angular radius 1/2, centres at angle 1 + gap / 2
+      const d = 1 / 2 + gap / 2; // rho 2: angular radius 1/4 (diameter 1), centres at angle 1/2 + gap / 2
       return { rho: 2, pieces: [{ q: [1, 0, 0, 0] }, { q: quatFromCentreTheta([Math.sin(d), 0, Math.cos(d)], 0) }] };
     };
     expect(disks.validate(pair(-1e-10)).valid).toBe(true);

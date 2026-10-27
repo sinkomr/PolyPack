@@ -13,7 +13,7 @@ import { hullFaces } from "./hull";
  * are active, so n is +-(p + q)/|p + q| for two points or +- the normal of the plane through three
  * points; a brute force over these candidates is exact (no candidate is missed).
  * Gaps are reported in length units on the sphere of radius rho: rho asin(m) for polygons (distance
- * from the separating great circle to the nearest vertex), rho (angle(c_i, c_j) - 2/rho) for disks.
+ * from the separating great circle to the nearest vertex), rho angle(c_i, c_j) - 1 for disks (diameter 1).
  *
  * Not authoritative: this is a float check. Near the existence limit rho = N/(2 pi) the circumradius
  * R = asin(sin(a/2)/sin(pi/N)) approaches pi/2 and its float error grows like 1e-16/(pi/2 - R), so
@@ -29,6 +29,7 @@ import {
   cross,
   dot,
   norm,
+  pieceAngle,
   pieceExists,
   placedVertices,
 } from "./geometry";
@@ -123,7 +124,7 @@ function* pairSteps(
   const out: PairGap[] = [];
   let overlaps = 0;
   if (N === 0) {
-    const a = 1 / rho;
+    const a = pieceAngle(N, rho);
     for (let i = 0; i < P; i++)
       for (let j = i + 1; j < P; j++) {
         const ang = Math.acos(Math.max(-1, Math.min(1, dot(C[i], C[j]))));
@@ -169,7 +170,7 @@ export function* validationSteps(
       errors.push(`piece ${k}: q must be 4 finite numbers`);
     else if (Math.hypot(...p.q) === 0) errors.push(`piece ${k}: zero quaternion`);
   }
-  if (N === 0 && P >= 2 && config?.rho > 0 && 1 / config.rho > Math.PI / 2)
+  if (N === 0 && P >= 2 && config?.rho > 0 && pieceAngle(0, config.rho) > Math.PI / 2)
     errors.push("disks larger than a hemisphere cannot both fit");
   if (errors.length)
     return { valid: false, strictlyValid: false, minGap: -Infinity, worstPair: null, pairs: [], errors };

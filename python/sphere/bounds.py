@@ -5,8 +5,9 @@ rho >= L (for rho < L the stated necessary condition fails). The float L is foun
 formula and lowered by a relative 1e-12 before the interval check, so it is slightly weaker than
 the exact bound. Functions return None when the argument gives nothing.
 
-Arguments (unit sphere, piece size a = 1/rho; a increases as rho decreases, and every
-quantity used below is monotone in a):
+Arguments (unit sphere, piece size a = 1/rho for polygons and a = 1/(2 rho) for disks, whose
+diameter is 1 (their radius was 1 before 2026-10-27, and every disk bound was twice as large); a
+increases as rho decreases, and every quantity used below is monotone in a):
   existence  a convex regular N-gon needs R < pi/2, i.e. a < 2 pi/N:  rho > N/(2 pi).
   area       interior-disjoint pieces: P A(a) <= 4 pi; A = N alpha - (N - 2) pi with
              cos(pi/N) = cos(a/2) sin(alpha/2); disks A = 2 pi (1 - cos a).
@@ -48,8 +49,13 @@ def existence_bound(N):
     return None
 
 
+def _disk_angle(L):
+    """Angular radius of a disk of diameter 1 on the sphere of radius L: a = 1/(2 L) (interval)."""
+    return I(1) / (2 * I(Fraction(L)))
+
+
 def _verify_area(N, P, L):
-    a = I(1) / I(Fraction(L))
+    a = _disk_angle(L) if N == 0 else I(1) / I(Fraction(L))
     pi = rg.pi_iv()
     if N == 0:
         ca, _ = rg.cos_sin(a)
@@ -69,7 +75,7 @@ def _verify_area(N, P, L):
 def area_bound(N, P):
     if N == 0:
         a = math.acos(1 - 2 / P)
-        L = _lower(1 / a)
+        L = _lower(1 / (2 * a))
     else:
         alpha_star = ((N - 2) * PI + 4 * PI / P) / N
         if alpha_star >= PI:
@@ -99,8 +105,8 @@ def fejes_toth_disk_bound(P):
     if P < 3:
         return None
     theta = math.acos(ft_cos(P))
-    L = _lower(2 / theta)
-    a = I(1) / I(Fraction(L))
+    L = _lower(1 / theta)
+    a = _disk_angle(L)
     pi = rg.pi_iv()
     c2a, _ = rg.cos_sin(2 * a)
     # 2a > theta_FT  <=>  cos 2a < cos theta_FT  (2a in [0, pi])
@@ -110,11 +116,11 @@ def fejes_toth_disk_bound(P):
 
 
 def tammes_disk_bound(P, cos_theta_lit, slack=Fraction(1, 10 ** 11)):
-    """rho >= 2/theta_P from a published Tammes optimum, cos theta_P >= cos_lit - slack."""
+    """rho >= 1/theta_P (disks of diameter 1) from a published Tammes optimum, cos theta_P >= cos_lit - slack."""
     c = Fraction(cos_theta_lit) - slack
     theta = math.acos(float(c))
-    L = _lower(2 / theta)
-    a = I(1) / I(Fraction(L))
+    L = _lower(1 / theta)
+    a = _disk_angle(L)
     c2a, _ = rg.cos_sin(2 * a)
     pi = rg.pi_iv()
     if rg.is_neg(2 * a - pi) and rg.is_neg(c2a - I(c)):

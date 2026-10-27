@@ -20,7 +20,17 @@
  *    along the geodesic between the two centres).
  */
 import type { Finished, KernelCapability, KernelState, SpaceKernel, Validation } from "@polypack/methods";
-import { type Quat, type SphereConfig, type Vec3, areaBound, centreOf, pieceExists, quatMul } from "./geometry";
+import {
+  type Quat,
+  type SphereConfig,
+  type Vec3,
+  areaBound,
+  centreOf,
+  pieceAngle,
+  pieceExists,
+  quatMul,
+  rhoForAngle,
+} from "./geometry";
 import { SphereEnergy, type SphereStateView } from "./kernel-energy";
 import { platonicCentres, posesFromCentres, spiralCentres, touchingRho } from "./kernel-seeds";
 import { expQuat, maxAngle, normalized, randomQuat, tightRho, tightSize } from "./search";
@@ -91,8 +101,8 @@ export function sphereKernel(problem: { N: number; P: number }): SpaceKernel {
   // run can stop there. Validity is the validator's, here as everywhere.
   const aMax = N === 0 ? maxAngle(N, P) : ((2 * Math.PI) / N) * (1 - 1e-12);
   const model = new SphereEnergy(N, P, aMax);
-  // one step moves a piece by about its inradius (side 1 or radius 1)
-  const step = N === 0 ? 1 : 1 / (2 * Math.tan(Math.PI / N));
+  // one step moves a piece by about its inradius (side 1, or a disk of diameter 1: radius 1/2)
+  const step = N === 0 ? 0.5 : 1 / (2 * Math.tan(Math.PI / N));
   const bound = areaBound(N, P);
   const capabilities: KernelCapability[] = N === 0 ? ["shape", "seeds"] : ["shape", "seeds", "swap"];
   const auxOf = (s: KernelState) => s.aux as SphereKernelAux;
@@ -234,7 +244,11 @@ export function sphereKernel(problem: { N: number; P: number }): SpaceKernel {
       // the search's bisection (tightRho), with the energy's own pair test in place of the
       // validator at each step: the same answer except within float rounding at the contacts.
       // When it finds no valid size within a factor of about 14, neither would the validator.
-      const fast = tightSize((r) => 1 / r < aMax && pieceExists(N, r) && model.separatedAt(q0, r), s.size, 1 / aMax);
+      const fast = tightSize(
+        (r) => pieceAngle(N, r) < aMax && pieceExists(N, r) && model.separatedAt(q0, r),
+        s.size,
+        rhoForAngle(N, aMax),
+      );
       if (fast === null) return null;
       // the validator decides: the bisection's end, or just above it (by up to 7e-12) past rounding at a contact
       let rho: number | null = null;

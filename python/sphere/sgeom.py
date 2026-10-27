@@ -2,8 +2,10 @@
 
 Conventions (identical to packages/sphere and docs/spaces/SPHERE.md):
   * All computation happens on the UNIT sphere S^2 in R^3. A problem sphere/N/P with sphere
-    radius rho is the same as pieces of angular size a = 1/rho on the unit sphere (polygon side
-    angle, or disk angular radius). Score rho = 1/a, curvature K = a^2.
+    radius rho is the same as pieces of angular size a on the unit sphere: a = 1/rho for polygons
+    (side angle) and a = 1/(2 rho) for disks (angular radius; disks have diameter 1, since
+    2026-10-27, radius 1 before). angle_of_rho and rho_of_angle convert; everything else here is
+    in a, so nothing below depends on the unit change.
   * O = e3 = (0, 0, 1) (north pole); tangent frame at O: x = e1, y = e2.
   * Standard piece: centre O, vertex k at (sin R cos phi_k, sin R sin phi_k, cos R),
     phi_k = pi/2 + 2 pi k/N (vertex 0 straight up, +y), R the angular circumradius,
@@ -16,6 +18,16 @@ import math
 import numpy as np
 
 PI = math.pi
+
+
+def angle_of_rho(N, rho):
+    """Angular size a of a piece on the sphere of radius rho (disks: angular radius 1/(2 rho))."""
+    return 1 / (2 * rho) if N == 0 else 1 / rho
+
+
+def rho_of_angle(N, a):
+    """Sphere radius at which a piece has angular size a (exact inverse of angle_of_rho)."""
+    return 1 / (2 * a) if N == 0 else 1 / a
 
 
 # ---------------------------------------------------------------- piece measures (unit sphere)

@@ -1,11 +1,15 @@
 /**
  * Whole-sphere geometry for PolyPack sphere/N/P problems (no container).
  *
- * Problem: P congruent pieces on a sphere of radius rho: disks of geodesic radius 1 (N = 0) or
+ * Problem: P congruent pieces on a sphere of radius rho: disks of geodesic DIAMETER 1, i.e. radius
+ * 1/2 (N = 0; before 2026-10-27 the radius was 1 and every disk score was twice as large), or
  * regular spherical N-gons of geodesic side 1 (N >= 3). Score rho (smaller is better), K = 1/rho^2.
  *
- * All computation is done on the UNIT sphere, where a piece has angular size a = 1/rho (polygon
- * side angle, disk angular radius).
+ * All computation is done on the UNIT sphere, where a piece has angular size a = 1/rho for polygons
+ * (side angle) and a = 1/(2 rho) for disks (angular radius): see pieceAngle. Everything below is
+ * written in a, so the unit change is this one function and its inverse rhoForAngle (exact: a
+ * factor 2); lengths on the sphere (gaps, the kernel's variables) are rho times an angle, in
+ * site units.
  *
  * Coordinates: R^3 with O = e3 = (0, 0, 1) (north pole); the tangent frame at O is x = e1, y = e2.
  * The curved package's homogeneous point (v0, v1, v2) at K = 1 is (Z, X, Y) here.
@@ -51,49 +55,55 @@ export const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] +
 export const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 export const unit = (a: Vec3): Vec3 => scale(a, 1 / norm(a));
 
-/** Angular size of a piece on the unit sphere. */
-export function pieceAngle(rho: number): number {
-  return 1 / rho;
+/** Angular size of a piece on the unit sphere: polygon side angle, disk angular radius. */
+export function pieceAngle(N: number, rho: number): number {
+  return 1 / (N === 0 ? 2 * rho : rho);
+}
+
+/** The sphere radius rho at which a piece has angular size a (the inverse of pieceAngle; exact). */
+export function rhoForAngle(N: number, a: number): number {
+  return N === 0 ? 1 / (2 * a) : 1 / a;
 }
 
 /** Does the piece exist as a convex regular N-gon (or a proper cap) at sphere radius rho? */
 export function pieceExists(N: number, rho: number): boolean {
   if (!(rho > 0) || !Number.isFinite(rho)) return false;
-  const a = 1 / rho;
+  const a = pieceAngle(N, rho);
   if (N === 0) return a < Math.PI; // as the certifier: a cap of angular radius pi is the whole sphere
   return N >= 3 && a < (2 * Math.PI) / N; // equivalent to sin(a/2) < sin(pi/N) only for a < pi
 }
 
 /** Angular circumradius R: sin(a/2) = sin R sin(pi/N). Disks: the angular radius. */
 export function circumradiusAngle(N: number, rho: number): number {
-  const a = 1 / rho;
+  const a = pieceAngle(N, rho);
   if (N === 0) return a;
   return Math.asin(Math.sin(a / 2) / Math.sin(Math.PI / N));
 }
 
 /** Angular inradius r: tan(a/2) = sin r tan(pi/N). */
 export function inradiusAngle(N: number, rho: number): number {
-  const a = 1 / rho;
+  const a = pieceAngle(N, rho);
   if (N === 0) return a;
   return Math.asin(Math.tan(a / 2) / Math.tan(Math.PI / N));
 }
 
 /** Interior angle alpha: cos(pi/N) = cos(a/2) sin(alpha/2). */
 export function interiorAngle(N: number, rho: number): number {
-  const a = 1 / rho;
+  const a = pieceAngle(N, rho);
   return 2 * Math.asin(Math.min(1, Math.cos(Math.PI / N) / Math.cos(a / 2)));
 }
 
 /** Area of one piece on the sphere of radius rho (Gauss-Bonnet; caps 2 pi rho^2 (1 - cos a)). */
 export function pieceArea(N: number, rho: number): number {
-  const a = 1 / rho;
+  const a = pieceAngle(N, rho);
   const unitArea = N === 0 ? 2 * Math.PI * (1 - Math.cos(a)) : N * interiorAngle(N, rho) - (N - 2) * Math.PI;
   return unitArea * rho * rho;
 }
 
 /** Area bound (float): the rho at which P pieces have total area 4 pi rho^2; for P <= 2 polygons the existence limit N/(2 pi). */
 export function areaBound(N: number, P: number): number {
-  if (N === 0) return 1 / (2 * Math.asin(1 / Math.sqrt(P)));
+  // P caps of angular radius a cover the sphere at 1 - cos a = 2/P, i.e. sin(a/2) = 1/sqrt(P); rho = 1/(2a)
+  if (N === 0) return rhoForAngle(0, 2 * Math.asin(1 / Math.sqrt(P)));
   if (P <= 2) return N / (2 * Math.PI);
   // cos(a/2) = cos(x)/cos(y), x=pi/N, y=x(1-2/P). Avoid acos of a quotient
   // almost equal to one: sin²(a/4) = sin(x(1-1/P)) sin(x/P) / cos(y).

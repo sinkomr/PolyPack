@@ -13,7 +13,9 @@ c^_i.c^_j <= z, z = cos(2a). Same two stages.
 
 Usage:
   python3 python/sphere/search.py --N 4 --P 3-24 --seed 1 --starts 8 --hops 20 --out RUNDIR
-Writes RUNDIR/sphere_N_P.json with the best configuration (rho = 1/a), seeds and budget.
+Writes RUNDIR/sphere_N_P.json with the best configuration (rho = sg.rho_of_angle(N, a): 1/a for
+polygons, 1/(2a) for disks of diameter 1; "units": "diameter" marks site units, older files have
+radius-1 disks and no tag), seeds and budget.
 """
 import argparse
 import json
@@ -675,7 +677,7 @@ def solve_disks(P, seed, starts, hops, time_limit=300, log=None):
         if best is None or z < best[0] - 1e-14:
             best = (z, C2)
             if log:
-                log(f"  disks P={P} {tag}: theta={math.degrees(math.acos(z)):.10f} deg rho={2 / math.acos(z):.12f}")
+                log(f"  disks P={P} {tag}: theta={math.degrees(math.acos(z)):.10f} deg rho={1 / math.acos(z):.12f}")
 
     for s in range(starts):
         if time.time() - t0 > time_limit:
@@ -733,7 +735,7 @@ def main():
         if args.N == 0:
             r = solve_disks(P, args.seed, args.starts, args.hops, args.time, log)
             a = math.acos(r["z"]) / 2
-            out = {"N": 0, "P": P, "a": a, "rho": 1 / a, "q": r["Q"].tolist(), "seed": args.seed,
+            out = {"N": 0, "P": P, "a": a, "rho": sg.rho_of_angle(0, a), "units": "diameter", "q": r["Q"].tolist(), "seed": args.seed,
                    "budget": {"starts": args.starts, "hops": args.hops, "time_limit_s": args.time},
                    "time_s": r["time"], "history": r["history"]}
         else:
@@ -754,7 +756,7 @@ def main():
                     warm = json.load(open(fw))["q"]
             r = solve_polygon(args.N, P, args.seed, args.starts, args.hops, codes, args.time, log, prev, warm, args.code_mix)
             a = sg.a_from_R(args.N, r["R"])
-            out = {"N": args.N, "P": P, "R": r["R"], "a": a, "rho": 1 / a, "q": r["Q"].tolist(),
+            out = {"N": args.N, "P": P, "R": r["R"], "a": a, "rho": sg.rho_of_angle(args.N, a), "units": "diameter", "q": r["Q"].tolist(),
                    "normals": [[int(i), int(j)] + list(map(float, n)) for (i, j), n in r["normals"].items()],
                    "seed": args.seed,
                    "budget": {"starts": args.starts, "hops": args.hops, "time_limit_s": args.time,
