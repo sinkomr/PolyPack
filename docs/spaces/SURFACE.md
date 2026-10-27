@@ -172,6 +172,14 @@ square both need 2 + 2 sqrt 2), where the larger packing's coordinates scored a 
 On the Platonic solids the site's board (beside a nofold problem's values), the Dimensions page (a link in each
 nofold row) and the viewer at `/spaces/surface.html` say this and link to the equivalent 2D in 2D
 problem N/M/ceil(P/F) on the polygon board, `/#p=N,M,k` (disks are N = 0 there too).
+When that problem's best value is printed without coordinates, a short note quotes it at the
+source's precision and links to the source. The note is omitted when the surface packing already
+reaches that printed precision: its fullest face supplies coordinates for the 2D problem.
+The notes use a compact index generated from `data/records.json`, including which records have
+coordinates. Refresh it with `node --import tsx packages/surface/scripts/build-planar-values.ts`
+after changing those records, then rebuild the viewer with
+`node --import tsx packages/surface/scripts/build-viz.ts`. A test checks that the index matches
+the records. These commands do not search for or change packings.
 
 **2.1b Mixed regular faces: nofold reduces to 2D in 2D** [CALC]. Archimedean solids have q = 2
 or 3 face kinds; prisms and antiprisms have q = 2. Kind i has Fi regular Mi-gons, all of side s.
@@ -194,8 +202,11 @@ instead gives an upper bound, with the envelope min over k' >= k of s2_best(N, M
 
 Consequently the server's work targets omit these nofold problems, including ones with site
 entries, just as they omit Platonic nofold problems. They remain available on the board and accept
-submissions. The board and volunteer client use the surface kernel in nofold mode; links to the
-planar problems of the best split are not built yet. PolyPack's planar records do not yet cover
+submissions. The board and volunteer client use the surface kernel in nofold mode. The board and records
+page state the rule and link to the 2D in 2D problems of the best split by current values from
+`data/records.json`; a missing 2D value uses its area lower bound and the note says so (an estimate
+for choosing a split, not an upper bound or a packing), and empty face kinds are labelled empty
+and have no zero-piece problem link. PolyPack's planar records do not yet cover
 containers with 9 to 12 sides.
 
 **2.1c Catalan solids: nofold problems are new 2D problems** [CALC]. All faces of a Catalan solid

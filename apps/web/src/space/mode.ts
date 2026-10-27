@@ -21,7 +21,8 @@ import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } fro
 import { SPACE_INFO } from "@polypack/spaces";
 import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, spaceLatticeStart } from "@polypack/spaces/search";
 import { ParameterError, parameterForm, validityText } from "../solve-params";
-import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
+import { certifiedBy, downloadName } from "../spaces-model";
+import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, loadNofoldMethods, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
@@ -891,13 +892,7 @@ class SpaceMode {
     if (this.factsOf !== p) {
       this.factsOf = p;
       facts.replaceChildren();
-      const face = p ? nofoldFaceProblem(p.id) : null;
-      const same = $("space-same-as");
-      same.hidden = !face;
-      if (face) {
-        const [before, text, after] = nofoldNote(face);
-        same.replaceChildren(before, h("a", { href: face.href }, text), after);
-      } else same.replaceChildren();
+      renderNofoldNote($("space-same-as"), p?.id ?? "", p?.best?.score);
     }
     if (p && !facts.childElementCount)
       for (const f of problemFacts(p)) {

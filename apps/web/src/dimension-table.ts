@@ -154,7 +154,7 @@ export const menuGroups = (dimensions: readonly Dimension[] = DIMENSIONS): MenuG
   dimensions.map((d) => ({
     label: d.label,
     options: d.families.map((f) => ({
-      text: f.available ? f.name : `${f.name} (coming soon)`,
+      text: `${d.label}: ${f.name}${f.available ? "" : " (coming soon)"}`,
       value: f.space,
       disabled: !f.available,
     })),

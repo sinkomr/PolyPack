@@ -423,64 +423,8 @@ export const day = (iso: string): string => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? is
 
 // ---------- surface nofold problems are 2D in 2D problems ----------
 
-/** The faces of each Platonic solid: how many there are (F) and their number of sides (M). */
-export const SOLID_FACES: Readonly<Record<string, { F: number; M: number }>> = {
-  tetrahedron: { F: 4, M: 3 },
-  cube: { F: 6, M: 4 },
-  octahedron: { F: 8, M: 3 },
-  dodecahedron: { F: 12, M: 5 },
-  icosahedron: { F: 20, M: 3 },
-};
-
-/** A surface nofold problem and the 2D in 2D problem it is the same as. */
-export interface FaceProblem {
-  /** The surface problem's pieces, and its solid's faces. */
-  P: number;
-  F: number;
-  /** The 2D in 2D problem: k pieces of shape N (0 for a disk) in a regular M-gon, the face. */
-  N: number;
-  M: number;
-  k: number;
-  /** The polygon board's address of that problem. */
-  href: string;
-}
-
-/**
- * Without folding, each face holds its pieces on its own, and some face holds at least
- * k = ceil(P / F) of them; a k-piece packing of the face on every face holds P. So the best edge of
- * surface/<solid>/nofold/<N>/<P> is the best side of k pieces in the face polygon:
- * s_nofold(solid, N, P) = s2(N, M, k) (docs/spaces/SURFACE.md, 2.1). The 2D in 2D problem of a
- * nofold id, or null for any other id.
- */
-export function nofoldFaceProblem(id: string): FaceProblem | null {
-  const m = /^surface\/([a-z]+)\/nofold\/(0|[1-9]\d*)\/([1-9]\d*)$/.exec(id);
-  if (!m || !Object.hasOwn(SOLID_FACES, m[1])) return null;
-  const { F, M } = SOLID_FACES[m[1]];
-  const N = Number(m[2]);
-  const P = Number(m[3]);
-  const k = Math.ceil(P / F);
-  return { P, F, N, M, k, href: `/#p=${N},${M},${k}` };
-}
-
-/** "3 squares in a square", "1 disk in a triangle": the face problem in words. */
-export const faceProblemText = (f: FaceProblem): string =>
-  `${f.k} ${f.k === 1 ? pieceName(f.N) : plural(pieceName(f.N))} in a ${pieceName(f.M)}`;
-
-/** "the 2D in 2D problem N = 4, M = 4, P = 3": the text of a link to the face problem. */
-export const faceProblemName = (f: FaceProblem): string => `the 2D in 2D problem N = ${f.N}, M = ${f.M}, P = ${f.k}`;
-
-/**
- * The board's note on a nofold problem, in two sentences around a link to the face problem:
- * the text before the link, the link's text and the text after it.
- */
-export function nofoldNote(f: FaceProblem): [before: string, link: string, after: string] {
-  return [
-    `Without folding, each face holds its pieces on its own, and one of the ${f.F} faces must hold at least ` +
-      `⌈${f.P} / ${f.F}⌉ = ${f.k} of them. So this is the same as packing ${faceProblemText(f)}, `,
-    faceProblemName(f),
-    ".",
-  ];
-}
+export { SOLID_FACES, nofoldFaceProblem, nofoldNote, faceProblemText, faceProblemName } from "@polypack/surface/nofold";
+export type { FaceProblem } from "@polypack/surface/nofold";
 
 // ---------- address ----------
 

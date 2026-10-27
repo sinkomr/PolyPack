@@ -33,6 +33,9 @@ async function choose(page: Page, kind: SpaceName | "polygon"): Promise<void> {
 /** The menu names the family shown, and <main> its dimension. */
 async function menusShow(page: Page, kind: SpaceName | "polygon"): Promise<void> {
   await expect(page.locator("#family-select")).toHaveValue(kind);
+  const where = DIMENSIONS.find((d) => d.families.some((f) => f.space === kind))!;
+  const family = where.families.find((f) => f.space === kind)!;
+  await expect(page.locator("#family-select option:checked")).toHaveText(`${where.label}: ${family.name}`);
   await expect(page.locator("main")).toHaveAttribute("data-dimension", whereIs(kind)!.dimension.id);
 }
 
@@ -128,13 +131,13 @@ test("the Problem set menu works with the keyboard", async ({ page }) => {
   await menu.focus();
   await expect(menu).toBeFocused();
   // typing a name picks its family, as in any select; the board follows
-  await page.keyboard.type("Sphere");
+  await page.keyboard.type("2D on 3D: Sphere");
   await menusShow(page, "sphere");
   await shown(page, DEFAULT_PROBLEM.sphere, LAZY_VIEW);
   await expect(menu).toBeFocused();
   // a select's type-ahead forgets the letters typed after a second
   await page.waitForTimeout(1100);
-  await page.keyboard.type("Flat");
+  await page.keyboard.type("2D in 2D: Flat");
   await menusShow(page, "polygon");
   await expect(page.locator("#board")).toBeVisible();
 });
@@ -387,6 +390,31 @@ test("a nofold surface problem says it is a 2D in 2D problem and links to it on 
     await expect(page.locator("#p-input")).toHaveValue(P);
     await menusShow(page, "polygon");
   }
+});
+
+test("nofold surface notes link printed sources and the current regular-face splits", async ({ page }) => {
+  await page.goto("/#space=surface/tetrahedron/nofold/6/21");
+  await shown(page, "surface/tetrahedron/nofold/6/21", LAZY_VIEW);
+  const note = page.locator("#space-same-as");
+  await expect(note).toContainText("Friedman publishes 6.89897+ for this 2D problem, without coordinates.");
+  await expect(note.getByRole("link", { name: "Friedman", exact: true })).toHaveAttribute(
+    "href",
+    "https://erich-friedman.github.io/packing/hexintri/",
+  );
+  for (const [id, hrefs] of [
+    ["surface/prism5/nofold/0/9", ["/#p=0,4,1", "/#p=0,5,2"]],
+    ["surface/antiprism4/nofold/3/10", ["/#p=3,3,1", "/#p=3,4,1"]],
+  ] as const) {
+    await page.goto(`/#space=${id}`);
+    await shown(page, id);
+    await expect(note).toContainText("Take the smallest over all splits.");
+    for (const href of hrefs) await expect(note.locator(`a[href="${href}"]`)).toBeVisible();
+    await expect(note).not.toContainText("lower bound");
+  }
+  await page.goto("/#space=surface/prism11/nofold/7/25");
+  await shown(page, "surface/prism11/nofold/7/25");
+  await expect(note).toContainText("lower bound; no 2D value");
+  await expect(note.locator('a[href^="/#p=7,11,"]')).toBeVisible();
 });
 
 test("the dimensions page links each problem to the board", async ({ page }) => {
