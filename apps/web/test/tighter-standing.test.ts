@@ -40,7 +40,7 @@ function lateGame(extra: UpgradeId[] = []): GameState {
   s.standing.cycleEarned = 8_000_000;
   s.autoDue = 50;
   s.settings.auto = true;
-  const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   p.ourId = 4;
   p.verified = 6;
@@ -157,16 +157,16 @@ describe("Tighter cycle rules", () => {
   it("limit the problems, the methods and auto-eval for one cycle", () => {
     const s = newGame(T0, 1);
     s.owned.push("auto1");
-    expect(ruleAllowsProblem(s.standing, { N: 40, M: 40, P: 100 })).toBe(true);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 40, M: 40, P: 100 })).toBe(true);
     s.standing.rule = "circles";
-    expect(ruleAllowsProblem(s.standing, { N: 0, M: 40, P: 100 })).toBe(true);
-    expect(ruleAllowsProblem(s.standing, { N: 40, M: 0, P: 100 })).toBe(true);
-    expect(ruleAllowsProblem(s.standing, { N: 40, M: 40, P: 100 })).toBe(false);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 0, M: 40, P: 100 })).toBe(true);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 40, M: 0, P: 100 })).toBe(true);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 40, M: 40, P: 100 })).toBe(false);
     expect(ruleOpenProblems(s.standing)!.length).toBe(17 * 9 * 2);
     expect(ruleOpenProblems(s.standing)!.every((p) => ruleAllowsProblem(s.standing, p))).toBe(true);
     s.standing.rule = "small";
-    expect(ruleAllowsProblem(s.standing, { N: 40, M: 40, P: 60 })).toBe(false);
-    expect(ruleAllowsProblem(s.standing, { N: 21, M: 21, P: 40 })).toBe(true);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 40, M: 40, P: 60 })).toBe(false);
+    expect(ruleAllowsProblem(s.standing, { family: "polygon", N: 21, M: 21, P: 40 })).toBe(true);
     expect(ruleOpenProblems(s.standing)!.length).toBeGreaterThan(20);
     expect(ruleOpenProblems(s.standing)!.every((p) => p.N + p.M + p.P <= 120)).toBe(true);
     s.standing.rule = "method";
@@ -195,11 +195,11 @@ describe("Tighter cycle rules", () => {
     expect(evalsPerClick(ownedSet(s))).toBe(2);
     expect(ruleAllowsMethod(s.standing, "basin_hopping")).toBe(false);
     // one method, finished: 1.5 times the points on mc_compress's boards (after its cycle)
-    expect(ruleRewardFactor(s.standing, { N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1);
+    expect(ruleRewardFactor(s.standing, { family: "polygon", N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1);
     s.standing.cycleEarned = RESET_MIN;
     resetCycle(s, T0 + MIN);
     expect(s.standing.rulesDone).toEqual(["clicks", "method"]);
-    expect(ruleRewardFactor(s.standing, { N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1.5);
+    expect(ruleRewardFactor(s.standing, { family: "polygon", N: 21, M: 21, P: 40 }, "mc_compress")).toBe(1.5);
     // the One seed rule went with the Seeds row
     expect(RULES.map((r) => r.id)).toEqual(["circles", "small", "clicks", "method"]);
   });

@@ -1,4 +1,5 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
+import type { Family } from "./frontier";
 import { sym } from "./how";
 import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
@@ -47,6 +48,21 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
 
 export type EvolveMethod =
   "mc_compress" | "basin_hopping" | "shrink_repair" | "seed" | "penalty" | "harden" | "asc" | "morph" | "ls_growth";
+
+const EVOLVE_METHODS: readonly EvolveMethod[] = [
+  "mc_compress",
+  "basin_hopping",
+  "shrink_repair",
+  "seed",
+  "penalty",
+  "harden",
+  "asc",
+  "morph",
+  "ls_growth",
+];
+
+/** The evolve methods a family has: today's list for polygons, none for the families still to come (not wired yet). */
+export const methodsFor = (family: Family): readonly EvolveMethod[] => (family === "polygon" ? EVOLVE_METHODS : []);
 
 export type UpgradeId =
   // clicks

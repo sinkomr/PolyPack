@@ -47,7 +47,7 @@ function played(): GameState {
   const s = newGame(T0, 1234);
   s.name = "Ada";
   s.consent = true;
-  const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
   applyLoadAll(p, b, 7, null);
@@ -95,6 +95,7 @@ function played(): GameState {
   s.reveal.push("score", "points");
   s.log.push({ t: T0, text: "New record 6.500000" });
   s.past.push({
+    family: "polygon",
     N: 21,
     M: 21,
     P: 40,
@@ -131,7 +132,7 @@ describe("Tighter saves", () => {
       [101, 6.4 + 1e-13],
     ]);
     expect(a).toMatchObject({ evaluations: 101, sinceGain: 0, runs: 1, endedRuns: 0, nextSeed: 2, unconfirmed: 0 });
-    expect(r.state).toMatchObject({ version: 4 });
+    expect(r.state).toMatchObject({ version: 5 });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
@@ -314,7 +315,7 @@ describe("Tighter saves", () => {
   it("round-trip through an export string", async () => {
     const s = played();
     const text = await exportString(s);
-    expect(text).toMatch(/^tighter:4:[zj]:[A-Za-z0-9_-]+$/);
+    expect(text).toMatch(/^tighter:5:[zj]:[A-Za-z0-9_-]+$/);
     const r = await importString(text, T0 + 5000);
     expect(r.ok && r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // whitespace from a copy and paste is ignored
@@ -757,6 +758,8 @@ describe("Tighter saves of version 3", () => {
       rpEarned: 1000,
       standing: {
         ...raw.standing,
+        // no reset yet: a reset is cleared by version 5's step, tested apart
+        resets: 0,
         cycleEarned: 800,
         history: [{ startedAt: 0, endedAt: 1, earned: 5000, gain: 1, rule: null, marks: {} }],
       },
@@ -831,5 +834,111 @@ describe("Tighter saves of version 3", () => {
     expect(r.retired).toEqual({ rp: Math.round(300 * f), standing: 0, groups: ["Seeds"] });
     expect(r.state.rp).toBeCloseTo(160 * f + Math.round(300 * f), 9);
     expect(r.state.owned).toEqual(["trace", "click2", "auto1"]);
+  });
+});
+
+describe("Tighter saves of version 4", () => {
+  /** A save as version 4 wrote it: no family on its problems, no bound, and its resets as played. */
+  const v4 = (resets: number) => {
+    const raw = JSON.parse(toJson(played()));
+    const bare = (list: Record<string, unknown>[], bound: boolean) =>
+      list.map(({ family: _family, bound: _bound, ...q }) => (bound ? { ...q, bound: undefined } : q));
+    raw.version = 4;
+    raw.queue = bare(raw.queue, true);
+    raw.past = bare(raw.past, false);
+    raw.picks.offers = bare(raw.picks.offers, false);
+    raw.standing = { ...raw.standing, resets };
+    return raw;
+  };
+
+  it("read as they were, with every problem a polygon one, when no reset was made", () => {
+    const raw = v4(0);
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const s = played();
+    expect(r.rebalanced).toBeUndefined();
+    expect(r.state.queue[0]).toMatchObject({ family: "polygon", N: 24, M: 30, P: 40, bound: null });
+    expect(r.state.past[0]).toMatchObject({ family: "polygon", N: 21, M: 21, P: 40 });
+    expect(r.state.rp).toBe(s.rp);
+    expect(r.state.owned).toEqual(s.owned);
+    expect(r.state.standing).toMatchObject({ points: 3, total: 5, rule: "circles", dimensions: ["2-in-2"] });
+    expect(r.state.picks).toEqual(s.picks);
+    expect(r.state.version).toBe(SAVE_VERSION);
+  });
+
+  it("clear standing, the Standing row and the rules once, and give back the points the finished cycles earned", () => {
+    const raw = v4(2);
+    raw.owned = [...raw.owned, "head1", "keepAuto", "rules"];
+    raw.levels = { ...raw.levels, clickx: 2 };
+    raw.standing.history = [
+      { startedAt: 0, endedAt: 1, earned: 3_000_000, gain: 2, rule: "circles", marks: {} },
+      { startedAt: 1, endedAt: 2, earned: 2_500_000, gain: 2, rule: null, marks: {} },
+    ];
+    raw.standing.rulesDone = ["circles"];
+    raw.standing.nextRule = "small";
+    const s = played();
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.rebalanced).toEqual({ rp: 5_500_000 });
+    expect(r.state.rp).toBe(s.rp + 5_500_000);
+    // the points were earned already: the lifetime count does not take them twice
+    expect(r.state.rpEarned).toBe(s.rpEarned);
+    expect(r.state.standing).toMatchObject({
+      points: 0,
+      total: 0,
+      resets: 0,
+      history: [],
+      rule: null,
+      nextRule: null,
+      rulesDone: [],
+      marks: {},
+      cycleEarned: 1234.5,
+    });
+    for (const id of ["standing", "head1", "keepAuto", "rules"]) expect(r.state.owned).not.toContain(id);
+    expect(r.state.owned).toContain("clickx");
+    expect(r.state.levels).toEqual({ clickx: 2 });
+    // the records stay
+    expect(r.state.queue.map((p) => p.key)).toEqual(s.queue.map((p) => p.key));
+    // saved again, it is a version 5 save: nothing is given back twice
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.rebalanced).toBeUndefined();
+    expect(again.ok && again.state.rp).toBe(r.state.rp);
+  });
+
+  it("round-trip a space problem in the queue and in the past", () => {
+    const s = played();
+    const sphere = { family: "sphere" as const, id: "sphere/0/12", P: 12 };
+    const q = newProblem(sphere, "open", T0);
+    q.bound = 1.25;
+    addToQueue(s, q);
+    s.past.push({
+      family: "surface",
+      id: "surface/cube/fold/7/20",
+      P: 20,
+      key: "surface/cube/fold/7/20",
+      tier: "open",
+      best: null,
+      verified: null,
+      ourId: null,
+      rp: 0,
+      leftAt: T0,
+    });
+    s.picks.retake.push("polyhedra/abc/30");
+    s.economy.recorded.push("sphere/0/12");
+    const r = fromJson(toJson(s), T0 + 5000);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
+    expect(r.state.queue[1]).toMatchObject({ family: "sphere", id: "sphere/0/12", key: "sphere/0/12", bound: 1.25 });
+    expect(r.state.past.at(-1)).toMatchObject({ family: "surface", key: "surface/cube/fold/7/20" });
+    expect(r.state.picks.retake).toContain("polyhedra/abc/30");
+    expect(r.state.economy.recorded).toContain("sphere/0/12");
+    // a space problem stored under another family's name is not read
+    const bad = JSON.parse(toJson(s));
+    bad.queue[1].family = "torus";
+    const bad2 = fromJson(JSON.stringify(bad), T0);
+    expect(bad2.ok && bad2.state.queue.map((p) => p.key)).toEqual(["24/30/40"]);
   });
 });

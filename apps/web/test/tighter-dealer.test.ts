@@ -40,7 +40,17 @@ import {
   speedFactor,
 } from "../src/tighter/rank";
 import { fromJson, toJson } from "../src/tighter/save";
-import { SWITCHES, dealerChoices, inUse, offText, offerCount, owning, ringMin, switchName, switchOf } from "../src/tighter/upgrades";
+import {
+  SWITCHES,
+  dealerChoices,
+  inUse,
+  offText,
+  offerCount,
+  owning,
+  ringMin,
+  switchName,
+  switchOf,
+} from "../src/tighter/upgrades";
 
 const T0 = 1_700_000_000_000;
 
@@ -231,6 +241,7 @@ describe("Tighter contested problems", () => {
 
 describe("Tighter ranking", () => {
   const cand = (over: Partial<Candidate>): Candidate => ({
+    family: "polygon",
     N: 24,
     M: 30,
     P: 60,
@@ -259,18 +270,21 @@ describe("Tighter ranking", () => {
     expect(room("loose", 1)).toBe(1);
     expect(room("batch", 0)).toBeLessThan(room("loose", 0.005));
     expect(room("published", null)).toBeLessThan(room("batch", 0));
-    const small = priorPerEval(cand({ N: 7, M: 7, P: 300, tier: "batch", weakness: 0 }));
+    const small = priorPerEval(cand({ family: "polygon", N: 7, M: 7, P: 300, tier: "batch", weakness: 0 }));
     expect(small).toBeCloseTo(1 * 1 * CONTEST.batch * room("batch", 0) * RP_PER_EVAL, 12);
     expect(RP_PER_EVAL).toBe(4);
     // a published value is expected to pay less per evaluation than a site record, whatever its weight
     expect(CONTEST.published * room("published", null)).toBeLessThan(CONTEST.batch * room("batch", 0));
     // the shape weight: 100-gons in a 100-gon pay a twenty-fifth of what heptagons do
-    expect(priorPerEval(cand({ N: 100, M: 100 }))).toBeCloseTo(priorPerEval(cand({ N: 7, M: 7 })) / 25, 12);
+    expect(priorPerEval(cand({ family: "polygon", N: 100, M: 100 }))).toBeCloseTo(
+      priorPerEval(cand({ family: "polygon", N: 7, M: 7 })) / 25,
+      12,
+    );
   });
 
   it("rank retakes first, then by expected points per second of solver time", () => {
-    const big = cand({ N: 100, M: 100, P: 300 });
-    const starter = cand({ N: 21, M: 24, P: 40 });
+    const big = cand({ family: "polygon", N: 100, M: 100, P: 300 });
+    const starter = cand({ family: "polygon", N: 21, M: 24, P: 40 });
     const retake = cand({ N: 90, M: 90, P: 250, tier: "loose", retake: true, leader: { score: 9, name: "x", id: 1 } });
     const ranked = rankCandidates([big, starter, retake], null, generator(1));
     expect(ranked.map((r) => r.candidate)).toEqual([retake, starter, big]);
@@ -280,7 +294,7 @@ describe("Tighter ranking", () => {
   });
 
   it("learns which buckets pay, and ranks by what it learned once the learning dealer is owned", () => {
-    const open = cand({ N: 24, M: 30, P: 60 });
+    const open = cand({ family: "polygon", N: 24, M: 30, P: 60 });
     const loose = cand({ N: 7, M: 7, P: 300, tier: "loose", weakness: 0.01, leader: { score: 9, name: "x", id: 1 } });
     // the prior prefers the loose record
     expect(rankCandidates([open, loose], null, generator(2))[0].candidate).toBe(loose);
@@ -305,9 +319,9 @@ describe("Tighter ranking", () => {
     expect(sizeRing(300)).toBe(0);
     expect(sizeRing(299)).toBe(1);
     expect(sizeRing(29)).toBe(6);
-    expect(bucketOf({ N: 0, M: 4, P: 300, tier: "loose" })).toBe("loose|r0|cf");
-    expect(bucketOf({ N: 21, M: 100, P: 40, tier: "open" })).toBe("open|r2|nn");
-    expect(bucketOf({ N: 12, M: 7, P: 30, tier: "batch" })).toBe("batch|r5|mm");
+    expect(bucketOf({ family: "polygon", N: 0, M: 4, P: 300, tier: "loose" })).toBe("loose|r0|cf");
+    expect(bucketOf({ family: "polygon", N: 21, M: 100, P: 40, tier: "open" })).toBe("open|r2|nn");
+    expect(bucketOf({ family: "polygon", N: 12, M: 7, P: 30, tier: "batch" })).toBe("batch|r5|mm");
   });
 });
 
@@ -334,13 +348,13 @@ describe("Tighter dealer filters", () => {
       tiers: ["loose", "warp"],
     })!;
     expect(f).toEqual({ pieces: [0, 4, 7], containers: null, minP: 50, maxP: 50, tiers: ["loose"] });
-    expect(passes(f, { N: 4, M: 9, P: 50, tier: "loose" })).toBe(true);
-    expect(passes(f, { N: 5, M: 9, P: 50, tier: "loose" })).toBe(false);
-    expect(passes(f, { N: 4, M: 9, P: 51, tier: "loose" })).toBe(false);
-    expect(passes(f, { N: 4, M: 9, P: 50, tier: "batch" })).toBe(false);
+    expect(passes(f, { family: "polygon", N: 4, M: 9, P: 50, tier: "loose" })).toBe(true);
+    expect(passes(f, { family: "polygon", N: 5, M: 9, P: 50, tier: "loose" })).toBe(false);
+    expect(passes(f, { family: "polygon", N: 4, M: 9, P: 51, tier: "loose" })).toBe(false);
+    expect(passes(f, { family: "polygon", N: 4, M: 9, P: 50, tier: "batch" })).toBe(false);
     // without a tier, only the shape and size are judged (a pair drawn before its records are read)
-    expect(passes(f, { N: 4, M: 9, P: 50 })).toBe(true);
-    expect(passes(null, { N: 5, M: 9, P: 1 })).toBe(true);
+    expect(passes(f, { family: "polygon", N: 4, M: 9, P: 50 })).toBe(true);
+    expect(passes(null, { family: "polygon", N: 5, M: 9, P: 1 })).toBe(true);
     expect(normalizeFilters("x")).toBeNull();
     expect(normalizeFilters({})).toEqual({ pieces: null, containers: null, minP: 1, maxP: 500, tiers: null });
   });
@@ -348,6 +362,7 @@ describe("Tighter dealer filters", () => {
 
 describe("Tighter offers and the dealer's memory", () => {
   const offer = (over: Record<string, unknown> = {}) => ({
+    family: "polygon",
     N: 7,
     M: 7,
     P: 300,
@@ -386,7 +401,7 @@ describe("Tighter offers and the dealer's memory", () => {
 
   it("learn from a problem when it leaves the queue, in the bucket it was dealt under", () => {
     const s = newGame(T0, 1);
-    const p = newProblem({ N: 24, M: 30, P: 60 }, "open", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 60 }, "open", T0);
     addToQueue(s, p);
     s.picks.dealt[p.key] = { bucket: "open|r2|nn", prior: 0.1 };
     p.rp = 60;
@@ -410,12 +425,12 @@ describe("Tighter offers and the dealer's memory", () => {
   });
 
   it("aim the Collector at the pair nearest to complete, its missing problems in order", () => {
-    const rec = (N: number, M: number, ps: number[]) => ps.map((P) => keyOf({ N, M, P }));
+    const rec = (N: number, M: number, ps: number[]) => ps.map((P) => keyOf({ family: "polygon", N, M, P }));
     const recorded = new Set([...rec(21, 24, FRONTIER_P.slice(0, 7)), ...rec(30, 30, FRONTIER_P.slice(0, 3))]);
-    const exclude = new Set([keyOf({ N: 21, M: 24, P: FRONTIER_P[7] })]);
+    const exclude = new Set([keyOf({ family: "polygon", N: 21, M: 24, P: FRONTIER_P[7] })]);
     const targets = collectorTargets(recorded, exclude);
-    expect(targets[0]).toEqual({ N: 21, M: 24, P: FRONTIER_P[8] });
-    expect(targets[1]).toEqual({ N: 30, M: 30, P: FRONTIER_P[3] });
+    expect(targets[0]).toEqual({ family: "polygon", N: 21, M: 24, P: FRONTIER_P[8] });
+    expect(targets[1]).toEqual({ family: "polygon", N: 30, M: 30, P: FRONTIER_P[3] });
     expect(targets).toHaveLength(1 + 6);
     // a complete pair, or none begun, gives nothing
     expect(collectorTargets(new Set(rec(21, 24, [...FRONTIER_P])), new Set())).toEqual([]);
@@ -467,7 +482,7 @@ describe("Tighter published values", () => {
     const s = newGame(T0, 1);
     s.consent = true;
     s.name = "Ada";
-    const p = newProblem({ N: 7, M: 7, P: 40 }, "published", T0);
+    const p = newProblem({ family: "polygon", N: 7, M: 7, P: 40 }, "published", T0);
     addToQueue(s, p);
     const board = loadAll(7, 7, 40);
     p.phase = "ready";
@@ -506,7 +521,7 @@ describe("Tighter published values", () => {
 
   it("keep a problem's published value through a save", () => {
     const s = newGame(T0, 1);
-    const p = newProblem({ N: 7, M: 7, P: 40 }, "published", T0);
+    const p = newProblem({ family: "polygon", N: 7, M: 7, P: 40 }, "published", T0);
     p.published = 9.25;
     addToQueue(s, p);
     s.picks.offers.push(

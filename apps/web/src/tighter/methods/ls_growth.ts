@@ -1,4 +1,5 @@
 import type { PackingConfig } from "@polypack/geometry";
+import { needPolygon } from "../frontier";
 import type { ProblemState } from "../game";
 import { sym } from "../how";
 import type { MethodGame, RunView } from "./types";
@@ -61,7 +62,8 @@ const bases = new Map<string, PackingConfig>();
  */
 export function growthStart(p: ProblemState): PackingConfig {
   const b = bases.get(p.key);
-  if (p.run?.method === "ls_growth" && b && b.N === p.N && b.M === p.M && b.P === p.P) return b;
+  const q = needPolygon(p, "Growth start");
+  if (p.run?.method === "ls_growth" && b && b.N === q.N && b.M === q.M && b.P === q.P) return b;
   bases.delete(p.key);
   bases.set(p.key, p.board!);
   while (bases.size > GROWTH_BASES) bases.delete(bases.keys().next().value!);

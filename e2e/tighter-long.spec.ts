@@ -545,12 +545,12 @@ test("long game: a save from the per-click build (no new fields) loads and plays
     autoDue: st.autoDue,
     auto: st.settings.auto,
   }));
-  // read as version 4. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
+  // read as version 5. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
   // and the Seed counter's list price (300 RP), now that the Seeds row is gone. Version 4 multiplies every
   // amount by what the save could buy next costs now over then: Auto-eval: 2 a second and 5 evaluations
   // per click, 2,900 RP now and 815 then
   const f = 2900 / 815;
-  expect(s).toMatchObject({ version: 4, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 5, levels: {}, picks: 0, pipeline: [] });
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
   await expect(page.locator("#status")).toContainText(`${Math.round(81 * f)} RP of what you paid for yours came back`);

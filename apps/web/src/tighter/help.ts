@@ -1,4 +1,4 @@
-import { areaLowerBound, improvesOn } from "@polypack/geometry";
+import { improvesOn } from "@polypack/geometry";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   PAIR_BONUS,
@@ -11,7 +11,8 @@ import {
   SHAPE_MILESTONES,
   TIER_BONUS,
 } from "./economy";
-import { FRONTIER_P, FRONTIER_SIDES } from "./frontier";
+import { rulesOf } from "./families";
+import { FRONTIER_P, FRONTIER_SIDES, poly } from "./frontier";
 import type { How } from "./how";
 import { METHOD_GAMES, methodLabel } from "./methods";
 import type { MethodGame } from "./methods";
@@ -33,7 +34,6 @@ import {
   SIZE_WEIGHT,
   TIER_LABEL,
   recordPoints,
-  shapeWeight,
 } from "./points";
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
 import { HELD_PER_STANDING, RESET_MIN, RULES } from "./standing";
@@ -101,10 +101,10 @@ export function smallerText(side: string, before: number | null, after: number |
 // ---------- how points are paid ----------
 
 /** The worked example: 60 24-gons in a 30-gon (an open problem), a board 20 % above the area bound. */
-const EXAMPLE = { N: 24, M: 30, P: 60 };
-const exampleBound = areaLowerBound(EXAMPLE.N, EXAMPLE.M, EXAMPLE.P);
+const EXAMPLE = poly(24, 30, 60);
+const exampleBound = rulesOf(EXAMPLE).bound(EXAMPLE)!;
 const exampleSide = exampleBound * 1.2;
-const exampleW = shapeWeight(EXAMPLE.N, EXAMPLE.M);
+const exampleW = rulesOf(EXAMPLE).weight(EXAMPLE);
 function exampleLine(delta: number, label: string): string {
   const r = recordPoints({ ...EXAMPLE, sPrev: exampleSide, sNew: exampleSide * (1 - delta), tier: "open" })!;
   const terms =

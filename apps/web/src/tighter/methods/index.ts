@@ -1,5 +1,6 @@
 import type { PackingConfig } from "@polypack/geometry";
 import type { ProblemState } from "../game";
+import { needPolygon } from "../frontier";
 import type { EvolveMethod } from "../upgrades";
 import { ascGame } from "./asc";
 import { basinHoppingGame } from "./basin_hopping";
@@ -67,7 +68,8 @@ export interface RunSetup {
  */
 export function runSetup(m: EvolveMethod, base: Record<string, unknown>, p: ProblemState): RunSetup {
   const g = methodGame(m);
-  const params = g.runParams ? g.runParams(base, { N: p.N, M: p.M, P: p.P, score: p.best }) : base;
+  const q = needPolygon(p, "run parameters");
+  const params = g.runParams ? g.runParams(base, { N: q.N, M: q.M, P: q.P, score: p.best }) : base;
   const budget = g.runBudget ? g.runBudget(params) : RUN_BUDGET;
   const start = g.startFrom ? g.startFrom(p) : p.board!;
   return { params, budget: Math.max(1, Math.floor(budget)), start };

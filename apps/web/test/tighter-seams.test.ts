@@ -47,7 +47,7 @@ function withRecord(): { s: GameState; p: ReturnType<typeof newProblem> } {
   const s = newGame(T0, 1);
   s.name = "Ada";
   s.consent = true;
-  const p = newProblem({ N: 24, M: 30, P: 40 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
   applyLoadAll(p, b, 7, null);
@@ -105,6 +105,7 @@ describe("Tighter seams", () => {
     owning(s, ["standing", "pick3"]);
     s.standing.cycleEarned = 8_000_000;
     const offer = (P: number, retake: boolean): Offer => ({
+      family: "polygon",
       N: 7,
       M: 7,
       P,
@@ -128,6 +129,7 @@ describe("Tighter seams", () => {
 
   it("let an offer be taken only while the tree, the filters and the rule still allow it", () => {
     const base: Offer = {
+      family: "polygon",
       N: 7,
       M: 7,
       P: 300,
@@ -230,7 +232,7 @@ describe("Tighter seams", () => {
 
 describe("Tighter published values", () => {
   it("send a board only once it beats the published value, not a small gain on the published packing", () => {
-    const p = newProblem({ N: 4, M: 4, P: 30 }, "published", 0);
+    const p = newProblem({ family: "polygon", N: 4, M: 4, P: 30 }, "published", 0);
     p.phase = "ready";
     p.board = { N: 4, M: 4, P: 30, pieces: [], container_phi: 0 };
     p.run = { method: "mc_compress", params: {}, seed: 1, budget: { evals: 10 } };

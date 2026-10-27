@@ -1,6 +1,6 @@
 import { MAX_PIECES, evaluate, findFreeSpot } from "@polypack/geometry";
 import type { PackingConfig, Pose } from "@polypack/geometry";
-import { FRONTIER_P, ProblemKey } from "./frontier";
+import { FRONTIER_P, PolygonKey } from "./frontier";
 
 /**
  * Transfers (plan §4): a new problem starts from the best known packing of a neighbour with fewer
@@ -76,7 +76,7 @@ function leastGrowth(N: number, M: number, pieces: Pose[], phi: number): Pose {
  * free space. A few pieces are placed one by one where each grows the container least; many go
  * around the centre. Null when the neighbour is not a smaller packing of the same N and M.
  */
-export function transferBoard(neighbour: PackingConfig, target: ProblemKey): PackingConfig | null {
+export function transferBoard(neighbour: PackingConfig, target: PolygonKey): PackingConfig | null {
   if (neighbour.N !== target.N || neighbour.M !== target.M) return null;
   if (neighbour.pieces.length !== neighbour.P || neighbour.P >= target.P || target.P > MAX_PIECES) return null;
   const pieces: Pose[] = neighbour.pieces.map((q) => ({ x: q.x, y: q.y, theta: q.theta }));
@@ -99,7 +99,7 @@ export interface TransferStart {
 }
 
 /** The transferred board scored as the server scores it (container at its best angle), or null if not valid. */
-export function scoredTransfer(neighbour: PackingConfig, target: ProblemKey): TransferStart | null {
+export function scoredTransfer(neighbour: PackingConfig, target: PolygonKey): TransferStart | null {
   const board = transferBoard(neighbour, target);
   if (!board) return null;
   const e = evaluate(board, { autoOrient: true });

@@ -1,7 +1,7 @@
 import { parseConfig } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import { DealerState, creditOf, newDealer } from "./dealer";
-import { keyOf, parseKey } from "./frontier";
+import { isPolygon, keyOf, parseKey, poly } from "./frontier";
 import {
   DEFAULT_PATIENCE,
   DEFAULT_TOLERANCE,
@@ -26,7 +26,7 @@ import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { readLattice } from "./methods/lattice";
-import { HEAD_STARTS, normalizeStanding } from "./standing";
+import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
 import {
   EvolveMethod,
   SWITCHES,
@@ -117,7 +117,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -215,6 +215,53 @@ export const MIGRATIONS: Record<number, Migration> = {
       ...(isObj(save.runplan) ? { runplan: { ...save.runplan, bandit: {} } } : {}),
       ...(save.autoRefund !== undefined ? { autoRefund: x(save.autoRefund) } : {}),
       pointsScale: f,
+    };
+  },
+  /**
+   * Version 5 deals problems of other families, so every problem carries its `family` (all polygon
+   * until now) and a space problem's `bound` (null for a polygon). Resets work differently too: a
+   * save that has reset is rebalanced once. Its standing, history and rules are cleared, the Standing
+   * row goes, and the record points its finished cycles earned, which the resets took, come back
+   * (`rebalanced`, for the page's notice).
+   */
+  4: (save) => {
+    const each = (list: unknown, add: Record<string, unknown>) =>
+      Array.isArray(list) ? list.map((q) => (isObj(q) ? { family: "polygon", ...add, ...q } : q)) : list;
+    const picks = isObj(save.picks) ? { ...save.picks, offers: each(save.picks.offers, {}) } : save.picks;
+    const out: Record<string, unknown> = {
+      ...save,
+      queue: each(save.queue, { bound: null }),
+      past: each(save.past, {}),
+      ...(picks !== undefined ? { picks } : {}),
+    };
+    const st = isObj(save.standing) ? save.standing : null;
+    if (!st || !(int(st.resets, 0) > 0)) return out;
+    const back = (Array.isArray(st.history) ? st.history : []).reduce(
+      (t: number, h) => t + (isObj(h) ? num(h.earned, 0, 0) : 0),
+      0,
+    );
+    // the standing card and everything bought with standing
+    const gone = (id: unknown) => id === "standing" || (isUpgradeId(id) && currencyOf(upgrade(id)) === "standing");
+    const reset = newStanding(0);
+    return {
+      ...out,
+      rp: num(save.rp, 0, 0) + back,
+      owned: (Array.isArray(save.owned) ? save.owned : []).filter((id) => !gone(id)),
+      levels: isObj(save.levels)
+        ? Object.fromEntries(Object.entries(save.levels).filter(([id]) => !gone(id)))
+        : save.levels,
+      standing: {
+        ...st,
+        points: reset.points,
+        total: reset.total,
+        resets: reset.resets,
+        history: reset.history,
+        rule: reset.rule,
+        nextRule: reset.nextRule,
+        rulesDone: reset.rulesDone,
+        marks: reset.marks,
+      },
+      rebalanced: back,
     };
   },
 };
@@ -389,7 +436,14 @@ export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Recor
  * (none if it owned none). Every amount is in today's points.
  */
 export type LoadResult =
-  | { ok: true; state: GameState; rescaled?: number; refunded?: number; retired?: RetiredRefund }
+  | {
+      ok: true;
+      state: GameState;
+      rescaled?: number;
+      refunded?: number;
+      retired?: RetiredRefund;
+      rebalanced?: { rp: number };
+    }
   | { ok: false; error: string };
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
@@ -429,7 +483,7 @@ function board(v: unknown, key: string): PackingConfig | null {
   const parsed = parseConfig(v);
   if (!parsed.ok) return null;
   const c = parsed.config;
-  if (keyOf(c) !== key || c.pieces.length !== c.P) return null;
+  if (keyOf(poly(c.N, c.M, c.P)) !== key || c.pieces.length !== c.P) return null;
   return { N: c.N, M: c.M, P: c.P, pieces: c.pieces, container_phi: c.container_phi };
 }
 
@@ -466,10 +520,12 @@ function pendingSend(v: unknown): PendingSend | null {
 function problemState(v: unknown, now: number): ProblemState | null {
   if (!isObj(v)) return null;
   const k = parseKey(str(v.key, ""));
-  if (!k || k.N !== v.N || k.M !== v.M || k.P !== v.P) return null;
+  if (!k) return null;
+  if (isPolygon(k) ? k.N !== v.N || k.M !== v.M || k.P !== v.P : k.family !== v.family || k.P !== v.P) return null;
   const key = keyOf(k);
   let phase: Phase = v.phase === "loaded" || v.phase === "ready" ? v.phase : "bare";
-  const b = board(v.board, key);
+  // a space problem's board is read once its package stores one: until then it starts bare
+  const b = isPolygon(k) ? board(v.board, key) : null;
   const best = posOrNull(v.best);
   // a board that cannot be read takes the problem back to the start
   if (phase !== "bare" && (!b || best === null)) phase = "bare";
@@ -515,6 +571,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     ...k,
     key,
     tier: tier(v.tier),
+    bound: isPolygon(k) ? null : posOrNull(v.bound),
     dealtAt: num(v.dealtAt, now),
     floor: posOrNull(v.floor),
     published: posOrNull(v.published),
@@ -713,12 +770,14 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const refunded = (raw.version as number) < 3 ? Math.round(num(m.save.autoRefund, 0, 0)) : 0;
   const rescaled = (raw.version as number) < 4 ? num(m.save.pointsScale, 0, 0) : 0;
   const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0));
+  const rebalanced = (raw.version as number) < 5 && m.save.rebalanced !== undefined;
   return {
     ok: true,
     state: normalize(m.save, now),
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
+    ...(rebalanced ? { rebalanced: { rp: Math.round(num(m.save.rebalanced, 0, 0)) } } : {}),
   };
 }
 

@@ -1,6 +1,7 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
-import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, keyOf } from "./frontier";
-import { CONTEST, TIERS, Tier, shapeWeight } from "./points";
+import { rulesOf } from "./families";
+import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, keyOf, needPolygon, poly } from "./frontier";
+import { CONTEST, TIERS, Tier } from "./points";
 
 /**
  * The dealer's judgement (plan 2026-10-20 §3): what a candidate problem is expected to pay, the
@@ -55,8 +56,14 @@ export const LOOSE_WEAKNESS = 0.005;
 /** Neighbours of P: the same pair's records at P − NEIGHBOURS … P + NEIGHBOURS. */
 export const NEIGHBOURS = 3;
 
+/** N + M + P, the size that rings and the speed factor go by (polygons only for now). */
+const sizeOf = (c: ProblemKey): number => {
+  const q = needPolygon(c, "size");
+  return q.N + q.M + q.P;
+};
+
 /** A problem the dealer may deal, with what is known about its record. */
-export interface Candidate extends ProblemKey {
+export interface CandidateFields {
   tier: Tier;
   /** The record's gap less its neighbours' median gap (contested problems); null when not judged. */
   weakness: number | null;
@@ -69,6 +76,7 @@ export interface Candidate extends ProblemKey {
   /** A record the player lost, offered again. */
   retake: boolean;
 }
+export type Candidate = ProblemKey & CandidateFields;
 
 /** What is left to gain on a problem of this tier [SPEC]. */
 export function room(tier: Tier, weakness: number | null): number {
@@ -95,7 +103,7 @@ export const RP_PER_EVAL = 4;
 
 /** The prior: expected record points per evaluation. */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null }): number {
-  return shapeWeight(c.N, c.M) * CONTEST[c.tier] * room(c.tier, c.weakness) * RP_PER_EVAL;
+  return rulesOf(c).weight(c) * CONTEST[c.tier] * room(c.tier, c.weakness) * RP_PER_EVAL;
 }
 
 /** The size rings, largest first (plan §3): ring k holds N+M+P ≥ RINGS[k] and below RINGS[k − 1]. */
@@ -113,7 +121,8 @@ export function shapeClass(n: number): "c" | "f" | "m" | "n" {
 
 /** The learning dealer's bucket: tier × size ring × the classes of piece and container. */
 export function bucketOf(c: ProblemKey & { tier: Tier }): string {
-  return `${c.tier}|r${sizeRing(c.N + c.M + c.P)}|${shapeClass(c.N)}${shapeClass(c.M)}`;
+  const p = needPolygon(c, "learning bucket");
+  return `${c.tier}|r${sizeRing(sizeOf(p))}|${shapeClass(p.N)}${shapeClass(p.M)}`;
 }
 
 /**
@@ -163,7 +172,7 @@ export function rankCandidates(cands: readonly Candidate[], bandit: Bandit | nul
       if (!draws.has(bucket)) draws.set(bucket, sampleArm(bandit, bucket, CORRECTION_PRIOR, rand));
       correction = Math.max(0.01, draws.get(bucket)!);
     }
-    const score = prior * correction * speedFactor(candidate.N + candidate.M + candidate.P);
+    const score = prior * correction * speedFactor(sizeOf(candidate));
     return { candidate, score, prior, bucket };
   });
   return out.sort((a, b) => Number(b.candidate.retake) - Number(a.candidate.retake) || b.score - a.score);
@@ -213,8 +222,9 @@ export function normalizeFilters(v: unknown): Filters | null {
 /** Whether a candidate passes the filters (null: no filters). */
 export function passes(f: Filters | null, c: ProblemKey & { tier?: Tier }): boolean {
   if (!f) return true;
-  if (f.pieces && !f.pieces.includes(c.N)) return false;
-  if (f.containers && !f.containers.includes(c.M)) return false;
+  const q = needPolygon(c, "dealer filters");
+  if (f.pieces && !f.pieces.includes(q.N)) return false;
+  if (f.containers && !f.containers.includes(q.M)) return false;
   if (c.P < f.minP || c.P > f.maxP) return false;
   if (f.tiers && c.tier && !f.tiers.includes(c.tier)) return false;
   return true;
@@ -263,15 +273,15 @@ export function formatShapes(list: readonly number[] | null): string {
  * of FRONTIER_P. Pairs with the most problems recorded (but not all) come first; within a pair, the
  * missing P in order. Problems in `exclude` (dealt before, or taken) are skipped.
  */
-export function collectorTargets(recorded: ReadonlySet<string>, exclude: ReadonlySet<string>): ProblemKey[] {
-  const pairs: { have: number; missing: ProblemKey[]; order: number }[] = [];
+export function collectorTargets(recorded: ReadonlySet<string>, exclude: ReadonlySet<string>): PolygonKey[] {
+  const pairs: { have: number; missing: PolygonKey[]; order: number }[] = [];
   let order = 0;
   for (const N of FRONTIER_SIDES)
     for (const M of FRONTIER_SIDES) {
       let have = 0;
-      const missing: ProblemKey[] = [];
+      const missing: PolygonKey[] = [];
       for (const P of FRONTIER_P) {
-        const k = { N, M, P };
+        const k = poly(N, M, P);
         if (recorded.has(keyOf(k))) have++;
         else if (!exclude.has(keyOf(k))) missing.push(k);
       }

@@ -1,4 +1,4 @@
-import { MAX_PIECES, areaLowerBound, evaluate, eventKeys } from "@polypack/geometry";
+import { MAX_PIECES, evaluate, eventKeys } from "@polypack/geometry";
 import type { Container, LeaderboardEvent, PackingConfig, ProblemInfo } from "@polypack/geometry";
 import * as api from "../api";
 import { Board } from "../board";
@@ -20,7 +20,21 @@ import {
   retakeTier,
   takeToken,
 } from "./dealer";
-import { FRONTIER, FRONTIER_P, ProblemKey, STARTER, keyOf, parseKey, problemTitle, shapeName } from "./frontier";
+import { rulesOf } from "./families";
+import {
+  FRONTIER,
+  FRONTIER_P,
+  ProblemKey,
+  STARTER,
+  isPolygon,
+  keyOf,
+  keyPart,
+  needPolygon,
+  parseKey,
+  poly,
+  problemTitle,
+  shapeName,
+} from "./frontier";
 import {
   AdvancePlan,
   GameState,
@@ -95,7 +109,7 @@ import {
   recordSend,
 } from "./pacer";
 import { Offer, addRetake, offerFits } from "./picks";
-import { CONTEST, TIERS, TIER_LABEL, Tier, gapOf, show6 } from "./points";
+import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { renderHow } from "./how";
 import {
@@ -205,7 +219,19 @@ function fmtRelative(x: number): string {
 }
 const evals = (n: number) => `${fmtInt(n)} evaluation${n === 1 ? "" : "s"}`;
 /** "side", or "radius" for a circle container. */
-const sideWord = (p: ProblemKey) => (p.M === 0 ? "radius" : "side");
+/** GET /api/problems for a polygon problem. */
+const getProblem = (p: ProblemKey) => {
+  const q = needPolygon(p, "the problem read");
+  return api.getProblem(q.N, q.M, q.P);
+};
+/** N + M + P of a polygon problem, the size the speed of an evaluation goes by. */
+const sizeOfPolygon = (p: ProblemKey): number => {
+  const q = needPolygon(p, "evaluation speed");
+  return q.N + q.M + q.P;
+};
+/** The gap of a score to the problem's lower bound, s / b − 1. */
+const gapTo = (p: ProblemKey & { bound?: number | null }, s: number): number => s / rulesOf(p).bound(p)! - 1;
+const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
 /**
  * Auto-eval's target from its evaluations a second: "up to 1 evaluation a second", "up to 2.5
  * evaluations a second". A target, never a claim: a computer that cannot keep up runs fewer.
@@ -222,6 +248,9 @@ const rescaleNote = (f: number) =>
 /** What a save from before auto-eval's lower prices was given back, said once as it is read. */
 const refundNote = (rp: number) =>
   `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
+/** Said once to a save that had reset, when it is read (save.ts migration 4). */
+const REBALANCED_NOTE =
+  "Tighter is being rebalanced and expanded, and resets now work differently. Sorry: your standing has been cleared and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
 /** What a save's retired upgrades paid back (save.ts RETIRED), said once as it is read. */
 function retiredNote(r: RetiredRefund): string {
   const paid = [r.rp > 0 ? `${fmtInt(r.rp)} RP` : "", r.standing > 0 ? `${fmtInt(r.standing)} standing` : ""];
@@ -253,6 +282,7 @@ function initialState(): GameState {
         r.rescaled ? rescaleNote(r.rescaled) : "",
         r.refunded ? refundNote(r.refunded) : "",
         r.retired ? retiredNote(r.retired) : "",
+        r.rebalanced ? REBALANCED_NOTE : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -355,12 +385,13 @@ view.previewLabel = null;
 
 /** The dashed area bound, centred on a container (or the origin). */
 function ghost(p: ProblemState, around: Container | null): Container {
+  const q = needPolygon(p, "the area bound ghost");
   return {
-    M: p.M,
+    M: q.M,
     cx: around?.cx ?? 0,
     cy: around?.cy ?? 0,
     phi: around?.phi ?? 0,
-    size: areaLowerBound(p.N, p.M, p.P),
+    size: rulesOf(q).bound(q)!,
   };
 }
 
@@ -380,8 +411,9 @@ function showFocus(force = false): void {
     view.fit();
     return;
   }
-  const config: PackingConfig = p.board ?? { N: p.N, M: p.M, P: p.P, pieces: [], container_phi: 0 };
-  if (board.load(config, false)) board.load({ N: p.N, M: p.M, P: p.P, pieces: [], container_phi: 0 }, false);
+  const q = needPolygon(p, "the board");
+  const config: PackingConfig = p.board ?? { N: q.N, M: q.M, P: q.P, pieces: [], container_phi: 0 };
+  if (board.load(config, false)) board.load({ N: q.N, M: q.M, P: q.P, pieces: [], container_phi: 0 }, false);
   // the dashed area bound frames a board that has no record yet
   view.ghost = p.phase === "ready" ? null : ghost(p, board.container);
   // a new problem is framed; clicks on the same one keep the camera still
@@ -578,9 +610,13 @@ const loading = new Set<string>();
  * problem's pieces. The player's own boards in the queue first, then the site's records of the
  * closest neighbours (one GET each, and one for the packing). Null when there is none.
  */
-async function findTransfer(p: ProblemState): Promise<TransferStart | null> {
+async function findTransfer(p0: ProblemState): Promise<TransferStart | null> {
+  const p = needPolygon(p0, "Transfers");
   const own = state.queue
-    .filter((q) => q !== p && q.N === p.N && q.M === p.M && q.P < p.P && q.board && q.phase !== "bare" && !!q.run)
+    .filter(
+      (q) =>
+        q !== p0 && isPolygon(q) && q.N === p.N && q.M === p.M && q.P < p.P && q.board && q.phase !== "bare" && !!q.run,
+    )
     .sort((a, b) => b.P - a.P)[0];
   let best = own?.board ? scoredTransfer(own.board, p) : null;
   for (const P2 of neighbourPs(p.P, owned().has("wide"))) {
@@ -603,7 +639,8 @@ async function findTransfer(p: ProblemState): Promise<TransferStart | null> {
  * Transfers, a neighbour's packing grown to this problem starts it instead when that is clearly smaller; the
  * free floor is then the smallest of the two (and of the trim floor), so neither is sent unimproved.
  */
-async function loadAll(p: ProblemState): Promise<boolean> {
+async function loadAll(p0: ProblemState): Promise<boolean> {
+  const p = needPolygon(p0, "Load all");
   if (p.phase !== "bare") return true;
   if (loading.has(p.key) || !ownsGame) return false;
   loading.add(p.key);
@@ -627,7 +664,7 @@ async function loadAll(p: ProblemState): Promise<boolean> {
     applyLoadAll(p, start.board, start.score, trim);
     reveal(state, "score");
     if (p.key === state.focus) {
-      const b0 = areaLowerBound(p.N, p.M, p.P);
+      const b0 = rulesOf(p).bound(p)!;
       const side = sideWord(p);
       // the starting score: what the first record must beat (the code's free floor)
       const startingScore =
@@ -724,7 +761,7 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
     chooseRun(state.runplan, {
-      kind: problemKind(p),
+      kind: problemKind(needPolygon(p, "run kinds")),
       methods: ms,
       levelOf: (m) => tuningLevel(o, m),
       tune: withLevels,
@@ -778,10 +815,11 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   lv.run = null;
   if (lv.lane.open) await lv.lane.close();
   // the method's own settings for the run, its budget and its start (methods/)
+  const q = needPolygon(p, "runs");
   const setup = runSetup(method, params, p);
   const startScore = p.best;
   const a = await lv.lane.openRun({
-    problem: { N: p.N, M: p.M, P: p.P },
+    problem: { N: q.N, M: q.M, P: q.P },
     method,
     params: setup.params,
     budget: { evals: setup.budget },
@@ -806,7 +844,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     params: a.params,
     seed,
     budget: setup.budget,
-    warmup: warmupOf(method, a.params, { N: p.N, M: p.M, P: p.P, score: startScore }),
+    warmup: warmupOf(method, a.params, { N: q.N, M: q.M, P: q.P, score: startScore }),
     evaluations: a.state.evaluations,
     last: a.state.last,
     runBest: a.state.score,
@@ -814,7 +852,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     stage: a.state.stage,
     origin: setup.start,
     startScore,
-    kind: problemKind(p),
+    kind: problemKind(q),
     rpAt: basePoints(p),
     evalsAt: 0,
   };
@@ -1093,7 +1131,8 @@ const speeds = new Speeds();
 const speedKey = (method: EvolveMethod, level: number) => `${method}@${level}`;
 
 function observeSpeed(run: OpenRunView, p: ProblemKey, done: number, ms: number): void {
-  speeds.observe(speedKey(run.method, run.level), msPerEval(p.N + p.M + p.P), done, ms);
+  const q = needPolygon(p, "evaluation speed");
+  speeds.observe(speedKey(run.method, run.level), msPerEval(q.N + q.M + q.P), done, ms);
 }
 
 /**
@@ -1147,7 +1186,7 @@ function autoJob(lv: LaneView): Job | null {
   }
   const tp = problem(state, target.key);
   // at most a quarter second of this device's time on that problem, with that run's method
-  const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), msPerEval(tp.N + tp.M + tp.P)) : 0;
+  const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), msPerEval(sizeOfPolygon(tp))) : 0;
   const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msEach) : n;
   state.autoDue -= evals;
   return { key: target.key, evals, click: false, compact: false };
@@ -1250,6 +1289,7 @@ async function submitTick(): Promise<void> {
  * this often gains a little: an improvement like any other.
  */
 function orient(p: ProblemState): void {
+  needPolygon(p, "container orientation");
   if (!p.board || p.best === null) return;
   const turned = orientBoard(p.board, p.best);
   if (!turned) return;
@@ -1266,7 +1306,7 @@ function orient(p: ProblemState): void {
 async function submit(p: ProblemState): Promise<void> {
   const name = state.name;
   // the leader just before: the server's exact check decides
-  const read = await within(SEND_TIMEOUT_MS, api.getProblem(p.N, p.M, p.P), null);
+  const read = await within(SEND_TIMEOUT_MS, getProblem(p), null);
   const info = read.answer;
   if (problem(state, p.key) !== p || !ownsGame) return;
   if (!info) {
@@ -1369,7 +1409,7 @@ async function settleLost(): Promise<void> {
   if (!p) return;
   lostChecking = true;
   try {
-    const { answer: info } = await within(SEND_TIMEOUT_MS, api.getProblem(p.N, p.M, p.P), null);
+    const { answer: info } = await within(SEND_TIMEOUT_MS, getProblem(p), null);
     if (problem(state, p.key) !== p || !p.sending || inFlight.has(p.key) || !ownsGame) return;
     if (!info) {
       lostCheckAfter = now() + OFFLINE_BACKOFF_MS;
@@ -1408,7 +1448,7 @@ const spentIo = (io: DealIo) => io.offline || io.gets >= DEAL_GETS;
 
 async function problemInfo(io: DealIo, k: ProblemKey): Promise<ProblemInfo | null> {
   io.gets++;
-  const info = await api.getProblem(k.N, k.M, k.P);
+  const info = await getProblem(k);
   if (!info) io.offline = true;
   return info;
 }
@@ -1451,9 +1491,7 @@ const dealerFilters = () => (inUse(owned(), "filters") ? state.picks.filters : n
 const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleAllowsProblem(state.standing, c);
 
 const openCandidateOf = (k: ProblemKey): Candidate => ({
-  N: k.N,
-  M: k.M,
-  P: k.P,
+  ...keyPart(k),
   tier: "open",
   weakness: null,
   leader: null,
@@ -1518,8 +1556,9 @@ async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
     if (!info.accepts_submissions || !lead || lead.verification === "pending") continue;
     if (state.name && sanitizeName(lead.name) === sanitizeName(state.name)) continue;
     if (!ruleAllowsProblem(state.standing, k)) continue;
-    const records = k.N <= 20 && k.M <= 20 ? await pairRecords(io, k.N, k.M) : null;
-    const tier = retakeTier(k.N, k.M, k.P, records);
+    const pk = needPolygon(k, "Retake");
+    const records = pk.N <= 20 && pk.M <= 20 ? await pairRecords(io, pk.N, pk.M) : null;
+    const tier = retakeTier(pk.N, pk.M, pk.P, records);
     const lit = info.literature?.status === "best_known" ? info.literature : null;
     return {
       ...k,
@@ -1597,8 +1636,9 @@ function plainRanked(c: Candidate): Ranked {
  * published value starts from a packing the server keeps (the leader's, or the best drawable one
  * for a published value) and must be improved on. Null when that packing cannot be read.
  */
-async function materialize(c: Candidate): Promise<ProblemState | null> {
-  if (c.tier === "open" && !c.retake) return newProblem(c, "open", now());
+async function materialize(c0: Candidate): Promise<ProblemState | null> {
+  if (c0.tier === "open" && !c0.retake) return newProblem(c0, "open", now());
+  const c = needPolygon(c0, "contested problems");
   let config: PackingConfig | null = null;
   let score: number | null = null;
   if (c.tier === "published") {
@@ -1803,7 +1843,7 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
       );
     return;
   }
-  const info = await api.getProblem(x.N, x.M, x.P);
+  const info = await getProblem(x);
   if (!info) {
     pauseDealing(true);
     say("The server cannot be reached. The offer stays until it can be checked.");
@@ -1884,7 +1924,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
 }
 
 function onLeaderEvent(e: LeaderboardEvent): void {
-  const key = keyOf(e);
+  const key = keyOf(poly(e.N, e.M, e.P));
   // our own entry, announced before its answer arrives; a rival's is seen in that answer instead
   if (!ownsGame || inFlight.has(key)) return;
   const target = problem(state, key) ?? state.past.find((p) => p.key === key);
@@ -1913,7 +1953,7 @@ async function refreshHeld(): Promise<void> {
     ...[...state.queue, ...state.past].filter((p) => p.ourId !== null && !("sending" in p && p.sending)).slice(-30),
   ];
   for (const p of check) {
-    const info = await api.getProblem(p.N, p.M, p.P);
+    const info = await getProblem(p);
     if (!info) return;
     if (inFlight.has(p.key)) continue;
     const leader = info.site_best
@@ -1947,7 +1987,7 @@ async function rentTick(): Promise<void> {
   rentChecking = true;
   rentCheckedAt = now();
   try {
-    const info = await api.getProblem(p.N, p.M, p.P);
+    const info = await getProblem(p);
     if (!info || inFlight.has(p.key) || !ownsGame) return;
     const leader = info.site_best
       ? { score: info.site_best.score, name: info.site_best.name, id: info.site_best.id }
@@ -2078,7 +2118,7 @@ function renderProblem(p: ProblemState | undefined): void {
       (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
     note =
-      `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapOf(p.N, p.M, p.P, p.leader.score))} above the area bound. ` +
+      `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapTo(p, p.leader.score))} above the area bound. ` +
       `Improvements here pay ${CONTEST[p.tier]} times as much as on an open problem.`;
   else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
@@ -2185,8 +2225,8 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
   show("t-score", !!p);
   show("t-pip", !!p);
   if (!p) return;
-  text("t-side-label", p.M === 0 ? "Radius r" : "Side s");
-  const b = areaLowerBound(p.N, p.M, p.P);
+  text("t-side-label", sideWord(p) === "radius" ? "Radius r" : "Side s");
+  const b = rulesOf(p).bound(p)!;
   text("t-bound", show6(b));
   if (p.best === null || p.phase === "bare") {
     for (const id of ["t-side", "t-delta", "t-gap", "t-density"]) text(id, "—");
@@ -2513,8 +2553,7 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
       ...state.queue.map((p) => {
         const li = document.createElement("li");
         if (p.key === state.focus) li.className = "focus";
-        const gap =
-          p.best !== null && p.phase !== "bare" ? ` · gap ${fmtPct(p.best / areaLowerBound(p.N, p.M, p.P) - 1)}` : "";
+        const gap = p.best !== null && p.phase !== "bare" ? ` · gap ${fmtPct(gapTo(p, p.best))}` : "";
         const status = p.leaving
           ? " · leaving"
           : p.ourId !== null
@@ -2659,14 +2698,14 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
           ? "open: any packing is a record"
           : x.tier === "published"
             ? `published value ${x.source ?? ""}: beat ${show6(x.target!)}`.replace(/\s+:/, ":")
-            : `${TIER_LABEL[x.tier]} ${show6(x.leader!.score)} by ${x.leader!.name}, gap ${fmtPct(gapOf(x.N, x.M, x.P, x.leader!.score))}` +
+            : `${TIER_LABEL[x.tier]} ${show6(x.leader!.score)} by ${x.leader!.name}, gap ${fmtPct(gapTo(x, x.leader!.score))}` +
               (x.weakness !== null && x.weakness > 0 ? `, ${fmtPct(x.weakness)} weaker than its neighbours` : "");
       const meta = document.createElement("span");
       meta.className = "note";
       // what the dealer knows, not a promise: the ranking itself is an estimate
       meta.textContent =
         `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · contest weight ${CONTEST[x.tier]}` +
-        ` · about ${msPerEval(x.N + x.M + x.P).toFixed(1)} ms an evaluation`;
+        ` · about ${msPerEval(sizeOfPolygon(x)).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
       btn.textContent = "Take";
       btn.disabled = !due || dealing;
@@ -2847,7 +2886,7 @@ function renderRuns(o: Owned): void {
       owned: o,
       methods: methods(o),
       allowed: (m) => allowedMethod(o, m),
-      focusKind: p ? problemKind(p) : null,
+      focusKind: p ? problemKind(needPolygon(p, "run kinds")) : null,
     },
     (next) => {
       state.runplan.pipeline = next;
@@ -3047,7 +3086,7 @@ function renderRecords(o: Owned): void {
     setLines("t-rc-sets", []);
     return;
   }
-  const pairName = (n: { N: number; M: number }) => problemTitle({ ...n, P: 0 }).replace(/, 0 pieces$/, "");
+  const pairName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
     `${fmtInt(c.pairs)} complete shape pair${c.pairs === 1 ? "" : "s"}, with a record on all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
       (c.nearest.length
@@ -3321,7 +3360,11 @@ $("t-import").addEventListener("click", async () => {
   ensureLanes();
   saveNow();
   showFocus(true);
-  const notes = [r.rescaled ? rescaleNote(r.rescaled) : "", r.refunded ? refundNote(r.refunded) : ""].filter(Boolean);
+  const notes = [
+    r.rescaled ? rescaleNote(r.rescaled) : "",
+    r.refunded ? refundNote(r.refunded) : "",
+    r.rebalanced ? REBALANCED_NOTE : "",
+  ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
 });
