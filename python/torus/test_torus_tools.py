@@ -38,25 +38,35 @@ class Display(unittest.TestCase):
         self.assertLessEqual(abs(Decimal(d) - Decimal(x)), Decimal("0.0000005"))
 
 
+_BOUNDS = {}
+
+
+def bound(family, N):
+    """p1_bound.bound, computed once per (family, N) within this process (the tests share the cases)."""
+    if (family, N) not in _BOUNDS:
+        _BOUNDS[(family, N)] = p1_bound.bound(family, N)
+    return _BOUNDS[(family, N)]
+
+
 class P1Bounds(unittest.TestCase):
     def test_tilings_and_known_values(self):
-        lb, ub, _ = p1_bound.bound("sq", 4)
+        lb, ub, _ = bound("sq", 4)
         self.assertAlmostEqual(float(lb), 1.0, places=12)
-        lb, ub, _ = p1_bound.bound("hex", 6)
+        lb, ub, _ = bound("hex", 6)
         self.assertAlmostEqual(float(lb), math.sqrt(3), places=12)
-        lb, ub, _ = p1_bound.bound("hex", 3)
+        lb, ub, _ = bound("hex", 3)
         self.assertAlmostEqual(float(lb), math.sqrt(3) / 2, places=12)
 
     def test_bound_below_float_optimum(self):
         for fam in ("sq", "hex"):
             for N in (5, 7):
-                lb, ub, _ = p1_bound.bound(fam, N)
+                lb, ub, _ = bound(fam, N)
                 self.assertLessEqual(float(lb), ub)
                 self.assertLess((ub - float(lb)) / ub, 2e-9)
 
     def test_bound_is_valid_at_sample_angles(self):
         # the rigorous bound can never exceed L*(theta) at any angle
-        lb, _, _ = p1_bound.bound("hex", 5)
+        lb, _, _ = bound("hex", 5)
         F = ((1.0, 0.5), (0.0, math.sqrt(3) / 2))
         for k in range(200):
             th = 2 * math.pi * k / 200

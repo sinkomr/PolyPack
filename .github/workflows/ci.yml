@@ -5,12 +5,15 @@ on:
   push:
     branches: [main]
   pull_request:
+# One run per ref: a newer commit cancels the older run (set here, not per job, because jobs that
+# shared a group would cancel each other).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  test:
+  # The test jobs below (four runners with the two browser shards) are independent and run in parallel.
+  node:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-${{ github.ref }}
-      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,21 +21,48 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # record suites skip themselves when their data file is missing; fail here instead
+      - run: node scripts/check-fixtures.mjs
       - run: npm run typecheck
       - run: npm test
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # the runner's preinstalled Node is enough for this script
+      - run: node scripts/check-fixtures.mjs
       # the spaces' interval certifiers need mpmath (python/requirements.txt)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: python/requirements.txt
       - run: python3 -m pip install -r python/requirements.txt
       - run: npm run test:python
+
+  # The browser tests run in two shards on separate runners, one worker each (each runner starts its
+  # own server with a fresh in-memory database, so shards share no state).
+  e2e:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
+      - run: npm run e2e -- --shard=${{ matrix.shard }}/2
 
-  # The live site is updated only from main, and only after every test above has passed.
+  # The live site is updated only from main, and only after every test job above has passed.
   deploy:
-    needs: test
+    needs: [node, python, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency: deploy

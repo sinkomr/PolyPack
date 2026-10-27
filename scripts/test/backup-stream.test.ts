@@ -3,14 +3,17 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { afterEach, describe, expect, it } from "vitest";
+import { gunzipSync, gzipSync } from "node:zlib";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 // deploy/fly/backup-dump.cjs streams a database; deploy/fly/backup-rebuild.mjs rebuilds it.
 const dump = resolve(__dirname, "../../deploy/fly/backup-dump.cjs");
 const rebuild = resolve(__dirname, "../../deploy/fly/backup-rebuild.mjs");
 
 let dir = "";
-afterEach(() => dir && rmSync(dir, { recursive: true, force: true }));
+let src = "";
+let stream: Buffer;
+afterAll(() => dir && rmSync(dir, { recursive: true, force: true }));
 
 function everything(path: string) {
   const db = new DatabaseSync(path, { readOnly: true });
@@ -30,6 +33,8 @@ function everything(path: string) {
   return out;
 }
 
+const PAIRS = 1000;
+
 function sample(path: string) {
   const db = new DatabaseSync(path);
   db.exec(`
@@ -47,23 +52,29 @@ function sample(path: string) {
   put.run(42n, 0.1, "the last row, deleted below", null);
   db.exec("DELETE FROM items WHERE id = 6");
   const pair = db.prepare("INSERT INTO pairs VALUES (?, ?, ?)");
-  for (let i = 0; i < 12_000; i++) pair.run(i % 97, i, i % 3 ? i / 7 : `r${i}`);
+  // one transaction (a commit per row is what made this slow). A thousand rows of long values give a stream of
+  // well over 64 KiB, so that both the compressed file and the decompressed lines reach the rebuild in many chunks
+  db.exec("BEGIN");
+  for (let i = 0; i < PAIRS; i++) pair.run(i % 97, i, i % 3 ? i / 7 : `r${i}-${(i * 2654435761 >>> 0).toString(36).repeat(30)}`);
+  db.exec("COMMIT");
   db.close();
 }
 
 describe("streaming backup", () => {
-  it("rebuilds a database exactly, values, types, schema and AUTOINCREMENT counters included", () => {
+  beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), "polypack-backup-"));
-    const src = join(dir, "src.sqlite");
+    src = join(dir, "src.sqlite");
     sample(src);
-    const stream = execFileSync(process.execPath, [dump], {
-      env: { ...process.env, POLYPACK_DB: src },
-      maxBuffer: 1 << 28,
-    });
+    stream = execFileSync(process.execPath, [dump], { env: { ...process.env, POLYPACK_DB: src }, maxBuffer: 1 << 28 });
     writeFileSync(join(dir, "dump.gz"), stream);
+  });
+
+  it("rebuilds a database exactly, values, types, schema and AUTOINCREMENT counters included", () => {
+    // the stream crosses several chunks of the readers (16 KiB of gunzip output), and the 97 keys of `a` repeat
+    expect(gunzipSync(stream).length).toBeGreaterThan(4 * 16384);
     const out = join(dir, "out.sqlite");
     const report = JSON.parse(execFileSync(process.execPath, [rebuild, join(dir, "dump.gz"), out]).toString());
-    expect(report).toEqual({ rows: { items: 5, pairs: 12_000 }, check: "ok" });
+    expect(report).toEqual({ rows: { items: 5, pairs: PAIRS }, check: "ok" });
     expect(everything(out)).toEqual(everything(src));
     // AUTOINCREMENT goes on from the deleted row 6, as it would on the server
     const db = new DatabaseSync(out);
@@ -73,12 +84,7 @@ describe("streaming backup", () => {
   });
 
   it("refuses a stream that was cut short and leaves no database behind", () => {
-    dir = mkdtempSync(join(tmpdir(), "polypack-backup-"));
-    const src = join(dir, "src.sqlite");
-    sample(src);
-    const stream = execFileSync(process.execPath, [dump], { env: { ...process.env, POLYPACK_DB: src } });
     // whole gzip members cut at a line boundary: decompress, drop the end marker, recompress
-    const { gunzipSync, gzipSync } = require("node:zlib") as typeof import("node:zlib");
     const lines = gunzipSync(stream).toString().trimEnd().split("\n");
     writeFileSync(join(dir, "short.gz"), gzipSync(lines.slice(0, -1).join("\n") + "\n"));
     writeFileSync(join(dir, "torn.gz"), stream.subarray(0, Math.floor(stream.length / 2)));
