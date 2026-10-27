@@ -77,26 +77,50 @@ const result = (job: SpaceJob, score: number | null, extra: Partial<SpaceJobResu
   ...extra,
 });
 
+/** A round's answer that depends on its job alone (its seed), so that bookkeeping can be compared without a solve. */
+const bySeed = (job: SpaceJob): SpaceJobResult => result(job, 1.5 + ((job.seed >>> 0) % 997) / 1000);
+
 describe("a search on a space problem, in rounds", () => {
   const sphere = problemOf("sphere/4/10");
 
-  it("gives the same result for the same seed, and every result passes the server's rule", async () => {
-    const run = async (seed: number) =>
+  it("gives the same result for the same seed, mixing the run's seed with each round's number", async () => {
+    const run = async (seed: number, runner = new LocalRunner(bySeed)) =>
       new SpaceSearch(
         sphere.search,
         sphere.start,
         { seed, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-        new LocalRunner(),
+        runner,
       ).done;
-    const a = await run(3);
+    const ra = new LocalRunner(bySeed);
+    const a = await run(3, ra);
     const b = await run(3);
-    expect(sphere.rule.bound).toBeLessThan(sphere.start.rho * 0.99);
+    const c = await run(4);
     expect(a.ended).toBe("evals");
     expect(a.rounds).toBe(2);
     expect(a.evaluations).toBe(20000);
     expect(a.best).not.toBeNull();
     expect(b.best).toEqual(a.best);
+    expect(c.best).not.toEqual(a.best);
+    expect(ra.jobs.map((j) => j.seed)).toEqual([mixSeed(3, 0), mixSeed(3, 1)]);
     expect(a.best!.seed).toBe(mixSeed(3, a.best!.round));
+    // the better of the two rounds is kept
+    expect(a.best!.score).toBe(Math.min(...ra.jobs.map((j) => bySeed(j).score!)));
+  });
+
+  it("runs the real shared job on a sphere problem: a result the server's rule accepts, never worse than the start", async () => {
+    expect(sphere.rule.bound).toBeLessThan(sphere.start.rho * 0.99);
+    const run = () =>
+      new SpaceSearch(
+        sphere.search,
+        sphere.start,
+        { seed: 3, budget: { evals: 1500 }, fresh: false, rule: sphere.rule },
+        new LocalRunner(),
+      ).done;
+    const a = await run();
+    expect(a.ended).toBe("evals");
+    expect(a.evaluations).toBeLessThanOrEqual(1500);
+    expect(a.best).not.toBeNull();
+    expect((await run()).best).toEqual(a.best);
     const v = validateSpaceSubmission("sphere", "sphere/4/10", a.best!.config, sphere.rule);
     expect(v.valid).toBe(true);
     expect(v.score).toBe(a.best!.score);
@@ -109,11 +133,11 @@ describe("a search on a space problem, in rounds", () => {
       sphere.search,
       sphere.start,
       { seed: 5, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-      new LocalRunner(),
+      new LocalRunner(bySeed),
     ).done;
     let search: SpaceSearch | null = null;
     const states: SpaceSearchProgress["state"][] = [];
-    const runner = new LocalRunner(undefined, 5, (_job, n) => {
+    const runner = new LocalRunner(bySeed, 5, (_job, n) => {
       // pause while the second round is in flight, resume a little later
       if (n === 2)
         setTimeout(() => {
@@ -256,11 +280,11 @@ describe("a search on a space problem, in rounds", () => {
       sphere.search,
       sphere.start,
       { seed: 9, budget: { evals: 20000 }, fresh: false, rule: sphere.rule },
-      new LocalRunner(),
+      new LocalRunner(bySeed),
     ).done;
     // pause() then resume() while round 2 is in flight: it runs again, nothing counts as failed
     let search: SpaceSearch | null = null;
-    const quick = new LocalRunner(undefined, 5, (_job, n) => {
+    const quick = new LocalRunner(bySeed, 5, (_job, n) => {
       if (n === 2)
         setTimeout(() => {
           search!.pause();
@@ -283,7 +307,7 @@ describe("a search on a space problem, in rounds", () => {
     // resume() then pause() while paused: the run stays paused and starts no round
     let held: SpaceSearch | null = null;
     const states: string[] = [];
-    const runner = new LocalRunner(undefined, 5, (_job, n) => {
+    const runner = new LocalRunner(bySeed, 5, (_job, n) => {
       if (n === 2)
         setTimeout(() => {
           held!.pause();
@@ -373,33 +397,28 @@ describe("a new arrangement, within the panel's default budget", () => {
     });
 });
 
-describe("a run from a tight packing, with the panel's default budget", () => {
-  // the start: the best of a new arrangement with seed 4 (10,000 evaluations), then a run from
-  // it with 20,000 evaluations (the default, without the time limit) and seed 9
-  // A clear gain, not an exact value: seeded results differ between Node versions (CI runs Node 24),
-  // and ten rounds of 2,000 evaluations from such a start gained nothing at all.
-  for (const [id, gain] of [
-    ["sphere/4/30", 0.005],
-    ["torus/free/4/12", 0.005],
-  ] as const)
-    it(`improves ${id} by more than ${gain * 100}%`, async () => {
-      const p = problemOf(id);
-      const fresh = await new SpaceSearch(
-        p.search,
-        null,
-        { seed: 4, budget: { evals: 10000 }, fresh: true, rule: p.rule },
-        new LocalRunner(),
-      ).done;
-      const start = fresh.best!;
-      const r = await new SpaceSearch(
-        p.search,
-        start.config,
-        { seed: 9, budget: { evals: 20000 }, fresh: false, rule: p.rule },
-        new LocalRunner(),
-      ).done;
-      expect(r.best!.score).toBeLessThan(start.score * (1 - gain));
-      expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
-    });
+describe("a run from a tight packing", () => {
+  // Smoke on a small budget: a run from a start is valid and no worse than the start. The clear-gain
+  // check with the panel's default budget is in space-search.quality.test.ts.
+  it("is valid and no worse than its start (sphere/4/30)", async () => {
+    const id = "sphere/4/30";
+    const p = problemOf(id);
+    const fresh = await new SpaceSearch(
+      p.search,
+      null,
+      { seed: 4, budget: { evals: 10000 }, fresh: true, rule: p.rule },
+      new LocalRunner(),
+    ).done;
+    const start = fresh.best!;
+    const r = await new SpaceSearch(
+      p.search,
+      start.config,
+      { seed: 9, budget: { evals: 2000 }, fresh: false, rule: p.rule },
+      new LocalRunner(),
+    ).done;
+    expect(r.best!.score).toBeLessThanOrEqual(start.score + 1e-12);
+    expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
+  });
 });
 
 describe("3D in 3D: rounds of the polyhedra search", () => {

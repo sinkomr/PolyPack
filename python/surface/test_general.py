@@ -183,12 +183,26 @@ class TestPackings(unittest.TestCase):
                     self.assertIn((solid, N, mode), kinds)
 
     def test_all_certify_at_1e12(self):
+        # One pass certifies every packing, and also counts what it covered: N = 3, 7, 12, 20 and 100 on a
+        # Platonic and a Catalan solid, a prism and an antiprism, folded and not, each certified here
+        # (a 100-gon packing certifies in a few seconds)
+        import time
+
+        done = set()
         for r in self.recs:
+            t = time.time()
             c = certify(r, "1e-12")
+            if r["N"] == 100:
+                self.assertLess(time.time() - t, 30, r["id"])
+            done.add((r["solid"], r["N"], r["mode"]))
             self.assertGreaterEqual(Fr(c["score_cert"]), Fr(r["s"]) / (1 - Fr("1e-12")))
             if r["mode"] == "fold" and r["solid"] in GENERAL_SOLIDS:
                 # these packings cross edges: the chain path certified them, not the nofold lemma
                 self.assertEqual(c["method"], "chains", r["id"])
+        for solid in ("cube", "rhombic_dodecahedron", "prism7", "antiprism5"):
+            for N in (3, 7, 12, 20, 100):
+                for mode in ("fold", "nofold"):
+                    self.assertIn((solid, N, mode), done)
 
     def test_nofold_packings_are_fold_packings(self):
         for r in self.recs:
@@ -196,20 +210,6 @@ class TestPackings(unittest.TestCase):
                 c = certify(dict(r, mode="fold"), "1e-12")
                 if r["solid"] in GENERAL_SOLIDS:
                     self.assertEqual(c["method"], "inside_faces", r["id"])
-
-    def test_the_range_of_N(self):
-        # N = 3, 7, 12, 20 and 100 on a Platonic and a Catalan solid, a prism and an antiprism; a
-        # 100-gon packing certifies in a few seconds
-        import time
-
-        for solid in ("cube", "rhombic_dodecahedron", "prism7", "antiprism5"):
-            for N in (3, 7, 12, 20, 100):
-                for mode in ("fold", "nofold"):
-                    r = next(x for x in self.recs if (x["solid"], x["N"], x["mode"]) == (solid, N, mode))
-                    t = time.time()
-                    certify(r, "1e-12")
-                    if N == 100:
-                        self.assertLess(time.time() - t, 30, r["id"])
 
     def test_every_packing_is_tight(self):
         # the solid shrunk by 1e-7 relative: some contact (pair, wall or cone point) is violated

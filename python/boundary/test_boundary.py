@@ -185,24 +185,37 @@ class Records(unittest.TestCase):
         self.assertEqual(self.data["generated"], build_records.GENERATED)
 
     def test_every_record_certifies(self):
+        # each shipped record is certified once, here; the batch and command-line wrappers are tested
+        # on two small records below
         t0 = time.time()
+        n = 0
         for r in self.recs:
             cert = C.certify_record(r)
             self.assertTrue(cert["valid"] and cert["strict"], r["id"])
             for k in ("min_clearance", "min_distance", "min_loop", "min_edge_slack", "min_part_separation"):
                 if k in r["certificate"]:
                     self.assertEqual(cert[k], r["certificate"][k], (r["id"], k))
-        lines = []
-        ok, bad = C.check_records(self.recs, log=lines.append)
-        self.assertEqual((ok, bad), (32, 0), lines)
-        print(f"  [32 records certified twice: {time.time() - t0:.1f} s]", file=sys.stderr)
+            n += 1
+        self.assertEqual(n, 32)
+        print(f"  [32 records certified: {time.time() - t0:.1f} s]", file=sys.stderr)
 
-    def test_command_line(self):
-        out = io.StringIO()
-        with redirect_stdout(out):
-            code = C.main([RECORDS])
-        self.assertEqual(code, 0)
-        self.assertIn("certified 32, failed 0", out.getvalue())
+    def test_batch_and_command_line(self):
+        import tempfile
+
+        good = [self.recs[0], self.recs[16]]  # one ball and one cube record
+        lines = []
+        self.assertEqual(C.check_records(good, log=lines.append), (2, 0), lines)
+        bad = copy.deepcopy(good[1])
+        bad["score_cert"] = bad["score_cert"] * (1 - 1e-6)
+        for recs, code, text in ((good, 0, "certified 2, failed 0"), ([good[0], bad], 1, "certified 1, failed 1")):
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "records.json")
+                with open(path, "w") as fh:
+                    json.dump({"records": recs}, fh)
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    self.assertEqual(C.main([path]), code)
+                self.assertIn(text, out.getvalue())
 
     def test_shrunk_copy_fails(self):
         for r in self.recs:

@@ -36,6 +36,7 @@ import {
   applyPoint,
   ORIGIN,
   type CurvedPose,
+  type CurvedConfig,
 } from "../src/index";
 import { multiplierRange, oneSidedSlopes } from "../src/sensitivity";
 import { kPolish } from "../src/ideal";
@@ -249,9 +250,9 @@ function euclideanCases(): { N: number; M: number; P: number; value: number; pie
 
 describe("Euclidean limit", () => {
   const cases = euclideanCases();
-  it("found the record fixtures", () => expect(cases.length).toBeGreaterThanOrEqual(6));
-
   it("K = 0 reproduces PolyPack's record sizes", () => {
+    expect(cases.length).toBeGreaterThanOrEqual(6); // the fixtures were found
+
     for (const c of cases) {
       const v = validate({ N: c.N, M: c.M, P: c.P }, 0, { size: c.value * (1 + 1e-6), pieces: c.pieces });
       expect(v.valid).toBe(true);
@@ -284,38 +285,72 @@ describe("solver", () => {
     expect(a.validation!.valid).toBe(true);
   });
 
-  it("hyperbolic disk rings: R = 1 + asinh(sinh 1 / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - 1)/6", async () => {
+  it("hyperbolic disk rings: R = 1 + asinh(sinh 1 / sin(pi/P)) and dR/dK(0) = r0 (r0^2 - 1)/6", () => {
     for (const P of [3, 4, 5]) {
-      // the solves are long synchronous runs; let the test worker answer its runner between them
-      await new Promise((resolve) => setImmediate(resolve));
-      const r = solve({ N: 0, M: 0, P }, -1, { seed: 2, restarts: 2, hops: 4 });
-      expect(r.config!.size).toBeCloseTo(1 + Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P)), 9);
-      await new Promise((resolve) => setImmediate(resolve));
-      const e = solve({ N: 0, M: 0, P }, 0, { seed: 2, restarts: 2, hops: 4 });
-      const r0 = e.config!.size - 1; // ring radius
-      const s = sensitivity({ N: 0, M: 0, P }, 0, e.config!, e.polish);
+      // the rings are analytic: P unit disks on a circle about O, neighbours touching, the outer rim on the wall
+      const prob = { N: 0, M: 0, P };
+      const ring = (K: number): CurvedConfig => {
+        const rho = K === 0 ? 1 / Math.sin(Math.PI / P) : Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P));
+        return {
+          size: 1 + rho,
+          pieces: Array.from({ length: P }, (_, i) => ({
+            x: rho * Math.cos((2 * Math.PI * i) / P),
+            y: rho * Math.sin((2 * Math.PI * i) / P),
+            theta: 0,
+          })),
+        };
+      };
+      const h = ring(-1);
+      expect(h.size).toBeCloseTo(1 + Math.asinh(Math.sinh(1) / Math.sin(Math.PI / P)), 12);
+      // valid at the analytic size, and polishing it neither loosens nor tightens it
+      const v = validate(prob, -1, h);
+      expect(v.valid).toBe(true);
+      expect(v.tightSize).toBeCloseTo(h.size, 8);
+      expect(polishAt(prob, -1, { ...h, size: h.size * 1.01 }).config.size).toBeCloseTo(h.size, 9);
+      // and a ring any smaller does not fit
+      expect(validate(prob, -1, { ...h, size: h.size * (1 - 1e-6) }).valid).toBe(false);
+      const e = ring(0);
+      const r0 = e.size - 1; // ring radius
+      const s = sensitivity(prob, 0, e);
       expect(s.dsdK).toBeCloseTo((r0 * (r0 * r0 - 1)) / 6, 5);
     }
   });
 
   it("multiplier range brackets the one-sided slopes of a degenerate record (4 hexagons)", () => {
     const prob = { N: 6, M: 6, P: 4 };
-    const e = solve(prob, 0, { seed: 3, restarts: 2, hops: 6 });
-    expect(e.config!.size).toBeCloseTo(7 / 3, 6);
-    const rg = multiplierRange(prob, 0, e.config!, e.polish!);
+    // four unit hexagons in a hexagon of side 7/3, in pairs along two opposite sides of the container
+    const r3 = Math.sqrt(3);
+    const fixture: CurvedConfig = {
+      size: 7 / 3,
+      pieces: [
+        { x: 2 / 3, y: -2 / r3, theta: (5 * Math.PI) / 6 },
+        { x: -1, y: -1 / r3, theta: (5 * Math.PI) / 6 },
+        { x: 1, y: 1 / r3, theta: Math.PI / 6 },
+        { x: -2 / 3, y: 2 / r3, theta: Math.PI / 6 },
+      ],
+    };
+    expect(validate(prob, 0, fixture).valid).toBe(true);
+    const e = polishAt(prob, 0, fixture);
+    expect(e.config.size).toBeCloseTo(7 / 3, 6);
+    const rg = multiplierRange(prob, 0, e.config, e.polish);
     const d = 1e-4;
-    const sp = polishAt(prob, d, e.config!).config.size;
-    const sm = polishAt(prob, -d, e.config!).config.size;
-    const right = (sp - e.config!.size) / d;
-    const left = (e.config!.size - sm) / d;
+    const sp = polishAt(prob, d, e.config).config.size;
+    const sm = polishAt(prob, -d, e.config).config.size;
+    const right = (sp - e.config.size) / d;
+    const left = (e.config.size - sm) / d;
     expect(right).toBeLessThanOrEqual(rg.max + 1e-2);
     expect(left).toBeGreaterThanOrEqual(rg.min - 1e-2);
   });
 
   it("continuation in K reports sizes, slopes and active-set changes", () => {
     const prob = { N: 0, M: 0, P: 4 };
-    const e = solve(prob, 0, { seed: 2, restarts: 1, hops: 2 });
-    const path = continueTo(prob, 0, -0.5, e.config!, 5);
+    // four disks in a ring of radius sqrt 2 in a disk of radius 1 + sqrt 2
+    const rho = Math.SQRT2;
+    const start: CurvedConfig = {
+      size: 1 + rho,
+      pieces: [0, 1, 2, 3].map((i) => ({ x: rho * Math.cos((Math.PI * i) / 2), y: rho * Math.sin((Math.PI * i) / 2), theta: 0 })),
+    };
+    const path = continueTo(prob, 0, -0.5, start, 5);
     expect(path.length).toBe(6);
     for (const st of path) expect(st.feasible).toBe(true);
     for (let i = 1; i < path.length; i++) expect(path[i].size).toBeLessThan(path[i - 1].size);
@@ -333,9 +368,19 @@ describe("solver", () => {
 
 describe("scale-free ideal family", () => {
   it("a*(3,3,2): two triangles in the ideal triangle grow to side 1.06128 (K* = -1.12630)", () => {
-    const r = solve({ N: 3, M: 3, P: 2 }, -1, { seed: 4, restarts: 2, hops: 4 });
-    expect(r.config!.size).toBeCloseTo(3.5946997, 6);
-    const a = kPolish(3, 3, r.config!.pieces, -1);
+    // the packing a solve finds (seed 4), written out: two triangles in the triangle of side 3.5946997 at K = -1
+    const fixture: CurvedConfig = {
+      size: 3.59469969187996,
+      pieces: [
+        { x: 0.34622809197317933, y: -0.28478658233106596, theta: 6.148983926350788 },
+        { x: -0.07351836896906214, y: 0.4422356143181209, theta: 4.32299158561519 },
+      ],
+    };
+    const prob = { N: 3, M: 3, P: 2 };
+    expect(validate(prob, -1, fixture).valid).toBe(true);
+    const r = polishAt(prob, -1, fixture);
+    expect(r.config.size).toBeCloseTo(3.5946997, 6);
+    const a = kPolish(3, 3, r.config.pieces, -1);
     expect(a.unbounded).toBe(false);
     expect(a.a).toBeCloseTo(1.061275, 5);
     expect(a.feasibility).toBeGreaterThan(-1e-10);
@@ -343,9 +388,16 @@ describe("scale-free ideal family", () => {
 
   it("one-sided slopes are reported for a kinked record (6 disks, R = 3 at K = 0)", () => {
     const prob = { N: 0, M: 0, P: 6 };
-    const e = solve(prob, 0, { seed: 5, restarts: 2, hops: 6 });
-    expect(e.config!.size).toBeCloseTo(3, 8);
-    const s = oneSidedSlopes(prob, 0, e.config!, 1e-3);
+    // six disks on a ring of radius 2 touch their neighbours and the wall of the disk of radius 3
+    const ring: CurvedConfig = {
+      size: 3,
+      pieces: Array.from({ length: 6 }, (_, i) => ({ x: 2 * Math.cos((Math.PI * i) / 3), y: 2 * Math.sin((Math.PI * i) / 3), theta: 0 })),
+    };
+    expect(validate(prob, 0, ring).valid).toBe(true);
+    const s = oneSidedSlopes(prob, 0, ring, 1e-3);
     expect(Number.isFinite(s.left) && Number.isFinite(s.right)).toBe(true);
+    // the size grows with K: a positive K needs more room, a negative K less
+    expect(s.sMinus).toBeLessThan(3);
+    expect(s.sPlus).toBeGreaterThan(3);
   });
 });

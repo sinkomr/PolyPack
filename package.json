@@ -15,6 +15,7 @@
     "build:volunteer": "npm run build --workspace @polypack/volunteer",
     "start": "npm run start --workspace @polypack/server",
     "test": "vitest run",
+    "test:quality": "vitest run --config vitest.quality.config.ts",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "e2e": "playwright test",
     "test:python": "python3 python/test_corpus.py && python3 python/test_spaces.py && python3 python/test_circle_floor.py"

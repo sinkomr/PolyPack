@@ -137,14 +137,55 @@ describe("the problem picker", () => {
     }
   });
 
-  it("finds every catalogue problem from its own fields", () => {
+  it("finds a problem from its own fields, on a hand-built list of every field family", () => {
+    // per space: a list of ids as the catalogue writes them (its first and last, a sparse field, a P of 100, the
+    // two signs of K), each of which must be found from its own fields. The catalogue's own ids and order are
+    // checked in packages/spaces.
+    const lists: Record<string, string[]> = {
+      surface: [
+        "surface/tetrahedron/fold/0/1",
+        "surface/tetrahedron/fold/0/2",
+        "surface/tetrahedron/nofold/0/2",
+        "surface/dodecahedron/fold/5/22",
+        "surface/dodecahedron/nofold/5/22",
+        "surface/icosahedron/nofold/8/80",
+      ],
+      curved: [
+        "curved/-6.519717439579256/3/12/12",
+        "curved/-4.50521902808615/3/10/10",
+        "curved/-1/5/3/1",
+        "curved/-1/5/3/2",
+        "curved/1.225778283313099/3/5/5",
+      ],
+      sphere: ["sphere/0/2", "sphere/0/3", "sphere/4/17", "sphere/4/18", "sphere/8/12"],
+      torus: ["torus/sq/0/1", "torus/sq/0/2", "torus/sq/4/7", "torus/hex/0/6", "torus/free/0/5", "torus/free/8/49"],
+      boundary: ["boundary/tesseract/ball/1", "boundary/tesseract/ball/2", "boundary/tesseract/cube/1", "boundary/tesseract/cube/16"],
+      polyhedra: [
+        "polyhedra/tetintet/2",
+        "polyhedra/tetintet/3",
+        "polyhedra/ap7inap7/2",
+        "polyhedra/ap7inap7/50",
+        "polyhedra/tz12incub/99",
+        "polyhedra/tz12incub/100",
+      ],
+    };
+    for (const [space, ids] of Object.entries(lists)) {
+      const problems = ids.map((id) => ({ id }));
+      for (const id of ids) {
+        const pick = pickProblem(space as SpaceName, problems, fieldsOfId(space as SpaceName, id));
+        expect(pick.id, id).toBe(id);
+        expect(pick.fields.map((f) => f.value).join("/"), id).toBe(id.split("/").slice(1).join("/"));
+      }
+    }
+  });
+
+  it("finds the catalogue's first and last problem of every space from its own fields", () => {
     for (const space of BOARD_SPACES) {
       const problems = catalogue(space).problems;
-      // every problem of the small spaces, every 7th of the surface and the polyhedra
-      for (const p of problems.filter((_, i) => (space !== "surface" && space !== "polyhedra") || i % 7 === 0)) {
+      for (const p of [problems[0], problems[problems.length - 1]]) {
+        if (!p) continue; // balls has a domain and no records
         const pick = pickProblem(space, problems, fieldsOfId(space, p.id));
         expect(pick.id, p.id).toBe(p.id);
-        expect(pick.fields.map((f) => f.value).join("/"), p.id).toBe(p.id.split("/").slice(1).join("/"));
       }
     }
   });
