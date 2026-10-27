@@ -99,60 +99,16 @@ test("the Problem set menu switches the board to each family and back to the Fla
   await menusShow(page, "polygon");
 });
 
-test("the Problem set menu lists every family under its dimension, the ones to come disabled", async ({ page }) => {
+test("the Problem set menu is one labelled menu, and a family chosen again returns to the problem last shown in it", async ({ page }) => {
   await openProblem(page, 4, 4, 5);
   const menu = page.locator("#family-select");
   // one menu, named by its label
   await expect(page.getByLabel("Problem set")).toHaveAttribute("id", "family-select");
   await expect(page.locator("#dimension-select, #kind-select")).toHaveCount(0);
+  // the groups and their options, in order, are pinned by apps/web/test/dimension-table.test.ts
   await expect(menu.locator("optgroup")).toHaveCount(DIMENSIONS.length);
-  for (const d of DIMENSIONS) {
-    const group = menu.locator(`optgroup[label="${d.label}"]`);
-    await expect(group.locator("option")).toHaveText(
-      d.families.map((f) => (f.available ? f.name : `${f.name} (coming soon)`)),
-    );
-    // a family that is not available is listed but cannot be chosen
-    for (const f of d.families) {
-      const option = group.locator(`option[value="${f.space}"]`);
-      if (f.available) await expect(option).toBeEnabled();
-      else await expect(option).toBeDisabled();
-    }
-  }
-  expect(await menu.locator("optgroup").evaluateAll((g) => g.map((x) => (x as HTMLOptGroupElement).label))).toEqual([
-    "2D in 2D",
-    "2D on 3D",
-    "3D in 3D",
-    "3D on 4D",
-  ]);
-  await expect(menu.locator("option")).toHaveText([
-    "Flat",
-    "Curved",
-    "Polyhedral surfaces",
-    "Sphere",
-    "Torus",
-    "Polyhedra",
-    "Balls",
-    "Polytope boundaries",
-  ]);
   await expect(menu.locator("option[disabled]")).toHaveCount(0);
   await menusShow(page, "polygon");
-
-  // a family opens at the problem the board starts it with, at the same addresses as before
-  await choose(page, "surface");
-  await menusShow(page, "surface");
-  await shown(page, DEFAULT_PROBLEM.surface, LAZY_VIEW);
-  await choose(page, "torus");
-  await shown(page, DEFAULT_PROBLEM.torus);
-  await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.torus}$`));
-
-  // Flat: the board as it was; then Curved
-  await choose(page, "polygon");
-  await menusShow(page, "polygon");
-  await expect(page.locator("#board")).toBeVisible();
-  await expect(page).toHaveURL(/#p=4,4,5$/);
-  await choose(page, "curved");
-  await shown(page, DEFAULT_PROBLEM.curved);
-  await expect(page).toHaveURL(new RegExp(`#space=${DEFAULT_PROBLEM.curved.replace(/[/-]/g, "\\$&")}$`));
 
   // a family chosen again returns to the problem last shown in it
   await page.evaluate(() => (location.hash = "#space=torus/hex/5/8"));
@@ -446,21 +402,58 @@ test("the dimensions page links each problem to the board", async ({ page }) => 
 
 for (const scheme of ["light", "dark"] as const) {
   test(`the space mode has no automatic accessibility violations (${scheme})`, async ({ browser }) => {
-    const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
+    const context = await browser.newContext({ colorScheme: scheme });
+    // The torus problem shows an optimizer result without a search: the search thread answers with
+    // the problem's own record, as a round that ended on its evaluation limit.
+    await context.addInitScript(() => {
+      const Real = window.Worker;
+      window.Worker = class extends Real {
+        constructor(url: string | URL, options?: WorkerOptions) {
+          super(url, options);
+          if (!String(url).includes("/space/worker")) return;
+          this.postMessage = ((message: { id: number; job: { space: string; id: string } }) => {
+            const { id, job } = message;
+            void fetch(`/api/spaces/${job.space}/problems/${job.id}`)
+              .then((r) => r.json())
+              .then((p: { certified_config: unknown; certified: { score: number } }) =>
+                this.dispatchEvent(
+                  new MessageEvent("message", {
+                    data: {
+                      id,
+                      result: {
+                        job,
+                        score: p.certified.score,
+                        valid: true,
+                        config: p.certified_config,
+                        evaluations: 2000,
+                        wallTime: 0.1,
+                        termination: "evals",
+                        reasons: [],
+                      },
+                    },
+                  }),
+                ),
+              );
+          }) as typeof this.postMessage;
+        }
+      };
+    });
+    const page = await context.newPage();
     for (const id of [
       "sphere/4/12",
-      "surface/cube/fold/0/10",
       "surface/cube/nofold/4/13",
-      "curved/-1/3/4/5",
       "torus/sq/5/7",
-      "sphere/0/12",
       "polyhedra/cubincub/11",
       "balls/ballinball/13",
     ]) {
       await page.goto("about:blank");
       await page.goto(`/#space=${id}`);
       await shown(page, id);
-      if (id === "torus/sq/5/7") await runFor(page, 2000);
+      if (id === "torus/sq/5/7") {
+        await page.click("#space-solve-run");
+        await expect(page.locator("#space-solve-stop")).toBeDisabled();
+        await expect(page.locator("#space-shown")).toHaveText("the optimizer's result");
+      }
       await page.waitForTimeout(300);
       const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
       expect(

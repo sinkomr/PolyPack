@@ -224,11 +224,7 @@ test("published data carries reference marks to the notes of its sources", async
   );
   expect(missing).toEqual([]);
 
-  // the marks and the notes pass the automatic accessibility checks, in the panel and behind it
-  const axe = () => new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
-  expect((await axe()).violations.map((v) => `${v.id} ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
-  await page.keyboard.press("Escape");
-  expect((await axe()).violations.map((v) => `${v.id} ${v.nodes[0].html.slice(0, 80)}`)).toEqual([]);
+  // (the marks, the notes and the panel's credits are scanned by the accessibility cases at the end)
 
   // squares in a square: David Ellsworth's values, with coordinates that this site constructed
   await page.goto("/browse.html#4,4");
@@ -511,6 +507,11 @@ test("the wall of tiles is wider than the chart and the table, which keep their 
   expect(table.width).toBeCloseTo(948, 0);
   // all three share one centre line
   expect(atlas.x + atlas.width / 2).toBeCloseTo(chart.x + chart.width / 2, 0);
+  // and in that order down the page: the chart, then the atlas, then the complete table
+  const top = (selector: string) =>
+    page.locator(selector).evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
+  expect(await top("#plot")).toBeLessThan(await top("#atlas-tiles"));
+  expect(await top("#atlas-tiles")).toBeLessThan(await top("table"));
 });
 
 // ---------- placeholders and laziness, on fixtures ----------
@@ -716,22 +717,35 @@ test("a failed request is retried, then reported with a way to try again", async
       return "answered";
     },
   });
+  // the retry delays pass on the page's clock, which is moved forward in steps: a retry is only
+  // scheduled once the request before it has failed
+  await page.clock.install();
+  const retries = async (done: () => Promise<boolean>) => {
+    for (let i = 0; i < 60 && !(await done()); i++) {
+      await page.clock.fastForward(1700);
+      await page.waitForTimeout(25);
+    }
+  };
+  const isFailed = () => art(page, 3).evaluate((e) => e.classList.contains("failed"));
   await page.goto("/browse.html?show=all#0,11");
   await expect(shownTiles(page)).toHaveCount(300);
   await expect(art(page, 3)).toHaveClass(/loading/);
   // each range is asked for four times (0.4 s, 0.8 s and 1.6 s apart), then the tiles say so
-  await expect(art(page, 3)).toHaveClass(/failed/, { timeout: 15_000 });
+  await retries(isFailed);
+  await expect(art(page, 3)).toHaveClass(/failed/);
   await expect(tile(page, 3).locator(".tile-empty")).toHaveText("not loaded");
   await expect(tile(page, 3)).toHaveAttribute("aria-label", /the drawing could not be loaded$/);
   expect(asked.filter((a) => a.from === 1).length).toBe(4);
   const gaveUp = asked.length;
-  await page.waitForTimeout(1500);
+  await page.clock.fastForward(1500);
+  await page.waitForTimeout(100);
   expect(asked.length).toBe(gaveUp); // no endless retrying
 
   // opening the record tries again, and says so when it fails again
   await tile(page, 3).click();
   const detail = page.getByRole("dialog");
-  await expect(detail).toContainText("The coordinates could not be loaded.", { timeout: 15_000 });
+  await retries(() => detail.getByRole("button", { name: "Try again" }).isVisible());
+  await expect(detail).toContainText("The coordinates could not be loaded.");
   const again = detail.getByRole("button", { name: "Try again" });
   await expect(again).toBeVisible();
   expect(asked.length).toBeGreaterThan(gaveUp);
@@ -908,7 +922,8 @@ for (const scheme of ["light", "dark"] as const) {
     for (const path of [
       "/browse.html#0,0",
       "/browse.html?layout=rows&size=small&scale=row#3,3",
-      "/browse.html?size=large&p=4#3,3",
+      // the reference marks and notes, with the panel that credits two sources open over them
+      "/browse.html?size=large&p=7#0,0",
       "/browse.html?p=11#4,4",
     ]) {
       await page.goto(path);
