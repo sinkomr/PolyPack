@@ -3,10 +3,12 @@ import * as api from "./api";
 import { Atlas } from "./atlas";
 import { foundWithLabel } from "./found-with";
 import { AtlasRow, AtlasView, parseView, safeHref, verifiedEntry, viewQuery } from "./atlas-model";
+import { renderTabs } from "./records-tabs";
 import { el, fillShapeSelect, shapeLabel } from "./shapes-ui";
 import { SOURCES, followSourceMarks, recordSources, renderSourceList, sourceMarks } from "./sources";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+renderTabs($("records-tabs"), "polygon");
 const nSel = $<HTMLSelectElement>("n-select");
 const mSel = $<HTMLSelectElement>("m-select");
 fillShapeSelect(nSel, false);

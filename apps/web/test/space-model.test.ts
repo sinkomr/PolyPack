@@ -8,6 +8,7 @@ import { PROBLEM_CODES } from "@polypack/polyhedra/catalogue";
 import {
   type SpaceName,
   SPACE_RECORD_MARGIN,
+  SPACE_DOMAINS,
   type ParsedSpaceId,
   parseSpaceId,
   problemOf,
@@ -635,27 +636,43 @@ describe("3D on 4D on the board", () => {
 describe("3D in 3D: balls on the board", () => {
   const rule = { bound: null, certified: null };
 
-  it("picks one of the seven problems, then P from 2 to 100, from its domain", () => {
+  it("picks one of the 189 problems in groups, then P from 2 to 100, from its domain", () => {
     // no records: the picker is the domain's
     expect(catalogue("balls").problems).toHaveLength(0);
     const domain = catalogue("balls").domain!.info;
     const pick = pickFromDomain("balls", domain, fieldsOfId("balls", DEFAULT_PROBLEM.balls));
     expect(pick.id).toBe("balls/ballinball/13");
     expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
-    expect(pick.fields[0].options.map((o) => o.text)).toEqual([
-      "Balls in a ball",
-      "Balls in a cube",
-      "Tetrahedra in a ball",
-      "Cubes in a ball",
-      "Octahedra in a ball",
-      "Dodecahedra in a ball",
-      "Icosahedra in a ball",
-    ]);
+    const options = pick.fields[0].options;
+    expect(options).toHaveLength(189);
+    expect(options.slice(0, 3).map((o) => o.text)).toEqual(["Balls in a ball", "Balls in a tetrahedron", "Balls in a cube"]);
+    expect(options.find((o) => o.value === "ballinpkd")).toMatchObject({
+      text: "Balls in a pentakis dodecahedron",
+      group: "Balls in a Catalan solid",
+    });
+    expect(options.find((o) => o.value === "kttinball")).toMatchObject({
+      text: "Triakis tetrahedra in a ball",
+      group: "Catalan solids in a ball",
+    });
+    // every option has a group, and a group is one run of options (an optgroup each)
+    const runs: string[] = [];
+    for (const o of options) {
+      expect(o.group).toBeDefined();
+      if (runs[runs.length - 1] !== o.group) runs.push(o.group!);
+    }
+    expect(runs).toHaveLength(16);
+    expect(new Set(runs).size).toBe(16);
+    expect(["tetinball", "cubinball", "octinball", "dodinball", "icoinball"].map((c) => options.find((o) => o.value === c)!.group)).toEqual(
+      Array(5).fill("Platonic solids in a ball"),
+    );
     expect(pick.fields[1].options).toHaveLength(99);
     expect(pickFromDomain("balls", domain, { code: "icoinball", P: "100" }).id).toBe("balls/icoinball/100");
+    expect(pickFromDomain("balls", domain, { code: "ballinpr3l15", P: "7" }).id).toBe("balls/ballinpr3l15/7");
     expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container radius s");
     expect(scoreLabel(parseSearchProblem("balls/ballincub/13")!)).toBe("Cube edge s");
     expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/ballinpkd/13")!)).toBe("Container scale s");
+    expect(scoreLabel(parseSearchProblem("balls/pr3l15inball/13")!)).toBe("Container radius s");
   });
 
   it("sizes its rounds from P and the piece, within their limits", () => {
@@ -663,7 +680,13 @@ describe("3D in 3D: balls on the board", () => {
     expect(ballsRound(100, "ballinball").round).toBe(128000);
     expect(ballsRound(100, "dodinball").round).toBe(25000);
     expect(ballsRound(100, "tetinball").round).toBe(16000);
-    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"])
+    // also the new problems: any container solid, and any solid in a ball
+    expect(ballsRound(100, "ballinball").round).toBe(128000);
+    expect(ballsRound(100, "ballindtc").round).toBeLessThan(ballsRound(100, "ballinball").round);
+    expect(ballsRound(100, "ballinball").evalUs).toBeCloseTo(15.6, 10);
+    expect(ballsRound(100, "ballintet").evalUs).toBeCloseTo(15.6 * (1 + 4 / 150), 10);
+    expect(ballsRound(100, "phcinball").evalUs).toBe(500);
+    for (const code of ["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball", "ballinpkd", "ballinpr12l3", "ballindtc", "phcinball", "pr3l3inball", "tz12inball"])
       for (let P = 2; P <= 100; P++) {
         const { round, fresh } = ballsRound(P, code);
         const search = parseSearchProblem(`balls/${code}/${P}`)!;
@@ -708,6 +731,51 @@ describe("3D in 3D: balls on the board", () => {
 });
 
 describe("3D in 3D: polyhedra on the board", () => {
+  it("offers the entire domain through 500 regardless of records", () => {
+    const pick = pickFromDomain("polyhedra", SPACE_DOMAINS.polyhedra!.info, { code: "tidintid", P: "500" });
+    expect(pick.id).toBe("polyhedra/tidintid/500");
+    expect(pick.fields.at(-1)!.options).toHaveLength(499);
+    expect(pick.fields.at(-1)!.options.at(-1)!.value).toBe("500");
+    for (const code of ["cubincub", "tetintet", "tidintid", "dtcindtc", "pr12l3incub"])
+      for (const method of ["auto", "basin_hopping"])
+        for (const fresh of [false, true]) {
+          const p = parseSearchProblem(`polyhedra/${code}/500`)!;
+          const plan = roundJob(p, rule, { seed: 1, fresh, method, budget: { evals: 1e6 } },
+            0, { evals: 0, seconds: 0 }, fresh ? null : { s: 10, pieces: [] }, 20)!;
+          const { stepMs } = polyhedraRound(500, code);
+          const seconds = method !== "auto" ? plan.evals * stepMs / 1000
+            : fresh ? 0.4 * plan.evals * 1.5 * stepMs / 1000 : polyhedraRoundSeconds(500, code, plan.evals);
+          expect(seconds, `${code} ${method} fresh=${fresh}`).toBeLessThanOrEqual(20);
+        }
+  });
+
+  it("picks the piece and the container in two menus of the 94 solids, grouped, and composes the code", () => {
+    const info = SPACE_DOMAINS.polyhedra!.info;
+    const pick = pickFromDomain("polyhedra", info, fieldsOfId("polyhedra", DEFAULT_PROBLEM.polyhedra));
+    expect(pick.id).toBe("polyhedra/cubincub/11");
+    expect(pick.fields.map((f) => [f.key, f.label, f.value])).toEqual([
+      ["piece", "Piece", "cub"],
+      ["container", "Container", "cub"],
+      ["P", "Pieces (P)", "11"],
+    ]);
+    for (const f of pick.fields.slice(0, 2)) {
+      expect(f.options).toHaveLength(94);
+      expect(new Set(f.options.map((o) => o.group)).size).toBe(8);
+    }
+    expect(pick.fields[0].options[0]).toEqual({ value: "tet", text: "tetrahedron", group: "Platonic solids" });
+    // a menu's change keeps the others
+    expect(pickFromDomain("polyhedra", info, { piece: "ktt", container: "pkd", P: "7" }).id).toBe("polyhedra/kttinpkd/7");
+    expect(pickFromDomain("polyhedra", info, { piece: "pr12l3", container: "cub", P: "500" }).id).toBe("polyhedra/pr12l3incub/500");
+    // an old address with the code alone opens the same problem, whether one of the 150 or another pair
+    for (const code of ["cubintet", "pr3l15incub", "tidintid", "kttinpkd", "pr12l3inbp7"]) {
+      const old = pickFromDomain("polyhedra", info, { code, P: "9" });
+      expect(old.id, code).toBe(`polyhedra/${code}/9`);
+      expect(old.fields.map((f) => f.value).slice(0, 2).join("in")).toBe(code);
+    }
+    // a code that is no pair falls back to the starting problem's solids
+    expect(pickFromDomain("polyhedra", info, { code: "nonsense", P: "9" }).id).toBe("polyhedra/cubincub/9");
+  });
+
   const rule = { bound: null, certified: null };
 
   it("picks a problem by its pair of solids, then P from 2 to 100", () => {
@@ -724,7 +792,7 @@ describe("3D in 3D: polyhedra on the board", () => {
     expect(scoreLabel(parseSearchProblem("polyhedra/tidintid/100")!)).toBe("Container scale s");
   });
 
-  it("sizes its rounds from P and the solid's size, at most about 20 s on a slow machine up to P = 100", () => {
+  it("sizes its rounds from P and the solid's size, at most about 20 s on a slow machine up to P = 500", () => {
     // two hops for small problems; for 100 of the largest solids, a polish of the start and jiggles
     expect(polyhedraRound(11, "cubincub").round).toBe(16800);
     expect(polyhedraRound(100, "cubincub").round).toBe(7100);
@@ -732,10 +800,10 @@ describe("3D in 3D: polyhedra on the board", () => {
     expect(polyhedraRound(100, "phcinphc").round).toBe(2600);
     expect(polyhedraRound(100, "dtcindtc").round).toBe(2400);
     for (const code of PROBLEM_CODES)
-      for (let P = 2; P <= 100; P++) {
+      for (let P = 2; P <= 500; P++) {
         const { round, fresh, stepMs } = polyhedraRound(P, code);
         const at = `${code}/${P}`;
-        if (round > 2 * (7000 + 130 * P) || round < 1000) throw new Error(`${at}: round ${round}`);
+        if (round > 2 * (7000 + 130 * P) || round < (P > 100 ? 100 : 1000)) throw new Error(`${at}: round ${round}`);
         // [CALC] at most about 20 s on a machine 3.5 times slower than the measured costs (3.4 times was seen under load)
         if (!(polyhedraRoundSeconds(P, code, round) < 20))
           throw new Error(`${at}: ${polyhedraRoundSeconds(P, code, round)} s`);
@@ -744,7 +812,7 @@ describe("3D in 3D: polyhedra on the board", () => {
         if (fresh > round && !((0.4 * fresh * 1.5 * stepMs) / 1000 < 21)) throw new Error(`${at}: fresh ${fresh}`);
       }
     for (const code of ["tetintet", "cubincub", "tidintid", "phcinphc", "dtcindtc", "sndinsnd", "pr12l3incub"])
-      for (const P of [2, 11, 30, 31, 64, 100]) {
+      for (const P of [2, 11, 30, 31, 64, 100, 101, 257, 500]) {
         const { round, fresh } = polyhedraRound(P, code);
         const at = `${code}/${P}`;
         const search = parseSearchProblem(`polyhedra/${code}/${P}`)!;

@@ -17,6 +17,7 @@ afterEach(() => {
 
 type RunRequest = Extract<SolveRequest, { type: "run" }>;
 type ProgressResponse = Extract<SolveResponse, { type: "progress" }>;
+const SOLVE_TIMEOUT_MS = 60_000;
 const config: PackingConfig = {
   N: 0,
   M: 0,
@@ -43,8 +44,13 @@ function harness() {
   const messages: SolveResponse[] = [];
   const runtime = createSolveRuntime((message) => messages.push(message));
   const terminal = async (id: number) => {
-    await vi.waitFor(() =>
-      expect(messages.some((m) => "id" in m && m.id === id && (m.type === "result" || m.type === "error"))).toBe(true),
+    // vi.waitFor gives up after 1 s by default; a real solver job on a loaded CI runner takes longer.
+    await vi.waitFor(
+      () =>
+        expect(messages.some((m) => "id" in m && m.id === id && (m.type === "result" || m.type === "error"))).toBe(
+          true,
+        ),
+      { timeout: SOLVE_TIMEOUT_MS, interval: 20 },
     );
     return messages.find((m) => "id" in m && m.id === id && (m.type === "result" || m.type === "error"))!;
   };
@@ -133,7 +139,7 @@ describe("browser solve runtime", () => {
     for (const m of messages)
       if (m.type === "progress" && m.preview)
         expect(findOverlaps(m.preview.N, m.preview.pieces, strictTolerance(m.preview))).toEqual([]);
-  });
+  }, SOLVE_TIMEOUT_MS);
 
   it("snapshots all caller inputs before asynchronous execution and preserves budget/start semantics", async () => {
     const { runtime, terminal } = harness();

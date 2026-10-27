@@ -41,7 +41,8 @@ describe.skipIf(!file)("data/polyhedra/records.json", () => {
 
   it("has one record per id, with fields that agree with the id and the display rule", () => {
     expect(new Set(records.map((r) => r.id)).size).toBe(records.length);
-    expect(Math.max(...records.map((r) => r.P))).toBe(POLYHEDRA_MAX_P);
+    expect(Math.max(...records.map((r) => r.P))).toBe(100);
+    expect(POLYHEDRA_MAX_P).toBe(500);
     for (const r of records) {
       const id = parsePolyhedraId(r.id);
       expect(typeof id, r.id).toBe("object");

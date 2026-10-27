@@ -7,11 +7,16 @@ s C of a container solid: the 86 three-dimensional problems of
 and Catalan solids in themselves, prisms and antiprisms in themselves and in a cube, elongated prisms in a cube),
 and 64 of PolyPack's own in the same scheme: prisms and antiprisms with 7, 9, 10 and 11 sides in themselves and
 in a cube, and their prisms of height 1.5, 2 and 3 in a cube; and the bipyramids and trapezohedra, the duals of the
-prisms and antiprisms, in themselves and in a cube (150 problems). The score is s; smaller is better. In code and
-data the space is called `polyhedra`.
+prisms and antiprisms, in themselves and in a cube (150 problems with records); and, since 2026-10-26, every other
+ordered pair of the 94 solids (8,836 pairs in all, without records, see "Every pair" in §1). The score is s;
+smaller is better. In code and data the space is called `polyhedra`.
 
-**Summary** (2026-10-25).
+**Summary** (2026-10-26).
 
+- The domain covers **4,409,164 problems**, the 8,836 ordered pairs of the 94 solids (8,686 of them new, without
+  records) at P = 2 to 500. The 150 pairs of the records keep their codes, ids, titles and records; P = 101 to 500
+  of those and every P of the new pairs start without research records; entries use the same volume bound and must
+  pass the strict check [CALC].
 - `data/polyhedra/records.json` holds **14,850 records**, one for each of the 150 problems and P = 2 to 100 (the
   wiki's range), every one with coordinates: 8,514 of the wiki's problems and 6,336 of PolyPack's (2,772 of prisms
   and antiprisms, 3,564 of bipyramids and trapezohedra). The file is the index (values, bounds, provenance;
@@ -155,6 +160,24 @@ eight for antiprisms (`ap7inap7`, ...), and `pr7l15incub`, `pr7l2incub`, `pr7l3i
 11; then `bp<n>inbp<n>` and `bp<n>incub` (n = 3, 5 to 12) and `tz<n>intz<n>` and `tz<n>incub` (n = 4 to 12),
 families `bipyramids` and `trapezohedra` (no code of the wiki starts with `bp` or `tz`). There are no published
 values for them; their records are PolyPack research only.
+
+**Every pair** (2026-10-26). Every ordered pair (piece, container) of the 94 solids is a problem family, P = 2 to
+500: 94 x 94 = 8,836 codes `<piece code>in<container code>`, 150 of them the problems above and **8,686 new**
+(family `pairs` in `catalogue.ts`, `wiki: false`). The code is read by splitting at an `in` that has a solid code on
+each side (`problemNameOf`; the 8,836 codes are distinct and each reads back as its own pair, tested), so the
+codes need no list: `kttinpkd` is triakis tetrahedra in a pentakis dodecahedron. Titles are made from the solids'
+names the same way ("Triakis tetrahedra in a pentakis dodecahedron", "Dodecagonal prisms of height 3 in a
+heptagonal bipyramid"). The new pairs ship without records and without baselines: no packing was searched for
+them. Their lower bound is the volume bound above, labelled "volume bound; [CALC]" like the existing ones, and an
+entry must pass the same strict check; a start is the box-lattice patch of §8 ("Large problems"). Pairs where
+piece and container are far apart in size (500 truncated icosidodecahedra in the tetrahedron of edge 1 needs s of
+about 200; the largest container scale over all 8,836 pairs at P = 500 is below the server's limit of 1e6, and
+the largest coordinate of a lattice start below 1e4) are valid problems; nothing in the validator or the server
+treats a pair apart [CALC]. A pair whose piece is larger than its container (a cube of edge 1 in an octahedron of
+edge 1) is an ordinary problem with s above 1 for every P. Pieces and containers that are the same solid (the 94
+self-packings, 27 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The nightly snapshot holds the leading site entry of any open problem of the domain, new pairs and P = 101 to 500 included (`snapshotSpaces`; domain problems without a record are listed after the records, by P). The volunteers' work list
+(`domain.sample`) is unchanged: it offers only the unrecorded range P = 101 to 500 of the 150 pairs; a new pair comes up
+for volunteers once it has a site entry.
 
 **Configuration.** `{s, pieces: [[x, y, z, qw, qx, qy, qz], ...]}` with P poses, upstream's own format. Piece i is
 the canonical piece solid turned by the rotation of q / |q| (v -> q v q*, the matrix H(q) / |q|^2, exactly
@@ -684,10 +707,31 @@ the volume bound ignores their length of 17 against a width of 3.9).
 ## 8. On the site: board, API and volunteer client
 
 **Registry.** `@polypack/spaces` lists the space as `polyhedra` (user-facing: dimension 3D in 3D, kind Polyhedra):
-ids `polyhedra/<code>/<P>`, the configuration `{s, pieces}`, P from 2 to `POLYHEDRA_MAX_P` = 100 (P = 101 and
+ids `polyhedra/<code>/<P>`, the configuration `{s, pieces}`, P from 2 to `POLYHEDRA_MAX_P` = 500 (P = 501 and
 above are refused as malformed), the validator above at the touching tolerance 1e-9, and the strict check at
-1e-11 for an entry below a research record by more than the margin. The search registry runs
+1e-11 for an entry below a research record by more than the margin, or any entry without a research record.
+`polyhedraDomain` defines the range, volume bounds and a bounded volunteer sample (500 ids, starting
+at P = 101). The 14,850 existing records and their configurations are unchanged. The search registry runs
 `searchPolyhedra` for a job (`@polypack/spaces/search`, method "polyhedra soft-to-rigid search").
+
+**Large problems (P up to 500, 2026-10-26).** The board's domain picker offers every P from 2 to 500.
+"Start from → Lattice arrangement" constructs a deterministic patch of the existing box lattice in the
+piece's canonical orientation: non-overlapping axis-aligned bounding boxes separate the pieces, face supports
+choose the smallest container about the origin for that patch, and a relative dilation of 1e-10 keeps clearance
+through rounding. It uses code only, with no saved packing or optimization. The volunteer scheduler uses this
+start when neither a record nor a site packing exists [CALC].
+
+The validator yields during placement, wall checks and pair scans, targeting 20 ms per slice. Every P = 500
+entry uses the existing heavy-check queue (one running, eight waiting). The address reserves up to 1,600 ms
+for the two passes, reconciled against measured work; the shared verification budget is 4,000 ms/minute
+(6.7% of one core). The unchanged 256 KiB body limit fits a full-precision 500-pose entry, tested at about
+79 kB [CALC].
+
+Board rounds above P = 100 increase the existing step-cost model's safety factor to 1.8 times its old value at
+P = 500, on top of its 3.5-times slow-machine allowance. The 1,000-evaluation floor is relaxed for large P;
+regular, fresh, grown and generic rounds are capped to the existing roughly 20-second slow-machine bound.
+The sizing is deterministic and tested across all 150 solid pairs through P = 500; these bounds are cost-model
+calculations, not a timing guarantee for arbitrary hardware [CALC].
 
 **Keep rule.** An entry is kept when it beats the site's leader by more than the tie tolerance 1e-9 and the
 research record's certified s by more than `POLYHEDRA_RECORD_MARGIN` = 1e-6 relative (`SPACE_RECORD_MARGIN`,
@@ -730,8 +774,12 @@ another address meanwhile were answered as usual (before: 820 ms of lag, and 503
 bipyramids and trapezohedra joined, 3.4 MB with the wiki's 8,514);
 `/api/spaces/polyhedra/problems/<id>` adds the research configuration, read from its problem's file (§2).
 
-**Board.** Dimension 3D in 3D, kind Polyhedra (`docs/spaces/BOARD.md`, "3D in 3D"): a picker of the 150 problems
-(PolyPack's prisms and antiprisms among the wiki's by their number of sides, then the bipyramids and trapezohedra) and P, the values, a three.js drawing (instanced pieces and merged edges, solid or see-through, turned by drag or
+**Board.** Dimension 3D in 3D, kind Polyhedra (`docs/spaces/BOARD.md`, "3D in 3D"): two menus of the 94 solids,
+Piece and Container, grouped by family (Platonic, Archimedean and Catalan solids, prisms, antiprisms, prisms of
+height 1.5, 2 and 3, bipyramids, trapezohedra; prisms by their number of sides), which make the code, and P.
+`/api/spaces` describes the domain with those two fields and `joined: [{key: "code", parts: ["piece",
+"container"], separator: "in"}]` (`packages/spaces/src/domain.ts`), not with 8,836 codes; an address
+`#space=polyhedra/cubintet/12` opens as before. The board shows the values, a three.js drawing (instanced pieces and merged edges, solid or see-through, turned by drag or
 keys; about 1 ms a frame for 100 of the largest solids on an Apple M1 Pro), and rounds of the search in a Web
 Worker of at most about 20 s on a machine 3.5 times slower than the measured costs (16,800 evaluations at 11
 cubes, 7,100 at 100 cubes, 2,600 at 100 truncated icosidodecahedra: jiggles; a second or two each here). A round
@@ -753,7 +801,7 @@ asks for, so polyhedra get their share of its searches.
 
 `polyhedraKernel({ code, P })` (`packages/polyhedra/src/kernel.ts`) is the space's kernel for the generic search
 methods (`docs/methods/dimensions/README.md`). The space's own search (§5) stays the default, "Auto". P runs from 1
-to 100, the largest P the server accepts; the factory refuses a larger one.
+to 500, the largest P the server accepts; the factory refuses a larger one.
 
 **State.** Six numbers per piece: its centre, then a rotation vector times the piece's circumradius, so that it
 reads as a length. The rotation turns the piece's anchor orientation, a unit quaternion the kernel keeps in the

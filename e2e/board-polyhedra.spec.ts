@@ -69,9 +69,11 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect(page.locator("#space-facts")).toContainText(`Certified value${api.certified!.display}`);
   await expect(page.locator("#space-score-label")).toHaveText("Container scale s");
   await expect(page.locator("#space-shown")).toHaveText("the research record");
-  await expect(page.locator("#space-f-code")).toHaveValue("cubincub");
-  await expect(page.locator("#space-f-code option")).toHaveCount(150);
-  await expect(page.locator("#space-f-P option")).toHaveCount(99);
+  await expect(page.locator("#space-f-piece")).toHaveValue("cub");
+  await expect(page.locator("#space-f-container")).toHaveValue("cub");
+  await expect(page.locator("#space-f-piece option")).toHaveCount(94);
+  await expect(page.locator("#space-f-container option")).toHaveCount(94);
+  await expect(page.locator("#space-f-P option")).toHaveCount(499);
 
   // the drawing turns with the keyboard and the views
   const draw = page.locator(".space-draw");
@@ -100,7 +102,8 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect.poll(() => page.evaluate(() => polypack.space!.renderer?.measureFrames?.(1) ?? null)).not.toBeNull();
 
   // the picker: another problem, then the largest P of the largest solid, served from its file on demand
-  await page.selectOption("#space-f-code", "tidintid");
+  await page.selectOption("#space-f-piece", "tid");
+  await page.selectOption("#space-f-container", "tid");
   await page.selectOption("#space-f-P", "100");
   await shown(page, "polyhedra/tidintid/100");
   await drawn(page, 100);
@@ -112,6 +115,27 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await page.selectOption("#family-select", "polyhedra");
   await shown(page, "polyhedra/tidintid/100");
   await drawn(page, 100);
+});
+
+test("P = 500 without a record offers a lattice start on the board", async ({ page }) => {
+  await page.goto("/#space=polyhedra/tidintid/500");
+  await expect(page.locator("#space-problem-note")).toHaveText("Problem polyhedra/tidintid/500");
+  await expect(page.locator("#space-f-P")).toHaveValue("500");
+  await expect(page.locator("#space-f-P option")).toHaveCount(499);
+  await expect(page.locator("#space-solve-start")).toHaveValue("lattice");
+  await expect(page.locator('#space-solve-start option[value="lattice"]')).toHaveText("Lattice arrangement");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await expect(page.locator("#space-solve-status")).toContainText("lattice arrangement");
+  // All three choices remain available, including the original fresh search.
+  await page.selectOption("#space-solve-start", "fresh");
+  await expect(page.locator("#space-solve-run")).toBeEnabled();
+  await page.selectOption("#space-solve-start", "shown");
+  await expect(page.locator("#space-solve-run")).toBeDisabled();
+  // Moving to a problem with a record resets a "lattice" choice to the shown packing.
+  await page.selectOption("#space-solve-start", "lattice");
+  await page.selectOption("#space-f-P", "100");
+  await shown(page, "polyhedra/tidintid/100");
+  await expect(page.locator("#space-solve-start")).toHaveValue("shown");
 });
 
 test("a polyhedra round runs in the browser and returns a valid result, and pause and stop act at once at P = 100", async ({
@@ -260,7 +284,8 @@ test("the dimensions page lists 3D in 3D with the polyhedra records and links th
   await page.goto("/dimensions.html");
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="polyhedra"]');
   await expect(card.getByRole("heading", { name: "Polyhedra", exact: true })).toBeVisible();
-  await expect(card).toContainText("14,850");
+  // 8,836 pairs x P = 2..500; the 14,850 research records stop at P = 100 and cover 150 pairs
+  await expect(card).toContainText("4,409,164, 4,394,314 without a record yet");
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="polyhedra"]')).toBeChecked();
   // the table starts at cubes in a cube, P = 2 to 100

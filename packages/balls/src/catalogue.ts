@@ -1,38 +1,168 @@
 /**
- * The problems of the balls space without their geometry: P unit balls in the smallest ball or cube, and P
- * unit-edge Platonic solids in the smallest ball. No imports, so that a page can name problems without loading
- * any coordinates.
+ * The problems of the balls space without their geometry: P unit balls in the smallest ball or in the smallest
+ * copy of any of the polyhedra space's 94 solids, and P unit-edge solids (any of the 94) in the smallest ball.
+ * Names only, so that a page can name problems without loading any coordinates (the polyhedra space's catalogue
+ * is as light).
  *
  * A problem is named by a code `<piece>in<container>` in the manner of the polyhedra space ("cubintet"): the
- * piece is `ball` or a Platonic solid's code (tet, cub, oct, dod, ico, as the polyhedra space names them), the
- * container `ball` or `cub`. With P pieces its id is `balls/<code>/<P>`, e.g. "balls/ballinball/13".
+ * piece is `ball` or a solid's code (tet, cub, oct, dod, ico, tte, pr3l15, ... as the polyhedra space names
+ * them), the container `ball` or a solid's code. With P pieces its id is `balls/<code>/<P>`, e.g.
+ * "balls/ballinball/13", "balls/ballinpkd/20" (balls in a pentakis dodecahedron), "balls/ap5inball/7".
+ *
+ * Without a piece or container of the other kind there are 1 + 94 + 94 = 189 codes: balls in a ball, balls in
+ * each of the 94 solids, and each of the 94 solids in a ball. The first 7 (BALLS_ORIGINAL_CODES) are the space's
+ * first problems, and their ids are unchanged.
  */
+import { SOLID_NAMES_LIST, type SolidName, pluralTitle } from "@polypack/polyhedra/catalogue";
 
-export type BallsPiece = "ball" | "tetrahedron" | "cube" | "octahedron" | "dodecahedron" | "icosahedron";
-export type BallsContainer = "ball" | "cube";
+/**
+ * The radius of a ball piece, in the units of the space (the polyhedra space's solids have edge 1). Every length
+ * of the space that is a ball's size goes through this constant (the validator, the bounds, the search, the
+ * kernel, the certifier's python/balls/balls_catalogue.py BALL_RADIUS and the board's drawing).
+ */
+export const BALL_RADIUS = 1;
+/**
+ * The score of a ball container as a function of its radius, and back. Today the score s of a ball container is its
+ * radius; when the score becomes the diameter, only these two functions (and BALL_RADIUS) change. Every ball-container
+ * bound and wall test goes through them.
+ */
+let radiusPerScore = 1;
+export const ballContainerScore = (radius: number): number => radius / radiusPerScore;
+export const ballContainerRadius = (score: number): number => radiusPerScore * score;
+/** d(radius) / d(score): the factor of every gradient with respect to the size of a ball container. */
+export const ballContainerRadiusSlope = (): number => radiusPerScore;
+/** Test hook: a linear conversion radius = k score (2 for a score that is half the radius, 0.5 for the diameter). */
+export function setBallContainerConversionForTests(k: number | null): void {
+  radiusPerScore = k ?? 1;
+}
+/** The least distance of two ball centres. */
+export const BALL_DIAMETER = 2 * BALL_RADIUS;
+
+/** "ball", or the polyhedra space's name of a solid ("cube", "pentakis_dodecahedron", "prism3_l15"). */
+export type BallsPiece = string;
+export type BallsContainer = string;
 
 export interface BallsProblem {
-  /** e.g. "ballinball", "ballincub", "tetinball". */
+  /** e.g. "ballinball", "ballincub", "tetinball", "ballinpkd". */
   code: string;
-  /** "ball", or the polyhedra space's name of a Platonic solid. */
+  /** "ball", or the polyhedra space's name of a solid. */
   piece: BallsPiece;
+  /** "ball", or the polyhedra space's name of a solid ("cube" for the cube). */
   container: BallsContainer;
-  /** "Balls in a ball", "Tetrahedra in a ball". */
+  /** "Balls in a ball", "Triakis tetrahedra in a ball", "Balls in a pentakis dodecahedron". */
   title: string;
+  /** The group of the problem in the board's menu, e.g. "Balls in a Catalan solid". */
+  group: string;
 }
 
-export const BALLS_PROBLEMS: readonly BallsProblem[] = [
-  { code: "ballinball", piece: "ball", container: "ball", title: "Balls in a ball" },
-  { code: "ballincub", piece: "ball", container: "cube", title: "Balls in a cube" },
-  { code: "tetinball", piece: "tetrahedron", container: "ball", title: "Tetrahedra in a ball" },
-  { code: "cubinball", piece: "cube", container: "ball", title: "Cubes in a ball" },
-  { code: "octinball", piece: "octahedron", container: "ball", title: "Octahedra in a ball" },
-  { code: "dodinball", piece: "dodecahedron", container: "ball", title: "Dodecahedra in a ball" },
-  { code: "icoinball", piece: "icosahedron", container: "ball", title: "Icosahedra in a ball" },
+const article = (title: string) => (/^[aeiouAEIOU]/.test(title) ? `an ${title}` : `a ${title}`);
+const capital = (t: string) => `${t.charAt(0).toUpperCase()}${t.slice(1)}`;
+
+const FAMILY_LABEL: Record<SolidName["family"], string> = {
+  platonic: "Platonic solid",
+  archimedean: "Archimedean solid",
+  catalan: "Catalan solid",
+  prism: "prism",
+  antiprism: "antiprism",
+  elongated_prism: "elongated prism",
+  bipyramid: "bipyramid",
+  trapezohedron: "trapezohedron",
+};
+const FAMILY_ORDER = Object.keys(FAMILY_LABEL) as SolidName["family"][];
+const FAMILY_PLURAL: Record<SolidName["family"], string> = {
+  platonic: "Platonic solids",
+  archimedean: "Archimedean solids",
+  catalan: "Catalan solids",
+  prism: "Prisms",
+  antiprism: "Antiprisms",
+  elongated_prism: "Elongated prisms",
+  bipyramid: "Bipyramids",
+  trapezohedron: "Trapezohedra",
+};
+
+/** Sort key of a solid within its family: the number of sides, then the height of an elongated prism. */
+function solidRank(s: SolidName): [number, number] {
+  const m = /^(?:prism|antiprism|bipyramid|trapezohedron)(\d+)(?:_(l15|l2|l3))?$/.exec(s.name);
+  return m ? [Number(m[1]), m[2] ? ["l15", "l2", "l3"].indexOf(m[2]) : 0] : [0, 0];
+}
+
+/** The 94 solids in the order of the board's menu: by family, then (prisms and the like) by sides and height. */
+const SOLIDS: readonly SolidName[] = FAMILY_ORDER.flatMap((f) =>
+  SOLID_NAMES_LIST.filter((s) => s.family === f)
+    .map((s, i) => ({ s, i, k: solidRank(s) }))
+    .sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.i - b.i)
+    .map((e) => e.s),
+);
+
+function build(): BallsProblem[] {
+  const out: BallsProblem[] = [];
+  const ballsIn = (container: string, code: string, title: string, group: string) =>
+    out.push({ code: `ballin${code}`, piece: "ball", container, title: `Balls in ${article(title)}`, group });
+  // balls in a ball, then in the Platonic solids, ..., trapezohedra
+  ballsIn("ball", "ball", "ball", "Balls in a ball or a Platonic solid");
+  for (const s of SOLIDS)
+    ballsIn(
+      s.name,
+      s.code,
+      s.title,
+      s.family === "platonic" ? "Balls in a ball or a Platonic solid" : `Balls in ${article(FAMILY_LABEL[s.family])}`,
+    );
+  for (const s of SOLIDS)
+    out.push({
+      code: `${s.code}inball`,
+      piece: s.name,
+      container: "ball",
+      title: `${capital(pluralTitle(s.title))} in a ball`,
+      group: `${FAMILY_PLURAL[s.family]} in a ball`,
+    });
+  return out;
+}
+
+export const BALLS_PROBLEMS: readonly BallsProblem[] = build();
+
+/**
+ * The codes of the space's first 7 problems, in their first order: balls in a ball and in a cube, and the five
+ * Platonic solids in a ball. The volunteers' work list samples these only (problems.ts ballsDomain.sample).
+ */
+export const BALLS_ORIGINAL_CODES: readonly string[] = [
+  "ballinball",
+  "ballincub",
+  "tetinball",
+  "cubinball",
+  "octinball",
+  "dodinball",
+  "icoinball",
+];
+
+/**
+ * One container and one piece solid from each family, the long and the flat among the prisms: a sample for the
+ * tests that cannot run the 189 problems (the kernel's contract, every method, Auto).
+ */
+export const BALLS_FAMILY_SAMPLE: readonly string[] = [
+  "ballintet",
+  "ballintte",
+  "ballinpkd",
+  "ballinpr3",
+  "ballinpr12",
+  "ballinap5",
+  "ballinpr7l3",
+  "ballinbp5",
+  "ballintz8",
+  "tteinball",
+  "kttinball",
+  "pr3inball",
+  "ap4inball",
+  "pr3l3inball",
+  "bp7inball",
+  "tz6inball",
+  "phcinball",
 ];
 
 /** The codes in catalogue order. */
 export const BALLS_CODES: readonly string[] = BALLS_PROBLEMS.map((p) => p.code);
+
+/** A few codes for a message ("ballinball, ballincub, ..."), the list being 189 long. */
+export const BALLS_CODES_HINT = `${BALLS_CODES.slice(0, 6).join(", ")}, ... (<piece>in<container>, the piece or the container ball or a solid's code of the polyhedra space; GET /api/spaces lists them)`;
 
 /** Smallest and largest P of the catalogue. */
 export const BALLS_MIN_P = 2;
@@ -65,11 +195,11 @@ export interface ParsedBallsId {
 export function parseBallsId(id: unknown): ParsedBallsId | string {
   if (typeof id !== "string") return "id must be a string";
   if (id.length > 100) return "id is too long";
-  const m = /^balls\/([a-z]+)\/([1-9]\d{0,3})$/.exec(id);
+  const m = /^balls\/([a-z][a-z0-9]*)\/([1-9]\d{0,3})$/.exec(id);
   if (!m)
-    return `"${id}" is not a balls problem id: the form is balls/<code>/<P>, code one of ${BALLS_CODES.join(", ")}`;
+    return `"${id}" is not a balls problem id: the form is balls/<code>/<P>, code ${BALLS_CODES_HINT}`;
   const problem = ballsProblemOf(m[1]);
-  if (!problem) return `"${m[1]}" is not a balls problem code (one of ${BALLS_CODES.join(", ")})`;
+  if (!problem) return `"${m[1]}" is not a balls problem code (${BALLS_CODES_HINT})`;
   return { id, code: m[1], P: Number(m[2]), problem };
 }
 

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import {
   BALLS_CLEARANCE,
   BALLS_CODES,
+  BALLS_ORIGINAL_CODES,
   type BallsConfig,
   ballsBound,
   ballsConfigErrors,
@@ -36,7 +37,9 @@ describe("ids and bounds", () => {
     expect(parseBallsId("balls/ballinball/13")).toMatchObject({ code: "ballinball", P: 13 });
     for (const bad of ["balls/ballinball/013", "balls/ballinball/+3", "balls/ballinballs/3", "balls/ballinball", "polyhedra/cubincub/3", 3])
       expect(typeof parseBallsId(bad)).toBe("string");
-    expect(BALLS_CODES).toEqual(["ballinball", "ballincub", "tetinball", "cubinball", "octinball", "dodinball", "icoinball"]);
+    expect(BALLS_CODES.slice(0, 1)).toEqual(["ballinball"]);
+    expect(BALLS_CODES).toHaveLength(189);
+    expect(BALLS_ORIGINAL_CODES.every((c) => BALLS_CODES.includes(c))).toBe(true);
   });
 
   it("gives the elementary bounds", () => {
@@ -51,13 +54,13 @@ describe("ids and bounds", () => {
 });
 
 describe("the catalogue", () => {
-  it("has a domain of the 7 problems for P = 2 to 100, with their bounds, and a sample of small P first", () => {
-    expect(ballsDomain.info.problems).toBe(7 * (BALLS_MAX_P - BALLS_MIN_P + 1));
+  it("has a domain of the 189 problems for P = 2 to 100, with their bounds, and a sample of small P first from the first 7", () => {
+    expect(ballsDomain.info.problems).toBe(189 * (BALLS_MAX_P - BALLS_MIN_P + 1));
     expect(ballsDomain.info.fields.map((f) => f.key)).toEqual(["code", "P"]);
     const all = ballsDomain.sample(10000);
     expect(all).toHaveLength(693);
     expect(new Set(all).size).toBe(693);
-    expect(all.slice(0, 8)).toEqual([...BALLS_CODES.map((c) => `balls/${c}/2`), "balls/ballinball/3"]);
+    expect(all.slice(0, 8)).toEqual([...BALLS_ORIGINAL_CODES.map((c) => `balls/${c}/2`), "balls/ballinball/3"]);
     expect(ballsDomain.sample(3)).toHaveLength(3);
     for (const id of all) {
       const p = parseBallsId(id);
@@ -75,7 +78,7 @@ describe("the catalogue", () => {
   });
 
   it("has test packings of every kind, valid at tolerance 0 and not below their bounds", () => {
-    expect(new Set(packings.map((p) => p.code))).toEqual(new Set(BALLS_CODES));
+    expect(new Set(packings.map((p) => p.code))).toEqual(new Set(BALLS_ORIGINAL_CODES));
     for (const p of packings) {
       const problem = getBallsProblem(p.code)!;
       const v = validateBalls(problem, p.config, { tol: 0 });

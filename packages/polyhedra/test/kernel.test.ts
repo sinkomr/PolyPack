@@ -224,8 +224,8 @@ describe("polyhedraKernel", () => {
     );
     expect(() => polyhedraKernel({ code: "nope", P: 3 })).toThrow(/unknown/);
     expect(() => polyhedraKernel({ code: "cubincub", P: 0 })).toThrow(/positive/);
-    // the server accepts P up to 100
-    expect(() => polyhedraKernel({ code: "cubincub", P: 101 })).toThrow(/at most 100/);
+    // the server accepts P up to 500
+    expect(() => polyhedraKernel({ code: "cubincub", P: 501 })).toThrow(/at most 500/);
   });
 
   it("undoes randomPose and jiggle when the piece's variables are written back", () => {

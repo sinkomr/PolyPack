@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } fro
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gunzipSync } from "node:zlib";
-import { type SpacesIndex, buildSpaceCatalogue } from "@polypack/spaces";
+import { SPACE_DOMAINS, type SpacesIndex, buildSpaceCatalogue } from "@polypack/spaces";
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import {
@@ -202,6 +202,17 @@ function addSpace(store: SqliteStore, problem: string, score: number, name = "Ad
 }
 
 describe("the spaces in the snapshot", () => {
+  it("place entries on problems of a space's domain without a record, after the records", () => {
+    const domain = { ...SPACE_DOMAINS.polyhedra!, info: SPACE_DOMAINS.polyhedra!.info };
+    const records = buildSpaceCatalogue("polyhedra", null, domain);
+    const { place } = snapshotSpaces({ polyhedra: records } as never, new SqliteStore(":memory:"));
+    expect(place("polyhedra", "polyhedra/kttinpkd/7")).toEqual({ P: 7, order: records.problems.length + 7 });
+    expect(place("polyhedra", "polyhedra/cubincub/300")).toEqual({ P: 300, order: records.problems.length + 300 });
+    expect(place("polyhedra", "polyhedra/kttinpkd/501")).toBeNull();
+    expect(place("polyhedra", "polyhedra/kttinxyz/7")).toBeNull();
+    expect(place("sphere", "sphere/4/12")).toBeNull();
+  });
+
   it("hold every open space problem's leader with its configuration, one file per space, listed apart", async () => {
     const store = new SqliteStore(":memory:");
     const dir = freshDir();

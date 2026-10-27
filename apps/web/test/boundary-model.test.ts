@@ -23,7 +23,7 @@ import {
   viewerPacking,
 } from "../src/boundary-model";
 import { problemFacts } from "../src/space/facts";
-import { pickProblem } from "../src/space/pick";
+import { DEFAULT_PROBLEM, fieldsOfId, pickProblem } from "../src/space/pick";
 
 const root = resolve(__dirname, "../../..");
 const catalogue = loadSpacesIndex(root).boundary!;
@@ -240,5 +240,77 @@ describe("names, ids and addresses", () => {
     expect(pick.fields[2].options.map((o) => o.value)).toEqual(cubes.sort((a, b) => a - b).map(String));
     // P = 9999 is not listed: the nearest is
     expect(pick.id).toBe(`boundary/tesseract/cube/${Math.max(...cubes)}`);
+  });
+});
+
+// The board and the viewer both open the problem an address names as pickProblem picks it from the
+// catalogue, with the fields of the id (space/mode.ts, boundary-viewer.ts); both then say when it is
+// another problem. Their browser tests follow one address that is not listed.
+describe("the problem an address opens", () => {
+  /** The problem the pages open for an id, from a listing. */
+  const opened = (id: string, problems: readonly { id: string }[] = catalogue.problems) =>
+    pickProblem("boundary", problems, fieldsOfId("boundary", id)).id;
+  const listedP = (problems: readonly { id: string }[], piece: string) =>
+    problems.filter((p) => p.id.split("/")[2] === piece).map((p) => Number(p.id.split("/")[3]));
+  /** The listed P nearest a number, the smaller of two as near: an oracle apart from pickProblem's. */
+  const nearest = (Ps: number[], want: number) => {
+    const by = [...Ps].sort((a, b) => Math.abs(a - want) - Math.abs(b - want) || a - b);
+    return by[0];
+  };
+
+  it("is the problem itself when it is listed, and the starting problem when the address names none", () => {
+    for (const p of catalogue.problems) expect(opened(p.id), p.id).toBe(p.id);
+    // the pages read a missing id as the starting problem's
+    expect(catalogue.byId.has(DEFAULT_PROBLEM.boundary)).toBe(true);
+    expect(opened(DEFAULT_PROBLEM.boundary)).toBe(DEFAULT_PROBLEM.boundary);
+  });
+
+  it("has the nearest listed P of the piece for any other number, the smaller of two as near", () => {
+    for (const piece of ["ball", "cube"]) {
+      const Ps = listedP(catalogue.problems, piece);
+      for (const P of [0, -3, Math.min(...Ps) - 1, Math.max(...Ps) + 1, 9999, 1e9, 2.5])
+        expect(opened(`boundary/tesseract/${piece}/${P}`), `${piece} ${P}`).toBe(
+          `boundary/tesseract/${piece}/${nearest(Ps, P)}`,
+        );
+      // a listed number written otherwise
+      expect(opened(`boundary/tesseract/${piece}/0${Ps[0]}`)).toBe(`boundary/tesseract/${piece}/${Ps[0]}`);
+    }
+    // a sparser listing, with gaps between its P and other P for each piece
+    const sparse = catalogue.problems.filter((p) =>
+      p.fields.piece === "ball" ? [2, 5, 9, 16].includes(p.P) : [3, 12].includes(p.P),
+    );
+    expect(sparse.length).toBe(6);
+    const cases: [string, number, number][] = [
+      ["ball", 1, 2],
+      ["ball", 3, 2],
+      ["ball", 4, 5],
+      // as near to 5 as to 9
+      ["ball", 7, 5],
+      ["ball", 8, 9],
+      ["ball", 13, 16],
+      ["ball", 100, 16],
+      // 5 is listed for balls only
+      ["cube", 5, 3],
+      ["cube", 8, 12],
+      ["cube", 64, 12],
+    ];
+    for (const [piece, P, want] of cases) {
+      expect(nearest(listedP(sparse, piece), P), `${piece} ${P}`).toBe(want);
+      expect(opened(`boundary/tesseract/${piece}/${P}`, sparse), `${piece} ${P}`).toBe(
+        `boundary/tesseract/${piece}/${want}`,
+      );
+    }
+  });
+
+  it("takes the starting value of a field it does not list, and the smallest P for one that is not a number", () => {
+    const smallest = (piece: string) => Math.min(...listedP(catalogue.problems, piece));
+    expect(opened("boundary/tesseract/sphere/9")).toBe("boundary/tesseract/ball/9");
+    expect(opened("boundary/cube/cube/9")).toBe("boundary/tesseract/cube/9");
+    for (const P of ["x", "", "NaN", "Infinity"])
+      expect(opened(`boundary/tesseract/cube/${P}`), P).toBe(`boundary/tesseract/cube/${smallest("cube")}`);
+    // an id cut short: its last part is read as P
+    expect(opened("boundary/tesseract/cube")).toBe(`boundary/tesseract/cube/${smallest("cube")}`);
+    // nothing listed: no problem
+    expect(opened(DEFAULT_PROBLEM.boundary, [])).toBeNull();
   });
 });

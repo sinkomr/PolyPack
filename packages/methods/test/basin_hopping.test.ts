@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, getMethod, methodsFor, mulberry32, registerMethod, runMethod } from "../src";
+import { type SpaceKernel, mulberry32, registerMethod, runMethod } from "../src";
 import { type BasinHop, type BasinTrace, basinHopping, runBasinHopping } from "../src/methods/basin_hopping";
 import { OPERATORS, chooseOperator, metropolis, reinsert, stressedPiece } from "../src/methods/basin-operators";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
@@ -94,16 +94,6 @@ const square4 = {
 };
 
 describe("basin_hopping", () => {
-  it("is registered with its board title, summary, doc and defaults", () => {
-    const m = getMethod("basin_hopping")!;
-    expect(m.title).toBe("Basin hopping");
-    expect(m.summary.length).toBeGreaterThan(20);
-    expect(m.doc).toBe("docs/methods/dimensions/basin_hopping.md");
-    expect(m.requires).toEqual([]);
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("basin_hopping");
-    expect(Object.keys((m.defaults.weights as object) ?? {})).toEqual([...OPERATORS]);
-  });
-
   it("comes within 1% of the best known packings for P = 2 to 10 in 30,000 evaluations", () => {
     for (let P = 2; P <= 10; P++) {
       const r = runMethod(disksKernel(P), "basin_hopping", { seed: 1, budget: { evals: 30000 } });

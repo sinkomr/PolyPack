@@ -118,6 +118,27 @@ describe("a problem without a research record", () => {
     expect((await get("/api/spaces/torus/problems/torus/sq/0/50")).status).toBe(404);
   });
 
+  it("is listed with its site entry by /site-only, a page at a time, and not before it has one", async () => {
+    expect((await get("/api/spaces/torus/site-only")).body).toMatchObject({ space: "torus", problems: [], next: null });
+    await submit(entry(twoDisks(1)));
+    const page = (await get("/api/spaces/torus/site-only")).body;
+    expect(page.problems.map((p: { id: string }) => p.id)).toEqual([ID]);
+    expect(page.problems[0]).toMatchObject({
+      status: "no_record",
+      certified: null,
+      bound: { value: L2 },
+      site_best: { name: "ann" },
+    });
+    expect(page.problems[0].site_best.score).toBeCloseTo(L2, 12);
+    expect(page.next).toBeNull();
+    // after the last id of a page comes the rest; problems with a research record are never listed
+    expect((await get(`/api/spaces/torus/site-only?after=${ID}`)).body.problems).toEqual([]);
+    expect((await get("/api/spaces/torus/site-only?limit=1")).body.next).toBeNull();
+    for (const bad of ["limit=0", "limit=5001", "limit=1&limit=2", "since=1"])
+      expect((await get(`/api/spaces/torus/site-only?${bad}`)).status).toBe(400);
+    expect((await get("/api/spaces/nowhere/site-only")).status).toBe(404);
+  });
+
   it("keeps the first valid entry, then only better ones, and refuses one valid only within the tolerance", async () => {
     // 2e-10 too close: an overlap of 4e-10, within the touching tolerance but not the strict one
     const loose = await submit(entry(twoDisks(1 - 2e-10)));

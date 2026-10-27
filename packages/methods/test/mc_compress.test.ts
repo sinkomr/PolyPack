@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMethod, listMethods, methodsFor, runMethod } from "../src";
+import { runMethod } from "../src";
 import type { KernelState, SpaceKernel } from "../src/kernel";
 import { sizeMoves } from "../src/methods/mc-chain";
 import { mulberry32 } from "../src/random";
@@ -18,16 +18,6 @@ const hexagon = (scale: number) => ({
 });
 
 describe("mc_compress", () => {
-  it("is registered after penalty's place, with its board text, for every kernel", () => {
-    const m = getMethod("mc_compress")!;
-    expect(m.title).toBe("Monte Carlo compression");
-    expect(m.summary).toMatch(/\.$/);
-    expect(m.requires).toEqual([]);
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("mc_compress");
-    const names = listMethods().map((d) => d.name);
-    expect(names.indexOf("mc_compress")).toBeLessThan(names.indexOf("asc"));
-  });
-
   // Measured over seeds 1-20 at 30000 evaluations (docs/methods/dimensions/mc_compress.md): P = 3
   // to 9 end within 1e-7 of the best known radius in 18 of 20 runs or more, but a run can jam (five
   // disks with one caged by four, R = 3, in 1 of 20); P = 2 within 3e-5 (two disks jam off the

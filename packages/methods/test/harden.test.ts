@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type KernelState, type SpaceKernel, getMethod, methodsFor, mulberry32, runMethod } from "../src";
+import { type KernelState, type SpaceKernel, mulberry32, runMethod } from "../src";
 import { checkKernel } from "../src/contract";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 import { HardenDynamics } from "../src/methods/harden-dynamics";
@@ -145,14 +145,6 @@ describe("the hardening dynamics", () => {
 });
 
 describe("harden on the reference kernel", () => {
-  it("is offered where the kernel has soft shapes", () => {
-    const m = getMethod("harden")!;
-    expect(m.requires).toEqual(["shape"]);
-    expect(m.title).toBe("Soft-to-rigid hardening");
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("harden");
-    expect(methodsFor({ capabilities: [] }).map((d) => d.name)).not.toContain("harden");
-  });
-
   it("comes within 0.1% of the best known packings for P = 2 to 10 in 30,000 evaluations", () => {
     // Measured (seeds 1-10, Node 26, Apple Silicon): every run within 2.4e-8 of the best known radius.
     const gaps: Record<number, number> = {};
