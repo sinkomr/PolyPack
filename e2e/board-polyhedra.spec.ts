@@ -281,7 +281,8 @@ test("the dimensions page lists 3D in 3D with the polyhedra records and links th
   await page.goto("/dimensions.html");
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="polyhedra"]');
   await expect(card.getByRole("heading", { name: "Polyhedra", exact: true })).toBeVisible();
-  await expect(card).toContainText("14,850");
+  // 150 kinds x P = 2..500; the 14,850 research records stop at P = 100
+  await expect(card).toContainText("74,850, 60,000 without a record yet");
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="polyhedra"]')).toBeChecked();
   // the table starts at cubes in a cube, P = 2 to 100
