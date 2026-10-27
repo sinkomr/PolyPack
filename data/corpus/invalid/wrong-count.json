@@ -11,12 +11,13 @@
         "theta": 0
       },
       {
-        "x": 2,
+        "x": 1,
         "y": 0,
         "theta": 0
       }
     ]
   },
+  "units": "diameter",
   "expected_score": 2,
   "expected_valid": false,
   "oriented_score": 2,

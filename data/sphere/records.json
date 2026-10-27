@@ -1,9 +1,11 @@
 {
  "generated": "2026-10-25T01:17:39Z",
+ "units": "diameter",
+ "units_date": "2026-10-27",
  "conventions": {
-  "problem_id": "sphere/N/P: P congruent pieces on the whole sphere of radius rho (no container); N = 0 disks of geodesic radius 1, N >= 3 regular spherical N-gons of geodesic side 1",
+  "problem_id": "sphere/N/P: P congruent pieces on the whole sphere of radius rho (no container); N = 0 disks of geodesic diameter 1 (radius 1/2), N >= 3 regular spherical N-gons of geodesic side 1",
   "score": "rho, the sphere radius (smaller is better); curvature K = 1/rho^2",
-  "units": "lengths in units of the piece (side 1 / disk radius 1); poses on the unit sphere",
+  "units": "lengths in units of the piece (side 1 / disk diameter 1); poses on the unit sphere",
   "pose": "q = [w, x, y, z] (any nonzero quaternion; the piece is G(standard piece), G = rotation of q/|q|, v -> q v q*). Standard piece: centre e3 = (0,0,1), vertex k at (sin R cos phi_k, sin R sin phi_k, cos R), phi_k = pi/2 + 2 pi k/N (vertex up = +y), sin(1/(2 rho)) = sin R sin(pi/N). Gauge: piece 0 has q = [1,0,0,0]. G = T(c) R_z(theta) recovers the curved package's (centre, theta) pose away from the south pole.",
   "validity": "interiors disjoint (touching allowed); score_cert is a radius at which the stored configuration is proven strictly valid by python/sphere/certify.py (mpmath intervals, 256 bits)",
   "display": "score_cert rounded to the nearest at 6 decimals (half-even, from its exact binary64 value)",
@@ -14,15 +16,15 @@
    "id": "sphere/0/2",
    "N": 0,
    "P": 2,
-   "score_float": 0.6366197723675814,
-   "score_cert": 0.6366197723739476,
-   "display": "0.636620",
+   "score_float": 0.3183098861837907,
+   "score_cert": 0.3183098861869738,
+   "display": "0.318310",
    "gap_rel": 1.0000067770640549e-11,
-   "K_cert": 2.467401100222991,
+   "K_cert": 9.869604400891964,
    "density_float": 0.9999999999999999,
    "status": "proven",
    "config": {
-    "rho": 0.6366197723739476,
+    "rho": 0.3183098861869738,
     "pieces": [
      {
       "q": [
@@ -56,15 +58,15 @@
    },
    "bound": {
     "kind": "area",
-    "value": 0.6366197723669448,
-    "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+    "value": 0.3183098861834724,
+    "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
     "rigorous": true
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 0.6366197723669448,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.3183098861834724,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     }
    ],
@@ -73,7 +75,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "-1",
     "theta_deg": 180.0,
-    "rho": 0.6366197723675814,
+    "rho": 0.3183098861837907,
     "source": "exact (P <= 6, Rankin 1955; trivial)",
     "rel_diff": 0.0,
     "proof": [
@@ -87,22 +89,22 @@
    "found_by": "PolyPack research",
    "notes": [
     "Optimal: matches the published Tammes optimum for P = 2 within 0.0e+00 relative (proof: R. A. Rankin).",
-    "Two closed hemispheres (angular radius pi/2) touching along the equator: rho = 2/pi exactly [CALC]."
+    "Two closed hemispheres (angular radius pi/2) touching along the equator: rho = 1/pi exactly [CALC]."
    ]
   },
   {
    "id": "sphere/0/3",
    "N": 0,
    "P": 3,
-   "score_float": 0.9549296585513721,
-   "score_cert": 0.9549296585609215,
-   "display": "0.954930",
+   "score_float": 0.47746482927568606,
+   "score_cert": 0.47746482928046075,
+   "display": "0.477465",
    "gap_rel": 1.0000067770640547e-11,
-   "K_cert": 1.096622711210218,
+   "K_cert": 4.386490844840872,
    "density_float": 0.7499999999999997,
    "status": "proven",
    "config": {
-    "rho": 0.9549296585609215,
+    "rho": 0.47746482928046075,
     "pieces": [
      {
       "q": [
@@ -144,29 +146,29 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 0.954929658550417,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 0.4774648292752085,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 0.8123744665435737,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.40618723327178685,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 0.954929658550417,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.4774648292752085,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 0.9549296585451523,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.47746482927257616,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "R. A. Rankin, The closest packing of spherical caps in n dimensions, Proc. Glasgow Math. Assoc. 2 (1955) 139-144, doi:10.1017/S2040618500033219; L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -176,7 +178,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "-1/2",
     "theta_deg": 120.00000000000001,
-    "rho": 0.9549296585513719,
+    "rho": 0.47746482927568595,
     "source": "exact (P <= 6, Rankin 1955; regular simplex / cross-polytope)",
     "rel_diff": 2.325245665339088e-16,
     "proof": [
@@ -201,15 +203,15 @@
    "id": "sphere/0/4",
    "N": 0,
    "P": 4,
-   "score_float": 1.0467733744266,
-   "score_cert": 1.0467733744370677,
-   "display": "1.046773",
+   "score_float": 0.5233866872133,
+   "score_cert": 0.5233866872185339,
+   "display": "0.523387",
    "gap_rel": 1.0000109924189478e-11,
-   "K_cert": 0.9126298408465966,
+   "K_cert": 3.6505193633863864,
    "density_float": 0.8452994616207483,
    "status": "proven",
    "config": {
-    "rho": 1.0467733744370677,
+    "rho": 0.5233866872185339,
     "pieces": [
      {
       "q": [
@@ -259,29 +261,29 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 1.0467733744255532,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 0.5233866872127766,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 0.9549296585504172,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.4774648292752086,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.0467733744255532,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.5233866872127766,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.046773374419742,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.523386687209871,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "R. A. Rankin, The closest packing of spherical caps in n dimensions, Proc. Glasgow Math. Assoc. 2 (1955) 139-144, doi:10.1017/S2040618500033219; L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -291,7 +293,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "-1/3",
     "theta_deg": 109.47122063449069,
-    "rho": 1.0467733744266,
+    "rho": 0.5233866872133,
     "source": "exact (P <= 6, Rankin 1955; regular simplex / cross-polytope)",
     "rel_diff": 0.0,
     "proof": [
@@ -316,15 +318,15 @@
    "id": "sphere/0/5",
    "N": 0,
    "P": 5,
-   "score_float": 1.2732395447351628,
-   "score_cert": 1.27323954477336,
-   "display": "1.273240",
+   "score_float": 0.6366197723675814,
+   "score_cert": 0.63661977238668,
+   "display": "0.636620",
    "gap_rel": 3.000002891849674e-11,
-   "K_cert": 0.6168502750310738,
+   "K_cert": 2.4674011001242953,
    "density_float": 0.732233047033631,
    "status": "proven",
    "config": {
-    "rho": 1.27323954477336,
+    "rho": 0.63661977238668,
     "pieces": [
      {
       "q": [
@@ -382,29 +384,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.2732395447257838,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.6366197723628919,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "R. A. Rankin, The closest packing of spherical caps in n dimensions, Proc. Glasgow Math. Assoc. 2 (1955) 139-144, doi:10.1017/S2040618500033219; K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.0784052161447264,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.5392026080723632,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.1632658544571124,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.5816329272285562,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.2732395447257838,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.6366197723628919,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "R. A. Rankin, The closest packing of spherical caps in n dimensions, Proc. Glasgow Math. Assoc. 2 (1955) 139-144, doi:10.1017/S2040618500033219; K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
     }
@@ -414,7 +416,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0",
     "theta_deg": 90.0,
-    "rho": 1.2732395447351628,
+    "rho": 0.6366197723675814,
     "source": "exact (P <= 6, Rankin 1955; regular simplex / cross-polytope)",
     "rel_diff": 0.0,
     "proof": [
@@ -439,15 +441,15 @@
    "id": "sphere/0/6",
    "N": 0,
    "P": 6,
-   "score_float": 1.2732395447351628,
-   "score_cert": 1.2732395447478952,
-   "display": "1.273240",
+   "score_float": 0.6366197723675814,
+   "score_cert": 0.6366197723739476,
+   "display": "0.636620",
    "gap_rel": 1.0000067770640549e-11,
-   "K_cert": 0.6168502750557477,
+   "K_cert": 2.467401100222991,
    "density_float": 0.8786796564403573,
    "status": "proven",
    "config": {
-    "rho": 1.2732395447478952,
+    "rho": 0.6366197723739476,
     "pieces": [
      {
       "q": [
@@ -513,29 +515,29 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 1.2732395447338896,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 0.6366197723669448,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.188963559091735,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.5944817795458675,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.2732395447338896,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.6366197723669448,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.2732395447257838,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.6366197723628919,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "R. A. Rankin, The closest packing of spherical caps in n dimensions, Proc. Glasgow Math. Assoc. 2 (1955) 139-144, doi:10.1017/S2040618500033219; L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -545,7 +547,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0",
     "theta_deg": 90.0,
-    "rho": 1.2732395447351628,
+    "rho": 0.6366197723675814,
     "source": "exact (P <= 6, Rankin 1955; regular simplex / cross-polytope)",
     "rel_diff": 0.0,
     "proof": [
@@ -570,15 +572,15 @@
    "id": "sphere/0/7",
    "N": 0,
    "P": 7,
-   "score_float": 1.471583829238987,
-   "score_cert": 1.471583829253703,
-   "display": "1.471584",
+   "score_float": 0.7357919146194934,
+   "score_cert": 0.7357919146268515,
+   "display": "0.735792",
    "gap_rel": 1.0000114094089134e-11,
-   "K_cert": 0.4617745420280647,
+   "K_cert": 1.847098168112259,
    "density_float": 0.777483302994278,
    "status": "proven",
    "config": {
-    "rho": 1.471583829253703,
+    "rho": 0.7357919146268515,
     "pieces": [
      {
       "q": [
@@ -652,29 +654,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.4715838292268797,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.7357919146134398,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.2900007074733257,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.6450003537366629,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.3757055061749013,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.6878527530874506,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.4715838292268797,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.7357919146134398,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
     }
@@ -684,7 +686,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.210138312731",
     "theta_deg": 77.86954215540013,
-    "rho": 1.4715838292394263,
+    "rho": 0.7357919146197132,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.9860770716252715e-13,
     "marked_optimal_in_table": true,
@@ -709,15 +711,15 @@
    "id": "sphere/0/8",
    "N": 0,
    "P": 8,
-   "score_float": 1.5307756766196805,
-   "score_cert": 1.5307756766349885,
-   "display": "1.530776",
+   "score_float": 0.7653878383098403,
+   "score_cert": 0.7653878383174942,
+   "display": "0.765388",
    "gap_rel": 1.0000143941364593e-11,
-   "K_cert": 0.42675330606782014,
+   "K_cert": 1.7070132242712805,
    "density_float": 0.8235820489567286,
    "status": "proven",
    "config": {
-    "rho": 1.5307756766349885,
+    "rho": 0.7653878383174942,
     "pieces": [
      {
       "q": [
@@ -799,29 +801,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.5307756766063252,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.7653878383031626,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.3836344451981257,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.6918172225990629,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.4715838292375154,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.7357919146187577,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.5307756766063252,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.7653878383031626,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
     }
@@ -831,7 +833,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.261203874964",
     "theta_deg": 74.85849218560018,
-    "rho": 1.5307756766199938,
+    "rho": 0.7653878383099969,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.0467070540407818e-13,
     "marked_optimal_in_table": true,
@@ -856,15 +858,15 @@
    "id": "sphere/0/9",
    "N": 0,
    "P": 9,
-   "score_float": 1.6247489330887723,
-   "score_cert": 1.62474893310502,
-   "display": "1.624749",
+   "score_float": 0.8123744665443862,
+   "score_cert": 0.81237446655251,
+   "display": "0.812374",
    "gap_rel": 1.0000111121963471e-11,
-   "K_cert": 0.3788152717774083,
+   "K_cert": 1.5152610871096333,
    "density_float": 0.8257653858252323,
    "status": "proven",
    "config": {
-    "rho": 1.62474893310502,
+    "rho": 0.81237446655251,
     "pieces": [
      {
       "q": [
@@ -954,29 +956,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.624748933074081,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.8123744665370405,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.4712939827596925,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.7356469913798462,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.5618543685093529,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.7809271842546764,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.624748933074081,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.8123744665370405,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "K. Schutte and B. L. van der Waerden, Auf welcher Kugel haben 5, 6, 7, 8 oder 9 Punkte mit Mindestabstand Eins Platz?, Math. Ann. 123 (1951) 96-124, doi:10.1007/BF02054944"
     }
@@ -986,7 +988,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.333333333334",
     "theta_deg": 70.5287793654688,
-    "rho": 1.6247489330897054,
+    "rho": 0.8123744665448527,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -5.742619126517483e-13,
     "marked_optimal_in_table": true,
@@ -1011,15 +1013,15 @@
    "id": "sphere/0/10",
    "N": 0,
    "P": 10,
-   "score_float": 1.7323819282979753,
-   "score_cert": 1.7323819283152992,
-   "display": "1.732382",
+   "score_float": 0.8661909641489877,
+   "score_cert": 0.8661909641576496,
+   "display": "0.866191",
    "gap_rel": 1.0000058181899466e-11,
-   "K_cert": 0.3332059214362821,
+   "K_cert": 1.3328236857451283,
    "density_float": 0.8101397320193189,
    "status": "proven",
    "config": {
-    "rho": 1.7323819283152992,
+    "rho": 0.8661909641576496,
     "pieces": [
      {
       "q": [
@@ -1117,29 +1119,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.732381928281064,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.866190964140532,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "L. Danzer, Endliche Punktmengen auf der 2-Sphare mit moglichst grossem Minimalabstand, Habilitationsschrift, Gottingen 1963; English: Finite point-sets on S^2 with minimum distance as large as possible, Discrete Math. 60 (1986) 3-66, doi:10.1016/0012-365X(86)90002-6"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.5539988763566157,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.7769994381783079,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.6473364914841555,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.8236682457420778,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.732381928281064,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.866190964140532,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "L. Danzer, Endliche Punktmengen auf der 2-Sphare mit moglichst grossem Minimalabstand, Habilitationsschrift, Gottingen 1963; English: Finite point-sets on S^2 with minimum distance as large as possible, Discrete Math. 60 (1986) 3-66, doi:10.1016/0012-365X(86)90002-6"
     }
@@ -1149,7 +1151,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.404394325217",
     "theta_deg": 66.14682198784361,
-    "rho": 1.732381928299203,
+    "rho": 0.8661909641496015,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -7.086685681579462e-13,
     "marked_optimal_in_table": true,
@@ -1174,15 +1176,15 @@
    "id": "sphere/0/11",
    "N": 0,
    "P": 11,
-   "score_float": 1.8064420505177023,
-   "score_cert": 1.8064420505357668,
-   "display": "1.806442",
+   "score_float": 0.9032210252588512,
+   "score_cert": 0.9032210252678834,
+   "display": "0.903221",
    "gap_rel": 1.0000010146187027e-11,
-   "K_cert": 0.3064445708221452,
+   "K_cert": 1.2257782832885808,
    "density_float": 0.8214205540637789,
    "status": "proven",
    "config": {
-    "rho": 1.8064420505357668,
+    "rho": 0.9032210252678834,
     "pieces": [
      {
       "q": [
@@ -1288,29 +1290,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 1.8064420504977292,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 0.9032210252488646,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "L. Danzer, Endliche Punktmengen auf der 2-Sphare mit moglichst grossem Minimalabstand, Habilitationsschrift, Gottingen 1963; English: Finite point-sets on S^2 with minimum distance as large as possible, Discrete Math. 60 (1986) 3-66, doi:10.1016/0012-365X(86)90002-6; K. Boroczky, The problem of Tammes for n = 11, Studia Sci. Math. Hungar. 18 (1983) 165-171"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.6325071661514543,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.8162535830757272,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.7286891775734008,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.8643445887867004,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.8064420504977292,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.9032210252488646,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "L. Danzer, Endliche Punktmengen auf der 2-Sphare mit moglichst grossem Minimalabstand, Habilitationsschrift, Gottingen 1963; English: Finite point-sets on S^2 with minimum distance as large as possible, Discrete Math. 60 (1986) 3-66, doi:10.1016/0012-365X(86)90002-6; K. Boroczky, The problem of Tammes for n = 11, Studia Sci. Math. Hungar. 18 (1983) 165-171"
     }
@@ -1320,7 +1322,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.447213595500",
     "theta_deg": 63.434948822919324,
-    "rho": 1.8064420505177774,
+    "rho": 0.9032210252588887,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -4.154635153845584e-14,
     "marked_optimal_in_table": true,
@@ -1346,15 +1348,15 @@
    "id": "sphere/0/12",
    "N": 0,
    "P": 12,
-   "score_float": 1.806442050517702,
-   "score_cert": 1.8064420505357663,
-   "display": "1.806442",
+   "score_float": 0.903221025258851,
+   "score_cert": 0.9032210252678832,
+   "display": "0.903221",
    "gap_rel": 1.000001014618703e-11,
-   "K_cert": 0.3064445708221454,
+   "K_cert": 1.2257782832885815,
    "density_float": 0.8960951498877594,
    "status": "proven",
    "config": {
-    "rho": 1.8064420505357663,
+    "rho": 0.9032210252678832,
     "pieces": [
      {
       "q": [
@@ -1468,29 +1470,29 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 1.8064420505158945,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 0.9032210252579472,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.7074008589938172,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.8537004294969086,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.8064420505158945,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.9032210252579472,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 1.8064420504977292,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 0.9032210252488646,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -1500,7 +1502,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.447213595500",
     "theta_deg": 63.434948822919324,
-    "rho": 1.8064420505177774,
+    "rho": 0.9032210252588887,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -4.1792187938091674e-14,
     "marked_optimal_in_table": true,
@@ -1525,15 +1527,15 @@
    "id": "sphere/0/13",
    "N": 0,
    "P": 13,
-   "score_float": 2.00556827492437,
-   "score_cert": 2.005568274944426,
-   "display": "2.005568",
+   "score_float": 1.002784137462185,
+   "score_cert": 1.002784137472213,
+   "display": "1.002784",
    "gap_rel": 1.0000136692431893e-11,
-   "K_cert": 0.24861372332382417,
+   "K_cert": 0.9944548932952967,
    "density_float": 0.7913928332494164,
    "status": "proven",
    "config": {
-    "rho": 2.005568274944426,
+    "rho": 1.002784137472213,
     "pieces": [
      {
       "q": [
@@ -1655,29 +1657,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 2.0055682748992854,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 1.0027841374496427,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "O. R. Musin and A. S. Tarasov, The strong thirteen spheres problem, Discrete Comput. Geom. 48 (2012) 128-141, doi:10.1007/s00454-011-9392-2"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.7791384533585919,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.8895692266792959,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.8810247931810558,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.9405123965905279,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 2.0055682748992854,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 1.0027841374496427,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "O. R. Musin and A. S. Tarasov, The strong thirteen spheres problem, Discrete Comput. Geom. 48 (2012) 128-141, doi:10.1007/s00454-011-9392-2"
     }
@@ -1687,7 +1689,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.542636486830",
     "theta_deg": 57.13670307755368,
-    "rho": 2.005568274925234,
+    "rho": 1.002784137462617,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -4.30677690686233e-13,
     "marked_optimal_in_table": true,
@@ -1712,15 +1714,15 @@
    "id": "sphere/0/14",
    "N": 0,
    "P": 14,
-   "score_float": 2.058386667050456,
-   "score_cert": 2.05838666707104,
-   "display": "2.058387",
+   "score_float": 1.029193333525228,
+   "score_cert": 1.02919333353552,
+   "display": "1.029193",
    "gap_rel": 1.0000054554985948e-11,
-   "K_cert": 0.236018518391174,
+   "K_cert": 0.944074073564696,
    "density_float": 0.8099448824075572,
    "status": "proven",
    "config": {
-    "rho": 2.05838666707104,
+    "rho": 1.02919333353552,
     "pieces": [
      {
       "q": [
@@ -1850,29 +1852,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 2.058386667024012,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 1.029193333512006,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "O. R. Musin and A. S. Tarasov, The Tammes problem for N = 14, Exp. Math. 24 (2015) 460-468, doi:10.1080/10586458.2015.1022842"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.8480888487752967,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.9240444243876483,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 1.9527901891587964,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 0.9763950945793982,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 2.058386667024012,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 1.029193333512006,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "O. R. Musin and A. S. Tarasov, The Tammes problem for N = 14, Exp. Math. 24 (2015) 460-468, doi:10.1080/10586458.2015.1022842"
     }
@@ -1882,7 +1884,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.563950300361",
     "theta_deg": 55.67056999562519,
-    "rho": 2.058386667051724,
+    "rho": 1.029193333525862,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -6.161712974697907e-13,
     "marked_optimal_in_table": true,
@@ -1907,15 +1909,15 @@
    "id": "sphere/0/15",
    "N": 0,
    "P": 15,
-   "score_float": 2.135597284436133,
-   "score_cert": 2.1355972844574893,
-   "display": "2.135597",
+   "score_float": 1.0677986422180665,
+   "score_cert": 1.0677986422287447,
+   "display": "1.067799",
    "gap_rel": 1.0000129826597085e-11,
-   "K_cert": 0.21926094426026704,
+   "K_cert": 0.8770437770410682,
    "density_float": 0.8073143641907242,
    "status": "best_known",
    "config": {
-    "rho": 2.1355972844574893,
+    "rho": 1.0677986422287447,
     "pieces": [
      {
       "q": [
@@ -2053,22 +2055,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.022031388816577,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.0110156944082884,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.9145541314359455,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.9572770657179728,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.022031388816577,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.0110156944082884,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -2078,7 +2080,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.592605902926",
     "theta_deg": 53.657850129866794,
-    "rho": 2.1355972844387443,
+    "rho": 1.0677986422193722,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.2227232975736942e-12,
     "marked_optimal_in_table": true
@@ -2100,15 +2102,15 @@
    "id": "sphere/0/16",
    "N": 0,
    "P": 16,
-   "score_float": 2.193375143403728,
-   "score_cert": 2.193375143425662,
-   "display": "2.193375",
+   "score_float": 1.096687571701864,
+   "score_cert": 1.096687571712831,
+   "display": "1.096688",
    "gap_rel": 1.0000117959605743e-11,
-   "K_cert": 0.2078615517103632,
+   "K_cert": 0.8314462068414528,
    "density_float": 0.8171434841390353,
    "status": "best_known",
    "config": {
-    "rho": 2.193375143425662,
+    "rho": 1.096687571712831,
     "pieces": [
      {
       "q": [
@@ -2254,22 +2256,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.08899476089062,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.04449738044531,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 1.9787854010134542,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 0.9893927005067271,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.08899476089062,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.04449738044531,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -2279,7 +2281,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.612294616483",
     "theta_deg": 52.24439575269867,
-    "rho": 2.1933751434046482,
+    "rho": 1.0966875717023241,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -4.195145757788748e-13,
     "marked_optimal_in_table": false
@@ -2299,15 +2301,15 @@
    "id": "sphere/0/17",
    "N": 0,
    "P": 17,
-   "score_float": 2.242920769444019,
-   "score_cert": 2.2429207694664486,
-   "display": "2.242921",
+   "score_float": 1.1214603847220095,
+   "score_cert": 1.1214603847332243,
+   "display": "1.121460",
    "gap_rel": 1.0000181026214771e-11,
-   "K_cert": 0.19877974765795478,
+   "K_cert": 0.7951189906318191,
    "density_float": 0.8309120004785086,
    "status": "best_known",
    "config": {
-    "rho": 2.2429207694664486,
+    "rho": 1.1214603847332243,
     "pieces": [
      {
       "q": [
@@ -2461,22 +2463,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.1538895161613496,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.0769447580806748,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.0409940752292,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.0204970376146,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.1538895161613496,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.0769447580806748,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -2486,7 +2488,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.628094415071",
     "theta_deg": 51.09032855155574,
-    "rho": 2.24292076944718,
+    "rho": 1.12146038472359,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.4093351128456732e-12,
     "marked_optimal_in_table": false
@@ -2506,15 +2508,15 @@
    "id": "sphere/0/18",
    "N": 0,
    "P": 18,
-   "score_float": 2.312334429384352,
-   "score_cert": 2.3123344294074757,
-   "display": "2.312334",
+   "score_float": 1.156167214692176,
+   "score_cert": 1.1561672147037378,
+   "display": "1.156167",
    "gap_rel": 1.0000164709327682e-11,
-   "K_cert": 0.18702458886890094,
+   "K_cert": 0.7480983554756038,
    "density_float": 0.8285753258665943,
    "status": "best_known",
    "config": {
-    "rho": 2.3123344294074757,
+    "rho": 1.1561672147037378,
     "pieces": [
      {
       "q": [
@@ -2676,22 +2678,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.2168949910866393,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.1084474955433197,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.1013601593936038,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.0506800796968019,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.2168949910866393,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.1084474955433197,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -2701,7 +2703,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.648695832224",
     "theta_deg": 49.556654768367736,
-    "rho": 2.312334429387454,
+    "rho": 1.156167214693727,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.3414855097860602e-12,
     "marked_optimal_in_table": false
@@ -2721,15 +2723,15 @@
    "id": "sphere/0/19",
    "N": 0,
    "P": 19,
-   "score_float": 2.4027460664469666,
-   "score_cert": 2.4027460664709945,
-   "display": "2.402746",
+   "score_float": 1.2013730332234833,
+   "score_cert": 1.2013730332354973,
+   "display": "1.201373",
    "gap_rel": 1.0000179013373002e-11,
-   "K_cert": 0.17321450222797236,
+   "K_cert": 0.6928580089118894,
    "density_float": 0.810960953526143,
    "status": "best_known",
    "config": {
-    "rho": 2.4027460664709945,
+    "rho": 1.2013730332354973,
     "pieces": [
      {
       "q": [
@@ -2899,22 +2901,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.2781662275430725,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.1390831137715363,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.160038422002749,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.0800192110013744,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.2781662275430725,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.1390831137715363,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -2924,7 +2926,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.673116887561",
     "theta_deg": 47.69191410869273,
-    "rho": 2.4027460664506695,
+    "rho": 1.2013730332253347,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.54107663869766e-12,
     "marked_optimal_in_table": false
@@ -2944,15 +2946,15 @@
    "id": "sphere/0/20",
    "N": 0,
    "P": 20,
-   "score_float": 2.4159615336768274,
-   "score_cert": 2.415961533700987,
-   "display": "2.415962",
+   "score_float": 1.2079807668384137,
+   "score_cert": 1.2079807668504936,
+   "display": "1.207981",
    "gap_rel": 1.0000070343299061e-11,
-   "K_cert": 0.17132469582667284,
+   "K_cert": 0.6852987833066914,
    "density_float": 0.8444630465230151,
    "status": "best_known",
    "config": {
-    "rho": 2.415961533700987,
+    "rho": 1.2079807668504936,
     "pieces": [
      {
       "q": [
@@ -3130,22 +3132,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.337838299957927,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.1689191499789635,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.217163090629565,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.1085815453147825,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.337838299957927,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.1689191499789635,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -3155,7 +3157,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.676477138130",
     "theta_deg": 47.431036226683474,
-    "rho": 2.4159615336782037,
+    "rho": 1.2079807668391018,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -5.696417108223101e-13,
     "marked_optimal_in_table": false
@@ -3175,15 +3177,15 @@
    "id": "sphere/0/21",
    "N": 0,
    "P": 21,
-   "score_float": 2.5122442840851424,
-   "score_cert": 2.512244284110265,
-   "display": "2.512244",
+   "score_float": 1.2561221420425712,
+   "score_cert": 1.2561221420551325,
+   "display": "1.256122",
    "gap_rel": 1.0000050890583085e-11,
-   "K_cert": 0.15844417094900098,
+   "K_cert": 0.6337766837960039,
    "density_float": 0.8209064984093659,
    "status": "best_known",
    "config": {
-    "rho": 2.512244284110265,
+    "rho": 1.2561221420551325,
     "pieces": [
      {
       "q": [
@@ -3369,22 +3371,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.3960297109383393,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.1980148554691696,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.2728514799728323,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.1364257399864162,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.3960297109383393,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.1980148554691696,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -3394,7 +3396,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.699498431067",
     "theta_deg": 45.61322310571752,
-    "rho": 2.5122442840878927,
+    "rho": 1.2561221420439463,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.094736086781447e-12,
     "marked_optimal_in_table": false
@@ -3412,15 +3414,15 @@
    "id": "sphere/0/22",
    "N": 0,
    "P": 22,
-   "score_float": 2.5612683556953755,
-   "score_cert": 2.5612683557209883,
-   "display": "2.561268",
+   "score_float": 1.2806341778476877,
+   "score_cert": 1.2806341778604942,
+   "display": "1.280634",
    "gap_rel": 1.0000063101997199e-11,
-   "K_cert": 0.152436803134648,
+   "K_cert": 0.609747212538592,
    "density_float": 0.827806104675781,
    "status": "best_known",
    "config": {
-    "rho": 2.5612683557209883,
+    "rho": 1.2806341778604942,
     "pieces": [
      {
       "q": [
@@ -3614,22 +3616,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.4528450858277524,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.2264225429138762,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.3272068348468387,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.1636034174234193,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.4528450858277524,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.2264225429138762,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -3639,7 +3641,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.710306258580",
     "theta_deg": 44.740161167137444,
-    "rho": 2.5612683556968157,
+    "rho": 1.2806341778484078,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -5.622922347595783e-13,
     "marked_optimal_in_table": false
@@ -3659,15 +3661,15 @@
    "id": "sphere/0/23",
    "N": 0,
    "P": 23,
-   "score_float": 2.621634702971647,
-   "score_cert": 2.6216347029978633,
-   "display": "2.621635",
+   "score_float": 1.3108173514858235,
+   "score_cert": 1.3108173514989316,
+   "display": "1.310817",
    "gap_rel": 1.0000005868312664e-11,
-   "K_cert": 0.14549753831659015,
+   "K_cert": 0.5819901532663606,
    "density_float": 0.8265161791276892,
    "status": "best_known",
    "config": {
-    "rho": 2.6216347029978633,
+    "rho": 1.3108173514989316,
     "pieces": [
      {
       "q": [
@@ -3869,22 +3871,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.5083773333400665,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.2541886666700333,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.380320586384592,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.190160293192296,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.5083773333400665,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.2541886666700333,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -3894,7 +3896,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.722846984869",
     "theta_deg": 43.70996420521277,
-    "rho": 2.621634702974629,
+    "rho": 1.3108173514873145,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.1374807637233316e-12,
     "marked_optimal_in_table": false
@@ -3914,15 +3916,15 @@
    "id": "sphere/0/24",
    "N": 0,
    "P": 24,
-   "score_float": 2.6227866117286145,
-   "score_cert": 2.6227866117548424,
-   "display": "2.622787",
+   "score_float": 1.3113933058643072,
+   "score_cert": 1.3113933058774212,
+   "display": "1.311393",
    "gap_rel": 1.0000016248542051e-11,
-   "K_cert": 0.14536976346565086,
+   "K_cert": 0.5814790538626035,
    "density_float": 0.8617034641731353,
    "status": "proven",
    "config": {
-    "rho": 2.6227866117548424,
+    "rho": 1.3113933058774212,
     "pieces": [
      {
       "q": [
@@ -4132,29 +4134,29 @@
    },
    "bound": {
     "kind": "tammes_proven",
-    "value": 2.6227866116786385,
-    "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+    "value": 1.3113933058393192,
+    "label": "EST: published Tammes optimum, rho >= 1/theta_P",
     "rigorous": true,
     "source": "R. M. Robinson, Arrangement of 24 points on a sphere, Math. Ann. 144 (1961) 17-48, doi:10.1007/BF01396539"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.4322741631004585,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.2161370815502293,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.5627093949295383,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.2813546974647692,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     },
     {
      "kind": "tammes_proven",
-     "value": 2.6227866116786385,
-     "label": "EST: published Tammes optimum, rho >= 2/theta_P",
+     "value": 1.3113933058393192,
+     "label": "EST: published Tammes optimum, rho >= 1/theta_P",
      "rigorous": true,
      "source": "R. M. Robinson, Arrangement of 24 points on a sphere, Math. Ann. 144 (1961) 17-48, doi:10.1007/BF01396539"
     }
@@ -4164,7 +4166,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.723078468334",
     "theta_deg": 43.69076710763503,
-    "rho": 2.6227866117310534,
+    "rho": 1.3113933058655267,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -9.299033057389413e-13,
     "marked_optimal_in_table": true,
@@ -4189,15 +4191,15 @@
    "id": "sphere/0/25",
    "N": 0,
    "P": 25,
-   "score_float": 2.7523247703715747,
-   "score_cert": 2.752324770399098,
-   "display": "2.752325",
+   "score_float": 1.3761623851857874,
+   "score_cert": 1.376162385199549,
+   "display": "1.376162",
    "gap_rel": 1.0000025162423536e-11,
-   "K_cert": 0.13200811893344647,
+   "K_cert": 0.5280324757337859,
    "density_float": 0.8160144703249606,
    "status": "best_known",
    "config": {
-    "rho": 2.752324770399098,
+    "rho": 1.376162385199549,
     "pieces": [
      {
       "q": [
@@ -4415,22 +4417,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.615915673956047,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.3079578369780236,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.4831404597196762,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.2415702298598381,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.615915673956047,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.3079578369780236,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -4440,7 +4442,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.747398628578",
     "theta_deg": 41.634461259705446,
-    "rho": 2.7523247703716143,
+    "rho": 1.3761623851858071,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.436020200164064e-14,
     "marked_optimal_in_table": false
@@ -4460,15 +4462,15 @@
    "id": "sphere/0/26",
    "N": 0,
    "P": 26,
-   "score_float": 2.792351087745929,
-   "score_cert": 2.792351087773853,
-   "display": "2.792351",
+   "score_float": 1.3961755438729646,
+   "score_cert": 1.3961755438869266,
+   "display": "1.396176",
    "gap_rel": 1.000013413381449e-11,
-   "K_cert": 0.12825076250009534,
+   "K_cert": 0.5130030500003814,
    "density_float": 0.8247584842581649,
    "status": "best_known",
    "config": {
-    "rho": 2.792351087773853,
+    "rho": 1.3961755438869266,
     "pieces": [
      {
       "q": [
@@ -4694,22 +4696,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.668063213015876,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.334031606507938,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.532985039682503,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.2664925198412516,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.668063213015876,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.334031606507938,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -4719,7 +4721,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.754278177121",
     "theta_deg": 41.03766160666886,
-    "rho": 2.792351087751619,
+    "rho": 1.3961755438758094,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.0375915412485916e-12,
     "marked_optimal_in_table": false
@@ -4739,15 +4741,15 @@
    "id": "sphere/0/27",
    "N": 0,
    "P": 27,
-   "score_float": 2.8170677988897133,
-   "score_cert": 2.817067798917884,
-   "display": "2.817068",
+   "score_float": 1.4085338994448566,
+   "score_cert": 1.408533899458942,
+   "display": "1.408534",
    "gap_rel": 1.0000042965931327e-11,
-   "K_cert": 0.12601011307441343,
+   "K_cert": 0.5040404522976537,
    "density_float": 0.8416740114651954,
    "status": "best_known",
    "config": {
-    "rho": 2.817067798917884,
+    "rho": 1.408533899458942,
     "pieces": [
      {
       "q": [
@@ -4981,22 +4983,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.7192126713307436,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.3596063356653718,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.581867128092664,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.290933564046332,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.7192126713307436,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.3596063356653718,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -5006,7 +5008,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.758389210777",
     "theta_deg": 40.67760068508961,
-    "rho": 2.8170677988922836,
+    "rho": 1.4085338994461418,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -9.124339668441351e-13,
     "marked_optimal_in_table": false
@@ -5026,15 +5028,15 @@
    "id": "sphere/0/28",
    "N": 0,
    "P": 28,
-   "score_float": 2.9117301738612715,
-   "score_cert": 2.911730173890389,
-   "display": "2.911730",
+   "score_float": 1.4558650869306358,
+   "score_cert": 1.4558650869451946,
+   "display": "1.455865",
    "gap_rel": 1.0000101480428713e-11,
-   "K_cert": 0.11794994588174747,
+   "K_cert": 0.47179978352698987,
    "density_float": 0.8175660172667498,
    "status": "best_known",
    "config": {
-    "rho": 2.911730173890389,
+    "rho": 1.4558650869451946,
     "pieces": [
      {
       "q": [
@@ -5276,22 +5278,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.769419141987864,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.384709570993932,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.6298404381042135,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.3149202190521068,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.769419141987864,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.384709570993932,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -5301,7 +5303,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.773230262338",
     "theta_deg": 39.35514356888166,
-    "rho": 2.9117301738615144,
+    "rho": 1.4558650869307572,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -8.342696035801623e-14,
     "marked_optimal_in_table": false
@@ -5321,15 +5323,15 @@
    "id": "sphere/0/29",
    "N": 0,
    "P": 29,
-   "score_float": 2.9599780824688042,
-   "score_cert": 2.959978082498404,
-   "display": "2.959978",
+   "score_float": 1.4799890412344021,
+   "score_cert": 1.479989041249202,
+   "display": "1.479989",
    "gap_rel": 1.000003286492179e-11,
-   "K_cert": 0.11413609492412165,
+   "K_cert": 0.4565443796964866,
    "density_float": 0.8196460626338721,
    "status": "best_known",
    "config": {
-    "rho": 2.959978082498404,
+    "rho": 1.479989041249202,
     "pieces": [
      {
       "q": [
@@ -5579,22 +5581,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.8187328398425606,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.4093664199212803,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.6769538636856733,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.3384769318428367,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.8187328398425606,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.4093664199212803,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -5604,7 +5606,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.780281415949",
     "theta_deg": 38.71365119383302,
-    "rho": 2.959978082470784,
+    "rho": 1.479989041235392,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -6.688393097353686e-13,
     "marked_optimal_in_table": false
@@ -5624,15 +5626,15 @@
    "id": "sphere/0/30",
    "N": 0,
    "P": 30,
-   "score_float": 2.968915065134089,
-   "score_cert": 2.968915065163779,
-   "display": "2.968915",
+   "score_float": 1.4844575325670446,
+   "score_cert": 1.4844575325818894,
+   "display": "1.484458",
    "gap_rel": 1.0000146003902279e-11,
-   "K_cert": 0.11344998768516848,
+   "K_cert": 0.4537999507406739,
    "density_float": 0.842860954691933,
    "status": "best_known",
    "config": {
-    "rho": 2.968915065163779,
+    "rho": 1.4844575325818894,
     "pieces": [
      {
       "q": [
@@ -5890,22 +5892,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.8671996841592806,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.4335998420796403,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.7232520642655595,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.3616260321327798,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.8671996841592806,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.4335998420796403,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -5915,7 +5917,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.781551875095",
     "theta_deg": 38.59711595386649,
-    "rho": 2.96891506513417,
+    "rho": 1.484457532567085,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.7223492225116526e-14,
     "marked_optimal_in_table": false
@@ -5935,15 +5937,15 @@
    "id": "sphere/0/31",
    "N": 0,
    "P": 31,
-   "score_float": 3.038771631381919,
-   "score_cert": 3.038771631412307,
-   "display": "3.038772",
+   "score_float": 1.5193858156909594,
+   "score_cert": 1.5193858157061535,
+   "display": "1.519386",
    "gap_rel": 1.000013825909014e-11,
-   "K_cert": 0.1082938698176837,
+   "K_cert": 0.4331754792707348,
    "density_float": 0.8317307284566337,
    "status": "best_known",
    "config": {
-    "rho": 3.038771631412307,
+    "rho": 1.5193858157061535,
     "pieces": [
      {
       "q": [
@@ -6209,22 +6211,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.914861794965726,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.457430897482863,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.768775961200787,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.3843879806003936,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.914861794965726,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.457430897482863,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -6234,7 +6236,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.791118613299",
     "theta_deg": 37.70982914367944,
-    "rho": 3.03877163138437,
+    "rho": 1.519385815692185,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -8.065523331366395e-13,
     "marked_optimal_in_table": false
@@ -6254,15 +6256,15 @@
    "id": "sphere/0/32",
    "N": 0,
    "P": 32,
-   "score_float": 3.0577959902511185,
-   "score_cert": 3.0577959902816967,
-   "display": "3.057796",
+   "score_float": 1.5288979951255592,
+   "score_cert": 1.5288979951408483,
+   "display": "1.528898",
    "gap_rel": 1.0000080689138685e-11,
-   "K_cert": 0.1069505411451767,
+   "K_cert": 0.4278021645807068,
    "density_float": 0.8480058505976942,
    "status": "best_known",
    "config": {
-    "rho": 3.0577959902816967,
+    "rho": 1.5288979951408483,
     "pieces": [
      {
       "q": [
@@ -6536,22 +6538,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 2.9617579181955356,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.4808789590977678,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.8135631618019676,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.4067815809009838,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 2.9617579181955356,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.4808789590977678,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -6561,7 +6563,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.793616614872",
     "theta_deg": 37.47521397480209,
-    "rho": 3.0577959902567797,
+    "rho": 1.5288979951283899,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.851414962020796e-12,
     "marked_optimal_in_table": false
@@ -6581,15 +6583,15 @@
    "id": "sphere/0/33",
    "N": 0,
    "P": 33,
-   "score_float": 3.160749467901187,
-   "score_cert": 3.1607494679327948,
-   "display": "3.160749",
+   "score_float": 1.5803747339505936,
+   "score_cert": 1.5803747339663974,
+   "display": "1.580375",
    "gap_rel": 1.000003503689793e-11,
-   "K_cert": 0.10009672146965656,
+   "K_cert": 0.40038688587862625,
    "density_float": 0.8189325886987356,
    "status": "best_known",
    "config": {
-    "rho": 3.1607494679327948,
+    "rho": 1.5803747339663974,
     "pieces": [
      {
       "q": [
@@ -6871,22 +6873,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.00792379168831,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.503961895844155,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.857648323434557,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.4288241617172786,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.00792379168831,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.503961895844155,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -6896,7 +6898,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.806397613648",
     "theta_deg": 36.25455297541264,
-    "rho": 3.1607494679048758,
+    "rho": 1.5803747339524379,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.1670032738974523e-12,
     "marked_optimal_in_table": false
@@ -6916,15 +6918,15 @@
    "id": "sphere/0/34",
    "N": 0,
    "P": 34,
-   "score_float": 3.200185684760256,
-   "score_cert": 3.200185684792258,
-   "display": "3.200186",
+   "score_float": 1.600092842380128,
+   "score_cert": 1.600092842396129,
+   "display": "1.600093",
    "gap_rel": 1.0000031183381993e-11,
-   "K_cert": 0.09764491768606257,
+   "K_cert": 0.39057967074425026,
    "density_float": 0.8232501185857519,
    "status": "best_known",
    "config": {
-    "rho": 3.200185684792258,
+    "rho": 1.600092842396129,
     "pieces": [
      {
       "q": [
@@ -7214,22 +7216,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.053392461777508,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.526696230888754,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.9010634677349834,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.4505317338674917,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.053392461777508,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.526696230888754,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -7239,7 +7241,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.810984337204",
     "theta_deg": 35.80778439562365,
-    "rho": 3.200185684768862,
+    "rho": 1.600092842384431,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.689220453251901e-12,
     "marked_optimal_in_table": false
@@ -7259,15 +7261,15 @@
    "id": "sphere/0/35",
    "N": 0,
    "P": 35,
-   "score_float": 3.244399300087547,
-   "score_cert": 3.244399300119991,
-   "display": "3.244399",
+   "score_float": 1.6221996500437734,
+   "score_cert": 1.6221996500599956,
+   "display": "1.622200",
    "gap_rel": 1.000008522143079e-11,
-   "K_cert": 0.09500170549258012,
+   "K_cert": 0.3800068219703205,
    "density_float": 0.8247047624068411,
    "status": "best_known",
    "config": {
-    "rho": 3.244399300119991,
+    "rho": 1.6221996500599956,
     "pieces": [
      {
       "q": [
@@ -7565,22 +7567,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.098194558364762,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.549097279182381,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.9438382530513603,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.4719191265256801,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.098194558364762,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.549097279182381,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -7590,7 +7592,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.815937771500",
     "theta_deg": 35.319807590572374,
-    "rho": 3.244399300089948,
+    "rho": 1.622199650044974,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -7.401032165161415e-13,
     "marked_optimal_in_table": false
@@ -7608,15 +7610,15 @@
    "id": "sphere/0/36",
    "N": 0,
    "P": 36,
-   "score_float": 3.2563918982504054,
-   "score_cert": 3.2563918982829696,
-   "display": "3.256392",
+   "score_float": 1.6281959491252027,
+   "score_cert": 1.6281959491414848,
+   "display": "1.628196",
    "gap_rel": 1.0000078183888578e-11,
-   "K_cert": 0.09430325187717471,
+   "K_cert": 0.37721300750869885,
    "density_float": 0.8420803703695141,
    "status": "best_known",
    "config": {
-    "rho": 3.2563918982829696,
+    "rho": 1.6281959491414848,
     "pieces": [
      {
       "q": [
@@ -7922,22 +7924,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.1423585349327174,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.5711792674663587,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 2.9860002117044737,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.4930001058522369,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.1423585349327174,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.5711792674663587,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -7947,7 +7949,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.817248185290",
     "theta_deg": 35.189732257806824,
-    "rho": 3.2563918982572697,
+    "rho": 1.6281959491286349,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.1079425115650216e-12,
     "marked_optimal_in_table": false
@@ -7967,15 +7969,15 @@
    "id": "sphere/0/37",
    "N": 0,
    "P": 37,
-   "score_float": 3.328981487774913,
-   "score_cert": 3.328981487808203,
-   "display": "3.328981",
+   "score_float": 1.6644907438874565,
+   "score_cert": 1.6644907439041015,
+   "display": "1.664491",
    "gap_rel": 1.0000000141494108e-11,
-   "K_cert": 0.09023546066776157,
+   "K_cert": 0.3609418426710463,
    "density_float": 0.8284203965503842,
    "status": "best_known",
    "config": {
-    "rho": 3.328981487808203,
+    "rho": 1.6644907439041015,
     "pieces": [
      {
       "q": [
@@ -8289,22 +8291,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.1859108787982837,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.5929554393991419,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 3.027574957468089,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.5137874787340444,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.1859108787982837,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.5929554393991419,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -8314,7 +8316,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.824892480240",
     "theta_deg": 34.42240800886245,
-    "rho": 3.3289814877756876,
+    "rho": 1.6644907438878438,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -2.326512132381962e-13,
     "marked_optimal_in_table": false
@@ -8334,15 +8336,15 @@
    "id": "sphere/0/38",
    "N": 0,
    "P": 38,
-   "score_float": 3.345674412612987,
-   "score_cert": 3.345674412646444,
-   "display": "3.345674",
+   "score_float": 1.6728372063064936,
+   "score_cert": 1.672837206323222,
+   "display": "1.672837",
    "gap_rel": 1.0000014575702275e-11,
-   "K_cert": 0.08933726447620627,
+   "K_cert": 0.3573490579048251,
    "density_float": 0.8424043902938969,
    "status": "best_known",
    "config": {
-    "rho": 3.345674412646444,
+    "rho": 1.672837206323222,
     "pieces": [
      {
       "q": [
@@ -8664,22 +8666,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.22887629598807,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.614438147994035,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 3.068586367714602,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.534293183857301,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.22887629598807,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.614438147994035,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -8689,7 +8691,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.826583259422",
     "theta_deg": 34.25066067219878,
-    "rho": 3.3456744126158853,
+    "rho": 1.6728372063079426,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -8.662307881942248e-13,
     "marked_optimal_in_table": false
@@ -8709,15 +8711,15 @@
    "id": "sphere/0/39",
    "N": 0,
    "P": 39,
-   "score_float": 3.4217623589802892,
-   "score_cert": 3.421762359014507,
-   "display": "3.421762",
+   "score_float": 1.7108811794901446,
+   "score_cert": 1.7108811795072536,
+   "display": "1.710881",
    "gap_rel": 1.0000098840167331e-11,
-   "K_cert": 0.0854083458823561,
+   "K_cert": 0.3416333835294244,
    "density_float": 0.8268213693202148,
    "status": "best_known",
    "config": {
-    "rho": 3.421762359014507,
+    "rho": 1.7108811795072536,
     "pieces": [
      {
       "q": [
@@ -9047,22 +9049,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.271277874376423,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.6356389371882114,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 3.109056743908182,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.554528371954091,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.271277874376423,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.6356389371882114,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -9072,7 +9074,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.833991322411",
     "theta_deg": 33.489046580107455,
-    "rho": 3.4217623589867205,
+    "rho": 1.7108811794933603,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.8795285184424947e-12,
     "marked_optimal_in_table": false
@@ -9092,15 +9094,15 @@
    "id": "sphere/0/40",
    "N": 0,
    "P": 40,
-   "score_float": 3.455887804357834,
-   "score_cert": 3.455887804392393,
-   "display": "3.455888",
+   "score_float": 1.727943902178917,
+   "score_cert": 1.7279439021961964,
+   "display": "1.727944",
    "gap_rel": 1.0000041745265385e-11,
-   "K_cert": 0.08372993049992344,
+   "K_cert": 0.3349197219996938,
    "density_float": 0.8314733353163684,
    "status": "best_known",
    "config": {
-    "rho": 3.455887804392393,
+    "rho": 1.7279439021961964,
     "pieces": [
      {
       "q": [
@@ -9438,22 +9440,22 @@
    },
    "bound": {
     "kind": "fejes_toth",
-    "value": 3.313137228126003,
-    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+    "value": 1.6565686140630016,
+    "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
     "rigorous": true,
     "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
    },
    "bounds": [
     {
      "kind": "area",
-     "value": 3.1490069535111904,
-     "label": "CALC: P caps of angular radius 1/rho have total area <= 4 pi",
+     "value": 1.5745034767555952,
+     "label": "CALC: P caps of angular radius 1/(2 rho) (diameter 1) have total area <= 4 pi",
      "rigorous": true
     },
     {
      "kind": "fejes_toth",
-     "value": 3.313137228126003,
-     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 2/theta_FT",
+     "value": 1.6565686140630016,
+     "label": "CALC from EST theorem: Fejes Toth 1943 bound on the minimal angle, rho >= 1/theta_FT",
      "rigorous": true,
      "source": "L. Fejes Toth, Uber die Abschatzung des kurzesten Abstandes zweier Punkte eines auf einer Kugelflache liegenden Punktsystems, Jber. Deutsch. Math.-Verein. 53 (1943) 66-68"
     }
@@ -9463,7 +9465,7 @@
     "quantity": "Tammes minimal angle",
     "cos_min_angle": "0.837162072474",
     "theta_deg": 33.15835626418836,
-    "rho": 3.4558878043639827,
+    "rho": 1.7279439021819913,
     "source": "Cohn, Table of spherical codes (spherical-codes.org), accessed 2026-10-24",
     "rel_diff": -1.779241557500619e-12,
     "marked_optimal_in_table": false

@@ -12,9 +12,9 @@
   "X1": "0.2222222222",
   "X2": "0.2222222222"
  },
- "min_clearance_lb": "1.9979901e-12",
- "score_cert_upper": "9.671129386421548538477097",
- "score_upper_float": 9.67112938642155,
+ "min_clearance_lb": "9.9899505e-13",
+ "score_cert_upper": "4.8355646932107742692385485",
+ "score_upper_float": 4.835564693210775,
  "explicit": [],
- "score_cert_checked": 9.67112938642155
+ "score_cert_checked": 4.835564693210775
 }

@@ -32,6 +32,7 @@
       }
     ]
   },
+  "units": "diameter",
   "expected_score": 2.7071067811865475,
   "expected_valid": true,
   "oriented_score": 2.7071067811865475,
