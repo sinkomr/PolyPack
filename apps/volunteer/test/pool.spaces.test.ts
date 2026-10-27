@@ -151,25 +151,62 @@ describe("space jobs in the worker pool", () => {
       },
     ],
   ];
-  for (const [what, job] of largest) {
-    const at = job.space === "surface" ? 2000 : 3000;
-    it(`answers an abort within 2 s: ${what}`, { timeout: 60_000 }, async () => {
-      pool = await WorkerPool.create({ size: 1, priority: "normal", tickMs: 20 });
-      const c = control();
-      const running = pool.runSpaceJob(job, c);
-      await new Promise((r) => setTimeout(r, at));
-      const t = Date.now();
-      c.aborted = true;
-      const r = await running;
-      expect((Date.now() - t) / 1000).toBeLessThan(2);
-      expect(r.termination).toBe("aborted");
-    });
+  /**
+   * Resolves when the process has used `ms` of CPU since `since` (a process.cpuUsage() reading): the search
+   * thread is computing, whatever the load of the machine or the time its start took. The only thread that
+   * works in this process is the pool's.
+   */
+  const computed = async (since: NodeJS.CpuUsage, ms: number) => {
+    for (let i = 0; i < 2000; i++) {
+      const u = process.cpuUsage(since);
+      if ((u.user + u.system) / 1000 >= ms) return;
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    throw new Error(`the job did not compute for ${ms} ms`);
+  };
 
-    it(`uses no CPU while paused: ${what}`, { timeout: 60_000 }, async () => {
+  for (const [what, job] of largest) {
+    if (job.space === "surface") {
+      // its 2 s budget ends it: no abort after the pause, and the final polish is reached by the clock
+      it(`answers an abort within 2 s: ${what}`, { timeout: 60_000 }, async () => {
+        pool = await WorkerPool.create({ size: 1, priority: "normal", tickMs: 20 });
+        const c = control();
+        const running = pool.runSpaceJob(job, c);
+        await new Promise((r) => setTimeout(r, 2000));
+        const t = Date.now();
+        c.aborted = true;
+        const r = await running;
+        expect((Date.now() - t) / 1000).toBeLessThan(2);
+        expect(r.termination).toBe("aborted");
+      });
+      it(`uses no CPU while paused: ${what}`, { timeout: 60_000 }, async () => {
+        pool = await WorkerPool.create({ size: 1, priority: "normal", tickMs: 20 });
+        const c = control();
+        const running = pool.runSpaceJob(job, c);
+        await new Promise((r) => setTimeout(r, 2000));
+        pool.setPaused(true);
+        // the pause reaches the job within a check or two
+        await new Promise((r) => setTimeout(r, 500));
+        const cpu0 = process.cpuUsage();
+        await new Promise((r) => setTimeout(r, 2000));
+        const cpu = process.cpuUsage(cpu0);
+        expect((cpu.user + cpu.system) / 1e6).toBeLessThan(0.4);
+        pool.setPaused(false);
+        const r = await running;
+        expect(r.termination).toBe("time");
+        // active seconds: within the budget and the final stage's 1.5 s, the pause left out
+        expect(r.wallTime).toBeLessThan(2 + 1.5 + 0.5);
+      });
+      continue;
+    }
+    // One job for both: it computes (3 s of CPU, not of the clock) in the long operation, is paused and uses no
+    // CPU, goes on (the CPU shows it computing again) and is aborted within 2 s.
+    it(`uses no CPU while paused, then answers an abort within 2 s: ${what}`, { timeout: 60_000 }, async () => {
       pool = await WorkerPool.create({ size: 1, priority: "normal", tickMs: 20 });
       const c = control();
+      const cpuStart = process.cpuUsage();
       const running = pool.runSpaceJob(job, c);
-      await new Promise((r) => setTimeout(r, at));
+      await computed(cpuStart, 3000);
       pool.setPaused(true);
       // the pause reaches the job within a check or two
       await new Promise((r) => setTimeout(r, 500));
@@ -177,13 +214,14 @@ describe("space jobs in the worker pool", () => {
       await new Promise((r) => setTimeout(r, 2000));
       const cpu = process.cpuUsage(cpu0);
       expect((cpu.user + cpu.system) / 1e6).toBeLessThan(0.4);
+      const resumed = process.cpuUsage();
       pool.setPaused(false);
-      // the surface job ends on its 2 s budget; the others are ended here
-      if (job.space !== "surface") c.aborted = true;
+      await computed(resumed, 300);
+      const t = Date.now();
+      c.aborted = true;
       const r = await running;
-      expect(r.termination).toBe(job.space === "surface" ? "time" : "aborted");
-      // active seconds: within the budget and the final stage's 1.5 s, the pause left out
-      if (job.space === "surface") expect(r.wallTime).toBeLessThan(2 + 1.5 + 0.5);
+      expect((Date.now() - t) / 1000).toBeLessThan(2);
+      expect(r.termination).toBe("aborted");
     });
   }
 });
