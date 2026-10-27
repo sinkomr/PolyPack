@@ -58,7 +58,10 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
 }) => {
   test.setTimeout(180_000);
   await openProblem(page, 4, 4, 5);
-  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText(["Polyhedra", "Balls"]);
+  await expect(page.locator('#family-select optgroup[label="3D in 3D"] option')).toHaveText([
+    "3D in 3D: Polyhedra",
+    "3D in 3D: Balls",
+  ]);
   await page.selectOption("#family-select", "balls");
   await opened(page, DEFAULT_PROBLEM.balls);
   await expect(page).toHaveURL(/#space=balls\/ballinball\/13$/);

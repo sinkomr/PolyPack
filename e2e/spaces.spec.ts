@@ -311,6 +311,64 @@ test("the surface viewer says that a nofold record is a 2D in 2D packing, and li
   await expect(page.locator("#p-input")).toHaveValue("2");
 });
 
+test("the records page and surface viewer identify printed 2D values without coordinates", async ({ page }) => {
+  await page.goto("/dimensions.html#space=surface&solid=tetrahedron&mode=nofold&N=6");
+  const row = page.locator('#space-rows tr[data-id="surface/tetrahedron/nofold/6/21"]');
+  await expect(row).toContainText("Friedman publishes 6.89897+ for this 2D problem, without coordinates.");
+  await expect(row.getByRole("link", { name: "Friedman", exact: true })).toHaveAttribute(
+    "href",
+    "https://erich-friedman.github.io/packing/hexintri/",
+  );
+  await expect(row.locator('a[href="/#p=6,3,6"]')).toBeVisible();
+  await page.goto("/spaces/surface.html");
+  await page.selectOption("#solid", "tetrahedron");
+  await page.selectOption("#N", "6");
+  await page.fill("#P", "21");
+  await page.locator("#nofold").check();
+  const note = page.locator("#same-as");
+  await expect(note).toContainText("Friedman publishes 6.89897+ for this 2D problem, without coordinates.");
+  await expect(note.getByRole("link", { name: "Friedman", exact: true })).toHaveAttribute(
+    "href",
+    "https://erich-friedman.github.io/packing/hexintri/",
+  );
+  await expect(note.locator('a[href="/#p=6,3,6"]')).toBeVisible();
+});
+
+test("regular-face records show their split links and missing 2D values", async ({ page }) => {
+  // These solids have no research records yet. Supply listing rows without inventing packings.
+  await page.route("**/api/spaces/surface/records", (route) =>
+    route.fulfill({
+      json: {
+        space: "surface",
+        generated_at: "2026-10-26",
+        problems: [
+          { id: "surface/prism5/nofold/0/9", solid: "prism5", N: 0, P: 9 },
+          { id: "surface/prism11/nofold/7/25", solid: "prism11", N: 7, P: 25 },
+        ].map(({ id, solid, N, P }) => ({
+          space: "surface",
+          id,
+          fields: { solid, N, P, mode: "nofold" },
+          P,
+          certified: null,
+          bound: null,
+          site_best: null,
+          best_score: null,
+          accepts_submissions: true,
+          status: "no_record",
+          closed_reason: null,
+        })),
+      },
+    }),
+  );
+  await page.goto("/dimensions.html#space=surface&mode=nofold");
+  const prism = page.locator('#space-rows tr[data-id="surface/prism5/nofold/0/9"]');
+  await expect(prism).toContainText("Take the smallest over all splits.");
+  for (const href of ["/#p=0,4,1", "/#p=0,5,2"]) await expect(prism.locator(`a[href="${href}"]`)).toBeVisible();
+  const missing = page.locator('#space-rows tr[data-id="surface/prism11/nofold/7/25"]');
+  await expect(missing).toContainText("lower bound; no 2D value");
+  await expect(missing.locator('a[href^="/#p=7,11,"]')).toBeVisible();
+});
+
 test("the former spaces page sends its links on to the dimensions page, with their query and hash", async ({
   page,
 }) => {

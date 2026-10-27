@@ -32,10 +32,12 @@ test("phone: the Problem set menu fits and switches the board", async ({ page })
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
   await page.selectOption("#family-select", "surface");
+  await expect(menu.locator("option:checked")).toHaveText("2D on 3D: Polyhedral surfaces");
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "2-on-3");
   // the space mode's code loads on first use
   await expect(page.locator("#space-problem-note")).toContainText("Problem surface/", LAZY_VIEW);
   await page.selectOption("#family-select", "sphere");
+  await expect(menu.locator("option:checked")).toHaveText("2D on 3D: Sphere");
   await expect(page.locator("#space-problem-note")).toContainText("Problem sphere/");
   await page.selectOption("#family-select", "polyhedra");
   await expect(page.locator("main")).toHaveAttribute("data-dimension", "3-in-3");

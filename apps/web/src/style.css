@@ -1404,8 +1404,12 @@ figure {
 .space-table details.cell-why {
   padding: 0;
 }
-/* a nofold row's link to its 2D in 2D problem stays on one line */
+/* Keep each problem link together while allowing its source or split note to wrap. */
 .space-table .same-as {
+  max-width: 30em;
+  white-space: normal;
+}
+.space-table .same-as a {
   white-space: nowrap;
 }
 .space-table details.cell-why > summary {

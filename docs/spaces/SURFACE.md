@@ -136,6 +136,14 @@ square both need 2 + 2 sqrt 2), where the larger packing's coordinates scored a 
 On the Platonic solids the site's board (beside a nofold problem's values), the Dimensions page (a link in each
 nofold row) and the viewer at `/spaces/surface.html` say this and link to the equivalent 2D in 2D
 problem N/M/ceil(P/F) on the polygon board, `/#p=N,M,k` (disks are N = 0 there too).
+When that problem's best value is printed without coordinates, a short note quotes it at the
+source's precision and links to the source. The note is omitted when the surface packing already
+reaches that printed precision: its fullest face supplies coordinates for the 2D problem.
+The notes use a compact index generated from `data/records.json`, including which records have
+coordinates. Refresh it with `node --import tsx packages/surface/scripts/build-planar-values.ts`
+after changing those records, then rebuild the viewer with
+`node --import tsx packages/surface/scripts/build-viz.ts`. A test checks that the index matches
+the records. These commands do not search for or change packings.
 
 **2.1b Prisms and antiprisms: nofold is a 2D in 2D value** [CALC]. Their faces are regular polygons
 of two kinds, both of side s: F1 faces that are M1-gons and F2 that are M2-gons (a prism with n sides:
@@ -153,9 +161,14 @@ ki > 0 pieces holds a 2D packing in its regular Mi-gon of side s, so s >= s2(N, 
 kinds; s is at least the maximum for this split, hence at least the minimum over splits. For the
 true 2D optima (non-decreasing in k) the formula is exact; with best-known 2D values it is an upper
 bound, best taken over the envelope min over k' >= k of s2_best(N, M, k') as in 2.1. The board and
-the volunteer client run the surface search in its nofold mode on them; a link to the 2D in 2D
-problems of the best split is not built yet, and PolyPack's 2D records (`data/records.json`) do not
-yet cover containers with 9 to 12 sides.
+the volunteer client run the surface search in its nofold mode on them. The board and records
+page state the rule and link to the 2D in 2D problems of the best split by current values from
+`data/records.json`. The calculation works for any number of regular face kinds, including three:
+replace the two terms by a sum of capacities and a maximum over all kinds. It also considers
+larger stored packings, so it includes the best-known envelope. A missing 2D value uses its area
+lower bound and the note says so; this is an estimate for choosing a split, not an upper bound or
+a packing. Empty face kinds are labelled empty and have no zero-piece problem link. The same note
+code serves the standalone viewer; its current records cover only the Platonic solids.
 
 **2.1c Catalan solids: nofold problems are new 2D problems** [CALC]. All faces of a Catalan solid
 are congruent (by rotations or reflections, which map regular pieces to regular pieces), so the
