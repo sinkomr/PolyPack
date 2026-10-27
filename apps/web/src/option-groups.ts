@@ -1,6 +1,6 @@
 /**
  * Options of a select, in groups where they name one (an <optgroup> per run of options with the same
- * group, in their order): the surface solids are grouped into Platonic, Catalan, prisms, antiprisms.
+ * group, in their order): the surface solids are grouped into Platonic, Archimedean, Catalan, prisms, antiprisms.
  */
 export function addOptions(select: HTMLSelectElement, options: readonly { value: string; text: string; group?: string }[]): void {
   let group: HTMLOptGroupElement | null = null;

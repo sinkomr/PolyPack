@@ -25,7 +25,7 @@ import { SpaceName, isSpaceName } from "./types";
 
 /**
  * The solids of the surface space, in the order the catalogue lists them: the Platonic solids, the
- * Catalan solids (by number of faces), the prisms and the antiprisms (by number of sides). The same
+ * Archimedean solids (polyhedra catalogue order), Catalan solids (by number of faces), the prisms and the antiprisms (by number of sides). The same
  * list as ALL_SOLID_NAMES of @polypack/surface (a test checks it), written out here so that pages
  * reading ids need no geometry.
  */
@@ -35,6 +35,19 @@ export const SURFACE_SOLIDS = [
   "octahedron",
   "dodecahedron",
   "icosahedron",
+  "truncated_tetrahedron",
+  "cuboctahedron",
+  "truncated_cube",
+  "truncated_octahedron",
+  "rhombicuboctahedron",
+  "truncated_cuboctahedron",
+  "snub_cube",
+  "icosidodecahedron",
+  "truncated_dodecahedron",
+  "truncated_icosahedron",
+  "rhombicosidodecahedron",
+  "truncated_icosidodecahedron",
+  "snub_dodecahedron",
   "rhombic_dodecahedron",
   "triakis_tetrahedron",
   "deltoidal_icositetrahedron",
@@ -69,8 +82,10 @@ export const SURFACE_SOLIDS = [
 ] as const;
 /** The Platonic solids of the surface space: their nofold problems are planar problems of one face. */
 export const SURFACE_PLATONIC = SURFACE_SOLIDS.slice(0, 5);
+/** The Archimedean solids: nofold values split among two or three regular face kinds. */
+export const SURFACE_ARCHIMEDEAN: readonly string[] = SURFACE_SOLIDS.slice(5, 18);
 /** The Catalan solids of the surface space: their faces are irregular, so their nofold problems are no 2D in 2D problem. */
-export const SURFACE_CATALAN: readonly string[] = SURFACE_SOLIDS.slice(5, 18);
+export const SURFACE_CATALAN: readonly string[] = SURFACE_SOLIDS.slice(18, 31);
 export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;
@@ -132,7 +147,7 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
     case "surface": {
       const pattern =
         "surface/<solid>/<mode>/<N>/<P>, solid a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron), " +
-        "a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12) or an antiprism " +
+        "an Archimedean solid (such as snub_cube), a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12) or an antiprism " +
         "(antiprism4 to antiprism12), mode fold or nofold";
       if (parts.length !== 5) return bad(pattern);
       const [, solid, mode, n, p] = parts;
