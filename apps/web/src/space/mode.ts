@@ -19,9 +19,10 @@ import { addOptions } from "../option-groups";
 import { SCORE_TIE } from "@polypack/geometry";
 import type { SpaceConfig, SpaceDomainInfo, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
 import { SPACE_INFO } from "@polypack/spaces";
-import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, spaceLatticeStart } from "@polypack/spaces/search";
+import { AUTO, type SpaceCheck, type SpaceMethodInfo, checkSpaceMethod, hasLatticeStart, spaceLatticeStart } from "@polypack/spaces/search";
 import { ParameterError, parameterForm, validityText } from "../solve-params";
-import { certifiedBy, downloadName, nofoldFaceProblem, nofoldNote } from "../spaces-model";
+import { certifiedBy, downloadName } from "../spaces-model";
+import { renderNofoldNote } from "@polypack/surface/nofold-note";
 import { type BoardSpace, spaceAddress } from "../space-address";
 import { type SpaceProblemHandle, loadNofoldMethods, spaceProblemHandle } from "./index";
 import { listSpaceProblems, loadSpaceDomain, loadSpaceProblem } from "./load";
@@ -688,9 +689,10 @@ class SpaceMode {
     this.view.show(p.best?.config ?? null);
     const startPicker = $<HTMLSelectElement>("space-solve-start");
     const latticeOption = startPicker.querySelector<HTMLOptionElement>('[value="lattice"]')!;
-    latticeOption.hidden = p.space !== "polyhedra";
-    latticeOption.disabled = p.space !== "polyhedra";
-    if (!p.best && p.status === "no_record") startPicker.value = p.space === "polyhedra" ? "lattice" : "fresh";
+    const offersLattice = hasLatticeStart(p.search);
+    latticeOption.hidden = !offersLattice;
+    latticeOption.disabled = !offersLattice;
+    if (!p.best && p.status === "no_record") startPicker.value = offersLattice ? "lattice" : "fresh";
     // "lattice" is offered only where nothing is shown yet; a problem with a record starts from its packing
     else if (startPicker.value === "lattice") startPicker.value = "shown";
     this.setDefaults(p);
@@ -717,7 +719,7 @@ class SpaceMode {
         (p.best
           ? "Choose a budget, then run."
           : p.status === "no_record"
-            ? p.space === "polyhedra"
+            ? hasLatticeStart(p.search)
               ? "No record yet: a run starts from a lattice arrangement."
               : "No record yet: a run starts from a new arrangement."
             : "There is no packing to start from."),
@@ -790,10 +792,14 @@ class SpaceMode {
     const info = this.methods.find((m) => m.name === method) ?? this.methods[0];
     const generic = isGeneric(p.search, method);
     const fold = kind === "surface" && !generic;
-    // fold, polyhedra and balls budgets grow with P (a generic method's rounds are sized apart, and for balls
+    // fold, polyhedra, balls and large torus budgets grow with P (a generic method's rounds are sized apart, and for balls
     // apart again for balls and for solids, whose rounds differ up to 60 times)
     const key =
-      (fold || ((kind === "polyhedra" || kind === "balls") && !generic) ? `${kind}/${p.P}` : kind) +
+      (fold || ((kind === "polyhedra" || kind === "balls") && !generic)
+        ? `${kind}/${p.P}`
+        : kind === "torus" && !generic && p.P > 100
+          ? `torus/${p.P}/${p.search.space === "torus" ? p.search.N : 0}`
+          : kind) +
       (generic ? "/generic" : "") +
       (generic && kind === "balls" ? (ballPieces(p.search) ? "/ball" : "/solid") : "");
     if (key !== this.defaultsFor) {
@@ -891,13 +897,7 @@ class SpaceMode {
     if (this.factsOf !== p) {
       this.factsOf = p;
       facts.replaceChildren();
-      const face = p ? nofoldFaceProblem(p.id) : null;
-      const same = $("space-same-as");
-      same.hidden = !face;
-      if (face) {
-        const [before, text, after] = nofoldNote(face);
-        same.replaceChildren(before, h("a", { href: face.href }, text), after);
-      } else same.replaceChildren();
+      renderNofoldNote($("space-same-as"), p?.id ?? "", p?.best?.score);
     }
     if (p && !facts.childElementCount)
       for (const f of problemFacts(p)) {

@@ -66,7 +66,7 @@ def _num(v, what):
     return Fraction(v)
 
 
-SUPPORTED_N = (0, 3, 4, 5, 6, 8)  # the problem set of docs/spaces/SPHERE.md
+SUPPORTED_N = (0, *range(3, 101))
 STATUSES = ("best_known", "proven")
 ID_TAG = re.compile(r"[A-Za-z0-9_.-]{1,32}")  # allowed suffix after '#' in a record id
 
@@ -75,7 +75,7 @@ def _shape(N):
     if isinstance(N, bool) or not isinstance(N, int):
         raise CertError("N must be an integer")
     if N not in SUPPORTED_N:
-        raise CertError("N must be one of 0, 3, 4, 5, 6, 8")
+        raise CertError("N must be 0 or an integer in [3, 100]")
     return N
 
 
@@ -165,15 +165,28 @@ def _float_max_margin_normals(A, B, limit=12):
             val = min(v[0] * s[0] + v[1] * s[1] + v[2] * s[2] for s in S)
             cands.append((val, v))
 
-    for i in range(m):
-        for j in range(i + 1, m):
-            add([S[i][r] + S[j][r] for r in range(3)])
-            for k in range(j + 1, m):
-                u = [S[j][r] - S[i][r] for r in range(3)]
-                w = [S[k][r] - S[i][r] for r in range(3)]
-                cr = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
-                add(cr)
-                add([-c for c in cr])
+    if m > 16:
+        from hull import faces, sub, cross
+        edges = set()
+        for i, j, k in faces(S):
+            n = cross(sub(S[j], S[i]), sub(S[k], S[i]))
+            add(n)
+            add([-c for c in n])
+            for u, v in ((i, j), (j, k), (k, i)):
+                edge = tuple(sorted((u, v)))
+                if edge not in edges:
+                    edges.add(edge)
+                    add([S[u][r]+S[v][r] for r in range(3)])
+    else:
+        for i in range(m):
+            for j in range(i + 1, m):
+                add([S[i][r] + S[j][r] for r in range(3)])
+                for k in range(j + 1, m):
+                    u = [S[j][r] - S[i][r] for r in range(3)]
+                    w = [S[k][r] - S[i][r] for r in range(3)]
+                    cr = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]
+                    add(cr)
+                    add([-c for c in cr])
     cands.sort(key=lambda t: -t[0])
     return [v for _, v in cands[:limit]]
 

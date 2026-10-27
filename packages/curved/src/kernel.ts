@@ -65,7 +65,7 @@ export function formatCurvature(K: number): string {
 
 export function curvedKernel(problem: { K: number; N: number; M: number; P: number }): SpaceKernel {
   const { K, N, M, P } = problem;
-  if (!Number.isInteger(P) || P < 1) throw new RangeError("P must be a positive integer");
+  if (!Number.isInteger(P) || P < 1 || P > 100) throw new RangeError("P must be an integer in [1, 100]");
   // throws for a non-finite K, a bad N or M, or a unit piece that does not exist at K
   const space = makeSpace(K, N, M);
   const dim = N === 0 ? 2 : 3;

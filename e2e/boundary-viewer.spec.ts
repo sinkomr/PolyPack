@@ -32,8 +32,9 @@ test("the viewer opens from the dimensions page, draws a problem and links to th
     .locator('#dimension-groups li[data-space="boundary"]')
     .getByRole("link", { name: /^Viewer/ })
     .click();
-  await expect(page).toHaveURL(/\/spaces\/boundary\.html#id=boundary\/tesseract\/ball\/9$/);
+  // the viewer writes the problem's id into the address after its first draw, so wait for the drawing first
   await shown(page, "boundary/tesseract/ball/9");
+  await expect(page).toHaveURL(/\/spaces\/boundary\.html#id=boundary\/tesseract\/ball\/9$/, LAZY_VIEW);
   await expect(page).toHaveTitle("PolyPack — 3D on 4D: 9 balls");
   await expect(page.getByRole("navigation", { name: "Site" }).getByRole("link")).toHaveText([
     "Board",

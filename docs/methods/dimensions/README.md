@@ -39,7 +39,7 @@ as **Auto** and stays the default.
 
 Surface problems in the nofold mode on the Platonic solids are planar problems of one face. They
 run on the polygon solver itself, so every polygon method is available for them unchanged. On the
-other solids (Catalan solids, prisms, antiprisms) the surface kernel serves them in its nofold mode.
+other solids (Archimedean and Catalan solids, prisms, antiprisms) the surface kernel serves them in its nofold mode.
 
 ## Running a method (`packages/methods/src/framework.ts`)
 

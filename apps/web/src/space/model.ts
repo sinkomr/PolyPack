@@ -292,7 +292,7 @@ export const GENERIC_ROUND_K: Record<SpaceName, number> = {
   curved: 300_000,
   surface: 100_000,
   polyhedra: 300_000,
-  // Platonic solids in a ball; balls problems whose pieces are balls have GENERIC_ROUND_K_BALL_PIECES. [CALC] The
+  // the solids in a ball; balls problems whose pieces are balls have GENERIC_ROUND_K_BALL_PIECES. [CALC] The
   // eight methods' median rate times P, from a test packing grown by 3 % (rounds of 2 s): 43,000 to 99,000 for 13
   // tetrahedra, octahedra and dodecahedra, 140,000 for 30 cubes, 53,000 for 30 icosahedra, 33,000 for 80
   // dodecahedra; a round of K / P then takes 1 to 3.5 s up to P = 30 (beyond, GENERIC_ROUND_MIN makes it longer:
@@ -302,13 +302,13 @@ export const GENERIC_ROUND_K: Record<SpaceName, number> = {
 /** K for surface problems with disks (N = 0). */
 export const GENERIC_ROUND_K_SURFACE_DISKS = 300_000;
 /**
- * K for balls problems whose pieces are balls (balls in a ball or a cube): their energy costs a few microseconds, so
+ * K for balls problems whose pieces are balls (balls in a ball or a solid): their energy costs a few microseconds, so
  * their rounds hold far more evaluations than the solids'. [CALC] As for GENERIC_ROUND_K: the eight methods' median
  * rate times P was 7.2 to 8.1 million at 13 balls, 5.1 million at 30 and 4.0 million at 80; a round of K / P takes
  * about 2.5 s at P = 80, and up to P = 33 GENERIC_ROUND_MAX holds it to 0.5 to 2 s.
  */
 export const GENERIC_ROUND_K_BALL_PIECES = 10_000_000;
-/** True for a balls problem whose pieces are balls (balls in a ball or a cube): its generic rounds are sized apart. */
+/** True for a balls problem whose pieces are balls (balls in a ball or a solid): its generic rounds are sized apart. */
 export const ballPieces = (p: SearchProblem): boolean => p.space === "balls" && ballsProblemOf(p.code)?.piece === "ball";
 /** The smallest and the largest round of a generic method. */
 export const GENERIC_ROUND_MIN = 5000;
@@ -331,9 +331,22 @@ export function genericRound(p: SearchProblem): number {
   let round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
   if (p.space === "polyhedra" && p.P > 100)
     round = Math.max(100, 100 * Math.floor(8000 / polyhedraRound(p.P, p.code).stepMs / 100));
+  if (p.space === "torus" && p.P > 100) round = Math.min(round, torusGenericRound(p.P, p.N));
   const k = spaceKernel(p);
   const offers = k ? 2 * (k.finishCost + (k.validateCost ?? k.finishCost)) : 0;
   return Math.max(round, 100 * Math.ceil(offers / 100));
+}
+
+/**
+ * A generic method's round on a torus problem above P = 100. [CALC] In Node on an Apple Silicon laptop (2026-10-27),
+ * the generic methods took about 1.9, 2.4 and 4.9 ms per evaluation at P = 500 for disks, hexagons and 100-gons
+ * (the cost grows with P): evalMs = P (1.9 + 0.5 min(N, 6) / 6 + 2.5 max(0, N - 6) / 94) / 500. A round is sized to
+ * about 3 s with room for a machine 1.5 times slower, at least 100 evaluations: 1,000 for disks and 400 for 100-gons
+ * at P = 500, where K / P alone gave 1,800.
+ */
+export function torusGenericRound(P: number, N: number): number {
+  const evalMs = (P * (1.9 + (0.5 * Math.min(N, 6)) / 6 + (2.5 * Math.max(0, N - 6)) / 94)) / 500;
+  return Math.max(100, 100 * Math.floor(3000 / (1.5 * evalMs) / 100));
 }
 
 /** The panel's starting budget for a generic method: ten rounds, and a time limit of 30 s. */
@@ -488,6 +501,21 @@ export function polyhedraRoundSeconds(P: number, code: string, evals: number): n
 }
 
 /**
+ * The rounds of a torus search above P = 100 (the lattice start's range). One evaluation of the search is a
+ * penalty energy and gradient over all pieces, so it costs about P times more with P pieces, and a polygon's
+ * separation costs more with more sides. [CALC] In Node on an Apple Silicon laptop (2026-10-27), 200
+ * evaluations from the lattice start took 4.8 ms each for disks at P = 500, 12.7 to 12.9 ms for triangles
+ * and hexagons, 157 ms for 100-gons (about 2 ms for pentagons at P = 100): evalMs = P (5 + 1.5 N) / 500.
+ * A round is sized to about 3 s with room for a machine 1.5 times slower, at least 100 evaluations (the
+ * start's tight scale alone takes about 45 validations) and at most the usual 10,000.
+ */
+export function torusRound(P: number, N: number): { round: number; evalMs: number } {
+  const evalMs = (P * (5 + 1.5 * N)) / 500;
+  const round = Math.max(100, Math.min(ROUND_EVALS.torus, 100 * Math.floor(3000 / (1.5 * evalMs) / 100)));
+  return { round, evalMs };
+}
+
+/**
  * The rounds of a balls search (packages/balls search.ts): a polish of its start in a run's first round, then hops
  * from the best so far, each a polish of a few thousand evaluations at most (10 penalty stages of up to 300 + 10 P
  * L-BFGS iterations for balls; 9 of up to 400 for solids, whose stages also list their near pairs).
@@ -539,6 +567,7 @@ export function roundSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
   if (p.space === "polyhedra") return polyhedraRound(p.P, p.code).round;
   if (p.space === "balls") return ballsRound(p.P, p.code).round;
+  if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
   return p.space === "surface" && searchKind(p) !== "nofold" && p.P >= LARGE_FOLD ? 2 : ROUND_EVALS[searchKind(p)];
 }
 
@@ -546,6 +575,7 @@ export function roundSize(p: SearchProblem, method?: string): number {
 export function freshSize(p: SearchProblem, method?: string): number {
   if (isGeneric(p, method)) return genericRound(p);
   if (p.space === "balls") return ballsRound(p.P, p.code).fresh;
+  if (p.space === "torus" && p.P > 100) return torusRound(p.P, p.N).round;
   return p.space === "polyhedra" ? polyhedraRound(p.P, p.code).fresh : FRESH_EVALS[searchKind(p)];
 }
 
@@ -564,6 +594,12 @@ export function defaultBudget(p: SearchProblem, method?: string): { time_s: numb
     // most the panel's 300 s): on a usual machine the ten end first
     const { round } = polyhedraRound(p.P, p.code);
     const time_s = Math.max(60, Math.min(300, 30 * Math.ceil((5 * polyhedraRoundSeconds(p.P, p.code, round)) / 30)));
+    return { time_s, evals: 10 * round };
+  }
+  if (p.space === "torus" && p.P > 100) {
+    // ten rounds, and time for five on a machine 1.5 times slower than torusRound assumes (60 to 300 s)
+    const { round, evalMs } = torusRound(p.P, p.N);
+    const time_s = Math.max(60, Math.min(300, 30 * Math.ceil((5 * 1.5 * round * evalMs) / 1000 / 30)));
     return { time_s, evals: 10 * round };
   }
   // ten rounds of about 2 to 3 s here, with room for a machine several times slower
@@ -656,6 +692,11 @@ export function roundJob(
     const seconds = (n: number) => generic ? n * stepMs / 1000
       : start ? polyhedraRoundSeconds(p.P, p.code, n) : 0.4 * n * 1.5 * stepMs / 1000;
     while (size > 100 && seconds(size) > 20) size = Math.max(100, size - 100);
+  }
+  if (p.space === "torus" && p.P > 100 && !generic) {
+    // Growing a stalled round must still fit the slow-machine bound (20 s).
+    const evalMs = torusRound(p.P, p.N).evalMs;
+    while (size > 100 && (size * evalMs * 1.5) / 1000 > 20) size = Math.max(100, size - 100);
   }
   const evals = Math.max(least, Math.min(size, left));
   const time_s =

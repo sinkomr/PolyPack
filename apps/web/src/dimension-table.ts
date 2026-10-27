@@ -73,14 +73,14 @@ export const DIMENSIONS: readonly Dimension[] = [
     id: "2-on-3",
     label: "2D on 3D",
     summary:
-      "Polygons and disks on a closed surface, with no container: the surface of a polyhedron (a Platonic or Catalan solid, a prism or an antiprism), a sphere or a flat torus. A flat torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth.",
+      "Polygons and disks on a closed surface, with no container: the surface of a polyhedron (a Platonic, Archimedean or Catalan solid, a prism or an antiprism), a sphere or a flat torus. A flat torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth.",
     families: [
       {
         space: "surface",
         name: "Polyhedral surfaces",
         short: "Surfaces",
         summary:
-          "Pieces on the surface of a Platonic solid, a Catalan solid, a prism or an antiprism, with or without folding over its edges.",
+          "Pieces on the surface of a Platonic solid, an Archimedean solid, a Catalan solid, a prism or an antiprism, with or without folding over its edges.",
         available: true,
       },
       {
@@ -102,7 +102,7 @@ export const DIMENSIONS: readonly Dimension[] = [
   {
     id: "3-in-3",
     label: "3D in 3D",
-    summary: "Polyhedra packed inside a polyhedron, and balls and Platonic solids packed inside a ball or a cube.",
+    summary: "Polyhedra packed inside a polyhedron, balls packed inside a ball or a solid, and solids packed inside a ball.",
     families: [
       {
         space: "polyhedra",
@@ -117,7 +117,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Balls",
         short: "Balls",
         summary:
-          "Unit balls in the smallest ball or cube, and unit-edge Platonic solids in the smallest ball, up to 100 pieces.",
+          "Unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball, up to 100 pieces.",
         available: true,
       },
     ],
@@ -154,7 +154,7 @@ export const menuGroups = (dimensions: readonly Dimension[] = DIMENSIONS): MenuG
   dimensions.map((d) => ({
     label: d.label,
     options: d.families.map((f) => ({
-      text: f.available ? f.name : `${f.name} (coming soon)`,
+      text: `${d.label}: ${f.name}${f.available ? "" : " (coming soon)"}`,
       value: f.space,
       disabled: !f.available,
     })),

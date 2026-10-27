@@ -12,12 +12,15 @@ import { LAZY_VIEW, distinctColours, pageErrors } from "./helpers";
 const fixtures = JSON.parse(
   readFileSync(resolve(import.meta.dirname, "../python/surface/fixtures/general_packings.json"), "utf8"),
 ).records as { id: string; solid: string; mode: string; N: number; P: number; s: number; pieces: unknown[] }[];
+fixtures.push(...JSON.parse(readFileSync(resolve(import.meta.dirname, "../python/surface/fixtures/archimedean_packings.json"), "utf8")).packings);
 const SHOWN = [
   "surface/deltoidal_icositetrahedron/fold/6/3",
   "surface/prism5/fold/3/3",
   "surface/antiprism4/fold/6/3",
   "surface/rhombic_dodecahedron/nofold/6/14",
   "surface/prism7/fold/100/2",
+  "surface/snub_cube/fold/12/2",
+  "surface/truncated_icosidodecahedron/nofold/0/4",
 ];
 const served = SHOWN.map((id) => fixtures.find((r) => r.id === id)!);
 
@@ -87,17 +90,33 @@ test("the board draws a Catalan solid, a prism and an antiprism, as the solid an
   expect(errors).toEqual([]);
 });
 
+test("the board draws mixed regular faces of Archimedean solids and their nets", async ({ page }) => {
+  const errors = pageErrors(page);
+  await serve(page);
+  for (const r of served.slice(5)) {
+    await page.goto(`/#space=${r.id}`);
+    await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${r.id}`, LAZY_VIEW);
+    await expect(page.locator("#space-score")).toHaveText(r.s.toFixed(6));
+    await expect(page.locator(".space-draw > canvas")).toBeVisible();
+    await shot(page, `${r.solid}-solid`);
+    await page.click('.space-tools button[data-view="net"]');
+    await shot(page, `${r.solid}-net`);
+  }
+  expect(errors).toEqual([]);
+});
+
 test("the problem picker groups the solids by family, in order", async ({ page }) => {
   await serve(page);
   await page.goto(`/#space=${SHOWN[1]}`);
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${SHOWN[1]}`, LAZY_VIEW);
   const groups = await page.locator("#space-f-solid optgroup").evaluateAll((gs) => gs.map((g) => (g as HTMLOptGroupElement).label));
-  expect(groups).toEqual(["Platonic solids", "Catalan solids", "Prisms", "Antiprisms"]);
+  expect(groups).toEqual(["Platonic solids", "Archimedean", "Catalan solids", "Prisms", "Antiprisms"]);
   // the picker offers the space's whole domain, not only the problems with a record
   await expect(page.locator('#space-f-solid optgroup[label="Prisms"] option')).toHaveText(
     ["Triangular", "Pentagonal", "Hexagonal", "Heptagonal", "Octagonal", "Enneagonal", "Decagonal", "Hendecagonal", "Dodecagonal"].map((b) => `${b} prism`),
   );
   await expect(page.locator('#space-f-solid optgroup[label="Catalan solids"] option')).toHaveCount(13);
+  await expect(page.locator('#space-f-solid optgroup[label="Archimedean"] option')).toHaveCount(13);
   await expect(page.locator("#space-f-N option")).toHaveCount(99);
   await expect(page.locator('#space-f-solid optgroup[label="Platonic solids"] option')).toHaveText([
     "Tetrahedron",

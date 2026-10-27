@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ALL_SOLID_NAMES, CATALAN_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceBounds, surfaceDomain } from "../src/index";
+import { ALL_SOLID_NAMES, ARCHIMEDEAN_NAMES, CATALAN_NAMES, SURFACE_NS, getSolid, surfaceBound, surfaceBounds, surfaceDomain } from "../src/index";
 import { independentBounds } from "./helpers";
 
 const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.json", import.meta.url), "utf8")).records;
@@ -8,7 +8,11 @@ const records = JSON.parse(readFileSync(new URL("../../../data/surface/records.j
 describe("the surface domain", () => {
   it("holds every solid, both modes, N = 0 and 3 to 100, P = 1 to 100", () => {
     expect(SURFACE_NS.length).toBe(99);
-    expect(surfaceDomain.info.problems).toBe(36 * 2 * 99 * 100);
+    expect(surfaceDomain.info.problems).toBe(49 * 2 * 99 * 100);
+    for (const n of ARCHIMEDEAN_NAMES) {
+      expect(surfaceDomain.info.fields[0].groups![n]).toBe("Archimedean");
+      expect(surfaceDomain.info.fields[0].titles![n]).toBeTruthy();
+    }
     const at = (fields: Record<string, string | number>, P: number) => surfaceDomain.bound({ fields: { ...fields, P }, P });
     expect(at({ solid: "prism5", mode: "fold", N: 100 }, 100)).toMatchObject({ label: "area bound; [CALC]" });
     expect(at({ solid: "rhombic_dodecahedron", mode: "nofold", N: 0 }, 1)).toMatchObject({ label: "one piece bound; [CALC]" });

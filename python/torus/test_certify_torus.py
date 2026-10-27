@@ -407,5 +407,35 @@ class StatusRules(unittest.TestCase):
         self.assertEqual(len(proven), 52)
 
 
+class WidePieces(unittest.TestCase):
+    def test_certified_examples(self):
+        for N in (3, 7, 12, 20, 100):
+            R = 0.5/math.sin(math.pi/N)
+            for P in (1, 2, 5):
+                for family in ('sq', 'hex', 'free'):
+                    L = 4*R*P
+                    lat = dict(b1=[L, 0], b2=[0, L]) if family == 'free' else dict(L=L)
+                    C.certify(rec(family, N, [[3*R*i, 0, 0] for i in range(P)], **lat))
+
+    def test_capacity_with_near_pairs(self):
+        N, P = 100, 100
+        step = 1/math.tan(math.pi/N)+1e-7
+        C.certify(rec('sq', N, [[step*(i%10-4.5), step*(i//10-4.5), math.pi/N] for i in range(P)], L=10*step))
+
+    def test_large_touch_overlap_and_periodic_boundary(self):
+        N = 100
+        r = 0.5/math.tan(math.pi/N)
+        theta = math.pi/N
+        # A self-translate touches across the identified cell boundary. Shrink proves touching.
+        C.certify(rec('sq', N, [[0, 0, theta]], L=2*r))
+        with self.assertRaises(C.CertError):
+            C.certify(rec('sq', N, [[0, 0, theta]], L=2*r-1e-7))
+        C.certify(rec('sq', N, [[-1, 0, theta], [2*r-1+1e-7, 0, theta]], L=100))
+        with self.assertRaises(C.CertError):
+            C.certify(rec('sq', N, [[-1, 0, theta], [2*r-1-1e-7, 0, theta]], L=100))
+        with self.assertRaises(C.CertError):
+            C.certify(rec('sq', N, [[None, 0, 0]], L=100))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)

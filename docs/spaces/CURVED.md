@@ -4,6 +4,12 @@
 
 Status: research build, 2026-10-24. Package `packages/curved` (`@polypack/curved`), certifier and bounds in `python/curved/`, data in `data/curved/`.
 
+[SPEC] The site domain is `curved/<K>/<N>/<M>/<P>`: N = 0 (unit disks) or every integer 3–100, P = 1–100. The existing curvature choices and containers M = 0, 3–10, 12 stay unchanged. The ten K values are listed in `packages/spaces/src/piece-domains.ts`, including the published sweep curvatures. This Cartesian domain has 990,000 problems; a choice whose unit piece does not exist is rejected by the geometry. New choices ship without research records. [CALC] Without a record, the bound reuses `curvedBound`: the area requirement, one-piece containment, and (disk containers with P ≥ 2) the two-inscribed-disks requirement. When these give no finite bound, the API returns null.
+
+[SPEC] `SPACE_DOMAINS` describes the ranges to the API and board picker. The volunteer list samples the domain; it never enumerates it all. Problems without a record have status `no_record`, null certified values/configurations, and require the strict float check on every entry. Existing record files are unchanged. Server validation shares the synchronous geometry through generators, yields between small units of work (8 ms default budget), stops after 20 overlapping pairs, and uses the shared heavy-check queue from P = 30. Sphere also queues N ≥ 20 at any P. No new records or optimisation runs accompany this change.
+
+[CALC] One Node 26 run at N = P = 100 used 34 ms of validation work for a near-contact row (including the strict check), with a longest slice of 9 ms. Coincident pieces stopped at 20 overlaps in 7 ms.
+
 ## Summary
 
 - **The engine works for every real K** (hyperbolic K < 0, Euclidean K = 0, spherical K > 0) with one set of formulas that never divides by K, so a curvature sweep can pass smoothly through K = 0. At K = ±10⁻⁶ it reproduces PolyPack's Euclidean records to O(|K|) (tests).

@@ -1,6 +1,6 @@
 /**
  * The Problem set menu of the board's Problem section, built from the table in dimension-table.ts:
- * one option per family, grouped by dimension (an <optgroup> per dimension). A family that is not
+ * one option per family, named with its dimension and grouped by dimension (an <optgroup> per dimension). A family that is not
  * available yet is listed, disabled, as "coming soon".
  *
  * Flat (2D in 2D) is the polygon board as it always was. Another family loads the space mode
