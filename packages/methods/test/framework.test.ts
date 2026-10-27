@@ -151,6 +151,39 @@ describe("running a method", () => {
     expect(cut.evaluations).toBeLessThan(120 + 10);
   });
 
+  it("keeps the result of a finish a stop arrives in, charging it once, and flags the poll inside a finish", () => {
+    const base = disksKernel(4);
+    let stop = false;
+    let atFinish = -1;
+    const flags: (boolean | undefined)[] = [];
+    // a finish that polls once, as a real finish does, and then completes
+    const k = {
+      ...base,
+      finishCost: 50,
+      finish: (s: Parameters<typeof base.finish>[0], poll?: () => boolean) => {
+        poll?.();
+        return base.finish(s);
+      },
+    };
+    const r = runMethod(k, "test_restarts", {
+      seed: 5,
+      budget: { evals: 10_000 },
+      shouldStop: (used, finishing) => {
+        flags.push(finishing);
+        if (finishing && !stop) {
+          stop = true;
+          atFinish = used;
+        }
+        return stop;
+      },
+    });
+    expect(r.stopped).toBe("stopped");
+    expect(r.score).not.toBeNull();
+    expect(flags.filter((f) => f === true)).toHaveLength(1);
+    // the finish's cost was in `used` when it polled; the run then added only the check of its result
+    expect(r.evaluations).toBe(atFinish + (k.validateCost ?? k.finishCost));
+  });
+
   it("offers a method only to kernels with the capabilities it needs", () => {
     expect(getMethod("test_restarts")).toBeDefined();
     const needs: SpaceMethodDefinition = {

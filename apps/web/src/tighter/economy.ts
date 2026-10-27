@@ -1,3 +1,4 @@
+import { parseDealtKey } from "./catalogue";
 import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, isPolygon, parseKey } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
 import { ruleRewardFactor, standingMultiplier } from "./standing";
@@ -43,7 +44,7 @@ export const newEconomy = (): EconomyState => ({
 });
 
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
-const isKey = (k: unknown): k is string => typeof k === "string" && parseKey(k) !== null;
+const isKey = (k: unknown): k is string => typeof k === "string" && parseDealtKey(k) !== null;
 
 /** Most problems remembered as recorded. */
 export const RECORDED_LIMIT = 20000;
@@ -159,7 +160,7 @@ export function collectionsBonus(s: GameState, o: Owned): number {
  * the rewards of the rules finished that apply to it (and to the method that found it).
  */
 export function pointsMultiplier(s: GameState, o: Owned, p: ProblemKey, method: string | null): number {
-  // the rewards of "circles only" and "small problems only" are polygons' (a space problem is not allowed under them)
+  // the rewards of "circles only" and "small problems only" are polygons' (they do not apply to space problems)
   const rules = isPolygon(p)
     ? s.standing
     : { ...s.standing, rulesDone: s.standing.rulesDone.filter((r) => r === "method") };
@@ -176,7 +177,8 @@ export function noteRecorded(s: GameState, o: Owned, p: ProblemState, now: numbe
     e.recorded.push(p.key);
     if (e.recorded.length > RECORDED_LIMIT) e.recorded.splice(0, e.recorded.length - RECORDED_LIMIT);
   }
-  if (!e.tiers.includes(p.tier)) e.tiers.push(p.tier);
+  // tier firsts count polygon problems only, as the other collections do
+  if (isPolygon(p) && !e.tiers.includes(p.tier)) e.tiers.push(p.tier);
   if (o.has("rent") && e.checks[p.key] === undefined) e.checks[p.key] = now;
 }
 
@@ -205,7 +207,7 @@ export function syncEconomy(s: GameState): void {
   for (const p of [...s.past, ...s.queue]) {
     if (p.verified === null) continue;
     if (!s.economy.recorded.includes(p.key)) s.economy.recorded.push(p.key);
-    if (!s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
+    if (isPolygon(p) && !s.economy.tiers.includes(p.tier)) s.economy.tiers.push(p.tier);
   }
   if (s.standing.resets === 0 && s.standing.cycleEarned < s.rpEarned) s.standing.cycleEarned = s.rpEarned;
 }

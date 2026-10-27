@@ -944,7 +944,7 @@ describe("Tighter saves of version 4", () => {
       rp: 0,
       leftAt: T0,
     });
-    s.picks.retake.push("polyhedra/abc/30");
+    s.picks.retake.push("polyhedra/cubintet/30");
     s.economy.recorded.push("sphere/0/12");
     const r = fromJson(toJson(s), T0 + 5000);
     expect(r.ok).toBe(true);
@@ -952,7 +952,7 @@ describe("Tighter saves of version 4", () => {
     expect(r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     expect(r.state.queue[1]).toMatchObject({ family: "sphere", id: "sphere/0/12", key: "sphere/0/12", bound: 1.25 });
     expect(r.state.past.at(-1)).toMatchObject({ family: "surface", key: "surface/cube/fold/7/20" });
-    expect(r.state.picks.retake).toContain("polyhedra/abc/30");
+    expect(r.state.picks.retake).toContain("polyhedra/cubintet/30");
     expect(r.state.economy.recorded).toContain("sphere/0/12");
     // a space problem stored under another family's name is not read
     const bad = JSON.parse(toJson(s));

@@ -1,7 +1,8 @@
 import { parseConfig } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import { DealerState, creditOf, newDealer } from "./dealer";
-import { isPolygon, keyOf, parseKey, poly } from "./frontier";
+import { parseDealtKey } from "./catalogue";
+import { isPolygon, keyOf, poly } from "./frontier";
 import {
   DEFAULT_PATIENCE,
   DEFAULT_TOLERANCE,
@@ -523,7 +524,7 @@ function pendingSend(v: unknown): PendingSend | null {
 
 function problemState(v: unknown, now: number): ProblemState | null {
   if (!isObj(v)) return null;
-  const k = parseKey(str(v.key, ""));
+  const k = parseDealtKey(str(v.key, ""));
   if (!k) return null;
   if (isPolygon(k) ? k.N !== v.N || k.M !== v.M || k.P !== v.P : k.family !== v.family || k.P !== v.P) return null;
   // a space problem's points need the server's bound
@@ -612,7 +613,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
 
 function pastProblem(v: unknown, now: number): PastProblem | null {
   if (!isObj(v)) return null;
-  const k = parseKey(str(v.key, ""));
+  const k = parseDealtKey(str(v.key, ""));
   if (!k) return null;
   return {
     ...k,
@@ -650,7 +651,7 @@ function pacer(v: unknown): PacerState {
   const last: Record<string, number> = {};
   if (isObj(v.lastByProblem))
     for (const [k, t] of Object.entries(v.lastByProblem))
-      if (parseKey(k) && typeof t === "number" && Number.isFinite(t)) last[k] = t;
+      if (parseDealtKey(k) && typeof t === "number" && Number.isFinite(t)) last[k] = t;
   return {
     sent: Array.isArray(v.sent)
       ? v.sent.filter((t): t is number => typeof t === "number" && Number.isFinite(t)).slice(-20)

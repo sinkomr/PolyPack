@@ -12,12 +12,15 @@ import {
   drawSliceProblem,
   inSlice,
   polyhedraCodes,
+  parseDealtKey,
   sliceOfId,
 } from "../src/tighter/catalogue";
 import { newDealer } from "../src/tighter/dealer";
 import { FAMILY_FACTOR, SPACE_METHODS, UNITS_AT_20, rulesOf, spaceFields, unitsFor } from "../src/tighter/families";
 import { SpaceKey, parseKey, poly } from "../src/tighter/frontier";
-import { newGame, newProblem } from "../src/tighter/game";
+import { newGame, newProblem, ownedSet } from "../src/tighter/game";
+import { noteRecorded, pointsMultiplier } from "../src/tighter/economy";
+import { ruleAllowsProblem, ruleRewardFactor } from "../src/tighter/standing";
 import { normalizeOffer } from "../src/tighter/picks";
 import { bucketOf, passes, rankCandidates } from "../src/tighter/rank";
 import { fromJson, toJson } from "../src/tighter/save";
@@ -200,12 +203,12 @@ describe("Tighter catalogue", () => {
     }
   });
 
-  it("draws surfaces within N 0 or 3 to 100 and P 1 to 100, and balls within P 2 to 100", () => {
+  it("draws surfaces within N 0 or 3 to 100 and P 2 to 100, and balls within P 2 to 100", () => {
     for (const k of sample("surf-platonic", 200)) {
       const f = spaceFields(k.id)!;
       if (f.family !== "surface") throw new Error(k.id);
       expect(f.N === 0 || (f.N >= 3 && f.N <= 100)).toBe(true);
-      expect(f.P).toBeGreaterThanOrEqual(1);
+      expect(f.P).toBeGreaterThanOrEqual(2);
       expect(f.P).toBeLessThanOrEqual(100);
       expect(f.P).toBe(k.P);
     }
@@ -272,6 +275,93 @@ describe("Tighter catalogue", () => {
     };
     expect(sample("poly-platonic", 5, false, listings).map((k) => k.id)).toEqual(["polyhedra/cubintet/12"]);
     expect(sample("poly-cube", 5, false, listings).map((k) => k.id)).toEqual(["polyhedra/pr3incub/10"]);
+  });
+});
+
+describe("Tighter space problems of every slice", () => {
+  const listed = (id: string, P = Number(id.split("/").at(-1))): ListedSpaceProblem => ({
+    id,
+    P,
+    accepts_submissions: true,
+    certified: { score: 2, status: "best_known" },
+    bound: { value: 1.5 },
+  });
+  const draw = (slice: SliceId, n: number, starter = false) => {
+    const d = newDealer(7);
+    const out: SpaceKey[] = [];
+    const exclude = new Set<string>();
+    for (let i = 0; i < n; i++) {
+      const k = drawSliceProblem(d, slice, { listings, exclude, starter });
+      if (!k) break;
+      exclude.add(k.id);
+      out.push(k);
+    }
+    return out;
+  };
+  const listings = {
+    sphere: [listed("sphere/4/1"), listed("sphere/4/12")],
+    torus: [listed("torus/sq/3/1"), listed("torus/sq/3/9")],
+    curved: [listed("curved/-1/3/4/1"), listed("curved/-1/3/4/7")],
+    polyhedra: PROBLEM_NAMES.flatMap((n) => [listed(`polyhedra/${n.code}/1`), listed(`polyhedra/${n.code}/6`)]),
+  };
+
+  it("are each in the slice that dealt them, with at least 2 pieces", () => {
+    for (const s of SLICES) {
+      const ks = draw(s.id, 60, false);
+      for (const starter of [false, true]) {
+        for (const k of starter ? draw(s.id, 20, true) : ks) {
+          expect(sliceOfId(k.id)).toBe(s.id);
+          expect(k.P).toBeGreaterThanOrEqual(2);
+          expect(parseDealtKey(k.id)).not.toBeNull();
+        }
+      }
+    }
+  });
+
+  it("are read from a save only when their ids are space problems' ids that a slice deals", () => {
+    const g = newGame(T0, 1);
+    const good = newProblem(key("sphere/4/12"), "batch", T0);
+    good.bound = 2.5;
+    g.queue.push(good);
+    const raw = JSON.parse(toJson(g));
+    const hostile = [
+      ["sphere/x/5", "sphere", 5],
+      ["surface/foo/bar/1/2", "surface", 2],
+      ["surface/cube/nofold/4/20", "surface", 20],
+      ["polyhedra/nope/6", "polyhedra", 6],
+    ] as const;
+    for (const [id, family, P] of hostile)
+      raw.queue.push({ ...raw.queue[0], key: id, id, family, P });
+    raw.past = [{ key: "surface/cube/nofold/4/20", tier: "open", best: 2, verified: null, rp: 0 }];
+    const r = fromJson(JSON.stringify(raw), T0);
+    if (!r.ok) throw new Error("save not read");
+    expect(r.state.queue.map((q) => q.key)).toEqual(["sphere/4/12"]);
+    expect(r.state.past).toHaveLength(0);
+    for (const q of r.state.queue) expect(() => rulesOf(q).title(q)).not.toThrow();
+    for (const [id, family, P] of hostile)
+      expect(normalizeOffer({ family, id, P, tier: "open", leader: null })).toBeNull();
+  });
+
+  it("are dealt under the polygon rules, whose rewards do not apply to them", () => {
+    const st = { ...newGame(T0, 1).standing, rulesDone: ["circles", "small", "method"] };
+    const p = key("sphere/4/12");
+    for (const rule of ["circles", "small", "method", null]) expect(ruleAllowsProblem({ ...st, rule }, p)).toBe(true);
+    expect(ruleAllowsProblem({ ...st, rule: "circles" }, poly(5, 6, 30))).toBe(false);
+    expect(ruleRewardFactor(st, p, null)).toBe(1);
+    expect(ruleRewardFactor(st, poly(0, 3, 4), null)).toBe(1.5 * 1.5);
+    const g = newGame(T0, 1);
+    g.standing.rulesDone = ["circles", "small"];
+    expect(pointsMultiplier(g, ownedSet(g), p, null)).toBe(pointsMultiplier(newGame(T0, 1), ownedSet(g), p, null));
+  });
+
+  it("do not count for tier firsts", () => {
+    const g = newGame(T0, 1);
+    const p = newProblem(key("sphere/4/12"), "published", T0);
+    noteRecorded(g, ownedSet(g), p, T0);
+    expect(g.economy.recorded).toContain("sphere/4/12");
+    expect(g.economy.tiers).toEqual([]);
+    noteRecorded(g, ownedSet(g), newProblem(poly(21, 21, 40), "published", T0), T0);
+    expect(g.economy.tiers).toEqual(["published"]);
   });
 });
 

@@ -20,6 +20,8 @@ export type OpenAnswer =
 export type OpenSpaceAnswer =
   { ok: true; params: Record<string, unknown>; state: SpaceRunState } | { ok: false; message: string };
 export type AnyRunState = RunState | SpaceRunState;
+/** What openSpace answers on a page that is not cross-origin isolated (a space run needs shared memory). */
+export const NOT_ISOLATED = "needs a cross-origin isolated page";
 export type StepAnswer = { ok: true; state: AnyRunState; ms: number } | { ok: false; message: string };
 
 /** True for a space run's state, false for a polygon run's. */
@@ -124,7 +126,7 @@ export class Lane {
   openSpace(request: SpaceRunRequest): Promise<OpenSpaceAnswer> {
     if (this.opening) return Promise.resolve({ ok: false, message: "a run is being opened" });
     if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === "undefined")
-      return Promise.resolve({ ok: false, message: "needs a cross-origin isolated page" });
+      return Promise.resolve({ ok: false, message: NOT_ISOLATED });
     const id = ++this.nextId;
     this.release();
     const control = new SpaceRunControl();
@@ -177,6 +179,10 @@ export class Lane {
   close(): Promise<AnyRunState | null> {
     const id = this.runId;
     if (!id || !this.worker) return Promise.resolve(null);
+    // a run still opening is dropped: its opening is answered, so that the next open works
+    const opening = this.opening;
+    this.opening = null;
+    opening?.({ ok: false, message: "closed while opening" });
     this.runId = 0;
     this.release();
     return new Promise((resolve) => {

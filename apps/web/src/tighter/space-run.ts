@@ -125,10 +125,17 @@ export class SpaceRun {
     }
   }
 
-  /** The framework's stop poll: pauses at what is allowed, true only once the run is aborted. */
-  private poll = (used: number): boolean => {
+  /**
+   * The framework's stop poll: pauses at what is allowed, true only once the run is aborted. A poll
+   * from inside a finish never blocks or reports: the finish has been charged but has no result yet,
+   * so the step is answered at the next check, after it, with the result in the state.
+   */
+  private poll = (used: number, finishing?: boolean): boolean => {
     this.used = used;
     const c = this.control;
+    if (finishing) return c.aborted;
+    // the run's own budget is reached: the framework's evaluation stop ends it, not a pause
+    if (used >= this.request.budget.evals * this.request.unit) return c.aborted;
     for (;;) {
       // the epoch first: a change after it makes the wait below return at once
       const epoch = c.epoch();

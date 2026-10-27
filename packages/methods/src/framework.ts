@@ -79,8 +79,10 @@ export interface MethodRunOptions {
    * Polled at every kernel call, before the call is charged, with the evaluations charged so far
    * (never decreasing): true ends the run with its best so far. A caller that pauses the run
    * blocks inside it; a pause that ends on `used` reaching a number does not change a seeded run.
+   * `finishing` is true when the poll comes from inside a finish, whose result is not kept yet: the
+   * caller must not block or report then, only answer whether to stop.
    */
-  shouldStop?: (used: number) => boolean;
+  shouldStop?: (used: number, finishing?: boolean) => boolean;
   /** Called with every improvement of the best. */
   onImprove?: (best: Finished) => void;
   /** Seconds, monotonic; default performance.now() / 1000. */
@@ -165,7 +167,7 @@ export function runMethod(kernel: SpaceKernel, name: string, o: MethodRunOptions
     if (atBound()) throw new Stop("bound");
   };
   /** For a finish under way: true once the external stop or the clock says so (the budget was charged before it began). */
-  const polled = () => !!o.shouldStop?.(used) || (timeLimit < Infinity && now() - t0 >= timeLimit);
+  const polled = () => !!o.shouldStop?.(used, true) || (timeLimit < Infinity && now() - t0 >= timeLimit);
   const charge = (cost: number) => {
     check();
     used += cost;

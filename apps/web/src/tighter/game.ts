@@ -776,7 +776,7 @@ export function applyAnswer(
     p.ourId = null;
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
-      p.leader = { score: outcome.leaderScore, name: "another name", id: null };
+      p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
       p.paidTo = outcome.leaderScore;
       points = pay(s, p);
     }

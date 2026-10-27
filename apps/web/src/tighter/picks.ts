@@ -1,5 +1,6 @@
 import { Bandit, normalizeBandit } from "./bandit";
-import { isPolygon, keyOf, parseKey } from "./frontier";
+import { parseDealtKey } from "./catalogue";
+import { isPolygon, keyOf } from "./frontier";
 import { CONTEST, Tier } from "./points";
 import { Candidate, Filters, learn, normalizeFilters } from "./rank";
 
@@ -47,7 +48,7 @@ export const MAX_RETAKES = 200;
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const pos = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
-const validKey = (k: string): boolean => parseKey(k) !== null;
+const validKey = (k: string): boolean => parseDealtKey(k) !== null;
 
 function leader(v: unknown): Candidate["leader"] {
   if (!isObj(v) || !pos(v.score)) return null;
@@ -63,7 +64,7 @@ function leader(v: unknown): Candidate["leader"] {
 /** An offer read from a save, or null when it is not one. */
 export function normalizeOffer(v: unknown): Offer | null {
   if (!isObj(v)) return null;
-  const k = parseKey(typeof v.id === "string" && v.family !== "polygon" ? v.id : `${v.N}/${v.M}/${v.P}`);
+  const k = parseDealtKey(typeof v.id === "string" && v.family !== "polygon" ? v.id : `${v.N}/${v.M}/${v.P}`);
   if (!k || typeof v.tier !== "string" || !(v.tier in CONTEST)) return null;
   const tier = v.tier as Tier;
   const lead = leader(v.leader);

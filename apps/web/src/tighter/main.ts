@@ -102,7 +102,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "./economy";
-import { Lane, isSpaceRunState } from "./lanes";
+import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
 import { latticeDue, latticeStep } from "./methods/lattice";
 import type { RunStage, RunView } from "./methods";
@@ -1068,7 +1068,11 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     return false;
   }
   if (!a.ok) {
-    say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
+    if (a.message === NOT_ISOLATED) {
+      // latched: no more space problems are dealt this session, and the player is told once
+      if (!spaceBlocked) say("Space problems need a browser page that keeps its memory to itself, so they are left out here.");
+      spaceBlocked = true;
+    } else say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
   }
   openedRun(state, p, now());
@@ -1570,7 +1574,7 @@ async function submit(p: ProblemState): Promise<void> {
     sendingWorks();
     p.closed = true;
     event(
-      `The server takes no more entries for ${problemTitle(p)}, because its optimum is proven. It leaves the queue.`,
+      `The server takes no more entries for ${problemTitle(p)}. It leaves the queue.`,
     );
     leave(state, p.key, now());
     return;
@@ -1639,7 +1643,7 @@ async function submit(p: ProblemState): Promise<void> {
       break;
     case "closed":
       event(
-        `The server takes no more entries for ${title} (${outcome.reasons.join(", ")}). It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
+        `The server takes no more entries for ${title}${outcome.reasons.length ? ` (${outcome.reasons.join(", ")})` : ""}. It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
       );
       leave(state, p.key, now());
       break;
@@ -1740,11 +1744,8 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
 }
 
 const dealerFilters = () => (inUse(owned(), "filters") ? state.picks.filters : null);
-/** The cycle's rule allows a problem: "circles only" and "small problems only" are polygon rules, so a space problem is not allowed under them. */
-const ruleOk = (p: ProblemKey): boolean =>
-  isPolygon(p)
-    ? ruleAllowsProblem(state.standing, p)
-    : state.standing.rule !== "circles" && state.standing.rule !== "small";
+/** The cycle's rule allows a problem: "circles only" and "small problems only" restrict polygon problems only, so space problems are dealt as usual under them. */
+const ruleOk = (p: ProblemKey): boolean => ruleAllowsProblem(state.standing, p);
 /** The player's filters and the cycle's rule allow a candidate. */
 const allowed = (c: ProblemKey & { tier?: Tier }) => passes(dealerFilters(), c) && ruleOk(c);
 
@@ -1839,11 +1840,12 @@ async function spaceInfo(io: DealIo, k: SpaceKey): Promise<SpaceRead | null> {
   return read;
 }
 
-/** The slices a space problem may be drawn from now: those open in the dimensions opened, unless the cycle's rule is a polygon one. */
+/** Set once a space run could not open because the page is not cross-origin isolated: no space problems are dealt this session. */
+let spaceBlocked = false;
+
+/** The slices a space problem may be drawn from now: those open in the dimensions opened (the cycle's rules restrict polygon problems only), none once the page proved unable to run space problems. */
 function dealableSlices(): SliceId[] {
-  return state.standing.rule === "circles" || state.standing.rule === "small"
-    ? []
-    : openSlices(owned(), state.standing);
+  return spaceBlocked ? [] : openSlices(owned(), state.standing);
 }
 
 /** Problems of a dimension dealt, offered or left so far. */

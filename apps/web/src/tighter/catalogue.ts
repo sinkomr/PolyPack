@@ -1,7 +1,7 @@
 import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PROBLEM_NAMES } from "@polypack/polyhedra/catalogue";
 import { DealerState, nextRandom } from "./dealer";
-import { SpaceKey } from "./frontier";
+import { ProblemKey, SpaceKey, isPolygon, parseKey } from "./frontier";
 import { spaceFields } from "./families";
 import { SliceId } from "./slices";
 
@@ -88,8 +88,9 @@ export function sliceOfId(id: string): SliceId | null {
     case "sphere":
     case "torus":
     case "curved":
-    case "balls":
       return f.family;
+    case "balls":
+      return BALLS_CODES.includes(f.code) ? "balls" : null;
     case "polyhedra":
       return POLY_SLICE_OF.get(f.code) ?? null;
     case "surface": {
@@ -101,6 +102,18 @@ export function sliceOfId(id: string): SliceId | null {
       return faces <= 24 ? "surf-catalan-a" : faces <= 60 ? "surf-catalan-b" : "surf-catalan-c";
     }
   }
+}
+
+/**
+ * A problem key read from a save or a cheat: a polygon key, or a space key whose id is a space
+ * problem's (spaceFields) of the key's family and piece count and that a slice deals (sliceOfId).
+ * Null for anything else, so that titles and drawings never meet an id they cannot read.
+ */
+export function parseDealtKey(key: string): ProblemKey | null {
+  const k = parseKey(key);
+  if (!k || isPolygon(k)) return k;
+  const f = spaceFields(k.id);
+  return f && f.family === k.family && f.P === k.P && sliceOfId(k.id) !== null ? k : null;
 }
 
 export const inSlice = (slice: SliceId, id: string): boolean => sliceOfId(id) === slice;
@@ -180,7 +193,7 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
   if (listed) {
     const all = o.listings[listed];
     if (!all) return null;
-    const ok = all.filter((p) => dealtFromListing(p) && inSlice(slice, p.id) && !o.exclude.has(p.id));
+    const ok = all.filter((p) => p.P >= 2 && dealtFromListing(p) && inSlice(slice, p.id) && !o.exclude.has(p.id));
     const small = o.starter ? ok.filter((p) => p.P >= STARTER_P.min && p.P <= STARTER_P.max) : [];
     const from = small.length ? small : ok;
     if (!from.length) return null;
@@ -204,7 +217,7 @@ export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions)
     const solid = pick(d, o.starter && slice === "surf-platonic" ? STARTER_SOLIDS : solids);
     // pieces: a disk (0), or a polygon of 3 to 100 sides; a starter has few sides
     const N = o.starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 98 ? 0 : span(d, 3, 100);
-    const P = o.starter ? span(d, STARTER_P.min, STARTER_P.max) : span(d, 1, 100);
+    const P = o.starter ? span(d, STARTER_P.min, STARTER_P.max) : span(d, 2, 100);
     const id = `surface/${solid}/${mode}/${N}/${P}`;
     if (!o.exclude.has(id)) return keyFor(id, P, "surface");
   }

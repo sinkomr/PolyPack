@@ -1,8 +1,10 @@
 import { Worker } from "node:worker_threads";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { checkSpaceConfig, parseSearchProblem, spaceKernel } from "@polypack/spaces/search";
 import { createRunHost } from "../src/tighter/run-host";
 import type { HostReply } from "../src/tighter/run-host";
+import { Lane } from "../src/tighter/lanes";
+import type { OpenRunRequest } from "../src/tighter/open-run";
 import { SpaceRunControl } from "../src/tighter/space-control";
 import { SpaceRun, spaceStart } from "../src/tighter/space-run";
 import type { SpaceRunRequest, SpaceRunState } from "../src/tighter/space-run-types";
@@ -174,6 +176,79 @@ describe("Tighter space runs", () => {
       expect(c.score, id).toBe(a.score);
     }
     expect(spaceStart({ family: "sphere", id: "nonsense", seed: 1 }).ok).toBe(false);
+  });
+});
+
+describe("Tighter space runs and their finishes", () => {
+  it("report every finish whose cost was counted, stepped one game evaluation at a time", () => {
+    // a ball packing's finish costs 1144 kernel evaluations: 57 game evaluations of 20
+    const unit = 20;
+    const k = spaceKernel(parseSearchProblem(BALLS)!)!;
+    expect(k.finishCost).toBeGreaterThan(10 * unit);
+    const req = request("balls", BALLS, { budget: { evals: 150 }, unit, seed: 3 });
+    const one = drive(req, () => 1);
+    const free = drive(req, () => 10_000);
+    expect(one.pauses.length).toBeGreaterThan(20);
+    let best = Infinity;
+    for (const p of one.pauses) {
+      // a pause is never inside a finish: once the evaluations of a finish are counted, its result is in the state
+      if (p.state.evaluations * unit >= k.finishCost) expect(p.state.last).not.toBeNull();
+      if (p.state.score !== null) {
+        expect(p.state.score).toBeLessThanOrEqual(best);
+        best = p.state.score;
+      }
+    }
+    expect(one.final.score).toBe(free.final.score);
+    expect(one.final.best).toEqual(free.final.best);
+    expect(one.final.evaluations).toBe(free.final.evaluations);
+    expect(one.final.found).toBe(free.final.found);
+  });
+
+  it("end, not block, when allowed exactly their budget", () => {
+    const req = request("sphere", SPHERE, { budget: { evals: 30 }, unit: 20 });
+    const { final, pauses } = drive(req, () => 30);
+    expect(pauses).toHaveLength(0);
+    expect(final.ended).toBe(true);
+    expect(final.closed).toBe(false);
+    expect(final.error).toBeUndefined();
+  });
+});
+
+describe("Tighter lanes closed while opening", () => {
+  class FakeWorker {
+    onmessage = null;
+    onerror = null;
+    onmessageerror = null;
+    postMessage() {}
+    terminate() {}
+  }
+  const realWorker = (globalThis as { Worker?: unknown }).Worker;
+  const realIsolated = (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated;
+  afterEach(() => {
+    (globalThis as { Worker?: unknown }).Worker = realWorker;
+    (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated = realIsolated;
+  });
+
+  it("answer the opening as closed and open again", async () => {
+    (globalThis as { Worker?: unknown }).Worker = FakeWorker;
+    (globalThis as { crossOriginIsolated?: boolean }).crossOriginIsolated = true;
+    const lane = new Lane(0);
+    const space = request("sphere", SPHERE);
+    const first = lane.openSpace(space);
+    expect(lane.pending).toBe(1);
+    void lane.close();
+    expect(await first).toEqual({ ok: false, message: "closed while opening" });
+    expect(lane.pending).toBe(0);
+    // the next open is a new opening, not refused as "a run is being opened"
+    void lane.openSpace(space);
+    expect(lane.pending).toBe(1);
+    void lane.close();
+    const polygon = lane.openRun({} as OpenRunRequest);
+    void lane.close();
+    expect(await polygon).toEqual({ ok: false, message: "closed while opening" });
+    void lane.openRun({} as OpenRunRequest);
+    expect(lane.pending).toBe(1);
+    lane.terminate();
   });
 });
 
