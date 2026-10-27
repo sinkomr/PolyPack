@@ -13,6 +13,7 @@ import { Board } from "./board";
 import { foundWithLabel, submissionFields } from "./found-with";
 import { CLOSED_NOTE, acceptedMessage, leaderboardNote } from "./leaderboard-text";
 import { decodeShare, encodeShare } from "./share";
+import { readStoredBoard, taggedBoard } from "./board-units";
 import { fillShapeSelect } from "./shapes-ui";
 import { BoardView } from "./view";
 import { SnapMode } from "./snapping";
@@ -329,7 +330,7 @@ function render(): void {
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(board.toConfig()));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(taggedBoard(board.toConfig())));
     } catch {
       // storage can be unavailable (private mode); the board still works
     }
@@ -503,7 +504,7 @@ $("submit").addEventListener("click", async () => {
 
 $("export").addEventListener("click", () => {
   const s = board.state;
-  const blob = new Blob([JSON.stringify(board.toConfig(), null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(taggedBoard(board.toConfig()), null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `polypack-N${s.N}-M${s.M}-P${s.P}.json`;
@@ -518,7 +519,7 @@ importFile.addEventListener("change", async () => {
   if (!file) return;
   let parsed;
   try {
-    parsed = parseConfig(JSON.parse(await file.text()));
+    parsed = readStoredBoard(JSON.parse(await file.text()));
   } catch {
     return say("Import failed: the file is not valid JSON.");
   }
@@ -589,7 +590,7 @@ function loadInitial(): void {
   let restored = false;
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    const parsed = saved ? parseConfig(JSON.parse(saved)) : null;
+    const parsed = saved ? readStoredBoard(JSON.parse(saved)) : null;
     restored = !!parsed?.ok && !board.load(parsed.config, false);
   } catch {
     // fall through to the default board

@@ -327,7 +327,7 @@ An independent non-Euclidean research run (kept outside the repository, differen
 - Values are best found, not proven optimal (except P = 1 disk cases and the {3, q} tilings, which meet the inradius or area bound). Status is `best_known` throughout.
 - Open P_max gaps at K = −1: triangles in M = 3, 4, 5, 6, 8 (found 2, 7, 13, 19, 29 against cusp bounds 5, 12, 19, 26, 40), squares in a square (1 against 4) and pentagon (5 against 7), pentagons in a pentagon (1 against 4) and hexagon (3 against 5), squares in a hexagon (6 against 10) and octagon (9 against 16), hexagons in an octagon (3 against 6), pentagons in an octagon (5 against 9). A two-piece branch-and-bound over separating lines would likely settle squares and pentagons in their own polygon.
 - At K = +1: squares fit three times in every container tried (bound 5); triangles about ten (bound 12).
-- The spherical problem is restricted to containers in an open hemisphere. Larger caps (r up to π/√K) are meaningful for disk containers (two radius-1 disks need r = 2, three r = 1 + asin(sin 1 / sin 60°) = 2.3327 at K = 1) but need a chart-free pair test; not implemented.
+- The spherical problem is restricted to containers in an open hemisphere. Larger caps (r up to π/√K) are meaningful for disk containers (two disks of diameter 1 need a container of diameter 2, three need 1 + 2 asin(sin(1/2) / sin 60°) = 2.1733 at K = 1) but need a chart-free pair test; not implemented.
 - The float validator's accuracy degrades like cosh² of the distance from O; the certifier has no such limit. Containers far beyond s ≈ 30 at K = −1 were not needed.
 - `continueTo` follows one branch; it does not detect a better branch appearing elsewhere.
 
