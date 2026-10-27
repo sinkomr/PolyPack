@@ -1,12 +1,13 @@
 /**
  * Cost of the search's evaluations: microseconds per evaluation of a run of `evals` from a fresh start (its polish
  * and hops), wall time included the work between evaluations (pair lists, legalizations), for each problem at a few P.
- *   npx tsx scripts/bench.ts [evals]
+ *   npx tsx scripts/bench.ts [evals] [code,code,...]
+ * (without codes, the first 7 problems; the 189 take long)
  */
-import { BALLS_CODES, getBallsProblem, searchBalls } from "../src";
+import { BALLS_ORIGINAL_CODES, getBallsProblem, searchBalls } from "../src";
 
 const evals = Number(process.argv[2] ?? 30000);
-for (const code of BALLS_CODES)
+for (const code of process.argv[3]?.split(",") ?? BALLS_ORIGINAL_CODES)
   for (const P of [10, 30, 60, 100]) {
     const t = performance.now();
     const r = searchBalls(getBallsProblem(code)!, P, { seed: 1, maxEvals: evals });

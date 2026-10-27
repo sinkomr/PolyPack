@@ -25,7 +25,7 @@ async function drawn(page: Page, pieces: number, what = "[a-z]+"): Promise<void>
   await expect(page.locator(".space-draw")).toHaveAttribute(
     "aria-label",
     new RegExp(
-      `^${pieces} ${what} in a (ball of radius|cube of edge) \\d+\\.\\d{6}, drawn in 3D\\. Drag it or use the arrow keys to turn it\\.$`,
+      `^${pieces} ${what} in an? [\\w .]+? (of radius|of edge|scaled by) \\d+\\.\\d{6}, drawn in 3D\\. Drag it or use the arrow keys to turn it\\.$`,
     ),
     LAZY_VIEW,
   );
@@ -73,15 +73,11 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
   await expect(facts).toContainText("Entriesopen");
   await expect(page.locator("#space-score-label")).toHaveText("Container radius s");
   await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
-  await expect(page.locator("#space-f-code option")).toHaveText([
-    "Balls in a ball",
-    "Balls in a cube",
-    "Tetrahedra in a ball",
-    "Cubes in a ball",
-    "Octahedra in a ball",
-    "Dodecahedra in a ball",
-    "Icosahedra in a ball",
-  ]);
+  // 189 problems in 16 menu groups: balls in a ball or a Platonic solid first
+  await expect(page.locator("#space-f-code option")).toHaveCount(189);
+  await expect(page.locator("#space-f-code optgroup")).toHaveCount(16);
+  await expect(page.locator("#space-f-code option").first()).toHaveText("Balls in a ball");
+  await expect(page.locator('#space-f-code optgroup[label="Balls in a Catalan solid"] option')).toHaveCount(13);
   await expect(page.locator("#space-f-P option")).toHaveCount(99);
 
   const status = await runFor(page, 40000);
@@ -123,6 +119,29 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
   await expect(page.locator("#family-select")).toHaveValue("balls");
   await opened(page, "balls/dodinball/10");
   await drawn(page, 10, "dodecahedra");
+});
+
+test("3D in 3D > Balls opens balls in a Catalan solid and a prism in a ball from the grouped menu, runs and draws them", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await page.goto("/#space=balls/ballinpkd/6");
+  await opened(page, "balls/ballinpkd/6");
+  await expect(page.locator("#space-f-code")).toHaveValue("ballinpkd");
+  await expect(page.locator("#space-score-label")).toHaveText("Container scale s");
+  await expect(page.locator("#space-empty")).toHaveText(EMPTY);
+  await runFor(page, 12000);
+  await resultValid(page, "balls/ballinpkd/6");
+  await drawn(page, 6, "balls");
+  await expect(page.locator(".space-draw")).toHaveAttribute("aria-label", /^6 balls in a pentakis dodecahedron scaled by \d+\.\d{6}, drawn in 3D\./);
+  // a prism of height 1.5 in a ball, chosen in the menu
+  await page.selectOption("#space-f-code", "pr3l15inball");
+  await page.selectOption("#space-f-P", "4");
+  await opened(page, "balls/pr3l15inball/4");
+  await expect(page.locator("#space-score-label")).toHaveText("Container radius s");
+  await runFor(page, 8000);
+  await resultValid(page, "balls/pr3l15inball/4");
+  await drawn(page, 4, "triangular prisms of height 1\\.5");
 });
 
 test("a balls run at P = 100 pauses and stops at once", async ({ page }) => {
@@ -189,12 +208,12 @@ test("the dimensions page lists Balls under 3D in 3D, its problems without recor
   await page.goto("/dimensions.html");
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="balls"]');
   await expect(card.getByRole("heading", { name: "Balls", exact: true })).toBeVisible();
-  await expect(card).toContainText("693, none with a record yet");
+  await expect(card).toContainText("18,711, none with a record yet");
   // its problems are a domain: the records table lists none, and says where to work on them
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="balls"]')).toBeChecked();
   await expect(page.locator("#space-note")).toHaveText(
-    "No records yet. All 693 problems of this kind are open: choose one on the board, or let the volunteer client search them.",
+    "No records yet. All 18,711 problems of this kind are open: choose one on the board, or let the volunteer client search them.",
   );
   await page.goto("/dimensions.html");
   await page

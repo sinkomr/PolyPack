@@ -1,6 +1,10 @@
 /**
- * The balls kernel for unit-edge Platonic solids in a ball (kernel.ts has the whole kernel's description). It is
- * the polyhedra space's kernel (packages/polyhedra/src/kernel.ts) with a ball for the container.
+ * The balls kernel for unit-edge solids, any of the polyhedra space's 94, in a ball (kernel.ts has the whole
+ * kernel's description). It is the polyhedra space's kernel (packages/polyhedra/src/kernel.ts) with a ball for the
+ * container. Its rho and Rc are the solid's inradius (the least face offset) and circumradius (the largest vertex
+ * distance), both about the vertex centroid, which is the centre of the solid's largest inscribed ball and of its
+ * smallest enclosing ball for all 94 (container.ts); so the soft shapes below lie inside the solid, and the ball of
+ * radius t Rc + (1 - t) rho about the centre holds the soft piece, also for the long and the thin prisms.
  *
  * State. Piece i owns x[6i .. 6i + 5]: its centre (3 lengths), then its chart rotation r, a rotation vector times
  * the piece's circumradius Rc so that it reads as a length: the piece is turned by exp([r / Rc]x) A_i, the anchor
@@ -52,7 +56,7 @@ import {
   unitQuat,
 } from "@polypack/polyhedra";
 import { latticeCut } from "./ball-pieces";
-import { type BallsProblem, ballsProblemOf } from "./catalogue";
+import { BALL_RADIUS, type BallsProblem, ballContainerRadius, ballsProblemOf } from "./catalogue";
 import { ballsServerRule, finishBallsConfig } from "./kernel-rule";
 import { BALLS_CLEARANCE } from "./search";
 import { cubeLatticeCut, legalizeSolids, solidsAt } from "./solid-pieces";
@@ -85,9 +89,15 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
   // icosahedron. Fitted: 250 / (1 + satUs / 35), that is 233 to 244 energies for tetrahedra, cubes and octahedra and
   // 141 for dodecahedra and icosahedra, which the measured finishes were 0.41 to 2.9 times in 80 % of the 105 runs
   // (median 0.95; 0.21 to 5.2 in all, and the three starts of one case up to 10 times apart). A validate (two
-  // checks, at the touching and the strict tolerance) cost 1.7 to 8.2 energies (median 3.2).
+  // checks, at the touching and the strict tolerance) cost 1.7 to 8.2 energies (median 3.2). [CALC] For the other 89
+  // solids the same fit, checked with the same bench on 11 of them at P = 5, 10 and 30 (tetrahedra, dodecahedra,
+  // truncated tetrahedra, truncated icosidodecahedra, pentagonal hexecontahedra, prisms of height 3, 12-gonal prisms of
+  // height 3, 12-gonal trapezohedra, 12-gonal bipyramids, triakis icosahedra, disdyakis triacontahedra, 12-gonal
+  // antiprisms): the measured finishes were 0.5 to 3.6 times the fit where it gives 31 or more, and up to 9 times
+  // (at P = 5) where the many edges drive it below that, truncated icosidodecahedra (fit 24, measured 48 to 214),
+  // pentagonal hexecontahedra (12; 20 to 62) and disdyakis triacontahedra (10; 26 to 39). So it has a floor of 30.
   const satUs = shape.prune ? 0.03 * shape.edges.length ** 2 : 0.012 * shape.edirs.length ** 2 * shape.nv;
-  const finishCost = Math.round(250 / (1 + satUs / 35));
+  const finishCost = Math.max(30, Math.round(250 / (1 + satUs / 35)));
   const validateCost = 3;
   const rho = piece.inradius;
   const Rc = piece.circumradius;
@@ -184,7 +194,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
       const cy = x[o + 1];
       const cz = x[o + 2];
       // no vertex of the core is farther than t Rc from the centre
-      if (Math.hypot(cx, cy, cz) + t * Rc + r <= s.size) return;
+      if (Math.hypot(cx, cy, cz) + t * Rc + r <= ballContainerRadius(s.size)) return;
       const X = core(i).X;
       let m2 = -1;
       let im = 0;
@@ -196,7 +206,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
         }
       }
       const m = Math.sqrt(m2);
-      const viol = m + r - s.size;
+      const viol = m + r - ballContainerRadius(s.size);
       if (!(viol > 0)) return;
       const wi = w ? w[i] : 1;
       e += wi * viol * viol;
@@ -425,7 +435,7 @@ export function solidPiecesKernel(pb: BallsProblem, P: number, common: { id: str
         let poses: Pose[];
         if (kind === "cubes") poses = cubeLatticeCut(P, rng);
         else {
-          const R = Rc * (1 + 1e-9);
+          const R = (Rc / BALL_RADIUS) * (1 + 1e-9);
           const centres = latticeCut(unitBalls, P, rng, kind, true).map((c) => [c[0] * R, c[1] * R, c[2] * R]);
           poses = solidsAt(centres, rng);
         }

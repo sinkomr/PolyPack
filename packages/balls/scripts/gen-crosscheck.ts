@@ -1,5 +1,5 @@
 /**
- * Near-contact cases for the cross-check of the float validator and the certifier: for each of the 7 problems,
+ * Near-contact cases for the cross-check of the float validator and the certifier: for each of the first 7 problems,
  * two pieces in random orientations moved apart along a random direction to separations of +-1e-7 and +-1e-9
  * (found by bisection on the validator's measured separation), and one piece at wall gaps of +-1e-7 and +-1e-9.
  * Each case stores the validator's measured gap. python/balls/test_certify.py checks that the certifier proves
@@ -8,7 +8,7 @@
  *
  *   npx tsx scripts/gen-crosscheck.ts > ../../python/balls/fixtures/crosscheck.json
  */
-import { BALLS_PROBLEMS, type BallsConfig, validateBalls } from "../src";
+import { BALLS_ORIGINAL_CODES, type BallsConfig, getBallsProblem, validateBalls } from "../src";
 import { mulberry32, randomQuaternion } from "../src/random";
 import { getSolid } from "@polypack/polyhedra";
 
@@ -21,7 +21,8 @@ const unit = (): [number, number, number] => {
   return [q * Math.cos(phi), q * Math.sin(phi), u];
 };
 
-for (const problem of BALLS_PROBLEMS) {
+// the first 7 problems; gen-crosscheck-solids.ts has the others
+for (const problem of BALLS_ORIGINAL_CODES.map((c) => getBallsProblem(c)!)) {
   const ball = problem.piece === "ball";
   const R = ball ? 1 : getSolid(problem.piece).circumradius;
   for (let t = 0; t < 3; t++) {

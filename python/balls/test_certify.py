@@ -9,6 +9,7 @@ import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import balls_catalogue  # noqa: E402
 import certify  # noqa: E402
 from balls_catalogue import bound  # noqa: E402
 
@@ -193,6 +194,108 @@ class CrossCheck(unittest.TestCase):
                 self.assertFalse(r['ok'], (c['code'], c['what'], c['gap']))
 
 
+class Catalogue(unittest.TestCase):
+    """The 189 problems and their bounds agree with packages/balls (fixtures/bounds.json, scripts/gen-bounds.ts)."""
+
+    def test_codes_ids_and_titles(self):
+        c = balls_catalogue
+        self.assertEqual(len(c.CODES), 189)
+        self.assertEqual(len(set(c.CODES)), 189)
+        self.assertEqual(c.ORIGINAL_CODES, ['ballinball', 'ballincub', 'tetinball', 'cubinball', 'octinball', 'dodinball', 'icoinball'])
+        self.assertEqual(c.PROBLEMS['ballinpkd'], {'piece': 'ball', 'container': 'pentakis_dodecahedron', 'title': 'Balls in a pentakis dodecahedron'})
+        self.assertEqual(c.PROBLEMS['kttinball']['title'], 'Triakis tetrahedra in a ball')
+        self.assertEqual(c.PROBLEMS['pr3l15inball']['title'], 'Triangular prisms of height 1.5 in a ball')
+        self.assertEqual(c.PROBLEMS['ballinoct']['title'], 'Balls in an octahedron')
+        self.assertEqual(c.parse_id('balls/pr3l15inball/7'), ('pr3l15inball', 7))
+        self.assertEqual(c.parse_id('balls/ballinpkd/100'), ('ballinpkd', 100))
+        for bad in ('balls/ballinpkd/1', 'balls/ballinpkd/101', 'balls/ballinpkd/07', 'balls/ballinPKD/5', 'balls/3inball/5', 'balls/pr3l16inball/5'):
+            self.assertIsNone(c.parse_id(bad), bad)
+        self.assertEqual(c.BALL_RADIUS, 1)
+
+    def test_bounds_and_solid_geometry_match_the_typescript(self):
+        with open(os.path.join(HERE, 'fixtures', 'bounds.json')) as f:
+            d = json.load(f)
+        self.assertEqual(len(d['solids']), 94)
+        self.assertEqual(len(d['bounds']), 189 * 3)
+        for name, g in d['solids'].items():
+            h = balls_catalogue.geometry(name)
+            self.assertEqual(h['tangential'], g['tangential'], name)
+            for k in ('volume', 'inradius', 'circumradius', 'diameter'):
+                self.assertAlmostEqual(h[k] / g[k], 1.0, delta=1e-12, msg=f'{name} {k}')
+        for b in d['bounds']:
+            self.assertAlmostEqual(bound(b['code'], b['P']) / b['value'], 1.0, delta=1e-12, msg=str(b))
+        # the bound of a ball in a tetrahedron at P = 2: the two far vertices of the shrunk tetrahedron
+        self.assertAlmostEqual(bound('ballintet', 2), 12 / math.sqrt(6) + 2, delta=1e-12)
+
+
+class SolidContainers(unittest.TestCase):
+    """Balls in a solid other than the ball and the cube: the walls are decided with interval arithmetic."""
+
+    def test_a_centred_ball_needs_the_inradius(self):
+        # the octahedron (edge 1) has inradius sqrt 6 / 6: one ball of radius 1 fits from s = sqrt 6 on
+        s = math.sqrt(6)
+        for k, ok in ((1e-9, True), (1e-12, True), (1e-15, True), (-1e-15, False), (-1e-9, False)):
+            r = certify.certify_balls('octahedron', s * (1 + k), [[0.0, 0.0, 0.0]])
+            self.assertEqual(r['ok'], ok, k)
+            self.assertAlmostEqual(r['min_wall_gap'], s * k / math.sqrt(6), delta=1e-14)
+        r = certify.certify_balls('octahedron', s * 0.9, [[0.0, 0.0, 0.0]])
+        self.assertEqual(r['failed_walls'], [0])
+
+    def test_pairs_and_walls_together(self):
+        # two balls on the axis of a hexagonal prism (edge 1, height 1): the prism's ends are at 0.5, so s * 0.5 >= 1 + |c_z|
+        s = 4.5
+        z = s * 0.5 - 1
+        ok = certify.certify_balls('prism6', s, [[0.0, 0.0, z * (1 - 1e-12)], [0.0, 0.0, -z * (1 - 1e-12)]])
+        self.assertTrue(ok['ok'])
+        self.assertAlmostEqual(ok['min_pair_gap'], 2 * z - 2, delta=1e-9)
+        bad = certify.certify_balls('prism6', s, [[0.0, 0.0, z * (1 + 1e-9)], [0.0, 0.0, -z * (1 - 1e-12)]])
+        self.assertEqual(bad['failed_walls'], [0])
+        near = certify.certify_balls('prism6', s, [[0.0, 0.0, 0.0], [0.0, 0.0, 2 - 1e-9]])
+        self.assertEqual(near['failed_pairs'], [[0, 1]])
+        self.assertFalse(near['ok'])
+
+    def test_malformed_and_unknown(self):
+        with self.assertRaises(certify.CertError):
+            certify.certify_balls('no_such_solid', 3.0, [[0.0, 0.0, 0.0]])
+        with self.assertRaises(certify.CertError):
+            certify.certify_balls('octahedron', 3.0, [[0.0, 0.0]])
+        with self.assertRaises(certify.CertError):
+            certify.certify_balls('octahedron', 0.0, [[0.0, 0.0, 0.0]])
+        with self.assertRaises(certify.CertError):
+            certify.certify_balls('octahedron', 3.0, [[0.0, 0.0, float('nan')]])
+
+    def test_a_record_of_a_new_problem_passes_its_field_checks(self):
+        s = 2 * math.sqrt(6) * (1 + 1e-9)
+        rec = a_record('ballinoct', 2, s, [[0.3, 0.0, 0.0], [-0.3, 0.0, 0.0]])
+        rec['bound']['value'] = bound('ballinoct', 2)
+        res = certify.certify_record(rec)
+        self.assertFalse(res['ok'], res)       # the balls overlap
+        rec['config']['pieces'] = [[1.0, 0.0, 0.0], [-1.0, 0.0, 0.0]]
+        self.assertTrue(certify.certify_record(rec)['ok'], certify.certify_record(rec))
+        rec['container'] = 'cube'
+        self.assertFalse(certify.certify_record(rec)['ok'])
+
+    def test_validator_and_certifier_agree_near_contact_on_the_solids(self):
+        # fixtures/crosscheck_solids.json: 702 cases from packages/balls/scripts/gen-crosscheck-solids.ts with the float
+        # validator's measured gaps (+-1e-7, +-1e-9, +-1e-12): one ball against the walls of each of the 93 solids that
+        # are no cube, and pairs and walls of 8 solids in a ball. The certifier is exact, the validator's floats err by
+        # about 1e-16 of the sizes, so they agree wherever the gap exceeds 1e-13.
+        with open(os.path.join(HERE, 'fixtures', 'crosscheck_solids.json')) as f:
+            cases = json.load(f)['cases']
+        self.assertEqual(len(cases), 702)
+        seen = {'valid': 0, 'invalid': 0}
+        for c in cases:
+            r = certify.certify_config(c['code'], c['config']['s'], c['config']['pieces'])
+            if c['gap'] > 1e-13:
+                self.assertTrue(r['ok'], (c['code'], c['what'], c['gap']))
+                seen['valid'] += 1
+            elif c['gap'] < -1e-13:
+                self.assertFalse(r['ok'], (c['code'], c['what'], c['gap']))
+                seen['invalid'] += 1
+        self.assertEqual(seen['valid'], 351)
+        self.assertEqual(seen['invalid'], 351)
+
+
 class TestPackings(unittest.TestCase):
     """fixtures/packings.json: test packings of every problem kind at P = 2, 5, 13, 30, 80 and 100 (not records: the
     problems ship without any). Each is proven valid, and fails once its container is shrunk by 1e-8 relative."""
@@ -203,7 +306,7 @@ class TestPackings(unittest.TestCase):
             cls.packings = json.load(f)['packings']
 
     def test_every_kind_and_size(self):
-        self.assertEqual(sorted({p['code'] for p in self.packings}), sorted(certify.catalogue.CODES))
+        self.assertEqual(sorted({p['code'] for p in self.packings}), sorted(certify.catalogue.ORIGINAL_CODES))
         self.assertEqual(len(self.packings), 7 * 6)
         for p in self.packings:
             r = certify.certify_config(p['code'], p['config']['s'], p['config']['pieces'])

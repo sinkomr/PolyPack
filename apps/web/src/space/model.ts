@@ -182,7 +182,15 @@ export function scoreLabel(p: SearchProblem): string {
     case "polyhedra":
       return "Container scale s";
     case "balls":
-      return ballsProblemOf(p.code)?.container === "cube" ? "Cube edge s" : "Container radius s";
+      switch (ballsProblemOf(p.code)?.container) {
+        case "cube":
+          return "Cube edge s";
+        case "ball":
+        case undefined:
+          return "Container radius s";
+        default:
+          return "Container scale s";
+      }
   }
 }
 
@@ -492,16 +500,27 @@ const BALLS_SOLID_EVAL_US: Record<string, number> = {
   dodecahedron: 1.2,
   icosahedron: 1.0,
 };
+/**
+ * The other 89 solids in a ball [CALC] (the same bench on 11 of them, tetrahedra to truncated icosidodecahedra, prisms
+ * of height 3, the 12-sided bipyramid and trapezohedron, the disdyakis triacontahedron and the pentagonal
+ * hexecontahedron, at 10, 30 and 100 pieces, Node 26 on an Apple Silicon laptop, 2026-10-26, 8,000 evaluations from a
+ * new start): 1.6 to 5.6 microseconds a piece, 10 for 100 pentagonal hexecontahedra; 5 is used for all.
+ * Balls in a solid other than the cube cost one hinge per face for each ball: [CALC] the same bench at 10, 30 and 100
+ * balls took 0.65 to 1.75 times the balls in a ball (0.65 for the tetrahedron, 1.5 for the 60 faces of the pentakis
+ * dodecahedron, 1.75 for the 120 of the disdyakis triacontahedron), so 1 + faces / 150.
+ */
+const BALLS_OTHER_SOLID_EVAL_US = 5;
 
 export function ballsRound(P: number, code: string): { round: number; fresh: number; evalUs: number } {
   const problem = ballsProblemOf(code);
   const k = (n: number) => 1000 * Math.floor(n / 1000);
   if (!problem || problem.piece === "ball") {
-    const evalUs = 0.6 + 0.15 * P;
+    const faces = problem && problem.container !== "ball" && problem.container !== "cube" ? getPolyhedraSolid(problem.container).faces.length : 0;
+    const evalUs = (0.6 + 0.15 * P) * (1 + faces / 150);
     const round = k(Math.max(20000, Math.min(300000, 2e6 / evalUs)));
     return { round, fresh: round, evalUs };
   }
-  const evalUs = P * BALLS_SOLID_EVAL_US[problem.piece];
+  const evalUs = P * (BALLS_SOLID_EVAL_US[problem.piece] ?? BALLS_OTHER_SOLID_EVAL_US);
   const round = k(Math.max(10000, Math.min(200000, 3e6 / evalUs)));
   return { round, fresh: round, evalUs };
 }

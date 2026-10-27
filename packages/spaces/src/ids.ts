@@ -11,8 +11,9 @@
  *  - torus/<family>/<N>/<P>            e.g. torus/hex/5/8
  *  - boundary/<polytope>/<piece>/<P>   e.g. boundary/tesseract/ball/9
  *  - polyhedra/<code>/<P>              e.g. polyhedra/cubintet/12 (code: the wiki's <piece>in<container>)
- *  - balls/<code>/<P>                  e.g. balls/ballinball/13 (code <piece>in<container>: piece ball or a
- *                                      Platonic solid, container ball or cub)
+ *  - balls/<code>/<P>                  e.g. balls/ballinball/13, balls/ballinpkd/20 (code <piece>in<container>:
+ *                                      the piece or the container ball, the other one of the polyhedra space's
+ *                                      solid codes)
  *
  * An id is accepted only in its one written form (no leading zeros, no "+", K written as the
  * research records write it), so that every problem has exactly one id.
@@ -20,7 +21,7 @@
 import { PIECES, POLYTOPES, parseBoundaryId } from "@polypack/boundary";
 import type { PieceName, PolytopeName } from "@polypack/boundary";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
-import { BALLS_CODES, parseBallsId } from "@polypack/balls/catalogue";
+import { BALLS_CODES_HINT, parseBallsId } from "@polypack/balls/catalogue";
 import { SpaceName, isSpaceName } from "./types";
 
 /**
@@ -193,7 +194,7 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
       return { space, id, fields: { code: problem.code, piece: problem.piece, container: problem.container, P }, P };
     }
     case "balls": {
-      const pattern = `balls/<code>/<P>, code one of ${BALLS_CODES.join(", ")}`;
+      const pattern = `balls/<code>/<P>, code ${BALLS_CODES_HINT}`;
       const parsed = parseBallsId(id);
       if (typeof parsed === "string") return bad(pattern);
       const { problem, P } = parsed;

@@ -4,8 +4,8 @@
  *
  *  - the pieces: one instanced mesh, of a sphere (unit balls) or of the Platonic solid (with its edges merged into
  *    one set of line segments), one matrix and one colour per piece;
- *  - the container: a ball as a faint see-through sphere with three great circles, or a cube as its edges over faint
- *    see-through faces;
+ *  - the container: a ball as a faint see-through sphere with three great circles, or a solid (the cube, or any of the
+ *    polyhedra space's other 93, scaled by s) as its edges over faint see-through faces;
  *  - views: "Solid" (opaque pieces) and "See-through" (translucent pieces, to see the inner ones);
  *  - drag or the arrow keys turn it; it is drawn only when something changes.
  *
@@ -14,7 +14,7 @@
  * buffer, so that the board can release the drawing while it shows another kind.
  */
 import type * as T from "three";
-import { ballsProblemOf } from "@polypack/balls/catalogue";
+import { BALL_RADIUS, ballsProblemOf } from "@polypack/balls/catalogue";
 import { getSolid, type Solid } from "@polypack/polyhedra";
 import type { SpaceConfig } from "@polypack/spaces";
 import { type SpaceRenderer, cssVar, fitCanvas, isDark, onDrag } from "./common";
@@ -64,11 +64,13 @@ function rotation(w: number, x: number, y: number, z: number): number[] {
   ];
 }
 
-/** "13 balls in a ball of radius 3.000000, drawn in 3D." */
-function describeText(title: string, cube: boolean, P: number, s: number): string {
+/** "13 balls in a ball of radius 3.000000, drawn in 3D." and "13 balls in a pentakis dodecahedron scaled by 3.000000, drawn in 3D." */
+function describeText(title: string, container: string, P: number, s: number): string {
   const at = title.lastIndexOf(" in ");
   const what = title.slice(0, at).toLowerCase();
-  return `${P} ${what} in ${cube ? "a cube of edge" : "a ball of radius"} ${s.toFixed(6)}, drawn in 3D.`;
+  const into = title.slice(at + 4).toLowerCase();
+  const how = container === "ball" ? "of radius" : container === "cube" ? "of edge" : "scaled by";
+  return `${P} ${what} in ${into} ${how} ${s.toFixed(6)}, drawn in 3D.`;
 }
 
 export function ballsRenderer(
@@ -78,7 +80,8 @@ export function ballsRenderer(
   const problem = ballsProblemOf(code);
   if (!problem) throw new Error(`unknown balls problem ${code}`);
   const solid = problem.piece === "ball" ? null : getSolid(problem.piece);
-  const cube = problem.container === "cube";
+  // the container solid of a ball piece's problem (the cube included: it is drawn as any solid)
+  const contSolid = problem.container === "ball" ? null : getSolid(problem.container);
   const cv = document.createElement("canvas");
   let view: "solid" | "clear" = "solid";
   let config: { s: number; pieces: number[][] } | null = null;
@@ -139,7 +142,7 @@ export function ballsRenderer(
       pieceGeometry.setAttribute("normal", new T3.BufferAttribute(normals, 3));
     } else {
       // fine enough to look round at 100 balls, coarse enough to stay a few thousand triangles each
-      pieceGeometry = new T3.SphereGeometry(1, P > 50 ? 20 : 28, P > 50 ? 14 : 20);
+      pieceGeometry = new T3.SphereGeometry(BALL_RADIUS, P > 50 ? 20 : 28, P > 50 ? 14 : 20);
     }
     // the faces sit a little behind their edges in the depth buffer, so that every edge shows
     pieceMaterial = new T3.MeshLambertMaterial({
@@ -153,18 +156,18 @@ export function ballsRenderer(
     boxEdgeMaterial = new T3.LineBasicMaterial({ transparent: true });
   }
 
-  /** The container's outline: three great circles of a ball, or the twelve edges of a cube. */
+  /** The container's outline: three great circles of a ball, or the edges of the solid scaled by s. */
   function outline(s: number): Float32Array {
-    if (cube) {
-      const h = s / 2;
-      const out: number[] = [];
-      for (const a of [-h, h])
-        for (const b of [-h, h]) {
-          out.push(-h, a, b, h, a, b);
-          out.push(a, -h, b, a, h, b);
-          out.push(a, b, -h, a, b, h);
+    if (contSolid) {
+      const out = new Float32Array(contSolid.edges.length * 6);
+      let o = 0;
+      for (const [a, b] of contSolid.edges)
+        for (const v of [a, b]) {
+          out[o++] = s * contSolid.V[3 * v];
+          out[o++] = s * contSolid.V[3 * v + 1];
+          out[o++] = s * contSolid.V[3 * v + 2];
         }
-      return Float32Array.from(out);
+      return out;
     }
     const n = 96;
     const out = new Float32Array(3 * n * 6);
@@ -226,7 +229,12 @@ export function ballsRenderer(
       objects.push(new T3.LineSegments(edgeGeometry, edgeMaterial!));
     }
     // the container: faint see-through faces and its outline
-    const faceGeometry = cube ? new T3.BoxGeometry(s, s, s) : new T3.SphereGeometry(s, 48, 32);
+    let faceGeometry: T.BufferGeometry;
+    if (contSolid) {
+      faceGeometry = new T3.BufferGeometry();
+      const { positions } = solidTriangles(contSolid);
+      faceGeometry.setAttribute("position", new T3.BufferAttribute(positions.map((v) => v * s), 3));
+    } else faceGeometry = new T3.SphereGeometry(s, 48, 32);
     const faces = new T3.Mesh(faceGeometry, boxFaceMaterial!);
     faces.renderOrder = 2;
     const outlineGeometry = new T3.BufferGeometry();
@@ -245,7 +253,7 @@ export function ballsRenderer(
     edgeMaterial!.color.copy(edge);
     edgeMaterial!.opacity = view === "clear" ? 0.35 : dark ? 0.55 : 0.5;
     boxEdgeMaterial!.color.copy(edge);
-    boxEdgeMaterial!.opacity = cube ? 0.9 : 0.45;
+    boxEdgeMaterial!.opacity = contSolid ? 0.9 : 0.45;
     boxFaceMaterial!.color.set(cssVar("--space-face") || (dark ? "#2a2c31" : "#ece8df"));
     boxFaceMaterial!.opacity = dark ? 0.1 : 0.16;
     const clear = view === "clear";
@@ -284,7 +292,7 @@ export function ballsRenderer(
     gl.setPixelRatio(window.devicePixelRatio || 1);
     gl.setSize(w, h, false);
     // the whole container in view, whatever its turn: a sphere of its circumradius
-    const r = cube ? (config.s * Math.sqrt(3)) / 2 : config.s;
+    const r = contSolid ? config.s * contSolid.circumradius : config.s;
     const fov = (camera.fov * Math.PI) / 180;
     const fit = Math.min(1, w / h);
     const d = (1.12 * r) / Math.sin(Math.atan(Math.tan(fov / 2) * fit));
@@ -378,7 +386,7 @@ export function ballsRenderer(
         : lost
           ? "The browser has taken this drawing's graphics context away; it is drawn again when the context comes back."
           : config
-            ? describeText(problem.title, cube, P, config.s)
+            ? describeText(problem.title, problem.container, P, config.s)
             : "No packing to draw.",
     destroy() {
       destroyed = true;

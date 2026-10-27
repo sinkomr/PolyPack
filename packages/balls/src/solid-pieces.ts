@@ -27,7 +27,7 @@
  * a little and shake it; then a polish. A smaller result replaces the best.
  */
 import { type Pose, StopSearch, getSolid, lbfgs, place, separation, type Solid } from "@polypack/polyhedra";
-import type { BallsProblem } from "./catalogue";
+import { type BallsProblem, ballContainerRadius, ballContainerScore } from "./catalogue";
 import { type Rng, gauss, randomQuaternion } from "./random";
 import type { BallsConfig } from "./validate";
 
@@ -106,7 +106,7 @@ function makeObjective(
     touched.fill(0);
     let pen = 0;
     // the sphere: vertices beyond s - w
-    const lim = s - w;
+    const lim = ballContainerRadius(s) - w;
     for (let i = 0; i < n; i++)
       for (const v of walls[i]) {
         const k = 3 * (i * nv + v);
@@ -310,7 +310,7 @@ export function legalizeSolids(problem: BallsProblem, poses0: ArrayLike<number>[
     const X = place(Pc, p).X;
     for (let k = 0; k < X.length; k += 3) far = Math.max(far, Math.hypot(X[k], X[k + 1], X[k + 2]));
   }
-  return { s: (far + w) * (1 + 4 * Number.EPSILON), pieces: poses };
+  return { s: ballContainerScore((far + w) * (1 + 4 * Number.EPSILON)), pieces: poses };
 }
 
 /**
