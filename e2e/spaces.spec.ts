@@ -262,8 +262,8 @@ test("3D on 4D has its card with Records, Board, Viewer and Notes, and its recor
   await expect(nine.nth(0)).toHaveText("9");
   const ninth = data.problems.find((p) => p.id === "boundary/tesseract/ball/9")!;
   await expect(nine.nth(1)).toHaveText(ninth.certified!.display);
-  // two balls in one cell without folding: 2 + 2 / sqrt 3 (docs/spaces/BOUNDARY.md 6)
-  await expect(nine.nth(4)).toContainText((2 + 2 / Math.sqrt(3)).toFixed(6));
+  // two balls in one cell without folding: 1 + 1 / sqrt 3 (docs/spaces/BOUNDARY.md 6)
+  await expect(nine.nth(4)).toContainText((1 + 1 / Math.sqrt(3)).toFixed(6));
   await expect(nine.nth(5)).toHaveText(gain(ninth.id));
   await nine.nth(4).locator("summary").click();
   await expect(nine.nth(4)).toContainText(plainNofoldLabel(ninth.extra!.nofold!.label));

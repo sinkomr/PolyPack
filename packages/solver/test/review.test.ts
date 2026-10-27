@@ -127,7 +127,7 @@ async function submit(app: ReturnType<typeof createApp>, config: PackingConfig) 
   const response = await app.request("/api/submit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ ...config, name: "reviewer", agent: "ai" }),
+    body: JSON.stringify({ ...config, units: "diameter", name: "reviewer", agent: "ai" }),
   });
   return {
     status: response.status,

@@ -159,7 +159,7 @@ test("a problem with a proven optimum takes no submissions, and an open one does
 
   // the server refuses on its own account, whatever the page does
   const r = await request.post("/api/submit", {
-    data: { N: 0, M: 0, P: 7, name: "x", container_phi: 0, pieces: await pieces(page) },
+    data: { N: 0, M: 0, P: 7, units: "diameter", name: "x", container_phi: 0, pieces: await pieces(page) },
   });
   expect(r.status()).toBe(409);
   expect((await r.json()).reasons[0]).toMatch(/^this problem is closed: its optimum 3 is proven \(.+\)$/);

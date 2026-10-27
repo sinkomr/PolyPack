@@ -1,4 +1,4 @@
-import { Container, PackingConfig, containerVertices, pieceContainsPoint, pieceVertices } from "@polypack/geometry";
+import { Container, DISK_RADIUS, PackingConfig, containerVertices, pieceContainsPoint, pieceVertices } from "@polypack/geometry";
 import { Board } from "./board";
 import { MagneticSnap, SnapMode } from "./snapping";
 import type { Sketch } from "@polypack/solver";
@@ -133,7 +133,7 @@ export class BoardView {
     if (!c || c.size === 0) {
       this.cam = { x: 0, y: 0, zoom: 60 };
     } else {
-      const reach = c.M === 0 ? c.size : c.size / (2 * Math.sin(Math.PI / c.M));
+      const reach = c.M === 0 ? c.size / 2 : c.size / (2 * Math.sin(Math.PI / c.M));
       this.cam.x = c.cx;
       this.cam.y = c.cy;
       this.cam.zoom = Math.max(4, Math.min(160, (0.42 * Math.min(this.w, this.h)) / reach));
@@ -501,14 +501,14 @@ export class BoardView {
    * Path of a sketch's working shape: the polygon scaled by `scale` about its centre, dilated by
    * a disk of radius `padding`, i.e. the scaled polygon with each corner replaced by an arc of
    * that radius spanning the turn between its two edge normals (2 pi / N). Scale 0 is the disk
-   * itself; a circle piece (N = 0) is a disk of radius `scale`.
+   * itself; a circle piece (N = 0) is a disk of radius `scale` * DISK_RADIUS (diameter `scale`).
    */
   private softPath(N: number, p: { x: number; y: number; theta: number }, scale: number, padding: number, buf: Float64Array | null): void {
     const ctx = this.ctx;
     const z = this.cam.zoom;
     ctx.beginPath();
     if (!N || !buf || scale <= 0) {
-      ctx.arc(this.sx(p.x), this.sy(p.y), (N ? padding : scale) * z, 0, 2 * Math.PI);
+      ctx.arc(this.sx(p.x), this.sy(p.y), (N ? padding : scale * DISK_RADIUS) * z, 0, 2 * Math.PI);
       return;
     }
     pieceVertices(N, p, scale, buf);
@@ -577,7 +577,7 @@ export class BoardView {
       ctx.setLineDash([6, 5]);
       if (ghost.M === 0) {
         ctx.beginPath();
-        ctx.arc(this.sx(ghost.cx), this.sy(ghost.cy), ghost.size * z, 0, 2 * Math.PI);
+        ctx.arc(this.sx(ghost.cx), this.sy(ghost.cy), (ghost.size / 2) * z, 0, 2 * Math.PI);
       } else {
         this.path(containerVertices(ghost));
       }
@@ -591,7 +591,7 @@ export class BoardView {
       ctx.lineWidth = 2;
       if (c.M === 0) {
         ctx.beginPath();
-        ctx.arc(this.sx(c.cx), this.sy(c.cy), c.size * z, 0, 2 * Math.PI);
+        ctx.arc(this.sx(c.cx), this.sy(c.cy), (c.size / 2) * z, 0, 2 * Math.PI);
       } else {
         this.path(containerVertices(c));
       }
@@ -605,7 +605,7 @@ export class BoardView {
       else if (buf) this.path(pieceVertices(N, p, 1, buf));
       else {
         ctx.beginPath();
-        ctx.arc(this.sx(p.x), this.sy(p.y), z, 0, 2 * Math.PI);
+        ctx.arc(this.sx(p.x), this.sy(p.y), DISK_RADIUS * z, 0, 2 * Math.PI);
       }
     };
     ctx.font = "11px system-ui, sans-serif";

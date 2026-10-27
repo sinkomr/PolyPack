@@ -25,7 +25,7 @@ async function drawn(page: Page, pieces: number, what = "[a-z]+"): Promise<void>
   await expect(page.locator(".space-draw")).toHaveAttribute(
     "aria-label",
     new RegExp(
-      `^${pieces} ${what} in an? [\\w .]+? (of radius|of edge|scaled by) \\d+\\.\\d{6}, drawn in 3D\\. Drag it or use the arrow keys to turn it\\.$`,
+      `^${pieces} ${what} in an? [\\w .]+? (of diameter|of edge|scaled by) \\d+\\.\\d{6}, drawn in 3D\\. Drag it or use the arrow keys to turn it\\.$`,
     ),
     LAZY_VIEW,
   );
@@ -74,7 +74,7 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
   await expect(facts).toContainText("Statusno record yet");
   await expect(facts).toContainText("Lower bound2.351335");
   await expect(facts).toContainText("Entriesopen");
-  await expect(page.locator("#space-score-label")).toHaveText("Container radius s");
+  await expect(page.locator("#space-score-label")).toHaveText("Container diameter d");
   await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
   // 189 problems in 16 menu groups: balls in a ball or a Platonic solid first
   await expect(page.locator("#space-f-code option")).toHaveCount(189);
@@ -141,7 +141,7 @@ test("3D in 3D > Balls opens balls in a Catalan solid and a prism in a ball from
   await page.selectOption("#space-f-code", "pr3l15inball");
   await page.selectOption("#space-f-P", "4");
   await opened(page, "balls/pr3l15inball/4");
-  await expect(page.locator("#space-score-label")).toHaveText("Container radius s");
+  await expect(page.locator("#space-score-label")).toHaveText("Container diameter d");
   await runFor(page, 8000);
   await resultValid(page, "balls/pr3l15inball/4");
   await drawn(page, 4, "triangular prisms of height 1\\.5");

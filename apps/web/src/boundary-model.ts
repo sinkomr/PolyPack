@@ -4,7 +4,7 @@
  * carries, the words for the pieces, a configuration read from the server (untrusted input) and
  * the viewer's address. No DOM and no three.js in here, so that it is tested in Node.
  *
- * The space and its numbers are defined in docs/spaces/BOUNDARY.md: P unit balls (radius 1) or
+ * The space and its numbers are defined in docs/spaces/BOUNDARY.md: P balls of diameter 1 or
  * unit cubes (edge 1) on the boundary of a tesseract of edge s; the score is s. "nofold" is the
  * best s when every piece must stay inside one cell (section 6).
  */

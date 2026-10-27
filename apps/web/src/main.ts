@@ -279,7 +279,7 @@ function render(): void {
 
   const k = s.pieces.length;
   $("count").textContent = `${k} / ${s.P}` + (k === s.P ? " ✓ ready to submit" : k > s.P ? " ✗ too many" : "");
-  $("score-label").textContent = s.M === 0 ? "Container radius r" : "Container side s";
+  $("score-label").textContent = s.M === 0 ? "Container diameter d" : "Container side s";
   $("score").textContent = c ? c.size.toFixed(6) : "—";
   $("bound").textContent = areaLowerBound(s.N, s.M, s.P).toFixed(6);
 

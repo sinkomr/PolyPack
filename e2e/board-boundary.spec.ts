@@ -102,9 +102,9 @@ test("3D on 4D is chosen from the menus and drawn as cells, as a net that folds,
   await expect(facts).toContainText(`Certified value${api.certified!.display}`);
   await expect(facts).toContainText("Statusbest known");
   await expect(facts).toContainText(`Lower bound${api.bound!.value.toFixed(6)}`);
-  // nine balls without folding: two in one cell, 2 + 2 / sqrt 3 (docs/spaces/BOUNDARY.md 6)
+  // nine balls without folding: two in one cell, 1 + 1 / sqrt 3 (docs/spaces/BOUNDARY.md 6)
   await expect(facts).toContainText(`Without folding${nine.nofold}`);
-  expect(nine.nofold).toBe((2 + 2 / Math.sqrt(3)).toFixed(6));
+  expect(nine.nofold).toBe((1 + 1 / Math.sqrt(3)).toFixed(6));
   await expect(facts).toContainText(`Folding gains${nine.gain}`);
   await expect(facts).toContainText("Entriesopen");
   await expect(page.locator("#space-values-note")).toContainText("exact rational arithmetic");

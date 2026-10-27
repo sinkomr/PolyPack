@@ -495,7 +495,7 @@ describe("POST /api/spaces/submit", () => {
   it("refuses closed problems with 409 before looking at the packing, and stores nothing", async () => {
     const proven = await submit({ space: "sphere", id: "sphere/0/2", config: { rho: 1, pieces: [] }, name: "x" });
     expect(proven.status).toBe(409);
-    expect(proven.body.reasons[0]).toMatch(/^this problem is closed: its optimum 0\.636620 is proven \(R\. A\. Rankin/);
+    expect(proven.body.reasons[0]).toMatch(/^this problem is closed: its optimum 0\.318310 is proven \(R\. A\. Rankin/);
     const infeasible = await submit({ space: "curved", id: "curved/1/5/0/2", config: "anything", name: "x" });
     expect(infeasible.status).toBe(409);
     expect(infeasible.body.reasons[0]).toMatch(/no packing exists/);
@@ -509,7 +509,7 @@ describe("POST /api/spaces/submit", () => {
         lattice: { L: L2 },
         poses: [
           [0, 0, 0],
-          [1.4, 1.4, 0],
+          [0.7, 0.7, 0],
         ],
       },
     });
@@ -522,7 +522,7 @@ describe("POST /api/spaces/submit", () => {
     const small = await submit({
       space: "torus",
       id: "torus/sq/0/1",
-      config: { lattice: { L: 1.9 }, poses: [[0, 0, 0]] },
+      config: { lattice: { L: 0.9 }, poses: [[0, 0, 0]] },
       name: "a",
     });
     expect(small.status).toBe(422);

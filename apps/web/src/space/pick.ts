@@ -15,7 +15,7 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   // nine balls: without folding one cell must hold two of them, so folding gains much here
   boundary: "boundary/tesseract/ball/9",
   polyhedra: "polyhedra/cubincub/11",
-  // 13 balls: twelve round a thirteenth in a ball of radius 3 (the kissing arrangement)
+  // 13 balls: twelve round a thirteenth in a ball of diameter 3 (the kissing arrangement)
   balls: "balls/ballinball/13",
 };
 

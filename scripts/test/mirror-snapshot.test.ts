@@ -129,7 +129,7 @@ describe("mirroring the snapshot", () => {
   });
 
   it("refuses a manifest it does not understand", () => {
-    expect(() => checkManifest({ format: 2, files: [] })).toThrow(/format 1/);
+    expect(() => checkManifest({ format: 3, files: [] })).toThrow(/format 1 or 2/);
     expect(() => checkManifest(manifest([{ ...file(3, 3, "a"), file: "../x.json.gz" }]))).toThrow(/malformed/);
     expect(() => checkManifest(manifest([{ ...file(3, 3, "a"), sha256: "xyz" }]))).toThrow(/malformed/);
     expect(checkManifest(manifest([file(3, 3, "a")])).files).toHaveLength(1);

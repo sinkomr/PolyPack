@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 
 // one address per tab, as its link makes it: the other kinds of a dimension are reached from its kind links
 const TABS = [
-  { dimension: "2D in 2D", kind: "Curved", hash: "#space=curved&K=-1&N=0&M=0" },
+  { dimension: "2D in 2D", kind: "Curved", hash: "#space=curved&K=-1&N=3&M=8" },
   { dimension: "2D on 3D", kind: "Sphere", hash: "#space=sphere&N=0" },
   { dimension: "2D on 3D", kind: "Torus", hash: "#space=torus&family=hex&N=0" },
   { dimension: "2D on 3D", kind: "Surfaces", hash: "#space=surface&solid=cube&mode=fold&N=0" },
@@ -149,8 +149,8 @@ test("zoom stays where it is when a request is too narrow, and the table has no 
 test("a row's gap is the shown record minus the shown bound, a curved caption says K = value, and other hashes go to the polygons", async ({
   page,
 }) => {
-  await page.goto("/records.html#space=curved&K=-1&N=0&M=0");
-  await expect(page.locator("#chart-title")).toContainText("K = −1, disk, disk");
+  await page.goto("/records.html#space=curved&K=-1&N=3&M=8");
+  await expect(page.locator("#chart-title")).toContainText("K = −1, triangle, octagon");
   const rows = page.locator("#rec-rows tr");
   await expect(rows.first()).toBeVisible();
   for (let i = 0; i < Math.min(await rows.count(), 12); i++) {

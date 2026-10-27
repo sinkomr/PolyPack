@@ -13,6 +13,7 @@
  *    keys) about its vertical and horizontal axes, and the gnomonic chart (geodesics straight);
  *  - |K| < 1e-3: the plane.
  */
+import { DISK_RADIUS } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
 import { SVG_NS, type SpaceRenderer, onDrag, pieceFill, piecesText } from "./common";
 
@@ -78,7 +79,7 @@ function segment(K: number, a: H3, b: H3, n: number): H3[] {
 function pieceOutline(K: number, N: number, pose: Pose): H3[] {
   if (N === 0) {
     const pts: H3[] = [];
-    for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 1, (2 * Math.PI * i) / 96)));
+    for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, DISK_RADIUS, (2 * Math.PI * i) / 96)));
     return pts;
   }
   // circumradius R of a regular N-gon of geodesic side 1: sn(R) sin(pi/N) = sn(1/2)
@@ -93,7 +94,7 @@ function pieceOutline(K: number, N: number, pose: Pose): H3[] {
 function containerOutline(K: number, M: number, size: number, ideal: boolean): H3[] {
   if (M === 0) {
     const pts: H3[] = [];
-    for (let i = 0; i < 160; i++) pts.push(polar(K, size, (2 * Math.PI * i) / 160));
+    for (let i = 0; i < 160; i++) pts.push(polar(K, size / 2, (2 * Math.PI * i) / 160)); // size is the diameter
     return pts;
   }
   const vs: H3[] = [];
@@ -250,7 +251,7 @@ export function curvedRenderer(K: number, N: number, M: number, P: number): Spac
       if (!config) return "No packing to draw.";
       const where = K < 0 ? "the hyperbolic plane" : K > 0 ? "a sphere" : "the plane";
       const box =
-        M === 0 ? `a disk of radius ${config.size.toFixed(6)}` : `a regular ${M}-gon of side ${config.size.toFixed(6)}`;
+        M === 0 ? `a disk of diameter ${config.size.toFixed(6)}` : `a regular ${M}-gon of side ${config.size.toFixed(6)}`;
       return `${piecesText(N, P)} in ${box} on ${where} of curvature ${K}, drawn in the ${MODELS[view].label.toLowerCase()}.`;
     },
     destroy() {

@@ -248,7 +248,7 @@ describe("a problem from the server", () => {
     const facts = Object.fromEntries(problemFacts(proven).map((f) => [f.label, f]));
     expect(facts.Status.value).toBe("proven optimal");
     expect(facts.Entries.value).toBe("closed");
-    expect(facts.Entries.note).toMatch(/^Its optimum 1\.806442 is proven/);
+    expect(facts.Entries.note).toMatch(/^Its optimum 0\.903221 is proven/);
 
     const none = catalogue("curved").problems.find((p) => p.status === "infeasible")!;
     const infeasible = readSpaceProblem("curved", none.id, answer("curved", none.id));
@@ -276,7 +276,7 @@ describe("a problem from the server", () => {
     expect(facts["Site best"].value).toBe("—");
     expect(facts.Entries.value).toBe("open");
     expect(scoreLabel(p.search)).toBe("Torus side L");
-    expect(scoreLabel(parseSearchProblem("curved/-1/0/0/5")!)).toBe("Container radius r");
+    expect(scoreLabel(parseSearchProblem("curved/-1/0/0/5")!)).toBe("Container diameter d");
     expect(scoreLabel(parseSearchProblem("torus/free/0/5")!)).toBe("Cell √|det(b1, b2)|");
   });
 
@@ -562,7 +562,7 @@ describe("3D on 4D on the board", () => {
     if (typeof p === "string") throw new Error(p);
     expect(p.search).toEqual({ space: "boundary", id, P: 9, polytope: "tesseract", piece: "ball" });
     expect(p.best?.source).toBe("certified");
-    expect(p.extra?.nofold?.value).toBeCloseTo(2 + 2 / Math.sqrt(3), 12);
+    expect(p.extra?.nofold?.value).toBeCloseTo(1 + 1 / Math.sqrt(3), 12);
     expect(scoreLabel(p.search)).toBe("Tesseract edge s");
     expect(problemFacts(p).map((f) => f.label)).toEqual([
       "Certified value",
@@ -574,7 +574,7 @@ describe("3D on 4D on the board", () => {
       "Entries",
     ]);
     const facts = Object.fromEntries(problemFacts(p).map((f) => [f.label, f]));
-    expect(facts["Without folding"]).toMatchObject({ value: "3.154701", details: true });
+    expect(facts["Without folding"]).toMatchObject({ value: "1.577350", details: true });
     expect(facts["Folding gains"]).toMatchObject({
       value: gainText(1 - p.best_score! / p.extra!.nofold!.value),
       note: "shorter edge than without folding",
@@ -669,11 +669,11 @@ describe("3D in 3D: balls on the board", () => {
     expect(pick.fields[1].options).toHaveLength(99);
     expect(pickFromDomain("balls", domain, { code: "icoinball", P: "100" }).id).toBe("balls/icoinball/100");
     expect(pickFromDomain("balls", domain, { code: "ballinpr3l15", P: "7" }).id).toBe("balls/ballinpr3l15/7");
-    expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/ballinball/13")!)).toBe("Container diameter d");
     expect(scoreLabel(parseSearchProblem("balls/ballincub/13")!)).toBe("Cube edge s");
-    expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/tetinball/13")!)).toBe("Container diameter d");
     expect(scoreLabel(parseSearchProblem("balls/ballinpkd/13")!)).toBe("Container scale s");
-    expect(scoreLabel(parseSearchProblem("balls/pr3l15inball/13")!)).toBe("Container radius s");
+    expect(scoreLabel(parseSearchProblem("balls/pr3l15inball/13")!)).toBe("Container diameter d");
   });
 
   it("sizes its rounds from P and the piece, within their limits", () => {

@@ -172,7 +172,7 @@ export function scoreLabel(p: SearchProblem): string {
     case "surface":
       return "Edge s of the solid";
     case "curved":
-      return p.M === 0 ? "Container radius r" : "Container side s";
+      return p.M === 0 ? "Container diameter d" : "Container side s";
     case "sphere":
       return "Sphere radius ρ";
     case "torus":
@@ -187,7 +187,7 @@ export function scoreLabel(p: SearchProblem): string {
           return "Cube edge s";
         case "ball":
         case undefined:
-          return "Container radius s";
+          return "Container diameter d";
         default:
           return "Container scale s";
       }

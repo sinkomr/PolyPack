@@ -2,6 +2,9 @@ import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
   LiteratureRecord,
+  beatsLiterature,
+  literatureTolerance,
+  reachesLiterature,
   MAX_PIECES,
   ProblemId,
   SiteInfo,
@@ -306,5 +309,20 @@ describe("rankTargets", () => {
     expect(withClosed.map((t) => t.P)).not.toContain(9);
     const ten = (list: typeof without) => list.find((t) => t.P === 10)!;
     expect(ten(withClosed)).toEqual(ten(without));
+  });
+});
+
+describe("the tolerance of a published value follows its conversion", () => {
+  const rec = (N: number, M: number) =>
+    ({ N, M, P: 5, value: 3, display_precision: 3 }) as Parameters<typeof literatureTolerance>[0] & { value: number };
+  it("doubles for a polygon in a circle, whose value is the diameter, and stays for the rest", () => {
+    expect(literatureTolerance(rec(4, 0))).toBe(0.002);
+    expect(literatureTolerance(rec(0, 4))).toBe(0.001);
+    expect(literatureTolerance(rec(0, 0))).toBe(0.001);
+    expect(literatureTolerance(rec(4, 4))).toBe(0.001);
+    expect(beatsLiterature(2.9985, rec(4, 0) as never)).toBe(false);
+    expect(beatsLiterature(2.9985, rec(4, 4) as never)).toBe(true);
+    expect(reachesLiterature(3.0015, rec(4, 0) as never)).toBe(true);
+    expect(reachesLiterature(3.0015, rec(4, 4) as never)).toBe(false);
   });
 });

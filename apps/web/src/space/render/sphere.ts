@@ -3,11 +3,12 @@
  * faintly through it, or a map of the two hemispheres facing and facing away from the viewer
  * (azimuthal equal-area). Ported from packages/sphere/viz/template.html.
  *
- * Pieces live on the unit sphere with angular size 1/rho: a disk of radius 1 on the sphere of
- * radius rho is a cap of angular radius 1/rho, a polygon of side 1 has vertices at angular
+ * Pieces live on the unit sphere with angular size 1/rho (a polygon side): a disk of diameter 1 on the sphere of
+ * radius rho is a cap of angular radius 1/(2 rho), a polygon of side 1 has vertices at angular
  * circumradius R with sin(1/(2 rho)) = sin R sin(pi/N). A piece is the standard piece at the north
  * pole turned by its quaternion q (v -> q v q*).
  */
+import { DISK_RADIUS } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
 import { type SpaceRenderer, cssVar, fitCanvas, onDrag, pieceFill, piecesText } from "./common";
 
@@ -51,7 +52,8 @@ const START_VIEW: M3 = rotAxis([1, 0, 0], -0.5);
 /** The boundary of a piece sampled on the unit sphere (world coordinates). */
 function boundary(N: number, rho: number, q: Quat): V3[] {
   const M = qmat(q);
-  const a = 1 / rho;
+  // a polygon side subtends 1/rho; a disk of diameter 1 is a cap of angular radius DISK_RADIUS/rho
+  const a = (N === 0 ? DISK_RADIUS : 1) / rho;
   const pts: V3[] = [];
   if (N === 0) {
     const n = 96;
