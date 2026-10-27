@@ -5,15 +5,16 @@
  *   tn_K(b) = sn_K(a) tan(pi/n)        sn_K(b) = sn_K(R) sin(pi/n)        cos(pi/n) = cs_K(b) sin(alpha/2)
  * where alpha is the interior angle. For K = 0 these are the Euclidean formulas of PROMPT.md §2.
  */
+import { DISK_RADIUS } from "@polypack/geometry";
 import { asnK, atnK, csK, snK, tnK, vsK } from "./kfun";
 
 /**
- * The radius of a disk piece (N = 0): disks have DIAMETER 1 (2026-10-27, the unit change), so radius 1/2. The same
- * value as DISK_RADIUS of packages/geometry (units/core). TODO: import it from there once units/core is merged here; every disk length of this package derives from it
+ * The radius of a disk piece (N = 0): disks have DIAMETER 1 (2026-10-27, the unit change), so radius 1/2; the one
+ * constant of packages/geometry, re-exported here. Every disk length of this package derives from it
  * (PieceGeometry.R and .rho of a disk). Polygon pieces keep side 1. A disk problem at curvature K is the radius-1
- * problem at curvature K / 4 scaled by 1/2.
+ * problem at curvature K/4 scaled by 1/2.
  */
-export const DISK_RADIUS = 0.5;
+export { DISK_RADIUS };
 
 export interface PieceGeometry {
   N: number;
