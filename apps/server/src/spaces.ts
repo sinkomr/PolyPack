@@ -698,11 +698,14 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
           // without a research record, every entry must pass the strict check (validate.ts)
           noRecord: !hasRecord(p),
         });
+        // normalised whenever the entry could be kept against the research record, not only when it beats
+        // the leader read above: the leader can change while this entry is checked, and then this entry
+        // may be stored as the leader with its basis as sent
         if (
           verdict.valid &&
           verdict.score !== null &&
           verdict.config &&
-          (best === null || improvesSpaceBest(space, verdict.score, cert, current?.score ?? null))
+          (best === null || improvesSpaceBest(space, verdict.score, cert, null))
         ) {
           const stored = await storedSpaceConfigAsync(space, p.id, verdict.config, {
             bound: p.bound?.value ?? null,
