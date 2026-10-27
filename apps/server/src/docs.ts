@@ -630,7 +630,7 @@ Values of <code>P</code> with no coordinates at all are simply absent. The answe
 
 <h3 id="snapshot"><code>GET /api/snapshot</code></h3>
 <p>Every current record at once: the <a href="#leader">leader</a> of every <a href="#closed">open</a> problem with its coordinates, rebuilt each night and mirrored into the GitHub release
-<a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads.
+<a href="https://github.com/sinkomr/PolyPack/releases/tag/records">records</a>, where <code>gh release download records --repo sinkomr/PolyPack</code> fetches it all. Prefer the release for large downloads. The release gathers the pairs by piece shape: <code>n-{N}.json.gz</code> is <code>{format, N, pairs}</code>, whose <code>pairs</code> are the files below for that N, and its <code>manifest.json</code> lists each such file with its pairs.
 This route answers the manifest: <code>{format, units, generated_at, completed_at, records, pieces, files, spaces}</code>, where each of <code>files</code> is
 <code>{N, M, file, records, pieces, bytes, sha256, as_of, fingerprint}</code> and <code>as_of</code> says when that file's leaders were read.
 <code>spaces</code> lists the files of the <a href="#spaces">other dimensions</a>, one per space, each <code>{space, file, records, pieces, bytes, sha256, as_of, fingerprint}</code>; <code>records</code> and <code>pieces</code> at the top count <code>files</code> alone. A manifest written before the space files existed has no <code>spaces</code>.

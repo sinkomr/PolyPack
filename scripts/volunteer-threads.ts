@@ -8,8 +8,9 @@
  * K lanes then behave as K cores that never contend, and the engine makes the decisions it would
  * make on them. A run of K lanes for T seconds takes about K * T seconds of one core.
  *
- * The problem and its start (the site leader's packing) come from a file of the records release,
- * https://github.com/sinkomr/PolyPack/releases/tag/records, such as 20-3.json.gz.
+ * The problem and its start (the site leader's packing) come from a pair's file of the site's
+ * snapshot, such as https://polypack.fly.dev/api/snapshot/20-3.json.gz (the records release holds
+ * the same files gathered by piece shape).
  *
  * Usage: npx tsx scripts/volunteer-threads.ts <N-M.json.gz> <P> <lanes> <maxSeconds> <seed> <out.json>
  */

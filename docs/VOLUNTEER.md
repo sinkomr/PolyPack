@@ -127,7 +127,7 @@ Why not every thread on one problem, as before: most of a search's gain comes fr
 - As a check, a real run with 15 threads and 10 minutes per problem on these three problems reached 2.839 %, 3.152 % and 3.858 % (the last stopped by Ctrl-C at 4m55s): close to the simulated 15 threads at 2 minutes.
 - [SPEC] Not measured: longer times per problem, problems whose leaders came from long searches (where depth may matter more), and real machines. Two threads of one core with simultaneous multithreading (Hyper-Threading) do less than two cores, so a thread is worth less there, and spreading them over problems costs less still.
 
-To measure more, run the script on any problem of the records release, for example `npx tsx scripts/volunteer-threads.ts 20-3.json.gz 57 4 120 1 out.json` (4 threads, 120 s, seed 1). It takes about K times the time per problem on one core.
+To measure more, run the script on any problem of the snapshot, for example on https://polypack.fly.dev/api/snapshot/20-3.json.gz with `npx tsx scripts/volunteer-threads.ts 20-3.json.gz 57 4 120 1 out.json` (4 threads, 120 s, seed 1). It takes about K times the time per problem on one core.
 
 ### When the engine stops early
 
