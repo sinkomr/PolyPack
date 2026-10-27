@@ -788,3 +788,19 @@ describe("one space job on this thread", () => {
     expect(gate.why).toBe("time");
   });
 });
+
+describe("range-domain problems in the volunteer client", () => {
+  it("reads and checks new shapes at P = 100 without a research record", () => {
+    for (const N of [3, 7, 12, 20, 100]) {
+      const ids = [`curved/-1e-06/${N}/0/100`, `sphere/${N}/100`, `torus/hex/${N}/100`];
+      for (const id of ids) {
+        const p = parseSpaceId(id)!;
+        expect(p).toMatchObject({ N, P: 100 });
+        // The shared checker reaches the packing parser, rather than refusing the old P cap.
+        expect(checkSpaceConfig(p.space, id, {}).reasons.join(" ")).not.toMatch(
+          /above the largest P|bad sphere problem/,
+        );
+      }
+    }
+  });
+});

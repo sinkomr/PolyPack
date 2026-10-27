@@ -48,7 +48,7 @@ export interface SphereKernelAux {
   t: number;
 }
 
-const SUPPORTED_N = [0, 3, 4, 5, 6, 8];
+const supportedN = (N: number) => N === 0 || (Number.isInteger(N) && N >= 3 && N <= 100);
 
 /** Energy evaluations one finish() and one validate() cost, by N (see the kernel's finishCost). */
 const FINISH_COST: Record<number, number> = { 0: 30, 3: 100, 4: 500, 5: 500, 6: 800, 8: 2500 };
@@ -82,7 +82,7 @@ function transport(u: Vec3, v: Vec3): Quat {
 
 export function sphereKernel(problem: { N: number; P: number }): SpaceKernel {
   const { N, P } = problem;
-  if (!SUPPORTED_N.includes(N) || !Number.isInteger(P) || P < 1)
+  if (!supportedN(N) || !Number.isInteger(P) || P < 1 || P > 100)
     throw new Error(`bad sphere problem ${JSON.stringify(problem)}`);
   const dim = 3;
   // The largest angular size the kernel uses. For polygons it is 2 pi / N (1 - 1e-12), much closer
@@ -174,8 +174,8 @@ export function sphereKernel(problem: { N: number; P: number }): SpaceKernel {
     // [CALC] measured at P = 10 to 30 (8-gons: 10), squeezed states, rounded up: a finish is a
     // bisection with the energy's pair test (about 50 sweeps) and one call of the validator, whose
     // max-margin planes cost far more than a sweep for polygons
-    finishCost: FINISH_COST[N],
-    validateCost: VALIDATE_COST[N],
+    finishCost: FINISH_COST[N] ?? 2500,
+    validateCost: VALIDATE_COST[N] ?? 2500,
     capabilities,
 
     fromConfig(config) {

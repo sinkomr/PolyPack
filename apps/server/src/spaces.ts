@@ -31,7 +31,7 @@ import {
   parseSpaceConfig,
   parseSpaceId,
   spaceProblemSummary,
-  storedSpaceConfig,
+  storedSpaceConfigAsync,
   validateSpaceSubmissionAsync,
 } from "@polypack/spaces";
 import { Context, Hono } from "hono";
@@ -96,7 +96,7 @@ export const SPACE_TARGETS_MAX_LIMIT = 20000;
  */
 export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
 /**
- * Polyhedra and surface checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
+ * Polyhedra, surface, curved, sphere and torus checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
  * parts, 0.57 s before): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
  * turn; another is refused with 503.
@@ -669,18 +669,22 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     // is refused here, before it takes a place in the heavy queue or any of the budget.
     const shape = parseSpaceConfig(parsedId, body.config);
     if (!shape.ok) return reject(shape.malformed ? 400 : 422, shape.errors.slice(0, 20));
-    const heavy = (space === "polyhedra" || space === "surface") && parsedId.P >= SPACE_HEAVY_CHECK_P;
+    const heavy =
+      (["polyhedra", "surface", "curved", "sphere", "torus"].includes(space) && parsedId.P >= SPACE_HEAVY_CHECK_P) ||
+      (space === "sphere" && Number(parsedId.fields.N) >= 20);
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
-    // a surface check grows with P^2 N (pairs of parts of N sides): about 15 ms at P = N = 100
-    const sides = space === "surface" ? Math.max(8, Number(parsedId.fields.N)) : 0;
+    // Reserve work before checking; a many-sided sphere also queues at small P.
+    const sides = Math.max(8, Number(parsedId.fields.N) || 0);
     // [CALC] Reserve up to 1.6 s for two polyhedra passes at P = 500 (about 0.7 s each).
     const estimate =
       space === "polyhedra"
         ? Math.min(1600, 0.04 * parsedId.P * parsedId.P)
         : space === "surface"
           ? Math.min(100, 5 + 1e-5 * parsedId.P * parsedId.P * sides)
-          : 5;
+          : ["curved", "sphere", "torus"].includes(space)
+            ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
+            : 5;
     checking.add(address);
     ctx.verifyBudget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;
@@ -694,6 +698,23 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
           // without a research record, every entry must pass the strict check (validate.ts)
           noRecord: !hasRecord(p),
         });
+        if (
+          verdict.valid &&
+          verdict.score !== null &&
+          verdict.config &&
+          (best === null || improvesSpaceBest(space, verdict.score, cert, current?.score ?? null))
+        ) {
+          const stored = await storedSpaceConfigAsync(space, p.id, verdict.config, {
+            bound: p.bound?.value ?? null,
+            maxP: cat.maxP,
+            certified: cert,
+            noRecord: !hasRecord(p),
+          });
+          verdict.config = stored.config;
+          verdict.workMs += stored.workMs;
+          verdict.slices += stored.slices;
+          verdict.longestSliceMs = Math.max(verdict.longestSliceMs, stored.longestSliceMs);
+        }
       } finally {
         if (heavy) heavyDone();
       }
@@ -717,16 +738,6 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         200,
       );
 
-    // a free torus is stored in a reduced basis (the same lattice and score), so that every reader
-    // gets one it can draw; that check is charged to the address too
-    const storeStart = performance.now();
-    const stored = storedSpaceConfig(space, p.id, verdict.config, {
-      bound: p.bound?.value ?? null,
-      maxP: cat.maxP,
-      certified: cert,
-      noRecord: !hasRecord(p),
-    });
-    ctx.verifyBudget.charge(address, performance.now() - storeStart);
     const { id, before, leader, kept } = await store.spaceSubmit({
       space,
       problem: p.id,
@@ -736,7 +747,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
       software,
       method,
       seed,
-      config: JSON.stringify(stored),
+      config: JSON.stringify(verdict.config),
       created_at: new Date().toISOString(),
     });
     if (kept || leader?.id !== before?.id) changed(space);

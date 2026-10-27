@@ -1,3 +1,4 @@
+import { runSteps, runStepsAsync } from "@polypack/methods";
 /**
  * Float64 validator for curved packings. Independent rigorous certification is done by
  * python/curved/certify.py; this validator mirrors PolyPack's touching tolerance (1e-9).
@@ -13,6 +14,8 @@ export const TOL = 1e-9;
 export interface ValidationOptions {
   /** overlap tolerance: a gap >= -tol counts as touching (default 1e-9) */
   tol?: number;
+  /** Stop after this many overlapping pairs (server use). */
+  maxErrors?: number;
   /** gaps <= contactTol are reported as contacts (default 1e-7) */
   contactTol?: number;
 }
@@ -56,12 +59,12 @@ function fail(errors: string[], size = NaN): ValidationResult {
   };
 }
 
-export function validate(
+export function* validationSteps(
   problem: CurvedProblem,
   K: number,
   config: CurvedConfig,
   options: ValidationOptions = {},
-): ValidationResult {
+): Generator<void, ValidationResult> {
   const tol = options.tol ?? TOL;
   const contactTol = options.contactTol ?? 1e-7;
   const errors: string[] = [];
@@ -99,11 +102,14 @@ export function validate(
   let minPair = Infinity;
   let minCont = Infinity;
   const reach = 2 * space.piece.R + 1e-6;
-  for (let i = 0; i < P; i++) {
+  let overlaps = 0;
+  pairs: for (let i = 0; i < P; i++) {
     for (let j = i + 1; j < P; j++) {
       if (centreDistance(space, states[i], states[j]) > reach) continue;
       const g = pairGap(space, states[i], states[j]);
       minPair = Math.min(minPair, g.gap);
+      yield;
+      if (g.gap < -tol && ++overlaps >= (options.maxErrors ?? Infinity)) break pairs;
       if (g.gap <= contactTol)
         contacts.push({ kind: "pair", i, j, wall: -1, vertex: g.witness.vertex, gap: g.gap, witness: g.witness });
     }
@@ -115,20 +121,21 @@ export function validate(
     tReq = Math.max(tReq, requiredT(space, s));
     const pts = N === 0 ? [s.centre] : s.verts;
     const pad = N === 0 ? 1 : 0;
-    pts.forEach((p, k) => {
+    for (const [k, p] of pts.entries()) {
       const vertex = N === 0 ? -1 : k;
       if (M === 0) {
         const g = t - distFromVs(K, p.e) - pad;
         minCont = Math.min(minCont, g);
         if (g <= contactTol) contacts.push({ kind: "rim", i, j: -1, wall: -1, vertex, gap: g });
       } else {
-        walls.forEach((n, w) => {
+        for (const [w, n] of walls.entries()) {
           const g = -asnK(K, lineValue(K, n, p)) - pad;
           minCont = Math.min(minCont, g);
           if (g <= contactTol) contacts.push({ kind: "wall", i, j: -1, wall: w, vertex, gap: g });
-        });
+        }
       }
-    });
+      yield;
+    }
   }
   const minGap = Math.min(minPair, minCont);
   const tightSize = M === 0 ? tReq : sideFromApothem(M, K, tReq);
@@ -146,4 +153,21 @@ export function validate(
     contacts,
     errors,
   };
+}
+
+export function validate(
+  problem: CurvedProblem,
+  K: number,
+  config: CurvedConfig,
+  options: ValidationOptions = {},
+): ValidationResult {
+  return runSteps(validationSteps(problem, K, config, options));
+}
+export function validateAsync(
+  problem: CurvedProblem,
+  K: number,
+  config: CurvedConfig,
+  options: ValidationOptions & { sliceMs?: number } = {},
+) {
+  return runStepsAsync(validationSteps(problem, K, config, options), options.sliceMs);
 }
