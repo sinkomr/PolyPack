@@ -17,8 +17,10 @@ ${readFileSync(resolve(import.meta.dirname, "../../node_modules/three/LICENSE"),
 */`;
 
 /**
- * The game's page, and its lane worker's script, cross-origin isolated (as apps/server/src/node.ts
- * serves them), so that space runs can share memory with their worker. No other page is isolated.
+ * The game's page cross-origin isolated (as apps/server/src/node.ts serves it), so that space runs
+ * can share memory with their worker. No other page is isolated. Safari also refuses every module a
+ * worker of an isolated page imports unless that module is served with the embedder policy, so
+ * every script and module gets it: on a script the header changes nothing for the other pages.
  */
 const isolateTighter = (): Plugin => {
   const middleware = (req: { url?: string }, res: { setHeader(k: string, v: string): void }, next: () => void) => {
@@ -26,7 +28,7 @@ const isolateTighter = (): Plugin => {
     if (path === "/tighter.html") {
       res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
       res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-    } else if (/\/run-worker(?:-[^/]*)?\.[jt]s$/.test(path))
+    } else if (/^\/(assets|src|@fs|@vite|@id|node_modules)\//.test(path))
       res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
     next();
   };

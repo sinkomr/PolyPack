@@ -104,16 +104,17 @@ if (existsSync(dist)) {
   // the spaces' standalone viewers carry their data inline (the sweep viewer is about 4 MB)
   app.use("/spaces/*", compress());
   // The game's space runs share memory with their worker (SharedArrayBuffer), which a page gets only
-  // when it is cross-origin isolated, and an isolated page loads its worker script only when that is
-  // served with the same embedder policy. This page alone is isolated: it loads nothing from other
-  // origins, and the other pages are unchanged.
+  // when it is cross-origin isolated, and an isolated page loads its worker's script, and in Safari
+  // every module that worker imports, only when they are served with the same embedder policy. This
+  // page alone is isolated: it loads nothing from other origins. The built assets all carry the
+  // embedder policy, which changes nothing for the other pages that load them.
   app.use("/tighter.html", async (c, next) => {
     c.header("Cross-Origin-Opener-Policy", "same-origin");
     c.header("Cross-Origin-Embedder-Policy", "require-corp");
     await next();
   });
   app.use("/assets/*", async (c, next) => {
-    if (/\/run-worker-[^/]*\.js$/.test(c.req.path)) c.header("Cross-Origin-Embedder-Policy", "require-corp");
+    c.header("Cross-Origin-Embedder-Policy", "require-corp");
     await next();
   });
   app.use("/*", serveStatic({ root: dist }));
