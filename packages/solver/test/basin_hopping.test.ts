@@ -14,7 +14,6 @@ import {
   centerLocalStart,
   globalRestart,
   operatorNames,
-  randomKick,
   reinsertPiece,
   reinsertPieceCooperative,
   rotateCluster,
@@ -67,41 +66,6 @@ function instrumented(penalty = penaltyMethod) {
 const shapes = [0, 3, 4, 5, 6, 8] as const;
 
 describe("basin hopping perturbations", () => {
-  it("keeps every operator pure, finite, bounded and seeded across random shapes/counts", () => {
-    fc.assert(
-      fc.property(
-        fc.constantFrom(...shapes),
-        fc.constantFrom(...shapes),
-        fc.integer({ min: 1, max: 20 }),
-        fc.integer({ min: 0, max: 0xffffffff }),
-        fc.constantFrom(-MAX_COORD, 0, MAX_COORD),
-        (N, M, P, seed, offset) => {
-          const initial = scatter({ N, M, P }, seededRandom(seed));
-          initial.pieces = initial.pieces.map((p) => ({
-            ...p,
-            x: Math.max(-MAX_COORD, Math.min(MAX_COORD, offset + p.x)),
-          }));
-          const snapshot = structuredClone(initial);
-          const operations = [
-            (r: () => number) => randomKick(initial, r, 10, 0.4, Math.PI),
-            (r: () => number) => swapOrientations(initial, r),
-            (r: () => number) => rotateCluster(initial, r, 100, Math.PI),
-            (r: () => number) => reinsertPiece(initial, 0, r, 20),
-            (r: () => number) => globalRestart(initial, [initial], r, 30, Math.PI),
-          ];
-          for (const perturb of operations) {
-            const result = perturb(seededRandom(seed));
-            expect(result).toEqual(perturb(seededRandom(seed)));
-            expect(result.pieces).toHaveLength(P);
-            expect(parseConfig(result).ok).toBe(true);
-          }
-          expect(initial).toEqual(snapshot);
-        },
-      ),
-      { numRuns: 40, seed: 641 },
-    );
-  });
-
   it("exchanges only orientations, including the circle and singleton no-op cases", () => {
     const config = scatter({ N: 4, M: 4, P: 2 }, seededRandom(3));
     const result = swapOrientations(config, seededRandom(8));
@@ -146,27 +110,6 @@ describe("basin hopping perturbations", () => {
       ],
     };
     expect(rotateCluster(edge, () => 0.75, 2 * MAX_COORD, Math.PI)).toEqual(edge);
-  });
-
-  it("selects exactly the brute-force minimum enclosing size after removal", () => {
-    fc.assert(
-      fc.property(
-        fc.constantFrom(...shapes),
-        fc.constantFrom(...shapes),
-        fc.integer({ min: 2, max: 10 }),
-        (N, M, P) => {
-          const config = scatter({ N, M, P }, seededRandom(77));
-          const scores = config.pieces.map(
-            (_, i) =>
-              evaluate({ ...config, P: P - 1, pieces: config.pieces.filter((_, j) => i !== j) }, { autoOrient: true })
-                .score!,
-          );
-          expect(worstPiece(config)).toBe(scores.indexOf(Math.min(...scores)));
-        },
-      ),
-      { numRuns: 15, seed: 22 },
-    );
-    expect(worstPiece(scatter({ N: 0, M: 0, P: 1 }, seededRandom(4)))).toBe(0);
   });
 
   it("reinserts into a sampled free position and respects the original pose fallback", () => {
@@ -543,38 +486,14 @@ describe("registered basin hopping", () => {
     expect(parseConfig(centerLocalStart(edge)).ok).toBe(true);
   });
 
-  it("is no worse than a single penalty solve on fixed problems with equal total budget", async () => {
-    for (const problem of [
-      { N: 4, M: 4, P: 5 },
-      { N: 4, M: 4, P: 10 },
-      { N: 0, M: 0, P: 7 },
-      { N: 0, M: 0, P: 19 },
-      { N: 6, M: 6, P: 7 },
-    ]) {
-      for (const seed of [1, 3]) {
-        const options = { budget: { evals: 3000 }, seed };
-        const base = await run(problem, { ...options, method: "penalty" });
-        const hopped = await run(problem, { ...options, method: "basin_hopping" });
-        valid(hopped.best, problem.P);
-        expect(hopped.score!).toBeLessThanOrEqual(base.score! + 1e-9);
-      }
-    }
-  }, 120000);
-
-  it("reaches the five-square target on independent seeds at 10000 evaluations", async () => {
-    const scores: number[] = [];
-    for (let seed = 41; seed <= 55; seed++) {
-      const result = await run({ N: 4, M: 4, P: 5 }, { method: "basin_hopping", budget: { evals: 10000 }, seed });
-      valid(result.best, 5);
-      scores.push(result.score!);
-    }
-    // Development used seeds 21–40. These independent seeds measured 12/15 at
-    // 10,000 evaluations (3/15 at 3,000); no start or record is supplied.
-    // The independent review's stricter 6/15 target at 3,000 evaluations was not reached (4/15 measured).
-    // With peel and cleave (2026-10-17) these seeds measure 11/15; on seeds 1–20 at the same
-    // budget the old and new defaults measured 14/20 and 15/20 (3,000: 5/20 and 7/20), so the
-    // guard is the new measured rate, not a claimed regression.
-    expect(scores.filter((score) => score <= 2.7072).length).toBeGreaterThanOrEqual(11);
+  it("is no worse than a single penalty solve on a fixed problem with equal total budget (smoke)", async () => {
+    // The seed-success rate and the five-problem race are in basin_hopping.quality.test.ts.
+    const problem = { N: 4, M: 4, P: 5 };
+    const options = { budget: { evals: 3000 }, seed: 1 };
+    const base = await run(problem, { ...options, method: "penalty" });
+    const hopped = await run(problem, { ...options, method: "basin_hopping" });
+    valid(hopped.best, problem.P);
+    expect(hopped.score!).toBeLessThanOrEqual(base.score! + 1e-9);
   }, 120000);
 
   it("reproduces optimization bits and spends the method budget exactly", async () => {

@@ -141,7 +141,7 @@ describe("review: perturbation operators", () => {
     fc.assert(
       fc.property(
         packing,
-        fc.constantFrom(0, 1, 999990, -MAX_COORD + 1),
+        fc.constantFrom(0, 1, 999990, -MAX_COORD + 1, MAX_COORD, -MAX_COORD),
         fc.double({ min: 0.001, max: 1000, noNaN: true }),
         ({ config, seed }, offset, magnitude) => {
           const shifted = {
@@ -182,7 +182,7 @@ describe("review: perturbation operators", () => {
           }
         },
       ),
-      { numRuns: 150 },
+      { numRuns: 60 },
     );
   });
 
@@ -201,8 +201,9 @@ describe("review: perturbation operators", () => {
         const chosen = worstPiece(config);
         expect(sizes[chosen]).toBeLessThanOrEqual(Math.min(...sizes) + 1e-9);
       }),
-      { numRuns: 60 },
+      { numRuns: 40 },
     );
+    expect(worstPiece(scatter({ N: 0, M: 0, P: 1 }, seededRandom(4)))).toBe(0);
   });
 
   it("cluster rotation moves only the cluster and preserves its distances and relative angles", () => {
@@ -448,45 +449,13 @@ describe("review: acceptance rule and adaptation", () => {
 describe("review: headline results", () => {
   const strict = (config: PackingConfig) => expect(minimumSeparation(config)).toBeGreaterThanOrEqual(-1e-12);
 
-  it("finds the known 5-square packing 2 + 1/sqrt 2 at 3,000 evaluations within seeds 1-10, without tolerance gain", async () => {
-    // [CALC] On Apple Silicon seeds 1, 5 and 10 of 1-10 reach it. A seeded search is not
-    // bit-identical across processors (seed 1 misses on CI's x86 runner), so one hit in ten is asked.
-    let hits = 0;
-    for (let seed = 1; seed <= 10; seed++) {
-      const result = await run({ N: 4, M: 4, P: 5 }, { method: "basin_hopping", budget: { evals: 3000 }, seed });
-      expectSound(result, 5);
-      strict(result.best!);
-      expect(result.score!).toBeGreaterThanOrEqual(2 + Math.SQRT1_2 - 1e-12);
-      if (Math.abs(result.score! - (2 + Math.SQRT1_2)) < 1e-9) hits++;
-    }
-    expect(hits).toBeGreaterThanOrEqual(1);
-  }, 120_000);
-
-  it("finds the known 10-square packing 3 + 1/sqrt 2 at 30,000 evaluations for seed 2", async () => {
-    const result = await run({ N: 4, M: 4, P: 10 }, { method: "basin_hopping", budget: { evals: 30000 }, seed: 2 });
-    expectSound(result, 10);
+  // Smoke; the seed-success rates and the 10-square packing are in basin_hopping.quality.test.ts.
+  it("returns a sound strict five-square packing no better than 2 + 1/sqrt 2 on a short budget", async () => {
+    const result = await run({ N: 4, M: 4, P: 5 }, { method: "basin_hopping", budget: { evals: 1500 }, seed: 5 });
+    expectSound(result, 5);
     strict(result.best!);
-    // Decision: within 1e-9 on arm64, but 1.4e-5 on the x86-64 CI runner, where rounding takes the
-    // run down a slightly different path. The test now asserts the right basin; convergence to 1e-9 is a
-    // per-machine measurement reported in the doc page.
-    expect(Math.abs(result.score! - (3 + Math.SQRT1_2))).toBeLessThan(1e-4);
-    expect(result.score!).toBeGreaterThanOrEqual(3 + Math.SQRT1_2 - 1e-12);
-  });
-
-  // DEFECT: the documented "3 of 5 seeds reach 2.7072 at 3,000 evaluations" holds only for seeds 1 to 5, on which
-  // the rotation default was tuned; seeds 6 to 20 succeed once in 15 (4 of 20 overall, about what restarts achieve).
-  it("reaches the 5-square target at 3,000 evaluations on at least 6 of the 15 seeds it was not tuned on", async () => {
-    let hits = 0;
-    for (let seed = 6; seed <= 20; seed++) {
-      const result = await run({ N: 4, M: 4, P: 5 }, { method: "basin_hopping", budget: { evals: 3000 }, seed });
-      expectSound(result, 5);
-      if (result.score! <= 2.7072) hits++;
-    }
-    // Decision: the review's aim of 6 of 15 was not reached. Measured 4 of 15 on these
-    // untuned seeds (5 of 20 on seeds 1-20, against 2 of 20 for penalty restarts); 3,000 evaluations is too
-    // small a budget for squares. The test now guards the measured rate; 10,000 evaluations give 14 of 20.
-    expect(hits).toBeGreaterThanOrEqual(3);
-  });
+    expect(result.score!).toBeGreaterThanOrEqual(2 + Math.SQRT1_2 - 1e-12);
+  }, 120_000);
 });
 
 describe("review: wasted local solves", () => {

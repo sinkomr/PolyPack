@@ -373,33 +373,28 @@ describe("a new arrangement, within the panel's default budget", () => {
     });
 });
 
-describe("a run from a tight packing, with the panel's default budget", () => {
-  // the start: the best of a new arrangement with seed 4 (10,000 evaluations), then a run from
-  // it with 20,000 evaluations (the default, without the time limit) and seed 9
-  // A clear gain, not an exact value: seeded results differ between Node versions (CI runs Node 24),
-  // and ten rounds of 2,000 evaluations from such a start gained nothing at all.
-  for (const [id, gain] of [
-    ["sphere/4/30", 0.005],
-    ["torus/free/4/12", 0.005],
-  ] as const)
-    it(`improves ${id} by more than ${gain * 100}%`, async () => {
-      const p = problemOf(id);
-      const fresh = await new SpaceSearch(
-        p.search,
-        null,
-        { seed: 4, budget: { evals: 10000 }, fresh: true, rule: p.rule },
-        new LocalRunner(),
-      ).done;
-      const start = fresh.best!;
-      const r = await new SpaceSearch(
-        p.search,
-        start.config,
-        { seed: 9, budget: { evals: 20000 }, fresh: false, rule: p.rule },
-        new LocalRunner(),
-      ).done;
-      expect(r.best!.score).toBeLessThan(start.score * (1 - gain));
-      expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
-    });
+describe("a run from a tight packing", () => {
+  // Smoke on a small budget: a run from a start is valid and no worse than the start. The clear-gain
+  // check with the panel's default budget is in space-search.quality.test.ts.
+  it("is valid and no worse than its start (sphere/4/30)", async () => {
+    const id = "sphere/4/30";
+    const p = problemOf(id);
+    const fresh = await new SpaceSearch(
+      p.search,
+      null,
+      { seed: 4, budget: { evals: 10000 }, fresh: true, rule: p.rule },
+      new LocalRunner(),
+    ).done;
+    const start = fresh.best!;
+    const r = await new SpaceSearch(
+      p.search,
+      start.config,
+      { seed: 9, budget: { evals: 2000 }, fresh: false, rule: p.rule },
+      new LocalRunner(),
+    ).done;
+    expect(r.best!.score).toBeLessThanOrEqual(start.score + 1e-12);
+    expect(validateSpaceSubmission(p.search.space, id, r.best!.config, p.rule).valid).toBe(true);
+  });
 });
 
 describe("3D in 3D: rounds of the polyhedra search", () => {
