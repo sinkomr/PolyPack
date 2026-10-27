@@ -15,7 +15,8 @@ Model (identical conventions to packages/curved, re-derived here):
         v0' = C v0 - K S (x v1 + y v2)
         v' = S (x, y) v0 + v - K V (x v1 + y v2) (x, y),  C = C(K D^2), S = S(K D^2), V = V(K D^2), D^2 = x^2 + y^2.
   * Unit piece: regular N-gon of geodesic side 1, circumradius R with sn_K(1/2) = sn_K(R) sin(pi/N),
-    vertex k at direction pi/2 + 2 pi k/N; disk (N = 0) of radius 1.
+    vertex k at direction pi/2 + 2 pi k/N; disk (N = 0) of DIAMETER 1, radius DISK_RADIUS = 1/2 (2026-10-27;
+    the archived records of disks of radius 1 are in data/curved/archive and are not certified by this file).
   * Container centred at O, phi = 0: polygon walls at distance h with tn_K(s/2) = sn_K(h) tan(pi/M),
     covectors n_k = (-sn_K(h), cs_K(h) u_k), u_k at angle -pi/2 + 2 pi k/M (outward); or a disk of radius r.
   * K > 0: container (hence every piece) must lie in the open hemisphere around O.
@@ -109,6 +110,9 @@ def problem_id(K, N, M, P):
     return f"curved/{K}/{N}/{M}/{P}"
 
 
+DISK_RADIUS = Fraction(1, 2)  # a disk piece's radius (packages/curved/src/shapes.ts DISK_RADIUS)
+
+
 class Geometry:
     """Rigorous constants for (K, N, M)."""
 
@@ -120,11 +124,11 @@ class Geometry:
         K = self.K
         pi = rg.pi_iv()
         self.pi = pi
-        self.sn1 = rg.snK(K, I(1))
+        self.sn1 = rg.snK(K, I(DISK_RADIUS))  # sn_K of a disk's radius (disks only)
         if N == 0:
             if Kq > 0:
-                # radius 1 must be below the hemisphere radius pi/(2 sqrt K): 4K < pi^2
-                if not rg.is_pos(pi * pi - 4 * K):
+                # radius 1/2 must be below the hemisphere radius pi/(2 sqrt K): K < pi^2
+                if not rg.is_pos(pi * pi - K):
                     raise CertError("unit disk does not fit in a hemisphere at this K")
             self.verts = []
         else:
@@ -383,7 +387,7 @@ def _certify_core(K, N, M, P, cfg, witness_list=None, score_cert=None):
                 c = centres[i]
                 qc = rg.sqrt_pos(qform(geo, c))
                 for n in geo.walls:
-                    val = dot(n, c) / qc + geo.sn1  # needs < 0: sn(signed distance) < -sn(1)
+                    val = dot(n, c) / qc + geo.sn1  # needs < 0: sn(signed distance) < -sn(1/2)
                     if not rg.is_neg(val):
                         raise CertError(f"disk {i} not certainly inside wall")
                     min_cont = upd(min_cont, -val.b)
@@ -396,9 +400,9 @@ def _certify_core(K, N, M, P, cfg, witness_list=None, score_cert=None):
                         raise CertError(f"piece {i} not certainly inside the disk container")
                     min_cont = upd(min_cont, val.a)
             else:
-                if not rg.is_pos(geo.r - 1):
-                    raise CertError("container radius must exceed 1")
-                lim = vs_of_length(geo, geo.r - 1)
+                if not rg.is_pos(geo.r - I(DISK_RADIUS)):
+                    raise CertError("container radius must exceed 1/2")
+                lim = vs_of_length(geo, geo.r - I(DISK_RADIUS))
                 val = lim - vs_from_O(geo, centres[i])
                 if not rg.is_pos(val):
                     raise CertError(f"disk {i} not certainly inside the disk container")
@@ -410,7 +414,7 @@ def _certify_core(K, N, M, P, cfg, witness_list=None, score_cert=None):
             wit[(w["i"], w["j"])] = w
     used = {"axis": 0, "far": 0, "disk": 0, "searched": 0}
     if N == 0:
-        lim = vs_of_length(geo, I(2))
+        lim = vs_of_length(geo, I(2 * DISK_RADIUS))
     else:
         far_lim = 2 * geo.snR * geo.snR  # vs_K(2R) = 2 sn_K(R)^2
     for i in range(P):

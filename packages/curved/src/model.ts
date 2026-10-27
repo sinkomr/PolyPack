@@ -54,7 +54,7 @@ export function collectRows(space: Space, states: PieceState[], t: number, opt: 
       const cd = centreDistance(space, states[i], states[j]);
       if (cd > reach) continue;
       if (N === 0) {
-        if (cd - 2 < opt.below) rows.push(diskPairRow(space, states[i], states[j], i, j));
+        if (cd - 2 * space.piece.R < opt.below) rows.push(diskPairRow(space, states[i], states[j], i, j));
         continue;
       }
       const g = pairGap(space, states[i], states[j]);
@@ -81,7 +81,7 @@ export function collectRows(space: Space, states: PieceState[], t: number, opt: 
     for (let k = 0; k < pts; k++) {
       const kk = N === 0 ? -1 : k;
       const p = N === 0 ? S.centre : S.verts[k];
-      const pad = N === 0 ? 1 : 0;
+      const pad = N === 0 ? space.piece.R : 0;
       if (M === 0) {
         const g = t - distFromVs(space.K, p.e) - pad;
         if (g < opt.below) rows.push(rimRow(space, S, i, kk, t));

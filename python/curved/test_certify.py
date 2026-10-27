@@ -127,17 +127,18 @@ class Basic(unittest.TestCase):
 
     def test_disk_in_disk(self):
         for K in (-1, 0, 1):
-            self.assertTrue(ok(rec(K, 0, 0, 1 + 1e-12, [(0.0, 0.0, 0.0)])))
-            self.assertFalse(ok(rec(K, 0, 0, 1 - 1e-12, [(0.0, 0.0, 0.0)])))
+            # (disks have diameter 1: radius 1/2)
+            self.assertTrue(ok(rec(K, 0, 0, 0.5 + 1e-12, [(0.0, 0.0, 0.0)])))
+            self.assertFalse(ok(rec(K, 0, 0, 0.5 - 1e-12, [(0.0, 0.0, 0.0)])))
 
     def test_disk_pair_distance(self):
-        for K in (-1, 0, Fraction(1, 2)):
-            for d, expect in ((2 + 1e-9, True), (2 - 1e-12, False), (2.0, False)):
+        for K in (-4, 0, 2):
+            for d, expect in ((1 + 1e-9, True), (1 - 1e-12, False), (1.0, False)):
                 poses = [(d / 2, 0.0, 0.0), (-d / 2, 0.0, 0.0)]
-                # at K = 1/2 the open hemisphere has radius pi/sqrt(2) / 2 = 2.2214
-                self.assertEqual(ok(rec(K, 0, 0, 2.2, poses)), expect, (K, d))
+                # at K = 2 the open hemisphere has radius pi / (2 sqrt 2) = 1.1107
+                self.assertEqual(ok(rec(K, 0, 0, 1.1, poses)), expect, (K, d))
         # beyond the hemisphere the container is rejected
-        self.assertFalse(ok(rec(Fraction(1, 2), 0, 0, 2.23, [(1.0 + 1e-9, 0.0, 0.0), (-1.0 - 1e-9, 0.0, 0.0)])))
+        self.assertFalse(ok(rec(2, 0, 0, 1.12, [(0.5 + 1e-9, 0.0, 0.0), (-0.5 - 1e-9, 0.0, 0.0)])))
 
     def test_square_pair_overlap_1e9(self):
         for K in (-1, 0, 1):
@@ -206,20 +207,21 @@ class Malformed(unittest.TestCase):
         # no unit octagon on the unit sphere; unit hexagon exists
         self.assertFalse(ok(rec(1, 8, 0, 1.5, [(0.0, 0.0, 0.0)])))
         self.assertTrue(ok(rec(1, 6, 6, 1.0 + 1e-9, [(0.0, 0.0, math.pi / 6)])))
-        # unit disk does not fit in a hemisphere at K = 3 (pi/(2 sqrt 3) < 1)
-        self.assertFalse(ok(rec(3, 0, 0, 0.9, [(0.0, 0.0, 0.0)])))
+        # a disk of diameter 1 does not fit in a hemisphere at K = 10 (pi / (2 sqrt 10) = 0.4967 < 1/2)
+        self.assertFalse(ok(rec(10, 0, 0, 0.9, [(0.0, 0.0, 0.0)])))
+        self.assertTrue(ok(rec(9, 0, 0, 0.5 + 1e-3, [(0.0, 0.0, 0.0)])))
 
     def test_disk_in_polygon(self):
-        # one unit disk in the regular pentagon at K = -1 whose apothem is 1 + 1e-9
+        # one disk of diameter 1 in the regular pentagon at K = -1 whose apothem is 1/2 + 1e-9
         K = -1
-        h = 1 + 1e-9
+        h = 0.5 + 1e-9
         s = 2 * math.atanh(math.sinh(h) * math.tan(math.pi / 5))
         self.assertTrue(ok(rec(K, 0, 5, s, [(0.0, 0.0, 0.0)])))
-        h = 1 - 1e-9
+        h = 0.5 - 1e-9
         s = 2 * math.atanh(math.sinh(h) * math.tan(math.pi / 5))
         self.assertFalse(ok(rec(K, 0, 5, s, [(0.0, 0.0, 0.0)])))
-        # no apothem >= 1 exists in a hyperbolic square (ideal apothem 0.8814): huge side still fails
-        self.assertFalse(ok(rec(K, 0, 4, 30.0, [(0.0, 0.0, 0.0)])))
+        # the ideal apothem of a hyperbolic square is 0.8814 > 1/2: a huge side holds the disk (a disk of radius 1 would not fit)
+        self.assertTrue(ok(rec(K, 0, 4, 30.0, [(0.0, 0.0, 0.0)])))
 
 
 class ReviewRegressions(unittest.TestCase):

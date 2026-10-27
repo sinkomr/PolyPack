@@ -120,7 +120,7 @@ export function* validationSteps(
     const s = states[i];
     tReq = Math.max(tReq, requiredT(space, s));
     const pts = N === 0 ? [s.centre] : s.verts;
-    const pad = N === 0 ? 1 : 0;
+    const pad = N === 0 ? space.piece.R : 0;
     for (const [k, p] of pts.entries()) {
       const vertex = N === 0 ? -1 : k;
       if (M === 0) {

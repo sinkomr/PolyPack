@@ -156,7 +156,7 @@ function pairTerm(ev: Evaluation, i: number, j: number, withRow: boolean): { gap
   // a piece beyond float range (cosh overflows near 710 / sqrt(-K) at K < 0) overlaps everything
   if (!finitePoint(A.centre) || !finitePoint(B.centre)) return { gap: NaN };
   if (space.N === 0) {
-    const gap = distFromVs(K, pairVs(K, A.centre, B.centre)) - 2;
+    const gap = distFromVs(K, pairVs(K, A.centre, B.centre)) - 2 * space.piece.R;
     return { gap, row: withRow && gap < 0 ? diskPairRow(space, A, B, i, j) : undefined };
   }
   const sat = pairGap(space, A, B);
@@ -208,7 +208,7 @@ function wallTerms(ev: Evaluation, i: number, below: number, term: (gap: number,
   const { K, N, M } = space;
   const S = stateOf(ev, i);
   const pts = N === 0 ? [S.centre] : S.verts;
-  const pad = N === 0 ? 1 : 0;
+  const pad = N === 0 ? space.piece.R : 0;
   const soft = N > 0 && ev.r < Infinity;
   if (M === 0) {
     // rim: t - d(O, p) - pad; the soft disk's: t - d(O, c) - r

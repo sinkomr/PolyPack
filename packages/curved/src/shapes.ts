@@ -7,14 +7,22 @@
  */
 import { asnK, atnK, csK, snK, tnK, vsK } from "./kfun";
 
+/**
+ * The radius of a disk piece (N = 0): disks have DIAMETER 1 (2026-10-27, the unit change), so radius 1/2. The same
+ * value as DISK_RADIUS of packages/geometry (units/core); every disk length of this package derives from it
+ * (PieceGeometry.R and .rho of a disk). Polygon pieces keep side 1. A disk problem at curvature K is the radius-1
+ * problem at curvature K / 4 scaled by 1/2.
+ */
+export const DISK_RADIUS = 0.5;
+
 export interface PieceGeometry {
   N: number;
   K: number;
-  /** circumradius (radius 1 for a disk piece) */
+  /** circumradius (DISK_RADIUS = 1/2 for a disk piece) */
   R: number;
   snR: number;
   csR: number;
-  /** inradius (apothem; 1 for a disk) */
+  /** inradius (apothem; DISK_RADIUS for a disk) */
   rho: number;
   snRho: number;
   csRho: number;
@@ -31,7 +39,7 @@ export interface PieceGeometry {
  * sqrt K sn_K(1/2) < sin(pi/N) alone is necessary but not sufficient (it holds again for large K).
  */
 export function pieceExists(N: number, K: number): boolean {
-  if (N === 0) return !(K > 0) || 1 < Math.PI / (2 * Math.sqrt(K));
+  if (N === 0) return !(K > 0) || DISK_RADIUS < Math.PI / (2 * Math.sqrt(K));
   if (!(K > 0)) return true;
   return Math.sqrt(K) * N < 2 * Math.PI && Math.sqrt(K) * snK(K, 0.5) < Math.sin(Math.PI / N);
 }
@@ -50,14 +58,14 @@ export function pieceGeometry(N: number, K: number): PieceGeometry {
     return {
       N,
       K,
-      R: 1,
-      snR: snK(K, 1),
-      csR: csK(K, 1),
-      rho: 1,
-      snRho: snK(K, 1),
-      csRho: csK(K, 1),
+      R: DISK_RADIUS,
+      snR: snK(K, DISK_RADIUS),
+      csR: csK(K, DISK_RADIUS),
+      rho: DISK_RADIUS,
+      snRho: snK(K, DISK_RADIUS),
+      csRho: csK(K, DISK_RADIUS),
       alpha: NaN,
-      area: 2 * Math.PI * vsK(K, 1),
+      area: 2 * Math.PI * vsK(K, DISK_RADIUS),
     };
   }
   const snR = snK(K, 0.5) / Math.sin(Math.PI / N);

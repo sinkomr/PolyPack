@@ -23,7 +23,7 @@ import { polarPoint, poseMotion, applyPoint, lineCovector, type LPoint, type Mot
 import { pieceEdgeAngle, pieceVertexAngle, wallAngle } from "./shapes";
 
 export interface CurvedProblem {
-  /** 0 = disk of radius 1, else regular N-gon of side 1 */
+  /** 0 = disk of diameter 1 (radius 1/2, DISK_RADIUS), else regular N-gon of side 1 */
   N: number;
   /** 0 = disk container of radius r, else regular M-gon of side s */
   M: number;

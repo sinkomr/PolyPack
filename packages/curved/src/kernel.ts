@@ -107,7 +107,7 @@ export function curvedKernel(problem: { K: number; N: number; M: number; P: numb
     id: `curved/${formatCurvature(K)}/${N}/${M}/${P}`,
     P,
     dim,
-    steps: Float64Array.from(N === 0 ? [1, 1] : [rho, rho, rho / R]),
+    steps: Float64Array.from(N === 0 ? [rho, rho] : [rho, rho, rho / R]),
     globals: 0,
     globalSteps: new Float64Array(0),
     inradius: rho,

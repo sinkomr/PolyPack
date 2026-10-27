@@ -251,7 +251,7 @@
           </table>
         </div>
         <div class="note">
-          N = 0 means disks of radius 1 (pieces) or a disk container (M = 0). Size is the container side s (or radius
+          N = 0 means disks of diameter 1 (radius 1/2, pieces) or a disk container (M = 0). Size is the container side s (or radius
           r), certified; shown to 6 decimals (rounded to the nearest).
         </div>
       </aside>
@@ -328,7 +328,7 @@
       function pieceOutline(K, N, pose) {
         if (N === 0) {
           const pts = [];
-          for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 1, (2 * Math.PI * i) / 96)));
+          for (let i = 0; i < 96; i++) pts.push(poseApply(K, pose, polar(K, 0.5, (2 * Math.PI * i) / 96)));
           return pts;
         }
         const R = asn(K, sn(K, 0.5) / Math.sin(Math.PI / N));
