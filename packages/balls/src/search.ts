@@ -17,7 +17,7 @@
  */
 import { StopSearch, getSolid } from "@polypack/polyhedra";
 import { BALL_MUS, freshStart, hopBalls, latticeCut, legalizeBalls, polishBalls } from "./ball-pieces";
-import type { BallsProblem } from "./catalogue";
+import { BALL_RADIUS, type BallsProblem, ballsProblemOf } from "./catalogue";
 import { mulberry32 } from "./random";
 import { SOLID_MUS, cubeLatticeCut, hopSolids, legalizeSolids, polishSolids, solidsAt } from "./solid-pieces";
 import { type BallsConfig, validateBalls } from "./validate";
@@ -127,8 +127,9 @@ export function searchBalls(problem: BallsProblem, P: number, o: BallsSearchOpti
     if (problem.piece === "cube" && rng() < 0.4) return legalizeSolids(problem, cubeLatticeCut(P, rng), clearance, clearance, poll);
     // unit balls of a lattice cut, scaled to the circumradius: the pieces' circumscribed balls are then disjoint
     const kind = rng() < 0.5 ? "fcc" : "hcp";
-    const centres = latticeCut({ code: "ballinball", piece: "ball", container: "ball", title: "" }, P, rng, kind, true);
-    const R = S.circumradius * (1 + 1e-9);
+    const centres = latticeCut(ballsProblemOf("ballinball")!, P, rng, kind, true);
+    // (the lattice has balls of radius BALL_RADIUS, so the scale is the circumradius over that)
+    const R = (S.circumradius / BALL_RADIUS) * (1 + 1e-9);
     return legalizeSolids(problem, solidsAt(centres.map((c) => [c[0] * R, c[1] * R, c[2] * R]), rng), clearance, clearance, poll);
   };
   let startScore: number | null = null;

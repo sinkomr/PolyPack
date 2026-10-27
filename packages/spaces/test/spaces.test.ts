@@ -160,7 +160,7 @@ describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
     expect(counts).toEqual({ surface: 2038, curved: 334, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
-    expect(cat("balls").domain!.info.problems).toBe(693);
+    expect(cat("balls").domain!.info.problems).toBe(18711);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -183,7 +183,7 @@ describe("the catalogues", () => {
     // the balls space has no records yet: every problem is open, without a certified value
     expect(closed("balls")).toEqual([]);
     // any problem of its domain is open, without a record and with its bound
-    for (const id of cat("balls").domain!.sample(693)) {
+    for (const id of [...cat("balls").domain!.sample(693), "balls/ballinpkd/20", "balls/pr3l15inball/7", "balls/ballintz12/100", "balls/ap5inball/2"]) {
       const p = problem("balls", id);
       expect(p.status === "no_record" && p.certified === null && p.bound !== null && acceptsSubmissions(p), id).toBe(true);
     }
@@ -293,13 +293,13 @@ describe("the catalogues", () => {
     expect(loaded.polyhedra!.problems).toHaveLength(0);
     expect(loaded.polyhedra!.domain!.info.problems).toBe(4409164);
     expect(loaded.balls!.problems).toHaveLength(0);
-    expect(loaded.balls!.domain!.info.problems).toBe(693);
+    expect(loaded.balls!.domain!.info.problems).toBe(18711);
     expect(loaded.surface!.problems).toHaveLength(0);
     expect(loaded.surface!.domain!.info.problems).toBe(712800);
     expect(logs).toEqual(
       SPACE_NAMES.map((s) =>
         s === "balls"
-          ? "[spaces] balls: a domain of 693 problems, 0 with a record (no records file)"
+          ? "[spaces] balls: a domain of 18711 problems, 0 with a record (no records file)"
           : s === "surface"
             ? "[spaces] surface: a domain of 712800 problems, 0 with a record (no records file)"
           : s === "polyhedra"
