@@ -90,11 +90,11 @@ export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
 export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
  * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
- * kept: a check of 500 large polyhedra takes about 0.7 s, and posting a research record back
- * would otherwise cost one each time. The other spaces' checks are short, and they keep answering
- * "valid, not kept" for such an entry.
+ * kept: a check of 500 large polyhedra takes about 0.7 s, one of 500 torus pieces on a skewed basis about
+ * 0.5 s, and posting a research record or the site's best back would otherwise cost one each time. The
+ * other spaces' checks are short, and they keep answering "valid, not kept" for such an entry.
  */
-export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra"]);
+export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra", "torus"]);
 /**
  * Polyhedra, surface, curved, sphere and torus checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
