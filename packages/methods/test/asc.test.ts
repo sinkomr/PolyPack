@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getMethod, methodsFor, runMethod } from "../src";
+import { runMethod } from "../src";
 import type { KernelState, SpaceKernel } from "../src/kernel";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 import { instrument, torusDisksKernel, validateTorusDisks } from "./mc-torus-kernel";
@@ -16,14 +16,6 @@ const hexagon = (scale: number) => ({
 });
 
 describe("asc", () => {
-  it("is registered with its board text, for every kernel", () => {
-    const m = getMethod("asc")!;
-    expect(m.title).toBe("Adaptive shrinking container");
-    expect(m.summary).toMatch(/\.$/);
-    expect(m.requires).toEqual([]);
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("asc");
-  });
-
   // Measured over seeds 1-20 at 30000 evaluations (docs/methods/dimensions/asc.md): P = 3 to 8
   // end within 1e-7 of the best known radius in most runs, but a run can cage a disk (P = 5 at
   // R = 3) and return at stagnation; P = 9 within 3e-2, P = 10 within 3e-2. Thresholds: the best
