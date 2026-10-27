@@ -96,11 +96,11 @@ describe("Tighter polygon-only paths given a space problem", () => {
     expect(() => recordPoints({ ...sphere, bound: 1, sPrev: 2, sNew: 1.5, tier: "open" })).toThrow("not yet");
   });
 
-  it("throw under a cycle rule that reads N and M, and pass without one", () => {
+  it("pass under a cycle rule that reads N and M, which covers polygon problems only", () => {
     const s = normalizeStanding({}, T0);
     expect(ruleAllowsProblem(s, sphere)).toBe(true);
-    expect(() => ruleAllowsProblem({ ...s, rule: "circles" }, sphere)).toThrow("not yet");
-    expect(() => ruleAllowsProblem({ ...s, rule: "small" }, sphere)).toThrow("not yet");
+    expect(ruleAllowsProblem({ ...s, rule: "circles" }, sphere)).toBe(true);
+    expect(ruleAllowsProblem({ ...s, rule: "small" }, sphere)).toBe(true);
   });
 
   it("are skipped by the live feed, which follows polygon problems only", () => {
@@ -138,10 +138,11 @@ describe("Tighter standing across dimensions", () => {
     expect(dimensionOpenedBy(3)).toBeNull();
   });
 
-  it("ask the same record points of every cycle for now, and take the threshold in the gain", () => {
-    for (const n of [0, 1, 2, 5]) expect(resetThreshold(n)).toBe(RESET_MIN);
-    expect(standingGain(RESET_MIN, 0)).toBe(standingGain(RESET_MIN, 0, resetThreshold(0)));
-    expect(standingGain(RESET_MIN, 0, 2 * RESET_MIN)).toBe(0);
+  it("ask 5 times the record points of the cycle before, and take the threshold in the gain", () => {
+    expect([0, 1, 2, 3].map(resetThreshold)).toEqual([2e8, 1e9, 5e9, 2.5e10]);
+    expect(resetThreshold(0)).toBe(RESET_MIN);
+    expect(standingGain(RESET_MIN)).toBe(standingGain(RESET_MIN, resetThreshold(0)));
+    expect(standingGain(RESET_MIN, 2 * RESET_MIN)).toBe(0);
   });
 });
 

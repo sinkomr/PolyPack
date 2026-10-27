@@ -67,6 +67,7 @@ import {
 import { drawProblem, newDealer, openDealable } from "../src/tighter/dealer";
 
 const T0 = 1_000_000;
+const ALL_DIMENSIONS = ["2-in-2", "2-on-3", "3-in-3", "3-on-4"] as const;
 const board = (P: number, shift = 0): PackingConfig => ({
   N: 24,
   M: 30,
@@ -134,12 +135,12 @@ describe("Tighter upgrades", () => {
     const levels: Partial<Record<UpgradeId, number>> = {};
     const rich = { rp: 1e300, standing: 1e300 };
     for (const u of UPGRADES) {
-      expect(canBuy(owning(owned, levels), rich, u.id)).toEqual({ ok: true });
+      expect(canBuy(owning(owned, levels, null, [], [], 0, ALL_DIMENSIONS), rich, u.id)).toEqual({ ok: true });
       owned.add(u.id);
       // a levelled upgrade is bought to its last level
       if (u.levels) levels[u.id] = u.levels.max;
     }
-    expect(available(owning(owned, levels))).toEqual([]);
+    expect(available(owning(owned, levels, null, [], [], 0, ALL_DIMENSIONS))).toEqual([]);
   });
 
   it("show every upgrade, the mysteries as ?????? until their prerequisites are owned", () => {

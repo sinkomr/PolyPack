@@ -98,12 +98,15 @@ export function retiredRefund(owned: unknown, scale = 1): RetiredRefund {
  * auto-eval's rate was in clicks, and 3 at that price while it multiplied a rate in evaluations a
  * second by 1.3. Then it added one evaluation a second a level, 10 levels at 100,000 RP × 1.6 a
  * level, and now 10 a second a level, the same 10 levels at a tenth of that: a level kept is worth more.
+ * Higher rent had 50 levels at 480,000 RP × 1.6 a level until it was capped at 5: income grew about 10 times a day.
  * Levels past the new maximum are refunded at the price they were bought at; none past the old
  * maximum could have been bought. A save loaded while the maximum was 3 kept 3 levels and had the
  * rest refunded then, so nothing is refunded twice: the levels a save still has are kept.
  */
 const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>([
   ["autox", { max: 100, cost: 150_000, growth: 1.4 }],
+  // Higher rent had 50 levels at 480,000 RP × 1.6 a level before it was capped at 5 (2026-10-26)
+  ["rentx", { max: 50, cost: 480_000, growth: 1.6 }],
 ]);
 
 /**

@@ -60,23 +60,23 @@ describe("Tighter seams", () => {
   it("give standing only for points the server has confirmed", () => {
     const { s, p } = withRecord();
     owning(s, ["standing"]);
-    // a cycle of 8 M RP, 7.2 M of them paid per click and still waiting for the server's answer
-    s.standing.cycleEarned = 8_000_000;
-    p.unconfirmed = 7_200_000;
+    // a cycle of 400 M RP, 360 M of them paid per click and still waiting for the server's answer
+    s.standing.cycleEarned = 400_000_000;
+    p.unconfirmed = 360_000_000;
     expect(resetPreview(s).gain).toBe(0);
     expect(resetCycle(s, T0)).toBe(0);
     // once confirmed, they count
     p.unconfirmed = 0;
-    expect(resetPreview(s).gain).toBe(2);
+    expect(resetPreview(s).gain).toBe(7);
     // a send on its way carries its points: not confirmed yet either
-    p.sending = { score: 6.5, name: "Ada", leaderBefore: null, at: T0, rp: 7_200_000 };
+    p.sending = { score: 6.5, name: "Ada", leaderBefore: null, at: T0, rp: 360_000_000 };
     expect(resetPreview(s).gain).toBe(0);
     // a reset trades only the confirmed points; those still waiting carry into the next cycle
-    s.standing.cycleEarned = 16_000_000;
-    s.rp = 8_000_000;
-    expect(resetCycle(s, T0)).toBe(2);
-    expect(s.rp).toBe(7_200_000);
-    expect(s.standing.cycleEarned).toBe(7_200_000);
+    s.standing.cycleEarned = 800_000_000;
+    s.rp = 400_000_000;
+    expect(resetCycle(s, T0)).toBe(7);
+    expect(s.rp).toBe(360_000_000);
+    expect(s.standing.cycleEarned).toBe(360_000_000);
     // and if the server does not confirm them, they are taken from there, once
     applyAnswer(s, p, null, 6.5, { kind: "refused", status: 422, reasons: ["no"] }, T0 + 1);
     expect(s.rp).toBe(0);
@@ -103,7 +103,7 @@ describe("Tighter seams", () => {
   it("drop offers drawn for the old tree at a reset, and keep lost records offered for a retake", () => {
     const s = newGame(T0, 1);
     owning(s, ["standing", "pick3"]);
-    s.standing.cycleEarned = 8_000_000;
+    s.standing.cycleEarned = 400_000_000;
     const offer = (P: number, retake: boolean): Offer => ({
       family: "polygon",
       N: 7,

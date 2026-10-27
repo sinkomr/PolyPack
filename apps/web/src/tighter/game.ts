@@ -310,7 +310,15 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
 }
 
 export const ownedSet = (s: GameState): Owned =>
-  owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone, s.settings.off);
+  owning(
+    s.owned,
+    s.levels,
+    s.standing.rule,
+    s.standing.rulesDone,
+    s.settings.off,
+    s.standing.resets,
+    s.standing.dimensions,
+  );
 
 /** The tolerance progress is measured with: the player's with Auto-advance, else any improvement that counts. */
 export const progressTolerance = (s: GameState): number => (ownedSet(s).has("advance") ? s.settings.tolerance : FLOOR);

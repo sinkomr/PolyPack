@@ -51,11 +51,13 @@ export const TIER_LABEL: Record<Tier, string> = {
 export const SIZE_WEIGHT = 10_000;
 export const GAP_WEIGHT = 10_000;
 /**
- * Record points a cycle must earn before it can be reset [SPEC]: 250,000 at the weights of 100, 8 times
- * that now, as the prices from Basin hopping on (upgrades.ts). It lives here so the tree's texts
- * can read it without importing standing.ts, which imports the tree.
+ * Record points the first cycle must earn before it can be reset [SPEC, Michael's ladder of 2026-10-26];
+ * each later cycle needs 5 times the one before (standing.ts resetThreshold). It lives here so the
+ * tree's texts can read it without importing standing.ts, which imports the tree.
  */
-export const RESET_MIN = 2_000_000;
+export const RESET_MIN = 200_000_000;
+/** What each cycle's threshold is times the last one's. */
+export const RESET_GROWTH = 5;
 /** A first record whose gap beats the free floor's by at least 10 %. */
 export const FIRST_RECORD_BONUS = 10;
 export const FIRST_RECORD_GAP_RATIO = 0.9;
