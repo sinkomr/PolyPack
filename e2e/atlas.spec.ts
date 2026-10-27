@@ -726,7 +726,14 @@ test("a failed request is retried, then reported with a way to try again", async
       await page.waitForTimeout(25);
     }
   };
-  const isFailed = () => art(page, 3).evaluate((e) => e.classList.contains("failed"));
+  // done when no tile is still waiting for an answer: every range has used its retries (one tile
+  // failing is not enough, as the ranges around the viewport fail one after the other)
+  const isFailed = () =>
+    page.evaluate(
+      () =>
+        document.querySelectorAll("#atlas-tiles .tile-art.failed").length > 0 &&
+        document.querySelectorAll("#atlas-tiles .tile-art.loading").length === 0,
+    );
   await page.goto("/browse.html?show=all#0,11");
   await expect(shownTiles(page)).toHaveCount(300);
   await expect(art(page, 3)).toHaveClass(/loading/);
@@ -736,9 +743,12 @@ test("a failed request is retried, then reported with a way to try again", async
   await expect(tile(page, 3).locator(".tile-empty")).toHaveText("not loaded");
   await expect(tile(page, 3)).toHaveAttribute("aria-label", /the drawing could not be loaded$/);
   expect(asked.filter((a) => a.from === 1).length).toBe(4);
+  // every range has given up; the clock runs on well past the longest delay and nothing is asked
   const gaveUp = asked.length;
+  expect(asked.filter((a) => a.from === 1).length).toBe(4);
   await page.clock.fastForward(1500);
-  await page.waitForTimeout(100);
+  await page.clock.fastForward(1500);
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(0))));
   expect(asked.length).toBe(gaveUp); // no endless retrying
 
   // opening the record tries again, and says so when it fails again
