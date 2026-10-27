@@ -5,6 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  PAIR_CACHE,
   PAIR_COUNT,
   PROBLEM_NAMES,
   SOLIDS_BY_GROUP,
@@ -80,6 +81,17 @@ describe("the problems of every pair of solids", () => {
     expect(typeof parsePolyhedraId("polyhedra/kttinxx/7")).toBe("string");
   });
 
+  it("keep no memory of what is not a pair, so that junk ids cannot grow it", () => {
+    problemNameOf("kttinpkd");
+    const size = PAIR_CACHE.size;
+    expect(size).toBeLessThanOrEqual(8686);
+    for (let i = 0; i < 20_000; i++) {
+      expect(problemNameOf(`junk${i}in${i * 7}`)).toBeNull();
+      problemNameOf(`cubin${i}`);
+    }
+    expect(PAIR_CACHE.size).toBe(size);
+  });
+
   it("are offered in two menus of 94 solids, grouped by family, that make the codes", () => {
     const d = polyhedraDomain.info;
     type Field = { key: string; values?: string[]; titles?: Record<string, string>; groups?: Record<string, string>; min?: number; max?: number };
@@ -88,6 +100,8 @@ describe("the problems of every pair of solids", () => {
     expect(piece.values).toEqual(SOLIDS_BY_GROUP.map((s) => s.code));
     expect(new Set(piece.values).size).toBe(94);
     expect(container.values).toEqual(piece.values);
+    // the pattern names the two menus, so that a page that knows only fields by name composes the id
+    expect(d.id).toBe("polyhedra/<piece>in<container>/<P>");
     expect(d.joined).toEqual([{ key: "code", parts: ["piece", "container"], separator: "in" }]);
     expect(d.problems).toBe(8836 * (POLYHEDRA_MAX_P - 1));
     expect([P.min, P.max]).toEqual([2, 500]);

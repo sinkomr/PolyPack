@@ -119,6 +119,11 @@ export function splitJoined(info: SpaceDomainInfo, join: SpaceDomainJoin, value:
 
 /** The id of a choice of the domain's fields, from its pattern ("balls/<code>/<P>" with code and P). */
 export function domainId(info: SpaceDomainInfo, fields: Readonly<Record<string, string | number>>): string {
-  const all = withJoined(info, fields);
+  const all: Record<string, string | number> = withJoined(info, fields);
+  // a joined value (the code) is the truth: the parts of a parsed id may be names, not the menus' values
+  for (const j of info.joined ?? []) {
+    const parts = typeof fields[j.key] === "string" ? splitJoined(info, j, fields[j.key] as string) : null;
+    if (parts) Object.assign(all, parts);
+  }
   return info.id.replace(/<([A-Za-z]+)>/g, (_, k: string) => String(all[k]));
 }

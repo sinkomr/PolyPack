@@ -16,7 +16,8 @@ const SOLID_VALUES = {
 
 export const polyhedraDomain = {
   info: {
-    id: "polyhedra/<code>/<P>",
+    // written from the two menus; a page loaded before the pairs (which builds the id from the fields' names) still composes it
+    id: "polyhedra/<piece>in<container>/<P>",
     fields: [
       { key: "piece", label: "Piece", ...SOLID_VALUES },
       { key: "container", label: "Container", ...SOLID_VALUES },

@@ -175,7 +175,7 @@ about 200; the largest container scale over all 8,836 pairs at P = 500 is below 
 the largest coordinate of a lattice start below 1e4) are valid problems; nothing in the validator or the server
 treats a pair apart [CALC]. A pair whose piece is larger than its container (a cube of edge 1 in an octahedron of
 edge 1) is an ordinary problem with s above 1 for every P. Pieces and containers that are the same solid (the 94
-self-packings, 27 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The volunteers' work list
+self-packings, 27 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The nightly snapshot holds the leading site entry of any open problem of the domain, new pairs and P = 101 to 500 included (`snapshotSpaces`; domain problems without a record are listed after the records, by P). The volunteers' work list
 (`domain.sample`) is unchanged: it offers only the unrecorded range P = 101 to 500 of the 150 pairs; a new pair comes up
 for volunteers once it has a site entry.
 

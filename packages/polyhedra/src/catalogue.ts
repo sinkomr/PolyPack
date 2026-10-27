@@ -225,8 +225,8 @@ function buildProblems(): ProblemName[] {
 export const PROBLEM_NAMES: readonly ProblemName[] = buildProblems();
 const PROBLEM_BY_CODE = new Map(PROBLEM_NAMES.map((p) => [p.code, p]));
 
-/** Problems of the other pairs, named when first asked for (at most one per ordered pair of solids). */
-const PAIR_CACHE = new Map<string, ProblemName | null>();
+/** Problems of the other pairs, named when first asked for: at most one per ordered pair of solids; misses are not kept. */
+export const PAIR_CACHE = new Map<string, ProblemName>();
 
 /**
  * The pair of solids a code names: the splits of the code at an "in" with a solid code on each side. [CALC] No code
@@ -246,12 +246,12 @@ export function problemNameOf(code: string): ProblemName | null {
   const known = PROBLEM_BY_CODE.get(code);
   if (known) return known;
   if (code.length > 24) return null;
-  let p = PAIR_CACHE.get(code);
-  if (p === undefined) {
-    const pair = pairOfCode(code);
-    p = pair ? problemName(pair[0].name, pair[1].name, "pairs", false) : null;
-    PAIR_CACHE.set(code, p);
-  }
+  const cached = PAIR_CACHE.get(code);
+  if (cached) return cached;
+  const pair = pairOfCode(code);
+  if (!pair) return null;
+  const p = problemName(pair[0].name, pair[1].name, "pairs", false);
+  PAIR_CACHE.set(code, p);
   return p;
 }
 
