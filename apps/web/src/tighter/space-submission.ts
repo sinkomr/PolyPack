@@ -155,7 +155,7 @@ export async function postSpaceSubmission(
 /**
  * One answer of POST /api/spaces/submit, read by its status. An entry the server kept and made leader
  * is the leader; one that is valid but not kept, or that the server did not check because it could
- * not be kept (polyhedra: `checked: false`), is behind; 409 is closed; 400 and 422 refused; 429 and
+ * not be kept (polyhedra and torus: `checked: false`), is behind; 409 is closed; 400 and 422 refused; 429 and
  * 503 rate-limited; no answer or another failure is offline.
  */
 export function classifySpaceAnswer(status: number | null, body: unknown): SubmitOutcome {

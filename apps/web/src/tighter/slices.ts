@@ -12,13 +12,14 @@ import type { DimensionId, Family } from "./frontier";
  * first reset with folded Polyhedral surfaces, then Sphere, Torus and the Catalan solids without
  * folding as late cards; 3D in 3D opens at the second reset with Archimedean solids in themselves
  * only, then each card opens a family of solids: a pair of solids (piece, container) is dealt when both
- * families are open, and a balls problem when the Balls card is owned and the solid's family (if any) is open. Surfaces without folding on Platonic solids, prisms and
+ * families are open, and a balls problem when the Balls card is owned and the solid's family (if any) is open. Surfaces without folding on Platonic and Archimedean solids, prisms and
  * antiprisms are never dealt: each is a 2D in 2D packing of its faces (docs/spaces/SURFACE.md).
  */
 export type SliceId =
   | "curved"
   | "surf-platonic"
   | "surf-prisms"
+  | "surf-archimedean"
   | "surf-catalan-a"
   | "surf-catalan-b"
   | "surf-catalan-c"
@@ -54,6 +55,14 @@ export const SLICES: readonly Slice[] = [
     family: "surface",
     dimension: "2-on-3",
     label: "Prism and antiprism surfaces",
+    free: false,
+    late: false,
+  },
+  {
+    id: "surf-archimedean",
+    family: "surface",
+    dimension: "2-on-3",
+    label: "Archimedean surfaces",
     free: false,
     late: false,
   },

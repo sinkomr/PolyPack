@@ -1,9 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
-import { SURFACE_CATALAN as PKG_CATALAN, SURFACE_PLATONIC as PKG_PLATONIC, SURFACE_SOLIDS } from "@polypack/spaces";
+import {
+  SPACE_DOMAINS,
+  SURFACE_ARCHIMEDEAN as PKG_ARCHIMEDEAN,
+  SURFACE_CATALAN as PKG_CATALAN,
+  SURFACE_PLATONIC as PKG_PLATONIC,
+  SURFACE_SOLIDS,
+  parseSpaceId,
+} from "@polypack/spaces";
 import {
   CLOSE_TO_BOUND,
+  CURVED_KS,
+  CURVED_MS,
+  DOMAIN_MAX_P,
   ListedSpaceProblem,
+  SURFACE_ARCHIMEDEAN,
+  TORUS_LATTICES,
   STARTER_P,
   SURFACE_CATALAN,
   SURFACE_PLATONIC,
@@ -146,11 +158,12 @@ describe("Tighter catalogue", () => {
   it("lists the solids as the spaces package does", () => {
     expect([...SURFACE_PLATONIC]).toEqual([...PKG_PLATONIC]);
     expect([...SURFACE_CATALAN].sort()).toEqual([...PKG_CATALAN].sort());
-    const solids = [...SURFACE_PLATONIC, ...SURFACE_CATALAN, ...SURFACE_PRISMS].sort();
+    expect([...SURFACE_ARCHIMEDEAN]).toEqual([...PKG_ARCHIMEDEAN]);
+    const solids = [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_CATALAN, ...SURFACE_PRISMS].sort();
     expect(solids).toEqual([...SURFACE_SOLIDS].sort());
   });
 
-  it("never deals a surface without folding on a Platonic solid, a prism or an antiprism", () => {
+  it("never deals a surface without folding on a Platonic or Archimedean solid, a prism or an antiprism", () => {
     for (const slice of SLICES.filter((s) => s.family === "surface"))
       for (const k of sample(slice.id, 120)) {
         const f = spaceFields(k.id)!;
@@ -158,13 +171,15 @@ describe("Tighter catalogue", () => {
         if (f.mode === "nofold") expect(SURFACE_CATALAN).toContain(f.solid);
         expect(inSlice(slice.id, k.id)).toBe(true);
       }
-    for (const solid of [...SURFACE_PLATONIC, ...SURFACE_PRISMS])
+    for (const solid of [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_PRISMS])
       expect(sliceOfId(`surface/${solid}/nofold/4/12`)).toBeNull();
   });
 
   it("puts sample ids in their slices", () => {
     expect(sliceOfId("surface/cube/fold/4/12")).toBe("surf-platonic");
     expect(sliceOfId("surface/prism5/fold/4/12")).toBe("surf-prisms");
+    expect(sliceOfId("surface/snub_cube/fold/4/12")).toBe("surf-archimedean");
+    expect(sliceOfId("surface/cuboctahedron/nofold/4/12")).toBeNull();
     expect(sliceOfId("surface/antiprism12/fold/0/12")).toBe("surf-prisms");
     expect(sliceOfId("surface/rhombic_dodecahedron/fold/4/12")).toBe("surf-catalan-a");
     expect(sliceOfId("surface/triakis_octahedron/fold/4/12")).toBe("surf-catalan-a");
@@ -323,21 +338,53 @@ describe("Tighter catalogue", () => {
       true,
     );
     expect(dealtFromListing(entry("sphere/4/12", { certified: null, bound: null }))).toBe(true);
+    // the listing removes the closed ones from the domain's draws
     const listings = {
-      sphere: [
-        entry("sphere/4/12"),
-        entry("sphere/4/14", { status: "proven" }),
-        entry("sphere/4/30"),
-        entry("sphere/3/16"),
-      ],
+      sphere: [entry("sphere/4/12", { status: "proven" }), entry("sphere/4/14", { accepts_submissions: false })],
     };
-    const ids = sample("sphere", 10, false, listings).map((k) => k.id);
-    expect(ids.sort()).toEqual(["sphere/3/16", "sphere/4/12", "sphere/4/30"]);
-    // a starter takes the small ones while there are
+    const ids = sample("sphere", 400, false, listings).map((k) => k.id);
+    expect(ids).not.toContain("sphere/4/12");
+    expect(ids).not.toContain("sphere/4/14");
+    // a starter takes the small ones
     expect(sample("sphere", 1, true, listings)[0].P).toBeLessThanOrEqual(STARTER_P.max);
-    // without a listing, nothing
-    expect(sample("sphere", 3)).toEqual([]);
+    // without a listing, the domain is still dealt
+    expect(sample("sphere", 3)).toHaveLength(3);
+    expect(listingOf("sphere")).toBe("sphere");
     expect(listingOf("poly-platonic")).toBeNull();
+  });
+});
+
+describe("Tighter domain draws of curved, sphere and torus", () => {
+  it("write the domains as the spaces package does", () => {
+    const f = (sp: "curved" | "torus", key: string) => SPACE_DOMAINS[sp]!.info.fields.find((x) => x.key === key)!;
+    expect([...CURVED_KS]).toEqual(f("curved", "K").values);
+    expect(CURVED_MS.map(String)).toEqual(f("curved", "M").values);
+    expect([...TORUS_LATTICES]).toEqual(f("torus", "family").values);
+    for (const sp of ["curved", "sphere", "torus"] as const)
+      expect(DOMAIN_MAX_P[sp]).toBe(SPACE_DOMAINS[sp]!.info.fields.find((x) => x.key === "P")!.max);
+  });
+
+  it("parse in the package, are in their slice, and have at least 2 pieces, below the domain's P", () => {
+    for (const slice of ["curved", "sphere", "torus"] as const) {
+      const d = newDealer(11);
+      const exclude = new Set<string>();
+      let bigP = 0;
+      for (let i = 0; i < 300; i++) {
+        const k = drawSliceProblem(d, slice, { listings: {}, exclude })!;
+        expect(k).not.toBeNull();
+        exclude.add(k.id);
+        const parsed = parseSpaceId(slice, k.id);
+        expect(typeof parsed).toBe("object");
+        expect(SPACE_DOMAINS[slice]!.bound(parsed as Exclude<typeof parsed, string>)).not.toBeUndefined();
+        expect(sliceOfId(k.id)).toBe(slice);
+        expect(k.P).toBeGreaterThanOrEqual(2);
+        expect(k.P).toBeLessThanOrEqual(DOMAIN_MAX_P[slice]);
+        expect(parseDealtKey(k.id)).not.toBeNull();
+        bigP = Math.max(bigP, k.P);
+      }
+      // log-uniform: large P is reached
+      expect(bigP).toBeGreaterThan(DOMAIN_MAX_P[slice] * 0.6);
+    }
   });
 });
 
@@ -539,7 +586,7 @@ describe("Tighter space submissions", () => {
     });
     // valid and leader but not kept: not a leader
     expect(classifySpaceAnswer(200, { ...ok, id: null })).toMatchObject({ kind: "behind" });
-    // polyhedra: an entry that cannot be kept is not checked
+    // polyhedra and torus: an entry that cannot be kept is not checked
     expect(
       classifySpaceAnswer(200, {
         valid: false,

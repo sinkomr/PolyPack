@@ -8,6 +8,7 @@ import { presetParams, tuningLevels } from "./presets";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
+import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
 import { SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
 
@@ -740,6 +741,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
   "surf-prisms": 0.002,
+  "surf-archimedean": 0.005,
   "surf-catalan-a": 0.01,
   "surf-catalan-b": 0.05,
   "surf-catalan-c": 0.15,
@@ -830,6 +832,8 @@ function polyWhat(id: SliceId, what: string): string {
   return `The dealer also deals ${what} (${n} solids) as pieces and as containers, in pairs with any solid of a family that is open, itself included. Every ordered pair of solids is a problem, with 2 to 500 pieces: ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem with every family open.`;
 }
 
+const nf = (n: number) => n.toLocaleString("en-US");
+
 const SURFACE_PIECES =
   "Pieces are disks or polygons of 3 to 100 sides, with 1 to 100 of them, so each solid holds 9,900 problems.";
 
@@ -838,7 +842,7 @@ const SLICE_CARDS: Upgrade[] = [
     "curved",
     ["ring30"],
     "Deals packings on the hyperbolic plane and on spheres, besides the flat plane.",
-    "The dealer also deals the 334 curved problems: pieces packed in a regular polygon or disk on a surface of constant curvature K. K below 0 is the hyperbolic plane, K = 0 is the flat plane, and K above 0 is a sphere of radius 1 / √K. This is 2D in 2D, played on curved surfaces.",
+    `The dealer also deals curved problems: ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces that are disks or polygons of 3 to 100 sides, packed in a regular polygon or disk on a surface of constant curvature K. K below 0 is the hyperbolic plane, K = 0 is the flat plane, and K above 0 is a sphere of radius 1 / √K. This is 2D in 2D, played on curved surfaces. Most have no research record yet.`,
   ),
   sliceCard(
     "surf-prisms",
@@ -847,8 +851,14 @@ const SLICE_CARDS: Upgrade[] = [
     `The dealer also deals pieces packed on the surface of a prism with 3, or 5 to 12 sides, and of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
   ),
   sliceCard(
-    "surf-catalan-a",
+    "surf-archimedean",
     ["surf-prisms"],
+    `Deals packings on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
+    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. Without folding these would be 2D packings of regular faces, so only the folded ones are dealt. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-catalan-a",
+    ["surf-archimedean"],
     "Deals packings on the 6 Catalan solids with 12 or 24 faces.",
     `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces), and on the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
@@ -868,19 +878,19 @@ const SLICE_CARDS: Upgrade[] = [
     "sphere",
     ["surf-catalan-b"],
     "Deals packings on the surface of a sphere.",
-    "The dealer also deals the 166 problems of pieces packed in a cap of a sphere, the smallest one that holds them. Each has a research record to beat.",
+    `The dealer also deals pieces packed in a cap of a sphere, the smallest one that holds them: ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
   ),
   sliceCard(
     "torus",
     ["surf-catalan-b"],
     "Deals packings on a torus, with a square, a hexagonal or a free cell.",
-    "The dealer also deals the 544 torus problems: pieces packed on a flat torus whose cell is a square, a hexagon or any shape, the smallest one that holds them. Each has a research record to beat.",
+    `The dealer also deals pieces packed on a flat torus whose cell is a square, a hexagon or any shape, the smallest one that holds them: ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
   ),
   sliceCard(
     "surf-nofold-catalan",
     ["surf-catalan-b"],
     "Deals packings on the Catalan solids where a piece stays on one face.",
-    `The dealer also deals the Catalan solids without folding: each piece must lie inside one face, so each face is a separate 2D packing. This is for the 13 Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
+    `The dealer also deals the Catalan solids without folding: each piece must lie inside one face, so each face is a separate 2D packing. This is for the Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "poly-catalan",

@@ -483,6 +483,7 @@ describe("Tighter dimension cards", () => {
       [
         "curved",
         "surf-prisms",
+        "surf-archimedean",
         "surf-catalan-a",
         "surf-catalan-b",
         "surf-catalan-c",
@@ -501,10 +502,11 @@ describe("Tighter dimension cards", () => {
     const dims = ["2-in-2", "2-on-3"] as const;
     const v = shopView(rest([], 1, dims), funds, 8);
     expect(card(v, "surf-prisms")).toMatchObject({ state: "buyable", name: "Prism and antiprism surfaces" });
-    expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Prism and antiprism surfaces"] });
+    expect(card(v, "surf-archimedean")).toMatchObject({ state: "locked", needs: ["Prism and antiprism surfaces"] });
+    expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"] });
     for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
       expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
-    const w = shopView(rest(["surf-prisms", "surf-catalan-a", "surf-catalan-b"], 1, dims), funds, 8);
+    const w = shopView(rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims), funds, 8);
     for (const id of ["sphere", "torus", "surf-nofold-catalan"] as const)
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });
@@ -516,8 +518,10 @@ describe("Tighter dimension cards", () => {
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
     const T1 = resetThreshold(1);
     expect(
-      (["surf-prisms", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const).map((id) => costOf(o(1), id)),
-    ).toEqual([0.002 * T1, 0.01 * T1, 0.05 * T1, 0.15 * T1]);
+      (["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const).map((id) =>
+        costOf(o(1), id),
+      ),
+    ).toEqual([0.002 * T1, 0.005 * T1, 0.01 * T1, 0.05 * T1, 0.15 * T1]);
     expect((["sphere", "torus", "surf-nofold-catalan"] as const).map((id) => costOf(o(1), id))).toEqual([
       0.3 * T1,
       0.4 * T1,

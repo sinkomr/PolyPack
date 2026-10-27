@@ -9,9 +9,11 @@ import { SLICES, SOLID_FAMILY_SLICE, SliceId, laterSlice } from "./slices";
  * The problems each slice (slices.ts) may deal, enumerated lazily: surfaces are 712,800 problems
  * and balls are 693, so those are drawn from parameter ranges with the dealer's seeded generator.
  * Polyhedra problems are every ordered pair of the 94 solids (8,836, of which 150 have records), drawn
- * from the solids of the open families. The other spaces (sphere, torus, curved) have only their
- * research records for problems, so they are drawn from the records listing of the server (GET /api/spaces/<space>/records),
- * read once a session by the page and passed in.
+ * from the solids of the open families. Curved, sphere and torus are domains of the spaces package
+ * (SPACE_DOMAINS: any piece, any P, a problem without a record is open), drawn from parameter ranges
+ * written out below (a test checks them against the package); the records listing of the server
+ * (GET /api/spaces/<space>/records), read once a session by the page and passed in, only removes the
+ * problems that are closed or settled.
  */
 
 // ---------- the solids of the surface space ----------
@@ -35,6 +37,22 @@ export const CATALAN_FACES: Readonly<Record<string, number>> = {
   disdyakis_triacontahedron: 120,
 };
 export const SURFACE_CATALAN: readonly string[] = Object.keys(CATALAN_FACES);
+/** The 13 Archimedean solids of the surface space: their faces are regular, so without folding they are 2D in 2D packings. */
+export const SURFACE_ARCHIMEDEAN: readonly string[] = [
+  "truncated_tetrahedron",
+  "cuboctahedron",
+  "truncated_cube",
+  "truncated_octahedron",
+  "rhombicuboctahedron",
+  "truncated_cuboctahedron",
+  "snub_cube",
+  "icosidodecahedron",
+  "truncated_dodecahedron",
+  "truncated_icosahedron",
+  "rhombicosidodecahedron",
+  "truncated_icosidodecahedron",
+  "snub_dodecahedron",
+];
 export const SURFACE_PRISMS: readonly string[] = [
   ...[3, 5, 6, 7, 8, 9, 10, 11, 12].map((k) => `prism${k}`),
   ...[4, 5, 6, 7, 8, 9, 10, 11, 12].map((k) => `antiprism${k}`),
@@ -44,6 +62,7 @@ export const SURFACE_PRISMS: readonly string[] = [
 const SURFACE_SOLIDS: Partial<Record<SliceId, readonly string[]>> = {
   "surf-platonic": SURFACE_PLATONIC,
   "surf-prisms": SURFACE_PRISMS,
+  "surf-archimedean": SURFACE_ARCHIMEDEAN,
   "surf-catalan-a": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] <= 24),
   "surf-catalan-b": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] >= 30 && CATALAN_FACES[s] <= 60),
   "surf-catalan-c": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] >= 120),
@@ -99,7 +118,7 @@ export function dealableIn(id: string, open: readonly SliceId[]): boolean {
 
 /**
  * The slice of a space problem's id, or null for a problem no slice deals: a surface without
- * folding on a Platonic solid, a prism or an antiprism (each is a 2D in 2D packing of its faces), or an id
+ * folding on a Platonic or Archimedean solid, a prism or an antiprism (each is a 2D in 2D packing of its faces), or an id
  * that is not a space problem's.
  */
 export function sliceOfId(id: string): SliceId | null {
@@ -120,6 +139,7 @@ export function sliceOfId(id: string): SliceId | null {
       if (f.mode === "nofold") return f.solid in CATALAN_FACES ? "surf-nofold-catalan" : null;
       if (SURFACE_PLATONIC.includes(f.solid)) return "surf-platonic";
       if (SURFACE_PRISMS.includes(f.solid)) return "surf-prisms";
+      if (SURFACE_ARCHIMEDEAN.includes(f.solid)) return "surf-archimedean";
       const faces = CATALAN_FACES[f.solid];
       if (faces === undefined) return null;
       return faces <= 24 ? "surf-catalan-a" : faces <= 60 ? "surf-catalan-b" : "surf-catalan-c";
@@ -153,12 +173,12 @@ export interface ListedSpaceProblem {
   bound: { value: number } | null;
 }
 
-/** The spaces whose problems are their records. */
+/** The spaces drawn from a domain, whose records listing only removes closed problems. */
 export type ListedSpace = "sphere" | "torus" | "curved" | "polyhedra";
 // (polyhedra stays a listed space for the page's other uses; no slice draws from it now)
 export type SpaceListings = Partial<Record<ListedSpace, readonly ListedSpaceProblem[]>>;
 
-/** The records listing a slice draws from, or null for a slice drawn from parameter ranges. */
+/** The space of a slice drawn from a domain (its records listing removes closed problems), or null for another slice. */
 export function listingOf(slice: SliceId): ListedSpace | null {
   // polyhedra pairs are drawn from the solids, not from the 150 records
   return slice === "sphere" || slice === "torus" || slice === "curved" ? slice : null;
@@ -192,6 +212,55 @@ const STARTER_BALLS = ["ballinball", "ballincub"] as const;
 /** P of a polyhedra pair, from 2 to 500. */
 export const POLY_P = { min: 2, max: 500 } as const;
 
+// ---------- the domains of curved, sphere and torus ----------
+
+/** The curvatures of the curved domain, written as its ids write them (spaces package piece-domains.ts CURVED_KS). */
+export const CURVED_KS: readonly string[] = [
+  "-6.519717439579256",
+  "-4.50521902808615",
+  "-3.4413111779836725",
+  "-2.3365290558829845",
+  "-1.1892985685754194",
+  "-1",
+  "-1e-06",
+  "1e-06",
+  "1",
+  "1.225778283313099",
+];
+/** The containers of the curved domain: a disk (0) or a polygon. */
+export const CURVED_MS: readonly number[] = [0, 3, 4, 5, 6, 7, 8, 9, 10, 12];
+export const TORUS_LATTICES: readonly string[] = ["sq", "hex", "free"];
+/** P of a drawn problem runs from 2 (P = 1 is trivial) to this: 100, and 500 on a torus. */
+export const DOMAIN_MAX_P: Readonly<Record<ListedSpace, number>> = { curved: 100, sphere: 100, torus: 500, polyhedra: 500 };
+
+/** How many problems the game draws from a domain: every piece (99), every container, curvature or lattice, P from 2. */
+export function domainProblems(space: "curved" | "sphere" | "torus"): number {
+  const per = 99 * (DOMAIN_MAX_P[space] - 1);
+  return space === "curved" ? CURVED_KS.length * CURVED_MS.length * per : space === "torus" ? TORUS_LATTICES.length * per : per;
+}
+
+/**
+ * The id of a problem drawn from a space's domain. N is a disk (0) with the chance of one value in
+ * the list of 99 and else 3 to 100; P is log-uniform in [2, the space's largest], since the cost of an
+ * evaluation grows with P, so the many small problems that can be improved quickly are dealt as often
+ * as the few large ones that take long. A starter has few sides and 8 to 20 pieces.
+ */
+function drawDomainId(d: DealerState, space: ListedSpace, starter: boolean): string {
+  const N = starter ? pick(d, STARTER_SIDES) : nextRandom(d) < 1 / 99 ? 0 : span(d, 3, 100);
+  const max = DOMAIN_MAX_P[space];
+  const P = starter
+    ? span(d, STARTER_P.min, STARTER_P.max)
+    : Math.min(max, Math.max(2, Math.round(Math.exp(Math.log(2) + nextRandom(d) * Math.log(max / 2)))));
+  switch (space) {
+    case "sphere":
+      return `sphere/${N}/${P}`;
+    case "torus":
+      return `torus/${pick(d, TORUS_LATTICES)}/${N}/${P}`;
+    default:
+      return `curved/${pick(d, CURVED_KS)}/${N}/${pick(d, CURVED_MS)}/${P}`;
+  }
+}
+
 // ---------- drawing ----------
 
 const pick = <T>(d: DealerState, list: readonly T[]): T => list[Math.floor(nextRandom(d) * list.length)];
@@ -217,18 +286,18 @@ const keyFor = (id: string, P: number, family: SpaceKey["family"]): SpaceKey => 
  * started with the same seed is dealt the same candidates.
  */
 export function drawSliceProblem(d: DealerState, slice: SliceId, o: DrawOptions): SpaceKey | null {
+  const attempts = o.attempts ?? 24;
   const listed = listingOf(slice);
   if (listed) {
-    const all = o.listings[listed];
-    if (!all) return null;
-    const ok = all.filter((p) => p.P >= 2 && dealtFromListing(p) && inSlice(slice, p.id) && !o.exclude.has(p.id));
-    const small = o.starter ? ok.filter((p) => p.P >= STARTER_P.min && p.P <= STARTER_P.max) : [];
-    const from = small.length ? small : ok;
-    if (!from.length) return null;
-    const p = pick(d, from);
-    return keyFor(p.id, p.P, listed);
+    // A domain: any piece and P of its ranges, not only the problems with records. The listing, when read,
+    // removes the ids that are proven, closed, infeasible or settled at their bound.
+    const shut = new Set((o.listings[listed] ?? []).filter((p) => !dealtFromListing(p)).map((p) => p.id));
+    for (let i = 0; i < attempts; i++) {
+      const id = drawDomainId(d, listed, !!o.starter);
+      if (!o.exclude.has(id) && !shut.has(id)) return keyFor(id, spaceFields(id)!.P, listed);
+    }
+    return null;
   }
-  const attempts = o.attempts ?? 24;
   const open = o.open ?? SLICES.map((s) => s.id);
   if (slice.startsWith("poly-")) {
     // The slice's own family supplies the piece or the container (a coin says which), the other comes
