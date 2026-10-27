@@ -141,7 +141,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const rows = await page
     .locator("#t-cards .t-band")
     .evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.row));
-  expect(rows).toEqual(["clicks", "auto", "queue", "methods", "runs", "problems", "dealer", "records"]);
+  expect(rows).toEqual(["clicks", "auto", "queue", "methods", "runs", "problems", "dimensions", "dealer", "records"]);
   await expect(page.locator("#t-shop-summary")).toHaveText(
     /^0 of \d+ upgrades owned · \d+ still \?\?\?\?\?\? · 1 to buy now$/,
   );
@@ -446,12 +446,12 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await give(page, ["standing", "rules", "head1"]);
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
-    s.standing.cycleEarned = 2_400_000;
-    s.rp += 2_400_000;
-    s.rpEarned += 2_400_000;
+    s.standing.cycleEarned = 240_000_000;
+    s.rp += 240_000_000;
+    s.rpEarned += 240_000_000;
   });
   await expect(page.locator("#t-standing")).toBeVisible();
-  await expect(page.locator("#t-st-preview")).toContainText("Reset now for 1 standing");
+  await expect(page.locator("#t-st-preview")).toContainText("Reset now for 5 standing");
   await page.selectOption("#t-st-rule", "method");
   await expect(page.locator("#t-st-rule-note")).toContainText("One method");
   await page.click("#t-st-reset");
@@ -467,7 +467,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
     ourId: s.queue.find((q: { key: string }) => q.key === s.focus)?.ourId,
   }));
   expect(after.rp).toBe(0);
-  expect(after.standing).toMatchObject({ points: 1, total: 1, rule: "method", cycleEarned: 0 });
+  expect(after.standing).toMatchObject({ points: 5, total: 5, rule: "method", cycleEarned: 0 });
+  expect(after.standing.dimensions).toEqual(["2-in-2", "2-on-3"]);
   // kept: Standing and its row, rent and collections; granted: Head start I's upgrades
   expect(after.owned).toEqual(
     expect.arrayContaining(["standing", "rules", "head1", "rent", "collections", "trace", "click5", "auto1"]),
@@ -475,7 +476,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   expect(after.owned).not.toContain("click6");
   expect(after.recorded).toContain(p.key);
   expect(after.ourId).toBe(p.ourId);
-  await expect(page.locator("#t-bar-standing")).toHaveText("1 · ×1.1");
+  await expect(page.locator("#t-bar-standing")).toHaveText("5 · ×1.5");
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×5");
   // the rule holds: with Basin hopping owned, the select still offers only mc_compress
   await give(page, ["basin"]);
@@ -487,7 +488,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await page.waitForTimeout(1500);
   await page.reload();
   await expect(page.locator("#t-standing")).toBeVisible();
-  expect(await game(page, (s) => [s.standing.rule, s.standing.resets, s.standing.points])).toEqual(["method", 1, 1]);
+  expect(await game(page, (s) => [s.standing.rule, s.standing.resets, s.standing.points])).toEqual(["method", 1, 5]);
   await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
   await expect(page.locator("#t-st-history-box")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });

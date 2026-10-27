@@ -294,6 +294,25 @@ describe("Tighter saves", () => {
     expect(load(raw).rp).toBe(s.rp);
   });
 
+  it("refund Higher rent's levels past its 5, once, at the price they were bought at", () => {
+    const s = played();
+    const raw = JSON.parse(toJson(s));
+    raw.owned = ["rent", "rentx"];
+    raw.levels = { rentx: 8 };
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.levels).toEqual({ rentx: 5 });
+    // levels 6 to 8 at their list price from before the cap: 480,000 RP × 1.6 a level
+    let refund = 0;
+    for (let j = 5; j < 8; j++) refund += Math.round(480_000 * 1.6 ** j);
+    expect(r.state.rp).toBe(s.rp + refund);
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.rp).toBe(s.rp + refund);
+    raw.levels = { rentx: 5 };
+    expect(load(raw).rp).toBe(s.rp);
+  });
+
   it("read the dealer of a save that counted evaluations: what ran since its last refill, as the clicks it was", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));

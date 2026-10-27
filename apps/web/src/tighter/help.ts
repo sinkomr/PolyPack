@@ -36,7 +36,7 @@ import {
   recordPoints,
 } from "./points";
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
-import { HELD_PER_STANDING, RESET_MIN, RULES } from "./standing";
+import { DIMENSION_TEXT, RESET_MIN, RULES, resetThreshold } from "./standing";
 import { CLIENT_TAG } from "./submission";
 import { MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "./transfer";
 import {
@@ -265,25 +265,28 @@ const STANDING: How = {
   text: [
     "A cycle is the time between two resets. Your first cycle began when you started the game. A reset trades this cycle's record points and most of your tech tree for standing.",
     "Every point of standing you have ever earned adds 10 % to all the record points you earn, whether you spend it or not. You spend standing on the upgrades in the tech tree's Standing row, which only standing buys and which every reset keeps.",
-    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Points still waiting for the server do not count yet, and they carry into the next cycle.`,
-    "A reset takes away your RP to spend and every upgrade bought with RP, except Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at their first level.",
+    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Each later cycle needs 5 times as many as the one before, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points still waiting for the server do not count yet, and they carry into the next cycle.`,
+    `The first reset opens ${DIMENSION_TEXT["2-on-3"].label}, ${DIMENSION_TEXT["2-on-3"].what}. The second opens ${DIMENSION_TEXT["3-in-3"].label}, ${DIMENSION_TEXT["3-in-3"].what}. A dimension stays open for good, and the cards that deal its problems are in the Dimensions row of the tech tree, bought again in each cycle. Curved problems, a part of ${DIMENSION_TEXT["2-in-2"].label}, are a card from the first cycle on.`,
+    "A reset takes away your RP to spend and every upgrade bought with RP, the cards of the Dimensions row included, except Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at their first level.",
     "A reset keeps your records on the server, and they go on paying rent. It also keeps your collections, your standing and the Standing row, the queue, what the dealer has learned and every count.",
   ],
   math: [
-    `<var>G</var> = ⌊√(<var>E</var> / ${int(RESET_MIN)}) + <var>H</var> / ${HELD_PER_STANDING}⌋, once <var>E</var> ≥ ${int(RESET_MIN)}`,
+    `<var>G</var> = ⌊5 × √(<var>E</var> / <var>R</var>)⌋, once <var>E</var> ≥ <var>R</var>`,
+    `<var>R</var> = ${int(RESET_MIN)} × 5<sup><var>n</var></sup>`,
     `<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉), added only for a cycle played under a rule`,
     `multiplier on all points = 1 + 0.1 × <var>T</var>`,
-    `<var>E</var><sub>next</sub> = ${int(RESET_MIN)} × (<var>G</var> + 1 − <var>H</var> / ${HELD_PER_STANDING})<sup>2</sup>`,
+    `<var>E</var><sub>next</sub> = <var>R</var> × ((<var>G</var> + 1) / 5)<sup>2</sup>`,
   ],
   vars: [
     ["<var>G</var>", "the standing a reset gives now"],
     ["<var>E</var>", "the record points earned in this cycle and confirmed by the server, rent included"],
-    ["<var>H</var>", "the records you hold now"],
+    ["<var>R</var>", "the record points this cycle needs for a reset (the threshold)"],
+    ["<var>n</var>", "the resets you have made so far (0 in the first cycle)"],
     ["<var>G</var><sub>rule</sub>", "the extra standing for finishing a cycle under a rule"],
     ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
     [
       "<var>E</var><sub>next</sub>",
-      "the confirmed record points of this cycle at which the reset gives one more standing, with H unchanged",
+      "the confirmed record points of this cycle at which the reset gives one more standing",
     ],
   ],
   note: "The milestones show how long this cycle took to reach a few key upgrades, next to your fastest earlier cycle.",

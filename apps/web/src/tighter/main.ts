@@ -126,13 +126,13 @@ import { Speeds, autoHold, autoTarget } from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
-  HELD_PER_STANDING,
+  DIMENSION_TEXT,
   MARKS,
-  RESET_MIN,
   RULES,
   bestMark,
   markProgress,
   resetCycle,
+  resetThreshold,
   resetPreview,
   ruleAllowsMethod,
   ruleAllowsProblem,
@@ -2982,14 +2982,19 @@ function renderStanding(o: Owned): void {
   );
   const pv = resetPreview(state);
   const rule = ruleById(st.rule);
+  const opensText = pv.opens
+    ? ` This reset opens ${DIMENSION_TEXT[pv.opens].label}: ${DIMENSION_TEXT[pv.opens].what}.`
+    : "";
   text(
     "t-st-preview",
     pv.gain > 0
       ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}. ` +
           `All points would then pay ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)} instead of ×${standingMultiplier(st).toFixed(1)}. ` +
-          `The next point of standing comes at ${fmtInt(pv.nextAt)} confirmed RP in this cycle.`
-      : `A reset needs ${fmtInt(RESET_MIN)} RP earned in this cycle and confirmed by the server, so ${fmtInt(Math.ceil(pv.short))} more to go. ` +
-          `It then gives ⌊√(cycle RP / ${fmtInt(RESET_MIN)}) + records held / ${HELD_PER_STANDING}⌋ standing.`,
+          `The next point of standing comes at ${fmtInt(pv.nextAt)} confirmed RP in this cycle.` +
+          opensText
+      : `A reset needs ${fmtInt(resetThreshold(st.resets))} RP earned in this cycle and confirmed by the server, so ${fmtInt(Math.ceil(pv.short))} more to go. ` +
+          `It then gives ⌊5 × √(cycle RP / ${fmtInt(resetThreshold(st.resets))})⌋ standing.` +
+          opensText,
   );
   const btn = $<HTMLButtonElement>("t-st-reset");
   btn.disabled = pv.gain <= 0 || !ownsGame;
@@ -3009,7 +3014,8 @@ function renderStanding(o: Owned): void {
       "t-st-confirm-text",
       `You get ${fmtInt(pv.gain)} standing and give up ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
         `You keep ${andList(kept)}. The next cycle begins with ${fmtInt(pv.keeps.length)} upgrades` +
-        (next ? ` and is played under ${next.name}. ${next.limit}` : "."),
+        (next ? ` and is played under ${next.name}. ${next.limit}` : ".") +
+        (pv.opens ? ` It opens ${DIMENSION_TEXT[pv.opens].label}: ${DIMENSION_TEXT[pv.opens].what}.` : ""),
     );
   }
   // cycle rules: the next cycle's, chosen here
@@ -3113,6 +3119,7 @@ async function doReset(): Promise<void> {
   // let the stopped jobs settle first (an auto-eval job that could not run is due again)
   await new Promise((r) => setTimeout(r, 0));
   const rule = ruleById(state.standing.rule);
+  const opens = resetPreview(state).opens;
   const gain = resetCycle(state, now());
   ensureLanes();
   lastChange.clear();
@@ -3120,9 +3127,11 @@ async function doReset(): Promise<void> {
   if (gain > 0) {
     const st = state.standing;
     const next = ruleById(st.rule);
+    const opened = opens ? ` It opens ${DIMENSION_TEXT[opens].label}: ${DIMENSION_TEXT[opens].what}.` : "";
     event(
       `Reset for ${fmtInt(gain)} standing. All points now pay ×${standingMultiplier(st).toFixed(1)}.` +
-        (rule ? ` You finished a cycle under ${rule.name}, and its reward holds for good.` : ""),
+        (rule ? ` You finished a cycle under ${rule.name}, and its reward holds for good.` : "") +
+        opened,
     );
     say(
       `Cycle ${fmtInt(st.resets + 1)} begins with ${fmtInt(state.owned.length)} upgrades.` +

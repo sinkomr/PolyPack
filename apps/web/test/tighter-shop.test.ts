@@ -22,7 +22,7 @@ import {
   room,
 } from "../src/tighter/rank";
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "../src/tighter/runplan";
-import { HELD_PER_STANDING, RESET_MIN, standingMultiplier } from "../src/tighter/standing";
+import { RESET_MIN, resetThreshold, standingMultiplier } from "../src/tighter/standing";
 import { GREEDY_BUDGET, MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "../src/tighter/transfer";
 import { MYSTERY, shopView } from "../src/tighter/shop";
 import {
@@ -32,8 +32,12 @@ import {
   TUNED_DEFAULTS,
   UPGRADES,
   EvolveMethod,
+  canBuy,
   UpgradeId,
+  costOf,
+  exists,
   laneCount,
+  slicePrice,
   lanesMaxed,
   owning,
   rpCostFactor,
@@ -42,6 +46,9 @@ import {
 const broke = { rp: 0, standing: 0 };
 const card = (v: ReturnType<typeof shopView>, id: UpgradeId) => v.rows.flatMap((r) => r.cards).find((c) => c.id === id);
 const row = (v: ReturnType<typeof shopView>, id: string) => v.rows.find((r) => r.id === id)!;
+
+/** What the shop shows with only the first dimension open: the tree, the Standing row aside. */
+const inTheFirstDimension = () => UPGRADES.filter((u) => u.row !== "standing" && exists(owning([]), u.id));
 
 describe("Tighter shop", () => {
   it("shows the whole tree from the start, row by row, the Standing row aside", () => {
@@ -53,14 +60,17 @@ describe("Tighter shop", () => {
       "methods",
       "runs",
       "problems",
+      "dimensions",
       "dealer",
       "records",
     ]);
     const shown = v.rows.flatMap((r) => r.cards.map((c) => c.id));
-    expect(new Set(shown)).toEqual(new Set(UPGRADES.filter((u) => u.row !== "standing").map((u) => u.id)));
-    expect(shown.length).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
+    expect(new Set(shown)).toEqual(new Set(inTheFirstDimension().map((u) => u.id)));
+    expect(shown.length).toBe(inTheFirstDimension().length);
+    // only Curved has a card before a reset opens a dimension
+    expect(row(v, "dimensions").cards.map((c) => c.id)).toEqual(["curved"]);
     expect(v.owned).toBe(0);
-    expect(v.total).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
+    expect(v.total).toBe(inTheFirstDimension().length);
     // the first card can be worked toward; the rest are locked or mysteries
     expect(card(v, "trace")).toMatchObject({ state: "dear", price: "1,000 RP", needs: [] });
     expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "1,500 RP" });
@@ -84,7 +94,7 @@ describe("Tighter shop", () => {
     expect(card(v, "morph")!.needs).toEqual([MYSTERY]);
     expect(card(v, "transfer")!.needs).toEqual(["Lattice", "More open problems"]);
     expect(harden.label).not.toMatch(/harden/i);
-    expect(v.mysteries).toBe(UPGRADES.filter((u) => u.mystery && u.row !== "standing").length);
+    expect(v.mysteries).toBe(inTheFirstDimension().filter((u) => u.mystery).length);
     // owning the prerequisite reveals it
     const w = shopView(owning(["lattice"]), { rp: 240000, standing: 0 }, 8);
     expect(card(w, "harden")).toMatchObject({
@@ -221,7 +231,7 @@ describe("Tighter tech tree", () => {
     const funds = { rp: 2000, standing: 0 };
     const v = treeView(owning(["trace"]), funds, 8);
     const node = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!;
-    expect(v.nodes.length).toBe(UPGRADES.filter((u) => u.row !== "standing").length);
+    expect(v.nodes.length).toBe(inTheFirstDimension().length);
     expect(node("trace").state).toBe("owned");
     expect(node("click2")).toMatchObject({ state: "buyable", price: "1,500 RP" });
     expect(node("click3").state).toBe("locked");
@@ -451,10 +461,88 @@ describe("Tighter upgrade texts", () => {
     expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
-    expect([RESET_MIN, HELD_PER_STANDING]).toEqual([2_000_000, 50]);
+    expect(RESET_MIN).toBe(200_000_000);
     expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
-    expect(text("standing")).toContain("earned 2,000,000 record points");
-    expect(text("standing")).toContain("/ 2,000,000)");
+    expect(text("standing")).toContain("earned 200,000,000 record points");
+    expect(text("standing")).toContain("200,000,000 × 5<sup>");
+    expect(text("standing")).toContain("⌊5 × √(");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
+  });
+});
+
+describe("Tighter dimension cards", () => {
+  const funds = { rp: 1e12, standing: 0 };
+  const rest = (ids: UpgradeId[], resets: number, dims: Parameters<typeof owning>[6], levels = {}) =>
+    owning(ids, levels, null, [], [], resets, dims);
+  const cardIds = (o: ReturnType<typeof owning>) => row(shopView(o, funds, 8), "dimensions").cards.map((c) => c.id);
+
+  it("exist only while their dimension is open, Curved from the first cycle on", () => {
+    expect(cardIds(owning([]))).toEqual(["curved"]);
+    const two = rest([], 1, ["2-in-2", "2-on-3"]);
+    expect(cardIds(two).sort()).toEqual(
+      [
+        "curved",
+        "surf-prisms",
+        "surf-catalan-a",
+        "surf-catalan-b",
+        "surf-catalan-c",
+        "sphere",
+        "torus",
+        "surf-nofold-catalan",
+      ].sort(),
+    );
+    const three = rest([], 2, ["2-in-2", "2-on-3", "3-in-3"]);
+    expect(cardIds(three)).toEqual(expect.arrayContaining(["poly-catalan", "poly-platonic", "balls", "surf-prisms"]));
+    expect(exists(owning([]), "balls")).toBe(false);
+    expect(canBuy(owning([]), funds, "balls")).toEqual({ ok: false, reason: "locked" });
+  });
+
+  it("show the late cards as ?????? until their prerequisites are owned, and the ladder as it is", () => {
+    const dims = ["2-in-2", "2-on-3"] as const;
+    const v = shopView(rest([], 1, dims), funds, 8);
+    expect(card(v, "surf-prisms")).toMatchObject({ state: "buyable", name: "Prism and antiprism surfaces" });
+    expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Prism and antiprism surfaces"] });
+    for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
+      expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
+    const w = shopView(rest(["surf-prisms", "surf-catalan-a", "surf-catalan-b"], 1, dims), funds, 8);
+    for (const id of ["sphere", "torus", "surf-nofold-catalan"] as const)
+      expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
+  });
+
+  it("are priced from the cycle's threshold, Curved at 300,000,000 in the first cycle", () => {
+    const o = (resets: number) => rest([], resets, ["2-in-2", "2-on-3", "3-in-3"]);
+    expect(costOf(o(0), "curved")).toBe(300_000_000);
+    expect(costOf(o(1), "curved")).toBe(0.3 * resetThreshold(1));
+    expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
+    const T1 = resetThreshold(1);
+    expect(
+      (["surf-prisms", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const).map((id) => costOf(o(1), id)),
+    ).toEqual([0.002 * T1, 0.01 * T1, 0.05 * T1, 0.15 * T1]);
+    expect((["sphere", "torus", "surf-nofold-catalan"] as const).map((id) => costOf(o(1), id))).toEqual([
+      0.3 * T1,
+      0.4 * T1,
+      0.5 * T1,
+    ]);
+    const T2 = resetThreshold(2);
+    expect(
+      (
+        ["poly-catalan", "poly-platonic", "poly-prisms", "poly-cube", "poly-elongated", "poly-duals", "balls"] as const
+      ).map((id) => costOf(o(2), id)),
+    ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.4 * T2, 0.5 * T2]);
+    // Quick study takes its 10 % a level off these prices as off any price in record points
+    expect(costOf(o(1), "surf-prisms")).toBe(2_000_000);
+    const studied = owning(["study"], { study: 2 }, null, [], [], 1, ["2-in-2", "2-on-3"]);
+    expect(costOf(studied, "surf-prisms")).toBe(Math.round(slicePrice("surf-prisms", 1) * 0.81));
+    // the card is owned until the reset takes it away
+    expect(costOf(rest(["surf-prisms"], 1, ["2-in-2", "2-on-3"]), "surf-prisms")).toBeNull();
+  });
+});
+
+describe("Tighter Higher rent", () => {
+  it("has 5 levels", () => {
+    const rentx = UPGRADES.find((u) => u.id === "rentx")!;
+    expect(rentx.levels!.max).toBe(5);
+    expect(costOf(owning(["rent", "rentx"], { rentx: 5 }), "rentx")).toBeNull();
+    expect(costOf(owning(["rent", "rentx"], { rentx: 4 }), "rentx")).toBe(Math.round(480_000 * 1.6 ** 4));
   });
 });
