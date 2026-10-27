@@ -1,7 +1,8 @@
 import {
   boundingRadius,
+  containerInradius,
+  DISK_RADIUS,
   findOverlaps,
-  inradius,
   pieceSeparation,
   visitContainerProtrusions,
   type Container,
@@ -143,8 +144,11 @@ export class GrowthDynamics {
 
   discAdvance(stopped: () => boolean): Advance {
     const vmax = Math.max(...this.velocities.map((v) => Math.hypot(v.x, v.y)));
-    const horizon = (0.2 * this.scale) / (vmax + this.growth);
-    const reach = 2 * this.scale + 2 * (vmax + this.growth) * horizon;
+    // a disk piece scaled by `scale` has radius DISK_RADIUS * scale, which grows at DISK_RADIUS * growth
+    const radius = this.scale * DISK_RADIUS;
+    const radiusGrowth = this.growth * DISK_RADIUS;
+    const horizon = (0.2 * radius) / (vmax + radiusGrowth);
+    const reach = 2 * radius + 2 * (vmax + radiusGrowth) * horizon;
     const queue = new EventQueue();
     for (const [i, j] of horizonPairs(this.pieces, reach, stopped)) {
       if (stopped()) return { dt: 0, collision: false, repaired: false, failed: true };
@@ -153,8 +157,8 @@ export class GrowthDynamics {
         this.pieces[j],
         this.velocities[i],
         this.velocities[j],
-        this.scale,
-        this.growth,
+        radius,
+        radiusGrowth,
       );
       if (time <= horizon) queue.push({ time, i, j, edge: -1 });
     }
@@ -164,20 +168,20 @@ export class GrowthDynamics {
         const time = discCircleWallTime(
           this.pieces[i],
           this.velocities[i],
-          this.scale,
-          this.growth,
-          this.container.size,
+          radius,
+          radiusGrowth,
+          this.container.size / 2,
         );
         if (time <= horizon) queue.push({ time, i, j: -1, edge: -1 });
       } else {
-        const apothem = this.container.size * inradius(this.container.M);
+        const apothem = this.container.size * containerInradius(this.container.M);
         for (let edge = 0; edge < this.container.M; edge++) {
           const angle = this.container.phi - Math.PI / 2 + (2 * Math.PI * edge) / this.container.M;
           const time = discEdgeTime(
             this.pieces[i],
             this.velocities[i],
-            this.scale,
-            this.growth,
+            radius,
+            radiusGrowth,
             Math.cos(angle),
             Math.sin(angle),
             apothem,
@@ -205,13 +209,13 @@ export class GrowthDynamics {
     if (event.j >= 0) {
       const q = this.pieces[event.j];
       const distance = Math.hypot(p.x - q.x, p.y - q.y);
-      collideDiscs(v, this.velocities[event.j], (p.x - q.x) / distance, (p.y - q.y) / distance, this.growth);
+      collideDiscs(v, this.velocities[event.j], (p.x - q.x) / distance, (p.y - q.y) / distance, this.growth * DISK_RADIUS);
     } else {
       const angle = this.container.phi - Math.PI / 2 + (2 * Math.PI * event.edge) / this.container.M;
       const distance = Math.hypot(p.x, p.y);
       const nx = this.container.M === 0 ? (distance === 0 ? 1 : p.x / distance) : Math.cos(angle);
       const ny = this.container.M === 0 ? (distance === 0 ? 0 : p.y / distance) : Math.sin(angle);
-      const closing = v.x * nx + v.y * ny + this.growth;
+      const closing = v.x * nx + v.y * ny + this.growth * DISK_RADIUS;
       // Tangency to a curved wall has outward second-order motion. A zero
       // normal impulse cannot resolve it; create microscopic room for the next event.
       if (this.container.M === 0 && Math.abs(closing) <= 1e-14 * Math.max(1, Math.hypot(v.x, v.y))) {

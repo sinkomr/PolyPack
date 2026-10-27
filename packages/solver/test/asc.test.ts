@@ -206,12 +206,12 @@ describe("asc", () => {
       P: 2,
       container_phi: 0,
       pieces: [
-        { x: -1, y: 0, theta: 0 },
-        { x: 1, y: 0, theta: 0 },
+        { x: -0.5, y: 0, theta: 0 },
+        { x: 0.5, y: 0, theta: 0 },
       ],
     };
     const state = new AscState(pair, { M: 0, cx: 0, cy: 0, phi: 0, size: 3 });
-    expect(state.move(0, { x: -1 + 1e-13, y: 0, theta: 0 })).toBe(false);
+    expect(state.move(0, { x: -0.5 + 1e-13, y: 0, theta: 0 })).toBe(false);
     expect(state.config.pieces).toEqual(pair.pieces);
     const single = { N: 0, M: 0, P: 1, container_phi: 0, pieces: [{ x: 0, y: 0, theta: 0 }] };
     const wall = new AscState(single, { M: 0, cx: 0, cy: 0, phi: 0, size: 1 });
@@ -444,16 +444,16 @@ describe("asc", () => {
   }, 30000);
 
   it("repairs a tolerance-only start in place and measures improvement from the repaired state", async () => {
-    // Two unit circles 5e-10 too close, side by side in a square: within the evaluator's 1e-9
-    // allowance, so the start scores 4 - 5e-10, below every strict state near it.
+    // Two unit-diameter disks 5e-10 too close, side by side in a square: within the evaluator's 1e-9
+    // allowance, so the start scores 2 - 5e-10, below every strict state near it.
     const start = {
       N: 0,
       M: 4,
       P: 2,
       container_phi: 0,
       pieces: [
-        { x: -1 + 2.5e-10, y: 0, theta: 0 },
-        { x: 1 - 2.5e-10, y: 0, theta: 0 },
+        { x: -0.5 + 2.5e-10, y: 0, theta: 0 },
+        { x: 0.5 - 2.5e-10, y: 0, theta: 0 },
       ],
     };
     const nearStart = (config: PackingConfig) => {
@@ -549,7 +549,7 @@ describe("asc", () => {
       container_phi: 0,
       pieces: [
         { x: 1e4, y: -1e4, theta: 0 },
-        { x: 1e4 + 2 + gap, y: -1e4, theta: 0 },
+        { x: 1e4 + 1 + gap, y: -1e4, theta: 0 },
       ],
     });
     const options = { method: "asc", budget: { evals: 30 }, seed: 1, finalPolish: false };

@@ -561,8 +561,8 @@ async function* recordPlus(ctx: MethodContext, trials: Trial[]): AsyncGenerator<
   }
   const centre = { x: cx, y: cy, theta };
   if (await clear(centre)) pending.push(centre);
-  // A two-contact circle insertion is the intersection of radius-two circles
-  // about two existing centres. The tiny outward margin keeps both contacts
+  // A two-contact circle insertion is the intersection of circles of radius 2R
+  // (R the piece radius) about two existing centres. The tiny outward margin keeps both contacts
   // on the valid side of float64 rounding; shared geometry checks every pose.
   if (N === 0)
     for (const { p: a } of outer) {

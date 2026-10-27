@@ -118,10 +118,16 @@ describe("review: backward compatibility of the scale/padding extension", () => 
       const b = k % 7 === 0 ? { ...a, theta: r(10) } : { x: r(spread), y: r(spread), theta: r(10) };
       const axesA = N ? OLD.penaltyEdgeNormals(N, a.theta) : undefined;
       const axesB = N ? OLD.penaltyEdgeNormals(N, b.theta) : undefined;
-      expect(geometry.pairPenetration(N, a, b)).toStrictEqual(OLD.pairPenetration(N, a, b));
-      expect(geometry.pairPenetration(N, a, b, axesA, axesB)).toStrictEqual(OLD.pairPenetration(N, a, b, axesA, axesB));
+      // Disk pieces (N = 0) and circle containers (M = 0) changed on purpose in the diameter-1 units
+      // change (the base copy still has radius-1 disks and a radius-scored circle), so only the
+      // polygon pairs and polygon containers are compared bit for bit.
+      if (N !== 0) {
+        expect(geometry.pairPenetration(N, a, b)).toStrictEqual(OLD.pairPenetration(N, a, b));
+        expect(geometry.pairPenetration(N, a, b, axesA, axesB)).toStrictEqual(OLD.pairPenetration(N, a, b, axesA, axesB));
+      }
       const M = Ms[k % Ms.length];
       const container: Container = { M, cx: r(2), cy: r(2), size: 0.5 + 5 * random(), phi: r(4) };
+      if (N === 0 || M === 0) continue;
       for (const supportOnly of [false, true]) {
         const before: unknown[][] = [];
         const after: unknown[][] = [];
@@ -277,14 +283,14 @@ describe("review: rounded and superellipse geometry", () => {
             return worst;
           });
           const core = N === 0 ? new Float64Array([pose.x, pose.y]) : pieceVertices(N, pose, shape.scale);
-          const radius = N === 0 ? shape.scale + shape.padding : shape.padding;
+          const radius = N === 0 ? shape.scale * geometry.DISK_RADIUS + shape.padding : shape.padding;
           let brute = -Infinity;
           for (let v = 0; v < core.length / 2; v++)
             for (let s = 0; s < 720; s++) {
               const w = (2 * Math.PI * s) / 720;
               const x = core[2 * v] + radius * Math.cos(w) - container.cx;
               const y = core[2 * v + 1] + radius * Math.sin(w) - container.cy;
-              if (M === 0) brute = Math.max(brute, Math.hypot(x, y) - container.size);
+              if (M === 0) brute = Math.max(brute, Math.hypot(x, y) - container.size / 2);
               else
                 for (let e = 0; e < M; e++) {
                   const g = container.phi - Math.PI / 2 + (2 * Math.PI * e) / M;

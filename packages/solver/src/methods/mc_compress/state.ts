@@ -1,8 +1,8 @@
 import {
   boundingRadius,
+  containerInradius,
   enclose,
   findOverlaps,
-  inradius,
   MAX_COORD,
   pieceSeparation,
   visitContainerProtrusions,
@@ -16,7 +16,7 @@ export const MIN_STEP = 1e-7;
 /** Shared enclosures can round inward; add free room rather than accepting protrusion. */
 export function strictEnclose(config: PackingConfig, phi = config.container_phi): Container {
   const container = enclose(config.N, config.pieces, config.M, phi);
-  const wallScale = config.M === 0 ? 1 : inradius(config.M);
+  const wallScale = containerInradius(config.M);
   return { ...container, size: container.size + (2e-13 * Math.max(1, container.size)) / wallScale };
 }
 
@@ -109,7 +109,7 @@ export function adaptStep(step: number, rate: number, target: number, gain: numb
   return Math.max(MIN_STEP, Math.min(maximum, step * Math.exp(gain * (rate - target))));
 }
 
-/** Energy is exactly the explicit container side (polygon) or radius (circle). */
+/** Energy is exactly the explicit container side (polygon) or diameter (circle). */
 export function acceptSize(before: number, after: number, temperature: number, random: () => number): boolean {
   return after <= before || (temperature > 0 && random() < Math.exp(-(after - before) / temperature));
 }
@@ -147,7 +147,7 @@ export class CompressionState {
       );
     }
     if (protrusion > 0 && protrusion <= 1e-12) {
-      const wallScale = container.M === 0 ? 1 : inradius(container.M);
+      const wallScale = containerInradius(container.M);
       container = { ...container, size: container.size + (protrusion + 2e-13) / wallScale };
     }
     if (!feasible(config, container) || !acceptSize(this.container.size, container.size, temperature, random))

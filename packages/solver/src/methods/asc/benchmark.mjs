@@ -85,7 +85,7 @@ function writeReport(output) {
     "the stored record size, and each polygon angle uniformly over its symmetry",
     "period. Negative pair separation rejects the new piece. The same start for",
     "each seed goes to all methods. The box side is twice the record size, including",
-    "when the record size denotes a circle radius. Default-seed rows give each",
+    "when the record size denotes a circle diameter. Default-seed rows give each",
     "method its own normal automatic bootstrap; no record poses are supplied.",
     "The raw file preserves every returned arrangement for rechecking.",
     "Random insertion retries the whole start after 100,000 draws if it jams;",

@@ -59,7 +59,7 @@ export const lsGrowthMethod: MethodDefinition = {
       },
       growthRate: numeric(
         "Growth rate",
-        "Constant side/radius increase per simulation time. Slow growth permits more rearrangement; fast growth generally jams sooner.",
+        "Constant increase of the piece scale (side, or disk diameter) per simulation time. Slow growth permits more rearrangement; fast growth generally jams sooner.",
         0.01,
         1e-6,
         1,
@@ -189,7 +189,7 @@ export function* looseSteps(
   const fallback = scatter(problem, random);
   const box = strictEnclose(fallback);
   box.size *= 1.3;
-  const reach = problem.M === 0 ? box.size : box.size / (2 * Math.sin(Math.PI / problem.M));
+  const reach = problem.M === 0 ? box.size / 2 : box.size / (2 * Math.sin(Math.PI / problem.M));
   const pieces: Pose[] = [];
   for (let i = 0; i < problem.P; i++) {
     let placed = false;

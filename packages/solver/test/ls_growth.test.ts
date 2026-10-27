@@ -4,6 +4,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  areaLowerBound,
   containerProtrusions,
   evaluate,
   findOverlaps,
@@ -170,9 +171,10 @@ describe("growing disc event mathematics", () => {
   });
 
   it("handles tangency to a curved wall as an immediate event with microscopic retreat", () => {
-    const p = { x: 4, y: 0, theta: 0 };
-    const v = { x: -0.01, y: 1, omega: 0 };
-    expect(discCircleWallTime(p, v, 1, 0.01, 5)).toBe(0);
+    // a disk of radius 1/2 (growing at 0.005) touches the wall of a container of diameter 5 at x = 2
+    const p = { x: 2, y: 0, theta: 0 };
+    const v = { x: -0.005, y: 1, omega: 0 };
+    expect(discCircleWallTime(p, v, 0.5, 0.005, 2.5)).toBe(0);
     const config: PackingConfig = { N: 0, M: 0, P: 1, container_phi: 0, pieces: [p] };
     const state = new GrowthDynamics(config, { M: 0, cx: 0, cy: 0, phi: 0, size: 5 }, 1, 0.01, 1, 0, seededRandom(1));
     Object.assign(state.velocities[0], v);
@@ -764,15 +766,15 @@ describe("ls_growth start insurance", () => {
 
 describe("ls_growth tolerance-only starts under a time budget", () => {
   it("spends the time on repairing a start that is valid within tolerance, never on the grid", async () => {
-    // Touching discs on a 6 by 6 lattice score 12; one pair overlaps by 5e-10, inside the
-    // validity tolerance but not strict. The insurance grid would score about 14.
+    // Touching discs on a 6 by 6 lattice score 6; one pair overlaps by 5e-10, inside the
+    // validity tolerance but not strict. The insurance grid would score about 7.
     const problem = { N: 0, M: 4, P: 36 };
     const start: PackingConfig = {
       ...problem,
       container_phi: 0,
       pieces: Array.from({ length: problem.P }, (_, i) => ({
-        x: 2 * (i % 6) - 5 - (i === 1 ? 5e-10 : 0),
-        y: 2 * Math.floor(i / 6) - 5,
+        x: (i % 6) - 2.5 - (i === 1 ? 5e-10 : 0),
+        y: Math.floor(i / 6) - 2.5,
         theta: 0,
       })),
     };
@@ -780,7 +782,7 @@ describe("ls_growth tolerance-only starts under a time budget", () => {
     expect(scored.valid).toBe(true);
     expect(findOverlaps(problem.N, start.pieces, 0)).toHaveLength(1);
     const grid = scatter(problem, () => 0.5);
-    expect(evaluate(grid).score!).toBeGreaterThan(scored.score! + 1);
+    expect(evaluate(grid).score!).toBeGreaterThan(scored.score! + 0.5);
     // Ample time, with and without an evaluation cap: the first assessment is the repaired
     // start, strict and as good as the supplied one, and the grid is never assessed.
     for (const limits of [{ ms: 1e9 }, { evals: 6, ms: 1e9 }]) {
@@ -820,44 +822,47 @@ describe("ls_growth cooperative checkpoints", () => {
     }
   });
 
-  it("reproduces run signatures recorded from the implementation that had no inner checkpoints", async () => {
-    // Expectations were recorded on 2026-10-11 (Apple Silicon, Node 26.5) by running these exact
-    // calls against the committed HEAD 4960c77 sources of ls_growth.ts and ls_growth/dynamics.ts,
-    // which checkpointed every sixteen operations and placed the start synchronously. Event-driven
-    // trajectories are chaotic in the last bits of libm, so the score, collision and repair pins hold
-    // only on the recording platform (Linux x64 CI reached a different packing for the second case).
-    // Elsewhere the platform-independent parts are checked: budget, strictness and operation count.
-    const recorded = process.platform === "darwin" && process.arch === "arm64";
-    for (const [N, M, P, evals, seed, score, operations, collisions, repairs] of [
-      [0, 0, 7, 60, 3, 3.20469281877272, 944, 655, 160],
-      [0, 4, 12, 90, 8, 7.762904136309369, 1424, 1202, 241],
-      [4, 4, 5, 60, 5, 3.4013785970437564, 944, 110, 0],
-      [5, 3, 9, 50, 13, 10.845005702165931, 784, 56, 0],
+  it("reproduces run signatures: the budget, strictness, bounds and repeatability of seeded runs", async () => {
+    // Before the diameter-1 units change this test pinned scores, collision and repair counts that
+    // were recorded on one platform (event-driven trajectories are chaotic in the last bits of
+    // libm). Native diameter-1 disks change every trajectory, so the pins are replaced by the
+    // properties that hold on any platform: the budget and strictness, the area bound, and a
+    // second run of the same seed reproducing the first exactly.
+    for (const [N, M, P, evals, seed] of [
+      [0, 0, 7, 60, 3],
+      [0, 4, 12, 90, 8],
+      [4, 4, 5, 60, 5],
+      [5, 3, 9, 50, 13],
     ]) {
-      const last = { run: -1, operations: -1, collisions: -1, repairs: -1, thermostats: -1 };
-      const observed = new MethodRegistry();
-      observed.register({
-        ...lsGrowthMethod,
-        execute: (ctx) =>
-          executeGrowth(ctx, (event) => {
-            for (const key of Object.keys(last) as (keyof typeof last)[]) last[key] = event[key];
-          }),
-      });
-      const result = await observed.run(
-        { N, M, P },
-        { method: "ls_growth", budget: { evals }, seed, finalPolish: false },
-      );
+      const once = async () => {
+        const last = { run: -1, operations: -1, collisions: -1, repairs: -1, thermostats: -1 };
+        const observed = new MethodRegistry();
+        observed.register({
+          ...lsGrowthMethod,
+          execute: (ctx) =>
+            executeGrowth(ctx, (event) => {
+              for (const key of Object.keys(last) as (keyof typeof last)[]) last[key] = event[key];
+            }),
+        });
+        const result = await observed.run(
+          { N, M, P },
+          { method: "ls_growth", budget: { evals }, seed, finalPolish: false },
+        );
+        return { result, last };
+      };
+      const { result, last } = await once();
       expect(result.evaluations).toBe(evals);
       expect(result.termination).toBe("evals");
       expect(result.strict).toBe(true);
       strictValid(result.best, P);
+      expect(result.score!).toBeGreaterThanOrEqual(areaLowerBound(N, M, P));
       // Cumulative totals reported at the end of the fourth and last run.
       expect(last.run).toBe(3);
-      expect(last.operations).toBe(operations);
-      if (recorded) {
-        expect(Math.abs(result.score! - score)).toBeLessThanOrEqual(1e-9 * score);
-        expect(last).toEqual({ run: 3, operations, collisions, repairs, thermostats: 0 });
-      }
+      expect(last.operations).toBeGreaterThan(0);
+      // Same platform, same seed: the same trajectory, bit for bit.
+      const again = await once();
+      expect(again.result.score).toBe(result.score);
+      expect(again.last).toEqual(last);
     }
   });
 

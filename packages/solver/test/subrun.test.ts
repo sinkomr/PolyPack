@@ -2,13 +2,14 @@ import { describe, expect, it } from "vitest";
 import { PackingConfig, evaluate } from "@polypack/geometry";
 import { MethodContext, MethodRegistry, SubRunResult } from "../src/index";
 
+// two unit-diameter disks; the container diameter is gap + 1
 const circles = (gap: number): PackingConfig => ({
   N: 0,
   M: 0,
   P: 2,
   pieces: [
-    { x: -gap, y: 0, theta: 0 },
-    { x: gap, y: 0, theta: 0 },
+    { x: -gap / 2, y: 0, theta: 0 },
+    { x: gap / 2, y: 0, theta: 0 },
   ],
   container_phi: 0,
 });
@@ -136,7 +137,7 @@ describe("strict results", () => {
     });
     expect(result.strict).toBe(true);
     expect(result.score).toBe(2);
-    expect(result.best!.pieces[1].x).toBe(1);
+    expect(result.best!.pieces[1].x).toBe(0.5);
     expect(result.reasons).toEqual([]);
   });
 

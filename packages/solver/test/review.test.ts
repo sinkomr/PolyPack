@@ -42,7 +42,7 @@ function squares(expansion: number, phi = 0): PackingConfig {
   };
 }
 
-/** Seven unit circles in a circle; expansion 1 is the tight packing with radius 3. */
+/** Seven unit-diameter disks in a circle; expansion 1 is the tight packing with diameter 3. */
 function circles(expansion: number): PackingConfig {
   return {
     N: 0,
@@ -52,15 +52,15 @@ function circles(expansion: number): PackingConfig {
     pieces: [
       { x: 0, y: 0, theta: 0 },
       ...Array.from({ length: 6 }, (_, k) => ({
-        x: 2 * expansion * Math.cos((k * Math.PI) / 3),
-        y: 2 * expansion * Math.sin((k * Math.PI) / 3),
+        x: expansion * Math.cos((k * Math.PI) / 3),
+        y: expansion * Math.sin((k * Math.PI) / 3),
         theta: 0,
       })),
     ],
   };
 }
 
-/** Two unit circles in a circle; half-distance 1 is the tight packing with radius 2. */
+/** Two unit-diameter disks in a circle; `half` = 1 is the tight packing (centres 1 apart) with diameter 2. */
 function twoCircles(half: number): PackingConfig {
   return {
     N: 0,
@@ -68,8 +68,8 @@ function twoCircles(half: number): PackingConfig {
     P: 2,
     container_phi: 0,
     pieces: [
-      { x: -half, y: 0, theta: 0 },
-      { x: half, y: 0, theta: 0 },
+      { x: -half / 2, y: 0, theta: 0 },
+      { x: half / 2, y: 0, theta: 0 },
     ],
   };
 }
@@ -611,17 +611,17 @@ describe("review: polish safety", () => {
       container_phi: 0,
       pieces: [
         { x: 1e6, y: 1e6, theta: 0 },
-        { x: 1e6 - 2, y: 1e6, theta: 0 },
+        { x: 1e6 - 1, y: 1e6, theta: 0 },
       ],
     });
   });
 
   it("keeps a single piece at its exact optimum for every shape pairing", async () => {
-    // [CALC] One unit circle: square side 2, circle radius 1. One unit square: circle radius 1/sqrt(2), square side 1.
+    // [CALC] One unit-diameter disk: square side 1, circle diameter 1. One unit square: circle diameter sqrt(2), square side 1.
     const cases: [number, number, number][] = [
-      [0, 4, 2],
+      [0, 4, 1],
       [0, 0, 1],
-      [4, 0, Math.SQRT1_2],
+      [4, 0, Math.SQRT2],
       [4, 4, 1],
     ];
     for (const [N, M, target] of cases) {

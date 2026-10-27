@@ -6,8 +6,10 @@ import {
   MAX_COORD,
   boundingRadius,
   containerArea,
+  containerInradius,
   enclose,
   inradius,
+  pieceInradius,
   pairPenetration,
   penaltyContainerNormals,
   penaltyEdgeNormals,
@@ -42,22 +44,22 @@ export function gaussian(random: () => number): number {
 /**
  * Length unit of the pressure and of the noise: the piece's inscribed diameter. The reference
  * states both in absolute units for unit squares and unit-diameter circles, whose inscribed
- * diameter is 1. Scaling by it reproduces those two cases exactly (PolyPack's circles have
- * radius 1, so every length doubles) and keeps both proportionate for other piece sizes.
+ * diameter is 1. Scaling by it reproduces those two cases exactly (PolyPack's disks have
+ * diameter 1, so the unit is 1) and keeps both proportionate for other piece sizes.
  */
 export function lengthUnit(N: number): number {
-  return N === 0 ? 2 : 2 * inradius(N);
+  return 2 * pieceInradius(N);
 }
 
 /**
  * Size variable L per unit of PolyPack's container size. The reference moves the side of a
- * square or triangle and the radius of a circle. A polygon's side per unit of apothem shrinks
+ * square or triangle and the radius of a circle (PolyPack's size is a diameter: L = size / 2). A polygon's side per unit of apothem shrinks
  * as 1/M, which would make the same update ever stiffer for many-sided containers, so from
  * the first polygon whose apothem exceeds its side (M >= 7) L is the apothem: the limit is
  * the reference's circle and M = 3, 4 keep the reference's side.
  */
 export function sizeUnit(M: number): number {
-  return M === 0 ? 1 : Math.max(1, inradius(M));
+  return M === 0 ? containerInradius(0) : Math.max(1, inradius(M));
 }
 
 export interface EnergyReport {
@@ -128,7 +130,7 @@ export class HardenDynamics {
     this.length = lengthUnit(N);
     this.cap = STEP_CAP * Math.SQRT2 * boundingRadius(N);
     // Distance from the container centre to its walls per unit of PolyPack size.
-    this.apothem = M === 0 ? 1 : inradius(M);
+    this.apothem = containerInradius(M);
     this.axes = N === 0 ? [] : Array.from({ length: P }, () => new Float64Array(3 * N));
     this.containerAxes = M === 0 ? new Float64Array(0) : penaltyContainerNormals(M, 0);
     this.scratch = new Float64Array(2 * (N + M));
@@ -145,7 +147,7 @@ export class HardenDynamics {
     };
   }
 
-  /** PolyPack container size (side, or radius for a circle) of the moving container. */
+  /** PolyPack container size (side, or diameter for a circle) of the moving container. */
   get size(): number {
     return this.L / this.unit;
   }
@@ -160,10 +162,10 @@ export class HardenDynamics {
     const size = Math.sqrt((fill * P * pieceArea(N)) / containerArea(M, 1));
     this.L = size * this.unit;
     this.vL = 0;
-    const half = M === 0 ? size : size / (2 * Math.sin(Math.PI / M));
+    const half = M === 0 ? size / 2 : size / (2 * Math.sin(Math.PI / M));
     const margin = boundingRadius(N);
     const inside = (x: number, y: number, clearance: number): boolean => {
-      if (M === 0) return Math.hypot(x, y) < size - clearance;
+      if (M === 0) return Math.hypot(x, y) < this.apothem * size - clearance;
       for (let edge = 0; edge < M; edge++) {
         if (
           x * this.containerAxes[3 * edge + 1] + y * this.containerAxes[3 * edge + 2] >
@@ -323,7 +325,7 @@ export class HardenDynamics {
       visited++;
       if (disk) {
         // A circle piece or a pure inscribed disk: one constraint per wall, with its radius.
-        visitContainerProtrusions(0, poses[i], container, this.visitor, false, undefined, this.containerAxes, reach, 0);
+        visitContainerProtrusions(0, poses[i], container, this.visitor, false, undefined, this.containerAxes, 0, reach);
       } else {
         visitContainerProtrusions(
           N,

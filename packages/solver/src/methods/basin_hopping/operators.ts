@@ -129,7 +129,7 @@ function* reinsertion(
     return result;
   }
   const container = enclose(config.N, config.pieces, config.M, config.container_phi);
-  const reach = config.M === 0 ? container.size : container.size / (2 * Math.sin(Math.PI / config.M));
+  const reach = config.M === 0 ? container.size / 2 : container.size / (2 * Math.sin(Math.PI / config.M));
   const loX = bounded(container.cx - reach);
   const hiX = bounded(container.cx + reach);
   const loY = bounded(container.cy - reach);

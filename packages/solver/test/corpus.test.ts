@@ -10,6 +10,8 @@ function files(dir: string): string[] {
   });
 }
 
+// UNITS-DATA: reads data/corpus/**, which Part 10 converts to diameter units. Until then every circle-piece
+// or circle-container file fails here; polygon-only files pass.
 describe("cross-language corpus reference", () => {
   for (const file of files(resolve(import.meta.dirname, "../../../data/corpus"))) {
     it(file.split("data/corpus/")[1], () => {

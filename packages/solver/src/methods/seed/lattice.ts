@@ -1,4 +1,4 @@
-import { boundingRadius, defaultTheta, inradius, pieceSeparation, pieceVertices, type Pose } from "@polypack/geometry";
+import { boundingRadius, DISK_RADIUS, defaultTheta, inradius, pieceInradius, pieceSeparation, pieceVertices, type Pose } from "@polypack/geometry";
 import type { MethodContext } from "../../framework";
 
 export interface Cell {
@@ -96,7 +96,7 @@ export async function tightScale(ctx: MethodContext, cell: Cell): Promise<number
   }
   // Inscribed disks give a rigorous lower bound on any feasible dilation.
   // Outside 2R at that bound, a translate cannot determine the tight spacing.
-  let scale = (2 * (N === 0 ? 1 : inradius(N))) / shortest;
+  let scale = (2 * pieceInradius(N)) / shortest;
   vectors.sort((a, b) => a.distance - b.distance);
   for (const vector of vectors) {
     if (!(await ctx.checkpoint())) return undefined;
@@ -184,7 +184,7 @@ function ranker(N: number, M: number, theta: number): (x: number, y: number) => 
     return (x, y) => {
       let rank = 0;
       for (let k = 0; k < vertices.length; k += 2)
-        rank = Math.max(rank, Math.hypot(x + vertices[k], y + vertices[k + 1]) + (N === 0 ? 1 : 0));
+        rank = Math.max(rank, Math.hypot(x + vertices[k], y + vertices[k + 1]) + (N === 0 ? DISK_RADIUS : 0));
       return rank;
     };
   const normals = Array.from({ length: M }, (_, edge) => {
@@ -193,7 +193,7 @@ function ranker(N: number, M: number, theta: number): (x: number, y: number) => 
     const ny = Math.sin(angle);
     let support = -Infinity;
     for (let k = 0; k < vertices.length; k += 2)
-      support = Math.max(support, nx * vertices[k] + ny * vertices[k + 1] + (N === 0 ? 1 : 0));
+      support = Math.max(support, nx * vertices[k] + ny * vertices[k + 1] + (N === 0 ? DISK_RADIUS : 0));
     return { nx, ny, support };
   });
   return (x, y) => {

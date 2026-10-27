@@ -121,7 +121,7 @@ describe("basin hopping perturbations", () => {
   });
   it("repairs tolerance-band child starts before the framework can score them", () => {
     for (const N of [0, 4]) {
-      const distance = N === 0 ? 2 : 1;
+      const distance = 1;
       const config: PackingConfig = {
         N,
         M: 4,

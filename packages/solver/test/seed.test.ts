@@ -384,9 +384,9 @@ describe("seed", () => {
 
   it("alternates rows with tight pitch and follows explicit hexagon orientation", async () => {
     const rows = valid(await generate({ N: 0, M: 0, P: 9 }, "rows", { perRow: 3, alternateRows: true, trials: 1 }), 9);
-    expect(rows.pieces[3].x - rows.pieces[0].x).toBeCloseTo(1, 9);
+    expect(rows.pieces[3].x - rows.pieces[0].x).toBeCloseTo(0.5, 9);
     expect(rows.pieces[6].x - rows.pieces[0].x).toBeCloseTo(0, 9);
-    expect(rows.pieces[3].y - rows.pieces[0].y).toBeCloseTo(Math.sqrt(3), 9);
+    expect(rows.pieces[3].y - rows.pieces[0].y).toBeCloseTo(Math.sqrt(3) / 2, 9);
     const hexagons = valid(
       await generate({ N: 6, M: 0, P: 7 }, "hex_lattice", {
         automaticOrientation: false,
@@ -423,7 +423,7 @@ describe("seed", () => {
     // A fixed optimal seven-circle hexagonal cluster cannot extend to the
     // optimal eight-circle packing without moving its original pieces.
     expect(eight.score).toBeCloseTo(1 + 14 / (3 * Math.sqrt(3)), 9);
-    const ringRadius = 1 / Math.sin(Math.PI / 7);
+    const ringRadius = 0.5 / Math.sin(Math.PI / 7);
     const compatible: PackingConfig = {
       N: 0,
       M: 0,

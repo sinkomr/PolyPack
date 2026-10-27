@@ -7,6 +7,9 @@
  * Energy: max(0, 2 - |c_i - c_j|)^2 per pair and max(0, |c_i| + 1 - R)^2 per disk, with exact
  * gradients. finish() scales the centres by the factor that makes the closest pair touch and
  * takes the smallest R around them: a closed form, so a finish costs about one energy sweep.
+ * Units: this test bed is in working units on purpose (disk radius 1, R the container radius). It is no
+ * space of the site and is not served; the site units (disk diameter 1, circle container scored by its
+ * diameter) apply at the API edge, where a space kernel converts exactly (see CONVENTIONS in the units plan).
  * Capabilities: "shape" (a disk is its own inscribed disk, so every soft shape is the disk
  * itself) and "seeds" (patches of the hexagonal lattice).
  */

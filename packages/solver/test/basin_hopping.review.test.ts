@@ -260,8 +260,8 @@ describe("review: perturbation operators", () => {
       pieces: [
         { x: 0, y: 0, theta: 0 },
         ...Array.from({ length: 6 }, (_, k) => ({
-          x: 2 * Math.cos((k * Math.PI) / 3),
-          y: 2 * Math.sin((k * Math.PI) / 3),
+          x: Math.cos((k * Math.PI) / 3),
+          y: Math.sin((k * Math.PI) / 3),
           theta: 0,
         })),
       ],

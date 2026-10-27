@@ -39,6 +39,19 @@ export function inradius(n: number): number {
   return 1 / (2 * Math.tan(Math.PI / n));
 }
 
+/** Inradius of a piece: the apothem of a polygon of side 1, DISK_RADIUS for a disk (N = 0). */
+export function pieceInradius(N: number): number {
+  return N === 0 ? DISK_RADIUS : inradius(N);
+}
+
+/**
+ * Inradius of a container of size 1: the apothem of a regular M-gon of side 1, or 1/2 for a
+ * circle container (M = 0), whose size is its diameter.
+ */
+export function containerInradius(M: number): number {
+  return M === 0 ? 0.5 : inradius(M);
+}
+
 /** Radius of the smallest circle about the piece centre that contains the piece. */
 export function boundingRadius(N: number): number {
   return N === 0 ? DISK_RADIUS : circumradius(N);

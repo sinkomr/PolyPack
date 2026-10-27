@@ -206,8 +206,8 @@ describe("penalty numerical helpers", () => {
       P: 2,
       container_phi: 0,
       pieces: [
-        { x: -2, y: 0.1, theta: 0 },
-        { x: 2, y: 0.1, theta: 0 },
+        { x: -1.5, y: 0.1, theta: 0 },
+        { x: 1.5, y: 0.1, theta: 0 },
       ],
     };
     const multipliers = new Map([["p:0:1", 100]]);

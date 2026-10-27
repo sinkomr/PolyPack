@@ -313,12 +313,12 @@ describe("seed review: sound behaviour", () => {
       [0, 0, 7, 3],
       [0, 0, 19, 1 + Math.SQRT2 + Math.sqrt(6)],
       [6, 6, 7, 5 / s3],
-      [0, 3, 3, 2 + 2 * s3],
-      [0, 3, 6, 4 + 2 * s3],
-      [0, 3, 10, 6 + 2 * s3],
-      [0, 3, 21, 10 + 2 * s3],
+      [0, 3, 3, 1 + s3],
+      [0, 3, 6, 2 + s3],
+      [0, 3, 10, 3 + s3],
+      [0, 3, 21, 5 + s3],
       [3, 6, 24, 2],
-      [0, 4, 9, 6],
+      [0, 4, 9, 3],
     ]) {
       const result = await generate({ N, M, P }, "auto");
       expectValid(result, P);
@@ -352,7 +352,7 @@ describe("seed review: sound behaviour", () => {
           const sites: { x: number; y: number; theta: number }[] = [];
           for (let a = -6; a <= 6; a++)
             for (let b = -6; b <= 6; b++)
-              sites.push({ x: 2 * (a + i / 12) + (b + j / 12), y: Math.sqrt(3) * (b + j / 12), theta: 0 });
+              sites.push({ x: (a + i / 12) + (b + j / 12) / 2, y: (Math.sqrt(3) / 2) * (b + j / 12), theta: 0 });
           sites.sort((p, q) => Math.hypot(p.x, p.y) - Math.hypot(q.x, q.y));
           brute = Math.min(brute, evaluate({ N: 0, M: 0, P, pieces: sites.slice(0, P), container_phi: 0 }).score!);
         }
@@ -541,7 +541,7 @@ describe("seed review: defects", () => {
     for (const p of candidates[0].pieces) rows.set(p.y.toFixed(6), [...(rows.get(p.y.toFixed(6)) ?? []), p.x]);
     const starts = [...rows.entries()].sort((a, b) => Number(a[0]) - Number(b[0])).map(([, xs]) => Math.min(...xs));
     expect(starts).toHaveLength(3);
-    expect(starts[1] - starts[0]).toBeCloseTo(1, 6); // half of the circle pitch 2: correct
+    expect(starts[1] - starts[0]).toBeCloseTo(0.5, 6); // half of the disk pitch 1: correct
     expect(starts[2] - starts[0]).toBeCloseTo(0, 6);
   });
 

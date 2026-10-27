@@ -1,4 +1,4 @@
-import { Container, DISK_RADIUS, Pose, circumradius, inradius, pieceVertices } from "./shapes";
+import { Container, DISK_RADIUS, Pose, containerInradius, circumradius, inradius, pieceVertices } from "./shapes";
 
 /** Selected SAT feature; edge starts at vertex `edge` on `edgePiece`. */
 export interface PenetrationFeature {
@@ -276,13 +276,13 @@ export function visitContainerProtrusions(
       const ux = distance === 0 ? 1 : dx / distance;
       const uy = distance === 0 ? 0 : dy / distance;
       visitor(
-        distance + radius - container.size * DISK_RADIUS,
+        distance + radius - container.size * containerInradius(0),
         ux,
         uy,
         ox * uy - oy * ux,
         -ux,
         -uy,
-        -DISK_RADIUS,
+        -containerInradius(0),
         0,
         vertex,
         N === 0 ? undefined : vertex,
