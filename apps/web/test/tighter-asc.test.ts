@@ -23,7 +23,7 @@ import { methodParams, owning, upgrade } from "../src/tighter/upgrades";
 // asc runs warm, one cooling cycle a run (methods/asc.ts). asc is slow, so the runs here are on a
 // tiny problem with small budgets.
 
-const problem = { N: 21, M: 24, P: 8 };
+const problem = { family: "polygon" as const, N: 21, M: 24, P: 8 };
 
 function loadAll(): PackingConfig {
   const pieces: Pose[] = [];

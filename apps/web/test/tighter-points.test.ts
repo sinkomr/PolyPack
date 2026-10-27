@@ -5,7 +5,7 @@ import { FLOOR, GAP_WEIGHT, SIZE_WEIGHT, gapOf, recordPoints, shapeWeight } from
 // The worked examples of design.md §5 (balance/results/points-examples.txt), at F = 1e-9, with the size
 // and gap weights of 2026-10-22 (10,000 each, 100 times design.md's): the step term and the bonuses are
 // as they were, the size and gap terms 100 times.
-const P33 = { N: 33, M: 47, P: 197 };
+const P33 = { family: "polygon", N: 33, M: 47, P: 197 };
 
 describe("Tighter record points", () => {
   it("uses the server's tie tolerance as the floor", () => {
@@ -48,7 +48,16 @@ describe("Tighter record points", () => {
   it("reproduces (e), another name's loose record improved by 0.05 %, with the beat bonus", () => {
     // (e) is a batch record (c = 10) in the design; the same arithmetic at c = 3 for a loose record
     const s = 15.656167;
-    const p = recordPoints({ N: 7, M: 7, P: 197, sPrev: s, sNew: s * (1 - 5e-4), tier: "loose", beatOther: true })!;
+    const p = recordPoints({
+      family: "polygon",
+      N: 7,
+      M: 7,
+      P: 197,
+      sPrev: s,
+      sNew: s * (1 - 5e-4),
+      tier: "loose",
+      beatOther: true,
+    })!;
     expect(p.c).toBe(3);
     expect(p.beatBonus).toBe(true);
     expect(p.total / 3).toBeCloseTo(65.12, 2);
@@ -83,8 +92,16 @@ describe("Tighter record points", () => {
       let prev = s0;
       for (let i = 1; i <= clicks; i++) {
         const next = s0 * (1 - (cut * i) / clicks);
-        total += recordPoints({ N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.total;
-        steps += recordPoints({ N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.nibble;
+        total += recordPoints({ family: "polygon", N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.total;
+        steps += recordPoints({
+          family: "polygon",
+          N: 21,
+          M: 24,
+          P: 40,
+          sPrev: prev,
+          sNew: next,
+          tier: "open",
+        })!.nibble;
         prev = next;
       }
       return { total, steps };
@@ -99,7 +116,7 @@ describe("Tighter record points", () => {
 
   it("pays nothing at or below the floor, and one point just above it", () => {
     const s = 15.656167;
-    const base = { N: 7, M: 7, P: 197, sPrev: s, tier: "loose" as const };
+    const base = { family: "polygon", N: 7, M: 7, P: 197, sPrev: s, tier: "loose" as const };
     for (const d of [0, 1e-12, 1e-10, 5e-10, 1e-9]) {
       // exactly at the floor is a tie: not counted, as on the server
       expect(recordPoints({ ...base, sNew: s * (1 - d) })).toBeNull();
@@ -142,7 +159,16 @@ describe("Tighter record points", () => {
 
   it("pays the beat bonus only when the change is visible at 6 decimals", () => {
     const s = 7.123456;
-    const tiny = recordPoints({ N: 7, M: 7, P: 40, sPrev: s, sNew: s * (1 - 1e-8), tier: "loose", beatOther: true })!;
+    const tiny = recordPoints({
+      family: "polygon",
+      N: 7,
+      M: 7,
+      P: 40,
+      sPrev: s,
+      sNew: s * (1 - 1e-8),
+      tier: "loose",
+      beatOther: true,
+    })!;
     expect(tiny.beatBonus).toBe(false);
     expect(tiny.bonus).toBe(0);
   });

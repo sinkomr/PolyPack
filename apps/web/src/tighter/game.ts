@@ -1,7 +1,8 @@
 import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
+import type { SpaceConfig } from "@polypack/spaces";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
-import { ProblemKey, keyOf } from "./frontier";
+import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
 import { FLOOR, Points, Tier, recordPoints } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
@@ -54,10 +55,15 @@ export interface PendingSend {
   rp: number;
 }
 
-export interface ProblemState extends ProblemKey {
+export interface ProblemFields {
   key: string;
   tier: Tier;
   dealtAt: number;
+  /**
+   * A space problem's lower bound as the server gave it at deal time; null for polygons, whose
+   * bound is computed (areaLowerBound).
+   */
+  bound: number | null;
   /**
    * The free floor: what the problem's first record improves on. Open problems: the smaller of
    * Load all and the leader of P + 1 (a P + 1 packing minus a piece is a P packing that is no
@@ -70,8 +76,11 @@ export interface ProblemState extends ProblemKey {
    */
   published: number | null;
   phase: Phase;
-  /** The best strict board found here (after Load all: the Load-all board), and its score. */
-  board: PackingConfig | null;
+  /**
+   * The best strict board found here (after Load all: the Load-all board), and its score. A polygon
+   * problem's board is a PackingConfig and a space problem's a SpaceConfig (polygonBoard tells them apart).
+   */
+  board: PackingConfig | SpaceConfig | null;
   best: number | null;
   /** The run that produced `board`; null for Load all and for a dealt site record. */
   run: RunRecord | null;
@@ -126,8 +135,15 @@ export interface ProblemState extends ProblemKey {
   rp: number;
 }
 
+/** A problem of any family: its identity (frontier.ts) and what the game keeps on it. */
+export type ProblemState = ProblemKey & ProblemFields;
+
+/** A polygon problem's board; null for a bare one, and for a space problem's (whose board is no PackingConfig). */
+export const polygonBoard = (p: ProblemState): PackingConfig | null =>
+  isPolygon(p) ? (p.board as PackingConfig | null) : null;
+
 /** A problem that left the queue: enough to count records held and never deal it again. */
-export interface PastProblem extends ProblemKey {
+export interface PastFields {
   key: string;
   tier: Tier;
   best: number | null;
@@ -136,6 +152,7 @@ export interface PastProblem extends ProblemKey {
   rp: number;
   leftAt: number;
 }
+export type PastProblem = ProblemKey & PastFields;
 
 export interface Settings {
   /** Auto-eval switched on (once owned). */
@@ -219,7 +236,7 @@ export const DEFAULT_PATIENCE = 1000;
 export function newGame(now: number, seed: number): GameState {
   return {
     // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
-    version: 4,
+    version: 5,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
@@ -262,13 +279,11 @@ export function newGame(now: number, seed: number): GameState {
 }
 
 export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState {
-  return {
-    N: p.N,
-    M: p.M,
-    P: p.P,
+  const fields: ProblemFields = {
     key: keyOf(p),
     tier,
     dealtAt: now,
+    bound: null,
     floor: null,
     published: null,
     phase: "bare",
@@ -297,10 +312,21 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     lastRunAt: 0,
     rp: 0,
   };
+  return isPolygon(p)
+    ? { family: "polygon", N: p.N, M: p.M, P: p.P, ...fields }
+    : { family: p.family, id: p.id, P: p.P, ...fields };
 }
 
 export const ownedSet = (s: GameState): Owned =>
-  owning(s.owned, s.levels, s.standing.rule, s.standing.rulesDone, s.settings.off);
+  owning(
+    s.owned,
+    s.levels,
+    s.standing.rule,
+    s.standing.rulesDone,
+    s.settings.off,
+    s.standing.resets,
+    s.standing.dimensions,
+  );
 
 /** The tolerance progress is measured with: the player's with Auto-advance, else any improvement that counts. */
 export const progressTolerance = (s: GameState): number => (ownedSet(s).has("advance") ? s.settings.tolerance : FLOOR);
@@ -333,6 +359,7 @@ export const slotted = (s: GameState) => s.queue.filter((p) => !p.leaving);
 
 /** Density of a packing of side (or radius) s: the pieces' area over the container's. */
 export function density(p: ProblemKey, s: number): number {
+  if (!isPolygon(p)) throw new Error(`not yet: density for ${p.family}`);
   return (p.P * pieceArea(p.N)) / containerArea(p.M, s);
 }
 
@@ -345,7 +372,12 @@ export function density(p: ProblemKey, s: number): number {
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
 /** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
-export function applyLoadAll(p: ProblemState, board: PackingConfig, score: number, trimFloor: number | null): void {
+export function applyLoadAll(
+  p: ProblemState,
+  board: PackingConfig | SpaceConfig,
+  score: number,
+  trimFloor: number | null,
+): void {
   if (p.phase !== "bare") return;
   p.board = board;
   p.best = score;
@@ -426,7 +458,7 @@ export function openedRun(s: GameState, p: ProblemState, now: number): void {
 /** One step of an open run: the evaluations it did and the run's best strict packing so far. */
 export interface StepOutcome {
   evaluations: number;
-  best: PackingConfig | null;
+  best: PackingConfig | SpaceConfig | null;
   score: number | null;
   /** The run as a board it found records it (budget: the evaluations the run had done). */
   run: RunRecord;
@@ -562,9 +594,8 @@ function pointsFor(p: ProblemState, name: string): Points | null {
   const sPrev = payBase(p);
   if (sPrev === null) return null;
   return recordPoints({
-    N: p.N,
-    M: p.M,
-    P: p.P,
+    ...keyPart(p),
+    bound: p.bound,
     sPrev,
     sNew: p.best,
     tier: p.tier,
@@ -745,7 +776,7 @@ export function applyAnswer(
     p.ourId = null;
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
-      p.leader = { score: outcome.leaderScore, name: "another name", id: null };
+      p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
       p.paidTo = outcome.leaderScore;
       points = pay(s, p);
     }
@@ -822,10 +853,11 @@ export function recordsHeld(s: GameState): number {
  * left first. The live-update stream follows as many as fit (eventKeys); the rest are checked
  * when the game reads them (Rent, and the page opening).
  */
-export function followed(s: GameState): ProblemKey[] {
+export function followed(s: GameState): PolygonKey[] {
   const queue = [...s.queue].sort((a, b) => Number(b.key === s.focus) - Number(a.key === s.focus));
   const held = s.past.filter((p) => p.ourId !== null).sort((a, b) => b.leftAt - a.leftAt);
-  return [...queue, ...held].map(({ N, M, P }) => ({ N, M, P }));
+  // the live feed follows polygon problems only (eventKeys)
+  return [...queue, ...held].filter(isPolygon).map(({ N, M, P }) => poly(N, M, P));
 }
 
 // ---------- auto-eval's pace ----------
@@ -889,9 +921,7 @@ export function leave(s: GameState, key: string, now: number): void {
   // the learning dealer learns what the problem paid per evaluation, from the points as earned, before standing and collections multiply them
   learnOnLeave(s.picks, { key: p.key, rp: s.economy.base[p.key] ?? p.rp, evaluations: p.evaluations });
   s.past.push({
-    N: p.N,
-    M: p.M,
-    P: p.P,
+    ...keyPart(p),
     key: p.key,
     tier: p.tier,
     best: p.phase === "ready" ? p.best : null,

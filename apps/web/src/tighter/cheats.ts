@@ -1,4 +1,6 @@
-import { GameState, reveal } from "./game";
+import type { SpaceConfig } from "@polypack/spaces";
+import { DimensionId, familyDimension, parseKey } from "./frontier";
+import { GameState, ProblemState, addToQueue, newProblem, problem, reveal } from "./game";
 
 /**
  * Cheats for playtesting: points from nowhere, to move through the game faster. Only a development
@@ -34,12 +36,54 @@ export function grant(s: GameState, g: Grant): { rp: number; standing: number } 
   return { rp, standing };
 }
 
+/** Opens a dimension for good, as a reset would; false when it was open. */
+export function openDimension(s: GameState, d: DimensionId): boolean {
+  if (s.standing.dimensions.includes(d)) return false;
+  s.standing.dimensions.push(d);
+  return true;
+}
+
+/** What the server knows of a space problem that a dealt one starts from. */
+export interface SpaceStart {
+  bound: number | null;
+  best: { config: SpaceConfig; score: number } | null;
+}
+
+/**
+ * Deals a space problem by its id ("sphere/4/10") into the queue and focuses it, opening its
+ * dimension: a board to look at without a reset. With the server's best it starts loaded, else bare.
+ * Returns the problem, or why not.
+ */
+export function dealSpaceProblem(s: GameState, id: string, now: number, start: SpaceStart): ProblemState | string {
+  const k = parseKey(id);
+  if (!k || k.family === "polygon") return `${id} is not a space problem id.`;
+  openDimension(s, familyDimension(k.family));
+  let p = problem(s, k.id);
+  if (!p) {
+    p = newProblem(k, "open", now);
+    p.bound = start.bound;
+    if (start.best) {
+      p.board = start.best.config as never;
+      p.best = start.best.score;
+      p.floor = start.best.score;
+      p.phase = "loaded";
+    }
+    addToQueue(s, p);
+  }
+  s.focus = p.key;
+  return p;
+}
+
 export interface CheatHost {
   state(): GameState;
   /** This tab runs the game: in another tab's, a grant would be lost or overwrite its save. */
   canChange(): boolean;
   /** Saves and redraws after a grant. */
   changed(): void;
+  /** The server's side of a space problem (its bound and best), or why it could not be read. */
+  spaceStart(id: string): Promise<SpaceStart | string>;
+  /** The game's clock, in ms. */
+  now(): number;
 }
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string): HTMLElementTagNameMap[K] => {
@@ -124,6 +168,41 @@ export function mountCheats(dialogBody: HTMLElement, host: CheatHost): HTMLEleme
     amountForm("t-cheat-standing", "Standing", 10, "1", "Add standing", (n) => apply({ standing: n })),
     note,
   );
+  const spaceForm = el("form", undefined, "row wrap");
+  const spaceLabel = el("label", "Space problem id");
+  spaceLabel.htmlFor = "t-cheat-space";
+  const spaceInput = el("input");
+  spaceInput.id = "t-cheat-space";
+  spaceInput.value = "sphere/0/12";
+  const spaceButton = el("button", "Deal it");
+  spaceButton.type = "submit";
+  const dimInput = el("select");
+  dimInput.id = "t-cheat-dimension";
+  dimInput.setAttribute("aria-label", "Dimension to open");
+  for (const d of ["2-on-3", "3-in-3", "3-on-4"] as const) dimInput.append(new Option(d, d));
+  const dimButton = el("button", "Open dimension");
+  dimButton.type = "button";
+  spaceForm.append(spaceLabel, spaceInput, spaceButton, dimInput, dimButton);
+  spaceForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (!host.canChange()) {
+      note.textContent = "This tab does not run the game, so nothing was dealt.";
+      return;
+    }
+    const id = spaceInput.value.trim();
+    void host.spaceStart(id).then((start) => {
+      const p = typeof start === "string" ? start : dealSpaceProblem(host.state(), id, host.now(), start);
+      note.textContent = typeof p === "string" ? p : `Dealt ${p.key}.`;
+      if (typeof p !== "string") host.changed();
+    });
+  });
+  dimButton.addEventListener("click", () => {
+    if (!host.canChange()) return;
+    const opened = openDimension(host.state(), dimInput.value as DimensionId);
+    note.textContent = opened ? `Opened ${dimInput.value}.` : `${dimInput.value} was open.`;
+    if (opened) host.changed();
+  });
+  section.append(spaceForm);
   const save = dialogBody.querySelector("section.t-save");
   if (save) save.after(section);
   else dialogBody.append(section);

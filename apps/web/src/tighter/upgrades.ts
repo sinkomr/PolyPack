@@ -1,10 +1,15 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
+import type { DimensionId, Family } from "./frontier";
 import { sym } from "./how";
 import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { RESET_MIN } from "./points";
+import { RESET_GROWTH, RESET_MIN } from "./points";
+import { BALLS_CODES } from "@polypack/balls/catalogue";
+import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
+import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
+import { SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
 
 /**
@@ -47,6 +52,21 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
 
 export type EvolveMethod =
   "mc_compress" | "basin_hopping" | "shrink_repair" | "seed" | "penalty" | "harden" | "asc" | "morph" | "ls_growth";
+
+const EVOLVE_METHODS: readonly EvolveMethod[] = [
+  "mc_compress",
+  "basin_hopping",
+  "shrink_repair",
+  "seed",
+  "penalty",
+  "harden",
+  "asc",
+  "morph",
+  "ls_growth",
+];
+
+/** The evolve methods a family has: today's list for polygons, none for the families still to come (not wired yet). */
+export const methodsFor = (family: Family): readonly EvolveMethod[] => (family === "polygon" ? EVOLVE_METHODS : []);
 
 export type UpgradeId =
   // clicks
@@ -136,10 +156,16 @@ export type UpgradeId =
   | "study"
   | "rules"
   | "pipeline"
-  | "autoTune";
+  | "autoTune"
+  // dimensions: the slices of the catalogue with a card (slices.ts)
+  | CardSliceId;
+
+/** The slices that are bought with a card (the others open with their dimension). */
+export type CardSliceId = Exclude<SliceId, "surf-platonic" | "poly-archimedean">;
 
 /** The shop's rows, in the order they are shown. */
-export type Row = "clicks" | "auto" | "queue" | "methods" | "runs" | "problems" | "dealer" | "records" | "standing";
+export type Row =
+  "clicks" | "auto" | "queue" | "methods" | "runs" | "problems" | "dimensions" | "dealer" | "records" | "standing";
 
 export const ROWS: readonly { id: Row; title: string }[] = [
   { id: "clicks", title: "Clicks" },
@@ -148,6 +174,7 @@ export const ROWS: readonly { id: Row; title: string }[] = [
   { id: "methods", title: "Methods" },
   { id: "runs", title: "Runs" },
   { id: "problems", title: "Problems" },
+  { id: "dimensions", title: "Dimensions" },
   { id: "dealer", title: "Dealer" },
   { id: "records", title: "Records" },
   { id: "standing", title: "Standing" },
@@ -191,6 +218,10 @@ export type Owned = ReadonlySet<UpgradeId> & {
   readonly rule?: string | null;
   readonly rewards?: readonly string[];
   readonly off?: ReadonlySet<UpgradeId>;
+  /** Resets so far: the cycle's threshold, and with it the price of a dimension's cards. */
+  readonly resets?: number;
+  /** The dimensions open (the first only when missing): their cards exist, the others' do not. */
+  readonly dimensions?: readonly DimensionId[];
 };
 
 /** An Owned from ids, levels, the cycle's rule, the rules finished and the switches turned off. */
@@ -200,17 +231,23 @@ export function owning(
   rule: string | null = null,
   rewards: readonly string[] = [],
   off: Iterable<UpgradeId> = [],
+  resets = 0,
+  dimensions: readonly DimensionId[] = ["2-in-2"],
 ): Owned {
   const set = new Set(ids) as Set<UpgradeId> & {
     levels?: Levels;
     rule?: string | null;
     rewards?: readonly string[];
     off?: ReadonlySet<UpgradeId>;
+    resets?: number;
+    dimensions?: readonly DimensionId[];
   };
   set.levels = levels;
   set.rule = rule;
   set.rewards = rewards;
   set.off = new Set(off);
+  set.resets = resets;
+  set.dimensions = dimensions;
   return set;
 }
 
@@ -693,6 +730,212 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   };
 }
 
+// ---------- dimensions: the cards of the slices (slices.ts) ----------
+
+/**
+ * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
+ * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
+ * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
+ * Curved costs 300,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
+ */
+export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
+  curved: 0.3,
+  "surf-prisms": 0.002,
+  "surf-archimedean": 0.005,
+  "surf-catalan-a": 0.01,
+  "surf-catalan-b": 0.05,
+  "surf-catalan-c": 0.15,
+  sphere: 0.3,
+  torus: 0.4,
+  "surf-nofold-catalan": 0.5,
+  "poly-catalan": 0.01,
+  "poly-platonic": 0.03,
+  "poly-prisms": 0.1,
+  "poly-antiprisms": 0.15,
+  "poly-elongated": 0.25,
+  "poly-duals": 0.4,
+  balls: 0.5,
+};
+/** Curved's price in the first cycle, where a share of T (200,000,000) would be too little. */
+export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 300_000_000 };
+
+/** The record points a reset needs in the cycle after `resets` resets (standing.ts resetThreshold). */
+const thresholdAfter = (resets: number) => RESET_MIN * Math.pow(RESET_GROWTH, resets);
+
+/** The price of a slice card in a cycle, before Quick study. */
+export function slicePrice(id: CardSliceId, resets: number): number {
+  return SLICE_FIRST_CYCLE[id] !== undefined && resets === 0
+    ? SLICE_FIRST_CYCLE[id]!
+    : Math.round(SLICE_SHARE[id] * thresholdAfter(resets));
+}
+
+/** The reset count a dimension is first open in (its cards are priced for that cycle in the tree's layout). */
+const OPENING_RESETS: Partial<Record<DimensionId, number>> = { "2-in-2": 0, "2-on-3": 1, "3-in-3": 2 };
+
+export const isCardSlice = (id: UpgradeId): id is CardSliceId => id in SLICE_SHARE;
+
+/** Whether the upgrade exists now: a slice card only while its dimension is open. */
+export function exists(o: Owned, id: UpgradeId): boolean {
+  return !isCardSlice(id) || (o.dimensions ?? ["2-in-2"]).includes(sliceById(id).dimension);
+}
+
+const SLICE_FORMULA = (id: CardSliceId): string[] =>
+  id === "curved"
+    ? [
+        `${sym("p")} = 300,000,000 in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
+        `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
+      ]
+    : [
+        `${sym("p")} = ${SLICE_SHARE[id]} × ${sym("T")}`,
+        `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
+      ];
+const SLICE_VARS: readonly Var[] = [
+  [sym("p"), "the price in record points, before Quick study"],
+  [sym("T"), "the record points the cycle needs for a reset"],
+  [sym("r"), "the resets you have made so far"],
+];
+
+/** The price of a slice card in the cycle it is dealt in, as its How states it. */
+const priceNote = (id: CardSliceId): string => {
+  const slice = sliceById(id);
+  const resets = id === "curved" ? 0 : (OPENING_RESETS[slice.dimension] ?? 0);
+  const p = slicePrice(id, resets);
+  return `In cycle ${resets + 1}, with a threshold of ${thresholdAfter(resets).toLocaleString("en-US")}, it costs ${p.toLocaleString("en-US")} RP. It is bought again in each cycle, at that cycle's threshold.`;
+};
+
+function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what: string): Upgrade {
+  const slice = sliceById(id);
+  return {
+    id,
+    name: slice.label,
+    cost: slicePrice(id, id === "curved" ? 0 : (OPENING_RESETS[slice.dimension] ?? 0)),
+    requires,
+    effect,
+    how: {
+      text: [what, priceNote(id)],
+      math: SLICE_FORMULA(id),
+      vars: SLICE_VARS,
+      note: "Quick study lowers the price like any other price in record points. A reset takes the card away, and the dimension stays open.",
+    },
+    row: "dimensions",
+    mystery: slice.late,
+  };
+}
+
+/**
+ * The text of a solid family's card. 3D in 3D opens with the Archimedean solids; each card opens a family,
+ * and a pair of solids (the piece, the container) is dealt when both of its families are open, with 2 to 500
+ * pieces. The counts come from the catalogue, so they follow it.
+ */
+function polyWhat(id: SliceId, what: string): string {
+  const n = solidsOfSlice(id);
+  return `The dealer also deals ${what} (${n} solids) as pieces and as containers, in pairs with any solid of a family that is open, itself included. Every ordered pair of solids is a problem, with 2 to 500 pieces: ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem with every family open.`;
+}
+
+const nf = (n: number) => n.toLocaleString("en-US");
+
+const SURFACE_PIECES =
+  "Pieces are disks or polygons of 3 to 100 sides, with 1 to 100 of them, so each solid holds 9,900 problems.";
+
+const SLICE_CARDS: Upgrade[] = [
+  sliceCard(
+    "curved",
+    ["ring30"],
+    "Deals packings on the hyperbolic plane and on spheres, besides the flat plane.",
+    `The dealer also deals curved problems: ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces that are disks or polygons of 3 to 100 sides, packed in a regular polygon or disk on a surface of constant curvature K. K below 0 is the hyperbolic plane, K = 0 is the flat plane, and K above 0 is a sphere of radius 1 / √K. This is 2D in 2D, played on curved surfaces. Most have no research record yet.`,
+  ),
+  sliceCard(
+    "surf-prisms",
+    [],
+    "Deals packings on the surfaces of the 9 prisms and 9 antiprisms.",
+    `The dealer also deals pieces packed on the surface of a prism with 3, or 5 to 12 sides, and of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-archimedean",
+    ["surf-prisms"],
+    `Deals packings on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
+    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. Without folding these would be 2D packings of regular faces, so only the folded ones are dealt. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-catalan-a",
+    ["surf-archimedean"],
+    "Deals packings on the 6 Catalan solids with 12 or 24 faces.",
+    `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces), and on the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-catalan-b",
+    ["surf-catalan-a"],
+    "Deals packings on the 6 Catalan solids with 30 to 60 faces.",
+    `The dealer also deals pieces packed on the rhombic triacontahedron (30 faces), the disdyakis dodecahedron (48 faces), and the deltoidal hexecontahedron, the pentagonal hexecontahedron, the pentakis dodecahedron and the triakis icosahedron (60 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-catalan-c",
+    ["surf-catalan-b"],
+    "Deals packings on the disdyakis triacontahedron, the Catalan solid with 120 faces.",
+    `The dealer also deals pieces packed on the disdyakis triacontahedron, the Catalan solid with the most faces. A piece may bend over an edge. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "sphere",
+    ["surf-catalan-b"],
+    "Deals packings on the surface of a sphere.",
+    `The dealer also deals pieces packed in a cap of a sphere, the smallest one that holds them: ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+  ),
+  sliceCard(
+    "torus",
+    ["surf-catalan-b"],
+    "Deals packings on a torus, with a square, a hexagonal or a free cell.",
+    `The dealer also deals pieces packed on a flat torus whose cell is a square, a hexagon or any shape, the smallest one that holds them: ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+  ),
+  sliceCard(
+    "surf-nofold-catalan",
+    ["surf-catalan-b"],
+    "Deals packings on the Catalan solids where a piece stays on one face.",
+    `The dealer also deals the Catalan solids without folding: each piece must lie inside one face, so each face is a separate 2D packing. This is for the Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "poly-catalan",
+    [],
+    "Opens the Catalan solids as pieces and containers.",
+    polyWhat("poly-catalan", "the Catalan solids"),
+  ),
+  sliceCard(
+    "poly-platonic",
+    [],
+    "Opens the Platonic solids as pieces and containers.",
+    polyWhat("poly-platonic", "the Platonic solids"),
+  ),
+  sliceCard(
+    "poly-prisms",
+    ["poly-catalan"],
+    "Opens the prisms as pieces and containers.",
+    polyWhat("poly-prisms", "the prisms"),
+  ),
+  sliceCard(
+    "poly-antiprisms",
+    ["poly-prisms"],
+    "Opens the antiprisms as pieces and containers.",
+    polyWhat("poly-antiprisms", "the antiprisms"),
+  ),
+  sliceCard(
+    "poly-elongated",
+    ["poly-antiprisms"],
+    "Opens the elongated prisms as pieces and containers.",
+    polyWhat("poly-elongated", "the prisms of height 1.5, 2 and 3"),
+  ),
+  sliceCard(
+    "poly-duals",
+    ["poly-elongated"],
+    "Opens the bipyramids and trapezohedra as pieces and containers.",
+    polyWhat("poly-duals", "the bipyramids and trapezohedra"),
+  ),
+  sliceCard(
+    "balls",
+    ["poly-platonic"],
+    "Deals packings of balls in solids, solids in a ball, and balls in a ball.",
+    `The dealer also deals packings with balls: unit balls in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
+  ),
+];
+
 /** The tree, in an order where every prerequisite comes before the upgrades that need it. */
 export const UPGRADES: readonly Upgrade[] = [
   {
@@ -995,14 +1238,14 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Each level multiplies the rent of every record by 1.5.",
     how: {
       text: [
-        "Each level multiplies every record's rent by 1.5, so level 1 pays 1.5 times the rent, level 2 pays 2.25 times, level 5 about 7.6 times and level 10 about 58 times.",
+        "Each level multiplies every record's rent by 1.5, so level 1 pays 1.5 times the rent, level 2 pays 2.25 times and level 5, the last, about 7.6 times.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
-      note: "Each level costs 1.6 times the one before.",
+      note: "Each level costs 1.6 times the one before. There are 5 levels, because more would make rent outgrow everything else.",
     },
     row: "records",
-    levels: { max: 50, growth: 1.6 },
+    levels: { max: 5, growth: 1.6 },
   },
   ringRung("ring120", 480_000, ["ring200", "batch"]),
   methodRung("asc", 480_000, ["morph"], true),
@@ -1144,25 +1387,25 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 6_000_000,
+    cost: 600_000_000,
     requires: ["collections", "rent", "ring120"],
     effect: "You can reset the tree for standing, and each point of standing adds 10 % to all points.",
     how: {
       text: [
-        `A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. You can reset once the cycle has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed.`,
+        `A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
         "Your records stay on the server and keep paying rent. Your collection counts, the dealer's learning and the queue stay, and so do the upgrades Records pay rent, Higher rent and Collections. Every point of standing ever earned adds 10 % to all record points, spent or not, and standing buys the Standing row.",
+        "The first reset opens 2D on 3D, pieces packed on the surfaces of solids. The second opens 3D in 3D, solids packed in solids. An opened dimension stays open, and its cards in the Dimensions row are bought again in each cycle.",
       ],
       math: [
-        `${sym("S")} = ⌊√(${sym("E")} / ${RESET_MIN.toLocaleString("en-US")}) + ${sym("H")} / 50⌋, at least 1`,
+        `${sym("S")} = ⌊5 × √(${sym("E")} / ${sym("T")})⌋`,
+        `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
         `${sym("m", "s")} = 1 + 0.1 × ${sym("S", "all")}`,
       ],
       vars: [
-        [sym("S"), "the standing a reset gives"],
-        [
-          sym("E"),
-          `the record points of this cycle that the server has confirmed (at least ${RESET_MIN.toLocaleString("en-US")})`,
-        ],
-        [sym("H"), "the records you hold"],
+        [sym("S"), "the standing a reset gives (5 at the threshold)"],
+        [sym("E"), "the record points of this cycle that the server has confirmed (at least T)"],
+        [sym("T"), "the record points this cycle needs for a reset"],
+        [sym("r"), "the resets you have made so far (0 in the first cycle)"],
         [sym("m", "s"), "the multiplier standing puts on every record point"],
         [sym("S", "all"), "the standing you have ever earned"],
       ],
@@ -1206,7 +1449,7 @@ export const UPGRADES: readonly Upgrade[] = [
     {
       text: [
         "Before a reset, you can choose a rule for the next cycle in the Standing panel. The cycle is played under it, and the reset that ends that cycle pays extra standing and gives the rule's reward for good.",
-        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
+        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. Circles only and Small problems only cover the polygon problems of 2D in 2D, so problems of other dimensions are dealt as usual and pay no reward from them. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
       ],
       math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
       vars: [
@@ -1300,6 +1543,8 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     { max: 10, growth: 1.6 },
   ),
+  // ---- dimensions ----
+  ...SLICE_CARDS,
 ];
 
 const BY_ID = new Map(UPGRADES.map((u) => [u.id, u]));
@@ -1323,7 +1568,11 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (!u) return null;
   const l = level(o, id);
   if (u.levels ? l >= u.levels.max : l > 0) return null;
-  const base = u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+  const base = isCardSlice(id)
+    ? slicePrice(id, o.resets ?? 0)
+    : u.levels
+      ? u.cost * Math.pow(u.levels.growth, l)
+      : u.cost;
   return currencyOf(u) === "rp" ? Math.round(base * rpCostFactor(o)) : Math.round(base);
 }
 
@@ -1335,7 +1584,7 @@ export function isRevealed(o: Owned, id: UpgradeId): boolean {
 
 /** Upgrades that can be bought next (prerequisites owned, a level left): the shop's open cards. */
 export function available(o: Owned): Upgrade[] {
-  return UPGRADES.filter((u) => costOf(o, u.id) !== null && u.requires.every((r) => o.has(r)));
+  return UPGRADES.filter((u) => exists(o, u.id) && costOf(o, u.id) !== null && u.requires.every((r) => o.has(r)));
 }
 
 /** What the player can pay with. */
@@ -1348,7 +1597,7 @@ export type BuyCheck = { ok: true } | { ok: false; reason: "owned" | "locked" | 
 
 export function canBuy(o: Owned, funds: Funds | number, id: UpgradeId): BuyCheck {
   const u = BY_ID.get(id);
-  if (!u) return { ok: false, reason: "locked" };
+  if (!u || !exists(o, id)) return { ok: false, reason: "locked" };
   const cost = costOf(o, id);
   if (cost === null) return { ok: false, reason: "owned" };
   if (!u.requires.every((r) => o.has(r))) return { ok: false, reason: "locked" };

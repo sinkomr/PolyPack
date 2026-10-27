@@ -1,7 +1,7 @@
 import { MAX_PIECES, areaLowerBound, closedToSubmissions } from "@polypack/geometry";
 import type { ProblemInfo } from "@polypack/geometry";
 import type { RecordsResponse } from "../api";
-import { ProblemKey, keyOf } from "./frontier";
+import { ProblemKey, keyOf, poly } from "./frontier";
 import type { Tier } from "./points";
 import { Candidate, LOOSE_WEAKNESS, NEIGHBOURS } from "./rank";
 
@@ -144,11 +144,7 @@ export function drawWide(
 ): ProblemKey | null {
   const span = (a: number, b: number) => a + Math.floor(nextRandom(d) * (b - a + 1));
   for (let i = 0; i < attempts; i++) {
-    const p = {
-      N: span(WIDE.minSide, WIDE.maxSide),
-      M: span(WIDE.minSide, WIDE.maxSide),
-      P: span(WIDE.minP, WIDE.maxP),
-    };
+    const p = poly(span(WIDE.minSide, WIDE.maxSide), span(WIDE.minSide, WIDE.maxSide), span(WIDE.minP, WIDE.maxP));
     if (!exclude.has(keyOf(p)) && allow(p)) return p;
   }
   return null;
@@ -241,6 +237,7 @@ export function contestedCandidates(records: RecordsResponse, opts: ContestedOpt
     if (e.verification === "pending" || e.P < 2 || lit.has(e.P)) continue;
     const weakness = weak.get(e.P) ?? 0;
     consider({
+      family: "polygon",
       N,
       M,
       P: e.P,
@@ -259,6 +256,7 @@ export function contestedCandidates(records: RecordsResponse, opts: ContestedOpt
     if (e?.verification === "pending") continue;
     if (!r.has_coordinates && !e) continue;
     consider({
+      family: "polygon",
       N,
       M,
       P: r.P,

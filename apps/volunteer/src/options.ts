@@ -25,6 +25,8 @@ export interface Options {
   name: string | null;
   base: string;
   cores: number;
+  /** Problems searched at once, each on its share of the threads (laneShares in main.ts). */
+  parallelProblems: number;
   /** Hours before the client stops; Infinity for never. */
   hours: number;
   minutesPerProblem: number;
@@ -70,11 +72,24 @@ export class OptionError extends Error {}
 
 export const defaultCores = (m: Machine) => Math.max(1, m.availableParallelism - 1);
 
+/**
+ * Threads per problem that the default number of problems at once aims at. [CALC] In simulations
+ * of the engine with ideal threads (docs/VOLUNTEER.md, "Several problems at once";
+ * scripts/volunteer-threads.ts), 2 minutes on three sawtooth problems with 2 seeds each, 4 threads
+ * found on average 98 % of the improvement that 15 threads found, 8 threads as much as 15, 2
+ * threads 84 % and 1 thread 82 %. A thread spent on another problem is worth more than the 5th to
+ * 15th threads on one.
+ */
+export const THREADS_PER_PROBLEM = 4;
+/** One problem at once per THREADS_PER_PROBLEM threads, rounded, and at least one. */
+export const defaultParallelProblems = (cores: number) => Math.max(1, Math.round(cores / THREADS_PER_PROBLEM));
+
 export function helpText(m: Machine): string {
   return `polypack-volunteer ${VERSION}: give spare CPU time to PolyPack (${DEFAULT_BASE})
 
-It takes problems from the server's work list one at a time, searches each with many methods and
-seeds on the cores it is given, and submits a result only when it beats the site's leader.
+It takes problems from the server's work list, several at once on a machine with many cores,
+searches each with many methods and seeds on its share of the cores, and submits a result only
+when it beats the site's leader.
 
 Usage: node polypack-volunteer.mjs [options]
 
@@ -82,6 +97,8 @@ Usage: node polypack-volunteer.mjs [options]
                            without it nothing is submitted: the client runs as a dry run
   --base URL               server (default ${DEFAULT_BASE})
   --cores K                search threads (default: all cores but one, here ${defaultCores(m)})
+  --parallel-problems K    problems searched at once, sharing the threads (default: one per
+                           ${THREADS_PER_PROBLEM} threads, here ${defaultParallelProblems(defaultCores(m))}); 1 searches one at a time
   --hours H                stop after H hours (default: never)
   --minutes-per-problem T  most minutes of search per problem, pauses excluded (default ${DEFAULT_MINUTES_PER_PROBLEM})
   --N LIST                 piece shapes, e.g. 0,3-6 (0 = circle; default: all)
@@ -249,6 +266,7 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
         name: { type: "string" },
         base: { type: "string", default: DEFAULT_BASE },
         cores: { type: "string" },
+        "parallel-problems": { type: "string" },
         hours: { type: "string" },
         "minutes-per-problem": { type: "string" },
         N: { type: "string" },
@@ -308,6 +326,19 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
       "--space-method applies to the other kinds: give --dimensions LIST too, for example --dimensions all",
     );
 
+  const cores = values.cores === undefined ? defaultCores(machine) : positiveInteger("cores", values.cores, 1024);
+  const asked =
+    values["parallel-problems"] === undefined
+      ? null
+      : positiveInteger("parallel-problems", values["parallel-problems"], 1024);
+  if (values.once && asked !== null && asked > 1)
+    throw new OptionError("--once searches one problem: leave out --parallel-problems, or give 1");
+  const parallelProblems = asked ?? (values.once ? 1 : defaultParallelProblems(cores));
+  if (parallelProblems > cores)
+    throw new OptionError(
+      `--parallel-problems (${parallelProblems}) is more than the search threads (--cores ${cores}): each problem needs a thread`,
+    );
+
   let stateDir = values.state ?? join(machine.homedir, ".polypack-volunteer");
   // a quoted or --state=~/... path reaches us unexpanded
   if (stateDir === "~" || stateDir.startsWith("~/")) stateDir = join(machine.homedir, stateDir.slice(1));
@@ -318,7 +349,8 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
     options: {
       name,
       base,
-      cores: values.cores === undefined ? defaultCores(machine) : positiveInteger("cores", values.cores, 1024),
+      cores,
+      parallelProblems,
       hours: values.hours === undefined ? Infinity : positiveNumber("hours", values.hours),
       minutesPerProblem:
         values["minutes-per-problem"] === undefined

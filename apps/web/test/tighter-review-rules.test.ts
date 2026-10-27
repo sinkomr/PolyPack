@@ -39,7 +39,7 @@ function readyProblem(name = "Ada"): { s: ReturnType<typeof newGame>; p: Problem
   const s = newGame(T0, 1);
   s.name = name;
   s.consent = true;
-  const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   p.phase = "loaded";
   p.board = cfg(0);
@@ -84,7 +84,7 @@ describe("tighter review: points", () => {
       if (!(sNew > b)) continue;
       const tier = rnd() < 0.5 ? "open" : "loose";
       const first = rnd() < 0.3;
-      const pts = recordPoints({ N, M, P, sPrev, sNew, tier, first, beatOther: false });
+      const pts = recordPoints({ family: "polygon", N, M, P, sPrev, sNew, tier, first, beatOther: false });
       const d = 1 - sNew / sPrev;
       if (!(sNew < sPrev * (1 - SCORE_TIE))) {
         expect(pts).toBeNull();

@@ -104,6 +104,12 @@ export interface SearchInput {
   /** Seed of the engine's own choices. */
   seed: number;
   memory?: EngineMemory;
+  /**
+   * The host's memory as it stands when the search ends: searches that run at the same time
+   * (--parallel-problems) update it meanwhile, and this problem's record is added to it, not to
+   * `memory` as it was at the start. Without it, the record is added to `memory`.
+   */
+  memoryNow?: () => EngineMemory;
   /** Active seconds, monotonic: the host stops this clock while the search is paused. */
   now: () => number;
   /** Called after every job, for the host's log and status line. */

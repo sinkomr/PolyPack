@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { spaceViewers } from "./scripts/space-viewers";
 
 const api = process.env.POLYPACK_API ?? "http://localhost:8787";
@@ -16,9 +16,33 @@ ${readFileSync(resolve(import.meta.dirname, "../../node_modules/three/LICENSE"),
   .replace(/\*\//g, "* /")}
 */`;
 
+/**
+ * The game's page cross-origin isolated (as apps/server/src/node.ts serves it), so that space runs
+ * can share memory with their worker. No other page is isolated. Safari also refuses every module a
+ * worker of an isolated page imports unless that module is served with the embedder policy, so
+ * every script and module gets it: on a script the header changes nothing for the other pages.
+ */
+const isolateTighter = (): Plugin => {
+  const middleware = (req: { url?: string }, res: { setHeader(k: string, v: string): void }, next: () => void) => {
+    const path = (req.url ?? "").split("?")[0];
+    if (path === "/tighter.html") {
+      res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+      res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    } else if (/^\/(assets|src|@fs|@vite|@id|node_modules)\//.test(path))
+      res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    next();
+  };
+  return {
+    name: "isolate-tighter",
+    // the dev server, and the preview server the end-to-end tests run against
+    configureServer: (server) => void server.middlewares.use(middleware),
+    configurePreviewServer: (server) => void server.middlewares.use(middleware),
+  };
+};
+
 export default defineConfig({
   // the standalone viewers of the spaces, at /spaces/<name>.html (copied from packages/*/viz)
-  plugins: [spaceViewers(resolve(import.meta.dirname, "../.."))],
+  plugins: [spaceViewers(resolve(import.meta.dirname, "../..")), isolateTighter()],
   server: { port: 5173, proxy: { "/api": { target: api, changeOrigin: true } } },
   // keep "/*!" comments (the licence notices above) when the build is minified
   esbuild: { legalComments: "inline" },

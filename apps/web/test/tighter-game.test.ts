@@ -32,7 +32,7 @@ import {
   unconfirmedPoints,
   withdrawConsent,
 } from "../src/tighter/game";
-import { FRONTIER, STARTER, problemTitle } from "../src/tighter/frontier";
+import { FRONTIER, STARTER, keyOf, problemTitle } from "../src/tighter/frontier";
 import { msPerEval } from "../src/tighter/rank";
 import { autoHold, autoTarget } from "../src/tighter/scheduler";
 import { CLIENT_TAG, classifyAnswer, shouldSubmit, submissionBody } from "../src/tighter/submission";
@@ -67,6 +67,7 @@ import {
 import { drawProblem, newDealer, openDealable } from "../src/tighter/dealer";
 
 const T0 = 1_000_000;
+const ALL_DIMENSIONS = ["2-in-2", "2-on-3", "3-in-3", "3-on-4"] as const;
 const board = (P: number, shift = 0): PackingConfig => ({
   N: 24,
   M: 30,
@@ -96,7 +97,7 @@ function game(consent = true): { s: GameState; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = "Ada";
   s.consent = consent;
-  const p = newProblem({ N: 24, M: 30, P: 3 }, "open", T0);
+  const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   return { s, p };
 }
@@ -107,12 +108,12 @@ const B = areaLowerBound(24, 30, 3);
 describe("Tighter frontier", () => {
   it("is the curated 2,601, with a 108-problem starter corner inside it", () => {
     expect(FRONTIER).toHaveLength(2601);
-    expect(new Set(FRONTIER.map((p) => `${p.N}/${p.M}/${p.P}`)).size).toBe(2601);
+    expect(new Set(FRONTIER.map(keyOf)).size).toBe(2601);
     expect(STARTER).toHaveLength(108);
-    const all = new Set(FRONTIER.map((p) => `${p.N}/${p.M}/${p.P}`));
-    for (const p of STARTER) expect(all.has(`${p.N}/${p.M}/${p.P}`)).toBe(true);
-    expect(problemTitle({ N: 60, M: 47, P: 80 })).toBe("60-gons in a 47-gon, 80 pieces");
-    expect(problemTitle({ N: 21, M: 80, P: 40 })).toBe("21-gons in an 80-gon, 40 pieces");
+    const all = new Set(FRONTIER.map(keyOf));
+    for (const p of STARTER) expect(all.has(keyOf(p))).toBe(true);
+    expect(problemTitle({ family: "polygon", N: 60, M: 47, P: 80 })).toBe("60-gons in a 47-gon, 80 pieces");
+    expect(problemTitle({ family: "polygon", N: 21, M: 80, P: 40 })).toBe("21-gons in an 80-gon, 40 pieces");
   });
 });
 
@@ -134,12 +135,12 @@ describe("Tighter upgrades", () => {
     const levels: Partial<Record<UpgradeId, number>> = {};
     const rich = { rp: 1e300, standing: 1e300 };
     for (const u of UPGRADES) {
-      expect(canBuy(owning(owned, levels), rich, u.id)).toEqual({ ok: true });
+      expect(canBuy(owning(owned, levels, null, [], [], 0, ALL_DIMENSIONS), rich, u.id)).toEqual({ ok: true });
       owned.add(u.id);
       // a levelled upgrade is bought to its last level
       if (u.levels) levels[u.id] = u.levels.max;
     }
-    expect(available(owning(owned, levels))).toEqual([]);
+    expect(available(owning(owned, levels, null, [], [], 0, ALL_DIMENSIONS))).toEqual([]);
   });
 
   it("show every upgrade, the mysteries as ?????? until their prerequisites are owned", () => {
@@ -443,7 +444,7 @@ describe("Tighter runs on the board", () => {
 
   it("give every run a random 32-bit seed, a new one each time, the same in a game with the same dealer's seed", () => {
     const { s, p } = game();
-    const q = newProblem({ N: 24, M: 30, P: 60 }, "open", T0);
+    const q = newProblem({ family: "polygon", N: 24, M: 30, P: 60 }, "open", T0);
     addToQueue(s, q);
     // drawn at once, before the run is opened: two runs opening together on one problem never share one
     const seeds = Array.from({ length: 200 }, () => reserveSeed(s, p));
@@ -526,7 +527,7 @@ describe("Tighter points per click", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
     s.consent = true;
-    const p = newProblem({ N: 24, M: 30, P: 3 }, "loose", T0);
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
     addToQueue(s, p);
     p.phase = "ready";
     p.board = board(3);
@@ -745,7 +746,7 @@ describe("Tighter answers from the server", () => {
     expect(drop(s, p.key, T0)).toBe(false);
     expect(p.leaving).toBe(true);
     expect(s.queue).toHaveLength(1);
-    const other = newProblem({ N: 21, M: 21, P: 40 }, "open", T0);
+    const other = newProblem({ family: "polygon", N: 21, M: 21, P: 40 }, "open", T0);
     addToQueue(s, other);
     expect(drop(s, other.key, T0)).toBe(true);
     expect(s.past.map((q) => q.key)).toEqual(["21/21/40"]);
@@ -983,7 +984,7 @@ describe("Tighter dealer", () => {
     // the last problem left is still found
     const all = new Set(STARTER.map((p) => `${p.N}/${p.M}/${p.P}`));
     all.delete("36/36/80");
-    expect(drawProblem(a, STARTER, all)).toEqual({ N: 36, M: 36, P: 80 });
+    expect(drawProblem(a, STARTER, all)).toEqual({ family: "polygon", N: 36, M: 36, P: 80 });
   });
 
   // contested records (loose, batch, published) are tested in tighter-dealer.test.ts
@@ -993,7 +994,7 @@ describe("Tighter auto-eval", () => {
   function queue(): ProblemState[] {
     return ["24/30/60", "21/21/40", "27/27/80"].map((k) => {
       const [N, M, P] = k.split("/").map(Number);
-      const p = newProblem({ N, M, P }, "open", T0);
+      const p = newProblem({ family: "polygon", N, M, P }, "open", T0);
       p.phase = "ready";
       p.run = run(1);
       return p;
@@ -1043,7 +1044,7 @@ describe("Tighter auto-eval", () => {
     // everything has stalled: the one stalled least still runs
     q[0].lastRunAt = 5;
     expect(autoTarget({ ...base, lane: 0, queue: q, focus: q[0].key, owned })?.key).toBe("21/21/40");
-    q.push(newProblem({ N: 30, M: 30, P: 60 }, "open", T0));
+    q.push(newProblem({ family: "polygon", N: 30, M: 30, P: 60 }, "open", T0));
     expect(autoTarget({ ...base, lane: 1, queue: q, focus: q[0].key, owned })).toEqual({
       key: "30/30/60",
       action: "compact",

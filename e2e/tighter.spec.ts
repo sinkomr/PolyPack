@@ -454,3 +454,23 @@ test("tighter: a method change opens a new run", async ({ page }) => {
   // a problem allows any number of runs
   await expect(page.locator("#t-evolve")).toBeEnabled();
 });
+
+test("tighter: the game's page is cross-origin isolated (space runs share memory with their worker), the other pages are not", async ({
+  page,
+}) => {
+  // Safari refuses every module a worker of an isolated page imports unless it carries the embedder
+  // policy (Chrome needs it on the worker's own script only), so every script must carry it
+  const scripts: { url: string; coep: string | undefined }[] = [];
+  // (the context sees the worker's own requests too)
+  page.context().on("response", (r) => {
+    if (r.request().resourceType() === "script" || /\.(m?js|ts)(\?|$)/.test(r.url()))
+      scripts.push({ url: r.url(), coep: r.headers()["cross-origin-embedder-policy"] });
+  });
+  await page.goto("/tighter.html");
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
+  await page.locator("#t-evolve").click();
+  await expect.poll(() => scripts.some((s) => /run-worker/.test(s.url))).toBe(true);
+  expect(scripts.filter((s) => s.coep !== "require-corp").map((s) => s.url)).toEqual([]);
+  await page.goto("/index.html");
+  expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
+});

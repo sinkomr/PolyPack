@@ -1,5 +1,6 @@
 import { Bandit, Prior, choose, normalizeBandit, observe, posterior } from "./bandit";
 import { mulberry32 } from "./dealer";
+import type { PolygonKey } from "./frontier";
 import type { EvolveMethod } from "./upgrades";
 
 /**
@@ -67,7 +68,7 @@ function shapeClass(N: number): string {
 }
 
 /** A kind of problem for the bandit: tier, size ring and piece-shape class, e.g. "open|t120|r". */
-export function problemKind(p: { N: number; M: number; P: number; tier: string }): string {
+export function problemKind(p: PolygonKey & { tier: string }): string {
   const t = p.N + p.M + p.P;
   return `${p.tier}|t${RINGS.find((r) => t >= r) ?? 0}|${shapeClass(p.N)}`;
 }

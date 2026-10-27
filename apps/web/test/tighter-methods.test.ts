@@ -79,7 +79,7 @@ function withHooks<T>(m: EvolveMethod, hooks: Partial<MethodGame>, fn: () => T):
 
 function loaded(N: number, M: number, P: number) {
   const s = newGame(1_000, 7);
-  const p = newProblem({ N, M, P }, "open", 1_000);
+  const p = newProblem({ family: "polygon", N, M, P }, "open", 1_000);
   addToQueue(s, p);
   const pieces: Pose[] = [];
   for (let k = 0; k < P; k++) pieces.push(findFreeSpot(N, pieces, 0, 0));

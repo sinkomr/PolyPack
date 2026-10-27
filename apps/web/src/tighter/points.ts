@@ -1,4 +1,6 @@
 import { SCORE_TIE, areaLowerBound, improvesOn } from "@polypack/geometry";
+import { rulesOf } from "./families";
+import type { ProblemKey } from "./frontier";
 
 /**
  * Record points (RP), design.md §5. For a verified improvement from s_prev to s_new:
@@ -49,11 +51,13 @@ export const TIER_LABEL: Record<Tier, string> = {
 export const SIZE_WEIGHT = 10_000;
 export const GAP_WEIGHT = 10_000;
 /**
- * Record points a cycle must earn before it can be reset [SPEC]: 250,000 at the weights of 100, 8 times
- * that now, as the prices from Basin hopping on (upgrades.ts). It lives here so the tree's texts
- * can read it without importing standing.ts, which imports the tree.
+ * Record points the first cycle must earn before it can be reset [SPEC, Michael's ladder of 2026-10-26];
+ * each later cycle needs 5 times the one before (standing.ts resetThreshold). It lives here so the
+ * tree's texts can read it without importing standing.ts, which imports the tree.
  */
-export const RESET_MIN = 2_000_000;
+export const RESET_MIN = 200_000_000;
+/** What each cycle's threshold is times the last one's. */
+export const RESET_GROWTH = 5;
 /** A first record whose gap beats the free floor's by at least 10 %. */
 export const FIRST_RECORD_BONUS = 10;
 export const FIRST_RECORD_GAP_RATIO = 0.9;
@@ -70,10 +74,9 @@ export function shapeWeight(N: number, M: number): number {
   return distinctness(N) * distinctness(M);
 }
 
-export interface PointsInput {
-  N: number;
-  M: number;
-  P: number;
+export type PointsInput = ProblemKey & {
+  /** A space problem's bound as the server gave it (ProblemState.bound); polygons compute theirs. */
+  bound?: number | null;
   /** The leader's score before this improvement, or for a problem without one its free floor. */
   sPrev: number;
   /** The verified new score. */
@@ -83,7 +86,7 @@ export interface PointsInput {
   first?: boolean;
   /** sPrev is held by another name and the bonus for beating one has not been paid on this problem. */
   beatOther?: boolean;
-}
+};
 
 export interface Points {
   /** Relative improvement Δ = 1 − s_new / s_prev. */
@@ -116,18 +119,21 @@ export const show6 = (s: number) => s.toFixed(6);
  * than the floor, or not a finite positive score).
  */
 export function recordPoints(input: PointsInput): Points | null {
-  const { N, M, P, sPrev, sNew } = input;
+  const { sPrev, sNew } = input;
   if (!(sNew > 0) || !(sPrev > 0) || !Number.isFinite(sNew) || !Number.isFinite(sPrev)) return null;
   if (!improvesOn(sNew, sPrev)) return null;
   const delta = 1 - sNew / sPrev;
   // improvesOn and Δ > F are the same test up to one rounding; never pay less than the floor's point
   const decades = Math.max(0, Math.log10(delta / FLOOR));
-  const w = shapeWeight(N, M);
+  const rules = rulesOf(input);
+  const w = rules.weight(input);
   const c = CONTEST[input.tier];
   const nibble = 1 + decades;
   const size = SIZE_WEIGHT * Math.log(sPrev / sNew);
-  const gPrev = gapOf(N, M, P, sPrev);
-  const gNew = gapOf(N, M, P, sNew);
+  const bound = rules.bound(input);
+  if (bound === null) throw new Error(`no bound for ${input.family}`);
+  const gPrev = sPrev / bound - 1;
+  const gNew = sNew / bound - 1;
   // A gap at or below zero cannot occur for the dealt problems (P >= 2 and gap > 0); guard anyway,
   // since ln(g_prev / g_new) would be undefined or infinite.
   const gap = gPrev > 0 && gNew > 0 ? GAP_WEIGHT * Math.log(gPrev / gNew) : 0;

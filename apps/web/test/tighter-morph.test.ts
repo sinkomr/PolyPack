@@ -81,7 +81,7 @@ describe("Tighter's morph", () => {
     expect(warm).toBe(722);
     // through applyStep: a run that never improves adds only its second stage to the count
     const s = newGame(1_000, 7);
-    const q = newProblem({ N: 21, M: 24, P: 12 }, "open", 1_000);
+    const q = newProblem({ family: "polygon", N: 21, M: 24, P: 12 }, "open", 1_000);
     addToQueue(s, q);
     const board = loadAll(21, 24, 12);
     applyLoadAll(q, board, 9.5, null);
@@ -163,7 +163,7 @@ describe("Tighter's morph", () => {
   });
 
   it("opens a 2-stage run that ends by itself within 1,442 evaluations", async () => {
-    const problem = { N: 21, M: 21, P: 6 };
+    const problem = { family: "polygon" as const, N: 21, M: 21, P: 6 };
     const start = loadAll(problem.N, problem.M, problem.P);
     const r = new OpenRun({
       problem,

@@ -24,7 +24,7 @@ import { UPGRADES } from "../src/tighter/upgrades";
 // penalty in the game (penalty-run.ts): a squeeze that scores every 10th L-BFGS step, then a settle
 // with mc_compress, in turn, while the "penalty" basin_hopping calls stays the solver's own.
 
-const problem = { N: 21, M: 24, P: 12 };
+const problem = { family: "polygon" as const, N: 21, M: 24, P: 12 };
 
 /** Load all, then 40 evaluations of mc_compress: a compacted board, as a player has it. */
 const board: Promise<PackingConfig> = (async () => {
@@ -123,7 +123,7 @@ describe("Tighter's penalty definitions", () => {
 
   it("keep basin_hopping's penalty solves the solver's own, to the bit", async () => {
     // a small problem, where basin_hopping makes several penalty solves in 400 evaluations
-    const small = { N: 4, M: 4, P: 9 };
+    const small = { family: "polygon" as const, N: 4, M: 4, P: 9 };
     const pieces: Pose[] = [];
     for (let k = 0; k < small.P; k++) pieces.push(findFreeSpot(small.N, pieces, 0, 0));
     const start: PackingConfig = { ...small, pieces, container_phi: 0 };

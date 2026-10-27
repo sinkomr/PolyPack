@@ -131,10 +131,14 @@ export async function main(argv: readonly string[], deps: MainDeps = {}): Promis
   return new Volunteer(parsed.options, deps, out).run();
 }
 
-/** The problem being searched, for the status line. */
+/** A problem being searched, for the status line, the stop and the pause. */
 interface Current {
   /** "N=4 M=4 P=3", or a space problem's id. */
   label: string;
+  /** Its key in skipUntil and in the problems being searched. */
+  key: string;
+  /** The threads it is searched on: its slot's share of --cores. */
+  lanes: number;
   control: Control;
   startedAt: number;
   maxSeconds: number;
@@ -175,6 +179,19 @@ function describeAnswer(a: Answer | null): string {
 
 const errorText = (error: unknown) => cleanText((error as Error)?.stack ?? String(error), 2000);
 
+/**
+ * The threads of each of `problems` problems searched at once: `cores` split as evenly as it goes,
+ * the larger shares first (15 threads, 4 problems: 4, 4, 4 and 3).
+ */
+export function laneShares(cores: number, problems: number): number[] {
+  const k = Math.max(1, Math.min(problems, cores));
+  return Array.from({ length: k }, (_, i) => Math.floor(cores / k) + (i < cores % k ? 1 : 0));
+}
+
+/** "4, 4, 4 and 3". */
+const andList = (xs: readonly number[]) =>
+  xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
+
 class Volunteer {
   private readonly clock = new ActiveClock();
   /** Aborted to stop: no new problem starts, and waits between problems end. */
@@ -213,7 +230,14 @@ class Volunteer {
   /** Set when the server answered 426: it works in other units than this client. */
   private upgrade: string | null = null;
   private hardTimer: NodeJS.Timeout | null = null;
-  private current: Current | null = null;
+  /** The problems being searched now: one per slot (--parallel-problems), between their searches none. */
+  private readonly currents = new Set<Current>();
+  /** Keys of the problems the slots have drawn and not yet finished: no other slot draws them. */
+  private readonly inFlight = new Set<string>();
+  /** The slots draw their problems one at a time. */
+  private picking: Promise<unknown> = Promise.resolve();
+  /** The last note the slots share (its `same`), so that each slot does not print it again (note). */
+  private lastNote = { text: "", at: -Infinity };
   private readonly started: number;
   private readonly deadline: number;
   private readonly counts = { problems: 0, sent: 0, accepted: 0, leading: 0 };
@@ -335,7 +359,11 @@ class Volunteer {
     const o = this.o;
     this.log(
       `polypack-volunteer ${VERSION} (Node ${process.version}, ${process.platform} ${process.arch}): ` +
-        `${o.cores} search thread(s) on ${os.availableParallelism()} core(s), ${o.priority} priority`,
+        `${o.cores} search thread(s) on ${os.availableParallelism()} core(s), ` +
+        (o.parallelProblems > 1
+          ? `${o.parallelProblems} problems at once (${andList(laneShares(o.cores, o.parallelProblems))} threads), `
+          : "") +
+        `${o.priority} priority`,
     );
     this.log(
       `Server ${o.base}; ` +
@@ -393,11 +421,15 @@ class Volunteer {
     this.stopReason = why;
     this.log(
       `${why}: stopping. ` +
-        (this.current ? "The search is aborted; its best is submitted if it beats the leader. " : "") +
+        (this.currents.size > 1
+          ? "The searches are aborted; each one's best is submitted if it beats the leader. "
+          : this.currents.size === 1
+            ? "The search is aborted; its best is submitted if it beats the leader. "
+            : "") +
         `Exiting within ${STOP_GRACE_MS / 1000} s; a second Ctrl-C exits at once.`,
     );
     this.stop.abort();
-    if (this.current) this.current.control.aborted = true;
+    for (const c of this.currents) c.control.aborted = true;
     this.pool?.stop();
     this.hardTimer = setTimeout(() => this.hard.abort(), STOP_GRACE_MS);
     this.hardTimer.unref();
@@ -438,7 +470,7 @@ class Volunteer {
     this.paused = paused;
     if (paused) this.clock.pause();
     else this.clock.resume();
-    if (this.current) this.current.control.paused = paused;
+    for (const c of this.currents) c.control.paused = paused;
     this.pool?.setPaused(paused);
   }
 
@@ -467,23 +499,50 @@ class Volunteer {
 
   // ---------- the loop ----------
 
+  /**
+   * Searches --parallel-problems problems at once: one slot each, on its share of the threads
+   * (laneShares), each taking its next problem when its search ends. Exit code 1 when a slot ends
+   * with 1.
+   */
   private async loop(): Promise<number> {
+    const shares = laneShares(this.o.cores, this.o.parallelProblems);
+    const codes = await Promise.all(shares.map((lanes) => this.slot(lanes)));
+    return codes.some((code) => code !== 0) ? 1 : 0;
+  }
+
+  /**
+   * A note that every slot would print, such as an unreachable work list: with several slots it is
+   * printed once a minute at most. `same` is what makes two notes the same (default the text).
+   */
+  private note(text: string, same = text): void {
+    const now = this.now();
+    if (this.o.parallelProblems > 1 && same === this.lastNote.text && now - this.lastNote.at < 60_000) return;
+    this.lastNote = { text: same, at: now };
+    this.log(text);
+  }
+
+  /** One problem after another on `lanes` threads, until the client stops. */
+  private async slot(lanes: number): Promise<number> {
     let failures = 0;
     while (!this.stopped) {
       // nothing new starts on battery power
       while (this.paused && !this.stopped) await this.wait(1000);
       if (this.stopped || this.checkDeadline(true)) break;
-      const pick = await this.pickNext();
-      if (this.stopped) break;
+      const pick = await this.pickFree();
+      if (this.stopped) {
+        if (pick.kind === "polygon") this.inFlight.delete(problemKey(pick.target));
+        if (pick.kind === "space") this.inFlight.delete(pick.target.id);
+        break;
+      }
       if (pick.kind === "missing") {
-        this.log(pick.message);
+        this.note(pick.message);
         return 1;
       }
       if (pick.kind === "unreachable") {
         if (this.o.once) return 1;
         failures++;
         const ms = Math.min(60_000, 2000 * 2 ** failures);
-        this.log(`Could not read the work list; trying again in ${ms / 1000} s`);
+        this.note(`Could not read the work list; trying again in ${ms / 1000} s`);
         await this.wait(ms);
         continue;
       }
@@ -495,7 +554,7 @@ class Volunteer {
           .map((c) => c!.at + TARGETS_TTL_MS - now);
         const wait = Math.max(60_000, ...expiries);
         const again = this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`;
-        this.log(`${pick.message}${again}`);
+        this.note(`${pick.message}${again}`, pick.message);
         if (this.o.once) return 0;
         await this.wait(wait);
         continue;
@@ -504,18 +563,35 @@ class Volunteer {
       const label = pick.kind === "polygon" ? problemLabel(pick.target) : pick.target.id;
       let searched: boolean;
       try {
-        searched = pick.kind === "polygon" ? await this.searchOne(pick.target) : await this.searchSpace(pick.target);
+        searched =
+          pick.kind === "polygon"
+            ? await this.searchOne(pick.target, lanes)
+            : await this.searchSpace(pick.target, lanes);
       } catch (error) {
         // a bug or an answer nobody foresaw: skip the problem, keep the client
-        this.current = null;
+        for (const c of this.currents) if (c.key === key) this.currents.delete(c);
         this.log(`Skipping ${label} for 10 minutes after an unexpected error: ${errorText(error)}`);
         this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
         searched = false;
+      } finally {
+        this.inFlight.delete(key);
       }
       if (this.fatal) return 1;
       if (this.o.once) return searched || this.stopped ? 0 : 1;
     }
     return 0;
+  }
+
+  /** The next problem (pickNext), drawn by one slot at a time; a problem being searched is not drawn again. */
+  private pickFree(): Promise<Pick> {
+    const pick = this.picking.then(async () => {
+      const next = await this.pickNext();
+      if (next.kind === "polygon") this.inFlight.add(problemKey(next.target));
+      if (next.kind === "space") this.inFlight.add(next.target.id);
+      return next;
+    });
+    this.picking = pick.catch(() => undefined);
+    return pick;
   }
 
   /**
@@ -554,7 +630,7 @@ class Volunteer {
         const target = pickTarget(list, {
           filters: { N: this.o.N, M: this.o.M, maxP: this.o.maxP },
           recent: this.recent,
-          skip: new Set(this.skipUntil.keys()),
+          skip: new Set([...this.skipUntil.keys(), ...this.inFlight]),
           now,
           random: this.random,
         });
@@ -584,7 +660,7 @@ class Volunteer {
         const target = pickSpaceTarget(list, {
           filters: { spaces: this.o.spaces!, maxP: this.o.maxP },
           recent: this.recent,
-          skip: new Set(this.skipUntil.keys()),
+          skip: new Set([...this.skipUntil.keys(), ...this.inFlight]),
           now,
           random: this.random,
         });
@@ -735,8 +811,13 @@ class Volunteer {
 
   // ---------- one problem ----------
 
+  /** The start of a line about one problem's search: indented, and with the problem's label when several run at once. */
+  private sub(label: string): string {
+    return this.o.parallelProblems > 1 ? `  ${label}: ` : "  ";
+  }
+
   /** Searches one problem and submits its best if it qualifies. False when it could not be searched. */
-  private async searchOne(t: Target): Promise<boolean> {
+  private async searchOne(t: Target, lanes: number): Promise<boolean> {
     const p: Problem = { N: t.N, M: t.M, P: t.P };
     const key = problemKey(p);
     const label = problemLabel(p);
@@ -777,6 +858,8 @@ class Volunteer {
     const control: Control = { aborted: this.stopped, paused: this.paused };
     const cur: Current = {
       label,
+      key,
+      lanes,
       control,
       startedAt: this.clock.now(),
       maxSeconds,
@@ -786,7 +869,7 @@ class Volunteer {
       against: "leader",
       crashed: 0,
     };
-    this.current = cur;
+    this.currents.add(cur);
     /** The best strict packing reported so far. */
     let seen: Candidate | null = null;
     this.log(
@@ -794,7 +877,7 @@ class Volunteer {
         (leader ? `${formatScore(leader.score)} by "${cleanText(leader.name, 60)}"` : "none") +
         `, published ${published === null ? "none" : formatScore(published)}, area bound ${formatScore(info.area_bound)}; ` +
         `starting from ${known ? (known.source === "site" ? "the leader's packing" : "the published packing") : "nothing"}; ` +
-        `up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
+        `up to ${formatDuration(maxSeconds)} on ${lanes} thread(s)`,
     );
     const input: SearchInput = {
       problem: p,
@@ -803,9 +886,10 @@ class Volunteer {
       published,
       areaBound: info.area_bound,
       maxSeconds,
-      lanes: this.pool!.size,
+      lanes,
       seed: engineSeed,
       memory: this.memory,
+      memoryNow: () => this.memory,
       now: () => this.clock.now(),
       onResult: (result, best) => {
         cur.jobs++;
@@ -814,7 +898,7 @@ class Volunteer {
           cur.best = best;
           seen = best;
           this.log(
-            `  best so far ${formatScore(best.score)} (${best.job.method}, ${best.job.kind}, seed ${best.job.seed})` +
+            `${this.sub(label)}best so far ${formatScore(best.score)} (${best.job.method}, ${best.job.kind}, seed ${best.job.seed})` +
               (cur.leader === null ? "" : `, ${relativePercent(best.score, cur.leader)} against the leader`),
           );
         }
@@ -838,7 +922,7 @@ class Volunteer {
       this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
     }
     const activeSeconds = this.clock.now() - cur.startedAt;
-    this.current = null;
+    this.currents.delete(cur);
     if (outcome) {
       this.memory = outcome.memory;
       this.saveMemory();
@@ -1048,7 +1132,7 @@ class Volunteer {
    * Searches one space problem and submits its best if it qualifies, as searchOne does for the
    * polygon problems. False when it could not be searched.
    */
-  private async searchSpace(t: SpaceTarget): Promise<boolean> {
+  private async searchSpace(t: SpaceTarget, lanes: number): Promise<boolean> {
     const p = parseSpaceId(t.id);
     if (!p) throw new Error(`not a space problem id: ${t.id}`);
     const key = p.id;
@@ -1085,6 +1169,8 @@ class Volunteer {
     const control: Control = { aborted: this.stopped, paused: this.paused };
     const cur: Current = {
       label,
+      key,
+      lanes,
       control,
       startedAt: this.clock.now(),
       maxSeconds,
@@ -1094,7 +1180,7 @@ class Volunteer {
       against: "best",
       crashed: 0,
     };
-    this.current = cur;
+    this.currents.add(cur);
     // nofold problems of the Platonic solids are planar problems of one face (the polygon engine); those
     // of the other solids run the surface search in its nofold mode, like any other space job (Auto only)
     const nofold = nofoldOnPolygonEngine(p);
@@ -1113,19 +1199,21 @@ class Volunteer {
         `, lower bound ${info.bound === null ? "none" : formatScore(info.bound)}; ` +
         `starting from ${known ? (known.source === "site" ? "the site's leader" : "the research record") : "nothing"}` +
         (nofold ? ", as a planar packing of one face" : "") +
-        `; method ${methodText}; up to ${formatDuration(maxSeconds)} on ${this.pool!.size} thread(s)`,
+        `; method ${methodText}; up to ${formatDuration(maxSeconds)} on ${lanes} thread(s)`,
     );
     if (nofold && asked !== "auto")
-      this.log(`  --space-method ${asked} does not apply here: nofold problems run the polygon engine's own methods`);
+      this.log(
+        `${this.sub(label)}--space-method ${asked} does not apply here: nofold problems run the polygon engine's own methods`,
+      );
     else if (chosen.fallback)
       this.log(
-        `  ${p.id} does not offer ${asked} (${checkSpaceMethod(p, asked, this.o.spaceParams ?? undefined) ?? "not offered"}), so it runs auto`,
+        `${this.sub(label)}${p.id} does not offer ${asked} (${checkSpaceMethod(p, asked, this.o.spaceParams ?? undefined) ?? "not offered"}), so it runs auto`,
       );
     const onBest = (score: number, what: string) => {
       if (cur.best && !(score < cur.best.score)) return;
       cur.best = { score };
       this.log(
-        `  best so far ${formatScore(score)} (${what})` +
+        `${this.sub(label)}best so far ${formatScore(score)} (${what})` +
           (cur.leader === null ? "" : `, ${relativePercent(score, cur.leader)} against the best`),
       );
     };
@@ -1145,7 +1233,7 @@ class Volunteer {
                 certified: rule.certified,
                 ...(rule.noRecord ? { noRecord: true } : {}),
                 maxSeconds,
-                lanes: this.pool!.size,
+                lanes,
                 seed: engineSeed,
                 now: () => this.clock.now(),
                 method: this.o.spaceMethod,
@@ -1156,7 +1244,7 @@ class Volunteer {
                   // the engine hands a generic method that reached its kernel's bound over to auto
                   if (result.termination === "bound" && result.valid && (result.job.method ?? "auto") !== "auto")
                     this.log(
-                      `  ${result.job.method} reached its kernel's bound at ${formatScore(result.score!)}; auto goes on`,
+                      `${this.sub(label)}${result.job.method} reached its kernel's bound at ${formatScore(result.score!)}; auto goes on`,
                     );
                   if (best)
                     onBest(
@@ -1181,7 +1269,7 @@ class Volunteer {
       this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
     }
     const activeSeconds = this.clock.now() - cur.startedAt;
-    this.current = null;
+    this.currents.delete(cur);
 
     // The best this machine has found for the problem stays in best/spaces/. Both it and the
     // search's best are checked by the server's rule first, with the score the check computes: a
@@ -1328,9 +1416,10 @@ class Volunteer {
       published: null,
       areaBound: face.areaBound,
       maxSeconds,
-      lanes: this.pool!.size,
+      lanes: cur.lanes,
       seed,
       memory: this.memory,
+      memoryNow: () => this.memory,
       now: () => this.clock.now(),
       onResult: (result, best) => {
         cur.jobs++;
@@ -1457,25 +1546,39 @@ class Volunteer {
     };
   }
 
+  /**
+   * The status line, once a minute: the problem being searched, the threads and the submissions.
+   * With several problems at once, a line for each problem and then one for the threads.
+   */
   private status(): void {
-    const c = this.current;
     const s = this.pool?.stats();
     const lanes = s ? `threads ${s.busy} busy, ${s.paused} paused, ${s.idle} idle` : "";
     const subs = `${this.counts.accepted} submission(s) accepted`;
     const paused = this.paused ? "; paused on battery power" : "";
+    const describe = (c: Current) => {
+      const elapsed = this.clock.now() - c.startedAt;
+      const best = c.best ? formatScore(c.best.score) : "none yet";
+      const vs =
+        c.leader === null
+          ? `no ${c.against}`
+          : `${c.against} ${formatScore(c.leader)}` + (c.best ? ` (${relativePercent(c.best.score, c.leader)})` : "");
+      return (
+        `${c.label}, ${formatDuration(elapsed)} of ${formatDuration(c.maxSeconds)}; ` +
+        `best ${best} vs ${vs}; ${c.jobs} job(s) run`
+      );
+    };
+    if (this.o.parallelProblems > 1) {
+      for (const c of this.currents) this.log(`Status: ${describe(c)} on ${c.lanes} thread(s)`);
+      this.log(
+        `Status: ${this.currents.size} of ${this.o.parallelProblems} problems being searched; ${lanes}; ${subs}${paused}`,
+      );
+      return;
+    }
+    const [c] = this.currents;
     if (!c) {
       this.log(`Status: between problems; ${subs}${paused}`);
       return;
     }
-    const elapsed = this.clock.now() - c.startedAt;
-    const best = c.best ? formatScore(c.best.score) : "none yet";
-    const vs =
-      c.leader === null
-        ? `no ${c.against}`
-        : `${c.against} ${formatScore(c.leader)}` + (c.best ? ` (${relativePercent(c.best.score, c.leader)})` : "");
-    this.log(
-      `Status: ${c.label}, ${formatDuration(elapsed)} of ${formatDuration(c.maxSeconds)}; ` +
-        `best ${best} vs ${vs}; ${c.jobs} job(s) run; ${lanes}; ${subs}${paused}`,
-    );
+    this.log(`Status: ${describe(c)}; ${lanes}; ${subs}${paused}`);
   }
 }

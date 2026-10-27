@@ -100,7 +100,7 @@ describe("every path that sends a board to POST /api/submit", () => {
     expect(send.indexOf("orient(p);")).toBeLessThan(send.indexOf("structuredClone(p.board!)"));
     expect(send.indexOf("orient(p);")).toBeLessThan(send.indexOf("const best = p.best!"));
     expect(between(source("apps/web/src/tighter/main.ts"), "function orient(p: ProblemState)", "\n}\n")).toContain(
-      "orientBoard(p.board, p.best)",
+      "orientBoard(current, p.best)",
     );
 
     const app = server();
