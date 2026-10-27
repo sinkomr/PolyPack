@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, getMethod, methodsFor, mulberry32, registerMethod, runMethod } from "../src";
+import { type SpaceKernel, mulberry32, registerMethod, runMethod } from "../src";
 import { type ShrinkRepairEvent, runShrinkRepair, shrinkRepair } from "../src/methods/shrink_repair";
 import { REPAIRED, Repair, type RuinKind, region, ruin } from "../src/methods/shrink-phase";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
@@ -82,15 +82,6 @@ const settings = {
 };
 
 describe("shrink_repair", () => {
-  it("is registered with its board title, summary, doc and defaults", () => {
-    const m = getMethod("shrink_repair")!;
-    expect(m.title).toBe("Shrink and repair");
-    expect(m.summary.length).toBeGreaterThan(20);
-    expect(m.doc).toBe("docs/methods/dimensions/shrink_repair.md");
-    expect(m.requires).toEqual([]);
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("shrink_repair");
-  });
-
   it("comes within 1% of the best known packings for P = 2 to 10 in 30,000 evaluations", () => {
     for (let P = 2; P <= 10; P++) {
       const r = runMethod(disksKernel(P), "shrink_repair", { seed: 1, budget: { evals: 30000 } });

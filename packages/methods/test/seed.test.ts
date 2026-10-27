@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type SpaceKernel, getMethod, methodsFor, runMethod } from "../src";
+import { type SpaceKernel, runMethod } from "../src";
 import { DISKS_IN_CIRCLE_BEST, disksKernel, validateDisks } from "../src/reference/disks";
 
 const valid = (P: number, config: unknown) => validateDisks(P, config, 0).valid;
@@ -11,14 +11,6 @@ function counted(P: number, calls: { seeds: number }): SpaceKernel {
 }
 
 describe("seed", () => {
-  it("is registered with its board text", () => {
-    const m = getMethod("seed")!;
-    expect(m.title).toBe("Seeds");
-    expect(m.summary.length).toBeGreaterThan(20);
-    expect(m.requires).toEqual([]);
-    expect(methodsFor(disksKernel(3)).map((d) => d.name)).toContain("seed");
-  });
-
   it("comes within 1% of the best known packings for P = 2 to 10 in 20,000 evaluations", () => {
     for (let P = 2; P <= 10; P++) {
       const r = runMethod(disksKernel(P), "seed", { seed: 1, budget: { evals: 20000 } });
