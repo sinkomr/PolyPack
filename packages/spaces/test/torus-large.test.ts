@@ -1,6 +1,7 @@
 /** Torus problems up to 500 pieces: the domain, the lattice start, the checks and the searches at P = 500. */
 import { describe, expect, it } from "vitest";
-import { SPACE_DOMAINS, SPACE_MAX_P, domainId, parseSpaceConfig, parseSpaceId, validateSpaceSubmissionAsync } from "../src";
+import { imageCandidates, imageRanges, latticeImages, maxImageCandidates } from "@polypack/torus";
+import { SPACE_DOMAINS, SPACE_MAX_P, domainId, storedSpaceConfigAsync, parseSpaceConfig, parseSpaceId, validateSpaceSubmissionAsync } from "../src";
 import {
   TORUS_LATTICE_START_FROM_P,
   hasLatticeStart,
@@ -88,4 +89,42 @@ describe("torus up to 500 pieces", () => {
       await tick();
     }
   }, 60000);
+
+  it("counts the translates the enumeration loops over: never above the bound, and the bound is reached", () => {
+    const unit = { b1: [1, 0], b2: [0, 1] } as const;
+    // 2 X = 5 and the displacement at the worst fraction: ceil(u + X) - floor(u - X) = 6, so 9 x 9 candidates... per axis 6 + 3
+    const reach = 2.5;
+    const at = -(2.5 + 1e-9);
+    expect(imageCandidates(unit, [at, at], reach)).toBe(maxImageCandidates(unit, reach));
+    expect(maxImageCandidates(unit, reach)).toBe(9 * 9);
+    // the count is the loop's: the ranges it reports are the ones latticeImages visits (no translate lies outside)
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (let k = 0; k < 400; k++) {
+      const l = { b1: [1 + 3 * rnd(), 2 * rnd() - 1], b2: [4 * rnd() - 2, 1 + 5 * rnd()] } as const;
+      const r = 0.5 + 6 * rnd();
+      const d: [number, number] = [20 * rnd() - 10, 20 * rnd() - 10];
+      const { mLo, mHi, nLo, nHi } = imageRanges(l, d, r);
+      expect(imageCandidates(l, d, r)).toBe((mHi - mLo + 1) * (nHi - nLo + 1));
+      expect(imageCandidates(l, d, r)).toBeLessThanOrEqual(maxImageCandidates(l, r));
+      for (const im of latticeImages(l, d, r)) {
+        expect(im.m >= mLo && im.m <= mHi && im.n >= nLo && im.n <= nHi).toBe(true);
+      }
+    }
+  });
+
+  it("stores a reduced basis from the verdict's score without checking the sent configuration again", async () => {
+    const id = "torus/free/0/2";
+    const sent = { lattice: { b1: [4, 0], b2: [160, 4] }, poses: [[0, 0, 0], [2, 2, 0]] };
+    const first = await validateSpaceSubmissionAsync("torus", id, sent, { noRecord: true });
+    expect(first.valid, first.reasons.join()).toBe(true);
+    const right = await storedSpaceConfigAsync("torus", id, first.config!, { noRecord: true }, first.score!);
+    expect((right.config.lattice as { b2: number[] }).b2[0]).not.toBe(160);
+    // a score that differs from the reduced basis's is believed, not recomputed: the sent form is kept
+    const wrong = await storedSpaceConfigAsync("torus", id, first.config!, { noRecord: true }, first.score! * 2);
+    expect(wrong.config).toEqual(first.config);
+    // and the check of the sent form is not in the work counted
+    const again = await storedSpaceConfigAsync("torus", id, first.config!, { noRecord: true });
+    expect(again.slices).toBeGreaterThan(right.slices);
+  });
 });

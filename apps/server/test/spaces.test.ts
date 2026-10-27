@@ -31,7 +31,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { MAX_BODY_BYTES } from "../src/limits";
 import { getProblem, latticeStart } from "@polypack/polyhedra";
-import { imageWindow, torusLatticeStart } from "@polypack/torus";
+import { maxImageCandidates, torusLatticeStart } from "@polypack/torus";
 import type { LoadStats } from "../src/load";
 import {
   SPACES_CHECKED_ONLY_IF_KEPT,
@@ -872,14 +872,9 @@ describe("POST /api/spaces/submit: torus (2D on 3D) up to 500 pieces", () => {
     const id = "torus/free/0/500";
     const base = configOf("free", 0, 500);
     const { b1, b2 } = base.lattice as { b1: number[]; b2: number[] };
-    // the unreduced basis (b1, b2 + m b1) with the most translates per pair that the server allows
-    const translates = (m: number) => {
-      const { X1, X2 } = imageWindow(
-        { b1: [b1[0], b1[1]], b2: [b2[0] + m * b1[0], b2[1] + m * b1[1]] },
-        2 + 2e-7,
-      );
-      return (2 * X1 + 3) * (2 * X2 + 3);
-    };
+    // the unreduced basis (b1, b2 + m b1) with the most candidates per pair that the server allows
+    const translates = (m: number) =>
+      maxImageCandidates({ b1: [b1[0], b1[1]], b2: [b2[0] + m * b1[0], b2[1] + m * b1[1]] }, 2 + 2e-7);
     let lo = 0;
     let hi = 1e5;
     while (hi - lo > 1) {

@@ -919,3 +919,21 @@ describe("rounds of torus problems above P = 100", () => {
     }
   });
 });
+
+describe("generic rounds of torus problems above P = 100", () => {
+  it("fit about 3 s by the measured rates, and are the usual K / P up to P = 100", async () => {
+    const { genericRound, torusGenericRound } = await import("../src/space/model");
+    expect(genericRound(parseSearchProblem("torus/hex/5/100")!)).toBe(9000);
+    for (const N of [0, 6, 100]) {
+      let last = Infinity;
+      for (const P of [101, 250, 500]) {
+        const r = torusGenericRound(P, N);
+        expect(r).toBeLessThanOrEqual(last);
+        last = r;
+        expect(genericRound(parseSearchProblem(`torus/sq/${N}/${P}`)!)).toBeLessThanOrEqual(Math.max(r, 5000));
+      }
+    }
+    expect(torusGenericRound(500, 0)).toBe(1000);
+    expect(torusGenericRound(500, 100)).toBe(400);
+  });
+});

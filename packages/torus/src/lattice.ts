@@ -117,6 +117,36 @@ export interface Image {
 /** Hard cap on enumerated candidates; a nearly degenerate basis throws instead of hanging. */
 export const MAX_IMAGE_CANDIDATES = 1_000_000;
 
+/** The integer ranges of m and n that latticeImages loops over for a displacement d (one extra on each side). */
+export function imageRanges(l: Lattice, d: Vec2, reach: number) {
+  const { X1, X2 } = imageWindow(l, reach);
+  const [a0, b0] = latticeCoordinates(l, d);
+  if (!Number.isFinite(X1) || !Number.isFinite(X2) || !Number.isFinite(a0) || !Number.isFinite(b0)) {
+    throw new Error("degenerate lattice or non-finite displacement");
+  }
+  return {
+    mLo: Math.floor(-a0 - X1) - 1,
+    mHi: Math.ceil(-a0 + X1) + 1,
+    nLo: Math.floor(-b0 - X2) - 1,
+    nHi: Math.ceil(-b0 + X2) + 1,
+  };
+}
+
+/** Candidates (m, n) that latticeImages loops over for a displacement d. */
+export function imageCandidates(l: Lattice, d: Vec2, reach: number): number {
+  const { mLo, mHi, nLo, nHi } = imageRanges(l, d, reach);
+  return (mHi - mLo + 1) * (nHi - nLo + 1);
+}
+
+/**
+ * The most candidates latticeImages loops over for any displacement: per axis ceil(x + X) - floor(x - X) + 3 is
+ * at most ceil(2 X) + 4, so (ceil(2 X1) + 4)(ceil(2 X2) + 4). This is what the server's limit counts.
+ */
+export function maxImageCandidates(l: Lattice, reach: number): number {
+  const { X1, X2 } = imageWindow(l, reach);
+  return (Math.ceil(2 * X1) + 4) * (Math.ceil(2 * X2) + 4);
+}
+
 /**
  * All lattice translates v = d + m b1 + n b2 with |v| < reach, by the Cramer window above
  * (one extra integer on each side of the window guards against rounding). With
@@ -124,15 +154,7 @@ export const MAX_IMAGE_CANDIDATES = 1_000_000;
  * own images, lambda and -lambda describe the same pair.
  */
 export function latticeImages(l: Lattice, d: Vec2, reach: number, halfPlane = false): Image[] {
-  const { X1, X2 } = imageWindow(l, reach);
-  const [a0, b0] = latticeCoordinates(l, d);
-  if (!Number.isFinite(X1) || !Number.isFinite(X2) || !Number.isFinite(a0) || !Number.isFinite(b0)) {
-    throw new Error("degenerate lattice or non-finite displacement");
-  }
-  const mLo = Math.floor(-a0 - X1) - 1;
-  const mHi = Math.ceil(-a0 + X1) + 1;
-  const nLo = Math.floor(-b0 - X2) - 1;
-  const nHi = Math.ceil(-b0 + X2) + 1;
+  const { mLo, mHi, nLo, nHi } = imageRanges(l, d, reach);
   if ((mHi - mLo + 1) * (nHi - nLo + 1) > MAX_IMAGE_CANDIDATES) {
     throw new Error("lattice image enumeration too large (nearly degenerate basis)");
   }

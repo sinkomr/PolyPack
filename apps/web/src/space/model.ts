@@ -331,9 +331,22 @@ export function genericRound(p: SearchProblem): number {
   let round = Math.min(GENERIC_ROUND_MAX, Math.max(GENERIC_ROUND_MIN, 100 * Math.round(K / p.P / 100)));
   if (p.space === "polyhedra" && p.P > 100)
     round = Math.max(100, 100 * Math.floor(8000 / polyhedraRound(p.P, p.code).stepMs / 100));
+  if (p.space === "torus" && p.P > 100) round = Math.min(round, torusGenericRound(p.P, p.N));
   const k = spaceKernel(p);
   const offers = k ? 2 * (k.finishCost + (k.validateCost ?? k.finishCost)) : 0;
   return Math.max(round, 100 * Math.ceil(offers / 100));
+}
+
+/**
+ * A generic method's round on a torus problem above P = 100. [CALC] In Node on an Apple Silicon laptop (2026-10-27),
+ * the generic methods took about 1.9, 2.4 and 4.9 ms per evaluation at P = 500 for disks, hexagons and 100-gons
+ * (the cost grows with P): evalMs = P (1.9 + 0.5 min(N, 6) / 6 + 2.5 max(0, N - 6) / 94) / 500. A round is sized to
+ * about 3 s with room for a machine 1.5 times slower, at least 100 evaluations: 1,000 for disks and 400 for 100-gons
+ * at P = 500, where K / P alone gave 1,800.
+ */
+export function torusGenericRound(P: number, N: number): number {
+  const evalMs = (P * (1.9 + (0.5 * Math.min(N, 6)) / 6 + (2.5 * Math.max(0, N - 6)) / 94)) / 500;
+  return Math.max(100, 100 * Math.floor(3000 / (1.5 * evalMs) / 100));
 }
 
 /** The panel's starting budget for a generic method: ten rounds, and a time limit of 30 s. */

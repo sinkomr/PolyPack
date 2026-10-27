@@ -46,7 +46,7 @@ import {
   TORUS_MAX_P,
   TorusFamily,
   gaussReduce,
-  imageWindow,
+  maxImageCandidates,
   torusScore,
   validationSteps as torusSteps,
 } from "@polypack/torus";
@@ -446,11 +446,11 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
         ];
       // the validator's enumeration window, per pair of pieces (see packages/torus/src/lattice.ts)
       const reachR = 2 * boundingRadius(N) + 2 * 1e-7;
-      const { X1, X2 } = imageWindow(lattice, reachR);
-      const translates = (2 * X1 + 3) * (2 * X2 + 3);
+      // the most candidates (m, n) that the loop of latticeImages visits for one pair, exactly its bound
+      const translates = maxImageCandidates(lattice, reachR);
       if (!(translates <= TORUS_MAX_TRANSLATES))
         return [
-          `the lattice basis is too skewed: about ${Math.ceil(translates)} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
+          `the lattice basis is too skewed: up to ${translates} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
         ];
       const v = yield* torusSteps(
         { family, N, lattice, poses: c.poses.map(([x, y, theta]) => ({ x, y, theta })) },
@@ -727,10 +727,12 @@ export function storedSpaceConfig(
   id: string,
   config: SpaceConfig,
   opts: SpaceValidateOptions = {},
+  sentScore?: number,
 ): SpaceConfig {
   const candidate = reducedSpaceConfig(space, id, config);
   if (candidate === config) return config;
-  const before = validateSpaceSubmission(space, id, config, opts);
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before = { score: sentScore ?? validateSpaceSubmission(space, id, config, opts).score };
   const after = validateSpaceSubmission(space, id, candidate, opts);
   if (
     !after.valid ||
@@ -749,12 +751,17 @@ export async function storedSpaceConfigAsync(
   id: string,
   config: SpaceConfig,
   opts: SpaceValidateOptions & { sliceMs?: number } = {},
+  sentScore?: number,
 ): Promise<{ config: SpaceConfig; workMs: number; slices: number; longestSliceMs: number }> {
   const start = performance.now();
   const candidate = reducedSpaceConfig(space, id, config);
   const first = performance.now() - start;
   if (candidate === config) return { config, workMs: first, slices: 1, longestSliceMs: first };
-  const before = await validateSpaceSubmissionAsync(space, id, config, opts);
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before =
+    sentScore !== undefined
+      ? { score: sentScore, workMs: 0, slices: 0, longestSliceMs: 0 }
+      : await validateSpaceSubmissionAsync(space, id, config, opts);
   const after = await validateSpaceSubmissionAsync(space, id, candidate, opts);
   const keep =
     after.valid &&
