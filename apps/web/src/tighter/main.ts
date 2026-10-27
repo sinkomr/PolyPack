@@ -1070,7 +1070,8 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
   if (!a.ok) {
     if (a.message === NOT_ISOLATED) {
       // latched: no more space problems are dealt this session, and the player is told once
-      if (!spaceBlocked) say("Space problems need a browser page that keeps its memory to itself, so they are left out here.");
+      if (!spaceBlocked)
+        say("Space problems need a browser page that keeps its memory to itself, so they are left out here.");
       spaceBlocked = true;
     } else say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
@@ -1573,9 +1574,7 @@ async function submit(p: ProblemState): Promise<void> {
   if (!info.accepts) {
     sendingWorks();
     p.closed = true;
-    event(
-      `The server takes no more entries for ${problemTitle(p)}. It leaves the queue.`,
-    );
+    event(`The server takes no more entries for ${problemTitle(p)}. It leaves the queue.`);
     leave(state, p.key, now());
     return;
   }
