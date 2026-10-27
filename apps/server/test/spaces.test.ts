@@ -6,6 +6,7 @@ import { gunzipSync, gzipSync } from "node:zlib";
 import { SCORE_TIE } from "@polypack/geometry";
 import {
   SPACE_BOUND_SLACK,
+  TORUS_MAX_TRANSLATES,
   SPACE_NAMES,
   SURFACE_CATALAN,
   SURFACE_ARCHIMEDEAN,
@@ -30,6 +31,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
 import { MAX_BODY_BYTES } from "../src/limits";
 import { getProblem, latticeStart } from "@polypack/polyhedra";
+import { maxImageCandidates, torusLatticeStart } from "@polypack/torus";
 import type { LoadStats } from "../src/load";
 import {
   SPACES_CHECKED_ONLY_IF_KEPT,
@@ -195,7 +197,7 @@ describe("GET /api/spaces", () => {
       ["surface", 970200],
       ["curved", 990000],
       ["sphere", 9900],
-      ["torus", 29700],
+      ["torus", 148500],
       ["boundary", 32],
       ["polyhedra", 4409164],
       ["balls", 18711],
@@ -828,6 +830,83 @@ describe("POST /api/spaces/submit: boundary records are beaten by the tie tolera
     const kept = await submit(entry);
     expect(kept.body).toMatchObject({ valid: true, leader: true, beats_certified: true });
     expect(kept.body.id).not.toBeNull();
+  });
+});
+
+describe("POST /api/spaces/submit: torus (2D on 3D) up to 500 pieces", () => {
+  const fullPrecision = (config: { lattice: unknown; poses: number[][] }) =>
+    `{"lattice":${JSON.stringify(config.lattice)},"poses":[${config.poses.map((q) => `[${q.map((v) => v.toExponential(16)).join(",")}]`).join(",")}]}`;
+  const configOf = (family: "sq" | "hex" | "free", N: number, P: number) => {
+    const k = torusLatticeStart({ family, N, P });
+    const lattice =
+      family === "free"
+        ? { b1: [...k.lattice.b1], b2: [...k.lattice.b2] }
+        : { L: Math.hypot(k.lattice.b1[0], k.lattice.b1[1]) };
+    return { lattice, poses: k.poses.map((q) => [q.x, q.y, q.theta]) };
+  };
+
+  it.each([
+    ["sq", 0],
+    ["hex", 6],
+    ["free", 100],
+    ["free", 3],
+  ] as const)("accepts the lattice start of torus/%s/%i/500 without a record, in short slices", async (family, N) => {
+    const id = `torus/${family}/${N}/500`;
+    const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
+    makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
+    const p = (await get(`/api/spaces/torus/problems/${id}`)).body as SpaceProblemResponse;
+    expect(p).toMatchObject({ status: "no_record", certified: null, certified_config: null, best_score: null });
+    const body = `{"space":"torus","id":"${id}","name":"ann","config":${fullPrecision(configOf(family, N, 500))}}`;
+    expect(Buffer.byteLength(body)).toBeGreaterThan(30000);
+    expect(Buffer.byteLength(body)).toBeLessThan(MAX_BODY_BYTES);
+    const r = await app.request("/api/spaces/submit", { method: "POST", headers: { "content-type": "application/json" }, body });
+    expect(r.status).toBe(200);
+    expect(await r.json()).toMatchObject({ valid: true, leader: true, beats_certified: false });
+    expect(checks).toHaveLength(1);
+    expect(checks[0].slices).toBeGreaterThan(1);
+    expect(checks[0].longestSliceMs).toBeLessThan(250);
+    console.log(`[CALC] server ${id}: ${checks[0].workMs.toFixed(1)} ms work, max slice ${checks[0].longestSliceMs.toFixed(1)} ms, body ${Buffer.byteLength(body)} bytes`);
+  });
+
+  it("checks a skewed basis at the translate limit of 500 disks in short slices", async () => {
+    const id = "torus/free/0/500";
+    const base = configOf("free", 0, 500);
+    const { b1, b2 } = base.lattice as { b1: number[]; b2: number[] };
+    // the unreduced basis (b1, b2 + m b1) with the most candidates per pair that the server allows
+    const translates = (m: number) =>
+      maxImageCandidates({ b1: [b1[0], b1[1]], b2: [b2[0] + m * b1[0], b2[1] + m * b1[1]] }, 2 + 2e-7);
+    let lo = 0;
+    let hi = 1e5;
+    while (hi - lo > 1) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (translates(mid) <= TORUS_MAX_TRANSLATES) lo = mid;
+      else hi = mid;
+    }
+    const config = { lattice: { b1, b2: [b2[0] + lo * b1[0], b2[1] + lo * b1[1]] }, poses: base.poses };
+    const checks: { workMs: number; slices: number; longestSliceMs: number }[] = [];
+    makeApp({}, index, undefined, { onCheck: (c) => checks.push(c) });
+    const r = await submit({ space: "torus", id, name: "ann", config });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ valid: true, leader: true });
+    expect(checks[0].slices).toBeGreaterThan(5);
+    expect(checks[0].longestSliceMs).toBeLessThan(250);
+    console.log(`[CALC] server ${id} at ${Math.ceil(translates(lo))} translates per pair: ${checks[0].workMs.toFixed(0)} ms work (strict pass included), max slice ${checks[0].longestSliceMs.toFixed(1)} ms`);
+    // one translate more is refused before any pair is checked
+    const more = { lattice: { b1, b2: [b2[0] + (lo + 1) * b1[0], b2[1] + (lo + 1) * b1[1]] }, poses: base.poses };
+    const refused = await submit({ space: "torus", id, name: "bob", config: more });
+    expect(refused.status).toBe(422);
+    expect(refused.body.reasons[0]).toMatch(/too skewed/);
+  }, 30000);
+
+  it("refuses P = 501 and an overlap at P = 500", async () => {
+    makeApp({}, index);
+    const big = await submit({ space: "torus", id: "torus/sq/0/501", name: "ann", config: configOf("sq", 0, 500) });
+    expect(big.status).toBe(400);
+    const squeezed = configOf("sq", 0, 500);
+    squeezed.poses[1] = [...squeezed.poses[0]];
+    const over = await submit({ space: "torus", id: "torus/sq/0/500", name: "ann", config: squeezed });
+    expect(over.status).toBe(422);
+    expect(over.body.reasons[0]).toMatch(/overlap/);
   });
 });
 

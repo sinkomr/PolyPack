@@ -44,22 +44,23 @@ describe("curved, sphere and torus range domains", () => {
   it("has bounded deterministic samples, rejects outside choices, and leaves new problems without records", () => {
     for (const space of ["curved", "sphere", "torus"] as const) {
       const d = SPACE_DOMAINS[space]!;
+      const top = space === "torus" ? 500 : 100;
       const cat = buildSpaceCatalogue(space, { records: [] }, d);
-      const parsedNew = parseSpaceId(space, example(space, 100, 100).id);
+      const parsedNew = parseSpaceId(space, example(space, 100, top).id);
       if (typeof parsedNew === "string") throw new Error(parsedNew);
-      expect(problemOf(cat, parsedNew)).toMatchObject({ status: "no_record", certified: null, config: null, P: 100 });
-      expect(SPACE_MAX_P[space]).toBe(100);
+      expect(problemOf(cat, parsedNew)).toMatchObject({ status: "no_record", certified: null, config: null, P: top });
+      expect(SPACE_MAX_P[space]).toBe(top);
       expect(d.sample(0)).toEqual([]);
       expect(d.sample(9)).toEqual(d.sample(20).slice(0, 9));
       expect(new Set(d.sample(20)).size).toBe(20);
       for (const N of [0, ...shapes])
-        for (const P of [1, 2, 100]) {
+        for (const P of [1, 2, 100, top]) {
           const { id } = example(space, N === 0 ? 3 : N, P);
           const parsed = parseSpaceId(space, id.replace(`/${N === 0 ? 3 : N}/`, `/${N}/`));
           expect(typeof parsed).toBe("object");
           if (typeof parsed !== "string") {
             expect(d.bound(parsed)).not.toBeUndefined();
-            expect(d.bound({ ...parsed, P: 101 })).toBeUndefined();
+            expect(d.bound({ ...parsed, P: top + 1 })).toBeUndefined();
             expect(d.bound({ ...parsed, fields: { ...parsed.fields, N: 101 } })).toBeUndefined();
           }
         }
@@ -205,13 +206,14 @@ describe("curved, sphere and torus range domains", () => {
       }).valid,
     ).toBe(true);
   });
-  it("rejects malformed large-N submissions and enforces P = 100 in kernel limit copies", () => {
+  it("rejects malformed large-N submissions and enforces the largest P in kernel limit copies", () => {
     for (const space of ["curved", "sphere", "torus"] as const) {
+      const top = space === "torus" ? 500 : 100;
       const { id } = example(space, 100, 2);
       expect(validateSpaceSubmission(space, id, { pieces: [null, null], poses: [null, null] }).valid).toBe(false);
-      const p = parseSearchProblem(example(space, 100, 100).id)!;
-      expect(spaceKernel(p)).toBeDefined();
-      expect(spaceKernel({ ...p, id: p.id.replace(/100$/, "101"), P: 101 })).toBeNull();
+      const p = parseSearchProblem(example(space, 100, top).id)!;
+      expect(spaceKernel(p)).not.toBeNull();
+      expect(spaceKernel({ ...p, id: p.id.replace(new RegExp(`${top}$`), String(top + 1)), P: top + 1 })).toBeNull();
     }
   });
 });

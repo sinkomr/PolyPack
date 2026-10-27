@@ -12,7 +12,7 @@ The site files every kind of problem under a **dimension**: the pieces' dimensio
 | 2D on 3D | Sphere | `sphere` | yes |
 | 2D on 3D | Torus | `torus` | yes |
 | 3D in 3D | Polyhedra | `polyhedra` | yes |
-| 3D in 3D | Balls (balls in a ball or a cube, Platonic solids in a ball) | `balls` | yes |
+| 3D in 3D | Balls (balls in a ball or in a solid, each solid in a ball) | `balls` | yes |
 | 3D on 4D | Polytope boundaries (the tesseract first) | `boundary` | yes |
 
 A flat torus is filed under 2D on 3D because a torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth ([TORUS.md](TORUS.md)).
@@ -34,9 +34,9 @@ For any solid whose faces are all regular polygons, the value without folding is
 | Torus | the tiled plane, or one cell with its glued sides | torus basin hopping | yes | no |
 | Polytope boundaries (3D on 4D) | the eight cells side by side, the net with a Fold slider that folds it into the fourth dimension, or slices across one axis (three.js) | boundary compression search | yes | no |
 | Polyhedra | the solids in their container in 3D, solid or see-through, which turns | polyhedra soft-to-rigid search | yes | no |
-| Balls | the balls or solids in their ball or cube in 3D, solid or see-through, which turns | balls penalty basin hopping | yes | no |
+| Balls | the balls or solids in their ball or solid in 3D, solid or see-through, which turns | balls penalty basin hopping | yes | no |
 
-- **The problem.** One field per part of the id (solid, folding, piece, P; curvature, piece, container, P; piece, P; torus, piece, P; polytope, piece, P; for polyhedra and balls the problem, such as "Cubes in a cube" or "Balls in a ball", and P from 2 to 100). Each field offers only values that occur in the catalogue (`GET /api/spaces/<space>/records`) with the fields before it.
+- **The problem.** One field per part of the id (solid, folding, piece, P; curvature, piece, container, P; piece, P; torus, piece, P; polytope, piece, P; for polyhedra and balls the problem, such as "Cubes in a cube" or "Balls in a ball", and P from 2 to 500 for polyhedra and 2 to 100 for balls). Each field offers only values that occur in the catalogue (`GET /api/spaces/<space>/records`) with the fields before it.
 - **The address.** `/#space=<problem id>`, such as `/#space=sphere/4/12` or `/#space=curved/-1/3/4/5`, opens a problem; `/#space=torus` opens a kind at its starting problem (an open one with room above its lower bound). The address keeps the API's name, so that older links still work, and choosing a kind writes the same address as the former Space menu did. Each row of the dimensions page links to it ("Open on the board").
 - **The values.** The packing shown is the better of the research record and the site's best entry (the record on a tie), from `GET /api/spaces/<space>/problems/<id>`. Beside it: its size, the certified value, the status, the lower bound, the site best and whether the problem takes entries, in the dimensions page's words. 3D on 4D adds two rows from the listing's `extra`: **Without folding**, the best edge when every piece stays inside one cell (with how it is derived, under "Why"), and **Folding gains**, 1 − best / without folding, the problem's best edge against it, to one decimal of a percent. The gain follows the problem's best, so a site entry that beats the research record raises it; for the record itself it is the server's `fold_gain` to within 1e-12. A Polyhedral surfaces problem without folding adds a note under the values: each face holds its pieces on its own, so the problem is the 2D in 2D problem of ⌈P / F⌉ pieces in the face polygon ([SURFACE.md](SURFACE.md), 2.1), with a link to it on the polygon board (`/#p=N,M,k`).
 - **Closed problems.** A proven problem is shown and can be optimised, but its entries are closed. A problem where no packing exists has nothing to show or run.

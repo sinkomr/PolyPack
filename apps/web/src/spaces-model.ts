@@ -275,7 +275,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       start: "cubincub",
     },
   ],
-  // balls/<code>/<P>: balls in a ball and in a cube, then the Platonic solids in a ball
+  // balls/<code>/<P>: balls in a ball and in each of the 94 solids, then each solid in a ball
   balls: [
     {
       key: "code",

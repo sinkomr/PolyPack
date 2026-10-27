@@ -39,6 +39,7 @@ import {
   freshSize,
   ballsRound,
   polyhedraRound,
+  torusRound,
   polyhedraRoundSeconds,
   roundSize,
   beatsBest,
@@ -886,5 +887,53 @@ describe("3D in 3D: polyhedra on the board", () => {
       certified: p.certified!.score,
     });
     expect(v.valid, v.reasons.join("; ")).toBe(true);
+  });
+});
+
+describe("rounds of torus problems above P = 100", () => {
+  it("keep the usual size up to P = 100 and shrink with P and N above it, to at least 100 evaluations", () => {
+    for (const id of ["torus/hex/5/100", "torus/free/100/100", "torus/sq/0/30"]) {
+      const p = parseSearchProblem(id)!;
+      expect(roundSize(p)).toBe(ROUND_EVALS.torus);
+      expect(freshSize(p)).toBe(ROUND_EVALS.torus);
+    }
+    expect(torusRound(500, 0).round).toBeLessThan(ROUND_EVALS.torus);
+    expect(torusRound(500, 100).round).toBe(100);
+    for (const N of [0, 3, 6, 20, 100]) {
+      let last = Infinity;
+      for (const P of [101, 200, 300, 400, 500]) {
+        const { round, evalMs } = torusRound(P, N);
+        expect(round).toBeGreaterThanOrEqual(100);
+        expect(round).toBeLessThanOrEqual(last);
+        // about 3 s on this model, 20 s at the very most, apart from the floor of 100 evaluations
+        if (round > 100) expect((round * evalMs * 1.5) / 1000).toBeLessThanOrEqual(3.01);
+        last = round;
+        const p = parseSearchProblem(`torus/free/${N}/${P}`)!;
+        expect(roundSize(p)).toBe(round);
+        expect(freshSize(p)).toBe(round);
+        const d = defaultBudget(p);
+        expect(d.evals).toBe(10 * round);
+        expect(d.time_s).toBeGreaterThanOrEqual(60);
+        expect(d.time_s).toBeLessThanOrEqual(300);
+      }
+    }
+  });
+});
+
+describe("generic rounds of torus problems above P = 100", () => {
+  it("fit about 3 s by the measured rates, and are the usual K / P up to P = 100", async () => {
+    const { genericRound, torusGenericRound } = await import("../src/space/model");
+    expect(genericRound(parseSearchProblem("torus/hex/5/100")!)).toBe(9000);
+    for (const N of [0, 6, 100]) {
+      let last = Infinity;
+      for (const P of [101, 250, 500]) {
+        const r = torusGenericRound(P, N);
+        expect(r).toBeLessThanOrEqual(last);
+        last = r;
+        expect(genericRound(parseSearchProblem(`torus/sq/${N}/${P}`)!)).toBeLessThanOrEqual(Math.max(r, 5000));
+      }
+    }
+    expect(torusGenericRound(500, 0)).toBe(1000);
+    expect(torusGenericRound(500, 100)).toBe(400);
   });
 });

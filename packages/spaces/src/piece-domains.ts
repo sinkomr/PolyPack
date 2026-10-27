@@ -1,7 +1,7 @@
 /** Range domains for curved, whole-sphere and flat-torus pieces. Research records are independent. */
 import { curvedBound, makeSpace } from "@polypack/curved";
 import { areaBound } from "@polypack/sphere";
-import { areaScoreBound, type TorusFamily } from "@polypack/torus";
+import { areaScoreBound, TORUS_MAX_P, type TorusFamily } from "@polypack/torus";
 import type { SpaceDomain, SpaceDomainField } from "./domain";
 import { formatCurvature, TORUS_FAMILIES } from "./ids";
 
@@ -19,6 +19,8 @@ const pieces: SpaceDomainField = {
   titles: Object.fromEntries(PIECE_NS.map((N) => [N, N === 0 ? "Disk (N = 0)" : `${N}-gon`])),
 };
 const count: SpaceDomainField = { key: "P", label: "Pieces (P)", min: 1, max: 100 };
+/** Torus pieces run to TORUS_MAX_P = 500 (a lattice start is offered above P = 100); the others stop at 100. */
+const torusCount: SpaceDomainField = { key: "P", label: "Pieces (P)", min: 1, max: TORUS_MAX_P };
 const shape = (n: unknown): n is number => typeof n === "number" && PIECE_NS.includes(n);
 const countOK = (p: number) => Number.isInteger(p) && p >= 1 && p <= 100;
 
@@ -46,11 +48,12 @@ export const sphereDomain: SpaceDomain = {
 export const torusDomain: SpaceDomain = {
   info: {
     id: "torus/<family>/<N>/<P>",
-    fields: [{ key: "family", label: "Torus", values: [...TORUS_FAMILIES] }, pieces, count],
-    problems: TORUS_FAMILIES.length * PIECE_NS.length * 100,
+    fields: [{ key: "family", label: "Torus", values: [...TORUS_FAMILIES] }, pieces, torusCount],
+    problems: TORUS_FAMILIES.length * PIECE_NS.length * TORUS_MAX_P,
   },
   bound({ fields: { family, N }, P }) {
-    if (!TORUS_FAMILIES.includes(family as TorusFamily) || !shape(N) || !countOK(P)) return undefined;
+    if (!TORUS_FAMILIES.includes(family as TorusFamily) || !shape(N) || !Number.isInteger(P) || P < 1 || P > TORUS_MAX_P)
+      return undefined;
     return { value: areaScoreBound(family as TorusFamily, N, P) * (1 - 1e-12), label: "area bound; [CALC]" };
   },
   sample: (limit) =>

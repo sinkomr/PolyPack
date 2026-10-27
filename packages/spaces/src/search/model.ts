@@ -12,7 +12,14 @@
 import { type PieceName, type PolytopeName, getPolytope, parseBoundaryId } from "@polypack/boundary";
 import { MAX_PIECES } from "@polypack/geometry";
 import { type PlatonicName, type SolidName, isSolidName } from "@polypack/surface";
-import { type Lattice, type TorusFamily, type TorusPacking, familyLattice, torusScore } from "@polypack/torus";
+import {
+  type Lattice,
+  type TorusFamily,
+  type TorusPacking,
+  familyLattice,
+  torusLatticeStart,
+  torusScore,
+} from "@polypack/torus";
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { POLYHEDRA_MAX_P, getProblem, latticeStart } from "@polypack/polyhedra";
 import { ballsProblemOf, parseBallsId } from "@polypack/balls/catalogue";
@@ -337,7 +344,21 @@ export function nofoldOnPolygonEngine(p: SearchProblem): boolean {
   return p.space === "surface" && p.mode === "nofold" && Object.hasOwn(SOLID_FACES, p.solid);
 }
 
-/** A cheap generated start for polyhedra; offered separately from records and site entries. */
+/** Torus problems with more pieces than this offer a generated start (the smaller ones start from a new arrangement). */
+export const TORUS_LATTICE_START_FROM_P = 100;
+
+/** True when spaceLatticeStart gives a start for the problem. */
+export const hasLatticeStart = (p: SearchProblem): boolean =>
+  p.space === "polyhedra" || (p.space === "torus" && p.P > TORUS_LATTICE_START_FROM_P);
+
+/**
+ * A cheap generated start for problems without a record, offered separately from records and site entries:
+ * polyhedra a box-lattice patch, torus (P above TORUS_LATTICE_START_FROM_P) the best superlattice of a square or
+ * hexagonal cell. Null for the others.
+ */
 export function spaceLatticeStart(p: SearchProblem) {
-  return p.space === "polyhedra" ? { ...latticeStart(getProblem(p.code)!, p.P) } : null;
+  if (!hasLatticeStart(p)) return null;
+  if (p.space === "polyhedra") return { ...latticeStart(getProblem(p.code)!, p.P) };
+  if (p.space === "torus") return torusConfigOf(p, torusLatticeStart(p));
+  return null;
 }

@@ -98,7 +98,7 @@ export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<Space
 /**
  * Polyhedra, surface, curved, sphere and torus checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
- * parts, 0.57 s before): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
+ * parts, 0.57 s before; torus up to 0.5 s at P = 500 on a basis at the translate limit, 0.06 s on a reduced one): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
  * turn; another is refused with 503.
  */
 export const SPACE_HEAVY_CHECK_P = 30;
@@ -682,9 +682,15 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
         ? Math.min(1600, 0.04 * parsedId.P * parsedId.P)
         : space === "surface"
           ? Math.min(100, 5 + 1e-5 * parsedId.P * parsedId.P * sides)
-          : ["curved", "sphere", "torus"].includes(space)
-            ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
-            : 5;
+          : space === "torus"
+            ? // [CALC] A torus entry of 500 disks on a basis at the limit of TORUS_MAX_TRANSLATES candidates per
+              // pair, the worst case, took 0.5 s of work (the check, its strict pass and the reduced basis'
+              // check; the sent configuration is not checked again), and 0.06 s on a reduced basis. Reserve
+              // 0.002 P^2 ms: 0.5 s at P = 500 (at least the earlier many-sided estimate).
+              Math.min(800, Math.max(5 + 0.002 * parsedId.P * parsedId.P, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides))
+            : ["curved", "sphere"].includes(space)
+              ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
+              : 5;
     checking.add(address);
     ctx.verifyBudget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;
@@ -712,7 +718,7 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
             maxP: cat.maxP,
             certified: cert,
             noRecord: !hasRecord(p),
-          });
+          }, verdict.score);
           verdict.config = stored.config;
           verdict.workMs += stored.workMs;
           verdict.slices += stored.slices;

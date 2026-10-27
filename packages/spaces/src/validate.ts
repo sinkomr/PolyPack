@@ -43,9 +43,10 @@ import {
 } from "@polypack/surface";
 import {
   Lattice,
+  TORUS_MAX_P,
   TorusFamily,
   gaussReduce,
-  imageWindow,
+  maxImageCandidates,
   torusScore,
   validationSteps as torusSteps,
 } from "@polypack/torus";
@@ -76,7 +77,7 @@ import { SpaceConfig, SpaceName } from "./types";
  * Largest P each space accepts: its catalogue or domain cap (polyhedra P <= 500, 2026-10-26),
  * and for boundary (catalogue P <= 16) room for a larger catalogue: [CALC] checks of 64 pieces took
  * at most about 20 ms (docs/ARCHITECTURE.md). The server also caps P at its loaded catalogue's.
- * Surface, curved, sphere and torus have domains with P <= 100.
+ * Surface, curved and sphere have domains with P <= 100; torus P <= 500 (2026-10-27).
  * Their server checks yield in slices, including torus storage rechecks; many-piece checks share
  * the heavy queue (also many-sided sphere pairs at small P).
  * Surface: [CALC] A check of 100 pieces stops at the first MAX_REASONS overlaps and
@@ -88,7 +89,7 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   surface: 100,
   curved: 100,
   sphere: 100,
-  torus: 100,
+  torus: TORUS_MAX_P,
   boundary: 64,
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
@@ -445,11 +446,11 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
         ];
       // the validator's enumeration window, per pair of pieces (see packages/torus/src/lattice.ts)
       const reachR = 2 * boundingRadius(N) + 2 * 1e-7;
-      const { X1, X2 } = imageWindow(lattice, reachR);
-      const translates = (2 * X1 + 3) * (2 * X2 + 3);
+      // the most candidates (m, n) that the loop of latticeImages visits for one pair, exactly its bound
+      const translates = maxImageCandidates(lattice, reachR);
       if (!(translates <= TORUS_MAX_TRANSLATES))
         return [
-          `the lattice basis is too skewed: about ${Math.ceil(translates)} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
+          `the lattice basis is too skewed: up to ${translates} translates per pair would need checking (at most ${TORUS_MAX_TRANSLATES}); send a Lagrange-Gauss reduced basis`,
         ];
       const v = yield* torusSteps(
         { family, N, lattice, poses: c.poses.map(([x, y, theta]) => ({ x, y, theta })) },
@@ -726,10 +727,12 @@ export function storedSpaceConfig(
   id: string,
   config: SpaceConfig,
   opts: SpaceValidateOptions = {},
+  sentScore?: number,
 ): SpaceConfig {
   const candidate = reducedSpaceConfig(space, id, config);
   if (candidate === config) return config;
-  const before = validateSpaceSubmission(space, id, config, opts);
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before = { score: sentScore ?? validateSpaceSubmission(space, id, config, opts).score };
   const after = validateSpaceSubmission(space, id, candidate, opts);
   if (
     !after.valid ||
@@ -748,12 +751,17 @@ export async function storedSpaceConfigAsync(
   id: string,
   config: SpaceConfig,
   opts: SpaceValidateOptions & { sliceMs?: number } = {},
+  sentScore?: number,
 ): Promise<{ config: SpaceConfig; workMs: number; slices: number; longestSliceMs: number }> {
   const start = performance.now();
   const candidate = reducedSpaceConfig(space, id, config);
   const first = performance.now() - start;
   if (candidate === config) return { config, workMs: first, slices: 1, longestSliceMs: first };
-  const before = await validateSpaceSubmissionAsync(space, id, config, opts);
+  // `sentScore`: the score of the verdict that has just accepted `config`; the check is not repeated
+  const before =
+    sentScore !== undefined
+      ? { score: sentScore, workMs: 0, slices: 0, longestSliceMs: 0 }
+      : await validateSpaceSubmissionAsync(space, id, config, opts);
   const after = await validateSpaceSubmissionAsync(space, id, candidate, opts);
   const keep =
     after.valid &&
