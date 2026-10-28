@@ -1,3 +1,4 @@
+import { axesOf, axisOf, pieceTrig } from "./trig";
 import { DISK_RADIUS, Pose, boundingRadius, circumradius, inradius } from "./shapes";
 
 /**
@@ -85,20 +86,25 @@ export function regularPolygonSeparation(N: number, a: Pose, b: Pose, scale = 1)
   let best = -Infinity;
   let nx = 1;
   let ny = 0;
+  // cached edge-normal angles, cos and sin of each piece (pure in (N, theta), see trig.ts); no callbacks below
+  const ea = pieceTrig(N, a.theta);
+  const eb = pieceTrig(N, b.theta, ea);
+  const axA = axesOf(ea);
+  const axB = axesOf(eb);
   for (let k = 0; k < N; k++) {
     // edge normals bisect consecutive vertex directions
-    const angA = a.theta + Math.PI / 2 + Math.PI / N + k * step;
-    let ux = Math.cos(angA);
-    let uy = Math.sin(angA);
+    const angA = axA[3 * k];
+    let ux = axA[3 * k + 1];
+    let uy = axA[3 * k + 2];
     let sep = dx * ux + dy * uy - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
     if (sep > best) {
       best = sep;
       nx = -ux;
       ny = -uy;
     }
-    const angB = b.theta + Math.PI / 2 + Math.PI / N + k * step;
-    ux = Math.cos(angB);
-    uy = Math.sin(angB);
+    const angB = axB[3 * k];
+    ux = axB[3 * k + 1];
+    uy = axB[3 * k + 2];
     sep = -(dx * ux + dy * uy) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step);
     if (sep > best) {
       best = sep;
@@ -138,14 +144,20 @@ export function pairSeparation(N: number, a: Pose, b: Pose, scale = 1): number {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   // the candidate gaps of the edge normals k of A and of B, exactly as regularPolygonSeparation has them
+  // axes are filled on demand: the pruned search visits only a few of the N. Both entries are held
+  // across the search (no callbacks run in it), the second looked up so as not to evict the first.
+  const ea = pieceTrig(N, a.theta);
+  const eb = pieceTrig(N, b.theta, ea);
   const gapA = (k: number) => {
-    const angA = a.theta + Math.PI / 2 + Math.PI / N + k * step;
-    return dx * Math.cos(angA) + dy * Math.sin(angA) - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
+    const axA = axisOf(ea, k);
+    const angA = axA[3 * k];
+    return dx * axA[3 * k + 1] + dy * axA[3 * k + 2] - r - R * cosToNearestVertex(angA + Math.PI / 2 - b.theta, step);
   };
   const gapB = (k: number) => {
-    const angB = b.theta + Math.PI / 2 + Math.PI / N + k * step;
+    const axB = axisOf(eb, k);
+    const angB = axB[3 * k];
     return (
-      -(dx * Math.cos(angB) + dy * Math.sin(angB)) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step)
+      -(dx * axB[3 * k + 1] + dy * axB[3 * k + 2]) - r - R * cosToNearestVertex(angB + Math.PI / 2 - a.theta, step)
     );
   };
   const index = (k: number) => ((k % N) + N) % N;
