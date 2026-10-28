@@ -4,7 +4,7 @@ import { strictTolerance } from "@polypack/solver";
 import { newGame } from "../src/tighter/game";
 import { OpenRun } from "../src/tighter/open-run";
 import { fromJson, toJson } from "../src/tighter/save";
-import { HANDS_ON, handsOnRequest, looseStart, nineSquares, sideOf, SHOWN, TEASER } from "../src/tighter/tutorial";
+import { HANDS_ON, handsOnRequest, looseStart, nineSquares, sideOf, SHOWN, STEPS, TEASER } from "../src/tighter/tutorial";
 
 // The tutorial's boards are fixed: nine squares in 3 by 3, and 12 hexagons in a pentagon that each
 // click shrinks. These check properties, never the exact values a seeded search finds.
@@ -20,6 +20,17 @@ describe("Tighter tutorial", () => {
     expect(SHOWN.counts).toEqual([9, 10, 11, 17]);
     expect(TEASER).toHaveLength(2);
     expect(TEASER.map((t) => t.caption)).toEqual(["12 circles on a sphere", "6 octahedra in a cube"]);
+  });
+
+  it("tells the player that records update the public tables and pay points over time", () => {
+    const game = STEPS.find((s) => s.title === "Now the game")!;
+    expect(game.text).toContain(
+      "Whenever your packing beats the best one known, PolyPack's public record tables are updated, and you earn points both right away and over time, for as long as your record holds the top spot.",
+    );
+    expect(game.text).toContain("In the game you'll do this on many different problems.");
+    expect(game.text).toContain("Points buy upgrades that make your solver faster and smarter.");
+    expect(game.text).not.toContain("under your name");
+    expect(STEPS[STEPS.length - 1].teaser).toBe(true);
   });
 
   it("starts the hexagons loose and valid", () => {

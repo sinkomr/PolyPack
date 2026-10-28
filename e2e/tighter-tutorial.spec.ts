@@ -70,17 +70,42 @@ test("a first visit walks the tutorial, then starts the game", async ({ page }) 
   await expect(page.locator("#t-tut-text")).toContainText("Later in the game you can reset");
   await expect(page.locator("#t-tut-space-0 canvas")).toHaveCount(1, { timeout: 30_000 });
   await expect(page.locator("#t-tut-space-1 canvas")).toHaveCount(1, { timeout: 30_000 });
-  await expect(page.locator("#t-tut-next")).toHaveText("Choose a name");
+  await expect(page.locator("#t-tut-next")).toHaveText("PLAY");
+  await expect(page.locator("#t-tut-name")).toHaveText("Set my leaderboard name");
   await page.click("#t-tut-next");
 
-  // the name pop-up comes next; the game starts when it closes, and the tutorial is not shown again
+  // PLAY starts the game with the generated name and no name pop-up; the tutorial is not shown again
   await expect(dialog).toBeHidden();
-  await closeNamePopup(page);
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
   await expect.poll(() => page.evaluate(() => (window as any).tighter.state.tutorialDone)).toBe(true);
   await page.reload();
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
   await expect(dialog).toBeHidden();
+});
+
+test("Set my leaderboard name opens the name pop-up, then starts the game", async ({ page }) => {
+  await freshVisit(page);
+  await expect(page.locator("#t-tutorial")).toBeVisible({ timeout: 30_000 });
+  for (const title of ["Nine squares", "Ten and eleven squares", "Seventeen squares"]) {
+    await expect(page.locator("#t-tut-title")).toHaveText(title);
+    await page.click("#t-tut-next");
+  }
+  await expect(page.locator("#t-tut-act")).toBeEnabled({ timeout: 60_000 });
+  for (let k = 1; k <= 10; k++) {
+    await page.click("#t-tut-act");
+    await expect(page.locator("#t-tut-status")).toContainText(`Improved ${k}`, { timeout: 60_000 });
+    await expect(page.locator("#t-tut-act")).toBeEnabled();
+  }
+  await page.click("#t-tut-next");
+  await expect(page.locator("#t-tut-name")).toBeHidden();
+  await page.click("#t-tut-next");
+  await expect(page.locator("#t-tut-title")).toHaveText("What comes later");
+  await expect(page.locator("#t-tut-name")).toBeVisible();
+  await page.click("#t-tut-name");
+  await expect(page.locator("#t-tutorial")).toBeHidden();
+  await closeNamePopup(page);
+  await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 });
 
 test("Skip goes to the game, and ?tutorial=off never shows it", async ({ page }) => {

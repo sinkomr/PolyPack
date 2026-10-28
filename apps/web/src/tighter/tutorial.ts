@@ -82,7 +82,7 @@ export function handsOnRequest(): OpenRunRequest {
 /** The side of a packing as the server scores it (null when it is not a valid packing). */
 export const sideOf = (config: PackingConfig): number | null => evaluate(config, { autoOrient: true }).score;
 
-interface Step {
+export interface Step {
   title: string;
   text: string;
   /** Packings of squares to draw: one, or two side by side. */
@@ -92,7 +92,7 @@ interface Step {
   teaser?: true;
 }
 
-const STEPS: Step[] = [
+export const STEPS: Step[] = [
   {
     title: "Nine squares",
     text: "Nine squares with sides that are 1 unit long can pack perfectly into a larger square with sides that are 3 units long. Packings are scored by the side length of the shape they are packed into, and a smaller score is better.",
@@ -115,7 +115,7 @@ const STEPS: Step[] = [
   },
   {
     title: "Now the game",
-    text: "In the game you'll do this on many different problems. Whenever your packing beats the best one known, it is sent to PolyPack's public record tables under your name and earns you points. Points buy upgrades that make your solver faster and smarter.",
+    text: "In the game you'll do this on many different problems. Whenever your packing beats the best one known, PolyPack's public record tables are updated, and you earn points both right away and over time, for as long as your record holds the top spot. Points buy upgrades that make your solver faster and smarter.",
   },
   {
     title: "What comes later",
@@ -159,6 +159,7 @@ async function play(): Promise<void> {
   const status = $("t-tut-status");
   const act = $<HTMLButtonElement>("t-tut-act");
   const next = $<HTMLButtonElement>("t-tut-next");
+  const setName = $<HTMLButtonElement>("t-tut-name");
   const skip = $<HTMLButtonElement>("t-tut-skip");
   const boards = $("t-tut-boards");
   const canvas = $<HTMLCanvasElement>("t-tut-board");
@@ -175,6 +176,18 @@ async function play(): Promise<void> {
   const view2 = new BoardView(canvas2, board2, () => {});
   view2.readOnly = true;
   view2.previewLabel = null;
+  // a canvas gets its laid-out size only after the slide changes (one drawing narrows to half the width
+  // for a pair), so each drawing is fitted again whenever its canvas is resized; the view's own observer
+  // was registered first and has already taken the new size
+  const refit = new ResizeObserver((entries) => {
+    for (const e of entries) {
+      if (e.contentRect.width === 0 || e.contentRect.height === 0) continue;
+      if (stepNow === STEPS.findIndex((s) => s.hands) && clicks > 0) continue;
+      (e.target === canvas ? view : view2).fit();
+    }
+  });
+  refit.observe(canvas);
+  refit.observe(canvas2);
   const packings = shownPackings();
   let lane = null as Lane | null;
 
@@ -221,7 +234,9 @@ async function play(): Promise<void> {
     canvas2.hidden = (s.show?.length ?? 0) < 2;
     spaces.hidden = !s.teaser;
     act.hidden = !s.hands;
-    next.textContent = i === STEPS.length - 1 ? "Choose a name" : "Next";
+    const last = i === STEPS.length - 1;
+    next.textContent = last ? "PLAY" : "Next";
+    setName.hidden = !last;
     next.disabled = !!s.hands && clicks < HANDS_ON.clicks;
     if (s.show) {
       const got = await packings;
@@ -268,14 +283,23 @@ async function play(): Promise<void> {
     }
   };
 
+  let askName = false;
+  let skipped = false;
   const finished = new Promise<void>((resolve) => {
     const done = () => resolve();
+    setName.onclick = () => {
+      askName = true;
+      done();
+    };
     next.onclick = () => {
       if (stepNow === STEPS.length - 1) return done();
       stepNow++;
       void show(stepNow);
     };
-    skip.onclick = done;
+    skip.onclick = () => {
+      skipped = true;
+      done();
+    };
     dialog.oncancel = (e) => {
       // Escape skips, as the Skip button does
       e.preventDefault();
@@ -305,11 +329,13 @@ async function play(): Promise<void> {
 
   void show(0);
   await finished;
-  next.onclick = skip.onclick = act.onclick = dialog.oncancel = null;
+  next.onclick = skip.onclick = setName.onclick = act.onclick = dialog.oncancel = null;
   over = true;
+  refit.disconnect();
   dialog.close();
   lane?.terminate();
   for (const m of mounted) m.destroy();
   spaces.hidden = true;
-  await showNamePopup();
+  // PLAY keeps the generated name; the name pop-up opens for "Set my leaderboard name" and for Skip
+  if (askName || skipped) await showNamePopup();
 }
