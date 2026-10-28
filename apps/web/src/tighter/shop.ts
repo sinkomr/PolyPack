@@ -590,7 +590,9 @@ export class TreeRenderer {
    * "More detail" button (none for a mystery; the canvas's node has a small one too).
    */
   private explain(node: HTMLElement, n: NodeView): void {
-    const want = n.state !== "mystery" && !!n.how ? (this.list ? "list" : "canvas") : "";
+    // On a touch canvas the node's own button opens the details panel, which has its More detail: a
+    // second button on the node would sit over the first at touch size and take its taps.
+    const want = n.state !== "mystery" && !!n.how ? (this.list ? "list" : this.touch ? "" : "canvas") : "";
     if (want === (node.dataset.how ?? "")) return;
     node.querySelectorAll(".t-list-effect, .t-list-how, .t-node-more").forEach((e) => e.remove());
     const btn = node.querySelector("button")!;
