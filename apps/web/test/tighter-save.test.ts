@@ -28,7 +28,7 @@ import {
   readSave,
   toJson,
 } from "../src/tighter/save";
-import { AUTO_MAX, autoPerSecond, evalsPerClick, owning } from "../src/tighter/upgrades";
+import { autoPerSecond, evalsPerClick, owning, upgrade } from "../src/tighter/upgrades";
 
 const T0 = 1_700_000_000_000;
 
@@ -43,6 +43,19 @@ function loadAll(N: number, M: number, P: number): PackingConfig {
  * its way to the server, an upgrade bought, a submission paced, auto-eval due part of a click, a
  * deal made on credit.
  */
+/** What the ladder of version 8 charges for its first n levels (the same as upgrades.ts). */
+const ladderCost = (n: number) => {
+  const u = upgrade("autox");
+  return (u.cost * (u.levels!.growth ** n - 1)) / (u.levels!.growth - 1);
+};
+/** What the old rungs auto2 to auto10 cost, in list prices, and the old Faster auto-eval's first n levels. */
+const oldRung = [100, 250, 800, 1500, 3600, 7200, 12800, 22400, 36000];
+const oldFaster = (levels: number) => {
+  let t = 0;
+  for (let j = 0; j < levels; j++) t += 80_000 * 1.6 ** j;
+  return t;
+};
+
 function played(): GameState {
   const s = newGame(T0, 1234);
   s.name = "Ada";
@@ -132,7 +145,7 @@ describe("Tighter saves", () => {
       [101, 6.4 + 1e-13],
     ]);
     expect(a).toMatchObject({ evaluations: 101, sinceGain: 0, runs: 1, endedRuns: 0, nextSeed: 2, unconfirmed: 0 });
-    expect(r.state).toMatchObject({ version: 6 });
+    expect(r.state).toMatchObject({ version: SAVE_VERSION });
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
@@ -228,70 +241,99 @@ describe("Tighter saves", () => {
     if (!r.ok) throw new Error(r.error);
     return r.state;
   };
-
-  it("read a save from an earlier ladder: each rung at its new rate", () => {
+  it("read a save of version 7: each rung at the level of the same rate, and the difference paid back", () => {
     const s = played();
-    const raw = JSON.parse(toJson(s));
-    // auto5 ran 15 evaluations a second in each lane, then 5 in all: it now runs 10 in all
+    const raw = { ...JSON.parse(toJson(s)), version: 7 };
+    // auto5 ran 10 evaluations a second in all
     raw.owned = ["trace", "click10", ...rungs.slice(0, 5), "queue3", "lanes2"];
     raw.levels = {};
-    const t = load(raw);
-    expect(t.owned).toEqual(raw.owned);
-    expect(autoPerSecond(owning(t.owned))).toBe(10);
-    // the ids are kept, so nothing is refunded
-    expect(t.rp).toBe(s.rp);
-    const rates = [1, 2, 3, 5, 10, 20, 35, 60, 100];
-    for (let i = 1; i <= rungs.length; i++) expect(autoPerSecond(owning(rungs.slice(0, i)))).toBe(rates[i - 1]);
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 9 levels of Faster auto-eval after Auto-eval, in the place of the rungs
+    expect(r.state.owned).toEqual(["trace", "click10", "auto1", "autox", "queue3", "lanes2"]);
+    expect(r.state.levels).toEqual({ autox: 9 });
+    expect(autoPerSecond(owning(r.state.owned, r.state.levels))).toBe(10);
+    // paid 100 + 250 + 800 + 1,500, and the ladder charges less for the same rate
+    const back = Math.round(100 + 250 + 800 + 1500 - ladderCost(9));
+    expect(back).toBeGreaterThan(0);
+    expect(r.ladder).toEqual({ rp: back });
+    expect(r.state.rp).toBe(s.rp + back);
+    // read again, nothing more is paid
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.state.rp).toBe(r.state.rp);
+    expect(again.ok && again.ladder).toBeUndefined();
+    // a save with Auto-eval alone, or without it, is left as it is, nothing paid
+    raw.owned = ["trace", "click10", "auto1"];
+    expect(load(raw).owned).toEqual(["trace", "click10", "auto1"]);
+    expect(load(raw).rp).toBe(s.rp);
+    raw.owned = ["trace", "click10"];
+    expect(load(raw).owned).toEqual(["trace", "click10"]);
   });
 
-  it("read a save with Faster auto-eval's old levels: auto10 given, the levels kept at 10 evaluations a second each", () => {
+  it("read a save of version 7 with Faster auto-eval's levels: the rate kept, as 1 a second a level", () => {
     const s = played();
-    const raw = JSON.parse(toJson(s));
-    // the last era: 3 levels of × 1.3 on 120 a second in each lane, after auto9
-    raw.owned = ["trace", "click10", "clickx", ...rungs, "autox"];
+    const raw = { ...JSON.parse(toJson(s)), version: 7 };
+    // auto10 (150) and 3 levels of 10 a second: 180
+    raw.owned = ["trace", "click10", "clickx", ...rungs, "auto10", "autox"];
     raw.levels = { clickx: 30, autox: 3 };
     raw.autoDue = 4321.5;
     const r = readSave(raw, T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // Faster auto-eval comes after auto10 now: the save is given it, just before
-    expect(r.state.owned).toEqual(["trace", "click10", "clickx", ...rungs, "auto10", "autox"]);
-    expect(r.state.levels).toEqual({ clickx: 30, autox: 3 });
+    expect(r.state.owned).toEqual(["trace", "click10", "clickx", "auto1", "autox"]);
+    expect(r.state.levels).toEqual({ clickx: 30, autox: 179 });
     const o = owning(r.state.owned, r.state.levels);
     expect(evalsPerClick(o)).toBe(40);
-    // 150 a second of auto10 and 10 more a level: 180
     expect(autoPerSecond(o)).toBe(180);
-    // nothing due from before the load, whatever unit it was counted in
     expect(r.state.autoDue).toBe(0);
-    expect(r.state.autoAt).toBe(T0);
-    // within the new range of 10 levels: nothing refunded, now or at the next load
-    expect(r.state.rp).toBe(s.rp);
-    const again = readSave(JSON.parse(toJson(r.state)), T0);
-    expect(again.ok && again.state.owned).toEqual(r.state.owned);
-    expect(again.ok && again.state.levels).toEqual({ clickx: 30, autox: 3 });
-    expect(again.ok && again.state.rp).toBe(s.rp);
+    const paid = oldRung.reduce((t, c) => t + c, 0) + oldFaster(3);
+    expect(r.state.rp).toBe(s.rp + Math.round(paid - ladderCost(179)));
+    // a save that held Faster auto-eval without the tenth rung is counted as having it
+    raw.owned = ["trace", "click10", ...rungs, "autox"];
+    expect(load(raw).levels.autox).toBe(179);
   });
 
-  it("refund Faster auto-eval's levels past its 10, once, at the price they were bought at", () => {
+  it("read a save of version 7 with Faster auto-eval's levels past the old 10: those refunded at their old price", () => {
     const s = played();
-    const raw = JSON.parse(toJson(s));
-    // a save from when auto-eval's rate was in clicks and Faster auto-eval had 100 levels
-    raw.owned = ["trace", "click10", ...rungs, "autox"];
+    const raw = { ...JSON.parse(toJson(s)), version: 7 };
+    raw.owned = ["trace", "click10", ...rungs, "auto10", "autox"];
     raw.levels = { autox: 14 };
     const r = readSave(raw, T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.levels).toEqual({ autox: 10 });
-    expect(autoPerSecond(owning(r.state.owned, r.state.levels))).toBe(AUTO_MAX);
-    // levels 11 to 14 at their list price then, 150,000 RP × 1.4 a level, not at today's price
-    let refund = 0;
-    for (let j = 10; j < 14; j++) refund += Math.round(150000 * 1.4 ** j);
-    expect(r.state.rp).toBe(s.rp + refund);
-    const again = readSave(JSON.parse(toJson(r.state)), T0);
-    expect(again.ok && again.state.rp).toBe(s.rp + refund);
-    // a save that kept 3 levels (and had the rest refunded when the maximum was 3) gets nothing more
-    raw.levels = { autox: 3 };
-    expect(load(raw).rp).toBe(s.rp);
+    // 10 levels count, 150 + 100 = 250 a second
+    expect(r.state.levels).toEqual({ autox: 249 });
+    expect(autoPerSecond(owning(r.state.owned, r.state.levels))).toBe(250);
+    let past = 0;
+    for (let j = 10; j < 14; j++) past += Math.round(150000 * 1.4 ** j);
+    const paid = oldRung.reduce((t, c) => t + c, 0) + oldFaster(10);
+    expect(r.state.rp).toBe(s.rp + Math.round(paid - ladderCost(249)) + past);
+  });
+
+  it("read a save of version 7 with Head start II: the 9 levels it gives each cycle are not paid for", () => {
+    const s = played();
+    const raw = { ...JSON.parse(toJson(s)), version: 7 };
+    raw.owned = [
+      "standing",
+      "head1",
+      "head2",
+      "trace",
+      "click10",
+      "auto1",
+      "auto2",
+      "auto3",
+      "auto4",
+      "auto5",
+      "auto6",
+    ];
+    raw.levels = {};
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 20 a second: 19 levels, 9 of them free; only auto6 (3,600) was bought
+    expect(r.state.levels).toEqual({ autox: 19 });
+    expect(r.state.rp).toBe(s.rp + Math.round(Math.max(0, 3600 - (ladderCost(19) - ladderCost(9)))));
   });
 
   it("refund Higher rent's levels past its 5, once, at the price they were bought at", () => {
@@ -334,7 +376,7 @@ describe("Tighter saves", () => {
   it("round-trip through an export string", async () => {
     const s = played();
     const text = await exportString(s);
-    expect(text).toMatch(/^tighter:6:[zj]:[A-Za-z0-9_-]+$/);
+    expect(text).toMatch(new RegExp(`^tighter:${SAVE_VERSION}:[zj]:[A-Za-z0-9_-]+$`));
     const r = await importString(text, T0 + 5000);
     expect(r.ok && r.state).toEqual({ ...s, autoDue: 0, autoAt: T0 + 5000 });
     // whitespace from a copy and paste is ignored
@@ -708,9 +750,11 @@ describe("Tighter saves of version 2", () => {
     const f = pointsScale([...clicks, ...rungs, "autox"], { autox: 3 });
     expect(r.rescaled).toBe(f);
     expect(r.refunded).toBe(Math.round((96_831 + faster) * f));
-    expect(r.state.rp).toBeCloseTo((s.rp + 96_831 + faster) * f, 6);
+    // and the ladder of version 8 pays back what the old rungs and levels cost over its price for 180 a second
+    const ladderBack = Math.round(oldRung.reduce((t, c) => t + c, 0) + oldFaster(3) - ladderCost(179));
+    expect(r.state.rp).toBeCloseTo((s.rp + 96_831 + faster) * f + ladderBack, 6);
     expect(r.state.version).toBe(SAVE_VERSION);
-    expect(r.state.levels).toEqual({ autox: 3 });
+    expect(r.state.levels).toEqual({ autox: 179 });
     expect("autoRefund" in r.state).toBe(false);
     // the save it writes is of version 3: read again, it gets nothing more
     const again = readSave(JSON.parse(toJson(r.state)), T0);
@@ -742,10 +786,11 @@ describe("Tighter saves of version 2", () => {
     // the levels past 10, refunded as the save is read, in the points of their time too
     let pastNow = 0;
     for (let j = 10; j < 14; j++) pastNow += Math.round(150_000 * 1.4 ** j * f);
-    expect(r.state.rp).toBeCloseTo((s.rp + Math.round(rungsBack + kept)) * f + pastNow, 6);
+    // and version 8's step pays what the old rungs and 10 levels cost over the ladder's price for 250 a second
+    const ladderBack = Math.round(oldRung.reduce((t, c) => t + c, 0) + oldFaster(10) - ladderCost(249));
+    expect(r.state.rp).toBeCloseTo((s.rp + Math.round(rungsBack + kept)) * f + pastNow + ladderBack, 6);
     // auto10, given to a save with Faster auto-eval from before it, was never paid for
-    expect(r.state.owned).toContain("auto10");
-    expect(r.state.levels).toEqual({ autox: 10 });
+    expect(r.state.levels).toEqual({ autox: 249 });
   });
 
   it("pay nothing back for the rungs a head start gives each cycle, and pay at the Quick study discount", () => {
@@ -794,12 +839,10 @@ describe("Tighter saves of version 3", () => {
   it("value a point by the new prices over the old of what the save could buy next", () => {
     // nothing owned: Trace detail, 1,000 RP now and 5 then
     expect(pointsScale([], {})).toBe(200);
-    // 3 evaluations per click is all it can buy next: 1,800 now, 320 then
-    expect(pointsScale(["trace", "click2", "auto1"], {})).toBe(1800 / 320);
-    // Auto-eval: 2 a second, 4 evaluations per click and Dealer: best of 2
-    expect(pointsScale(["trace", "click2", "queue3", "auto1", "click3"], {})).toBe(
-      (100 + 2200 + 20000) / (35 + 500 + 3000),
-    );
+    // 3 evaluations per click is all it can buy next: 250 now, 320 then
+    expect(pointsScale(["trace", "click2", "auto1"], {})).toBe(250 / 320);
+    // 4 evaluations per click and Dealer: best of 2 (Faster auto-eval's ladder has no old price to compare)
+    expect(pointsScale(["trace", "click2", "queue3", "auto1", "click3"], {})).toBe((300 + 20000) / (500 + 3000));
     // a levelled upgrade counts its next level, which grows by the same factor then and now
     const ladder: UpgradeId[] = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8"];
     const next = pointsScale([...ladder, "click9", "click10", "clickx", "sweeps10", "queue3", "rank2"], { clickx: 2 });
@@ -818,10 +861,10 @@ describe("Tighter saves of version 3", () => {
     const r = readSave(raw, T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const f = 1800 / 320;
+    const f = 250 / 320;
     expect(r.rescaled).toBe(f);
-    // the bank buys what it bought before: half of 3 evaluations per click then, and now
-    expect(r.state.rp).toBeCloseTo(900, 9);
+    // the bank buys what it bought before: half of 3 evaluations per click then (160 of 320), and now (125 of 250)
+    expect(r.state.rp).toBeCloseTo(125, 9);
     expect(r.state.rpEarned).toBeCloseTo(1000 * f, 9);
     expect(r.state.standing.cycleEarned).toBeCloseTo(800 * f, 9);
     expect(r.state.standing.history[0].earned).toBeCloseTo(5000 * f, 9);
@@ -849,7 +892,7 @@ describe("Tighter saves of version 3", () => {
     const r = readSave(v3(["trace", "click2", "auto1", "seeds"]), T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const f = 1800 / 320;
+    const f = 250 / 320;
     expect(r.retired).toEqual({ rp: Math.round(300 * f), standing: 0, groups: ["Seeds"] });
     expect(r.state.rp).toBeCloseTo(160 * f + Math.round(300 * f), 9);
     expect(r.state.owned).toEqual(["trace", "click2", "auto1"]);

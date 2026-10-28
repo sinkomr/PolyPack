@@ -207,13 +207,13 @@ describe("Tighter saves across the unit change", () => {
     const r = readSave(saved(s, 5), T0 + 5000);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(SAVE_VERSION).toBe(6);
+    expect(SAVE_VERSION).toBeGreaterThanOrEqual(6);
     // queue: 11 problems, of which 9 are converted and 1 dropped; past: 2 converted, 1 dropped
     expect(r.units).toEqual({ converted: 11, dropped: 2 });
     const q = (key: string) => s.queue.find((p) => p.key === key)!;
     const expected: GameState = {
       ...s,
-      version: 6,
+      version: SAVE_VERSION,
       autoDue: 0,
       autoAt: T0 + 5000,
       queue: [
@@ -273,7 +273,7 @@ describe("Tighter saves across the unit change", () => {
     const fresh = readSave(saved(s, 6), T0);
     if (!fresh.ok) throw new Error(fresh.error);
     expect(fresh.units).toBeUndefined();
-    expect(fresh.state).toEqual({ ...s, version: 6, autoDue: 0, autoAt: T0 });
+    expect(fresh.state).toEqual({ ...s, version: SAVE_VERSION, autoDue: 0, autoAt: T0 });
   });
 
   it("say nothing to a save with no problem the change reached", () => {

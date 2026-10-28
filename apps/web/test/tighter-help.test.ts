@@ -68,7 +68,7 @@ describe("Tighter's explanations", () => {
     expect(text).toContain("Its rate is in evaluations a second");
     expect(text).toContain("do not speed auto-eval up");
     expect(text).toContain("The rate is a target.");
-    expect(text).toContain("r = min(250, a + 10 × x)");
+    expect(text).toContain("r = 1 + 1 × x");
     // a batch is also at most a quarter second of the expected time of its evaluations
     expect(text).toContain("b = min(⌊D⌋, max(1, min(⌈0.25 × rlane⌉, ⌊250 / t⌋)))");
     expect(text).not.toMatch(/clicks Evolve for you|its clicks|speeds it up too|clicks a second/);

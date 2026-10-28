@@ -343,7 +343,7 @@ describe("Tighter's methods table", () => {
     expect(speeds.slowness("mc_compress@0")).toBeCloseTo(1, 12);
     expect(speeds.slowness("harden@0")).toBeCloseTo(6, 12);
     // harden's steps leave mc_compress's jobs as they were: 150 a second, a quarter second's worth
-    const top = owning([..."auto1 auto2 auto3 auto4 auto5 auto6 auto7 auto8 auto9 auto10".split(" ")] as UpgradeId[]);
+    const top = owning(["auto1", "autox"], { autox: 149 });
     expect(autoJobEvals(top, 1000, 1, speeds.msEach("mc_compress@0", 2))).toBe(38);
     // and harden's own jobs keep to a quarter second of its slower evaluations: 250 / 12 ms
     expect(autoJobEvals(top, 1000, 1, speeds.msEach("harden@0", 2))).toBe(20);

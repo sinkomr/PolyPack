@@ -159,7 +159,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(await axe(page)).toEqual([]);
 
   // a mystery revealed: Lattice bought, Method: harden shows as itself
-  const before = CLICK_LADDER.concat(["auto1", "auto2", "auto3", "auto4", "basin", "shrink", "penalty"]);
+  const before = CLICK_LADDER.concat(["auto1", "basin", "shrink", "penalty"]);
   await give(page, before);
   await grant(page, 168_000);
   await buy(page, "lattice");
@@ -207,9 +207,9 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP"
   await expect(page.locator("#t-auto")).toBeHidden();
   await grant(page, 1000);
   await buy(page, "trace");
-  await grant(page, 1500);
+  await grant(page, 150);
   await buy(page, "click2");
-  // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (1,800)
+  // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (250)
   const card = page.locator('.t-card[data-id="auto1"]');
   await expect(card).toContainText(/(^|\D)80 RP/);
   await expect(card).toHaveAttribute("data-state", "dear");
@@ -343,7 +343,7 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await fresh(page, 24);
   await firstRecord(page);
   // method match: an Auto option in the method select, and the Runs panel says what it learned
-  await give(page, [...CLICK_LADDER, "auto1", "auto2", "auto3", "auto4", "basin", "shrink", "learning", "methodMatch"]);
+  await give(page, [...CLICK_LADDER, "auto1", "basin", "shrink", "learning", "methodMatch"]);
   const select = page.locator("#t-method");
   await expect(select.locator('option[value="auto"]')).toHaveText("Auto (method match)");
   await select.selectOption("auto");
@@ -708,13 +708,13 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
   await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
-  // auto-eval at its limit of 250 evaluations a second, shared by the two lanes: every new problem gets
+  // auto-eval at 250 evaluations a second (249 levels of Faster auto-eval), shared by the two lanes: every new problem gets
   // its Compact, although a lane with a problem to work takes each job as it comes due (a Compact owes
   // the rest)
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
-    s.owned.push("auto2", "auto3", "auto4", "auto5", "auto6", "auto7", "auto8", "auto9", "auto10", "autox");
-    s.levels.autox = 10;
+    s.owned.push("autox");
+    s.levels.autox = 249;
   });
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");

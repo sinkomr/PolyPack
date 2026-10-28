@@ -91,10 +91,33 @@ export class Speeds {
     return own ?? (this.ratio.size ? Math.max(...this.ratio.values()) : 1);
   }
 
+  /** Whether any step has been measured here yet. */
+  get measured(): boolean {
+    return this.ratio.size > 0;
+  }
+
   /** The expected ms of one evaluation of the kind `key` where the table says `tableMs`. */
   msEach(key: string | null, tableMs: number): number {
     return tableMs * this.slowness(key);
   }
+}
+
+/**
+ * The most evaluations a second this computer runs for auto-eval, all lanes together: each lane is a
+ * worker on a core of its own, and runs one evaluation in `msEach` ms (Speeds.msEach). Infinity where
+ * nothing is known (msEach of 0).
+ */
+export function computerRate(lanes: number, msEach: number): number {
+  return msEach > 0 ? (Math.max(1, lanes) * 1000) / msEach : Infinity;
+}
+
+/** The warning when auto-eval asks for more than this computer was measured to run. */
+export const AUTO_LIMIT_WARNING =
+  "This computer cannot run this many evaluations a second, so more auto-eval will not run faster here.";
+
+/** Whether the rate asked for is more than this computer runs (a small margin keeps the sentence from flickering). */
+export function autoOverLimit(rate: number, lanes: number, msEach: number): boolean {
+  return rate > computerRate(lanes, msEach) * 1.05;
 }
 
 /** Why auto-eval is held back, or null when it may run. Clicks are never held. */

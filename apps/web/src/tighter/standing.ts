@@ -11,7 +11,7 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
-import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
+import { EvolveMethod, HEAD2_AUTO_LEVELS, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
 /**
  * Standing: the reset currency (plan §5).
@@ -289,7 +289,7 @@ export const ALWAYS_KEPT: readonly UpgradeId[] = ["standing", "rent", "rentx", "
 /** Head starts: owned at once when a cycle begins (with their prerequisites). */
 export const HEAD_STARTS: Readonly<Partial<Record<UpgradeId, readonly UpgradeId[]>>> = {
   head1: ["trace", "click2", "click3", "click4", "click5", "auto1"],
-  head2: ["queue3", "auto2", "auto3", "auto4", "auto5", "basin"],
+  head2: ["queue3", "autox", "basin"],
   head3: ["reach2", "advance", "lanes2"],
 };
 const METHOD_IDS: readonly UpgradeId[] = ["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"];
@@ -323,9 +323,11 @@ export function nextCycleTree(s: GameState): { owned: UpgradeId[]; levels: Parti
     .flatMap(([, ids]) => ids!);
   const keptSet = new Set(kept);
   const owned = new Set([...kept, ...withPrerequisites(heads)]);
-  // levels stay only with the upgrades kept (a head start grants first levels only)
+  // levels stay only with the upgrades kept (a head start grants first levels only, bar Head start II's
+  // levels of Faster auto-eval, which it brings up to the rate of the old fifth rung)
   const levels: Partial<Record<UpgradeId, number>> = {};
   for (const [id, l] of Object.entries(s.levels) as [UpgradeId, number][]) if (keptSet.has(id)) levels[id] = l;
+  if (has.has("head2")) levels.autox = Math.max(levels.autox ?? 0, HEAD2_AUTO_LEVELS);
   return { owned: UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id), levels };
 }
 

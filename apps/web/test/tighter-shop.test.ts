@@ -73,7 +73,7 @@ describe("Tighter shop", () => {
     expect(v.total).toBe(inTheFirstDimension().length);
     // the first card can be worked toward; the rest are locked or mysteries
     expect(card(v, "trace")).toMatchObject({ state: "dear", price: "1,000 RP", needs: [] });
-    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "1,500 RP" });
+    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
     expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");
   });
@@ -112,32 +112,18 @@ describe("Tighter shop", () => {
 
   it("folds owned upgrades into one line, and a row with nothing left into that line alone", () => {
     const clicks: UpgradeId[] = ["trace", "click2", "click3"];
-    const v = shopView(owning(clicks), { rp: 400, standing: 0 }, 8);
+    const v = shopView(owning(clicks), { rp: 200, standing: 0 }, 8);
     // a ladder folds to where it stands
     expect(row(v, "clicks").owned).toEqual(["Trace detail", "2 to 3 evaluations per click"]);
     expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
-    const auto: UpgradeId[] = [
-      "auto1",
-      "auto2",
-      "auto3",
-      "auto4",
-      "auto5",
-      "auto6",
-      "auto7",
-      "auto8",
-      "auto9",
-      "auto10",
-    ];
-    const w = shopView(owning([...auto, "autox"], { autox: 10 }), broke, 8);
-    expect(row(w, "auto").cards).toEqual([]);
-    expect(row(w, "auto").owned).toEqual([
-      "Auto-eval",
-      "Auto-eval: 150 evaluations a second",
-      "Faster auto-eval (level 10, the last)",
-    ]);
-    expect(w.owned).toBe(11);
+    const w = shopView(owning(["auto1", "autox"], { autox: 150 }), broke, 8);
+    // Faster auto-eval has no last level: it stays a card to buy, however far it is owned
+    expect(row(w, "auto").cards.map((c) => c.id)).toEqual(["autox"]);
+    expect(card(w, "autox")).toMatchObject({ level: 150, levelText: "Level 150" });
+    expect(row(w, "auto").owned).toEqual(["Auto-eval", "Faster auto-eval (level 150)"]);
+    expect(w.owned).toBe(2);
   });
 
   it("shows a levelled upgrade's level and the next level's price", () => {
@@ -233,7 +219,7 @@ describe("Tighter tech tree", () => {
     const node = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!;
     expect(v.nodes.length).toBe(inTheFirstDimension().length);
     expect(node("trace").state).toBe("owned");
-    expect(node("click2")).toMatchObject({ state: "buyable", price: "1,500 RP" });
+    expect(node("click2")).toMatchObject({ state: "buyable", price: "150 RP" });
     expect(node("click3").state).toBe("locked");
     expect(node("harden")).toMatchObject({ state: "mystery", name: M });
     expect(v.buyable).toBe(1);
@@ -357,17 +343,14 @@ describe("Tighter upgrade texts", () => {
     expect(u("click3").effect).toBe("Each Evolve click runs 3 evaluations instead of 2.");
     expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>a</var> + <var>r</var>"]);
     expect(u("auto1").effect).toBe("Auto-eval runs 1 evaluation a second for you while it is switched on.");
-    expect(u("auto3").how.math).toEqual([
-      "<var>r</var> = 3",
+    expect(u("auto1").how.math).toEqual([
+      "<var>r</var> = 1",
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
-    expect(u("auto2").effect).toBe("Auto-eval runs 2 evaluations a second in all instead of 1.");
-    expect(u("auto6").effect).toBe("Auto-eval runs 20 evaluations a second in all instead of 10.");
-    expect(u("auto9").name).toBe("Auto-eval: 100 evaluations a second");
-    expect(u("auto10").name).toBe("Auto-eval: 150 evaluations a second");
-    expect(u("autox").effect).toBe("Each level adds 10 evaluations a second to auto-eval, up to 250 in all.");
+    expect(UPGRADES.some((x) => /^auto([2-9]|10)$/.test(x.id))).toBe(false);
+    expect(u("autox").effect).toBe("Each level adds 1 evaluation a second to auto-eval, with no last level.");
     expect(u("autox").how.math).toEqual([
-      "<var>r</var> = min(250, 150 + 10 × <var>a</var>)",
+      "<var>r</var> = 1 + 1 × <var>a</var>",
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
@@ -384,24 +367,20 @@ describe("Tighter upgrade texts", () => {
       expect(t, u.id).not.toMatch(/auto-eval('s)? click|clicks? (Evolve )?for you|its clicks/i);
     }
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    for (const id of ["auto1", "auto5"] as UpgradeId[])
-      expect(text(id)).toContain("whatever your evaluations per click");
+    expect(text("auto1")).toContain("whatever your evaluations per click");
     expect(text("click5")).toContain("Auto-eval keeps its own rate in evaluations a second");
     expect(text("clickx")).toContain("Auto-eval keeps its own rate in evaluations a second");
-    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms), and where 250 a
-    // second need more than a core (4 ms an evaluation)
-    expect(text("autox")).toContain("so 250 evaluations a second keep about 44.3 % of one core busy there");
-    expect(text("autox")).toContain("From about N + M + P = 130 up an evaluation takes 4 ms or more");
-    expect(text("autox")).toContain("more lanes spread the work over more cores");
-    expect(text("autox")).toContain("so level 10 reaches the limit of 250 a second");
+    // Faster auto-eval has no last level, and says that the computer is the limit
+    expect(text("autox")).toContain("You can buy as many levels as you like");
+    expect(text("autox")).toContain("At some point your computer is the limit");
     expect(text("head1")).toContain("Auto-eval at 1 evaluation a second");
-    expect(text("head2")).toContain("the Auto-eval upgrades up to 10 evaluations a second");
+    expect(text("head2")).toContain("Faster auto-eval up to level 9 (10 evaluations a second)");
   });
 
   it("say that the lanes share auto-eval's rate, and never that each lane runs it", () => {
     for (const u of UPGRADES) expect(all(u).join(" "), u.id).not.toMatch(/in each lane|in every lane|per lane/);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    for (const id of ["auto1", "auto5", "auto10", "lanes2", "lanesx"] as UpgradeId[])
+    for (const id of ["auto1", "lanes2", "lanesx"] as UpgradeId[])
       expect(text(id), id).toMatch(/The lanes share (it|auto-eval's rate)/);
     expect(text("lanesx")).toContain("adds no evaluations");
     expect(text("autox")).toContain("the lanes share it");
@@ -435,7 +414,7 @@ describe("Tighter upgrade texts", () => {
     expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
     expect(text("advance")).toContain("100 evaluations of mc_compress");
     expect(text("shrink")).toContain("A run ends by itself after 1,000 evaluations without progress.");
-    expect(text("auto2")).toContain("60 s");
+    expect(text("auto1")).toContain("60 s");
     expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
       0.01, 1.5, 168, 10,
     ]);
@@ -506,7 +485,11 @@ describe("Tighter dimension cards", () => {
     expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"] });
     for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
       expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
-    const w = shopView(rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims), funds, 8);
+    const w = shopView(
+      rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims),
+      funds,
+      8,
+    );
     for (const id of ["sphere", "torus", "surf-nofold-catalan"] as const)
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });

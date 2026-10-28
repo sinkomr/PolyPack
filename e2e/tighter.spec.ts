@@ -261,8 +261,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await rp(page)).toBeCloseTo(before - 1000, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
-  // evaluations per click: 2 per click (1,500 RP), then 3 (1,800 RP)
-  await grant(page, 3300);
+  // evaluations per click: 2 per click (150 RP), then 3 (250 RP)
+  await grant(page, 400);
   await buyAll(page, ["click2"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×2");
   let e = (await stats(page)).evaluations;
@@ -422,14 +422,11 @@ test("tighter: a method change opens a new run", async ({ page }) => {
     "click4",
     "auto1",
     "click5",
-    "auto2",
     "click6",
     "click7",
-    "auto3",
     "click8",
     "click9",
     "click10",
-    "auto4",
   ]);
   await expect(page.locator("#t-method-box")).toBeHidden();
   await buyAll(page, ["basin"]);

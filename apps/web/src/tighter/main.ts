@@ -131,7 +131,7 @@ import {
   passes,
   rankCandidates,
 } from "./rank";
-import { Speeds, autoHold, autoTarget } from "./scheduler";
+import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
@@ -299,6 +299,9 @@ const rescaleNote = (f: number) =>
 /** What a save from before auto-eval's lower prices was given back, said once as it is read. */
 const refundNote = (rp: number) =>
   `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
+/** What the ladder of 2026-10-27 paid back to a save (save.ts migration 7), said once as it is read. */
+const ladderNote = (rp: number) =>
+  `Auto-eval now has one ladder of small steps. You keep the rate you had, and ${fmtInt(rp)} RP of what you paid came back.`;
 /** Said once to a save that had reset, when it is read (save.ts migration 4). */
 const REBALANCED_NOTE =
   "Tighter is being rebalanced and expanded, and resets now work differently. Sorry: your standing has been cleared and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
@@ -349,6 +352,7 @@ function initialState(): GameState {
         r.retired ? retiredNote(r.retired) : "",
         r.rebalanced ? REBALANCED_NOTE : "",
         r.units ? unitsNote(r.units) : "",
+        r.ladder ? ladderNote(r.ladder.rp) : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -1417,6 +1421,18 @@ function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
   const stage = piped(o) ? pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m)) : null;
   const m = stage ? stage.method : autoMethods(o) ? null : chosenMethod(o);
   return m ? runSpeedKey(p, m, isPolygon(p) ? tuningLevel(o, m) : 0) : null;
+}
+
+/**
+ * Whether the rate auto-eval asks for is more than this computer was measured to run, on the problem
+ * on the board with the method its next run would take (scheduler.ts). False until a step has run here.
+ */
+function overComputerLimit(o: Owned): boolean {
+  const rate = autoPerSecond(o);
+  const p = focused();
+  if (rate === null || !p || !speeds.measured) return false;
+  const msEach = speeds.msEach(lanes[0] ? jobSpeedKey(lanes[0], p, o) : null, tableMsOf(p));
+  return autoOverLimit(rate, laneCount(o), msEach);
 }
 
 /**
@@ -2889,7 +2905,21 @@ function renderUpgrades(o: Owned): void {
   show("t-board-view", !treeOpen);
   show("t-upgrades", treeOpen);
   const funds = { rp: state.rp, standing: state.standing.points };
-  const v = treeView(o, funds);
+  let v = treeView(o, funds);
+  // Faster auto-eval's card says so when more levels would run no faster on this computer
+  if (overComputerLimit(o))
+    v = {
+      ...v,
+      nodes: v.nodes.map((n) =>
+        n.id !== "autox"
+          ? n
+          : {
+              ...n,
+              levelText: `${n.levelText ?? "Level 0"}. More levels will not run faster on this computer.`,
+              how: n.how ? { ...n.how, text: [AUTO_LIMIT_WARNING, ...n.how.text] } : n.how,
+            },
+      ),
+    };
   if (treeOpen) tree.render(v, funds);
   // near the board, always: what can be bought now, else the next upgrade to save for
   const count = $("t-tab-count");
@@ -3378,9 +3408,9 @@ function renderLanes(o: Owned): void {
   if (rate !== null)
     text(
       "t-lanes-note",
-      lanes.length > 1
+      (lanes.length > 1
         ? `The ${lanes.length} lanes share auto-eval's rate of ${fmtRate(rate)}, so each one runs ${fmtRate(rate / lanes.length)}.`
-        : `Auto-eval runs ${fmtRate(rate)} in this lane.`,
+        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) + (overComputerLimit(o) ? ` ${AUTO_LIMIT_WARNING}` : ""),
     );
 }
 
@@ -3892,6 +3922,7 @@ $("t-import").addEventListener("click", async () => {
     r.refunded ? refundNote(r.refunded) : "",
     r.rebalanced ? REBALANCED_NOTE : "",
     r.units ? unitsNote(r.units) : "",
+    r.ladder ? ladderNote(r.ladder.rp) : "",
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();

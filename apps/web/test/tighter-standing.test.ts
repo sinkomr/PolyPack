@@ -21,7 +21,7 @@ import {
   standingMultiplier,
 } from "../src/tighter/standing";
 import { openSlices } from "../src/tighter/unlocks";
-import { UPGRADES, UpgradeId, autoPerSecond, evalsPerClick, upgrade } from "../src/tighter/upgrades";
+import { HEAD2_AUTO_LEVELS, UPGRADES, UpgradeId, autoPerSecond, evalsPerClick, upgrade } from "../src/tighter/upgrades";
 import { fromJson, toJson } from "../src/tighter/save";
 
 const T0 = 1_000_000;
@@ -30,7 +30,7 @@ const MIN = 60_000;
 /** A late first cycle: Standing bought, much of the tree owned, a record held, auto-eval running and due a click. */
 function lateGame(extra: UpgradeId[] = []): GameState {
   const s = newGame(T0, 1);
-  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "clickx", "auto7", ...extra]);
+  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "clickx", "autox", ...extra]);
   const add = (id: UpgradeId) => {
     if (s.owned.includes(id)) return;
     for (const r of upgrade(id).requires) add(r);
@@ -151,24 +151,22 @@ describe("Tighter standing", () => {
   });
 
   it("begins the next cycle with the head starts owned, prerequisites and all, and keeps the rows bought", () => {
-    const s = lateGame(["head1", "head2", "head3", "keepAuto", "keepMethods", "study", "shrink", "auto9"]);
+    const s = lateGame(["head1", "head2", "head3", "keepAuto", "keepMethods", "study", "shrink"]);
     s.levels.study = 2;
     s.levels.autox = 1;
-    s.owned.push("autox");
     const tree = nextCycleTree(s);
     const owned = new Set(tree.owned);
     for (const ids of Object.values(HEAD_STARTS)) for (const id of ids!) expect(owned.has(id)).toBe(true);
     // every head-start upgrade's prerequisites come with it (Basin hopping needs 10 per click and auto-eval at 1/2 s)
     for (const id of tree.owned)
       if (!["standing", "rent", "rentx", "collections"].includes(id) && upgrade(id).currency !== "standing")
-        for (const r of upgrade(id).requires)
-          if (!["shrink", "auto9", "autox"].includes(id)) expect(owned.has(r)).toBe(true);
+        for (const r of upgrade(id).requires) if (!["shrink", "autox"].includes(id)) expect(owned.has(r)).toBe(true);
     // the auto-eval row and the methods survive, with their levels; record points' upgrades elsewhere do not
-    expect(owned.has("auto9")).toBe(true);
     expect(owned.has("autox")).toBe(true);
     expect(owned.has("shrink")).toBe(true);
     expect(owned.has("lanesx")).toBe(false);
-    expect(tree.levels).toEqual({ rentx: 3, study: 2, autox: 1 });
+    // Head start II brings Faster auto-eval up to 9 levels (10 evaluations a second), more than the 1 owned
+    expect(tree.levels).toEqual({ rentx: 3, study: 2, autox: HEAD2_AUTO_LEVELS });
     expect(tree.owned).toEqual(UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id));
     // with Keep auto-eval, it stays on, due nothing yet
     resetCycle(s, T0);
