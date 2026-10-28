@@ -124,7 +124,7 @@ const POINTS: How[] = [
   {
     text: [
       `You earn record points (RP) each time a click makes your board smaller by more than the smallest improvement that counts, ${MIN_STEP} of its size. The server uses the same rule, so a smaller step would not make a new record there either. The click pays at once, whether you pressed Evolve or auto-eval clicked for you.`,
-      "Points are paid only while you send your records under your name. Improvements made before that wait, and each problem pays them in one payment when you put your name on your records.",
+      "Your records are always sent to PolyPack, and points are paid from your first click. You can change the name they are sent under in Settings.",
       `Each payment adds three terms and any bonus, then multiplies the sum by the shape weight, the contest weight and your points multiplier. The size term pays for how much the side shrank, and the gap term for how much closer it came to the area bound. These two pay most of your points. Over a run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.`,
       `The step term pays a little for every click that improves the board at all. It is 1 for the smallest improvement that counts and grows by 1 for each factor of 10 above it, so it goes up and down from click to click. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
       "The server checks every record you send. A board is usually sent within a minute, and Settings explains when. If the server does not make it the record, for example because another entry got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
@@ -402,11 +402,11 @@ const RUNNING: How = {
 
 const SENDING: How = {
   text: [
-    `Nothing is sent until you enter a display name, tick the box and save. From then on the game sends a board to PolyPack whenever it beats the current record for its problem by more than the smallest improvement that counts (${MIN_STEP} of the side). Just before each send it asks the server for the current record, and it turns the container to its best angle, as the server scores it.`,
+    `Every game has a display name from the start, "TighterGamePlayer" and five digits, and you can change it in Settings. The game sends a board to PolyPack whenever it beats the current record for its problem by more than the smallest improvement that counts (${MIN_STEP} of the side). Just before each send it asks the server for the current record, and it turns the container to its best angle, as the server scores it.`,
     `Each send contains the problem (piece shape, container shape and number of pieces), the position and angle of every piece, the container's angle and your display name. It also says how the board was found, which is the method, its settings, the seed, the number of evaluations and the tag ${CLIENT_TAG}.`,
     `Sends are paced. A problem's first send goes at once, and each later send for the same problem waits at least ${minutes(PROBLEM_INTERVAL_MS)} after the one before. In all, first sends included, at most ${PLAYER_PER_MINUTE} sends go in any ${seconds(PLAYER_WINDOW_MS)}. If the server asks the game to slow down, all sending pauses for ${minutes(RATE_LIMITED_BACKOFF_MS)}, and if the server cannot be reached, for ${seconds(OFFLINE_BACKOFF_MS)}.`,
     `Your name is cleaned the way the server stores it. Control characters, invisible direction marks and angle brackets become spaces, runs of spaces become one, and the name is cut to ${MAX_NAME_LENGTH} characters.`,
-    "If you stop sending, the points the server has not confirmed yet are taken back, and they are paid again when you send again. Records already on the server stay there under your name. A problem you drop stays in the queue, marked as leaving, until its unsent best has gone.",
+    "Records on the server stay there under the name they were sent with, even if you change your name later. A problem you drop stays in the queue, marked as leaving, until its unsent best has gone.",
   ],
   math: [
     `sent only when <var>s</var> &lt; <var>s</var><sub>record</sub> × (1 − ${minStep})`,

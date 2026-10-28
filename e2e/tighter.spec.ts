@@ -8,7 +8,7 @@ import { strictTolerance } from "@polypack/solver";
 // the Vite dev server on 5174). Every request is checked to stay on that stack.
 //
 // A click is k evaluations of a solver run that stays open on the problem; points are paid per
-// click (with consent) and confirmed or taken back by the server's answer to the next submission.
+// click and confirmed or taken back by the server's answer to the next submission.
 
 interface ProblemView {
   key: string;
@@ -139,6 +139,17 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(p.board!.pieces).toHaveLength(p.P);
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
 
+  // every game has a name from the start, and sends under it; the player changes it from Settings
+  expect((await page.evaluate(() => (window as any).tighter.state.name)) as string).toMatch(/^TighterGamePlayer\d{5}$/);
+  await page.click("#t-open-settings");
+  await expect(page.locator("#t-name-now")).toHaveText(/^TighterGamePlayer\d{5}$/);
+  await page.click("#t-name-change");
+  await page.fill("#t-name-input", "E2E Tighter");
+  await page.click("#t-name-save");
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
+  await expect(page.locator("#t-name-now")).toHaveText("E2E Tighter");
+  await page.click("#t-settings-close");
+
   // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (with a random
   // seed) that stays open, and the first record
   await page.click("#t-evolve");
@@ -162,19 +173,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   // the next problem is earned by work: 300 clicks, whatever their size (Compact counts its 100 evaluations)
   await expect(page.locator("#t-next")).toBeDisabled();
   await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
-  // nothing is sent and nothing is paid before the player consents
-  await page.waitForTimeout(1500);
-  expect(await siteBest(page, p)).toBeNull();
-  expect(await rp(page)).toBe(0);
-  // the first record asks for a name in a pop-up over the board
-  await expect(page.locator("#t-welcome #t-consent")).toBeVisible();
-
-  await page.fill("#t-name", "E2E Tighter");
-  await page.check("#t-agree");
-  await page.click("#t-consent-save");
-  await expect(page.locator("#t-welcome")).toBeHidden();
-
-  // consent pays the record so far at once (the totals appear); the first record goes at once, with its provenance
+  // the click paid the record at once (the totals appear); the first record goes at once, with its provenance
   await expect(page.locator("#t-bar")).toBeVisible();
   const paid = await rp(page);
   expect(paid).toBeGreaterThanOrEqual(5);
@@ -198,7 +197,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   p = await focused(page);
   expect(p.unconfirmed).toBe(0);
   expect(p.sending).toBeNull();
-  // everything paid so far (consent's payment, and the container's turn before the send) is confirmed
+  // everything paid so far (the first click's payment, and the container's turn before the send) is confirmed
   const confirmed = await rp(page);
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
   await expect.poll(() => logText(page)).toContain(`${fmtRP(confirmed)} RP confirmed`);
@@ -341,9 +340,6 @@ test("tighter: auto-eval runs live, an evaluation a second while on, at most a m
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 5);
   await firstRecord(page);
-  await page.fill("#t-name", "Idle Player");
-  await page.check("#t-agree");
-  await page.click("#t-consent-save");
   await grant(page, 6000);
   await expect(page.locator("#t-auto")).toBeHidden();
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);

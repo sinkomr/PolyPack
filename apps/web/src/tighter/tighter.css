@@ -97,7 +97,6 @@ canvas#board[hidden] {
 .chip.good {
   color: var(--good);
 }
-.t-consent .t-check,
 .t-check {
   display: flex;
   gap: 8px;
@@ -637,12 +636,6 @@ body.tighter[data-pane="tree"] .t-banner {
   cursor: pointer;
   color: var(--muted);
 }
-#t-name-nudge {
-  margin-top: 8px;
-}
-#t-name-nudge[hidden] {
-  display: none;
-}
 
 /* ---- dialogs ---- */
 /* the first record's pop-up: over the board, not modal (the game goes on beneath it) */
@@ -712,13 +705,14 @@ body.tighter[data-pane="tree"] .t-banner {
   margin: 0 0 6px;
   font-size: 14px;
 }
-.t-consent .row {
+.t-name .row,
+.t-name.row {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: center;
 }
-.t-consent .row input {
+.t-name input {
   flex: 1 1 12rem;
   min-width: 0;
 }

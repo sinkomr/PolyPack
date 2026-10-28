@@ -154,18 +154,6 @@
               <dd id="t-prob-rp">—</dd>
             </dl>
           </section>
-          <dialog id="t-welcome" class="t-pop" aria-labelledby="t-welcome-title">
-            <h2 id="t-welcome-title">A new record</h2>
-            <p class="note">
-              No one has sent PolyPack a packing for this problem, so your board is a new record. Points are paid only
-              for records sent to PolyPack, and records are sent under a display name. Enter a name, tick the box and
-              save to send this one. You can change this later in Settings.
-            </p>
-            <div id="t-welcome-slot"></div>
-            <div class="row wrap t-pop-actions">
-              <button id="t-welcome-later" type="button">Not now</button>
-            </div>
-          </dialog>
         </div>
         <section id="t-upgrades" class="t-treewrap" role="tabpanel" aria-labelledby="t-tab-tree" hidden>
           <div class="t-tree-head">
@@ -309,7 +297,6 @@
         </section>
         <!-- what the totals above count and how they are paid, and the name that makes records pay -->
         <section id="t-points-help" aria-label="Points" hidden>
-          <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
           <details class="t-how-more t-points-how" data-how="points">
             <summary>How points are paid</summary>
           </details>
@@ -351,27 +338,17 @@
         <button id="t-settings-close" type="button" aria-label="Close settings">Close</button>
       </div>
       <div class="t-dialog-body">
-        <div id="t-settings-slot">
-          <section id="t-consent" aria-labelledby="t-consent-heading">
-            <h3 id="t-consent-heading">Your name on records</h3>
-            <form id="t-consent-form" class="t-consent">
-              <div class="row">
-                <label for="t-name">Display name</label>
-                <input id="t-name" maxlength="40" autocomplete="nickname" placeholder="display name" />
-              </div>
-              <label class="t-check"
-                ><input id="t-agree" type="checkbox" /> Send my records to PolyPack under this name</label
-              >
-              <button id="t-consent-save" type="submit" class="primary">Save</button>
-            </form>
-            <p id="t-consent-note" class="note">
-              Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.
-            </p>
-            <details class="t-how-more" data-how="sending">
-              <summary>What is sent, and how often</summary>
-            </details>
-          </section>
-        </div>
+        <section id="t-name-section" aria-labelledby="t-name-heading">
+          <h3 id="t-name-heading">Your name</h3>
+          <div class="row t-name">
+            <strong id="t-name-now"></strong>
+            <button id="t-name-change" type="button">Change name</button>
+          </div>
+          <p id="t-name-note" class="note"></p>
+          <details class="t-how-more" data-how="sending">
+            <summary>What is sent, and how often</summary>
+          </details>
+        </section>
         <section aria-labelledby="t-run-heading">
           <h3 id="t-run-heading">Running</h3>
           <label id="t-bg-box" class="t-check" hidden
