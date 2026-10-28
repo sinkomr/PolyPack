@@ -163,6 +163,7 @@ import { renderRunsPanel } from "./runs-ui";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
 import { bindNamePopup, showNamePopup } from "./name-popup";
+import { runTutorial } from "./tutorial";
 import {
   SpaceRead,
   classifySpaceAnswer,
@@ -3661,6 +3662,10 @@ $("t-settings-close").addEventListener("click", () => settingsDialog.close());
 settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
 });
+$("t-tut-replay").addEventListener("click", () => {
+  settingsDialog.close();
+  void runTutorial();
+});
 // the name is changed in the pop-up, which the tutorial also opens (name-popup.ts)
 bindNamePopup({
   get: () => state.name,
@@ -3898,6 +3903,18 @@ let ticker = 0;
 /** This tab holds the game: it may run, send and save. */
 function start(): void {
   ownsGame = true;
+  // a new game opens with the tutorial (?tutorial=off skips it), and the game starts when it is over
+  if (!state.tutorialDone && new URLSearchParams(location.search).get("tutorial") !== "off") {
+    void runTutorial().then(() => {
+      if (!ownsGame) return;
+      state.tutorialDone = true;
+      saveNow();
+      begin();
+    });
+  } else begin();
+}
+
+function begin(): void {
   $("t-elsewhere").hidden = true;
   document.body.classList.remove("standby");
   state.autoAt = now();

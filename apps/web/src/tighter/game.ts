@@ -198,6 +198,8 @@ export interface GameState {
   levels: Partial<Record<UpgradeId, number>>;
   /** The name records are sent under: generated at the start (names.ts), and the player may change it. */
   name: string;
+  /** The tutorial has been shown (or skipped); a save from before the tutorial counts as done. */
+  tutorialDone: boolean;
   settings: Settings;
   stats: Stats;
   /** Evaluations auto-eval is due and has not run yet (fractional; at most a minute's worth; a loaded save starts at 0). */
@@ -242,6 +244,7 @@ export function newGame(now: number, seed: number): GameState {
     owned: [],
     levels: {},
     name: generatePlayerName(),
+    tutorialDone: false,
     settings: {
       auto: false,
       method: "mc_compress",

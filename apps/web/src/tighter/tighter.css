@@ -718,6 +718,43 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-dialog-body {
   padding: 4px 16px 16px;
 }
+/* the tutorial: the head holds the step count between the title and Skip, then a picture and the step's text */
+.t-tut .t-dialog-head h2 {
+  margin-right: auto;
+}
+.t-tut-board[hidden],
+.t-tut-spaces[hidden] {
+  display: none;
+}
+.t-tut-spaces {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.t-tut-spaces figure {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+}
+.t-tut-space {
+  display: flex;
+  flex-direction: column;
+  height: min(30vh, 13rem);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.t-tut-board {
+  display: block;
+  width: 100%;
+  height: min(46vh, 22rem);
+  margin: 12px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
 .t-dialog-body section {
   padding: 10px 0;
   border-bottom: 1px solid var(--border);

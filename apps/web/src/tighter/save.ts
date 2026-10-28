@@ -746,6 +746,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     levels,
     // the name as the server stores it; a save without one gets a generated name
     name: sanitizeName(str(save.name, "", 400)) || generatePlayerName(),
+    // a save without the flag is from before the tutorial: the player has played, so it counts as shown
+    tutorialDone: bool(save.tutorialDone, true),
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: method as EvolveMethod,

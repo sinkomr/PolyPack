@@ -43,9 +43,9 @@ const siteBest = async (page: Page, p: ProblemView) =>
   (await (await page.request.get(`/api/problems/${p.N}/${p.M}/${p.P}`)).json()).site_best;
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
@@ -462,7 +462,7 @@ test("tighter: the game's page is cross-origin isolated (space runs share memory
     if (r.request().resourceType() === "script" || /\.(m?js|ts)(\?|$)/.test(r.url()))
       scripts.push({ url: r.url(), coep: r.headers()["cross-origin-embedder-policy"] });
   });
-  await page.goto("/tighter.html");
+  await page.goto("/tighter.html?tutorial=off");
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await page.locator("#t-evolve").click();
   await expect.poll(() => scripts.some((s) => /run-worker/.test(s.url))).toBe(true);

@@ -16,9 +16,9 @@ const state = <T>(page: Page, f: (s: any) => T): Promise<T> =>
 const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`${URL}?seed=${seed}`);
+  await page.goto(`${URL}?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`${URL}?seed=${seed}`);
+  await page.goto(`${URL}?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
 }
 

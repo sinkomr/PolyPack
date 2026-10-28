@@ -30,9 +30,9 @@ const game = <T>(page: Page, f: (s: any) => T): Promise<T> =>
   page.evaluate(`(${f.toString()})(window.tighter.state)`) as Promise<T>;
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
@@ -545,7 +545,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
       sessionStorage.setItem("old-save-put", "1");
     }
   }, old);
-  await page.goto("/tighter.html");
+  await page.goto("/tighter.html?tutorial=off");
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×4", { timeout: 30_000 });
   const s = await game(page, (st) => ({
     version: st.version,

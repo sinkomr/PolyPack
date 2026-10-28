@@ -40,9 +40,9 @@ const siteBest = async (page: Page, k: { N: number; M: number; P: number }) =>
   (await (await page.request.get(`/api/problems/${k.N}/${k.M}/${k.P}`)).json()).site_best;
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
@@ -397,7 +397,7 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
       return setItem.call(this, k, v);
     };
   });
-  await b.goto("/tighter.html");
+  await b.goto("/tighter.html?tutorial=off");
   await expect(b.locator("#t-elsewhere")).toBeVisible({ timeout: 10_000 });
   await expect(b.locator("#t-elsewhere-text")).toContainText("open in another tab");
   await expect(b.locator("#t-evolve")).toBeHidden();
