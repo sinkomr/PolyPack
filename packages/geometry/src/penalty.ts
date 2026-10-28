@@ -1,3 +1,4 @@
+import { axesOf, lastVertexSin, pieceTrig, vertexCos } from "./trig";
 import { Container, DISK_RADIUS, Pose, containerInradius, circumradius, inradius, pieceVertices } from "./shapes";
 
 /** Selected SAT feature; edge starts at vertex `edge` on `edgePiece`. */
@@ -113,8 +114,11 @@ export function pairPenetration(
   const R = circumradius(N) * scale;
   const r = inradius(N) * scale;
   const step = (2 * Math.PI) / N;
-  const cacheA = axesA && axesA.length >= 3 * N ? axesA : undefined;
-  const cacheB = axesB && axesB.length >= 3 * N ? axesB : undefined;
+  // Caller-supplied axes win; otherwise the (N, theta) memo of trig.ts, whose values are the same
+  // expressions. Both entries stay held through the loop (no callbacks run in it).
+  let memoA: ReturnType<typeof pieceTrig> | undefined;
+  const cacheA = axesA && axesA.length >= 3 * N ? axesA : axesOf((memoA = pieceTrig(N, a.theta)));
+  const cacheB = axesB && axesB.length >= 3 * N ? axesB : axesOf(pieceTrig(N, b.theta, memoA));
   let best = -Infinity;
   let bestEdge = 0;
   let bestPass = 0;
@@ -304,9 +308,10 @@ export function visitContainerProtrusions(
       // to u. This selects it in O(1), without enumerating the N vertices.
       const nearest = N === 0 ? 0 : Math.round((angle - a0) / step);
       const vertex = N === 0 ? 0 : ((nearest % N) + N) % N;
-      const vertexAngle = a0 + vertex * step;
-      const vx = N === 0 ? pose.x : pose.x + R * Math.cos(vertexAngle);
-      const vy = N === 0 ? pose.y : pose.y + R * Math.sin(vertexAngle);
+      // cached cos/sin of the same vertex angle (pure in (N, theta), see trig.ts)
+      const vc = N === 0 ? 0 : vertexCos(N, pose.theta, vertex, step);
+      const vx = N === 0 ? pose.x : pose.x + R * vc;
+      const vy = N === 0 ? pose.y : pose.y + R * lastVertexSin;
       const ox = vx - pose.x;
       const oy = vy - pose.y;
       const dx = vx - container.cx;
