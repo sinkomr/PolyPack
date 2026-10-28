@@ -157,26 +157,26 @@ export const RULES: readonly Rule[] = [
     id: "circles",
     name: "Circles only",
     limit:
-      "Only problems with circle pieces or a circle container are dealt. The open ones are circles in a polygon, or polygons in a circle, of 21 to 100 sides. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.",
-    reward: "Every polygon problem with circle pieces or a circle container pays 1.5 times the points.",
+      "Only problems with circle pieces or a circle container are dealt. This covers 2D in 2D only, and other dimensions are dealt as usual.",
+    reward: "Every 2D in 2D problem with circle pieces or a circle container pays 1.5 times the points.",
   },
   {
     id: "small",
     name: "Small problems only",
-    limit: `Only problems with N + M + P at most ${SMALL_TOTAL} are dealt, where N and M are the sides of the piece and of the container (0 for a circle) and P is the number of pieces. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.`,
-    reward: `Every polygon problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
+    limit: `Only problems of size ${SMALL_TOTAL} or less are dealt. Size means N + M + P, the sides of the piece and of the container plus the number of pieces, with 0 sides for a circle. This covers 2D in 2D only, and other dimensions are dealt as usual.`,
+    reward: `Every 2D in 2D problem of size ${SMALL_TOTAL} or less pays 1.5 times the points.`,
   },
   {
     id: "clicks",
     name: "Clicks only",
-    limit: "Auto-eval does not run, so every evaluation comes from your own clicks.",
+    limit: "Auto-eval is off, so every evaluation comes from your own clicks.",
     reward: "Every click runs one more evaluation.",
   },
   {
     id: "method",
     name: "One method",
     limit: "Only mc_compress runs. Other methods are greyed out, and pipeline stages that use them are skipped.",
-    reward: "Points on boards found by mc_compress are multiplied by 1.5.",
+    reward: "Improvements found by mc_compress pay 1.5 times the points.",
   },
 ];
 export const ruleById = (id: string | null) => RULES.find((r) => r.id === id) ?? null;
@@ -255,7 +255,7 @@ export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what:
   "2-in-2": { label: "2D in 2D", what: "polygons and circles packed in polygons and circles" },
   "2-on-3": { label: "2D on 3D", what: "pieces packed on the surfaces of solids" },
   "3-in-3": { label: "3D in 3D", what: "solids packed in solids" },
-  "3-on-4": { label: "3D on 4D", what: "solids packed on the boundary of a four-dimensional solid" },
+  "3-on-4": { label: "3D on 4D", what: "solids packed on the surface of a 4D solid" },
 };
 
 /** Records the player leads, as far as the game has seen (queue and past). */
