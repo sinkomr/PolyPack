@@ -447,9 +447,9 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await give(page, ["standing", "rules", "head1"]);
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
-    s.standing.cycleEarned = 240_000_000;
-    s.rp += 240_000_000;
-    s.rpEarned += 240_000_000;
+    s.standing.cycleEarned = 1_200_000_000;
+    s.rp += 1_200_000_000;
+    s.rpEarned += 1_200_000_000;
   });
   await expect(page.locator("#t-standing")).toBeVisible();
   await expect(page.locator("#t-st-preview")).toContainText("Reset now for 5 standing");

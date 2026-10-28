@@ -443,10 +443,10 @@ describe("Tighter upgrade texts", () => {
     expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
-    expect(RESET_MIN).toBe(200_000_000);
+    expect(RESET_MIN).toBe(1_000_000_000);
     expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
-    expect(text("standing")).toContain("earned 200,000,000 record points");
-    expect(text("standing")).toContain("200,000,000 × 5<sup>");
+    expect(text("standing")).toContain("earned 1,000,000,000 record points");
+    expect(text("standing")).toContain("1,000,000,000 × 5<sup>");
     expect(text("standing")).toContain("⌊5 × √(");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
@@ -497,9 +497,9 @@ describe("Tighter dimension cards", () => {
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });
 
-  it("are priced from the cycle's threshold, Curved at 300,000,000 in the first cycle", () => {
+  it("are priced from the cycle's threshold, Curved at 1,500,000,000 in the first cycle", () => {
     const o = (resets: number) => rest([], resets, ["2-in-2", "2-on-3", "3-in-3"]);
-    expect(costOf(o(0), "curved")).toBe(300_000_000);
+    expect(costOf(o(0), "curved")).toBe(1_500_000_000);
     expect(costOf(o(1), "curved")).toBe(0.3 * resetThreshold(1));
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
     const T1 = resetThreshold(1);
@@ -528,7 +528,7 @@ describe("Tighter dimension cards", () => {
       ).map((id) => costOf(o(2), id)),
     ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.4 * T2, 0.5 * T2]);
     // Quick study takes its 10 % a level off these prices as off any price in record points
-    expect(costOf(o(1), "surf-prisms")).toBe(2_000_000);
+    expect(costOf(o(1), "surf-prisms")).toBe(10_000_000);
     const studied = owning(["study"], { study: 2 }, null, [], [], 1, ["2-in-2", "2-on-3"]);
     expect(costOf(studied, "surf-prisms")).toBe(Math.round(slicePrice("surf-prisms", 1) * 0.81));
     // the card is owned until the reset takes it away

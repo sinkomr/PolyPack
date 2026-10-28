@@ -52,7 +52,7 @@ function lateGame(extra: UpgradeId[] = []): GameState {
 
 describe("Tighter standing", () => {
   it("is earned from the cycle's points alone, 5 at the threshold and growing as its square root", () => {
-    expect(RESET_MIN).toBe(200_000_000);
+    expect(RESET_MIN).toBe(1_000_000_000);
     expect(standingGain(RESET_MIN - 1)).toBe(0);
     expect(standingGain(RESET_MIN)).toBe(5);
     expect(standingGain(4 * RESET_MIN)).toBe(10);
@@ -60,7 +60,7 @@ describe("Tighter standing", () => {
     expect(standingGain(RESET_MIN, resetThreshold(1))).toBe(0);
     expect(standingGain(resetThreshold(1), resetThreshold(1))).toBe(5);
     // the next point: 5 √(c / T) = 6 at 1.44 T
-    expect(nextStandingAt(RESET_MIN)).toBe(288_000_000);
+    expect(nextStandingAt(RESET_MIN)).toBe(1_440_000_000);
     expect(nextStandingAt(4 * RESET_MIN)).toBe(Math.ceil((RESET_MIN * 121) / 25));
     expect(nextStandingAt(0)).toBe(RESET_MIN);
     expect(nextStandingAt(resetThreshold(2), resetThreshold(2))).toBe(1.44 * resetThreshold(2));

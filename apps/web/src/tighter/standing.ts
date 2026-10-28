@@ -240,8 +240,8 @@ export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string
 export { RESET_MIN } from "./points";
 /**
  * The confirmed cycle RP a reset needs, by the number of resets so far [SPEC, Michael's ladder of
- * 2026-10-26]: 200,000,000 in the first cycle and 5 times the last one's after: 1,000,000,000,
- * then 5,000,000,000.
+ * 2026-10-26, first reset raised 5x on 2026-10-27]: 1,000,000,000 in the first cycle and 5 times the
+ * last one's after: 5,000,000,000, then 25,000,000,000.
  */
 export const resetThreshold = (resets: number): number => RESET_MIN * Math.pow(RESET_GROWTH, resets);
 

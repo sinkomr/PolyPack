@@ -756,7 +756,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 300,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
+ * Curved costs 1,500,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -776,8 +776,8 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   "poly-duals": 0.4,
   balls: 0.5,
 };
-/** Curved's price in the first cycle, where a share of T (200,000,000) would be too little. */
-export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 300_000_000 };
+/** Curved's price in the first cycle, where a share of T (1,000,000,000) would be too little. */
+export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 1_500_000_000 };
 
 /** The record points a reset needs in the cycle after `resets` resets (standing.ts resetThreshold). */
 const thresholdAfter = (resets: number) => RESET_MIN * Math.pow(RESET_GROWTH, resets);
@@ -802,7 +802,7 @@ export function exists(o: Owned, id: UpgradeId): boolean {
 const SLICE_FORMULA = (id: CardSliceId): string[] =>
   id === "curved"
     ? [
-        `${sym("p")} = 300,000,000 in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
+        `${sym("p")} = ${SLICE_FIRST_CYCLE.curved!.toLocaleString("en-US")} in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
         `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
       ]
     : [
@@ -1426,7 +1426,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 600_000_000,
+    cost: 3_000_000_000,
     requires: ["collections", "rent", "ring120"],
     effect: "You can reset for standing, and each point of standing adds 10 % to all points.",
     how: {
