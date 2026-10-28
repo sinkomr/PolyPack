@@ -388,7 +388,7 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
     await click(page);
   }
   expect((await focused(page)).endedRuns).toBe(ended0 + 1);
-  await expect.poll(() => logText(page)).toContain("made no progress in its last 500 evaluations");
+  await expect.poll(() => logText(page)).toContain("made no progress in 500 evaluations");
   await expect(page.locator("#t-notice")).toContainText(/made no progress|Lattice packed/);
   // a run on the problem has ended by itself, so its one Lattice build ran in that same click,
   // and the build moved the pipeline no further

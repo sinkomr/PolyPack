@@ -37,7 +37,7 @@ export function chooseName(typed: string, current: string): NameChoice {
     name: current,
     changed: false,
     problem: typed.trim()
-      ? "That name has nothing left once angle brackets and control characters are removed. Your name stays the same."
+      ? "Nothing is left of that name once angle brackets and control characters are removed. Your name stays the same."
       : null,
   };
 }
