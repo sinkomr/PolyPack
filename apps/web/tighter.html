@@ -48,7 +48,7 @@
           <div id="t-bar-auto-box" title="Auto-eval's target in evaluations a second, shared by all lanes." hidden>
             <span>Auto-eval</span><strong id="t-bar-auto">off</strong>
           </div>
-          <div id="t-bar-lanes-box" title="Solver workers running at once, each on its own problem." hidden>
+          <div id="t-bar-lanes-box" title="Lanes: workers that each run one problem at the same time." hidden>
             <span>Lanes</span><strong id="t-bar-lanes">1</strong>
           </div>
           <div
@@ -85,12 +85,12 @@
           <button
             id="t-auto"
             aria-pressed="false"
-            title="Switches auto-eval on or off. While on, it runs evaluations for you."
+            title="Turns auto-eval on or off. While on, it runs evaluations for you."
             hidden
           >
             Auto-eval
           </button>
-          <button id="t-stop" title="Switches auto-eval off and drops the clicks still waiting to run.">Stop</button>
+          <button id="t-stop" title="Turns auto-eval off and drops the waiting clicks.">Stop</button>
           <span id="t-runinfo" class="t-runinfo"></span>
         </div>
         <div id="t-views" class="t-views" hidden>
@@ -131,7 +131,7 @@
             <dl class="t-score-list">
               <dt
                 id="t-side-label"
-                title="Your container's side (its diameter, for a circle), in units where a polygon piece has side 1 and a circle piece has diameter 1."
+                title="The container's side (its diameter, for a circle). A polygon piece has side 1 and a circle piece has diameter 1."
               >
                 Side s
               </dt>
@@ -140,7 +140,7 @@
               <dd id="t-delta">—</dd>
               <dt
                 id="t-bound-label"
-                title="The smallest value the problem allows by a bound, no packing is smaller. For a polygon problem it is the side the container would have if the pieces filled it completely."
+                title="No packing can be smaller than this. For a polygon problem it is the side the container would have if the pieces filled it completely."
               >
                 Area bound
               </dt>
@@ -380,8 +380,8 @@
         <section class="t-save" aria-labelledby="t-save-heading">
           <h3 id="t-save-heading">Save</h3>
           <p class="note">
-            Your game is saved in this browser only. Export gives you a save string that holds the whole game, to keep
-            or to paste into Import in another browser. Importing replaces the game in this browser.
+            Your game is saved in this browser only. Export gives you a save string. Paste it into Import in another
+            browser to move your game. Importing replaces the game in that browser.
           </p>
           <div class="row wrap">
             <button id="t-export" type="button">Export</button>
@@ -392,10 +392,9 @@
           <p id="t-save-note" class="note" role="status"></p>
         </section>
         <p class="note">
-          Every click runs the PolyPack solver in this browser, and the server checks every record you send before it
-          counts. The game plays best in Chrome. Other browsers may pause a hidden tab, and the game then waits until
-          you come back. On the <a href="/">Board</a> page you can use the same solver directly, with every method and
-          setting.
+          Every click runs the PolyPack solver in this browser. The server checks each record before it counts. The
+          game works best in Chrome. Other browsers may pause a hidden tab, and the game waits until you come back. The
+          <a href="/">Board</a> page lets you use the same solver with every method and setting.
         </p>
       </div>
     </dialog>
