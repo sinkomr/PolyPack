@@ -736,6 +736,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     // the name as the server stores it; no consent without one
     name: sanitizeName(str(save.name, "", 400)),
     consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
+    // a save without the flag is from before the tutorial: the player has played, so it counts as shown
+    tutorialDone: bool(save.tutorialDone, true),
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: method as EvolveMethod,

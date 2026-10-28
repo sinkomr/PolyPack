@@ -385,6 +385,11 @@
             <summary>When auto-eval pauses</summary>
           </details>
         </section>
+        <section aria-labelledby="t-tut-replay-heading">
+          <h3 id="t-tut-replay-heading">Tutorial</h3>
+          <p class="note">The tutorial shows how a packing gets smaller. It does not change your game.</p>
+          <button id="t-tut-replay" type="button">Show the tutorial again</button>
+        </section>
         <section class="t-save" aria-labelledby="t-save-heading">
           <h3 id="t-save-heading">Save</h3>
           <p class="note">
@@ -405,6 +410,26 @@
           you come back. On the <a href="/">Board</a> page you can use the same solver directly, with every method and
           setting.
         </p>
+      </div>
+    </dialog>
+    <dialog id="t-tutorial" class="t-dialog t-tut" aria-labelledby="t-tut-title">
+      <div class="t-dialog-head">
+        <h2 id="t-tut-title">Tutorial</h2>
+        <span id="t-tut-count" class="note"></span>
+        <button id="t-tut-skip" type="button">Skip</button>
+      </div>
+      <div class="t-dialog-body">
+        <canvas id="t-tut-board" class="t-tut-board" role="img" aria-label="The packing for this step"></canvas>
+        <div id="t-tut-spaces" class="t-tut-spaces" hidden>
+          <figure><div id="t-tut-space-0" class="t-tut-space"></div><figcaption id="t-tut-space-cap-0"></figcaption></figure>
+          <figure><div id="t-tut-space-1" class="t-tut-space"></div><figcaption id="t-tut-space-cap-1"></figcaption></figure>
+        </div>
+        <p id="t-tut-text"></p>
+        <p id="t-tut-status" class="note" role="status"></p>
+        <div class="row wrap t-pop-actions">
+          <button id="t-tut-act" type="button" hidden>Improve</button>
+          <button id="t-tut-next" type="button" class="primary">Next</button>
+        </div>
       </div>
     </dialog>
     <script type="module" src="/src/tighter/main.ts"></script>

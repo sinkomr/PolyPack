@@ -28,9 +28,9 @@ async function safari(playwright: {
   page.on("console", (m) => {
     if (m.type() === "error" && /worker|Embedder|module/i.test(m.text())) errors.push(m.text());
   });
-  await page.goto(`${URL}?seed=7`);
+  await page.goto(`${URL}?seed=7&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`${URL}?seed=7`);
+  await page.goto(`${URL}?seed=7&tutorial=off`);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
   return { browser, page, errors };
 }

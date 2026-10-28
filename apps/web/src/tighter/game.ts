@@ -199,6 +199,8 @@ export interface GameState {
   name: string;
   /** "Send my records to PolyPack under this name": nothing is sent before. */
   consent: boolean;
+  /** The tutorial has been shown (or skipped); a save from before the tutorial counts as done. */
+  tutorialDone: boolean;
   settings: Settings;
   stats: Stats;
   /** Evaluations auto-eval is due and has not run yet (fractional; at most a minute's worth; a loaded save starts at 0). */
@@ -244,6 +246,7 @@ export function newGame(now: number, seed: number): GameState {
     levels: {},
     name: "",
     consent: false,
+    tutorialDone: false,
     settings: {
       auto: false,
       method: "mc_compress",
