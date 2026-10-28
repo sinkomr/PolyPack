@@ -312,10 +312,10 @@ describe("Tighter's methods table", () => {
   it("say in Auto-advance's How which runs have a warm-up, read from the table", () => {
     // morph's is on the card, and without any the card says nothing of it
     expect(upgrade("advance").how).toEqual(advanceHow([{ label: "morph", evals: 722, runs: "on polygon pieces" }]));
-    expect(advanceHow([]).text[1]).toMatch(/“830 since progress”\.$/);
+    expect(advanceHow([]).text[0]).toMatch(/“830 since progress”\.$/);
     expect(advanceHow([]).math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var>");
     const how = advanceHow([{ label: "morph", evals: 722 }]);
-    expect(how.text[1]).toMatch(
+    expect(how.text[0]).toMatch(
       /The first 722 evaluations of every morph run are its warm-up, and they do not add to the count\.$/,
     );
     expect(how.math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var> − <var>e</var><sub>warm</sub>");
@@ -324,7 +324,7 @@ describe("Tighter's methods table", () => {
       { label: "morph", evals: 722 },
       { label: "lattice", evals: 1_500 },
     ]);
-    expect(two.text[1]).toContain(
+    expect(two.text[0]).toContain(
       "The first 722 evaluations of every morph run and the first 1,500 of every lattice run are their warm-up, and they do not add to the count.",
     );
     expect(two.vars!.find(([v]) => v.includes("warm"))![1]).toBe(

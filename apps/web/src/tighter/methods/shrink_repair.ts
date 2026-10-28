@@ -74,16 +74,16 @@ const TOL = tenText(SHRINK_STALL_TOLERANCE);
 /** The run-end sentence, unless the run used its whole budget. */
 function ended(v: RunView, title: string): string | null {
   if (v.evaluations >= v.budget) return null;
-  return `The run on ${title} ended after ${int(v.evaluations)} evaluations, because its last ${STALL} did not make its best score ${TOL} (relative) smaller.`;
+  return `The shrink_repair run on ${title} ended after ${int(v.evaluations)} evaluations, because its last ${STALL} brought no progress.`;
 }
 
 export const shrinkRepairGame: MethodGame = {
-  effect: "You can run shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
+  effect: "Adds shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
   how: (select) => ({
     text: [
-      `shrink_repair makes the container's side smaller by the ratio r and scales the centres into it, so that pieces overlap. It then repairs the overlaps at that fixed side. Each round of the repair moves every piece that still overlaps to the best of ${SHRINK_SOLVER.globalSamples + SHRINK_SOLVER.localSamples} sampled spots, lowers F below with L-BFGS, and raises the weights of the pairs that still overlap.`,
-      `A repair that ends with no overlap is scored. When the packing got smaller, r grows by a quarter, up to ${pct(B.maxShrinkRatio)}. A repair fails after ${B.patience} rounds in a row that do not lower the overlap by ${pct(ROUND_GAIN)}, or after ${ROUND_CAP * B.strikes * B.patience} rounds in all, and then r halves. Once r is below ${pct(B.minShrinkRatio)}, shrink_repair explores. It scatters or turns a group of nearby pieces and repairs 1 to ${EXPLORE_MAX} times ${pct(B.minShrinkRatio)} below the current side. Such a repair fails the same way after ${B.explorePatience} rounds in a row, or ${ROUND_CAP * B.strikes * B.explorePatience} in all. It explores until it finds a smaller packing, and then it shrinks again.`,
-      `The working packing is also scored after every W × P units of work, once its centres are spread until nothing overlaps. Each scoring is one evaluation. A run ends by itself after ${STALL} evaluations without progress. Progress is a score at least ${TOL} (relative) below the reference score. The reference is the start's score at first, and each progress makes its score the reference. The next run starts from the best board with a new random seed.`,
+      "shrink_repair makes the container a little smaller, so that some pieces overlap. It then moves the pieces around until none of them overlap any more. When that works, the packing is smaller than before.",
+      "After a smaller packing, the next shrink is a little bigger. After a failed repair, the next shrink is smaller. When the shrink gets very small, the method explores instead: it scatters or turns a group of nearby pieces and tries again, until it finds a smaller packing.",
+      `The game scores the working packing every so often, and each scoring is one evaluation. A run ends by itself after ${STALL} evaluations without progress. The next run starts from the best board with a new random seed.`,
     ],
     math: [
       `${sym("s")}′ = (1 − ${sym("r")}) × ${sym("s")}`,
@@ -114,7 +114,7 @@ export const shrinkRepairGame: MethodGame = {
       [sym("s", "ref"), "the reference score, the start's at first and then the score at the run's last progress"],
       [sym("n"), "the run's evaluations since its last progress"],
     ],
-    note: select,
+    note: `Each round of a repair moves every piece that still overlaps to the best of ${SHRINK_SOLVER.globalSamples + SHRINK_SOLVER.localSamples} sampled spots, lowers F with L-BFGS, and raises the weights of the pairs that still overlap. A repair that ends with no overlap is scored. When the packing got smaller, r grows by a quarter, up to ${pct(B.maxShrinkRatio)}. A repair fails after ${B.patience} rounds in a row that do not lower the overlap by ${pct(ROUND_GAIN)}, or after ${ROUND_CAP * B.strikes * B.patience} rounds in all, and then r halves. Once r is below ${pct(B.minShrinkRatio)}, shrink_repair explores. It scatters or turns a group of nearby pieces and repairs 1 to ${EXPLORE_MAX} times ${pct(B.minShrinkRatio)} below the current side. Such a repair fails the same way after ${B.explorePatience} rounds in a row, or ${ROUND_CAP * B.strikes * B.explorePatience} in all. Progress is a score at least ${TOL} (relative) below the reference score. The reference is the start's score at first, and each progress makes its score the reference. ${select}`,
   }),
   /**
    * Bench (see SHRINK_BASE), worked boards, 1,000 evaluations, side cut in % per problem [seeds 4
@@ -139,7 +139,8 @@ export const shrinkRepairGame: MethodGame = {
   tunedMeaning: { evaluationWork: "units of work per piece between two scorings of the working packing" },
   tunedTime: TUNE_TIME,
   tuneBase: "the setting on the shrink_repair card",
-  tuneNote: `A level was kept only where its median cut of the side over 1,000 evaluations was at least that of the level below (within 0.05 percentage points). The runs started from boards that mc_compress had worked for 8,000 evaluations, 3 runs on each of 40 21-gons in a 24-gon, 60 33-gons in a 27-gon and 80 36-gons in a 30-gon. An evaluation takes ${TUNE_TIME} at the top level, which matters only when your computer limits auto-eval.`,
-  runEnds: `A shrink_repair run ends once its last ${STALL} evaluations have not made its best score ${TOL} (relative) smaller.`,
+  tuneNote: `In tests, each level cut the side at least as much over 1,000 evaluations as the level below. An evaluation takes ${TUNE_TIME} at the top level, which matters only when your computer limits auto-eval.`,
+  tuneDetail: `A level was kept only where its median cut of the side over 1,000 evaluations was at least that of the level below (within 0.05 percentage points). The runs started from boards that mc_compress had worked for 8,000 evaluations, 3 runs on each of 40 21-gons in a 24-gon, 60 33-gons in a 27-gon and 80 36-gons in a 30-gon. An evaluation takes ${TUNE_TIME} at the top level.`,
+  runEnds: `A shrink_repair run ends after ${STALL} evaluations in a row without progress.`,
   endedText: ended,
 };

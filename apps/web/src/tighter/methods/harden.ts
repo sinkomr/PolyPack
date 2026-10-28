@@ -114,13 +114,12 @@ const orList = (xs: readonly string[]) =>
   xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} or ${xs[xs.length - 1]}`;
 
 export const hardenGame: MethodGame = {
-  effect: `You can run harden, which squeezes your board in runs of ${count(LEVEL0)} evaluations, with the gains near the end.`,
+  effect: `Adds harden, which squeezes your board slowly, in runs of ${count(LEVEL0)} evaluations.`,
   how: (select) => ({
     text: [
-      "harden is Nakajima's soft-to-rigid method. The pieces push each other apart where they overlap, and the container presses inward with the pressure μ. Each momentum step moves every piece and the container's size a little down the energy E, and then adds random noise.",
-      `A run starts from your board and makes S momentum steps. For the first ${PATH_SHARE} % of them the pressure stays at μ and the noise fades to 0. For the last ${SETTLE_SHARE} % there is no noise and the pressure falls to μ / 10,000, so the pieces settle. Every I steps the run scales the pieces' centres about their mean until the pieces just touch, and scores that packing, which is one evaluation.`,
-      "These packings start larger than your board and shrink as the run goes on, so its gains come near the end. The run's line beside Evolve shows how much larger the latest one is than your board. The run ends after its last step, and the next run starts from your board with a new random seed.",
-      `Polygons with up to ${HARDEN_RIGID_FROM_N - 1} sides start as the disc inscribed in them and turn into their true shape over the first ${PATH_SHARE} % of the steps. Polygons with ${HARDEN_RIGID_FROM_N} or more sides keep their true shape from the start, which makes their steps several times faster. Their inscribed disc already covers more than ${RIGID_COVER} % of their area, so turning it into the polygon would change little.`,
+      "harden is Nakajima's soft-to-rigid method. The pieces push each other apart where they overlap, while the container presses inward. In every step the pieces and the container move a little, and the game adds some random noise.",
+      `A run starts from your board. For the first ${PATH_SHARE} % of its steps the noise fades away. For the last ${SETTLE_SHARE} % there is no noise and the pressure drops, so the pieces settle. Every few steps the game spreads the pieces until they just touch and scores that packing, which is one evaluation.`,
+      "These packings start larger than your board and shrink as the run goes on, so the gains come near the end. The run line beside Evolve shows how much larger the latest packing is than your board. The run ends after its last step, and the next run starts from your board with a new random seed.",
     ],
     math: [
       `${sym("E")} = Σ ${sym("d")}<sup>2</sup> + Σ ${sym("p")}<sup>2</sup> + ${sym("μ")} × ${sym("L")}`,
@@ -152,14 +151,15 @@ export const hardenGame: MethodGame = {
       [sym("s", "last"), "the side of the run's latest packing, or its diameter for a circle container"],
       [sym("s"), "your board's side, or its diameter for a circle container"],
     ],
-    note: `The 1 in the evaluations per run is the scoring of your board when the run starts. ${select}`,
+    note: `Polygons with up to ${HARDEN_RIGID_FROM_N - 1} sides start as the disc inscribed in them and turn into their true shape over the first ${PATH_SHARE} % of the steps. Polygons with ${HARDEN_RIGID_FROM_N} or more sides keep their true shape from the start, which makes their steps several times faster. Their inscribed disc already covers more than ${RIGID_COVER} % of their area, so turning it into the polygon would change little. In the settle phase the pressure falls to μ / 10,000. Every I steps the run scales the centres about their mean. The 1 in the evaluations per run is the scoring of your board when the run starts. ${select}`,
   }),
   presets: PRESETS,
   tunedDefaults: { evaluationInterval: HARDEN_INTERVAL },
   tunedMeaning: { evaluationInterval: "momentum steps between two evaluations" },
   // an evaluation is I steps and one scoring, so 96 steps take less than 3 times as long as 32
   tunedTime: `up to ${SLOWER} times as long`,
-  tuneNote: `Every level makes the same ${count(hardenRunSteps({}))} momentum steps in a harden run and scores its packing every ${orList(INTERVALS.map(count))} steps, so a run takes ${orList(BUDGETS.map(count))} evaluations. A level changes only how often the packing is scored, not the moves, so the run ends with the packing it would end with at level 0. An evaluation takes up to ${SLOWER} times as long at the top level, which matters only when your computer limits auto-eval.`,
+  tuneNote: `Every level makes the same ${count(hardenRunSteps({}))} steps in a run. A level only changes how often the packing is scored, so a run takes ${orList(BUDGETS.map(count))} evaluations and ends with the same packing. Each evaluation takes up to ${SLOWER} times as long at the top level, which matters only when your computer limits auto-eval.`,
+  tuneDetail: `The packing is scored every ${orList(INTERVALS.map(count))} steps. A level changes only how often the packing is scored, not the moves.`,
   runParams: hardenRunParams,
   runBudget: hardenRunBudget,
   runEnds: `A harden run ends after its ${count(hardenRunSteps({}))} momentum steps, ${evals(LEVEL0)} without harden tuning.`,

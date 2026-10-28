@@ -3,7 +3,7 @@ import type { DimensionId, Family } from "./frontier";
 import { sym } from "./how";
 import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
-import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
+import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
@@ -328,8 +328,8 @@ const seconds = (x: number) => `${number(x)} s`;
 const K = sym("k");
 const VAR_K: Var = [K, "evaluations per click"];
 const EVALUATION =
-  "An evaluation is one scoring of the whole packing by the solver, which checks the pieces for overlaps and measures the container around them.";
-const DEALS_PER_CLICK = `New problems are earned per ${DEAL_CLICKS} clicks. Each Evolve click of yours counts as one click whatever its evaluations, so more evaluations per click do not bring them faster per click. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`;
+  "An evaluation is one check of the whole packing. The solver looks for overlaps and measures the container.";
+const DEALS_PER_CLICK = `The dealer earns a new problem every ${DEAL_CLICKS} clicks. An Evolve click counts as one click however many evaluations it runs, so more evaluations per click do not earn problems faster. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`;
 
 /** Evaluations per click: the rungs' value, the levels of One more evaluation per click, the Clicks only reward. */
 const CLICK_MATH = (base: string) => [`${K} = ${base} + ${sym("a")} + ${sym("r")}`];
@@ -349,8 +349,8 @@ function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
     effect: `Each Evolve click runs ${n} evaluations instead of ${n - 1}.`,
     how: {
       text: [
-        `An Evolve click asks the open run on the problem for more evaluations. ${EVALUATION} Between two evaluations the method moves the pieces, so each evaluation is one more step of its search.`,
-        `With this upgrade a click runs ${n} evaluations of the same run, one after another. Auto-eval keeps its own rate in evaluations a second, which this upgrade does not change.`,
+        `An Evolve click makes the open run on the problem work for a moment. ${EVALUATION} Each evaluation is one more step of the search.`,
+        `With this upgrade a click runs ${n} evaluations, one after the other. Auto-eval keeps its own rate in evaluations a second, so this does not speed it up.`,
       ],
       math: CLICK_MATH(String(n)),
       vars: CLICK_VARS,
@@ -369,11 +369,11 @@ const AUTO_VARS: readonly Var[] = [
   [sym("L"), "lanes, the solver workers that run at once (1 until Second lane)"],
 ];
 const AUTO_NOTE =
-  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can, and at most 60 s of its evaluations (at least 100) wait to be run.";
+  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can. At most 60 s of its evaluations (at least 100) wait to be run.";
 const AUTO_RATE =
-  "Its rate is in evaluations a second, whatever your evaluations per click. Upgrades of evaluations per click make your own clicks larger, and only the Auto-eval upgrades and Faster auto-eval speed auto-eval up.";
+  "Its rate is in evaluations a second, whatever your evaluations per click. Those upgrades make your own clicks bigger. Only Auto-eval and Faster auto-eval speed auto-eval up.";
 const AUTO_SHARE =
-  "The rate is for all your lanes together. The lanes share it, so with L lanes each one runs r / L evaluations a second. More lanes let more problems progress at once, but they add no evaluations.";
+  "You start with one lane, a worker that runs one problem. The lanes share auto-eval's rate, so more lanes add no evaluations.";
 /** Auto-eval, the first rung: 1 evaluation a second. Faster auto-eval (below) adds levels on it. */
 function autoFirst(cost: number, requires: UpgradeId[]): Upgrade {
   const r = AUTO_BASE;
@@ -385,11 +385,9 @@ function autoFirst(cost: number, requires: UpgradeId[]): Upgrade {
     effect: `Auto-eval runs ${autoRateText(r)} for you while it is switched on.`,
     how: {
       text: [
-        `Auto-eval runs evaluations on a problem's open run for you, beside your own clicks, at a rate of ${autoRateText(r)}. ${EVALUATION}`,
-        AUTO_RATE,
-        "It runs while its switch is on and this page is open. It pauses in a hidden tab unless Continuous lets it go on, and on battery power (where the browser reports it) unless you allow that in Settings. Nothing builds up while it is paused or off.",
-        "Without Auto-advance it works only on problems you have already compacted (your first click on a new problem). The first lane works on the problem on the board, and any other lane on the next problems in the queue.",
-        AUTO_SHARE,
+        `Auto-eval runs evaluations for you, ${autoRateText(r)}, beside your own clicks. ${EVALUATION}`,
+        `${AUTO_RATE} It runs while its switch is on and this page is open. It pauses in a hidden tab unless you own Continuous, and on battery power unless you allow that in Settings. Nothing builds up while it is paused.`,
+        `${AUTO_SHARE} Without Auto-advance, it works only on problems you have already compacted (your first click on a new problem).`,
       ],
       math: AUTO_MATH(number(r)),
       vars: AUTO_VARS,
@@ -419,9 +417,9 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
     effect: `The queue holds ${q} problems, and the dealer earns a new one every ${number(DEAL_CLICKS / q)} clicks.`,
     how: {
       text: [
-        "The queue holds the problems you work on, one per slot. A deal gives a free slot a new problem. The dealer earns deals as you and auto-eval work, and saves up at most one deal per slot. When a slot is free and a deal is saved, it deals at once. When the queue is empty, it deals a problem without a saved deal, and the next work pays that back.",
-        `Work counts in clicks. Each Evolve click of yours counts as one, whatever its evaluations, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click.`,
-        "A problem leaves the queue when you drop it, or when Auto-advance replaces it.",
+        "The queue holds the problems you work on, one in each slot. The dealer earns a deal as you and auto-eval work. A deal puts a new problem in a free slot.",
+        `Work counts in clicks. An Evolve click counts as one, however many evaluations it runs. ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The dealer saves up at most one deal for each slot. If the queue is empty, it deals a problem anyway, and your next work pays for it.`,
+        "A problem leaves the queue when you drop it or when Auto-advance replaces it.",
       ],
       math: [
         `${t} ← min(${sym("q")}, ${t} + ${sym("q")} × ${sym("c")} / ${DEAL_CLICKS})`,
@@ -439,7 +437,7 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
   };
 }
 
-const SELECT = "Choose it in the Method list beside Evolve, and your next click opens a run with it.";
+const SELECT = "Pick it in the Method list beside Evolve. Your next click starts a run with it.";
 /** A method's card: its name, effect and How come from its file in methods/. */
 function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const m = METHOD[id]!;
@@ -477,17 +475,17 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     effect:
       g.tuneEffect ??
       (n === 1
-        ? `Gives ${m} a setting that paid more per evaluation in tests.`
-        : `Each level gives ${m} a setting that does more search per evaluation.`),
+        ? `Gives ${m} a setting that earned more per evaluation in tests.`
+        : `Each level makes ${m} search harder on every evaluation.`),
     how: {
       text: [
-        `${n === 1 ? "The level sets" : `Each level sets`} ${m}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
+        `${n === 1 ? "The level changes" : "Each level changes"} ${m}'s settings. Runs use the new setting from your next click. Level 0 is ${g.tuneBase ?? "the solver's defaults"}.`,
         g.tuneNote ??
-          `A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon).${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
+          `In tests, each level cut the side at least as much per evaluation as the level below.${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
       ],
       math: keys.map((k) => `<code>${k}</code> = ${levels.map((l) => String(l[k as keyof typeof l])).join(", ")}`),
       vars: keys.map((k) => [`<code>${k}</code>`, `${g.tunedMeaning?.[k]}, at levels 0 to ${n}`]),
-      note: `${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
+      note: `${g.tuneDetail ?? "A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon)."} ${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
     },
     row: "runs",
     mystery,
@@ -606,7 +604,8 @@ const LANE_VARS: readonly Var[] = [
   [sym("r", "lane"), "the share of each lane, in evaluations a second"],
 ];
 const LANE_TEXT =
-  "A lane is a solver worker, a thread of the browser that holds one open run. Two lanes never work on the same problem, since one run's evaluations cannot be split. The lanes share auto-eval's rate, so each new lane lets one more problem progress at once but adds no evaluations. A lane with nothing to work on leaves its share to the others. When evaluations take so long that one core cannot keep up with the rate, more lanes spread the work over more cores.";
+  "A lane is a worker that runs one problem. Two lanes never work on the same problem. The lanes share auto-eval's rate, so a new lane lets one more problem progress at once but adds no evaluations. If evaluations are slow, more lanes also spread the work over more cores.";
+const LANE_NOTE = "A lane with nothing to work on leaves its share to the others.";
 
 function standingRung(
   id: UpgradeId,
@@ -666,13 +665,13 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   const e = sym("e");
   return {
     text: [
-      "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
-      "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”." +
+      "You set two values in the Queue panel. The tolerance is the smallest improvement that counts as progress. The patience is how many evaluations a problem may run without progress before it is replaced." +
+        " Each problem in the queue counts the evaluations it has run since its last progress. The queue shows the count, as in “830 since progress”." +
         (warm.length
           ? ` ${firsts.charAt(0).toUpperCase()}${firsts.slice(1)} ${warm.length === 1 ? "are its" : "are their"} warm-up, and they do not add to the count.`
           : ""),
-      `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. While your records have no name, a problem with an unsent best is never dropped.`,
-      "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
+      `While auto-eval is on, a problem that reaches the patience is replaced as soon as a deal is earned. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
+      "Auto-eval compacts new problems first (100 evaluations of mc_compress, the same as your first click). After that, a lane stays on its problem while it makes progress. Otherwise it takes the problem that is still improving and has run the fewest evaluations since progress.",
     ],
     math: [
       `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${n} ← 0`,
@@ -690,7 +689,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
         : []),
       [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
     ],
-    note: "With the patience at Never nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself.",
+    note: "With Your pick, the new problem is the best offer. With the patience at Never, nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). The patience goes from 250 to 20,000 evaluations (1,000 at first).",
   };
 }
 
@@ -907,12 +906,13 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Trace detail",
     cost: 1000,
     requires: [],
-    effect: "The trace in the board's corner gets its labels and a dot at each improvement.",
+    effect: "The trace in the board's corner gets labels and a dot at each improvement.",
     how: {
       text: [
-        "The trace is the small chart in the board's corner. It draws the problem's side after each improvement that counted, against the evaluations run on that problem. An improvement counts when it beats the side before by more than the 10⁻⁹ minimum, as below.",
-        "Trace detail adds a dot at each of the last 60 improvements and a label under the chart. The label gives the side at the first and the last point, the number of improvements, and the evaluations between them.",
+        "The trace is the small chart in the board's corner. It shows the container's side after each improvement, against the evaluations run on the problem.",
+        "Trace detail adds a dot for each of the last 60 improvements. It also adds a label under the chart. The label gives the first and last side, the number of improvements, and the evaluations between them.",
       ],
+      note: "An improvement counts only when the side falls by more than 10⁻⁹ (relative).",
       math: [`counts when ${sym("s")}′ &lt; ${sym("s")} × (1 − 10<sup>−9</sup>)`],
       vars: [
         [sym("s"), "the container's side before, which is the score (smaller is better)"],
@@ -937,12 +937,14 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "mc_compress: 10 sweeps per evaluation",
     cost: 10000,
     requires: ["click7"],
-    effect: "mc_compress runs 10 sweeps of moves per evaluation instead of 5.",
+    effect: "mc_compress tries 10 sweeps of moves per evaluation instead of 5.",
     how: {
       text: [
-        "Each evaluation of mc_compress now follows 10 sweeps of moves instead of 5, so each click searches about twice as long. 10 is the solver's own default. Compact, your first click on a new problem, uses it too.",
-        ...MC_COMPRESS_TEXT,
+        "A sweep is one try of a move for each piece. Each evaluation of mc_compress now follows 10 sweeps instead of 5, so each click searches about twice as long. Compact, your first click on a new problem, uses it too.",
+        `${MC_COMPRESS_TEXT[0]} ${MC_COMPRESS_TEXT[1]}`,
+        MC_COMPRESS_TEXT[2],
       ],
+      note: MC_COMPRESS_NOTE,
       math: MC_COMPRESS_MATH,
       vars: MC_COMPRESS_VARS("10 with this upgrade, 5 without"),
     },
@@ -954,10 +956,10 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "One more evaluation per click",
     cost: 15000,
     requires: ["click10"],
-    effect: "Each level adds one evaluation to every Evolve click of yours.",
+    effect: "Each level adds one evaluation to every Evolve click.",
     how: {
       text: [
-        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, which this does not change. ${EVALUATION}`,
+        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, so this does not speed it up.`,
       ],
       math: CLICK_MATH("10"),
       vars: CLICK_VARS,
@@ -1005,7 +1007,7 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Auto-advance",
     cost: 88000,
     requires: ["reach2", "queue3"],
-    effect: "Problems that stop making progress are replaced, and auto-eval compacts new problems first.",
+    effect: "Problems that stop improving are replaced, and auto-eval compacts new problems first.",
     how: advanceHow(),
     row: "queue",
   },
@@ -1016,14 +1018,15 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Second lane",
     cost: 144_000,
     requires: ["advance"],
-    effect: "Auto-eval works on two problems at once, each in its own solver worker, and they share its rate.",
+    effect: "Auto-eval works on two problems at once, and the two lanes share its rate.",
     how: {
       text: [
         `${LANE_TEXT} Your own clicks go to the lane that holds the problem on the board.`,
-        "Without Auto-advance the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane keeps to its own problem while that makes progress, and otherwise moves to the problem with the fewest evaluations since progress that is still making progress.",
+        "Without Auto-advance, the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane stays on its problem while it makes progress. Otherwise it moves to the problem that is still improving and has run the fewest evaluations since progress.",
       ],
       math: LANE_MATH,
       vars: LANE_VARS,
+      note: LANE_NOTE,
     },
     row: "queue",
   },
@@ -1066,11 +1069,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Continuous",
     cost: 208_000,
     requires: ["lanes2"],
-    effect: "Auto-eval can keep running while this tab is hidden, once you tick its setting.",
+    effect: "Auto-eval can keep running in a hidden tab, once you tick its setting.",
     how: {
       text: [
-        "Without this upgrade, auto-eval pauses while the tab is hidden. With it, Settings gets a box, off until you tick it, that keeps auto-eval running in a hidden tab.",
-        "Browsers slow down the timers of a hidden tab, and may wake them only once a minute. Up to 60 s of auto-eval's evaluations wait to be run, so such a tab still loses nothing. Nothing runs once the page is closed.",
+        "Without this upgrade, auto-eval pauses while the tab is hidden. With it, Settings gets a box that keeps auto-eval running in a hidden tab. The box is off until you tick it.",
+        "Browsers slow down a hidden tab, and may wake it only once a minute. The game stores up to 60 s of auto-eval's evaluations and runs them when it can, so a hidden tab loses nothing. Nothing runs once the page is closed.",
       ],
     },
     row: "queue",
@@ -1152,9 +1155,10 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "A new problem can start from the best packing of a neighbour with fewer pieces.",
     how: {
       text: [
-        "When a new open problem is placed, the game looks for the best known packing of the same shapes with fewer pieces. That is your own board in the queue, or else the site's record of the nearest piece count it can find (at most 4 lookups). It keeps those pieces where they are and places the missing ones in free space. With 6 or fewer missing, each goes where it grows the container least.",
-        "This start is used only when its side is under 98 % of Load all's, the start with every piece on rings around the centre. The starting score, which your first record must beat by more than the 10⁻⁹ minimum, is the smallest of the sides below.",
+        "When the game places a new open problem, it looks for a good packing of the same shapes with fewer pieces. This is your own board in the queue, or else the site's record for the nearest piece count it finds. It keeps those pieces where they are and adds the missing ones in free space.",
+        "The game uses this start only if it is clearly smaller than the usual start, with every piece on rings around the centre. Your first record on the problem must beat the best of these starts.",
       ],
+      note: "It looks up at most 4 piece counts. With 6 or fewer pieces missing, each goes where it grows the container least. The start counts as clearly smaller when its side is under 98 % of Load all's. The starting score is the smallest of the sides below, and your first record must beat it by more than 10⁻⁹ (relative).",
       math: [
         `use the transfer when ${sym("s", "t")} &lt; 0.98 × ${sym("s", "L")}`,
         `${sym("s", "0")} = min(${sym("s", "L")}, ${sym("s", "t")}, ${sym("s", "P+1")})`,
@@ -1177,12 +1181,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Another lane",
     cost: 480_000,
     requires: ["lanes2", "continuous"],
-    effect: "Each level adds a lane, up to one less than your CPU's cores.",
+    effect: "Each level adds one lane, up to one less than your computer's cores.",
     how: {
-      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the tree stops offering them."],
+      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the shop stops offering them."],
       math: LANE_MATH,
       vars: LANE_VARS,
-      note: "Each level costs 2.2 times the one before.",
+      note: `Each level costs 2.2 times the one before. ${LANE_NOTE}`,
     },
     row: "queue",
     levels: { max: 31, growth: 2.2 },
@@ -1271,8 +1275,8 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: `Each level adds ${AUTOX_STEP} evaluation a second to auto-eval, with no last level.`,
     how: {
       text: [
-        `Each level adds ${AUTOX_STEP} evaluation a second to auto-eval's rate, on top of the ${autoRateText(AUTO_BASE)} of Auto-eval. Like Auto-eval, it raises the rate of all your lanes together, and the lanes share it.`,
-        `You can buy as many levels as you like, and each costs a little more than the one before. At some point your computer is the limit: it cannot run evaluations faster than it can, and levels bought past that run no faster on this computer. The card and the Lanes panel say so when auto-eval asks for more than this computer was measured to run.`,
+        `Each level adds ${AUTOX_STEP} evaluation a second to auto-eval's rate, on top of the ${autoRateText(AUTO_BASE)} of Auto-eval. The rate is for all your lanes together, and the lanes share it.`,
+        `You can buy as many levels as you like. Each costs a little more than the one before. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
       ],
       math: AUTO_MATH(`${number(AUTO_BASE)} + ${AUTOX_STEP} × ${sym("a")}`),
       vars: [AUTO_VARS[0], [sym("a"), "levels of Faster auto-eval, 0 without it"], ...AUTO_VARS.slice(1)],
@@ -1291,8 +1295,8 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "With Auto chosen, the game picks each new run's method from what has paid.",
     how: {
       text: [
-        "Problems are sorted into kinds by tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind, the record points it earned per evaluation. The game learns from every run, before you buy this too.",
-        "With Auto chosen in the Method list, each new run draws a plausible value θ for every method you own from what its arm has learned, and runs the method with the highest. This is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind, with a spread as wide as that mean, so new methods get tried.",
+        "The game sorts problems into kinds by tier, size and piece shape. It keeps track of how many record points (RP) each method earned per evaluation on each kind. It learns this from every run, even before you buy Method match.",
+        "With Auto chosen in the Method list, each new run uses the method that looks best for that kind of problem. The game sometimes tries a method it knows less about, so new methods get their turn.",
       ],
       math: [
         `${sym("y")} = ${sym("G")} / ${sym("E")}`,
@@ -1314,7 +1318,7 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("ȳ"), "the mean of their y"],
         [sym("v"), "the variance of their y (σ₀² until there are two)"],
       ],
-      note: "Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
+      note: "Kinds are tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind. The method with the highest draw θ runs, which is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind, with a spread as wide as that mean. Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
     },
     row: "runs",
     mystery: true,

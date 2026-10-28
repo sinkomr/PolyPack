@@ -176,9 +176,9 @@ describe("Tighter's asc runs", () => {
   it("explain the warm start and the cycle on the card, the help and the tuning card", () => {
     const card = upgrade("asc");
     expect(card.effect).toBe(
-      "You can run asc, a search that loosens the packing and squeezes it again, so tight boards can still shrink.",
+      "Adds asc, which loosens the packing and squeezes it again, so tight boards can still shrink.",
     );
-    const text = prose(card.how).join(" ");
+    const text = [...prose(card.how), card.how.note!].join(" ");
     expect(text).toContain("The temperature T falls by 0.05 % each sweep");
     expect(text).toContain("A run is one cooling cycle of about 20,000 sweeps");
     expect(text).toContain("or earlier after 2,000 sweeps without a gain (4,000 at the top level of asc tuning)");
@@ -192,7 +192,7 @@ describe("Tighter's asc runs", () => {
     );
     // the help on runs and on pipelines says when an asc run ends
     const ends =
-      "An asc run ends after one cooling cycle of about 20,000 sweeps, which is 2,000 evaluations at first and fewer with asc tuning.";
+      "An asc run ends after one cooling cycle of about 20,000 sweeps. That is 2,000 evaluations at first, and fewer with asc tuning.";
     expect(runEndRules()).toContain(ends);
     expect(prose(HELP.counts as How).join(" ")).toContain(ends);
     expect(prose(PIPELINE).join(" ")).toContain(ends);

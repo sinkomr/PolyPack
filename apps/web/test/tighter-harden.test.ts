@@ -122,7 +122,7 @@ describe("harden in Tighter", () => {
 
   it("explains the run as the code runs it, with its numbers from the constants", () => {
     const how = hardenGame.how!("SELECT");
-    const all = [text(how), ...(how.math ?? [])].join(" ");
+    const all = [text(how), how.note ?? "", ...(how.math ?? [])].join(" ");
     for (const n of ["11,500", "11,520", "87 %", "13 %", "99.2 %", "20 sides", "21 or more sides"])
       expect(all, n).toContain(n);
     expect(how.math).toContain(
@@ -130,14 +130,14 @@ describe("harden in Tighter", () => {
     );
     expect(how.note).toMatch(/SELECT$/);
     expect(upgrade("harden").effect).toBe(
-      "You can run harden, which squeezes your board in runs of 361 evaluations, with the gains near the end.",
+      "Adds harden, which squeezes your board slowly, in runs of 361 evaluations.",
     );
     // the old texts of a compress phase and of many passes a run are gone
     expect(prose(how)).not.toMatch(/compress|repeats it|100,000/i);
     // the tuning card's second paragraph is harden's own
     const tune = upgrade("tuneHarden").how;
     expect((tune.text as string[])[1]).toBe(hardenGame.tuneNote);
-    expect(hardenGame.tuneNote).toContain("every 32, 48, 64 or 96 steps");
+    expect(hardenGame.tuneDetail).toContain("every 32, 48, 64 or 96 steps");
     expect(hardenGame.tuneNote).toContain("361, 241, 181 or 121 evaluations");
     expect(hardenGame.tuneNote).toContain("up to 3 times as long");
     expect(tune.math).toEqual(["<code>evaluationInterval</code> = 32, 48, 64, 96"]);
