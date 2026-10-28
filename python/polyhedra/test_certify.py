@@ -455,7 +455,9 @@ class CrossCheck(unittest.TestCase):
 
 class KeepSearch(unittest.TestCase):
     """build_records.py --keep with --search: a certified result replaces a PolyPack record by any gain and a record
-    of the wiki's only by more than 1e-5 relative; the other lines of the configuration file stay as they were."""
+    of the wiki's only by more than 1e-5 relative; the other lines of the configuration file stay as they were; a
+    result with pieces deleted from a larger P (from_P) takes that record's lineage, also when the same run replaces
+    it."""
 
     def test_replacements(self):
         import shutil
@@ -489,12 +491,12 @@ class KeepSearch(unittest.TestCase):
             res = os.path.join(d, 'polish')
             os.makedirs(res)
 
-            def result(pieces, s, record_file=None):
+            def result(pieces, s, record_file=None, **more):
                 n = len(pieces)
                 with open(os.path.join(res, f'cubincub_n{n:02d}.json'), 'w') as f:
                     json.dump({'code': 'cubincub', 'P': n, 's_full': s, 'pieces': pieces, 'method': 'test polish',
                                'start': 'warm', 'record_file': record_file or f'records/cubincub/cubincub_n{n:02d}.json',
-                               'date': '2026-10-27'}, f)
+                               'date': '2026-10-27', **more}, f)
 
             for pieces, s in ((two, 2 + 3e-7), (four, 2 + 4e-7), (eight, 2 + 4e-7)):
                 result(pieces, s)
@@ -519,10 +521,27 @@ class KeepSearch(unittest.TestCase):
             for r in doc['records']:
                 self.assertEqual(certify.field_errors(r, VOL), [], r['id'])
                 self.assertTrue(certify.check_record(r, VOL)['ok'], r['id'])
-            # a result that did not start from the kept record is refused
+            # pieces deleted from the wiki's P = 8 give P = 4, and from that new P = 4 (the same run) P = 2
+            os.remove(os.path.join(res, 'cubincub_n08.json'))
+            result(four, 2 + 3.5e-7, 'records/cubincub/cubincub_n08.json', from_P=8, runs=['pieces deleted'])
+            result(two, 2 + 2e-7, 'polish/cubincub_n04.json', from_P=4, runs=['pieces deleted'])
+            self.assertEqual(B.keep_and_add(keep, None, [res], 100, 1, False), 0)
+            r2, r4, _ = certify.load_records(keep)['records']
+            self.assertEqual((r4['score_cert'], r2['score_cert']), (2 + 3.5e-7, 2 + 2e-7))
+            self.assertEqual(r4['origin'], {'file': 'polish/cubincub_n04.json', 'date': '2026-10-27',
+                                            'start': 'records/cubincub/cubincub_n08.json', 'runs': ['pieces deleted']})
+            self.assertEqual(r2['origin']['start'], 'polish/cubincub_n04.json')
+            for r in (r2, r4):
+                self.assertEqual(r['sources'], ['polypack', 'wiki'])
+                self.assertIn('Alejandro Zarzuelo, records/cubincub/cubincub_n08.json', r['credit'])
+                self.assertTrue(certify.check_record(r, VOL)['ok'], r['id'])
+            # a result that did not start from the record it names, or names a smaller P, is refused
             for n in (2, 4):
                 os.remove(os.path.join(res, f'cubincub_n{n:02d}.json'))
             result(eight, 2 + 3e-7, 'records/other.json')
+            with self.assertRaises(ValueError):
+                B.keep_and_add(keep, None, [res], 100, 1, False)
+            result(eight, 2 + 3e-7, from_P=4)
             with self.assertRaises(ValueError):
                 B.keep_and_add(keep, None, [res], 100, 1, False)
         finally:

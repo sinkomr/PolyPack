@@ -20,9 +20,10 @@ usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--o
   --keep      an existing records.json whose records are kept exactly as they are (index entries and
               configs/<code>.jsonl untouched), except those of the PolyPack problems that have a file in --polypack,
               which are built from it, and those of the wiki's problems that a result in --search replaces: a
-              result started from the kept record (start "warm", record_file its origin.file; its runs, when given,
-              become origin.runs), certified, replaces a PolyPack research record when it is smaller at all and a
-              record of the wiki's only when smaller by more than 1e-5 relative (as in a full build); the
+              result started from the kept record (start "warm", record_file its origin.file; or, with from_P, from
+              the record of a larger P that pieces were deleted from, kept or replaced in the same run; its runs, when
+              given, become origin.runs), certified, replaces a PolyPack research record when it is smaller at all
+              and a record of the wiki's only when smaller by more than 1e-5 relative (as in a full build); the
               configuration files of those problems are rewritten
 
 For every problem of catalogue.py and n = 2..nmax the candidates are every upstream record file of the case
@@ -712,51 +713,61 @@ POLYPACK_CONVENTION = ('records of PolyPack\'s own problems (no wiki record): or
 
 def search_replacements(records, dirs, jobs, volumes, no_certify):
     """--keep with --search: the records of the wiki's problems that the results in `dirs` replace (see the usage),
-    as {id: new record}, and the ids whose result was not certified. A result must start from the kept record."""
+    as {id: new record}, and the ids whose result was not certified. A result of n pieces starts from the record of
+    its problem at P = from_P (default n; a larger from_P: pieces were deleted from that record), which is a kept
+    record or one this run replaces: record_file must be that record's origin.file. The new record's sources and
+    credit are those of the lineage it starts from."""
     by_id = {r['id']: r for r in records}
-    work, olds, seen = [], [], set()
-    for code, cands in load_search(dirs, label=True).items():
+    cands, seen = [], set()
+    for code, cs in load_search(dirs, label=True).items():
         if code not in catalogue.WIKI_PROBLEMS:
             raise ValueError(f'--search with --keep: {code} is not one of the wiki\'s problems (they come from --polypack)')
-        for c in cands:
+        for c in cs:
             r, n = c['rec'], len(c['rec']['pieces'])
-            old = by_id.get(f'polyhedra/{code}/{n}')
-            if old is None or r.get('start') != 'warm' or r.get('record_file') != old['origin']['file']:
-                raise ValueError(f'{c["file"]}: not started from the kept record of {code}/{n} (start "warm", '
-                                 f'record_file its origin.file)')
-            if old['id'] in seen:
-                raise ValueError(f'{c["file"]}: a second result for {old["id"]}')
-            seen.add(old['id'])
+            m = r.get('from_P', n)
+            rid = f'polyhedra/{code}/{n}'
+            if rid not in by_id or isinstance(m, bool) or not isinstance(m, int) or m < n or r.get('start') != 'warm':
+                raise ValueError(f'{c["file"]}: not a result of a kept record of {code} (start "warm", from_P >= P)')
+            if rid in seen:
+                raise ValueError(f'{c["file"]}: a second result for {rid}')
+            seen.add(rid)
             c['pieces'], c['s_cert'], c['mine'] = [list(map(float, p)) for p in r['pieces']], c['s'], True
-            ours = old['found_by'] == 'PolyPack research'
-            # a PolyPack record is replaced by any gain; the wiki's only by more than OUR_MARGIN, as in a full build
-            limit = old['score_cert'] if ours else old['wiki']['s_full'] * (1 - OUR_MARGIN)
-            if not c['s_cert'] < limit:
-                print(f'{c["file"]}: s = {c["s_cert"]!r} does not replace {old["id"]} (s = {old["score_cert"]!r})')
-                continue
-            # the lineage's sources are the kept record's; its credit names the wiki packing the lineage starts from
-            c['start_keys'], c['start_rec'] = old['sources'], old
-            if not ours:
-                c['start_credit'] = f"{old['found_by']}, {old['origin']['file']}"
-            elif old['credit'].startswith(START_CREDIT):
-                c['start_credit'] = old['credit'][len(START_CREDIT):-1]
-            work.append((Case(code, n), [c], volumes))
-            olds.append(old)
+            cands.append((Case(code, n), m, c))
+    work = [(case, [c], volumes) for case, _, c in cands]
     if no_certify:
-        results = [(cands[0], None) for _, cands, _ in work]
+        results = [(c[0], None) for _, c, _ in work]
     elif jobs > 1 and len(work) > 1:
         import multiprocessing as mp
         with mp.Pool(jobs) as pool:
             results = pool.map(certify_case, work, chunksize=1)
     else:
         results = [certify_case(w) for w in work]
+    # in decreasing P per problem, so that a result can start from a record this run replaces
     replaced, failed = {}, []
-    for (case, _, _), old, (cand, _) in zip(work, olds, results):
+    for (case, m, c), (cand, _) in sorted(zip(cands, results), key=lambda x: (x[0][0].code, -x[0][0].n)):
+        r, rid = c['rec'], f'polyhedra/{case.code}/{case.n}'
+        old = by_id[rid]
+        src = replaced.get(f'polyhedra/{case.code}/{m}') or by_id.get(f'polyhedra/{case.code}/{m}')
+        if src is None or r.get('record_file') != src['origin']['file']:
+            raise ValueError(f'{c["file"]}: not started from the record of {case.code}/{m} (record_file must be its '
+                             f'origin.file)')
         if cand is None:
-            failed.append(old['id'])
+            failed.append(rid)
             continue
+        ours = old['found_by'] == 'PolyPack research'
+        # a PolyPack record is replaced by any gain; the wiki's only by more than OUR_MARGIN, as in a full build
+        limit = old['score_cert'] if ours else old['wiki']['s_full'] * (1 - OUR_MARGIN)
+        if not c['s_cert'] < limit:
+            print(f'{c["file"]}: s = {c["s_cert"]!r} does not replace {rid} (s = {old["score_cert"]!r})')
+            continue
+        # the lineage's sources are the start record's; its credit names the wiki packing the lineage starts from
+        c['start_keys'], c['start_rec'] = src['sources'], src
+        if src['found_by'] != 'PolyPack research':
+            c['start_credit'] = f"{src['found_by']}, {src['origin']['file']}"
+        elif src['credit'].startswith(START_CREDIT):
+            c['start_credit'] = src['credit'][len(START_CREDIT):-1]
         wiki_best = {'s': old['wiki']['s_full'], 'file': old['wiki'].get('file', old['origin']['file'])}
-        replaced[old['id']] = make_record(case, cand, True, wiki_best, None, old['literature'], volumes)
+        replaced[rid] = make_record(case, c, True, wiki_best, None, old['literature'], volumes)
     return replaced, failed
 
 
