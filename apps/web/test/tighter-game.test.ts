@@ -545,6 +545,28 @@ describe("Tighter points per click", () => {
     const c2 = applyStep(s, p, step(1.28 * B, 2), T0);
     expect(c2.points!.beatBonus).toBe(false);
   });
+
+  it("pays the beat factor again each time the lead is taken back from another name", () => {
+    const s = newGame(T0, 1);
+    s.name = "Ada";
+    s.consent = true;
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
+    addToQueue(s, p);
+    p.phase = "ready";
+    p.board = board(3);
+    p.best = 1.3 * B;
+    p.floor = 1.3 * B;
+    p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
+    const c1 = applyStep(s, p, step(1.29 * B, 1), T0);
+    expect(c1.points!.beat).toBe(2);
+    applyAnswer(s, p, 1.3 * B, 1.29 * B, { kind: "leader", score: 1.29 * B, id: 17, pending: false }, T0);
+    // leading: a nibble pays the plain factor
+    expect(applyStep(s, p, step(1.28 * B, 2), T0).points!.beat).toBe(1);
+    // Bob takes the lead back (a check), and the retake is a beat again
+    applyLeader(p, { score: 1.27 * B, name: "Bob", id: 5 }, s, T0);
+    expect(p.beatPaid).toBe(false);
+    expect(applyStep(s, p, step(1.26 * B, 3), T0).points!.beat).toBe(2);
+  });
 });
 
 describe("Tighter answers from the server", () => {

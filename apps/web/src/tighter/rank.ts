@@ -1,7 +1,7 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
-import { rulesOf } from "./families";
+import { msPerEval, rulesOf } from "./families";
 import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, poly } from "./frontier";
-import { CONTEST, TIERS, Tier } from "./points";
+import { CONTEST, TIERS, Tier, costFactor } from "./points";
 
 /**
  * The dealer's judgement (plan 2026-10-20 §3): what a candidate problem is expected to pay, the
@@ -12,6 +12,9 @@ import { CONTEST, TIERS, Tier } from "./points";
  *
  *   score = w · c · room · RP_PER_EVAL · correction · speed
  *
+ * The prior itself (record points per evaluation) is also scaled by the cost factor of points.ts, as
+ * pay is, so the learning dealer's ratios of pay to prior stay near 1.
+ *
  * with w the shape weight, c the contest weight of the tier, room what the tier and the record's
  * weakness leave to gain, correction the learning dealer's draw for the candidate's bucket (1
  * without it), and speed √(cost of an evaluation at N+M+P = 85 / cost at the candidate's size).
@@ -21,30 +24,7 @@ import { CONTEST, TIERS, Tier } from "./points";
  * Room and RP_PER_EVAL are [SPEC]; the cost table is measured [CALC].
  */
 
-/** Median ms of one mc_compress evaluation (open run, after Compact) by N+M+P, measured 2026-10-20 [CALC]. */
-export const COST_TABLE: readonly (readonly [number, number])[] = [
-  [18, 0.22],
-  [24, 0.31],
-  [33, 0.45],
-  [54, 0.87],
-  [64, 1.31],
-  [85, 1.77],
-  [180, 7.35],
-  [326, 22.8],
-  [500, 52.3],
-];
-
-/** The cost of one evaluation at size N+M+P, interpolated on log-log axes (extrapolated at the ends). */
-export function msPerEval(total: number): number {
-  const t = Math.max(2, total);
-  const T = COST_TABLE;
-  let i = 0;
-  while (i < T.length - 2 && t > T[i + 1][0]) i++;
-  const [x0, y0] = T[i];
-  const [x1, y1] = T[i + 1];
-  const slope = Math.log(y1 / y0) / Math.log(x1 / x0);
-  return y0 * Math.pow(t / x0, slope);
-}
+export { COST_TABLE, msPerEval } from "./families";
 
 /** The speed term: √(cost at N+M+P = 85 / cost at this size); 1 for the starter corner's sizes. */
 export function speedFactor(total: number): number {
@@ -106,7 +86,7 @@ export const RP_PER_EVAL = 4;
 
 /** The prior: expected record points per evaluation. */
 export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null }): number {
-  return rulesOf(c).weight(c) * CONTEST[c.tier] * room(c.tier, c.weakness) * RP_PER_EVAL;
+  return rulesOf(c).weight(c) * CONTEST[c.tier] * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL;
 }
 
 /** The size rings, largest first (plan §3): ring k holds N+M+P ≥ RINGS[k] and below RINGS[k − 1]. */
@@ -176,7 +156,9 @@ export function rankCandidates(cands: readonly Candidate[], bandit: Bandit | nul
       if (!draws.has(bucket)) draws.set(bucket, sampleArm(bandit, bucket, CORRECTION_PRIOR, rand));
       correction = Math.max(0.01, draws.get(bucket)!);
     }
-    const score = prior * correction * speedFactor(sizeOf(candidate));
+    // the prior carries the cost factor, as pay does; the ranking keeps its own cost term (speedFactor),
+    // so the cost factor is divided out of it and a problem's rank does not move with the pay scaling
+    const score = (prior / costFactor(candidate)) * correction * speedFactor(sizeOf(candidate));
     return { candidate, score, prior, bucket };
   });
   return out.sort((a, b) => Number(b.candidate.retake) - Number(a.candidate.retake) || b.score - a.score);

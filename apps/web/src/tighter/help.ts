@@ -25,7 +25,7 @@ import {
   RATE_LIMITED_BACKOFF_MS,
 } from "./pacer";
 import {
-  BEAT_OTHER_BONUS,
+  BEAT_OTHER_FACTOR,
   CONTEST,
   FIRST_RECORD_BONUS,
   FIRST_RECORD_GAP_RATIO,
@@ -33,6 +33,7 @@ import {
   GAP_WEIGHT,
   SIZE_WEIGHT,
   TIER_LABEL,
+  costFactor,
   recordPoints,
 } from "./points";
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
@@ -116,7 +117,7 @@ function exampleLine(delta: number, label: string): string {
   const sum = r.nibble + r.size + r.gap;
   return (
     `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(0)}, ${terms}, ` +
-    `so ${exampleW.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
+    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
   );
 }
 
@@ -131,7 +132,7 @@ const POINTS: How[] = [
     ],
     math: [
       `<var>Δ</var> = 1 − <var>s</var><sub>new</sub> / <var>s</var><sub>prev</sub>, paid only when <var>Δ</var> &gt; <var>F</var>`,
-      `RP = <var>m</var> × <var>w</var> × <var>c</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>)`,
+      `RP = <var>m</var> × <var>w</var> × <var>c</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>) × <var>β</var>`,
       `<var>t</var><sub>step</sub> = 1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>)`,
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
@@ -173,7 +174,15 @@ const POINTS: How[] = [
       ],
       [
         "<var>B</var>",
-        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, plus ${BEAT_OTHER_BONUS} the first time you beat another name's record on a problem by enough to change its 6 decimals, otherwise 0`,
+        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, otherwise 0`,
+      ],
+      [
+        "<var>κ</var>",
+        "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
+      ],
+      [
+        "<var>β</var>",
+        `${BEAT_OTHER_FACTOR} for the first improvement on a problem that beats another name's record or a published value by enough to change its 6 decimals, otherwise 1`,
       ],
       ["<var>m</var>", "your points multiplier"],
       ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
@@ -186,7 +195,7 @@ const POINTS: How[] = [
     note: "On a problem with a published value, nothing pays until your board beats that value, and the first payment is measured from it. Before a send the container is turned to its best angle, as the server scores it. When that shrinks the side by more than the smallest improvement that counts, it pays like any other improvement.",
   },
   {
-    text: `An example, before the multiplier m. The problem 24-gons in a 30-gon with 60 pieces is open, so w = ${exampleW.toFixed(3)} and c = ${CONTEST.open}. Its area bound is b = ${exampleBound.toFixed(6)}. Your board has side ${exampleSide.toFixed(6)}, 20 % above the bound, and here is what four different clicks would pay.`,
+    text: `An example, before the multiplier m. The problem 24-gons in a 30-gon with 60 pieces is open, so w = ${exampleW.toFixed(3)}, c = ${CONTEST.open} and κ = ${costFactor(EXAMPLE).toFixed(3)}. Its area bound is b = ${exampleBound.toFixed(6)}. Your board has side ${exampleSide.toFixed(6)}, 20 % above the bound, and here is what four different clicks would pay.`,
     math: [
       exampleLine(1.0000001 * FLOOR, `just above ${minStep}`),
       exampleLine(1e-6, "= 10<sup>−6</sup>"),
