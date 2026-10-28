@@ -1176,9 +1176,11 @@ describe("harden sketches of its working shapes", () => {
     expect(watched.strict).toBe(true);
     expect(frames.length).toBeGreaterThan(0);
     for (const frame of frames) expect(frame.stage.method).toBe("harden");
-    // At most one sketch per interval (frame.elapsed is in seconds).
-    for (let k = 1; k < frames.length; k++)
-      expect(frames[k].elapsed - frames[k - 1].elapsed).toBeGreaterThanOrEqual(SKETCH_INTERVAL_MS / 1000 - 1e-3);
+    // At most one sketch per interval (frame.elapsed is in seconds). The throttle reads its clock before the
+    // sketch is drawn and cloned, frame.elapsed after, so two frames' times can be closer than the interval by
+    // the difference of their drawing times: count the frames instead of timing each gap.
+    const span = frames.at(-1)!.elapsed - frames[0].elapsed;
+    expect(frames.length).toBeLessThanOrEqual(Math.floor((span * 1000) / SKETCH_INTERVAL_MS) + 2);
     // An observer that throws cannot affect the run either.
     const failing = await run(problem, {
       ...options,
