@@ -14,14 +14,14 @@ import { fetchSpaceProblem } from "./space-submission";
 
 /**
  * The tutorial: a few short steps in a pop-up, shown on a first visit and again from Settings. It
- * shows that one packing is easy to see and the next ones are not (squares in a square), then lets
+ * shows that one packing is easy to see and the next ones are not (squares in a square: 9, then 10 and 11, then 17), then lets
  * the player shrink a loose packing of 12 hexagons in a pentagon with a few clicks, and ends with
  * the name pop-up. The boards here are never sent and pay no points: the tutorial has its own lane
  * and touches no game state.
  */
 
 /** The shape of the first steps: the pieces and the container (4: squares), and how many pieces each step shows. */
-export const SHOWN = { N: 4, M: 4, counts: [9, 10, 11] } as const;
+export const SHOWN = { N: 4, M: 4, counts: [9, 10, 11, 17] } as const;
 
 /** The hands-on step: 12 hexagons in a pentagon, improved by clicks that each run a fixed seeded mc_compress. */
 export const HANDS_ON = {
@@ -37,16 +37,16 @@ export const HANDS_ON = {
 
 /**
  * The closing teaser: finished packings from the research records, drawn read-only by the site's
- * space view. 12 disks on a sphere sit at the corners of an icosahedron (a proven optimum), and 8 cubes
- * fill a cube in two layers of four.
+ * space view. 12 circles on a sphere sit at the corners of an icosahedron (a proven optimum), and 6
+ * octahedra in a cube are a tilted, irregular record (side 1.767767).
  */
 export const TEASER: { key: SpaceKey; caption: string }[] = [
-  { key: { family: "sphere", id: "sphere/0/12", P: 12 }, caption: "12 disks on a sphere" },
-  { key: { family: "polyhedra", id: "polyhedra/cubincub/8", P: 8 }, caption: "8 cubes in a cube" },
+  { key: { family: "sphere", id: "sphere/0/12", P: 12 }, caption: "12 circles on a sphere" },
+  { key: { family: "polyhedra", id: "polyhedra/octincub/6", P: 6 }, caption: "6 octahedra in a cube" },
 ];
 
-/** The side of nine squares in a 3 by 3 square, and the best known sides for 10 and 11 (shown when the site cannot be reached). */
-const KNOWN_SIDE: Record<number, number> = { 9: 3, 10: 3 + 1 / Math.SQRT2, 11: 3.877084 };
+/** The side of nine squares in a 3 by 3 square, and the best known sides for 10, 11 and 17 (named when the site cannot be reached). */
+const KNOWN_SIDE: Record<number, number> = { 9: 3, 10: 3 + 1 / Math.SQRT2, 11: 3.877084, 17: 4.67553 };
 
 /** Nine squares in rows of three: the obvious packing. An unrotated square points a vertex up, so each is turned an eighth of a turn. */
 export function nineSquares(): PackingConfig {
@@ -85,41 +85,41 @@ export const sideOf = (config: PackingConfig): number | null => evaluate(config,
 interface Step {
   title: string;
   text: string;
-  /** A packing of squares to draw. */
-  show?: { count: number };
+  /** Packings of squares to draw: one, or two side by side. */
+  show?: number[];
   hands?: true;
-  /** The closing step: two finished packings in space. */
+  /** The closing step: two read-only drawings in space. */
   teaser?: true;
 }
 
 const STEPS: Step[] = [
   {
     title: "Nine squares",
-    text: "Nine squares of side 1 fit in a square of side 3. You can see the fit at once. The score of a packing is the side of its container, and smaller is better.",
-    show: { count: 9 },
+    text: "Nine squares with sides that are 1 unit long can pack perfectly into a larger square with sides that are 3 units long. Packings are scored by the side length of the shape they are packed into, and a smaller score is better.",
+    show: [9],
   },
   {
-    title: "Ten squares",
-    text: "Ten squares need a little more room. The best known side is about 3.707, and the packing is no longer simple to see.",
-    show: { count: 10 },
+    title: "Ten and eleven squares",
+    text: "Add one or two more squares and the neat grid no longer works. Ten squares need a square about 3.707 units on a side, and eleven need about 3.877, with some of the squares tilted at odd angles. Both packings have been proven to be the best possible.",
+    show: [10, 11],
   },
   {
-    title: "Eleven squares",
-    text: "Eleven squares are harder still. The best known packing has a side of about 3.877. Every new count is a new puzzle.",
-    show: { count: 11 },
+    title: "Seventeen squares",
+    text: "Seventeen squares are a different story. The best packing anyone has found fits in a square about 4.676 units on a side, and it looks almost random. Nobody has proven that it can't be beaten, and puzzles like this are what Tighter is about.",
+    show: [17],
   },
   {
     title: "Try it yourself",
-    text: "These 12 hexagons sit loose in a pentagon. Each press of Improve runs the solver for a short time on the board. Press it about 10 times and watch the side shrink.",
+    text: "Here are 12 hexagons packed loosely inside a pentagon. Each time you press Improve, the solver spends a moment nudging the pieces closer together, and the pentagon shrinks around them. Press it about 10 times and watch the packing tighten.",
     hands: true,
   },
   {
     title: "Now the game",
-    text: "In the game you do this on many problems. When your board beats the best one known, you can send it to PolyPack and earn points.",
+    text: "In the game you'll do this on many different problems. Whenever your packing beats the best one known, it is sent to PolyPack's public record tables under your name and earns you points. Points buy upgrades that make your solver faster and smarter.",
   },
   {
     title: "What comes later",
-    text: "After your first reset, you will pack on the surfaces of solids. After the second, inside them. Next, you can choose a name for your records.",
+    text: "Later in the game you can reset for a fresh start that opens new kinds of puzzles.",
     teaser: true,
   },
 ];
@@ -160,7 +160,9 @@ async function play(): Promise<void> {
   const act = $<HTMLButtonElement>("t-tut-act");
   const next = $<HTMLButtonElement>("t-tut-next");
   const skip = $<HTMLButtonElement>("t-tut-skip");
+  const boards = $("t-tut-boards");
   const canvas = $<HTMLCanvasElement>("t-tut-board");
+  const canvas2 = $<HTMLCanvasElement>("t-tut-board-2");
   const spaces = $("t-tut-spaces");
   const mounted: SpaceBoard[] = [];
   const board = new Board();
@@ -168,12 +170,18 @@ async function play(): Promise<void> {
   const view = new BoardView(canvas, board, () => {});
   view.readOnly = true;
   view.previewLabel = null;
+  // the second drawing of the slide with two packings
+  const board2 = new Board();
+  const view2 = new BoardView(canvas2, board2, () => {});
+  view2.readOnly = true;
+  view2.previewLabel = null;
   const packings = shownPackings();
   let lane = null as Lane | null;
 
-  const draw = (config: PackingConfig, refit: boolean) => {
-    if (board.load(config, false)) return;
-    if (refit) view.fit();
+  const draw = (config: PackingConfig, refit: boolean, which = 0) => {
+    const [b, v] = which === 0 ? [board, view] : [board2, view2];
+    if (b.load(config, false)) return;
+    if (refit) v.fit();
   };
 
   // the hands-on step's state
@@ -196,7 +204,7 @@ async function play(): Promise<void> {
     status.textContent =
       side === null
         ? "The solver is starting."
-        : `Side ${show6(side)}. Improvements so far: ${clicks} of ${HANDS_ON.clicks}.`;
+        : `Pentagon side: ${show6(side)}. Improved ${clicks} of ${HANDS_ON.clicks} times.`;
   };
 
   const show = async (i: number) => {
@@ -205,22 +213,32 @@ async function play(): Promise<void> {
     count.textContent = `Step ${i + 1} of ${STEPS.length}`;
     body.textContent = s.text;
     status.textContent = "";
-    canvas.hidden = !!s.teaser;
+    boards.hidden = !!s.teaser;
+    boards.classList.toggle("pair", (s.show?.length ?? 0) > 1);
+    canvas2.hidden = (s.show?.length ?? 0) < 2;
     spaces.hidden = !s.teaser;
     act.hidden = !s.hands;
     next.textContent = i === STEPS.length - 1 ? "Choose a name" : "Next";
     next.disabled = !!s.hands && clicks < HANDS_ON.clicks;
     if (s.show) {
-      const config = (await packings).get(s.show.count);
+      const got = await packings;
       if (stepNow !== i) return;
-      if (config) {
-        draw(config, true);
-        const side = sideOf(config);
-        status.textContent = side === null ? "" : `${s.show.count} squares, side ${show6(side)}.`;
-      } else {
-        board.clear();
-        status.textContent = `The site could not be reached, so there is no picture. The best known side for ${s.show.count} squares is about ${show6(KNOWN_SIDE[s.show.count])}.`;
-      }
+      const lines: string[] = [];
+      s.show.forEach((n, k) => {
+        const config = got.get(n);
+        if (config) {
+          draw(config, true, k);
+          const side = sideOf(config);
+          if (side !== null) lines.push(`${n} squares, side ${show6(side)}.`);
+        } else {
+          (k === 0 ? board : board2).clear();
+          lines.push(`The best known side for ${n} squares is about ${show6(KNOWN_SIDE[n])}.`);
+        }
+      });
+      const missing = s.show.some((n) => !got.has(n));
+      status.textContent = missing
+        ? `The site could not be reached, so there is no picture. ${lines.join(" ")}`
+        : lines.join(" ");
     } else if (s.teaser) {
       // each drawing is its own mount; one that cannot be read or loaded leaves its place empty
       TEASER.forEach((t, k) => {

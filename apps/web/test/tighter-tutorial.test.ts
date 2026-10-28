@@ -4,7 +4,7 @@ import { strictTolerance } from "@polypack/solver";
 import { newGame } from "../src/tighter/game";
 import { OpenRun } from "../src/tighter/open-run";
 import { fromJson, toJson } from "../src/tighter/save";
-import { HANDS_ON, handsOnRequest, looseStart, nineSquares, sideOf } from "../src/tighter/tutorial";
+import { HANDS_ON, handsOnRequest, looseStart, nineSquares, sideOf, SHOWN, TEASER } from "../src/tighter/tutorial";
 
 // The tutorial's boards are fixed: nine squares in 3 by 3, and 12 hexagons in a pentagon that each
 // click shrinks. These check properties, never the exact values a seeded search finds.
@@ -14,6 +14,12 @@ describe("Tighter tutorial", () => {
     const c = nineSquares();
     expect(findOverlaps(c.N, c.pieces, strictTolerance(c))).toEqual([]);
     expect(sideOf(c)).toBeCloseTo(3, 9);
+  });
+
+  it("shows squares for 9, 10, 11 and 17, and a teaser of two drawings", () => {
+    expect(SHOWN.counts).toEqual([9, 10, 11, 17]);
+    expect(TEASER).toHaveLength(2);
+    expect(TEASER.map((t) => t.caption)).toEqual(["12 circles on a sphere", "6 octahedra in a cube"]);
   });
 
   it("starts the hexagons loose and valid", () => {

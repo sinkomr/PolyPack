@@ -402,10 +402,13 @@
       <div class="t-dialog-head">
         <h2 id="t-tut-title">Tutorial</h2>
         <span id="t-tut-count" class="note"></span>
-        <button id="t-tut-skip" type="button">Skip</button>
+        <button id="t-tut-skip" type="button">Skip tutorial</button>
       </div>
       <div class="t-dialog-body">
-        <canvas id="t-tut-board" class="t-tut-board" role="img" aria-label="The packing for this step"></canvas>
+        <div id="t-tut-boards" class="t-tut-boards">
+          <canvas id="t-tut-board" class="t-tut-board" role="img" aria-label="The packing for this step"></canvas>
+          <canvas id="t-tut-board-2" class="t-tut-board" role="img" aria-label="The second packing for this step" hidden></canvas>
+        </div>
         <div id="t-tut-spaces" class="t-tut-spaces" hidden>
           <figure><div id="t-tut-space-0" class="t-tut-space"></div><figcaption id="t-tut-space-cap-0"></figcaption></figure>
           <figure><div id="t-tut-space-1" class="t-tut-space"></div><figcaption id="t-tut-space-cap-1"></figcaption></figure>

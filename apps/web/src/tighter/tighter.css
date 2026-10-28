@@ -723,8 +723,21 @@ body.tighter[data-pane="tree"] .t-banner {
   margin-right: auto;
 }
 .t-tut-board[hidden],
+.t-tut-boards[hidden],
 .t-tut-spaces[hidden] {
   display: none;
+}
+.t-tut-boards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.t-tut-boards.pair {
+  grid-template-columns: 1fr 1fr;
+}
+.t-tut-boards.pair .t-tut-board {
+  height: min(34vh, 16rem);
 }
 .t-tut-spaces {
   display: grid;
@@ -750,7 +763,7 @@ body.tighter[data-pane="tree"] .t-banner {
   display: block;
   width: 100%;
   height: min(46vh, 22rem);
-  margin: 12px 0 8px;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg);
