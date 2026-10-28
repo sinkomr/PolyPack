@@ -249,7 +249,7 @@ export function level(o: Owned, id: UpgradeId): number {
 }
 
 /** Evaluations per click, by upgrade (1 without any). */
-const CLICK: Partial<Record<UpgradeId, number>> = {
+export const CLICK: Partial<Record<UpgradeId, number>> = {
   click2: 2,
   click3: 3,
   click4: 4,
@@ -280,7 +280,7 @@ export const HEAD2_AUTO_LEVELS = 9;
 const AUTOX_COST = 250;
 const AUTOX_GROWTH = 1.01;
 /** Problem slots, by upgrade (1 without any). */
-const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
+export const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
 /** Methods in the order they unlock, by upgrade. */
 const METHOD: Partial<Record<UpgradeId, EvolveMethod>> = {
   basin: "basin_hopping",
@@ -303,7 +303,7 @@ export const TUNING: Partial<Record<EvolveMethod, UpgradeId>> = {
   ls_growth: "tuneGrowth",
 };
 /** Smallest N+M+P of the contested problems dealt, by upgrade (the size rings, largest first). */
-const RING: Partial<Record<UpgradeId, number>> = {
+export const RING: Partial<Record<UpgradeId, number>> = {
   reach2: 300,
   ring200: 200,
   ring120: 120,

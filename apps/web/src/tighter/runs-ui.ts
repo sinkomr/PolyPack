@@ -86,7 +86,7 @@ export function renderRunsPanel(
       const m = methodLabel(stage);
       const li = el("li");
       const name = el("span", `${i + 1}. ${m}`, input.allowed(stage) ? undefined : "t-refused");
-      if (!input.allowed(stage)) name.title = "This cycle's rule does not allow this method, so this stage is skipped.";
+      if (!input.allowed(stage)) name.title = "This cycle's rule does not allow this method, so the stage is skipped.";
       const n = plan.pipeline.length;
       const actions = el("span", undefined, "t-q-actions");
       actions.append(
@@ -124,8 +124,8 @@ export function renderRunsPanel(
       el(
         "p",
         plan.pipeline.length
-          ? "Each new run on a problem uses the next stage, in a loop. While the pipeline has stages, it chooses the method instead of the toolbar."
-          : "With no stages, your clicks run the toolbar's method. Add methods in the order you want the runs on a problem to use them.",
+          ? "Each new run on a problem uses the next stage, and after the last stage the list starts again. While it has stages, the pipeline picks the method instead of the toolbar."
+          : "With no stages, your clicks use the method chosen in the toolbar. Add methods in the order you want the runs on a problem to use them.",
         "note",
       ),
       how("pipeline", PIPELINE),
@@ -136,15 +136,15 @@ export function renderRunsPanel(
     parts.push(el("h3", o.has("autoTune") ? "Method match and Auto-tune" : "Method match"));
     const runs = runsObserved(plan);
     const lines: string[] = [
-      `It has learned from ${runs.toLocaleString("en-US")} run${runs === 1 ? "" : "s"} so far, as RP earned per evaluation. ` +
+      `It has learned from ${runs.toLocaleString("en-US")} run${runs === 1 ? "" : "s"} so far. ` +
         (plan.auto
-          ? `Auto is on, so it picks the ${o.has("autoTune") ? "method and setting" : "method"} of each new run.`
-          : `Choose Auto in the toolbar to let it pick the ${o.has("autoTune") ? "method and setting" : "method"} of each new run.`),
+          ? `Auto is on, so it chooses the ${o.has("autoTune") ? "method and setting" : "method"} for each new run.`
+          : `Choose Auto in the toolbar to let it pick the ${o.has("autoTune") ? "method and setting" : "method"} for each new run.`),
     ];
     if (input.focusKind)
       lines.push(
         top.length
-          ? `On problems like this one, the best so far ${top.length === 1 ? "is" : "are"} ${andList(
+          ? `The best so far on problems like this one ${top.length === 1 ? "is" : "are"} ${andList(
               top.map(
                 (t) =>
                   `${methodLabel(t.method)}${t.level ? ` at setting ${t.level}` : ""} with ${fmt(t.mean)} RP an evaluation (${t.runs} run${t.runs === 1 ? "" : "s"})`,
@@ -161,7 +161,7 @@ export function renderRunsPanel(
     parts.push(
       el(
         "p",
-        `A new open problem starts from the best known packing with fewer pieces, the rest placed around it, when that is more than ${Math.round((1 - TRANSFER_MARGIN) * 100)} % smaller than the usual start.`,
+        `A new open problem can start from the best known packing with fewer pieces. This happens when that start is more than ${Math.round((1 - TRANSFER_MARGIN) * 100)} % smaller than the usual one.`,
         "note",
       ),
       how("transfers", TRANSFERS),
