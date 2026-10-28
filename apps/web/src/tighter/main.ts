@@ -3044,7 +3044,8 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   show("t-queue", revealed(state, "queue"));
   if (!revealed(state, "queue")) return;
   const slots = queueSize(o);
-  text("t-queue-heading", `Queue · ${slots} slots`);
+  text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
+  text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
   const busy = new Set(lanes.flatMap(laneKeys));
   const sig = state.queue
@@ -3074,7 +3075,14 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                   ? " · no record yet"
                   : "";
         li.dataset.key = p.key;
-        li.append(`${problemTitle(p)}${gap}${status}${busy.has(p.key) ? " · running" : ""}`);
+        li.append(`${problemTitle(p)}${gap}${status}`);
+        if (busy.has(p.key)) {
+          // a lane has work on it: the mark is text as well as a dot, so it reads without colour
+          const live = document.createElement("span");
+          live.className = "t-q-live";
+          live.textContent = "Working";
+          li.append(" ", live);
+        }
         const actions = document.createElement("span");
         actions.className = "t-q-actions";
         if (p.key !== state.focus && !p.leaving) {
@@ -3115,6 +3123,16 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** One plain sentence on which problem clicks work on, and which problems auto-eval works on. */
+function queueWorkText(o: Owned): string {
+  const board = focused();
+  const clicks = board
+    ? `Your clicks work on ${problemTitle(board)}, the problem on the board.`
+    : "Your clicks work on the problem on the board.";
+  if (!o.has("auto1") && !o.has("lanes2")) return clicks;
+  return `${clicks} Auto-eval works on every problem in the queue.${state.settings.auto ? "" : " It is off now."}`;
 }
 
 /** Evaluations a long step under way on the problem has done that its counters do not have yet. */

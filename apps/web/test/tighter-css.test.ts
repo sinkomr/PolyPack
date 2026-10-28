@@ -25,4 +25,10 @@ describe("Tighter stylesheet", () => {
   it("lays out phones under the same media query the tech tree uses to become a list", () => {
     expect(css).toContain(`@media ${PHONE_QUERY} {`);
   });
+
+  it("styles the queue's working mark, and the page holds the sentence on what each kind of work does", () => {
+    expect(css).toContain(".t-queue .t-q-live");
+    const html = readFileSync(new URL("../tighter.html", import.meta.url), "utf8");
+    expect(html).toContain('id="t-queue-work"');
+  });
 });

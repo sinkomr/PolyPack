@@ -143,6 +143,32 @@ canvas#board[hidden] {
   font-weight: 400;
   font-variant-numeric: tabular-nums;
 }
+/* the mark on a problem a lane is working on */
+.t-queue .t-q-live {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.t-queue .t-q-live::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: t-q-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes t-q-pulse {
+  from {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-queue .t-q-live::before {
+    animation: none;
+  }
+}
 /* Auto-advance's tolerance and patience */
 .t-advance {
   margin: 10px 0 0;
