@@ -1,4 +1,5 @@
-import { How, howDisclosure, renderHow } from "./how";
+import { moreDetail } from "./detail";
+import type { How } from "./how";
 import {
   CardState,
   Currency,
@@ -327,7 +328,7 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
 }
 
 /** Sizes of the tree's layout, in CSS pixels. */
-export const TREE = { nodeW: 136, nodeH: 62, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
+export const TREE = { nodeW: 136, nodeH: 78, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
 
 /**
  * The phone layout (tighter.css, "phones"): there the tree is a list, row after row, in the order of
@@ -421,8 +422,8 @@ function focusVisible(e: Element): boolean {
  * hovers, pressing a node you can afford buys it, and hovering or focusing any node shows a card
  * beside it with its details and explanation (a mystery's card says only what it needs). On a touch
  * screen, and in the phone's list, a tap shows the details below the tree instead, which hold the
- * Buy button and the explanation behind "How it works"; the list's upgrades also show their effect
- * and "How it works" themselves. A mystery shows no explanation. An owned dealer upgrade has a
+ * Buy button and "More detail"; the list's upgrades also show their effect
+ * and "More detail" themselves. A mystery shows no explanation. An owned dealer upgrade has a
  * switch (upgrades.ts SWITCHES): pressing it turns it off or on again where pressing would buy, and
  * its details hold a button that does the same where a tap shows them.
  *
@@ -529,10 +530,6 @@ export class TreeRenderer {
 
   /** The phone's tree: each row's upgrades as a list of the same nodes, without the lines. */
   private buildList(view: TreeView): void {
-    // explanations left open stay open when the list is built again (after a purchase)
-    const open = new Set(
-      Array.from(this.box.querySelectorAll(".t-list-how[open]"), (d) => d.closest<HTMLElement>(".t-node")?.dataset.id),
-    );
     const list = el("div", "t-tree-list");
     this.edges = [];
     this.nodes.clear();
@@ -545,8 +542,6 @@ export class TreeRenderer {
       const grid = el("div", "t-list-nodes");
       for (const n of nodes) {
         const node = this.node(n);
-        const how = node.querySelector<HTMLDetailsElement>(".t-list-how");
-        if (how && open.has(n.id)) how.open = true;
         grid.append(node);
       }
       row.append(el("h3", "t-list-title", r.title), grid);
@@ -592,23 +587,26 @@ export class TreeRenderer {
 
   /**
    * In the phone's list: the upgrade's effect under its name, the button's description, and its
-   * explanation behind "How it works" (none for a mystery, and none on the canvas).
+   * "More detail" button (none for a mystery; the canvas's node has a small one too).
    */
   private explain(node: HTMLElement, n: NodeView): void {
-    const want = this.list && n.state !== "mystery" && !!n.how;
-    if (want === (node.dataset.how === "1")) return;
-    node.querySelectorAll(".t-list-effect, .t-list-how").forEach((e) => e.remove());
+    const want = n.state !== "mystery" && !!n.how ? (this.list ? "list" : "canvas") : "";
+    if (want === (node.dataset.how ?? "")) return;
+    node.querySelectorAll(".t-list-effect, .t-list-how, .t-node-more").forEach((e) => e.remove());
     const btn = node.querySelector("button")!;
     btn.removeAttribute("aria-describedby");
     delete node.dataset.how;
     if (!want) return;
-    const effect = el("p", "t-list-effect", n.effect);
-    effect.id = `t-effect-${n.id}`;
-    const how = howDisclosure(n.how!);
-    how.classList.add("t-list-how");
-    node.append(effect, how);
-    btn.setAttribute("aria-describedby", effect.id);
-    node.dataset.how = "1";
+    if (want === "canvas") {
+      // a small button of its own, over the node's big one, so pointer and keyboard both reach it
+      node.append(moreDetail(n.how!, n.name, "t-node-more"));
+    } else {
+      const effect = el("p", "t-list-effect", n.effect);
+      effect.id = `t-effect-${n.id}`;
+      node.append(effect, moreDetail(n.how!, n.name, "t-list-how"));
+      btn.setAttribute("aria-describedby", effect.id);
+    }
+    node.dataset.how = want;
   }
 
   private build(view: TreeView): void {
@@ -744,8 +742,6 @@ export class TreeRenderer {
       return;
     }
     this.detailSig = sig;
-    // an explanation opened on a touch screen stays open while the same upgrade's details change
-    const wasOpen = !!this.detail.querySelector<HTMLDetailsElement>(".t-detail-how")?.open && this.detailId === id;
     this.detailId = n ? n.id : null;
     if (!n) {
       this.detail.replaceChildren(
@@ -779,19 +775,16 @@ export class TreeRenderer {
       sw.addEventListener("click", () => this.onSwitch(n.id));
       parts.push(sw, el("p", "t-detail-effect", offText(n.id)!));
     }
-    // with no hover there is no card beside the node: the explanation is here (the list has its own)
+    // with no hover there is no card beside the node: "More detail" is here (the list has its own)
     if (this.touch && !this.list && n.state !== "mystery" && n.how) {
-      const how = howDisclosure(n.how);
-      how.classList.add("t-detail-how");
-      how.open = wasOpen;
-      parts.push(how);
+      parts.push(moreDetail(n.how, n.name, "t-detail-how"));
     }
     this.detail.replaceChildren(...parts);
   }
 
   /**
    * The card beside the node under the pointer or focus, on the canvas with a pointer that hovers:
-   * its name, price or standing, effect and explanation, or for a mystery only what it needs. The
+   * its name, price or standing and short effect, or for a mystery only what it needs. The
    * node's button names it as its description while it shows.
    */
   private renderTip(): void {
@@ -817,7 +810,6 @@ export class TreeRenderer {
         ),
         ...(mystery ? [] : [el("p", "t-tree-tip-effect", n.effect)]),
         ...(n.on === null ? [] : [el("p", "t-tree-tip-effect", offText(n.id)!)]),
-        ...(!mystery && n.how ? [renderHow(n.how)] : []),
       );
       this.tip.hidden = false;
       this.nodes.get(n.id)?.querySelector("button")?.setAttribute("aria-describedby", TIP_ID);

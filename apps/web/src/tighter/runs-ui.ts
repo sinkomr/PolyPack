@@ -1,5 +1,6 @@
 import { METHOD_MATCH, PIPELINE, TRANSFERS, andList } from "./help";
-import { How, howDisclosure } from "./how";
+import { moreDetail } from "./detail";
+import type { How } from "./how";
 import { methodLabel } from "./methods";
 import { RunPlanState, addStage, learned, moveStage, removeStage, runsObserved } from "./runplan";
 import { TRANSFER_MARGIN } from "./transfer";
@@ -21,6 +22,13 @@ export interface RunsPanelInput {
   /** The kind of the problem on the board (see problemKind), if any. */
   focusKind: string | null;
 }
+
+/** What each "More detail" button in the Runs panel explains. */
+const HOW_TITLES: Record<string, string> = {
+  pipeline: "the pipeline",
+  match: "method match",
+  transfers: "transfers",
+};
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text?: string, cls?: string): HTMLElementTagNameMap[K] => {
   const e = document.createElement(tag);
@@ -69,18 +77,7 @@ export function renderRunsPanel(
   if (body.dataset.sig === sig) return;
   body.dataset.sig = sig;
   const parts: HTMLElement[] = [];
-  // the explanations a rebuild would close stay open
-  const opened = new Set(
-    Array.from(body.querySelectorAll<HTMLDetailsElement>("details[data-how]"))
-      .filter((d) => d.open)
-      .map((d) => d.dataset.how),
-  );
-  const how = (id: string, h: How): HTMLDetailsElement => {
-    const d = howDisclosure(h);
-    d.dataset.how = id;
-    d.open = opened.has(id);
-    return d;
-  };
+  const how = (id: string, h: How): HTMLButtonElement => moreDetail(h, HOW_TITLES[id] ?? id, "t-how-btn");
 
   if (pipes) {
     parts.push(el("h3", "Pipeline"));

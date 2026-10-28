@@ -1,14 +1,14 @@
 /**
- * "How it works": the detailed explanation behind a short description (an upgrade, a setting, a
- * panel). It says what happens in plain sentences, gives the rule as formulas, and defines every
- * variable the formulas use.
+ * The detailed explanation behind a short description (an upgrade, a setting, a panel). `text` is
+ * what the "More detail" pop-up shows (detail.ts): plain sentences, no formulas. `math`, `vars` and
+ * `note` give the rule exactly and appear only on the Mechanics page (mechanics.ts).
  *
  * Formulas and variable symbols are trusted markup written in this codebase, never player or
  * server text. Only <var>, <sub>, <sup>, <em>, <strong>, <code> and <br> are kept; any other tag
  * keeps its text and loses the tag.
  */
 export interface How {
-  /** What happens, in plain sentences (one or more paragraphs). */
+  /** What happens, in plain sentences (one or more paragraphs): the "More detail" content. */
   text: string | readonly string[];
   /** The rule as formulas, one per line, in markup such as `<var>r</var> = 2<sup><var>k</var></sup>`. */
   math?: readonly string[];
@@ -50,7 +50,7 @@ export function plain(source: string): string {
   return source.replace(/<[^>]*>/g, "");
 }
 
-/** The explanation as one block: paragraphs, then formulas, then "where" and the variables. */
+/** The "More detail" content: the plain paragraphs only, with no formulas. */
 export function renderHow(how: How, className = "t-how"): HTMLElement {
   const box = document.createElement("div");
   box.className = className;
@@ -59,6 +59,12 @@ export function renderHow(how: How, className = "t-how"): HTMLElement {
     p.textContent = t;
     box.append(p);
   }
+  return box;
+}
+
+/** The Mechanics page's entry: paragraphs, then formulas, then "where" and the variables, then the note. */
+export function renderMechanic(how: How, className = "t-how"): HTMLElement {
+  const box = renderHow(how, className);
   if (how.math?.length) {
     const m = document.createElement("div");
     m.className = "t-math";
@@ -86,17 +92,4 @@ export function renderHow(how: How, className = "t-how"): HTMLElement {
     box.append(p);
   }
   return box;
-}
-
-/**
- * A disclosure: the summary line always shows; "How it works" opens to the explanation. Used where
- * there is no hover (phones, the panels).
- */
-export function howDisclosure(how: How, summary = "How it works"): HTMLDetailsElement {
-  const d = document.createElement("details");
-  d.className = "t-how-more";
-  const s = document.createElement("summary");
-  s.textContent = summary;
-  d.append(s, renderHow(how));
-  return d;
 }
