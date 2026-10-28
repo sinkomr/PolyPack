@@ -4,7 +4,8 @@
 usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--ours DIR] [--search DIR ...]
                                                  [--polypack DIR] [--nmax 100] [--jobs 2] [--no-certify]
                                                  [--skip FILE] [--out data/polyhedra/records.json]
-       python3 python/polyhedra/build_records.py --keep data/polyhedra/records.json --polypack DIR [--jobs 2]
+       python3 python/polyhedra/build_records.py --keep data/polyhedra/records.json [--polypack DIR] [--search DIR ...]
+                                                 [--jobs 2]
 
   --upstream  a checkout of github.com/alejandrozu/platonic-packing at commit cbf76f2f (records/, docs/)
   --site      polyhedrainpolyhedra.wiki's data bundle /data/records.json of the same build (the site's selection of
@@ -12,12 +13,18 @@ usage: python3 python/polyhedra/build_records.py --upstream DIR --site FILE [--o
   --ours      PolyPack research results: a directory with results/improvements.csv and the files it names
               (upstream record format), whose packings of m pieces cover every n <= m by deleting pieces
   --polypack  the records of PolyPack's own problems (catalogue.py, not in WIKI_PROBLEMS): <code>.json per problem,
-              {code, piece, container, records: [{P, s, config: [P poses], method, seed[, start, runs]}]}; each is
-              certified and becomes a PolyPack research record after the wiki's problems (start and runs, when
-              given, are origin.start and origin.runs as they are; otherwise they are read from the method)
+              {code, piece, container, records: [{P, s, config: [P poses], method, seed[, start, runs, date]}]}; each
+              is certified and becomes a PolyPack research record after the wiki's problems (start and runs, when
+              given, are origin.start and origin.runs as they are; otherwise they are read from the method; date,
+              when given, is origin.date, else 2026-10-25)
   --keep      an existing records.json whose records are kept exactly as they are (index entries and
               configs/<code>.jsonl untouched), except those of the PolyPack problems that have a file in --polypack,
-              which are built from it
+              which are built from it, and those of the wiki's problems that a result in --search replaces: a
+              result started from the kept record (start "warm", record_file its origin.file; or, with from_P, from
+              the record of a larger P that pieces were deleted from, kept or replaced in the same run; its runs, when
+              given, become origin.runs), certified, replaces a PolyPack research record when it is smaller at all
+              and a record of the wiki's only when smaller by more than 1e-5 relative (as in a full build); the
+              configuration files of those problems are rewritten
 
 For every problem of catalogue.py and n = 2..nmax the candidates are every upstream record file of the case
 (records/<p>/, records/community/<p>/, records/external/<p>/ and the files the site lists) and, from --ours, a
@@ -242,7 +249,8 @@ class Case:
 
 def load(path):
     try:
-        return json.load(open(path))
+        with open(path) as f:
+            return json.load(f)
     except (OSError, ValueError):
         return None
 
@@ -281,16 +289,18 @@ def our_candidates(ours, code, n, upstream_rows):
     return out
 
 
-def load_search(dirs):
-    """PolyPack search results (packages/polyhedra/scripts/improve.ts): code -> list of candidates."""
+def load_search(dirs, label=None):
+    """PolyPack search results (packages/polyhedra/scripts/improve.ts): code -> list of candidates. Their origin
+    file is search/<file>, or <label of the directory>/<file> with label=True (--keep mode)."""
     out = {}
     for d in dirs or []:
+        prefix = os.path.basename(os.path.normpath(d)) if label else 'search'
         for f in sorted(glob.glob(os.path.join(d, '*.json'))):
             r = load(f)
             if not r or r.get('code') not in catalogue.PROBLEMS or not isinstance(r.get('pieces'), list):
                 continue
             rec = dict(r, problem=r['code'], method=r.get('method'))
-            out.setdefault(r['code'], []).append({'file': 'search/' + os.path.basename(f), 'rec': rec,
+            out.setdefault(r['code'], []).append({'file': f'{prefix}/{os.path.basename(f)}', 'rec': rec,
                                                   's': float(r['s_full'])})
     return out
 
@@ -464,6 +474,9 @@ def literature_of(code, n, row, external):
     return out
 
 
+START_CREDIT = "PolyPack research (search started from the wiki's packing: "
+
+
 def make_record(case, cand, mine, wiki_best, row, literature, volumes):
     r = cand['rec']
     code, n = case.code, case.n
@@ -472,8 +485,7 @@ def make_record(case, cand, mine, wiki_best, row, literature, volumes):
         start = cand.get('start_keys') or []
         keys = ['polypack'] + [k for k in start if k != 'polypack']
         found_by = 'PolyPack research'
-        credit = 'PolyPack research' + (f" (search started from the wiki's packing: {cand['start_credit']})"
-                                        if cand.get('start_credit') else '')
+        credit = START_CREDIT + f"{cand['start_credit']})" if cand.get('start_credit') else 'PolyPack research'
         method = r.get('method', 'PolyPack research')
         if len(r['pieces']) > n:
             method += f'; {len(r["pieces"]) - n} of its {len(r["pieces"])} pieces deleted, container rescaled to wall clearance 1e-7'
@@ -482,6 +494,8 @@ def make_record(case, cand, mine, wiki_best, row, literature, volumes):
             src.update(seed=r['seed'], evaluations=r.get('evals'))
         if r.get('start') == 'warm' and r.get('record_file'):
             src['start'] = r['record_file']                  # the record the search started from
+        if r.get('runs'):
+            src['runs'] = list(r['runs'])                    # its steps from that start, when the result names them
         src.update(cand.get('study') or {})                  # a compute-study search: its start and runs
         upstream_keys = [k for k in start if k != 'polypack']
         cite = 'PolyPack research' + ('; started from a packing ' + citation(upstream_keys, cand['start_rec'])
@@ -642,7 +656,7 @@ def make_polypack_record(case, cand, volumes):
         start, runs = r.get('start'), list(r['runs'])
     else:
         start, runs = polypack_short(*polypack_steps(r['method']))
-    origin = {'file': cand['file'], 'date': POLYPACK_DATE}
+    origin = {'file': cand['file'], 'date': r.get('date', POLYPACK_DATE)}
     if r.get('seed') is not None:
         origin['seed'] = r['seed']
     if start:
@@ -697,11 +711,86 @@ POLYPACK_CONVENTION = ('records of PolyPack\'s own problems (no wiki record): or
                        'origin.seed the last step\'s seed, in short; method states the whole lineage in full')
 
 
-def keep_and_add(keep, polypack, nmax, jobs, no_certify):
-    """--keep mode: the wiki's records of `keep` untouched, PolyPack's problems built from --polypack."""
+def search_replacements(records, dirs, jobs, volumes, no_certify):
+    """--keep with --search: the records of the wiki's problems that the results in `dirs` replace (see the usage),
+    as {id: new record}, and the ids whose result was not certified. A result of n pieces starts from the record of
+    its problem at P = from_P (default n; a larger from_P: pieces were deleted from that record), which is a kept
+    record or one this run replaces: record_file must be that record's origin.file. The new record's sources and
+    credit are those of the lineage it starts from."""
+    by_id = {r['id']: r for r in records}
+    cands, seen = [], set()
+    for code, cs in load_search(dirs, label=True).items():
+        if code not in catalogue.WIKI_PROBLEMS:
+            raise ValueError(f'--search with --keep: {code} is not one of the wiki\'s problems (they come from --polypack)')
+        for c in cs:
+            r, n = c['rec'], len(c['rec']['pieces'])
+            m = r.get('from_P', n)
+            rid = f'polyhedra/{code}/{n}'
+            if rid not in by_id or isinstance(m, bool) or not isinstance(m, int) or m < n or r.get('start') != 'warm':
+                raise ValueError(f'{c["file"]}: not a result of a kept record of {code} (start "warm", from_P >= P)')
+            if rid in seen:
+                raise ValueError(f'{c["file"]}: a second result for {rid}')
+            seen.add(rid)
+            c['pieces'], c['s_cert'], c['mine'] = [list(map(float, p)) for p in r['pieces']], c['s'], True
+            cands.append((Case(code, n), m, c))
+    work = [(case, [c], volumes) for case, _, c in cands]
+    if no_certify:
+        results = [(c[0], None) for _, c, _ in work]
+    elif jobs > 1 and len(work) > 1:
+        import multiprocessing as mp
+        with mp.Pool(jobs) as pool:
+            results = pool.map(certify_case, work, chunksize=1)
+    else:
+        results = [certify_case(w) for w in work]
+    # in decreasing P per problem, so that a result can start from a record this run replaces
+    replaced, failed = {}, []
+    for (case, m, c), (cand, _) in sorted(zip(cands, results), key=lambda x: (x[0][0].code, -x[0][0].n)):
+        r, rid = c['rec'], f'polyhedra/{case.code}/{case.n}'
+        old = by_id[rid]
+        src = replaced.get(f'polyhedra/{case.code}/{m}') or by_id.get(f'polyhedra/{case.code}/{m}')
+        if src is None or r.get('record_file') != src['origin']['file']:
+            raise ValueError(f'{c["file"]}: not started from the record of {case.code}/{m} (record_file must be its '
+                             f'origin.file)')
+        if cand is None:
+            failed.append(rid)
+            continue
+        ours = old['found_by'] == 'PolyPack research'
+        # a PolyPack record is replaced by any gain; the wiki's only by more than OUR_MARGIN, as in a full build
+        limit = old['score_cert'] if ours else old['wiki']['s_full'] * (1 - OUR_MARGIN)
+        if not c['s_cert'] < limit:
+            print(f'{c["file"]}: s = {c["s_cert"]!r} does not replace {rid} (s = {old["score_cert"]!r})')
+            continue
+        # the lineage's sources are the start record's; its credit names the wiki packing the lineage starts from
+        c['start_keys'], c['start_rec'] = src['sources'], src
+        if src['found_by'] != 'PolyPack research':
+            c['start_credit'] = f"{src['found_by']}, {src['origin']['file']}"
+        elif src['credit'].startswith(START_CREDIT):
+            c['start_credit'] = src['credit'][len(START_CREDIT):-1]
+        wiki_best = {'s': old['wiki']['s_full'], 'file': old['wiki'].get('file', old['origin']['file'])}
+        replaced[rid] = make_record(case, c, True, wiki_best, None, old['literature'], volumes)
+    return replaced, failed
+
+
+def attach_configs(cdir, records):
+    """Reads each record's configuration back from configs/<code>.jsonl (the line its config_at locates)."""
+    raw = {}
+    for r in records:
+        if r['code'] not in raw:
+            with open(os.path.join(cdir, f'{r["code"]}.jsonl'), 'rb') as f:
+                raw[r['code']] = f.read()
+        o, n = r.pop('config_at')
+        line = json.loads(raw[r['code']][o:o + n])
+        if line.get('P') != r['P'] or line['config']['s'] != r['score_cert']:
+            raise ValueError(f'{r["id"]}: its configuration line does not match')
+        r['config'] = line['config']
+
+
+def keep_and_add(keep, polypack, search, nmax, jobs, no_certify):
+    """--keep mode: the records of `keep` untouched, except PolyPack's problems built from --polypack and the
+    records of the wiki's problems that results in --search replace."""
     with open(keep) as f:
         doc = json.load(f)
-    codes = polypack_codes(polypack)
+    codes = polypack_codes(polypack) if polypack else []
     old = [r for r in doc['records'] if r['code'] not in codes]
     if len(old) != len(doc['records']):
         print(f'{len(doc["records"]) - len(old)} records of PolyPack\'s problems in {keep} are replaced')
@@ -709,18 +798,31 @@ def keep_and_add(keep, polypack, nmax, jobs, no_certify):
         raise ValueError('--keep: every kept record must have its configuration apart (config_at)')
     volumes = certify.solid_volumes()
     t0 = time.time()
-    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify, codes)
-    nfiles, total = write_configs(os.path.join(os.path.dirname(keep), 'configs'), new)
+    cdir = os.path.join(os.path.dirname(keep), 'configs')
+    new, failed = polypack_records(polypack, nmax, jobs, volumes, no_certify, codes) if polypack else ([], [])
+    nfiles, total = write_configs(cdir, new)
+    replaced, bad = search_replacements(old, search, jobs, volumes, no_certify) if search else ({}, [])
+    failed += bad
+    if replaced:
+        # the configuration files of the problems with a replaced record are written again, every line in its place
+        changed = {r['code'] for r in replaced.values()}
+        old = [replaced.get(r['id'], r) for r in old]
+        rewrite = [r for r in old if r['code'] in changed]
+        attach_configs(cdir, [r for r in rewrite if r['id'] not in replaced])
+        n2, t2 = write_configs(cdir, rewrite)
+        nfiles, total = nfiles + n2, total + t2
     # catalogue order: kept and new records by problem, then P
     order = {c: i for i, c in enumerate(catalogue.PROBLEMS)}
     doc['records'] = sorted(old + new, key=lambda r: (order[r['code']], r['P']))
-    doc['scope'] = {'P': [2, nmax], 'problems': len(catalogue.PROBLEMS), 'note': SCOPE_NOTE_POLYPACK % nmax}
-    doc['sources']['polypack'] = SOURCES['polypack']
-    doc['conventions']['polypack'] = POLYPACK_CONVENTION
+    if polypack:
+        doc['scope'] = {'P': [2, nmax], 'problems': len(catalogue.PROBLEMS), 'note': SCOPE_NOTE_POLYPACK % nmax}
+        doc['sources']['polypack'] = SOURCES['polypack']
+        doc['conventions']['polypack'] = POLYPACK_CONVENTION
     with open(keep, 'w') as f:
         json.dump(doc, f, separators=(',', ':'), ensure_ascii=False)
         f.write('\n')
-    print(f'kept {len(old)} records; wrote {len(new)} of PolyPack\'s problems and {nfiles} configuration files '
+    print(f'kept {len(old) - len(replaced)} records; wrote {len(new)} of PolyPack\'s problems, replaced '
+          f'{len(replaced)} of the wiki\'s problems {sorted(replaced)[:20]} and wrote {nfiles} configuration files '
           f'({total / 1e6:.2f} MB); {len(failed)} not certified {failed[:10]}; {time.time() - t0:.0f} s')
     return 0 if not failed else 1
 
@@ -757,7 +859,8 @@ def main(argv=None):
     ap.add_argument('--upstream')
     ap.add_argument('--site')
     ap.add_argument('--polypack', help='records of PolyPack\'s own problems: <code>.json per problem (see above)')
-    ap.add_argument('--keep', help='keep this records.json\'s wiki records as they are and add PolyPack\'s problems')
+    ap.add_argument('--keep', help='keep this records.json\'s records as they are, except PolyPack\'s problems from '
+                                   '--polypack and the wiki\'s problems\' records that --search results replace')
     ap.add_argument('--ours')
     ap.add_argument('--search', action='append', help='a directory of PolyPack search results (repeatable)')
     ap.add_argument('--nmax', type=int, default=100)
@@ -770,11 +873,11 @@ def main(argv=None):
                                                   'records.json'))
     a = ap.parse_args(argv)
     if a.keep:
-        if not a.polypack:
-            ap.error('--keep needs --polypack')
-        return keep_and_add(a.keep, a.polypack, a.nmax, a.jobs, a.no_certify)
+        if not a.polypack and not a.search:
+            ap.error('--keep needs --polypack or --search')
+        return keep_and_add(a.keep, a.polypack, a.search, a.nmax, a.jobs, a.no_certify)
     if not a.upstream or not a.site:
-        ap.error('--upstream and --site are required (or --keep with --polypack)')
+        ap.error('--upstream and --site are required (or --keep with --polypack or --search)')
     U = a.upstream
     site = json.load(open(a.site))
     rows = {(p['id'], r['n']): r for p in site['problems'] for r in p['rows']}
