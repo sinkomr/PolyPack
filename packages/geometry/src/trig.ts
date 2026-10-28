@@ -53,7 +53,8 @@ function make(N: number, theta: number): PieceTrig {
 /** The entry for (N, theta), reusing a slot (never `keep`'s) on a miss. */
 export function pieceTrig(N: number, theta: number, keep?: PieceTrig): PieceTrig {
   f64[0] = theta;
-  let idx = (Math.imul(u32[0] ^ Math.imul(u32[1], 0x9e3779b1), 0x85ebca6b) ^ N) >>> 21; // 11 bits
+  // N is mixed in before the multiply, so it reaches the top bits the shift keeps
+  let idx = Math.imul(u32[0] ^ Math.imul(u32[1], 0x9e3779b1) ^ Math.imul(N, 0x27d4eb2f), 0x85ebca6b) >>> 21; // 11 bits
   let e = slots[idx];
   if (e !== undefined && e.N === N && Object.is(e.theta, theta)) return e;
   if (e === keep && e !== undefined) {

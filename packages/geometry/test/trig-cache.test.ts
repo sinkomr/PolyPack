@@ -139,3 +139,69 @@ function replacer(_key: string, v: unknown): unknown {
   if (typeof v === "number") return Object.is(v, -0) ? "-0" : Number.isFinite(v) ? v : String(v);
   return v;
 }
+
+// Forced collisions: thetas that share a memo slot or sit in adjacent ones (the second probe), every
+// ordered pair, and a visitor that evicts those slots while the container walk is in progress.
+describe("trig cache under forced slot collisions", () => {
+  const f64 = new Float64Array(1);
+  const u32 = new Uint32Array(f64.buffer);
+  // a copy of the slot hash in trig.ts; if it drifts the test still passes, only less pointedly
+  const slot = (N: number, t: number) => {
+    f64[0] = t;
+    return Math.imul(u32[0] ^ Math.imul(u32[1], 0x9e3779b1) ^ Math.imul(N, 0x27d4eb2f), 0x85ebca6b) >>> 21;
+  };
+  const collide = (N: number, base: number, offset: number, n: number) => {
+    const target = (slot(N, base) + offset) & 2047;
+    const out = offset === 0 ? [base] : [];
+    for (let i = 1; out.length < n && i < 200000; i++) {
+      const t = base + i * 1.0000001e-3;
+      if (slot(N, t) === target) out.push(t);
+    }
+    return out;
+  };
+  const same = (x: unknown, y: unknown) => JSON.stringify(x, replacer) === JSON.stringify(y, replacer);
+
+  it("mixes N into the slot, so mixed-N use does not share one slot", () => {
+    const slots = new Set([3, 4, 5, 6, 7, 8, 12, 24, 100].map((N) => slot(N, 0.3)));
+    expect(slots.size).toBeGreaterThan(5);
+  });
+
+  it("stays bit-identical for every ordered pair of colliding thetas and under evicting visitors", () => {
+    for (const N of [5, 12, 24]) {
+      const pool = [0, 1, 2].flatMap((off) => collide(N, 0.3, off, 3));
+      expect(pool.length).toBeGreaterThanOrEqual(6);
+      for (const ta of pool)
+        for (const tb of pool)
+          for (const [d, ang] of [[1.9, 0.1], [1.2, 1], [1.0, 2.5], [1.7, 4]]) {
+            const a: Pose = { x: 0, y: 0, theta: ta };
+            const b: Pose = { x: d * Math.cos(ang), y: d * Math.sin(ang), theta: tb };
+            expect(same(regularPolygonSeparation(N, a, b), refOverlap.regularPolygonSeparation(N, a, b))).toBe(true);
+            expect(Object.is(pairSeparation(N, a, b), refOverlap.pairSeparation(N, a, b))).toBe(true);
+            expect(same(pairPenetration(N, a, b), refPenalty.pairPenetration(N, a, b))).toBe(true);
+            expect(
+              same(
+                pairPenetration(N, a, b, undefined, undefined, 1, 0.03),
+                refPenalty.pairPenetration(N, a, b, undefined, undefined, 1, 0.03),
+              ),
+            ).toBe(true);
+          }
+      for (const M of [0, 4, 6])
+        for (const supportOnly of [false, true])
+          for (const theta of pool) {
+            const container: Container = { M, size: 6, phi: 0.2, cx: 0.1, cy: -0.1 };
+            const pose: Pose = { x: 0.3, y: 0.2, theta };
+            const record = (visit: typeof visitContainerProtrusions, evict: boolean) => {
+              const out: unknown[] = [];
+              visit(N, pose, container, (...args: unknown[]) => {
+                if (evict)
+                  for (const t of pool)
+                    regularPolygonSeparation(N, { x: 0, y: 0, theta: t }, { x: 1.5, y: 0, theta: t + 1e-3 });
+                out.push(args);
+              }, supportOnly);
+              return out;
+            };
+            expect(same(record(visitContainerProtrusions, true), record(refPenalty.visitContainerProtrusions, false))).toBe(true);
+          }
+    }
+  });
+});
