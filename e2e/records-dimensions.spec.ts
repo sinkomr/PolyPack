@@ -127,6 +127,8 @@ test("each kind's problems are fetched once however fast the tabs change", async
 
 test("zoom stays where it is when a request is too narrow, and the table has no empty scroll box", async ({ page }) => {
   await page.goto("/records.html#space=sphere&N=0");
+  // the chart takes keys only once its records are drawn
+  await expect(page.locator("#rec-rows tr").first()).toBeVisible();
   const chart = page.locator("#chart");
   await chart.focus();
   await page.keyboard.press("Home");
