@@ -99,7 +99,6 @@ const SPACE_BOARDS: Record<string, Record<string, unknown>> = {
 function oldGame(): GameState {
   const s = newGame(T0, 1234);
   s.name = "Ada";
-  s.consent = true;
   addToQueue(s, ready(poly(24, 30, 40), 7, flat(24, 30, 40)));
   addToQueue(s, ready(poly(0, 24, 3), 3.5, flat(0, 24, 3)));
   addToQueue(s, ready(poly(24, 0, 40), 9, flat(24, 0, 40)));

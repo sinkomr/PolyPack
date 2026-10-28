@@ -19,6 +19,7 @@ import { MAX_NAME_LENGTH, sanitizeName } from "../src/tighter/names";
 import { fromJson, toJson } from "../src/tighter/save";
 import { canSend, newPacer, recordSend } from "../src/tighter/pacer";
 import { recordPoints, shapeWeight } from "../src/tighter/points";
+import { msPerEval } from "../src/tighter/families";
 import type { SubmitOutcome } from "../src/tighter/submission";
 
 // Independent review of Tighter (2026-10-19). Tests named "owner rule" assert the site owner's rules
@@ -38,7 +39,6 @@ const runRec = (seed: number) => ({ method: "mc_compress", params: {}, seed, bud
 function readyProblem(name = "Ada"): { s: ReturnType<typeof newGame>; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = name;
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   p.phase = "loaded";
@@ -96,6 +96,7 @@ describe("tighter review: points", () => {
       const want =
         shapeWeight(N, M) *
         (tier === "open" ? 1 : 3) *
+        (msPerEval(N + M + P) / msPerEval(85)) *
         (1 + Math.log10(d / 1e-9) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn) + bonus);
       expect(pts).not.toBeNull();
       expect(Math.abs(pts!.total - want)).toBeLessThan(1e-12 * Math.max(1, want));

@@ -18,8 +18,9 @@ import {
   TOLERANCES,
   TRACE_LIMIT,
   newGame,
+  payAll,
 } from "./game";
-import { sanitizeName } from "./names";
+import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
@@ -282,8 +283,16 @@ export const MIGRATIONS: Record<number, Migration> = {
     const { save: out, report } = convertSaveUnits(save);
     return { ...out, unitsConverted: report };
   },
-  // Step 6 (to 7) is the "no consent gate" branch's: this identity stands in until it merges.
-  6: (save) => save,
+  /**
+   * Version 7 has no consent to send: every game has a name from its first moment and sends under it. A
+   * save without a name (as the server stores names) gets a generated one. Points that waited because
+   * sending was off pay once when the save is read (`payWaiting`, read by readSave).
+   */
+  6: (save) => {
+    const named = sanitizeName(str(save.name, "", 400));
+    const { consent, ...rest } = save;
+    return { ...rest, name: named || generatePlayerName(), payWaiting: consent !== true || !named };
+  },
   /**
    * Version 8 replaces Auto-eval's nine faster rungs and its 10 levels of 10 a second by one ladder of
    * levels of Faster auto-eval, 1 a second each, with no last level. A save keeps the rate it had,
@@ -814,9 +823,10 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
     levels,
-    // the name as the server stores it; no consent without one
-    name: sanitizeName(str(save.name, "", 400)),
-    consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
+    // the name as the server stores it; a save without one gets a generated name
+    name: sanitizeName(str(save.name, "", 400)) || generatePlayerName(),
+    // a save without the flag is from before the tutorial: the player has played, so it counts as shown
+    tutorialDone: bool(save.tutorialDone, true),
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: method as EvolveMethod,
@@ -876,9 +886,12 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const ladder = (raw.version as number) < 8 ? Math.round(num(m.save.ladderRefund, 0, 0)) : 0;
   const converted = units ? int(units.converted, 0) : 0;
   const dropped = units ? int(units.dropped, 0) : 0;
+  const state = normalize(m.save, now);
+  // what the boards improved while sending was off pays now, one event per problem, as it did on consent
+  if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
   return {
     ok: true,
-    state: normalize(m.save, now),
+    state,
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),

@@ -1245,7 +1245,10 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("r"), "what one problem teaches its kind"],
         [sym("G"), "the record points it earned"],
         [sym("E"), "the evaluations it ran"],
-        [sym("p"), `the record points per evaluation the dealer expected (w × c × R × ${number(RP_PER_EVAL)})`],
+        [
+          sym("p"),
+          `the record points per evaluation the dealer expected (w × c × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points)`,
+        ],
         [sym("θ"), "the kind's correction for this ranking"],
         [sym("z"), "a random draw from the standard normal distribution"],
         [sym("μ"), "the kind's expected correction, 1 before it has learned anything"],

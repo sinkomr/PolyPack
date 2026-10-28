@@ -50,7 +50,6 @@ const step = (score: number | null, evaluations = 1, extra: Partial<StepOutcome>
 function advanced(): GameState {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = true;
   s.owned.push("auto1", "queue3", "advance");
   return s;
 }
@@ -231,11 +230,6 @@ describe("Tighter Auto-advance", () => {
     s.settings.patience = 20000;
     expect(stallAfter(s)).toBe(20000);
     expect(advancePlan(s, o).replace).toBe(q[0]);
-    // without a name, an unsent best would be lost: it stays
-    s.consent = false;
-    q[0].best = 9;
-    expect(leaveReason(s, q[0])).toBeNull();
-    expect(advancePlan(s, o).replace).toBeNull();
   });
 
   it("marks a dropped problem with an unsent best as leaving, and frees its slot for the replacement", () => {

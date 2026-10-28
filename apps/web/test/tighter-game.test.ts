@@ -30,7 +30,6 @@ import {
   runSeed,
   submitTarget,
   unconfirmedPoints,
-  withdrawConsent,
 } from "../src/tighter/game";
 import { FRONTIER, STARTER, keyOf, problemTitle } from "../src/tighter/frontier";
 import { msPerEval } from "../src/tighter/rank";
@@ -99,10 +98,9 @@ const step = (score: number | null, seed = 1, extra: Partial<StepOutcome> = {}):
   ...extra,
 });
 
-function game(consent = true): { s: GameState; p: ProblemState } {
+function game(): { s: GameState; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = consent;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   return { s, p };
@@ -492,28 +490,20 @@ describe("Tighter points per click", () => {
     ]);
   });
 
-  it("pay nothing without a name; on consent, what the board improved pays as one event", () => {
-    const { s, p } = game(false);
+  it("pays what the board improved as one event per payment, and payAll finds nothing more owed", () => {
+    const { s, p } = game();
     applyLoadAll(p, board(3), 1.28 * B, null);
-    applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
-    applyStep(s, p, step(1.18 * B, 2), T0);
-    expect(s.rp).toBe(0);
-    expect(p.paidTo).toBeNull();
-    const pending = pendingPoints(p, s.name)!;
-    expect(pending.firstBonus).toBe(true);
-    expect(pending.delta).toBeCloseTo(1 - 1.18 / 1.28, 12);
-    s.consent = true;
-    expect(payAll(s)).toBeCloseTo(pending.total, 12);
-    expect(s.rp).toBeCloseTo(pending.total, 12);
+    const c1 = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    const c2 = applyStep(s, p, step(1.18 * B, 2), T0);
+    expect(c1.points!.firstBonus).toBe(true);
+    expect(s.rp).toBeCloseTo(c1.points!.total + c2.points!.total, 12);
     expect(p.paidTo).toBe(1.18 * B);
-    // paid once
     expect(payAll(s)).toBe(0);
   });
 
   it("measure a dealt record from its leader, and pay the bonus for beating another name once", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
-    s.consent = true;
     const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
     addToQueue(s, p);
     p.phase = "ready";
@@ -531,6 +521,28 @@ describe("Tighter points per click", () => {
     expect(p.beatPaid).toBe(true);
     const c2 = applyStep(s, p, step(1.28 * B, 2), T0);
     expect(c2.points!.beatBonus).toBe(false);
+  });
+
+  it("pays the beat factor again each time the lead is taken back from another name", () => {
+    const s = newGame(T0, 1);
+    s.name = "Ada";
+    s.consent = true;
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
+    addToQueue(s, p);
+    p.phase = "ready";
+    p.board = board(3);
+    p.best = 1.3 * B;
+    p.floor = 1.3 * B;
+    p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
+    const c1 = applyStep(s, p, step(1.29 * B, 1), T0);
+    expect(c1.points!.beat).toBe(2);
+    applyAnswer(s, p, 1.3 * B, 1.29 * B, { kind: "leader", score: 1.29 * B, id: 17, pending: false }, T0);
+    // leading: a nibble pays the plain factor
+    expect(applyStep(s, p, step(1.28 * B, 2), T0).points!.beat).toBe(1);
+    // Bob takes the lead back (a check), and the retake is a beat again
+    applyLeader(p, { score: 1.27 * B, name: "Bob", id: 5 }, s, T0);
+    expect(p.beatPaid).toBe(false);
+    expect(applyStep(s, p, step(1.26 * B, 3), T0).points!.beat).toBe(2);
   });
 });
 
@@ -694,37 +706,6 @@ describe("Tighter answers from the server", () => {
     expect(p.sending).toBeNull();
     expect(p.unconfirmed).toBe(paid);
     expect(s.rp).toBe(paid);
-  });
-
-  it("takes back unsent points when sending is switched off, and pays again from the last confirmed score", () => {
-    const { s, p } = game();
-    recordOn(s, p);
-    markSending(p, 9.5, "Ada", null, T0);
-    applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 17, pending: false }, T0);
-    const confirmed = s.rp;
-    const c = applyStep(s, p, step(9.4, 2), T0);
-    const traced = p.rpTrace.length;
-    expect(withdrawConsent(s)).toBeCloseTo(c.points!.total, 12);
-    expect(s.consent).toBe(false);
-    expect(s.rp).toBeCloseTo(confirmed, 12);
-    // the graph falls back with the points taken, at the same evaluation: the payment's point is replaced
-    expect(p.rpTrace).toHaveLength(traced);
-    expect(p.rpTrace.at(-1)).toEqual([p.evaluations, p.rp]);
-    expect(p.paidTo).toBe(9.5);
-    // nothing pays while sending is off
-    expect(applyStep(s, p, step(9.3, 3), T0).points).toBeNull();
-    // back on: the board pays again from the last confirmed score, 9.5, as one event
-    s.consent = true;
-    const again = pendingPoints(p, s.name)!;
-    expect(again.delta).toBeCloseTo(1 - 9.3 / 9.5, 12);
-    expect(payAll(s)).toBeCloseTo(again.total, 12);
-    expect(p.paidTo).toBe(9.3);
-    // a send already on its way keeps its points until its answer
-    markSending(p, 9.3, "Ada", null, T0);
-    const riding = p.sending!.rp;
-    expect(withdrawConsent(s)).toBe(0);
-    expect(p.sending!.rp).toBe(riding);
-    expect(p.paidTo).toBe(9.3);
   });
 
   it("keeps a dropped problem until its best is sent", () => {

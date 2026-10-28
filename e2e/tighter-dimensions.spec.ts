@@ -4,9 +4,9 @@ import { expect, test } from "@playwright/test";
 // without a reset: the site's own drawing replaces the polygon canvas, and the score box fits it.
 
 test("a dealt sphere problem is drawn with the space view and the score box has no density", async ({ page }) => {
-  await page.goto("/tighter.html?seed=7");
+  await page.goto("/tighter.html?seed=7&tutorial=off");
   await page.evaluate(() => localStorage.clear());
-  await page.goto("/tighter.html?seed=7");
+  await page.goto("/tighter.html?seed=7&tutorial=off");
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 
   await page.click("#t-open-settings");
@@ -31,9 +31,9 @@ test("a dealt sphere problem is drawn with the space view and the score box has 
 // drawing stays on the board.
 
 test("Evolve on a dealt sphere problem runs evaluations and keeps the board drawn", async ({ page }) => {
-  await page.goto("/tighter.html?seed=7");
+  await page.goto("/tighter.html?seed=7&tutorial=off");
   await page.evaluate(() => localStorage.clear());
-  await page.goto("/tighter.html?seed=7");
+  await page.goto("/tighter.html?seed=7&tutorial=off");
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 
   await page.click("#t-open-settings");

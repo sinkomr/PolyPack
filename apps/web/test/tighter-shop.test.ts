@@ -427,7 +427,7 @@ describe("Tighter upgrade texts", () => {
     expect(room("loose", 0.01)).toBeCloseTo(0.3 + 25 * 0.01, 12);
     expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([4, 0.005, 3, 1.77]);
     expect(text("rank2")).toContain("× 4 ×");
-    expect(text("learning")).toContain("(w × c × R × 4)");
+    expect(text("learning")).toContain("(w × c × R × κ × 4");
     expect(text("reach2")).toContain("≥ 0.005");
     expect([LEARN_MIN_EVALS, MAX_RATIO, MIN_OBSERVED_EVALS, MAX_STAGES]).toEqual([200, 20, 20, 9]);
     expect(text("learning")).toContain("at least 200 evaluations");

@@ -22,6 +22,7 @@ import {
   exportString,
   pointsScale,
   fromJson,
+  MIGRATIONS,
   importString,
   migrate,
   normalize,
@@ -59,7 +60,6 @@ const oldFaster = (levels: number) => {
 function played(): GameState {
   const s = newGame(T0, 1234);
   s.name = "Ada";
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
@@ -430,8 +430,8 @@ describe("Tighter saves", () => {
     const s = normalize(raw, T0);
     expect(s.owned).toEqual(["trace", "click10", "clickx", "standing"]);
     expect(s.rp).toBe(0);
-    // no consent without a name
-    expect(s.consent).toBe(false);
+    // no name: a generated one
+    expect(s.name).toMatch(/^TighterGamePlayer\d{5}$/);
     expect(s.settings).toEqual({
       auto: false,
       method: "mc_compress",
@@ -656,7 +656,7 @@ describe("Tighter saves of version 1", () => {
     expect(r.rescaled).toBe(f);
     expect(r.refunded).toBe(Math.round(81 * f));
     expect(r.retired).toEqual({ rp: Math.round(300 * f), standing: 0, groups: ["Seeds"] });
-    expect(s).toMatchObject({ autoDue: 0, consent: true });
+    expect(s).toMatchObject({ autoDue: 0, name: "Ada" });
     expect(s.rp).toBeCloseTo((40 + 81) * f + Math.round(300 * f), 9);
     expect(s.rpEarned).toBeCloseTo(100 * f, 9);
     expect(s.queue[0].rp).toBeCloseTo(30 * f, 9);
@@ -1002,5 +1002,52 @@ describe("Tighter saves of version 4", () => {
     bad.queue[1].family = "torus";
     const bad2 = fromJson(JSON.stringify(bad), T0);
     expect(bad2.ok && bad2.state.queue.map((p) => p.key)).toEqual(["24/30/40"]);
+  });
+});
+
+describe("Tighter saves of version 6 (before names were always sent)", () => {
+  const NAMED = /^TighterGamePlayer\d{5}$/;
+
+  /** A current save, as version 6 wrote it: with a consent flag, and the name the player typed. */
+  function v6(name: string, consent: boolean): Record<string, unknown> {
+    const raw = JSON.parse(toJson(played()));
+    raw.version = 6;
+    raw.name = name;
+    raw.consent = consent;
+    for (const q of raw.queue) q.paidTo = null;
+    return raw;
+  }
+
+  it("keeps a typed name, drops the consent flag and pays nothing twice", () => {
+    const m = MIGRATIONS[6](v6("Ada", true));
+    expect(m.name).toBe("Ada");
+    expect("consent" in m).toBe(false);
+    expect(m.payWaiting).toBe(false);
+  });
+
+  it("gives a save without a name a generated one, and sending", () => {
+    for (const raw of [v6("", false), v6("<>", true)]) {
+      const r = readSave(raw, T0);
+      expect(r.ok && r.state.name).toMatch(NAMED);
+      expect(r.ok && "consent" in r.state).toBe(false);
+    }
+  });
+
+  it("pays the points that waited for consent, once", () => {
+    const waiting = readSave(v6("Ada", false), T0);
+    expect(waiting.ok && waiting.state.name).toBe("Ada");
+    const rp = waiting.ok ? waiting.state.queue.reduce((t, p) => t + p.rp, 0) : 0;
+    expect(waiting.ok && waiting.state.rp).toBeGreaterThan(0);
+    expect(waiting.ok && waiting.state.queue.every((p) => p.paidTo === p.best)).toBe(true);
+    // a save that was already sending keeps its balance as it was
+    const sending = readSave(v6("Ada", true), T0);
+    expect(sending.ok && sending.state.queue.every((p) => p.paidTo === null)).toBe(true);
+    expect(rp).toBeGreaterThanOrEqual(0);
+  });
+
+  it("round-trips a version 7 save with its name, and names a new game", () => {
+    const r = fromJson(toJson(played()), T0);
+    expect(r.ok && r.state.name).toBe("Ada");
+    expect(newGame(T0, 1).name).toMatch(NAMED);
   });
 });

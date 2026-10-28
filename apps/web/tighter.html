@@ -17,6 +17,7 @@
         <a href="/tighter.html" aria-current="page">Tighter</a>
       </nav>
       <span id="t-hold" class="t-hold" role="status" aria-live="polite"></span>
+      <button id="t-open-mechanics" class="t-settings-btn" type="button" aria-haspopup="dialog">Mechanics</button>
       <button id="t-open-settings" class="t-settings-btn" type="button" aria-haspopup="dialog">Settings</button>
     </header>
 
@@ -154,18 +155,6 @@
               <dd id="t-prob-rp">—</dd>
             </dl>
           </section>
-          <dialog id="t-welcome" class="t-pop" aria-labelledby="t-welcome-title">
-            <h2 id="t-welcome-title">A new record</h2>
-            <p class="note">
-              No one has sent PolyPack a packing for this problem, so your board is a new record. Points are paid only
-              for records sent to PolyPack, and records are sent under a display name. Enter a name, tick the box and
-              save to send this one. You can change this later in Settings.
-            </p>
-            <div id="t-welcome-slot"></div>
-            <div class="row wrap t-pop-actions">
-              <button id="t-welcome-later" type="button">Not now</button>
-            </div>
-          </dialog>
         </div>
         <section id="t-upgrades" class="t-treewrap" role="tabpanel" aria-labelledby="t-tab-tree" hidden>
           <div class="t-tree-head">
@@ -188,6 +177,7 @@
       <aside id="t-panel" class="panel" aria-label="Game panels">
         <section id="t-queue" aria-labelledby="t-queue-heading" hidden>
           <h2 id="t-queue-heading">Queue</h2>
+          <p id="t-queue-work" class="note"></p>
           <ol id="t-queue-list" class="t-queue"></ol>
           <p id="t-deal" class="note"></p>
           <div id="t-offers" class="t-offers" hidden>
@@ -309,7 +299,6 @@
         </section>
         <!-- what the totals above count and how they are paid, and the name that makes records pay -->
         <section id="t-points-help" aria-label="Points" hidden>
-          <button id="t-name-nudge" type="button" class="wide" hidden>Put your name on your records</button>
           <details class="t-how-more t-points-how" data-how="points">
             <summary>How points are paid</summary>
           </details>
@@ -345,33 +334,31 @@
       </div>
     </div>
 
+    <dialog id="t-mechanics" class="t-dialog t-mechanics-dialog" aria-labelledby="t-mechanics-heading">
+      <div class="t-dialog-head">
+        <h2 id="t-mechanics-heading">Mechanics</h2>
+        <button id="t-mechanics-close" type="button" aria-label="Close mechanics">Close</button>
+      </div>
+      <div id="t-mechanics-body" class="t-dialog-body"></div>
+    </dialog>
+
     <dialog id="t-settings" class="t-dialog" aria-labelledby="t-settings-heading">
       <div class="t-dialog-head">
         <h2 id="t-settings-heading">Settings</h2>
         <button id="t-settings-close" type="button" aria-label="Close settings">Close</button>
       </div>
       <div class="t-dialog-body">
-        <div id="t-settings-slot">
-          <section id="t-consent" aria-labelledby="t-consent-heading">
-            <h3 id="t-consent-heading">Your name on records</h3>
-            <form id="t-consent-form" class="t-consent">
-              <div class="row">
-                <label for="t-name">Display name</label>
-                <input id="t-name" maxlength="40" autocomplete="nickname" placeholder="display name" />
-              </div>
-              <label class="t-check"
-                ><input id="t-agree" type="checkbox" /> Send my records to PolyPack under this name</label
-              >
-              <button id="t-consent-save" type="submit" class="primary">Save</button>
-            </form>
-            <p id="t-consent-note" class="note">
-              Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.
-            </p>
-            <details class="t-how-more" data-how="sending">
-              <summary>What is sent, and how often</summary>
-            </details>
-          </section>
-        </div>
+        <section id="t-name-section" aria-labelledby="t-name-heading">
+          <h3 id="t-name-heading">Your name</h3>
+          <div class="row t-name">
+            <strong id="t-name-now"></strong>
+            <button id="t-name-change" type="button">Change name</button>
+          </div>
+          <p id="t-name-note" class="note"></p>
+          <details class="t-how-more" data-how="sending">
+            <summary>What is sent, and how often</summary>
+          </details>
+        </section>
         <section aria-labelledby="t-run-heading">
           <h3 id="t-run-heading">Running</h3>
           <label id="t-bg-box" class="t-check" hidden
@@ -384,6 +371,11 @@
           <details class="t-how-more" data-how="running">
             <summary>When auto-eval pauses</summary>
           </details>
+        </section>
+        <section aria-labelledby="t-tut-replay-heading">
+          <h3 id="t-tut-replay-heading">Tutorial</h3>
+          <p class="note">The tutorial shows how a packing gets smaller. It does not change your game.</p>
+          <button id="t-tut-replay" type="button">Show the tutorial again</button>
         </section>
         <section class="t-save" aria-labelledby="t-save-heading">
           <h3 id="t-save-heading">Save</h3>
@@ -405,6 +397,26 @@
           you come back. On the <a href="/">Board</a> page you can use the same solver directly, with every method and
           setting.
         </p>
+      </div>
+    </dialog>
+    <dialog id="t-tutorial" class="t-dialog t-tut" aria-labelledby="t-tut-title">
+      <div class="t-dialog-head">
+        <h2 id="t-tut-title">Tutorial</h2>
+        <span id="t-tut-count" class="note"></span>
+        <button id="t-tut-skip" type="button">Skip</button>
+      </div>
+      <div class="t-dialog-body">
+        <canvas id="t-tut-board" class="t-tut-board" role="img" aria-label="The packing for this step"></canvas>
+        <div id="t-tut-spaces" class="t-tut-spaces" hidden>
+          <figure><div id="t-tut-space-0" class="t-tut-space"></div><figcaption id="t-tut-space-cap-0"></figcaption></figure>
+          <figure><div id="t-tut-space-1" class="t-tut-space"></div><figcaption id="t-tut-space-cap-1"></figcaption></figure>
+        </div>
+        <p id="t-tut-text"></p>
+        <p id="t-tut-status" class="note" role="status"></p>
+        <div class="row wrap t-pop-actions">
+          <button id="t-tut-act" type="button" hidden>Improve</button>
+          <button id="t-tut-next" type="button" class="primary">Next</button>
+        </div>
       </div>
     </dialog>
     <script type="module" src="/src/tighter/main.ts"></script>

@@ -97,7 +97,6 @@ canvas#board[hidden] {
 .chip.good {
   color: var(--good);
 }
-.t-consent .t-check,
 .t-check {
   display: flex;
   gap: 8px;
@@ -142,6 +141,32 @@ canvas#board[hidden] {
   font-size: 12px;
   font-weight: 400;
   font-variant-numeric: tabular-nums;
+}
+/* the mark on a problem a lane is working on */
+.t-queue .t-q-live {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+.t-queue .t-q-live::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: t-q-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes t-q-pulse {
+  from {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-queue .t-q-live::before {
+    animation: none;
+  }
 }
 /* Auto-advance's tolerance and patience */
 .t-advance {
@@ -633,16 +658,6 @@ body.tighter[data-pane="tree"] .t-banner {
   margin-top: 6px;
   font-size: 13px;
 }
-.t-points-how summary {
-  cursor: pointer;
-  color: var(--muted);
-}
-#t-name-nudge {
-  margin-top: 8px;
-}
-#t-name-nudge[hidden] {
-  display: none;
-}
 
 /* ---- dialogs ---- */
 /* the first record's pop-up: over the board, not modal (the game goes on beneath it) */
@@ -703,6 +718,43 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-dialog-body {
   padding: 4px 16px 16px;
 }
+/* the tutorial: the head holds the step count between the title and Skip, then a picture and the step's text */
+.t-tut .t-dialog-head h2 {
+  margin-right: auto;
+}
+.t-tut-board[hidden],
+.t-tut-spaces[hidden] {
+  display: none;
+}
+.t-tut-spaces {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 12px 0 8px;
+}
+.t-tut-spaces figure {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+}
+.t-tut-space {
+  display: flex;
+  flex-direction: column;
+  height: min(30vh, 13rem);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.t-tut-board {
+  display: block;
+  width: 100%;
+  height: min(46vh, 22rem);
+  margin: 12px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
 .t-dialog-body section {
   padding: 10px 0;
   border-bottom: 1px solid var(--border);
@@ -712,13 +764,14 @@ body.tighter[data-pane="tree"] .t-banner {
   margin: 0 0 6px;
   font-size: 14px;
 }
-.t-consent .row {
+.t-name .row,
+.t-name.row {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
   align-items: center;
 }
-.t-consent .row input {
+.t-name input {
   flex: 1 1 12rem;
   min-width: 0;
 }
@@ -813,8 +866,8 @@ body.tighter[data-pane="tree"] .t-banner {
   flex-direction: column;
   justify-content: space-between;
   width: 136px;
-  height: 62px;
-  padding: 5px 8px 7px;
+  height: 78px;
+  padding: 5px 8px 24px;
   overflow: hidden;
   border: 1.5px solid var(--border);
   border-radius: 8px;
@@ -862,6 +915,16 @@ body.tighter[data-pane="tree"] .t-banner {
   color: transparent;
   font-size: 1px;
   cursor: pointer;
+}
+/* over the node's big button, at its bottom edge */
+.t-node-more {
+  position: absolute;
+  left: 6px;
+  bottom: 4px;
+  margin: 0;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
 }
 .t-node-act:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 7%, transparent);
@@ -1007,11 +1070,8 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-tree-tip-effect {
   font-weight: 600;
 }
-.t-tree-tip .t-math {
-  font-size: 14px;
-}
 
-/* "How it works" (how.ts): prose, formulas, then each variable defined */
+/* how.ts: prose, and on the Mechanics page formulas, then each variable defined */
 .t-how p {
   margin: 0 0 6px;
 }
@@ -1048,20 +1108,41 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-how-note {
   color: var(--muted);
 }
-.t-how-more > summary {
-  cursor: pointer;
-  color: var(--accent);
+/* "More detail" (detail.ts): a small text button, and its pop-up */
+.t-more-detail {
+  min-height: 0;
+  margin: 4px 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
 }
-/* help.ts's explanations in the panels, Settings and the first record's pop-up: never wider than the panel */
-:is(.panel, .t-dialog, .t-pop) .t-how-more {
-  margin: 6px 0;
-  font-size: 13px;
+.t-how-btn {
+  display: block;
 }
-:is(.panel, .t-dialog, .t-pop) .t-how-more > .t-how {
-  margin-top: 4px;
+.t-detail-dialog .t-how p {
+  margin: 0 0 8px;
 }
-:is(.panel, .t-dialog, .t-pop) .t-how-more .t-math {
+/* the Mechanics page: one article per mechanic, formulas set apart */
+.t-mechanics-dialog {
+  width: min(44rem, calc(100vw - 24px));
+}
+.t-mechanics-dialog .t-dialog-body section {
+  border-bottom: 0;
+}
+.t-mech {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.t-mech h4 {
+  margin: 0 0 2px;
   font-size: 14px;
+}
+.t-mech-effect {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+.t-mech .t-math {
   overflow-wrap: anywhere;
 }
 
@@ -1111,14 +1192,7 @@ body.tighter[data-pane="tree"] .t-banner {
 }
 .t-list-how {
   position: relative;
-  font-size: 12.5px;
-}
-.t-list-how > summary {
-  padding: 4px 0 2px;
-}
-.t-list-how .t-math {
-  font-size: 14px;
-  overflow-wrap: anywhere;
+  align-self: flex-start;
 }
 
 /* ---- touch ---- */
@@ -1261,8 +1335,10 @@ html {
     display: inline-block;
     padding: 12px 0;
   }
-  .tighter .top .t-settings-btn {
+  .tighter .top #t-open-mechanics {
     margin-left: auto;
+  }
+  .tighter .top .t-settings-btn {
     padding: 4px 12px;
   }
   .tighter .top .t-hold {

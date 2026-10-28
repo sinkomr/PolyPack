@@ -73,8 +73,6 @@ import {
   ownedSet,
   polygonBoard,
   pay,
-  payAll,
-  withdrawConsent,
   problem,
   recordsHeld,
   reveal,
@@ -120,7 +118,8 @@ import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
-import { renderHow } from "./how";
+import { moreDetail } from "./detail";
+import { renderMechanics } from "./mechanics";
 import {
   Candidate,
   Ranked,
@@ -163,6 +162,8 @@ import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKi
 import { renderRunsPanel } from "./runs-ui";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
+import { bindNamePopup, showNamePopup } from "./name-popup";
+import { runTutorial } from "./tutorial";
 import {
   SpaceRead,
   classifySpaceAnswer,
@@ -1257,7 +1258,7 @@ function settle(
   );
   lastChange.set(p.key, { ...change, evals: done, seed: run.seed, method: run.method });
   if (change.firstRecord) {
-    reveal(state, "consent", "log");
+    reveal(state, "log");
     banner = {
       key: p.key,
       text:
@@ -1265,10 +1266,7 @@ function settle(
           ? `New record ${show6(p.best!)} · No one had sent a packing of ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
           : `New best ${show6(p.best!)} on ${problemTitle(p)}.`,
     };
-    event(
-      `New record ${show6(p.best!)} on ${problemTitle(p)}.${state.consent ? "" : " It is not sent until you put your name on your records."}`,
-      false,
-    );
+    event(`New record ${show6(p.best!)} on ${problemTitle(p)}.`, false);
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (run.mode === "lattice") {
@@ -1303,7 +1301,6 @@ function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job,
   if (!c.counted)
     return `${text}. That is less than the smallest improvement that counts (${MIN_STEP}), so it pays with the next one that does.`;
   text += c.points ? `, worth +${fmtRP(c.points.total)} RP.` : ".";
-  if (!state.consent) text += " Put your name on your records to send them and earn their points.";
   return text;
 }
 
@@ -1547,13 +1544,13 @@ function pauseSending(t: Trouble): void {
   sendTrouble(t);
 }
 
-/** Sends at most one improvement per call, when consent, the pacer and the server allow. */
+/** Sends at most one improvement per call, when the pacer and the server allow. */
 async function submitTick(): Promise<void> {
   if (submitting) return;
   const t = now();
   // problems dropped with nothing left to send leave now
-  for (const p of [...state.queue]) if (p.leaving && (!state.consent || !hasUnsent(p))) leave(state, p.key, t);
-  if (!ownsGame || !state.consent || !state.name) return;
+  for (const p of [...state.queue]) if (p.leaving && !hasUnsent(p)) leave(state, p.key, t);
+  if (!ownsGame || !state.name) return;
   const candidates = state.queue
     .filter(hasUnsent)
     .map((p) => ({ p, kind: { first: p.verified === null && p.leader === null, leaving: p.leaving } }))
@@ -1619,9 +1616,9 @@ async function submit(p: ProblemState): Promise<void> {
     sendingWorks();
     return;
   }
-  // The player may have withdrawn consent or changed the name while the leader was read: what goes
+  // The player may have changed the name while the leader was read: what goes
   // to the server is decided now, immediately before the POST.
-  if (!ownsGame || !state.consent || state.name !== name || !name) return;
+  if (!ownsGame || state.name !== name || !name) return;
   const board0 = structuredClone(p.board!);
   const run = structuredClone(p.run!);
   state.pacer = recordSend(state.pacer, p.key, now());
@@ -2545,15 +2542,6 @@ function render(): void {
   showFocus();
 
   // reveals: a panel once shown stays
-  if (s.consent || s.stats.firstRecords || s.queue.some((q) => q.phase === "ready" && q.tier === "open")) {
-    reveal(s, "consent");
-    // the first record asks once for a name, in a pop-up over the board; after that, Settings holds it
-    if (!revealed(s, "asked") && ownsGame) {
-      reveal(s, "asked");
-      if (!s.consent) openWelcome();
-      persist();
-    }
-  }
   if (s.rpEarned > 0) reveal(s, "points", "upgrades");
   if (queueSize(o) > 1) reveal(s, "queue");
   if (o.has("auto1") || o.has("lanes2")) reveal(s, "lanes");
@@ -2588,7 +2576,7 @@ function render(): void {
   problemTip();
   renderToolbar(p, o);
   renderScore(p, o);
-  renderConsent();
+  renderName();
   renderPoints();
   renderUpgrades(o);
   renderQueue(o);
@@ -2863,25 +2851,14 @@ function renderTraces(p: ProblemState, detail: boolean): void {
   }
 }
 
-function renderConsent(): void {
-  const name = $<HTMLInputElement>("t-name");
-  const agree = $<HTMLInputElement>("t-agree");
-  if (document.activeElement !== name && !name.dataset.edited) name.value = state.name;
-  if (document.activeElement !== agree && !agree.dataset.edited) agree.checked = state.consent;
-  text(
-    "t-consent-note",
-    state.consent
-      ? `Your records are sent to PolyPack as “${state.name}”. To stop sending, untick the box and save.`
-      : state.stats.submissions
-        ? `Sending is off. New records stay in this browser and pay no points until you send them.${owned().has("rent") ? " Records already on the server keep paying rent." : ""}`
-        : "Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.",
-  );
+function renderName(): void {
+  text("t-name-now", state.name);
+  text("t-name-note", `Your records are sent to PolyPack as “${state.name}”.`);
 }
 
 /** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
-  show("t-name-nudge", !state.consent && revealed(state, "asked"));
   // the clicks: in the evaluations' tooltip
   const evals = $("t-bar-evals-box");
   const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
@@ -3074,7 +3051,8 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   show("t-queue", revealed(state, "queue"));
   if (!revealed(state, "queue")) return;
   const slots = queueSize(o);
-  text("t-queue-heading", `Queue · ${slots} slots`);
+  text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
+  text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
   const busy = new Set(lanes.flatMap(laneKeys));
   const sig = state.queue
@@ -3104,7 +3082,14 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                   ? " · no record yet"
                   : "";
         li.dataset.key = p.key;
-        li.append(`${problemTitle(p)}${gap}${status}${busy.has(p.key) ? " · running" : ""}`);
+        li.append(`${problemTitle(p)}${gap}${status}`);
+        if (busy.has(p.key)) {
+          // a lane has work on it: the mark is text as well as a dot, so it reads without colour
+          const live = document.createElement("span");
+          live.className = "t-q-live";
+          live.textContent = "Working";
+          li.append(" ", live);
+        }
         const actions = document.createElement("span");
         actions.className = "t-q-actions";
         if (p.key !== state.focus && !p.leaving) {
@@ -3145,6 +3130,16 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** One plain sentence on which problem clicks work on, and which problems auto-eval works on. */
+function queueWorkText(o: Owned): string {
+  const board = focused();
+  const clicks = board
+    ? `Your clicks work on ${problemTitle(board)}, the problem on the board.`
+    : "Your clicks work on the problem on the board.";
+  if (!o.has("auto1") && !o.has("lanes2")) return clicks;
+  return `${clicks} Auto-eval works on every problem in the queue.${state.settings.auto ? "" : " It is off now."}`;
 }
 
 /** Evaluations a long step under way on the problem has done that its counters do not have yet. */
@@ -3336,8 +3331,6 @@ function dropProblem(key: string): boolean {
 function onDrop(key: string): void {
   const p = problem(state, key);
   if (!p) return;
-  const unsent = p.phase === "ready" && !!p.run && hasUnsent(p) && !state.consent;
-  if (unsent && !confirm(`Your best on ${problemTitle(p)} has not been sent. Drop it anyway?`)) return;
   const left = dropProblem(key);
   event(left ? `Dropped ${problemTitle(p)}.` : `Dropping ${problemTitle(p)} once its best has been sent.`, false);
   persist();
@@ -3684,37 +3677,13 @@ async function doReset(): Promise<void> {
   void dealTick();
 }
 
-// ---------- dialogs: the first record's pop-up, and Settings ----------
+// ---------- dialogs: Settings, and the name pop-up ----------
 
-const welcome = $<HTMLDialogElement>("t-welcome");
 const settingsDialog = $<HTMLDialogElement>("t-settings");
 
-/** The name-and-consent form lives in Settings; the first record's pop-up borrows it. */
-function placeConsent(into: "welcome" | "settings"): void {
-  const slot = $(into === "welcome" ? "t-welcome-slot" : "t-settings-slot");
-  const form = $("t-consent");
-  if (form.parentElement !== slot) slot.append(form);
-}
-
-/** The first record found: a pop-up over the board asks for a name (it does not stop the game). */
-function openWelcome(): void {
-  if (settingsDialog.open) return;
-  placeConsent("welcome");
-  renderConsent();
-  if (!welcome.open) welcome.show();
-  $("t-name").focus();
-}
-
-function closeWelcome(): void {
-  if (welcome.open) welcome.close();
-  placeConsent("settings");
-}
-
-function openSettings(focusName = false): void {
-  closeWelcome();
-  renderConsent();
+function openSettings(): void {
+  renderName();
   if (!settingsDialog.open) settingsDialog.showModal();
-  if (focusName) $("t-name").focus();
 }
 
 $("t-open-settings").addEventListener("click", () => openSettings());
@@ -3723,13 +3692,23 @@ $("t-settings-close").addEventListener("click", () => settingsDialog.close());
 settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
 });
-$("t-name-nudge").addEventListener("click", () => openSettings(true));
-$("t-welcome-later").addEventListener("click", () => {
-  closeWelcome();
-  say(
-    "Your record stays in this browser and pays no points until you send it. You can add your name at any time in Settings.",
-  );
+$("t-tut-replay").addEventListener("click", () => {
+  settingsDialog.close();
+  void runTutorial();
 });
+// the name is changed in the pop-up, which the tutorial also opens (name-popup.ts)
+bindNamePopup({
+  get: () => state.name,
+  set: (name) => {
+    state.name = name;
+    say(`Your records will be sent to PolyPack as “${name}”.`);
+    event(`Sending records as “${name}”.`, false);
+    persist();
+    render();
+    void submitTick();
+  },
+});
+$("t-name-change").addEventListener("click", () => void showNamePopup());
 $("t-tab-board").addEventListener("click", () => setView(false));
 $("t-tab-tree").addEventListener("click", () => setView(true));
 // the tabs as a tab list: the arrow keys move between them
@@ -3825,41 +3804,6 @@ $("t-next").addEventListener("click", () => {
   if (!p || clicksToDeal() > 0) return;
   onDrop(p.key);
 });
-for (const id of ["t-name", "t-agree"]) $(id).addEventListener("input", () => ($(id).dataset.edited = "1"));
-$("t-consent-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  // the name as the server will store it: what is shown, sent and compared is the same
-  const typed = $<HTMLInputElement>("t-name").value;
-  const name = sanitizeName(typed);
-  const agree = $<HTMLInputElement>("t-agree").checked;
-  if (agree && !name) {
-    say(
-      typed.trim()
-        ? "That name is empty once cleaned the way PolyPack stores names, which removes angle brackets and control characters. Choose another name."
-        : "Enter a display name first. Records are sent to PolyPack under that name.",
-    );
-    text("t-consent-note", "Nothing is sent until you enter a name.");
-    $("t-name").focus();
-    return;
-  }
-  delete $("t-name").dataset.edited;
-  delete $("t-agree").dataset.edited;
-  const withdrawn = state.consent && !agree ? withdrawConsent(state) : 0;
-  state.name = name;
-  state.consent = agree;
-  // what the boards improved before there was a name pays now, one event per problem
-  const paid = agree ? payAll(state) : 0;
-  say(
-    agree
-      ? `Your records will be sent to PolyPack as “${name}”.${paid > 0 ? ` Your improvements so far paid +${fmtRP(paid)} RP.` : ""}`
-      : `Nothing will be sent, and your records stay in this browser.${withdrawn > 0 ? ` The ${fmtRP(withdrawn)} RP the server had not confirmed yet were taken back. They are paid again when you send again.` : ""}`,
-  );
-  event(agree ? `Sending records as “${name}”.` : "Sending is off.", false);
-  closeWelcome();
-  persist();
-  render();
-  void submitTick();
-});
 $("t-bg").addEventListener("change", () => {
   state.settings.background = $<HTMLInputElement>("t-bg").checked;
   persist();
@@ -3930,11 +3874,28 @@ $("t-import").addEventListener("click", async () => {
 
 // ---------- "How it works" ----------
 
-// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the text
+// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the
+// text. Each becomes a "More detail" button named by the disclosure's summary.
 for (const d of document.querySelectorAll<HTMLElement>("details[data-how]")) {
   const how = HELP[d.dataset.how ?? ""];
-  if (how) for (const h of Array.isArray(how) ? how : [how]) d.append(renderHow(h));
+  if (how) d.replaceWith(moreDetail(how, d.querySelector("summary")?.textContent ?? "this panel", "t-how-btn"));
 }
+
+// ---------- the Mechanics page ----------
+
+const mechanicsDialog = $<HTMLDialogElement>("t-mechanics");
+$("t-open-mechanics").addEventListener("click", () => {
+  // built when first opened, from the same data as the cards, so it never drifts
+  if (!mechanicsDialog.dataset.built) {
+    renderMechanics($("t-mechanics-body"));
+    mechanicsDialog.dataset.built = "1";
+  }
+  if (!mechanicsDialog.open) mechanicsDialog.showModal();
+});
+$("t-mechanics-close").addEventListener("click", () => mechanicsDialog.close());
+mechanicsDialog.addEventListener("click", (e) => {
+  if (e.target === mechanicsDialog) mechanicsDialog.close();
+});
 
 // ---------- start ----------
 
@@ -3973,6 +3934,18 @@ let ticker = 0;
 /** This tab holds the game: it may run, send and save. */
 function start(): void {
   ownsGame = true;
+  // a new game opens with the tutorial (?tutorial=off skips it), and the game starts when it is over
+  if (!state.tutorialDone && new URLSearchParams(location.search).get("tutorial") !== "off") {
+    void runTutorial().then(() => {
+      if (!ownsGame) return;
+      state.tutorialDone = true;
+      saveNow();
+      begin();
+    });
+  } else begin();
+}
+
+function begin(): void {
   $("t-elsewhere").hidden = true;
   document.body.classList.remove("standby");
   state.autoAt = now();
