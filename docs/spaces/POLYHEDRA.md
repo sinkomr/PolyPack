@@ -11,7 +11,7 @@ prisms and antiprisms, in themselves and in a cube (150 problems with records); 
 ordered pair of the 94 solids (8,836 pairs in all, without records, see "Every pair" in §1). The score is s;
 smaller is better. In code and data the space is called `polyhedra`.
 
-**Summary** (2026-10-26).
+**Summary** (2026-10-27).
 
 - The domain covers **4,409,164 problems**, the 8,836 ordered pairs of the 94 solids (8,686 of them new, without
   records) at P = 2 to 500. The 150 pairs of the records keep their codes, ids, titles and records; P = 101 to 500
@@ -32,12 +32,19 @@ smaller is better. In code and data the space is called `polyhedra`.
   with citation), Hyra-results (Apache-2.0), Ryan Xu's square_packing (no licence; used with citation), a
   reconstruction of Erich Friedman's construction and community submissions; some are PolyPack's own. Every
   record names its sources; see §3.
-- **PolyPack research** beats the wiki by more than 1e-5 relative in **1,004 records** (§6), by a median of
-  5.55 % and up to 23.55 % (35 dodecahedra in a tetrahedron); 769 by more than 1 %. Up to P = 30 (330 records),
+- **PolyPack research** beats the wiki by more than 1e-5 relative in **1,008 records** (§6), by a median of
+  5.54 % and up to 23.55 % (35 dodecahedra in a tetrahedron); 772 by more than 1 %. Up to P = 30 (331 records),
   316 come from this package's search started from the case's record, run over all 725 Platonic records of that
-  range, 1 from a search from scratch and 13 from the compute study of 2026-10-23 (crystal cuts and searches).
-  From P = 31 to 100 (674 records) all come from that compute study's results: lattice and crystal cuts and
-  searches. No new search was run for P > 30.
+  range, 1 from a search from scratch, 13 from the compute study of 2026-10-23 (crystal cuts and searches) and 1
+  from a polish of the wiki's record (2026-10-27). From P = 31 to 100 (677 records), 674 come from that compute
+  study's results (lattice and crystal cuts and searches; on 2026-10-27, 3 of them were polished and 4 replaced by
+  pieces deleted from those) and 3 from a polish of the wiki's record of P = 35 (tetrahedra in a cube) and pieces
+  deleted from it. No new search was run for P > 30.
+- **Polish of 11 records** (2026-10-27; §6): 11 records that the clearance study of 2026-10-26 found are not
+  local minima were polished once at clearance 1e-7 and certified, smaller by 2.0e-5 to 2.7e-2 relative; 9 records
+  of smaller P that they beat were then made from them by deleting pieces and polishing again, smaller by 4.2e-4 to
+  3.7e-2, so that s does not decrease with P in these problems. Four of the 20 were the wiki's records (tetrahedra
+  in a cube, P = 33 to 35; pentakis dodecahedra, P = 6).
 - 736 published values without coordinates are listed with their sources (§6).
 - **PolyPack's prism and antiprism problems** (2026-10-25; §1, §6): 2,772 records, all PolyPack research, from
   layered constructions over packings of PolyPack's 2D solver, crystal cuts of column packings, searches and
@@ -289,11 +296,12 @@ PolyPack research (MIT) that rest on nothing else (PolyPack's 2D solver, lattice
 | soft-to-rigid-packing (Yohei Nakajima) at `efe7a920` | MIT | 0 (the wiki's record is smaller) | 1 |
 | square_packing (Ryan Xu) at `9535d65d` | no licence stated; used with citation | 3 (cubes in a cube, P = 34 to 36) | 3 |
 | Erich Friedman's Packing Center (values by Friedman, Ríain Walsh, Lin) | values cited; no images copied | 1 (cubes P = 33: Friedman's construction, coordinates made by upstream) | 54 (Walsh 24, trivial grids 20, Friedman 10) |
-| PolyPack research | MIT | 1,004 (680 of them rest on nothing else) | - |
+| PolyPack research | MIT | 1,008 (680 of them rest on nothing else) | - |
 
 Lineage follows upstream's own `found_by`, `credit` and `search.lineage` fields, which its engine passes on
 through every move (a packing found from a Kamp packing keeps "search started from the packing of ..."). PolyPack's
 own records name what their searches started from: a sweep search the packing it was given (`origin.start`), a
+polish of 2026-10-27 the record it polished (`origin.start`, and the step in `origin.runs`), a
 search of the compute study of 2026-10-23 the start its run logs show (`origin.start`, `origin.runs`): of the 24
 records from the study's searches, 20 go back to an upstream record, 3 to random starts and 1 to an FCC cut
 [CALC]. Until 2026-10-25 the study's searches were taken to start from the upstream record of their own P, which
@@ -351,11 +359,24 @@ quaternions nonzero, s positive and P equal to the id's. Upstream's `certify_gen
 - The bipyramids and trapezohedra: `build_records.py --keep data/polyhedra/records.json --polypack <dir> --jobs 2`
   certified all 3,564 records while building (and `certify.py data/polyhedra/records.json --jobs 2 --ids <their 3,564 ids>` again, field checks included: 3,564 of 3,564 in 2,648 s on a heavily loaded machine, results appended to `data/polyhedra/certification.json`; smallest proven wall slack 1.0e-7, pair gap 8.7e-8, as for the prisms the certifier's rational planes lying near the best axis); upstream's own `certify_general.py`, unmodified, with the
   18 solids added to a copy of its exact data: 60 of 60 drawn from the tracked records with seed 20261027, among them P = 100 of the largest solids of both families, and 436 of 436 configurations checked before their last subset step (36 and 400 drawn with seeds 20261025 and 20261026).
-- `python3 python/polyhedra/test_certify.py`: 26 tests, among them overlaps and protrusions of 1.7e-7 to 3e-7,
+- The polish of 11 records (2026-10-27, §6; Python 3.12): `build_records.py --keep data/polyhedra/records.json
+  --polypack <dir> --search <dir> --jobs 2` certified the 594 records of the six bipyramid and trapezohedron
+  problems involved and the 5 polished records of the wiki's problems while building (226 s); then `certify.py
+  data/polyhedra/records.json --jobs 2 --ids <the 11 ids>`, field checks included: 11 of 11 in 21 s, smallest
+  proven wall slack and pair gap 1.0e-7; their entries in `data/polyhedra/certification.json` were replaced in
+  place. Upstream's own `certify_general.py`, unmodified (with the 18 solids added to a copy of its exact data):
+  11 of 11. The 9 records made from them by deleting pieces: the same build (`--polypack` for the 198 records of
+  `tz4intz4` and `tz10incub`, `--search` with `from_P` for 6 of the wiki's problems; 95 s), `certify.py --ids <the
+  9 ids>`: 9 of 9 in 30 s, smallest wall slack and pair gap 1.0e-7, entries replaced in place; upstream's
+  `certify_general.py`: 9 of 9.
+- `python3 python/polyhedra/test_certify.py`: 27 tests, among them overlaps and protrusions of 1.7e-7 to 3e-7,
   coincident pieces, a piece turned by 1e-3 rad, malformed numbers, zero quaternions, every field check, exact
   checks of PolyPack's solids with valid, overlapping and protruding packings of them (for the bipyramids and
   trapezohedra: exact midsphere and insphere, closed-form volumes, two pieces face to face 1e-7 apart that certify
-  and 2e-7 into each other or out of the container that do not), and the near-contact cross-check below.
+  and 2e-7 into each other or out of the container that do not), the near-contact cross-check below, and
+  `build_records.py --keep --search` (a PolyPack record replaced by a gain of 5e-8, the wiki's by one of 5e-4 and
+  not by one of 5e-6, the other configuration lines unchanged, results with pieces deleted from a larger P that
+  take its lineage, also from a record the same run replaces, and a result from another start refused).
 
 **Validator and certifier agree.** `python/polyhedra/fixtures/crosscheck.json` (written by
 `packages/polyhedra/scripts/gen-crosscheck.ts`) holds 240 near-contact cases: two pieces of ten problems in
@@ -454,8 +475,8 @@ with three.js instead (§8).
 
 ## 6. Results and comparison with the wiki
 
-**PolyPack records** [CALC]. 1,004 records beat the wiki's by more than 1e-5 relative (median 5.55 %, 769 by more
-than 1 %, 530 by more than 5 %). Up to P = 30, 330 records (median 0.58 %, 116 by more than 1 %, 10 by more than
+**PolyPack records** [CALC]. 1,008 records beat the wiki's by more than 1e-5 relative (median 5.54 %, 772 by more
+than 1 %, 530 by more than 5 %). Up to P = 30, 331 records (median 0.57 %, 116 by more than 1 %, 10 by more than
 5 %); per problem (gain = 1 - ours / wiki):
 
 | problem | records | P | median gain | largest gain | how |
@@ -479,6 +500,7 @@ than 1 %, 530 by more than 5 %). Up to P = 30, 330 records (median 0.58 %, 116 b
 | `icoincub` | 20 | 11-30 | 0.39 % | 4.28 % (P = 29: 5.173597 to 4.951992) | search from the record 19, crystal cut 1 |
 | `icoinoct` | 18 | 11-30 | 0.16 % | 1.96 % (P = 30: 6.617696 to 6.487819) | search from the record |
 | `rcoinrco` | 1 | 5-5 | 0.09 % | 0.09 % (P = 5: 2.330957 to 2.328886) | search from scratch |
+| `pkdinpkd` | 1 | 6-6 | 0.0025 % | 0.0025 % (P = 6: 2.388137 to 2.388077) | polish of the record (2026-10-27) |
 | `pr3incub` | 1 | 8-8 | 2.88 % | 2.88 % (P = 8: 1.921405 to 1.866026) | search from the record |
 | `pr5l2incub` | 1 | 5-5 | 1.99 % | 1.99 % (P = 5: 3.393394 to 3.325841) | compute-study search |
 
@@ -486,11 +508,14 @@ The gains are largest where the search started from a packing of Berthold, Kamp 
 other than the container's solid, mostly tetrahedra, with P >= 7. There the wiki's record was their published
 packing itself, which the wiki's search had not improved. The first six problems (the five self-packings and
 cubes in an octahedron) gave only 2 small gains [CALC]. The Archimedean, Catalan and prism records were not
-swept, only the few cases of the benchmark above, so all but 3 of them stay the wiki's.
+swept, only the few cases of the benchmark above, so all but 3 of them stay the wiki's; a fourth, pentakis
+dodecahedra P = 6, is the polish of 2026-10-27 (below).
 
-From P = 31 to 100, 674 records (median 7.92 %, 653 by more than 1 %, 233 by more than 10 %), all from the
+From P = 31 to 100, 677 records (median 7.91 %, 656 by more than 1 %, 234 by more than 10 %): 674 from the
 results of the compute study of 2026-10-23, imported as they were (a packing of m pieces also gives every n < m
-by deleting pieces; the container is then rescaled to a wall clearance of 1e-7). Per problem:
+by deleting pieces; the container is then rescaled to a wall clearance of 1e-7), of which 3 were polished on
+2026-10-27 and 4 replaced by pieces deleted from those; and 3 from the polish of the wiki's record of P = 35 of that
+date and pieces deleted from it (below). Per problem:
 
 | problem | records | P | median gain | largest gain | how |
 |---|---|---|---|---|---|
@@ -500,12 +525,12 @@ by deleting pieces; the container is then rescaled to a wall clearance of 1e-7).
 | `cubinoct` | 55 | 41-100 | 5.94 % | 9.63 % (P = 65: 7.235209 to 6.538254) | lattice cut |
 | `octincub` | 23 | 53-100 | 2.63 % | 7.20 % (P = 97: 4.673265 to 4.336922) | lattice cut |
 | `dodinico` | 1 | 100 | 15.38 % | 15.38 % (P = 100: 10.149366 to 8.588217) | lattice cut |
-| `icoindod` | 38 | 63-100 | 13.27 % | 15.73 % (P = 63: 3.953275 to 3.331309) | lattice cut |
+| `icoindod` | 38 | 63-100 | 13.27 % | 15.73 % (P = 63: 3.953275 to 3.331309) | lattice cut (P = 93 then polished) |
 | `cubintet` | 60 | 41-100 | 7.60 % | 18.59 % (P = 41: 10.758893 to 8.758892) | fcc tetrahedral cut 35, lattice cut 21, search 4 |
 | `cubindod` | 51 | 41-100 | 5.94 % | 10.73 % (P = 81: 2.948337 to 2.631969) | lattice cut |
-| `cubinico` | 21 | 33-100 | 3.69 % | 5.20 % (P = 89: 4.460625 to 4.228553) | lattice cut |
+| `cubinico` | 21 | 33-100 | 3.69 % | 5.20 % (P = 89: 4.460625 to 4.228553) | lattice cut (P = 85 then polished, P = 84 from it) |
 | `octintet` | 9 | 31-100 | 6.67 % | 9.97 % (P = 98: 9.996984 to 9.000002) | fcc tetrahedral cut |
-| `octindod` | 52 | 31-100 | 8.39 % | 12.50 % (P = 50: 2.150972 to 1.882153) | lattice cut |
+| `octindod` | 52 | 31-100 | 8.46 % | 12.50 % (P = 50: 2.150972 to 1.882153) | lattice cut (P = 62 then polished, P = 59 to 61 from it) |
 | `octinico` | 34 | 67-100 | 8.93 % | 11.36 % (P = 97: 3.936279 to 3.489001) | lattice cut |
 | `dodintet` | 70 | 31-100 | 15.89 % | 23.55 % (P = 35: 20.952291 to 16.017722) | fcc tetrahedral cut |
 | `dodincub` | 62 | 31-100 | 6.66 % | 10.90 % (P = 31: 8.472137 to 7.548885) | lattice cut |
@@ -516,6 +541,7 @@ by deleting pieces; the container is then rescaled to a wall clearance of 1e-7).
 | `pr3inpr3` | 1 | 36 | 0.23 % | 0.23 % (P = 36: 3.894581 to 3.885609) | search |
 | `ap4incub` | 12 | 85-96 | 2.34 % | 2.61 % (P = 91: 5.217892 to 5.081925) | search |
 | `ap5inap5` | 2 | 56-57 | 0.17 % | 0.17 % (P = 57: 4.388640 to 4.381370) | search |
+| `tetincub` | 3 | 33-35 | 3.06 % | 3.73 % (P = 33: 2.259950 to 2.175577) | polish of the record of P = 35, P = 33 and 34 from it (2026-10-27) |
 
 The cuts take the pieces of a lattice packing (or of a face-centred cubic arrangement of tetrahedral layers)
 that fit in the container, with the lattice's position and orientation optimised; they beat the wiki most where
@@ -534,8 +560,8 @@ them are available [EST, upstream registry].
 
 **Compute study.** The compute study of 2026-10-23 found 707 certified improvements over the wiki's records at
 P <= 100 (699 by more than 1e-5), mostly lattice and crystal cuts at P >= 41; the prism and antiprism records
-held up. Those for P > 30 are the 674 records above (with the subsets their packings give); those up to P = 30
-are 13 of the 330.
+held up. Those for P > 30 are 674 of the 677 records above (with the subsets their packings give; 7 since
+polished or made from a polished one); those up to P = 30 are 13 of the 331.
 
 ### PolyPack's prism and antiprism problems
 
@@ -655,7 +681,7 @@ the cut itself):
 | `bp11incub` | 1.3407 (20) | 1.4065 | 1.8702 (2) | 14 / 72 / 13 | 65 / 34 / 0 |
 | `bp12inbp12` | 1.2042 (17) | 1.2438 | 1.4040 (2) | 91 / 0 / 8 | 75 / 24 / 0 |
 | `bp12incub` | 1.3587 (17) | 1.4404 | 1.9685 (2) | 86 / 0 / 13 | 68 / 31 / 0 |
-| `tz4intz4` | 1.2220 (26) | 1.2547 | 1.4191 (2) | 0 / 80 / 19 | 83 / 16 / 0 |
+| `tz4intz4` | 1.2220 (26) | 1.2547 | 1.4191 (2) | 0 / 81 / 18 | 82 / 17 / 0 |
 | `tz4incub` | 1.1842 (48) | 1.2579 | 1.4355 (2) | 6 / 80 / 13 | 75 / 24 / 0 |
 | `tz5intz5` | 1.1730 (81) | 1.2114 | 1.4828 (2) | 86 / 0 / 13 | 75 / 24 / 0 |
 | `tz5incub` | 1.1942 (57) | 1.2362 | 1.5291 (2) | 86 / 0 / 13 | 73 / 26 / 0 |
@@ -668,16 +694,75 @@ the cut itself):
 | `tz9intz9` | 1.2046 (16) | 1.2413 | 1.4117 (2) | 89 / 0 / 10 | 86 / 13 / 0 |
 | `tz9incub` | 1.3033 (18) | 1.4058 | 1.8139 (2) | 86 / 0 / 13 | 74 / 25 / 0 |
 | `tz10intz10` | 1.2102 (16) | 1.2551 | 1.4068 (2) | 16 / 74 / 9 | 70 / 29 / 0 |
-| `tz10incub` | 1.3558 (20) | 1.4144 | 1.9287 (2) | 20 / 66 / 13 | 71 / 28 / 0 |
+| `tz10incub` | 1.3558 (20) | 1.4144 | 1.9287 (2) | 20 / 66 / 13 | 72 / 27 / 0 |
 | `tz11intz11` | 1.2099 (16) | 1.2448 | 1.3999 (2) | 91 / 0 / 8 | 88 / 11 / 0 |
 | `tz11incub` | 1.3839 (20) | 1.4841 | 2.0394 (2) | 86 / 0 / 13 | 73 / 26 / 0 |
 | `tz12intz12` | 1.2060 (17) | 1.2493 | 1.3974 (2) | 22 / 70 / 7 | 87 / 12 / 0 |
 | `tz12incub` | 1.4078 (20) | 1.4734 | 2.1466 (2) | 24 / 63 / 12 | 59 / 40 / 0 |
 
 All 3,564 records: s / bound 1.040 to 2.147, median 1.267; their lineages start from a lattice cut 1,727 times, a
-double-lattice cut 1,428 times and random positions 409 times; 2,771 end with a search and 793 with a subset step.
+double-lattice cut 1,429 times and random positions 408 times; 2,771 end with a search and 793 with a subset step
+(9 of them continue with the steps of 2026-10-27 below; the table counts the last step before those).
 The cube problems of the long solids are the loosest (s / bound up to 2.15 at P = 2 for dodecagonal trapezohedra:
 the volume bound ignores their length of 17 against a width of 3.9).
+
+### Polish of 11 records (2026-10-27)
+
+[CALC] The clearance study of 2026-10-26 tightened a stratified sample of 79 records with the existing polish and
+found 18 that are not local minima at their own clearance: a local polish lowers them by more than 1e-6 relative.
+The 11 whose gain was above 1e-5 were polished once more, each from its stored record: `polishConfig`
+(`packages/polyhedra/src/polish.ts`) at pair and wall clearance 1e-7, penalty weights 1e4 to 1e9 with 400 L-BFGS
+iterations each and no time limit (0.03 to 0.8 s each, Node 26.5; another Node version may end elsewhere). Every
+result was valid by the float validator at tolerance 0 with every pair and wall at least 1e-7 apart, and was
+certified by `certify.py` and by upstream's unmodified `certify_general.py` (with the 18 bipyramids and
+trapezohedra added to a copy of its exact data): 11 of 11, at the first attempt. `build_records.py --keep` folded
+them in (§4): the six of PolyPack's problems through `--polypack`, the five of the wiki's problems through
+`--search`, by the rule of §2 (a PolyPack record gives way to any certified gain, a record of the wiki's only to one
+of more than 1e-5 relative). Each record's `method` ends with "polish of the previous record at clearance 1e-7",
+`origin.runs` with that step, and `origin.date` is 2026-10-27; for the wiki's problems `origin.file` is
+`polish/<code>_nPP.json` and `origin.start` the file of the record that was polished.
+
+Then each record of smaller P that a polished record beat was made from the record of its problem with the
+smallest s at a larger P, going down in P (so one more followed, `tz4intz4` P = 23, beaten by the new P = 24): pieces
+deleted (`build_records.subset`: each time the piece reaching farthest out, then the smallest scale with wall
+clearance 1e-7 at the same centres), then the same polish once; of the two, the smaller certified one was kept
+(the polished one each time). The same checks and rule as above; `method` ends with "pieces deleted from the P = m
+record, then polished at clearance 1e-7" and `origin.runs` with that step; for the wiki's problems `origin.start` is
+the file of the record of P = m (`--search` with `from_P`).
+
+| record | previous s | polished s (certified) | gain (relative) | previous record |
+|---|---|---|---|---|
+| `tetincub/35` | 2.317654299 | 2.254508001 | 2.72e-2 | the wiki's: PingYou Ltd, a block-translation construction |
+| `octindod/62` | 2.013305770 | 1.995961935 | 8.61e-3 | PolyPack: lattice cut |
+| `tz4intz4/25` | 3.620159393 | 3.602080060 | 4.99e-3 | PolyPack: a piece deleted from the packing of P = 26 |
+| `icoindod/93` | 3.736867339 | 3.724744653 | 3.24e-3 | PolyPack: lattice cut |
+| `bp3incub/79` | 5.173435575 | 5.163629734 | 1.90e-3 | PolyPack: search from a double-lattice cut, subsets |
+| `tz6intz6/84` | 5.562831280 | 5.559295930 | 6.36e-4 | PolyPack: search from a double-lattice cut |
+| `cubinico/85` | 4.211457859 | 4.208989756 | 5.86e-4 | PolyPack: lattice cut |
+| `tz10incub/51` | 16.777690418 | 16.775788622 | 1.13e-4 | PolyPack: search from a lattice cut |
+| `bp12inbp12/43` | 4.409373971 | 4.409194252 | 4.08e-5 | PolyPack: search from a lattice cut, a subset |
+| `pkdinpkd/6` | 2.388137235 | 2.388076519 | 2.54e-5 | the wiki's: PingYou Ltd |
+| `bp12incub/26` | 16.462239901 | 16.461913404 | 1.98e-5 | PolyPack: search from a lattice cut |
+| `tetincub/34` | 2.282933422 | 2.212976640 | 3.06e-2 | the wiki's: PingYou Ltd; now from P = 35 |
+| `tetincub/33` | 2.259950330 | 2.175577169 | 3.73e-2 | the wiki's: PingYou Ltd; now from P = 34 |
+| `octindod/61` | 2.012691550 | 1.990925862 | 1.08e-2 | PolyPack: lattice cut; now from P = 62 |
+| `octindod/60` | 2.006540566 | 1.982963491 | 1.18e-2 | PolyPack: lattice cut; now from P = 61 |
+| `octindod/59` | 2.004018368 | 1.976024306 | 1.40e-2 | PolyPack: lattice cut; now from P = 60 |
+| `cubinico/84` | 4.211457859 | 4.205543577 | 1.40e-3 | PolyPack: lattice cut; now from P = 85 |
+| `tz4intz4/24` | 3.620159393 | 3.590946066 | 8.07e-3 | PolyPack: pieces deleted from P = 26; now from P = 25 |
+| `tz4intz4/23` | 3.591077891 | 3.580330267 | 2.99e-3 | PolyPack: search from random positions; now from P = 24 |
+| `tz10incub/50` | 16.777652498 | 16.770530261 | 4.25e-4 | PolyPack: a subset of P = 51; now from P = 51 |
+
+- The four records of the wiki's are now PolyPack's (the 1,008 above). Pentakis dodecahedra, P = 6, gain only
+  2.5e-5, but the polished s is also below upstream's uncertified touching limit of the wiki's configuration
+  (s_tight 2.388137193), so the gain is not the clearance.
+- For tetrahedra in a cube, P = 35, the study's polish kept the record's wall gaps of 5e-10 and ended at
+  2.254285; at wall clearance 1e-7 the same schedule ends at 2.254508. From such rough starts the polish is path
+  dependent at that level.
+- In the 11 problems involved, s does not decrease with P: no record has a larger s than a record of larger P.
+- Only these 11 were polished; the study's other seven records that are not local minima gain 1.1e-6 to 3.0e-6
+  and were left as they are. Its sample over-represents constructions, so its rate of 18 in 79 is not a rate for
+  all records, and others may not be local minima either [SPEC].
 
 ## 7. Limitations and open questions
 
@@ -688,7 +773,11 @@ the volume bound ignores their length of 17 against a width of 3.9).
   are far from the records at the budgets a browser can give; warm starts from the record are the useful mode.
 - Only the Platonic records up to P = 30 were swept with the search; the Archimedean, Catalan and prism records
   (1,769 up to P = 30) were not, and the sweep used one seed and 150,000 evaluations per record. From P = 31 on
-  no record was searched by this package; the PolyPack records there are the compute study's cuts and searches.
+  no record was searched by this package; the PolyPack records there are the compute study's cuts and searches,
+  eight of them polished or made from a polished one on 2026-10-27, and three made from the wiki's record of
+  tetrahedra in a cube, P = 35, by the same steps.
+- The polish of 2026-10-27 (§6) covered only the 11 records of a 79-record sample whose polish gained more than
+  1e-5, and the 9 records of smaller P made from them; no other record was checked for being a local minimum.
 - Lineage is upstream's own record of it; it is not re-derived.
 - An entry beats a research record only by more than `POLYHEDRA_RECORD_MARGIN = 1e-6` relative, a margin above the
   records' clearance (whose measured cost is at most 2.6e-7 relative); site entries compete with each other by

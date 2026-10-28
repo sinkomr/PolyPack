@@ -453,6 +453,101 @@ class CrossCheck(unittest.TestCase):
         self.assertGreaterEqual(n_bad, 100)
 
 
+class KeepSearch(unittest.TestCase):
+    """build_records.py --keep with --search: a certified result replaces a PolyPack record by any gain and a record
+    of the wiki's only by more than 1e-5 relative; the other lines of the configuration file stay as they were; a
+    result with pieces deleted from a larger P (from_P) takes that record's lineage, also when the same run replaces
+    it."""
+
+    def test_replacements(self):
+        import shutil
+        import tempfile
+        import build_records as B
+        a = 0.5 + 0.5e-7
+        two = [[-a, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0], [a, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]]
+        four = [[x, y, 0.0, 1.0, 0.0, 0.0, 0.0] for x in (-a, a) for y in (-a, a)]
+        _, eight = cubes8()
+
+        def kept(pieces, s, ours, wiki_s):
+            r = record_of(s, copy.deepcopy(pieces))
+            r.update(found_by='PolyPack research' if ours else 'Alejandro Zarzuelo',
+                     sources=['polypack'] if ours else ['wiki'], source='test',
+                     origin={'file': f'records/cubincub/cubincub_n{len(pieces):02d}.json', 'date': '2026-10-15'},
+                     wiki={'s_full': wiki_s, 'url': B.catalogue_wiki('cubincub', len(pieces))})
+            if ours:
+                r['credit'] = 'PolyPack research'
+            return r
+
+        old = [kept(two, 2.001, False, 2.001), kept(four, 2 + 5e-7, True, 2.1),
+               kept(eight, 2 + 4e-7 + 1e-5, False, 2 + 4e-7 + 1e-5)]
+        d = tempfile.mkdtemp()
+        try:
+            B.write_configs(os.path.join(d, 'configs'), old)
+            keep = os.path.join(d, 'records.json')
+            with open(keep, 'w') as f:
+                json.dump({'sources': {'wiki': {}, 'polypack': {}}, 'conventions': {}, 'records': old}, f)
+            with open(os.path.join(d, 'configs', 'cubincub.jsonl'), 'rb') as f:
+                before = f.read().split(b'\n')
+            res = os.path.join(d, 'polish')
+            os.makedirs(res)
+
+            def result(pieces, s, record_file=None, **more):
+                n = len(pieces)
+                with open(os.path.join(res, f'cubincub_n{n:02d}.json'), 'w') as f:
+                    json.dump({'code': 'cubincub', 'P': n, 's_full': s, 'pieces': pieces, 'method': 'test polish',
+                               'start': 'warm', 'record_file': record_file or f'records/cubincub/cubincub_n{n:02d}.json',
+                               'date': '2026-10-27', **more}, f)
+
+            for pieces, s in ((two, 2 + 3e-7), (four, 2 + 4e-7), (eight, 2 + 4e-7)):
+                result(pieces, s)
+            self.assertEqual(B.keep_and_add(keep, None, [res], 100, 1, False), 0)
+            doc = certify.load_records(keep)
+            r2, r4, r8 = doc['records']
+            # the wiki's record of P = 2 gains 5e-4: replaced, credited to the wiki's packing it started from
+            self.assertEqual(r2['score_cert'], 2 + 3e-7)
+            self.assertEqual(r2['found_by'], 'PolyPack research')
+            self.assertEqual(r2['sources'], ['polypack', 'wiki'])
+            self.assertEqual(r2['origin'], {'file': 'polish/cubincub_n02.json', 'date': '2026-10-27',
+                                            'start': 'records/cubincub/cubincub_n02.json'})
+            self.assertEqual(r2['wiki']['s_full'], 2.001)
+            self.assertEqual(r2['wiki']['file'], 'records/cubincub/cubincub_n02.json')
+            self.assertIn('Alejandro Zarzuelo, records/cubincub/cubincub_n02.json', r2['credit'])
+            # a PolyPack record is replaced by a gain of 5e-8; the wiki's of P = 8 not by 5e-6 (below 1e-5)
+            self.assertEqual((r4['score_cert'], r4['credit']), (2 + 4e-7, 'PolyPack research'))
+            self.assertEqual((r8['score_cert'], r8['found_by']), (2 + 4e-7 + 1e-5, 'Alejandro Zarzuelo'))
+            with open(os.path.join(d, 'configs', 'cubincub.jsonl'), 'rb') as f:
+                after = f.read().split(b'\n')
+            self.assertEqual(after[2], before[2])
+            for r in doc['records']:
+                self.assertEqual(certify.field_errors(r, VOL), [], r['id'])
+                self.assertTrue(certify.check_record(r, VOL)['ok'], r['id'])
+            # pieces deleted from the wiki's P = 8 give P = 4, and from that new P = 4 (the same run) P = 2
+            os.remove(os.path.join(res, 'cubincub_n08.json'))
+            result(four, 2 + 3.5e-7, 'records/cubincub/cubincub_n08.json', from_P=8, runs=['pieces deleted'])
+            result(two, 2 + 2e-7, 'polish/cubincub_n04.json', from_P=4, runs=['pieces deleted'])
+            self.assertEqual(B.keep_and_add(keep, None, [res], 100, 1, False), 0)
+            r2, r4, _ = certify.load_records(keep)['records']
+            self.assertEqual((r4['score_cert'], r2['score_cert']), (2 + 3.5e-7, 2 + 2e-7))
+            self.assertEqual(r4['origin'], {'file': 'polish/cubincub_n04.json', 'date': '2026-10-27',
+                                            'start': 'records/cubincub/cubincub_n08.json', 'runs': ['pieces deleted']})
+            self.assertEqual(r2['origin']['start'], 'polish/cubincub_n04.json')
+            for r in (r2, r4):
+                self.assertEqual(r['sources'], ['polypack', 'wiki'])
+                self.assertIn('Alejandro Zarzuelo, records/cubincub/cubincub_n08.json', r['credit'])
+                self.assertTrue(certify.check_record(r, VOL)['ok'], r['id'])
+            # a result that did not start from the record it names, or names a smaller P, is refused
+            for n in (2, 4):
+                os.remove(os.path.join(res, f'cubincub_n{n:02d}.json'))
+            result(eight, 2 + 3e-7, 'records/other.json')
+            with self.assertRaises(ValueError):
+                B.keep_and_add(keep, None, [res], 100, 1, False)
+            result(eight, 2 + 3e-7, from_P=4)
+            with self.assertRaises(ValueError):
+                B.keep_and_add(keep, None, [res], 100, 1, False)
+        finally:
+            shutil.rmtree(d)
+
+
 @unittest.skipUnless(os.path.exists(RECORDS), 'no records file')
 class RecordsFile(unittest.TestCase):
     def test_fields_of_every_record(self):
