@@ -173,7 +173,7 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await expect(page.locator("#board")).toBeHidden();
   const node = page.locator('.t-card[data-id="click6"]');
   await expect(node).toHaveAttribute("data-state", "buyable");
-  await node.locator("button").tap();
+  await node.locator(".t-node-act").tap();
   await expect(page.locator(".t-detail-buy")).toBeVisible();
   await axeClean(page);
   await page.locator(".t-detail-buy").tap();
@@ -183,7 +183,7 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await page.evaluate(() => (window as any).tighter.state.owned.push("filters"));
   const filters = page.locator('.t-node[data-id="filters"]');
   await expect(filters).toHaveAttribute("data-switch", "on");
-  await filters.locator("button").tap();
+  await filters.locator(".t-node-act").tap();
   await expect(page.locator(".t-detail-switch")).toHaveText("Turn off");
   await page.locator(".t-detail-switch").tap();
   await expect(filters).toHaveAttribute("data-switch", "off");
@@ -257,7 +257,7 @@ test("iPhone (WebKit): rapid taps, a purchase from the tree by touch, and the bo
     await page.locator("#t-dock-tree").tap();
     const node = page.locator('.t-card[data-id="click6"]');
     await expect(node).toHaveAttribute("data-state", "buyable");
-    await node.locator("button").tap();
+    await node.locator(".t-node-act").tap();
     await expect(page.locator(".t-detail-buy")).toBeVisible();
     await page.locator(".t-detail-buy").tap();
     await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
@@ -309,7 +309,7 @@ test("iPad (WebKit): two columns, the toolbar under the board, rapid taps kept w
     await page.locator("#t-tab-tree").tap();
     const node = page.locator('.t-card[data-id="click6"]');
     await expect(node).toHaveAttribute("data-state", "buyable");
-    await node.locator("button").tap();
+    await node.locator(".t-node-act").tap();
     await page.locator(".t-detail-buy").tap();
     await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
     await fits(page);

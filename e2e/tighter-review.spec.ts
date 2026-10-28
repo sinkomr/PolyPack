@@ -112,7 +112,7 @@ async function buyAll(page: Page, ids: string[]): Promise<void> {
   for (const id of ids) {
     const node = page.locator(`.t-card[data-id="${id}"]`);
     await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
-    await node.locator("button").click();
+    await node.locator(".t-node-act").click();
     await expect.poll(async () => (await state(page)).owned.includes(id)).toBe(true);
   }
   await openBoard(page);
@@ -184,7 +184,7 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   await page.click("#t-name-change");
   await page.fill("#t-name-input", "<>");
   await page.click("#t-name-save");
-  await expect(page.locator("#t-name-problem")).toContainText("nothing left");
+  await expect(page.locator("#t-name-problem")).toContainText("Nothing is left of that name");
   await page.click("#t-name-cancel");
   await page.click("#t-settings-close");
   expect((await state(page)).name).toBe(named);
@@ -235,7 +235,7 @@ test("owner rule: points the server does not confirm are taken back", async ({ p
   // the click paid the record at once
   expect((await state(page)).rp).toBeGreaterThan(5);
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
-  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("Another entry got there first");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("Another entry was first on");
   await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("taken back");
   const s = await state(page);
   const q = s.queue.find((x: any) => x.key === p.key);
@@ -288,7 +288,7 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   expect(after.sending).toBeNull();
   expect(after.unconfirmed).toBe(0);
   expect(s.rp).toBeCloseTo(paid, 9);
-  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("its answer had not arrived");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("answer had not arrived");
 });
 
 test("server errors do not cause retry storms: 429, 500, network failure, failed leader check, 409, 422", async ({
@@ -610,8 +610,8 @@ test("a sustained session: the first click compacts, a name, clicks, upgrades, a
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes between ticks: auto-eval catches up at most a minute (5 evaluations a second,
-  // shared by the two lanes: 300), then runs live, two lanes, Auto-advance compacting the new problems
+  // twenty minutes between ticks: auto-eval catches up at most a minute (Auto-eval alone is 1 evaluation
+  // a second, shared by the two lanes: 60), then runs live, two lanes, Auto-advance compacting the new problems
   const autoStart = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));
   let twoBusy = false;
@@ -633,7 +633,7 @@ test("a sustained session: the first click compacts, a name, clicks, upgrades, a
   // more than a minute behind plus its live rate
   const afterAuto = await state(page);
   const conserved = afterAuto.stats.evaluations - e0 + afterAuto.autoDue;
-  const dueAtMost = 300 + 5 * ((Date.now() - autoStart) / 1000) + 40;
+  const dueAtMost = 60 + 1 * ((Date.now() - autoStart) / 1000) + 60;
   endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
@@ -693,7 +693,7 @@ test("a sustained session: the first click compacts, a name, clicks, upgrades, a
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(300);
+  expect(conserved).toBeGreaterThanOrEqual(60);
   expect(conserved).toBeLessThanOrEqual(dueAtMost);
   expect(s2.autoDue).toBe(0);
   expect(twoBusy).toBe(true);

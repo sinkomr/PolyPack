@@ -12,9 +12,16 @@ async function freshVisit(page: Page, query = ""): Promise<void> {
   await page.goto(URL + query);
 }
 
+/** Finishing or skipping the tutorial opens the name pop-up; the game begins when it closes. */
+async function closeNamePopup(page: Page): Promise<void> {
+  await expect(page.locator("#t-name-popup")).toBeVisible({ timeout: 30_000 });
+  await page.click("#t-name-cancel");
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
+}
+
 /** The side the hands-on step shows, from its status line. */
 const shownSide = async (page: Page): Promise<number> =>
-  Number(/Pentagon side: ([\d.]+)/.exec((await page.locator("#t-tut-status").textContent()) ?? "")?.[1]);
+  Number(/Pentagon side: ([\d.]+?)\.?(\s|$)/.exec((await page.locator("#t-tut-status").textContent()) ?? "")?.[1]);
 
 test("a first visit walks the tutorial, then starts the game", async ({ page }) => {
   await freshVisit(page);
@@ -43,7 +50,10 @@ test("a first visit walks the tutorial, then starts the game", async ({ page }) 
   let side = await shownSide(page);
   for (let k = 1; k <= 10; k++) {
     await page.click("#t-tut-act");
-    await expect(page.locator("#t-tut-status")).toContainText(`Improved ${k} of 10 times`, { timeout: 60_000 });
+    await expect(page.locator("#t-tut-status")).toContainText(
+      k < 10 ? `Improved ${k} of 10 times` : "Improved 10 times. Press Next when you're ready.",
+      { timeout: 60_000 },
+    );
     const now = await shownSide(page);
     expect(now).toBeLessThan(side);
     side = now;
@@ -63,8 +73,9 @@ test("a first visit walks the tutorial, then starts the game", async ({ page }) 
   await expect(page.locator("#t-tut-next")).toHaveText("Choose a name");
   await page.click("#t-tut-next");
 
-  // then the game starts, and the tutorial is not shown again
+  // the name pop-up comes next; the game starts when it closes, and the tutorial is not shown again
   await expect(dialog).toBeHidden();
+  await closeNamePopup(page);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
   await expect.poll(() => page.evaluate(() => (window as any).tighter.state.tutorialDone)).toBe(true);
   await page.reload();
@@ -77,6 +88,7 @@ test("Skip goes to the game, and ?tutorial=off never shows it", async ({ page })
   await expect(page.locator("#t-tutorial")).toBeVisible({ timeout: 30_000 });
   await page.click("#t-tut-skip");
   await expect(page.locator("#t-tutorial")).toBeHidden();
+  await closeNamePopup(page);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 
   await freshVisit(page, "&tutorial=off");
@@ -93,4 +105,5 @@ test("Settings replays the tutorial", async ({ page }) => {
   await expect(page.locator("#t-tut-title")).toHaveText("Nine squares");
   await page.click("#t-tut-skip");
   await expect(page.locator("#t-tutorial")).toBeHidden();
+  await closeNamePopup(page);
 });

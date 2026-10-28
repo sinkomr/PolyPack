@@ -95,7 +95,7 @@ async function buy(page: Page, id: string): Promise<void> {
   await openTree(page);
   const node = page.locator(`.t-card[data-id="${id}"]`);
   await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
-  await node.locator("button").click();
+  await node.locator(".t-node-act").click();
   await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
 }
 
@@ -150,7 +150,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const harden = page.locator('.t-node[data-id="harden"]');
   await expect(harden).toHaveAttribute("data-state", "mystery");
   await expect(harden.locator(".t-node-name")).toHaveText("??????");
-  await harden.locator("button").click();
+  await harden.locator(".t-node-act").click();
   // with a pointer that hovers, the card beside the node holds the details and the pane below is gone
   await expect(page.locator("#t-tree-tip")).toContainText("Needs Lattice.");
   await expect(page.locator("#t-tree-tip")).toContainText("??????");
@@ -172,7 +172,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 18,750 RP");
   await expect(page.locator('.t-card[data-id="clickx"] .t-level')).toHaveText("L1");
   const rp = await game(page, (s) => s.rp);
-  await page.click('.t-card[data-id="clickx"] button');
+  await page.click('.t-card[data-id="clickx"] .t-node-act');
   await expect.poll(() => game(page, (s) => s.levels.clickx)).toBe(2);
   expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 18_750, 6);
   await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 23,438 RP");
@@ -186,12 +186,12 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(page.locator('.t-card[data-id="head1"]')).toHaveAttribute("data-state", "dear");
   await page.evaluate(() => ((window as any).tighter.state.standing.points = 1));
   await expect(page.locator('.t-card[data-id="head1"]')).toHaveAttribute("data-state", "buyable");
-  await page.click('.t-card[data-id="head1"] button');
+  await page.click('.t-card[data-id="head1"] .t-node-act');
   await expect.poll(() => game(page, (s) => [s.owned.includes("head1"), s.standing.points])).toEqual([true, 0]);
 
   // at phone width: no sideways scroll, and still clean for assistive technology with a node's details open
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator('.t-node[data-state="mystery"] button').first().click();
+  await page.locator('.t-node[data-state="mystery"] .t-node-act').first().click();
   await expect(page.locator("#t-tree-detail")).toContainText("Needs");
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
@@ -207,7 +207,8 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP"
   await expect(page.locator("#t-auto")).toBeHidden();
   await grant(page, 1000);
   await buy(page, "trace");
-  await grant(page, 150);
+  // exactly the price of 2 evaluations per click: the first record's points are not left over
+  await page.evaluate(() => ((window as any).tighter.state.rp = 150));
   await buy(page, "click2");
   // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (250)
   const card = page.locator('.t-card[data-id="auto1"]');
@@ -299,7 +300,7 @@ test("long game: the dealer's upgrades turn off and on again in the tech tree, a
   await expect(page.locator("#t-tree-tip")).toContainText("Owned · on. Press it to turn it off.");
   await expect(page.locator("#t-tree-tip")).toContainText("While it is off, the dealer deals on its own.");
   // Your pick off: the offers go, and the dealer fills the free slots on its own
-  await node("pick3").locator("button").click();
+  await node("pick3").locator(".t-node-act").click();
   await expect(node("pick3")).toHaveAttribute("data-switch", "off");
   await expect(page.locator("#t-tree-tip")).toContainText("Owned · off. Press it to turn it on.");
   expect(await game(page, (s) => s.settings.off)).toEqual(["pick3"]);
@@ -308,10 +309,10 @@ test("long game: the dealer's upgrades turn off and on again in the tech tree, a
   await expect(page.locator("#t-offers")).toBeHidden();
   expect(await logText(page)).toContain("Turned off Your pick: 3. While it is off, the dealer deals on its own.");
   // a ladder is one switch: Best of 4 off turns off Best of 2 too
-  await node("rank4").locator("button").click();
+  await node("rank4").locator(".t-node-act").click();
   await expect(node("rank2")).toHaveAttribute("data-switch", "off");
   await expect(node("rank4")).toHaveAttribute("data-switch", "off");
-  await node("filters").locator("button").click();
+  await node("filters").locator(".t-node-act").click();
   await expect(page.locator("#t-filters")).toBeHidden();
   expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3", "filters"]);
   await page.mouse.move(0, 0);
@@ -325,7 +326,7 @@ test("long game: the dealer's upgrades turn off and on again in the tech tree, a
   await page.reload();
   await openTree(page);
   for (const id of ["rank2", "rank4", "pick3", "filters"]) await expect(node(id)).toHaveAttribute("data-switch", "off");
-  await node("filters").locator("button").click();
+  await node("filters").locator(".t-node-act").click();
   await expect(node("filters")).toHaveAttribute("data-switch", "on");
   await expect(page.locator("#t-filters")).toBeVisible();
   expect(await game(page, (s) => s.settings.off)).toEqual(["rank2", "pick3"]);
@@ -427,7 +428,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect.poll(() => game(page, (s) => s.economy.recorded)).toContain(p.key);
   await give(page, ["rent", "collections"]);
   await expect(page.locator("#t-records")).toBeVisible();
-  await expect(page.locator("#t-rc-sets")).toContainText("First records by tier: open");
+  await expect(page.locator("#t-rc-sets")).toContainText("First records in these tiers: open problem");
   await expect(page.locator("#t-rc-stats")).toContainText("+5 % on all points");
 
   // rent: the record's rent starts, and an hour later a check that finds it still ours pays it
@@ -562,20 +563,20 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   }));
   // read as version 6. Version 3 pays back what Auto-eval cost over its price then (90 - 9 RP), once,
   // and the Seed counter's list price (300 RP), now that the Seeds row is gone. Version 4 multiplies every
-  // amount by what the save could buy next costs now over then: Auto-eval: 2 a second and 5 evaluations
-  // per click, 2,900 RP now and 815 then
-  const f = 2900 / 815;
-  expect(s).toMatchObject({ version: 6, levels: {}, picks: 0, pipeline: [] });
+  // amount by what the save could buy next costs now over then: 5 evaluations per click, 350 RP now and
+  // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
+  const f = 350 / 780;
+  expect(s).toMatchObject({ version: 8, levels: {}, picks: 0, pipeline: [] });
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
-  await expect(page.locator("#status")).toContainText(`${Math.round(81 * f)} RP of what you paid for yours came back`);
+  await expect(page.locator("#status")).toContainText(`you got ${Math.round(81 * f)} RP back for the ones you had bought`);
   await expect(page.locator("#status")).toContainText(
-    `The Seeds upgrades have left the tech tree, so the ${Math.round(300 * f).toLocaleString("en-US")} RP they cost came back.`,
+    `The Seeds upgrades are gone from the tech tree. You got ${Math.round(300 * f).toLocaleString("en-US")} RP back.`,
   );
   // version 6 is in diameter-1 disks: the side of disks in a polygon halves, once
   expect(s.disks).toMatchObject({ best: 5, verified: 5 });
   await expect(page.locator("#status")).toContainText(
-    "Disks and balls now have diameter 1, and a circle or ball container is measured by its diameter. 1 of your problems uses them and was converted.",
+    "Disks and balls now have diameter 1. A circle or ball container is measured by its diameter. 1 of your problems uses them and was converted.",
   );
   expect(s.standing).toMatchObject({ points: 0, total: 0, resets: 0 });
   expect(s.owned).toEqual(["trace", "click2", "click3", "click4", "auto1"]);

@@ -144,6 +144,7 @@ canvas#board[hidden] {
 }
 /* the mark on a problem a lane is working on */
 .t-queue .t-q-live {
+  margin: 0 4px;
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
@@ -1128,6 +1129,12 @@ body.tighter[data-pane="tree"] .t-banner {
   padding: 2px 8px;
   border-radius: 6px;
   font-size: 12.5px;
+}
+@media (pointer: coarse) {
+  .t-more-detail {
+    min-height: 44px;
+    padding: 6px 14px;
+  }
 }
 .t-how-btn {
   display: block;

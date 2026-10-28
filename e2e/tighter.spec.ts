@@ -105,7 +105,7 @@ async function buyAll(page: Page, ids: string[]): Promise<void> {
   for (const id of ids) {
     const node = page.locator(`.t-card[data-id="${id}"]`);
     await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
-    await node.locator("button").click();
+    await node.locator(".t-node-act").click();
     await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
   }
   await openBoard(page);
@@ -127,7 +127,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
 
   // a dealt open problem is placed at once (pieces on rings around the centre): the free floor, never sent
   await expect(page.locator("#t-problem-note")).toHaveText(
-    "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.",
+    "No one has sent a packing for this problem yet. Any board below the starting score is a new record.",
   );
   await expect(page.locator("#t-stop")).toBeVisible();
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
@@ -324,10 +324,10 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   expect(ran).toBeGreaterThanOrEqual(1);
   expect(ran).toBeLessThan(15);
   const p = await focused(page);
-  // the board is a strict packing smaller than its placed start, and nothing was sent
+  // the board is a strict packing smaller than its placed start (sending is always on, so the best may
+  // have gone to the server, but a send never carries more than the kept best)
   expect(p.best!).toBeLessThan(p.floor!);
   expect(findOverlaps(p.N, p.board!.pieces, strictTolerance(p.board!))).toEqual([]);
-  expect((await stats(page)).submissions).toBe(0);
   // the board is still playable
   await click(page);
 });

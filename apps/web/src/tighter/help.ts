@@ -118,7 +118,7 @@ const POINTS: How[] = [
     text: [
       `You earn record points (RP) whenever a click makes your board smaller by more than ${MIN_STEP} of its size, which is the same limit the server uses. The points are paid right away, whether you pressed Evolve yourself or auto-eval did it for you.`,
       "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
-      "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound, which is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
+      "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
       `Every click that improves the board also pays a small step part, which is larger for larger steps. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
       "The payment is then multiplied by three weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The contest weight makes problems that other players work on, and published values, pay more. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
@@ -367,8 +367,8 @@ const AUTO: How = {
     "Auto-eval runs evaluations for you while it is on, alongside your own clicks. Its rate is in evaluations a second, and it is set by Auto-eval and Faster auto-eval. Upgrades of evaluations per click make your own clicks bigger but do not speed auto-eval up. Its evaluations pay just as yours do.",
     "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving.",
     "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and it pauses on battery power, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks never pause.",
-    `Auto-eval gives each lane its evaluations in small batches, so a lane's worker gets only a few messages a second. A batch is at most about ${AUTO_JOB_SECONDS} s of your computer's time, judged from how long that problem's evaluations have taken here, so a click of yours waits behind very little, even on a large problem or with a slow method.`,
-    `The rate is a target. If the solver is slower than that, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind on wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. Each lane is its own solver worker, so on a large problem more lanes spread the work over more cores.`,
+    `Auto-eval gives each lane its evaluations in small batches, so a lane's worker gets only a few messages a second. A batch is at most about ${AUTO_JOB_SECONDS} s of your computer's time, judged from how long that problem's evaluations have taken here. So a click of yours waits behind very little, even on a large problem or with a slow method.`,
+    `The rate is a target. If the solver is slower than that, auto-eval runs as fast as your computer allows. The evaluations it has fallen behind on wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. Each lane is its own solver worker, so on a large problem more lanes spread the work over more cores.`,
   ],
   math: [
     `<var>r</var> = ${AUTO_BASE} + ${AUTOX_STEP} × <var>x</var>`,
@@ -438,7 +438,7 @@ const SENDING: How = {
 
 export const PIPELINE: How = {
   text: [
-    `A pipeline is a list of methods that the runs on a problem follow in turn. Each time a run ends by itself, because its method stopped improving, it reached ${int(RUN_BUDGET)} evaluations${stallRule() ? " or the game ended it at a stall" : ""}, the next run on that problem uses the next stage. After the last stage, the pipeline starts again at the first.`,
+    `A pipeline is a list of methods that the runs on a problem follow in turn. A run ends by itself when its method stops improving, when it reaches ${int(RUN_BUDGET)} evaluations${stallRule() ? ", or when the game ends it at a stall" : ""}. The next run on that problem then uses the next stage. After the last stage, the pipeline starts again at the first.`,
     ...(runRules() ? [runRules()] : []),
     "A run that the game closes early does not move the pipeline on. That happens when its lane moves to another problem or the page reloads. The next run then repeats the same stage with a new random seed.",
     "Stages whose method this cycle's rule does not allow are skipped. While the pipeline has a stage, it picks the method of every new run, so the toolbar's method is not used. With Auto-tune and Auto chosen, the game still picks the setting for each stage's method.",
@@ -452,11 +452,11 @@ export const PIPELINE: How = {
 
 export const METHOD_MATCH: How = {
   text: [
-    "Method match learns which method pays best on each kind of problem. When Auto is chosen in the toolbar, it picks the method for each new run, and with Auto-tune it also picks the method's setting, from level 0 up to the tuning level you own.",
+    "Method match learns which method pays best on each kind of problem. When Auto is chosen in the toolbar, it picks the method for each new run. With Auto-tune it also picks the method's setting, from level 0 up to the tuning level you own.",
     "A kind of problem combines its tier (open problem, loose record, site record or published value), its size and its pieces. The size is the piece's sides plus the container's sides plus the number of pieces. It falls in a band: 300 or more, 200 to 299, 120 to 199, 80 to 119, 50 to 79, 30 to 49, or under 30. The pieces are circles, 3 to 8 sides, 9 to 20 sides, or more than 20 sides.",
     `After each run, the game records its value. That is the RP its problem earned during the run, before multipliers, divided by the run's evaluations. Runs of every method count, even before you own Method match. Compact and runs shorter than ${MIN_OBSERVED_EVALS} evaluations are the only ones that do not count.`,
     "To choose, the game draws a random value for each method from what it has learned. The draw is centred on the method's average and narrows as the method gets more runs, and the method with the highest draw is the one that runs. This way methods with few runs still get tried, and the best one is chosen more and more often.",
-    "A method not yet tried on a kind of problem starts from the average of the methods tried on that kind, or on any kind if none has been. Its spread is at least as wide as that average, so it still gets a fair chance.",
+    "A method not yet tried on a kind of problem starts from the average of the methods tried on that kind, or on any kind if none has been tried. Its spread is at least as wide as that average, so it still gets a fair chance.",
   ],
   math: [
     `<var>y</var> = <var>p</var> / <var>e</var>`,

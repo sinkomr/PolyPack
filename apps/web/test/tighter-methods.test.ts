@@ -248,7 +248,7 @@ describe("Tighter's methods table", () => {
     const text = (h: How) => (typeof h.text === "string" ? h.text : h.text.join(" "));
     expect(text(HELP.counts as How)).toContain(stallRule());
     expect(text(PIPELINE)).toContain(stallRule());
-    expect(text(PIPELINE)).toContain("or the game ended it at a stall");
+    expect(text(PIPELINE)).toContain("or when the game ends it at a stall");
     // a method's own sentence on when its runs end goes with them, in the table's order
     for (const g of Object.values(METHOD_GAMES)) if (g.runEnds) expect(runEndRules()).toContain(g.runEnds);
     expect(text(HELP.counts as How)).toContain(runEndRules());

@@ -699,6 +699,9 @@ ensureLanes();
 /** The keys of the problems a lane has a run on, or work queued for. */
 const laneKeys = (l: LaneView) =>
   [l.run?.key, l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
+/** The keys of the problems a lane is running evaluations on now, or has jobs queued for (an open run alone is not work). */
+const workingKeys = (l: LaneView) =>
+  [l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
 const laneOn = (key: string) => lanes.find((l) => laneKeys(l).includes(key));
 /** The last step's change per problem, for the score panel (not saved). */
 const lastChange = new Map<string, StepChange & { evals: number; seed: number; method: string }>();
@@ -3054,11 +3057,10 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
   text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
-  const busy = new Set(lanes.flatMap(laneKeys));
   const sig = state.queue
     .map(
       (p) =>
-        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${busy.has(p.key)}|${p.key === state.focus}`,
+        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`,
     )
     .join(";");
   if (sig !== queueSig) {
@@ -3083,13 +3085,6 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                   : "";
         li.dataset.key = p.key;
         li.append(`${problemTitle(p)}${gap}${status}`);
-        if (busy.has(p.key)) {
-          // a lane has work on it: the mark is text as well as a dot, so it reads without colour
-          const live = document.createElement("span");
-          live.className = "t-q-live";
-          live.textContent = "Working";
-          li.append(" ", live);
-        }
         const actions = document.createElement("span");
         actions.className = "t-q-actions";
         if (p.key !== state.focus && !p.leaving) {
@@ -3120,8 +3115,19 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   }
   // the counters change with every step: they are written in place, so the rows (and their buttons
   // under the pointer) are rebuilt only when the signature above changes
+  const busy = new Set(lanes.flatMap(workingKeys));
   for (const li of list.children as HTMLCollectionOf<HTMLElement>) {
     const p = problem(state, li.dataset.key ?? null);
+    // the "Working" mark is text as well as a dot, so it reads without colour; it is added and
+    // removed in place, so the buttons beside it never move
+    const mark = li.querySelector(".t-q-live");
+    const working = busy.has(li.dataset.key ?? "");
+    if (working && !mark) {
+      const live = document.createElement("span");
+      live.className = "t-q-live";
+      live.textContent = "Working";
+      li.querySelector(".t-q-actions")?.before(live);
+    } else if (!working && mark) mark.remove();
     const count = li.querySelector(".t-q-count");
     const value = p ? countText(p) : "";
     if (count && count.textContent !== value) count.textContent = value;
@@ -3139,7 +3145,12 @@ function queueWorkText(o: Owned): string {
     ? `Your clicks work on ${problemTitle(board)}, the problem on the board.`
     : "Your clicks work on the problem on the board.";
   if (!o.has("auto1") && !o.has("lanes2")) return clicks;
-  return `${clicks} Auto-eval works on every problem in the queue.${state.settings.auto ? "" : " It is off now."}`;
+  const n = lanes.length;
+  const how =
+    n > 1
+      ? `Auto-eval works on the problems in the queue one at a time in each of your ${n} lanes.`
+      : "Auto-eval works on the problems in the queue one at a time.";
+  return `${clicks} ${how}${state.settings.auto ? "" : " It is off now."}`;
 }
 
 /** Evaluations a long step under way on the problem has done that its counters do not have yet. */
@@ -3876,9 +3887,27 @@ $("t-import").addEventListener("click", async () => {
 
 // tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the
 // text. Each becomes a "More detail" button named by the disclosure's summary.
+const HOW_LEAD: Record<string, string> = {
+  points: "Record points are what you earn when a board gets smaller.",
+  counts: "Clicks, evaluations and runs are the three ways your work is counted.",
+  standing: "Your standing grows as you earn points, and a reset starts a new cycle.",
+  records: "A record you still hold can keep paying you rent, and collections add a bonus.",
+  auto: "Auto-eval works for you in the background, spread over your lanes.",
+  running: "Auto-eval pauses in a few situations, and you can change some of them.",
+  sending: "Your best boards are sent to PolyPack under your display name.",
+};
 for (const d of document.querySelectorAll<HTMLElement>("details[data-how]")) {
   const how = HELP[d.dataset.how ?? ""];
-  if (how) d.replaceWith(moreDetail(how, d.querySelector("summary")?.textContent ?? "this panel", "t-how-btn"));
+  if (!how) continue;
+  const btn = moreDetail(how, d.querySelector("summary")?.textContent ?? "this panel", "t-how-btn");
+  // a panel with nothing else in it still says what it is about, before the button
+  const lead = HOW_LEAD[d.dataset.how ?? ""];
+  if (lead) {
+    const p = document.createElement("p");
+    p.className = "note t-how-lead";
+    p.textContent = lead;
+    d.replaceWith(p, btn);
+  } else d.replaceWith(btn);
 }
 
 // ---------- the Mechanics page ----------

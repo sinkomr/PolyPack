@@ -190,6 +190,7 @@ async function play(): Promise<void> {
   let busy = false;
   let opened: Promise<boolean> | null = null;
   let stepNow = 0;
+  let over = false;
 
   const openHandsOn = (): Promise<boolean> => {
     opened ??= (async () => {
@@ -204,7 +205,9 @@ async function play(): Promise<void> {
     status.textContent =
       side === null
         ? "The solver is starting."
-        : `Pentagon side: ${show6(side)}. Improved ${clicks} of ${HANDS_ON.clicks} times.`;
+        : clicks >= HANDS_ON.clicks
+          ? `Pentagon side: ${show6(side)}. Improved ${clicks} times. Press Next when you're ready.`
+          : `Pentagon side: ${show6(side)}. Improved ${clicks} of ${HANDS_ON.clicks} times.`;
   };
 
   const show = async (i: number) => {
@@ -245,8 +248,11 @@ async function play(): Promise<void> {
         const host = $(`t-tut-space-${k}`);
         $(`t-tut-space-cap-${k}`).textContent = t.caption;
         void fetchSpaceProblem(t.key.family, t.key.id).then(({ read }) => {
-          if (!read?.config || stepNow !== i) return;
-          mounted.push(mountSpaceBoard(host, { ...t.key, board: read.config }));
+          if (!read?.config || stepNow !== i || over) return;
+          const m = mountSpaceBoard(host, { ...t.key, board: read.config });
+          // the tutorial may have ended while the drawing loaded: it is not kept
+          if (over) m.destroy();
+          else mounted.push(m);
         });
       });
     } else if (s.hands) {
@@ -300,6 +306,7 @@ async function play(): Promise<void> {
   void show(0);
   await finished;
   next.onclick = skip.onclick = act.onclick = dialog.oncancel = null;
+  over = true;
   dialog.close();
   lane?.terminate();
   for (const m of mounted) m.destroy();
