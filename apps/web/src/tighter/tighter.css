@@ -633,10 +633,6 @@ body.tighter[data-pane="tree"] .t-banner {
   margin-top: 6px;
   font-size: 13px;
 }
-.t-points-how summary {
-  cursor: pointer;
-  color: var(--muted);
-}
 #t-name-nudge {
   margin-top: 8px;
 }
@@ -813,8 +809,8 @@ body.tighter[data-pane="tree"] .t-banner {
   flex-direction: column;
   justify-content: space-between;
   width: 136px;
-  height: 62px;
-  padding: 5px 8px 7px;
+  height: 78px;
+  padding: 5px 8px 24px;
   overflow: hidden;
   border: 1.5px solid var(--border);
   border-radius: 8px;
@@ -862,6 +858,16 @@ body.tighter[data-pane="tree"] .t-banner {
   color: transparent;
   font-size: 1px;
   cursor: pointer;
+}
+/* over the node's big button, at its bottom edge */
+.t-node-more {
+  position: absolute;
+  left: 6px;
+  bottom: 4px;
+  margin: 0;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 16px;
 }
 .t-node-act:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 7%, transparent);
@@ -1007,11 +1013,8 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-tree-tip-effect {
   font-weight: 600;
 }
-.t-tree-tip .t-math {
-  font-size: 14px;
-}
 
-/* "How it works" (how.ts): prose, formulas, then each variable defined */
+/* how.ts: prose, and on the Mechanics page formulas, then each variable defined */
 .t-how p {
   margin: 0 0 6px;
 }
@@ -1048,20 +1051,41 @@ body.tighter[data-pane="tree"] .t-banner {
 .t-how-note {
   color: var(--muted);
 }
-.t-how-more > summary {
-  cursor: pointer;
-  color: var(--accent);
+/* "More detail" (detail.ts): a small text button, and its pop-up */
+.t-more-detail {
+  min-height: 0;
+  margin: 4px 0;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 12.5px;
 }
-/* help.ts's explanations in the panels, Settings and the first record's pop-up: never wider than the panel */
-:is(.panel, .t-dialog, .t-pop) .t-how-more {
-  margin: 6px 0;
-  font-size: 13px;
+.t-how-btn {
+  display: block;
 }
-:is(.panel, .t-dialog, .t-pop) .t-how-more > .t-how {
-  margin-top: 4px;
+.t-detail-dialog .t-how p {
+  margin: 0 0 8px;
 }
-:is(.panel, .t-dialog, .t-pop) .t-how-more .t-math {
+/* the Mechanics page: one article per mechanic, formulas set apart */
+.t-mechanics-dialog {
+  width: min(44rem, calc(100vw - 24px));
+}
+.t-mechanics-dialog .t-dialog-body section {
+  border-bottom: 0;
+}
+.t-mech {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13.5px;
+}
+.t-mech h4 {
+  margin: 0 0 2px;
   font-size: 14px;
+}
+.t-mech-effect {
+  margin: 0 0 4px;
+  color: var(--muted);
+}
+.t-mech .t-math {
   overflow-wrap: anywhere;
 }
 
@@ -1111,14 +1135,7 @@ body.tighter[data-pane="tree"] .t-banner {
 }
 .t-list-how {
   position: relative;
-  font-size: 12.5px;
-}
-.t-list-how > summary {
-  padding: 4px 0 2px;
-}
-.t-list-how .t-math {
-  font-size: 14px;
-  overflow-wrap: anywhere;
+  align-self: flex-start;
 }
 
 /* ---- touch ---- */
@@ -1261,8 +1278,10 @@ html {
     display: inline-block;
     padding: 12px 0;
   }
-  .tighter .top .t-settings-btn {
+  .tighter .top #t-open-mechanics {
     margin-left: auto;
+  }
+  .tighter .top .t-settings-btn {
     padding: 4px 12px;
   }
   .tighter .top .t-hold {

@@ -120,7 +120,8 @@ import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
-import { renderHow } from "./how";
+import { moreDetail } from "./detail";
+import { renderMechanics } from "./mechanics";
 import {
   Candidate,
   Ranked,
@@ -3899,11 +3900,28 @@ $("t-import").addEventListener("click", async () => {
 
 // ---------- "How it works" ----------
 
-// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the text
+// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the
+// text. Each becomes a "More detail" button named by the disclosure's summary.
 for (const d of document.querySelectorAll<HTMLElement>("details[data-how]")) {
   const how = HELP[d.dataset.how ?? ""];
-  if (how) for (const h of Array.isArray(how) ? how : [how]) d.append(renderHow(h));
+  if (how) d.replaceWith(moreDetail(how, d.querySelector("summary")?.textContent ?? "this panel", "t-how-btn"));
 }
+
+// ---------- the Mechanics page ----------
+
+const mechanicsDialog = $<HTMLDialogElement>("t-mechanics");
+$("t-open-mechanics").addEventListener("click", () => {
+  // built when first opened, from the same data as the cards, so it never drifts
+  if (!mechanicsDialog.dataset.built) {
+    renderMechanics($("t-mechanics-body"));
+    mechanicsDialog.dataset.built = "1";
+  }
+  if (!mechanicsDialog.open) mechanicsDialog.showModal();
+});
+$("t-mechanics-close").addEventListener("click", () => mechanicsDialog.close());
+mechanicsDialog.addEventListener("click", (e) => {
+  if (e.target === mechanicsDialog) mechanicsDialog.close();
+});
 
 // ---------- start ----------
 
