@@ -248,7 +248,7 @@ describe("Tighter's methods table", () => {
     const text = (h: How) => (typeof h.text === "string" ? h.text : h.text.join(" "));
     expect(text(HELP.counts as How)).toContain(stallRule());
     expect(text(PIPELINE)).toContain(stallRule());
-    expect(text(PIPELINE)).toContain("or the game ended it at a stall");
+    expect(text(PIPELINE)).toContain("or when the game ends it at a stall");
     // a method's own sentence on when its runs end goes with them, in the table's order
     for (const g of Object.values(METHOD_GAMES)) if (g.runEnds) expect(runEndRules()).toContain(g.runEnds);
     expect(text(HELP.counts as How)).toContain(runEndRules());
@@ -312,10 +312,10 @@ describe("Tighter's methods table", () => {
   it("say in Auto-advance's How which runs have a warm-up, read from the table", () => {
     // morph's is on the card, and without any the card says nothing of it
     expect(upgrade("advance").how).toEqual(advanceHow([{ label: "morph", evals: 722, runs: "on polygon pieces" }]));
-    expect(advanceHow([]).text[1]).toMatch(/“830 since progress”\.$/);
+    expect(advanceHow([]).text[0]).toMatch(/“830 since progress”\.$/);
     expect(advanceHow([]).math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var>");
     const how = advanceHow([{ label: "morph", evals: 722 }]);
-    expect(how.text[1]).toMatch(
+    expect(how.text[0]).toMatch(
       /The first 722 evaluations of every morph run are its warm-up, and they do not add to the count\.$/,
     );
     expect(how.math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var> − <var>e</var><sub>warm</sub>");
@@ -324,7 +324,7 @@ describe("Tighter's methods table", () => {
       { label: "morph", evals: 722 },
       { label: "lattice", evals: 1_500 },
     ]);
-    expect(two.text[1]).toContain(
+    expect(two.text[0]).toContain(
       "The first 722 evaluations of every morph run and the first 1,500 of every lattice run are their warm-up, and they do not add to the count.",
     );
     expect(two.vars!.find(([v]) => v.includes("warm"))![1]).toBe(
@@ -343,7 +343,7 @@ describe("Tighter's methods table", () => {
     expect(speeds.slowness("mc_compress@0")).toBeCloseTo(1, 12);
     expect(speeds.slowness("harden@0")).toBeCloseTo(6, 12);
     // harden's steps leave mc_compress's jobs as they were: 150 a second, a quarter second's worth
-    const top = owning([..."auto1 auto2 auto3 auto4 auto5 auto6 auto7 auto8 auto9 auto10".split(" ")] as UpgradeId[]);
+    const top = owning(["auto1", "autox"], { autox: 69 });
     expect(autoJobEvals(top, 1000, 1, speeds.msEach("mc_compress@0", 2))).toBe(38);
     // and harden's own jobs keep to a quarter second of its slower evaluations: 250 / 12 ms
     expect(autoJobEvals(top, 1000, 1, speeds.msEach("harden@0", 2))).toBe(20);

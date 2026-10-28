@@ -189,7 +189,7 @@ describe("Tighter's basin_hopping", () => {
 
   it("words its card in plain sentences, with its numbers from its constants", () => {
     const u = upgrade("basin");
-    const text = [u.how.text].flat();
+    const text = [u.how.text, u.how.note ?? ""].flat();
     for (const t of [u.effect, ...text]) {
       expect(t).not.toMatch(/[;:—]/);
       expect(t).not.toMatch(/seed \d|seeds per problem|One seed|· seed /i);

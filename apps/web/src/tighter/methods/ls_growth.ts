@@ -94,14 +94,12 @@ export function largerText(d: number): string {
 }
 
 export const lsGrowthGame: MethodGame = {
-  effect:
-    "You can run ls_growth, which regrows the pieces in your container and often jams them denser than mc_compress does.",
+  effect: "Adds ls_growth, which regrows the pieces in your container and often packs them denser.",
   how: (select) => ({
     text: [
-      `ls_growth is Lubachevsky–Stillinger growth. The container stays fixed at the tight fit of the run's start. The pieces shrink to ${1 - GROWTH_DEFAULTS.initialShrink} of their size, get random velocities, and grow at a steady rate while they fly and bounce off each other and the walls. The run ends when they jam, which is when ${GROWTH_DEFAULTS.jamWindow} collisions in a row each let them grow by less than 10⁻⁸ of their size. It also ends after S evaluations in a row without a gain.`,
-      `Every I steps the pieces are scaled back to their true size and the packing is scored, which is one evaluation. The side scored is at most L / σ, so your board can improve only once L / σ is below b. In tests on 40 and 60 pieces that took ${range(GROWTH_SILENT)} evaluations, and a whole run took ${range(GROWTH_RUN)}. Until the run beats your board, the run line and the message after each click say how much larger its latest packing is.`,
-      "Each run grows the pieces once, with a new random seed. Every ls_growth run on a problem starts from the same board B, so each run is a new try and your board keeps the best of them. When a run of another method improves your board, the next ls_growth run takes that board as its B. After the page reloads, the next run takes your board as its B.",
-      `An evaluation of ls_growth does far more work than one of mc_compress. In tests on 40 and 60 pieces it took ${range(GROWTH_MS)} ms, where mc_compress took ${range(MC_MS)} ms. Your computer may then run auto-eval more slowly than its rate.`,
+      "ls_growth is Lubachevsky–Stillinger growth. The container stays fixed. The pieces start smaller, move around at random and slowly grow, bouncing off each other and the walls. The run ends when they jam and cannot grow any more.",
+      `Every few steps the game scales the pieces back to their true size and scores the packing, which is one evaluation. Your board improves only once the container is small enough to beat it. In tests on 40 and 60 pieces that took ${range(GROWTH_SILENT)} evaluations, and a whole run took ${range(GROWTH_RUN)}. Until then, the run line and the message after each click say how much larger the latest packing is than your board.`,
+      `Each run grows the pieces once, with a new random seed. Every ls_growth run on a problem starts from the same board, so each run is a new try and your board keeps the best of them. An evaluation does far more work than one of mc_compress. It took ${range(GROWTH_MS)} ms in tests, against ${range(MC_MS)} ms, so your computer may run auto-eval more slowly than its rate.`,
     ],
     math: [
       `${sym("σ")} ← ${sym("σ")} + ${sym("g")} × Δ${sym("t")}`,
@@ -134,7 +132,7 @@ export const lsGrowthGame: MethodGame = {
         `evaluations without a gain before a run ends, ${GROWTH_DEFAULTS.stagnationEvaluations} at first (more with ls_growth tuning)`,
       ],
     ],
-    note: `${select} It pays most on a problem where mc_compress has stopped improving, and mc_compress can then tighten the jammed packing further. Auto-advance counts these evaluations toward its patience, so a patience of ${int(PATIENCE)} lets about ${Math.round(PATIENCE / ((GROWTH_RUN[0] + GROWTH_RUN[1]) / 2))} runs in a row try to beat your board.`,
+    note: `The pieces shrink to ${1 - GROWTH_DEFAULTS.initialShrink} of their size at the start. The container stays at the tight fit of the run's start. The run ends when ${GROWTH_DEFAULTS.jamWindow} collisions in a row each let the pieces grow by less than 10⁻⁸ of their size, or after S evaluations in a row without a gain. The side scored is at most L / σ, so your board can improve only once L / σ is below b. When a run of another method improves your board, the next ls_growth run takes that board as its B. After the page reloads, the next run takes your board as its B. ${select} It pays most on a problem where mc_compress has stopped improving, and mc_compress can then tighten the jammed packing further. Auto-advance counts these evaluations toward its patience, so a patience of ${int(PATIENCE)} lets about ${Math.round(PATIENCE / ((GROWTH_RUN[0] + GROWTH_RUN[1]) / 2))} runs in a row try to beat your board.`,
   }),
   /**
    * One growth per run (`runs: 1`, the solver's default is 4): in the report's M1 the 3 restarts from
@@ -158,7 +156,8 @@ export const lsGrowthGame: MethodGame = {
     stagnationEvaluations: "evaluations without a gain before a run ends",
   },
   tunedTime: TOP_TIME,
-  tuneNote: `Each level runs more steps in each evaluation. In tests on 40 21-gons in a 24-gon, the top level reached as good a jam in ${TOP_SHARE} of the evaluations, each taking ${TOP_TIME}, so a click goes ${TOP_FACTOR} as far. A second of compute does the same work at every level, so once your computer limits auto-eval the levels give it nothing. In tests one lane ran ${range(GROWTH_RATE)} evaluations of ls_growth a second at level 0 on 40 and 60 pieces.`,
+  tuneNote: `Each level runs more steps in each evaluation. In tests on 40 21-gons in a 24-gon, the top level reached as good a jam in ${TOP_SHARE} of the evaluations, each taking ${TOP_TIME}, so a click goes ${TOP_FACTOR} as far. A second of computing does the same work at every level, so once your computer limits auto-eval, the levels give it nothing.`,
+  tuneDetail: `In tests one lane ran ${range(GROWTH_RATE)} evaluations of ls_growth a second at level 0 on 40 and 60 pieces.`,
   tuneBase: "the solver's defaults, with one growth a run",
   runEnds:
     "An ls_growth run ends when its pieces jam. Each run of a series starts from the board the series began on, not from the problem's best.",

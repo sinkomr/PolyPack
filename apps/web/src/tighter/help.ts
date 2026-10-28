@@ -25,7 +25,7 @@ import {
   RATE_LIMITED_BACKOFF_MS,
 } from "./pacer";
 import {
-  BEAT_OTHER_BONUS,
+  BEAT_OTHER_FACTOR,
   CONTEST,
   FIRST_RECORD_BONUS,
   FIRST_RECORD_GAP_RATIO,
@@ -33,21 +33,14 @@ import {
   GAP_WEIGHT,
   SIZE_WEIGHT,
   TIER_LABEL,
+  costFactor,
   recordPoints,
 } from "./points";
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
 import { DIMENSION_TEXT, RESET_MIN, RULES, resetThreshold } from "./standing";
 import { CLIENT_TAG } from "./submission";
 import { MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "./transfer";
-import {
-  AUTOX_STEP,
-  AUTO_JOB_SECONDS,
-  AUTO_MAX,
-  AUTO_RATES,
-  AUTO_SLACK_SECONDS,
-  COMPACT_EVALS,
-  RUN_BUDGET,
-} from "./upgrades";
+import { AUTO_BASE, AUTO_JOB_SECONDS, AUTO_SLACK_SECONDS, COMPACT_EVALS, RUN_BUDGET } from "./upgrades";
 
 /**
  * The "How it works" explanations outside the tech tree, in the shared format of how.ts: the points
@@ -116,22 +109,24 @@ function exampleLine(delta: number, label: string): string {
   const sum = r.nibble + r.size + r.gap;
   return (
     `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(0)}, ${terms}, ` +
-    `so ${exampleW.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
+    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
   );
 }
 
 const POINTS: How[] = [
   {
     text: [
-      `You earn record points (RP) each time a click makes your board smaller by more than the smallest improvement that counts, ${MIN_STEP} of its size. The server uses the same rule, so a smaller step would not make a new record there either. The click pays at once, whether you pressed Evolve or auto-eval clicked for you.`,
-      "Points are paid only while you send your records under your name. Improvements made before that wait, and each problem pays them in one payment when you put your name on your records.",
-      `Each payment adds three terms and any bonus, then multiplies the sum by the shape weight, the contest weight and your points multiplier. The size term pays for how much the side shrank, and the gap term for how much closer it came to the area bound. These two pay most of your points. Over a run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.`,
-      `The step term pays a little for every click that improves the board at all. It is 1 for the smallest improvement that counts and grows by 1 for each factor of 10 above it, so it goes up and down from click to click. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
-      "The server checks every record you send. A board is usually sent within a minute, and Settings explains when. If the server does not make it the record, for example because another entry got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
+      `You earn record points (RP) whenever a click makes your board smaller by more than ${MIN_STEP} of its size, which is the same limit the server uses. The points are paid right away, whether you pressed Evolve yourself or auto-eval did it for you.`,
+      "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
+      "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
+      `Every click that improves the board also pays a small step part, which is larger for larger steps. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
+      "The payment is then multiplied by three weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The contest weight makes problems that other players work on, and published values, pay more. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
+      "Beating an existing record pays double on your accepted new record. Every payment is doubled from the moment your board is better than the other record, until the server accepts your board as the new record. After that, payments are single again.",
+      "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
     ],
     math: [
       `<var>Δ</var> = 1 − <var>s</var><sub>new</sub> / <var>s</var><sub>prev</sub>, paid only when <var>Δ</var> &gt; <var>F</var>`,
-      `RP = <var>m</var> × <var>w</var> × <var>c</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>)`,
+      `RP = <var>m</var> × <var>w</var> × <var>c</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>) × <var>β</var>`,
       `<var>t</var><sub>step</sub> = 1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>)`,
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
@@ -173,7 +168,15 @@ const POINTS: How[] = [
       ],
       [
         "<var>B</var>",
-        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, plus ${BEAT_OTHER_BONUS} the first time you beat another name's record on a problem by enough to change its 6 decimals, otherwise 0`,
+        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, otherwise 0`,
+      ],
+      [
+        "<var>κ</var>",
+        "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
+      ],
+      [
+        "<var>β</var>",
+        `${BEAT_OTHER_FACTOR} for every payment while your board is better, at 6 decimals, than another name's record or a published value and the server has not yet made your entry the record. It starts again each time another name takes the lead and you beat it. Otherwise 1`,
       ],
       ["<var>m</var>", "your points multiplier"],
       ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
@@ -186,12 +189,20 @@ const POINTS: How[] = [
     note: "On a problem with a published value, nothing pays until your board beats that value, and the first payment is measured from it. Before a send the container is turned to its best angle, as the server scores it. When that shrinks the side by more than the smallest improvement that counts, it pays like any other improvement.",
   },
   {
-    text: `An example, before the multiplier m. The problem 24-gons in a 30-gon with 60 pieces is open, so w = ${exampleW.toFixed(3)} and c = ${CONTEST.open}. Its area bound is b = ${exampleBound.toFixed(6)}. Your board has side ${exampleSide.toFixed(6)}, 20 % above the bound, and here is what four different clicks would pay.`,
+    text: `An example, before your multiplier. The problem 24-gons in a 30-gon with 60 pieces is open. Your board's side is 20 % above its area bound. Here is what four different clicks would pay.`,
     math: [
       exampleLine(1.0000001 * FLOOR, `just above ${minStep}`),
       exampleLine(1e-6, "= 10<sup>−6</sup>"),
       exampleLine(1e-3, "= 10<sup>−3</sup>"),
       exampleLine(1e-2, "= 10<sup>−2</sup>"),
+    ],
+    vars: [
+      ["<var>w</var>", `the shape weight here, ${exampleW.toFixed(3)}`],
+      ["<var>κ</var>", `the cost factor here, ${costFactor(EXAMPLE).toFixed(3)}`],
+      [
+        "<var>b</var>",
+        `the area bound here, ${exampleBound.toFixed(6)}. The board's side is ${exampleSide.toFixed(6)}, 20 % above it. The contest weight of an open problem is ${CONTEST.open}.`,
+      ],
     ],
     note: "The step term depends only on how big the step is. It does not grow as your record gets better, which is why it rises and falls from one click to the next. The size and gap terms of many small steps add up to those of one big step that shrinks the side as much.",
   },
@@ -235,12 +246,13 @@ export function stallRule(games: Readonly<Record<string, MethodGame>> = METHOD_G
 
 const COUNTS: How = {
   text: [
-    "An evaluation is one scoring of your whole packing by the solver, which checks every overlap and how tightly the container fits. Between two evaluations the solver moves pieces, so each evaluation is one more step of search.",
-    `A click is one press of Evolve. Each click runs as many evaluations as you have per click. A new open problem starts with every piece placed on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it, and the starting board is never sent. Your first click on it is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress in one press.`,
-    `A run is one session of a solver method on one problem, from the problem's best board. Each run starts with a new random seed, the number that fixes its random choices, so each run searches differently. A run stays open between clicks. It ends by itself when its method stops improving, or after ${int(RUN_BUDGET)} evaluations, and the next click starts a new run. ${runRules()}${runRules() ? " " : ""}A problem allows any number of runs. Changing the method or its settings also starts a new run.`,
-    "Evaluations run counts every evaluation, yours and auto-eval's, including the one that scores a run's starting board. Clicks counts your own presses of Evolve that ran, not auto-eval's. Compute is the time the solver spent on those evaluations, added up over every lane, so with two lanes busy it grows twice as fast as the clock.",
-    "Records held counts the problems where your entry is the current record on PolyPack, as far as the game has seen. Earned counts every record point you have earned, less any taken back, and spending does not lower it.",
-    `New problems are earned by work, counted in clicks. Each Evolve click of yours counts as one click, whatever its evaluations, and Compact's ${int(COMPACT_EVALS)} evaluations count as ${int(COMPACT_EVALS)} / k clicks. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click, whatever your evaluations per click.`,
+    "An evaluation is one scoring of your packing by the solver, which checks every overlap and how tightly the container fits. Between two evaluations the solver moves the pieces a little.",
+    "A click is one press of Evolve, and it runs as many evaluations as you have per click.",
+    `A new open problem starts with every piece on rings around the centre. Its side, or the side of a smaller known packing, is the starting score. Your first record must beat it. The starting board is never sent. Your first click on a problem is Compact, ${int(COMPACT_EVALS)} evaluations of mc_compress at once.`,
+    `A run is one session of a solver method on one problem, starting from the problem's best board. Each run uses a new random seed, so it searches in a different way. A run stays open between clicks, and it ends when its method stops improving or after ${int(RUN_BUDGET)} evaluations. The next click after that starts a new run. ${runRules()}${runRules() ? " " : ""}Changing the method or its settings also starts a new run.`,
+    "Evaluations run counts every evaluation, yours and auto-eval's, while Clicks counts only your own presses of Evolve. Compute is the time the solver has spent, added up over all lanes, so with two busy lanes it grows twice as fast as the clock.",
+    "Records held counts the problems where your entry is the current record on PolyPack, as far as the game knows. Earned counts all the record points you have earned, minus any that were taken back, and spending points does not lower it.",
+    `New problems are earned by work, counted in clicks. Each Evolve click counts as one click, whatever its evaluations. Compact's ${int(COMPACT_EVALS)} evaluations count as ${int(COMPACT_EVALS)} divided by your evaluations per click. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`,
   ],
   math: [
     `<var>c</var><sub>deal</sub> = ${DEAL_CLICKS} / <var>q</var>`,
@@ -263,12 +275,12 @@ const COUNTS: How = {
 
 const STANDING: How = {
   text: [
-    "A cycle is the time between two resets. Your first cycle began when you started the game. A reset trades this cycle's record points and most of your tech tree for standing.",
-    "Every point of standing you have ever earned adds 10 % to all the record points you earn, whether you spend it or not. You spend standing on the upgrades in the tech tree's Standing row, which only standing buys and which every reset keeps.",
-    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Each later cycle needs 5 times as many as the one before, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points still waiting for the server do not count yet, and they carry into the next cycle.`,
-    `The first reset opens ${DIMENSION_TEXT["2-on-3"].label}, ${DIMENSION_TEXT["2-on-3"].what}. The second opens ${DIMENSION_TEXT["3-in-3"].label}, ${DIMENSION_TEXT["3-in-3"].what}. A dimension stays open for good, and the cards that deal its problems are in the Dimensions row of the tech tree, bought again in each cycle. Curved problems, a part of ${DIMENSION_TEXT["2-in-2"].label}, are a card from the first cycle on.`,
-    "A reset takes away your RP to spend and every upgrade bought with RP, the cards of the Dimensions row included, except Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at their first level.",
-    "A reset keeps your records on the server, and they go on paying rent. It also keeps your collections, your standing and the Standing row, the queue, what the dealer has learned and every count.",
+    "A cycle is the time between two resets. When you reset, you trade this cycle's record points and most of your tech tree for standing.",
+    "Each point of standing adds 10 % to all the record points you earn, and it counts whether you spend it or not. You can spend standing on the upgrades in the Standing row of the tech tree, and resets keep those upgrades.",
+    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Each cycle needs 5 times as many as the one before it, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points that are still waiting for the server carry over into the next cycle.`,
+    `The first reset opens ${DIMENSION_TEXT["2-on-3"].label}, ${DIMENSION_TEXT["2-on-3"].what}. The second opens ${DIMENSION_TEXT["3-in-3"].label}, ${DIMENSION_TEXT["3-in-3"].what}. A dimension stays open for good, and the problems in it are dealt by cards in the Dimensions row, which you buy again in each cycle. Curved problems, a part of ${DIMENSION_TEXT["2-in-2"].label}, have a card from the first cycle on.`,
+    "A reset takes away your RP and every upgrade bought with RP, the Dimensions row included. The only exceptions are Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at level 1.",
+    "A reset keeps your records on the server, and they go on paying rent. It also keeps your collections, your standing, the Standing row, the queue, what the dealer has learned and every count.",
   ],
   math: [
     `<var>G</var> = ⌊5 × √(<var>E</var> / <var>R</var>)⌋, once <var>E</var> ≥ <var>R</var>`,
@@ -294,7 +306,7 @@ const STANDING: How = {
 
 const RULES_HOW: How = {
   text: [
-    "Before a reset you can choose a rule for the next cycle, and it limits that whole cycle. When you reset at the end of a cycle played under a rule, the reset gives half again as much standing, rounded up and at least 1 more. You also keep the rule's reward for good. The reward comes once per rule, and the extra standing comes every time you finish a cycle under it.",
+    "Before a reset you can choose a rule for the next cycle, and the rule limits that whole cycle. If you finish a cycle under a rule, the reset gives half again as much standing, rounded up and at least 1 more. You also keep the rule's reward for good, but it comes only once per rule, while the extra standing comes every time you finish a cycle under it.",
     ...RULES.map((r) => `${r.name}. ${r.limit} Once finished, ${lowerFirst(r.reward)}`),
   ],
   math: [`<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉)`, `<var>R</var> = 1.5<sup><var>j</var></sup>`],
@@ -314,8 +326,8 @@ const RULES_HOW: How = {
 const RECORDS: How[] = [
   {
     text: [
-      `With Records pay rent, every record you still hold earns rent every hour, equal to ${pct(RENT_SHARE)} of the record points that problem earned before multipliers, times ${RENT_GROWTH} for each level of Higher rent, times your points multiplier now.`,
-      `Rent builds up between checks, even while the game is closed. Once a record's last check is ${minutes(RENT_RECHECK_MS)} old, the game asks the server who holds it, at most one record every ${seconds(RENT_CHECK_MS)}, the longest unchecked first. If the record is still yours, the rent since its last check is paid, at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days of it. If someone has beaten it, it pays nothing for the time since its last check.`,
+      `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
+      `Rent builds up between checks, even while the game is closed. Once a record's last check is ${minutes(RENT_RECHECK_MS)} old, the game asks the server who holds it, checking at most one record every ${seconds(RENT_CHECK_MS)}, with the longest unchecked first. If the record is still yours, you are paid the rent since its last check, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time.`,
       "Rent counts as record points earned in this cycle, so it also counts toward a reset.",
     ],
     math: [
@@ -332,9 +344,9 @@ const RECORDS: How[] = [
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one beaten later. Once you own Collections they add to all your points, and they stay through resets.",
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points, and they stay through resets.",
       `A shape pair is one piece shape in one container shape, each with ${FRONTIER_SIDES.slice(0, -1).join(", ")} or ${FRONTIER_SIDES.at(-1)} sides. It is complete when you have a confirmed record for each of its ${FRONTIER_P.length} piece counts, ${andList(FRONTIER_P.map(String))}.`,
-      `A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece. A tier first is your first confirmed record in each tier, that is ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}.`,
+      `A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}.`,
     ],
     math: [
       `<var>C</var> = ${PAIR_BONUS} × <var>A</var> + ${SHAPE_BONUS} × <var>K</var> + ${TIER_BONUS} × <var>Q</var>`,
@@ -353,14 +365,14 @@ const RECORDS: How[] = [
 
 const AUTO: How = {
   text: [
-    "Auto-eval runs evaluations for you while it is on, at its own rate, beside your own clicks. Its rate is in evaluations a second, set by the Auto-eval upgrades and Faster auto-eval. Upgrades of evaluations per click make your own clicks larger but do not speed auto-eval up. Its evaluations pay exactly as yours do.",
-    "A lane is one solver worker in your browser, holding one open run. The lanes share auto-eval's rate, so with L lanes each one runs r / L evaluations a second. Each lane works on a different problem, because one run cannot be split. More lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board and each other lane on another problem in the queue that already has a record. Auto-advance moves on from problems that stopped improving.",
-    "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and while the device runs on battery, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks are never paused.",
-    `Auto-eval hands a lane its due evaluations in batches of at most ${AUTO_JOB_SECONDS} s worth of the lane's share, and at least 1 evaluation, so that a lane's worker gets only a few messages a second at any rate. A batch is also at most about ${AUTO_JOB_SECONDS} s of your computer's time on that problem, judged from how long evaluations of its run's method, at its setting, have taken here, so a click of yours waits behind little even on a large problem or with a slow method.`,
-    `The rate is a target. When the solver is slower than that, because one evaluation takes longer than L / r seconds, auto-eval runs as fast as your computer allows, and the evaluations it has fallen behind wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. The rate stops at ${AUTO_MAX} evaluations a second. Each lane is a solver worker of its own, so on a large problem more lanes spread the work over more cores.`,
+    "Auto-eval runs evaluations for you while it is on, alongside your own clicks. Its rate is in evaluations a second, and it is set by Auto-eval and Faster auto-eval. Upgrades of evaluations per click make your own clicks bigger but do not speed auto-eval up. Its evaluations pay just as yours do.",
+    "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving.",
+    "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and it pauses on battery power, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks never pause.",
+    `Auto-eval gives each lane its evaluations in small batches, so a lane's worker gets only a few messages a second. A batch is at most about ${AUTO_JOB_SECONDS} s of your computer's time, judged from how long that problem's evaluations have taken here. So a click of yours waits behind very little, even on a large problem or with a slow method.`,
+    `The rate is a target. If the solver is slower than that, auto-eval runs as fast as your computer allows. The evaluations it has fallen behind on wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. Each lane is its own solver worker, so on a large problem more lanes spread the work over more cores.`,
   ],
   math: [
-    `<var>r</var> = min(${AUTO_MAX}, <var>a</var> + ${AUTOX_STEP} × <var>x</var>)`,
+    `<var>r</var> = ${AUTO_BASE} + <var>x</var> for <var>x</var> up to 49, then the steps of the table under Faster auto-eval (5 a level from 50, 10 from 200, 50 from 500, 100 from 1,000)`,
     `<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>`,
     `<var>b</var> = min(⌊<var>D</var>⌋, max(1, min(⌈${AUTO_JOB_SECONDS} × <var>r</var><sub>lane</sub>⌉, ⌊${AUTO_JOB_SECONDS * 1000} / <var>t</var>⌋)))`,
     `<var>D</var><sub>max</sub> = max(${COMPACT_EVALS}, ${AUTO_SLACK_SECONDS} × <var>r</var>)`,
@@ -368,12 +380,8 @@ const AUTO: How = {
   vars: [
     ["<var>r</var>", "auto-eval's target in all lanes together, in evaluations a second"],
     [
-      "<var>a</var>",
-      `the evaluations a second of the fastest Auto-eval upgrade you own, from ${AUTO_RATES[0]} to ${AUTO_RATES.at(-1)}`,
-    ],
-    [
       "<var>x</var>",
-      `your level of Faster auto-eval (0 without it), which adds ${AUTOX_STEP} evaluations a second a level`,
+      "your level of Faster auto-eval (0 without it), which has no last level and adds 1 evaluation a second a level at first, then more",
     ],
     ["<var>L</var>", "your lanes"],
     ["<var>r</var><sub>lane</sub>", "each lane's share, in evaluations a second"],
@@ -391,10 +399,10 @@ const AUTO: How = {
 const RUNNING: How = {
   text: [
     "These settings apply only to auto-eval. Your own clicks always run.",
-    `A tab is hidden when another tab is in front of it or its window is minimised. Without Continuous, auto-eval always pauses then. With Continuous, the first box lets it keep running. A browser may wake a hidden tab only about once a minute, so auto-eval then runs in bursts and makes up at most ${AUTO_SLACK_SECONDS} s of falling behind.`,
-    "The battery box appears only in browsers that tell the page whether the device is charging. Unticked, auto-eval pauses while the device is not charging.",
-    "While auto-eval is paused it earns nothing and owes nothing. When it resumes, it starts from that moment and does not make up the time it was paused.",
-    "Only one tab runs the game at a time. If you open Tighter in a second tab, the second tab waits, and Play here instead moves the game to it.",
+    `A tab is hidden when another tab is in front of it or its window is minimised. Without Continuous, auto-eval pauses then, and with Continuous the first box lets it keep running. A browser may wake a hidden tab only about once a minute, so auto-eval then runs in bursts and makes up at most ${AUTO_SLACK_SECONDS} s of falling behind.`,
+    "The battery box shows only in browsers that tell the page whether the device is charging. When it is unticked, auto-eval pauses whenever the device is not charging.",
+    "While auto-eval is paused it earns nothing and owes nothing. When it resumes, it starts from that moment and does not make up the lost time.",
+    "Only one tab runs the game at a time. If you open Tighter in a second tab, that tab waits, and pressing Play here moves the game to it.",
   ],
 };
 
@@ -402,11 +410,11 @@ const RUNNING: How = {
 
 const SENDING: How = {
   text: [
-    `Nothing is sent until you enter a display name, tick the box and save. From then on the game sends a board to PolyPack whenever it beats the current record for its problem by more than the smallest improvement that counts (${MIN_STEP} of the side). Just before each send it asks the server for the current record, and it turns the container to its best angle, as the server scores it.`,
-    `Each send contains the problem (piece shape, container shape and number of pieces), the position and angle of every piece, the container's angle and your display name. It also says how the board was found, which is the method, its settings, the seed, the number of evaluations and the tag ${CLIENT_TAG}.`,
-    `Sends are paced. A problem's first send goes at once, and each later send for the same problem waits at least ${minutes(PROBLEM_INTERVAL_MS)} after the one before. In all, first sends included, at most ${PLAYER_PER_MINUTE} sends go in any ${seconds(PLAYER_WINDOW_MS)}. If the server asks the game to slow down, all sending pauses for ${minutes(RATE_LIMITED_BACKOFF_MS)}, and if the server cannot be reached, for ${seconds(OFFLINE_BACKOFF_MS)}.`,
+    `Every game has a display name from the start, "TighterGamePlayer" and seven digits. You can change it in Settings. The game sends a board to PolyPack when it beats the current record for its problem by more than ${MIN_STEP} of the side. Just before each send, it asks the server for the current record and turns the container to its best angle, which is how the server scores it.`,
+    `A send contains the problem (piece shape, container shape and number of pieces), the position and angle of every piece, the container's angle and your display name. It also says how the board was found, which means the method, its settings, the seed, the number of evaluations and the tag ${CLIENT_TAG}.`,
+    `Sends are paced. The first send for a problem goes at once, and each later send for it waits at least ${minutes(PROBLEM_INTERVAL_MS)} after the one before. At most ${PLAYER_PER_MINUTE} sends go in any ${seconds(PLAYER_WINDOW_MS)}. If the server asks the game to slow down, sending pauses for ${minutes(RATE_LIMITED_BACKOFF_MS)}, and if the server cannot be reached, it pauses for ${seconds(OFFLINE_BACKOFF_MS)}.`,
     `Your name is cleaned the way the server stores it. Control characters, invisible direction marks and angle brackets become spaces, runs of spaces become one, and the name is cut to ${MAX_NAME_LENGTH} characters.`,
-    "If you stop sending, the points the server has not confirmed yet are taken back, and they are paid again when you send again. Records already on the server stay there under your name. A problem you drop stays in the queue, marked as leaving, until its unsent best has gone.",
+    "Records on the server keep the name they were sent with, even if you change your name later. A problem you drop stays in the queue, marked as leaving, until its unsent best has gone.",
   ],
   math: [
     `sent only when <var>s</var> &lt; <var>s</var><sub>record</sub> × (1 − ${minStep})`,
@@ -431,10 +439,10 @@ const SENDING: How = {
 
 export const PIPELINE: How = {
   text: [
-    `A pipeline is a list of methods that the runs on a problem follow in turn. Each time a run ends by itself, because its method stopped improving, it reached ${int(RUN_BUDGET)} evaluations${stallRule() ? " or the game ended it at a stall" : ""}, the next run on that problem uses the next stage. After the last stage it starts again at the first.`,
+    `A pipeline is a list of methods that the runs on a problem follow in turn. A run ends by itself when its method stops improving, when it reaches ${int(RUN_BUDGET)} evaluations${stallRule() ? ", or when the game ends it at a stall" : ""}. The next run on that problem then uses the next stage. After the last stage, the pipeline starts again at the first.`,
     ...(runRules() ? [runRules()] : []),
     "A run that the game closes early does not move the pipeline on. That happens when its lane moves to another problem or the page reloads. The next run then repeats the same stage with a new random seed.",
-    "Stages whose method this cycle's rule does not allow are skipped. While the pipeline has at least one stage, it chooses the method of every new run, and the toolbar's method is not used. With Auto-tune and Auto chosen, the game still picks the setting of each stage's method.",
+    "Stages whose method this cycle's rule does not allow are skipped. While the pipeline has a stage, it picks the method of every new run, so the toolbar's method is not used. With Auto-tune and Auto chosen, the game still picks the setting for each stage's method.",
   ],
   math: [`stage = (<var>n</var> mod <var>S</var>) + 1`],
   vars: [
@@ -445,11 +453,11 @@ export const PIPELINE: How = {
 
 export const METHOD_MATCH: How = {
   text: [
-    "Method match learns which method pays best on each kind of problem, and chooses the method of each new run when Auto is chosen in the toolbar. With Auto-tune it also chooses the method's setting, from level 0 up to the tuning level you own.",
-    "A kind of problem combines its tier (open problem, loose record, site record or published value), its size by N + M + P (300 or more, 200 to 299, 120 to 199, 80 to 119, 50 to 79, 30 to 49, or under 30) and its pieces (circles, 3 to 8 sides, 9 to 20 sides, or more than 20).",
-    `When a run ends or is replaced, the game records its value, which is the RP its problem earned during the run before multipliers, divided by the run's evaluations. Runs of every method count, even before you own Method match, except Compact and runs shorter than ${MIN_OBSERVED_EVALS} evaluations.`,
-    "To choose, the game draws one random value for each method from what it has learned, a bell curve around the method's average that narrows as the method gets more runs, and runs the method with the highest draw. Methods with few runs still get tried, and the best one is chosen more and more often.",
-    "A method not yet tried on a kind of problem starts from the average of the methods tried on that kind (or on any kind, when none has been), with a spread at least as wide as that average.",
+    "Method match learns which method pays best on each kind of problem. When Auto is chosen in the toolbar, it picks the method for each new run. With Auto-tune it also picks the method's setting, from level 0 up to the tuning level you own.",
+    "A kind of problem combines its tier (open problem, loose record, site record or published value), its size and its pieces. The size is the piece's sides plus the container's sides plus the number of pieces. It falls in a band: 300 or more, 200 to 299, 120 to 199, 80 to 119, 50 to 79, 30 to 49, or under 30. The pieces are circles, 3 to 8 sides, 9 to 20 sides, or more than 20 sides.",
+    `After each run, the game records its value. That is the RP its problem earned during the run, before multipliers, divided by the run's evaluations. Runs of every method count, even before you own Method match. Compact and runs shorter than ${MIN_OBSERVED_EVALS} evaluations are the only ones that do not count.`,
+    "To choose, the game draws a random value for each method from what it has learned. The draw is centred on the method's average and narrows as the method gets more runs, and the method with the highest draw is the one that runs. This way methods with few runs still get tried, and the best one is chosen more and more often.",
+    "A method not yet tried on a kind of problem starts from the average of the methods tried on that kind, or on any kind if none has been tried. Its spread is at least as wide as that average, so it still gets a fair chance.",
   ],
   math: [
     `<var>y</var> = <var>p</var> / <var>e</var>`,
@@ -475,9 +483,9 @@ export const METHOD_MATCH: How = {
 
 export const TRANSFERS: How = {
   text: [
-    "With Transfers, a new open problem can start from the best known packing of the same piece and container with fewer pieces, instead of every piece on rings around the centre.",
-    `The game looks first at your own boards in the queue with fewer pieces, then at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the piece counts below P among ${andList(FRONTIER_P.map(String))}, and with More open problems first P − 1, P − 2 and P − 3. The missing pieces are placed in free space around the packing, and when 6 or fewer are missing, each goes where it grows the container least.`,
-    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the sides below, so the transferred board is never sent unless you improve it.`,
+    "With Transfers, a new open problem can start from the best known packing of the same shapes with fewer pieces. Without it, every piece starts on rings around the centre of the container.",
+    `The game looks first at your own boards in the queue with fewer pieces. Then it looks at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the counts below the problem's among ${andList(FRONTIER_P.map(String))}. With More open problems they also include the three counts just below it. The missing pieces are placed in free space around the packing. When 6 or fewer are missing, each goes where it grows the container least.`,
+    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it.`,
   ],
   math: [
     `use the transfer when <var>s</var><sub>T</sub> &lt; ${TRANSFER_MARGIN} × <var>s</var><sub>L</sub>`,

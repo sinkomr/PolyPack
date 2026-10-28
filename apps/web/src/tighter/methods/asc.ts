@@ -76,7 +76,9 @@ const later = (xs: number[]) => {
 };
 
 const ASC_TEXT =
-  "asc (adaptive shrinking container) is a Monte Carlo search with the container as a variable. A sweep tries P moves of single pieces, moves of the container (shift, turn, shrink), and strains that move all centres at once. A strain squeezes the centres along a random axis (and may stretch them across it, keeping the area), squeezes them within a sector, or pulls them all inward while the container shrinks. The pieces never change shape.";
+  "asc (adaptive shrinking container) is a Monte Carlo search that treats the container as part of the puzzle. It moves single pieces, and it also shifts, turns and shrinks the container. Sometimes it squeezes all the pieces together at once. The pieces never change shape.";
+const ASC_DETAIL =
+  "A sweep tries P moves of single pieces, moves of the container (shift, turn, shrink), and strains that move all centres at once. A strain squeezes the centres along a random axis (and may stretch them across it, keeping the area), squeezes them within a sector, or pulls them all inward while the container shrinks. The packing is scored every n sweeps, and after each move that takes the container's side below the best so far. A packing already scored is not scored again.";
 
 /** The step note while the run has not beaten the board it opened from: why a click found nothing. */
 export function ascStepNote(v: RunView): string | null {
@@ -90,12 +92,12 @@ export function ascStepNote(v: RunView): string | null {
 }
 
 export const ascGame: MethodGame = {
-  effect: "You can run asc, a search that loosens the packing and squeezes it again, so tight boards can still shrink.",
+  effect: "Adds asc, which loosens the packing and squeezes it again, so tight boards can still shrink.",
   how: (select) => ({
     text: [
       ASC_TEXT,
-      `A move is kept only when no piece overlaps another or leaves the container. A move that makes the side larger may still be kept, with the probability below, so early in a run the packing loosens. On a board that is already tight, the side usually stays above your best for the first few hundred evaluations. The temperature T falls by ${COOLING_PCT} % each sweep, so the packing then settles again, and the side can end below where it started.`,
-      `The packing is scored every n sweeps, and after each move that takes the container's side below the best so far. Each scoring is one evaluation, and a packing already scored is not scored again. A run is one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps, after which T is close to 0. It ends after B evaluations, or earlier after ${int(STAGNATION)} sweeps without a gain (${int(TOP_STAGNATION)} at the top level of asc tuning). The next run starts from your best board.`,
+      "A move is kept only when no piece overlaps another or leaves the container. A move that makes the container bigger may still be kept, so early in a run the packing loosens. Then the temperature falls, the packing settles again, and the side can end below where it started.",
+      "On a board that is already tight, the side usually stays above your best for the first few hundred evaluations. A run is one cooling cycle, and the next run starts from your best board.",
     ],
     math: [
       `keep a move when ${sym("s")}′ ≤ ${sym("s")}, otherwise with probability exp(−(${sym("s")}′ − ${sym("s")}) / ${sym("T")})`,
@@ -119,7 +121,7 @@ export const ascGame: MethodGame = {
       [sym("y"), "its coordinate across the axis"],
       [sym("a"), "the move's size, which adapts"],
     ],
-    note: select,
+    note: `${ASC_DETAIL} The temperature T falls by ${COOLING_PCT} % each sweep. A run is one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps, after which T is close to 0. It ends after B evaluations, or earlier after ${int(STAGNATION)} sweeps without a gain (${int(TOP_STAGNATION)} at the top level of asc tuning). ${select}`,
   }),
   presets: PRESETS,
   tunedDefaults: { sweepsPerEvaluation: SWEEPS, stagnationSweeps: STAGNATION },
@@ -130,7 +132,7 @@ export const ascGame: MethodGame = {
   tunedTime: "up to 3 times as long",
   runParams: ascRunParams,
   runBudget: ascRunBudget,
-  runEnds: `An asc run ends after one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps, which is ${int(LEVEL_BUDGETS[0])} evaluations at first and fewer with asc tuning.`,
+  runEnds: `An asc run ends after one cooling cycle of about ${int(ASC_CYCLE_SWEEPS)} sweeps. That is ${int(LEVEL_BUDGETS[0])} evaluations at first, and fewer with asc tuning.`,
   stepNote: ascStepNote,
   endedText: (v, title) =>
     v.evaluations >= v.budget

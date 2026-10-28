@@ -7,10 +7,13 @@ import type { MethodGame } from "./types";
 // evaluation" (upgrades.ts), which quotes the three below.
 
 export const MC_COMPRESS_TEXT: readonly string[] = [
-  "mc_compress is a Monte Carlo compression. A sweep tries P moves. Each move picks a random piece and shifts it by up to its step in x and y, or for half the moves on polygons turns it by up to its turning step. A move is kept only when the piece stays inside the container and overlaps nothing.",
-  "Every 2 sweeps it tries to shrink. It pulls every centre toward the container's centre by the fraction f and fits the container tightly around them, and then it tries the wall alone at (1 − f) times its side. A change is kept only when nothing overlaps and the side does not grow. Every 10 sweeps it also tries a new angle for the container, and every 20 sweeps the steps and f adapt so that about 30 % of tries succeed.",
-  "The packing is scored once every n sweeps, which is one evaluation. A run ends after 500 evaluations without progress, which is a fall of more than 10⁻⁹ (relative) in the score or the container's side.",
+  "mc_compress is a Monte Carlo compression. In each sweep it tries one move for every piece. A move picks a random piece and shifts it a little, or turns it a little. The game keeps a move only when the piece stays inside the container and overlaps nothing.",
+  "Every few sweeps it also tries to shrink the container. It pulls all the pieces toward the centre and fits the container around them, and it keeps the result only when nothing overlaps. Now and then it tries a new angle for the container too.",
+  "The packing is scored after every few sweeps, and each scoring is one evaluation. A run ends after 500 evaluations without progress. Progress means the score or the container's side fell by more than 10⁻⁹ (relative).",
 ];
+/** The exact rule behind the text above, for the Mechanics page. */
+export const MC_COMPRESS_NOTE =
+  "A sweep tries P moves. Each move shifts a random piece by up to its step in x and y, or, for half the moves on polygons, turns it by up to its turning step. Every 2 sweeps it pulls every centre toward the container's centre by the fraction f, fits the container tightly around them, and then tries the wall alone at (1 − f) times its side. A change is kept only when nothing overlaps and the side does not grow. Every 10 sweeps it tries a new angle for the container, and every 20 sweeps the steps and f adapt so that about 30 % of tries succeed.";
 export const MC_COMPRESS_MATH: readonly string[] = [
   `${sym("c", "i")} ← ${sym("c", "0")} + (1 − ${sym("f")})(${sym("c", "i")} − ${sym("c", "0")})`,
   `${sym("s")} ← (1 − ${sym("f")}) × ${sym("s")}`,

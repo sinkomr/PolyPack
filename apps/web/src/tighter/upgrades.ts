@@ -3,9 +3,9 @@ import type { DimensionId, Family } from "./frontier";
 import { sym } from "./how";
 import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
-import { MC_COMPRESS_MATH, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
+import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { RESET_GROWTH, RESET_MIN } from "./points";
+import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
 import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
@@ -15,15 +15,16 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
  * each upgrade adds a little. Evaluations per click climb one at a time. Auto-eval runs evaluations
- * for the player at its own rate, 1 a second with its first rung and 150 with its tenth, and only its
- * own rungs (and Faster auto-eval) speed it up: evaluations-per-click upgrades do not. The rate is
- * auto-eval's in all: the lanes share it, so a lane lets one more problem progress at once but adds
- * no evaluations. Faster auto-eval adds 10 a second a level up to 250, a target the player's CPU
- * caps where it cannot keep up: about 44 % of a core at N+M+P = 85, a whole core from about
- * N+M+P = 130 up (rank.ts), where more lanes spread it over more cores [CALC]. Methods come well
+ * for the player at its own rate, 1 a second with Auto-eval, and each level of Faster auto-eval adds 1
+ * a second at first and more as the rate grows (1, 5, 10, 50, then 100), with no last level. Only those speed it up: evaluations-per-click upgrades do not.
+ * The rate is auto-eval's in all: the lanes share it, so a lane lets one more problem progress at once
+ * but adds no evaluations. The player's CPU caps it where it cannot keep up: about 44 % of a core at
+ * 250 a second at N+M+P = 85, a whole core from about N+M+P = 130 up (rank.ts), where more lanes
+ * spread it over more cores [CALC]; the shop and the Lanes panel warn when the rate asked for is more
+ * than this computer was measured to run. Methods come well
  * after, one at a time, each dearer than the last; method settings are bought too. Every
  * finite ladder ends in a levelled upgrade that can be bought again and again at a growing price, so
- * nothing has a last rung (Faster auto-eval excepted: its limit tops it out).
+ * nothing has a last rung.
  *
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
  * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
@@ -39,12 +40,11 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
  * it is set by hand to the model's pace [CALC], and the tree past the model's 3 hours keeps the
  * factor of 8 [SPEC]. A problem's first record (Compact) now pays about 1,000 to 2,900 RP on the
  * starter corner, so Trace detail costs 400 and the first record goes on toward 2 per click. The
- * Auto-eval rungs keep their tenth: each still costs a small part of the rung that gates it, so it
- * is bought as soon as its gate opens: Auto-eval with 2 per click, then 3 and 4 per click, 7 per
- * click, 10 per click, Basin hopping, the Second lane and asc. Its rates follow the targets of the time when auto-eval
- * clicked at the player's click size [SPEC]: half to three quarters of an active player's
- * evaluations (one click a second) before 10 per click, as many at 10 per click, then more with
- * methods and lanes, near the 120 a second in each lane its ninth rung ran then. The plan:
+ * opening is cheaper (2026-10-27): a player clicking about once a second owns Auto-eval within 5 s of
+ * the first record and 5 evaluations per click within 2 minutes (the slowest of 64 modelled games
+ * took 107 s, a median game 28 s), so click2 to click5 cost 150, 250, 300 and 350 [CALC].
+ * Reaching a rate costs 40 + the sum of 120 × e^(0.0095 x) RP for x = 2 up to the rate (2026-10-27,
+ * proposal C2, scratchpad autoplot/plot3.py): 1,184 at 10 a second, 72,082 at 200, 169,544,524 at 1,000 [CALC]. The plan:
  * PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
  *
  * The rest of the game reads what the player owns only through the functions below.
@@ -83,15 +83,6 @@ export type UpgradeId =
   | "clickx"
   // auto-eval
   | "auto1"
-  | "auto2"
-  | "auto3"
-  | "auto4"
-  | "auto5"
-  | "auto6"
-  | "auto7"
-  | "auto8"
-  | "auto9"
-  | "auto10"
   | "autox"
   // queue and lanes
   | "queue3"
@@ -258,7 +249,7 @@ export function level(o: Owned, id: UpgradeId): number {
 }
 
 /** Evaluations per click, by upgrade (1 without any). */
-const CLICK: Partial<Record<UpgradeId, number>> = {
+export const CLICK: Partial<Record<UpgradeId, number>> = {
   click2: 2,
   click3: 3,
   click4: 4,
@@ -270,37 +261,78 @@ const CLICK: Partial<Record<UpgradeId, number>> = {
   click10: 10,
 };
 /**
- * Auto-eval's evaluations a second, all lanes together, by upgrade: slowly while the player's own
- * clicks are small, then about doubling a rung. The rate is in evaluations, not clicks:
- * evaluations-per-click upgrades leave it as it is. A save keeps its rungs, at these rates (save.ts).
+ * Auto-eval's evaluations a second, all lanes together: 1 with Auto-eval, then the rate each level
+ * of Faster auto-eval gives (rateOfLevel), without a last level. The rate is in evaluations, not
+ * clicks: evaluations-per-click upgrades leave it as it is.
  */
-const AUTO: Partial<Record<UpgradeId, number>> = {
-  auto1: 1,
-  auto2: 2,
-  auto3: 3,
-  auto4: 5,
-  auto5: 10,
-  auto6: 20,
-  auto7: 35,
-  auto8: 60,
-  auto9: 100,
-  auto10: 150,
-};
-/** The Auto-eval rungs' evaluations a second, slowest first. */
-export const AUTO_RATES: readonly number[] = Object.values(AUTO).sort((a, b) => a - b);
+export const AUTO_BASE = 1;
+/** Auto-eval's own price (the running total at rate 1). */
+export const AUTO_COST = 40;
 /**
- * The most evaluations a second auto-eval asks for, all lanes together. It is a target: where the
- * player's CPU cannot keep up, auto-eval runs as fast as it can [SPEC]. 250 keep about 44 % of one
- * core busy at N+M+P = 85 (1.77 ms an evaluation, rank.ts) and need a whole core from about
- * N+M+P = 130 up; there the lanes, each a worker of its own, spread it over more cores [CALC].
+ * What a level of Faster auto-eval adds a second, by the rate it starts from: `step` while the rate
+ * is below `below`. The steps grow with the rate, so a purchase stays a few evaluations a second at
+ * every stage and the prices of the early levels stay small.
  */
-export const AUTO_MAX = 250;
-/** Faster auto-eval's evaluations a second a level. */
-export const AUTOX_STEP = 10;
-/** Levels of Faster auto-eval, from the last rung up to AUTO_MAX: 10. */
-const AUTOX_LEVELS = (AUTO_MAX - AUTO.auto10!) / AUTOX_STEP;
+export const AUTO_STEPS: readonly { below: number; step: number }[] = [
+  { below: 50, step: 1 },
+  { below: 200, step: 5 },
+  { below: 500, step: 10 },
+  { below: 1000, step: 50 },
+  { below: Infinity, step: 100 },
+];
+/** The evaluations a second a level adds, from the rate `rate`. */
+export function autoStepAt(rate: number): number {
+  return AUTO_STEPS.find((s) => rate < s.below)!.step;
+}
+/** The rate with `level` levels of Faster auto-eval: 1, 2 ... 50 (levels 0 to 49), then 55 ... 200, 210 ... 500, 550 ... 1,000, 1,100 ... */
+export function rateOfLevel(level: number): number {
+  const l = Math.max(0, Math.floor(level));
+  if (l <= 49) return 1 + l;
+  if (l <= 79) return 50 + 5 * (l - 49);
+  if (l <= 109) return 200 + 10 * (l - 79);
+  if (l <= 119) return 500 + 50 * (l - 109);
+  return 1000 + 100 * (l - 119);
+}
+/** The most levels whose rate is at most `rate` (0 below 2): the inverse of rateOfLevel. */
+export function levelOfRate(rate: number): number {
+  const r = Math.floor(rate);
+  if (r < 2) return 0;
+  if (r <= 50) return r - 1;
+  if (r <= 200) return 49 + Math.floor((r - 50) / 5);
+  if (r <= 500) return 79 + Math.floor((r - 200) / 10);
+  if (r <= 1000) return 109 + Math.floor((r - 500) / 50);
+  return 119 + Math.floor((r - 1000) / 100);
+}
+/** The price of each evaluation a second above the first: 120 RP × e^(0.0095 x) for the x-th. */
+const AUTO_RATE_PRICE = 120;
+const AUTO_RATE_K = 0.0095;
+/**
+ * What reaching `rate` evaluations a second costs in all (RP, before Quick study): 40 for Auto-eval,
+ * then 120 × e^(0.0095 x) for each evaluation a second x from 2 up (proposal C2). In closed form
+ * 40 + 120 × e^(2k) × (e^(k (rate − 1)) − 1) / (e^k − 1) with k = 0.0095. Infinity where the
+ * power overflows (past about 74,000 a second, far beyond anything a player can pay).
+ */
+export function autoRunningTotal(rate: number): number {
+  if (!(rate > 1)) return AUTO_COST;
+  const k = AUTO_RATE_K;
+  return AUTO_COST + (AUTO_RATE_PRICE * Math.exp(2 * k) * Math.expm1(k * (rate - 1))) / Math.expm1(k);
+}
+/** The price of level `level` + 1 of Faster auto-eval: the running total of the new rate less the old one's. */
+export function autoLevelPrice(level: number): number {
+  const from = autoRunningTotal(rateOfLevel(level));
+  const to = autoRunningTotal(rateOfLevel(level + 1));
+  const price = to - from;
+  // Infinity less Infinity is NaN: a level nobody can pay for is Infinity
+  return Number.isFinite(price) ? price : Infinity;
+}
+/** Levels of Faster auto-eval that Head start II gives each cycle: 9, so 10 evaluations a second as the old fifth rung did. */
+export const HEAD2_AUTO_LEVELS = 9;
+/** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
+const AUTOX_COST = AUTO_RATE_PRICE * Math.exp(2 * AUTO_RATE_K);
+/** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
+const AUTOX_GROWTH = Math.exp(AUTO_RATE_K);
 /** Problem slots, by upgrade (1 without any). */
-const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
+export const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
 /** Methods in the order they unlock, by upgrade. */
 const METHOD: Partial<Record<UpgradeId, EvolveMethod>> = {
   basin: "basin_hopping",
@@ -323,7 +355,7 @@ export const TUNING: Partial<Record<EvolveMethod, UpgradeId>> = {
   ls_growth: "tuneGrowth",
 };
 /** Smallest N+M+P of the contested problems dealt, by upgrade (the size rings, largest first). */
-const RING: Partial<Record<UpgradeId, number>> = {
+export const RING: Partial<Record<UpgradeId, number>> = {
   reach2: 300,
   ring200: 200,
   ring120: 120,
@@ -348,8 +380,8 @@ const seconds = (x: number) => `${number(x)} s`;
 const K = sym("k");
 const VAR_K: Var = [K, "evaluations per click"];
 const EVALUATION =
-  "An evaluation is one scoring of the whole packing by the solver, which checks the pieces for overlaps and measures the container around them.";
-const DEALS_PER_CLICK = `New problems are earned per ${DEAL_CLICKS} clicks. Each Evolve click of yours counts as one click whatever its evaluations, so more evaluations per click do not bring them faster per click. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`;
+  "An evaluation is one check of the whole packing. The solver looks for overlaps and measures the container.";
+const DEALS_PER_CLICK = `The dealer earns a new problem every ${DEAL_CLICKS} clicks. An Evolve click counts as one click however many evaluations it runs, so more evaluations per click do not earn problems faster. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`;
 
 /** Evaluations per click: the rungs' value, the levels of One more evaluation per click, the Clicks only reward. */
 const CLICK_MATH = (base: string) => [`${K} = ${base} + ${sym("a")} + ${sym("r")}`];
@@ -369,8 +401,8 @@ function clickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
     effect: `Each Evolve click runs ${n} evaluations instead of ${n - 1}.`,
     how: {
       text: [
-        `An Evolve click asks the open run on the problem for more evaluations. ${EVALUATION} Between two evaluations the method moves the pieces, so each evaluation is one more step of its search.`,
-        `With this upgrade a click runs ${n} evaluations of the same run, one after another. Auto-eval keeps its own rate in evaluations a second, which this upgrade does not change.`,
+        `An Evolve click makes the open run on the problem work for a moment. ${EVALUATION} Each evaluation is one more step of the search.`,
+        `With this upgrade a click runs ${n} evaluations, one after the other. Auto-eval keeps its own rate in evaluations a second, so this does not speed it up.`,
       ],
       math: CLICK_MATH(String(n)),
       vars: CLICK_VARS,
@@ -388,45 +420,30 @@ const AUTO_VARS: readonly Var[] = [
   [sym("r", "lane"), "the share of each lane, in evaluations a second"],
   [sym("L"), "lanes, the solver workers that run at once (1 until Second lane)"],
 ];
+/** Faster auto-eval's steps, as a sentence part. */
+const AUTO_STEP_TEXT =
+  "1 evaluation a second at first, then 5 from a rate of 50, 10 from 200, 50 from 500, and 100 from 1,000";
 const AUTO_NOTE =
-  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can, and at most 60 s of its evaluations (at least 100) wait to be run.";
+  "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can. At most 60 s of its evaluations (at least 100) wait to be run.";
 const AUTO_RATE =
-  "Its rate is in evaluations a second, whatever your evaluations per click. Upgrades of evaluations per click make your own clicks larger, and only the Auto-eval upgrades and Faster auto-eval speed auto-eval up.";
+  "Its rate is in evaluations a second, whatever your evaluations per click. Those upgrades make your own clicks bigger. Only Auto-eval and Faster auto-eval speed auto-eval up.";
 const AUTO_SHARE =
-  "The rate is for all your lanes together. The lanes share it, so with L lanes each one runs r / L evaluations a second. More lanes let more problems progress at once, but they add no evaluations.";
-/** The smallest N+M+P at which one evaluation takes at least a second's share of `perSecond` (rank.ts's table). */
-function coreBound(perSecond: number): number {
-  let t = 2;
-  while (msPerEval(t) < 1000 / perSecond) t++;
-  return t;
-}
-
-function autoRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
-  const r = AUTO[id]!;
-  const prev = Math.max(0, ...Object.values(AUTO).filter((x) => x < r));
-  const first = id === "auto1";
+  "You start with one lane, a worker that runs one problem. The lanes share auto-eval's rate, so more lanes add no evaluations.";
+/** Auto-eval, the first rung: 1 evaluation a second. Faster auto-eval (below) adds levels on it. */
+function autoFirst(cost: number, requires: UpgradeId[]): Upgrade {
+  const r = AUTO_BASE;
   return {
-    id,
-    name: first ? "Auto-eval" : `Auto-eval: ${autoRateText(r)}`,
+    id: "auto1",
+    name: "Auto-eval",
     cost,
     requires,
-    effect: first
-      ? `Auto-eval runs ${autoRateText(r)} for you while it is switched on.`
-      : `Auto-eval runs ${autoRateText(r)} in all instead of ${number(prev)}.`,
+    effect: `Auto-eval runs ${autoRateText(r)} for you while it is switched on.`,
     how: {
-      text: first
-        ? [
-            `Auto-eval runs evaluations on a problem's open run for you, beside your own clicks, at a rate of ${autoRateText(r)}. ${EVALUATION}`,
-            AUTO_RATE,
-            "It runs while its switch is on and this page is open. It pauses in a hidden tab unless Continuous lets it go on, and on battery power (where the browser reports it) unless you allow that in Settings. Nothing builds up while it is paused or off.",
-            "Without Auto-advance it works only on problems you have already compacted (your first click on a new problem). The first lane works on the problem on the board, and any other lane on the next problems in the queue.",
-            AUTO_SHARE,
-          ]
-        : [
-            `Auto-eval now runs ${autoRateText(r)} instead of ${autoRateText(prev)}. A lane is a solver worker that runs one problem at a time.`,
-            AUTO_SHARE,
-            AUTO_RATE,
-          ],
+      text: [
+        `Auto-eval runs evaluations for you, ${autoRateText(r)}, beside your own clicks. ${EVALUATION}`,
+        `${AUTO_RATE} It runs while its switch is on and this page is open. It pauses in a hidden tab unless you own Continuous, and on battery power unless you allow that in Settings. Nothing builds up while it is paused.`,
+        `${AUTO_SHARE} Without Auto-advance, it works only on problems you have already compacted (your first click on a new problem).`,
+      ],
       math: AUTO_MATH(number(r)),
       vars: AUTO_VARS,
       note: AUTO_NOTE,
@@ -455,9 +472,9 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
     effect: `The queue holds ${q} problems, and the dealer earns a new one every ${number(DEAL_CLICKS / q)} clicks.`,
     how: {
       text: [
-        "The queue holds the problems you work on, one per slot. A deal gives a free slot a new problem. The dealer earns deals as you and auto-eval work, and saves up at most one deal per slot. When a slot is free and a deal is saved, it deals at once. When the queue is empty, it deals a problem without a saved deal, and the next work pays that back.",
-        `Work counts in clicks. Each Evolve click of yours counts as one, whatever its evaluations, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click.`,
-        "A problem leaves the queue when you drop it, or when Auto-advance replaces it.",
+        "The queue holds the problems you work on, one in each slot. The dealer earns a deal as you and auto-eval work. A deal puts a new problem in a free slot.",
+        `Work counts in clicks. An Evolve click counts as one, however many evaluations it runs. ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The dealer saves up at most one deal for each slot. If the queue is empty, it deals a problem anyway, and your next work pays for it.`,
+        "A problem leaves the queue when you drop it or when Auto-advance replaces it.",
       ],
       math: [
         `${t} ← min(${sym("q")}, ${t} + ${sym("q")} × ${sym("c")} / ${DEAL_CLICKS})`,
@@ -475,7 +492,7 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
   };
 }
 
-const SELECT = "Choose it in the Method list beside Evolve, and your next click opens a run with it.";
+const SELECT = "Pick it in the Method list beside Evolve. Your next click starts a run with it.";
 /** A method's card: its name, effect and How come from its file in methods/. */
 function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const m = METHOD[id]!;
@@ -513,17 +530,17 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
     effect:
       g.tuneEffect ??
       (n === 1
-        ? `Gives ${m} a setting that paid more per evaluation in tests.`
-        : `Each level gives ${m} a setting that does more search per evaluation.`),
+        ? `Gives ${m} a setting that earned more per evaluation in tests.`
+        : `Each level makes ${m} search harder on every evaluation.`),
     how: {
       text: [
-        `${n === 1 ? "The level sets" : `Each level sets`} ${m}'s parameters as below, from level 0 (${g.tuneBase ?? "the solver's defaults"}) to level ${n}. Runs use the new setting from your next click.`,
+        `${n === 1 ? "The level changes" : "Each level changes"} ${m}'s settings. Runs use the new setting from your next click. Level 0 is ${g.tuneBase ?? "the solver's defaults"}.`,
         g.tuneNote ??
-          `A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon).${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
+          `In tests, each level cut the side at least as much per evaluation as the level below.${time ? ` An evaluation takes ${time} at the top level, which matters only when your computer limits auto-eval.` : ""}`,
       ],
       math: keys.map((k) => `<code>${k}</code> = ${levels.map((l) => String(l[k as keyof typeof l])).join(", ")}`),
       vars: keys.map((k) => [`<code>${k}</code>`, `${g.tunedMeaning?.[k]}, at levels 0 to ${n}`]),
-      note: `${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
+      note: `${g.tuneDetail ?? "A level was kept only where it cut the side at least as much per evaluation as the level below (within 0.05 percentage points) on three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon)."} ${n > 1 ? "Each level costs 3 times the one before. " : ""}With Auto-tune and Auto chosen, a run may also use a lower level when that paid more.`,
     },
     row: "runs",
     mystery,
@@ -533,7 +550,7 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
 }
 
 const RING_TEXT =
-  "Contested problems are site records and published values of shapes with up to 20 sides (or circles), which other players have worked on. They are dealt only when N + M + P is at least your size ring's bound.";
+  "Contested problems are ones where other players or researchers already hold a record, on shapes with up to 20 sides or on circles. The dealer deals them only when a problem's size is at least your size bound. The size of a problem is the piece's sides, the container's sides and the number of pieces, added up.";
 
 function ringRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const min = RING[id]!;
@@ -545,13 +562,14 @@ function ringRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = 
     requires,
     effect:
       min === 0
-        ? "Site records and published values of every size can be dealt."
-        : `Site records and published values are dealt down to N + M + P = ${min} instead of ${prev}.`,
+        ? "Contested problems can now be of every size."
+        : `Contested problems can now be dealt from size ${min} up, instead of ${prev}.`,
     how: {
       text: [
         RING_TEXT,
-        `${min === 0 ? "This upgrade removes the bound." : `This upgrade lowers the bound to ${min}.`} Smaller problems evaluate faster. One mc_compress evaluation took about 7.4 ms at N + M + P = 180, 1.8 ms at 85, 0.45 ms at 33 and 0.22 ms at 18 on the machine it was measured on. The dealer's ranking favours faster problems (see Dealer: best of 2).`,
+        `${min === 0 ? "This removes the size bound." : `This lowers the size bound to ${min}.`} Smaller problems run faster, and the dealer prefers problems that run faster (see Dealer: best of 2).`,
       ],
+      note: "Measured on one machine, an mc_compress evaluation took about 7.4 ms at N + M + P = 180, 1.8 ms at 85, 0.45 ms at 33 and 0.22 ms at 18.",
       math: min === 0 ? undefined : [`${sym("N")} + ${sym("M")} + ${sym("P")} ≥ ${min}`],
       vars:
         min === 0
@@ -580,9 +598,10 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
         : `The dealer draws ${k} problems instead of ${k / 2} and deals the best one.`,
     how: {
       text: [
-        `When a deal is due, the dealer draws ${k} candidate problems, checks each with the server, and ranks them by the value V below. It deals the best one, or the next if that one's packing cannot be read. A lost record waiting for Retake and Collector's pick come before the ranked candidates.`,
-        `V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. ${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits on larger problems.`,
+        `When a deal is due, the dealer draws ${k} problems and checks each with the server. It ranks them and deals the best one. If that one cannot be read, it deals the next. Problems from Retake and Collector come before the ranked ones.`,
+        "The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
       ],
+      note: `${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1.`,
       math: [
         `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × ${number(RP_PER_EVAL)} × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
         `${sym("w")} = ${sym("d")}(${sym("N")}) × ${sym("d")}(${sym("M")})`,
@@ -624,8 +643,8 @@ function pickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
         : "The dealer offers you 5 problems at a time instead of 3.",
     how: {
       text: [
-        `When a slot is free and a deal is saved, the dealer draws problems one at a time and shows up to ${n} of them as offers, best first by the value it expects them to pay (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks an offer with the server as you take it, and removes offers that your tree, your filters or the cycle's rule no longer allow.`,
-        "With Auto-advance and auto-eval on, a stalled problem is also replaced by the best offer, and the game takes the top offer into a free slot for you whenever a lane would otherwise have no problem to work on.",
+        `When a slot is free and a deal is earned, the dealer shows you up to ${n} problems, best first (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks your choice with the server as you take it, and it removes any offer that your upgrades, filters or the cycle rule no longer allow.`,
+        "With Auto-advance and auto-eval on, a stalled problem is replaced by the best offer, and the game also takes the top offer for you whenever a lane has no problem to work on.",
       ],
       note: "Each offer is a separate draw, so the dealer's best-of choice does not apply to offers. The first problem of a game is always dealt for you.",
     },
@@ -642,7 +661,8 @@ const LANE_VARS: readonly Var[] = [
   [sym("r", "lane"), "the share of each lane, in evaluations a second"],
 ];
 const LANE_TEXT =
-  "A lane is a solver worker, a thread of the browser that holds one open run. Two lanes never work on the same problem, since one run's evaluations cannot be split. The lanes share auto-eval's rate, so each new lane lets one more problem progress at once but adds no evaluations. A lane with nothing to work on leaves its share to the others. When evaluations take so long that one core cannot keep up with the rate, more lanes spread the work over more cores.";
+  "A lane is a worker that runs one problem. Two lanes never work on the same problem. The lanes share auto-eval's rate, so a new lane lets one more problem progress at once but adds no evaluations. If evaluations are slow, more lanes also spread the work over more cores.";
+const LANE_NOTE = "A lane with nothing to work on leaves its share to the others.";
 
 function standingRung(
   id: UpgradeId,
@@ -702,13 +722,13 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   const e = sym("e");
   return {
     text: [
-      "You set two values in the Queue panel. The tolerance τ is the smallest relative improvement that counts as progress, from 10⁻⁹ to 10⁻³, and 10⁻⁶ at first. The patience W is how many evaluations a problem may run without progress before it is replaced, from 250 to 20,000 or Never, and 1,000 at first.",
-      "Each problem in the queue keeps its best side at its last progress, which its first record sets, and counts the evaluations it has run since then. After every e evaluations on it (a click of yours, or a batch that auto-eval runs), the game updates both as below. The queue shows the count, as in “830 since progress”." +
+      "You set two values in the Queue panel. The tolerance is the smallest improvement that counts as progress. The patience is how many evaluations a problem may run without progress before it is replaced." +
+        " Each problem in the queue counts the evaluations it has run since its last progress. The queue shows the count, as in “830 since progress”." +
         (warm.length
           ? ` ${firsts.charAt(0).toUpperCase()}${firsts.slice(1)} ${warm.length === 1 ? "are its" : "are their"} warm-up, and they do not add to the count.`
           : ""),
-      `While auto-eval is on, a problem whose count reaches W is replaced once a deal is earned (each slot earns a problem per ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click) and the dealer has a problem for it, with Your pick the best offer. The old problem then leaves as if you had pressed Drop, its best sent first, and the new one takes its slot, so the queue never shrinks. Until then the lanes work on the other problems. While your records have no name, a problem with an unsent best is never dropped.`,
-      "Auto-eval compacts newly dealt problems first (100 evaluations of mc_compress, the work of your first click on a problem). After that a lane keeps to its own problem while it makes progress, and otherwise takes the problem with the fewest evaluations since progress that is still making progress.",
+      `While auto-eval is on, a problem that reaches the patience is replaced as soon as a deal is earned. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
+      "Auto-eval compacts new problems first (100 evaluations of mc_compress, the same as your first click). After that, a lane stays on its problem while it makes progress. Otherwise it takes the problem that is still improving and has run the fewest evaluations since progress.",
     ],
     math: [
       `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${n} ← 0`,
@@ -726,7 +746,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
         : []),
       [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
     ],
-    note: "With the patience at Never nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself.",
+    note: "With Your pick, the new problem is the best offer. With the patience at Never, nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). The patience goes from 250 to 20,000 evaluations (1,000 at first).",
   };
 }
 
@@ -736,7 +756,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 300,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
+ * Curved costs 1,500,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -756,8 +776,8 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   "poly-duals": 0.4,
   balls: 0.5,
 };
-/** Curved's price in the first cycle, where a share of T (200,000,000) would be too little. */
-export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 300_000_000 };
+/** Curved's price in the first cycle, where a share of T (1,000,000,000) would be too little. */
+export const SLICE_FIRST_CYCLE: Partial<Record<CardSliceId, number>> = { curved: 1_500_000_000 };
 
 /** The record points a reset needs in the cycle after `resets` resets (standing.ts resetThreshold). */
 const thresholdAfter = (resets: number) => RESET_MIN * Math.pow(RESET_GROWTH, resets);
@@ -782,7 +802,7 @@ export function exists(o: Owned, id: UpgradeId): boolean {
 const SLICE_FORMULA = (id: CardSliceId): string[] =>
   id === "curved"
     ? [
-        `${sym("p")} = 300,000,000 in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
+        `${sym("p")} = ${SLICE_FIRST_CYCLE.curved!.toLocaleString("en-US")} in the first cycle, and ${SLICE_SHARE[id]} × ${sym("T")} in later ones`,
         `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
       ]
     : [
@@ -800,7 +820,7 @@ const priceNote = (id: CardSliceId): string => {
   const slice = sliceById(id);
   const resets = id === "curved" ? 0 : (OPENING_RESETS[slice.dimension] ?? 0);
   const p = slicePrice(id, resets);
-  return `In cycle ${resets + 1}, with a threshold of ${thresholdAfter(resets).toLocaleString("en-US")}, it costs ${p.toLocaleString("en-US")} RP. It is bought again in each cycle, at that cycle's threshold.`;
+  return `In cycle ${resets + 1} the reset threshold is ${thresholdAfter(resets).toLocaleString("en-US")} RP, and this card costs ${p.toLocaleString("en-US")} RP. You buy it again in each cycle, priced from that cycle's threshold.`;
 };
 
 function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what: string): Upgrade {
@@ -829,110 +849,110 @@ function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what:
  */
 function polyWhat(id: SliceId, what: string): string {
   const n = solidsOfSlice(id);
-  return `The dealer also deals ${what} (${n} solids) as pieces and as containers, in pairs with any solid of a family that is open, itself included. Every ordered pair of solids is a problem, with 2 to 500 pieces: ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem with every family open.`;
+  return `The dealer also deals ${what} (${n} solids) as pieces and as containers. A problem pairs a piece solid with a container solid, from any family that is open, this one included. Each pair has 2 to 500 pieces. With every family open, that is ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem.`;
 }
 
 const nf = (n: number) => n.toLocaleString("en-US");
 
 const SURFACE_PIECES =
-  "Pieces are disks or polygons of 3 to 100 sides, with 1 to 100 of them, so each solid holds 9,900 problems.";
+  "Pieces are disks or polygons of 3 to 100 sides, and there are 1 to 100 of them. That makes 9,900 problems on each solid.";
 
 const SLICE_CARDS: Upgrade[] = [
   sliceCard(
     "curved",
     ["ring30"],
-    "Deals packings on the hyperbolic plane and on spheres, besides the flat plane.",
-    `The dealer also deals curved problems: ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces that are disks or polygons of 3 to 100 sides, packed in a regular polygon or disk on a surface of constant curvature K. K below 0 is the hyperbolic plane, K = 0 is the flat plane, and K above 0 is a sphere of radius 1 / √K. This is 2D in 2D, played on curved surfaces. Most have no research record yet.`,
+    "The dealer also deals packings on curved surfaces.",
+    `Curved problems are 2D in 2D played on curved surfaces, each with a constant curvature. Negative curvature gives the hyperbolic plane, zero gives the flat plane, and positive curvature gives a sphere. There are ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces. Pieces are disks or polygons of 3 to 100 sides, packed in a regular polygon or a disk. Most have no research record yet.`,
   ),
   sliceCard(
     "surf-prisms",
     [],
-    "Deals packings on the surfaces of the 9 prisms and 9 antiprisms.",
-    `The dealer also deals pieces packed on the surface of a prism with 3, or 5 to 12 sides, and of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 9 prisms and 9 antiprisms.",
+    `The dealer also deals pieces packed on the surface of a prism with 3 or 5 to 12 sides, or of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-archimedean",
     ["surf-prisms"],
-    `Deals packings on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
-    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. Without folding these would be 2D packings of regular faces, so only the folded ones are dealt. ${SURFACE_PIECES}`,
+    `The dealer also deals pieces packed on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
+    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. The faces are regular, so a packing that stays on one face would be a plain 2D packing, and only packings that bend over an edge are dealt. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-a",
     ["surf-archimedean"],
-    "Deals packings on the 6 Catalan solids with 12 or 24 faces.",
-    `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces), and on the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 6 Catalan solids with 12 or 24 faces.",
+    `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces). It also deals the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-b",
     ["surf-catalan-a"],
-    "Deals packings on the 6 Catalan solids with 30 to 60 faces.",
-    `The dealer also deals pieces packed on the rhombic triacontahedron (30 faces), the disdyakis dodecahedron (48 faces), and the deltoidal hexecontahedron, the pentagonal hexecontahedron, the pentakis dodecahedron and the triakis icosahedron (60 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 6 Catalan solids with 30 to 60 faces.",
+    `The dealer also deals pieces packed on the rhombic triacontahedron (30 faces) and the disdyakis dodecahedron (48 faces). It also deals the deltoidal hexecontahedron, the pentagonal hexecontahedron, the pentakis dodecahedron and the triakis icosahedron (60 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-c",
     ["surf-catalan-b"],
-    "Deals packings on the disdyakis triacontahedron, the Catalan solid with 120 faces.",
+    "The dealer also deals pieces packed on the Catalan solid with 120 faces.",
     `The dealer also deals pieces packed on the disdyakis triacontahedron, the Catalan solid with the most faces. A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "sphere",
     ["surf-catalan-b"],
-    "Deals packings on the surface of a sphere.",
-    `The dealer also deals pieces packed in a cap of a sphere, the smallest one that holds them: ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+    "The dealer also deals pieces packed on the surface of a sphere.",
+    `The dealer also deals pieces packed in a cap of a sphere. The game uses the smallest cap that holds them. There are ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces. Pieces are disks or polygons of 3 to 100 sides. Some have a research record to beat, and the others are open.`,
   ),
   sliceCard(
     "torus",
     ["surf-catalan-b"],
-    "Deals packings on a torus, with a square, a hexagonal or a free cell.",
-    `The dealer also deals pieces packed on a flat torus whose cell is a square, a hexagon or any shape, the smallest one that holds them: ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+    "The dealer also deals pieces packed on a torus, a surface that wraps around.",
+    `The dealer also deals pieces packed on a flat torus. A torus wraps around, so a piece that leaves one side comes back in on the opposite side. Its cell is a square, a hexagon or any shape, and the game uses the smallest one that holds the pieces. There are ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces. Pieces are disks or polygons of 3 to 100 sides. Some have a research record to beat, and the others are open.`,
   ),
   sliceCard(
     "surf-nofold-catalan",
     ["surf-catalan-b"],
-    "Deals packings on the Catalan solids where a piece stays on one face.",
-    `The dealer also deals the Catalan solids without folding: each piece must lie inside one face, so each face is a separate 2D packing. This is for the Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
+    "The dealer also deals Catalan solids where each piece stays on one face.",
+    `The dealer also deals the Catalan solids without folding. Each piece must lie inside one face, so each face is a separate 2D packing. This is only for Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "poly-catalan",
     [],
-    "Opens the Catalan solids as pieces and containers.",
+    "The dealer can use the Catalan solids as pieces and containers.",
     polyWhat("poly-catalan", "the Catalan solids"),
   ),
   sliceCard(
     "poly-platonic",
     [],
-    "Opens the Platonic solids as pieces and containers.",
+    "The dealer can use the Platonic solids as pieces and containers.",
     polyWhat("poly-platonic", "the Platonic solids"),
   ),
   sliceCard(
     "poly-prisms",
     ["poly-catalan"],
-    "Opens the prisms as pieces and containers.",
+    "The dealer can use the prisms as pieces and containers.",
     polyWhat("poly-prisms", "the prisms"),
   ),
   sliceCard(
     "poly-antiprisms",
     ["poly-prisms"],
-    "Opens the antiprisms as pieces and containers.",
+    "The dealer can use the antiprisms as pieces and containers.",
     polyWhat("poly-antiprisms", "the antiprisms"),
   ),
   sliceCard(
     "poly-elongated",
     ["poly-antiprisms"],
-    "Opens the elongated prisms as pieces and containers.",
+    "The dealer can use the elongated prisms as pieces and containers.",
     polyWhat("poly-elongated", "the prisms of height 1.5, 2 and 3"),
   ),
   sliceCard(
     "poly-duals",
     ["poly-elongated"],
-    "Opens the bipyramids and trapezohedra as pieces and containers.",
+    "The dealer can use the bipyramids and trapezohedra as pieces and containers.",
     polyWhat("poly-duals", "the bipyramids and trapezohedra"),
   ),
   sliceCard(
     "balls",
     ["poly-platonic"],
-    "Deals packings of balls in solids, solids in a ball, and balls in a ball.",
-    `The dealer also deals packings with balls: balls of diameter 1 in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
+    "The dealer also deals problems with balls, as pieces or as the container.",
+    `The dealer also deals packings with balls. They are balls of diameter 1 in the smallest ball or the smallest copy of a solid, and unit solids in the smallest ball. Each has 2 to 100 pieces. A solid is dealt once its family is open. With every family open, that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
   ),
 ];
 
@@ -941,14 +961,15 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "trace",
     name: "Trace detail",
-    cost: 1000,
+    cost: 2000,
     requires: [],
-    effect: "The trace in the board's corner gets its labels and a dot at each improvement.",
+    effect: "The trace in the board's corner gets labels and a dot at each improvement.",
     how: {
       text: [
-        "The trace is the small chart in the board's corner. It draws the problem's side after each improvement that counted, against the evaluations run on that problem. An improvement counts when it beats the side before by more than the 10⁻⁹ minimum, as below.",
-        "Trace detail adds a dot at each of the last 60 improvements and a label under the chart. The label gives the side at the first and the last point, the number of improvements, and the evaluations between them.",
+        "The trace is the small chart in the board's corner. It shows the container's side after each improvement, against the evaluations run on the problem.",
+        "Trace detail adds a dot for each of the last 60 improvements. It also adds a label under the chart. The label gives the first and last side, the number of improvements, and the evaluations between them.",
       ],
+      note: "An improvement counts only when the side falls by more than 10⁻⁹ (relative).",
       math: [`counts when ${sym("s")}′ &lt; ${sym("s")} × (1 − 10<sup>−9</sup>)`],
       vars: [
         [sym("s"), "the container's side before, which is the score (smaller is better)"],
@@ -957,14 +978,12 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "clicks",
   },
-  // ---- evaluations per click, about 100, 250, 450, 700, ... clicks in; a slow auto-eval early ----
-  clickRung("click2", 1500, ["trace"]),
-  autoRung("auto1", 80, ["click2"]),
-  clickRung("click3", 1800, ["click2"]),
-  autoRung("auto2", 100, ["auto1", "click3"]),
-  clickRung("click4", 2200, ["click3"]),
-  clickRung("click5", 2800, ["click4"]),
-  autoRung("auto3", 250, ["auto2", "click4"]),
+  // ---- evaluations per click, 5 within about 2 minutes; Auto-eval within one ----
+  clickRung("click2", 150, ["trace"]),
+  autoFirst(AUTO_COST, ["click2"]),
+  clickRung("click3", 250, ["click2"]),
+  clickRung("click4", 300, ["click3"]),
+  clickRung("click5", 350, ["click4"]),
   clickRung("click6", 3200, ["click5"]),
   queueRung("queue3", 3500, ["click5"]),
   clickRung("click7", 6000, ["click6"]),
@@ -975,28 +994,29 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "mc_compress: 10 sweeps per evaluation",
     cost: 10000,
     requires: ["click7"],
-    effect: "mc_compress runs 10 sweeps of moves per evaluation instead of 5.",
+    effect: "mc_compress tries 10 sweeps of moves per evaluation instead of 5.",
     how: {
       text: [
-        "Each evaluation of mc_compress now follows 10 sweeps of moves instead of 5, so each click searches about twice as long. 10 is the solver's own default. Compact, your first click on a new problem, uses it too.",
-        ...MC_COMPRESS_TEXT,
+        "A sweep is one try of a move for each piece. Each evaluation of mc_compress now follows 10 sweeps instead of 5, so each click searches about twice as long. Compact, your first click on a new problem, uses it too.",
+        `${MC_COMPRESS_TEXT[0]} ${MC_COMPRESS_TEXT[1]}`,
+        MC_COMPRESS_TEXT[2],
       ],
+      note: MC_COMPRESS_NOTE,
       math: MC_COMPRESS_MATH,
       vars: MC_COMPRESS_VARS("10 with this upgrade, 5 without"),
     },
     row: "runs",
   },
   clickRung("click10", 11000, ["click9"]),
-  autoRung("auto4", 800, ["auto3", "click7"]),
   {
     id: "clickx",
     name: "One more evaluation per click",
     cost: 15000,
     requires: ["click10"],
-    effect: "Each level adds one evaluation to every Evolve click of yours.",
+    effect: "Each level adds one evaluation to every Evolve click.",
     how: {
       text: [
-        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, which this does not change. ${EVALUATION}`,
+        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, so this does not speed it up.`,
       ],
       math: CLICK_MATH("10"),
       vars: CLICK_VARS,
@@ -1005,20 +1025,19 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "clicks",
     levels: { max: 990, growth: 1.25 },
   },
-  autoRung("auto5", 1500, ["auto4", "click10"]),
   dealerRung("rank2", 20000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
-  methodRung("basin", 40000, ["click10", "auto4"]),
+  methodRung("basin", 40000, ["click10"]),
   {
     id: "reach2",
     name: "Reach: site records",
     cost: 48000,
     requires: ["basin"],
-    effect: "The dealer also deals weak site records, which pay 3 times the points.",
+    effect: "The dealer also deals weak site records, worth 3 times the points.",
     how: {
       text: [
-        `${RING_TEXT} With Reach, two in three of the dealer's draws are contested problems.`,
-        "A site record is loose when its gap to the area bound exceeds the median gap of the same shapes' records with 3 fewer to 3 more pieces by at least 0.005. Reach deals loose records with N + M + P ≥ 300. The board starts from the leader's packing, and every point an improvement on it pays is multiplied by 3.",
+        `${RING_TEXT} With Reach, two in three draws are contested problems.`,
+        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 3.",
       ],
       math: [
         `${sym("g")} = ${sym("s")} / ${sym("b")} − 1`,
@@ -1037,7 +1056,6 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "problems",
   },
-  autoRung("auto6", 3600, ["auto5", "basin"]),
   tuneRung("tuneMc", "mc_compress", 64000, ["sweeps10", "basin"]),
   dealerRung("rank4", 72000, ["rank2", "reach2"]),
   methodRung("shrink", 80000, ["basin"]),
@@ -1046,7 +1064,7 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Auto-advance",
     cost: 88000,
     requires: ["reach2", "queue3"],
-    effect: "Problems that stop making progress are replaced, and auto-eval compacts new problems first.",
+    effect: "Problems that stop improving are replaced, and auto-eval compacts new problems first.",
     how: advanceHow(),
     row: "queue",
   },
@@ -1057,14 +1075,15 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Second lane",
     cost: 144_000,
     requires: ["advance"],
-    effect: "Auto-eval works on two problems at once, each in its own solver worker, and they share its rate.",
+    effect: "Auto-eval works on two problems at once, and the two lanes share its rate.",
     how: {
       text: [
         `${LANE_TEXT} Your own clicks go to the lane that holds the problem on the board.`,
-        "Without Auto-advance the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane keeps to its own problem while that makes progress, and otherwise moves to the problem with the fewest evaluations since progress that is still making progress.",
+        "Without Auto-advance, the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane stays on its problem while it makes progress. Otherwise it moves to the problem that is still improving and has run the fewest evaluations since progress.",
       ],
       math: LANE_MATH,
       vars: LANE_VARS,
+      note: LANE_NOTE,
     },
     row: "queue",
   },
@@ -1074,18 +1093,18 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Dealer filters",
     cost: 160_000,
     requires: ["pick3"],
-    effect: "You choose which piece shapes, containers, piece counts and tiers the dealer may deal.",
+    effect: "You choose which kinds of problem the dealer may deal.",
     how: {
       text: [
-        "The Queue panel gets a Filters section. You can list the piece shapes and the container shapes allowed, as numbers and ranges such as 0, 3-6, 21-100 (0 is the circle, then 3 to 100 sides). You can also set the fewest and most pieces (1 to 500) and the tiers. An empty list allows everything.",
-        "The dealer deals or offers a problem only when it passes every filter. Filters that allow too little can leave it with nothing to deal, and it then waits a while before it tries again.",
+        "The Queue panel gets a Filters section, where you can allow only some piece shapes, container shapes, piece counts and tiers. A tier is a kind of problem, which is open, loose record, site record or published value.",
+        "You write shapes as numbers and ranges, such as 0, 3-6, 21-100, where 0 means the circle. An empty list allows everything.",
+        "The dealer deals or offers a problem only if it passes every filter. If your filters allow too little, the dealer has nothing to deal and tries again after a while.",
       ],
     },
     row: "dealer",
   },
   tuneRung("tuneBasin", "basin_hopping", 160_000, ["basin", "tuneMc"]),
   methodRung("lattice", 168_000, ["penalty"]),
-  autoRung("auto7", 7200, ["auto6", "lanes2"]),
   {
     id: "rent",
     name: "Records pay rent",
@@ -1094,8 +1113,8 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Every record you still lead pays 1 % of what it earned, every hour.",
     how: {
       text: [
-        "Each record you lead pays rent by the hour for as long as you lead it, even while this page is closed. The game checks your records with the server one at a time, each at most once every 10 minutes, and pays the rent since a record's last check, up to a week of it.",
-        "When a check or the live feed finds a record taken by another name, the rent since its last check is not paid.",
+        "Each record you lead pays rent every hour for as long as you lead it, even while this page is closed. The game checks your records with the server one at a time, each at most every 10 minutes. It pays the rent since a record's last check, up to a week.",
+        "If a check finds that another name has taken the record, the rent since its last check is not paid.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1108,11 +1127,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Continuous",
     cost: 208_000,
     requires: ["lanes2"],
-    effect: "Auto-eval can keep running while this tab is hidden, once you tick its setting.",
+    effect: "Auto-eval can keep running in a hidden tab, once you tick its setting.",
     how: {
       text: [
-        "Without this upgrade, auto-eval pauses while the tab is hidden. With it, Settings gets a box, off until you tick it, that keeps auto-eval running in a hidden tab.",
-        "Browsers slow down the timers of a hidden tab, and may wake them only once a minute. Up to 60 s of auto-eval's evaluations wait to be run, so such a tab still loses nothing. Nothing runs once the page is closed.",
+        "Without this upgrade, auto-eval pauses while the tab is hidden. With it, Settings gets a box that keeps auto-eval running in a hidden tab. The box is off until you tick it.",
+        "Browsers slow down a hidden tab, and may wake it only once a minute. The game stores up to 60 s of auto-eval's evaluations and runs them when it can, so a hidden tab loses nothing. Nothing runs once the page is closed.",
       ],
     },
     row: "queue",
@@ -1125,13 +1144,13 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "More open problems",
     cost: 240_000,
     requires: ["queue4"],
-    effect: "Half the open problems dealt can have any sides from 21 to 100 and 40 to 500 pieces.",
+    effect: "Half of the open problems can have any sides from 21 to 100 and 40 to 500 pieces.",
     how: {
       text: [
-        "Open problems have no site entry yet. Without this upgrade the dealer draws them from a fixed list of 2,601, where N and M are among 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 and P among 40, 60, 80, 100, 120, 150, 200, 250 and 300.",
-        "With it, each draw of an open problem has an even chance to come instead from any N and M from 21 to 100 and any P from 40 to 500, each drawn uniformly. Transfers then also look at the problems with 1 to 3 fewer pieces.",
+        "An open problem is one that has no record on the site yet. Normally the dealer picks open problems from a fixed list of 2,601 problems.",
+        "With this upgrade, half of the open problems come from a much wider choice instead, with any sides from 21 to 100 and any piece count from 40 to 500. Transfers then also look at problems with 1 to 3 fewer pieces.",
       ],
-      note: "Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
+      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
     },
     row: "problems",
   },
@@ -1143,9 +1162,11 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Completed sets of records add to all your points, for good.",
     how: {
       text: [
-        "Collections count the records the server has confirmed, and the count is kept through resets. A shape pair is one piece shape in one container shape, each with 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 or 100 sides. Each shape pair with a record on all 9 of its piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300) adds 2 %. Each piece shape adds 1 % at 10, 30 and 100 records. Each tier (open problem, loose record, site record, published value) adds 5 % once you have its first record.",
+        "Collections count the records the server has confirmed, and the count is kept through resets. A shape pair is one piece shape in one container shape, and it is complete when you hold a record on each of its 9 piece counts.",
+        "Each complete pair adds a bonus. So does each piece shape with many records, and each tier once you have its first record. A tier is a kind of problem, which is open, loose record, site record or published value.",
         "The bonus multiplies every point you are paid, rent included.",
       ],
+      note: "Shape pairs use the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. Each complete pair adds 2 %. Each piece shape adds 1 % at 10, 30 and 100 records. Each tier adds 5 %.",
       math: [`${sym("m", "c")} = 1 + 0.02 × ${sym("a")} + 0.01 × ${sym("b")} + 0.05 × ${sym("t")}`],
       vars: [
         [sym("m", "c"), "the multiplier from collections"],
@@ -1156,18 +1177,18 @@ export const UPGRADES: readonly Upgrade[] = [
     },
     row: "records",
   },
-  autoRung("auto8", 12800, ["auto7"]),
   {
     id: "batch",
     name: "Reach: every site record",
     cost: 320_000,
     requires: ["ring200"],
-    effect: "The dealer also deals site records that are not loose, at 10 times the points.",
+    effect: "The dealer also deals all other site records, worth 10 times the points.",
     how: {
       text: [
-        `${RING_TEXT} This upgrade adds every site record without a published value, loose or not.`,
-        "The board starts from the leader's packing, and every point an improvement on it pays is multiplied by 10. These records have been worked on, so the dealer expects only 0.1 of the room an open problem has.",
+        `${RING_TEXT} This adds every site record that has no published value, loose or not.`,
+        "Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 10. These records have been worked on a lot, so the dealer expects little room to improve them.",
       ],
+      note: "The dealer expects 0.1 of the room an open problem has.",
     },
     row: "problems",
   },
@@ -1178,11 +1199,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Retake",
     cost: 360_000,
     requires: ["rent"],
-    effect: "A record you lose is offered again first, starting from the new leader's packing.",
+    effect: "A record you lose comes back to you first, starting from the new leader's packing.",
     how: {
       text: [
-        "When the server shows that another name took a record of yours on a problem no longer in your queue, the problem goes on a retake list. At each deal, the oldest problem on that list comes before every other candidate, if it still takes entries and someone else still leads it.",
-        "It starts from the new leader's packing, which your board must beat by more than the 10⁻⁹ minimum. A problem whose piece or container has more than 20 sides counts as a loose record (3 times the points). On smaller shapes it is ranked like any site record, or as a published value where there is one.",
+        "Sometimes another name takes a record of yours on a problem that is no longer in your queue. That problem then goes on a retake list, and at each deal the oldest problem on the list comes before all others, as long as someone else still leads it.",
+        `It starts from the new leader's packing, which your board must beat by more than one billionth. Beating an existing record pays double on your accepted new record, and that goes for each time you take the lead back.`,
+        "A problem with a shape of more than 20 sides counts as a loose record, worth 3 times the points. Problems with smaller shapes rank like other site records, or like published values where there is one.",
       ],
     },
     row: "dealer",
@@ -1195,9 +1217,10 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "A new problem can start from the best packing of a neighbour with fewer pieces.",
     how: {
       text: [
-        "When a new open problem is placed, the game looks for the best known packing of the same shapes with fewer pieces. That is your own board in the queue, or else the site's record of the nearest piece count it can find (at most 4 lookups). It keeps those pieces where they are and places the missing ones in free space. With 6 or fewer missing, each goes where it grows the container least.",
-        "This start is used only when its side is under 98 % of Load all's, the start with every piece on rings around the centre. The starting score, which your first record must beat by more than the 10⁻⁹ minimum, is the smallest of the sides below.",
+        "When the game places a new open problem, it looks for a good packing of the same shapes with fewer pieces. This is your own board in the queue, or else the site's record for the nearest piece count it finds. It keeps those pieces where they are and adds the missing ones in free space.",
+        "The game uses this start only if it is clearly smaller than the usual start, with every piece on rings around the centre. Your first record on the problem must beat the best of these starts.",
       ],
+      note: "It looks up at most 4 piece counts. With 6 or fewer pieces missing, each goes where it grows the container least. The start counts as clearly smaller when its side is under 98 % of Load all's. The starting score is the smallest of the sides below, and your first record must beat it by more than 10⁻⁹ (relative).",
       math: [
         `use the transfer when ${sym("s", "t")} &lt; 0.98 × ${sym("s", "L")}`,
         `${sym("s", "0")} = min(${sym("s", "L")}, ${sym("s", "t")}, ${sym("s", "P+1")})`,
@@ -1220,12 +1243,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Another lane",
     cost: 480_000,
     requires: ["lanes2", "continuous"],
-    effect: "Each level adds a lane, up to one less than your CPU's cores.",
+    effect: "Each level adds one lane, up to one less than your computer's cores.",
     how: {
-      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the tree stops offering them."],
+      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the shop stops offering them."],
       math: LANE_MATH,
       vars: LANE_VARS,
-      note: "Each level costs 2.2 times the one before.",
+      note: `Each level costs 2.2 times the one before. ${LANE_NOTE}`,
     },
     row: "queue",
     levels: { max: 31, growth: 2.2 },
@@ -1238,7 +1261,7 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Each level multiplies the rent of every record by 1.5.",
     how: {
       text: [
-        "Each level multiplies every record's rent by 1.5, so level 1 pays 1.5 times the rent, level 2 pays 2.25 times and level 5, the last, about 7.6 times.",
+        "Each level multiplies every record's rent by 1.5. Level 1 pays 1.5 times the rent, level 2 pays 2.25 times, and level 5, the last, pays about 7.6 times.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1255,11 +1278,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Collector",
     cost: 640_000,
     requires: ["collections", "pick3"],
-    effect: "Every third deal fills a gap in the collection you are closest to completing.",
+    effect: "Every third deal fills a gap in the collection you are closest to finishing.",
     how: {
       text: [
-        "A collection here is a shape pair (one piece shape in one container shape, as in Collections) with a record on each of its 9 piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300). On every third deal, the dealer first looks at the pair where you hold the most of those records but not all, and deals a missing problem of it that the server shows is still open.",
-        "It checks at most 6 such problems per deal. If none is open, the deal goes on as usual.",
+        "A collection is one piece shape in one container shape, as in Collections, with a record on each of 9 piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300).",
+        "On every third deal, the dealer looks at the collection where you hold the most records but not all of them. It then deals a missing problem from that collection, if the server shows it is still open. It checks at most 6 problems per deal, and if none is open, the deal goes on as usual.",
       ],
       math: [`Collector's deal when ${sym("D")} mod 3 = 2`],
       vars: [[sym("D"), "problems dealt before this deal"]],
@@ -1268,19 +1291,18 @@ export const UPGRADES: readonly Upgrade[] = [
     mystery: true,
   },
   tuneRung("tuneHarden", "harden", 640_000, ["harden"], true),
-  autoRung("auto9", 22400, ["auto8", "asc"]),
-  autoRung("auto10", 36000, ["auto9"]),
   {
     id: "learning",
     name: "Learning dealer",
     cost: 800_000,
     requires: ["rank8", "collections"],
-    effect: "The dealer learns which kinds of problem pay you most, and deals more of them.",
+    effect: "The dealer learns which kinds of problem pay you most and deals more of them.",
     how: {
       text: [
-        "The dealer sorts problems into kinds by tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and the shapes of piece and container (circle, 3 to 6 sides, 7 to 20, or more). When a problem that ran at least 200 evaluations leaves the queue, its kind learns the ratio r of what it paid per evaluation to what the dealer expected.",
-        "When it ranks candidates, the dealer draws one correction θ per kind from what that kind has learned and multiplies the kind's values V by it (see Dealer: best of 2). This is Thompson sampling. Kinds that paid well rank higher, and kinds with little data still get tried now and then.",
+        "The dealer groups problems into kinds by their tier, their size and the shapes of the piece and the container. When a problem leaves the queue after at least 200 evaluations, its kind learns how well the problem paid compared with what the dealer expected.",
+        "When the dealer ranks problems, it draws a random correction for each kind, based on what that kind has learned (see Dealer: best of 2). Kinds that paid well rank higher, and kinds with little data still get tried now and then.",
       ],
+      note: "Sizes are N + M + P of at least 300, 200, 120, 80, 50, 30, or less. Shapes are circle, 3 to 6 sides, 7 to 20, or more. The random draw is Thompson sampling.",
       math: [
         `${sym("r")} = min(20, ${sym("G")} / (${sym("E")} × ${sym("p")}))`,
         `${sym("θ")} = max(0.01, ${sym("μ")} + ${sym("σ")} × ${sym("z")})`,
@@ -1290,7 +1312,10 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("r"), "what one problem teaches its kind"],
         [sym("G"), "the record points it earned"],
         [sym("E"), "the evaluations it ran"],
-        [sym("p"), `the record points per evaluation the dealer expected (w × c × R × ${number(RP_PER_EVAL)})`],
+        [
+          sym("p"),
+          `the record points per evaluation the dealer expected (w × c × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points)`,
+        ],
         [sym("θ"), "the kind's correction for this ranking"],
         [sym("z"), "a random draw from the standard normal distribution"],
         [sym("μ"), "the kind's expected correction, 1 before it has learned anything"],
@@ -1308,20 +1333,32 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "autox",
     name: "Faster auto-eval",
-    cost: 80000,
-    requires: ["auto10"],
-    effect: `Each level adds ${AUTOX_STEP} evaluations a second to auto-eval, up to ${AUTO_MAX} in all.`,
+    cost: AUTOX_COST,
+    requires: ["auto1"],
+    effect: "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
     how: {
       text: [
-        `Each level adds ${AUTOX_STEP} evaluations a second to auto-eval's rate, on top of the ${number(AUTO.auto10!)} a second of the last Auto-eval upgrade, so level ${AUTOX_LEVELS} reaches the limit of ${AUTO_MAX} a second. Like every Auto-eval upgrade, it raises the rate of all your lanes together, and the lanes share it.`,
-        `The limit is a target, and your computer sets the real one. One mc_compress evaluation took about ${msPerEval(85)} ms at N + M + P = 85 on the machine it was measured on, so ${AUTO_MAX} evaluations a second keep about ${number((AUTO_MAX * msPerEval(85)) / 10)} % of one core busy there. From about N + M + P = ${Math.round(coreBound(AUTO_MAX) / 10) * 10} up an evaluation takes ${number(1000 / AUTO_MAX)} ms or more, so ${AUTO_MAX} a second need more than one core. Each lane is a solver worker of its own, so more lanes spread the work over more cores, and a lane that cannot keep up runs as fast as its core allows.`,
+        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it.`,
+        `You can buy as many levels as you like. Each extra evaluation a second costs a little more than the one before, so the price of a level grows slowly. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
       ],
-      math: AUTO_MATH(`min(${AUTO_MAX}, ${number(AUTO.auto10!)} + ${AUTOX_STEP} × ${sym("a")})`),
-      vars: [AUTO_VARS[0], [sym("a"), `levels of Faster auto-eval, 0 to ${AUTOX_LEVELS}`], ...AUTO_VARS.slice(1)],
-      note: `${AUTO_NOTE} Each level costs 1.6 times the one before.`,
+      math: [
+        `${sym("r")} = ${AUTO_BASE} + ${sym("a")} for ${sym("a")} up to 49, then +5 a level up to ${sym("r")} = 200, +10 up to 500, +50 up to 1,000, and +100 after that`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + Σ 120 × e<sup>0.0095 ${sym("x")}</sup>, for ${sym("x")} = 2 to ${sym("r")}`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + 120 × e<sup>0.019</sup> × (e<sup>0.0095 (${sym("r")} − 1)</sup> − 1) / (e<sup>0.0095</sup> − 1)`,
+        `price of a level = ${sym("C")}(${sym("r")}<sub>new</sub>) − ${sym("C")}(${sym("r")}<sub>old</sub>)`,
+        SHARE_MATH,
+      ],
+      vars: [
+        AUTO_VARS[0],
+        [sym("a"), "levels of Faster auto-eval, 0 without it"],
+        [sym("C"), "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)"],
+        [sym("x"), "each evaluation a second above the first, whose price grows about 1 % an evaluation"],
+        ...AUTO_VARS.slice(1),
+      ],
+      note: `${AUTO_NOTE} The price grows fast: far past 1,500 evaluations a second, no player can pay it.`,
     },
     row: "auto",
-    levels: { max: AUTOX_LEVELS, growth: 1.6 },
+    levels: { max: Infinity, growth: AUTOX_GROWTH },
   },
   ringRung("ring80", 1_200_000, ["ring120"], true),
   tuneRung("tuneAsc", "asc", 1_200_000, ["asc"], true),
@@ -1333,8 +1370,8 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "With Auto chosen, the game picks each new run's method from what has paid.",
     how: {
       text: [
-        "Problems are sorted into kinds by tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind, the record points it earned per evaluation. The game learns from every run, before you buy this too.",
-        "With Auto chosen in the Method list, each new run draws a plausible value θ for every method you own from what its arm has learned, and runs the method with the highest. This is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind, with a spread as wide as that mean, so new methods get tried.",
+        "The game sorts problems into kinds by tier, size and piece shape. It keeps track of how many record points (RP) each method earned per evaluation on each kind. It learns this from every run, even before you buy Method match.",
+        "With Auto chosen in the Method list, each new run uses the method that looks best for that kind of problem. The game sometimes tries a method it knows less about, so new methods get their turn.",
       ],
       math: [
         `${sym("y")} = ${sym("G")} / ${sym("E")}`,
@@ -1356,7 +1393,7 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("ȳ"), "the mean of their y"],
         [sym("v"), "the variance of their y (σ₀² until there are two)"],
       ],
-      note: "Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
+      note: "Kinds are tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind. The method with the highest draw θ runs, which is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind, with a spread as wide as that mean. Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
     },
     row: "runs",
     mystery: true,
@@ -1368,12 +1405,14 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: published values",
     cost: 4_000_000,
     requires: ["batch", "ring120"],
-    effect: "The dealer also deals problems with a published value, at 100 times the points.",
+    effect: "The dealer also deals problems with a published value, worth 100 times the points.",
     how: {
       text: [
-        `${RING_TEXT} This upgrade adds problems with a best-known value in the literature. Proven values are never dealt.`,
-        "The board starts from the best packing the site can draw, a site record or the published coordinates. Nothing pays until your board goes below the target T, and from there every point is multiplied by 100. A record below a published value waits for an administrator's review. The dealer expects little room, 0.004 of an open problem's, since many published values are excellent.",
+        `${RING_TEXT} This adds problems with a best-known value in the literature. Proven values are never dealt.`,
+        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on every point is multiplied by 100.",
+        "A record below a published value waits for an administrator's review. Many published values are excellent, so the dealer expects little room to improve them.",
       ],
+      note: "The dealer expects 0.004 of the room an open problem has.",
       math: [`${sym("T")} = ${sym("v")} − 10<sup>−${sym("d")}</sup>`],
       vars: [
         [sym("T"), "the side your board must go below"],
@@ -1387,14 +1426,14 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 600_000_000,
+    cost: 3_000_000_000,
     requires: ["collections", "rent", "ring120"],
-    effect: "You can reset the tree for standing, and each point of standing adds 10 % to all points.",
+    effect: "You can reset for standing, and each point of standing adds 10 % to all points.",
     how: {
       text: [
-        `A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
-        "Your records stay on the server and keep paying rent. Your collection counts, the dealer's learning and the queue stay, and so do the upgrades Records pay rent, Higher rent and Collections. Every point of standing ever earned adds 10 % to all record points, spent or not, and standing buys the Standing row.",
-        "The first reset opens 2D on 3D, pieces packed on the surfaces of solids. The second opens 3D in 3D, solids packed in solids. An opened dimension stays open, and its cards in the Dimensions row are bought again in each cycle.",
+        `A reset ends the cycle, the play since the last reset. Your record points and most upgrades go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
+        "Your records stay on the server and keep paying rent. Your collections, the dealer's learning and the queue stay too, and so do Records pay rent, Higher rent and Collections. Every point of standing you earn adds 10 % to all record points, whether you spend it or not, and you can also spend standing on the Standing row.",
+        "The first reset opens 2D on 3D, where pieces are packed on the surfaces of solids. The second opens 3D in 3D, where solids are packed in solids. An opened dimension stays open, but its cards in the Dimensions row must be bought again in each cycle.",
       ],
       math: [
         `${sym("S")} = ⌊5 × √(${sym("E")} / ${sym("T")})⌋`,
@@ -1424,7 +1463,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle starts with 2 to 5 evaluations per click and Auto-eval.",
     {
       text: [
-        `At every reset, the next cycle begins owning Trace detail, 2, 3, 4 and 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO.auto1!)}.`,
+        `Every reset starts the next cycle with Trace detail, 2 to 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO_BASE)}.`,
       ],
     },
   ),
@@ -1436,7 +1475,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Basin hopping and the queue of 3.",
     {
       text: [
-        `At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), the Auto-eval upgrades up to ${autoRateText(AUTO.auto5!)} and Problem queue: 3.`,
+        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}) and a queue of 3.`,
       ],
     },
   ),
@@ -1445,18 +1484,19 @@ export const UPGRADES: readonly Upgrade[] = [
     "Cycle rules",
     3,
     ["standing"],
-    "Before a reset you can choose a rule for the next cycle, which earns a lasting reward.",
+    "Before a reset, you can pick a rule for the next cycle and earn a lasting reward.",
     {
       text: [
-        "Before a reset, you can choose a rule for the next cycle in the Standing panel. The cycle is played under it, and the reset that ends that cycle pays extra standing and gives the rule's reward for good.",
-        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. Circles only and Small problems only cover the polygon problems of 2D in 2D, so problems of other dimensions are dealt as usual and pay no reward from them. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
+        "Before a reset, you can pick a rule for the next cycle in the Standing panel. You then play that cycle under the rule, and when you reset at its end, you get extra standing and the rule's reward for good.",
+        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
+        "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
       ],
       math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
       vars: [
         [sym("S", "rule"), "the extra standing for finishing a cycle under a rule"],
         [sym("S"), "the standing the reset gives otherwise"],
       ],
-      note: "Rewards multiply with each other and with your other multipliers.",
+      note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },
   ),
   standingRung(
@@ -1464,11 +1504,12 @@ export const UPGRADES: readonly Upgrade[] = [
     "Pipelines",
     4,
     ["standing"],
-    "You order your methods, and each new run on a problem uses the next one.",
+    "You put methods in order, and each new run on a problem uses the next one.",
     {
       text: [
-        "In the Runs panel you list up to 9 methods in order. Each time a run on a problem ends by itself, the next run there uses the next method in the list, and after the last it starts again at the first. A method the cycle's rule forbids is skipped. A run the game closed (for another problem, or a reload) opens again with the same method.",
-        "With Auto-tune and Auto chosen, the setting of each run is drawn as Auto-tune draws it. Otherwise each method runs at the tuning level you own. Compact still uses mc_compress.",
+        "In the Runs panel, you can list up to 9 methods in order. When a run on a problem ends by itself, the next run on that problem uses the next method in the list, and after the last method it starts again at the first.",
+        "A method that the cycle rule forbids is skipped. If the game closed a run, for another problem or because of a reload, the run opens again with the same method.",
+        "With Auto-tune and Auto chosen, each run's setting is drawn as Auto-tune draws it. Otherwise each method runs at the tuning level you own. Compact still uses mc_compress.",
       ],
       math: [`stage of the next run = ${sym("r")} mod ${sym("n")}, counting stages from 0`],
       vars: [
@@ -1485,7 +1526,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Your Auto-eval upgrades survive resets, Faster auto-eval's levels included.",
     {
       text: [
-        "At a reset, every upgrade of the Auto-eval row stays owned. That is Auto-eval, its nine faster rungs, and Faster auto-eval with its levels. Under the Clicks only rule auto-eval is still off for that cycle.",
+        "At a reset, you keep every upgrade of the Auto-eval row. That is Auto-eval and all levels of Faster auto-eval. Under the Clicks only rule, auto-eval is still off for that cycle.",
       ],
     },
   ),
@@ -1497,7 +1538,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "With Auto chosen, the game also picks each run's tuning level from what has paid.",
     {
       text: [
-        "Auto-tune adds every tuning level you own, from 0 up to your level, as arms of Method match, so a run may use a lower setting where that paid more on this kind of problem. It makes Auto available in the Method list even without Method match, and draws as Method match does.",
+        "Auto-tune lets the game also choose a run's tuning level, from 0 up to your level, so it may pick a lower level where that paid more on this kind of problem. It makes Auto available in the Method list even without Method match, and it chooses the same way Method match does.",
       ],
       math: [`arms = kind × method × level ${sym("l")}, for ${sym("l")} = 0, 1, …, ${sym("l", "m")}`],
       vars: [
@@ -1514,13 +1555,13 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Auto-advance, the second lane and Reach.",
     {
       text: [
-        "At every reset, the next cycle also begins owning Reach: site records, Auto-advance and the Second lane, with what they need.",
+        "Every reset also starts the next cycle with Reach: site records, Auto-advance and the Second lane, and what they need.",
       ],
     },
   ),
   standingRung("keepMethods", "Keep methods", 10, ["keepAuto"], "The methods you own survive resets.", {
     text: [
-      `At a reset, every Method upgrade you own stays owned (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule only mc_compress runs in that cycle.`,
+      `At a reset, you keep every Method upgrade you own (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule, only mc_compress runs in that cycle.`,
     ],
   }),
   standingRung(
@@ -1531,7 +1572,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each level makes every record-point price 10 % cheaper.",
     {
       text: [
-        "Each level multiplies every price in record points by 0.9. Level 1 gives 0.9 of the price, level 2 gives 0.81, level 5 about 0.59 and level 10 about 0.35. Prices in standing do not change.",
+        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change.",
       ],
       math: [`${sym("p")} = round(${sym("p", "0")} × 0.9<sup>${sym("a")}</sup>)`],
       vars: [
@@ -1570,9 +1611,11 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (u.levels ? l >= u.levels.max : l > 0) return null;
   const base = isCardSlice(id)
     ? slicePrice(id, o.resets ?? 0)
-    : u.levels
-      ? u.cost * Math.pow(u.levels.growth, l)
-      : u.cost;
+    : id === "autox"
+      ? autoLevelPrice(l)
+      : u.levels
+        ? u.cost * Math.pow(u.levels.growth, l)
+        : u.cost;
   return currencyOf(u) === "rp" ? Math.round(base * rpCostFactor(o)) : Math.round(base);
 }
 
@@ -1641,13 +1684,13 @@ export { RUN_BUDGET } from "./methods";
 
 /**
  * Auto-eval's target in evaluations per second, all lanes together (they share it), or null without
- * it: its fastest rung, plus AUTOX_STEP a level of Faster auto-eval, at most AUTO_MAX. Evaluations per
+ * it: rateOfLevel of the levels of Faster auto-eval, without an upper limit. Evaluations per
  * click do not change it.
  */
 export function autoPerSecond(o: Owned): number | null {
   // the "clicks only" cycle rule: no auto-eval in this cycle
   if (!o.has("auto1") || o.rule === "clicks") return null;
-  return Math.min(AUTO_MAX, highest(o, AUTO, 0, (a, b) => a > b) + AUTOX_STEP * level(o, "autox"));
+  return rateOfLevel(level(o, "autox"));
 }
 
 /**

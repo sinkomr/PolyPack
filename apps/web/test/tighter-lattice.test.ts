@@ -268,7 +268,7 @@ describe("Tighter's Lattice build", () => {
     // its price and place in the tree are the economy's
     expect(card).toMatchObject({ name: "Lattice", row: "methods" });
     expect(card.effect).toBe(
-      "Once on each problem, the game builds a lattice packing and makes it your board when it is smaller.",
+      "Once on each problem, the game builds a lattice packing and keeps it if it is smaller.",
     );
     const text = (h: How) => (typeof h.text === "string" ? h.text : h.text.join(" "));
     const how = text(card.how);

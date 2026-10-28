@@ -8,7 +8,7 @@ import { strictTolerance } from "@polypack/solver";
 // the Vite dev server on 5174). Every request is checked to stay on that stack.
 //
 // A click is k evaluations of a solver run that stays open on the problem; points are paid per
-// click (with consent) and confirmed or taken back by the server's answer to the next submission.
+// click and confirmed or taken back by the server's answer to the next submission.
 
 interface ProblemView {
   key: string;
@@ -43,9 +43,9 @@ const siteBest = async (page: Page, p: ProblemView) =>
   (await (await page.request.get(`/api/problems/${p.N}/${p.M}/${p.P}`)).json()).site_best;
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
@@ -105,7 +105,7 @@ async function buyAll(page: Page, ids: string[]): Promise<void> {
   for (const id of ids) {
     const node = page.locator(`.t-card[data-id="${id}"]`);
     await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
-    await node.locator("button").click();
+    await node.locator(".t-node-act").click();
     await expect.poll(() => page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(true);
   }
   await openBoard(page);
@@ -127,7 +127,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
 
   // a dealt open problem is placed at once (pieces on rings around the centre): the free floor, never sent
   await expect(page.locator("#t-problem-note")).toHaveText(
-    "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.",
+    "No one has sent a packing for this problem yet. Any board below the starting score is a new record.",
   );
   await expect(page.locator("#t-stop")).toBeVisible();
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
@@ -138,6 +138,17 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(p.phase).toBe("loaded");
   expect(p.board!.pieces).toHaveLength(p.P);
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
+
+  // every game has a name from the start, and sends under it; the player changes it from Settings
+  expect((await page.evaluate(() => (window as any).tighter.state.name)) as string).toMatch(/^TighterGamePlayer\d{7}$/);
+  await page.click("#t-open-settings");
+  await expect(page.locator("#t-name-now")).toHaveText(/^TighterGamePlayer\d{7}$/);
+  await page.click("#t-name-change");
+  await page.fill("#t-name-input", "E2E Tighter");
+  await page.click("#t-name-save");
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
+  await expect(page.locator("#t-name-now")).toHaveText("E2E Tighter");
+  await page.click("#t-settings-close");
 
   // the first Evolve click compacts: one press, 100 evaluations of a real mc_compress run (with a random
   // seed) that stays open, and the first record
@@ -162,19 +173,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   // the next problem is earned by work: 300 clicks, whatever their size (Compact counts its 100 evaluations)
   await expect(page.locator("#t-next")).toBeDisabled();
   await expect(page.locator("#t-next")).toHaveText(/^Next problem after [\d,]+ clicks$/);
-  // nothing is sent and nothing is paid before the player consents
-  await page.waitForTimeout(1500);
-  expect(await siteBest(page, p)).toBeNull();
-  expect(await rp(page)).toBe(0);
-  // the first record asks for a name in a pop-up over the board
-  await expect(page.locator("#t-welcome #t-consent")).toBeVisible();
-
-  await page.fill("#t-name", "E2E Tighter");
-  await page.check("#t-agree");
-  await page.click("#t-consent-save");
-  await expect(page.locator("#t-welcome")).toBeHidden();
-
-  // consent pays the record so far at once (the totals appear); the first record goes at once, with its provenance
+  // the click paid the record at once (the totals appear); the first record goes at once, with its provenance
   await expect(page.locator("#t-bar")).toBeVisible();
   const paid = await rp(page);
   expect(paid).toBeGreaterThanOrEqual(5);
@@ -198,7 +197,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   p = await focused(page);
   expect(p.unconfirmed).toBe(0);
   expect(p.sending).toBeNull();
-  // everything paid so far (consent's payment, and the container's turn before the send) is confirmed
+  // everything paid so far (the first click's payment, and the container's turn before the send) is confirmed
   const confirmed = await rp(page);
   expect(confirmed).toBeGreaterThanOrEqual(paid - 1e-9);
   await expect.poll(() => logText(page)).toContain(`${fmtRP(confirmed)} RP confirmed`);
@@ -243,7 +242,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (1,000 RP), labels it
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (2,000 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
   // under it, the RP paid here by evaluations, noted only "RP"
@@ -253,16 +252,16 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(rpTrace.length).toBeGreaterThanOrEqual(2);
   expect(rpTrace.at(-1)![1]).toBeCloseTo((await focused(page)).rp, 9);
   await page.locator("#t-pip").screenshot({ path: test.info().outputPath("pip.png") });
-  await grant(page, 1000);
+  await grant(page, 2000);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
   await openBoard(page);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  expect(await rp(page)).toBeCloseTo(before - 1000, 9);
+  expect(await rp(page)).toBeCloseTo(before - 2000, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
-  // evaluations per click: 2 per click (1,500 RP), then 3 (1,800 RP)
-  await grant(page, 3300);
+  // evaluations per click: 2 per click (150 RP), then 3 (250 RP)
+  await grant(page, 400);
   await buyAll(page, ["click2"]);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve ×2");
   let e = (await stats(page)).evaluations;
@@ -325,10 +324,10 @@ test("tighter: Stop drops queued clicks and keeps the best", async ({ page }) =>
   expect(ran).toBeGreaterThanOrEqual(1);
   expect(ran).toBeLessThan(15);
   const p = await focused(page);
-  // the board is a strict packing smaller than its placed start, and nothing was sent
+  // the board is a strict packing smaller than its placed start (sending is always on, so the best may
+  // have gone to the server, but a send never carries more than the kept best)
   expect(p.best!).toBeLessThan(p.floor!);
   expect(findOverlaps(p.N, p.board!.pieces, strictTolerance(p.board!))).toEqual([]);
-  expect((await stats(page)).submissions).toBe(0);
   // the board is still playable
   await click(page);
 });
@@ -341,9 +340,6 @@ test("tighter: auto-eval runs live, an evaluation a second while on, at most a m
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 5);
   await firstRecord(page);
-  await page.fill("#t-name", "Idle Player");
-  await page.check("#t-agree");
-  await page.click("#t-consent-save");
   await grant(page, 6000);
   await expect(page.locator("#t-auto")).toBeHidden();
   await buyAll(page, ["trace", "click2", "click3", "click4", "auto1"]);
@@ -422,14 +418,11 @@ test("tighter: a method change opens a new run", async ({ page }) => {
     "click4",
     "auto1",
     "click5",
-    "auto2",
     "click6",
     "click7",
-    "auto3",
     "click8",
     "click9",
     "click10",
-    "auto4",
   ]);
   await expect(page.locator("#t-method-box")).toBeHidden();
   await buyAll(page, ["basin"]);
@@ -466,7 +459,7 @@ test("tighter: the game's page is cross-origin isolated (space runs share memory
     if (r.request().resourceType() === "script" || /\.(m?js|ts)(\?|$)/.test(r.url()))
       scripts.push({ url: r.url(), coep: r.headers()["cross-origin-embedder-policy"] });
   });
-  await page.goto("/tighter.html");
+  await page.goto("/tighter.html?tutorial=off");
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(true);
   await page.locator("#t-evolve").click();
   await expect.poll(() => scripts.some((s) => /run-worker/.test(s.url))).toBe(true);

@@ -60,11 +60,12 @@ export function morphWarmup(params: Record<string, unknown>, p?: RunProblem): nu
 const warming = (v: RunView) => v.warmup > 0 && v.evaluations < v.warmup;
 
 export const morphGame: MethodGame = {
-  effect: "You can run morph, which repacks your board as discs and then as the true pieces.",
+  effect: "Adds morph, which repacks your board as discs and then as the true pieces.",
   how: (select) => ({
     text: [
-      `morph repacks your board in ${MORPH_PRESET.stages} stages. The first is the disc stage, where each piece is the disc inscribed in it. In the second stage each piece is the true piece. A run starts from your best board and moves each centre and angle by up to 0.03 at random. Each stage first scales the centres from their mean until the shapes just touch. It then runs at most ${MORPH_SOLVER.outerIterations} penalty solves of at most ${MORPH_SOLVER.innerIterations} L-BFGS steps each on those shapes, with the objective of the penalty method.`,
-      "After each accepted L-BFGS step, morph spreads the centres from their mean until no two true pieces overlap, and scores that board, which is one evaluation. On a board that is already packed tight, the boards of the disc stage are larger than your best, so your board usually changes only in the second stage. When a stage ends with an overlap or a protrusion above 0.02 piece sides, the next stage goes only halfway to the true piece, at most twice. The run ends after its last stage.",
+      `morph repacks your board in ${MORPH_PRESET.stages} stages. In the first, the disc stage, each piece is the disc inscribed in it. In the second stage each piece is its true shape. A run starts from your best board and nudges every piece at random.`,
+      "In each stage the game spreads the pieces until they just touch, and then a penalty search squeezes the container around them. After every step of the search, the game spreads the pieces until no true pieces overlap and scores that board, which is one evaluation.",
+      "On a board that is already packed tight, the boards of the disc stage are larger than your best, so your board usually changes only in the second stage. The run ends after its last stage.",
     ],
     math: [
       `${sym("S")}(${sym("t")}) = ${sym("t")} × polygon ⊕ (1 − ${sym("t")}) × ${sym("ρ")} × disc`,
@@ -84,7 +85,7 @@ export const morphGame: MethodGame = {
       [sym("O"), `penalty solves at most per stage, ${MORPH_SOLVER.outerIterations}`],
       [sym("I"), `L-BFGS steps at most per solve, ${MORPH_SOLVER.innerIterations}`],
     ],
-    note: `The ${MORPH_START} evaluations before the disc stage score your board as it is. The first ${int(MORPH_WARMUP)} evaluations of a run are its warm-up, which covers the disc stage, and they do not count toward Auto-advance's patience. On circle pieces the disc is the piece, so a run has only the second stage and no warm-up. ⊕ adds two shapes point by point (a Minkowski sum). ${select}`,
+    note: `A run starts by moving each centre and angle by up to 0.03 at random. Each stage runs at most ${MORPH_SOLVER.outerIterations} penalty solves of at most ${MORPH_SOLVER.innerIterations} L-BFGS steps each, with the objective of the penalty method, and the game scores the board after each accepted step. When a stage ends with an overlap or a protrusion above 0.02 piece sides, the next stage goes only halfway to the true piece, at most twice. The ${MORPH_START} evaluations before the disc stage score your board as it is. The first ${int(MORPH_WARMUP)} evaluations of a run are its warm-up, which covers the disc stage, and they do not count toward Auto-advance's patience. On circle pieces the disc is the piece, so a run has only the second stage and no warm-up. ⊕ adds two shapes point by point (a Minkowski sum). ${select}`,
   }),
   presets: [MORPH_PRESET],
   warmup: morphWarmup,
@@ -93,7 +94,7 @@ export const morphGame: MethodGame = {
   runNote: (v) => (warming(v) ? ` · warm-up until ${int(v.warmup)}` : ""),
   stepNote: (v) =>
     warming(v)
-      ? `morph's disc stage ends by evaluation ${int(v.warmup)} of this run. Its boards rarely beat a board packed tight before the second stage.`
+      ? `The disc stage of morph ends by evaluation ${int(v.warmup)} of this run. Its boards rarely beat a board that is already packed tight.`
       : null,
   endedText: (v, title) =>
     `The morph run on ${title} ended after its last stage, at ${int(v.evaluations)} evaluations.`,

@@ -73,8 +73,6 @@ import {
   ownedSet,
   polygonBoard,
   pay,
-  payAll,
-  withdrawConsent,
   problem,
   recordsHeld,
   reveal,
@@ -120,7 +118,8 @@ import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
-import { renderHow } from "./how";
+import { moreDetail } from "./detail";
+import { renderMechanics } from "./mechanics";
 import {
   Candidate,
   Ranked,
@@ -131,7 +130,7 @@ import {
   passes,
   rankCandidates,
 } from "./rank";
-import { Speeds, autoHold, autoTarget } from "./scheduler";
+import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
 import {
@@ -163,6 +162,8 @@ import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKi
 import { renderRunsPanel } from "./runs-ui";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
+import { bindNamePopup, showNamePopup } from "./name-popup";
+import { runTutorial } from "./tutorial";
 import {
   SpaceRead,
   classifySpaceAnswer,
@@ -295,31 +296,34 @@ let savesDisabled = false;
 let startNote: string | null = null;
 /** What a save from before version 4's points and prices was given, said once as it is read (save.ts). */
 const rescaleNote = (f: number) =>
-  `Record points now pay mostly for how much smaller a board gets, and every price went up with them. Your points were multiplied by ${f.toFixed(1)}, so they buy what they bought before.`;
+  `Record points now pay mostly for how much smaller a board gets. Prices went up too. Your points were multiplied by ${f.toFixed(1)}, so they buy what they did before.`;
 /** What a save from before auto-eval's lower prices was given back, said once as it is read. */
 const refundNote = (rp: number) =>
-  `The Auto-eval upgrades now cost a tenth of what they did, so ${fmtInt(rp)} RP of what you paid for yours came back.`;
+  `Auto-eval upgrades now cost a tenth of what they did, so you got ${fmtInt(rp)} RP back for the ones you had bought.`;
+/** What the ladder of 2026-10-27 paid back to a save (save.ts migration 7), said once as it is read. */
+const ladderNote = (rp: number) =>
+  `Auto-eval now has one ladder of small steps. You keep your rate and get ${fmtInt(rp)} RP back.`;
 /** Said once to a save that had reset, when it is read (save.ts migration 4). */
 const REBALANCED_NOTE =
-  "Tighter is being rebalanced and expanded, and resets now work differently. Sorry: your standing has been cleared and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
+  "Tighter changed, and resets now work differently. Your standing was cleared, and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
 /** What the unit change of 2026-10-27 did to a save (save.ts migration 5), said once as it is read. */
 function unitsNote(u: { converted: number; dropped: number }): string {
   const one = (n: number) => n === 1;
-  const parts = ["Disks and balls now have diameter 1, and a circle or ball container is measured by its diameter."];
+  const parts = ["Disks and balls now have diameter 1. A circle or ball container is measured by its diameter."];
   if (u.converted > 0)
     parts.push(
-      `${fmtInt(u.converted)} of your problems ${one(u.converted) ? "uses them and was" : "use them and were"} converted. The packings are the same, and only their numbers changed.`,
+      `${fmtInt(u.converted)} of your problems ${one(u.converted) ? "uses them and was" : "use them and were"} converted. The packings are the same. Only the numbers changed.`,
     );
   if (u.dropped > 0)
     parts.push(
-      `${fmtInt(u.dropped)} curved ${one(u.dropped) ? "problem" : "problems"} with disk pieces left your game, because the change made ${one(u.dropped) ? "it a different problem" : "them different problems"}.`,
+      `${fmtInt(u.dropped)} curved ${one(u.dropped) ? "problem" : "problems"} with disk pieces ${one(u.dropped) ? "was" : "were"} removed, because the change made ${one(u.dropped) ? "it a different problem" : "them different problems"}.`,
     );
   return parts.join(" ");
 }
 /** What a save's retired upgrades paid back (save.ts RETIRED), said once as it is read. */
 function retiredNote(r: RetiredRefund): string {
   const paid = [r.rp > 0 ? `${fmtInt(r.rp)} RP` : "", r.standing > 0 ? `${fmtInt(r.standing)} standing` : ""];
-  return `The ${andList(r.groups)} upgrades have left the tech tree, so the ${andList(paid.filter(Boolean))} they cost came back.`;
+  return `The ${andList(r.groups)} upgrades are gone from the tech tree. You got ${andList(paid.filter(Boolean))} back.`;
 }
 
 function randomSeed(): number {
@@ -338,7 +342,7 @@ function initialState(): GameState {
   try {
     text = localStorage.getItem(STORAGE_KEY);
   } catch {
-    startNote = "This browser does not let the page keep a save, so the game lasts only until you close the tab.";
+    startNote = "This browser does not let the page keep a save, so your game is lost when you close the tab.";
   }
   if (text) {
     const r = fromJson(text, now());
@@ -349,6 +353,7 @@ function initialState(): GameState {
         r.retired ? retiredNote(r.retired) : "",
         r.rebalanced ? REBALANCED_NOTE : "",
         r.units ? unitsNote(r.units) : "",
+        r.ladder ? ladderNote(r.ladder.rp) : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -356,14 +361,14 @@ function initialState(): GameState {
     if (/newer version/.test(r.error)) {
       // never overwrite a save this version cannot read
       savesDisabled = true;
-      startNote = `Your save is from a newer version of Tighter, so this page leaves it untouched and plays without saving.`;
+      startNote = `Your save is from a newer version of Tighter, so this page leaves it alone and plays without saving.`;
     } else {
       try {
         localStorage.setItem(`${STORAGE_KEY}.unreadable.${Date.now()}`, text);
       } catch {
         // nothing more to keep
       }
-      startNote = `Your save could not be read (${r.error}). It was kept aside, and a new game started.`;
+      startNote = `Your save could not be read (${r.error}). It was set aside, and a new game started.`;
     }
   }
   return newGame(now(), seed);
@@ -694,6 +699,9 @@ ensureLanes();
 /** The keys of the problems a lane has a run on, or work queued for. */
 const laneKeys = (l: LaneView) =>
   [l.run?.key, l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
+/** The keys of the problems a lane is running evaluations on now, or has jobs queued for (an open run alone is not work). */
+const workingKeys = (l: LaneView) =>
+  [l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
 const laneOn = (key: string) => lanes.find((l) => laneKeys(l).includes(key));
 /** The last step's change per problem, for the score panel (not saved). */
 const lastChange = new Map<string, StepChange & { evals: number; seed: number; method: string }>();
@@ -760,7 +768,7 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
     const config = b.toConfig();
     const e = evaluate(config, { autoOrient: true });
     if (!e.valid || !e.container || e.score === null) {
-      say(`Placing the pieces did not give a valid board (${e.reasons.join(", ")}).`);
+      say(`The pieces could not be placed on a valid board (${e.reasons.join(", ")}).`);
       return false;
     }
     config.container_phi = e.container.phi;
@@ -778,15 +786,15 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
       // the starting score: what the first record must beat (the code's free floor)
       const startingScore =
         p.floor! < start.score
-          ? `The record for ${p.P + 1} pieces, with one piece taken out, packs ${p.P} pieces in less room (${show6(p.floor!)}). ` +
-            "That is the starting score your first record must beat."
-          : `This ${side} is the starting score your first record must beat, and this board is never sent as it is. Your first press of Evolve compacts it.`;
+          ? `The record for ${p.P + 1} pieces, with one piece removed, fits ${p.P} pieces in a smaller ${side} (${show6(p.floor!)}). ` +
+            "Your first record must beat that."
+          : `Your first record must beat this ${side}. This board is not sent. Press Evolve to compact it.`;
       say(
         start.transferred
           ? `This problem starts from the best packing of ${transfer!.from} pieces, with ${p.P - transfer!.from} more placed around it (Transfers). ` +
-              `Its ${side} is ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound. Every piece on rings around the centre would give ${show6(e.score)}. ` +
+              `Its ${side} is ${show6(start.score)}, ${fmtPct(start.score / b0 - 1)} above the area bound. Rings of pieces around the centre would give ${show6(e.score)}. ` +
               startingScore
-          : `${p.P} pieces placed on rings around the centre. The ${side} is ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
+          : `${p.P} pieces placed in rings around the centre. The ${side} is ${show6(e.score)}, ${fmtPct(e.score / b0 - 1)} above the area bound. ` +
               startingScore,
       );
     }
@@ -825,7 +833,7 @@ function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
       if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
       if (!a.ok) {
         startFailed.add(p.key);
-        event(`${problemTitle(p)} could not be placed (${a.message}). Its first run starts from nothing.`, false);
+        event(`${problemTitle(p)} could not be placed (${a.message}). Its first run starts from scratch.`, false);
         return false;
       }
       applyLoadAll(p, a.config, a.score, null);
@@ -833,7 +841,7 @@ function loadAllSpace(p: ProblemState & SpaceKey): Promise<boolean> {
       if (p.key === state.focus)
         say(
           `${p.P} pieces placed. The ${sideWord(p)} is ${show6(a.score)}, ${fmtPct(a.score / rulesOf(p).bound(p)! - 1)} above the bound. ` +
-            `This ${sideWord(p)} is the starting score your first record must beat, and this board is never sent as it is. Your first press of Evolve compacts it.`,
+            `Your first record must beat this ${sideWord(p)}. This board is not sent. Press Evolve to compact it.`,
         );
       persist();
       return true;
@@ -1086,7 +1094,7 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     if (a.message === NOT_ISOLATED) {
       // latched: no more space problems are dealt this session, and the player is told once
       if (!spaceBlocked)
-        say("Space problems need a browser page that keeps its memory to itself, so they are left out here.");
+        say("Space problems need an isolated browser page, so they are left out here.");
       spaceBlocked = true;
     } else say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
@@ -1208,7 +1216,7 @@ async function endStalledRun(lv: LaneView, p: ProblemState, run: OpenRunView): P
   const title = problemTitle(p);
   const smaller = smallerText(sideWord(p), run.startScore, run.runBest);
   event(
-    `The run on ${title} made no progress in its last ${evals(limit)}, so the game ended it.` +
+    `The run on ${title} made no progress in ${evals(limit)}, so the game ended it.` +
       `${smaller ? ` ${smaller}` : ""} A new run starts from the best board${nextStageText(p)}.`,
     p.key === state.focus,
   );
@@ -1253,18 +1261,15 @@ function settle(
   );
   lastChange.set(p.key, { ...change, evals: done, seed: run.seed, method: run.method });
   if (change.firstRecord) {
-    reveal(state, "consent", "log");
+    reveal(state, "log");
     banner = {
       key: p.key,
       text:
         p.tier === "open"
-          ? `New record ${show6(p.best!)} · No one had sent a packing of ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
+          ? `New record ${show6(p.best!)}. No one had sent a packing of ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
           : `New best ${show6(p.best!)} on ${problemTitle(p)}.`,
     };
-    event(
-      `New record ${show6(p.best!)} on ${problemTitle(p)}.${state.consent ? "" : " It is not sent until you put your name on your records."}`,
-      false,
-    );
+    event(`New record ${show6(p.best!)} on ${problemTitle(p)}.`, false);
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (run.mode === "lattice") {
@@ -1297,9 +1302,8 @@ function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job,
     `${what} The ${sideWord(p)} went from ${show6(c.before)} to ${show6(c.after)}, ` +
     `an improvement of ${fmtRelative(1 - c.after / c.before)}`;
   if (!c.counted)
-    return `${text}. That is less than the smallest improvement that counts (${MIN_STEP}), so it pays with the next one that does.`;
+    return `${text}. That is too small to count (under ${MIN_STEP}), so it will be paid together with the next step that counts.`;
   text += c.points ? `, worth +${fmtRP(c.points.total)} RP.` : ".";
-  if (!state.consent) text += " Put your name on your records to send them and earn their points.";
   return text;
 }
 
@@ -1324,7 +1328,7 @@ function stopAll(): void {
   stopped = true;
   state.settings.auto = false;
   for (const l of lanes) l.jobs = l.jobs.filter((j) => j.compact && j.click);
-  say("Stopped. Auto-eval is off, and the clicks still waiting to run were dropped.");
+  say("Stopped. Auto-eval is now off, and the clicks that were still waiting to run were dropped.");
   persist();
   render();
 }
@@ -1417,6 +1421,18 @@ function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
   const stage = piped(o) ? pipelineMethod(state.runplan.pipeline, p.endedRuns, (m) => allowedMethod(o, m)) : null;
   const m = stage ? stage.method : autoMethods(o) ? null : chosenMethod(o);
   return m ? runSpeedKey(p, m, isPolygon(p) ? tuningLevel(o, m) : 0) : null;
+}
+
+/**
+ * Whether the rate auto-eval asks for is more than this computer was measured to run, on the problem
+ * on the board with the method its next run would take (scheduler.ts). False until a step has run here.
+ */
+function overComputerLimit(o: Owned): boolean {
+  const rate = autoPerSecond(o);
+  const p = focused();
+  if (rate === null || !p || !speeds.measured) return false;
+  const msEach = speeds.msEach(lanes[0] ? jobSpeedKey(lanes[0], p, o) : null, tableMsOf(p));
+  return autoOverLimit(rate, laneCount(o), msEach);
 }
 
 /**
@@ -1531,13 +1547,13 @@ function pauseSending(t: Trouble): void {
   sendTrouble(t);
 }
 
-/** Sends at most one improvement per call, when consent, the pacer and the server allow. */
+/** Sends at most one improvement per call, when the pacer and the server allow. */
 async function submitTick(): Promise<void> {
   if (submitting) return;
   const t = now();
   // problems dropped with nothing left to send leave now
-  for (const p of [...state.queue]) if (p.leaving && (!state.consent || !hasUnsent(p))) leave(state, p.key, t);
-  if (!ownsGame || !state.consent || !state.name) return;
+  for (const p of [...state.queue]) if (p.leaving && !hasUnsent(p)) leave(state, p.key, t);
+  if (!ownsGame || !state.name) return;
   const candidates = state.queue
     .filter(hasUnsent)
     .map((p) => ({ p, kind: { first: p.verified === null && p.leader === null, leaving: p.leaving } }))
@@ -1571,7 +1587,7 @@ function orient(p: ProblemState): void {
   const points = pay(state, p);
   if (points)
     event(
-      `Turning the container to its best angle on ${problemTitle(p)} gained ${fmtChange(p.best / (1 - points.delta), p.best)} (+${fmtRP(points.total)} RP).`,
+      `The container was turned to its best angle on ${problemTitle(p)}. The side changed by ${fmtChange(p.best / (1 - points.delta), p.best)} (+${fmtRP(points.total)} RP).`,
       false,
     );
 }
@@ -1589,7 +1605,7 @@ async function submit(p: ProblemState): Promise<void> {
   if (!info.accepts) {
     sendingWorks();
     p.closed = true;
-    event(`The server takes no more entries for ${problemTitle(p)}. It leaves the queue.`);
+    event(`The server no longer takes entries for ${problemTitle(p)}. It leaves the queue.`);
     leave(state, p.key, now());
     return;
   }
@@ -1603,9 +1619,9 @@ async function submit(p: ProblemState): Promise<void> {
     sendingWorks();
     return;
   }
-  // The player may have withdrawn consent or changed the name while the leader was read: what goes
+  // The player may have changed the name while the leader was read: what goes
   // to the server is decided now, immediately before the POST.
-  if (!ownsGame || !state.consent || state.name !== name || !name) return;
+  if (!ownsGame || state.name !== name || !name) return;
   const board0 = structuredClone(p.board!);
   const run = structuredClone(p.run!);
   state.pacer = recordSend(state.pacer, p.key, now());
@@ -1646,18 +1662,18 @@ async function submit(p: ProblemState): Promise<void> {
       event(
         `The server made ${show6(outcome.score)} the record for ${title}${a.confirmed > 0 ? ` (${fmtRP(a.confirmed)} RP confirmed)` : ""}.`,
       );
-      if (outcome.pending) event("It beats a published value, so it waits for an administrator's review.");
+      if (outcome.pending) event("It beats a published value, so an administrator must review it.");
       break;
     case "behind":
       event(
-        `Another entry got there first on ${title}, and the record is now ${show6(outcome.leaderScore ?? 0)}.` +
+        `Another entry was first on ${title}. The record is now ${show6(outcome.leaderScore ?? 0)}.` +
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : "") +
-          (a.points ? ` Your board still beats it, which pays +${fmtRP(a.points.total)} RP.` : ""),
+          (a.points ? ` Your board still beats it, and pays +${fmtRP(a.points.total)} RP.` : ""),
       );
       break;
     case "closed":
       event(
-        `The server takes no more entries for ${title}${outcome.reasons.length ? ` (${outcome.reasons.join(", ")})` : ""}. It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
+        `The server no longer takes entries for ${title}${outcome.reasons.length ? ` (${outcome.reasons.join(", ")})` : ""}. It leaves the queue.${a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : ""}`,
       );
       leave(state, p.key, now());
       break;
@@ -2222,7 +2238,7 @@ function pauseDealing(offline: boolean): void {
   dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
   if (offline && !state.queue.length)
     $("t-title").textContent =
-      `The server cannot be reached, and the game needs it to deal you a problem. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`;
+      `The server cannot be reached, so no problem can be dealt. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`;
 }
 
 async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked } | null> {
@@ -2307,7 +2323,7 @@ async function offerCheck(x: Offer): Promise<boolean | null> {
 async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null): Promise<void> {
   if (!offerAllowed(owned(), x)) {
     state.picks.offers = state.picks.offers.filter((y) => y !== x);
-    say(`The offer of ${problemTitle(x)} is gone, because your reach, filters or rule no longer allow it.`);
+    say(`The offer of ${problemTitle(x)} is gone. Your reach, filters or rule no longer allow it.`);
     persist();
     return;
   }
@@ -2315,8 +2331,8 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
     if (!auto)
       say(
         slotted(state).length >= queueSize(owned())
-          ? "Every slot is full. Drop a problem to make room for this one."
-          : `The next problem is earned after ${workText(clicksToDeal())}.`,
+          ? "Every slot is full. Drop a problem to make room."
+          : `The next problem comes after ${workText(clicksToDeal())}.`,
       );
     return;
   }
@@ -2330,7 +2346,7 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
   const title = problemTitle(x);
   if (!stands) {
     skipped.add(keyOf(x));
-    event(`${title} changed since it was offered, so the offer is gone. Someone took it, or its record moved.`);
+    event(`The offer of ${title} is gone. Someone took it, or its record moved.`);
     persist();
     return;
   }
@@ -2387,7 +2403,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     reveal(state, "points", "upgrades");
     event(
       `The server made ${show6(leader.score)} the record for ${problemTitle(p)}` +
-        `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}. The game recognised your entry from the current record, because its answer had not arrived.`,
+        `${r.confirmed > 0 ? ` (${fmtRP(r.confirmed)} RP confirmed)` : ""}. The game matched your entry to the record, because the server's answer had not arrived.`,
     );
   } else if (r.lost) {
     // Retake: a record lost after it left the queue is offered again first
@@ -2529,15 +2545,6 @@ function render(): void {
   showFocus();
 
   // reveals: a panel once shown stays
-  if (s.consent || s.stats.firstRecords || s.queue.some((q) => q.phase === "ready" && q.tier === "open")) {
-    reveal(s, "consent");
-    // the first record asks once for a name, in a pop-up over the board; after that, Settings holds it
-    if (!revealed(s, "asked") && ownsGame) {
-      reveal(s, "asked");
-      if (!s.consent) openWelcome();
-      persist();
-    }
-  }
   if (s.rpEarned > 0) reveal(s, "points", "upgrades");
   if (queueSize(o) > 1) reveal(s, "queue");
   if (o.has("auto1") || o.has("lanes2")) reveal(s, "lanes");
@@ -2572,7 +2579,7 @@ function render(): void {
   problemTip();
   renderToolbar(p, o);
   renderScore(p, o);
-  renderConsent();
+  renderName();
   renderPoints();
   renderUpgrades(o);
   renderQueue(o);
@@ -2584,8 +2591,8 @@ function render(): void {
   text(
     "t-run-note",
     o.has("continuous")
-      ? "Unless the first box is ticked, auto-eval pauses while this tab is hidden."
-      : "Auto-eval pauses while this tab is hidden. The Continuous upgrade in the tech tree lets it keep running.",
+      ? "Auto-eval pauses while this tab is hidden, unless the first box above is ticked."
+      : "Auto-eval pauses while this tab is hidden. The Continuous upgrade lets it keep running.",
   );
   renderStanding(o);
   renderRecords(o);
@@ -2605,17 +2612,17 @@ function renderProblem(p: ProblemState | undefined): void {
   text("t-title", isPolygon(p) ? problemTitle(p) : rulesOf(p).title(p));
   text("t-problem-count", countText(p));
   let note: string;
-  if (p.closed) note = "This problem is closed. The server takes no more entries for it.";
-  else if (p.leaving) note = "This problem leaves the queue once your best board has been sent.";
+  if (p.closed) note = "This problem is closed. The server takes no more entries.";
+  else if (p.leaving) note = "This problem leaves the queue once your best board is sent.";
   else if (p.ourId !== null)
     note =
       `You hold the record for this problem, ${show6(p.verified!)}.` +
       (p.published !== null && p.verified! > p.published
-        ? ` The published value ${show6(p.published)} is still smaller, and nothing more pays until your board beats it.`
+        ? ` The published value ${show6(p.published)} is still smaller. Nothing pays until you beat it.`
         : "");
   else if (p.tier === "published")
     note =
-      `To earn points here, beat the published value ${show6(p.published!)}. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and a record waits for an administrator's review.` +
+      `Beat the published value ${show6(p.published!)} to earn points. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and an administrator reviews the record. Beating an existing record pays double on your accepted new record.` +
       (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
     note =
@@ -2624,7 +2631,7 @@ function renderProblem(p: ProblemState | undefined): void {
   else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
   else
-    note = "No one has sent a packing for this problem yet. Your first board below the starting score is a new record.";
+    note = "No one has sent a packing for this problem yet. Any board below the starting score is a new record.";
   text("t-problem-note", note);
   // before the queue, one problem at a time: the next one is earned by work
   const single = queueSize(owned()) <= 1;
@@ -2634,7 +2641,7 @@ function renderProblem(p: ProblemState | undefined): void {
     const ready = left === 0;
     $<HTMLButtonElement>("t-next").disabled = !ready || dealing;
     text("t-next", ready ? "Next problem" : `Next problem after ${fmtInt(left)} click${left === 1 ? "" : "s"}`);
-    $("t-next").title = ready ? "" : `The next problem is earned after ${workText(left)}.`;
+    $("t-next").title = ready ? "" : `The next problem comes after ${workText(left)}.`;
   }
 }
 
@@ -2660,7 +2667,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
       ? "The pieces are being placed."
       : first
         ? `Your first click compacts the board with ${evals(COMPACT_EVALS)} of mc_compress. After that, each click runs ${evals(k)}.`
-        : `Each click runs ${evals(k)} of the solver on this board.`;
+        : `Each click runs ${evals(k)} on this board.`;
   // the method select: the owned methods (those the cycle's rule refuses greyed), and "Auto" with Method match
   const ms = methods(o);
   const canAuto = o.has("methodMatch") || o.has("autoTune");
@@ -2687,10 +2694,10 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
   const selected = canAuto && state.runplan.auto ? "auto" : state.settings.method;
   if (select.value !== selected) select.value = selected;
   select.title = piped(o)
-    ? "Your pipeline in the Runs panel chooses the method of each new run."
+    ? "Your pipeline in the Runs panel picks each new run's method."
     : canAuto && state.runplan.auto
-      ? "The game chooses each new run's method from what has paid best on problems like this one."
-      : "The solver method your clicks run. Changing it starts a new run.";
+      ? "The game picks each new run's method from what has paid best on similar problems."
+      : "The method your clicks use. Changing it starts a new run.";
   show("t-auto", autoPerSecond(o) !== null);
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));
@@ -2847,25 +2854,14 @@ function renderTraces(p: ProblemState, detail: boolean): void {
   }
 }
 
-function renderConsent(): void {
-  const name = $<HTMLInputElement>("t-name");
-  const agree = $<HTMLInputElement>("t-agree");
-  if (document.activeElement !== name && !name.dataset.edited) name.value = state.name;
-  if (document.activeElement !== agree && !agree.dataset.edited) agree.checked = state.consent;
-  text(
-    "t-consent-note",
-    state.consent
-      ? `Your records are sent to PolyPack as “${state.name}”. To stop sending, untick the box and save.`
-      : state.stats.submissions
-        ? `Sending is off. New records stay in this browser and pay no points until you send them.${owned().has("rent") ? " Records already on the server keep paying rent." : ""}`
-        : "Nothing has been sent yet. Your records pay points only once they are sent to PolyPack under your name.",
-  );
+function renderName(): void {
+  text("t-name-now", state.name);
+  text("t-name-note", `Your records are sent to PolyPack as “${state.name}”.`);
 }
 
 /** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
-  show("t-name-nudge", !state.consent && revealed(state, "asked"));
   // the clicks: in the evaluations' tooltip
   const evals = $("t-bar-evals-box");
   const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
@@ -2889,7 +2885,21 @@ function renderUpgrades(o: Owned): void {
   show("t-board-view", !treeOpen);
   show("t-upgrades", treeOpen);
   const funds = { rp: state.rp, standing: state.standing.points };
-  const v = treeView(o, funds);
+  let v = treeView(o, funds);
+  // Faster auto-eval's card says so when more levels would run no faster on this computer
+  if (overComputerLimit(o))
+    v = {
+      ...v,
+      nodes: v.nodes.map((n) =>
+        n.id !== "autox"
+          ? n
+          : {
+              ...n,
+              levelText: `${n.levelText ?? "Level 0"}. More levels will not be faster on this computer.`,
+              how: n.how ? { ...n.how, text: [AUTO_LIMIT_WARNING, ...n.how.text] } : n.how,
+            },
+      ),
+    };
   if (treeOpen) tree.render(v, funds);
   // near the board, always: what can be bought now, else the next upgrade to save for
   const count = $("t-tab-count");
@@ -3044,13 +3054,13 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   show("t-queue", revealed(state, "queue"));
   if (!revealed(state, "queue")) return;
   const slots = queueSize(o);
-  text("t-queue-heading", `Queue · ${slots} slots`);
+  text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
+  text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
-  const busy = new Set(lanes.flatMap(laneKeys));
   const sig = state.queue
     .map(
       (p) =>
-        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${busy.has(p.key)}|${p.key === state.focus}`,
+        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`,
     )
     .join(";");
   if (sig !== queueSig) {
@@ -3074,7 +3084,7 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
                   ? " · no record yet"
                   : "";
         li.dataset.key = p.key;
-        li.append(`${problemTitle(p)}${gap}${status}${busy.has(p.key) ? " · running" : ""}`);
+        li.append(`${problemTitle(p)}${gap}${status}`);
         const actions = document.createElement("span");
         actions.className = "t-q-actions";
         if (p.key !== state.focus && !p.leaving) {
@@ -3105,8 +3115,19 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   }
   // the counters change with every step: they are written in place, so the rows (and their buttons
   // under the pointer) are rebuilt only when the signature above changes
+  const busy = new Set(lanes.flatMap(workingKeys));
   for (const li of list.children as HTMLCollectionOf<HTMLElement>) {
     const p = problem(state, li.dataset.key ?? null);
+    // the "Working" mark is text as well as a dot, so it reads without colour; it is added and
+    // removed in place, so the buttons beside it never move
+    const mark = li.querySelector(".t-q-live");
+    const working = busy.has(li.dataset.key ?? "");
+    if (working && !mark) {
+      const live = document.createElement("span");
+      live.className = "t-q-live";
+      live.textContent = "Working";
+      li.querySelector(".t-q-actions")?.before(live);
+    } else if (!working && mark) mark.remove();
     const count = li.querySelector(".t-q-count");
     const value = p ? countText(p) : "";
     if (count && count.textContent !== value) count.textContent = value;
@@ -3115,6 +3136,21 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** One plain sentence on which problem clicks work on, and which problems auto-eval works on. */
+function queueWorkText(o: Owned): string {
+  const board = focused();
+  const clicks = board
+    ? `Your clicks work on ${problemTitle(board)}, the problem on the board.`
+    : "Your clicks work on the problem on the board.";
+  if (!o.has("auto1") && !o.has("lanes2")) return clicks;
+  const n = lanes.length;
+  const how =
+    n > 1
+      ? `Auto-eval works on the problems in the queue one at a time in each of your ${n} lanes.`
+      : "Auto-eval works on the problems in the queue one at a time.";
+  return `${clicks} ${how}${state.settings.auto ? "" : " It is off now."}`;
 }
 
 /** Evaluations a long step under way on the problem has done that its counters do not have yet. */
@@ -3140,8 +3176,8 @@ function dealText(o: Owned): string {
       ? `Pick a problem from the ${offers === 1 ? "offer" : `${offers} offers`} below.`
       : offers
         ? free > 0
-          ? `The offers wait for a free slot. The next one is earned after ${more}.`
-          : "The offers wait for a free slot. Every slot is full, so drop a problem to take one."
+          ? `The offers wait for a free slot. The next one comes after ${more}.`
+          : "The offers wait for a free slot. Every slot is full. Drop a problem to take one."
         : free > 0 && left > 0
           ? `New offers come after ${more}.`
           : free > 0
@@ -3150,14 +3186,14 @@ function dealText(o: Owned): string {
     : free > 0
       ? left === 0
         ? "Dealing a problem…"
-        : `The next problem is dealt after ${more}.`
-      : `Every slot is full. Each slot earns a new problem per ${workText(DEAL_CLICKS, false)}. Drop a problem to take one.`;
+        : `The next problem comes after ${more}.`
+      : `Every slot is full. Each slot gets a new problem per ${workText(DEAL_CLICKS, false)}. Drop a problem to take one.`;
   // with auto-eval off nothing leaves, but the line still says which problem waits and why
   const due = o.has("advance") ? advancePlan(state, { slots: queueSize(o) }).due : null;
   if (!due) return line;
   const why = `${problemTitle(due)} has run ${evals(due.sinceGain)} without progress.`;
   if (!advancing(o)) return `${line} ${why} Auto-advance replaces it once you switch auto-eval on.`;
-  return `${line} ${why} Auto-advance replaces it ${left > 0 ? `when the next problem is earned, after ${more}` : "as soon as a new problem is found"}.`;
+  return `${line} ${why} Auto-advance replaces it ${left > 0 ? `when the next problem comes, after ${more}` : "as soon as a new problem is found"}.`;
 }
 
 /** The percentage a tolerance is: 10⁻⁶ is "0.0001 %". */
@@ -3176,11 +3212,11 @@ function renderAdvance(o: Owned): void {
   if (pat.value !== pv) pat.value = pv;
   text(
     "t-advance-note",
-    `A problem makes progress when its best is at least ${fmtTolerance(tolerance)} smaller than at its last progress. ` +
+    `A problem makes progress when its best gets at least ${fmtTolerance(tolerance)} smaller than at its last progress. ` +
       (patience === null
-        ? "Auto-advance keeps every problem in the queue, and the lanes go first to problems that are making progress."
-        : `After ${evals(patience)} without progress, Auto-advance drops it as soon as a new problem can take its slot.`) +
-      (state.settings.auto ? "" : " Auto-advance moves on only while auto-eval is on."),
+        ? "Auto-advance keeps every problem in the queue. The lanes go first to problems that are making progress."
+        : `After ${evals(patience)} without progress, Auto-advance drops the problem once a new one can take its slot.`) +
+      (state.settings.auto ? "" : " Auto-advance works only while auto-eval is on."),
   );
 }
 
@@ -3212,7 +3248,7 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
       meta.className = "note";
       // what the dealer knows, not a promise: the ranking itself is an estimate
       meta.textContent =
-        `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · contest weight ${CONTEST[x.tier]}` +
+        `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · pays ×${CONTEST[x.tier]}` +
         ` · about ${tableMsOf(x).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
       btn.textContent = "Take";
@@ -3256,12 +3292,12 @@ function onSaveFilters(e: Event): void {
   const minP = Math.round(Number($<HTMLInputElement>("t-f-minp").value) || 1);
   const maxP = Math.round(Number($<HTMLInputElement>("t-f-maxp").value) || 500);
   if (!(minP >= 1 && maxP <= 500 && minP <= maxP)) {
-    text("t-filter-note", "Pieces: a range from 1 to 500, the first no larger than the second.");
+    text("t-filter-note", "Pieces: enter a range from 1 to 500, with the smaller number first.");
     return;
   }
   const tiers = TIERS.filter((t) => $<HTMLInputElement>(`t-f-tier-${t}`).checked);
   if (!tiers.length) {
-    text("t-filter-note", "Keep at least one tier.");
+    text("t-filter-note", "Keep at least one tier ticked.");
     return;
   }
   const filters = {
@@ -3279,8 +3315,8 @@ function onSaveFilters(e: Event): void {
   text(
     "t-filter-note",
     none
-      ? "No filters: the dealer draws from everything you have reached."
-      : "Filters saved. The dealer draws only what they allow; if nothing fits, nothing is dealt.",
+      ? "No filters. The dealer deals from everything you have reached."
+      : "Filters saved. The dealer deals only what they allow. If nothing fits, nothing is dealt.",
   );
   event(none ? "Dealer filters cleared." : "Dealer filters saved.", false);
   persist();
@@ -3306,10 +3342,8 @@ function dropProblem(key: string): boolean {
 function onDrop(key: string): void {
   const p = problem(state, key);
   if (!p) return;
-  const unsent = p.phase === "ready" && !!p.run && hasUnsent(p) && !state.consent;
-  if (unsent && !confirm(`Your best on ${problemTitle(p)} has not been sent. Drop it anyway?`)) return;
   const left = dropProblem(key);
-  event(left ? `Dropped ${problemTitle(p)}.` : `Dropping ${problemTitle(p)} once its best has been sent.`, false);
+  event(left ? `Dropped ${problemTitle(p)}.` : `${problemTitle(p)} will be dropped once its best is sent.`, false);
   persist();
   showFocus();
   render();
@@ -3328,7 +3362,7 @@ function autoDrop(p: ProblemState, next?: ProblemKey): void {
   const left = dropProblem(p.key);
   const message = left
     ? `Auto-advance dropped ${problemTitle(p)} ${why}${instead}.`
-    : `Auto-advance is dropping ${problemTitle(p)} ${why}${instead}. It leaves the queue once its best has been sent.`;
+    : `Auto-advance is dropping ${problemTitle(p)} ${why}${instead}. It leaves once its best is sent.`;
   event(message, false);
   say(message);
   persist();
@@ -3378,9 +3412,9 @@ function renderLanes(o: Owned): void {
   if (rate !== null)
     text(
       "t-lanes-note",
-      lanes.length > 1
-        ? `The ${lanes.length} lanes share auto-eval's rate of ${fmtRate(rate)}, so each one runs ${fmtRate(rate / lanes.length)}.`
-        : `Auto-eval runs ${fmtRate(rate)} in this lane.`,
+      (lanes.length > 1
+        ? `The ${lanes.length} lanes share auto-eval's ${fmtRate(rate)}. Each runs ${fmtRate(rate / lanes.length)}.`
+        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) + (overComputerLimit(o) ? ` ${AUTO_LIMIT_WARNING}` : ""),
     );
 }
 
@@ -3497,11 +3531,11 @@ function renderStanding(o: Owned): void {
     "t-st-preview",
     pv.gain > 0
       ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}. ` +
-          `All points would then pay ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)} instead of ×${standingMultiplier(st).toFixed(1)}. ` +
-          `The next point of standing comes at ${fmtInt(pv.nextAt)} confirmed RP in this cycle.` +
+          `All points would then pay ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)}, up from ×${standingMultiplier(st).toFixed(1)}. ` +
+          `You get one more standing at ${fmtInt(pv.nextAt)} confirmed RP this cycle.` +
           opensText
-      : `A reset needs ${fmtInt(resetThreshold(st.resets))} RP earned in this cycle and confirmed by the server, so ${fmtInt(Math.ceil(pv.short))} more to go. ` +
-          `It then gives ⌊5 × √(cycle RP / ${fmtInt(resetThreshold(st.resets))})⌋ standing.` +
+      : `A reset needs ${fmtInt(resetThreshold(st.resets))} RP earned this cycle and confirmed by the server. ${fmtInt(Math.ceil(pv.short))} more to go. ` +
+          `The more RP you earn past that, the more standing it gives.` +
           opensText,
   );
   const btn = $<HTMLButtonElement>("t-st-reset");
@@ -3512,7 +3546,7 @@ function renderStanding(o: Owned): void {
     const kept = [
       pv.held === 1 ? "the 1 record you hold and its rent" : `the ${fmtInt(pv.held)} records you hold and their rent`,
       `your collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
-      "Standing and every standing upgrade",
+      "standing and every standing upgrade",
       o.has("keepAuto") ? "the Auto-eval upgrades" : "",
       o.has("keepMethods") ? "your methods" : "",
       "the queue, what the dealer has learned and every count",
@@ -3520,8 +3554,8 @@ function renderStanding(o: Owned): void {
     const next = ruleById(st.nextRule);
     text(
       "t-st-confirm-text",
-      `You get ${fmtInt(pv.gain)} standing and give up ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
-        `You keep ${andList(kept)}. The next cycle begins with ${fmtInt(pv.keeps.length)} upgrades` +
+      `You get ${fmtInt(pv.gain)} standing. You lose ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
+        `You keep ${andList(kept)}. The next cycle starts with ${fmtInt(pv.keeps.length)} upgrades` +
         (next ? ` and is played under ${next.name}. ${next.limit}` : ".") +
         (pv.opens ? ` It opens ${DIMENSION_TEXT[pv.opens].label}: ${DIMENSION_TEXT[pv.opens].what}.` : ""),
     );
@@ -3543,11 +3577,11 @@ function renderStanding(o: Owned): void {
     text(
       "t-st-rule-note",
       (chosen
-        ? `${chosen.name}. ${chosen.limit} Finishing a cycle under it gives half again the standing (at least 1 more)` +
+        ? `${chosen.name}. ${chosen.limit} Finishing a cycle under it gives 50 % more standing (at least 1 more)` +
           (st.rulesDone.includes(chosen.id)
             ? ". You have finished it before, so its reward already holds."
             : `, and from then on ${lowerFirst(chosen.reward)}`)
-        : "No rule chosen. A rule limits the next cycle, and finishing a cycle under it pays extra standing and a reward that stays for good.") +
+        : "No rule chosen. A rule limits the next cycle. Finish a cycle under it for extra standing and a lasting reward.") +
         (st.rulesDone.length ? ` Finished so far: ${andList(st.rulesDone.map((id) => ruleById(id)!.name))}.` : ""),
     );
   }
@@ -3556,7 +3590,7 @@ function renderStanding(o: Owned): void {
   text(
     "t-st-only",
     left.length
-      ? `Standing buys ${andList(left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`))}. They are in the tech tree's Standing row, and every reset keeps them.`
+      ? `Standing buys ${andList(left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`))}. They are in the tech tree's Standing row. Resets keep them.`
       : "You own every standing upgrade.",
   );
   show("t-st-history-box", st.history.length > 0);
@@ -3590,7 +3624,7 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? "Each record you hold is checked in turn and paid the rent it built up since its last check." +
+      ? "Each record you hold is checked in turn. It pays the rent it built up since its last check." +
           (last
             ? ` The last check paid +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
             : "")
@@ -3602,15 +3636,15 @@ function renderRecords(o: Owned): void {
   }
   const pairName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.pairs)} complete shape pair${c.pairs === 1 ? "" : "s"}, with a record on all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
+    `${fmtInt(c.pairs)} complete shape pair${c.pairs === 1 ? "" : "s"}, with a record at all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
       (c.nearest.length
-        ? ` The closest to complete ${c.nearest.length === 1 ? "is" : "are"} ${andList(c.nearest.map((n) => `${pairName(n)} (${n.have} of ${FRONTIER_P.length})`))}.`
+        ? ` Closest to complete: ${andList(c.nearest.map((n) => `${pairName(n)} (${n.have} of ${FRONTIER_P.length})`))}.`
         : ""),
     `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
-        ? ` Your most recorded pieces are ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
+        ? ` Your most recorded pieces: ${andList(c.shapes.slice(0, 3).map((x) => `${shapeName(x.N, true)} (${fmtInt(x.count)})`))}.`
         : ""),
-    `First records by tier: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
+    `First records in these tiers: ${c.tiers.length ? andList(c.tiers.map((t) => TIER_LABEL[t as Tier] ?? t)) : "none yet"} (+${fmtPct(TIER_BONUS, 0)} each).`,
   ];
   setLines("t-rc-sets", lines);
 }
@@ -3638,7 +3672,7 @@ async function doReset(): Promise<void> {
     const opened = opens ? ` It opens ${DIMENSION_TEXT[opens].label}: ${DIMENSION_TEXT[opens].what}.` : "";
     event(
       `Reset for ${fmtInt(gain)} standing. All points now pay ×${standingMultiplier(st).toFixed(1)}.` +
-        (rule ? ` You finished a cycle under ${rule.name}, and its reward holds for good.` : "") +
+        (rule ? ` You finished a cycle under ${rule.name}. Its reward is yours for good.` : "") +
         opened,
     );
     say(
@@ -3654,37 +3688,13 @@ async function doReset(): Promise<void> {
   void dealTick();
 }
 
-// ---------- dialogs: the first record's pop-up, and Settings ----------
+// ---------- dialogs: Settings, and the name pop-up ----------
 
-const welcome = $<HTMLDialogElement>("t-welcome");
 const settingsDialog = $<HTMLDialogElement>("t-settings");
 
-/** The name-and-consent form lives in Settings; the first record's pop-up borrows it. */
-function placeConsent(into: "welcome" | "settings"): void {
-  const slot = $(into === "welcome" ? "t-welcome-slot" : "t-settings-slot");
-  const form = $("t-consent");
-  if (form.parentElement !== slot) slot.append(form);
-}
-
-/** The first record found: a pop-up over the board asks for a name (it does not stop the game). */
-function openWelcome(): void {
-  if (settingsDialog.open) return;
-  placeConsent("welcome");
-  renderConsent();
-  if (!welcome.open) welcome.show();
-  $("t-name").focus();
-}
-
-function closeWelcome(): void {
-  if (welcome.open) welcome.close();
-  placeConsent("settings");
-}
-
-function openSettings(focusName = false): void {
-  closeWelcome();
-  renderConsent();
+function openSettings(): void {
+  renderName();
   if (!settingsDialog.open) settingsDialog.showModal();
-  if (focusName) $("t-name").focus();
 }
 
 $("t-open-settings").addEventListener("click", () => openSettings());
@@ -3693,13 +3703,23 @@ $("t-settings-close").addEventListener("click", () => settingsDialog.close());
 settingsDialog.addEventListener("click", (e) => {
   if (e.target === settingsDialog) settingsDialog.close();
 });
-$("t-name-nudge").addEventListener("click", () => openSettings(true));
-$("t-welcome-later").addEventListener("click", () => {
-  closeWelcome();
-  say(
-    "Your record stays in this browser and pays no points until you send it. You can add your name at any time in Settings.",
-  );
+$("t-tut-replay").addEventListener("click", () => {
+  settingsDialog.close();
+  void runTutorial();
 });
+// the name is changed in the pop-up, which the tutorial also opens (name-popup.ts)
+bindNamePopup({
+  get: () => state.name,
+  set: (name) => {
+    state.name = name;
+    say(`Your records are sent to PolyPack as “${name}”.`);
+    event(`Sending records as “${name}”.`, false);
+    persist();
+    render();
+    void submitTick();
+  },
+});
+$("t-name-change").addEventListener("click", () => void showNamePopup());
 $("t-tab-board").addEventListener("click", () => setView(false));
 $("t-tab-tree").addEventListener("click", () => setView(true));
 // the tabs as a tab list: the arrow keys move between them
@@ -3766,7 +3786,7 @@ $("t-auto").addEventListener("click", () => {
   accrueAuto();
   say(
     state.settings.auto
-      ? `Auto-eval is on. It runs evaluations for you beside your own clicks, ${fmtRate(autoPerSecond(o) ?? 0)}${laneCount(o) > 1 ? `, shared by ${laneCount(o)} lanes` : ""}.`
+      ? `Auto-eval is on. It runs ${fmtRate(autoPerSecond(o) ?? 0)} besides your clicks${laneCount(o) > 1 ? `, shared by ${laneCount(o)} lanes` : ""}.`
       : "Auto-eval is off.",
   );
   persist();
@@ -3794,41 +3814,6 @@ $("t-next").addEventListener("click", () => {
   const p = focused();
   if (!p || clicksToDeal() > 0) return;
   onDrop(p.key);
-});
-for (const id of ["t-name", "t-agree"]) $(id).addEventListener("input", () => ($(id).dataset.edited = "1"));
-$("t-consent-form").addEventListener("submit", (e) => {
-  e.preventDefault();
-  // the name as the server will store it: what is shown, sent and compared is the same
-  const typed = $<HTMLInputElement>("t-name").value;
-  const name = sanitizeName(typed);
-  const agree = $<HTMLInputElement>("t-agree").checked;
-  if (agree && !name) {
-    say(
-      typed.trim()
-        ? "That name is empty once cleaned the way PolyPack stores names, which removes angle brackets and control characters. Choose another name."
-        : "Enter a display name first. Records are sent to PolyPack under that name.",
-    );
-    text("t-consent-note", "Nothing is sent until you enter a name.");
-    $("t-name").focus();
-    return;
-  }
-  delete $("t-name").dataset.edited;
-  delete $("t-agree").dataset.edited;
-  const withdrawn = state.consent && !agree ? withdrawConsent(state) : 0;
-  state.name = name;
-  state.consent = agree;
-  // what the boards improved before there was a name pays now, one event per problem
-  const paid = agree ? payAll(state) : 0;
-  say(
-    agree
-      ? `Your records will be sent to PolyPack as “${name}”.${paid > 0 ? ` Your improvements so far paid +${fmtRP(paid)} RP.` : ""}`
-      : `Nothing will be sent, and your records stay in this browser.${withdrawn > 0 ? ` The ${fmtRP(withdrawn)} RP the server had not confirmed yet were taken back. They are paid again when you send again.` : ""}`,
-  );
-  event(agree ? `Sending records as “${name}”.` : "Sending is off.", false);
-  closeWelcome();
-  persist();
-  render();
-  void submitTick();
 });
 $("t-bg").addEventListener("change", () => {
   state.settings.background = $<HTMLInputElement>("t-bg").checked;
@@ -3865,7 +3850,7 @@ $("t-export").addEventListener("click", async () => {
     await navigator.clipboard.writeText(area.value);
     text("t-save-note", "Save string copied to the clipboard.");
   } catch {
-    text("t-save-note", "The browser did not allow copying, so copy the save string above yourself.");
+    text("t-save-note", "The browser blocked copying. Copy the save string above by hand.");
   }
 });
 $("t-import").addEventListener("click", async () => {
@@ -3874,7 +3859,7 @@ $("t-import").addEventListener("click", async () => {
     text("t-save-note", `The save could not be imported (${r.error}).`);
     return;
   }
-  if (!confirm("Replace your current game with this save? Your current game is lost unless you exported it first."))
+  if (!confirm("Replace your current game with this save? You lose the current game unless you exported it."))
     return;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
@@ -3892,6 +3877,7 @@ $("t-import").addEventListener("click", async () => {
     r.refunded ? refundNote(r.refunded) : "",
     r.rebalanced ? REBALANCED_NOTE : "",
     r.units ? unitsNote(r.units) : "",
+    r.ladder ? ladderNote(r.ladder.rp) : "",
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
@@ -3899,11 +3885,46 @@ $("t-import").addEventListener("click", async () => {
 
 // ---------- "How it works" ----------
 
-// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the text
+// tighter.html places each explanation as an empty disclosure named by data-how; help.ts holds the
+// text. Each becomes a "More detail" button named by the disclosure's summary.
+const HOW_LEAD: Record<string, string> = {
+  points: "Record points are what you earn when a board gets smaller.",
+  counts: "Clicks, evaluations and runs are the three ways your work is counted.",
+  standing: "Your standing grows as you earn points, and a reset starts a new cycle.",
+  records: "A record you still hold can keep paying you rent, and collections add a bonus.",
+  auto: "Auto-eval works for you in the background, spread over your lanes.",
+  running: "Auto-eval pauses in a few situations, and you can change some of them.",
+  sending: "Your best boards are sent to PolyPack under your display name.",
+};
 for (const d of document.querySelectorAll<HTMLElement>("details[data-how]")) {
   const how = HELP[d.dataset.how ?? ""];
-  if (how) for (const h of Array.isArray(how) ? how : [how]) d.append(renderHow(h));
+  if (!how) continue;
+  const btn = moreDetail(how, d.querySelector("summary")?.textContent ?? "this panel", "t-how-btn");
+  // a panel with nothing else in it still says what it is about, before the button
+  const lead = HOW_LEAD[d.dataset.how ?? ""];
+  if (lead) {
+    const p = document.createElement("p");
+    p.className = "note t-how-lead";
+    p.textContent = lead;
+    d.replaceWith(p, btn);
+  } else d.replaceWith(btn);
 }
+
+// ---------- the Mechanics page ----------
+
+const mechanicsDialog = $<HTMLDialogElement>("t-mechanics");
+$("t-open-mechanics").addEventListener("click", () => {
+  // built when first opened, from the same data as the cards, so it never drifts
+  if (!mechanicsDialog.dataset.built) {
+    renderMechanics($("t-mechanics-body"));
+    mechanicsDialog.dataset.built = "1";
+  }
+  if (!mechanicsDialog.open) mechanicsDialog.showModal();
+});
+$("t-mechanics-close").addEventListener("click", () => mechanicsDialog.close());
+mechanicsDialog.addEventListener("click", (e) => {
+  if (e.target === mechanicsDialog) mechanicsDialog.close();
+});
 
 // ---------- start ----------
 
@@ -3942,6 +3963,18 @@ let ticker = 0;
 /** This tab holds the game: it may run, send and save. */
 function start(): void {
   ownsGame = true;
+  // a new game opens with the tutorial (?tutorial=off skips it), and the game starts when it is over
+  if (!state.tutorialDone && new URLSearchParams(location.search).get("tutorial") !== "off") {
+    void runTutorial().then(() => {
+      if (!ownsGame) return;
+      state.tutorialDone = true;
+      saveNow();
+      begin();
+    });
+  } else begin();
+}
+
+function begin(): void {
   $("t-elsewhere").hidden = true;
   document.body.classList.remove("standby");
   state.autoAt = now();
@@ -3974,8 +4007,8 @@ function standBy(takenOver: boolean): void {
   text(
     "t-elsewhere-text",
     takenOver
-      ? "Tighter was opened in another tab, which now runs the game. Nothing runs in this tab."
-      : "Tighter is open in another tab. Only one tab runs the game at a time, so nothing runs in this tab.",
+      ? "Tighter was opened in another tab. That tab now runs the game, and this one does nothing."
+      : "Tighter is open in another tab. Only one tab runs the game, so this one does nothing.",
   );
   $("t-elsewhere").hidden = false;
   document.body.classList.add("standby");

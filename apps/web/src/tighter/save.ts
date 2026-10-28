@@ -18,8 +18,9 @@ import {
   TOLERANCES,
   TRACE_LIMIT,
   newGame,
+  payAll,
 } from "./game";
-import { sanitizeName } from "./names";
+import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
@@ -31,15 +32,20 @@ import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
 import { UnitsReport, convertSaveUnits } from "./units";
 import {
+  AUTO_BASE,
   EvolveMethod,
+  HEAD2_AUTO_LEVELS,
   SWITCHES,
   UPGRADES,
   UpgradeId,
   currencyOf,
+  autoRunningTotal,
   evalsPerClick,
   isUpgradeId,
+  levelOfRate,
   methods,
   owning,
+  rateOfLevel,
   rpCostFactor,
   upgrade,
 } from "./upgrades";
@@ -107,7 +113,6 @@ export function retiredRefund(owned: unknown, scale = 1): RetiredRefund {
  * rest refunded then, so nothing is refunded twice: the levels a save still has are kept.
  */
 const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>([
-  ["autox", { max: 100, cost: 150_000, growth: 1.4 }],
   // Higher rent had 50 levels at 480,000 RP × 1.6 a level before it was capped at 5 (2026-10-26)
   ["rentx", { max: 50, cost: 480_000, growth: 1.6 }],
 ]);
@@ -123,7 +128,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 8;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -163,7 +168,7 @@ export const MIGRATIONS: Record<number, Migration> = {
    * cost more is paid back once, in record points (autoPriceRefund); `autoRefund` tells the page.
    */
   2: (save) => {
-    const ids = (Array.isArray(save.owned) ? save.owned : []).filter(isUpgradeId);
+    const ids = savedIds(save.owned);
     const refund = autoPriceRefund(ids, savedLevels(save.levels));
     return { ...save, rp: num(save.rp, 0, 0) + refund, autoRefund: refund };
   },
@@ -177,7 +182,7 @@ export const MIGRATIONS: Record<number, Migration> = {
    * stays on the migrated save for the refunds read after it (retired upgrades, SHRUNK) and the page.
    */
   3: (save) => {
-    const ids = (Array.isArray(save.owned) ? save.owned : []).filter(isUpgradeId);
+    const ids = savedIds(save.owned);
     const f = pointsScale(ids, savedLevels(save.levels));
     const x = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v * f : v);
     const each = (list: unknown, scale: (q: Record<string, unknown>) => Record<string, unknown>) =>
@@ -280,7 +285,56 @@ export const MIGRATIONS: Record<number, Migration> = {
     const { save: out, report } = convertSaveUnits(save);
     return { ...out, unitsConverted: report };
   },
+  /**
+   * Version 7 has no consent to send: every game has a name from its first moment and sends under it. A
+   * save without a name (as the server stores names) gets a generated one. Points that waited because
+   * sending was off pay once when the save is read (`payWaiting`, read by readSave).
+   */
+  6: (save) => {
+    const named = sanitizeName(str(save.name, "", 400));
+    const { consent, ...rest } = save;
+    return { ...rest, name: named || generatePlayerName(), payWaiting: consent !== true || !named };
+  },
+  /**
+   * Version 8 replaces Auto-eval's nine faster rungs and its 10 levels of 10 a second by one ladder of
+   * levels of Faster auto-eval (1 a second a level at first, then 5, 10, 50 and 100), with no last
+   * level. A save keeps the highest level whose rate is at most the rate it had, and is paid back
+   * what it paid above the new running total for that level (ladderSave). `ladderRefund` tells the page.
+   */
+  7: (save) => {
+    return { ...save, ...ladderSave(save) };
+  },
 };
+
+/**
+ * Auto-eval's rungs above the first, as the tree had them until version 8 (2026-10-27): the evaluations
+ * a second and the list price of each. The migrations of older saves still read them.
+ */
+const OLD_RUNGS: Readonly<Record<string, { rate: number; cost: number }>> = {
+  auto2: { rate: 2, cost: 100 },
+  auto3: { rate: 3, cost: 250 },
+  auto4: { rate: 5, cost: 800 },
+  auto5: { rate: 10, cost: 1500 },
+  auto6: { rate: 20, cost: 3600 },
+  auto7: { rate: 35, cost: 7200 },
+  auto8: { rate: 60, cost: 12800 },
+  auto9: { rate: 100, cost: 22400 },
+  auto10: { rate: 150, cost: 36000 },
+};
+/** The rungs Head start I and II gave each cycle for nothing, before version 8. */
+const OLD_HEAD_RUNGS: Readonly<Record<string, readonly string[]>> = {
+  head1: ["auto1"],
+  head2: ["auto2", "auto3", "auto4", "auto5"],
+};
+/** Auto-eval's list price before version 8 (it is 40 now). */
+const OLD_AUTO1_COST = 80;
+/** Faster auto-eval before version 8: 10 evaluations a second a level, 10 levels, level j + 1 at 80,000 × 1.6^j. */
+const OLD_AUTOX = { step: 10, max: 10, cost: 80_000, growth: 1.6 };
+
+/** The ids of a save's `owned` list that the tree knows, and the retired Auto-eval rungs the old migrations still price. */
+function savedIds(v: unknown): string[] {
+  return (Array.isArray(v) ? v : []).filter((id) => isUpgradeId(id) || (typeof id === "string" && id in OLD_RUNGS));
+}
 
 /** A save's levels of levelled upgrades, as the migrations read them: whole, at least 1, within range. */
 function savedLevels(v: unknown): Partial<Record<UpgradeId, number>> {
@@ -298,7 +352,7 @@ function savedLevels(v: unknown): Partial<Record<UpgradeId, number>> {
  * The list price of every record-point upgrade before version 4 (2026-10-22), when the size and gap
  * weights were 100. Levelled upgrades grew by the same factor a level then as now.
  */
-const PRICE_BEFORE_V4: Partial<Record<UpgradeId, number>> = {
+const PRICE_BEFORE_V4: Partial<Record<string, number>> = {
   trace: 5,
   click2: 150,
   auto1: 9,
@@ -378,7 +432,7 @@ const PRICE_BEFORE_V4: Partial<Record<UpgradeId, number>> = {
  * A save that could buy nothing more takes the whole tree's ratio. Quick study discounts both prices
  * alike, so it leaves the ratio as it is.
  */
-export function pointsScale(ids: readonly UpgradeId[], levels: Partial<Record<UpgradeId, number>>): number {
+export function pointsScale(ids: readonly string[], levels: Partial<Record<UpgradeId, number>>): number {
   const owned = new Set(ids);
   let now = 0;
   let before = 0;
@@ -386,7 +440,8 @@ export function pointsScale(ids: readonly UpgradeId[], levels: Partial<Record<Up
   let allBefore = 0;
   for (const u of UPGRADES) {
     const old = PRICE_BEFORE_V4[u.id];
-    if (currencyOf(u) !== "rp" || old === undefined) continue;
+    // Faster auto-eval's ladder of 2026-10-27 has other prices than the one this table knows
+    if (currencyOf(u) !== "rp" || old === undefined || u.id === "autox") continue;
     allNow += u.cost;
     allBefore += old;
     // the level the save would buy next: the first for an upgrade it does not own
@@ -404,7 +459,7 @@ export function pointsScale(ids: readonly UpgradeId[], levels: Partial<Record<Up
  * (it cost more before that). Faster auto-eval's level j + 1 had the lower of 100,000 × 1.6^j (from
  * 2026-10-21, 10 levels) and 150,000 × 1.4^j (before, 100 levels).
  */
-const AUTO_BEFORE: Partial<Record<UpgradeId, number>> = {
+const AUTO_BEFORE: Partial<Record<string, number>> = {
   auto1: 90,
   auto2: 350,
   auto3: 800,
@@ -423,26 +478,72 @@ const autoxBefore = (j: number) => Math.min(100_000 * Math.pow(1.6, j), 150_000 
  * auto-eval level it owns, the price before (AUTO_BEFORE) less its price in version 3 (PRICE_BEFORE_V4),
  * at the save's Quick study discount, in the record points of version 3 (version 4's step scales
  * them). The rungs its head starts give it each cycle cost nothing, and get nothing back; Faster
- * auto-eval's levels past its 10 are SHRUNK's, refunded whole when the save is read. Never more
+ * auto-eval's levels past its 10 are refunded whole by version 8's step (ladderSave). Never more
  * than the save paid: the prices before are the lowest they ever were, and Quick study only grows.
  */
-export function autoPriceRefund(ids: readonly UpgradeId[], levels: Partial<Record<UpgradeId, number>>): number {
+export function autoPriceRefund(ids: readonly string[], levels: Partial<Record<UpgradeId, number>>): number {
   const owned = new Set(ids);
-  const free = new Set<UpgradeId>();
-  const give = (id: UpgradeId) => {
+  const free = new Set<string>();
+  const give = (id: string) => {
     if (free.has(id)) return;
     free.add(id);
-    for (const r of upgrade(id).requires) give(r);
+    if (isUpgradeId(id)) for (const r of upgrade(id).requires) give(r);
   };
-  for (const [h, list] of Object.entries(HEAD_STARTS)) if (owned.has(h as UpgradeId)) list?.forEach(give);
+  for (const [h, list] of Object.entries(HEAD_STARTS)) if (owned.has(h)) list?.forEach(give);
+  for (const [h, list] of Object.entries(OLD_HEAD_RUNGS)) if (owned.has(h)) list.forEach(give);
   let refund = 0;
-  for (const [id, before] of Object.entries(AUTO_BEFORE) as [UpgradeId, number][])
+  for (const [id, before] of Object.entries(AUTO_BEFORE) as [string, number][])
     if (owned.has(id) && !free.has(id)) refund += Math.max(0, before - PRICE_BEFORE_V4[id]!);
-  const x = upgrade("autox");
-  if (owned.has("autox") && x.levels)
-    for (let j = 0; j < Math.min(levels.autox ?? 0, x.levels.max); j++)
-      refund += Math.max(0, autoxBefore(j) - PRICE_BEFORE_V4.autox! * Math.pow(x.levels.growth, j));
-  return Math.round(refund * rpCostFactor(owning(ids, levels)));
+  if (owned.has("autox"))
+    for (let j = 0; j < Math.min(levels.autox ?? 0, OLD_AUTOX.max); j++)
+      refund += Math.max(0, autoxBefore(j) - PRICE_BEFORE_V4.autox! * Math.pow(OLD_AUTOX.growth, j));
+  return Math.round(refund * rpCostFactor(owning(ids.filter(isUpgradeId), levels)));
+}
+
+/**
+ * Version 8's step: the save's Auto-eval rungs and levels of Faster auto-eval become levels of the one
+ * ladder (upgrades.ts rateOfLevel). The save gets the highest level whose rate is at most the rate it
+ * had, so it never loses rate (an old rate between two steps, such as 52 a second, rounds down to 50).
+ * What the save paid for Auto-eval and its rungs, at list prices and its Quick study discount, less
+ * what the ladder charges for that level (autoRunningTotal, less what a head start gives for
+ * nothing), comes back in record points when it is positive. Levels of Faster auto-eval above the old
+ * 10, which an older save could still hold, are refunded at their old price (SHRUNK's old rule,
+ * whose entry for it is gone).
+ */
+export function ladderSave(save: Record<string, unknown>): Record<string, unknown> {
+  const owned: unknown[] = Array.isArray(save.owned) ? save.owned : [];
+  const has = new Set(owned);
+  const rungs = Object.entries(OLD_RUNGS);
+  const oldLevels = isObj(save.levels) ? save.levels : {};
+  if (!has.has("auto1") && !has.has("autox") && !rungs.some(([id]) => has.has(id))) return {};
+  const free = new Set<string>();
+  for (const [h, list] of Object.entries(OLD_HEAD_RUNGS)) if (has.has(h)) list.forEach((id) => free.add(id));
+  if (has.has("head2")) free.add("auto1");
+  // a save that held Faster auto-eval without the tenth rung was given it (the order the tree had then)
+  if (has.has("autox")) has.add("auto10");
+  const rate = Math.max(AUTO_BASE, ...rungs.filter(([id]) => has.has(id)).map(([, r]) => r.rate));
+  const raw = has.has("autox") ? int(oldLevels.autox, 1, 1) : 0;
+  const bought = Math.min(raw, OLD_AUTOX.max);
+  const oldRate = rate + OLD_AUTOX.step * bought;
+  const level = levelOfRate(oldRate);
+  const newRate = rateOfLevel(level);
+  let paid = has.has("auto1") && !free.has("auto1") ? OLD_AUTO1_COST : 0;
+  paid += rungs.reduce((t, [id, r]) => t + (has.has(id) && !free.has(id) ? r.cost : 0), 0);
+  for (let j = 0; j < bought; j++) paid += OLD_AUTOX.cost * Math.pow(OLD_AUTOX.growth, j);
+  // what a head start gives each cycle for nothing: Head start I Auto-eval, II up to 10 a second
+  const freeRate = has.has("head2") ? rateOfLevel(HEAD2_AUTO_LEVELS) : has.has("head1") ? AUTO_BASE : 0;
+  const newCost = Math.max(0, autoRunningTotal(newRate) - (freeRate > 0 ? autoRunningTotal(Math.min(freeRate, newRate)) : 0));
+  const factor = rpCostFactor(owning(savedIds(owned).filter(isUpgradeId), savedLevels(save.levels)));
+  let refund = Math.max(0, paid - newCost) * factor;
+  // levels bought above the old 10, from before that range shrank
+  const scale = num(save.pointsScale, 1, 0);
+  refund = Math.round(refund);
+  for (let j = OLD_AUTOX.max; j < Math.min(raw, 100); j++) refund += Math.round(150_000 * Math.pow(1.4, j) * scale);
+  const kept = owned.filter((id) => !(typeof id === "string" && (id in OLD_RUNGS || id === "autox")));
+  if (level >= 1) kept.splice(Math.max(0, kept.indexOf("auto1") + 1), 0, "autox");
+  const levels = Object.fromEntries(Object.entries(oldLevels).filter(([id]) => id !== "autox"));
+  if (level >= 1) levels.autox = level;
+  return { owned: kept, levels, rp: num(save.rp, 0, 0) + refund, ...(refund > 0 ? { ladderRefund: refund } : {}) };
 }
 
 /**
@@ -461,6 +562,7 @@ export type LoadResult =
       retired?: RetiredRefund;
       rebalanced?: { rp: number };
       units?: UnitsReport;
+      ladder?: { rp: number };
     }
   | { ok: false; error: string };
 
@@ -603,7 +705,6 @@ function problemState(v: unknown, now: number): ProblemState | null {
     leader: leader(v.leader),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
-    beatPaid: bool(v.beatPaid, false),
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
@@ -697,9 +798,6 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     }
   }
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
-  // Auto-eval's rungs keep their ids, each at its new rate (auto5 runs 10 evaluations a second). Faster
-  // auto-eval came after auto9 and now comes after auto10: a save from before auto10 is given it.
-  if (owned.includes("autox") && !owned.includes("auto10")) owned.splice(owned.indexOf("autox"), 0, "auto10");
   // a save migrated from version 3 or older: the old prices refunded below are in the points of their time
   const scale = num(save.pointsScale, 1, 0);
   const retired = retiredRefund(save.owned, scale);
@@ -733,9 +831,10 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
     levels,
-    // the name as the server stores it; no consent without one
-    name: sanitizeName(str(save.name, "", 400)),
-    consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
+    // the name as the server stores it; a save without one gets a generated name
+    name: sanitizeName(str(save.name, "", 400)) || generatePlayerName(),
+    // a save without the flag is from before the tutorial: the player has played, so it counts as shown
+    tutorialDone: bool(save.tutorialDone, true),
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: method as EvolveMethod,
@@ -792,16 +891,21 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0));
   const rebalanced = (raw.version as number) < 5 && m.save.rebalanced !== undefined;
   const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
+  const ladder = (raw.version as number) < 8 ? Math.round(num(m.save.ladderRefund, 0, 0)) : 0;
   const converted = units ? int(units.converted, 0) : 0;
   const dropped = units ? int(units.dropped, 0) : 0;
+  const state = normalize(m.save, now);
+  // what the boards improved while sending was off pays now, one event per problem, as it did on consent
+  if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
   return {
     ok: true,
-    state: normalize(m.save, now),
+    state,
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),
     ...(rebalanced ? { rebalanced: { rp: Math.round(num(m.save.rebalanced, 0, 0)) } } : {}),
     ...(converted + dropped > 0 ? { units: { converted, dropped } } : {}),
+    ...(ladder > 0 ? { ladder: { rp: ladder } } : {}),
   };
 }
 

@@ -129,13 +129,12 @@ const VARS = (tuned: number | undefined): readonly Var[] => [
 const PRESETS: readonly Record<string, unknown>[] = [{}, { kickMagnitude: 0.25 }];
 
 export const basinHoppingGame: MethodGame = {
-  effect: `You can run ${LABEL}, which moves several pieces at once and gains most on pieces with few sides.`,
+  effect: `Adds ${LABEL}, which moves several pieces at once and works best on pieces with few sides.`,
   how: (select) => ({
     text: [
-      `A ${LABEL} run is ${int(L)} evaluations, and it starts from the problem's best board. It scores this start and one lattice packing, then repairs the start with a penalty solve of at most ${int(D.localEvals)} evaluations. It makes hops until ${int(R)} evaluations are left, and a tighter penalty solve then uses those to refine the best packing it found. Then the run ends by itself.`,
-      `Each hop changes the current packing with one of ${Object.keys(D.weights).length} moves. A penalty solve of at most ${int(D.localEvals)} evaluations then repairs the overlaps and squeezes the container, and the hop is kept only when the repaired packing is smaller than the current one. A move is chosen more often when its hops have recently been kept.`,
-      `The kick, the main move, shifts ${pct(D.kickFraction)} of the pieces (at least one) by up to m in x and y and turns them by up to ${deg(D.rotationMagnitude)}. The swap exchanges the angles of two pieces. The cluster move turns the pieces near one piece about their centre. The reinsert moves the piece whose removal shrinks the container most to a free spot. Finding that piece scores the packing once without each piece, one evaluation a piece. The peel moves the outer layer of pieces along one wall to free spots further in. The cleave opens a cross-shaped gap at a corner of one piece and moves the piece whose removal shrinks the container most into it. The restart kicks every piece of the start or of the lattice packing ${D.restartStrength} times as far as a kick.`,
-      `After each kick, m grows when the hop was kept and shrinks when it was not. A run gains most on pieces with few sides, such as squares. An evaluation takes ${BASIN_SLOWER[0]} to ${BASIN_SLOWER[1]} times as long as one of mc_compress, which matters only when your computer limits auto-eval.`,
+      `A ${LABEL} run lasts ${int(L)} evaluations and starts from the problem's best board. It first repairs that board, and then it makes hops until ${int(R)} evaluations are left. It uses those last evaluations to refine the best packing it found, and then the run ends by itself.`,
+      `Each hop changes the packing with one of ${Object.keys(D.weights).length} moves. The main move, the kick, shifts about ${pct(D.kickFraction)} of the pieces and turns them a little. A short repair then removes the overlaps and squeezes the container, and the game keeps the hop only when the packing got smaller. Moves whose hops were kept lately are chosen more often.`,
+      `The method works best on pieces with few sides, such as squares. An evaluation takes ${BASIN_SLOWER[0]} to ${BASIN_SLOWER[1]} times as long as one of mc_compress, which matters only when your computer limits auto-eval.`,
     ],
     math: [
       `kept when ${sym("s")}′ &lt; ${sym("s")} − ${tenTo(BASIN_TIE)}`,
@@ -145,7 +144,7 @@ export const basinHoppingGame: MethodGame = {
       `${sym("R")} = min(${int(D.refinementEvals)}, ⌊(${sym("L")} − 1) / 6⌋) = ${int(R)}`,
     ],
     vars: VARS(PRESETS[1]?.kickMagnitude as number | undefined),
-    note: select,
+    note: `The start is scored, and so is one lattice packing. The repair of the start and of each hop is a penalty solve of at most ${int(D.localEvals)} evaluations, and a tighter penalty solve of the last ${int(R)} evaluations does the refinement. The kick turns pieces by up to ${deg(D.rotationMagnitude)} and shifts them by up to m in x and y. The swap exchanges the angles of two pieces. The cluster move turns the pieces near one piece about their centre. The reinsert moves the piece whose removal shrinks the container most to a free spot, and finding that piece scores the packing once without each piece. The peel moves the outer layer of pieces along one wall to free spots further in. The cleave opens a cross-shaped gap at a corner of one piece and moves the piece whose removal shrinks the container most into it. The restart kicks every piece of the start or of the lattice packing ${D.restartStrength} times as far as a kick. After each kick, m grows when the hop was kept and shrinks when it was not. ${select}`,
   }),
   /**
    * Bench (presets.ts), 2500 evaluations (it gains nothing for its first 1000 or so on these

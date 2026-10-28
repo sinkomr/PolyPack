@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { SCORE_TIE, improvesOn } from "@polypack/geometry";
-import { FLOOR, GAP_WEIGHT, SIZE_WEIGHT, gapOf, recordPoints, shapeWeight } from "../src/tighter/points";
+import { SCORE_TIE, areaLowerBound, improvesOn } from "@polypack/geometry";
+import {
+  BEAT_OTHER_FACTOR,
+  FLOOR,
+  GAP_WEIGHT,
+  SIZE_WEIGHT,
+  costFactor,
+  gapOf,
+  recordPoints,
+  shapeWeight,
+} from "../src/tighter/points";
+import { msPerEval } from "../src/tighter/families";
 
 // The worked examples of design.md §5 (balance/results/points-examples.txt), at F = 1e-9, with the size
 // and gap weights of 2026-10-22 (10,000 each, 100 times design.md's): the step term and the bonuses are
@@ -31,21 +41,22 @@ describe("Tighter record points", () => {
     expect(p.gap).toBeCloseTo(2716.64, 2);
     expect(p.bonus).toBe(10);
     expect(p.firstBonus).toBe(true);
-    expect(p.total).toBeCloseTo(840.02, 2);
+    expect(p.total / costFactor(P33)).toBeCloseTo(840.02, 2);
   });
 
   it("reproduces (b), one Evolve click, and (d), basin hopping's jump", () => {
-    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 11.863522, tier: "open" })!.total).toBeCloseTo(
+    const k = costFactor(P33);
+    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 11.863522, tier: "open" })!.total / k).toBeCloseTo(
       37.28,
       2,
     );
-    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 10.834199, tier: "open" })!.total).toBeCloseTo(
+    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 10.834199, tier: "open" })!.total / k).toBeCloseTo(
       2114.18,
       2,
     );
   });
 
-  it("reproduces (e), another name's loose record improved by 0.05 %, with the beat bonus", () => {
+  it("reproduces (e), another name's loose record improved by 0.05 %, with the beat factor", () => {
     // (e) is a batch record (c = 10) in the design; the same arithmetic at c = 3 for a loose record
     const s = 15.656167;
     const p = recordPoints({
@@ -60,7 +71,59 @@ describe("Tighter record points", () => {
     })!;
     expect(p.c).toBe(3);
     expect(p.beatBonus).toBe(true);
-    expect(p.total / 3).toBeCloseTo(65.12, 2);
+    // the design's 65.12 had a beat bonus of 5 inside the bracket; the factor now doubles the event instead
+    const plain = recordPoints({
+      family: "polygon",
+      N: 7,
+      M: 7,
+      P: 197,
+      sPrev: s,
+      sNew: s * (1 - 5e-4),
+      tier: "loose",
+    })!;
+    expect(p.beat).toBe(BEAT_OTHER_FACTOR);
+    expect(p.total).toBeCloseTo(2 * plain.total, 9);
+    expect(p.total / 3 / costFactor({ family: "polygon", N: 7, M: 7, P: 197 })).toBeCloseTo(2 * (65.12 - 5), 1);
+  });
+
+  it("scales pay by the cost of an evaluation: 1 at N+M+P = 85, more for slower problems, 5 ms for spaces", () => {
+    expect(costFactor({ family: "polygon", N: 21, M: 24, P: 40 })).toBeCloseTo(1, 12);
+    expect(costFactor({ family: "polygon", N: 30, M: 36, P: 200 })).toBeCloseTo(msPerEval(266) / 1.77, 12);
+    expect(costFactor({ family: "polygon", N: 100, M: 100, P: 300 })).toBeCloseTo(52.3 / 1.77, 12);
+    expect(costFactor({ family: "polygon", N: 4, M: 4, P: 10 })).toBeLessThan(0.2);
+    expect(costFactor({ family: "sphere", id: "sphere/0/12", P: 12 })).toBeCloseTo(5 / 1.77, 12);
+    // the same board and the same step pay in proportion to the factor, nothing else changes
+    const a = { family: "polygon", N: 24, M: 30, P: 40, sPrev: 8, sNew: 7.9, tier: "open" } as const;
+    const b = { ...a, P: 200 };
+    const pa = recordPoints(a)!;
+    const pb = recordPoints(b)!;
+    expect(pa.total / pa.k / pa.w).toBeCloseTo(pa.nibble + pa.size + pa.gap + pa.bonus, 9);
+    expect(pb.k / pa.k).toBeCloseTo(costFactor(b) / costFactor(a), 12);
+  });
+
+  it("pays the same per second of solver time at every size, for the same relative progress", () => {
+    // a step of 10 evaluations that cuts 0.1 % at a gap of 23 %, shape weight removed: RP per ms of evaluation
+    const perMs = (P: number) => {
+      const N = 24;
+      const M = 30;
+      const sPrev = areaLowerBound(N, M, P) * 1.23;
+      const p = recordPoints({ family: "polygon", N, M, P, sPrev, sNew: sPrev * (1 - 0.001), tier: "open" })!;
+      return p.total / p.w / (10 * msPerEval(N + M + P));
+    };
+    const rates = [40, 80, 150, 250, 400].map(perMs);
+    expect(Math.max(...rates) / Math.min(...rates)).toBeCloseTo(1, 9);
+  });
+
+  it("pays the beat of a record BEAT_OTHER_FACTOR times, between 1.5 and 2.5", () => {
+    const base = { ...P33, sPrev: 12, sNew: 11.9, tier: "batch" } as const;
+    const plain = recordPoints(base)!;
+    const beat = recordPoints({ ...base, beatOther: true })!;
+    expect(beat.total / plain.total).toBeCloseTo(BEAT_OTHER_FACTOR, 12);
+    expect(BEAT_OTHER_FACTOR).toBeGreaterThanOrEqual(1.5);
+    expect(BEAT_OTHER_FACTOR).toBeLessThanOrEqual(2.5);
+    // the caller decides (game.ts beating): every flagged payment pays the factor, however small the step
+    const tiny = recordPoints({ ...base, sPrev: 12, sNew: 12 * (1 - 2e-9), beatOther: true })!;
+    expect(tiny.beat).toBe(BEAT_OTHER_FACTOR);
   });
 
   it("pays the size and gap terms by where a run ends, however many steps it takes", () => {
@@ -157,7 +220,7 @@ describe("Tighter record points", () => {
     );
   });
 
-  it("pays the beat bonus only when the change is visible at 6 decimals", () => {
+  it("leaves the beat to the caller: a flagged step pays double even when tiny", () => {
     const s = 7.123456;
     const tiny = recordPoints({
       family: "polygon",
@@ -169,7 +232,7 @@ describe("Tighter record points", () => {
       tier: "loose",
       beatOther: true,
     })!;
-    expect(tiny.beatBonus).toBe(false);
+    expect(tiny.beatBonus).toBe(true);
     expect(tiny.bonus).toBe(0);
   });
 });

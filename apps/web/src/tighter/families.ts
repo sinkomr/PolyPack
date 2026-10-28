@@ -38,6 +38,8 @@ export interface FamilyRules {
    * a 2D evaluation (about 5 ms); 1 for polygons.
    */
   unitsPerEvaluation(p: ProblemKey): number;
+  /** The cost in ms of one game evaluation, from a fixed model and not the player's machine: what pay scales with. */
+  evalMs(p: ProblemKey): number;
   /** The generic methods the family offers (the player also owns the card: upgrades.ts), mc_compress first; "seed" is left out, as in the 2D game's Method list. */
   methods: readonly EvolveMethod[];
 }
@@ -177,6 +179,36 @@ export function unitsRow(p: SpaceKey): string {
 /** U = max(1, round(base × 20 / P)): fewer pieces make a kernel evaluation cheaper, so more of them make a game evaluation. */
 export const unitsFor = (base: number, P: number): number => Math.max(1, Math.round((base * 20) / Math.max(1, P)));
 
+// ---------- cost of an evaluation ----------
+
+/** Median ms of one mc_compress evaluation (open run, after Compact) by N+M+P, measured 2026-10-20 [CALC]. */
+export const COST_TABLE: readonly (readonly [number, number])[] = [
+  [18, 0.22],
+  [24, 0.31],
+  [33, 0.45],
+  [54, 0.87],
+  [64, 1.31],
+  [85, 1.77],
+  [180, 7.35],
+  [326, 22.8],
+  [500, 52.3],
+];
+
+/** The cost of one evaluation at size N+M+P, interpolated on log-log axes (extrapolated at the ends). */
+export function msPerEval(total: number): number {
+  const t = Math.max(2, total);
+  const T = COST_TABLE;
+  let i = 0;
+  while (i < T.length - 2 && t > T[i + 1][0]) i++;
+  const [x0, y0] = T[i];
+  const [x1, y1] = T[i + 1];
+  const slope = Math.log(y1 / y0) / Math.log(x1 / x0);
+  return y0 * Math.pow(t / x0, slope);
+}
+
+/** What a space problem's game evaluation costs: unitsPerEvaluation sizes every family to about this. */
+export const SPACE_EVAL_MS = 5;
+
 // ---------- the rules ----------
 
 /** The generic methods every space offers, mc_compress first (packages/spaces kernels). */
@@ -206,6 +238,10 @@ const POLYGON_RULES: FamilyRules = {
     return areaLowerBound(q.N, q.M, q.P);
   },
   unitsPerEvaluation: () => 1,
+  evalMs: (p) => {
+    const q = needPolygon(p, "evaluation cost");
+    return msPerEval(q.N + q.M + q.P);
+  },
   methods: POLYGON_METHODS,
 };
 
@@ -230,6 +266,7 @@ function spaceRules(family: SpaceFamily): FamilyRules {
       const q = spaceOnly(p, family);
       return unitsFor(UNITS_AT_20[unitsRow(q)], q.P);
     },
+    evalMs: () => SPACE_EVAL_MS,
     methods: SPACE_METHODS,
   };
 }

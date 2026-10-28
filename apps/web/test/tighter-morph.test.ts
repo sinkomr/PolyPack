@@ -107,7 +107,7 @@ describe("Tighter's morph", () => {
     expect(q.sinceGain).toBe(MORPH_RUN - MORPH_WARMUP);
     // Auto-advance's card says so, read from the table
     const how = upgrade("advance").how;
-    expect(prose(how)[1]).toContain(
+    expect(prose(how)[0]).toContain(
       "The first 722 evaluations of every morph run on polygon pieces are its warm-up, and they do not add to the count.",
     );
     expect(how.math![1]).toBe("otherwise <var>n</var> ← <var>n</var> + <var>e</var> − <var>e</var><sub>warm</sub>");
@@ -118,8 +118,8 @@ describe("Tighter's morph", () => {
 
   it("says what a run does, with the numbers from its constants", () => {
     const card = upgrade("morph");
-    expect(card.effect).toBe("You can run morph, which repacks your board as discs and then as the true pieces.");
-    const text = prose(card.how).join(" ");
+    expect(card.effect).toBe("Adds morph, which repacks your board as discs and then as the true pieces.");
+    const text = [...prose(card.how), card.how.note!].join(" ");
     expect(text).toContain("morph repacks your board in 2 stages.");
     expect(text).toContain("at most 6 penalty solves of at most 120 L-BFGS steps each");
     expect(text).toContain("The run ends after its last stage.");
@@ -150,7 +150,7 @@ describe("Tighter's morph", () => {
 
   it("says on a click without improvement, and on the run line, that the run is still in its warm-up", () => {
     const note =
-      "morph's disc stage ends by evaluation 722 of this run. Its boards rarely beat a board packed tight before the second stage.";
+      "The disc stage of morph ends by evaluation 722 of this run. Its boards rarely beat a board that is already packed tight.";
     expect(morph.stepNote!(view(1))).toBe(note);
     expect(morph.stepNote!(view(721))).toBe(note);
     expect(morph.stepNote!(view(722))).toBeNull();

@@ -40,9 +40,9 @@ const siteBest = async (page: Page, k: { N: number; M: number; P: number }) =>
   (await (await page.request.get(`/api/problems/${k.N}/${k.M}/${k.P}`)).json()).site_best;
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`/tighter.html?seed=${seed}`);
+  await page.goto(`/tighter.html?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-title")).toHaveText(/pieces$/, { timeout: 30_000 });
 }
 
@@ -55,14 +55,14 @@ async function firstRecord(page: Page): Promise<void> {
     .toBe(true);
 }
 
-/** The name form: in the first record's pop-up while it is up, else in Settings (closed again after). */
-async function consent(page: Page, name: string, agree = true): Promise<void> {
-  if (!(await page.locator("#t-name").isVisible())) await page.click("#t-open-settings");
-  await page.fill("#t-name", name);
-  await page.setChecked("#t-agree", agree);
-  await page.click("#t-consent-save");
-  if (await page.locator("#t-settings").evaluate((d) => (d as HTMLDialogElement).open))
-    await page.click("#t-settings-close");
+/** A name of the player's own: the name pop-up, opened from Settings (closed again after). */
+async function setName(page: Page, name: string): Promise<void> {
+  await page.click("#t-open-settings");
+  await page.click("#t-name-change");
+  await page.fill("#t-name-input", name);
+  await page.click("#t-name-save");
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
+  await page.click("#t-settings-close");
 }
 
 /** One Evolve click, waited until it has run; returns its time in ms. */
@@ -112,7 +112,7 @@ async function buyAll(page: Page, ids: string[]): Promise<void> {
   for (const id of ids) {
     const node = page.locator(`.t-card[data-id="${id}"]`);
     await expect(node).toHaveAttribute("data-state", "buyable", { timeout: 10_000 });
-    await node.locator("button").click();
+    await node.locator(".t-node-act").click();
     await expect.poll(async () => (await state(page)).owned.includes(id)).toBe(true);
   }
   await openBoard(page);
@@ -120,27 +120,26 @@ async function buyAll(page: Page, ids: string[]): Promise<void> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-test("owner rule: nothing is POSTed after consent is withdrawn while the leader check is in flight", async ({
+test("owner rule: nothing is POSTed under a name the player has changed while the leader check is in flight", async ({
   page,
 }) => {
   test.setTimeout(240_000);
   const log = recorder(page);
   await fresh(page, 21);
-  await firstRecord(page);
-  const p = await focus(page);
+  await setName(page, "Old Player");
   // the leader check before the POST is slow (a slow network or a busy server)
-  await page.route(`**/api/problems/${p.N}/${p.M}/${p.P}`, async (route) => {
+  await page.route("**/api/problems/*/*/*", async (route) => {
     await sleep(3000);
     await route.continue();
   });
-  await consent(page, "Withdrawn Player");
-  await sleep(800);
-  // the player changes their mind while that GET is under way
-  await consent(page, "Withdrawn Player", false);
-  expect((await state(page)).consent).toBe(false);
+  await firstRecord(page);
+  const p = await focus(page);
+  // the player changes the name while that GET is under way
+  await setName(page, "New Player");
+  expect((await state(page)).name).toBe("New Player");
   await sleep(6000);
-  expect(posts(log)).toEqual([]);
-  expect(await siteBest(page, p)).toBeNull();
+  expect(posts(log).length).toBeLessThanOrEqual(1);
+  expect((await siteBest(page, p))?.name).not.toBe("Old Player");
 });
 
 test("owner rule: a problem's best is POSTed at most once a minute, also when it leaves (Next problem)", async ({
@@ -149,9 +148,9 @@ test("owner rule: a problem's best is POSTed at most once a minute, also when it
   test.setTimeout(400_000);
   const log = recorder(page);
   await fresh(page, 22);
+  await setName(page, "Leaving Player");
   await firstRecord(page);
   const p = await focus(page);
-  await consent(page, "Leaving Player");
   await expect.poll(async () => (await siteBest(page, p))?.name, { timeout: 20_000 }).toBe("Leaving Player");
   const first = await siteBest(page, p);
   await clickUntilBetter(page, first.score);
@@ -178,14 +177,17 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
   test.setTimeout(400_000);
   const log = recorder(page);
   await fresh(page, 23);
-  await firstRecord(page);
-  const p = await focus(page);
-  // the page cleans names as the server does, so "<>" (empty once cleaned) is refused at the form
-  await consent(page, "<>");
-  await expect(page.locator("#status")).toContainText("empty once cleaned");
-  expect((await state(page)).consent).toBe(false);
-  await sleep(3000);
-  expect(posts(log)).toEqual([]);
+  // the page cleans names as the server does, so "<>" (empty once cleaned) is refused in the pop-up
+  // and the old name stays
+  const named = (await state(page)).name;
+  await page.click("#t-open-settings");
+  await page.click("#t-name-change");
+  await page.fill("#t-name-input", "<>");
+  await page.click("#t-name-save");
+  await expect(page.locator("#t-name-problem")).toContainText("Nothing is left of that name");
+  await page.click("#t-name-cancel");
+  await page.click("#t-settings-close");
+  expect((await state(page)).name).toBe(named);
   // a refusal still paces the problem: here the server's 400 for an empty name, made up by the test
   await page.route("**/api/submit", (route) =>
     route.fulfill({
@@ -194,7 +196,8 @@ test("owner rule: a refused first record (name the server strips to nothing) is 
       body: JSON.stringify({ valid: false, reasons: ["name is required"], score: null, leader: false }),
     }),
   );
-  await consent(page, "Refused Player");
+  await firstRecord(page);
+  const p = await focus(page);
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
   await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("name is required");
   // the refused send's points are taken back
@@ -217,8 +220,6 @@ test("owner rule: points the server does not confirm are taken back", async ({ p
   test.setTimeout(240_000);
   const log = recorder(page);
   await fresh(page, 29);
-  await firstRecord(page);
-  const p = await focus(page);
   // another entry got there first: valid, but not the leader, and better than the board
   await page.route("**/api/submit", async (route) => {
     const best = (await focus(page)).best;
@@ -229,11 +230,12 @@ test("owner rule: points the server does not confirm are taken back", async ({ p
       body: JSON.stringify({ valid: true, score: best, leader: false, leader_score: best * 0.9, reasons: [] }),
     });
   });
-  await consent(page, "Behind Player");
-  // consent paid the record at once
+  await firstRecord(page);
+  const p = await focus(page);
+  // the click paid the record at once
   expect((await state(page)).rp).toBeGreaterThan(5);
   await expect.poll(() => posts(log).length, { timeout: 20_000 }).toBe(1);
-  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("Another entry got there first");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("Another entry was first on");
   await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("taken back");
   const s = await state(page);
   const q = s.queue.find((x: any) => x.key === p.key);
@@ -253,8 +255,7 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   test.setTimeout(240_000);
   const log = recorder(page);
   await fresh(page, 24);
-  await firstRecord(page);
-  const p = await focus(page);
+  await setName(page, "Reload Player");
   let reached!: () => void;
   const atServer = new Promise<void>((r) => (reached = r));
   await page.route("**/api/submit", async (route) => {
@@ -263,7 +264,8 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
     await sleep(4000);
     await route.fulfill({ response }).catch(() => {});
   });
-  await consent(page, "Reload Player");
+  await firstRecord(page);
+  const p = await focus(page);
   await atServer;
   const paid = (await state(page)).rp;
   await page.reload();
@@ -286,7 +288,7 @@ test("an accepted first record whose answer is lost to a reload: no second POST,
   expect(after.sending).toBeNull();
   expect(after.unconfirmed).toBe(0);
   expect(s.rp).toBeCloseTo(paid, 9);
-  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("its answer had not arrived");
+  await expect.poll(() => logText(page), { timeout: 15_000 }).toContain("answer had not arrived");
 });
 
 test("server errors do not cause retry storms: 429, 500, network failure, failed leader check, 409, 422", async ({
@@ -295,8 +297,6 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
   test.setTimeout(300_000);
   const log = recorder(page);
   await fresh(page, 25);
-  await firstRecord(page);
-  const p = await focus(page);
   const counts: Record<string, number> = {};
   const answer = async (status: number | "abort") => {
     await page.unroute("**/api/submit");
@@ -324,10 +324,11 @@ test("server errors do not cause retry storms: 429, 500, network failure, failed
     );
   };
   await answer(429);
-  // the first send goes as soon as there is consent, often before consent() returns: count from before
-  const beforeConsent = log.length;
-  await consent(page, "Error Player");
-  await measure("429 first 10 s", 10_000, beforeConsent);
+  // the first send goes as soon as the first record is made, often before firstRecord() returns: count from before
+  const beforeFirst = log.length;
+  await firstRecord(page);
+  const p = await focus(page);
+  await measure("429 first 10 s", 10_000, beforeFirst);
   // trouble with sending is told on the notice line, with when sending tries again
   await expect(page.locator("#t-notice")).toContainText("too many submissions came from your address");
   await page.evaluate(() => (window as any).tighter.skipAhead(61_000));
@@ -378,9 +379,9 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
   const a = await context.newPage();
   const logA = recorder(a);
   await fresh(a, 26);
+  await setName(a, "Two Tabs");
   await firstRecord(a);
   const p = await focus(a);
-  await consent(a, "Two Tabs");
   await expect.poll(async () => (await siteBest(a, p))?.name, { timeout: 20_000 }).toBe("Two Tabs");
   const first = await siteBest(a, p);
   await sleep(1000);
@@ -396,7 +397,7 @@ test("two tabs sharing one save: the second stands by, sends and saves nothing, 
       return setItem.call(this, k, v);
     };
   });
-  await b.goto("/tighter.html");
+  await b.goto("/tighter.html?tutorial=off");
   await expect(b.locator("#t-elsewhere")).toBeVisible({ timeout: 10_000 });
   await expect(b.locator("#t-elsewhere-text")).toContainText("open in another tab");
   await expect(b.locator("#t-evolve")).toBeHidden();
@@ -515,11 +516,11 @@ test("hidden tab and battery: auto-eval pauses and owes nothing, clicks always r
 test("names and server text are shown as text, never as HTML", async ({ page }) => {
   test.setTimeout(240_000);
   await fresh(page, 28);
-  await firstRecord(page);
   const evil = `<img src=x onerror="window.__xss=1">`;
-  await consent(page, evil);
+  await setName(page, evil);
+  await firstRecord(page);
   // the name is shown cleaned as the server stores it (no angle brackets)
-  await expect(page.locator("#t-consent-note")).toContainText(`img src=x onerror="window.__xss=1"`);
+  await expect(page.locator("#t-name-note")).toContainText(`img src=x onerror="window.__xss=1"`);
   await sleep(4000);
   expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
   expect(await page.locator("img").count()).toBe(0);
@@ -537,10 +538,10 @@ test("names and server text are shown as text, never as HTML", async ({ page }) 
   await expect(page.locator("#t-save-note")).toHaveText("Save imported.");
   await sleep(1500);
   expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
-  expect(await page.locator("#t-notice img, #t-consent b").count()).toBe(0);
+  expect(await page.locator("#t-notice img, #t-name-section b").count()).toBe(0);
 });
 
-test("a sustained session: the first click compacts, consent, clicks, upgrades, auto-eval on two lanes, Stop, reload", async ({
+test("a sustained session: the first click compacts, a name, clicks, upgrades, auto-eval on two lanes, Stop, reload", async ({
   page,
 }) => {
   test.setTimeout(900_000);
@@ -563,21 +564,21 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   endPhase("open and deal");
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
   await shot("02-placed");
+  await setName(page, "Review Player");
   const tc = Date.now();
   await page.click("#t-evolve");
   await expect
     .poll(async () => (await focus(page)).phase === "ready" && (await idle(page)), { timeout: 120_000 })
     .toBe(true);
   const compactMs = Date.now() - tc;
-  await shot("03-first-record-consent");
+  await shot("03-first-record");
   endPhase("placed and compacted");
-  await consent(page, "Review Player");
   const p0 = await focus(page);
   await expect.poll(async () => (await siteBest(page, p0))?.name, { timeout: 20_000 }).toBe("Review Player");
   const clickMs: number[] = [];
   for (let i = 0; i < 60; i++) clickMs.push(await click(page));
   await shot("04-after-60-clicks");
-  endPhase("consent and 60 manual clicks");
+  endPhase("60 manual clicks");
 
   // grant points through the page's handle, then buy the path to the second lane through the cards
   await grant(page, 400_000);
@@ -588,15 +589,12 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
     "click4",
     "auto1",
     "click5",
-    "auto2",
     "click6",
     "queue3",
     "click7",
-    "auto3",
     "click8",
     "click9",
     "click10",
-    "auto4",
     "basin",
     "reach2",
     "advance",
@@ -612,8 +610,8 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   const e0 = (await state(page)).stats.evaluations;
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");
-  // twenty minutes between ticks: auto-eval catches up at most a minute (5 evaluations a second,
-  // shared by the two lanes: 300), then runs live, two lanes, Auto-advance compacting the new problems
+  // twenty minutes between ticks: auto-eval catches up at most a minute (Auto-eval alone is 1 evaluation
+  // a second, shared by the two lanes: 60), then runs live, two lanes, Auto-advance compacting the new problems
   const autoStart = Date.now();
   await page.evaluate(() => ((window as any).tighter.state.autoAt -= 20 * 60_000));
   let twoBusy = false;
@@ -635,7 +633,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   // more than a minute behind plus its live rate
   const afterAuto = await state(page);
   const conserved = afterAuto.stats.evaluations - e0 + afterAuto.autoDue;
-  const dueAtMost = 300 + 5 * ((Date.now() - autoStart) / 1000) + 40;
+  const dueAtMost = 60 + 1 * ((Date.now() - autoStart) / 1000) + 60;
   endPhase("auto-eval, two lanes, 1 min");
 
   await page.selectOption("#t-method", "basin_hopping");
@@ -695,7 +693,7 @@ test("a sustained session: the first click compacts, consent, clicks, upgrades, 
   writeFileSync(`${SHOTS}/session-report.json`, JSON.stringify(report, null, 2));
   console.log(JSON.stringify(report, null, 2));
   expect(errors).toEqual([]);
-  expect(conserved).toBeGreaterThanOrEqual(300);
+  expect(conserved).toBeGreaterThanOrEqual(60);
   expect(conserved).toBeLessThanOrEqual(dueAtMost);
   expect(s2.autoDue).toBe(0);
   expect(twoBusy).toBe(true);

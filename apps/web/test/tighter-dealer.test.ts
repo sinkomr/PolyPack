@@ -18,7 +18,7 @@ import {
 import { FRONTIER_P, keyOf } from "../src/tighter/frontier";
 import { addToQueue, applyStep, leave, newGame, newProblem, pay } from "../src/tighter/game";
 import { MAX_OFFERS, addRetake, learnOnLeave, newPicks, normalizeOffer, normalizePicks } from "../src/tighter/picks";
-import { CONTEST, Tier } from "../src/tighter/points";
+import { CONTEST, Tier, costFactor } from "../src/tighter/points";
 import {
   COST_TABLE,
   Candidate,
@@ -271,15 +271,20 @@ describe("Tighter ranking", () => {
     expect(room("batch", 0)).toBeLessThan(room("loose", 0.005));
     expect(room("published", null)).toBeLessThan(room("batch", 0));
     const small = priorPerEval(cand({ family: "polygon", N: 7, M: 7, P: 300, tier: "batch", weakness: 0 }));
-    expect(small).toBeCloseTo(1 * 1 * CONTEST.batch * room("batch", 0) * RP_PER_EVAL, 12);
+    expect(small).toBeCloseTo(
+      CONTEST.batch * room("batch", 0) * costFactor({ family: "polygon", N: 7, M: 7, P: 300 }) * RP_PER_EVAL,
+      12,
+    );
     expect(RP_PER_EVAL).toBe(4);
     // a published value is expected to pay less per evaluation than a site record, whatever its weight
     expect(CONTEST.published * room("published", null)).toBeLessThan(CONTEST.batch * room("batch", 0));
     // the shape weight: 100-gons in a 100-gon pay a twenty-fifth of what heptagons do
-    expect(priorPerEval(cand({ family: "polygon", N: 100, M: 100 }))).toBeCloseTo(
-      priorPerEval(cand({ family: "polygon", N: 7, M: 7 })) / 25,
-      12,
-    );
+    // (same cost factor at the same N+M+P is not given, so the factor is taken out)
+    const per = (N: number, M: number) =>
+      priorPerEval(cand({ family: "polygon", N, M, P: 60 })) / costFactor({ family: "polygon", N, M, P: 60 });
+    expect(per(100, 100)).toBeCloseTo(per(7, 7) / 25, 12);
+    // the prior grows with the cost of an evaluation: a 300-piece problem pays more per evaluation than a 40-piece one
+    expect(priorPerEval(cand({ P: 300 }))).toBeGreaterThan(priorPerEval(cand({ P: 40 })));
   });
 
   it("rank retakes first, then by expected points per second of solver time", () => {
@@ -480,7 +485,6 @@ describe("Tighter published values", () => {
 
   it("pay nothing until the board beats the published value, then pay from it at 100x", () => {
     const s = newGame(T0, 1);
-    s.consent = true;
     s.name = "Ada";
     const p = newProblem({ family: "polygon", N: 7, M: 7, P: 40 }, "published", T0);
     addToQueue(s, p);

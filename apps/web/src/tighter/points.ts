@@ -1,11 +1,15 @@
 import { SCORE_TIE, areaLowerBound, improvesOn } from "@polypack/geometry";
-import { rulesOf } from "./families";
+import { msPerEval, rulesOf } from "./families";
 import type { ProblemKey } from "./frontier";
 
 /**
  * Record points (RP), design.md §5. For a verified improvement from s_prev to s_new:
  *
- *   RP = w · c · [ (1 + log10(Δ / F)) + W_s ln(s_prev / s_new) + W_g ln(g_prev / g_new) + bonus ]
+ *   RP = w · c · k · [ (1 + log10(Δ / F)) + W_s ln(s_prev / s_new) + W_g ln(g_prev / g_new) + bonus ] · beat
+ *
+ * k is the cost factor, the ms an evaluation of the problem takes over the ms at N+M+P = 85, so that
+ * a slow problem pays about as much per second of solver time as a fast one. `beat` is 2 for the
+ * improvement while the board is past another name's record or a published value and the server has not yet made our entry the leader, and 1 otherwise.
  *
  * with Δ = 1 − s_new / s_prev, g = s / areaLowerBound − 1, w = d(N) d(M) and c the contest weight
  * of the problem's tier. Only improvements that count are paid: those `improvesOn` accepts, i.e.
@@ -52,17 +56,37 @@ export const SIZE_WEIGHT = 10_000;
 export const GAP_WEIGHT = 10_000;
 /**
  * Record points the first cycle must earn before it can be reset [SPEC, Michael's ladder of 2026-10-26];
- * each later cycle needs 5 times the one before (standing.ts resetThreshold). It lives here so the
+ * each later cycle needs 5 times the one before (standing.ts resetThreshold). Michael raised the first
+ * reset 5x on 2026-10-27: at about a day of active play it came too early, and 5x restores roughly a week. It lives here so the
  * tree's texts can read it without importing standing.ts, which imports the tree.
  */
-export const RESET_MIN = 200_000_000;
+export const RESET_MIN = 1_000_000_000;
 /** What each cycle's threshold is times the last one's. */
 export const RESET_GROWTH = 5;
 /** A first record whose gap beats the free floor's by at least 10 %. */
 export const FIRST_RECORD_BONUS = 10;
 export const FIRST_RECORD_GAP_RATIO = 0.9;
-/** The first improvement visible at 6 decimals on a record held by another name (once per problem). */
-export const BEAT_OTHER_BONUS = 5;
+/**
+ * What every improvement pays times from the moment the board is visibly (at 6 decimals) past a
+ * record held by another name, or a published value, until the server makes our entry the leader
+ * [SPEC, Michael 2026-10-27: beating a record should pay noticeably more than a first record, "not
+ * insanely more"; the double pay lasts until the new record is accepted]. An additive bonus could
+ * not do it: the terms it would add to are in the hundreds to thousands.
+ */
+export const BEAT_OTHER_FACTOR = 2;
+
+/** The cost model's reference: ms of one mc_compress evaluation at N+M+P = 85, where the factor is 1. */
+export const REFERENCE_SIZE = 85;
+
+/**
+ * The cost factor k of a problem: the ms one of its game evaluations takes (a fixed table for
+ * polygons, 5 ms for the space problems, whose evaluations are sized to that) over the ms at N+M+P =
+ * 85. Not the player's measured speed, so the pay is the same on every machine. Expected RP per
+ * second of solver time then runs about level from N+M+P = 85 up [CALC, scratchpad w6/model.py].
+ */
+export function costFactor(p: ProblemKey): number {
+  return rulesOf(p).evalMs(p) / msPerEval(REFERENCE_SIZE);
+}
 
 /** Distinctness of a shape: 1 for circles and up to 20 sides, 20 / n for near-circular polygons. */
 export function distinctness(n: number): number {
@@ -84,7 +108,7 @@ export type PointsInput = ProblemKey & {
   tier: Tier;
   /** This is the problem's first record: it has no leader and sPrev is its free floor. */
   first?: boolean;
-  /** sPrev is held by another name and the bonus for beating one has not been paid on this problem. */
+  /** The board is past another name's record (or a published value) and our entry is not yet the leader: the payment is doubled. */
   beatOther?: boolean;
 };
 
@@ -95,6 +119,10 @@ export interface Points {
   decades: number;
   w: number;
   c: number;
+  /** The cost factor k (costFactor). */
+  k: number;
+  /** BEAT_OTHER_FACTOR when this improvement is the paid beat of a record, else 1. */
+  beat: number;
   nibble: number;
   size: number;
   gap: number;
@@ -102,7 +130,7 @@ export interface Points {
   /** Which bonuses were paid. */
   firstBonus: boolean;
   beatBonus: boolean;
-  /** w · c · (nibble + size + gap + bonus). */
+  /** w · c · k · (nibble + size + gap + bonus) · beat. */
   total: number;
 }
 
@@ -138,20 +166,24 @@ export function recordPoints(input: PointsInput): Points | null {
   // since ln(g_prev / g_new) would be undefined or infinite.
   const gap = gPrev > 0 && gNew > 0 ? GAP_WEIGHT * Math.log(gPrev / gNew) : 0;
   const firstBonus = !!input.first && gNew > 0 && gNew <= FIRST_RECORD_GAP_RATIO * gPrev;
-  // "visible": the 6-decimal displays differ, so the change shows on the site
-  const beatBonus = !!input.beatOther && show6(sNew) !== show6(sPrev);
-  const bonus = (firstBonus ? FIRST_RECORD_BONUS : 0) + (beatBonus ? BEAT_OTHER_BONUS : 0);
+  // the caller says whether the board is visibly past another name's record (game.ts beating)
+  const beatBonus = !!input.beatOther;
+  const bonus = firstBonus ? FIRST_RECORD_BONUS : 0;
+  const k = costFactor(input);
+  const beat = beatBonus ? BEAT_OTHER_FACTOR : 1;
   return {
     delta,
     decades,
     w,
     c,
+    k,
+    beat,
     nibble,
     size,
     gap,
     bonus,
     firstBonus,
     beatBonus,
-    total: w * c * (nibble + size + gap + bonus),
+    total: w * c * k * (nibble + size + gap + bonus) * beat,
   };
 }

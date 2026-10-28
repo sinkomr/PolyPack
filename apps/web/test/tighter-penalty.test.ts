@@ -277,7 +277,7 @@ describe("Tighter's penalty settings and texts", () => {
   it("explain the squeeze and the settle with the numbers of the settings", () => {
     const card = UPGRADES.find((u) => u.id === "penalty")!;
     expect(card.effect).toMatch(/mc_compress between squeezes/);
-    const text = [...(card.how.text as string[]), ...(card.how.math ?? []), ...(card.how.vars ?? []).flat()]
+    const text = [...(card.how.text as string[]), card.how.note ?? "", ...(card.how.math ?? []), ...(card.how.vars ?? []).flat()]
       .map(plain)
       .join("\n");
     expect(text).toContain(`After every ${SQUEEZE_INTERVAL}th step`);
@@ -297,7 +297,7 @@ describe("Tighter's penalty settings and texts", () => {
     expect(tune.effect).toBe(methodGame("penalty").tuneEffect);
     expect(tune.how.math).toEqual(["<code>innerIterations</code> = 200, 300, 400, 600"]);
     const text = (tune.how.text as string[]).join(" ");
-    expect(text).toContain("from level 0 (the settings on penalty's card) to level 3");
+    expect(text).toContain("Level 0 is the settings on penalty's card.");
     expect(text).toContain("up to 1.5 times as long");
     expect(text).not.toMatch(/at least as much per evaluation/);
     expect(tune.how.vars).toEqual([
@@ -313,7 +313,7 @@ describe("Tighter's penalty settings and texts", () => {
       " · settle 2 with mc_compress",
     );
     expect(g.endedText!(view({ evaluations: 3608, stage: { method: "mc_compress", count: 3, at: 2609 } }), "T")).toBe(
-      "The run on T ended after 3,608 evaluations, because squeeze 3 and the mc_compress settle after it shrank the container by less than 10⁻⁶ (relative).",
+      "The penalty run on T ended after 3,608 evaluations, because squeeze 3 and the settle after it shrank the side by less than 10⁻⁶ (relative).",
     );
     // a run its budget ended keeps the shared sentence
     expect(

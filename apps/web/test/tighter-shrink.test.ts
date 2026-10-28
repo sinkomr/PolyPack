@@ -183,7 +183,7 @@ describe("Tighter shrink_repair's setting and texts", () => {
     const card = upgrade("shrink");
     const how = all(card.how);
     expect(card.effect).toBe(
-      "You can run shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
+      "Adds shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
     );
     expect(how).toContain("A run ends by itself after 1,000 evaluations without progress.");
     expect(how).toContain("Progress is a score at least 10⁻⁵ (relative) below the reference score.");
@@ -207,21 +207,21 @@ describe("Tighter shrink_repair's setting and texts", () => {
 
   it("call level 0 of the tuning card the card's setting, and keep the other cards' wording", () => {
     expect(text(upgrade("tuneShrink").how)).toContain(
-      "from level 0 (the setting on the shrink_repair card) to level 3.",
+      "Level 0 is the setting on the shrink_repair card.",
     );
     expect(upgrade("tuneShrink").how.math).toEqual(["<code>evaluationWork</code> = 4000, 6000, 9000, 14000"]);
-    expect(text(upgrade("tuneMc").how)).toContain("from level 0 (the solver's defaults)");
+    expect(text(upgrade("tuneMc").how)).toContain("Level 0 is the solver's defaults.");
     // its bench was run on worked boards, the others' on Compact boards
-    expect(text(upgrade("tuneShrink").how)).toContain("boards that mc_compress had worked for 8,000 evaluations");
+    expect(all(upgrade("tuneShrink").how)).toContain("boards that mc_compress had worked for 8,000 evaluations");
     expect(text(upgrade("tuneShrink").how)).toContain("An evaluation takes up to 2.8 times as long at the top level");
-    expect(text(upgrade("tuneShrink").how)).not.toContain("three test problems");
-    expect(text(upgrade("tuneMc").how)).toContain("three test problems");
+    expect(all(upgrade("tuneShrink").how)).not.toContain("three test problems");
+    expect(all(upgrade("tuneMc").how)).toContain("three test problems");
   });
 
   it("say when a run ends, in the help and in the run-end event", () => {
     const g = methodGame("shrink_repair");
     expect(g.runEnds).toBe(
-      "A shrink_repair run ends once its last 1,000 evaluations have not made its best score 10⁻⁵ (relative) smaller.",
+      "A shrink_repair run ends after 1,000 evaluations in a row without progress.",
     );
     expect(text(HELP.counts as How)).toContain(g.runEnds);
     const view = (evaluations: number): RunView => ({
@@ -235,7 +235,7 @@ describe("Tighter shrink_repair's setting and texts", () => {
       problemBest: 2,
     });
     expect(g.endedText!(view(2011), "5 squares in a square")).toBe(
-      "The run on 5 squares in a square ended after 2,011 evaluations, because its last 1,000 did not make its best score 10⁻⁵ (relative) smaller.",
+      "The shrink_repair run on 5 squares in a square ended after 2,011 evaluations, because its last 1,000 brought no progress.",
     );
     // a run that used its whole budget keeps the shared sentence
     expect(g.endedText!(view(100_000), "5 squares in a square")).toBeNull();

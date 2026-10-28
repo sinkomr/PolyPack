@@ -16,21 +16,16 @@ const state = <T>(page: Page, f: (s: any) => T): Promise<T> =>
 const idle = (page: Page) => page.evaluate(() => !(window as any).tighter.busy);
 
 async function fresh(page: Page, seed: number): Promise<void> {
-  await page.goto(`${URL}?seed=${seed}`);
+  await page.goto(`${URL}?seed=${seed}&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
-  await page.goto(`${URL}?seed=${seed}`);
+  await page.goto(`${URL}?seed=${seed}&tutorial=off`);
   await expect(page.locator("#t-evolve")).toHaveText("Evolve (compacts first)", { timeout: 30_000 });
 }
 
-/** The first record by a tap, then a name on it from the pop-up, all by touch. */
-async function firstRecordWithName(page: Page, name: string): Promise<void> {
+/** The first record by a tap. */
+async function firstRecord(page: Page): Promise<void> {
   await page.locator("#t-evolve").tap();
-  await expect(page.locator("#t-welcome")).toBeVisible({ timeout: 60_000 });
-  await page.locator("#t-name").fill(name);
-  await page.locator("#t-agree").tap();
-  await page.locator("#t-consent-save").tap();
-  await expect.poll(() => state(page, (s) => s.consent)).toBe(true);
-  await expect(page.locator("#t-welcome")).toBeHidden();
+  await expect.poll(() => state(page, (s) => s.stats.clicks), { timeout: 60_000 }).toBeGreaterThan(0);
 }
 
 /** A game further on: points, the first upgrades, the queue and the lanes. */
@@ -39,7 +34,7 @@ async function midGame(page: Page): Promise<void> {
     const s = (window as any).tighter.state;
     s.rp = 5000;
     s.rpEarned = 9000;
-    for (const id of ["trace", "click2", "auto1", "click3", "auto2", "click4", "click5", "queue3"])
+    for (const id of ["trace", "click2", "auto1", "click3", "click4", "click5", "queue3"])
       if (!s.owned.includes(id)) s.owned.push(id);
     s.reveal.push("score", "points", "upgrades", "queue", "lanes");
   });
@@ -147,15 +142,15 @@ test("phone: one screen, Evolve in the thumb zone, and rapid taps that never zoo
   // a name first (Settings), then 40 rapid taps from the placed board: the first compacts, its record
   // pays, and the totals and the views' tabs appear in the middle of the tapping; Evolve stays put
   await page.locator("#t-open-settings").tap();
-  await page.locator("#t-name").fill("Thumb");
-  await page.locator("#t-agree").tap();
-  await page.locator("#t-consent-save").tap();
+  await page.locator("#t-name-change").tap();
+  await page.locator("#t-name-input").fill("Thumb");
+  await page.locator("#t-name-save").tap();
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
   await page.locator("#t-settings-close").tap();
   await expect(page.locator("#t-settings")).toBeHidden();
   const r = await rapidTaps(page, 40);
   expect(r).toMatchObject({ clicks: 40, scale: 1, scrollX: 0, scrollY: 0, selection: "", moved: 0 });
   await expect(page.locator("#t-dock")).toBeVisible();
-  await expect(page.locator("#t-welcome")).toBeHidden();
   await fits(page);
   expect(errors).toEqual([]);
 });
@@ -167,7 +162,7 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 12);
-  await firstRecordWithName(page, "Dock");
+  await firstRecord(page);
   await midGame(page);
   await axeClean(page);
 
@@ -178,7 +173,7 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await expect(page.locator("#board")).toBeHidden();
   const node = page.locator('.t-card[data-id="click6"]');
   await expect(node).toHaveAttribute("data-state", "buyable");
-  await node.locator("button").tap();
+  await node.locator(".t-node-act").tap();
   await expect(page.locator(".t-detail-buy")).toBeVisible();
   await axeClean(page);
   await page.locator(".t-detail-buy").tap();
@@ -188,7 +183,7 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   await page.evaluate(() => (window as any).tighter.state.owned.push("filters"));
   const filters = page.locator('.t-node[data-id="filters"]');
   await expect(filters).toHaveAttribute("data-switch", "on");
-  await filters.locator("button").tap();
+  await filters.locator(".t-node-act").tap();
   await expect(page.locator(".t-detail-switch")).toHaveText("Turn off");
   await page.locator(".t-detail-switch").tap();
   await expect(filters).toHaveAttribute("data-switch", "off");
@@ -230,10 +225,12 @@ test("phone: every view by the dock's tabs; the tree as a list, bought from by t
   const vh = await page.evaluate(() => innerHeight);
   expect(Math.abs(box.y + box.height - vh)).toBeLessThanOrEqual(2);
   expect(box.width).toBeGreaterThanOrEqual((await page.evaluate(() => innerWidth)) - 1);
+  await page.locator("#t-name-change").tap();
   const sizes = await page.evaluate(() =>
-    ["#t-name", "#t-save-text"].map((s) => parseFloat(getComputedStyle(document.querySelector(s)!).fontSize)),
+    ["#t-name-input", "#t-save-text"].map((s) => parseFloat(getComputedStyle(document.querySelector(s)!).fontSize)),
   );
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(16);
+  await page.locator("#t-name-cancel").tap();
   await axeClean(page);
   await page.locator("#t-settings-close").tap();
   await expect(sheet).toBeHidden();
@@ -251,7 +248,7 @@ test("iPhone (WebKit): rapid taps, a purchase from the tree by touch, and the bo
   try {
     await fresh(page, 13);
     await fits(page);
-    await firstRecordWithName(page, "Safari");
+    await firstRecord(page);
     const r = await rapidTaps(page, 40);
     expect(r).toMatchObject({ clicks: 40, scale: 1, scrollY: 0, selection: "", moved: 0 });
     // iOS takes a first tap on an element whose hover changes the page for a hover: the tree's nodes
@@ -260,7 +257,7 @@ test("iPhone (WebKit): rapid taps, a purchase from the tree by touch, and the bo
     await page.locator("#t-dock-tree").tap();
     const node = page.locator('.t-card[data-id="click6"]');
     await expect(node).toHaveAttribute("data-state", "buyable");
-    await node.locator("button").tap();
+    await node.locator(".t-node-act").tap();
     await expect(page.locator(".t-detail-buy")).toBeVisible();
     await page.locator(".t-detail-buy").tap();
     await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
@@ -312,7 +309,7 @@ test("iPad (WebKit): two columns, the toolbar under the board, rapid taps kept w
     await page.locator("#t-tab-tree").tap();
     const node = page.locator('.t-card[data-id="click6"]');
     await expect(node).toHaveAttribute("data-state", "buyable");
-    await node.locator("button").tap();
+    await node.locator(".t-node-act").tap();
     await page.locator(".t-detail-buy").tap();
     await expect.poll(() => state(page, (s) => s.owned.includes("click6"))).toBe(true);
     await fits(page);

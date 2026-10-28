@@ -44,16 +44,17 @@ const TUNE_LATE = 1500;
 const TUNED_TIME = "up to 1.5 times as long";
 
 const PENALTY_TEXT =
-  "penalty treats the container's side and every piece's position and angle as variables. It minimises the side plus a penalty for overlaps and for pieces that stick out of the container, with L-BFGS, a quasi-Newton method that estimates the curvature from its last 12 steps.";
+  "penalty treats the container's side and every piece's position and angle as numbers it can adjust. It looks for a smaller container by adding a cost for overlaps and for pieces that stick out, and then lowering the total cost with a method called L-BFGS.";
 
-const SQUEEZE_TEXT = `A squeeze is ${SQUEEZE_SOLVES} solves of at most I L-BFGS steps each, from the run's best packing. After every ${ordinal(SQUEEZE_INTERVAL)} step, and at the end of a solve, it moves every centre away from the pieces' mean centre by the smallest common factor that ends all overlaps, fits the container around the pieces and scores that packing, which is one evaluation. Between solves each term's multiplier λ is updated, and the weight w is multiplied by 4 when the largest violation did not at least halve (an augmented Lagrangian).`;
+const SQUEEZE_DETAIL = `L-BFGS is a quasi-Newton method that estimates the curvature from its last 12 steps. A squeeze is ${SQUEEZE_SOLVES} solves of at most I L-BFGS steps each, from the run's best packing. After every ${ordinal(SQUEEZE_INTERVAL)} step, and at the end of a solve, it moves every centre away from the pieces' mean centre by the smallest common factor that ends all overlaps, fits the container around the pieces and scores that packing, which is one evaluation. Between solves each term's multiplier λ is updated, and the weight w is multiplied by 4 when the largest violation did not at least halve (an augmented Lagrangian).`;
 
-const SETTLE_TEXT = `After each squeeze comes a settle, at most ${int(SETTLE_EVALS)} evaluations of mc_compress at ${SETTLE_PARAMS.sweepsPerEvaluation} sweeps per evaluation, from the run's best packing. A squeeze and a settle each score their starting packing first, which is one evaluation. The run ends when a squeeze and the settle after it shrink the side by less than ${TOLERANCE_TEXT} (relative).`;
+const SETTLE_TEXT = `A run alternates two steps. A squeeze lets the container shrink while pieces overlap a little, and then spreads the pieces out just enough to end every overlap. A settle then runs mc_compress for at most ${int(SETTLE_EVALS)} evaluations, starting from the best packing so far. The run ends when a squeeze and the settle after it make the side smaller by less than ${TOLERANCE_TEXT} (relative).`;
+const SETTLE_DETAIL = `The settle uses ${SETTLE_PARAMS.sweepsPerEvaluation} sweeps per evaluation. A squeeze and a settle each score their starting packing first, which is one evaluation.`;
 
 export const penaltyGame: MethodGame = {
-  effect: "You can run penalty, which squeezes your board with L-BFGS and runs mc_compress between squeezes.",
+  effect: "Adds penalty, which squeezes your board and runs mc_compress between squeezes.",
   how: (select) => ({
-    text: [PENALTY_TEXT, SQUEEZE_TEXT, SETTLE_TEXT],
+    text: [PENALTY_TEXT, SETTLE_TEXT],
     math: [
       `${sym("F")} = ${sym("s")} + Σ<sub>${sym("k")}</sub> (max(0, ${sym("λ", "k")} + 2${sym("w")}${sym("g", "k")})<sup>2</sup> − ${sym("λ", "k")}<sup>2</sup>) / (4${sym("w")})`,
       `${sym("λ", "k")} ← max(0, ${sym("λ", "k")} + 2${sym("w")}${sym("g", "k")})`,
@@ -74,7 +75,7 @@ export const penaltyGame: MethodGame = {
       [sym("s", "before"), "the side of the run's best packing before a squeeze"],
       [sym("s", "after"), "the side of the run's best packing after that squeeze and its settle"],
     ],
-    note: select,
+    note: `${SQUEEZE_DETAIL} ${SETTLE_DETAIL} ${select}`,
   }),
   /**
    * Bench (presets.ts protocol, squeeze and settle, one seed for the CPU limit, 2026-10-22, a loaded
@@ -96,9 +97,10 @@ export const penaltyGame: MethodGame = {
   tunedMeaning: { innerIterations: `L-BFGS steps at most per solve (a squeeze makes ${SQUEEZE_SOLVES} solves)` },
   tunedTime: TUNED_TIME,
   tuneBase: "the settings on penalty's card",
-  tuneEffect: "Each level gives penalty's solves more L-BFGS steps, so each squeeze shrinks the board further.",
-  tuneNote: `In tests from a compacted board, each level shrank the side more than the level below in the first ${int(TUNE_EARLY)} evaluations, on all three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon). After ${int(TUNE_LATE)} evaluations the levels were within 0.3 percentage points of each other. An evaluation takes ${TUNED_TIME} at the top level, which matters only when your computer limits auto-eval.`,
-  runEnds: `A penalty run ends when one of its squeezes, with the mc_compress evaluations after it, shrinks the side by less than ${TOLERANCE_TEXT} (relative).`,
+  tuneEffect: "Each level lets penalty squeeze the board further in every solve.",
+  tuneNote: `In tests, each level shrank the side more than the level below in the first ${int(TUNE_EARLY)} evaluations. After ${int(TUNE_LATE)} evaluations the levels were close to each other. An evaluation takes ${TUNED_TIME} at the top level, which matters only when your computer limits auto-eval.`,
+  tuneDetail: `In tests from a compacted board, each level shrank the side more than the level below in the first ${int(TUNE_EARLY)} evaluations, on all three test problems (40 21-gons in a 24-gon, 80 36-gons in a 33-gon and 30 heptagons in a heptagon). After ${int(TUNE_LATE)} evaluations the levels were within 0.3 percentage points of each other. An evaluation takes ${TUNED_TIME} at the top level.`,
+  runEnds: `A penalty run ends when a squeeze and the mc_compress evaluations after it make the side smaller by less than ${TOLERANCE_TEXT} (relative).`,
   runNote: (v) => {
     const s = v.stage;
     if (s?.method === SQUEEZE) return ` · squeeze ${s.count}`;
@@ -107,6 +109,6 @@ export const penaltyGame: MethodGame = {
   },
   endedText: (v, title) =>
     v.stage && v.evaluations < v.budget
-      ? `The run on ${title} ended after ${int(v.evaluations)} evaluations, because squeeze ${v.stage.count} and the mc_compress settle after it shrank the container by less than ${TOLERANCE_TEXT} (relative).`
+      ? `The penalty run on ${title} ended after ${int(v.evaluations)} evaluations, because squeeze ${v.stage.count} and the settle after it shrank the side by less than ${TOLERANCE_TEXT} (relative).`
       : null,
 };

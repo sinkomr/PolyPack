@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { plain } from "../src/tighter/how";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
 import {
   PAIR_BONUS,
@@ -72,8 +73,8 @@ describe("Tighter shop", () => {
     expect(v.owned).toBe(0);
     expect(v.total).toBe(inTheFirstDimension().length);
     // the first card can be worked toward; the rest are locked or mysteries
-    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "1,000 RP", needs: [] });
-    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "1,500 RP" });
+    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "2,000 RP", needs: [] });
+    expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
     expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");
   });
@@ -112,32 +113,18 @@ describe("Tighter shop", () => {
 
   it("folds owned upgrades into one line, and a row with nothing left into that line alone", () => {
     const clicks: UpgradeId[] = ["trace", "click2", "click3"];
-    const v = shopView(owning(clicks), { rp: 400, standing: 0 }, 8);
+    const v = shopView(owning(clicks), { rp: 200, standing: 0 }, 8);
     // a ladder folds to where it stands
     expect(row(v, "clicks").owned).toEqual(["Trace detail", "2 to 3 evaluations per click"]);
     expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
-    const auto: UpgradeId[] = [
-      "auto1",
-      "auto2",
-      "auto3",
-      "auto4",
-      "auto5",
-      "auto6",
-      "auto7",
-      "auto8",
-      "auto9",
-      "auto10",
-    ];
-    const w = shopView(owning([...auto, "autox"], { autox: 10 }), broke, 8);
-    expect(row(w, "auto").cards).toEqual([]);
-    expect(row(w, "auto").owned).toEqual([
-      "Auto-eval",
-      "Auto-eval: 150 evaluations a second",
-      "Faster auto-eval (level 10, the last)",
-    ]);
-    expect(w.owned).toBe(11);
+    const w = shopView(owning(["auto1", "autox"], { autox: 150 }), broke, 8);
+    // Faster auto-eval has no last level: it stays a card to buy, however far it is owned
+    expect(row(w, "auto").cards.map((c) => c.id)).toEqual(["autox"]);
+    expect(card(w, "autox")).toMatchObject({ level: 150, levelText: "Level 150" });
+    expect(row(w, "auto").owned).toEqual(["Auto-eval", "Faster auto-eval (level 150)"]);
+    expect(w.owned).toBe(2);
   });
 
   it("shows a levelled upgrade's level and the next level's price", () => {
@@ -233,7 +220,7 @@ describe("Tighter tech tree", () => {
     const node = (id: UpgradeId) => v.nodes.find((n) => n.id === id)!;
     expect(v.nodes.length).toBe(inTheFirstDimension().length);
     expect(node("trace").state).toBe("owned");
-    expect(node("click2")).toMatchObject({ state: "buyable", price: "1,500 RP" });
+    expect(node("click2")).toMatchObject({ state: "buyable", price: "150 RP" });
     expect(node("click3").state).toBe("locked");
     expect(node("harden")).toMatchObject({ state: "mystery", name: M });
     expect(v.buyable).toBe(1);
@@ -357,19 +344,18 @@ describe("Tighter upgrade texts", () => {
     expect(u("click3").effect).toBe("Each Evolve click runs 3 evaluations instead of 2.");
     expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>a</var> + <var>r</var>"]);
     expect(u("auto1").effect).toBe("Auto-eval runs 1 evaluation a second for you while it is switched on.");
-    expect(u("auto3").how.math).toEqual([
-      "<var>r</var> = 3",
+    expect(u("auto1").how.math).toEqual([
+      "<var>r</var> = 1",
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
-    expect(u("auto2").effect).toBe("Auto-eval runs 2 evaluations a second in all instead of 1.");
-    expect(u("auto6").effect).toBe("Auto-eval runs 20 evaluations a second in all instead of 10.");
-    expect(u("auto9").name).toBe("Auto-eval: 100 evaluations a second");
-    expect(u("auto10").name).toBe("Auto-eval: 150 evaluations a second");
-    expect(u("autox").effect).toBe("Each level adds 10 evaluations a second to auto-eval, up to 250 in all.");
-    expect(u("autox").how.math).toEqual([
-      "<var>r</var> = min(250, 150 + 10 × <var>a</var>)",
-      "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
-    ]);
+    expect(UPGRADES.some((x) => /^auto([2-9]|10)$/.test(x.id))).toBe(false);
+    expect(u("autox").effect).toBe(
+      "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
+    );
+    const math = u("autox").how.math!.map(plain);
+    expect(math[0]).toContain("r = 1 + a");
+    expect(math).toContain("C(r) = 40 + Σ 120 × e0.0095 x, for x = 2 to r");
+    expect(math).toContain("rlane = r / L");
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
     expect(u("wide").name).toBe("More open problems");
     expect(u("queue4").effect).toBe("The queue holds 4 problems, and the dealer earns a new one every 75 clicks.");
@@ -384,24 +370,20 @@ describe("Tighter upgrade texts", () => {
       expect(t, u.id).not.toMatch(/auto-eval('s)? click|clicks? (Evolve )?for you|its clicks/i);
     }
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    for (const id of ["auto1", "auto5"] as UpgradeId[])
-      expect(text(id)).toContain("whatever your evaluations per click");
+    expect(text("auto1")).toContain("whatever your evaluations per click");
     expect(text("click5")).toContain("Auto-eval keeps its own rate in evaluations a second");
     expect(text("clickx")).toContain("Auto-eval keeps its own rate in evaluations a second");
-    // the limit, from the measured cost of an evaluation at N+M+P = 85 (1.77 ms), and where 250 a
-    // second need more than a core (4 ms an evaluation)
-    expect(text("autox")).toContain("so 250 evaluations a second keep about 44.3 % of one core busy there");
-    expect(text("autox")).toContain("From about N + M + P = 130 up an evaluation takes 4 ms or more");
-    expect(text("autox")).toContain("more lanes spread the work over more cores");
-    expect(text("autox")).toContain("so level 10 reaches the limit of 250 a second");
+    // Faster auto-eval has no last level, and says that the computer is the limit
+    expect(text("autox")).toContain("You can buy as many levels as you like");
+    expect(text("autox")).toContain("At some point your computer is the limit");
     expect(text("head1")).toContain("Auto-eval at 1 evaluation a second");
-    expect(text("head2")).toContain("the Auto-eval upgrades up to 10 evaluations a second");
+    expect(text("head2")).toContain("Faster auto-eval up to level 9 (10 evaluations a second)");
   });
 
   it("say that the lanes share auto-eval's rate, and never that each lane runs it", () => {
     for (const u of UPGRADES) expect(all(u).join(" "), u.id).not.toMatch(/in each lane|in every lane|per lane/);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    for (const id of ["auto1", "auto5", "auto10", "lanes2", "lanesx"] as UpgradeId[])
+    for (const id of ["auto1", "lanes2", "lanesx"] as UpgradeId[])
       expect(text(id), id).toMatch(/The lanes share (it|auto-eval's rate)/);
     expect(text("lanesx")).toContain("adds no evaluations");
     expect(text("autox")).toContain("the lanes share it");
@@ -424,7 +406,7 @@ describe("Tighter upgrade texts", () => {
     for (const u of UPGRADES) expect([u.name, u.effect, ...all(u)].join(" "), u.id).not.toMatch(/frontier/i);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
     expect(text("collections")).toContain("A shape pair is one piece shape in one container shape");
-    expect(text("collector")).toContain("A collection here is a shape pair");
+    expect(text("collector")).toContain("A collection is one piece shape in one container shape");
   });
 
   // The texts are written in numbers; these are the game's constants they quote.
@@ -435,7 +417,7 @@ describe("Tighter upgrade texts", () => {
     expect([COMPACT_EVALS, RUN_BUDGET, AUTO_SLACK_SECONDS]).toEqual([100, 100_000, 60]);
     expect(text("advance")).toContain("100 evaluations of mc_compress");
     expect(text("shrink")).toContain("A run ends by itself after 1,000 evaluations without progress.");
-    expect(text("auto2")).toContain("60 s");
+    expect(text("auto1")).toContain("60 s");
     expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
       0.01, 1.5, 168, 10,
     ]);
@@ -448,7 +430,7 @@ describe("Tighter upgrade texts", () => {
     expect(room("loose", 0.01)).toBeCloseTo(0.3 + 25 * 0.01, 12);
     expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([4, 0.005, 3, 1.77]);
     expect(text("rank2")).toContain("× 4 ×");
-    expect(text("learning")).toContain("(w × c × R × 4)");
+    expect(text("learning")).toContain("(w × c × R × κ × 4");
     expect(text("reach2")).toContain("≥ 0.005");
     expect([LEARN_MIN_EVALS, MAX_RATIO, MIN_OBSERVED_EVALS, MAX_STAGES]).toEqual([200, 20, 20, 9]);
     expect(text("learning")).toContain("at least 200 evaluations");
@@ -461,10 +443,10 @@ describe("Tighter upgrade texts", () => {
     expect([6 * 33 <= GREEDY_BUDGET, 7 * 33 <= GREEDY_BUDGET]).toEqual([true, false]);
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
-    expect(RESET_MIN).toBe(200_000_000);
+    expect(RESET_MIN).toBe(1_000_000_000);
     expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
-    expect(text("standing")).toContain("earned 200,000,000 record points");
-    expect(text("standing")).toContain("200,000,000 × 5<sup>");
+    expect(text("standing")).toContain("earned 1,000,000,000 record points");
+    expect(text("standing")).toContain("1,000,000,000 × 5<sup>");
     expect(text("standing")).toContain("⌊5 × √(");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
@@ -506,14 +488,18 @@ describe("Tighter dimension cards", () => {
     expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"] });
     for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
       expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
-    const w = shopView(rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims), funds, 8);
+    const w = shopView(
+      rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims),
+      funds,
+      8,
+    );
     for (const id of ["sphere", "torus", "surf-nofold-catalan"] as const)
       expect(card(w, id)).toMatchObject({ state: "buyable", needs: [] });
   });
 
-  it("are priced from the cycle's threshold, Curved at 300,000,000 in the first cycle", () => {
+  it("are priced from the cycle's threshold, Curved at 1,500,000,000 in the first cycle", () => {
     const o = (resets: number) => rest([], resets, ["2-in-2", "2-on-3", "3-in-3"]);
-    expect(costOf(o(0), "curved")).toBe(300_000_000);
+    expect(costOf(o(0), "curved")).toBe(1_500_000_000);
     expect(costOf(o(1), "curved")).toBe(0.3 * resetThreshold(1));
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
     const T1 = resetThreshold(1);
@@ -542,7 +528,7 @@ describe("Tighter dimension cards", () => {
       ).map((id) => costOf(o(2), id)),
     ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.4 * T2, 0.5 * T2]);
     // Quick study takes its 10 % a level off these prices as off any price in record points
-    expect(costOf(o(1), "surf-prisms")).toBe(2_000_000);
+    expect(costOf(o(1), "surf-prisms")).toBe(10_000_000);
     const studied = owning(["study"], { study: 2 }, null, [], [], 1, ["2-in-2", "2-on-3"]);
     expect(costOf(studied, "surf-prisms")).toBe(Math.round(slicePrice("surf-prisms", 1) * 0.81));
     // the card is owned until the reset takes it away

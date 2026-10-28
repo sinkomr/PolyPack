@@ -42,11 +42,10 @@ function owning(s: GameState, ids: UpgradeId[]): void {
   for (const id of ids) add(id);
 }
 
-/** A game with consent and one open problem whose first record has been paid (not yet confirmed). */
+/** A game with one open problem whose first record has been paid (not yet confirmed). */
 function withRecord(): { s: GameState; p: ReturnType<typeof newProblem> } {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
@@ -60,23 +59,23 @@ describe("Tighter seams", () => {
   it("give standing only for points the server has confirmed", () => {
     const { s, p } = withRecord();
     owning(s, ["standing"]);
-    // a cycle of 400 M RP, 360 M of them paid per click and still waiting for the server's answer
-    s.standing.cycleEarned = 400_000_000;
-    p.unconfirmed = 360_000_000;
+    // a cycle of 2,000 M RP, 1,800 M of them paid per click and still waiting for the server's answer
+    s.standing.cycleEarned = 2_000_000_000;
+    p.unconfirmed = 1_800_000_000;
     expect(resetPreview(s).gain).toBe(0);
     expect(resetCycle(s, T0)).toBe(0);
     // once confirmed, they count
     p.unconfirmed = 0;
     expect(resetPreview(s).gain).toBe(7);
     // a send on its way carries its points: not confirmed yet either
-    p.sending = { score: 6.5, name: "Ada", leaderBefore: null, at: T0, rp: 360_000_000 };
+    p.sending = { score: 6.5, name: "Ada", leaderBefore: null, at: T0, rp: 1_800_000_000 };
     expect(resetPreview(s).gain).toBe(0);
     // a reset trades only the confirmed points; those still waiting carry into the next cycle
-    s.standing.cycleEarned = 800_000_000;
-    s.rp = 400_000_000;
+    s.standing.cycleEarned = 4_000_000_000;
+    s.rp = 2_000_000_000;
     expect(resetCycle(s, T0)).toBe(7);
-    expect(s.rp).toBe(360_000_000);
-    expect(s.standing.cycleEarned).toBe(360_000_000);
+    expect(s.rp).toBe(1_800_000_000);
+    expect(s.standing.cycleEarned).toBe(1_800_000_000);
     // and if the server does not confirm them, they are taken from there, once
     applyAnswer(s, p, null, 6.5, { kind: "refused", status: 422, reasons: ["no"] }, T0 + 1);
     expect(s.rp).toBe(0);
@@ -103,7 +102,7 @@ describe("Tighter seams", () => {
   it("drop offers drawn for the old tree at a reset, and keep lost records offered for a retake", () => {
     const s = newGame(T0, 1);
     owning(s, ["standing", "pick3"]);
-    s.standing.cycleEarned = 400_000_000;
+    s.standing.cycleEarned = 2_000_000_000;
     const offer = (P: number, retake: boolean): Offer => ({
       family: "polygon",
       N: 7,
@@ -185,7 +184,7 @@ describe("Tighter seams", () => {
     expect(g.queue[0].published).toBeNull();
     expect(g.economy).toMatchObject({ recorded: [], base: {}, checks: {} });
     expect(g.picks).toMatchObject({ offers: [], retake: [], dealt: {} });
-    // plays on: the next improvement pays (with consent), with no multiplier
+    // plays on: the next improvement pays, with no multiplier
     const p = g.queue[0];
     const better = { ...p.board!, pieces: p.board!.pieces.map((q) => ({ ...q, y: q.y + 0.01 })) };
     const c = applyStep(

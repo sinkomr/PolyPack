@@ -4,9 +4,9 @@ import type { SpaceConfig } from "@polypack/spaces";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
-import { FLOOR, Points, Tier, recordPoints } from "./points";
+import { FLOOR, Points, Tier, recordPoints, show6 } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
-import { sanitizeName } from "./names";
+import { generatePlayerName, sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
 import { PicksState, learnOnLeave, newPicks } from "./picks";
 import type { LatticeResult } from "./methods/lattice";
@@ -31,7 +31,7 @@ import {
  * they are given in place and return what happened, so the page can tell the player.
  *
  * Points are paid per click: every step of a run that improves the board by more than the floor
- * pays at once (with consent), measured from the last score paid. The server still judges every
+ * pays at once, measured from the last score paid. The server still judges every
  * record: the paid points ride with the next submission, and are taken back if the server does not
  * make it the leader.
  */
@@ -95,8 +95,6 @@ export interface ProblemFields {
   /** Our score that the server last made leader, and its entry id while it is kept. */
   verified: number | null;
   ourId: number | null;
-  /** The bonus for beating another name was paid on this problem. */
-  beatPaid: boolean;
   /** The server took a problem out of play (409), or refused this score (400/422). */
   closed: boolean;
   refused: { score: number; reasons: string[] } | null;
@@ -196,9 +194,10 @@ export interface GameState {
   owned: UpgradeId[];
   /** Levels of levelled upgrades (each also listed in `owned`). */
   levels: Partial<Record<UpgradeId, number>>;
+  /** The name records are sent under: generated at the start (names.ts), and the player may change it. */
   name: string;
-  /** "Send my records to PolyPack under this name": nothing is sent before. */
-  consent: boolean;
+  /** The tutorial has been shown (or skipped); a save from before the tutorial counts as done. */
+  tutorialDone: boolean;
   settings: Settings;
   stats: Stats;
   /** Evaluations auto-eval is due and has not run yet (fractional; at most a minute's worth; a loaded save starts at 0). */
@@ -236,14 +235,14 @@ export const DEFAULT_PATIENCE = 1000;
 export function newGame(now: number, seed: number): GameState {
   return {
     // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
-    version: 6,
+    version: 8,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
     owned: [],
     levels: {},
-    name: "",
-    consent: false,
+    name: generatePlayerName(),
+    tutorialDone: false,
     settings: {
       auto: false,
       method: "mc_compress",
@@ -294,7 +293,6 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     leader: null,
     verified: null,
     ourId: null,
-    beatPaid: false,
     closed: false,
     refused: null,
     leaving: false,
@@ -486,14 +484,14 @@ export interface StepChange {
   /** It improved by more than the floor: an event the server will count. */
   counted: boolean;
   firstRecord: boolean;
-  /** Points paid for this step (null: none, or no consent yet). */
+  /** Points paid for this step (null: none). */
   points: Points | null;
 }
 
 /**
  * A step of a run on problem `p`. Its best becomes the board only when it is strict, valid and
  * smaller than the board: the side never grows. Every step counts toward the effort counters, and
- * an improvement above the floor pays at once (with consent).
+ * an improvement above the floor pays at once.
  *
  * Progress (Auto-advance's): the best s beats the best at the last progress s_ref by the tolerance
  * τ, s < s_ref · (1 − τ). Then s_ref becomes s and the count since progress starts again; otherwise
@@ -600,7 +598,8 @@ function pointsFor(p: ProblemState, name: string): Points | null {
     sNew: p.best,
     tier: p.tier,
     first: p.paidTo === null && p.leader === null && p.verified === null,
-    beatOther: beatsOther(p, p.leader, name),
+    // a published value is a record too: the first payment below it beats it
+    beatOther: beating(p, name),
   });
 }
 
@@ -621,18 +620,14 @@ function withMultiplier(points: Points, multiplier: number): PaidPoints {
   return { ...points, base: points.total, multiplier, total: points.total * multiplier };
 }
 
-/**
- * Points the board would pay now (shown while no name is given; paid as one event on consent), with
- * the game state's multiplier when it is given.
- */
+/** Points the board would pay now, with the game state's multiplier when it is given. */
 export function pendingPoints(p: ProblemState, name: string, s?: GameState): PaidPoints | null {
   const points = pointsFor(p, name);
   return points ? withMultiplier(points, s ? multiplierFor(s, p) : 1) : null;
 }
 
-/** Pays the board's improvement since the last payment, as one event. Nothing without consent. */
+/** Pays the board's improvement since the last payment, as one event. */
 export function pay(s: GameState, p: ProblemState): PaidPoints | null {
-  if (!s.consent) return null;
   const own = pointsFor(p, s.name);
   if (!own) return null;
   const points = withMultiplier(own, multiplierFor(s, p));
@@ -644,30 +639,13 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);
   p.paidTo = p.best;
-  if (points.beatBonus) p.beatPaid = true;
   return points;
 }
 
-/** On consent: every board's improvement since its last payment pays, one event per problem. */
+/** Every board's improvement since its last payment pays, one event per problem (a save from before sending was always on). */
 export function payAll(s: GameState): number {
   let total = 0;
   for (const p of s.queue) total += pay(s, p)?.total ?? 0;
-  return total;
-}
-
-/**
- * Sending switched off: points paid and not yet carried by a submission will never be confirmed, so
- * they are taken back, and each board pays again from its last confirmed score once sending is back
- * on. A submission already on its way keeps its points until its answer. Returns the points taken.
- */
-export function withdrawConsent(s: GameState): number {
-  let total = 0;
-  for (const p of s.queue) {
-    total += takeBack(s, p, p.unconfirmed);
-    p.unconfirmed = 0;
-    p.paidTo = p.sending?.score ?? p.verified;
-  }
-  s.consent = false;
   return total;
 }
 
@@ -689,17 +667,19 @@ export function unconfirmedPoints(s: GameState): number {
 }
 
 /**
- * Whether beating `leader` pays the bonus for another name's record: not yet paid here, not our
- * entry, and not our name as the server stores it (it strips angle brackets, for one).
+ * Whether every payment on the problem now pays double: the board is visibly past another name's
+ * record (or a published value), and the server has not yet made our entry the leader. The window
+ * opens with the first payment that passes the record and closes when an answer makes our entry
+ * the leader (applyAnswer sets `leader` to it); when another name leads again, the next beat opens a
+ * new one. Our own record never pays double. The name is compared as the server stores it (it
+ * strips angle brackets, for one), and a leader read from a "behind" answer has no id.
  */
-function beatsOther(p: ProblemState, leader: Leader | null, name: string): boolean {
-  // a leader read from a "behind" answer has no id; the name tells it from ours
-  return (
-    !p.beatPaid &&
-    !!leader &&
-    (leader.id === null || leader.id !== p.ourId) &&
-    sanitizeName(leader.name) !== sanitizeName(name)
-  );
+function beating(p: ProblemState, name: string): boolean {
+  const leader = p.leader;
+  const other = !!leader && (leader.id === null || leader.id !== p.ourId) && sanitizeName(leader.name) !== sanitizeName(name);
+  if (leader && !other) return false;
+  const target = Math.min(other ? leader!.score : Infinity, p.published ?? Infinity);
+  return p.best !== null && Number.isFinite(target) && Number(show6(p.best)) < Number(show6(target));
 }
 
 // ---------- the server ----------
@@ -777,6 +757,7 @@ export function applyAnswer(
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
       p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
+      // the lead is another name's again: taking it back is a new beat, with its own double pay
       p.paidTo = outcome.leaderScore;
       points = pay(s, p);
     }
@@ -900,7 +881,7 @@ export function addToQueue(s: GameState, p: ProblemState): void {
 }
 
 /**
- * Drops a problem from the queue. With consent and an unsent improvement it stays, marked leaving,
+ * Drops a problem from the queue. With an unsent improvement it stays, marked leaving,
  * until that has been sent; otherwise it leaves now. Returns whether it left now.
  */
 export function drop(s: GameState, key: string, now: number): boolean {
@@ -908,7 +889,7 @@ export function drop(s: GameState, key: string, now: number): boolean {
   if (!p) return false;
   p.leaving = true;
   if (s.focus === key) s.focus = slotted(s)[0]?.key ?? null;
-  if (s.consent && hasUnsent(p)) return false;
+  if (hasUnsent(p)) return false;
   leave(s, key, now);
   return true;
 }
@@ -938,13 +919,11 @@ export function leave(s: GameState, key: string, now: number): void {
 
 /**
  * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
- * patience of evaluations without progress. A best that cannot be sent (no name on records yet) is
- * never dropped this way, nor anything with the patience at Never.
+ * patience of evaluations without progress. Nothing with the patience at Never is dropped this way.
  */
 export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
   const patience = s.settings.patience;
   if (patience === null || p.leaving || p.closed) return null;
-  if (!s.consent && hasUnsent(p)) return null;
   return p.sinceGain >= patience ? "stalled" : null;
 }
 

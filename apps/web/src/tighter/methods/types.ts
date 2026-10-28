@@ -91,6 +91,8 @@ export interface MethodGame {
    * `tunedTime`). For a method whose levels do something else than search more per evaluation.
    */
   tuneNote?: string;
+  /** The exact bench behind the tuning card, for its Mechanics entry (a default when missing). */
+  tuneDetail?: string;
   /** What the tuning card calls level 0. Default: "the solver's defaults". */
   tuneBase?: string;
   /** The tuning card's effect, in place of the shared "Each level gives … more search per evaluation." */

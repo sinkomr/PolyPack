@@ -11,7 +11,7 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
-import { EvolveMethod, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
+import { EvolveMethod, HEAD2_AUTO_LEVELS, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
 
 /**
  * Standing: the reset currency (plan §5).
@@ -157,26 +157,26 @@ export const RULES: readonly Rule[] = [
     id: "circles",
     name: "Circles only",
     limit:
-      "Only problems with circle pieces or a circle container are dealt. The open ones are circles in a polygon, or polygons in a circle, of 21 to 100 sides. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.",
-    reward: "Every polygon problem with circle pieces or a circle container pays 1.5 times the points.",
+      "Only problems with circle pieces or a circle container are dealt. This covers 2D in 2D only, and other dimensions are dealt as usual.",
+    reward: "Every 2D in 2D problem with circle pieces or a circle container pays 1.5 times the points.",
   },
   {
     id: "small",
     name: "Small problems only",
-    limit: `Only problems with N + M + P at most ${SMALL_TOTAL} are dealt, where N and M are the sides of the piece and of the container (0 for a circle) and P is the number of pieces. The rule covers the polygon problems of 2D in 2D only, so problems of other dimensions are dealt as usual.`,
-    reward: `Every polygon problem with N + M + P at most ${SMALL_TOTAL} pays 1.5 times the points.`,
+    limit: `Only problems of size ${SMALL_TOTAL} or less are dealt. Size means N + M + P, the sides of the piece and of the container plus the number of pieces, with 0 sides for a circle. This covers 2D in 2D only, and other dimensions are dealt as usual.`,
+    reward: `Every 2D in 2D problem of size ${SMALL_TOTAL} or less pays 1.5 times the points.`,
   },
   {
     id: "clicks",
     name: "Clicks only",
-    limit: "Auto-eval does not run, so every evaluation comes from your own clicks.",
+    limit: "Auto-eval is off, so every evaluation comes from your own clicks.",
     reward: "Every click runs one more evaluation.",
   },
   {
     id: "method",
     name: "One method",
     limit: "Only mc_compress runs. Other methods are greyed out, and pipeline stages that use them are skipped.",
-    reward: "Points on boards found by mc_compress are multiplied by 1.5.",
+    reward: "Improvements found by mc_compress pay 1.5 times the points.",
   },
 ];
 export const ruleById = (id: string | null) => RULES.find((r) => r.id === id) ?? null;
@@ -240,8 +240,8 @@ export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string
 export { RESET_MIN } from "./points";
 /**
  * The confirmed cycle RP a reset needs, by the number of resets so far [SPEC, Michael's ladder of
- * 2026-10-26]: 200,000,000 in the first cycle and 5 times the last one's after: 1,000,000,000,
- * then 5,000,000,000.
+ * 2026-10-26, first reset raised 5x on 2026-10-27]: 1,000,000,000 in the first cycle and 5 times the
+ * last one's after: 5,000,000,000, then 25,000,000,000.
  */
 export const resetThreshold = (resets: number): number => RESET_MIN * Math.pow(RESET_GROWTH, resets);
 
@@ -255,7 +255,7 @@ export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what:
   "2-in-2": { label: "2D in 2D", what: "polygons and circles packed in polygons and circles" },
   "2-on-3": { label: "2D on 3D", what: "pieces packed on the surfaces of solids" },
   "3-in-3": { label: "3D in 3D", what: "solids packed in solids" },
-  "3-on-4": { label: "3D on 4D", what: "solids packed on the boundary of a four-dimensional solid" },
+  "3-on-4": { label: "3D on 4D", what: "solids packed on the surface of a 4D solid" },
 };
 
 /** Records the player leads, as far as the game has seen (queue and past). */
@@ -289,7 +289,7 @@ export const ALWAYS_KEPT: readonly UpgradeId[] = ["standing", "rent", "rentx", "
 /** Head starts: owned at once when a cycle begins (with their prerequisites). */
 export const HEAD_STARTS: Readonly<Partial<Record<UpgradeId, readonly UpgradeId[]>>> = {
   head1: ["trace", "click2", "click3", "click4", "click5", "auto1"],
-  head2: ["queue3", "auto2", "auto3", "auto4", "auto5", "basin"],
+  head2: ["queue3", "autox", "basin"],
   head3: ["reach2", "advance", "lanes2"],
 };
 const METHOD_IDS: readonly UpgradeId[] = ["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"];
@@ -323,9 +323,11 @@ export function nextCycleTree(s: GameState): { owned: UpgradeId[]; levels: Parti
     .flatMap(([, ids]) => ids!);
   const keptSet = new Set(kept);
   const owned = new Set([...kept, ...withPrerequisites(heads)]);
-  // levels stay only with the upgrades kept (a head start grants first levels only)
+  // levels stay only with the upgrades kept (a head start grants first levels only, bar Head start II's
+  // levels of Faster auto-eval, which it brings up to the rate of the old fifth rung)
   const levels: Partial<Record<UpgradeId, number>> = {};
   for (const [id, l] of Object.entries(s.levels) as [UpgradeId, number][]) if (keptSet.has(id)) levels[id] = l;
+  if (has.has("head2")) levels.autox = Math.max(levels.autox ?? 0, HEAD2_AUTO_LEVELS);
   return { owned: UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id), levels };
 }
 
