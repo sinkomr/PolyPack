@@ -55,7 +55,6 @@ describe("Tighter cheats", () => {
   it("are never taken back by an answer of the server", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
-    s.consent = true;
     const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
     addToQueue(s, p);
     applyLoadAll(p, board(), 10, null);

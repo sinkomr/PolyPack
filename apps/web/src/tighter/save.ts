@@ -18,8 +18,9 @@ import {
   TOLERANCES,
   TRACE_LIMIT,
   newGame,
+  payAll,
 } from "./game";
-import { sanitizeName } from "./names";
+import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
 import { CONTEST, Tier } from "./points";
 import type { RunRecord } from "./submission";
@@ -123,7 +124,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -279,6 +280,16 @@ export const MIGRATIONS: Record<number, Migration> = {
   5: (save) => {
     const { save: out, report } = convertSaveUnits(save);
     return { ...out, unitsConverted: report };
+  },
+  /**
+   * Version 7 has no consent to send: every game has a name from its first moment and sends under it. A
+   * save without a name (as the server stores names) gets a generated one. Points that waited because
+   * sending was off pay once when the save is read (`payWaiting`, read by readSave).
+   */
+  6: (save) => {
+    const named = sanitizeName(str(save.name, "", 400));
+    const { consent, ...rest } = save;
+    return { ...rest, name: named || generatePlayerName(), payWaiting: consent !== true || !named };
   },
 };
 
@@ -733,9 +744,8 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     rpEarned: num(save.rpEarned, 0, 0),
     owned,
     levels,
-    // the name as the server stores it; no consent without one
-    name: sanitizeName(str(save.name, "", 400)),
-    consent: bool(save.consent, false) && sanitizeName(str(save.name, "", 400)) !== "",
+    // the name as the server stores it; a save without one gets a generated name
+    name: sanitizeName(str(save.name, "", 400)) || generatePlayerName(),
     settings: {
       auto: bool(settings.auto, g.settings.auto),
       method: method as EvolveMethod,
@@ -794,9 +804,12 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
   const converted = units ? int(units.converted, 0) : 0;
   const dropped = units ? int(units.dropped, 0) : 0;
+  const state = normalize(m.save, now);
+  // what the boards improved while sending was off pays now, one event per problem, as it did on consent
+  if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
   return {
     ok: true,
-    state: normalize(m.save, now),
+    state,
     ...(rescaled > 0 ? { rescaled } : {}),
     ...(refunded > 0 ? { refunded } : {}),
     ...(retired.groups.length ? { retired } : {}),

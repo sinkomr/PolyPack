@@ -42,11 +42,10 @@ function owning(s: GameState, ids: UpgradeId[]): void {
   for (const id of ids) add(id);
 }
 
-/** A game with consent and one open problem whose first record has been paid (not yet confirmed). */
+/** A game with one open problem whose first record has been paid (not yet confirmed). */
 function withRecord(): { s: GameState; p: ReturnType<typeof newProblem> } {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 40 }, "open", T0);
   addToQueue(s, p);
   const b = loadAll(24, 30, 40);
@@ -185,7 +184,7 @@ describe("Tighter seams", () => {
     expect(g.queue[0].published).toBeNull();
     expect(g.economy).toMatchObject({ recorded: [], base: {}, checks: {} });
     expect(g.picks).toMatchObject({ offers: [], retake: [], dealt: {} });
-    // plays on: the next improvement pays (with consent), with no multiplier
+    // plays on: the next improvement pays, with no multiplier
     const p = g.queue[0];
     const better = { ...p.board!, pieces: p.board!.pieces.map((q) => ({ ...q, y: q.y + 0.01 })) };
     const c = applyStep(

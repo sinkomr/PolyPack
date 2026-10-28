@@ -38,7 +38,6 @@ const runRec = (seed: number) => ({ method: "mc_compress", params: {}, seed, bud
 function readyProblem(name = "Ada"): { s: ReturnType<typeof newGame>; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = name;
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   p.phase = "loaded";

@@ -59,7 +59,6 @@ const B = areaLowerBound(24, 30, 3);
 function game(): { s: GameState; p: ProblemState } {
   const s = newGame(T0, 1);
   s.name = "Ada";
-  s.consent = true;
   const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "open", T0);
   addToQueue(s, p);
   applyLoadAll(p, board(3), 1.28 * B, null);
@@ -97,9 +96,10 @@ describe("Tighter points multiplier", () => {
 
   it("shows unpaid points with the multiplier when the game is given", () => {
     const { s, p } = game();
-    s.consent = false;
     s.standing.total = 10;
     applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    // the step paid at once: what it would pay again, measured from the start
+    p.paidTo = null;
     const plain = pendingPoints(p, s.name)!;
     const multiplied = pendingPoints(p, s.name, s)!;
     expect(plain.multiplier).toBe(1);

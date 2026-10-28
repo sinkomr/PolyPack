@@ -54,14 +54,14 @@ async function click(page: Page): Promise<void> {
     .toBe(true);
 }
 
-/** The name form: in the first record's pop-up while it is up, else in Settings (closed again after). */
-async function consent(page: Page, name: string): Promise<void> {
-  if (!(await page.locator("#t-name").isVisible())) await page.click("#t-open-settings");
-  await page.fill("#t-name", name);
-  await page.check("#t-agree");
-  await page.click("#t-consent-save");
-  if (await page.locator("#t-settings").evaluate((d) => (d as HTMLDialogElement).open))
-    await page.click("#t-settings-close");
+/** A name of the player's own: the name pop-up, opened from Settings (closed again after). */
+async function setName(page: Page, name: string): Promise<void> {
+  await page.click("#t-open-settings");
+  await page.click("#t-name-change");
+  await page.fill("#t-name-input", name);
+  await page.click("#t-name-save");
+  await expect(page.locator("#t-name-popup")).toHaveCount(0);
+  await page.click("#t-settings-close");
 }
 
 /** The tech tree's tab, opened: the upgrades live there. */
@@ -419,8 +419,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 25);
+  await setName(page, "E2E Long");
   await firstRecord(page);
-  await consent(page, "E2E Long");
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
   const p = await focused(page);
   // a confirmed record is remembered for collections, with its tier
@@ -506,8 +506,8 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 26);
+  await setName(page, "E2E Old Save");
   await firstRecord(page);
-  await consent(page, "E2E Old Save");
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
   const p = await focused(page);
   await page.waitForTimeout(1500);
@@ -603,8 +603,8 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 27);
+  await setName(page, "E2E Advance");
   await firstRecord(page);
-  await consent(page, "E2E Advance");
   const first = await focused(page);
   // the board counts the problem's evaluations, and those since its last progress
   const count = /^[\d,]+ evaluations? · [\d,]+ since progress$/;
@@ -692,8 +692,8 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 31);
+  await setName(page, "E2E Lanes");
   await firstRecord(page);
-  await consent(page, "E2E Lanes");
   await give(page, [...CLICK_LADDER, "queue3", "queue4", "queue6", "rank2", "pick3", "advance", "auto1", "lanes2"]);
   await page.evaluate(() => ((window as any).tighter.state.dealer.tokens = 6));
   // five offers taken by hand: a full queue of six, five of them never compacted

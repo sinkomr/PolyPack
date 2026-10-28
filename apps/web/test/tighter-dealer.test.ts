@@ -480,7 +480,6 @@ describe("Tighter published values", () => {
 
   it("pay nothing until the board beats the published value, then pay from it at 100x", () => {
     const s = newGame(T0, 1);
-    s.consent = true;
     s.name = "Ada";
     const p = newProblem({ family: "polygon", N: 7, M: 7, P: 40 }, "published", T0);
     addToQueue(s, p);
