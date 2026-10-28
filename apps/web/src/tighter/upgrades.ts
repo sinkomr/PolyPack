@@ -5,7 +5,7 @@ import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { RESET_GROWTH, RESET_MIN } from "./points";
+import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
 import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
 import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
@@ -495,7 +495,7 @@ function tuneRung(id: UpgradeId, method: EvolveMethod, cost: number, requires: U
 }
 
 const RING_TEXT =
-  "Contested problems are site records and published values of shapes with up to 20 sides (or circles), which other players have worked on. They are dealt only when N + M + P is at least your size ring's bound.";
+  "Contested problems are ones where other players or researchers already hold a record, on shapes with up to 20 sides or on circles. The dealer deals them only when a problem's size is at least your size bound. The size of a problem is the piece's sides, the container's sides and the number of pieces, added up.";
 
 function ringRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = false): Upgrade {
   const min = RING[id]!;
@@ -507,13 +507,14 @@ function ringRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery = 
     requires,
     effect:
       min === 0
-        ? "Site records and published values of every size can be dealt."
-        : `Site records and published values are dealt down to N + M + P = ${min} instead of ${prev}.`,
+        ? "Contested problems can now be of every size."
+        : `Contested problems can now be dealt from size ${min} up, instead of ${prev}.`,
     how: {
       text: [
         RING_TEXT,
-        `${min === 0 ? "This upgrade removes the bound." : `This upgrade lowers the bound to ${min}.`} Smaller problems evaluate faster. One mc_compress evaluation took about 7.4 ms at N + M + P = 180, 1.8 ms at 85, 0.45 ms at 33 and 0.22 ms at 18 on the machine it was measured on. The dealer's ranking favours faster problems (see Dealer: best of 2).`,
+        `${min === 0 ? "This removes the size bound." : `This lowers the size bound to ${min}.`} Smaller problems run faster, and the dealer prefers problems that run faster (see Dealer: best of 2).`,
       ],
+      note: "Measured on one machine, an mc_compress evaluation took about 7.4 ms at N + M + P = 180, 1.8 ms at 85, 0.45 ms at 33 and 0.22 ms at 18.",
       math: min === 0 ? undefined : [`${sym("N")} + ${sym("M")} + ${sym("P")} ≥ ${min}`],
       vars:
         min === 0
@@ -542,9 +543,10 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
         : `The dealer draws ${k} problems instead of ${k / 2} and deals the best one.`,
     how: {
       text: [
-        `When a deal is due, the dealer draws ${k} candidate problems, checks each with the server, and ranks them by the value V below. It deals the best one, or the next if that one's packing cannot be read. A lost record waiting for Retake and Collector's pick come before the ranked candidates.`,
-        `V is the record points the candidate is expected to pay per evaluation, scaled up for problems that evaluate faster. ${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1. The square root splits the difference between your clicks, which count the same however long an evaluation takes, and auto-eval, which your computer's speed limits on larger problems.`,
+        `When a deal is due, the dealer draws ${k} problems and checks each with the server. It ranks them and deals the best one. If that one cannot be read, it deals the next. Problems from Retake and Collector come before the ranked ones.`,
+        "The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
       ],
+      note: `${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1.`,
       math: [
         `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × ${number(RP_PER_EVAL)} × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
         `${sym("w")} = ${sym("d")}(${sym("N")}) × ${sym("d")}(${sym("M")})`,
@@ -586,8 +588,8 @@ function pickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
         : "The dealer offers you 5 problems at a time instead of 3.",
     how: {
       text: [
-        `When a slot is free and a deal is saved, the dealer draws problems one at a time and shows up to ${n} of them as offers, best first by the value it expects them to pay (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks an offer with the server as you take it, and removes offers that your tree, your filters or the cycle's rule no longer allow.`,
-        "With Auto-advance and auto-eval on, a stalled problem is also replaced by the best offer, and the game takes the top offer into a free slot for you whenever a lane would otherwise have no problem to work on.",
+        `When a slot is free and a deal is earned, the dealer shows you up to ${n} problems, best first (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks your choice with the server as you take it, and it removes any offer that your upgrades, filters or the cycle rule no longer allow.`,
+        "With Auto-advance and auto-eval on, a stalled problem is replaced by the best offer, and the game also takes the top offer for you whenever a lane has no problem to work on.",
       ],
       note: "Each offer is a separate draw, so the dealer's best-of choice does not apply to offers. The first problem of a game is always dealt for you.",
     },
@@ -763,7 +765,7 @@ const priceNote = (id: CardSliceId): string => {
   const slice = sliceById(id);
   const resets = id === "curved" ? 0 : (OPENING_RESETS[slice.dimension] ?? 0);
   const p = slicePrice(id, resets);
-  return `In cycle ${resets + 1}, with a threshold of ${thresholdAfter(resets).toLocaleString("en-US")}, it costs ${p.toLocaleString("en-US")} RP. It is bought again in each cycle, at that cycle's threshold.`;
+  return `In cycle ${resets + 1} the reset threshold is ${thresholdAfter(resets).toLocaleString("en-US")} RP, and this card costs ${p.toLocaleString("en-US")} RP. You buy it again in each cycle, priced from that cycle's threshold.`;
 };
 
 function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what: string): Upgrade {
@@ -792,110 +794,110 @@ function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what:
  */
 function polyWhat(id: SliceId, what: string): string {
   const n = solidsOfSlice(id);
-  return `The dealer also deals ${what} (${n} solids) as pieces and as containers, in pairs with any solid of a family that is open, itself included. Every ordered pair of solids is a problem, with 2 to 500 pieces: ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem with every family open.`;
+  return `The dealer also deals ${what} (${n} solids) as pieces and as containers. A problem pairs a piece solid with a container solid, from any family that is open, this one included. Each pair has 2 to 500 pieces. With every family open, that is ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem.`;
 }
 
 const nf = (n: number) => n.toLocaleString("en-US");
 
 const SURFACE_PIECES =
-  "Pieces are disks or polygons of 3 to 100 sides, with 1 to 100 of them, so each solid holds 9,900 problems.";
+  "Pieces are disks or polygons of 3 to 100 sides, and there are 1 to 100 of them. That makes 9,900 problems on each solid.";
 
 const SLICE_CARDS: Upgrade[] = [
   sliceCard(
     "curved",
     ["ring30"],
-    "Deals packings on the hyperbolic plane and on spheres, besides the flat plane.",
-    `The dealer also deals curved problems: ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces that are disks or polygons of 3 to 100 sides, packed in a regular polygon or disk on a surface of constant curvature K. K below 0 is the hyperbolic plane, K = 0 is the flat plane, and K above 0 is a sphere of radius 1 / √K. This is 2D in 2D, played on curved surfaces. Most have no research record yet.`,
+    "The dealer also deals packings on curved surfaces.",
+    `Curved problems are 2D in 2D played on curved surfaces, each with a constant curvature. Negative curvature gives the hyperbolic plane, zero gives the flat plane, and positive curvature gives a sphere. There are ${nf(domainProblems("curved"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.curved} pieces. Pieces are disks or polygons of 3 to 100 sides, packed in a regular polygon or a disk. Most have no research record yet.`,
   ),
   sliceCard(
     "surf-prisms",
     [],
-    "Deals packings on the surfaces of the 9 prisms and 9 antiprisms.",
-    `The dealer also deals pieces packed on the surface of a prism with 3, or 5 to 12 sides, and of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 9 prisms and 9 antiprisms.",
+    `The dealer also deals pieces packed on the surface of a prism with 3 or 5 to 12 sides, or of an antiprism with 4 to 12 sides. A piece may bend over an edge onto the next face. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-archimedean",
     ["surf-prisms"],
-    `Deals packings on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
-    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. Without folding these would be 2D packings of regular faces, so only the folded ones are dealt. ${SURFACE_PIECES}`,
+    `The dealer also deals pieces packed on the ${SURFACE_ARCHIMEDEAN.length} Archimedean solids.`,
+    `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. The faces are regular, so a packing that stays on one face would be a plain 2D packing, and only packings that bend over an edge are dealt. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-a",
     ["surf-archimedean"],
-    "Deals packings on the 6 Catalan solids with 12 or 24 faces.",
-    `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces), and on the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 6 Catalan solids with 12 or 24 faces.",
+    `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces). It also deals the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-b",
     ["surf-catalan-a"],
-    "Deals packings on the 6 Catalan solids with 30 to 60 faces.",
-    `The dealer also deals pieces packed on the rhombic triacontahedron (30 faces), the disdyakis dodecahedron (48 faces), and the deltoidal hexecontahedron, the pentagonal hexecontahedron, the pentakis dodecahedron and the triakis icosahedron (60 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
+    "The dealer also deals pieces packed on 6 Catalan solids with 30 to 60 faces.",
+    `The dealer also deals pieces packed on the rhombic triacontahedron (30 faces) and the disdyakis dodecahedron (48 faces). It also deals the deltoidal hexecontahedron, the pentagonal hexecontahedron, the pentakis dodecahedron and the triakis icosahedron (60 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "surf-catalan-c",
     ["surf-catalan-b"],
-    "Deals packings on the disdyakis triacontahedron, the Catalan solid with 120 faces.",
+    "The dealer also deals pieces packed on the Catalan solid with 120 faces.",
     `The dealer also deals pieces packed on the disdyakis triacontahedron, the Catalan solid with the most faces. A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "sphere",
     ["surf-catalan-b"],
-    "Deals packings on the surface of a sphere.",
-    `The dealer also deals pieces packed in a cap of a sphere, the smallest one that holds them: ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+    "The dealer also deals pieces packed on the surface of a sphere.",
+    `The dealer also deals pieces packed in a cap of a sphere. The game uses the smallest cap that holds them. There are ${nf(domainProblems("sphere"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.sphere} pieces. Pieces are disks or polygons of 3 to 100 sides. Some have a research record to beat, and the others are open.`,
   ),
   sliceCard(
     "torus",
     ["surf-catalan-b"],
-    "Deals packings on a torus, with a square, a hexagonal or a free cell.",
-    `The dealer also deals pieces packed on a flat torus whose cell is a square, a hexagon or any shape, the smallest one that holds them: ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces that are disks or polygons of 3 to 100 sides. Some have a research record to beat; the others are open.`,
+    "The dealer also deals pieces packed on a torus, a surface that wraps around.",
+    `The dealer also deals pieces packed on a flat torus. A torus wraps around, so a piece that leaves one side comes back in on the opposite side. Its cell is a square, a hexagon or any shape, and the game uses the smallest one that holds the pieces. There are ${nf(domainProblems("torus"))} kinds of problem, with 2 to ${DOMAIN_MAX_P.torus} pieces. Pieces are disks or polygons of 3 to 100 sides. Some have a research record to beat, and the others are open.`,
   ),
   sliceCard(
     "surf-nofold-catalan",
     ["surf-catalan-b"],
-    "Deals packings on the Catalan solids where a piece stays on one face.",
-    `The dealer also deals the Catalan solids without folding: each piece must lie inside one face, so each face is a separate 2D packing. This is for the Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
+    "The dealer also deals Catalan solids where each piece stays on one face.",
+    `The dealer also deals the Catalan solids without folding. Each piece must lie inside one face, so each face is a separate 2D packing. This is only for Catalan solids, whose faces are not regular. ${SURFACE_PIECES}`,
   ),
   sliceCard(
     "poly-catalan",
     [],
-    "Opens the Catalan solids as pieces and containers.",
+    "The dealer can use the Catalan solids as pieces and containers.",
     polyWhat("poly-catalan", "the Catalan solids"),
   ),
   sliceCard(
     "poly-platonic",
     [],
-    "Opens the Platonic solids as pieces and containers.",
+    "The dealer can use the Platonic solids as pieces and containers.",
     polyWhat("poly-platonic", "the Platonic solids"),
   ),
   sliceCard(
     "poly-prisms",
     ["poly-catalan"],
-    "Opens the prisms as pieces and containers.",
+    "The dealer can use the prisms as pieces and containers.",
     polyWhat("poly-prisms", "the prisms"),
   ),
   sliceCard(
     "poly-antiprisms",
     ["poly-prisms"],
-    "Opens the antiprisms as pieces and containers.",
+    "The dealer can use the antiprisms as pieces and containers.",
     polyWhat("poly-antiprisms", "the antiprisms"),
   ),
   sliceCard(
     "poly-elongated",
     ["poly-antiprisms"],
-    "Opens the elongated prisms as pieces and containers.",
+    "The dealer can use the elongated prisms as pieces and containers.",
     polyWhat("poly-elongated", "the prisms of height 1.5, 2 and 3"),
   ),
   sliceCard(
     "poly-duals",
     ["poly-elongated"],
-    "Opens the bipyramids and trapezohedra as pieces and containers.",
+    "The dealer can use the bipyramids and trapezohedra as pieces and containers.",
     polyWhat("poly-duals", "the bipyramids and trapezohedra"),
   ),
   sliceCard(
     "balls",
     ["poly-platonic"],
-    "Deals packings of balls in solids, solids in a ball, and balls in a ball.",
-    `The dealer also deals packings with balls: balls of diameter 1 in the smallest ball or in the smallest copy of a solid, and unit solids in the smallest ball, with 2 to 100 pieces each. A solid is dealt once its family is open. With every family open that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
+    "The dealer also deals problems with balls, as pieces or as the container.",
+    `The dealer also deals packings with balls. They are balls of diameter 1 in the smallest ball or the smallest copy of a solid, and unit solids in the smallest ball. Each has 2 to 100 pieces. A solid is dealt once its family is open. With every family open, that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
   ),
 ];
 
@@ -976,11 +978,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: site records",
     cost: 48000,
     requires: ["basin"],
-    effect: "The dealer also deals weak site records, which pay 3 times the points.",
+    effect: "The dealer also deals weak site records, worth 3 times the points.",
     how: {
       text: [
-        `${RING_TEXT} With Reach, two in three of the dealer's draws are contested problems.`,
-        "A site record is loose when its gap to the area bound exceeds the median gap of the same shapes' records with 3 fewer to 3 more pieces by at least 0.005. Reach deals loose records with N + M + P ≥ 300. The board starts from the leader's packing, and every point an improvement on it pays is multiplied by 3.",
+        `${RING_TEXT} With Reach, two in three draws are contested problems.`,
+        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 3.",
       ],
       math: [
         `${sym("g")} = ${sym("s")} / ${sym("b")} − 1`,
@@ -1036,11 +1038,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Dealer filters",
     cost: 160_000,
     requires: ["pick3"],
-    effect: "You choose which piece shapes, containers, piece counts and tiers the dealer may deal.",
+    effect: "You choose which kinds of problem the dealer may deal.",
     how: {
       text: [
-        "The Queue panel gets a Filters section. You can list the piece shapes and the container shapes allowed, as numbers and ranges such as 0, 3-6, 21-100 (0 is the circle, then 3 to 100 sides). You can also set the fewest and most pieces (1 to 500) and the tiers. An empty list allows everything.",
-        "The dealer deals or offers a problem only when it passes every filter. Filters that allow too little can leave it with nothing to deal, and it then waits a while before it tries again.",
+        "The Queue panel gets a Filters section, where you can allow only some piece shapes, container shapes, piece counts and tiers. A tier is a kind of problem, which is open, loose record, site record or published value.",
+        "You write shapes as numbers and ranges, such as 0, 3-6, 21-100, where 0 means the circle. An empty list allows everything.",
+        "The dealer deals or offers a problem only if it passes every filter. If your filters allow too little, the dealer has nothing to deal and tries again after a while.",
       ],
     },
     row: "dealer",
@@ -1055,8 +1058,8 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Every record you still lead pays 1 % of what it earned, every hour.",
     how: {
       text: [
-        "Each record you lead pays rent by the hour for as long as you lead it, even while this page is closed. The game checks your records with the server one at a time, each at most once every 10 minutes, and pays the rent since a record's last check, up to a week of it.",
-        "When a check or the live feed finds a record taken by another name, the rent since its last check is not paid.",
+        "Each record you lead pays rent every hour for as long as you lead it, even while this page is closed. The game checks your records with the server one at a time, each at most every 10 minutes. It pays the rent since a record's last check, up to a week.",
+        "If a check finds that another name has taken the record, the rent since its last check is not paid.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1086,13 +1089,13 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "More open problems",
     cost: 240_000,
     requires: ["queue4"],
-    effect: "Half the open problems dealt can have any sides from 21 to 100 and 40 to 500 pieces.",
+    effect: "Half of the open problems can have any sides from 21 to 100 and 40 to 500 pieces.",
     how: {
       text: [
-        "Open problems have no site entry yet. Without this upgrade the dealer draws them from a fixed list of 2,601, where N and M are among 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 and P among 40, 60, 80, 100, 120, 150, 200, 250 and 300.",
-        "With it, each draw of an open problem has an even chance to come instead from any N and M from 21 to 100 and any P from 40 to 500, each drawn uniformly. Transfers then also look at the problems with 1 to 3 fewer pieces.",
+        "An open problem is one that has no record on the site yet. Normally the dealer picks open problems from a fixed list of 2,601 problems.",
+        "With this upgrade, half of the open problems come from a much wider choice instead, with any sides from 21 to 100 and any piece count from 40 to 500. Transfers then also look at problems with 1 to 3 fewer pieces.",
       ],
-      note: "Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
+      note: "The fixed list has the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100 for the piece and the container, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. The wider choice draws each value uniformly. Under the Circles only and Small problems only rules, the rule's own list of problems is used instead.",
     },
     row: "problems",
   },
@@ -1104,9 +1107,11 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Completed sets of records add to all your points, for good.",
     how: {
       text: [
-        "Collections count the records the server has confirmed, and the count is kept through resets. A shape pair is one piece shape in one container shape, each with 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 or 100 sides. Each shape pair with a record on all 9 of its piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300) adds 2 %. Each piece shape adds 1 % at 10, 30 and 100 records. Each tier (open problem, loose record, site record, published value) adds 5 % once you have its first record.",
+        "Collections count the records the server has confirmed, and the count is kept through resets. A shape pair is one piece shape in one container shape, and it is complete when you hold a record on each of its 9 piece counts.",
+        "Each complete pair adds a bonus. So does each piece shape with many records, and each tier once you have its first record. A tier is a kind of problem, which is open, loose record, site record or published value.",
         "The bonus multiplies every point you are paid, rent included.",
       ],
+      note: "Shape pairs use the sides 21, 24, 27, 30, 33, 36, 40, 44, 47, 50, 55, 60, 66, 72, 80, 90 and 100, and the piece counts 40, 60, 80, 100, 120, 150, 200, 250 and 300. Each complete pair adds 2 %. Each piece shape adds 1 % at 10, 30 and 100 records. Each tier adds 5 %.",
       math: [`${sym("m", "c")} = 1 + 0.02 × ${sym("a")} + 0.01 × ${sym("b")} + 0.05 × ${sym("t")}`],
       vars: [
         [sym("m", "c"), "the multiplier from collections"],
@@ -1122,12 +1127,13 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: every site record",
     cost: 320_000,
     requires: ["ring200"],
-    effect: "The dealer also deals site records that are not loose, at 10 times the points.",
+    effect: "The dealer also deals all other site records, worth 10 times the points.",
     how: {
       text: [
-        `${RING_TEXT} This upgrade adds every site record without a published value, loose or not.`,
-        "The board starts from the leader's packing, and every point an improvement on it pays is multiplied by 10. These records have been worked on, so the dealer expects only 0.1 of the room an open problem has.",
+        `${RING_TEXT} This adds every site record that has no published value, loose or not.`,
+        "Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 10. These records have been worked on a lot, so the dealer expects little room to improve them.",
       ],
+      note: "The dealer expects 0.1 of the room an open problem has.",
     },
     row: "problems",
   },
@@ -1138,11 +1144,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Retake",
     cost: 360_000,
     requires: ["rent"],
-    effect: "A record you lose is offered again first, starting from the new leader's packing.",
+    effect: "A record you lose comes back to you first, starting from the new leader's packing.",
     how: {
       text: [
-        "When the server shows that another name took a record of yours on a problem no longer in your queue, the problem goes on a retake list. At each deal, the oldest problem on that list comes before every other candidate, if it still takes entries and someone else still leads it.",
-        "It starts from the new leader's packing, which your board must beat by more than the 10⁻⁹ minimum. A problem whose piece or container has more than 20 sides counts as a loose record (3 times the points). On smaller shapes it is ranked like any site record, or as a published value where there is one.",
+        "Sometimes another name takes a record of yours on a problem that is no longer in your queue. That problem then goes on a retake list, and at each deal the oldest problem on the list comes before all others, as long as someone else still leads it.",
+        `It starts from the new leader's packing, which your board must beat by more than one billionth. Taking the lead back pays the ${BEAT_OTHER_FACTOR} times bonus again, each time you take it.`,
+        "A problem with a shape of more than 20 sides counts as a loose record, worth 3 times the points. Problems with smaller shapes rank like other site records, or like published values where there is one.",
       ],
     },
     row: "dealer",
@@ -1199,7 +1206,7 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Each level multiplies the rent of every record by 1.5.",
     how: {
       text: [
-        "Each level multiplies every record's rent by 1.5, so level 1 pays 1.5 times the rent, level 2 pays 2.25 times and level 5, the last, about 7.6 times.",
+        "Each level multiplies every record's rent by 1.5. Level 1 pays 1.5 times the rent, level 2 pays 2.25 times, and level 5, the last, pays about 7.6 times.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1216,11 +1223,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Collector",
     cost: 640_000,
     requires: ["collections", "pick3"],
-    effect: "Every third deal fills a gap in the collection you are closest to completing.",
+    effect: "Every third deal fills a gap in the collection you are closest to finishing.",
     how: {
       text: [
-        "A collection here is a shape pair (one piece shape in one container shape, as in Collections) with a record on each of its 9 piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300). On every third deal, the dealer first looks at the pair where you hold the most of those records but not all, and deals a missing problem of it that the server shows is still open.",
-        "It checks at most 6 such problems per deal. If none is open, the deal goes on as usual.",
+        "A collection is one piece shape in one container shape, as in Collections, with a record on each of 9 piece counts (40, 60, 80, 100, 120, 150, 200, 250 and 300).",
+        "On every third deal, the dealer looks at the collection where you hold the most records but not all of them. It then deals a missing problem from that collection, if the server shows it is still open. It checks at most 6 problems per deal, and if none is open, the deal goes on as usual.",
       ],
       math: [`Collector's deal when ${sym("D")} mod 3 = 2`],
       vars: [[sym("D"), "problems dealt before this deal"]],
@@ -1234,12 +1241,13 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Learning dealer",
     cost: 800_000,
     requires: ["rank8", "collections"],
-    effect: "The dealer learns which kinds of problem pay you most, and deals more of them.",
+    effect: "The dealer learns which kinds of problem pay you most and deals more of them.",
     how: {
       text: [
-        "The dealer sorts problems into kinds by tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and the shapes of piece and container (circle, 3 to 6 sides, 7 to 20, or more). When a problem that ran at least 200 evaluations leaves the queue, its kind learns the ratio r of what it paid per evaluation to what the dealer expected.",
-        "When it ranks candidates, the dealer draws one correction θ per kind from what that kind has learned and multiplies the kind's values V by it (see Dealer: best of 2). This is Thompson sampling. Kinds that paid well rank higher, and kinds with little data still get tried now and then.",
+        "The dealer groups problems into kinds by their tier, their size and the shapes of the piece and the container. When a problem leaves the queue after at least 200 evaluations, its kind learns how well the problem paid compared with what the dealer expected.",
+        "When the dealer ranks problems, it draws a random correction for each kind, based on what that kind has learned (see Dealer: best of 2). Kinds that paid well rank higher, and kinds with little data still get tried now and then.",
       ],
+      note: "Sizes are N + M + P of at least 300, 200, 120, 80, 50, 30, or less. Shapes are circle, 3 to 6 sides, 7 to 20, or more. The random draw is Thompson sampling.",
       math: [
         `${sym("r")} = min(20, ${sym("G")} / (${sym("E")} × ${sym("p")}))`,
         `${sym("θ")} = max(0.01, ${sym("μ")} + ${sym("σ")} × ${sym("z")})`,
@@ -1330,12 +1338,14 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: published values",
     cost: 4_000_000,
     requires: ["batch", "ring120"],
-    effect: "The dealer also deals problems with a published value, at 100 times the points.",
+    effect: "The dealer also deals problems with a published value, worth 100 times the points.",
     how: {
       text: [
-        `${RING_TEXT} This upgrade adds problems with a best-known value in the literature. Proven values are never dealt.`,
-        "The board starts from the best packing the site can draw, a site record or the published coordinates. Nothing pays until your board goes below the target T, and from there every point is multiplied by 100. A record below a published value waits for an administrator's review. The dealer expects little room, 0.004 of an open problem's, since many published values are excellent.",
+        `${RING_TEXT} This adds problems with a best-known value in the literature. Proven values are never dealt.`,
+        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on every point is multiplied by 100.",
+        "A record below a published value waits for an administrator's review. Many published values are excellent, so the dealer expects little room to improve them.",
       ],
+      note: "The dealer expects 0.004 of the room an open problem has.",
       math: [`${sym("T")} = ${sym("v")} − 10<sup>−${sym("d")}</sup>`],
       vars: [
         [sym("T"), "the side your board must go below"],
@@ -1351,12 +1361,12 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Standing",
     cost: 600_000_000,
     requires: ["collections", "rent", "ring120"],
-    effect: "You can reset the tree for standing, and each point of standing adds 10 % to all points.",
+    effect: "You can reset for standing, and each point of standing adds 10 % to all points.",
     how: {
       text: [
-        `A reset ends the cycle, the play since the last reset. Your record points and most of the tree go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
-        "Your records stay on the server and keep paying rent. Your collection counts, the dealer's learning and the queue stay, and so do the upgrades Records pay rent, Higher rent and Collections. Every point of standing ever earned adds 10 % to all record points, spent or not, and standing buys the Standing row.",
-        "The first reset opens 2D on 3D, pieces packed on the surfaces of solids. The second opens 3D in 3D, solids packed in solids. An opened dimension stays open, and its cards in the Dimensions row are bought again in each cycle.",
+        `A reset ends the cycle, the play since the last reset. Your record points and most upgrades go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
+        "Your records stay on the server and keep paying rent. Your collections, the dealer's learning and the queue stay too, and so do Records pay rent, Higher rent and Collections. Every point of standing you earn adds 10 % to all record points, whether you spend it or not, and you can also spend standing on the Standing row.",
+        "The first reset opens 2D on 3D, where pieces are packed on the surfaces of solids. The second opens 3D in 3D, where solids are packed in solids. An opened dimension stays open, but its cards in the Dimensions row must be bought again in each cycle.",
       ],
       math: [
         `${sym("S")} = ⌊5 × √(${sym("E")} / ${sym("T")})⌋`,
@@ -1386,7 +1396,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle starts with 2 to 5 evaluations per click and Auto-eval.",
     {
       text: [
-        `At every reset, the next cycle begins owning Trace detail, 2, 3, 4 and 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO_BASE)}.`,
+        `Every reset starts the next cycle with Trace detail, 2 to 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO_BASE)}.`,
       ],
     },
   ),
@@ -1398,7 +1408,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Basin hopping and the queue of 3.",
     {
       text: [
-        `At every reset, the next cycle also begins owning Method: basin_hopping and what it needs (6 to 10 evaluations per click), Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(AUTO_BASE + AUTOX_STEP * HEAD2_AUTO_LEVELS)}) and Problem queue: 3.`,
+        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(AUTO_BASE + AUTOX_STEP * HEAD2_AUTO_LEVELS)}) and a queue of 3.`,
       ],
     },
   ),
@@ -1407,18 +1417,19 @@ export const UPGRADES: readonly Upgrade[] = [
     "Cycle rules",
     3,
     ["standing"],
-    "Before a reset you can choose a rule for the next cycle, which earns a lasting reward.",
+    "Before a reset, you can pick a rule for the next cycle and earn a lasting reward.",
     {
       text: [
-        "Before a reset, you can choose a rule for the next cycle in the Standing panel. The cycle is played under it, and the reset that ends that cycle pays extra standing and gives the rule's reward for good.",
-        "Circles only deals only problems with circle pieces or a circle container, and its reward is 1.5 times the points on every problem with circles. Small problems only deals only problems with N + M + P of at most 120, for 1.5 times the points on those. Circles only and Small problems only cover the polygon problems of 2D in 2D, so problems of other dimensions are dealt as usual and pay no reward from them. Clicks only turns auto-eval off, for one more evaluation per click. One method allows only mc_compress, for 1.5 times the points on improvements mc_compress finds.",
+        "Before a reset, you can pick a rule for the next cycle in the Standing panel. You then play that cycle under the rule, and when you reset at its end, you get extra standing and the rule's reward for good.",
+        "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
+        "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
       ],
       math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
       vars: [
         [sym("S", "rule"), "the extra standing for finishing a cycle under a rule"],
         [sym("S"), "the standing the reset gives otherwise"],
       ],
-      note: "Rewards multiply with each other and with your other multipliers.",
+      note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },
   ),
   standingRung(
@@ -1426,11 +1437,12 @@ export const UPGRADES: readonly Upgrade[] = [
     "Pipelines",
     4,
     ["standing"],
-    "You order your methods, and each new run on a problem uses the next one.",
+    "You put methods in order, and each new run on a problem uses the next one.",
     {
       text: [
-        "In the Runs panel you list up to 9 methods in order. Each time a run on a problem ends by itself, the next run there uses the next method in the list, and after the last it starts again at the first. A method the cycle's rule forbids is skipped. A run the game closed (for another problem, or a reload) opens again with the same method.",
-        "With Auto-tune and Auto chosen, the setting of each run is drawn as Auto-tune draws it. Otherwise each method runs at the tuning level you own. Compact still uses mc_compress.",
+        "In the Runs panel, you can list up to 9 methods in order. When a run on a problem ends by itself, the next run on that problem uses the next method in the list, and after the last method it starts again at the first.",
+        "A method that the cycle rule forbids is skipped. If the game closed a run, for another problem or because of a reload, the run opens again with the same method.",
+        "With Auto-tune and Auto chosen, each run's setting is drawn as Auto-tune draws it. Otherwise each method runs at the tuning level you own. Compact still uses mc_compress.",
       ],
       math: [`stage of the next run = ${sym("r")} mod ${sym("n")}, counting stages from 0`],
       vars: [
@@ -1447,7 +1459,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Your Auto-eval upgrades survive resets, Faster auto-eval's levels included.",
     {
       text: [
-        "At a reset, every upgrade of the Auto-eval row stays owned. That is Auto-eval and Faster auto-eval with its levels. Under the Clicks only rule auto-eval is still off for that cycle.",
+        "At a reset, you keep every upgrade of the Auto-eval row. That is Auto-eval and all levels of Faster auto-eval. Under the Clicks only rule, auto-eval is still off for that cycle.",
       ],
     },
   ),
@@ -1459,7 +1471,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "With Auto chosen, the game also picks each run's tuning level from what has paid.",
     {
       text: [
-        "Auto-tune adds every tuning level you own, from 0 up to your level, as arms of Method match, so a run may use a lower setting where that paid more on this kind of problem. It makes Auto available in the Method list even without Method match, and draws as Method match does.",
+        "Auto-tune lets the game also choose a run's tuning level, from 0 up to your level, so it may pick a lower level where that paid more on this kind of problem. It makes Auto available in the Method list even without Method match, and it chooses the same way Method match does.",
       ],
       math: [`arms = kind × method × level ${sym("l")}, for ${sym("l")} = 0, 1, …, ${sym("l", "m")}`],
       vars: [
@@ -1476,13 +1488,13 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Auto-advance, the second lane and Reach.",
     {
       text: [
-        "At every reset, the next cycle also begins owning Reach: site records, Auto-advance and the Second lane, with what they need.",
+        "Every reset also starts the next cycle with Reach: site records, Auto-advance and the Second lane, and what they need.",
       ],
     },
   ),
   standingRung("keepMethods", "Keep methods", 10, ["keepAuto"], "The methods you own survive resets.", {
     text: [
-      `At a reset, every Method upgrade you own stays owned (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule only mc_compress runs in that cycle.`,
+      `At a reset, you keep every Method upgrade you own (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule, only mc_compress runs in that cycle.`,
     ],
   }),
   standingRung(
@@ -1493,7 +1505,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each level makes every record-point price 10 % cheaper.",
     {
       text: [
-        "Each level multiplies every price in record points by 0.9. Level 1 gives 0.9 of the price, level 2 gives 0.81, level 5 about 0.59 and level 10 about 0.35. Prices in standing do not change.",
+        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change.",
       ],
       math: [`${sym("p")} = round(${sym("p", "0")} × 0.9<sup>${sym("a")}</sup>)`],
       vars: [

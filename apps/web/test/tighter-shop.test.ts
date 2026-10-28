@@ -403,7 +403,7 @@ describe("Tighter upgrade texts", () => {
     for (const u of UPGRADES) expect([u.name, u.effect, ...all(u)].join(" "), u.id).not.toMatch(/frontier/i);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
     expect(text("collections")).toContain("A shape pair is one piece shape in one container shape");
-    expect(text("collector")).toContain("A collection here is a shape pair");
+    expect(text("collector")).toContain("A collection is one piece shape in one container shape");
   });
 
   // The texts are written in numbers; these are the game's constants they quote.
