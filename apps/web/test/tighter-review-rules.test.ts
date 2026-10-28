@@ -19,6 +19,7 @@ import { MAX_NAME_LENGTH, sanitizeName } from "../src/tighter/names";
 import { fromJson, toJson } from "../src/tighter/save";
 import { canSend, newPacer, recordSend } from "../src/tighter/pacer";
 import { recordPoints, shapeWeight } from "../src/tighter/points";
+import { msPerEval } from "../src/tighter/families";
 import type { SubmitOutcome } from "../src/tighter/submission";
 
 // Independent review of Tighter (2026-10-19). Tests named "owner rule" assert the site owner's rules
@@ -95,6 +96,7 @@ describe("tighter review: points", () => {
       const want =
         shapeWeight(N, M) *
         (tier === "open" ? 1 : 3) *
+        (msPerEval(N + M + P) / msPerEval(85)) *
         (1 + Math.log10(d / 1e-9) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn) + bonus);
       expect(pts).not.toBeNull();
       expect(Math.abs(pts!.total - want)).toBeLessThan(1e-12 * Math.max(1, want));

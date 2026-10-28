@@ -598,7 +598,8 @@ function pointsFor(p: ProblemState, name: string): Points | null {
     sNew: p.best,
     tier: p.tier,
     first: p.paidTo === null && p.leader === null && p.verified === null,
-    beatOther: beatsOther(p, p.leader, name),
+    // a published value is a record too: the first payment below it beats it
+    beatOther: p.published !== null ? !p.beatPaid : beatsOther(p, p.leader, name),
   });
 }
 
@@ -755,6 +756,8 @@ export function applyAnswer(
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
       p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
+      // the lead is another name's again: taking it back is a new beat
+      p.beatPaid = false;
       p.paidTo = outcome.leaderScore;
       points = pay(s, p);
     }
@@ -817,6 +820,8 @@ export function applyLeader(
   // a record lost pays no rent, not even for the time since its last check
   if (lost && s) forgetHeld(s.economy, p.key);
   if ("leader" in p) p.leader = leader;
+  // a lead that is another name's (a lost record, a check or live event) can be beaten for the factor again
+  if (leader !== null && !ours && "beatPaid" in p) p.beatPaid = false;
   return { lost, reconciled: false, confirmed: 0 };
 }
 
