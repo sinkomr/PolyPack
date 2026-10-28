@@ -1689,9 +1689,45 @@ html {
   .tighter .t-head-count {
     display: none;
   }
-  .tighter .t-banner {
+  /*
+   * The column holds no spare height, so a banner or notice in it would push the toolbar down under a
+   * finger that is tapping Evolve (the tap then lands on the dock's tab). Both lie over the top of the
+   * board's cell instead (the body is their containing block, as wide as the board's column), out of the
+   * layout, and let taps through. The bottom corners keep the trace and the score box.
+   */
+  .tighter .t-banner,
+  .tighter .t-notice {
+    position: absolute;
+    left: 0;
+    width: calc(100% - min(340px, 46vw));
     margin: 0;
+    border: 0;
     border-radius: 0;
+    box-sizing: border-box;
+    z-index: 3;
+    pointer-events: none;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    padding-block: 4px;
+    line-height: 20px;
+  }
+  .tighter .t-banner[hidden],
+  .tighter .t-notice[hidden] {
+    display: none;
+  }
+  .tighter .t-banner {
+    top: 0;
+    border-bottom: 1px solid var(--good);
+    background: color-mix(in srgb, var(--good) 12%, var(--panel));
+  }
+  .tighter .t-notice {
+    top: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tighter .t-banner:not([hidden]) ~ .t-notice {
+    top: 29px;
   }
   .tighter .status {
     align-self: start;

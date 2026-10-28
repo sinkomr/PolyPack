@@ -31,4 +31,16 @@ describe("Tighter stylesheet", () => {
     const html = readFileSync(new URL("../tighter.html", import.meta.url), "utf8");
     expect(html).toContain('id="t-queue-work"');
   });
+
+  // A banner or notice in the landscape column pushed the toolbar down by 49 px mid-burst, and a tap
+  // at the old spot of Evolve landed on the dock's Tree tab (a lost click). They lie over the board.
+  it("keeps the landscape banner and notice out of the layout, so Evolve never moves under a finger", () => {
+    const start = css.indexOf("@media (max-height: 500px) and (orientation: landscape) and (max-width: 1023px) {");
+    expect(start).toBeGreaterThan(0);
+    const block = css.slice(start);
+    const rule = /\.tighter \.t-banner,\s*\.tighter \.t-notice \{([^}]*)\}/.exec(block);
+    expect(rule, "a shared banner and notice rule").not.toBeNull();
+    expect(rule![1]).toContain("position: absolute");
+    expect(rule![1]).toContain("pointer-events: none");
+  });
 });
