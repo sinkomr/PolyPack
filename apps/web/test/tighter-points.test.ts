@@ -121,10 +121,9 @@ describe("Tighter record points", () => {
     expect(beat.total / plain.total).toBeCloseTo(BEAT_OTHER_FACTOR, 12);
     expect(BEAT_OTHER_FACTOR).toBeGreaterThanOrEqual(1.5);
     expect(BEAT_OTHER_FACTOR).toBeLessThanOrEqual(2.5);
-    // an invisible change at 6 decimals does not count as a beat
+    // the caller decides (game.ts beating): every flagged payment pays the factor, however small the step
     const tiny = recordPoints({ ...base, sPrev: 12, sNew: 12 * (1 - 2e-9), beatOther: true })!;
-    expect(tiny.beatBonus).toBe(false);
-    expect(tiny.beat).toBe(1);
+    expect(tiny.beat).toBe(BEAT_OTHER_FACTOR);
   });
 
   it("pays the size and gap terms by where a run ends, however many steps it takes", () => {
@@ -221,7 +220,7 @@ describe("Tighter record points", () => {
     );
   });
 
-  it("pays the beat bonus only when the change is visible at 6 decimals", () => {
+  it("leaves the beat to the caller: a flagged step pays double even when tiny", () => {
     const s = 7.123456;
     const tiny = recordPoints({
       family: "polygon",
@@ -233,7 +232,7 @@ describe("Tighter record points", () => {
       tier: "loose",
       beatOther: true,
     })!;
-    expect(tiny.beatBonus).toBe(false);
+    expect(tiny.beatBonus).toBe(true);
     expect(tiny.bonus).toBe(0);
   });
 });

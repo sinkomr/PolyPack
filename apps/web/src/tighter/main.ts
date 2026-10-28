@@ -2622,7 +2622,7 @@ function renderProblem(p: ProblemState | undefined): void {
         : "");
   else if (p.tier === "published")
     note =
-      `Beat the published value ${show6(p.published!)} to earn points. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and an administrator reviews the record.` +
+      `Beat the published value ${show6(p.published!)} to earn points. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and an administrator reviews the record. Beating an existing record pays double on your accepted new record.` +
       (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
     note =

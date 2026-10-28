@@ -3,9 +3,9 @@ import { chooseName } from "../src/tighter/name-popup";
 import { MAX_NAME_LENGTH, generatePlayerName } from "../src/tighter/names";
 
 describe("generated names", () => {
-  it("are TighterGamePlayer and five digits, and vary", () => {
+  it("are TighterGamePlayer and seven digits, and vary", () => {
     const names = new Set(Array.from({ length: 50 }, generatePlayerName));
-    for (const n of names) expect(n).toMatch(/^TighterGamePlayer\d{5}$/);
+    for (const n of names) expect(n).toMatch(/^TighterGamePlayer\d{7}$/);
     expect(names.size).toBeGreaterThan(40);
   });
 
@@ -16,7 +16,7 @@ describe("generated names", () => {
         a[0] = 417;
         return a;
       }) as typeof crypto.getRandomValues;
-      expect(generatePlayerName()).toBe("TighterGamePlayer00417");
+      expect(generatePlayerName()).toBe("TighterGamePlayer0000417");
     } finally {
       crypto.getRandomValues = real;
     }
@@ -25,7 +25,7 @@ describe("generated names", () => {
 
 describe("the name pop-up's validation", () => {
   it("takes a new name, cleaned the way the server stores it", () => {
-    expect(chooseName("  Ada   Lovelace ", "TighterGamePlayer04817")).toEqual({
+    expect(chooseName("  Ada   Lovelace ", "TighterGamePlayer0481733")).toEqual({
       name: "Ada Lovelace",
       changed: true,
       problem: null,

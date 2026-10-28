@@ -1,7 +1,7 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import { HELP, METHOD_MATCH, PIPELINE, TRANSFERS } from "./help";
 import { How, renderMechanic, sym } from "./how";
-import { CLICK, QUEUE, RING, ROWS, UPGRADES, upgrade } from "./upgrades";
+import { AUTO_STEPS, CLICK, QUEUE, RING, ROWS, UPGRADES, autoLevelPrice, levelOfRate, rateOfLevel, upgrade } from "./upgrades";
 import type { UpgradeId } from "./upgrades";
 
 /**
@@ -167,6 +167,21 @@ function families(): Family[] {
   ];
 }
 
+/** Faster auto-eval's steps: the levels, the rates they reach and the price of the first level of each step. */
+function autoStepTable(): MechanicTable {
+  let from = 1;
+  const rows = AUTO_STEPS.map(({ below, step }) => {
+    const last = Number.isFinite(below) ? levelOfRate(below) : null;
+    const first = levelOfRate(from) + 1;
+    const levels = last === null ? `${int(first)} on` : `${int(first)} to ${int(last)}`;
+    const rates = last === null ? `${int(rateOfLevel(first))}, ${int(rateOfLevel(first + 1))}, ...` : `${int(rateOfLevel(first))} to ${int(below)}`;
+    const row = [levels, `+${int(step)}`, rates, int(Math.round(autoLevelPrice(first - 1)))];
+    from = below;
+    return row;
+  });
+  return { head: ["Levels", "Adds a second", "Rates", "Price of the first (RP)"], rows };
+}
+
 /** The data of the page: one group per shop row, then the help sections. */
 export function mechanicsModel(): MechanicGroup[] {
   const fams = families();
@@ -175,7 +190,14 @@ export function mechanicsModel(): MechanicGroup[] {
     for (const u of UPGRADES.filter((x) => x.row === r.id)) {
       const f = fams.find((x) => x.ids.includes(u.id));
       if (!f) {
-        entries.push({ id: u.id, name: u.name, effect: u.effect, hows: [u.how], covers: [u.id] });
+        entries.push({
+          id: u.id,
+          name: u.name,
+          effect: u.effect,
+          hows: [u.how],
+          covers: [u.id],
+          ...(u.id === "autox" ? { table: autoStepTable() } : {}),
+        });
       } else if (u.id === f.ids[0]) {
         entries.push({
           id: f.id,

@@ -1,6 +1,6 @@
 /**
  * The pop-up that offers the player a name of their own, shown once at the end of the tutorial
- * (and from Settings). Every player starts with a generated name, "TighterGamePlayer" and five
+ * (and from Settings). Every player starts with a generated name, "TighterGamePlayer" and seven
  * digits, and sends their records under it until they choose another.
  *
  * The page (main.ts) binds the game's name to it once at start-up; the tutorial only calls

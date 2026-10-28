@@ -243,7 +243,7 @@ describe("tighter review fixes: regressions", () => {
     expect(p.sending).toBeNull();
   });
 
-  it("a board that still beats the rival found by a 'behind' answer pays the beat-other bonus", () => {
+  it("a board that still beats the rival found by a 'behind' answer pays the beat-other double", () => {
     const { s, p } = readyProblem();
     // a better board than the rival's 10.99999, sent as 11 and answered "behind"
     applyStep(
@@ -255,7 +255,6 @@ describe("tighter review fixes: regressions", () => {
     markSending(p, 10.9, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 10.9, { kind: "behind", score: 10.9, leaderScore: 10.95 }, T0);
     expect(a.points?.beatBonus).toBe(true);
-    expect(p.beatPaid).toBe(true);
   });
 
   it("the pending send survives a save and a reload, with the points it carries", () => {

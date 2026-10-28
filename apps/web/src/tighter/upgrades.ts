@@ -15,8 +15,8 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
 /**
  * The tech tree. Progress is slow on purpose: a click is one evaluation of an open run at first, and
  * each upgrade adds a little. Evaluations per click climb one at a time. Auto-eval runs evaluations
- * for the player at its own rate, 1 a second with Auto-eval, and each level of Faster auto-eval adds one
- * more a second, with no last level. Only those speed it up: evaluations-per-click upgrades do not.
+ * for the player at its own rate, 1 a second with Auto-eval, and each level of Faster auto-eval adds 1
+ * a second at first and more as the rate grows (1, 5, 10, 50, then 100), with no last level. Only those speed it up: evaluations-per-click upgrades do not.
  * The rate is auto-eval's in all: the lanes share it, so a lane lets one more problem progress at once
  * but adds no evaluations. The player's CPU caps it where it cannot keep up: about 44 % of a core at
  * 250 a second at N+M+P = 85, a whole core from about N+M+P = 130 up (rank.ts), where more lanes
@@ -43,8 +43,8 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
  * opening is cheaper (2026-10-27): a player clicking about once a second owns Auto-eval within 5 s of
  * the first record and 5 evaluations per click within 2 minutes (the slowest of 64 modelled games
  * took 107 s, a median game 28 s), so click2 to click5 cost 150, 250, 300 and 350 [CALC].
- * Faster auto-eval's levels cost 250 RP × 1.01 a level, which puts the total price of a rate
- * within about 30 % of what the old rungs cost up to 150 a second [CALC]. The plan:
+ * Reaching a rate costs 40 + the sum of 120 × e^(0.0095 x) RP for x = 2 up to the rate (2026-10-27,
+ * proposal C2, scratchpad autoplot/plot3.py): 1,184 at 10 a second, 72,082 at 200, 169,544,524 at 1,000 [CALC]. The plan:
  * PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
  *
  * The rest of the game reads what the player owns only through the functions below.
@@ -261,24 +261,76 @@ export const CLICK: Partial<Record<UpgradeId, number>> = {
   click10: 10,
 };
 /**
- * Auto-eval's evaluations a second, all lanes together: 1 with Auto-eval, and one more a level of
- * Faster auto-eval, without a last level. The rate is in evaluations, not clicks: evaluations-per-click
- * upgrades leave it as it is. The ladder is small steps so that a purchase is cheap and many (before
- * 2026-10-27 it was nine rungs and 10 levels of 10 a second, capped at 250).
+ * Auto-eval's evaluations a second, all lanes together: 1 with Auto-eval, then the rate each level
+ * of Faster auto-eval gives (rateOfLevel), without a last level. The rate is in evaluations, not
+ * clicks: evaluations-per-click upgrades leave it as it is.
  */
 export const AUTO_BASE = 1;
-/** Faster auto-eval's evaluations a second a level. */
-export const AUTOX_STEP = 1;
+/** Auto-eval's own price (the running total at rate 1). */
+export const AUTO_COST = 40;
+/**
+ * What a level of Faster auto-eval adds a second, by the rate it starts from: `step` while the rate
+ * is below `below`. The steps grow with the rate, so a purchase stays a few evaluations a second at
+ * every stage and the prices of the early levels stay small.
+ */
+export const AUTO_STEPS: readonly { below: number; step: number }[] = [
+  { below: 50, step: 1 },
+  { below: 200, step: 5 },
+  { below: 500, step: 10 },
+  { below: 1000, step: 50 },
+  { below: Infinity, step: 100 },
+];
+/** The evaluations a second a level adds, from the rate `rate`. */
+export function autoStepAt(rate: number): number {
+  return AUTO_STEPS.find((s) => rate < s.below)!.step;
+}
+/** The rate with `level` levels of Faster auto-eval: 1, 2 ... 50 (levels 0 to 49), then 55 ... 200, 210 ... 500, 550 ... 1,000, 1,100 ... */
+export function rateOfLevel(level: number): number {
+  const l = Math.max(0, Math.floor(level));
+  if (l <= 49) return 1 + l;
+  if (l <= 79) return 50 + 5 * (l - 49);
+  if (l <= 109) return 200 + 10 * (l - 79);
+  if (l <= 119) return 500 + 50 * (l - 109);
+  return 1000 + 100 * (l - 119);
+}
+/** The most levels whose rate is at most `rate` (0 below 2): the inverse of rateOfLevel. */
+export function levelOfRate(rate: number): number {
+  const r = Math.floor(rate);
+  if (r < 2) return 0;
+  if (r <= 50) return r - 1;
+  if (r <= 200) return 49 + Math.floor((r - 50) / 5);
+  if (r <= 500) return 79 + Math.floor((r - 200) / 10);
+  if (r <= 1000) return 109 + Math.floor((r - 500) / 50);
+  return 119 + Math.floor((r - 1000) / 100);
+}
+/** The price of each evaluation a second above the first: 120 RP × e^(0.0095 x) for the x-th. */
+const AUTO_RATE_PRICE = 120;
+const AUTO_RATE_K = 0.0095;
+/**
+ * What reaching `rate` evaluations a second costs in all (RP, before Quick study): 40 for Auto-eval,
+ * then 120 × e^(0.0095 x) for each evaluation a second x from 2 up (proposal C2). In closed form
+ * 40 + 120 × e^(2k) × (e^(k (rate − 1)) − 1) / (e^k − 1) with k = 0.0095. Infinity where the
+ * power overflows (past about 74,000 a second, far beyond anything a player can pay).
+ */
+export function autoRunningTotal(rate: number): number {
+  if (!(rate > 1)) return AUTO_COST;
+  const k = AUTO_RATE_K;
+  return AUTO_COST + (AUTO_RATE_PRICE * Math.exp(2 * k) * Math.expm1(k * (rate - 1))) / Math.expm1(k);
+}
+/** The price of level `level` + 1 of Faster auto-eval: the running total of the new rate less the old one's. */
+export function autoLevelPrice(level: number): number {
+  const from = autoRunningTotal(rateOfLevel(level));
+  const to = autoRunningTotal(rateOfLevel(level + 1));
+  const price = to - from;
+  // Infinity less Infinity is NaN: a level nobody can pay for is Infinity
+  return Number.isFinite(price) ? price : Infinity;
+}
 /** Levels of Faster auto-eval that Head start II gives each cycle: 9, so 10 evaluations a second as the old fifth rung did. */
 export const HEAD2_AUTO_LEVELS = 9;
-/**
- * The price of Faster auto-eval's first level and its growth a level. The total price of reaching a
- * rate is about what the old rungs cost, up to 150 a second (about 85,000 RP; the old tenth rung
- * came to 84,650 above Auto-eval), then climbs more steeply: level 250 costs about 12 times level 1 [CALC].
- * Where this computer cannot run the rate asked for, more levels do not run faster here (scheduler.ts).
- */
-const AUTOX_COST = 250;
-const AUTOX_GROWTH = 1.01;
+/** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
+const AUTOX_COST = AUTO_RATE_PRICE * Math.exp(2 * AUTO_RATE_K);
+/** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
+const AUTOX_GROWTH = Math.exp(AUTO_RATE_K);
 /** Problem slots, by upgrade (1 without any). */
 export const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
 /** Methods in the order they unlock, by upgrade. */
@@ -368,6 +420,9 @@ const AUTO_VARS: readonly Var[] = [
   [sym("r", "lane"), "the share of each lane, in evaluations a second"],
   [sym("L"), "lanes, the solver workers that run at once (1 until Second lane)"],
 ];
+/** Faster auto-eval's steps, as a sentence part. */
+const AUTO_STEP_TEXT =
+  "1 evaluation a second at first, then 5 from a rate of 50, 10 from 200, 50 from 500, and 100 from 1,000";
 const AUTO_NOTE =
   "Your computer sets the upper limit. When it cannot keep up, auto-eval runs as fast as it can. At most 60 s of its evaluations (at least 100) wait to be run.";
 const AUTO_RATE =
@@ -925,7 +980,7 @@ export const UPGRADES: readonly Upgrade[] = [
   },
   // ---- evaluations per click, 5 within about 2 minutes; Auto-eval within one ----
   clickRung("click2", 150, ["trace"]),
-  autoFirst(80, ["click2"]),
+  autoFirst(AUTO_COST, ["click2"]),
   clickRung("click3", 250, ["click2"]),
   clickRung("click4", 300, ["click3"]),
   clickRung("click5", 350, ["click4"]),
@@ -1148,7 +1203,7 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "Sometimes another name takes a record of yours on a problem that is no longer in your queue. That problem then goes on a retake list, and at each deal the oldest problem on the list comes before all others, as long as someone else still leads it.",
-        `It starts from the new leader's packing, which your board must beat by more than one billionth. Taking the lead back pays the ${BEAT_OTHER_FACTOR} times bonus again, each time you take it.`,
+        `It starts from the new leader's packing, which your board must beat by more than one billionth. Beating an existing record pays double on your accepted new record, and that goes for each time you take the lead back.`,
         "A problem with a shape of more than 20 sides counts as a loose record, worth 3 times the points. Problems with smaller shapes rank like other site records, or like published values where there is one.",
       ],
     },
@@ -1280,15 +1335,27 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Faster auto-eval",
     cost: AUTOX_COST,
     requires: ["auto1"],
-    effect: `Each level adds ${AUTOX_STEP} evaluation a second to auto-eval, with no last level.`,
+    effect: "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
     how: {
       text: [
-        `Each level adds ${AUTOX_STEP} evaluation a second to auto-eval's rate, on top of the ${autoRateText(AUTO_BASE)} of Auto-eval. The rate is for all your lanes together, and the lanes share it.`,
-        `You can buy as many levels as you like. Each costs a little more than the one before. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
+        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it.`,
+        `You can buy as many levels as you like. Each extra evaluation a second costs a little more than the one before, so the price of a level grows slowly. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
       ],
-      math: AUTO_MATH(`${number(AUTO_BASE)} + ${AUTOX_STEP} × ${sym("a")}`),
-      vars: [AUTO_VARS[0], [sym("a"), "levels of Faster auto-eval, 0 without it"], ...AUTO_VARS.slice(1)],
-      note: `${AUTO_NOTE} Each level costs ${AUTOX_GROWTH} times the one before.`,
+      math: [
+        `${sym("r")} = ${AUTO_BASE} + ${sym("a")} for ${sym("a")} up to 49, then +5 a level up to ${sym("r")} = 200, +10 up to 500, +50 up to 1,000, and +100 after that`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + Σ 120 × e<sup>0.0095 ${sym("x")}</sup>, for ${sym("x")} = 2 to ${sym("r")}`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + 120 × e<sup>0.019</sup> × (e<sup>0.0095 (${sym("r")} − 1)</sup> − 1) / (e<sup>0.0095</sup> − 1)`,
+        `price of a level = ${sym("C")}(${sym("r")}<sub>new</sub>) − ${sym("C")}(${sym("r")}<sub>old</sub>)`,
+        SHARE_MATH,
+      ],
+      vars: [
+        AUTO_VARS[0],
+        [sym("a"), "levels of Faster auto-eval, 0 without it"],
+        [sym("C"), "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)"],
+        [sym("x"), "each evaluation a second above the first, whose price grows about 1 % an evaluation"],
+        ...AUTO_VARS.slice(1),
+      ],
+      note: `${AUTO_NOTE} The price grows fast: far past 1,500 evaluations a second, no player can pay it.`,
     },
     row: "auto",
     levels: { max: Infinity, growth: AUTOX_GROWTH },
@@ -1408,7 +1475,7 @@ export const UPGRADES: readonly Upgrade[] = [
     "Each new cycle also starts with Basin hopping and the queue of 3.",
     {
       text: [
-        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(AUTO_BASE + AUTOX_STEP * HEAD2_AUTO_LEVELS)}) and a queue of 3.`,
+        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}) and a queue of 3.`,
       ],
     },
   ),
@@ -1544,9 +1611,11 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (u.levels ? l >= u.levels.max : l > 0) return null;
   const base = isCardSlice(id)
     ? slicePrice(id, o.resets ?? 0)
-    : u.levels
-      ? u.cost * Math.pow(u.levels.growth, l)
-      : u.cost;
+    : id === "autox"
+      ? autoLevelPrice(l)
+      : u.levels
+        ? u.cost * Math.pow(u.levels.growth, l)
+        : u.cost;
   return currencyOf(u) === "rp" ? Math.round(base * rpCostFactor(o)) : Math.round(base);
 }
 
@@ -1615,13 +1684,13 @@ export { RUN_BUDGET } from "./methods";
 
 /**
  * Auto-eval's target in evaluations per second, all lanes together (they share it), or null without
- * it: AUTO_BASE plus AUTOX_STEP a level of Faster auto-eval, without an upper limit. Evaluations per
+ * it: rateOfLevel of the levels of Faster auto-eval, without an upper limit. Evaluations per
  * click do not change it.
  */
 export function autoPerSecond(o: Owned): number | null {
   // the "clicks only" cycle rule: no auto-eval in this cycle
   if (!o.has("auto1") || o.rule === "clicks") return null;
-  return AUTO_BASE + AUTOX_STEP * level(o, "autox");
+  return rateOfLevel(level(o, "autox"));
 }
 
 /**

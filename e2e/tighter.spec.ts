@@ -140,9 +140,9 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
 
   // every game has a name from the start, and sends under it; the player changes it from Settings
-  expect((await page.evaluate(() => (window as any).tighter.state.name)) as string).toMatch(/^TighterGamePlayer\d{5}$/);
+  expect((await page.evaluate(() => (window as any).tighter.state.name)) as string).toMatch(/^TighterGamePlayer\d{7}$/);
   await page.click("#t-open-settings");
-  await expect(page.locator("#t-name-now")).toHaveText(/^TighterGamePlayer\d{5}$/);
+  await expect(page.locator("#t-name-now")).toHaveText(/^TighterGamePlayer\d{7}$/);
   await page.click("#t-name-change");
   await page.fill("#t-name-input", "E2E Tighter");
   await page.click("#t-name-save");

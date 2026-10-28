@@ -18,14 +18,14 @@ export function sanitizeName(raw: string): string {
     .trim();
 }
 
-/** Every game starts with this name and five digits, so records can be sent from the first click. */
+/** Every game starts with this name and seven digits, so records can be sent from the first click. */
 export const GENERATED_NAME_PREFIX = "TighterGamePlayer";
 
-/** "TighterGamePlayer" and five random digits, drawn with crypto.getRandomValues (no modulo bias). */
+/** "TighterGamePlayer" and seven random digits, drawn with crypto.getRandomValues (no modulo bias). */
 export function generatePlayerName(): string {
-  const limit = 4294967296 - (4294967296 % 100000);
+  const limit = 4294967296 - (4294967296 % 10000000);
   const buf = new Uint32Array(1);
   do crypto.getRandomValues(buf);
   while (buf[0] >= limit);
-  return `${GENERATED_NAME_PREFIX}${String(buf[0] % 100000).padStart(5, "0")}`;
+  return `${GENERATED_NAME_PREFIX}${String(buf[0] % 10000000).padStart(7, "0")}`;
 }

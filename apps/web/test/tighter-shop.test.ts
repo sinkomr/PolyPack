@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { plain } from "../src/tighter/how";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
 import {
   PAIR_BONUS,
@@ -348,11 +349,13 @@ describe("Tighter upgrade texts", () => {
       "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
     ]);
     expect(UPGRADES.some((x) => /^auto([2-9]|10)$/.test(x.id))).toBe(false);
-    expect(u("autox").effect).toBe("Each level adds 1 evaluation a second to auto-eval, with no last level.");
-    expect(u("autox").how.math).toEqual([
-      "<var>r</var> = 1 + 1 × <var>a</var>",
-      "<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>",
-    ]);
+    expect(u("autox").effect).toBe(
+      "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
+    );
+    const math = u("autox").how.math!.map(plain);
+    expect(math[0]).toContain("r = 1 + a");
+    expect(math).toContain("C(r) = 40 + Σ 120 × e0.0095 x, for x = 2 to r");
+    expect(math).toContain("rlane = r / L");
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
     expect(u("wide").name).toBe("More open problems");
     expect(u("queue4").effect).toBe("The queue holds 4 problems, and the dealer earns a new one every 75 clicks.");

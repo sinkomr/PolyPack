@@ -40,7 +40,7 @@ import { MAX_STAGES, MIN_OBSERVED_EVALS } from "./runplan";
 import { DIMENSION_TEXT, RESET_MIN, RULES, resetThreshold } from "./standing";
 import { CLIENT_TAG } from "./submission";
 import { MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "./transfer";
-import { AUTOX_STEP, AUTO_BASE, AUTO_JOB_SECONDS, AUTO_SLACK_SECONDS, COMPACT_EVALS, RUN_BUDGET } from "./upgrades";
+import { AUTO_BASE, AUTO_JOB_SECONDS, AUTO_SLACK_SECONDS, COMPACT_EVALS, RUN_BUDGET } from "./upgrades";
 
 /**
  * The "How it works" explanations outside the tech tree, in the shared format of how.ts: the points
@@ -121,6 +121,7 @@ const POINTS: How[] = [
       "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
       `Every click that improves the board also pays a small step part, which is larger for larger steps. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
       "The payment is then multiplied by three weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The contest weight makes problems that other players work on, and published values, pay more. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
+      "Beating an existing record pays double on your accepted new record. Every payment is doubled from the moment your board is better than the other record, until the server accepts your board as the new record. After that, payments are single again.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
     ],
     math: [
@@ -175,7 +176,7 @@ const POINTS: How[] = [
       ],
       [
         "<var>β</var>",
-        `${BEAT_OTHER_FACTOR} for an improvement that takes the lead from another name, or beats a published value, by enough to change its 6 decimals. It pays again each time you retake the lead. Otherwise 1`,
+        `${BEAT_OTHER_FACTOR} for every payment while your board is better, at 6 decimals, than another name's record or a published value and the server has not yet made your entry the record. It starts again each time another name takes the lead and you beat it. Otherwise 1`,
       ],
       ["<var>m</var>", "your points multiplier"],
       ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
@@ -371,7 +372,7 @@ const AUTO: How = {
     `The rate is a target. If the solver is slower than that, auto-eval runs as fast as your computer allows. The evaluations it has fallen behind on wait their turn, up to ${AUTO_SLACK_SECONDS} s worth of them. Anything beyond that is dropped. Each lane is its own solver worker, so on a large problem more lanes spread the work over more cores.`,
   ],
   math: [
-    `<var>r</var> = ${AUTO_BASE} + ${AUTOX_STEP} × <var>x</var>`,
+    `<var>r</var> = ${AUTO_BASE} + <var>x</var> for <var>x</var> up to 49, then the steps of the table under Faster auto-eval (5 a level from 50, 10 from 200, 50 from 500, 100 from 1,000)`,
     `<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>`,
     `<var>b</var> = min(⌊<var>D</var>⌋, max(1, min(⌈${AUTO_JOB_SECONDS} × <var>r</var><sub>lane</sub>⌉, ⌊${AUTO_JOB_SECONDS * 1000} / <var>t</var>⌋)))`,
     `<var>D</var><sub>max</sub> = max(${COMPACT_EVALS}, ${AUTO_SLACK_SECONDS} × <var>r</var>)`,
@@ -380,7 +381,7 @@ const AUTO: How = {
     ["<var>r</var>", "auto-eval's target in all lanes together, in evaluations a second"],
     [
       "<var>x</var>",
-      `your level of Faster auto-eval (0 without it), which has no last level and adds ${AUTOX_STEP} evaluation a second a level`,
+      "your level of Faster auto-eval (0 without it), which has no last level and adds 1 evaluation a second a level at first, then more",
     ],
     ["<var>L</var>", "your lanes"],
     ["<var>r</var><sub>lane</sub>", "each lane's share, in evaluations a second"],
@@ -409,7 +410,7 @@ const RUNNING: How = {
 
 const SENDING: How = {
   text: [
-    `Every game has a display name from the start, "TighterGamePlayer" and five digits. You can change it in Settings. The game sends a board to PolyPack when it beats the current record for its problem by more than ${MIN_STEP} of the side. Just before each send, it asks the server for the current record and turns the container to its best angle, which is how the server scores it.`,
+    `Every game has a display name from the start, "TighterGamePlayer" and seven digits. You can change it in Settings. The game sends a board to PolyPack when it beats the current record for its problem by more than ${MIN_STEP} of the side. Just before each send, it asks the server for the current record and turns the container to its best angle, which is how the server scores it.`,
     `A send contains the problem (piece shape, container shape and number of pieces), the position and angle of every piece, the container's angle and your display name. It also says how the board was found, which means the method, its settings, the seed, the number of evaluations and the tag ${CLIENT_TAG}.`,
     `Sends are paced. The first send for a problem goes at once, and each later send for it waits at least ${minutes(PROBLEM_INTERVAL_MS)} after the one before. At most ${PLAYER_PER_MINUTE} sends go in any ${seconds(PLAYER_WINDOW_MS)}. If the server asks the game to slow down, sending pauses for ${minutes(RATE_LIMITED_BACKOFF_MS)}, and if the server cannot be reached, it pauses for ${seconds(OFFLINE_BACKOFF_MS)}.`,
     `Your name is cleaned the way the server stores it. Control characters, invisible direction marks and angle brackets become spaces, runs of spaces become one, and the name is cut to ${MAX_NAME_LENGTH} characters.`,

@@ -32,7 +32,6 @@ import { readLattice } from "./methods/lattice";
 import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
 import { UnitsReport, convertSaveUnits } from "./units";
 import {
-  AUTOX_STEP,
   AUTO_BASE,
   EvolveMethod,
   HEAD2_AUTO_LEVELS,
@@ -40,10 +39,13 @@ import {
   UPGRADES,
   UpgradeId,
   currencyOf,
+  autoRunningTotal,
   evalsPerClick,
   isUpgradeId,
+  levelOfRate,
   methods,
   owning,
+  rateOfLevel,
   rpCostFactor,
   upgrade,
 } from "./upgrades";
@@ -295,9 +297,9 @@ export const MIGRATIONS: Record<number, Migration> = {
   },
   /**
    * Version 8 replaces Auto-eval's nine faster rungs and its 10 levels of 10 a second by one ladder of
-   * levels of Faster auto-eval, 1 a second each, with no last level. A save keeps the rate it had,
-   * as the level of the same rate (ladderLevels), and is paid back once what it paid above the new
-   * ladder's price for that level (ladderRefund). `ladderRefund` tells the page.
+   * levels of Faster auto-eval (1 a second a level at first, then 5, 10, 50 and 100), with no last
+   * level. A save keeps the highest level whose rate is at most the rate it had, and is paid back
+   * what it paid above the new running total for that level (ladderSave). `ladderRefund` tells the page.
    */
   7: (save) => {
     return { ...save, ...ladderSave(save) };
@@ -324,6 +326,8 @@ const OLD_HEAD_RUNGS: Readonly<Record<string, readonly string[]>> = {
   head1: ["auto1"],
   head2: ["auto2", "auto3", "auto4", "auto5"],
 };
+/** Auto-eval's list price before version 8 (it is 40 now). */
+const OLD_AUTO1_COST = 80;
 /** Faster auto-eval before version 8: 10 evaluations a second a level, 10 levels, level j + 1 at 80,000 × 1.6^j. */
 const OLD_AUTOX = { step: 10, max: 10, cost: 80_000, growth: 1.6 };
 
@@ -498,11 +502,13 @@ export function autoPriceRefund(ids: readonly string[], levels: Partial<Record<U
 
 /**
  * Version 8's step: the save's Auto-eval rungs and levels of Faster auto-eval become levels of the one
- * ladder (rate 1 + level), at the same rate. Rungs a head start gave are not paid for. What the save
- * paid for the rate, at list prices and its Quick study discount, less what the ladder charges for the
- * same levels (the same free ones), comes back in record points when it is positive. Levels of Faster
- * auto-eval above the old 10, which an older save could still hold, are refunded at their old price
- * (SHRUNK's old rule, whose entry for it is gone).
+ * ladder (upgrades.ts rateOfLevel). The save gets the highest level whose rate is at most the rate it
+ * had, so it never loses rate (an old rate between two steps, such as 52 a second, rounds down to 50).
+ * What the save paid for Auto-eval and its rungs, at list prices and its Quick study discount, less
+ * what the ladder charges for that level (autoRunningTotal, less what a head start gives for
+ * nothing), comes back in record points when it is positive. Levels of Faster auto-eval above the old
+ * 10, which an older save could still hold, are refunded at their old price (SHRUNK's old rule,
+ * whose entry for it is gone).
  */
 export function ladderSave(save: Record<string, unknown>): Record<string, unknown> {
   const owned: unknown[] = Array.isArray(save.owned) ? save.owned : [];
@@ -512,20 +518,23 @@ export function ladderSave(save: Record<string, unknown>): Record<string, unknow
   if (!has.has("auto1") && !has.has("autox") && !rungs.some(([id]) => has.has(id))) return {};
   const free = new Set<string>();
   for (const [h, list] of Object.entries(OLD_HEAD_RUNGS)) if (has.has(h)) list.forEach((id) => free.add(id));
+  if (has.has("head2")) free.add("auto1");
   // a save that held Faster auto-eval without the tenth rung was given it (the order the tree had then)
   if (has.has("autox")) has.add("auto10");
-  const rate = Math.max(1, ...rungs.filter(([id]) => has.has(id)).map(([, r]) => r.rate));
+  const rate = Math.max(AUTO_BASE, ...rungs.filter(([id]) => has.has(id)).map(([, r]) => r.rate));
   const raw = has.has("autox") ? int(oldLevels.autox, 1, 1) : 0;
   const bought = Math.min(raw, OLD_AUTOX.max);
-  const level = Math.max(0, rate + OLD_AUTOX.step * bought - AUTO_BASE) / AUTOX_STEP;
-  let paid = rungs.reduce((t, [id, r]) => t + (has.has(id) && !free.has(id) ? r.cost : 0), 0);
+  const oldRate = rate + OLD_AUTOX.step * bought;
+  const level = levelOfRate(oldRate);
+  const newRate = rateOfLevel(level);
+  let paid = has.has("auto1") && !free.has("auto1") ? OLD_AUTO1_COST : 0;
+  paid += rungs.reduce((t, [id, r]) => t + (has.has(id) && !free.has(id) ? r.cost : 0), 0);
   for (let j = 0; j < bought; j++) paid += OLD_AUTOX.cost * Math.pow(OLD_AUTOX.growth, j);
-  const freeLevels = Math.min(level, has.has("head2") ? HEAD2_AUTO_LEVELS : 0);
-  const ladder = upgrade("autox");
-  const g = ladder.levels!.growth;
-  const upTo = (n: number) => (ladder.cost * (Math.pow(g, n) - 1)) / (g - 1);
+  // what a head start gives each cycle for nothing: Head start I Auto-eval, II up to 10 a second
+  const freeRate = has.has("head2") ? rateOfLevel(HEAD2_AUTO_LEVELS) : has.has("head1") ? AUTO_BASE : 0;
+  const newCost = Math.max(0, autoRunningTotal(newRate) - (freeRate > 0 ? autoRunningTotal(Math.min(freeRate, newRate)) : 0));
   const factor = rpCostFactor(owning(savedIds(owned).filter(isUpgradeId), savedLevels(save.levels)));
-  let refund = Math.max(0, paid - (upTo(level) - upTo(freeLevels))) * factor;
+  let refund = Math.max(0, paid - newCost) * factor;
   // levels bought above the old 10, from before that range shrank
   const scale = num(save.pointsScale, 1, 0);
   refund = Math.round(refund);
@@ -696,7 +705,6 @@ function problemState(v: unknown, now: number): ProblemState | null {
     leader: leader(v.leader),
     verified: posOrNull(v.verified),
     ourId: idOrNull(v.ourId),
-    beatPaid: bool(v.beatPaid, false),
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),

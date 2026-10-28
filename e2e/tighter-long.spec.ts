@@ -200,7 +200,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   expect(errors).toEqual([]);
 });
 
-test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP", async ({ page }) => {
+test("long game: auto-eval comes right after 2 evaluations per click, for 40 RP", async ({ page }) => {
   test.setTimeout(90_000);
   await fresh(page, 22);
   await firstRecord(page);
@@ -210,11 +210,11 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 80 RP"
   // exactly the price of 2 evaluations per click: the first record's points are not left over
   await page.evaluate(() => ((window as any).tighter.state.rp = 150));
   await buy(page, "click2");
-  // the next card along is Auto-eval at 80 RP, before 3 evaluations per click (250)
+  // the next card along is Auto-eval at 40 RP, before 3 evaluations per click (250)
   const card = page.locator('.t-card[data-id="auto1"]');
-  await expect(card).toContainText(/(^|\D)80 RP/);
+  await expect(card).toContainText(/(^|\D)40 RP/);
   await expect(card).toHaveAttribute("data-state", "dear");
-  await grant(page, 80);
+  await grant(page, 40);
   await buy(page, "auto1");
   await expect(page.locator("#t-auto")).toBeVisible();
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: off");
@@ -567,7 +567,8 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
   const f = 350 / 780;
   expect(s).toMatchObject({ version: 8, levels: {}, picks: 0, pipeline: [] });
-  expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f), 6);
+  // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
+  expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
   await expect(page.locator("#status")).toContainText(`you got ${Math.round(81 * f)} RP back for the ones you had bought`);
   await expect(page.locator("#status")).toContainText(
@@ -709,13 +710,13 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 1500));
   await expect(page.locator("#t-deal")).toContainText("Auto-advance replaces it once you switch auto-eval on");
   await page.evaluate(() => ((window as any).tighter.state.queue[0].sinceGain = 0));
-  // auto-eval at 250 evaluations a second (249 levels of Faster auto-eval), shared by the two lanes: every new problem gets
+  // auto-eval at 250 evaluations a second (84 levels of Faster auto-eval), shared by the two lanes: every new problem gets
   // its Compact, although a lane with a problem to work takes each job as it comes due (a Compact owes
   // the rest)
   await page.evaluate(() => {
     const s = (window as any).tighter.state;
     s.owned.push("autox");
-    s.levels.autox = 249;
+    s.levels.autox = 84;
   });
   await page.click("#t-auto");
   await expect(page.locator("#t-auto")).toHaveText("Auto-eval: on");

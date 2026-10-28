@@ -9,7 +9,7 @@ import type { ProblemKey } from "./frontier";
  *
  * k is the cost factor, the ms an evaluation of the problem takes over the ms at N+M+P = 85, so that
  * a slow problem pays about as much per second of solver time as a fast one. `beat` is 2 for the
- * improvement that first beats another name's record or a published value, and 1 otherwise.
+ * improvement while the board is past another name's record or a published value and the server has not yet made our entry the leader, and 1 otherwise.
  *
  * with Δ = 1 − s_new / s_prev, g = s / areaLowerBound − 1, w = d(N) d(M) and c the contest weight
  * of the problem's tier. Only improvements that count are paid: those `improvesOn` accepts, i.e.
@@ -66,10 +66,11 @@ export const RESET_GROWTH = 5;
 export const FIRST_RECORD_BONUS = 10;
 export const FIRST_RECORD_GAP_RATIO = 0.9;
 /**
- * What the first improvement visible at 6 decimals on a record held by another name, or on a
- * published value, pays times [SPEC, Michael 2026-10-27: beating a record should pay noticeably more
- * than a first record, "not insanely more"]. Once per problem. An additive bonus could not do it: the
- * terms it would add to are in the hundreds to thousands.
+ * What every improvement pays times from the moment the board is visibly (at 6 decimals) past a
+ * record held by another name, or a published value, until the server makes our entry the leader
+ * [SPEC, Michael 2026-10-27: beating a record should pay noticeably more than a first record, "not
+ * insanely more"; the double pay lasts until the new record is accepted]. An additive bonus could
+ * not do it: the terms it would add to are in the hundreds to thousands.
  */
 export const BEAT_OTHER_FACTOR = 2;
 
@@ -106,7 +107,7 @@ export type PointsInput = ProblemKey & {
   tier: Tier;
   /** This is the problem's first record: it has no leader and sPrev is its free floor. */
   first?: boolean;
-  /** sPrev is held by another name (or is a published value) and the pay for beating one has not been paid on this problem. */
+  /** The board is past another name's record (or a published value) and our entry is not yet the leader: the payment is doubled. */
   beatOther?: boolean;
 };
 
@@ -164,8 +165,8 @@ export function recordPoints(input: PointsInput): Points | null {
   // since ln(g_prev / g_new) would be undefined or infinite.
   const gap = gPrev > 0 && gNew > 0 ? GAP_WEIGHT * Math.log(gPrev / gNew) : 0;
   const firstBonus = !!input.first && gNew > 0 && gNew <= FIRST_RECORD_GAP_RATIO * gPrev;
-  // "visible": the 6-decimal displays differ, so the change shows on the site
-  const beatBonus = !!input.beatOther && show6(sNew) !== show6(sPrev);
+  // the caller says whether the board is visibly past another name's record (game.ts beating)
+  const beatBonus = !!input.beatOther;
   const bonus = firstBonus ? FIRST_RECORD_BONUS : 0;
   const k = costFactor(input);
   const beat = beatBonus ? BEAT_OTHER_FACTOR : 1;

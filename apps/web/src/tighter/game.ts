@@ -4,7 +4,7 @@ import type { SpaceConfig } from "@polypack/spaces";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
-import { FLOOR, Points, Tier, recordPoints } from "./points";
+import { FLOOR, Points, Tier, recordPoints, show6 } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { generatePlayerName, sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
@@ -95,8 +95,6 @@ export interface ProblemFields {
   /** Our score that the server last made leader, and its entry id while it is kept. */
   verified: number | null;
   ourId: number | null;
-  /** The bonus for beating another name was paid on this problem. */
-  beatPaid: boolean;
   /** The server took a problem out of play (409), or refused this score (400/422). */
   closed: boolean;
   refused: { score: number; reasons: string[] } | null;
@@ -295,7 +293,6 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     leader: null,
     verified: null,
     ourId: null,
-    beatPaid: false,
     closed: false,
     refused: null,
     leaving: false,
@@ -602,7 +599,7 @@ function pointsFor(p: ProblemState, name: string): Points | null {
     tier: p.tier,
     first: p.paidTo === null && p.leader === null && p.verified === null,
     // a published value is a record too: the first payment below it beats it
-    beatOther: p.published !== null ? !p.beatPaid : beatsOther(p, p.leader, name),
+    beatOther: beating(p, name),
   });
 }
 
@@ -642,7 +639,6 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);
   p.paidTo = p.best;
-  if (points.beatBonus) p.beatPaid = true;
   return points;
 }
 
@@ -671,17 +667,19 @@ export function unconfirmedPoints(s: GameState): number {
 }
 
 /**
- * Whether beating `leader` pays the bonus for another name's record: not yet paid here, not our
- * entry, and not our name as the server stores it (it strips angle brackets, for one).
+ * Whether every payment on the problem now pays double: the board is visibly past another name's
+ * record (or a published value), and the server has not yet made our entry the leader. The window
+ * opens with the first payment that passes the record and closes when an answer makes our entry
+ * the leader (applyAnswer sets `leader` to it); when another name leads again, the next beat opens a
+ * new one. Our own record never pays double. The name is compared as the server stores it (it
+ * strips angle brackets, for one), and a leader read from a "behind" answer has no id.
  */
-function beatsOther(p: ProblemState, leader: Leader | null, name: string): boolean {
-  // a leader read from a "behind" answer has no id; the name tells it from ours
-  return (
-    !p.beatPaid &&
-    !!leader &&
-    (leader.id === null || leader.id !== p.ourId) &&
-    sanitizeName(leader.name) !== sanitizeName(name)
-  );
+function beating(p: ProblemState, name: string): boolean {
+  const leader = p.leader;
+  const other = !!leader && (leader.id === null || leader.id !== p.ourId) && sanitizeName(leader.name) !== sanitizeName(name);
+  if (leader && !other) return false;
+  const target = Math.min(other ? leader!.score : Infinity, p.published ?? Infinity);
+  return p.best !== null && Number.isFinite(target) && Number(show6(p.best)) < Number(show6(target));
 }
 
 // ---------- the server ----------
@@ -759,8 +757,7 @@ export function applyAnswer(
     if (outcome.leaderScore !== null) {
       // it is now the one to beat (whose it is, the next read says); what the board still beats it by pays
       p.leader = { score: outcome.leaderScore, name: isPolygon(p) ? "another name" : "the research record", id: null };
-      // the lead is another name's again: taking it back is a new beat
-      p.beatPaid = false;
+      // the lead is another name's again: taking it back is a new beat, with its own double pay
       p.paidTo = outcome.leaderScore;
       points = pay(s, p);
     }
@@ -823,8 +820,6 @@ export function applyLeader(
   // a record lost pays no rent, not even for the time since its last check
   if (lost && s) forgetHeld(s.economy, p.key);
   if ("leader" in p) p.leader = leader;
-  // a lead that is another name's (a lost record, a check or live event) can be beaten for the factor again
-  if (leader !== null && !ours && "beatPaid" in p) p.beatPaid = false;
   return { lost, reconciled: false, confirmed: 0 };
 }
 
