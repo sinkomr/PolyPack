@@ -1720,3 +1720,18 @@ html {
 .t-score-list [hidden] {
   display: none;
 }
+/* the Mechanics page: a family of rungs as a compact table */
+.t-mech-table {
+  margin: 4px 0 2px;
+  border-collapse: collapse;
+}
+.t-mech-table th,
+.t-mech-table td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+  font-weight: normal;
+  font-variant-numeric: tabular-nums;
+}
+.t-mech-table th {
+  color: var(--muted);
+}

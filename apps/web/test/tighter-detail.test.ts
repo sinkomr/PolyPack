@@ -162,17 +162,37 @@ describe("the Mechanics page", () => {
   const model = mechanicsModel();
   const entries = model.flatMap((g) => g.entries);
 
-  it("lists every upgrade once, under its shop row, with its exact How", () => {
+  it("covers every upgrade once: alone with its exact How, or in a family of rungs with a table", () => {
     for (const u of UPGRADES) {
-      const hits = entries.filter((e) => e.id === u.id);
+      const hits = entries.filter((e) => e.covers.includes(u.id));
       expect(hits.length, u.id).toBe(1);
-      expect(hits[0].hows).toEqual([u.how]);
+      if (hits[0].covers.length === 1) expect(hits[0].hows).toEqual([u.how]);
+      else expect(hits[0].table?.rows.length, u.id).toBe(hits[0].covers.length);
     }
+  });
+
+  it("groups each family of rungs into one entry with one rule and a table of steps and prices", () => {
+    const families = entries.filter((e) => e.covers.length > 1);
+    expect(families.map((e) => e.id).sort()).toEqual([
+      "family:click",
+      "family:pick",
+      "family:queue",
+      "family:rank",
+      "family:ring",
+    ]);
+    const click = families.find((e) => e.id === "family:click")!;
+    expect(click.covers).toHaveLength(9);
+    expect(click.table!.rows[0]).toEqual(["2", "150"]);
+    expect(click.table!.head).toEqual(["Evaluations per click", "Price (RP)"]);
   });
 
   it("holds every upgrade's formulas and every help section's formulas", () => {
     const math = entries.flatMap((e) => e.hows.flatMap((h) => h.math ?? []));
-    for (const u of UPGRADES) for (const line of u.how.math ?? []) expect(math, u.id).toContain(line);
+    for (const u of UPGRADES) {
+      const alone = entries.find((e) => e.covers.length === 1 && e.id === u.id);
+      if (alone) for (const line of u.how.math ?? []) expect(math, u.id).toContain(line);
+    }
+    expect(math).toContain("<var>k</var> = <var>n</var> + <var>a</var> + <var>r</var>");
     for (const [id, h] of Object.entries(HELP))
       for (const how of Array.isArray(h) ? h : [h]) for (const line of how.math ?? []) expect(math, id).toContain(line);
     expect(math.length).toBeGreaterThan(50);
