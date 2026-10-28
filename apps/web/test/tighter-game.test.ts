@@ -216,10 +216,10 @@ describe("Tighter upgrades", () => {
   });
 
   it("open fast: Auto-eval and 5 evaluations per click are a few hundred points apiece", () => {
-    // the first record pays 1,200 RP at least on the starter corner (the pacing model of 2026-10-27, 64 games
-    // at a click a second, Trace detail at 1,000): Auto-eval was owned within 5 s in every game, and 5
-    // evaluations per click after at most 107 s (a median game after 28 s)
-    expect(cost("trace") + cost("click2") + cost("auto1")).toBeLessThanOrEqual(1200 + 30);
+    // Trace detail costs 2,000 (Michael, 2026-10-28): with points scaled by a problem's cost per evaluation
+    // the first Compact paid enough to open Auto-eval and 5 per click within about 10 s at 1,000, so the
+    // first purchase now takes a little more of the opening; the rungs after it stay a few hundred points
+    expect(cost("trace")).toBe(2000);
     expect(cost("click2") + cost("auto1")).toBeLessThanOrEqual(250);
     for (const id of ["click3", "click4", "click5"] as UpgradeId[]) expect(cost(id)).toBeLessThanOrEqual(350);
     // and the cost of the first five rungs after the first record stays a few hundred points each

@@ -961,7 +961,7 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "trace",
     name: "Trace detail",
-    cost: 1000,
+    cost: 2000,
     requires: [],
     effect: "The trace in the board's corner gets labels and a dot at each improvement.",
     how: {

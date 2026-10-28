@@ -73,7 +73,7 @@ describe("Tighter shop", () => {
     expect(v.owned).toBe(0);
     expect(v.total).toBe(inTheFirstDimension().length);
     // the first card can be worked toward; the rest are locked or mysteries
-    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "1,000 RP", needs: [] });
+    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "2,000 RP", needs: [] });
     expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
     expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");

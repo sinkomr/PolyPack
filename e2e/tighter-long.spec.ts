@@ -130,7 +130,7 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   await fresh(page, 21);
-  await grant(page, 1000);
+  await grant(page, 2000);
   // the tech tree is a pane of its own, beside the board; its tab counts what can be bought
   await expect(page.locator("#t-tab-count")).toHaveText("1");
   await expect(page.locator("#t-next-up")).toHaveText("1 upgrade to buy in the tech tree");
@@ -205,7 +205,7 @@ test("long game: auto-eval comes right after 2 evaluations per click, for 40 RP"
   await fresh(page, 22);
   await firstRecord(page);
   await expect(page.locator("#t-auto")).toBeHidden();
-  await grant(page, 1000);
+  await grant(page, 2000);
   await buy(page, "trace");
   // exactly the price of 2 evaluations per click: the first record's points are not left over
   await page.evaluate(() => ((window as any).tighter.state.rp = 150));

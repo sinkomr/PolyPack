@@ -242,7 +242,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect(page.locator("#t-bar-held")).toHaveText("1");
   expect(await rp(page)).toBeGreaterThanOrEqual(afterClicks - 1e-9);
 
-  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (1,000 RP), labels it
+  // the trace is drawn in the board's corner from the start; an upgrade, Trace detail (2,000 RP), labels it
   await expect(page.locator("#t-trace")).toBeVisible();
   await expect(page.locator("#t-trace text")).toHaveCount(0);
   // under it, the RP paid here by evaluations, noted only "RP"
@@ -252,12 +252,12 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(rpTrace.length).toBeGreaterThanOrEqual(2);
   expect(rpTrace.at(-1)![1]).toBeCloseTo((await focused(page)).rp, 9);
   await page.locator("#t-pip").screenshot({ path: test.info().outputPath("pip.png") });
-  await grant(page, 1000);
+  await grant(page, 2000);
   const before = await rp(page);
   await buyAll(page, ["trace"]);
   await openBoard(page);
   await expect(page.locator("#t-trace text")).toHaveCount(1);
-  expect(await rp(page)).toBeCloseTo(before - 1000, 9);
+  expect(await rp(page)).toBeCloseTo(before - 2000, 9);
   expect(await page.evaluate(() => (window as any).tighter.state.owned)).toEqual(["trace"]);
 
   // evaluations per click: 2 per click (150 RP), then 3 (250 RP)
