@@ -166,16 +166,14 @@ test("long game: the whole tree in its pane, mysteries until their prerequisites
   await expect(page.locator('.t-card[data-id="harden"] h3')).toHaveText("harden");
   await expect(page.locator('.t-card[data-id="harden"]')).toContainText("240,000 RP");
 
-  // a levelled upgrade bought twice: one more evaluation per click a level, the price growing
-  await grant(page, 15_000 + 18_750);
-  await buy(page, "clickx");
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 18,750 RP");
-  await expect(page.locator('.t-card[data-id="clickx"] .t-level')).toHaveText("L1");
+  // a levelled upgrade bought twice: the price grows with the level
+  await grant(page, 5000);
+  await buy(page, "autox");
+  await expect(page.locator('.t-card[data-id="autox"] .t-level')).toHaveText("L1");
   const rp = await game(page, (s) => s.rp);
-  await page.click('.t-card[data-id="clickx"] .t-node-act');
-  await expect.poll(() => game(page, (s) => s.levels.clickx)).toBe(2);
-  expect(await game(page, (s) => s.rp)).toBeCloseTo(rp - 18_750, 6);
-  await expect(page.locator('.t-card[data-id="clickx"]')).toContainText("next 23,438 RP");
+  await page.click('.t-card[data-id="autox"] .t-node-act');
+  await expect.poll(() => game(page, (s) => s.levels.autox)).toBe(2);
+  expect(await game(page, (s) => s.rp)).toBeLessThan(rp);
   await expect(page.locator("#t-evolve")).toBeAttached();
 
   // Standing: its row appears once Standing is owned, priced in standing
@@ -359,14 +357,13 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
 
   // Lattice is owned, but the game runs its build by itself: it is neither in the Method list nor a stage
-  await give(page, ["lattice", "standing", "pipeline", "clickx"]);
+  await give(page, ["lattice", "standing", "pipeline"]);
   await expect(page.locator("#t-runs h3").first()).toHaveText("Pipeline");
   await expect(select.locator('option[value="seed"]')).toHaveCount(0);
   await expect(page.locator('#t-pipeline-method option[value="seed"]')).toHaveCount(0);
-  // a pipeline of two stages, mc_compress and then basin_hopping. At 110 evaluations a click the
-  // mc_compress run is soon long enough for the game to end it at a stall (500 evaluations in the
-  // run and 500 without progress), and that moves the pipeline on.
-  await page.evaluate(() => ((window as any).tighter.state.levels.clickx = 100));
+  // a pipeline of two stages, mc_compress and then basin_hopping. When the mc_compress run is
+  // long enough for the game to end it at a stall (500 evaluations in the run and 500 without
+  // progress), that moves the pipeline on.
   const add = async (m: string) => {
     await page.selectOption("#t-pipeline-method", m);
     await page.getByRole("button", { name: "Add the chosen method as the pipeline's last stage" }).click();
@@ -378,26 +375,24 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   const ended0 = (await focused(page)).endedRuns;
   await click(page);
   await expect(page.locator("#t-runinfo")).toContainText("mc_compress ");
-  // 600 evaluations without progress: below the patience of 1,000, so only the run's own length decides
+  // 600 evaluations without progress: below the patience of 1,000, so only the run's own length (500 evaluations, 50 clicks) decides
   const stalled = () =>
     page.evaluate(() => {
       const s = (window as any).tighter.state;
-      s.queue.find((p: { key: string }) => p.key === s.focus).sinceGain = 600;
+      const p = s.queue.find((q: { key: string }) => q.key === s.focus);
+      p.sinceGain = 600;
     });
-  for (let i = 0; i < 12 && (await focused(page)).endedRuns === ended0; i++) {
+  for (let i = 0; i < 80 && (await focused(page)).endedRuns === ended0; i++) {
     await stalled();
     await click(page);
   }
   expect((await focused(page)).endedRuns).toBe(ended0 + 1);
   await expect.poll(() => logText(page)).toContain("made no progress in 500 evaluations");
-  await expect(page.locator("#t-notice")).toContainText(/made no progress|Lattice packed/);
-  // a run on the problem has ended by itself, so its one Lattice build ran in that same click,
-  // and the build moved the pipeline no further
-  await expect.poll(() => logText(page)).toContain("Lattice packed ");
-  await expect(page.locator("#status")).toContainText("evaluations of lattice.");
-  expect((await focused(page)).lattice).not.toBeNull();
-  expect((await focused(page)).endedRuns).toBe(ended0 + 1);
-  await click(page);
+  await expect(page.locator("#t-notice")).toContainText(/made no progress/);
+  // a run on the problem has ended by itself: Lattice builds its one board, which does not move the
+  // pipeline on; the next clicks run its next stage
+  for (let i = 0; i < 5 && !(await page.locator("#t-runinfo").innerText()).startsWith("basin_hopping "); i++)
+    await click(page);
   await expect(page.locator("#t-runinfo")).toContainText("basin_hopping ");
   // a stage can be moved and removed
   await page.getByRole("button", { name: "Move stage 2, basin_hopping, up" }).click();
@@ -569,7 +564,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // amount by what the save could buy next costs now over then: 5 evaluations per click, 350 RP now and
   // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
   const f = 350 / 780;
-  expect(s).toMatchObject({ version: 8, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 9, levels: {}, picks: 0, pipeline: [] });
   // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);

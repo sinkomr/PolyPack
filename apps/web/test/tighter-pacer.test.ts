@@ -131,10 +131,9 @@ describe("Tighter deal rate", () => {
     countEvaluations(s, 30, false);
     expect(s.stats.evaluations).toBe(34);
     expect(s.dealer.credit).toBeCloseTo(1 + 3, 12);
-    // 40 evaluations a click: auto-eval earns deals just as fast as at 4
-    s.owned.push("click5", "click6", "click7", "click8", "click9", "click10", "clickx");
-    s.levels.clickx = 30;
-    countEvaluations(s, 40, true);
+    // 10 evaluations a click: auto-eval earns deals just as fast as at 4
+    s.owned.push("click5", "click6", "click7", "click8", "click9", "click10");
+    countEvaluations(s, 10, true);
     countEvaluations(s, 30, false);
     expect(s.dealer.credit).toBeCloseTo(4 + 1 + 3, 12);
     s.dealer.tokens = 0;

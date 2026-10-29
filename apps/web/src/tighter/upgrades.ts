@@ -80,7 +80,6 @@ export type UpgradeId =
   | "click8"
   | "click9"
   | "click10"
-  | "clickx"
   // auto-eval
   | "auto1"
   | "autox"
@@ -383,11 +382,10 @@ const EVALUATION =
   "An evaluation is one check of the whole packing. The solver looks for overlaps and measures the container.";
 const DEALS_PER_CLICK = `The dealer earns a new problem every ${DEAL_CLICKS} clicks. An Evolve click counts as one click however many evaluations it runs, so more evaluations per click do not earn problems faster. Auto-eval's evaluations count ${AUTO_CLICK_EVALS} to the click.`;
 
-/** Evaluations per click: the rungs' value, the levels of One more evaluation per click, the Clicks only reward. */
-const CLICK_MATH = (base: string) => [`${K} = ${base} + ${sym("a")} + ${sym("r")}`];
+/** Evaluations per click: the rung's value and the Clicks only reward. */
+const CLICK_MATH = (base: string) => [`${K} = ${base} + ${sym("r")}`];
 const CLICK_VARS: readonly Var[] = [
   VAR_K,
-  [sym("a"), "levels of One more evaluation per click"],
   [sym("r"), "1 once you have finished a cycle under the Clicks only rule, else 0"],
 ];
 
@@ -1008,23 +1006,6 @@ export const UPGRADES: readonly Upgrade[] = [
     row: "runs",
   },
   clickRung("click10", 11000, ["click9"]),
-  {
-    id: "clickx",
-    name: "One more evaluation per click",
-    cost: 15000,
-    requires: ["click10"],
-    effect: "Each level adds one evaluation to every Evolve click.",
-    how: {
-      text: [
-        `Each level adds one evaluation to every Evolve click, on top of the 10 of the last rung. Auto-eval keeps its own rate in evaluations a second, so this does not speed it up.`,
-      ],
-      math: CLICK_MATH("10"),
-      vars: CLICK_VARS,
-      note: `Each level costs 1.25 times the one before. ${DEALS_PER_CLICK}`,
-    },
-    row: "clicks",
-    levels: { max: 990, growth: 1.25 },
-  },
   dealerRung("rank2", 20000, ["queue3"]),
   // ---- well after: methods, one at a time, each dearer than the last ----
   methodRung("basin", 40000, ["click10"]),
@@ -1676,7 +1657,7 @@ const highest = <T>(o: Owned, table: Partial<Record<UpgradeId, T>>, base: T, bet
 
 /** Evaluations of one Evolve click (one more for good after a cycle played under "clicks only"). */
 export function evalsPerClick(o: Owned): number {
-  return highest(o, CLICK, 1, (a, b) => a > b) + level(o, "clickx") + (o.rewards?.includes("clicks") ? 1 : 0);
+  return highest(o, CLICK, 1, (a, b) => a > b) + (o.rewards?.includes("clicks") ? 1 : 0);
 }
 
 /** Evaluations of Compact: one press that compacts the Load-all board (design §3). */

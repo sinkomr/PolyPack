@@ -63,6 +63,9 @@ const treeMethods = () => methods(owning(UPGRADES.map((u) => u.id)));
  *   runs only while the page is open.
  * - 2026-10-22: the Seeds row went (the Seed counter and Seeds: 2 to 32 per problem). Every run
  *   takes a random seed, and a problem allows any number of runs.
+ * - 2026-10-29: One more evaluation per click (clickx, a levelled upgrade past 10 evaluations per click)
+ *   went: auto-eval outscales it. Its levels are refunded at the list prices they were bought at
+ *   (RETIRED_LEVELS).
  */
 const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing"; group: string }>([
   ["away2", { cost: 1200, currency: "rp", group: "Away" }],
@@ -79,6 +82,11 @@ const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing"; gro
   ["seeds32", { cost: 400000, currency: "rp", group: "Seeds" }],
 ]);
 
+/** Retired levelled upgrades: level j + 1 cost `cost` × `growth`^j (list price, in today's points). */
+const RETIRED_LEVELS = new Map<string, { cost: number; growth: number; group: string }>([
+  ["clickx", { cost: 15000, growth: 1.25, group: "Evaluations per click" }],
+]);
+
 /** What a save's retired upgrades pay back (RETIRED), and the rows they were in, in RETIRED's order. */
 export interface RetiredRefund {
   rp: number;
@@ -91,7 +99,7 @@ export interface RetiredRefund {
  * in the record points of their time: `scale` turns them into today's (pointsScale, for a save of
  * version 3 or older). Standing keeps its value.
  */
-export function retiredRefund(owned: unknown, scale = 1): RetiredRefund {
+export function retiredRefund(owned: unknown, scale = 1, levels: unknown = {}): RetiredRefund {
   const out: RetiredRefund = { rp: 0, standing: 0, groups: [] };
   const ids = new Set(Array.isArray(owned) ? owned : []);
   for (const [id, r] of RETIRED)
@@ -99,6 +107,13 @@ export function retiredRefund(owned: unknown, scale = 1): RetiredRefund {
       out[r.currency] += r.currency === "rp" ? Math.round(r.cost * scale) : r.cost;
       if (!out.groups.includes(r.group)) out.groups.push(r.group);
     }
+  for (const [id, r] of RETIRED_LEVELS) {
+    const l = isObj(levels) ? levels[id] : 0;
+    if (!ids.has(id) || !Number.isSafeInteger(l) || (l as number) < 1) continue;
+    // each level is rounded as it was priced
+    for (let j = 0; j < Math.min(l as number, 990); j++) out.rp += Math.round(r.cost * Math.pow(r.growth, j) * scale);
+    if (!out.groups.includes(r.group)) out.groups.push(r.group);
+  }
   return out;
 }
 /**
@@ -128,7 +143,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -304,6 +319,11 @@ export const MIGRATIONS: Record<number, Migration> = {
   7: (save) => {
     return { ...save, ...ladderSave(save) };
   },
+  /**
+   * Version 9 has no One more evaluation per click (clickx). Reading the save pays its levels back
+   * once (RETIRED_LEVELS); the step only moves the version, so an older page never writes over it.
+   */
+  8: (save) => save,
 };
 
 /**
@@ -369,7 +389,6 @@ const PRICE_BEFORE_V4: Partial<Record<string, number>> = {
   sweeps10: 1600,
   click10: 1700,
   auto4: 135,
-  clickx: 2000,
   auto5: 250,
   rank2: 3000,
   basin: 5000,
@@ -532,7 +551,10 @@ export function ladderSave(save: Record<string, unknown>): Record<string, unknow
   for (let j = 0; j < bought; j++) paid += OLD_AUTOX.cost * Math.pow(OLD_AUTOX.growth, j);
   // what a head start gives each cycle for nothing: Head start I Auto-eval, II up to 10 a second
   const freeRate = has.has("head2") ? rateOfLevel(HEAD2_AUTO_LEVELS) : has.has("head1") ? AUTO_BASE : 0;
-  const newCost = Math.max(0, autoRunningTotal(newRate) - (freeRate > 0 ? autoRunningTotal(Math.min(freeRate, newRate)) : 0));
+  const newCost = Math.max(
+    0,
+    autoRunningTotal(newRate) - (freeRate > 0 ? autoRunningTotal(Math.min(freeRate, newRate)) : 0),
+  );
   const factor = rpCostFactor(owning(savedIds(owned).filter(isUpgradeId), savedLevels(save.levels)));
   let refund = Math.max(0, paid - newCost) * factor;
   // levels bought above the old 10, from before that range shrank
@@ -800,7 +822,7 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
   const owned = [...new Set(Array.isArray(save.owned) ? save.owned.filter(isUpgradeId) : [])];
   // a save migrated from version 3 or older: the old prices refunded below are in the points of their time
   const scale = num(save.pointsScale, 1, 0);
-  const retired = retiredRefund(save.owned, scale);
+  const retired = retiredRefund(save.owned, scale, save.levels);
   const refund = { rp: retired.rp, standing: retired.standing };
   // levels of levelled upgrades that are owned, within their range. Levels bought above a range that
   // shrank (SHRUNK) are refunded at the list price they were bought at, once: the save keeps only the range.
@@ -888,7 +910,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   if (!m.ok) return m;
   const refunded = (raw.version as number) < 3 ? Math.round(num(m.save.autoRefund, 0, 0)) : 0;
   const rescaled = (raw.version as number) < 4 ? num(m.save.pointsScale, 0, 0) : 0;
-  const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0));
+  const retired = retiredRefund(m.save.owned, num(m.save.pointsScale, 1, 0), m.save.levels);
   const rebalanced = (raw.version as number) < 5 && m.save.rebalanced !== undefined;
   const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
   const ladder = (raw.version as number) < 8 ? Math.round(num(m.save.ladderRefund, 0, 0)) : 0;

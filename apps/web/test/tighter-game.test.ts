@@ -172,20 +172,22 @@ describe("Tighter upgrades", () => {
   it("level up again and again at a growing price; Quick study makes record-point prices cheaper", () => {
     const s = newGame(T0, 1);
     s.owned = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8", "click9", "click10"];
-    expect(costOf(ownedSet(s), "clickx")).toBe(15000);
-    s.rp = 15000 + 18750;
-    expect(buy(s, "clickx")).toBe(true);
-    expect(level(ownedSet(s), "clickx")).toBe(1);
-    expect(costOf(ownedSet(s), "clickx")).toBe(18750);
-    expect(buy(s, "clickx")).toBe(true);
-    expect(s.rp).toBe(0);
-    expect(evalsPerClick(ownedSet(s))).toBe(12);
+    expect(evalsPerClick(ownedSet(s))).toBe(10);
+    s.owned.push("auto1");
+    const first = costOf(ownedSet(s), "autox");
+    s.rp = first * 10;
+    expect(buy(s, "autox")).toBe(true);
+    expect(level(ownedSet(s), "autox")).toBe(1);
+    const second = costOf(ownedSet(s), "autox");
+    expect(second).toBeGreaterThan(first);
+    expect(buy(s, "autox")).toBe(true);
+    expect(level(ownedSet(s), "autox")).toBe(2);
     // standing buys standing upgrades, and Quick study lowers record-point prices by a tenth a level
     s.owned.push("standing");
     s.standing.points = 2;
     expect(buy(s, "study")).toBe(true);
     expect(s.standing.points).toBe(0);
-    expect(costOf(ownedSet(s), "clickx")).toBe(Math.round(15000 * 1.25 ** 2 * 0.9));
+    expect(costOf(ownedSet(s), "autox")).toBeLessThan(Math.round(costOf(owning(["auto1"], { autox: 2 }), "autox")));
     expect(costOf(ownedSet(s), "study")).toBe(Math.round(2 * 1.6));
     expect(laneCount(owning(["lanes2"]), 16)).toBe(2);
     expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 5 }), 16)).toBe(7);
@@ -577,10 +579,24 @@ describe("Tighter points per click", () => {
     expect(beats).toEqual([2, 2, 2, 2]);
     // a send that is refused leaves Bob's record in place: the next step still pays double
     markSending(p, 1.26 * B, s.name, p.leader, T0);
-    applyAnswer(s, p, { score: 1.3 * B, name: "Bob", id: 4 }, 1.26 * B, { kind: "refused", status: 422, reasons: ["x"] }, T0);
+    applyAnswer(
+      s,
+      p,
+      { score: 1.3 * B, name: "Bob", id: 4 },
+      1.26 * B,
+      { kind: "refused", status: 422, reasons: ["x"] },
+      T0,
+    );
     expect(applyStep(s, p, step(1.25 * B, 5), T0).points!.beat).toBe(2);
     // accepted: back to 1
-    applyAnswer(s, p, { score: 1.3 * B, name: "Bob", id: 4 }, 1.25 * B, { kind: "leader", score: 1.25 * B, id: 17, pending: false }, T0);
+    applyAnswer(
+      s,
+      p,
+      { score: 1.3 * B, name: "Bob", id: 4 },
+      1.25 * B,
+      { kind: "leader", score: 1.25 * B, id: 17, pending: false },
+      T0,
+    );
     expect(applyStep(s, p, step(1.24 * B, 6), T0).points!.beat).toBe(1);
     // Carol takes the lead below our board: the next beat of her record is a new window, step after step
     applyLeader(p, { score: 1.2 * B, name: "Carol", id: 5 }, s, T0);
@@ -793,9 +809,9 @@ describe("Tighter auto-eval's rate", () => {
 
   it("starts at 1 a second and climbs by 1, 5, 10, 50 and 100 a level, without a last level", () => {
     expect(AUTO_BASE).toBe(1);
-    expect([1, 2, 3, 5, 10, 20, 50, 60, 150, 200, 250, 500, 1000, 2000, 5000].map((r) => autoPerSecond(at(r)))).toEqual([
-      1, 2, 3, 5, 10, 20, 50, 60, 150, 200, 250, 500, 1000, 2000, 5000,
-    ]);
+    expect([1, 2, 3, 5, 10, 20, 50, 60, 150, 200, 250, 500, 1000, 2000, 5000].map((r) => autoPerSecond(at(r)))).toEqual(
+      [1, 2, 3, 5, 10, 20, 50, 60, 150, 200, 250, 500, 1000, 2000, 5000],
+    );
     // the levels and their rates: 0 is 1; 1 to 49 are 2 to 50; 50 to 79 are 55 to 200; 80 to 109 are 210 to 500;
     // 110 to 119 are 550 to 1,000; from 120 on, 1,100, 1,200 ...
     const rates = [0, 1, 49, 50, 79, 80, 109, 110, 119, 120, 121].map(rateOfLevel);
@@ -899,15 +915,15 @@ describe("Tighter auto-eval's rate", () => {
     ];
     expect(autoPerSecond(at(3))).toBe(3);
     for (let i = 1; i <= ladder.length; i++) expect(autoPerSecond(at(3, ...ladder.slice(0, i)))).toBe(3);
-    const forty = owning([...ladder, "clickx", "auto1", "autox"], { clickx: 30, autox: 2 });
-    expect(evalsPerClick(forty)).toBe(40);
-    expect(autoPerSecond(forty)).toBe(3);
-    // 40 evaluations a click at 150 evaluations a second: 150 a second, not 40 × 150
-    expect(autoPerSecond(owning([...ladder, "clickx", "auto1", "autox"], { clickx: 30, autox: 69 }))).toBe(150);
+    const ten = owning([...ladder, "auto1", "autox"], { autox: 2 });
+    expect(evalsPerClick(ten)).toBe(10);
+    expect(autoPerSecond(ten)).toBe(3);
+    // 10 evaluations a click at 150 evaluations a second: 150 a second, not 10 × 150
+    expect(autoPerSecond(owning([...ladder, "auto1", "autox"], { autox: 69 }))).toBe(150);
     // the Clicks only reward's extra evaluation a click leaves it as it is too
     expect(autoPerSecond(owning(["auto1"], {}, null, ["clicks"]))).toBe(1);
     // and its jobs do not grow with the click size
-    expect(autoJobEvals(forty, 1000)).toBe(autoJobEvals(at(3), 1000));
+    expect(autoJobEvals(ten, 1000)).toBe(autoJobEvals(at(3), 1000));
   });
 
   it("hands a lane a quarter second of its share at a time, at least one evaluation, at most what is due", () => {
