@@ -104,18 +104,19 @@ describe("Tighter payday", () => {
     expect(r2.paid).toBeCloseTo((hourly * RENT_WINDOW_MS) / H, 9);
   });
 
-  it("skips records settled less than a day ago, and does not pay twice after a reload", async () => {
+  it("settles every held record at each payday, for the time since its own last settlement", async () => {
     const s = holder(3);
-    s.economy.checks["21/21/41"] = T0 + H;
-    expect(paydayDue(s, T0 + D).map((p) => p.key)).toEqual(["21/21/40", "21/21/42"]);
+    s.economy.checks["21/21/41"] = T0 + 12 * H;
+    const hourly = rentPerHour(s, ownedSet(s), s.past[0]);
+    expect(paydayDue(s).map((p) => p.key)).toEqual(["21/21/40", "21/21/41", "21/21/42"]);
     const srv = server(s);
-    await runPayday(deps(s, T0 + D, srv.getLeaders));
-    expect(srv.calls.flat()).toEqual(["21/21/40", "21/21/42"]);
-    // the page reloads at once: the settled times are in the save, so nothing is due
-    const again = server(s);
-    const r = await runPayday(deps(s, T0 + D + 60_000, again.getLeaders));
-    expect(again.calls).toEqual([]);
-    expect(r.paid).toBe(0);
+    const r = await runPayday(deps(s, T0 + D, srv.getLeaders));
+    expect(srv.calls.flat()).toEqual(["21/21/40", "21/21/41", "21/21/42"]);
+    expect(r.paid).toBeCloseTo((24 + 12 + 24) * hourly, 9);
+    expect(Object.values(s.economy.checks)).toEqual([T0 + D, T0 + D, T0 + D]);
+    // the page reloads a minute later: only that minute is owed, so nothing is paid twice
+    const r2 = await runPayday(deps(s, T0 + D + 60_000, server(s).getLeaders));
+    expect(r2.paid).toBeCloseTo((3 * hourly) / 60, 9);
   });
 
   it("pays nothing for a lost record, and hands it to the lost-record path", async () => {
@@ -162,7 +163,8 @@ describe("Tighter payday", () => {
     const r = await runPayday(deps(s, T0, server(s).getLeaders));
     expect(r.paid).toBeCloseTo((hourly * RENT_WINDOW_MS) / H, 6);
     const r2 = await runPayday(deps(s, T0 + D - 1, server(s).getLeaders));
-    expect(r2.paid).toBe(0);
+    // the backlog is not paid again: the next payday pays only the day since
+    expect(r2.paid).toBeCloseTo((hourly * (D - 1)) / H, 6);
     expect(RENT_PAYDAY_MS).toBe(D);
   });
 });

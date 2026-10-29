@@ -327,7 +327,7 @@ const RECORDS: How[] = [
   {
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
-      `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record that was paid less than a day ago waits for the next payday, and a record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
+      `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
       "Rent counts as record points earned in this cycle, so it also counts toward a reset.",
     ],
     math: [

@@ -1,5 +1,5 @@
 import type { LeaderValue, LeadersAnswer } from "../api";
-import { RENT_BATCH, RENT_PAYDAY_MS, heldRecords, settleRent, tidyRent } from "./economy";
+import { RENT_BATCH, heldRecords, settleRent, tidyRent } from "./economy";
 import type { GameState, Leader, PastProblem, ProblemState } from "./game";
 import type { Owned } from "./upgrades";
 
@@ -33,18 +33,15 @@ export interface PaydayDeps {
   batchDone?: () => void;
 }
 
-/** Records held whose rent was last settled a day or more ago. */
-export function paydayDue(s: GameState, now: number): Held[] {
-  return heldRecords(s).filter((p) => {
-    const at = s.economy.checks[p.key];
-    return at !== undefined && now - at >= RENT_PAYDAY_MS;
-  });
+/** Records held with rent running: every one is settled at each payday, for the time since its own last settlement. */
+export function paydayDue(s: GameState): Held[] {
+  return heldRecords(s).filter((p) => s.economy.checks[p.key] !== undefined);
 }
 
 const asLeader = (v: LeaderValue | null): Leader | null => (v ? { score: v.score, name: v.name, id: v.id } : null);
 
 /**
- * The daily payday: every held record whose rent was last settled a day or more ago is looked up in
+ * The daily payday: every held record is looked up in
  * batches of at most RENT_BATCH keys, one request after another. A record still ours pays its rent
  * (at most a week, settleRent); one found lost pays nothing and goes the usual way (noteLeader). A
  * record the server did not answer stays as it was, to be tried at the next payday. A failed request
@@ -54,7 +51,7 @@ export async function runPayday(d: PaydayDeps): Promise<PaydayResult> {
   const { state: s, owned: o } = d;
   const result: PaydayResult = { paid: 0, paying: 0, lost: 0, unanswered: 0 };
   tidyRent(s, o, d.now());
-  const due = paydayDue(s, d.now());
+  const due = paydayDue(s);
   const keys = [...new Set(due.map((p) => p.key))];
   const byKey = new Map<string, Held[]>();
   for (const p of due) byKey.set(p.key, [...(byKey.get(p.key) ?? []), p]);
