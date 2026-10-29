@@ -137,7 +137,8 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   expect(await siteBest(page, p)).toBeNull();
   expect(p.phase).toBe("loaded");
   expect(p.board!.pieces).toHaveLength(p.P);
-  expect(p.floor).toBe(evaluate(p.board!, { autoOrient: true }).score);
+  // the page (the browser's V8) and this test (Node's) may differ in the last bit of a trigonometric result
+  expect(p.floor!).toBeCloseTo(evaluate(p.board!, { autoOrient: true }).score!, 10);
 
   // every game has a name from the start, and sends under it; the player changes it from Settings
   expect((await page.evaluate(() => (window as any).tighter.state.name)) as string).toMatch(/^TighterGamePlayer\d{7}$/);
@@ -182,7 +183,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   p = await focused(page);
   // the board was turned to its best angle before it went, and the server scores the angle sent:
   // its score is the board's, to the bit
-  expect(first.score).toBe(p.best!);
+  expect(first.score).toBeCloseTo(p.best!, 10);
   const entry = await (await page.request.get(`/api/submissions/${first.id}`)).json();
   expect(entry).toMatchObject({
     found_with: "optimizer",
@@ -221,7 +222,7 @@ test("tighter: placed at once, the first click compacts, the first record is sen
   await expect(page.locator("#t-notice")).not.toContainText("Sending will try again");
   // the problem's next submission waits for its minute
   await page.waitForTimeout(2500);
-  expect((await siteBest(page, p)).score).toBe(first.score);
+  expect((await siteBest(page, p)).score).toBeCloseTo(first.score, 10);
   // past the minute the improvement goes and its points are confirmed. Game time can be moved only in
   // development builds; against a production build (POLYPACK_E2E_PRODUCTION=1) this waits the real minute.
   const dev = await page.evaluate(() => (window as any).tighter.dev);
@@ -474,21 +475,24 @@ test("tighter: with Rent, a held record's rent arrives at payday through /api/le
   page.on("request", (r) => {
     if (new URL(r.url()).pathname === "/api/leaders") leaderCalls.push(decodeURIComponent(new URL(r.url()).search));
   });
+  // dealing also asks /api/leaders (batches of candidates); payday's call is the one that names the held record
+  const paydayCalls = () => leaderCalls.filter((c) => c.split(",").length < 20 && heldKey && c.includes(heldKey));
+  let heldKey = "";
   await fresh(page, 7);
   await firstRecord(page);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 60_000 }).not.toBeNull();
   const p = await focused(page);
+  heldKey = p.key;
   // Rent owned (set through the handle): the record's rent starts, and the page's first payday, at once,
   // asks about it and pays only the seconds since
   await page.evaluate(() => (window as any).tighter.state.owned.push("rent"));
-  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => paydayCalls().length, { timeout: 30_000 }).toBe(1);
   await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in (23 h|1 d 0 h)/, { timeout: 20_000 });
   const first = await page.evaluate(() => (window as any).tighter.state.economy.rentPaid);
   expect(first).toBeLessThan(0.001);
   // a day later it is payday again: one batch request names the record, and a day of rent is paid
   await page.evaluate(() => (window as any).tighter.skipAhead(24 * 3_600_000));
-  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(2);
-  expect(leaderCalls[1]).toContain(p.key);
+  await expect.poll(() => paydayCalls().length, { timeout: 30_000 }).toBe(2);
   await expect
     .poll(() => page.evaluate(() => (window as any).tighter.state.economy.rentPaid), { timeout: 30_000 })
     .toBeGreaterThan(first + 0.01);

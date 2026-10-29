@@ -141,8 +141,10 @@ export function drawWide(
   exclude: ReadonlySet<string>,
   allow: (p: ProblemKey) => boolean = () => true,
   attempts = 24,
+  skew = 1,
 ): ProblemKey | null {
-  const span = (a: number, b: number) => a + Math.floor(nextRandom(d) * (b - a + 1));
+  // skew > 1 leans each value toward its minimum (smaller problems open quicker)
+  const span = (a: number, b: number) => a + Math.floor(Math.pow(nextRandom(d), skew) * (b - a + 1));
   for (let i = 0; i < attempts; i++) {
     const p = poly(span(WIDE.minSide, WIDE.maxSide), span(WIDE.minSide, WIDE.maxSide), span(WIDE.minP, WIDE.maxP));
     if (!exclude.has(keyOf(p)) && allow(p)) return p;

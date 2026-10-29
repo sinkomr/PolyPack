@@ -13,14 +13,13 @@ import {
   contestedCandidates,
   contestedDealable,
   drawContestedPair,
-  drawProblem,
-  drawWide,
   nextRandom,
   openDealable,
   publishedTarget,
   retakeTier,
   takeToken,
 } from "./dealer";
+import { FinderDeps, Pool, TakenCache, findOpen, firstDealPools } from "./open-finder";
 import { SpaceBoard, mountSpaceBoard, spaceScoreBox } from "./board-space";
 import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listingOf } from "./catalogue";
 import { problemTitle, rulesOf } from "./families";
@@ -1787,23 +1786,68 @@ const openCandidateOf = (k: ProblemKey): Candidate => ({
   retake: false,
 });
 
-/** An open problem of the frontier (or the wider frontier), checked with GET just before. */
-async function openCandidate(io: DealIo, d: DealerState, exclude: Set<string>, list?: readonly ProblemKey[]) {
+/** Open problems a batch found and no GET has confirmed yet, with when they were found. */
+let openStock: ProblemKey[] = [];
+let openStockAt = 0;
+const OPEN_STOCK_MS = 60_000;
+/** Most /api/leaders requests one deal (or one filling of the offers) makes. */
+const DEAL_BATCHES = 4;
+/** Problems found taken by a batch, remembered for a few minutes so the next deal does not ask again. */
+const takenCache = new TakenCache(now);
+const finderDeps: FinderDeps = { getLeaders: (keys) => api.getLeaders(keys), now };
+
+/** An open problem, found in batches of up to 200 (one /api/leaders request) and checked with GET just before it is dealt. */
+async function openCandidate(
+  io: DealIo & { batches?: number },
+  d: DealerState,
+  exclude: Set<string>,
+  firstPools?: Pool[],
+) {
   const o = owned();
   const pass = (p: ProblemKey) => allowed({ ...p, tier: "open" });
   // a cycle rule may need open problems of its own (circles have none in the frontier)
   const ruled = ruleOpenProblems(state.standing);
-  const k =
-    !list && !ruled && o.has("wide") && nextRandom(d) < 0.5
-      ? drawWide(d, exclude, pass)
-      : drawProblem(d, (list ?? ruled ?? FRONTIER).filter(pass), exclude);
-  if (!k) return null;
-  const info = await problemInfo(io, k);
-  if (!info) return null;
-  if (openDealable(info)) return openCandidateOf(k);
-  skipped.add(keyOf(k));
-  exclude.add(keyOf(k));
-  return null;
+  const confirm = async (): Promise<Candidate | null> => {
+    while (openStock.length && !spentIo(io)) {
+      const k = openStock.shift()!;
+      if (exclude.has(keyOf(k)) || !pass(k)) continue;
+      const info = await problemInfo(io, k);
+      if (!info) return null;
+      if (openDealable(info)) return openCandidateOf(k);
+      // a null leader also answers for a closed problem
+      takenCache.add(keyOf(k));
+      skipped.add(keyOf(k));
+      exclude.add(keyOf(k));
+    }
+    return null;
+  };
+  if (now() - openStockAt > OPEN_STOCK_MS) openStock = [];
+  const stocked = await confirm();
+  if (stocked || spentIo(io)) return stocked;
+  const batches = io.batches ?? 0;
+  if (batches >= DEAL_BATCHES) return null;
+  // the frontier first, then small problems of the wide set so that a deal always finds one while any is open
+  const wideFirst = !firstPools && !ruled && o.has("wide") && nextRandom(d) < 0.5;
+  const pools: Pool[] =
+    firstPools ??
+    (ruled
+      ? [{ keys: ruled }]
+      : wideFirst
+        ? [{ wide: true, skew: 1 }, { keys: FRONTIER }]
+        : [{ keys: FRONTIER }, { wide: true, skew: 2.5 }]);
+  const found = await findOpen(finderDeps, d, pools, {
+    exclude,
+    taken: takenCache,
+    allow: pass,
+    smallest: !!firstPools,
+    budget: DEAL_BATCHES - batches,
+  });
+  io.batches = batches + found.requests;
+  io.gets += found.requests;
+  if (found.offline) io.offline = true;
+  openStock.push(...found.open);
+  openStockAt = now();
+  return confirm();
 }
 
 /** A site record or published value of a random contested pair, in the player's tiers and size ring. */
@@ -2234,9 +2278,10 @@ async function dealTick(): Promise<void> {
 /** Offline or nothing found: ask again in a while rather than every second. */
 function pauseDealing(offline: boolean): void {
   dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
-  if (offline && !state.queue.length)
-    $("t-title").textContent =
-      `The server cannot be reached, so no problem can be dealt. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`;
+  if (!state.queue.length)
+    $("t-title").textContent = offline
+      ? `The server cannot be reached, so no problem can be dealt. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`
+      : "Looking for an open problem…";
 }
 
 async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked } | null> {
@@ -2245,11 +2290,12 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked }
     // the first problem comes from the starter corner while any of it is left open
     const io: DealIo = { gets: 0, offline: false };
     const ruled = ruleOpenProblems(state.standing);
-    for (const list of ruled ? [ruled] : [STARTER, FRONTIER])
-      for (let attempt = 0; attempt < 6 && !spentIo(io); attempt++) {
-        const c = await openCandidate(io, d, exclude, list);
-        if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };
-      }
+    // the starter corner, then the rest of the frontier, then small problems of the wide set: the smallest open one found
+    const pools = ruled ? [{ keys: ruled }] : firstDealPools(STARTER, FRONTIER);
+    for (let attempt = 0; attempt < 3 && !spentIo(io); attempt++) {
+      const c = await openCandidate(io, d, exclude, pools);
+      if (c) return { p: newProblem(c, "open", now()), ranked: plainRanked(c) };
+    }
     pauseDealing(io.offline);
     return null;
   }
