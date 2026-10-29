@@ -4,7 +4,7 @@ import { AUTO_CLICK_EVALS, DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
 import {
   PAIR_BONUS,
   RENT_GROWTH,
-  RENT_RECHECK_MS,
+  RENT_PAYDAY_MS,
   RENT_SHARE,
   RENT_WINDOW_MS,
   SHAPE_BONUS,
@@ -418,11 +418,11 @@ describe("Tighter upgrade texts", () => {
     expect(text("advance")).toContain("100 evaluations of mc_compress");
     expect(text("shrink")).toContain("A run ends by itself after 1,000 evaluations without progress.");
     expect(text("auto1")).toContain("60 s");
-    expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_RECHECK_MS / 60_000]).toEqual([
-      0.01, 1.5, 168, 10,
+    expect([RENT_SHARE, RENT_GROWTH, RENT_WINDOW_MS / 3_600_000, RENT_PAYDAY_MS / 3_600_000]).toEqual([
+      0.01, 1.5, 168, 24,
     ]);
     expect(text("rent")).toContain("0.01 × <var>B</var> × 1.5<sup>");
-    expect(text("rent")).toContain("10 minutes");
+    expect(text("rent")).toContain("On payday, the game checks all your records");
     expect(CONTEST).toEqual({ open: 1, loose: 3, batch: 10, published: 100 });
     expect([room("open", null), room("loose", 1), room("batch", null), room("published", null)]).toEqual([
       1, 1, 0.1, 0.004,

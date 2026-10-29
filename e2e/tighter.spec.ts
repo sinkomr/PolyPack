@@ -467,3 +467,27 @@ test("tighter: the game's page is cross-origin isolated (space runs share memory
   await page.goto("/index.html");
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
 });
+
+test("tighter: with Rent, a held record's rent arrives at payday through /api/leaders", async ({ page }) => {
+  test.setTimeout(180_000);
+  const leaderCalls: string[] = [];
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/api/leaders") leaderCalls.push(decodeURIComponent(new URL(r.url()).search));
+  });
+  await fresh(page, 7);
+  await firstRecord(page);
+  await expect.poll(async () => (await focused(page)).ourId, { timeout: 60_000 }).not.toBeNull();
+  const p = await focused(page);
+  // Rent owned (set through the handle): the record's rent starts now, and the page's first payday finds nothing due
+  await page.evaluate(() => (window as any).tighter.state.owned.push("rent"));
+  await expect.poll(() => page.evaluate((k) => (window as any).tighter.state.economy.checks[k], p.key)).toBeDefined();
+  expect(await page.evaluate(() => (window as any).tighter.state.economy.rentPaid)).toBe(0);
+  // a day and an hour later it is payday: one batch request names the record, and its rent is paid
+  await page.evaluate(() => (window as any).tighter.skipAhead(25 * 3_600_000));
+  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBeGreaterThan(0);
+  expect(leaderCalls[0]).toContain(p.key);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).tighter.state.economy.rentPaid), { timeout: 30_000 })
+    .toBeGreaterThan(0);
+  expect((await focused(page)).ourId).toBe(p.ourId);
+});
