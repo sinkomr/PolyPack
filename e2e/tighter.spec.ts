@@ -475,21 +475,24 @@ test("tighter: with Rent, a held record's rent arrives at payday through /api/le
   page.on("request", (r) => {
     if (new URL(r.url()).pathname === "/api/leaders") leaderCalls.push(decodeURIComponent(new URL(r.url()).search));
   });
+  // dealing also asks /api/leaders (batches of candidates); payday's call is the one that names the held record
+  const paydayCalls = () => leaderCalls.filter((c) => c.split(",").length < 20 && heldKey && c.includes(heldKey));
+  let heldKey = "";
   await fresh(page, 7);
   await firstRecord(page);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 60_000 }).not.toBeNull();
   const p = await focused(page);
+  heldKey = p.key;
   // Rent owned (set through the handle): the record's rent starts, and the page's first payday, at once,
   // asks about it and pays only the seconds since
   await page.evaluate(() => (window as any).tighter.state.owned.push("rent"));
-  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => paydayCalls().length, { timeout: 30_000 }).toBe(1);
   await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in (23 h|1 d 0 h)/, { timeout: 20_000 });
   const first = await page.evaluate(() => (window as any).tighter.state.economy.rentPaid);
   expect(first).toBeLessThan(0.001);
   // a day later it is payday again: one batch request names the record, and a day of rent is paid
   await page.evaluate(() => (window as any).tighter.skipAhead(24 * 3_600_000));
-  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(2);
-  expect(leaderCalls[1]).toContain(p.key);
+  await expect.poll(() => paydayCalls().length, { timeout: 30_000 }).toBe(2);
   await expect
     .poll(() => page.evaluate(() => (window as any).tighter.state.economy.rentPaid), { timeout: 30_000 })
     .toBeGreaterThan(first + 0.01);
