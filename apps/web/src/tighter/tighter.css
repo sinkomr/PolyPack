@@ -833,6 +833,20 @@ body.tighter[data-pane="tree"] .t-banner {
 }
 .t-tree-canvas {
   position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .t-tree:has(.t-tree-canvas) {
+    cursor: grab;
+  }
+  .t-tree.dragging,
+  .t-tree.dragging * {
+    cursor: grabbing !important;
+  }
+  .t-tree .t-node-act {
+    cursor: pointer;
+  }
 }
 .t-band {
   position: absolute;
@@ -880,8 +894,8 @@ body.tighter[data-pane="tree"] .t-banner {
   flex-direction: column;
   justify-content: space-between;
   width: 136px;
-  height: 78px;
-  padding: 5px 8px 24px;
+  height: 62px;
+  padding: 5px 8px 6px;
   overflow: hidden;
   border: 1.5px solid var(--border);
   border-radius: 8px;
@@ -930,15 +944,31 @@ body.tighter[data-pane="tree"] .t-banner {
   font-size: 1px;
   cursor: pointer;
 }
-/* over the node's big button, at its bottom edge */
+/* a small round "i" in the node's bottom-right corner, over the node's big button; the footer (price,
+   level) stops short of it, so it never covers them */
 .t-node-more {
   position: absolute;
-  left: 6px;
-  bottom: 4px;
+  right: 4px;
+  bottom: 2px;
+  width: 18px;
+  min-width: 0;
+  height: 18px;
+  min-height: 0;
   margin: 0;
-  padding: 0 6px;
+  padding: 0;
+  border-radius: 50%;
   font-size: 11px;
-  line-height: 16px;
+  font-style: italic;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+}
+.t-node-more:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.t-tree-canvas .t-node-foot {
+  padding-right: 22px;
 }
 .t-node-act:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 7%, transparent);

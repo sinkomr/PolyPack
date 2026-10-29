@@ -91,8 +91,8 @@ function played(): GameState {
   markSending(p, 6.4 + 1e-13, "Ada", p.leader, T0 + 3500);
   buy(s, "trace");
   // a levelled upgrade at level 2, standing, a record remembered, an arm of each bandit, a retake
-  s.owned.push("click10", "clickx", "standing");
-  s.levels.clickx = 2;
+  s.owned.push("click10", "lanesx", "standing");
+  s.levels.lanesx = 2;
   s.standing = { ...s.standing, points: 3, total: 5, resets: 1, cycleEarned: 1234.5, rule: "circles" };
   s.economy.recorded.push("21/21/40");
   s.economy.rentPaid = 12.5;
@@ -148,7 +148,7 @@ describe("Tighter saves", () => {
     expect(r.state.stats).toMatchObject({ evaluations: 101, clicks: 2, runs: 1, computeMs: 1237 });
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
-    expect(r.state.levels).toEqual({ clickx: 2 });
+    expect(r.state.levels).toEqual({ lanesx: 2 });
   });
 
   it("give back the price of the Away upgrades and Keep the bank, once, now that auto-eval runs live", () => {
@@ -223,9 +223,9 @@ describe("Tighter saves", () => {
   it("keep levels only for owned levelled upgrades, within their range", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));
-    raw.levels = { clickx: 5000, trace: 3, lanesx: 2, nope: 1, study: 0 };
+    raw.levels = { lanesx: 5000, trace: 3, nope: 1, study: 0 };
     const r = readSave(raw, T0);
-    expect(r.ok && r.state.levels).toEqual({ clickx: 990 });
+    expect(r.ok && r.state.levels).toEqual({ lanesx: 31 });
     raw.standing = "x";
     raw.economy = { recorded: ["1/2/3", "bad", 4], rentPaid: -1 };
     const t = readSave(raw, T0);
@@ -275,16 +275,16 @@ describe("Tighter saves", () => {
     const s = played();
     const raw = { ...JSON.parse(toJson(s)), version: 7 };
     // auto10 (150) and 3 levels of 10 a second: 180
-    raw.owned = ["trace", "click10", "clickx", ...rungs, "auto10", "autox"];
-    raw.levels = { clickx: 30, autox: 3 };
+    raw.owned = ["trace", "click10", ...rungs, "auto10", "autox"];
+    raw.levels = { autox: 3 };
     raw.autoDue = 4321.5;
     const r = readSave(raw, T0);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.owned).toEqual(["trace", "click10", "clickx", "auto1", "autox"]);
-    expect(r.state.levels).toEqual({ clickx: 30, autox: 75 });
+    expect(r.state.owned).toEqual(["trace", "click10", "auto1", "autox"]);
+    expect(r.state.levels).toEqual({ autox: 75 });
     const o = owning(r.state.owned, r.state.levels);
-    expect(evalsPerClick(o)).toBe(40);
+    expect(evalsPerClick(o)).toBe(10);
     expect(autoPerSecond(o)).toBe(180);
     expect(r.state.autoDue).toBe(0);
     const paid = OLD_AUTO1 + oldRung.reduce((t, c) => t + c, 0) + oldFaster(3);
@@ -428,7 +428,7 @@ describe("Tighter saves", () => {
     raw.autoDue = 1e6;
     raw.dealer.tokens = "many";
     const s = normalize(raw, T0);
-    expect(s.owned).toEqual(["trace", "click10", "clickx", "standing"]);
+    expect(s.owned).toEqual(["trace", "click10", "lanesx", "standing"]);
     expect(s.rp).toBe(0);
     // no name: a generated one
     expect(s.name).toMatch(/^TighterGamePlayer\d{7}$/);
@@ -846,13 +846,15 @@ describe("Tighter saves of version 3", () => {
     expect(pointsScale(["trace", "click2", "queue3", "auto1", "click3"], {})).toBe((300 + 20000) / (500 + 3000));
     // a levelled upgrade counts its next level, which grows by the same factor then and now
     const ladder: UpgradeId[] = ["trace", "click2", "click3", "click4", "click5", "click6", "click7", "click8"];
-    const next = pointsScale([...ladder, "click9", "click10", "clickx", "sweeps10", "queue3", "rank2"], { clickx: 2 });
+    const next = pointsScale([...ladder, "click9", "click10", "lanes2", "lanesx", "sweeps10", "queue3", "rank2"], {
+      lanesx: 2,
+    });
     expect(next).toBeGreaterThan(6);
     expect(next).toBeLessThan(8);
     // a save past Basin hopping buys at 8 times the old prices
     const past: UpgradeId[] = [...ladder, "click9", "click10", "auto1", "auto2", "auto3", "auto4", "auto5"];
     expect(
-      pointsScale([...past, "basin", "auto6", "sweeps10", "queue3", "rank2", "clickx"], { clickx: 990 }),
+      pointsScale([...past, "basin", "auto6", "sweeps10", "queue3", "rank2", "lanes2", "lanesx"], { lanesx: 31 }),
     ).toBeCloseTo(8, 9);
   });
 
@@ -933,7 +935,7 @@ describe("Tighter saves of version 4", () => {
   it("clear standing, the Standing row and the rules once, and give back the points the finished cycles earned", () => {
     const raw = v4(2);
     raw.owned = [...raw.owned, "head1", "keepAuto", "rules"];
-    raw.levels = { ...raw.levels, clickx: 2 };
+    raw.levels = { ...raw.levels, lanesx: 2 };
     raw.standing.history = [
       { startedAt: 0, endedAt: 1, earned: 3_000_000, gain: 2, rule: "circles", marks: {} },
       { startedAt: 1, endedAt: 2, earned: 2_500_000, gain: 2, rule: null, marks: {} },
@@ -960,8 +962,8 @@ describe("Tighter saves of version 4", () => {
       cycleEarned: 1234.5,
     });
     for (const id of ["standing", "head1", "keepAuto", "rules"]) expect(r.state.owned).not.toContain(id);
-    expect(r.state.owned).toContain("clickx");
-    expect(r.state.levels).toEqual({ clickx: 2 });
+    expect(r.state.owned).toContain("lanesx");
+    expect(r.state.levels).toEqual({ lanesx: 2 });
     // the records stay
     expect(r.state.queue.map((p) => p.key)).toEqual(s.queue.map((p) => p.key));
     // saved again, it is a version 5 save: nothing is given back twice
@@ -1050,5 +1052,28 @@ describe("Tighter saves of version 6 (before names were always sent)", () => {
     const r = fromJson(toJson(played()), T0);
     expect(r.ok && r.state.name).toBe("Ada");
     expect(newGame(T0, 1).name).toMatch(NAMED);
+  });
+});
+
+describe("the retired One more evaluation per click (clickx)", () => {
+  it("pays its levels back at the list prices once, and is gone from the save", () => {
+    const raw = { ...JSON.parse(toJson(newGame(T0, 1))), version: 8 };
+    raw.owned = ["trace", "click10", "clickx"];
+    raw.levels = { clickx: 3 };
+    raw.rp = 100;
+    const r = readSave(raw, T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    // 15,000 + 18,750 + 23,438
+    const paid = 15000 + 18750 + 23438;
+    expect(r.retired).toEqual({ rp: paid, standing: 0, groups: ["Evaluations per click"] });
+    expect(r.state.rp).toBe(100 + paid);
+    expect(r.state.owned).toEqual(["trace", "click10"]);
+    expect(r.state.levels).toEqual({});
+    expect(evalsPerClick(owning(r.state.owned, r.state.levels))).toBe(10);
+    // saved again (version 9), nothing is paid twice
+    const again = readSave(JSON.parse(toJson(r.state)), T0);
+    expect(again.ok && again.retired).toBeUndefined();
+    expect(again.ok && again.state.rp).toBe(100 + paid);
   });
 });

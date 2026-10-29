@@ -30,14 +30,14 @@ const MIN = 60_000;
 /** A late first cycle: Standing bought, much of the tree owned, a record held, auto-eval running and due a click. */
 function lateGame(extra: UpgradeId[] = []): GameState {
   const s = newGame(T0, 1);
-  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "clickx", "autox", ...extra]);
+  const want = new Set<UpgradeId>(["standing", "rentx", "lanesx", "autox", ...extra]);
   const add = (id: UpgradeId) => {
     if (s.owned.includes(id)) return;
     for (const r of upgrade(id).requires) add(r);
     s.owned.push(id);
   };
   for (const id of want) add(id);
-  s.levels = { rentx: 3, lanesx: 2, clickx: 5 };
+  s.levels = { rentx: 3, lanesx: 2 };
   s.rp = 123_456;
   s.rpEarned = 16_000_000;
   s.standing.cycleEarned = 4 * RESET_MIN;
@@ -77,7 +77,7 @@ describe("Tighter standing", () => {
     const pv = resetPreview(s);
     expect(pv).toMatchObject({ gain: 10, ruleBonus: 0, short: 0, held: 1, opens: "2-on-3" });
     expect(pv.keeps).toEqual(expect.arrayContaining(["standing", "rent", "rentx", "collections"]));
-    expect(pv.loses).toEqual(expect.arrayContaining(["click2", "basin", "lanes2", "lanesx", "clickx"]));
+    expect(pv.loses).toEqual(expect.arrayContaining(["click2", "basin", "lanes2", "lanesx"]));
     s.standing.cycleEarned = 1000;
     expect(resetPreview(s)).toMatchObject({ gain: 0, short: RESET_MIN - 1000 });
     expect(s.standing.dimensions).toEqual(["2-in-2"]);

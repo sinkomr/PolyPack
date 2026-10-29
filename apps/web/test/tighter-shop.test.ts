@@ -116,7 +116,7 @@ describe("Tighter shop", () => {
     const v = shopView(owning(clicks), { rp: 200, standing: 0 }, 8);
     // a ladder folds to where it stands
     expect(row(v, "clicks").owned).toEqual(["Trace detail", "2 to 3 evaluations per click"]);
-    expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 11 });
+    expect(row(v, "clicks")).toMatchObject({ ownedCount: 3, total: 10 });
     expect(card(v, "click3")).toBeUndefined();
     expect(card(v, "click4")).toMatchObject({ state: "dear" });
     const w = shopView(owning(["auto1", "autox"], { autox: 150 }), broke, 8);
@@ -128,17 +128,17 @@ describe("Tighter shop", () => {
   });
 
   it("shows a levelled upgrade's level and the next level's price", () => {
-    const o = owning(["click10", "clickx"], { clickx: 2 });
-    // 15,000 × 1.25²
-    const v = shopView(o, { rp: 23438, standing: 0 }, 8);
-    expect(card(v, "clickx")).toMatchObject({
+    const o = owning(["auto1", "autox"], { autox: 2 });
+    const price = costOf(o, "autox");
+    const v = shopView(o, { rp: price, standing: 0 }, 8);
+    expect(card(v, "autox")).toMatchObject({
       state: "buyable",
       level: 2,
-      price: "next level 23,438 RP",
+      price: `next level ${price.toLocaleString("en-US")} RP`,
       levelText: "Level 2",
     });
-    expect(card(v, "clickx")!.label).toBe("Buy One more evaluation per click level 3 for 23438 record points");
-    expect(row(v, "clicks").owned).toContain("One more evaluation per click (level 2)");
+    expect(card(v, "autox")!.label).toBe(`Buy Faster auto-eval level 3 for ${price} record points`);
+    expect(row(v, "auto").owned).toContain("Faster auto-eval (level 2)");
     const t = shopView(owning(["sweeps10", "basin", "tuneMc"], { tuneMc: 1 }), broke, 8);
     expect(card(t, "tuneMc")).toMatchObject({ level: 1, levelText: "Level 1 of 3", price: "next level 192,000 RP" });
     const full = shopView(owning(["sweeps10", "basin", "tuneMc"], { tuneMc: 3 }), broke, 8);
@@ -342,7 +342,7 @@ describe("Tighter upgrade texts", () => {
   it("give each rung of a ladder its own numbers", () => {
     const u = (id: UpgradeId) => UPGRADES.find((x) => x.id === id)!;
     expect(u("click3").effect).toBe("Each Evolve click runs 3 evaluations instead of 2.");
-    expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>a</var> + <var>r</var>"]);
+    expect(u("click3").how.math).toEqual(["<var>k</var> = 3 + <var>r</var>"]);
     expect(u("auto1").effect).toBe("Auto-eval runs 1 evaluation a second for you while it is switched on.");
     expect(u("auto1").how.math).toEqual([
       "<var>r</var> = 1",
@@ -372,7 +372,7 @@ describe("Tighter upgrade texts", () => {
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
     expect(text("auto1")).toContain("whatever your evaluations per click");
     expect(text("click5")).toContain("Auto-eval keeps its own rate in evaluations a second");
-    expect(text("clickx")).toContain("Auto-eval keeps its own rate in evaluations a second");
+    expect(UPGRADES.some((u) => u.id === ("clickx" as UpgradeId))).toBe(false);
     // Faster auto-eval has no last level, and says that the computer is the limit
     expect(text("autox")).toContain("You can buy as many levels as you like");
     expect(text("autox")).toContain("At some point your computer is the limit");

@@ -327,8 +327,11 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
   };
 }
 
+/** How far (CSS pixels) a mouse press may move and still be a click, not a drag of the tree. */
+const DRAG_SLOP = 4;
+
 /** Sizes of the tree's layout, in CSS pixels. */
-export const TREE = { nodeW: 136, nodeH: 78, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
+export const TREE = { nodeW: 136, nodeH: 62, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
 
 /**
  * The phone layout (tighter.css, "phones"): there the tree is a list, row after row, in the order of
@@ -480,7 +483,68 @@ export class TreeRenderer {
     this.tip.hidden = true;
     (box.parentElement ?? box).append(this.tip);
     box.addEventListener("scroll", () => this.placeTip(), { passive: true });
+    this.dragToScroll();
     addEventListener("resize", () => this.placeTip());
+  }
+
+  /**
+   * Drag to scroll, for a mouse or pen on the canvas: pressing the background or a node and moving
+   * more than DRAG_SLOP pixels pans the scroll container, and the click that would follow the release
+   * is swallowed. A press that stays put is still a click. Touch is left to the browser's own
+   * scrolling, and the phone's list scrolls vertically as a page does, so neither is touched here.
+   */
+  private dragToScroll(): void {
+    const box = this.box;
+    let start: { x: number; y: number; left: number; top: number; id: number } | null = null;
+    let dragging = false;
+    let swallow = false;
+    const end = () => {
+      if (!start) return;
+      start = null;
+      box.classList.remove("dragging");
+      if (dragging) {
+        dragging = false;
+        // the click that follows this release comes at once, or not at all
+        swallow = true;
+        setTimeout(() => (swallow = false), 0);
+      }
+    };
+    box.addEventListener("pointerdown", (e) => {
+      if (this.list || e.pointerType === "touch" || e.button !== 0) return;
+      // the scrollbars are the browser's
+      const r = box.getBoundingClientRect();
+      if (e.clientX - r.left >= box.clientWidth || e.clientY - r.top >= box.clientHeight) return;
+      start = { x: e.clientX, y: e.clientY, left: box.scrollLeft, top: box.scrollTop, id: e.pointerId };
+      dragging = false;
+    });
+    addEventListener("pointermove", (e) => {
+      if (!start || e.pointerId !== start.id) return;
+      const dx = e.clientX - start.x,
+        dy = e.clientY - start.y;
+      if (!dragging) {
+        if (Math.hypot(dx, dy) < DRAG_SLOP) return;
+        dragging = true;
+        box.classList.add("dragging");
+        getSelection()?.removeAllRanges();
+      }
+      box.scrollLeft = start.left - dx;
+      box.scrollTop = start.top - dy;
+      e.preventDefault();
+    });
+    addEventListener("pointerup", end);
+    addEventListener("pointercancel", end);
+    box.addEventListener(
+      "click",
+      (e) => {
+        if (!swallow) return;
+        swallow = false;
+        e.stopPropagation();
+        e.preventDefault();
+      },
+      true,
+    );
+    // a drag that starts on an image or link would start the browser's own drag
+    box.addEventListener("dragstart", (e) => e.preventDefault());
   }
 
   render(view: TreeView, funds: Funds): void {
@@ -600,8 +664,11 @@ export class TreeRenderer {
     delete node.dataset.how;
     if (!want) return;
     if (want === "canvas") {
-      // a small button of its own, over the node's big one, so pointer and keyboard both reach it
-      node.append(moreDetail(n.how!, n.name, "t-node-more"));
+      // a small round "i" in the node's bottom corner (the price and level leave room for it), over the
+      // node's big button so pointer and keyboard both reach it; its accessible name stays "More detail: ..."
+      const more = moreDetail(n.how!, n.name, "t-node-more");
+      more.textContent = "i";
+      node.append(more);
     } else {
       const effect = el("p", "t-list-effect", n.effect);
       effect.id = `t-effect-${n.id}`;

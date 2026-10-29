@@ -498,3 +498,73 @@ test("tighter: with Rent, a held record's rent arrives at payday through /api/le
     .toBeGreaterThan(first + 0.01);
   expect((await focused(page)).ourId).toBe(p.ourId);
 });
+
+test("tighter: the tech tree's More detail is a small corner button clear of the node's text, and a mouse drag pans the tree", async ({
+  page,
+}) => {
+  await fresh(page, 7);
+  await page.evaluate(() => {
+    const s = (window as any).tighter.state;
+    s.rp = 5000;
+    s.rpEarned = 9000;
+    for (const id of ["trace", "click2", "auto1", "click3", "click4", "click5"])
+      if (!s.owned.includes(id)) s.owned.push(id);
+    s.reveal.push("score", "points", "upgrades", "queue", "lanes");
+  });
+  await openTree(page);
+  const tree = page.locator(".t-tree");
+  const scroll = () => tree.evaluate((t) => [t.scrollLeft, t.scrollTop]);
+
+  // the "i" sits inside its node and over neither its name, its price and level, nor its progress bar
+  const node = page.locator('.t-node[data-id="click5"]');
+  const more = node.locator(".t-node-more");
+  await expect(more).toHaveAttribute("aria-label", "More detail: 5 evaluations per click");
+  const m = (await more.boundingBox())!;
+  const n = (await node.boundingBox())!;
+  expect(m.width).toBeLessThanOrEqual(20);
+  expect(m.x + m.width).toBeLessThanOrEqual(n.x + n.width);
+  expect(m.y + m.height).toBeLessThanOrEqual(n.y + n.height - 3);
+  for (const part of [".t-node-name", ".t-node-price", ".t-level"]) {
+    const b = await node.locator(part).boundingBox();
+    if (b) expect({ part, apart: b.x + b.width <= m.x || b.y + b.height <= m.y, b, m }).toMatchObject({ apart: true });
+  }
+
+  // a press that moves a little is still a click: the node is bought
+  const buy = page.locator('.t-node[data-id="click6"]');
+  await expect(buy).toHaveAttribute("data-state", "buyable");
+  const bb = (await buy.boundingBox())!;
+  await page.mouse.move(bb.x + 30, bb.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(bb.x + 32, bb.y + 21);
+  await page.mouse.up();
+  await expect.poll(() => page.evaluate(() => (window as any).tighter.state.owned.includes("click6"))).toBe(true);
+
+  // a drag pans the tree, from the background or from a node, and buys nothing
+  const t = (await tree.boundingBox())!;
+  const before = await scroll();
+  await page.mouse.move(t.x + 600, t.y + 400);
+  await page.mouse.down();
+  await page.mouse.move(t.x + 450, t.y + 340, { steps: 6 });
+  await expect(tree).toHaveClass(/dragging/);
+  await page.mouse.up();
+  const after = await scroll();
+  expect(after[0]).toBeGreaterThan(before[0] + 100);
+  expect(after[1]).toBeGreaterThan(before[1]);
+  const rp0 = await rp(page);
+  const dear = page.locator('.t-node[data-state="buyable"]').first();
+  const id = await dear.getAttribute("data-id");
+  const db = (await dear.boundingBox())!;
+  await page.mouse.move(db.x + 40, db.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(db.x + 140, db.y + 20, { steps: 6 });
+  await page.mouse.up();
+  expect(await page.evaluate((i) => (window as any).tighter.state.owned.includes(i), id)).toBe(false);
+  expect(await rp(page)).toBeGreaterThanOrEqual(rp0);
+  expect((await scroll())[0]).toBeLessThan(after[0] + 100 + 1);
+  expect(await page.evaluate(() => getSelection()!.toString())).toBe("");
+
+  // the "i" still opens the details
+  await node.locator(".t-node-more").scrollIntoViewIfNeeded();
+  await node.locator(".t-node-more").click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
