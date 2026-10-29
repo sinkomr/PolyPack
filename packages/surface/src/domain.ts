@@ -98,8 +98,8 @@ function inDomain(solid: unknown, mode: unknown, N: unknown, P: unknown): solid 
 }
 
 /**
- * The domain object (the shape of packages/spaces' SpaceDomain). Its sample for the volunteers' work
- * list holds problems without a record, small P first from P = 2 (the work list leaves out P = 1): the
+ * The domain object (the shape of packages/spaces' SpaceDomain). Its sample, the order of the volunteers' work
+ * list until it was removed on 2026-10-29, holds problems without a record, small P first from P = 2 (P = 1 left out): the
  * folding ones, and the Catalan nofold ones (the other nofold problems are 2D in 2D problems); within a P
  * the shapes of the records' tables (0, 3, 4, 5, 6, 8) first, then the other N, the solids in catalogue order.
  */

@@ -1,6 +1,6 @@
 /**
  * The boundary space ("3D on 4D") through the server's spaces routes, with the real catalogues and
- * an in-memory store: listing, records, problems, submissions, entries and targets. Nothing here
+ * an in-memory store: listing, records, problems, submissions and entries. Nothing here
  * talks to a live server.
  */
 import { readFileSync } from "node:fs";
@@ -252,7 +252,6 @@ describe("the API page", () => {
       "<code>{nofold, fold_gain}</code>",
       "boundary 64",
       "one piece may cross at most 1024 chains of cells",
-      "the full domains are never enumerated",
       "/api/spaces/boundary/problems/boundary/tesseract/ball/9",
     ])
       expect(html).toContain(part);

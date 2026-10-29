@@ -183,8 +183,8 @@ the largest coordinate of a lattice start below 1e4) are valid problems; nothing
 treats a pair apart [CALC]. A pair whose piece is larger than its container (a cube of edge 1 in an octahedron of
 edge 1) is an ordinary problem with s above 1 for every P. Pieces and containers that are the same solid (the 94
 self-packings, 27 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The nightly snapshot holds the leading site entry of any open problem of the domain, new pairs and P = 101 to 500 included (`snapshotSpaces`; domain problems without a record are listed after the records, by P). The volunteers' work list
-(`domain.sample`) is unchanged: it offers only the unrecorded range P = 101 to 500 of the 150 pairs; a new pair comes up
-for volunteers once it has a site entry.
+(`domain.sample`) offered only the unrecorded range P = 101 to 500 of the 150 pairs; since it was removed on
+2026-10-29 the volunteer client draws from every pair and P at random.
 
 **Configuration.** `{s, pieces: [[x, y, z, qw, qx, qy, qz], ...]}` with P poses, upstream's own format. Piece i is
 the canonical piece solid turned by the rotation of q / |q| (v -> q v q*, the matrix H(q) / |q|^2, exactly
@@ -846,7 +846,8 @@ Gzip is made off the event loop. [CALC] 1,200 connections that asked for the who
 listing (3.4 MB), plain or gzip, and never read, grew the heap by 9 MB (before, 150 plain ones ran a server with a
 230 MB heap out of memory).
 
-**Targets.** The targets list (`/api/spaces/targets`) treats a site entry as the leader on the same rule, and
+**Targets.** (The work list was removed on 2026-10-29, and the volunteer client draws its problems at random:
+[VOLUNTEER.md](../VOLUNTEER.md#the-end-of-the-work-list). This paragraph describes it as it was.) The targets list (`/api/spaces/targets`) treats a site entry as the leader on the same rule, and
 leaves out a problem whose record is within its margin of the lower bound (nothing could be kept below it: cubes
 in a cube and triangular prisms in a triangular prism, P = 8, 27 and 64). With 14,850 problems the whole list has
 16,657 targets with all seven spaces, 500 of them a sample of the balls space's domain (3.1 MB, 0.5 MB compressed;
@@ -882,9 +883,10 @@ keep.
 option the client never asks the server about it. Its jobs are sized by time like the other spaces' and polled at
 every evaluation: an abort of a job on 100 truncated icosidodecahedra from the record was answered after 0.16 to
 0.33 s (the job then checks its best), of a fresh job on 100 pentagonal hexecontahedra within 10 ms [CALC]; a test
-requires 2 s, and that a paused job uses no processor time (`apps/volunteer/test/pool.spaces.test.ts`). It reads
-the whole targets list (`limit=10000`, or 2000 from an older server) and draws a space uniformly among those it
-asks for, so polyhedra get their share of its searches.
+requires 2 s, and that a paused job uses no processor time (`apps/volunteer/test/pool.spaces.test.ts`). Since 0.3.0
+(2026-10-29) it draws from every problem of the kinds it asks for at random, so the 4,409,164 polyhedra problems get
+38.5% of its draws with `--dimensions all`; before, it read the whole targets list and drew a space uniformly among
+those it asked for.
 
 ## 9. Kernel for the generic methods
 

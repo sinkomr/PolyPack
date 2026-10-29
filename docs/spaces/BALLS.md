@@ -89,9 +89,9 @@ and D_nd of the prisms, antiprisms, elongated prisms, bipyramids and trapezohedr
 
 The space's problems are its domain, `ballsDomain` (`packages/balls/src/problems.ts`): the fields `code` (the 189
 codes, with their titles and the menu's groups) and `P` (2 to 100), 18,711 problems; `bound(id)` gives a problem's
-elementary bound, and `sample(limit)` the problems in the order the volunteers' work list offers them, small P first,
-from the first 7 codes only (693 problems, as before; the other 18,018 are on the board and the API, and open to
-entries and to the volunteer client's explicit jobs, but not in the default draw). `packages/spaces`
+elementary bound, and `sample(limit)` the problems in the order the volunteers' work list offered them until it was
+removed on 2026-10-29, small P first, from the first 7 codes only (693 problems). All 18,711 are on the board and the
+API, open to entries, and since then in the volunteer client's random draw. `packages/spaces`
 loads the space without a records file (`SPACE_DOMAINS`, `buildSpaceCatalogue`, `problemOf`): its catalogue holds no
 records, and any id of the domain answers with `status: "no_record"`, `certified: null` and its bound. Nothing of
 the space is in `data/`; the image copies no data for it.
@@ -304,8 +304,9 @@ microseconds a piece, 10 for 100 pentagonal hexecontahedra. The board sizes its 
 ## 6. Limitations and open questions
 
 - No records: every problem's best value is whatever the site's users and volunteers send. The elementary bounds
-  are weak, so the targets list gives every balls problem the largest room until it has an entry; the problems of
-  P > 73 reach the work list once the problems before them in the sample have entries.
+  are weak, so the targets list gave every balls problem the largest room until it had an entry, and the problems of
+  P > 73 reached the work list only once the problems before them in the sample had entries. Since the work list was
+  removed (2026-10-29) the volunteer client draws from every problem of the domain at random.
 - The Dimensions page's records table lists records only, so it shows none for this kind; its card and the board's
   picker show the domain.
 - No proof covers any case of balls in a ball, although the small cases look elementary; and none of Platonic
@@ -334,7 +335,7 @@ P from 2 to `SPACE_MAX_P.balls` = 100, the validator above at the touching toler
 (none yet); `/api/spaces/balls/problems/<id>` answers for any id of the domain, with `status: "no_record"`,
 `certified: null`, `certified_config: null`, its bound, and the site leader's configuration once there is one. An
 entry is kept when it is valid, also at the strict tolerance 1e-11, and beats the site leader by the tie tolerance
-(the first valid entry is kept). The targets list holds the balls problems with site entries and the first 500 of the
+(the first valid entry is kept). Until the work list was removed on 2026-10-29, the targets list held the balls problems with site entries and the first 500 of the
 domain's sample that have none (small P first: P <= 73 before any entry; the sample is the first 7 codes, so the
 default draw and the targets list are as they were), with `best_score: null` and
 `leader: "none"`; as those get entries, the next problems of the sample come in, so every problem comes up in turn.
@@ -354,8 +355,8 @@ the piece and container (`ballsRound`: balls in a solid with F faces cost 1 + F 
 89 solids 5 microseconds a piece). The Method select offers the eight generic methods beside Auto (§8).
 
 **Volunteer client.** `--dimensions balls` (or `all`) adds the space to the opt-in list of kinds; without the option
-the client never asks the server about it, and with it its draw is from the first 7 problems (the work list's sample,
-§2). It searches a problem without an entry from a new arrangement and applies
+the client never asks the server about it, and with it, since 0.3.0, it draws from all 18,711 problems of the domain
+at random (before, from the first 7 problems, the work list's sample, §2). It searches a problem without an entry from a new arrangement and applies
 the strict check before it sends a result.
 
 ## 8. Kernel for the generic methods

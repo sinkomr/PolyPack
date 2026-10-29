@@ -317,30 +317,15 @@ describe("GET /api/spaces/:space/records", () => {
     expect(await plain("/api/spaces/surface/records", "identity")).toBe(a);
     expect(await plain("/api/spaces/surface/records", "gzip;q=0")).toBe(a);
     expect(gzips).toBe(1);
-    // the targets: the default 500, 2000, 10000 and the whole list are kept compressed; other limits are served plain
-    const t1 = await zipped("/api/spaces/targets");
-    expect(await zipped("/api/spaces/targets?limit=500")).toBe(t1);
-    expect(gzips).toBe(2);
-    expect(await plain("/api/spaces/targets")).toBe(t1);
-    await zipped("/api/spaces/targets?limit=2000");
-    expect(gzips).toBe(3);
-    // an older volunteer client's limit, below the whole list since PolyPack's prism and antiprism problems joined
-    expect(JSON.parse(await zipped("/api/spaces/targets?limit=10000")).targets.length).toBe(10000);
-    expect(gzips).toBe(4);
-    const odd = await app.request("/api/spaces/targets?limit=51", { headers: { "accept-encoding": "gzip" } });
-    expect(odd.headers.get("content-encoding")).toBeNull();
-    expect(JSON.parse(await odd.text()).targets).toEqual(JSON.parse(t1).targets.slice(0, 51));
-    expect(gzips).toBe(4);
-    // an entry of the surface space would clear its listing; a torus entry clears the torus listing and the targets
+    // an entry of the surface space would clear its listing; a torus entry clears the torus listing only
     await zipped("/api/spaces/torus/records");
-    expect(gzips).toBe(5);
+    expect(gzips).toBe(2);
     expect((await submit(torusEntry())).body.leader).toBe(true);
     await zipped("/api/spaces/surface/records");
-    expect(gzips).toBe(5);
+    expect(gzips).toBe(2);
     const torus = JSON.parse(await zipped("/api/spaces/torus/records")) as SpaceRecordsResponse;
     expect(torus.problems.find((p) => p.id === "torus/sq/0/2")!.site_best!.score).toBe(L2);
-    expect(JSON.parse(await zipped("/api/spaces/targets")).generated_at).not.toBe(JSON.parse(t1).generated_at);
-    expect(gzips).toBe(7);
+    expect(gzips).toBe(3);
   });
 
   it("reads Accept-Encoding as clients write it", () => {
@@ -1597,7 +1582,7 @@ describe("the API page", () => {
       "GET /api/spaces/{space}/problems</code> (also <code>/records</code>)",
       "GET /api/spaces/{space}/problems/{id}",
       'id="spaces-no-record"',
-      "GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=",
+      "the volunteer client draws its problems from them",
       "POST /api/spaces/submit",
       "GET /api/spaces/entries/{id}",
       "POST /api/admin/spaces/remove",
@@ -1612,10 +1597,6 @@ describe("the API page", () => {
       'id="spaces-strict"',
       "overlaps of at most 1e-11 instead of 1e-9",
       SPACE_STRICT_REASON,
-      'id="spaces-priority"',
-      "w = min(1, (P − 1) / 5)",
-      "g = min((best_score − bound) / best_score, 0.25)",
-      "the priorities of each space sum to 1 / n",
       "nofold",
       "a quaternion's norm is at least 1e-6",
       '<pre tabindex="0">',
@@ -1627,5 +1608,8 @@ describe("the API page", () => {
     ])
       expect(html).toContain(part);
     expect(html).not.toContain("/spaces.html");
+    // the work list is gone, and the page says so
+    expect(html).not.toContain("GET /api/spaces/targets?");
+    expect(html).toContain('id="no-work-list"');
   });
 });

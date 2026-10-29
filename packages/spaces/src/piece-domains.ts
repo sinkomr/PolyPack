@@ -26,7 +26,7 @@ const countOK = (p: number) => Number.isInteger(p) && p >= 1 && p <= 100;
 
 function sample(prefixes: readonly string[], limit: number): string[] {
   const out: string[] = [];
-  // New shapes first so the bounded work list actually offers problems without records.
+  // New shapes first, so that the bounded work list (removed 2026-10-29) offered problems without records.
   const order = [7, 12, 20, 100, ...PIECE_NS.filter((n) => ![7, 12, 20, 100].includes(n))];
   for (let P = 2; P <= 100; P++)
     for (const N of order)

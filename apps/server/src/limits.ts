@@ -141,8 +141,7 @@ export const VERIFY_MS_PER_MINUTE = 4000;
  * two to three times that on a shared host CPU), so a longer delay means that work is queuing or
  * the host is throttling the CPU. Refusing the costly requests then keeps pages, live updates and
  * the health check (which fails after 5 s) answering. The reading of every problem's leader behind
- * the record holders count and the volunteers' work list (at most every HOLDERS_REFRESH_MS), the
- * ranking of that list (at most every TARGETS_REFRESH_MS) and the nightly records snapshot's
+ * the record holders count (at most every HOLDERS_REFRESH_MS) and the nightly records snapshot's
  * reading take longer on their own and may each refuse submissions for about two seconds.
  */
 export const OVERLOAD_DELAY_MS = 250;

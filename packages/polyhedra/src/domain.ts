@@ -32,9 +32,9 @@ export const polyhedraDomain = {
     return { value: volumeBound(p, id.P), label: "volume bound; [CALC]" };
   },
   /**
-   * Only the unrecorded range of the 150 problems of the research records, small P first; the work list adds the
-   * records separately. The other pairs (no records, no baselines) are open to entries but are not offered to
-   * volunteers unasked: they come up once they have a site entry.
+   * Only the unrecorded range of the 150 problems of the research records, small P first, as the volunteers' work list
+   * offered them until it was removed on 2026-10-29. Every pair is open to entries, and the volunteer client now draws
+   * from all of them at random.
    */
   sample(limit: number): string[] {
     const out: string[] = [];

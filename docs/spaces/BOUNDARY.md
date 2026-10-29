@@ -475,9 +475,10 @@ describes them all. Everything below goes through the spaces registry, `packages
   the record's fold_gain = 1 - score_float / nofold (section 7). Other spaces send no `extra`.
 - `GET /api/spaces/boundary/problems/boundary/tesseract/ball/9`: one problem, with
   `certified_config` (the record's configuration at s = score_cert) and `site_config`.
-- `GET /api/spaces/targets?spaces=boundary`: the open problems with room above their bound, 28 of
-  the 32. Left out: P = 1, and the records that meet their bound (balls P = 2 at sqrt 2, cubes P = 8
-  at 1). The space's priorities add up to the same share as each other space's.
+- `GET /api/spaces/targets?spaces=boundary`, until it was removed with the volunteers' work list on
+  2026-10-29: the open problems with room above their bound, 28 of the 32. Left out: P = 1, and the
+  records that meet their bound (balls P = 2 at sqrt 2, cubes P = 8 at 1). The volunteer client now
+  draws among all 32 at random ([VOLUNTEER.md](../VOLUNTEER.md#the-end-of-the-work-list)).
 - `POST /api/spaces/submit`: `{"space": "boundary", "id": ..., "config": {s, pieces}, "name": ...}`.
 - `GET /api/spaces/entries/<id>`: a kept entry, with its configuration.
 

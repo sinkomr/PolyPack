@@ -81,6 +81,11 @@ import { SOFTWARE, UNITS, UPGRADE_URL, VERSION } from "./version";
 export const SKIP_MS = 10 * 60_000;
 /** The wait before drawing again when every draw fell on a problem to skip. */
 export const NOTHING_WAIT_MS = 60_000;
+/**
+ * Problems in a row skipped as closed or unknown to the server after which the slot waits NOTHING_WAIT_MS: a server
+ * that knows none of the problems drawn (a server without the spaces, say) is not asked again at once, again and again.
+ */
+export const SKIPS_BEFORE_WAIT = 20;
 /** After the first signal (or the end of --hours), the most the client waits before it exits. */
 export const STOP_GRACE_MS = 30_000;
 /** No problem starts with less of --hours left than this, or than the time per problem if smaller. */
@@ -538,6 +543,7 @@ class Volunteer {
   /** One problem after another on `lanes` threads, until the client stops. */
   private async slot(lanes: number): Promise<number> {
     let failures = 0;
+    let skipped = 0;
     while (!this.stopped) {
       // nothing new starts on battery power
       while (this.paused && !this.stopped) await this.wait(1000);
@@ -575,7 +581,17 @@ class Volunteer {
         continue;
       }
       failures = 0;
-      if (searched === "skipped") continue;
+      if (searched === "skipped") {
+        if (++skipped % SKIPS_BEFORE_WAIT === 0) {
+          this.note(
+            `${skipped} problems in a row were closed or unknown to the server; drawing again in ${formatDuration(NOTHING_WAIT_MS / 1000)}`,
+            "skipped",
+          );
+          await this.wait(NOTHING_WAIT_MS);
+        }
+        continue;
+      }
+      skipped = 0;
       if (this.o.once) return searched || this.stopped ? 0 : 1;
     }
     return 0;

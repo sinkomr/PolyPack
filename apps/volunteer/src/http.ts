@@ -340,7 +340,7 @@ export class Api {
   }
 }
 
-/** "0,3-6" from [0, 3, 4, 5, 6]: the filters as the work list's query takes them. */
+/** "0,3-6" from [0, 3, 4, 5, 6]: a list of shapes as the banner and the options write it. */
 export function compactList(values: readonly number[]): string {
   const sorted = [...new Set(values)].sort((a, b) => a - b);
   const parts: string[] = [];

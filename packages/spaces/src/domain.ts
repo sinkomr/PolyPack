@@ -10,9 +10,9 @@
  *    P menus are.
  *  - `bound(id)`: the lower bound of a problem of the domain (null when it has none), or undefined when the id is
  *    the space's but lies outside the domain. Ids are first read by parseSpaceId.
- *  - `sample(limit)`: at most `limit` ids of the domain, in the order in which the volunteers' work list offers them
- *    (deterministic, e.g. small P first): the work list holds the records, the problems with site entries, and this
- *    bounded sample of the others, never the whole domain.
+ *  - `sample(limit)`: at most `limit` ids of the domain in a fixed order (e.g. small P first), the order in which the
+ *    volunteers' work list offered them until it was removed on 2026-10-29. Since then the volunteer client draws from
+ *    the whole domain at random (apps/volunteer/src/pick.ts), and the tests use the sample to walk a domain's ids.
  */
 import { polyhedraDomain } from "@polypack/polyhedra";
 import { curvedDomain, sphereDomain, torusDomain } from "./piece-domains";
@@ -67,7 +67,7 @@ export interface SpaceDomain {
   info: SpaceDomainInfo;
   /** The lower bound of a problem of the domain (null: none known), or undefined when `id` is outside the domain. */
   bound(id: ParsedSpaceId): { value: number; label: string } | null | undefined;
-  /** At most `limit` ids of the domain, in the order the volunteers' work list offers them. */
+  /** At most `limit` ids of the domain, in a fixed order (that of the volunteers' work list, removed 2026-10-29). */
   sample(limit: number): string[];
 }
 

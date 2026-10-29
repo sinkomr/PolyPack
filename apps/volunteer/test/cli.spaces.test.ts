@@ -402,6 +402,25 @@ describe("the client with the spaces option", () => {
   });
 
   // Review D5. Real space search, as above.
+  it("waits a minute after 20 problems in a row that the server does not know", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [], noSpaces: true });
+    // a fake clock that sleeps at once: the minute's wait ends the run at its --hours limit (36 s)
+    let offset = 0;
+    const { code, output } = await client(["--only-spaces", "--spaces", "sphere", "--name", "Test volunteer", "--hours", "0.01"], {
+      // the real draw, over sphere's 9,900 problems, none of which this server knows
+      kinds: undefined,
+      now: () => Date.now() + offset,
+      sleep: async (ms, signal) => {
+        if (signal?.aborted) throw new Error("aborted");
+        offset += ms;
+      },
+    });
+    expect(code, output).toBe(0);
+    expect(output).toMatch(/20 problems in a row were closed or unknown to the server; drawing again in 1m00s/);
+    expect(server.requests).toHaveLength(20);
+    expect(server.spaceSubmissions).toEqual([]);
+  });
+
   it("skips for good a problem the server does not know", { timeout: 60_000 }, async () => {
     server = await startFakeServer({ problems: [], spaces: [SPHERE], noSpaces: true });
     const { code, output } = await client([

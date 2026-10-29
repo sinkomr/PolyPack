@@ -23,9 +23,10 @@
       <h2 class="title">Give spare computer time</h2>
       <p>
         The volunteer client searches for better packings on your computer, in the background, in the way volunteer
-        computing projects such as Folding@home work. It takes problems from this site's work list, several at once on
-        a computer with many cores. On each it tries many search methods, seeds and run lengths, keeps what works, and
-        submits a packing only when it beats the site's current best. Then it moves on to the next problem.
+        computing projects such as Folding@home work. It draws problems at random from every problem, with a record or
+        without one, several at once on a computer with many cores. On each it tries many search methods, seeds and run
+        lengths, keeps what works, and submits a packing only when it beats the site's current best. Then it draws the
+        next problem.
       </p>
 
       <h3>Download</h3>
@@ -79,8 +80,7 @@
           <code>--dimensions</code> takes <code>surface</code>, <code>curved</code>, <code>sphere</code>,
           <code>torus</code>, <code>boundary</code>, <code>polyhedra</code> and <code>balls</code>, comma-separated, or
           <code>all</code>.
-          Each next problem then comes from the polygon work list or from the list of these kinds, with probability 1/2
-          each.
+          Every problem of these kinds and of the flat ones is then drawn as often as any other.
         </li>
         <li><code>--only-dimensions</code> searches these kinds alone.</li>
         <li>

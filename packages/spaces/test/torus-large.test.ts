@@ -29,7 +29,7 @@ describe("torus up to 500 pieces", () => {
     const over = parseSpaceId("torus", "torus/hex/7/501");
     if (typeof over === "string") throw new Error(over);
     expect(d.bound(over)).toBeUndefined();
-    // the work list's sample (and so the volunteers' default draw) stays within P <= 100
+    // the sample (the order of the volunteers' work list until 2026-10-29) stays within P <= 100
     expect(d.sample(2000).every((id) => Number(id.split("/").at(-1)) <= 100)).toBe(true);
   });
 
