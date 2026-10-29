@@ -55,6 +55,7 @@ import {
   planarAffected,
 } from "./units-gate";
 import type { SnapshotSource } from "./snapshot";
+import { registerLeadersRoute } from "./leaders";
 import { SpacesOptions, registerSpaceRoutes } from "./spaces";
 import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
 
@@ -910,6 +911,9 @@ export function createApp(opts: AppOptions): Hono {
       admin,
       unitsGate,
     });
+
+  // Who leads, for many problems at once (Tighter's rent checks); after the spaces, whose catalogues it reads.
+  registerLeadersRoute(app, { store, spaceStore: opts.spaces?.store, spaces: opts.spaces?.index, closed });
 
   app.all("/api/*", (c) => c.json({ error: "not found" }, 404));
 

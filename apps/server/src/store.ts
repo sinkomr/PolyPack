@@ -120,6 +120,11 @@ export interface Store {
   pairs(): Promise<{ N: number; M: number }[]>;
   /** The leader of every problem that has a listed entry, by N, then M, then P. */
   leaders(): Promise<ProblemLeader[]>;
+  /**
+   * The leader (the rule of `leader`) of each of the given problems that has a listed entry, in one
+   * indexed read; at most GET_MANY_LIMIT problems. Problems without an entry are left out.
+   */
+  leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]>;
   pending(): Promise<StoredSubmission[]>;
   /**
    * Decides on an entry that is pending or was confirmed, then prunes its problem. A rejected entry
@@ -201,6 +206,11 @@ export interface SpaceStore {
   spaceBest(space: string): Promise<SpaceLeader[]>;
   /** The leader of every space problem that has an entry, by space and problem id. */
   spaceLeaders(): Promise<SpaceLeader[]>;
+  /**
+   * The leader of each of the given space problems that has an entry, in one indexed read; at most
+   * GET_MANY_LIMIT problems. Problems without an entry are left out.
+   */
+  spaceLeadersOf(problems: readonly { space: string; problem: string }[]): Promise<SpaceLeader[]>;
   /** Deletes an entry and prunes its problem; its space and problem, or null when there is no such entry. */
   spaceRemove(id: number): Promise<{ space: string; problem: string } | null>;
   /** Corrects an entry's name or note; its space and problem, or null when there is no such entry. */

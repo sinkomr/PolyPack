@@ -398,14 +398,35 @@ export class SqliteStore implements Store, SpaceStore {
   async leaders(): Promise<ProblemLeader[]> {
     // The same rule again, for every problem: one pass over the listing index in its own order,
     // so SQLite sorts nothing, and the rule applied here (about 150 ms for 100,000 problems, half
-    // the time that window functions took). The first row of a problem has its smallest score;
-    // the leader is the earliest of the rows within the tie tolerance of it.
+    // the time that window functions took).
     const rows = this.db
       .prepare(
         `SELECT n, m, p, id, name, score, verification FROM submissions WHERE ${LISTED}
          ORDER BY n, m, p, score, id`,
       )
       .all() as Row[];
+    return this.leadersFromRows(rows);
+  }
+
+  async leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]> {
+    if (!problems.length) return [];
+    if (problems.length > GET_MANY_LIMIT) throw new RangeError(`at most ${GET_MANY_LIMIT} problems per call`);
+    // row values against the listing index: one lookup per problem, which keeps one row (two while a claim is pending)
+    const rows = this.db
+      .prepare(
+        `SELECT n, m, p, id, name, score, verification FROM submissions
+         WHERE (n, m, p) IN (VALUES ${problems.map(() => "(?, ?, ?)").join(", ")}) AND ${LISTED}
+         ORDER BY n, m, p, score, id`,
+      )
+      .all(...problems.flatMap((q) => [q.N, q.M, q.P])) as Row[];
+    return this.leadersFromRows(rows);
+  }
+
+  /**
+   * The leaders of rows read in (n, m, p, score, id) order. The first row of a problem has its
+   * smallest score; the leader is the earliest of the rows within the tie tolerance of it.
+   */
+  private leadersFromRows(rows: Row[]): ProblemLeader[] {
     const leaders: ProblemLeader[] = [];
     let first: Row | null = null;
     let leader: Row | null = null;
@@ -558,7 +579,7 @@ export class SqliteStore implements Store, SpaceStore {
   }
 
   /** The leaders of the rows read in (space, problem, score, id) order: per problem the earliest within the tie tolerance of its first. */
-  private spaceLeadersOf(rows: Row[]): SpaceLeader[] {
+  private spaceLeadersFromRows(rows: Row[]): SpaceLeader[] {
     const out: SpaceLeader[] = [];
     let first: Row | null = null;
     let leader: Row | null = null;
@@ -591,14 +612,28 @@ export class SqliteStore implements Store, SpaceStore {
     const rows = this.db
       .prepare(`SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries WHERE space = ? ORDER BY space, problem, score, id`)
       .all(space) as Row[];
-    return this.spaceLeadersOf(rows);
+    return this.spaceLeadersFromRows(rows);
+  }
+
+  async spaceLeadersOf(problems: readonly { space: string; problem: string }[]): Promise<SpaceLeader[]> {
+    if (!problems.length) return [];
+    if (problems.length > GET_MANY_LIMIT) throw new RangeError(`at most ${GET_MANY_LIMIT} problems per call`);
+    // row values against the listing index: one lookup per problem, which keeps one row (two at most)
+    const rows = this.db
+      .prepare(
+        `SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries
+         WHERE (space, problem) IN (VALUES ${problems.map(() => "(?, ?)").join(", ")})
+         ORDER BY space, problem, score, id`,
+      )
+      .all(...problems.flatMap((p) => [p.space, p.problem])) as Row[];
+    return this.spaceLeadersFromRows(rows);
   }
 
   async spaceLeaders(): Promise<SpaceLeader[]> {
     const rows = this.db
       .prepare(`SELECT ${SPACE_LEADER_COLUMNS} FROM space_entries ORDER BY space, problem, score, id`)
       .all() as Row[];
-    return this.spaceLeadersOf(rows);
+    return this.spaceLeadersFromRows(rows);
   }
 
   async spaceRemove(id: number): Promise<{ space: string; problem: string } | null> {

@@ -30,6 +30,7 @@ import {
   BOUNDARY_MAX_CHAINS,
   BOUNDARY_MAX_S,
 } from "@polypack/spaces";
+import { LEADERS_MAX_KEYS, LEADERS_MAX_URL } from "./leaders";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 import {
   SPACE_DOMAIN_TARGETS,
@@ -80,6 +81,8 @@ curl -s "https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20"
 
 curl -s --compressed "https://YOUR-SITE/api/targets?N=0,3-6&max_P=100&limit=50"
 
+curl -s --compressed "https://YOUR-SITE/api/leaders?keys=4/7/2,3/3/5,sphere/0/12"
+
 curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://YOUR-SITE/api/admin/pending`;
 
 const SCHEMA = `{
@@ -120,6 +123,15 @@ const TARGETS = `{
      "leader": 9.9071, "leader_id": 234567, "published": null, "published_coordinates": false,
      "area_bound": 9.2195}
   ]
+}`;
+
+const LEADERS = `{
+  "leaders": {
+    "4/7/2": {"score": 2.60512, "name": "ada", "id": 123456, "verification": "none"},
+    "3/3/5": null,
+    "sphere/0/12": {"score": 3.14159, "name": "the research record", "id": null, "research": true}
+  },
+  "unknown": ["5/5/0"]
 }`;
 
 const PROBLEM = `{
@@ -573,6 +585,14 @@ Fields that were not given are <code>null</code>. 404 for unknown, rejected and 
 <p>For one pair of shapes, across all <code>P</code>: the published values (<code>literature</code>, without coordinates; <code>has_coordinates</code> says whether there are any) and the leader per <code>P</code> (<code>site</code>, each with its <code>P</code>).
 Where that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.
 Closed problems appear in <code>literature</code> only.</p>
+
+<h3 id="leaders"><code>GET /api/leaders?keys=</code></h3>
+<p>The current <a href="#leader">leader</a> of many problems at once, for a client that holds many records and checks them in batches. <code>keys</code> is one comma-separated list of at most ${LEADERS_MAX_KEYS} keys, each a polygon problem written <code>N/M/P</code> or the id of a space problem, such as <code>sphere/0/12</code> or <code>polyhedra/&lt;code&gt;/&lt;P&gt;</code>, mixed freely. No other parameter is accepted; more than ${LEADERS_MAX_KEYS} keys, an empty list, a repeated or other parameter is a 400, and a URL over ${LEADERS_MAX_URL} characters a 414. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>
+<pre><code>${esc(LEADERS)}</code></pre>
+<table>
+<tr><th scope="row"><code>leaders</code></th><td>One entry per key asked, a repeated key once. A polygon problem's value is its <code>site_best</code> of <code>/api/problems/{N}/{M}/{P}</code>: <code>{score, name, id, verification}</code> of the leader (<code>verification</code> as in <code>site_best</code>: <code>none</code>, <code>confirmed</code> or <code>pending</code>), or <code>null</code> when it has no entry or is <a href="#closed">closed</a>. A space problem's is its best value as <code>/api/spaces/{space}/problems/{id}</code> gives it: the site entry, or the research record when that is at least as good, written <code>{"score", "name": "the research record", "id": null, "research": true}</code>; <code>null</code> when it has neither. Configurations are not sent.</td></tr>
+<tr><th scope="row"><code>unknown</code></th><td>Keys that are malformed, out of range or not in a catalogue this server holds. They do not fail the request.</td></tr>
+</table>
 
 <h3 id="holders"><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
