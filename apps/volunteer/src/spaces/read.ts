@@ -3,36 +3,13 @@
  * ../validate.ts, answers are untrusted input: each reader returns a clean copy, or null when the
  * answer cannot be used. A malformed configuration only drops that configuration.
  */
-import { type SpaceConfig, type SpaceTarget, isSpaceName } from "@polypack/spaces";
+import { type SpaceConfig, isSpaceName } from "@polypack/spaces";
 import { cleanText } from "../validate";
 import { type SpaceProblem, parseSpaceId, readSpaceConfig } from "./model";
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const positive = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v > 0;
 const idOrNull = (v: unknown) => (Number.isSafeInteger(v) ? (v as number) : null);
-
-/**
- * One entry of GET /api/spaces/targets, or null (also when its id is not one this client searches). A problem
- * without a research record or a site entry yet comes with best_score null and leader "none".
- */
-export function readSpaceTarget(v: unknown): SpaceTarget | null {
-  if (!isObject(v) || !isSpaceName(v.space) || typeof v.priority !== "number" || !Number.isFinite(v.priority))
-    return null;
-  const p = parseSpaceId(v.id);
-  const none = v.best_score === null && v.leader === "none";
-  if (!p || p.space !== v.space || v.P !== p.P || !(positive(v.best_score) || none)) return null;
-  const leaderId = none ? null : idOrNull(v.leader_id);
-  return {
-    space: p.space,
-    id: p.id,
-    P: p.P,
-    priority: v.priority,
-    best_score: none ? null : (v.best_score as number),
-    bound: positive(v.bound) ? v.bound : null,
-    leader: none ? "none" : leaderId === null ? "certified" : "site",
-    leader_id: leaderId,
-  };
-}
 
 /** What the client uses of GET /api/spaces/:space/problems/<id>. */
 export interface SpaceProblemInfo {

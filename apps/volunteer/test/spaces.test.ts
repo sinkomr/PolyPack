@@ -6,15 +6,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SpaceTarget } from "@polypack/spaces";
 import { SPACE_STRICT_REASON } from "@polypack/spaces";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { OptionError, helpText, parseOptions } from "../src/options";
-import { eligibleSpaceTargets, noteSearch, pickSpaceTarget, recentFromHistory } from "../src/pick";
+import { noteSearch } from "../src/pick";
 import { type SpaceSearchInput, searchSpaceProblem } from "../src/spaces/engine";
 import { checkSpaceConfig, parseSpaceId, readSpaceConfig, statedScore } from "../src/spaces/model";
 import { faceProblem, surfaceFromFace } from "../src/spaces/nofold";
-import { readSpaceProblem, readSpaceTarget } from "../src/spaces/read";
+import { readSpaceProblem } from "../src/spaces/read";
 import { Gate, type SpaceJob, type SpaceJobResult, runSpaceJob } from "../src/spaces/run";
 import { decideSpaceSubmission, spaceSubmissionBody } from "../src/spaces/submit";
 import { type HistoryLine, type SpaceHistoryLine, StateDir, spaceBestFileOf, spaceCandidateOf } from "../src/state";
@@ -137,21 +136,7 @@ describe("space problem ids and configurations", () => {
     expect(checkSpaceConfig(t.space, t.id, { ...free, lattice: { L: 3 } }).valid).toBe(false);
   });
 
-  it("reads the work list and a problem, dropping what it cannot use", () => {
-    const t = {
-      space: "sphere",
-      id: "sphere/3/13",
-      P: 13,
-      priority: 0.5,
-      best_score: 0.81,
-      bound: 0.75,
-      leader: "certified",
-      leader_id: null,
-    };
-    expect(readSpaceTarget(t)).toEqual(t);
-    expect(readSpaceTarget({ ...t, id: "sphere/3/14" })).toBeNull(); // P does not match the id
-    expect(readSpaceTarget({ ...t, space: "torus" })).toBeNull();
-    expect(readSpaceTarget({ ...t, priority: "high" })).toBeNull();
+  it("reads a problem, dropping what it cannot use", () => {
     const p = parseSpaceId("sphere/3/13")!;
     const config = recordConfig("sphere", "sphere/3/13");
     const body = {
@@ -262,20 +247,6 @@ describe("the spaces options", () => {
   });
 });
 
-const target = (id: string, priority: number, leader_id: number | null = null): SpaceTarget => {
-  const p = parseSpaceId(id)!;
-  return {
-    space: p.space,
-    id,
-    P: p.P,
-    priority,
-    best_score: 1,
-    bound: null,
-    leader: leader_id === null ? "certified" : "site",
-    leader_id,
-  };
-};
-
 function spaceLine(id: string, time: string, extra: Partial<SpaceHistoryLine> = {}): SpaceHistoryLine {
   const p = parseSpaceId(id)!;
   return {
@@ -302,95 +273,7 @@ function spaceLine(id: string, time: string, extra: Partial<SpaceHistoryLine> = 
   };
 }
 
-describe("the spaces' draw", () => {
-  it("filters by space and --max-P, skips, and leaves out recent searches with the same best", () => {
-    const list = [
-      target("sphere/3/13", 3),
-      target("torus/sq/0/7", 2),
-      target("sphere/0/30", 5),
-      target("surface/cube/fold/0/2", 1, 7),
-    ];
-    const now = Date.parse("2026-10-24T12:00:00Z");
-    const recent = recentFromHistory([
-      spaceLine("surface/cube/fold/0/2", "2026-10-24T11:00:00Z", {
-        leader_before: { id: 7, score: 1, source: "site" },
-      }),
-    ]);
-    const ids = (spaces: string[], maxP: number | null, skip: string[] = []) =>
-      [
-        ...eligibleSpaceTargets(list, {
-          filters: { spaces: spaces as never, maxP },
-          recent,
-          skip: new Set(skip),
-          now,
-        }).values(),
-      ]
-        .flat()
-        .map((t) => t.id);
-    // by space, in the filter's order, each space's highest priorities first
-    expect(ids(["torus", "sphere", "surface"], null)).toEqual(["torus/sq/0/7", "sphere/0/30", "sphere/3/13"]);
-    expect(ids(["sphere"], 20)).toEqual(["sphere/3/13"]);
-    expect(ids(["sphere", "torus"], null, ["sphere/0/30"])).toEqual(["sphere/3/13", "torus/sq/0/7"]);
-    // a new site leader brings the problem back
-    const changed = [{ ...list[3], leader_id: 9 }];
-    expect(
-      eligibleSpaceTargets(changed, { filters: { spaces: ["surface"], maxP: null }, recent, skip: new Set(), now }).get(
-        "surface",
-      ),
-    ).toHaveLength(1);
-  });
-
-  // Review D1: the server scales each space's priorities to the same sum, so a space with many
-  // problems has the smallest priorities. A cut of the whole list to its 50 highest left it out.
-  it("draws the space first, so that a space with many problems is reached", () => {
-    // as the server scales them: each space's priorities sum to 1/2
-    const solids = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
-    const shapes = [0, 3, 4, 5, 6, 8];
-    const sphere = Array.from({ length: 60 }, (_, k) =>
-      target(`sphere/${shapes[k % 6]}/${2 + Math.floor(k / 6)}`, 0.5 / 60),
-    );
-    const surface = Array.from({ length: 500 }, (_, k) =>
-      target(`surface/${solids[k % 5]}/fold/${shapes[Math.floor(k / 5) % 6]}/${1 + Math.floor(k / 30)}`, 0.5 / 500),
-    );
-    const list = [...sphere, ...surface];
-    expect(new Set(list.map((t) => t.id)).size).toBe(560);
-    // the 50 highest priorities of the whole list hold no surface problem: the old rule never reached one
-    expect(
-      [...list]
-        .sort((x, y) => y.priority - x.priority)
-        .slice(0, 50)
-        .some((t) => t.space === "surface"),
-    ).toBe(false);
-    let a = 7;
-    const random = () => {
-      // mulberry32, seeded
-      a = (a + 0x6d2b79f5) >>> 0;
-      let t = a;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-    const now = Date.parse("2026-10-24T12:00:00Z");
-    const recent = new Map();
-    const drawn: string[] = [];
-    for (let k = 0; k < 20; k++) {
-      const t = pickSpaceTarget(list, {
-        filters: { spaces: ["surface", "sphere"], maxP: null },
-        recent,
-        skip: new Set(),
-        now,
-        random,
-      })!;
-      drawn.push(t.space);
-      // each problem drawn counts as searched, as in the client
-      noteSearch(recent, spaceLine(t.id, "2026-10-24T11:00:00Z"));
-    }
-    expect(drawn.slice(0, 4)).toContain("surface");
-    const n = drawn.filter((s) => s === "surface").length;
-    expect(n).toBeGreaterThanOrEqual(5);
-    expect(n).toBeLessThanOrEqual(15);
-  });
-
+describe("the spaces' history", () => {
   it("keys space and polygon history apart", () => {
     const recent = new Map();
     noteSearch(recent, spaceLine("sphere/4/12", "2026-10-24T11:00:00Z"));

@@ -39,7 +39,7 @@ async function client(argv: string[]) {
       "--no-battery-pause",
       ...argv,
     ],
-    { out: (l) => lines.push(l), err: (l) => lines.push(l), signals: false },
+    { out: (l) => lines.push(l), err: (l) => lines.push(l), signals: false, kinds: server!.kinds() },
   );
   return { code, output: lines.join("\n") };
 }
@@ -59,7 +59,6 @@ describe("the client with --dimensions boundary", () => {
     const { code, output } = await client(["--once", "--only-dimensions", "--dimensions", "boundary", "--name", "Test volunteer"]);
     expect(code, output).toBe(0);
     expect(paths()).toEqual([
-      "GET /api/spaces/targets?spaces=boundary&limit=20000",
       "GET /api/spaces/boundary/problems/boundary/tesseract/ball/9",
       "GET /api/spaces/boundary/problems/boundary/tesseract/ball/9",
       "POST /api/spaces/submit",
@@ -70,7 +69,7 @@ describe("the client with --dimensions boundary", () => {
     expect(check.valid).toBe(true);
     expect(check.score!).toBeLessThan(BALLS.certified!.score * (1 - 1e-9));
     expect(history()[0]).toMatchObject({ space: "boundary", id: "boundary/tesseract/ball/9", P: 9, submitted: true });
-    expect(output).toMatch(/Searches only problems of the new spaces: boundary/);
+    expect(output).toMatch(/Searches only problems of these kinds: boundary \(--dimensions\)/);
   });
 
   it("stops a problem whose best is at the search's floor after its first job", { timeout: 60_000 }, async () => {

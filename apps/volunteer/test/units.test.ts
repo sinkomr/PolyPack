@@ -47,8 +47,8 @@ const bestOld = (N: number, M: number, P: number, score: number) => ({
 });
 
 describe("the client's units", () => {
-  it("is version 0.2.0, sends units and works with the state it writes", () => {
-    expect(VERSION).toBe("0.2.0");
+  it("is version 0.3.0, sends units and works with the state it writes", () => {
+    expect(VERSION).toBe("0.3.0");
     expect(UNITS).toBe("diameter");
     expect(STATE_VERSION).toBe(2);
   });
@@ -119,8 +119,8 @@ describe("the client's units", () => {
       fetch: async () => new Response(JSON.stringify({ error: "update" }), { status: 426 }),
       onUpgradeRequired: (m) => seen.push(m),
     });
-    expect((await api.get("/api/targets"))?.status).toBe(426);
-    expect((await api.get("/api/targets"))?.status).toBe(426);
+    expect((await api.get("/api/problems/4/4/3"))?.status).toBe(426);
+    expect((await api.get("/api/problems/4/4/3"))?.status).toBe(426);
     expect(seen).toEqual(["update"]);
   });
 });

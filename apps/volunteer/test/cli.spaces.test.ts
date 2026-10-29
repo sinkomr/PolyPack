@@ -65,7 +65,14 @@ async function client(argv: string[], deps: MainDeps = {}) {
       "--no-battery-pause",
       ...argv,
     ],
-    { out: (l) => lines.push(l), err: (l) => lines.push(l), signals: false, searchProblem: oneJob, ...deps },
+    {
+      out: (l) => lines.push(l),
+      err: (l) => lines.push(l),
+      signals: false,
+      searchProblem: oneJob,
+      kinds: server!.kinds(),
+      ...deps,
+    },
   );
   return { code, output: lines.join("\n") };
 }
@@ -158,7 +165,6 @@ describe("the client with the spaces option", () => {
     ]);
     expect(code, output).toBe(0);
     expect(paths()).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=20000",
       "GET /api/spaces/sphere/problems/sphere/3/13",
       "GET /api/spaces/sphere/problems/sphere/3/13", // the best again, just before submitting
       "POST /api/spaces/submit",
@@ -196,30 +202,29 @@ describe("the client with the spaces option", () => {
       response: { valid: true, leader: true, beats_certified: true },
     });
     expect(line).not.toHaveProperty("M");
-    expect(output).toMatch(/Searches only problems of the new spaces: sphere/);
-    expect(output).toMatch(/Searching sphere\/3\/13 .*starting from the research record/);
+    expect(output).toMatch(/Searches only problems of these kinds: sphere \(--dimensions\)/);
+    expect(output).toMatch(/Searching sphere\/3\/13: .*starting from the research record/);
     expect(output).toMatch(
       /Finished sphere\/3\/13 .*submitted: HTTP 200, the new leader of the site's entries \(#\d+\), below the research record/,
     );
 
-    // the problem now has this machine's entry as its best: not searched again at once
+    // the problem now has this machine's entry as its best; with no other problem it is searched again
     const again = await client(["--once", "--only-spaces", "--spaces", "sphere", "--name", "Test volunteer"]);
     expect(again.code, again.output).toBe(0);
-    expect(again.output).toMatch(/Nothing to search: the spaces' work list's 1 problem\(s\) are filtered out/);
+    expect(again.output).toMatch(/Searching sphere\/3\/13: best /);
+    expect(history()).toHaveLength(2);
   });
 
   // Real space search, as above.
   it(
-    "in a dry run with both work lists, says what it would submit and sends nothing",
+    "in a dry run over flat and space problems, says what it would submit and sends nothing",
     { timeout: 60_000 },
     async () => {
       server = await startFakeServer({ problems: [LOOSE_SQUARES], spaces: [fixture("torus", "torus/sq/0/7")] });
-      // 0.9: the spaces' list first
+      // one flat problem and one torus problem: 0.9 draws the torus one
       const { code, output } = await client(["--once", "--spaces", "all", "--max-P", "10"], { random: () => 0.9 });
       expect(code, output).toBe(0);
-      expect(paths()[0]).toBe(
-        "GET /api/spaces/targets?spaces=surface%2Ccurved%2Csphere%2Ctorus%2Cboundary%2Cpolyhedra%2Cballs&max_P=10&limit=20000",
-      );
+      expect(paths()[0]).toBe("GET /api/spaces/torus/problems/torus/sq/0/7");
       expect(server.spaceSubmissions).toEqual([]);
       expect(server.submissions).toEqual([]);
       expect(history()[0]).toMatchObject({
@@ -230,12 +235,12 @@ describe("the client with the spaces option", () => {
         decision: "dry run: would submit",
       });
       expect(output).toMatch(
-        /Also searches problems of the new spaces, half of the time: surface, curved, sphere, torus, boundary, polyhedra/,
+        /Also searches problems of these kinds: surface, curved, sphere, torus, boundary, polyhedra, balls \(--dimensions\)/,
       );
       // the dry run's best is kept for a real run
       expect(existsSync(join(dir, "state", "best", "spaces", "torus_sq_0_7.json"))).toBe(true);
 
-      // 0.1: the polygon list first
+      // 0.1: the flat one
       const polygon = await client(["--once", "--spaces", "all"], { random: () => 0.1 });
       expect(polygon.code, polygon.output).toBe(0);
       expect(polygon.output).toMatch(/Searching N=4 M=4 P=3/);
@@ -314,7 +319,6 @@ describe("the client with the spaces option", () => {
       ]);
       expect(code, output).toBe(0);
       expect(paths()).toEqual([
-        "GET /api/spaces/targets?spaces=sphere&limit=20000",
         "GET /api/spaces/sphere/problems/sphere/0/5",
         "GET /api/spaces/sphere/problems/sphere/0/5",
         "POST /api/spaces/submit",
@@ -398,62 +402,40 @@ describe("the client with the spaces option", () => {
   });
 
   // Review D5. Real space search, as above.
-  it("keeps its limit when the server refuses the spaces filters", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [], spaces: [SPHERE], refuseSpaceFilters: true });
-    const { code, output } = await client(["--once", "--only-spaces", "--spaces", "sphere", "--dry-run"], {
-      searchSpace: async () => ({ best: null, jobs: 0, stopped: "time" }),
+  it("waits a minute after 20 problems in a row that the server does not know", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [], noSpaces: true });
+    // a fake clock that sleeps at once: the minute's wait ends the run at its --hours limit (36 s)
+    let offset = 0;
+    const { code, output } = await client(["--only-spaces", "--spaces", "sphere", "--name", "Test volunteer", "--hours", "0.01"], {
+      // the real draw, over sphere's 9,900 problems, none of which this server knows
+      kinds: undefined,
+      now: () => Date.now() + offset,
+      sleep: async (ms, signal) => {
+        if (signal?.aborted) throw new Error("aborted");
+        offset += ms;
+      },
     });
     expect(code, output).toBe(0);
-    expect(paths().slice(0, 2)).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=20000",
-      "GET /api/spaces/targets?limit=20000",
-    ]);
-    expect(output).toMatch(/refused the spaces' work list filters/);
-    expect(output).toMatch(/Searching sphere\/3\/13/);
+    expect(output).toMatch(/20 problems in a row were closed or unknown to the server; drawing again in 1m00s/);
+    expect(server.requests).toHaveLength(20);
+    expect(server.spaceSubmissions).toEqual([]);
   });
 
-  it("asks an older server, whose largest limit is 2000, for 2000 targets", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [], spaces: [SPHERE], spaceTargetsMaxLimit: 2000 });
-    const { code, output } = await client(["--once", "--only-spaces", "--spaces", "sphere", "--dry-run"], {
-      searchSpace: async () => ({ best: null, jobs: 0, stopped: "time" }),
-    });
+  it("skips for good a problem the server does not know", { timeout: 60_000 }, async () => {
+    server = await startFakeServer({ problems: [], spaces: [SPHERE], noSpaces: true });
+    const { code, output } = await client([
+      "--once",
+      "--only-spaces",
+      "--spaces",
+      "sphere",
+      "--name",
+      "Test volunteer",
+    ]);
+    // skipped, and then there is nothing else to draw
     expect(code, output).toBe(0);
-    expect(paths().slice(0, 3)).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=20000",
-      "GET /api/spaces/targets?spaces=sphere&limit=10000",
-      "GET /api/spaces/targets?spaces=sphere&limit=2000",
-    ]);
-    expect(output).toMatch(/refused limit=20000 for the spaces' work list; asking for 10000/);
-    expect(output).toMatch(/refused limit=10000 for the spaces' work list; asking for 2000/);
-    expect(output).toMatch(/Searching sphere\/3\/13/);
-  });
-
-  it("asks a server whose largest limit is 10000 for 10000 targets", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [], spaces: [SPHERE], spaceTargetsMaxLimit: 10000 });
-    const { code, output } = await client(["--once", "--only-spaces", "--spaces", "sphere", "--dry-run"], {
-      searchSpace: async () => ({ best: null, jobs: 0, stopped: "time" }),
-    });
-    expect(code, output).toBe(0);
-    expect(paths().slice(0, 2)).toEqual([
-      "GET /api/spaces/targets?spaces=sphere&limit=20000",
-      "GET /api/spaces/targets?spaces=sphere&limit=10000",
-    ]);
-    expect(output).toMatch(/refused limit=20000 for the spaces' work list; asking for 10000/);
-    expect(output).not.toMatch(/asking for 2000\b/);
-    expect(output).toMatch(/Searching sphere\/3\/13/);
-  });
-
-  it("explains a server without the spaces", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [LOOSE_SQUARES], noSpaces: true });
-    const only = await client(["--once", "--only-spaces", "--spaces", "all", "--name", "Test volunteer"]);
-    expect(only.code).toBe(1);
-    expect(only.output).toMatch(/no work list for the new spaces: GET \/api\/spaces\/targets answered 404/);
-    expect(server.submissions).toEqual([]);
-
-    // with both lists, the polygon one goes on alone
-    const both = await client(["--once", "--spaces", "all", "--name", "Test volunteer"], { random: () => 0.9 });
-    expect(both.code, both.output).toBe(0);
-    expect(both.output).toMatch(/Searching the polygon work list only/);
-    expect(both.output).toMatch(/Searching N=4 M=4 P=3/);
+    expect(output).toMatch(/Could not read sphere\/3\/13 \(HTTP 404: not found\); skipping it$/m);
+    expect(output).toMatch(/Nothing to search: every problem drawn was closed/);
+    expect(server.requests).toHaveLength(1);
+    expect(server.spaceSubmissions).toEqual([]);
   });
 });

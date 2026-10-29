@@ -1,44 +1,55 @@
 /**
- * Which problem to search next, from the server's work list (GET /api/targets). Pure: the history,
- * the clock and the random source are passed in.
+ * Which problem to search next: one drawn uniformly at random from every problem this client may search, with or
+ * without a record. Pure: the history, the clock and the random source are passed in. (Before 0.3.0 the client drew
+ * from the server's ranked work lists, GET /api/targets and /api/spaces/targets, which were removed on 2026-10-29.)
  *
- * The list is filtered (--N, --M, --max-P), problems this machine searched in the last week are
- * left out unless their leader has changed since, and one of the 50 highest priorities left is
- * drawn with probability proportional to its priority. The draw spreads machines that read the
- * same list over different problems, and still favours the most promising ones.
+ * The problems are the flat ones, N and M a circle (0) or 3 to 100 sides and P from 1 to 500, narrowed by --N, --M and
+ * --max-P; and with --dimensions, those of the kinds named, narrowed by --max-P. Each kind's problems are the product
+ * of its id's fields (a list of values, or a range of integers): packages/spaces' domains, and boundary's catalogue.
+ * A draw takes a kind in proportion to the size of its product, then each field uniformly; a draw outside the kind's
+ * domain starts again from the kind. So every problem is as likely as any other.
  *
- * The optional work list of the new spaces (GET /api/spaces/targets, --spaces) is drawn from in
- * the same way, keyed by the space problem id, with the spaces and --max-P as its filters; the
- * leader of a space problem is a site entry id, or null while the research record leads.
+ * A problem this machine searched in the last week (RECENT_MS) is drawn again, at most RECENT_TRIES - 1 times: among
+ * millions of problems that hardly happens, and when the filters leave few the client searches one again rather than
+ * wait. Problems to skip (closed ones, those that could not be read, those other slots are searching) are never drawn.
  */
-import type { Target } from "@polypack/geometry";
-import type { SpaceName, SpaceTarget } from "@polypack/spaces";
+import { MAX_PIECES, MAX_SIDES } from "@polypack/geometry";
+import {
+  BOUNDARY_PIECES,
+  BOUNDARY_POLYTOPES,
+  SPACE_DOMAINS,
+  type SpaceDomain,
+  type SpaceName,
+  domainId,
+  parseSpaceId as parseIdOf,
+} from "@polypack/spaces";
 import { problemKey } from "./format";
+import { parseSpaceId } from "./spaces/model";
 import { type AnyHistoryLine, historyKey } from "./state";
+import type { Problem } from "./types";
 
 export const RECENT_MS = 7 * 24 * 3600_000;
-export const TOP = 50;
+/** Draws in a row that may fall on problems searched here recently before one of them is searched again. */
+export const RECENT_TRIES = 20;
+/** Draws in a row that may fall outside a domain or on problems to skip before the draw gives up. */
+export const DRAW_TRIES = 1000;
+/** The largest P of boundary's catalogue (docs/spaces/BOUNDARY.md: P = 1..16 for balls and for cubes). */
+export const BOUNDARY_CATALOGUE_MAX_P = 16;
 
-/** The last search of one problem: when, and the leaders seen before and after it. */
+/** The shape codes: 0 (a circle) and 3 to MAX_SIDES. */
+export const SHAPE_CODES: readonly number[] = [0, ...Array.from({ length: MAX_SIDES - 2 }, (_, i) => i + 3)];
+
+/** When this machine last searched a problem. */
 export interface Recent {
   time: number;
-  leaders: (number | null)[];
-}
-
-export interface Filters {
-  N: readonly number[] | null;
-  M: readonly number[] | null;
-  maxP: number | null;
 }
 
 /**
- * Records one finished search. A search cut short by a signal or by --hours does not count: the
- * problem may come back. One that failed does count, so that a failure is not repeated at once.
- * The leader after the search is usually this machine's own new entry; the list the server ranks
- * may still show the leader from before for a few minutes, so both count as seen.
+ * Records one finished search. A search cut short by a signal or by --hours does not count: the problem may come
+ * back. One that failed does count, so that a failure is not repeated at once.
  *
- * A dry run's search counts for later dry runs only: a real run must still search the problem and
- * submit, and the dry run's best packing, kept in best/, is offered then.
+ * A dry run's search counts for later dry runs only: a real run must still search the problem and submit, and the
+ * dry run's best packing, kept in best/, is offered then.
  */
 export function noteSearch(recent: Map<string, Recent>, line: AnyHistoryLine, dryRun = false): void {
   if (line.stopped === "aborted" || line.stopped === "interrupted" || line.stopped === "crashed") return;
@@ -49,9 +60,7 @@ export function noteSearch(recent: Map<string, Recent>, line: AnyHistoryLine, dr
   const key = historyKey(line);
   const old = recent.get(key);
   if (old && old.time > time) return;
-  const leaders = [line.leader_before?.id ?? null];
-  if (line.leader_after) leaders.push(line.leader_after.id);
-  recent.set(key, { time, leaders });
+  recent.set(key, { time });
 }
 
 export function recentFromHistory(lines: Iterable<AnyHistoryLine>, dryRun = false): Map<string, Recent> {
@@ -60,115 +69,151 @@ export function recentFromHistory(lines: Iterable<AnyHistoryLine>, dryRun = fals
   return recent;
 }
 
-/** Forgets searches older than RECENT_MS, which no longer skip anything. */
+/** Forgets searches older than RECENT_MS, which no longer count. */
 export function pruneRecent(recent: Map<string, Recent>, now: number): void {
   for (const [key, r] of recent) if (now - r.time >= RECENT_MS) recent.delete(key);
 }
 
-/** True when this machine searched the problem within RECENT_MS and its leader is one it saw then. */
-export function searchedRecently(t: Target | SpaceTarget, recent: ReadonlyMap<string, Recent>, now: number): boolean {
-  const r = recent.get("space" in t ? t.id : problemKey(t));
-  if (!r || now - r.time >= RECENT_MS) return false;
-  return r.leaders.includes(t.leader_id ?? null);
+/** True when this machine searched the problem (its problemKey, or a space problem's id) within RECENT_MS. */
+export function searchedRecently(key: string, recent: ReadonlyMap<string, Recent>, now: number): boolean {
+  const r = recent.get(key);
+  return !!r && now - r.time < RECENT_MS;
 }
 
-export function matchesFilters(t: Target, f: Filters): boolean {
-  return (!f.N || f.N.includes(t.N)) && (!f.M || f.M.includes(t.M)) && (f.maxP === null || t.P <= f.maxP);
+/** A drawn problem: a flat one, or one of a space by its id. */
+export type Drawn = { kind: "polygon"; problem: Problem } | { kind: "space"; space: SpaceName; id: string };
+
+/** The key of a drawn problem in the history, the skips and the problems being searched. */
+export const drawnKey = (d: Drawn) => (d.kind === "polygon" ? problemKey(d.problem) : d.id);
+
+/** One field of a kind's ids: a list of values, or the integers from min to max. */
+export interface KindField {
+  key: string;
+  values?: readonly string[];
+  min?: number;
+  max?: number;
 }
 
-/** The problems a draw chooses from: filtered, not skipped, the TOP highest priorities. */
-export function eligibleTargets(
-  targets: readonly Target[],
-  o: { filters: Filters; recent: ReadonlyMap<string, Recent>; skip: ReadonlySet<string>; now: number },
-): Target[] {
-  return targets
-    .filter((t) => matchesFilters(t, o.filters) && !o.skip.has(problemKey(t)) && !searchedRecently(t, o.recent, o.now))
-    .sort((a, b) => b.priority - a.priority)
-    .slice(0, TOP);
+/** One kind of problem a draw covers. */
+export interface Kind {
+  /** "flat", or the space. */
+  name: "flat" | SpaceName;
+  /** The size of the product of its fields, after the filters: what the kind is drawn in proportion to. */
+  size: number;
+  /** A problem of the product, each field drawn uniformly; null when it falls outside the kind's domain. */
+  draw(random: () => number): Drawn | null;
+}
+
+const pick = <T>(list: readonly T[], random: () => number): T =>
+  list[Math.min(list.length - 1, Math.floor(random() * list.length))];
+const between = (min: number, max: number, random: () => number) =>
+  min + Math.min(max - min, Math.floor(random() * (max - min + 1)));
+const fieldSize = (f: KindField) => (f.values ? f.values.length : Math.max(0, f.max! - f.min! + 1));
+
+/** The flat problems that pass --N, --M and --max-P (every shape and P up to MAX_PIECES without them). */
+export function flatKind(f: { N: readonly number[] | null; M: readonly number[] | null; maxP: number | null }): Kind {
+  const Ns = f.N ?? SHAPE_CODES;
+  const Ms = f.M ?? SHAPE_CODES;
+  const maxP = Math.min(MAX_PIECES, f.maxP ?? MAX_PIECES);
+  return {
+    name: "flat",
+    size: Ns.length * Ms.length * maxP,
+    draw: (random) => ({
+      kind: "polygon",
+      problem: { N: pick(Ns, random), M: pick(Ms, random), P: between(1, maxP, random) },
+    }),
+  };
 }
 
 /**
- * One target drawn with probability proportional to its priority; priorities that are not
- * positive numbers weigh nothing, and when none is positive the draw is uniform.
+ * The fields of a space's problems: its domain's, or for boundary (which has none) its catalogue's polytope, piece and
+ * P. --max-P cuts the range of P.
  */
-export function weightedDraw<T extends { priority: number }>(targets: readonly T[], random: () => number): T | null {
-  if (targets.length === 0) return null;
-  const weights = targets.map((t) => (Number.isFinite(t.priority) && t.priority > 0 ? t.priority : 0));
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (!(total > 0)) return targets[Math.min(targets.length - 1, Math.floor(random() * targets.length))];
-  let r = random() * total;
-  for (let i = 0; i < targets.length; i++) {
-    if (weights[i] === 0) continue;
-    r -= weights[i];
-    if (r < 0) return targets[i];
+export function spaceFields(space: SpaceName, maxP: number | null): KindField[] {
+  const domain = SPACE_DOMAINS[space];
+  const fields: KindField[] = domain
+    ? domain.info.fields.map((f) => ({ key: f.key, values: f.values, min: f.min, max: f.max }))
+    : [
+        { key: "polytope", values: BOUNDARY_POLYTOPES },
+        { key: "piece", values: BOUNDARY_PIECES },
+        { key: "P", min: 1, max: BOUNDARY_CATALOGUE_MAX_P },
+      ];
+  return fields.map((f) => (f.key === "P" && maxP !== null ? { ...f, max: Math.min(f.max!, maxP) } : f));
+}
+
+/** True when `id` is a problem of the space's domain (every id of the product, for boundary) that this client searches. */
+function inSpace(space: SpaceName, domain: SpaceDomain | undefined, id: string): boolean {
+  if (!parseSpaceId(id)) return false;
+  if (!domain) return true;
+  const parsed = parseIdOf(space, id);
+  return typeof parsed !== "string" && domain.bound(parsed) !== undefined;
+}
+
+/** The problems of one space, after --max-P. */
+export function spaceKind(space: SpaceName, maxP: number | null): Kind {
+  const domain = SPACE_DOMAINS[space];
+  const fields = spaceFields(space, maxP);
+  const size = fields.reduce((n, f) => n * fieldSize(f), 1);
+  return {
+    name: space,
+    size,
+    draw: (random) => {
+      const chosen: Record<string, string | number> = {};
+      for (const f of fields) chosen[f.key] = f.values ? pick(f.values, random) : between(f.min!, f.max!, random);
+      const id = domain ? domainId(domain.info, chosen) : `boundary/${chosen.polytope}/${chosen.piece}/${chosen.P}`;
+      return inSpace(space, domain, id) ? { kind: "space", space, id } : null;
+    },
+  };
+}
+
+/** The kinds a client draws from: flat unless --only-dimensions, and the kinds of --dimensions; those left empty dropped. */
+export function kindsFor(o: {
+  N: readonly number[] | null;
+  M: readonly number[] | null;
+  maxP: number | null;
+  spaces: readonly SpaceName[] | null;
+  onlySpaces: boolean;
+}): Kind[] {
+  const kinds = [...(o.onlySpaces ? [] : [flatKind(o)]), ...(o.spaces ?? []).map((space) => spaceKind(space, o.maxP))];
+  return kinds.filter((k) => k.size > 0);
+}
+
+/** One problem of the kinds, every problem equally likely; null when no draw of DRAW_TRIES falls in a domain. */
+export function drawOnce(kinds: readonly Kind[], random: () => number): Drawn | null {
+  const total = kinds.reduce((n, k) => n + k.size, 0);
+  if (!(total > 0)) return null;
+  for (let i = 0; i < DRAW_TRIES; i++) {
+    let r = random() * total;
+    let kind = kinds[kinds.length - 1];
+    for (const k of kinds) {
+      if (r < k.size) {
+        kind = k;
+        break;
+      }
+      r -= k.size;
+    }
+    const d = kind.draw(random);
+    if (d) return d;
   }
-  // rounding left r at or just above zero: the last positive weight
-  for (let i = targets.length - 1; i >= 0; i--) if (weights[i] > 0) return targets[i];
   return null;
 }
 
-export function pickTarget(
-  targets: readonly Target[],
-  o: {
-    filters: Filters;
-    recent: ReadonlyMap<string, Recent>;
-    skip: ReadonlySet<string>;
-    now: number;
-    random: () => number;
-  },
-): Target | null {
-  return weightedDraw(eligibleTargets(targets, o), o.random);
-}
-
-export interface SpaceFilters {
-  spaces: readonly SpaceName[];
-  maxP: number | null;
-}
-
-export function matchesSpaceFilters(t: SpaceTarget, f: SpaceFilters): boolean {
-  return f.spaces.includes(t.space) && (f.maxP === null || t.P <= f.maxP);
-}
-
 /**
- * The space problems a draw chooses from, by space: filtered, not skipped, not searched recently,
- * each space's TOP highest priorities, in the order of the filter's spaces (spaces with none are
- * left out).
+ * The next problem to search: a uniform draw (drawOnce) that is not in `skip`, and not searched here within RECENT_MS
+ * unless RECENT_TRIES draws in a row were. Null when DRAW_TRIES draws found nothing but problems to skip.
  */
-export function eligibleSpaceTargets(
-  targets: readonly SpaceTarget[],
-  o: { filters: SpaceFilters; recent: ReadonlyMap<string, Recent>; skip: ReadonlySet<string>; now: number },
-): Map<SpaceName, SpaceTarget[]> {
-  const bySpace = new Map<SpaceName, SpaceTarget[]>();
-  for (const space of o.filters.spaces) bySpace.set(space, []);
-  for (const t of targets)
-    if (matchesSpaceFilters(t, o.filters) && !o.skip.has(t.id) && !searchedRecently(t, o.recent, o.now))
-      bySpace.get(t.space)!.push(t);
-  for (const [space, list] of bySpace) {
-    if (list.length === 0) bySpace.delete(space);
-    else bySpace.set(space, list.sort((a, b) => b.priority - a.priority).slice(0, TOP));
+export function drawProblem(
+  kinds: readonly Kind[],
+  o: { recent: ReadonlyMap<string, Recent>; skip: ReadonlySet<string>; now: number; random: () => number },
+): Drawn | null {
+  let recentInARow = 0;
+  for (let i = 0; i < DRAW_TRIES; i++) {
+    const d = drawOnce(kinds, o.random);
+    if (!d) return null;
+    const key = drawnKey(d);
+    if (o.skip.has(key)) continue;
+    if (searchedRecently(key, o.recent, o.now) && ++recentInARow < RECENT_TRIES) continue;
+    return d;
   }
-  return bySpace;
-}
-
-/**
- * One space problem: first a space, uniformly among the requested spaces that have an eligible
- * problem, then one of that space's TOP highest priorities in proportion to its priority. The
- * server scales priorities so that each space's sum to the same share; a cut of the whole list to
- * its TOP highest would leave out the spaces with many problems, whose priorities are smallest.
- */
-export function pickSpaceTarget(
-  targets: readonly SpaceTarget[],
-  o: {
-    filters: SpaceFilters;
-    recent: ReadonlyMap<string, Recent>;
-    skip: ReadonlySet<string>;
-    now: number;
-    random: () => number;
-  },
-): SpaceTarget | null {
-  const bySpace = eligibleSpaceTargets(targets, o);
-  const spaces = [...bySpace.keys()];
-  if (spaces.length === 0) return null;
-  const space = spaces[Math.min(spaces.length - 1, Math.floor(o.random() * spaces.length))];
-  return weightedDraw(bySpace.get(space)!, o.random);
+  return null;
 }

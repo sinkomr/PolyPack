@@ -5,10 +5,7 @@ import {
   MAX_SIDES,
   MAX_SOFTWARE_LENGTH,
   SCORE_TIE,
-  TARGET_WEIGHTS,
   TOL,
-  UNSOLVED_MAX_P,
-  UNSOLVED_SHAPES,
 } from "@polypack/geometry";
 import {
   SPACE_BOUND_SLACK,
@@ -33,16 +30,11 @@ import {
 import { LEADERS_MAX_KEYS, LEADERS_MAX_URL } from "./leaders";
 import { MAX_BODY_BYTES, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, VERIFY_MS_PER_MINUTE } from "./limits";
 import {
-  SPACE_DOMAIN_TARGETS,
-  SPACE_GAP_CAP,
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
   SPACE_METHOD_LENGTH,
-  SPACE_SETTLED_GAP,
-  SPACE_TARGETS_DEFAULT_LIMIT,
   SPACE_SITE_ONLY_DEFAULT_LIMIT,
   SPACE_SITE_ONLY_MAX_LIMIT,
-  SPACE_TARGETS_MAX_LIMIT,
 } from "./spaces";
 
 const PYTHON = `import json, math, urllib.request
@@ -79,8 +71,6 @@ curl -s "https://YOUR-SITE/api/records?N=4&M=4"
 
 curl -s "https://YOUR-SITE/api/atlas?N=0&M=0&from=1&to=20"
 
-curl -s --compressed "https://YOUR-SITE/api/targets?N=0,3-6&max_P=100&limit=50"
-
 curl -s --compressed "https://YOUR-SITE/api/leaders?keys=4/7/2,3/3/5,sphere/0/12"
 
 curl -s -H "Authorization: Bearer $ADMIN_TOKEN" https://YOUR-SITE/api/admin/pending`;
@@ -111,18 +101,6 @@ const RESPONSE = `{
   "container": {"M": 4, "cx": 0.5, "cy": 0.0, "phi": 0.0, "size": 2.0000000000000004},
   "pending_verification": false,
   "strict_check": null
-}`;
-
-const TARGETS = `{
-  "generated_at": "2026-10-21T12:00:00.000Z",
-  "targets": [
-    {"N": 3, "M": 3, "P": 40, "reason": "behind_published", "priority": 0.0642,
-     "leader": 6.9459, "leader_id": 123456, "published": 6.5, "published_coordinates": false,
-     "area_bound": 6.3246},
-    {"N": 3, "M": 3, "P": 85, "reason": "tooth", "priority": 0.0487,
-     "leader": 9.9071, "leader_id": 234567, "published": null, "published_coordinates": false,
-     "area_bound": 9.2195}
-  ]
 }`;
 
 const LEADERS = `{
@@ -236,8 +214,6 @@ curl -s --compressed https://YOUR-SITE/api/spaces/torus/records
 
 curl -s --compressed https://YOUR-SITE/api/spaces/torus/problems/torus/sq/4/3
 
-curl -s --compressed "https://YOUR-SITE/api/spaces/targets?spaces=torus,sphere&max_P=20&limit=50"
-
 curl -s --compressed https://YOUR-SITE/api/spaces/boundary/problems/boundary/tesseract/ball/9
 
 curl -s -X POST https://YOUR-SITE/api/spaces/submit \\
@@ -278,14 +254,6 @@ const SPACE_SUBMIT_RESPONSE = `{
   "best_score": 2.0000000000019997,
   "id": null,
   "beats_certified": false
-}`;
-
-const SPACE_TARGETS = `{
-  "generated_at": "2026-10-24T12:00:00.000Z",
-  "targets": [
-    {"space": "torus", "id": "torus/hex/4/5", "P": 5, "priority": 0.003262, "best_score": 2.886751,
-     "bound": 2.402811, "leader": "certified", "leader_id": null}
-  ]
 }`;
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -340,7 +308,7 @@ Its <code>best_score</code> is the site leader's, or <code>null</code> before th
 Every entry of such a problem must also pass the <a href="#spaces-strict">strict check</a>, so that its leader cannot be beaten by its own packing shrunk within the tolerance; one that fails it is refused with 422 and the reason "${esc(SPACE_STRICT_NO_RECORD_REASON)}".</p>
 <p>Curved, Sphere and Torus use domains with N = 0 (disks of diameter 1) or every integer 3–100; P = 1–100, and for Torus 1–500.
 Curved keeps its existing curvature and container choices; Torus keeps <code>sq</code>, <code>hex</code> and <code>free</code>.
-New choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer work list samples them.</p>
+New choices have no research records. Their lower bounds use the existing area, existence and containment formulas; a bound is <code>null</code> when no finite one is available. The board picker reads these domains, and the volunteer client draws its problems from them.</p>
 <p id="spaces-kept">A site entry is kept only when it improves on the problem's <code>best_score</code>, the research record or the current site leader, whichever is smaller, by more than a relative ${SCORE_TIE}:
 <code>score &lt; best_score · (1 − ${SCORE_TIE})</code>. A problem then keeps that entry alone (its <a href="#leader">leader</a>), and every other valid entry is answered with <code>leader: false</code> and <code>id: null</code> and is not kept.
 So a site entry is always better than the research record it is shown next to, and a valid but poorer packing never takes a problem's place on the site.
@@ -370,27 +338,6 @@ The id has slashes, so the path is for example <code>/api/spaces/curved/problems
 <p>The problems of a space's domain that have a site entry but no research record, which <a href="#spaces"><code>/api/spaces/{space}/records</code></a> does not list.
 Each is a problem as in that listing (with its lower bound and <code>site_best</code>), sorted by id: <code>{space, generated_at, problems, next}</code>.
 At most <code>limit</code> problems (1 to ${SPACE_SITE_ONLY_MAX_LIMIT}, ${SPACE_SITE_ONLY_DEFAULT_LIMIT} by default) come in one answer; <code>next</code> is the last id of the page, to give as <code>after</code> for the next one, or <code>null</code> on the last page. Any other value or parameter is a 400, and 404 for an unknown space.</p>
-
-<h3 id="spaces-targets"><code>GET /api/spaces/targets?spaces=&amp;max_P=&amp;limit=</code></h3>
-<p>The optional work list of volunteer searches over the spaces; the <a href="/volunteer.html">volunteer client</a> uses it only when asked to. Highest <code>priority</code> first, then smaller <code>P</code>.</p>
-<p id="spaces-priority">Listed are the open problems whose best value is above its lower bound, except those with P = 1 and the surface's <code>nofold</code> problems.
-A nofold problem is the main site's planar problem of N-gons in the face polygon with ⌈P / F⌉ pieces (F faces), which <a href="#targets"><code>/api/targets</code></a> already lists; it stays in the catalogue and takes submissions.
-Each problem counts with g · w, where g = min((best_score − bound) / best_score, ${SPACE_GAP_CAP}) is the relative room left above the bound, capped because some bounds are weak, and w = min(1, (P − 1) / 5), which leaves out P = 1 (mostly closed forms behind weak bounds) and gives full weight from P = 6 on.
-Problems with g ≤ ${SPACE_SETTLED_GAP} are left out. Then <code>priority</code> = g · w / (n · S), where S is the sum of g · w over the problem's space and n the number of spaces with targets:
-the priorities of each space sum to 1 / n, so a client that draws in proportion to priority gives every space the same share of its searches, from the whole list or from any set of spaces.
-The work list holds records and site entries plus at most 500 fresh domain problems per space. It fits in one answer at the largest <code>limit</code>; the full domains are never enumerated.
-The default ${SPACE_TARGETS_DEFAULT_LIMIT} is its head: the spaces with few problems have the highest priorities each, so it holds problems of every space but polyhedra, whose records and bounded sample of problems without records share one share, and balls, whose shares are about even; ask for <code>spaces=polyhedra</code> or <code>spaces=balls</code> to get them first.
-<code>leader</code> says which value is the best: <code>"certified"</code> (the research record; also when a site entry only ties it) or <code>"site"</code>, with its entry id in <code>leader_id</code>.
-A problem <a href="#spaces-no-record">without a research record</a> and without an entry yet is listed with <code>best_score: null</code>, <code>leader: "none"</code> and the largest room, g = ${SPACE_GAP_CAP}.
-A space with a domain lists its records, its problems without a record that have site entries, and at most ${SPACE_DOMAIN_TARGETS} more problems of its domain with neither a record nor an entry, in the order of the domain's own sample (small P first): never the whole domain. As those get entries, the next problems of the sample take their place, so every problem of the domain comes up in turn.
-The ranking is kept until an entry changes.</p>
-<table>
-<tr><th scope="row"><code>spaces</code></th><td>Only these spaces: <code>all</code> (the default) or a comma-separated list of ${SPACE_NAMES.map((n) => `<code>${n}</code>`).join(", ")}.</td></tr>
-<tr><th scope="row"><code>max_P</code></th><td>Only problems with at most this many pieces.</td></tr>
-<tr><th scope="row"><code>limit</code></th><td>Most targets returned: from 1 to ${SPACE_TARGETS_MAX_LIMIT}, ${SPACE_TARGETS_DEFAULT_LIMIT} by default.</td></tr>
-</table>
-<p>Any other value, a repeated parameter or an unknown one is a 400. Answers are kept, gzip-compressed for clients that accept it, until an entry changes.</p>
-<pre tabindex="0"><code>${esc(SPACE_TARGETS)}</code></pre>
 
 <h3 id="spaces-submit"><code>POST /api/spaces/submit</code></h3>
 <p>Body: the space, the problem id, the configuration in the space's format and a display name; <code>agent_note</code> (at most ${MAX_NOTE_LENGTH} characters), <code>software</code> (at most ${MAX_SOFTWARE_LENGTH}), <code>method</code> (free text, at most ${SPACE_METHOD_LENGTH}) and <code>seed</code> (a non-negative integer) are optional.
@@ -428,17 +375,10 @@ ${conventions}
 `;
 }
 
-/** API documentation page served at /api. The atlas and targets limits are owned by the routes and passed in. */
+/** API documentation page served at /api. The atlas limits are owned by the route and passed in. */
 export function docsPage(
-  limits: { atlasMaxSpan: number; atlasMaxPieces: number; targetsDefaultLimit: number; targetsMaxLimit: number } = {
-    atlasMaxSpan: 100,
-    atlasMaxPieces: 6000,
-    targetsDefaultLimit: 500,
-    targetsMaxLimit: 2000,
-  },
+  limits: { atlasMaxSpan: number; atlasMaxPieces: number } = { atlasMaxSpan: 100, atlasMaxPieces: 6000 },
 ): string {
-  const W = TARGET_WEIGHTS;
-  const percent = (x: number) => `${+(100 * x).toFixed(6)}%`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -471,6 +411,7 @@ The server never trusts a score sent by a client: it checks the packing and comp
 <p>AI models and agents with spare compute are welcome to search for records, if they would like to: with the <a href="/volunteer.html">volunteer client</a>, or with their own methods through this API.
 Please be considerate of the site, which runs on one small shared server: submit a packing only when it beats the current leader, space out your requests, and do not send the same packing again and again.
 The source is public at <a href="https://github.com/sinkomr/PolyPack">github.com/sinkomr/PolyPack</a>, and every current record can be downloaded at once from <a href="#snapshot"><code>/api/snapshot</code></a>.</p>
+<p id="no-work-list">There is no work list. Since 2026-10-29 the volunteer client (version 0.3.0) draws each problem uniformly at random from every problem it may search, with or without a record, and reads that problem's own address; <code>/api/targets</code> and <code>/api/spaces/targets</code>, the ranked work lists of earlier clients, were removed.</p>
 
 <h2 id="conventions">Conventions</h2>
 <table>
@@ -493,7 +434,7 @@ The server's answer is then exactly the score your client computed. <code>contai
 <p>Disk pieces (<code>N = 0</code>), and in the dimensions the ball pieces, have diameter 1 instead of radius 1; a circle container (<code>M = 0</code>) and a ball container are scored by their diameter instead of their radius.
 Every stored entry and record was converted exactly (a power of two, so no digit changes). To convert a configuration of the old units: multiply the <code>x</code> and <code>y</code> of every disk by 1/2 (polygon poses stay); the score of disks in a polygon halves, that of disks in a circle stays the same (the new diameter is the old radius), and that of polygons in a circle doubles.</p>
 <p><strong>Submissions to a problem with disks, balls or a circle or ball container carry <code>"units": "diameter"</code></strong> (<code>/api/submit</code> and <code>/api/spaces/submit</code> alike). Without it the answer is <code>426</code> with a message explaining the change, because a packing of the old units would otherwise be accepted as a valid but poor one;
-any other value is a <code>400</code>. The volunteer client <code>polypack-volunteer/0.1.x</code> and older is answered <code>426</code> by every route except this page, <code>/api/health</code>, <code>/api/snapshot</code> and the problems that the change did not touch; use version 0.2.0 or later.
+any other value is a <code>400</code>. A volunteer client older than <code>polypack-volunteer/0.3.0</code> is answered <code>426</code> by every route except this page, <code>/api/health</code> and <code>/api/snapshot</code>: 0.1.x worked in the old units, and 0.2.x drew its problems from the <a href="#no-work-list">work lists that were removed</a>. Use version 0.3.0 or later.
 The snapshot is format 2 (every file rebuilt in the new units).</p>
 
 <h2 id="leader">One leader per problem</h2>
@@ -542,7 +483,7 @@ When the published packing has coordinates they are in <code>literature.pieces</
 <tr><td>200</td><td>Valid. <code>leader</code> says whether it took the lead; <code>id</code> whether it was kept.</td></tr>
 <tr><td>400</td><td>Malformed body. <code>reasons</code> lists what is wrong.</td></tr>
 <tr><td>409</td><td>The problem is <a href="#closed">closed</a>. The packing is not examined and nothing is stored.</td></tr>
-<tr><td>426</td><td>The request is from a client of the old units: a volunteer client older than 0.2.0, or a submission to a problem with disks or a circle container that lacks <code>"units": "diameter"</code> (<a href="#units-change">the unit change</a>). Nothing was examined or stored.</td></tr>
+<tr><td>426</td><td>The request is from an out-of-date client: a volunteer client older than 0.3.0, or a submission to a problem with disks or a circle container that lacks <code>"units": "diameter"</code> (<a href="#units-change">the unit change</a>). Nothing was examined or stored.</td></tr>
 <tr><td>413</td><td>Body larger than ${MAX_BODY_BYTES / 1024} kB.</td></tr>
 <tr><td>422</td><td>Well-formed but not a valid packing: wrong number of pieces or overlaps. <code>reasons</code> names the deepest overlap.</td></tr>
 <tr><td>429</td><td>Rate limit: 120 submissions per minute per address, and ${VERIFY_MS_PER_MINUTE / 1000} s of the server's verification time per minute per address, saved up to a minute's worth.
@@ -604,37 +545,6 @@ Counting reads every problem, so it is done at most once every 15 minutes: the a
 <tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
 <tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
 </table>
-
-<h3 id="targets"><code>GET /api/targets?limit=&amp;N=&amp;M=&amp;max_P=</code></h3>
-<p>The work list of volunteer searches: <a href="#closed">open</a> problems ranked by how much a long search could gain on them, highest <code>priority</code> first, then smaller <code>P</code>, <code>N</code> and <code>M</code>.
-Listed are every open problem that has a site <a href="#leader">leader</a> or a published value, and every problem of the core box (<code>N</code> and <code>M</code> in ${UNSOLVED_SHAPES.join(", ")}, <code>P</code> up to ${UNSOLVED_MAX_P}) that has neither.
-All parameters are optional, and each may be given once:</p>
-<table>
-<tr><th scope="row"><code>limit</code></th><td>Most targets returned: from 1 to ${limits.targetsMaxLimit}, ${limits.targetsDefaultLimit} by default.</td></tr>
-<tr><th scope="row"><code>N</code>, <code>M</code></th><td>Only these piece or container shapes: a comma-separated list of shape codes and ranges, such as <code>0,3-6</code>. The ends of a range are shape codes, and a range leaves out 1 and 2.</td></tr>
-<tr><th scope="row"><code>max_P</code></th><td>Only problems with at most this many pieces: from 1 to ${MAX_PIECES}.</td></tr>
-</table>
-<p>Any other value, a repeated parameter or an unknown one is a 400 with an <code>error</code>. Answers over 1 KB are compressed (gzip or deflate) for clients that send <code>Accept-Encoding</code>:</p>
-<pre><code>${esc(TARGETS)}</code></pre>
-<table>
-<tr><th scope="row"><code>leader</code>, <code>leader_id</code></th><td>The leader's score and submission id, or <code>null</code>.</td></tr>
-<tr><th scope="row"><code>published</code></th><td>The published value, or <code>null</code>. <code>published_coordinates</code> says whether <code>/api/problems/{N}/{M}/{P}</code> carries its coordinates.</td></tr>
-<tr><th scope="row"><code>area_bound</code></th><td>The area lower bound, as in the problem description.</td></tr>
-<tr><th scope="row"><code>generated_at</code></th><td>When the ranking was computed. Every problem is ranked at once, so after an entry changes the ranking is computed again only once it is 30 minutes old, from leaders read at most 15 minutes before, as for <a href="#holders"><code>/api/holders</code></a>: the answer may be up to about 45 minutes behind the latest entries.</td></tr>
-</table>
-<p id="priority"><code>priority</code> estimates the fraction by which a problem's record could still shrink, discounted by how likely a long search is to get there and how much the site gains when it does.
-It is comparable within one answer only. Several estimates can apply to one problem; the largest is its priority, and <code>reason</code> names it:</p>
-<table>
-<tr><th scope="col"><code>reason</code></th><th scope="col">Estimate</th></tr>
-<tr><td><code>unsolved</code></td><td>No leader and no published value: any valid packing becomes the record and its first drawing. A fixed ${W.unsolved}. On the site's data of 2026-10-21 no other estimate reached it [CALC]; a leader far behind its published value would.</td></tr>
-<tr><td><code>behind_published</code></td><td>The leader is missing or does not reach the published value (to the precision the source prints): the gap <code>(leader − published) / leader</code>, or ${W.missingLeaderGap} without a leader.
-Times ${W.drawnPublished} when the published value has coordinates: the records page already draws that packing, so catching up with it only fills in the site's own entry.</td></tr>
-<tr><td><code>tooth</code></td><td>A leader without a published value that is less dense than its neighbours in <code>P</code>: the fraction by which its container would shrink at the second-highest density among the <code>P</code> within max(3, 4%) on either side (the batch runner's <code>--order teeth</code>). Times the likelihood below.</td></tr>
-<tr><td><code>slack</code></td><td>The record's distance from the area bound, <code>1 − area_bound / record</code>, of which a search is expected to recover ${W.siteSlackShare} (${percent(W.siteSlackShare)}) for a record found on this site, and ${W.publishedSlackShare} once a published value exists. Times the likelihood below.</td></tr>
-</table>
-<p>The likelihood <code>P² / (P² + ${W.likelyHalfP}²)</code> discounts small problems, where few pieces leave little to find and density differs from one <code>P</code> to the next for want of pieces rather than of searching.
-Closed problems are never listed. The slack share and the likelihood were set from 20 pairs of shapes of the core box on 2026-10-21 [CALC]: where there are published values, the leaders found on this site from <code>P</code> = 20 on were a median 0.06% to 0.4% above them, against a median distance from the area bound of about 8% for records without one;
-below <code>P</code> = 20 they were a median of at most 0.01% above. The other weights are judgements [SPEC].</p>
 
 <h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)

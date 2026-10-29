@@ -241,7 +241,7 @@ export interface HistoryLine {
   N: number;
   M: number;
   P: number;
-  /** Why the work list ranked it, and its priority there. */
+  /** How it was chosen: "random" since 0.3.0 (priority null); before, why the work list ranked it, and its priority. */
   reason: string | null;
   priority: number | null;
   /** The site leader when the search began, and after it (re-read before submitting). */

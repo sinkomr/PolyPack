@@ -163,7 +163,7 @@ export function runKey(p: Problem, method: string, seed: number, budget: Budget)
   return `${problemKey(p)}|${method}|${seed}|${budget.evals}|${budget.time_s}`;
 }
 
-// The targeting helpers live in @polypack/geometry (src/targets.ts), shared with GET /api/targets.
+// The targeting helpers live in @polypack/geometry (src/targets.ts).
 export { type SiteInfo, missingClass, toothDepth };
 
 export interface RecordsResponse {

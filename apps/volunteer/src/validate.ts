@@ -11,7 +11,6 @@ import {
   MAX_SIDES,
   type Pose,
   type ProblemInfo,
-  type Target,
 } from "@polypack/geometry";
 import type { Problem } from "./types";
 
@@ -47,24 +46,6 @@ export function readPieces(v: unknown, P: number): Pose[] | null {
     out.push({ x: p.x, y: p.y, theta });
   }
   return out;
-}
-
-/** One entry of the work list, or null. A leader_id that is not an integer reads as none. */
-export function readTarget(v: unknown): Target | null {
-  if (!isObject(v) || !isShape(v.N) || !isShape(v.M) || !isCount(v.P) || !isFiniteNumber(v.priority)) return null;
-  const leaderId = Number.isSafeInteger(v.leader_id) ? (v.leader_id as number) : null;
-  return {
-    N: v.N,
-    M: v.M,
-    P: v.P,
-    reason: cleanText(v.reason, 40) as Target["reason"],
-    priority: v.priority,
-    leader: leaderId !== null && isPositive(v.leader) ? v.leader : null,
-    leader_id: leaderId,
-    published: isPositive(v.published) ? v.published : null,
-    published_coordinates: v.published_coordinates === true,
-    area_bound: isFiniteNumber(v.area_bound) ? v.area_bound : 0,
-  };
 }
 
 /**

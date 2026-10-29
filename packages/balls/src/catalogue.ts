@@ -123,7 +123,8 @@ export const BALLS_PROBLEMS: readonly BallsProblem[] = build();
 
 /**
  * The codes of the space's first 7 problems, in their first order: balls in a ball and in a cube, and the five
- * Platonic solids in a ball. The volunteers' work list samples these only (problems.ts ballsDomain.sample).
+ * Platonic solids in a ball. The volunteers' work list sampled these only (problems.ts ballsDomain.sample) until it was
+ * removed on 2026-10-29.
  */
 export const BALLS_ORIGINAL_CODES: readonly string[] = [
   "ballinball",

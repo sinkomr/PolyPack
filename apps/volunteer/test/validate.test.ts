@@ -6,7 +6,6 @@ import {
   readProblemInfo,
   readStoredEntry,
   readSubmitResponse,
-  readTarget,
 } from "../src/validate";
 
 const p = { N: 4, M: 4, P: 2 };
@@ -84,31 +83,6 @@ describe("reading the server's answers", () => {
     expect(readStoredEntry({ score: 2.2, pieces: [null, null] }, 2)).toBeNull();
     expect(readStoredEntry({ score: "2.2", pieces }, 2)).toBeNull();
     expect(readStoredEntry({ score: 2.2, pieces, container_phi: "0" }, 2)).toBeNull();
-  });
-
-  it("reads work list entries, refusing malformed ones", () => {
-    const t = {
-      N: 4,
-      M: 4,
-      P: 2,
-      reason: "slack",
-      priority: 3,
-      leader: 2,
-      leader_id: 7,
-      published: null,
-      area_bound: 1,
-    };
-    expect(readTarget(t)).toMatchObject({ N: 4, P: 2, priority: 3, leader_id: 7 });
-    expect(readTarget({ ...t, leader_id: "7" })).toMatchObject({ leader_id: null, leader: null });
-    for (const bad of [
-      { ...t, N: 2 },
-      { ...t, P: 0 },
-      { ...t, P: 1.5 },
-      { ...t, priority: NaN },
-      { ...t, priority: "3" },
-      null,
-    ])
-      expect(readTarget(bad)).toBeNull();
   });
 
   it("reads a submission's answer", () => {

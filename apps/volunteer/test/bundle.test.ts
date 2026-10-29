@@ -35,7 +35,14 @@ function runBundle(args: string[], onLine?: (line: string, child: ChildProcess) 
   });
 }
 
+// the fake server knows LOOSE_SQUARES (N=4 M=4 P=3) only: the draws are kept to it and two problems it answers 404 to
 const commonArgs = (server: FakeServer, state: string) => [
+  "--N",
+  "4",
+  "--M",
+  "4",
+  "--max-P",
+  "3",
   "--base",
   server.url,
   "--state",

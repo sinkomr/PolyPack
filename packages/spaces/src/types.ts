@@ -179,28 +179,6 @@ export interface SpaceProblemResponse extends SpaceProblemSummary {
   site_config: SpaceConfig | null;
 }
 
-/** One problem of the optional volunteer work list. */
-export interface SpaceTarget {
-  space: SpaceName;
-  id: string;
-  P: number;
-  /** Larger is more promising; the volunteer client draws in proportion to it. */
-  priority: number;
-  /** The problem's best value; null for a problem with neither a research record nor a site entry yet. */
-  best_score: number | null;
-  bound: number | null;
-  /** Which value leads: the research record, a site entry, or none (no record and no entry yet). */
-  leader: "certified" | "site" | "none";
-  /** Site entry id of the leader; null when the research record leads. */
-  leader_id: number | null;
-}
-
-/** GET /api/spaces/targets?spaces=surface,torus&limit=&max_P= */
-export interface SpaceTargetsResponse {
-  generated_at: string;
-  targets: SpaceTarget[];
-}
-
 /** GET /api/spaces/entries/:id: a stored site entry, with its configuration (for share links). */
 export interface SpaceEntryResponse {
   id: number;
