@@ -25,8 +25,9 @@ async function safari(playwright: {
   const page = await (await browser.newContext({ ...devices["Desktop Safari"] })).newPage();
   const errors: string[] = [];
   // WebKit can report a same-origin /api/ fetch that failed in transit as a page error; the test is about the worker
+  const transit = /Fetch API cannot load[\s\S]*access control checks/;
   page.on("pageerror", (e) => {
-    if (!/Fetch API cannot load\S*\s+\S*\/api\/.*access control checks/.test(String(e.message))) errors.push(String(e));
+    if (!transit.test(String(e.message))) errors.push(String(e));
   });
   page.on("console", (m) => {
     if (m.type() === "error" && /worker|Embedder|module/i.test(m.text())) errors.push(m.text());

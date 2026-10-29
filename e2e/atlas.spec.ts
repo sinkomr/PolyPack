@@ -171,7 +171,8 @@ test("published data carries reference marks to the notes of its sources", async
   await expect(art(page, 7)).toHaveClass(/drawn/);
   // the notes at the foot of the page: a fixed order, each with a link to the site
   const notes = page.locator("#source-list > li");
-  await expect(notes).toHaveCount(4);
+  await expect(notes).toHaveCount(5);
+  await expect(notes.nth(4)).toContainText("Hiroaki Hosono");
   await expect(notes.nth(0)).toHaveAttribute("id", "source-1");
   await expect(notes.nth(0)).toContainText("Erich Friedman");
   await expect(notes.nth(0).getByRole("link", { name: "Packing Center" })).toHaveAttribute(
@@ -242,7 +243,7 @@ test("a record from an unlisted source has no reference mark", async ({ page }) 
   await tile(page, 2).click();
   await expect(page.getByRole("dialog")).toContainText("A fixture of the tests, read 2026-10-07");
   await expect(page.locator(".src-ref")).toHaveCount(0);
-  await expect(page.locator("#source-list > li")).toHaveCount(4);
+  await expect(page.locator("#source-list > li")).toHaveCount(5);
 });
 
 test("the size, scale and layout choosers change the atlas and survive a reload", async ({ page, request }) => {
