@@ -1,13 +1,14 @@
 /**
- * An in-process stand-in for the PolyPack API, on 127.0.0.1 and a free port: GET /api/targets,
- * GET /api/problems/{N}/{M}/{P}, GET /api/submissions/{id} and POST /api/submit, which scores a
+ * An in-process stand-in for the PolyPack API, on 127.0.0.1 and a free port: GET
+ * /api/problems/{N}/{M}/{P}, GET /api/submissions/{id} and POST /api/submit, which scores a
  * packing with @polypack/geometry and keeps one leader per problem like the real server. It
- * records every request, so that tests can check what the client sent.
+ * records every request, so that tests can check what the client sent. It knows only its
+ * fixtures' problems (404 for any other), and `kinds` gives the client those to draw from.
  *
  * The new spaces' endpoints are served too (packages/spaces/src/types.ts): GET
- * /api/spaces/targets, GET /api/spaces/:space/problems/<id> and POST /api/spaces/submit, which
- * checks a configuration with the client's own wrapper of the spaces' validators (as the server
- * checks it with the same validators) and keeps one site leader per problem.
+ * /api/spaces/:space/problems/<id> and POST /api/spaces/submit, which checks a configuration with
+ * the client's own wrapper of the spaces' validators (as the server checks it with the same
+ * validators) and keeps one site leader per problem.
  */
 import { type Server, createServer } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -16,11 +17,11 @@ import {
   type Pose,
   type ProblemInfo,
   type SubmitResponse,
-  type Target,
   evaluate,
   improvesOn,
 } from "@polypack/geometry";
-import type { SpaceConfig, SpaceProblemResponse, SpaceSubmitResponse, SpaceTarget } from "@polypack/spaces";
+import type { SpaceConfig, SpaceName, SpaceProblemResponse, SpaceSubmitResponse } from "@polypack/spaces";
+import type { Drawn, Kind } from "../src/pick";
 import { checkSpaceConfig, parseSpaceId } from "../src/spaces/model";
 import { SOFTWARE_REFUSAL } from "../src/submit";
 import { planarFactors, spaceScoreFactor } from "../src/units";
@@ -36,7 +37,6 @@ export interface FakeSpaceProblem {
   /** A site entry that leads from the start. */
   site?: { config: SpaceConfig; name: string } | null;
   bound?: number | null;
-  priority?: number;
 }
 
 export interface FakeProblem {
@@ -47,13 +47,10 @@ export interface FakeProblem {
   leader: { pieces: Pose[]; container_phi: number; name: string } | null;
   literature?: ProblemInfo["literature"];
   closed?: boolean;
-  priority?: number;
 }
 
 export interface FakeServerOptions {
   problems: FakeProblem[];
-  /** Answer GET /api/targets with 404, like a server older than the client. */
-  noTargets?: boolean;
   /** Answer every request with 426 and this explanation, like the server to a client of the old units. */
   upgradeRequired?: string;
   /** Refuse `software` with optimizer entries, like the live server before its update. */
@@ -68,10 +65,6 @@ export interface FakeServerOptions {
   spaces?: FakeSpaceProblem[];
   /** Answer the spaces' endpoints with 404, like a server without them. */
   noSpaces?: boolean;
-  /** Answer GET /api/spaces/targets with 400 when it has `spaces` or `max_P`. */
-  refuseSpaceFilters?: boolean;
-  /** The largest limit of GET /api/spaces/targets (20000; 10000 or 2000 on older servers). */
-  spaceTargetsMaxLimit?: number;
   /** As afterSubmit, for the `n`-th POST /api/spaces/submit. */
   afterSpaceSubmit?: (n: number, answer: SpaceSubmitResponse) => { status: number; body: unknown } | "drop" | undefined;
 }
@@ -95,6 +88,8 @@ export interface FakeServer {
   leaderOf(N: number, M: number, P: number): { id: number; score: number; name: string } | null;
   /** Valid submissions the server processed (each one an entry stored, if only for a moment). */
   stored(): number;
+  /** The fixtures' problems as kinds to draw from (MainDeps.kinds): the flat ones, and each space's. */
+  kinds(): Kind[];
   close(): Promise<void>;
 }
 
@@ -228,37 +223,6 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
 
       if (url.pathname.startsWith("/api/spaces")) {
         if (o.noSpaces) return send(404, { error: "not found" });
-        if (req.method === "GET" && url.pathname === "/api/spaces/targets") {
-          if (o.refuseSpaceFilters && (url.searchParams.has("spaces") || url.searchParams.has("max_P")))
-            return send(400, { error: "unknown parameter" });
-          // as the server: 500 targets without a limit, at most its largest limit
-          const maxLimit = o.spaceTargetsMaxLimit ?? 20000;
-          const limit = Number(url.searchParams.get("limit") ?? 500);
-          if (!(limit >= 1 && limit <= maxLimit))
-            return send(400, { error: `limit must be an integer from 1 to ${maxLimit}` });
-          const only = url.searchParams.get("spaces")?.split(",");
-          const maxP = url.searchParams.has("max_P") ? Number(url.searchParams.get("max_P")) : Infinity;
-          const targets: SpaceTarget[] = [...spaceProblems.values()]
-            .filter((sp) => spaceOpen(sp))
-            .map((sp) => {
-              const p = parseSpaceId(sp.id)!;
-              // a problem without a record or an entry has no best yet
-              const best = spaceBest(sp.id);
-              return {
-                space: p.space,
-                id: sp.id,
-                P: p.P,
-                priority: sp.priority ?? 1,
-                best_score: best?.score ?? null,
-                bound: sp.bound ?? null,
-                leader: !best ? ("none" as const) : best.site ? ("site" as const) : ("certified" as const),
-                leader_id: best?.site?.id ?? null,
-              };
-            })
-            .filter((t) => (!only || only.includes(t.space)) && t.P <= maxP)
-            .slice(0, limit);
-          return answer({ generated_at: new Date().toISOString(), targets });
-        }
         const m = /^\/api\/spaces\/([a-z]+)\/problems\/(.+)$/.exec(url.pathname);
         if (req.method === "GET" && m) {
           const sp = spaceProblems.get(m[2]);
@@ -325,28 +289,6 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
           return send(200, result);
         }
         return send(404, { error: "not found" });
-      }
-
-      if (req.method === "GET" && url.pathname === "/api/targets") {
-        if (o.noTargets) return send(404, { error: "not found" });
-        const targets: Target[] = [...problems.values()]
-          .filter((p) => !p.closed)
-          .map((p) => {
-            const l = leaderOf(p.N, p.M, p.P);
-            return {
-              N: p.N,
-              M: p.M,
-              P: p.P,
-              reason: l ? "slack" : "unsolved",
-              priority: p.priority ?? 1,
-              leader: l?.score ?? null,
-              leader_id: l?.id ?? null,
-              published: p.literature?.value ?? null,
-              published_coordinates: !!p.literature?.pieces,
-              area_bound: areaBound(p),
-            };
-          });
-        return answer({ generated_at: new Date().toISOString(), targets });
       }
 
       if (req.method === "GET" && parts[0] === "api" && parts[1] === "problems" && parts.length === 5) {
@@ -454,6 +396,22 @@ export async function startFakeServer(o: FakeServerOptions): Promise<FakeServer>
     spaceBest,
     leaderOf,
     stored: () => stored,
+    kinds: () => {
+      const listKind = (name: Kind["name"], list: Drawn[]): Kind => ({
+        name,
+        size: list.length,
+        draw: (random) => list[Math.min(list.length - 1, Math.floor(random() * list.length))],
+      });
+      const flat: Drawn[] = o.problems.map((p) => ({ kind: "polygon", problem: { N: p.N, M: p.M, P: p.P } }));
+      const bySpace = new Map<SpaceName, Drawn[]>();
+      for (const sp of o.spaces ?? []) {
+        const space = parseSpaceId(sp.id)!.space;
+        bySpace.set(space, [...(bySpace.get(space) ?? []), { kind: "space", space, id: sp.id }]);
+      }
+      return [listKind("flat", flat), ...[...bySpace].map(([space, list]) => listKind(space, list))].filter(
+        (k) => k.size > 0,
+      );
+    },
     close: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

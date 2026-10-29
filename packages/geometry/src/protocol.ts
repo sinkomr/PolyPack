@@ -158,39 +158,6 @@ export interface HoldersResponse {
   holders: Holder[];
 }
 
-/**
- * One problem of GET /api/targets: the work list that volunteer searches take problems from.
- * Only open problems are listed (see closedToSubmissions).
- */
-export interface Target {
-  N: number;
-  M: number;
-  P: number;
-  /**
-   * Which estimate gave the priority (see rankTargets): "unsolved", no site entry and no published
-   * value; "behind_published", the site leader is missing or worse than the published value;
-   * "tooth", the leader is less dense than its neighbours in P (see the batch runner's --order
-   * teeth); "slack", the record's distance from the area bound.
-   */
-  reason: "unsolved" | "behind_published" | "tooth" | "slack";
-  /** Larger is more worth searching. Comparable within one answer only. */
-  priority: number;
-  /** The site leader's score and submission id, or null without a leader. */
-  leader: number | null;
-  leader_id: number | null;
-  /** The published value, or null; whether GET /api/problems/{N}/{M}/{P} carries its coordinates. */
-  published: number | null;
-  published_coordinates: boolean;
-  area_bound: number;
-}
-
-/** Answer of GET /api/targets, highest priority first. */
-export interface TargetsResponse {
-  /** When the ranking was computed (ISO 8601); it may be up to about 11 minutes behind the entries. */
-  generated_at: string;
-  targets: Target[];
-}
-
 /** Sent to all viewers when a problem gets a new leader; `id`, `score` and `name` are the leader's. */
 export interface LeaderboardEvent {
   N: number;

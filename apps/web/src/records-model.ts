@@ -1,4 +1,4 @@
-import type { CertifiedValue, SiteBest, SpaceDomainField, SpaceInfo, SpaceName, SpaceTarget } from "@polypack/spaces";
+import type { CertifiedValue, SiteBest, SpaceDomainField, SpaceInfo, SpaceName } from "@polypack/spaces";
 import { DIMENSIONS, availableFamilies, familyOfSpace, isAvailable } from "./dimension-table";
 import {
   ALL,

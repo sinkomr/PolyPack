@@ -1,29 +1,30 @@
 /**
- * The default polygon queue, run the same way against any version of the client's main(): K runs
- * with --once --dry-run on one state directory, a seeded random source shared by the runs, and an
- * engine that searches nothing. test/draws.test.ts compares its picks with a snapshot taken from
- * the client before the spaces option, so that no later change alters the default draws unnoticed.
+ * The draws of the client's main(), run the same way against any version of it: K runs with --once
+ * --dry-run on one state directory, a seeded random source shared by the runs, and an engine that
+ * searches nothing. test/draws.test.ts compares its picks with a snapshot, so that no later change
+ * alters the draws unnoticed.
  */
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Kind } from "../src/pick";
 import type { FakeProblem } from "./fake-server";
 
-/** Twelve open problems without leaders, with distinct priorities (and two equal ones). */
+/** Twelve open problems without leaders. */
 export const DRAW_PROBLEMS: FakeProblem[] = [
-  [3, 3, 5, 9],
-  [4, 4, 7, 7],
-  [0, 0, 11, 5],
-  [5, 0, 6, 5],
-  [6, 6, 8, 4.5],
-  [0, 4, 9, 4],
-  [3, 6, 10, 3.5],
-  [7, 5, 4, 3],
-  [8, 8, 3, 2.5],
-  [4, 0, 12, 2],
-  [5, 5, 13, 1.5],
-  [0, 3, 6, 1],
-].map(([N, M, P, priority]) => ({ N, M, P, priority, leader: null }));
+  [3, 3, 5],
+  [4, 4, 7],
+  [0, 0, 11],
+  [5, 0, 6],
+  [6, 6, 8],
+  [0, 4, 9],
+  [3, 6, 10],
+  [7, 5, 4],
+  [8, 8, 3],
+  [4, 0, 12],
+  [5, 5, 13],
+  [0, 3, 6],
+].map(([N, M, P]) => ({ N, M, P, leader: null }));
 
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -42,6 +43,7 @@ export async function defaultDraws(
   main: Main,
   base: string,
   runs: number,
+  kinds: Kind[],
 ): Promise<{ picks: string[]; draws: number; keys: string[] }> {
   const random = mulberry32(42);
   let draws = 0;
@@ -80,10 +82,11 @@ export async function defaultDraws(
           signals: false,
           searchProblem: nothing,
           random: counted,
+          kinds,
         },
       );
       const s = lines.find((l) => l.includes("] Searching "));
-      picks.push(`${code} ${s ? s.replace(/^\[[^\]]*\] Searching /, "").replace(/ \(.*$/, "") : "none"}`);
+      picks.push(`${code} ${s ? s.replace(/^\[[^\]]*\] Searching /, "").replace(/: .*$/, "") : "none"}`);
     }
     const history = readFileSync(join(state, "history.jsonl"), "utf8").trim().split("\n");
     const keys = [...new Set(history.map((l) => Object.keys(JSON.parse(l)).join(",")))];

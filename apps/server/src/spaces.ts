@@ -2,8 +2,6 @@ import { promisify } from "node:util";
 import { gzip as gzipCallback } from "node:zlib";
 import { MAX_SOFTWARE_LENGTH } from "@polypack/geometry";
 import {
-  SPACE_BOUND_SLACK,
-  SURFACE_CATALAN,
   SPACE_EXHIBITS,
   SPACE_INFO,
   SPACE_NAMES,
@@ -17,8 +15,6 @@ import {
   SpaceSiteOnlyResponse,
   SpaceProblemSummary,
   SpaceSubmitResponse,
-  SpaceTarget,
-  SpaceTargetsResponse,
   SpacesIndex,
   SpacesResponse,
   acceptsSubmissions,
@@ -50,45 +46,9 @@ import { LoadStats } from "./load";
 import { UNITS_MISSING_MESSAGE, spaceAffected } from "./units-gate";
 import { SpaceEntryEdit, SpaceLeader, SpaceStore } from "./store";
 
-/** Problems of a space's domain without a record or a site entry that the targets list holds at most. */
-export const SPACE_DOMAIN_TARGETS = 500;
-
-/**
- * The ids of a space's domain that the targets list offers besides its records: those with site entries (`entered`),
- * then the first `limit` of the domain's sample that have neither a record nor a site entry. As problems get entries
- * the sample moves on to the next ones, so every problem of the domain comes up in turn; the list stays bounded by
- * the records, the entries and `limit`.
- */
-export function domainTargetIds(cat: SpaceCatalogue, entered: readonly string[], limit: number): string[] {
-  if (!cat.domain) return [];
-  const taken = new Set(cat.byId.keys());
-  const out: string[] = [];
-  for (const id of entered)
-    if (!taken.has(id)) {
-      taken.add(id);
-      out.push(id);
-    }
-  let fresh = 0;
-  for (const id of cat.domain.sample(limit + taken.size)) {
-    if (fresh >= limit) break;
-    if (taken.has(id)) continue;
-    taken.add(id);
-    out.push(id);
-    fresh++;
-  }
-  return out;
-}
 /** Problems one /api/spaces/{space}/site-only page holds without a `limit`, and at most. */
 export const SPACE_SITE_ONLY_DEFAULT_LIMIT = 1000;
 export const SPACE_SITE_ONLY_MAX_LIMIT = 5000;
-/** Targets one /api/spaces/targets answer holds without a `limit`. */
-export const SPACE_TARGETS_DEFAULT_LIMIT = 500;
-/**
-  * Largest `limit` of /api/spaces/targets: the whole list fits in one answer (10000 until PolyPack's 28
-  * prism and antiprism problems took the polyhedra space to 11,286 problems on 2026-10-25; its bipyramids and
-  * trapezohedra make 14,850, and with the balls space's 500 sampled problems 17,657 targets in all, including 500 sampled polyhedra problems without records).
- */
-export const SPACE_TARGETS_MAX_LIMIT = 20000;
 /**
  * Spaces whose submissions are answered "not kept" without a check when their stated score cannot be
  * kept: a check of 500 large polyhedra takes about 0.7 s, one of 500 torus pieces on a skewed basis about
@@ -107,48 +67,12 @@ export const SPACE_HEAVY_CHECKS_WAITING = 8;
 
 /** Longest `method` text of a space submission. */
 export const SPACE_METHOD_LENGTH = 80;
-/**
- * Relative gap (best - bound) / best at or below which a problem counts as settled by its lower
- * bound: no valid entry can lead it by more than the tie tolerance, so it is left out of the targets.
- */
-export const SPACE_SETTLED_GAP = 1e-9;
-/**
- * Largest relative gap a target counts with. Some bounds are weak (the area bound in a hyperbolic
- * container, whose area is capped), so a larger gap says little more about the room left.
- */
-export const SPACE_GAP_CAP = 0.25;
-/**
- * Most bytes of /api/spaces/targets lists kept at once, encoded and gzip together. [CALC] The whole list of
- * 12,593 targets is about 2.4 MB and 0.4 MB of gzip, so this keeps about five filtered lists; the least
- * recently used goes first. Every limit of a list is served from it (a prefix of its bytes).
- */
-export const SPACE_TARGETS_CACHE_BYTES = 16_000_000;
-/**
- * The lengths of a targets answer that are also kept gzip-compressed: the default 500, 2000 and 10000
- * (the volunteer client's limits before 2026-10-25 and before PolyPack's prism and antiprism problems
- * joined) and the whole list (its limit since). Other limits are served uncompressed, so that no
- * request compresses an answer of its own.
- */
-export const SPACE_TARGETS_GZIP_LENGTHS: readonly number[] = [SPACE_TARGETS_DEFAULT_LIMIT, 2000, 10000];
-
-/**
- * Weight of a target by its number of pieces, min(1, (P - 1) / 5): nothing for P = 1, whose
- * records are mostly closed forms behind weak bounds, and full weight from P = 6 on.
- */
-export function spaceTargetWeight(P: number): number {
-  return Math.max(0, Math.min(1, (P - 1) / 5));
-}
-
 /** The spaces part of the API: the loaded catalogues and where their site entries are kept. */
 export interface SpacesOptions {
   index: SpacesIndex;
   store: SpaceStore;
   /** Compresses the answers that are kept; zlib's gzip off the event loop by default (tests count its calls). */
   gzip?: (data: Uint8Array) => Uint8Array<ArrayBuffer> | Promise<Uint8Array<ArrayBuffer>>;
-  /** Bytes of targets answers kept at once; SPACE_TARGETS_CACHE_BYTES by default. */
-  targetsCacheBytes?: number;
-  /** Told the bytes and answers the targets cache holds after each change (tests). */
-  onTargetsCache?: (bytes: number, answers: number) => void;
   /** Told what each check of a submission took: its work, its slices and the longest of them (tests). */
   onCheck?: (check: { workMs: number; slices: number; longestSliceMs: number }) => void;
 }
@@ -205,23 +129,6 @@ const encoder = new TextEncoder();
 const encode = (text: string) => encoder.encode(text) as Uint8Array<ArrayBuffer>;
 const packedOf = (value: unknown): Packed => ({ bytes: encode(JSON.stringify(value)), gzip: null });
 const gzipAsync = promisify(gzipCallback);
-const CLOSE = encode("]}");
-
-/**
- * The work list for one filter (spaces and max_P), encoded once: the answer of any limit is the prefix of its
- * bytes up to the end of its last target, then "]}".
- */
-interface EncodedList {
-  bytes: Uint8Array<ArrayBuffer>;
-  /** ends[i]: the offset just after target i. */
-  ends: Uint32Array;
-  /** The offset just after the opening "[". */
-  head: number;
-  /** Gzip answers of the lengths in SPACE_TARGETS_GZIP_LENGTHS and of the whole list, by length. */
-  gzips: Map<number, Packed>;
-  /** Bytes it holds, gzips included. */
-  size: number;
-}
 
 /** A JSON object's text with raw JSON fields appended (configurations are stored as JSON text). */
 function withRaw(head: object, raw: Record<string, string | null>): string {
@@ -233,9 +140,8 @@ function withRaw(head: object, raw: Record<string, string | null>): string {
 }
 
 /**
- * The routes of the spaces (docs/spaces/*.md): their catalogues of research records, the site
- * entries submitted for them, and the optional volunteer work list. Registered by createApp when
- * it is given `spaces`.
+ * The routes of the spaces (docs/spaces/*.md): their catalogues of research records and the site
+ * entries submitted for them. Registered by createApp when it is given `spaces`.
  */
 export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   const { index, store } = ctx.spaces;
@@ -248,32 +154,13 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
   const loaded = SPACE_NAMES.filter((s) => index[s]);
   const catalogue = (space: string) => (isSpaceName(space) ? index[space] : undefined);
 
-  // The listing of a space is kept until one of its entries changes; the ranking of the targets,
-  // and the answers drawn from it, until any entry does. Each answer is kept with its gzip bytes,
-  // so that it is compressed once and not per request. `version` keeps an answer computed across
-  // a change from being kept.
+  // The listing of a space is kept until one of its entries changes, with its gzip bytes, so that
+  // it is compressed once and not per request. `version` keeps an answer computed across a change
+  // from being kept.
   const recordsCache = new Map<SpaceName, Packed>();
-  // the ranked targets, each encoded once (made lazily, until any entry changes)
-  let ranking: { list: SpaceTarget[]; items: Uint8Array[] | null; at: number } | null = null;
-  // the targets lists by filter, least recently used first, bounded in bytes (encoded and gzip)
-  const targetLists = new Map<string, EncodedList>();
-  const targetsLimit = ctx.spaces.targetsCacheBytes ?? SPACE_TARGETS_CACHE_BYTES;
-  let targetsBytes = 0;
-  const targetsChanged = () => {
-    while (targetsBytes > targetsLimit && targetLists.size) {
-      const [oldest, l] = targetLists.entries().next().value!;
-      targetLists.delete(oldest);
-      targetsBytes -= l.size;
-    }
-    ctx.spaces.onTargetsCache?.(targetsBytes, targetLists.size);
-  };
   let version = 0;
   const changed = (space: string) => {
     if (isSpaceName(space)) recordsCache.delete(space);
-    ranking = null;
-    targetLists.clear();
-    targetsBytes = 0;
-    targetsChanged();
     version++;
   };
   const jsonHeaders = { "content-type": "application/json", vary: "Accept-Encoding" };
@@ -327,211 +214,6 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     exhibits: loaded.length ? SPACE_EXHIBITS : [],
   } satisfies SpacesResponse);
   app.get("/api/spaces", (c) => send(c, spacesAnswer));
-
-  // The work list (docs: "spaces-targets"). Each open problem counts with its relative room above
-  // its lower bound, g = (best - bound) / best capped at SPACE_GAP_CAP (best: the smaller of the
-  // certified and the site value), times spaceTargetWeight(P). Problems whose best value meets the
-  // bound (g at most SPACE_SETTLED_GAP), P = 1, and the surface in nofold mode on the Platonic solids,
-  // Archimedean solids, prisms and antiprisms are left out: such a nofold problem is the main site's planar problem N in M
-  // (the best split between two or three regular face kinds), which the polygon work list
-  // covers; it stays listed and open to submissions. Catalan nofold problems (irregular faces) are offered. The priorities are then
-  // scaled so that those of each space sum to 1 / (number of spaces with targets): drawn in
-  // proportion to priority, every space gets the same share of the searches. A problem without a
-  // research record or a site entry (status no_record) has no best value: it counts with the
-  // largest room, g = SPACE_GAP_CAP, and is listed with best_score null and leader "none". A space
-  // with a domain lists its records, its problems without a record that have site entries, and at
-  // most SPACE_DOMAIN_TARGETS more of its domain with neither, in the order of its sample (domainTargetIds):
-  // never the whole domain.
-  const rank = async (): Promise<SpaceTarget[]> => {
-    const leaders = await store.spaceLeaders();
-    const site = new Map(leaders.map((l) => [`${l.space} ${l.problem}`, l]));
-    const out: SpaceTarget[] = [];
-    const sums = new Map<SpaceName, number>();
-    const candidates = (space: SpaceName): SpaceProblemEntry[] => {
-      const cat = index[space]!;
-      if (!cat.domain) return cat.problems;
-      const list = [...cat.problems];
-      const entered = leaders.filter((l) => l.space === space).map((l) => l.problem);
-      for (const id of domainTargetIds(cat, entered, SPACE_DOMAIN_TARGETS)) {
-        const parsed = parseSpaceId(space, id);
-        const p = typeof parsed === "string" ? null : problemOf(cat, parsed);
-        if (p) list.push(p);
-      }
-      return list;
-    };
-    for (const space of loaded) {
-      for (const p of candidates(space)) {
-        if (!acceptsSubmissions(p)) continue;
-        // nofold problems of solids whose faces are regular polygons are 2D in 2D problems (the polygon
-        // work list's, or a split among two or three of them); a Catalan face is not
-        if (space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid)))
-          continue;
-        const weight = spaceTargetWeight(p.P);
-        if (!(weight > 0)) continue;
-        const lead = site.get(`${space} ${p.id}`) ?? null;
-        const cert = p.certified?.score ?? null;
-        // a site entry leads once it beats the research record by the space's record margin
-        const siteLeads = !!lead && beatsSpaceRecord(space, lead.score, cert);
-        const values = [cert, lead?.score].filter((v): v is number => typeof v === "number");
-        if (!values.length && hasRecord(p)) continue;
-        const best = values.length ? Math.min(...values) : null;
-        const bound = p.bound?.value ?? null;
-        const gap = bound === null || best === null ? SPACE_GAP_CAP : (best - bound) / best;
-        if (!(gap > SPACE_SETTLED_GAP)) continue;
-        // nothing can be kept when beating the record by its margin would take an entry below the
-        // lower bound (polyhedra records that meet their volume bound to within the clearance)
-        if (
-          cert !== null &&
-          bound !== null &&
-          !(cert * (1 - SPACE_RECORD_MARGIN[space]) > bound * (1 - SPACE_BOUND_SLACK))
-        )
-          continue;
-        const value = Math.min(gap, SPACE_GAP_CAP) * weight;
-        sums.set(space, (sums.get(space) ?? 0) + value);
-        out.push({
-          space,
-          id: p.id,
-          P: p.P,
-          priority: value,
-          best_score: best,
-          bound,
-          leader: siteLeads ? "site" : cert !== null ? "certified" : "none",
-          leader_id: siteLeads ? lead!.id : null,
-        });
-      }
-    }
-    for (const t of out) t.priority /= sums.size * sums.get(t.space)!;
-    const order = (s: SpaceName) => SPACE_NAMES.indexOf(s);
-    return out.sort(
-      (a, b) =>
-        b.priority - a.priority ||
-        a.P - b.P ||
-        order(a.space) - order(b.space) ||
-        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-    );
-  };
-
-  app.get("/api/spaces/targets", async (c) => {
-    const errors: string[] = [];
-    // each parameter at most once and by its own name, as /api/targets
-    for (const [name, values] of Object.entries(c.req.queries())) {
-      if (!["limit", "spaces", "max_P"].includes(name))
-        errors.push(`unknown parameter ${name}: the parameters are spaces, max_P and limit`);
-      else if (values.length > 1) errors.push(`${name} is given more than once`);
-    }
-    const limitText = c.req.query("limit");
-    const limit = limitText === undefined ? SPACE_TARGETS_DEFAULT_LIMIT : decimalInteger(limitText);
-    if (!(limit >= 1 && limit <= SPACE_TARGETS_MAX_LIMIT))
-      errors.push(`limit must be an integer from 1 to ${SPACE_TARGETS_MAX_LIMIT}`);
-    const maxPText = c.req.query("max_P");
-    const maxP = maxPText === undefined ? Infinity : decimalInteger(maxPText);
-    if (!(maxP >= 1)) errors.push("max_P must be a positive integer");
-    const spacesText = c.req.query("spaces");
-    let wanted: Set<SpaceName> | null = null;
-    if (spacesText !== undefined && spacesText !== "all") {
-      const names = spacesText.split(",");
-      if (!names.every(isSpaceName))
-        errors.push(`spaces must be all or a comma-separated list of ${SPACE_NAMES.join(", ")}`);
-      else wanted = new Set(names);
-    }
-    if (errors.length) return c.json({ error: errors.join("; ") }, 400);
-    const at = version;
-    let current = ranking;
-    if (!current) {
-      current = { list: await rank(), items: null, at: Date.now() };
-      // a ranking read across a change is answered but not kept
-      if (at === version) ranking = current;
-    }
-    // One list per filter, shared by every limit: a max_P at or above every listed P is no filter.
-    const spacesKey = wanted ? SPACE_NAMES.filter((s) => wanted.has(s)).join(",") : "all";
-    const largestP = Math.max(
-      0,
-      ...SPACE_NAMES.filter((s) => !wanted || wanted.has(s)).map((s) => index[s]?.maxP ?? 0),
-    );
-    const key = `${spacesKey}|${maxP >= largestP ? "all" : maxP}`;
-    let list = targetLists.get(key);
-    if (list) {
-      // the most recently used goes last
-      targetLists.delete(key);
-      targetLists.set(key, list);
-    } else {
-      list = encodeList(current, (t) => (!wanted || wanted.has(t.space)) && t.P <= maxP);
-      if (at === version) {
-        targetLists.set(key, list);
-        targetsBytes += list.size;
-        targetsChanged();
-      }
-    }
-    const kept = list;
-    const n = Math.min(limit, kept.ends.length);
-    const whole = n === kept.ends.length;
-    // the common lengths are also kept compressed; the others are served as they are
-    if ((whole || SPACE_TARGETS_GZIP_LENGTHS.includes(n)) && acceptsGzip(c.req.header("accept-encoding"))) {
-      let packed = kept.gzips.get(n);
-      if (!packed) {
-        packed = { bytes: whole ? kept.bytes : concat(prefixOf(kept, n), CLOSE), gzip: null };
-        kept.gzips.set(n, packed);
-      }
-      const z = await gzipOf(packed, (bytes) => {
-        // only the gzip is kept: a plain answer is a prefix of the list's own bytes
-        if (!whole) packed!.bytes = kept.bytes.subarray(0, 0);
-        kept.size += bytes;
-        if ([...targetLists.values()].includes(kept)) {
-          targetsBytes += bytes;
-          targetsChanged();
-        }
-      });
-      if (z) return c.body(z, 200, { ...jsonHeaders, "content-encoding": "gzip" });
-    }
-    if (whole) return c.body(kept.bytes, 200, jsonHeaders);
-    // a prefix of the shared bytes, then "]}": nothing is copied
-    const prefix = prefixOf(kept, n);
-    const body = new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(prefix);
-        controller.enqueue(CLOSE);
-        controller.close();
-      },
-    });
-    return c.body(body, 200, { ...jsonHeaders, "content-length": String(prefix.byteLength + CLOSE.byteLength) });
-  });
-
-  /** The bytes of a list up to the end of its n-th target (the opening of the answer when n is 0). */
-  const prefixOf = (list: EncodedList, n: number) => list.bytes.subarray(0, n ? list.ends[n - 1] : list.head);
-  const concat = (a: Uint8Array, b: Uint8Array) => {
-    const out = new Uint8Array(a.byteLength + b.byteLength);
-    out.set(a, 0);
-    out.set(b, a.byteLength);
-    return out;
-  };
-
-  /**
-   * The targets of the ranking that pass a filter, encoded as one answer {"generated_at", "targets"} (the
-   * same text as JSON.stringify of it) with the end of each target. The targets are encoded once per ranking.
-   */
-  const encodeList = (current: NonNullable<typeof ranking>, keep: (t: SpaceTarget) => boolean): EncodedList => {
-    const items = (current.items ??= current.list.map((t) => encode(JSON.stringify(t))));
-    const open = encode(`{"generated_at":${JSON.stringify(new Date(current.at).toISOString())},"targets":[`);
-    const picked: number[] = [];
-    let total = open.byteLength + CLOSE.byteLength;
-    for (let i = 0; i < current.list.length; i++)
-      if (keep(current.list[i])) {
-        total += items[i].byteLength + (picked.length ? 1 : 0);
-        picked.push(i);
-      }
-    const bytes = new Uint8Array(total);
-    const ends = new Uint32Array(picked.length);
-    bytes.set(open, 0);
-    let at = open.byteLength;
-    picked.forEach((i, k) => {
-      if (k) bytes[at++] = 44; // ","
-      bytes.set(items[i], at);
-      at += items[i].byteLength;
-      ends[k] = at;
-    });
-    bytes.set(CLOSE, at);
-    return { bytes, ends, head: open.byteLength, gzips: new Map(), size: bytes.byteLength + ends.byteLength };
-  };
 
   // Share links: a stored entry with its configuration. 404 also once it was overtaken (only the
   // leader of a problem is kept) or removed.

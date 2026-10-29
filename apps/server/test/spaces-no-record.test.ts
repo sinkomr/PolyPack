@@ -9,7 +9,6 @@ import {
   SpaceDomain,
   SpaceRecordsResponse,
   SpaceSubmitResponse,
-  SpaceTargetsResponse,
   SpacesIndex,
   SpacesResponse,
   buildSpaceCatalogue,
@@ -17,7 +16,6 @@ import {
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApp } from "../src/app";
-import { SPACE_DOMAIN_TARGETS, SPACE_GAP_CAP, domainTargetIds } from "../src/spaces";
 import { SqliteStore } from "../src/sqlite-store";
 import { withUnits } from "./units";
 
@@ -164,44 +162,16 @@ describe("a problem without a research record", () => {
     expect(one.body.status).toBe("no_record");
   });
 
-  it("is a target with the largest room, and then with its site leader's", async () => {
-    let targets = (await get("/api/spaces/targets?limit=20000")).body as SpaceTargetsResponse;
-    let t = targets.targets.find((x) => x.id === ID)!;
-    expect(t).toMatchObject({ best_score: null, leader: "none", leader_id: null, bound: L2 });
-    // the domain's sample, not the whole domain: torus/sq/0/49 is offered, torus/sq/0/48 is not
-    expect(targets.targets.find((x) => x.id === "torus/sq/0/49")).toMatchObject({ best_score: null, bound: null });
-    expect(targets.targets.find((x) => x.id === "torus/sq/0/48")).toBeUndefined();
-    // the largest room, SPACE_GAP_CAP: no torus problem of the same P (the same weight) ranks above it
-    const peers = targets.targets.filter((x) => x.space === "torus" && x.P === 2 && x.id !== ID);
-    for (const x of peers) expect(t.priority, x.id).toBeGreaterThanOrEqual(x.priority * (1 - 1e-12));
-    expect(SPACE_GAP_CAP).toBeGreaterThan(0);
-    await submit(entry(twoDisks(1.01)));
-    targets = (await get("/api/spaces/targets?limit=20000")).body as SpaceTargetsResponse;
-    t = targets.targets.find((x) => x.id === ID)!;
-    expect(t.leader).toBe("site");
-    expect(t.best_score).toBeCloseTo(L2 * 1.01, 12);
-    // a problem of the domain outside the sample comes into the list once it has an entry: 48 disks on a grid
+  it("takes an entry for any problem of its domain, as a random draw offers it", async () => {
+    // 48 disks on a grid: torus/sq/0/48 has neither a research record nor an entry
     const grid = {
       lattice: { L: 16 },
       poses: Array.from({ length: 48 }, (_, i) => [2 * (i % 8), 2 * Math.floor(i / 8), 0]),
     };
     const kept = await submit({ ...entry(grid), id: "torus/sq/0/48" });
     expect(kept.body).toMatchObject({ valid: true, leader: true });
-    targets = (await get("/api/spaces/targets?limit=20000")).body as SpaceTargetsResponse;
-    expect(targets.targets.find((x) => x.id === "torus/sq/0/48")).toMatchObject({ leader: "site", best_score: 16 });
-  });
-
-  it("is offered from the sample until it has an entry, and the sample then moves on to the next problem", () => {
-    const cat = withoutRecord().torus!;
-    expect(domainTargetIds(cat, [], 1)).toEqual([ID]);
-    // torus/sq/0/2 has an entry: it stays (through its leader), and the next problem of the sample comes in
-    expect(domainTargetIds(cat, [ID], 1)).toEqual([ID, "torus/sq/0/49"]);
-    // records are never sampled again, and a space without a domain adds nothing
-    expect(domainTargetIds({ ...cat, byId: new Map([[ID, cat.byId.values().next().value!]]) }, [], 1)).toEqual([
-      "torus/sq/0/49",
-    ]);
-    expect(domainTargetIds(index.boundary!, [], 5)).toEqual([]);
-    expect(domainTargetIds(index.sphere!, [], 5)).toHaveLength(5);
+    const one = await get("/api/spaces/torus/problems/torus/sq/0/48");
+    expect(one.body).toMatchObject({ status: "no_record", best_score: 16 });
   });
 });
 
@@ -245,20 +215,5 @@ describe("a balls entry", () => {
     });
     expect((await submit(balls("balls/cubinball/2", cubes(0.45)))).status).toBe(422);
     expect((await submit(balls("balls/cubinball/2", cubes(0.6)))).body).toMatchObject({ valid: true, leader: true });
-  });
-
-  it("takes its problem out of the sample, whose next problem comes in", async () => {
-    const next = index.balls!.domain!.sample(SPACE_DOMAIN_TARGETS + 1)[SPACE_DOMAIN_TARGETS];
-    const ids = async () =>
-      ((await get("/api/spaces/targets?spaces=balls&limit=20000")).body as SpaceTargetsResponse).targets.map(
-        (t) => t.id,
-      );
-    expect(await ids()).not.toContain(next);
-    // an entry above the bound (two balls in a ball of diameter 2 would meet it, and leave nothing to search)
-    await submit(balls("balls/ballinball/2", two(0.55, 2.1)));
-    const after = await ids();
-    expect(after).toContain(next);
-    expect(after).toContain("balls/ballinball/2");
-    expect(after.length).toBe(SPACE_DOMAIN_TARGETS + 1);
   });
 });

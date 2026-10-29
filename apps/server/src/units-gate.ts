@@ -1,12 +1,15 @@
-import { isSpaceName, parseSpaceId } from "@polypack/spaces";
+import { isSpaceName } from "@polypack/spaces";
 import { planarFactors, spacePlan } from "./units-migration";
 
 /** Version of the API's conventions: 2 since the unit change (disk and ball pieces have diameter 1). */
 export const CONVENTIONS_VERSION = 2;
 /** The date the unit change was made (the first day of version 2). */
 export const UNITS_DATE = "2026-10-27";
-/** The first volunteer client that sends `units` and works in diameter units. */
-export const VOLUNTEER_MIN_VERSION = "0.2.0";
+/**
+ * The oldest volunteer client the server answers: 0.3.0 draws its problems itself, at random (2026-10-29), where 0.2.x read
+ * the work lists that were removed then; 0.2.0 was the first to send `units` and work in diameter units.
+ */
+export const VOLUNTEER_MIN_VERSION = "0.3.0";
 
 export const UNITS_EXPLANATION =
   `Since ${UNITS_DATE} (API conventions version ${CONVENTIONS_VERSION}) disk and ball pieces have diameter 1 (radius 1/2), ` +
@@ -14,11 +17,12 @@ export const UNITS_EXPLANATION =
   "by multiplying the x and y of every piece by 1/2 (disks in a polygon container: the score also halves; disks in a circle: " +
   "the score stays; polygons in a circle: the score doubles).";
 
-/** The sentence an old client is answered with (426). */
+/** The sentence an old volunteer client is answered with (426). */
 export const UPGRADE_MESSAGE =
-  `${UNITS_EXPLANATION} This request is from a client that still works in the old units: update the PolyPack volunteer client to ` +
-  `${VOLUNTEER_MIN_VERSION} or later (https://polypack.fly.dev/volunteer.html), or, for your own client, convert as described and send ` +
-  `"units": "diameter" with every submission to a problem with disk or ball pieces or a circle or ball container.`;
+  "This volunteer client is out of date. Since 2026-10-29 the client draws each problem at random itself, and the work " +
+  "lists that earlier versions read (/api/targets and /api/spaces/targets) were removed; versions before 0.2.0 also work " +
+  `in the units before ${UNITS_DATE}, with disks and balls of radius 1. Update the PolyPack volunteer client to ` +
+  `${VOLUNTEER_MIN_VERSION} or later: https://polypack.fly.dev/volunteer.html`;
 
 export const UNITS_MISSING_MESSAGE =
   `this problem has disk or ball pieces or a circle or ball container, and the units changed on ${UNITS_DATE}: ` +
@@ -51,23 +55,8 @@ export function spaceAffected(space: string, id: string): boolean {
   return spacePlan(space, id) !== null;
 }
 
-/** True for an id of /api/spaces/... in the path of a space problem that the unit change did not touch. */
-export function spacePathUnaffected(path: string): boolean {
-  const m = /^\/api\/spaces\/([a-z]+)\/problems\/(.+)$/.exec(path);
-  if (!m || !isSpaceName(m[1])) return false;
-  let id: string;
-  try {
-    id = decodeURIComponent(m[2]);
-  } catch {
-    return false;
-  }
-  return typeof parseSpaceId(m[1], id) !== "string" && !spaceAffected(m[1], id);
-}
-
-/** What a request from an old volunteer may still read: the index, the health check and the snapshot. */
+/** What a request from an old volunteer may still read: the API page, the health check and the snapshot. */
 export function oldClientMayRead(method: string, path: string): boolean {
-  if (path === "/api" || path === "/api/health" || path === "/api/snapshot" || path.startsWith("/api/snapshot/")) return true;
-  const planar = /^\/api\/(?:problems|leaderboard)\/(\d+)\/(\d+)\/\d+$/.exec(path);
-  if (method === "GET" && planar) return !planarAffected(Number(planar[1]), Number(planar[2]));
-  return method === "GET" && spacePathUnaffected(path);
+  if (method !== "GET") return false;
+  return path === "/api" || path === "/api/health" || path === "/api/snapshot" || path.startsWith("/api/snapshot/");
 }

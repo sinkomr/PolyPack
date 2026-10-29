@@ -44,7 +44,7 @@ export interface HttpOptions {
   maxFailures?: number;
   timeoutMs?: number;
   maxAnswerBytes?: number;
-  /** Called once, with the server's explanation, when it answers 426: this client works in units the server has left. */
+  /** Called once, with the server's explanation, when it answers 426: the server no longer answers this client's version. */
   onUpgradeRequired?: (message: string) => void;
 }
 
@@ -188,7 +188,7 @@ export class Api {
         // not JSON: keep the text
       }
       if (response.status === 426 && !this.upgradeReported) {
-        // 426: the server has changed units (2026-10-27) and takes this client's packings as valid but poor, or not at all
+        // 426: this client is older than the oldest the server answers (0.2.x read the work lists removed on 2026-10-29)
         this.upgradeReported = true;
         const said = (parsed as { error?: unknown; reasons?: unknown } | null)?.error;
         this.onUpgradeRequired?.(typeof said === "string" ? said : "the server requires a newer client");
@@ -271,21 +271,12 @@ export class Api {
     }
   }
 
-  targets(query = ""): Promise<Answer | null> {
-    return this.get(`/api/targets${query}`);
-  }
-
   problem(p: Problem): Promise<Answer | null> {
     return this.get(`/api/problems/${p.N}/${p.M}/${p.P}`);
   }
 
   entry(id: number): Promise<Answer | null> {
     return this.get(`/api/submissions/${id}`);
-  }
-
-  /** GET /api/spaces/targets, the optional work list of the new spaces. */
-  spaceTargets(query = ""): Promise<Answer | null> {
-    return this.get(`/api/spaces/targets${query}`);
   }
 
   /** GET /api/spaces/:space/problems/<id>; the id has passed parseSpaceId, so it needs no escaping. */

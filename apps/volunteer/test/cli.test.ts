@@ -54,11 +54,17 @@ async function clientWith(argv: string[], deps: MainDeps = {}, onLine?: (line: s
       ...(deps.checkBattery ? [] : ["--no-battery-pause"]),
       ...argv,
     ],
-    { out: take, err: take, signals: false, searchProblem: oneJob, ...deps },
+    { out: take, err: take, signals: false, searchProblem: oneJob, kinds: server!.kinds(), ...deps },
   );
   return { code, output: lines.join("\n") };
 }
 const client = (...argv: string[]) => clientWith(argv);
+
+/** A random source that returns the given values in turn, again and again. */
+const cycle = (...values: number[]) => {
+  let i = 0;
+  return () => values[i++ % values.length];
+};
 
 const history = (): HistoryLine[] =>
   readFileSync(join(dir, "state", "history.jsonl"), "utf8")
@@ -143,7 +149,6 @@ describe("the client, end to end", () => {
 
     const paths = server.requests.map((r) => `${r.method} ${r.path}`);
     expect(paths).toEqual([
-      "GET /api/targets",
       "GET /api/problems/4/4/3",
       `GET /api/submissions/${before.id}`,
       "GET /api/problems/4/4/3", // the leader again, just before submitting
@@ -207,30 +212,35 @@ describe("the client, end to end", () => {
   });
 
   // Real solver work, as above.
-  it("does not submit when the leader is better, and skips the problem next time", { timeout: 60_000 }, async () => {
-    // three squares cannot beat side 2; a leader of side 2 cannot be improved
-    const optimal = {
-      ...LOOSE_SQUARES,
-      leader: {
-        ...LOOSE_SQUARES.leader!,
-        pieces: [
-          { x: 0, y: 0, theta: Math.PI / 4 },
-          { x: 1, y: 0, theta: Math.PI / 4 },
-          { x: 0, y: 1, theta: Math.PI / 4 },
-        ],
-      },
-    };
-    server = await startFakeServer({ problems: [optimal] });
-    const first = await client("--once", "--name", "Test volunteer");
-    expect(first.code, first.output).toBe(0);
-    expect(server.submissions).toEqual([]);
-    expect(history()[0]).toMatchObject({ submitted: false, decision: "not better than the leader" });
+  it(
+    "does not submit when the leader is better, and with no other problem searches it again",
+    { timeout: 60_000 },
+    async () => {
+      // three squares cannot beat side 2; a leader of side 2 cannot be improved
+      const optimal = {
+        ...LOOSE_SQUARES,
+        leader: {
+          ...LOOSE_SQUARES.leader!,
+          pieces: [
+            { x: 0, y: 0, theta: Math.PI / 4 },
+            { x: 1, y: 0, theta: Math.PI / 4 },
+            { x: 0, y: 1, theta: Math.PI / 4 },
+          ],
+        },
+      };
+      server = await startFakeServer({ problems: [optimal] });
+      const first = await client("--once", "--name", "Test volunteer");
+      expect(first.code, first.output).toBe(0);
+      expect(server.submissions).toEqual([]);
+      expect(history()[0]).toMatchObject({ submitted: false, decision: "not better than the leader" });
 
-    const second = await client("--once", "--name", "Test volunteer");
-    expect(second.code).toBe(0);
-    expect(second.output).toMatch(/Nothing to search/);
-    expect(history()).toHaveLength(1);
-  });
+      // searched here today, but the draw has nothing else to offer: searched again rather than waited for
+      const second = await client("--once", "--name", "Test volunteer");
+      expect(second.code, second.output).toBe(0);
+      expect(second.output).toMatch(/Searching N=4 M=4 P=3: leader/);
+      expect(history()).toHaveLength(2);
+    },
+  );
 
   // Real solver work: two 2 s jobs (active time) on twenty pentagons, paused for about 1 s once
   // the search has started. The pause is triggered by the client's own output, not by a clock.
@@ -412,22 +422,30 @@ describe("the client, end to end", () => {
   );
 
   it("contains an unexpected error to its problem and goes on (fix 2)", { timeout: 60_000 }, async () => {
-    server = await startFakeServer({ problems: [{ ...LOOSE_SQUARES, priority: 100 }, TWO_CIRCLES] });
-    // the engine breaks the contract on one problem: a "best" without a packing
-    const broken: SearchProblem = async (input, runJob, control) =>
-      input.problem.P === 3
-        ? { best: { score: 1, strict: true } as Candidate, jobs: 0, stopped: "time", memory: null }
-        : oneJob(input, runJob, control);
-    const once = await clientWith(["--once", "--name", "Test volunteer"], { searchProblem: broken, random: () => 0 });
+    server = await startFakeServer({ problems: [LOOSE_SQUARES, TWO_CIRCLES] });
+    // the engine breaks the contract on one problem: a "best" without a packing; after the other
+    // problem the fake clock below jumps past the --hours limit, which ends the run
+    let offset = 0;
+    const broken: SearchProblem = async (input, runJob, control) => {
+      if (input.problem.P === 3)
+        return { best: { score: 1, strict: true } as Candidate, jobs: 0, stopped: "time", memory: null };
+      const r = await oneJob(input, runJob, control);
+      offset += 2 * 3600_000;
+      return r;
+    };
+    // the first draw is LOOSE_SQUARES (the first fixture), the second TWO_CIRCLES
+    const once = await clientWith(["--once", "--name", "Test volunteer"], {
+      searchProblem: broken,
+      random: cycle(0, 0),
+    });
     expect(once.code, once.output).toBe(1);
     expect(once.output).toMatch(/Skipping N=4 M=4 P=3 for 10 minutes after an unexpected error: TypeError/);
 
     // without --once the client carries on with the other problem; a fake clock that sleeps
     // instantly lets the --hours limit end the run
-    let offset = 0;
     const run = await clientWith(["--name", "Test volunteer", "--hours", "1"], {
       searchProblem: broken,
-      random: () => 0,
+      random: cycle(0, 0, 0.75, 0.75),
       now: () => Date.now() + offset,
       sleep: async (ms, signal) => {
         if (signal?.aborted) throw new Error("aborted");
@@ -452,6 +470,8 @@ describe("the client, end to end", () => {
       const searched: string[] = [];
       let release!: () => void;
       const together = new Promise<void>((resolve) => (release = resolve));
+      let bothDone!: () => void;
+      const allDone = new Promise<void>((resolve) => (bothDone = resolve));
       const both: SearchProblem = async (input, runJob, control) => {
         active++;
         most = Math.max(most, active);
@@ -464,13 +484,20 @@ describe("the client, end to end", () => {
           return await oneJob(input, runJob, control);
         } finally {
           active--;
+          // the two end together, and then the fake clock jumps past the --hours limit, which ends the run
+          // before either slot draws again
+          if (active === 0) {
+            offset += 2 * 3600_000;
+            bothDone();
+          } else await Promise.race([allDone, delay(10_000)]);
         }
       };
       // a fake clock that moves on only while no search runs: the --hours limit ends the run once both are done
       let offset = 0;
       const run = await clientWith(["--name", "Test volunteer", "--hours", "1", "--parallel-problems", "2"], {
         searchProblem: both,
-        random: () => 0,
+        // the slots draw LOOSE_SQUARES and TWO_CIRCLES (a slot does not draw the other's problem)
+        random: cycle(0, 0, 0.75, 0.75),
         statusEveryMs: 100,
         now: () => Date.now() + offset,
         sleep: async (ms, signal) => {
@@ -485,7 +512,7 @@ describe("the client, end to end", () => {
       expect(lanes).toEqual([1, 1]);
       expect(searched.sort()).toEqual(["0/0/2", "4/4/3"]);
       expect(run.output).toMatch(/2 search thread\(s\) on \d+ core\(s\), 2 problems at once \(1 and 1 threads\)/);
-      expect(run.output).toMatch(/Searching N=4 M=4 P=3 .* on 1 thread\(s\)/);
+      expect(run.output).toMatch(/Searching N=4 M=4 P=3: .* on 1 thread\(s\)/);
       // their lines name their problem, and the status line shows both
       expect(run.output).toMatch(/\n\[[^\]]+\]   N=4 M=4 P=3: best so far/);
       expect(run.output).toMatch(/\n\[[^\]]+\]   N=0 M=0 P=2: best so far/);
@@ -559,14 +586,6 @@ describe("the client, end to end", () => {
     // whatever it found, anything it sent was valid and better than the leader
     for (const body of server.submissions) expect(scoreOf(body as never)!).toBeLessThan(2.5);
     expect(server.submissions.length).toBe(line.submitted ? 1 : 0);
-  });
-
-  it("explains a server without a work list and exits non-zero", { timeout: 30_000 }, async () => {
-    server = await startFakeServer({ problems: [LOOSE_SQUARES], noTargets: true });
-    const { code, output } = await client("--once", "--name", "Test volunteer");
-    expect(code).toBe(1);
-    expect(output).toMatch(/GET \/api\/targets answered 404/);
-    expect(server.submissions).toEqual([]);
   });
 
   it("refuses to share its state directory with a running copy", { timeout: 30_000 }, async () => {

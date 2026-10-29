@@ -9,27 +9,15 @@ import {
   PackingConfig,
   SCORE_TIE,
   SubmitResponse,
-  TARGET_WEIGHTS,
-  TargetsResponse,
   areaLowerBound,
   closedToSubmissions,
   evaluate,
   improvesOn,
   isProven,
-  rankTargets,
 } from "@polypack/geometry";
 import { registry } from "@polypack/solver";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ATLAS_MAX_PIECES,
-  ATLAS_MAX_SPAN,
-  HOLDERS_REFRESH_MS,
-  TARGETS_DEFAULT_LIMIT,
-  TARGETS_MAX_LIMIT,
-  TARGETS_REFRESH_MS,
-  atlasSource,
-  createApp,
-} from "../src/app";
+import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, HOLDERS_REFRESH_MS, atlasSource, createApp } from "../src/app";
 import { SOLVER_METHODS } from "../src/docs";
 import { SqliteStore } from "../src/sqlite-store";
 import { GET_MANY_LIMIT, NewSubmission } from "../src/store";
@@ -1592,218 +1580,10 @@ describe("the API page", () => {
   });
 });
 
-describe("GET /api/targets", () => {
-  // squares in a square: 2 closed, 3 published as 5.00 without coordinates, 5 published as
-  // 2.707107 with coordinates (all made up)
-  const records: LiteratureRecord[] = [
-    { ...fakeRecord, P: 2, value: 2, display: "2", display_precision: 6, status: "proven" },
-    fakeRecord,
-    { ...fakeRecord, P: 5, value: 2.707107, display: "2.707107", display_precision: 6, pieces: row(5) },
-  ];
-  let store: SqliteStore;
-  const make = (extra: { holdersRefreshMs?: number; targetsRefreshMs?: number } = {}) => {
-    store = new SqliteStore(":memory:");
-    app = createApp({ store, records, adminToken: "secret", clientIp: () => ip, log: (m) => logs.push(m), ...extra });
-  };
-  const targets = async (query = "") => {
-    const r = await get(`/api/targets${query}`);
-    return { status: r.status, body: r.body as TargetsResponse & { error?: string } };
-  };
-  const squaresOnly = "?N=4&M=4&max_P=6";
-  beforeEach(() => make());
-
-  it("ranks the open problems with what is known of each", async () => {
-    const four = (await submit(squares(4, { name: "ann" }))).body;
-    const five = (await submit(squares(5, { name: "bob" }))).body;
-    const { status, body } = await targets(squaresOnly);
-    expect(status).toBe(200);
-    expect(Date.parse(body.generated_at)).not.toBeNaN();
-    // the closed problem is left out; the empty ones come first, then the published value without
-    // a leader, then the leader behind a drawn packing, then the tooth at P = 4
-    expect(body.targets.map((t) => [t.P, t.reason])).toEqual([
-      [1, "unsolved"],
-      [6, "unsolved"],
-      [3, "behind_published"],
-      [5, "behind_published"],
-      [4, "tooth"],
-    ]);
-    const at = (P: number) => body.targets.find((t) => t.P === P)!;
-    expect(at(1)).toEqual({
-      N: 4,
-      M: 4,
-      P: 1,
-      reason: "unsolved",
-      priority: TARGET_WEIGHTS.unsolved,
-      leader: null,
-      leader_id: null,
-      published: null,
-      published_coordinates: false,
-      area_bound: areaLowerBound(4, 4, 1),
-    });
-    expect(at(3)).toMatchObject({ leader: null, published: 5, published_coordinates: false });
-    expect(at(3).priority).toBe(TARGET_WEIGHTS.missingLeaderGap);
-    expect(at(5)).toMatchObject({ leader: five.score, leader_id: five.id, published: 2.707107 });
-    expect(at(5).published_coordinates).toBe(true);
-    expect(at(5).priority).toBeCloseTo((TARGET_WEIGHTS.drawnPublished * (five.score! - 2.707107)) / five.score!, 15);
-    expect(at(4)).toMatchObject({ leader: four.score, leader_id: four.id, published: null });
-    expect(at(4).area_bound).toBeCloseTo(2, 12);
-    // the answer is the shared ranking itself
-    const ranking = rankTargets(
-      [four, five].map((s, i) => ({ N: 4, M: 4, P: 4 + i, id: s.id!, score: s.score! })),
-      records,
-    );
-    expect(body.targets).toEqual(ranking.select({ N: [4], M: [4], maxP: 6 }));
-  });
-
-  it("filters the ranking and caps the answer", async () => {
-    // nothing stored: the core box minus the closed problem, all unsolved, by P, N, M
-    let r = await targets();
-    expect(r.body.targets).toHaveLength(TARGETS_DEFAULT_LIMIT);
-    expect(r.body.targets.slice(0, 3).map((t) => `${t.N}/${t.M}/${t.P}`)).toEqual(["0/0/1", "0/3/1", "0/4/1"]);
-    expect((await targets(`?limit=${TARGETS_MAX_LIMIT}`)).body.targets).toHaveLength(TARGETS_MAX_LIMIT);
-    r = await targets("?N=0,3-5&M=12&max_P=2&limit=100");
-    expect(r.body.targets.map((t) => `${t.N}/${t.M}/${t.P}`)).toEqual([
-      "0/12/1",
-      "3/12/1",
-      "4/12/1",
-      "5/12/1",
-      "0/12/2",
-      "3/12/2",
-      "4/12/2",
-      "5/12/2",
-    ]);
-    // a range skips 1 and 2; repeated shapes count once
-    expect((await targets("?N=0-3,3&M=0&max_P=1")).body.targets.map((t) => t.N)).toEqual([0, 3]);
-    // shapes outside the core box have nothing unsolved
-    expect((await targets("?N=13-100")).body.targets).toEqual([]);
-    expect((await targets("?N=4&M=4&max_P=2")).body.targets.map((t) => t.P)).toEqual([1]);
-  });
-
-  it("parses its query strictly", async () => {
-    for (const bad of [
-      "limit=0",
-      `limit=${TARGETS_MAX_LIMIT + 1}`,
-      "limit=",
-      "limit=1e2",
-      "limit=-1",
-      "limit=5.0",
-      "limit=0x10",
-      "max_P=0",
-      "max_P=501",
-      "max_P=",
-      "max_P=+3",
-      "N=",
-      "N=2",
-      "N=1-4",
-      "N=4-101",
-      "N=6-3",
-      "N=3-",
-      "N=3,,4",
-      "N=3,",
-      "N=%203",
-      "N=0x3",
-      "N=3.0",
-      "M=101",
-      "M=a",
-      "M=1000",
-      // a repeated parameter, even with the same value, and misspelt or unknown ones
-      "N=3&N=x",
-      "N=3&N=3",
-      "limit=5&limit=0",
-      "n=3",
-      "max_p=1",
-      "maxP=1",
-      "limit=5&page=2",
-    ]) {
-      const r = await targets(`?${bad}`);
-      expect([bad, r.status]).toEqual([bad, 400]);
-      expect(r.body.error).toBeTruthy();
-    }
-    // several errors are named together
-    expect((await targets("?limit=0&M=2")).body.error).toMatch(/limit.*; M must be/);
-    for (const good of ["limit=1", "limit=2000", "max_P=1", "max_P=500", "N=0", "N=100", "N=0-100", "M=007"])
-      expect([good, (await targets(`?${good}`)).status]).toEqual([good, 200]);
-  });
-
-  it("shares one reading of the leaders with /api/holders and ranks again at most every TARGETS_REFRESH_MS", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      const reads = vi.spyOn(store, "leaders");
-      const start = Date.parse("2026-10-21T12:00:00Z");
-      vi.setSystemTime(start);
-      const leaderOf = async (P: number) => (await targets(`?N=4&M=4&max_P=6`)).body.targets.find((t) => t.P === P);
-      expect((await get("/api/holders")).body.holders).toEqual([]);
-      expect(await leaderOf(4)).toMatchObject({ reason: "unsolved", leader: null });
-      expect(reads).toHaveBeenCalledTimes(1);
-      expect((await targets()).body.generated_at).toBe(new Date(start).toISOString());
-
-      const four = (await submit(squares(4, { name: "ann" }))).body;
-      vi.setSystemTime(start + HOLDERS_REFRESH_MS - 1);
-      expect((await get("/api/holders")).body.holders).toEqual([]);
-      expect((await leaderOf(4))!.leader).toBeNull();
-      expect(reads).toHaveBeenCalledTimes(1);
-      // HOLDERS_REFRESH_MS on, the holders are counted again, but the ranking is kept for longer
-      vi.setSystemTime(start + HOLDERS_REFRESH_MS);
-      expect((await get("/api/holders")).body.holders.map((h: { name: string }) => h.name)).toEqual(["ann"]);
-      expect(reads).toHaveBeenCalledTimes(2);
-      vi.setSystemTime(start + TARGETS_REFRESH_MS - 1);
-      expect((await leaderOf(4))!.leader).toBeNull();
-      // then it is ranked again from the reading the holders took, which nothing has changed since
-      vi.setSystemTime(start + TARGETS_REFRESH_MS);
-      expect(await leaderOf(4)).toMatchObject({ leader: four.score, leader_id: four.id });
-      expect(reads).toHaveBeenCalledTimes(2);
-      expect((await targets()).body.generated_at).toBe(new Date(start + TARGETS_REFRESH_MS).toISOString());
-      // without a change the ranking stands however old it is, and the first change after
-      // TARGETS_REFRESH_MS shows at once
-      vi.setSystemTime(start + 5 * TARGETS_REFRESH_MS);
-      expect((await leaderOf(4))!.leader_id).toBe(four.id);
-      expect(reads).toHaveBeenCalledTimes(2);
-      const six = (await submit(squares(6, { name: "bob" }))).body;
-      expect((await leaderOf(6))!.leader_id).toBe(six.id);
-      expect(reads).toHaveBeenCalledTimes(3);
-      // and the holders use that reading
-      expect((await get("/api/holders")).body.holders.map((h: { name: string }) => h.name)).toEqual(["ann", "bob"]);
-      expect(reads).toHaveBeenCalledTimes(3);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("follows every change when both waits are zero", async () => {
-    make({ holdersRefreshMs: 0, targetsRefreshMs: 0 });
-    const admin = (path: string, body: object) =>
-      app.request(path, {
-        method: "POST",
-        headers: { authorization: "Bearer secret", "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-    const reasonOf = async (P: number) =>
-      (await targets(squaresOnly)).body.targets.find((t) => t.P === P)?.reason ?? "absent";
-    expect(await reasonOf(3)).toBe("behind_published");
-    // a claim below the published 5.00 awaits review, and leads meanwhile
-    const claim = (await submit(squares(3, { name: "cy" }))).body;
-    expect(claim.pending_verification).toBe(true);
-    let three = (await targets(squaresOnly)).body.targets.find((t) => t.P === 3)!;
-    expect(three).toMatchObject({ reason: "slack", leader: claim.score, leader_id: claim.id });
-    expect((await admin("/api/admin/review", { id: claim.id, decision: "rejected" })).status).toBe(200);
-    three = (await targets(squaresOnly)).body.targets.find((t) => t.P === 3)!;
-    expect(three).toMatchObject({ reason: "behind_published", leader: null });
-    const four = (await submit(squares(4, { name: "ann" }))).body;
-    expect(await reasonOf(4)).toBe("tooth");
-    expect((await admin("/api/admin/remove", { id: four.id })).status).toBe(200);
-    expect(await reasonOf(4)).toBe("unsolved");
-  });
-
-  it("compresses the answer for clients that accept it", async () => {
-    const r = await app.request("/api/targets?limit=2000", { headers: { "accept-encoding": "gzip" } });
-    expect(r.status).toBe(200);
-    expect(r.headers.get("content-encoding")).toBe("gzip");
-  });
-
-  it("is documented", async () => {
-    const html = await (await app.request("/api")).text();
-    expect(html).toContain("GET /api/targets");
-    for (const weight of Object.values(TARGET_WEIGHTS)) expect(html).toContain(String(weight));
+describe("the volunteer work list", () => {
+  it("was removed: GET /api/targets is not a route", async () => {
+    expect((await app.request("/api/targets")).status).toBe(404);
+    expect((await app.request("/api/targets?limit=10")).status).toBe(404);
   });
 });
 

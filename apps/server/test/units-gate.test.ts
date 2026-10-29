@@ -135,50 +135,47 @@ describe("old volunteer clients", () => {
     expect(volunteerVersion("polypack-volunteer/1.0")).toEqual([1, 0, 0]);
     expect(volunteerVersion("curl/8")).toBeNull();
     expect(isOldVolunteer("polypack-volunteer/0.1.9")).toBe(true);
-    expect(isOldVolunteer("polypack-volunteer/0.2.0")).toBe(false);
+    expect(isOldVolunteer("polypack-volunteer/0.2.0")).toBe(true);
+    expect(isOldVolunteer("polypack-volunteer/0.2.9")).toBe(true);
+    expect(isOldVolunteer("polypack-volunteer/0.3.0")).toBe(false);
     expect(isOldVolunteer("polypack-volunteer/0.10.0")).toBe(false);
     expect(isOldVolunteer("polypack-volunteer/1.0.0")).toBe(false);
     expect(isOldVolunteer(undefined)).toBe(false);
   });
 
-  it("get 426 from every route that could mislead them, with the way to upgrade", async () => {
-    const old = "polypack-volunteer/0.1.4";
-    for (const path of [
-      "/api/problems/0/0/5",
-      "/api/problems/0/4/5",
-      "/api/problems/7/0/5",
-      "/api/leaderboard/0/0/5",
-      "/api/targets",
-      "/api/records?N=0&M=0",
-      "/api/spaces/targets",
-      "/api/spaces/torus/problems/torus/sq/0/2",
-    ]) {
-      const r = await get(path, old);
-      expect(r.status, path).toBe(426);
-      const body = (await r.json()) as { error: string };
-      expect(body.error, path).toMatch(/0\.2\.0/);
-      expect(body.error, path).toMatch(/diameter 1/);
+  it("before 0.3.0 get 426 from every route but the API page, health and the snapshot, with the way to upgrade", async () => {
+    for (const old of ["polypack-volunteer/0.1.4", "polypack-volunteer/0.2.0"]) {
+      for (const path of [
+        "/api/problems/0/0/5",
+        "/api/problems/4/4/5",
+        "/api/leaderboard/4/4/5",
+        "/api/records?N=0&M=0",
+        "/api/targets",
+        "/api/spaces/targets",
+        "/api/spaces/torus/problems/torus/sq/4/5",
+      ]) {
+        const r = await get(path, old);
+        expect(r.status, `${old} ${path}`).toBe(426);
+        const body = (await r.json()) as { error: string };
+        expect(body.error, path).toMatch(/0\.3\.0 or later/);
+        expect(body.error, path).toMatch(/work lists/);
+        expect(body.error, path).toContain("https://polypack.fly.dev/volunteer.html");
+      }
+      const submit = await post("/api/submit", disks({ units: "diameter" }), { "user-agent": old });
+      expect(submit.status).toBe(426);
+      expect((await get("/api", old)).status).toBe(200);
+      expect((await get("/api/health", old)).status).toBe(200);
+      expect((await get("/api/snapshot", old)).status).toBe(404);
     }
-    const submit = await post("/api/submit", disks({ units: "diameter" }), { "user-agent": old });
-    expect(submit.status).toBe(426);
     expect(await (await get("/api/leaderboard/0/0/2")).json()).toMatchObject({ total: 0 });
-  });
-
-  it("may still read the index, health, the snapshot and the problems the change did not touch", async () => {
-    const old = "polypack-volunteer/0.1.4";
-    expect((await get("/api", old)).status).toBe(200);
-    expect((await get("/api/health", old)).status).toBe(200);
-    expect((await get("/api/problems/4/4/5", old)).status).toBe(200);
-    expect((await get("/api/leaderboard/4/4/5", old)).status).toBe(200);
-    expect((await get("/api/snapshot", old)).status).toBe(404);
-    expect((await get("/api/spaces/torus/problems/torus/sq/4/5", old)).status).not.toBe(426);
     expect(oldClientMayRead("POST", "/api/submit")).toBe(false);
+    expect(oldClientMayRead("POST", "/api/health")).toBe(false);
   });
 
-  it("are not hindered once they are 0.2.0, and nor are other clients", async () => {
-    for (const ua of ["polypack-volunteer/0.2.0", "polypack-volunteer/0.3.1", "curl/8.4", "Mozilla/5.0"]) {
+  it("are not hindered once they are 0.3.0, and nor are other clients", async () => {
+    for (const ua of ["polypack-volunteer/0.3.0", "polypack-volunteer/0.4.1", "curl/8.4", "Mozilla/5.0"]) {
       expect((await get("/api/problems/0/0/5", ua)).status, ua).toBe(200);
-      expect((await get("/api/targets?limit=1", ua)).status, ua).toBe(200);
+      expect((await get("/api/problems/57/91/400", ua)).status, ua).toBe(200);
     }
   });
 });

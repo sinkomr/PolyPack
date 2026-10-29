@@ -16,7 +16,6 @@ import {
   SpaceProblemResponse,
   SpaceRecordsResponse,
   SpaceSubmitResponse,
-  SpaceTargetsResponse,
   SpacesIndex,
   SpacesResponse,
   acceptsSubmissions,
@@ -37,16 +36,8 @@ import {
   SPACES_CHECKED_ONLY_IF_KEPT,
   SPACE_HEAVY_CHECKS_WAITING,
   SPACE_HEAVY_CHECK_P,
-  SPACE_DOMAIN_TARGETS,
-  domainTargetIds,
-  SPACE_GAP_CAP,
-  SPACE_SETTLED_GAP,
-  SPACE_TARGETS_DEFAULT_LIMIT,
-  SPACE_TARGETS_CACHE_BYTES,
-  SPACE_TARGETS_MAX_LIMIT,
   SpacesOptions,
   acceptsGzip,
-  spaceTargetWeight,
 } from "../src/spaces";
 import { SqliteStore } from "../src/sqlite-store";
 import { withUnits } from "./units";
@@ -1454,237 +1445,10 @@ describe("range-domain submissions", () => {
   });
 });
 
-describe("GET /api/spaces/targets", () => {
-  /** The work list as the rule says it should be, from the research records alone (no site entries). */
-  function expected(): Map<string, { space: SpaceName; P: number; raw: number }> {
-    const out = new Map<string, { space: SpaceName; P: number; raw: number }>();
-    for (const space of SPACE_NAMES) {
-      // a space with a domain: its records and the first SPACE_DOMAIN_TARGETS of its sample (no site entries here)
-      const cat = index[space]!;
-      const problems = [...cat.problems];
-      for (const id of domainTargetIds(cat, [], SPACE_DOMAIN_TARGETS)) {
-        const parsed = parseSpaceId(space, id);
-        if (typeof parsed !== "string" && !cat.byId.has(id)) problems.push(problemOf(cat, parsed)!);
-      }
-      for (const p of problems) {
-        // nofold problems are 2D in 2D problems, except on the Catalan solids (irregular faces)
-        const nofold2D =
-          space === "surface" && p.fields.mode === "nofold" && !SURFACE_CATALAN.includes(String(p.fields.solid));
-        if (!acceptsSubmissions(p) || nofold2D) continue;
-        const w = spaceTargetWeight(p.P);
-        // a problem without a record (and without site entries here) has the largest room
-        if (p.status === "no_record") {
-          if (w > 0) out.set(p.id, { space, P: p.P, raw: SPACE_GAP_CAP * w });
-          continue;
-        }
-        const gap = (p.certified!.score - p.bound!.value) / p.certified!.score;
-        // a record within its space's margin of the lower bound cannot be beaten by a kept entry
-        const unbeatable = !(
-          p.certified!.score * (1 - SPACE_RECORD_MARGIN[space]) >
-          p.bound!.value * (1 - SPACE_BOUND_SLACK)
-        );
-        if (gap > SPACE_SETTLED_GAP && w > 0 && !unbeatable)
-          out.set(p.id, { space, P: p.P, raw: Math.min(gap, SPACE_GAP_CAP) * w });
-      }
-    }
-    return out;
-  }
-
-  it("lists every open problem with room above its bound, all within the largest limit", async () => {
-    makeApp({}, index);
-    const r = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
-    const want = expected();
-    expect(r.targets.length).toBe(want.size);
-    expect(r.targets.length).toBeLessThan(SPACE_TARGETS_MAX_LIMIT);
-    expect(new Set(r.targets.map((t) => t.id))).toEqual(new Set(want.keys()));
-    for (let i = 1; i < r.targets.length; i++)
-      expect(r.targets[i].priority).toBeLessThanOrEqual(r.targets[i - 1].priority);
-    // closed problems, problems at their bound, P = 1 and the surface's nofold problems that are 2D in 2D never
-    const ids = new Set(r.targets.map((t) => t.id));
-    for (const id of ["sphere/0/2", "curved/1/5/0/2", "torus/sq/0/2", "torus/free/3/1", "surface/cube/nofold/4/12"])
-      expect(ids.has(id), id).toBe(false);
-    expect(r.targets.some((t) => t.P === 1)).toBe(false);
-    const nofold = r.targets.filter((t) => t.id.includes("/nofold/"));
-    expect(nofold.length).toBeGreaterThan(0);
-    expect(nofold.every((t) => SURFACE_CATALAN.includes(t.id.split("/")[1]))).toBe(true);
-    // polyhedra records at their volume bound to within the record margin: nothing can be kept below them
-    for (const id of ["cubincub/8", "cubincub/27", "cubincub/64", "pr3inpr3/8", "pr3inpr3/27", "pr3inpr3/64"])
-      expect(ids.has(`polyhedra/${id}`), id).toBe(false);
-    // the margin rule leaves the spaces whose margin is the tie tolerance as they were
-    expect(r.targets.filter((t) => t.space === "boundary").length).toBe(28);
-    for (const t of r.targets) {
-      const p = problemOf(index[t.space]!, parseSpaceId(t.space, t.id) as ParsedSpaceId)!;
-      // a problem without a record (the balls space) and without entries has no best and no leader yet
-      expect(t).toMatchObject({
-        leader: p.certified ? "certified" : "none",
-        leader_id: null,
-        best_score: p.certified ? p.certified.score : null,
-        bound: p.bound?.value ?? null,
-      });
-    }
-    // the balls space's domain is sampled, never listed whole: small P first
-    const balls = r.targets.filter((t) => t.space === "balls");
-    expect(balls.length).toBe(SPACE_DOMAIN_TARGETS);
-    expect(balls.every((t) => t.P <= 73)).toBe(true);
-  });
-
-  it("offers Archimedean fold targets and excludes nofold even with site entries", async () => {
-    makeApp({}, index);
-    const packings = JSON.parse(readFileSync(join(root, "python/surface/fixtures/archimedean_packings.json"), "utf8")).packings;
-    for (const p of packings.filter((p: { N: number }) => p.N === 0)) {
-      const before = await get(`/api/spaces/surface/problems/${p.id}`);
-      expect(before.status).toBe(200);
-      expect(before.body.status).toBe("no_record");
-      expect(before.body.certified_config).toBeNull();
-      expect((await submit({ space: "surface", id: p.id, config: { s: p.s, pieces: p.pieces }, name: "test" })).status).toBe(200);
-    }
-    const r = (await get(`/api/spaces/targets?spaces=surface&limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
-    const ids = new Set(r.targets.map((t) => t.id));
-    for (const p of packings.filter((p: { N: number }) => p.N === 0)) expect(ids.has(p.id), p.id).toBe(p.mode === "fold");
-    for (const solid of SURFACE_ARCHIMEDEAN) expect(ids.has(`surface/${solid}/fold/0/2`), solid).toBe(true);
-    expect(r.targets.some((t) => t.id.includes("/nofold/") && SURFACE_ARCHIMEDEAN.includes(t.id.split("/")[1]))).toBe(false);
-  });
-
-  it("gives every space an equal share of the priority: capped gap times min(1, (P - 1) / 5), scaled per space", async () => {
-    makeApp({}, index);
-    const r = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
-    const want = expected();
-    const sums = new Map<SpaceName, number>();
-    for (const v of want.values()) sums.set(v.space, (sums.get(v.space) ?? 0) + v.raw);
-    expect([...sums.keys()].sort()).toEqual([...SPACE_NAMES].sort());
-    const share = new Map<SpaceName, number>();
-    const n = SPACE_NAMES.length;
-    for (const t of r.targets) {
-      const v = want.get(t.id)!;
-      expect(t.priority / (v.raw / (n * sums.get(t.space)!)), t.id).toBeCloseTo(1, 12);
-      share.set(t.space, (share.get(t.space) ?? 0) + t.priority);
-    }
-    for (const s of SPACE_NAMES) expect(share.get(s), s).toBeCloseTo(1 / n, 12);
-    expect(spaceTargetWeight(1)).toBe(0);
-    expect(spaceTargetWeight(2)).toBeCloseTo(0.2, 15);
-    expect(spaceTargetWeight(6)).toBe(1);
-    expect(spaceTargetWeight(40)).toBe(1);
-    // the default list is the head of the whole list and holds problems of every space but polyhedra and balls:
-    // polyhedra's 14,850 problems share one space's share of the priority, so they come after the others' head;
-    // balls' 500 sampled problems all have the largest room, so their shares are about even and none is among the
-    // 500 largest
-    const first = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
-    expect(first.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
-    expect(first.targets.map((t) => t.id)).toEqual(r.targets.slice(0, SPACE_TARGETS_DEFAULT_LIMIT).map((t) => t.id));
-    expect(new Set(first.targets.map((t) => t.space))).toEqual(
-      new Set(SPACE_NAMES.filter((s) => s !== "polyhedra" && s !== "balls")),
-    );
-    const balls = (await get("/api/spaces/targets?spaces=balls")).body as SpaceTargetsResponse;
-    expect(balls.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
-    expect(balls.targets.every((t) => t.space === "balls")).toBe(true);
-    const polyhedra = (await get("/api/spaces/targets?spaces=polyhedra")).body as SpaceTargetsResponse;
-    expect(polyhedra.targets.length).toBe(SPACE_TARGETS_DEFAULT_LIMIT);
-    expect(polyhedra.targets.every((t) => t.space === "polyhedra")).toBe(true);
-  });
-
-  it("keeps its answers within a bound in bytes, and one answer for the queries that give it", async () => {
-    expect(SPACE_TARGETS_CACHE_BYTES).toBe(16_000_000);
-    const bound = 5_000_000;
-    let most = 0;
-    let gzips = 0;
-    makeApp({}, index, (text) => (gzips++, new Uint8Array(gzipSync(text))), {
-      targetsCacheBytes: bound,
-      onTargetsCache: (bytes) => (most = Math.max(most, bytes)),
-    });
-    // 256 queries of the whole list under different max_P and limit: one answer, compressed once
-    const whole = (await get(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT}`)).body as SpaceTargetsResponse;
-    for (let k = 0; k < 256; k++) {
-      const r = await app.request(`/api/spaces/targets?limit=${SPACE_TARGETS_MAX_LIMIT - (k % 150)}&max_P=${500 + k}`, {
-        headers: { "accept-encoding": "gzip" },
-      });
-      const body = JSON.parse(gunzipSync(Buffer.from(await r.arrayBuffer())).toString("utf8")) as SpaceTargetsResponse;
-      expect(body.targets.length).toBe(whole.targets.length);
-    }
-    expect(gzips).toBe(1);
-    // 256 distinct answers, with and without gzip: the cache stays within its bound
-    for (let k = 0; k < 256; k++) {
-      const q = `/api/spaces/targets?limit=${5000 + k}&max_P=${1 + (k % 99)}`;
-      const r = await app.request(q, k % 2 ? { headers: { "accept-encoding": "gzip" } } : {});
-      expect(r.status).toBe(200);
-      await r.arrayBuffer();
-    }
-    expect(most).toBeGreaterThan(1_000_000);
-    expect(most).toBeLessThanOrEqual(bound);
-    // answers drawn from the cache are still right
-    const small = (await get("/api/spaces/targets?max_P=5&limit=10000")).body as SpaceTargetsResponse;
-    expect(small.targets.length).toBeGreaterThan(0);
-    expect(small.targets.every((t) => t.P <= 5)).toBe(true);
-  });
-
-  it("filters by space and P and caps the answer", async () => {
-    const r = (await get("/api/spaces/targets?spaces=torus,sphere&max_P=5&limit=1000")).body as SpaceTargetsResponse;
-    expect(r.targets.length).toBeGreaterThan(10);
-    expect(r.targets.every((t) => (t.space === "torus" || t.space === "sphere") && t.P <= 5)).toBe(true);
-    expect((await get("/api/spaces/targets?spaces=all&limit=3")).body.targets.length).toBe(3);
-    const surface = (await get("/api/spaces/targets?spaces=surface&max_P=3&limit=2000")).body as SpaceTargetsResponse;
-    expect(surface.targets.length).toBeGreaterThan(0);
-    expect(surface.targets.every((t) => t.space === "surface" && t.P <= 3)).toBe(true);
-    expect((await get("/api/spaces/targets?max_P=1")).body.targets).toEqual([]);
-  });
-
-  it("parses its query strictly", async () => {
-    for (const q of [
-      "limit=0",
-      `limit=${SPACE_TARGETS_MAX_LIMIT + 1}`,
-      "limit=1e2",
-      "max_P=0",
-      "max_P=x",
-      "spaces=plane",
-      "spaces=torus,",
-      "N=3",
-      "limit=5&limit=6",
-    ]) {
-      const r = await get(`/api/spaces/targets?${q}`);
-      expect(r.status, q).toBe(400);
-      expect(r.body.error).toBeTruthy();
-    }
-  });
-
-  it("follows the site entries: a site leader that beats the record leads the target", async () => {
-    makeApp({}, weakTorusIndex());
-    const before = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
-    // the only target, so it has the whole of the priority
-    expect(before.targets).toEqual([
-      {
-        space: "torus",
-        id: "torus/sq/0/2",
-        P: 2,
-        priority: 1,
-        best_score: 3,
-        bound: L2,
-        leader: "certified",
-        leader_id: null,
-      },
-    ]);
-    const r = await submit(torusEntry(1.01));
-    const after = (await get("/api/spaces/targets")).body as SpaceTargetsResponse;
-    expect(after.targets).toEqual([
-      {
-        space: "torus",
-        id: "torus/sq/0/2",
-        P: 2,
-        priority: 1,
-        best_score: L2 * 1.01,
-        bound: L2,
-        leader: "site",
-        leader_id: r.body.id,
-      },
-    ]);
-    // an entry that meets the bound settles the problem
-    await submit(torusEntry(1));
-    expect(((await get("/api/spaces/targets")).body as SpaceTargetsResponse).targets).toEqual([]);
-    // removing it brings the problem back
-    const leader = (await store.spaceLeaders())[0];
-    expect((await admin("/api/admin/spaces/remove", { id: leader.id })).status).toBe(200);
-    expect(((await get("/api/spaces/targets")).body as SpaceTargetsResponse).targets[0]).toMatchObject({
-      leader: "certified",
-      best_score: 3,
-    });
+describe("the spaces' work list", () => {
+  it("was removed: GET /api/spaces/targets is not a route", async () => {
+    makeApp();
+    expect((await app.request("/api/spaces/targets")).status).toBe(404);
   });
 });
 

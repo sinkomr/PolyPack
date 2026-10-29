@@ -10,7 +10,6 @@ import {
   SpaceProblemResponse,
   SpaceRecordsResponse,
   SpaceSubmitResponse,
-  SpaceTargetsResponse,
   SpacesIndex,
   SpacesResponse,
   buildSpaceCatalogue,
@@ -237,33 +236,6 @@ describe("POST /api/spaces/submit for boundary problems", () => {
     expect(share.config).toEqual(sent);
     const listing = (await get("/api/spaces/boundary/records")).body as SpaceRecordsResponse;
     expect(listing.problems.find((p) => p.id === id)!.site_best!.id).toBe(r.body.id);
-  });
-});
-
-describe("GET /api/spaces/targets for boundary problems", () => {
-  it("lists the open boundary problems with room above their bound, which share the priority equally with the other spaces", async () => {
-    const all = (await get("/api/spaces/targets?limit=2000")).body as SpaceTargetsResponse;
-    const mine = all.targets.filter((t) => t.space === "boundary");
-    const share = mine.reduce((sum, t) => sum + t.priority, 0);
-    expect(share).toBeCloseTo(1 / SPACE_NAMES.length, 12);
-    const only = (await get("/api/spaces/targets?spaces=boundary&limit=2000")).body as SpaceTargetsResponse;
-    expect(only.targets.map((t) => t.id)).toEqual(mine.map((t) => t.id));
-    // P = 1, and the problems whose record meets its bound (balls 2 at sqrt 2, cubes 8 at 1), are left out
-    const open = file.records.filter((r: any) => r.P > 1 && (r.score_cert - r.bound.value) / r.score_cert > 1e-9);
-    expect(new Set(only.targets.map((t) => t.id))).toEqual(new Set(open.map((r: any) => r.id)));
-    expect(open.length).toBeLessThanOrEqual(28);
-    const ids = new Set(only.targets.map((t) => t.id));
-    for (const id of ["boundary/tesseract/ball/1", "boundary/tesseract/ball/2", "boundary/tesseract/cube/1", "boundary/tesseract/cube/8"])
-      expect(ids.has(id), id).toBe(false);
-    for (const t of only.targets) {
-      const raw = record(t.id);
-      expect(t).toMatchObject({ space: "boundary", P: raw.P, best_score: raw.score_cert, bound: raw.bound.value, leader: "certified", leader_id: null });
-    }
-    // a filter picks targets and keeps their priorities
-    expect(only.targets.map((t) => t.priority)).toEqual(mine.map((t) => t.priority));
-    const small = (await get("/api/spaces/targets?spaces=boundary,torus&max_P=4&limit=2000")).body as SpaceTargetsResponse;
-    expect(small.targets.some((t) => t.space === "boundary")).toBe(true);
-    expect(small.targets.every((t) => (t.space === "boundary" || t.space === "torus") && t.P <= 4)).toBe(true);
   });
 });
 

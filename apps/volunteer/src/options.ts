@@ -48,7 +48,7 @@ export interface Options {
    * space problem is ever fetched or searched.
    */
   spaces: SpaceName[] | null;
-  /** --only-dimensions (or --only-spaces): the polygon work list is not used at all. */
+  /** --only-dimensions (or --only-spaces): no flat problem is drawn. */
   onlySpaces: boolean;
   /**
    * --space-method: the search method of the other kinds' jobs, "auto" (each kind's own search,
@@ -87,9 +87,9 @@ export const defaultParallelProblems = (cores: number) => Math.max(1, Math.round
 export function helpText(m: Machine): string {
   return `polypack-volunteer ${VERSION}: give spare CPU time to PolyPack (${DEFAULT_BASE})
 
-It takes problems from the server's work list, several at once on a machine with many cores,
-searches each with many methods and seeds on its share of the cores, and submits a result only
-when it beats the site's leader.
+It draws problems at random from every problem, with a record or without one, several at once on
+a machine with many cores, searches each with many methods and seeds on its share of the cores,
+and submits a result only when it beats the site's leader.
 
 Usage: node polypack-volunteer.mjs [options]
 
@@ -114,7 +114,7 @@ Usage: node polypack-volunteer.mjs [options]
   --version                the version
 
 Optional, off by default: the other kinds of problem (see ${DEFAULT_BASE}/dimensions.html).
-The work list above is Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
+The problems above are Flat (2D in 2D): polygons in polygons. These options add curved (2D in 2D
 at constant curvature); surface, sphere and torus (2D on 3D: on the surface of a polyhedron,
 on a whole sphere, on a flat torus); boundary (3D on 4D: unit balls and cubes on the boundary of
 a tesseract); polyhedra (3D in 3D: solids in a solid); and balls (3D in 3D: unit balls in a ball
@@ -122,9 +122,8 @@ or in one of 94 solids, and each of those solids in a ball). The API calls these
 Without these options the client never asks for them.
 
   --dimensions LIST        also search problems of these kinds: surface, curved, sphere, torus,
-                           boundary, polyhedra, balls, comma-separated, or all; each next problem comes
-                           from the polygon work list or from the work list of these kinds with
-                           probability 1/2
+                           boundary, polyhedra, balls, comma-separated, or all; every problem of
+                           these kinds and of Flat is drawn as often as any other
   --spaces LIST            the same as --dimensions (its earlier name)
   --only-dimensions        search only the kinds given with --dimensions
   --only-spaces            the same as --only-dimensions
@@ -135,7 +134,7 @@ Without these options the client never asks for them.
 ${spaceMethodLines()}
   --space-params JSON      that method's parameters, a JSON object (default: its defaults)
 
---max-P applies to these kinds too; --N and --M filter only the polygon work list.
+--max-P applies to these kinds too; --N and --M filter only the flat problems.
 
 Stop it with Ctrl-C: it submits the current problem's best if that beats the leader, saves its
 state and exits within about 30 s. A second Ctrl-C exits at once.
@@ -319,7 +318,7 @@ export function parseOptions(argv: readonly string[], machine: Machine): Parsed 
   if (onlySpaces && spaces === null)
     throw new OptionError(`${only} needs --${named} LIST (or --${other} LIST), for example --${named} all`);
   if (onlySpaces && (values.N !== undefined || values.M !== undefined))
-    throw new OptionError(`--N and --M filter the polygon work list, which ${only} leaves out`);
+    throw new OptionError(`--N and --M filter the flat problems, which ${only} leaves out`);
   const { spaceMethod, spaceParams } = parseSpaceMethod(values["space-method"], values["space-params"]);
   if (spaceMethod !== "auto" && spaces === null)
     throw new OptionError(

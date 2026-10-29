@@ -12,8 +12,6 @@ import {
   ProblemInfo,
   SubmitResponse,
   TOL,
-  TargetRanking,
-  TargetsResponse,
   areaLowerBound,
   beatsLiterature,
   closedToSubmissions,
@@ -22,7 +20,6 @@ import {
   parseConfig,
   MAX_SOFTWARE_LENGTH,
   parseProvenance,
-  rankTargets,
   reachesLiterature,
   strictVerify,
 } from "@polypack/geometry";
@@ -83,11 +80,9 @@ export interface AppOptions {
   stats?: LoadStats;
   /**
    * Least age at which the leaders of every problem are read again after an entry changed, for
-   * /api/holders and /api/targets; HOLDERS_REFRESH_MS by default.
+   * /api/holders; HOLDERS_REFRESH_MS by default.
    */
   holdersRefreshMs?: number;
-  /** Least age at which /api/targets is ranked again after an entry changed; TARGETS_REFRESH_MS by default. */
-  targetsRefreshMs?: number;
   /**
    * Whether a submission to a problem with disk or ball pieces or a circle or ball container must carry
    * `"units": "diameter"` (426 without it). On by default; the gate stays until its sunset date.
@@ -127,15 +122,9 @@ export const ATLAS_MAX_PIECES = 6000;
 /**
  * How far /api/holders may lag behind the entries: the leaders it is counted from are read again at
  * most once every 15 minutes (each reading holds the event loop for about a second on the live
- * server). /api/targets is ranked from the same reading.
+ * server).
  */
 export const HOLDERS_REFRESH_MS = 900_000;
-/** How far the ranking of /api/targets may lag behind the reading: it is ranked again at most every 30 minutes. */
-export const TARGETS_REFRESH_MS = 1_800_000;
-/** Targets one /api/targets answer holds without a `limit`. */
-export const TARGETS_DEFAULT_LIMIT = 500;
-/** Largest `limit` of /api/targets. */
-export const TARGETS_MAX_LIMIT = 2000;
 
 /**
  * Which packing the atlas draws for one P.
@@ -184,24 +173,6 @@ function decimalInteger(text: string | undefined): number {
   return text !== undefined && /^\d{1,9}$/.test(text) ? Number(text) : NaN;
 }
 
-/**
- * A query value that lists shape codes, such as "0,3-6": plain decimal integers and ranges a-b
- * whose ends are shape codes, separated by commas. A range leaves out 1 and 2, which are not.
- * Null for anything else, an empty item or a reversed range included.
- */
-function shapeList(text: string): number[] | null {
-  const out = new Set<number>();
-  for (const item of text.split(",")) {
-    const m = /^(\d{1,3})(?:-(\d{1,3}))?$/.exec(item);
-    if (!m) return null;
-    const lo = Number(m[1]);
-    const hi = m[2] === undefined ? lo : Number(m[2]);
-    if (!isShapeCode(lo) || !isShapeCode(hi) || hi < lo) return null;
-    for (let v = lo; v <= hi; v++) if (isShapeCode(v)) out.add(v);
-  }
-  return [...out];
-}
-
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -214,8 +185,9 @@ export function createApp(opts: AppOptions): Hono {
   const { store } = opts;
   const unitsGate = opts.unitsGate !== false;
   const app = new Hono();
-  // Volunteer clients older than the unit change would read new-unit leaders as old ones and send old-unit packings that
-  // pass as valid but poor: they are told to update (426) before anything else; the index, health and snapshot stay open.
+  // Volunteer clients older than VOLUNTEER_MIN_VERSION are told to update (426) before anything else: 0.2.x read the work
+  // lists that are gone, and 0.1.x would read new-unit leaders as old ones and send old-unit packings that pass as valid but
+  // poor. The API page, the health check and the snapshot stay open.
   app.use("/api/*", async (c, next) => {
     if (isOldVolunteer(c.req.header("user-agent")) && !oldClientMayRead(c.req.method, c.req.path))
       return c.json({ error: UPGRADE_MESSAGE, reasons: [UPGRADE_MESSAGE], conventions_version: CONVENTIONS_VERSION }, 426);
@@ -286,8 +258,6 @@ export function createApp(opts: AppOptions): Hono {
       docsPage({
         atlasMaxSpan: ATLAS_MAX_SPAN,
         atlasMaxPieces: ATLAS_MAX_PIECES,
-        targetsDefaultLimit: TARGETS_DEFAULT_LIMIT,
-        targetsMaxLimit: TARGETS_MAX_LIMIT,
       }),
     ),
   );
@@ -390,18 +360,14 @@ export function createApp(opts: AppOptions): Hono {
     return JSON.stringify({ holders: list } satisfies HoldersResponse);
   };
 
-  // The leader of every problem, which /api/holders and /api/targets are computed from. Reading it
-  // blocked the live server for about 0.9 s with 180,000 problems (2026-10-21) while entries
-  // arrived every few seconds. So one reading serves both routes: it is kept until an entry
-  // changes, and after a change still until it is holdersRefreshMs old. Only a request reads it
-  // again, never a timer. What the routes need is drawn from it at once: the holders' answer, and
-  // for the ranking each leader's problem, id and score, five numbers per leader in one array
-  // (7 MB for 180,000) rather than objects that keep their names.
+  // The leader of every problem, which /api/holders is counted from. Reading it blocked the live
+  // server for about 0.9 s with 180,000 problems (2026-10-21) while entries arrived every few
+  // seconds. So a reading is kept until an entry changes, and after a change still until it is
+  // holdersRefreshMs old. Only a request reads it again, never a timer. The holders' answer is
+  // drawn from it at once, and the leaders themselves are not kept.
   const holdersRefreshMs = opts.holdersRefreshMs ?? HOLDERS_REFRESH_MS;
   interface LeadersReading {
     holders: string;
-    /** N, M, P, id and score of each leader in turn. */
-    ranked: Float64Array;
     at: number;
     /** False once an entry has changed since the reading. */
     current: boolean;
@@ -422,16 +388,8 @@ export function createApp(opts: AppOptions): Hono {
     reading ??= (async () => {
       const version = entriesVersion;
       const all = await store.leaders();
-      const ranked = new Float64Array(5 * all.length);
-      for (const [i, e] of all.entries()) {
-        ranked[5 * i] = e.N;
-        ranked[5 * i + 1] = e.M;
-        ranked[5 * i + 2] = e.P;
-        ranked[5 * i + 3] = e.id;
-        ranked[5 * i + 4] = e.score;
-      }
       // an entry that changed while this was read may be missing from it
-      leaders = { holders: countHolders(all), ranked, at: Date.now(), current: version === entriesVersion };
+      leaders = { holders: countHolders(all), at: Date.now(), current: version === entriesVersion };
       return leaders;
     })().finally(() => {
       reading = null;
@@ -442,65 +400,6 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/holders", async (c) =>
     c.body((await readLeaders()).holders, 200, { "content-type": "application/json" }),
   );
-
-  // The work list of volunteer searches: every open problem, ranked by rankTargets. Ranking 200,000
-  // problems took about 0.2 s on an Apple M1 Pro (2026-10-21), more on the live server's shared
-  // CPU, so the ranking is kept until an entry changes, and after a change it is built again, from
-  // the latest reading of the leaders, only once it is targetsRefreshMs old. Each request filters
-  // the ranking and takes the first `limit`.
-  const targetsRefreshMs = opts.targetsRefreshMs ?? TARGETS_REFRESH_MS;
-  let targets: { ranking: TargetRanking; at: number; from: LeadersReading } | null = null;
-  const currentTargets = async () => {
-    // a ranking whose reading is still current is up to date, however old
-    if (targets && (targets.from.current || Date.now() - targets.at < targetsRefreshMs)) return targets;
-    const from = await readLeaders();
-    if (targets?.from !== from) {
-      const { ranked } = from;
-      const each = function* () {
-        for (let i = 0; i < ranked.length; i += 5)
-          yield { N: ranked[i], M: ranked[i + 1], P: ranked[i + 2], id: ranked[i + 3], score: ranked[i + 4] };
-      };
-      targets = { ranking: rankTargets(each(), opts.records), at: Date.now(), from };
-    }
-    return targets;
-  };
-  app.use("/api/targets", compress());
-  app.get("/api/targets", async (c) => {
-    const errors: string[] = [];
-    // each parameter at most once and by its own name, so that a misspelt or repeated filter is
-    // refused rather than silently ignored
-    for (const [name, values] of Object.entries(c.req.queries())) {
-      if (!["limit", "N", "M", "max_P"].includes(name))
-        errors.push(`unknown parameter ${name}: the parameters are limit, N, M and max_P`);
-      else if (values.length > 1) errors.push(`${name} is given more than once`);
-    }
-    const limitText = c.req.query("limit");
-    const limit = limitText === undefined ? TARGETS_DEFAULT_LIMIT : decimalInteger(limitText);
-    if (!(limit >= 1 && limit <= TARGETS_MAX_LIMIT))
-      errors.push(`limit must be an integer from 1 to ${TARGETS_MAX_LIMIT}`);
-    const maxPText = c.req.query("max_P");
-    const maxP = maxPText === undefined ? MAX_PIECES : decimalInteger(maxPText);
-    if (!(maxP >= 1 && maxP <= MAX_PIECES)) errors.push(`max_P must be an integer from 1 to ${MAX_PIECES}`);
-    const shapes = (name: "N" | "M") => {
-      const text = c.req.query(name);
-      if (text === undefined) return undefined;
-      const list = shapeList(text);
-      if (!list)
-        errors.push(
-          `${name} must be a comma-separated list of shape codes (0, or 3 to ${MAX_SIDES}) and ranges such as 0,3-6`,
-        );
-      return list ?? undefined;
-    };
-    const N = shapes("N");
-    const M = shapes("M");
-    if (errors.length) return c.json({ error: errors.join("; ") }, 400);
-    const { ranking, at } = await currentTargets();
-    const body: TargetsResponse = {
-      generated_at: new Date(at).toISOString(),
-      targets: ranking.select({ N, M, maxP, limit }),
-    };
-    return c.json(body);
-  });
 
   // The drawings of the records page: for each P in [from, to], the one best packing that can be
   // drawn. Bounded twice: the range by ATLAS_MAX_SPAN and the payload by ATLAS_MAX_PIECES.

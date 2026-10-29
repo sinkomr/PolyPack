@@ -1,25 +1,34 @@
 /**
- * The volunteer client's main loop: take a problem from the server's work list, search it with the
- * engine on the worker pool, submit the best only when it beats the site's leader, and move on.
+ * The volunteer client's main loop: draw a problem uniformly at random from every problem it may
+ * search (pick.ts), read it from the server, search it with the engine on the worker pool, submit
+ * the best only when it beats the site's leader, and draw the next.
  *
- * With --spaces it also takes problems of the new spaces from their own work list (or only those,
- * with --only-spaces): each next problem comes from one list or the other with probability 1/2.
- * Without the option nothing here asks the server about the spaces.
+ * With --dimensions (--spaces) the draw also covers the problems of those kinds, or only them with
+ * --only-dimensions; every problem is as likely as any other. Without the option nothing here asks
+ * the server about the other kinds.
  *
  * `main` returns the exit code instead of exiting, and takes its network, output, engine, clock
  * and battery from `deps`, so that test/cli.test.ts runs it end to end against an in-process server.
  */
 import { randomInt } from "node:crypto";
 import os from "node:os";
-import { type ProblemInfo, type Target, type TargetsResponse, improvesOn } from "@polypack/geometry";
-import type { SpaceTarget, SpaceTargetsResponse } from "@polypack/spaces";
+import { type ProblemInfo, improvesOn } from "@polypack/geometry";
 import { onBattery, watchBattery } from "./battery";
 import { ActiveClock } from "./clock";
 import { searchProblem as engineSearch } from "./engine/index";
 import { formatDuration, formatScore, problemKey, problemLabel, relativePercent, timestamp } from "./format";
 import { type Answer, Api, type Sleep, type SubmitOutcome, compactList, realSleep } from "./http";
 import { type Machine, OptionError, type Options, helpText, parseOptions } from "./options";
-import { type Recent, noteSearch, pickSpaceTarget, pickTarget, pruneRecent, recentFromHistory } from "./pick";
+import {
+  type Kind,
+  type Recent,
+  drawProblem,
+  drawnKey,
+  kindsFor,
+  noteSearch,
+  pruneRecent,
+  recentFromHistory,
+} from "./pick";
 import { type PoolOptions, WorkerPool } from "./pool";
 import { type SpaceCandidate, type SpaceSearchOutcome, chooseSpaceMethod, searchSpaceProblem } from "./spaces/engine";
 import {
@@ -33,7 +42,7 @@ import {
   spaceMethodNote,
 } from "./spaces/model";
 import { type NofoldProblem, faceProblem, surfaceFromFace } from "./spaces/nofold";
-import { type SpaceProblemInfo, readSpaceProblem, readSpaceSubmitResponse, readSpaceTarget } from "./spaces/read";
+import { type SpaceProblemInfo, readSpaceProblem, readSpaceSubmitResponse } from "./spaces/read";
 import {
   betterSpace,
   bestRef,
@@ -65,17 +74,13 @@ import {
   submissionBody,
 } from "./submit";
 import type { Candidate, Control, Problem, SearchInput, SearchOutcome, SearchProblem } from "./types";
-import { cleanText, readProblemInfo, readStoredEntry, readSubmitResponse, readTarget } from "./validate";
+import { cleanText, readProblemInfo, readStoredEntry, readSubmitResponse } from "./validate";
 import { SOFTWARE, UNITS, UPGRADE_URL, VERSION } from "./version";
 
-/** The work list is read again after this long; a problem that could not be read is skipped as long. */
-export const TARGETS_TTL_MS = 10 * 60_000;
-/**
- * The largest limit of GET /api/spaces/targets (apps/server SPACE_TARGETS_MAX_LIMIT), and older servers' largest,
- * newest first: 10000 until PolyPack's prism and antiprism problems joined (2026-10-25), 2000 before that.
- */
-export const SPACE_TARGETS_LIMIT = 20000;
-export const SPACE_TARGETS_LIMITS_BEFORE: readonly number[] = [10000, 2000];
+/** A problem that could not be read is not drawn again for this long. */
+export const SKIP_MS = 10 * 60_000;
+/** The wait before drawing again when every draw fell on a problem to skip. */
+export const NOTHING_WAIT_MS = 60_000;
 /** After the first signal (or the end of --hours), the most the client waits before it exits. */
 export const STOP_GRACE_MS = 30_000;
 /** No problem starts with less of --hours left than this, or than the time per problem if smaller. */
@@ -94,6 +99,11 @@ export interface MainDeps {
   /** Install the SIGINT and SIGTERM handlers; default true. */
   signals?: boolean;
   random?: () => number;
+  /**
+   * The kinds the draws cover; default pick.ts's kindsFor(options). Tests give the fake server's problems. Either way
+   * flat problems are left out with --only-dimensions, and a space's unless --dimensions names it.
+   */
+  kinds?: Kind[];
   /** Whether the machine is on battery power; default battery.ts's onBattery. */
   checkBattery?: () => Promise<boolean>;
   batteryEveryMs?: number;
@@ -152,13 +162,17 @@ interface Current {
   crashed: number;
 }
 
-/** The next problem: from the polygon work list or the spaces' one; why there is none; or a failure. */
-type Pick =
-  | { kind: "polygon"; target: Target }
-  | { kind: "space"; target: SpaceTarget }
-  | { kind: "none"; message: string }
-  | { kind: "missing"; message: string }
-  | { kind: "unreachable" };
+/** The next problem, drawn (pick.ts); or why there is none. */
+type Pick = { kind: "polygon"; problem: Problem } | { kind: "space"; id: string } | { kind: "none"; message: string };
+
+/**
+ * What a search came to: searched (true); not searched (false); skipped, because the problem is closed or unknown to the
+ * server, so that another is drawn at once, also with --once; or the server could not be reached to read it.
+ */
+type Searched = boolean | "skipped" | "unreachable";
+
+/** True for an answer that says the server could not answer now: none at all, a 429 or a 5xx. */
+const unreachable = (a: Answer | null) => !a || a.status === 429 || a.status >= 500;
 
 /** "HTTP 422: overlap of pieces 3 and 7" or "no answer", safe to print. */
 function describeAnswer(a: Answer | null): string {
@@ -189,7 +203,7 @@ export function laneShares(cores: number, problems: number): number[] {
 }
 
 /** "4, 4, 4 and 3". */
-const andList = (xs: readonly number[]) =>
+const andList = (xs: readonly (number | string)[]) =>
   xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`;
 
 class Volunteer {
@@ -213,29 +227,19 @@ class Volunteer {
   private recent = new Map<string, Recent>();
   /** Problems not to pick again before a time (ms): closed ones forever, unreadable ones for a while. */
   private readonly skipUntil = new Map<string, number>();
-  private targets: { at: number; list: Target[] } | null = null;
-  /** Whether to send the filters with GET /api/targets; dropped if the server refuses them. */
-  private filterOnServer = true;
-  /** The limit the spaces' work list is asked for: the server's largest, or 2000 for an older server. */
-  private spaceTargetsLimit = SPACE_TARGETS_LIMIT;
-  /** The spaces' work list (--spaces), cached like `targets`. */
-  private spaceTargets: { at: number; list: SpaceTarget[] } | null = null;
-  private spaceFilterOnServer = true;
-  /** Set when the server has no spaces' work list: the polygon list goes on alone. */
-  private spacesGone = false;
+  /** What the draws cover: flat problems and the kinds of --dimensions, after the filters. */
+  private readonly kinds: Kind[];
   private paused = false;
   private stopReason: string | null = null;
   /** Set when the client cannot go on (its threads do not start): it exits with code 1. */
   private fatal: string | null = null;
-  /** Set when the server answered 426: it works in other units than this client. */
+  /** Set when the server answered 426: this client is older than the oldest it answers. */
   private upgrade: string | null = null;
   private hardTimer: NodeJS.Timeout | null = null;
   /** The problems being searched now: one per slot (--parallel-problems), between their searches none. */
   private readonly currents = new Set<Current>();
   /** Keys of the problems the slots have drawn and not yet finished: no other slot draws them. */
   private readonly inFlight = new Set<string>();
-  /** The slots draw their problems one at a time. */
-  private picking: Promise<unknown> = Promise.resolve();
   /** The last note the slots share (its `same`), so that each slot does not print it again (note). */
   private lastNote = { text: "", at: -Infinity };
   private readonly started: number;
@@ -263,6 +267,9 @@ class Volunteer {
     this.sleep = deps.sleep ?? realSleep;
     this.search = deps.searchProblem ?? engineSearch;
     this.random = deps.random ?? Math.random;
+    this.kinds = (deps.kinds ?? kindsFor(o)).filter((k) =>
+      k.name === "flat" ? !o.onlySpaces : (o.spaces?.includes(k.name) ?? false),
+    );
   }
 
   /** The server asks for a newer client (426): there is nothing useful this one can send or read, so it stops. */
@@ -387,12 +394,15 @@ class Volunteer {
               .join(", ")}`
           : ""),
     );
+    if (this.kinds.length)
+      this.log(
+        "Draws each problem at random, every one as likely, from " +
+          `${andList(this.kinds.map((k) => `${k.size.toLocaleString("en-US")} ${k.name}`))} problems`,
+      );
     if (o.spaces)
       this.log(
-        (o.onlySpaces
-          ? "Searches only problems of the new spaces: "
-          : "Also searches problems of the new spaces, half of the time: ") +
-          `${o.spaces.join(", ")} (--spaces); a result is submitted only when the space's own check accepts it ` +
+        (o.onlySpaces ? "Searches only problems of these kinds: " : "Also searches problems of these kinds: ") +
+          `${o.spaces.join(", ")} (--dimensions); a result is submitted only when the kind's own check accepts it ` +
           "and it beats the problem's best, the research record or the site's leader",
       );
   }
@@ -505,6 +515,10 @@ class Volunteer {
    * with 1.
    */
   private async loop(): Promise<number> {
+    if (!this.kinds.length) {
+      this.log("No problem passes --N, --M, --max-P and --dimensions together: there is nothing to search.");
+      return 1;
+    }
     const shares = laneShares(this.o.cores, this.o.parallelProblems);
     const codes = await Promise.all(shares.map((lanes) => this.slot(lanes)));
     return codes.some((code) => code !== 0) ? 1 : 0;
@@ -528,254 +542,69 @@ class Volunteer {
       // nothing new starts on battery power
       while (this.paused && !this.stopped) await this.wait(1000);
       if (this.stopped || this.checkDeadline(true)) break;
-      const pick = await this.pickFree();
-      if (this.stopped) {
-        if (pick.kind === "polygon") this.inFlight.delete(problemKey(pick.target));
-        if (pick.kind === "space") this.inFlight.delete(pick.target.id);
-        break;
-      }
-      if (pick.kind === "missing") {
-        this.note(pick.message);
-        return 1;
-      }
-      if (pick.kind === "unreachable") {
-        if (this.o.once) return 1;
-        failures++;
-        const ms = Math.min(60_000, 2000 * 2 ** failures);
-        this.note(`Could not read the work list; trying again in ${ms / 1000} s`);
-        await this.wait(ms);
-        continue;
-      }
-      failures = 0;
+      const pick = this.pickFree();
       if (pick.kind === "none") {
-        const now = this.now();
-        const expiries = [this.targets, this.spaceTargets]
-          .filter((c) => c !== null)
-          .map((c) => c!.at + TARGETS_TTL_MS - now);
-        const wait = Math.max(60_000, ...expiries);
-        const again = this.o.once ? "" : ` Looking again in ${formatDuration(wait / 1000)}.`;
+        const again = this.o.once ? "" : ` Drawing again in ${formatDuration(NOTHING_WAIT_MS / 1000)}.`;
         this.note(`${pick.message}${again}`, pick.message);
         if (this.o.once) return 0;
-        await this.wait(wait);
+        await this.wait(NOTHING_WAIT_MS);
         continue;
       }
-      const key = pick.kind === "polygon" ? problemKey(pick.target) : pick.target.id;
-      const label = pick.kind === "polygon" ? problemLabel(pick.target) : pick.target.id;
-      let searched: boolean;
+      const key = pick.kind === "polygon" ? problemKey(pick.problem) : pick.id;
+      const label = pick.kind === "polygon" ? problemLabel(pick.problem) : pick.id;
+      let searched: Searched;
       try {
         searched =
-          pick.kind === "polygon"
-            ? await this.searchOne(pick.target, lanes)
-            : await this.searchSpace(pick.target, lanes);
+          pick.kind === "polygon" ? await this.searchOne(pick.problem, lanes) : await this.searchSpace(pick.id, lanes);
       } catch (error) {
         // a bug or an answer nobody foresaw: skip the problem, keep the client
         for (const c of this.currents) if (c.key === key) this.currents.delete(c);
         this.log(`Skipping ${label} for 10 minutes after an unexpected error: ${errorText(error)}`);
-        this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+        this.skipUntil.set(key, this.now() + SKIP_MS);
         searched = false;
       } finally {
         this.inFlight.delete(key);
       }
       if (this.fatal) return 1;
+      if (searched === "unreachable") {
+        if (this.o.once) return 1;
+        failures++;
+        const ms = Math.min(60_000, 2000 * 2 ** failures);
+        this.note(`Could not reach the server to read a problem; trying again in ${ms / 1000} s`, "unreachable");
+        await this.wait(ms);
+        continue;
+      }
+      failures = 0;
+      if (searched === "skipped") continue;
       if (this.o.once) return searched || this.stopped ? 0 : 1;
     }
     return 0;
   }
 
-  /** The next problem (pickNext), drawn by one slot at a time; a problem being searched is not drawn again. */
-  private pickFree(): Promise<Pick> {
-    const pick = this.picking.then(async () => {
-      const next = await this.pickNext();
-      if (next.kind === "polygon") this.inFlight.add(problemKey(next.target));
-      if (next.kind === "space") this.inFlight.add(next.target.id);
-      return next;
-    });
-    this.picking = pick.catch(() => undefined);
-    return pick;
+  /** The next problem (pickNext), marked as being searched so that no other slot draws it. */
+  private pickFree(): Pick {
+    const next = this.pickNext();
+    if (next.kind === "polygon") this.inFlight.add(problemKey(next.problem));
+    if (next.kind === "space") this.inFlight.add(next.id);
+    return next;
   }
 
-  /**
-   * The next problem. Without --spaces this is the polygon work list's draw alone. With both
-   * lists, one of them is tried first with probability 1/2 (from the same random source as the
-   * draws), and the other when the first has nothing to offer.
-   */
-  private async pickNext(): Promise<Pick> {
-    const polygon = !this.o.onlySpaces;
-    const spaces = this.o.spaces !== null && !this.spacesGone;
-    const order: ("polygon" | "space")[] =
-      polygon && spaces
-        ? this.random() < 0.5
-          ? ["polygon", "space"]
-          : ["space", "polygon"]
-        : polygon
-          ? ["polygon"]
-          : ["space"];
-    const empty: string[] = [];
-    let reached = false;
-    for (const queue of order) {
-      if (queue === "polygon") {
-        const list = await this.readTargets();
-        if (this.stopped) return { kind: "unreachable" };
-        if (list === "missing")
-          return {
-            kind: "missing",
-            message:
-              `The server at ${this.o.base} has no work list: GET /api/targets answered 404, so it runs a version of ` +
-              "PolyPack older than this client. Try again once it is updated, or give --base a server that has it.",
-          };
-        if (list === null) continue;
-        reached = true;
-        const now = this.now();
-        this.prune(now);
-        const target = pickTarget(list, {
-          filters: { N: this.o.N, M: this.o.M, maxP: this.o.maxP },
-          recent: this.recent,
-          skip: new Set([...this.skipUntil.keys(), ...this.inFlight]),
-          now,
-          random: this.random,
-        });
-        if (target) return { kind: "polygon", target };
-        empty.push(
-          list.length
-            ? `the work list's ${list.length} problem(s) are filtered out, closed, or were searched here in the last 7 days with the same leader`
-            : "the work list is empty",
-        );
-      } else {
-        const list = await this.readSpaceTargets();
-        if (this.stopped) return { kind: "unreachable" };
-        if (list === "missing") {
-          const why =
-            `The server at ${this.o.base} has no work list for the new spaces: GET /api/spaces/targets answered 404, ` +
-            "so it runs a version of PolyPack without them.";
-          if (this.o.onlySpaces)
-            return { kind: "missing", message: `${why} Try again once it is updated, or leave out --only-spaces.` };
-          this.log(`${why} Searching the polygon work list only.`);
-          this.spacesGone = true;
-          continue;
-        }
-        if (list === null) continue;
-        reached = true;
-        const now = this.now();
-        this.prune(now);
-        const target = pickSpaceTarget(list, {
-          filters: { spaces: this.o.spaces!, maxP: this.o.maxP },
-          recent: this.recent,
-          skip: new Set([...this.skipUntil.keys(), ...this.inFlight]),
-          now,
-          random: this.random,
-        });
-        if (target) return { kind: "space", target };
-        empty.push(
-          list.length
-            ? `the spaces' work list's ${list.length} problem(s) are filtered out, closed, or were searched here in the last 7 days with the same best`
-            : "the spaces' work list is empty",
-        );
-      }
-    }
-    if (!reached) return { kind: "unreachable" };
-    const text = empty.join("; ");
+  /** A uniform draw of the kinds (pick.ts), leaving out the problems to skip and those other slots are searching. */
+  private pickNext(): Pick {
+    const now = this.now();
+    this.prune(now);
+    const d = drawProblem(this.kinds, {
+      recent: this.recent,
+      skip: new Set([...this.skipUntil.keys(), ...this.inFlight]),
+      now,
+      random: this.random,
+    });
+    if (d) return d.kind === "polygon" ? { kind: "polygon", problem: d.problem } : { kind: "space", id: d.id };
     return {
       kind: "none",
       message:
-        empty.length === 1 && text === "the work list is empty"
-          ? "The work list is empty."
-          : `Nothing to search: ${text}.`,
+        "Nothing to search: every problem drawn was closed, could not be read lately, or is being searched by another slot.",
     };
-  }
-
-  /** The spaces' work list, from the cache while it is fresh; "missing" on 404; null when unreachable. */
-  private async readSpaceTargets(): Promise<SpaceTarget[] | "missing" | null> {
-    const now = this.now();
-    if (this.spaceTargets && now - this.spaceTargets.at < TARGETS_TTL_MS && now >= this.spaceTargets.at)
-      return this.spaceTargets.list;
-    const query = this.spaceTargetsQuery(this.spaceFilterOnServer);
-    let answer = await this.reader.spaceTargets(query);
-    for (;;) {
-      // an older server takes at most limit=10000, or 2000: ask for the next smaller limit
-      const next = SPACE_TARGETS_LIMITS_BEFORE.find((l) => l < this.spaceTargetsLimit);
-      if (!(answer?.status === 400 && next !== undefined && /limit/.test(describeAnswer(answer)))) break;
-      this.log(`The server refused limit=${this.spaceTargetsLimit} for the spaces' work list; asking for ${next}`);
-      this.spaceTargetsLimit = next;
-      answer = await this.reader.spaceTargets(this.spaceTargetsQuery(this.spaceFilterOnServer));
-    }
-    if (answer?.status === 400 && this.spaceFilterOnServer) {
-      // the filters are applied here as well
-      this.log(`The server refused the spaces' work list filters (${describeAnswer(answer)}); filtering here instead`);
-      this.spaceFilterOnServer = false;
-      answer = await this.reader.spaceTargets(this.spaceTargetsQuery(false));
-    }
-    if (!answer) return null;
-    if (answer.status === 404) return "missing";
-    const body = answer.body as Partial<SpaceTargetsResponse> | null;
-    if (answer.status !== 200 || !Array.isArray(body?.targets)) {
-      this.log(`Unexpected answer to GET /api/spaces/targets: ${describeAnswer(answer)}`);
-      return null;
-    }
-    const list = body.targets.map(readSpaceTarget).filter((t): t is SpaceTarget => t !== null);
-    this.spaceTargets = { at: now, list };
-    this.log(
-      `Read the spaces' work list: ${list.length} problem(s)` +
-        (body.generated_at ? `, ranked at ${cleanText(body.generated_at, 40)}` : "") +
-        (list.length < body.targets.length
-          ? `; ${body.targets.length - list.length} entries left out (malformed or unknown ids)`
-          : ""),
-    );
-    return list;
-  }
-
-  /**
-   * ?spaces=...&max_P=...&limit=20000, the server's largest limit, so that the client draws from
-   * the whole list (16,657 targets with the catalogues of 2026-10-25, so that every space gets its
-   * share); only the limit once the server has refused the filters (they then apply here only).
-   * An older server takes at most 10000, or 2000, which the client then asks for.
-   */
-  private spaceTargetsQuery(filters: boolean): string {
-    const q = new URLSearchParams();
-    if (filters) {
-      q.set("spaces", this.o.spaces!.join(","));
-      if (this.o.maxP !== null) q.set("max_P", String(this.o.maxP));
-    }
-    // without it the server answers its default 500, which may leave out every problem of a space
-    q.set("limit", String(this.spaceTargetsLimit));
-    return `?${q.toString()}`;
-  }
-
-  /** The work list, from the cache while it is fresh; "missing" on 404; null when unreachable. */
-  private async readTargets(): Promise<Target[] | "missing" | null> {
-    const now = this.now();
-    if (this.targets && now - this.targets.at < TARGETS_TTL_MS && now >= this.targets.at) return this.targets.list;
-    const query = this.filterOnServer ? this.targetsQuery() : "";
-    let answer = await this.reader.targets(query);
-    if (answer?.status === 400 && query) {
-      // the filters are applied here as well: a server that refuses them still works
-      this.log(`The server refused the work list's filters (${describeAnswer(answer)}); filtering here instead`);
-      this.filterOnServer = false;
-      answer = await this.reader.targets("");
-    }
-    if (!answer) return null;
-    if (answer.status === 404) return "missing";
-    const body = answer.body as Partial<TargetsResponse> | null;
-    if (answer.status !== 200 || !Array.isArray(body?.targets)) {
-      this.log(`Unexpected answer to GET /api/targets: ${describeAnswer(answer)}`);
-      return null;
-    }
-    const list = body.targets.map(readTarget).filter((t): t is Target => t !== null);
-    this.targets = { at: now, list };
-    this.log(
-      `Read the work list: ${list.length} problem(s)` +
-        (body.generated_at ? `, ranked at ${cleanText(body.generated_at, 40)}` : "") +
-        (list.length < body.targets.length ? `; ${body.targets.length - list.length} malformed entries left out` : ""),
-    );
-    return list;
-  }
-
-  private targetsQuery(): string {
-    const q = new URLSearchParams();
-    if (this.o.N) q.set("N", compactList(this.o.N));
-    if (this.o.M) q.set("M", compactList(this.o.M));
-    if (this.o.maxP !== null) q.set("max_P", String(this.o.maxP));
-    const s = q.toString();
-    return s ? `?${s}` : "";
   }
 
   private maxSeconds(): number {
@@ -817,24 +646,27 @@ class Volunteer {
   }
 
   /** Searches one problem and submits its best if it qualifies. False when it could not be searched. */
-  private async searchOne(t: Target, lanes: number): Promise<boolean> {
-    const p: Problem = { N: t.N, M: t.M, P: t.P };
+  private async searchOne(p: Problem, lanes: number): Promise<Searched> {
     const key = problemKey(p);
     const label = problemLabel(p);
 
     const { info, answer } = await this.readProblem(this.reader, p);
     if (this.stopped) return false;
     if (!info) {
+      if (unreachable(answer)) return "unreachable";
+      // 404: the server has no such problem (an id this client's catalogue has and the server's has not)
+      const gone = answer?.status === 404;
       this.log(
-        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it for 10 minutes`,
+        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it` +
+          (gone ? "" : " for 10 minutes"),
       );
-      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
-      return false;
+      this.skipUntil.set(key, gone ? Infinity : this.now() + SKIP_MS);
+      return gone ? "skipped" : false;
     }
     if (!info.accepts_submissions) {
       this.log(`${label} is closed: its published optimum is proven. Skipping it.`);
       this.skipUntil.set(key, Infinity);
-      return false;
+      return "skipped";
     }
     const site = info.site_best;
     const leader: LeaderRef | null = site ? { id: site.id, score: site.score, name: site.name } : null;
@@ -873,7 +705,7 @@ class Volunteer {
     /** The best strict packing reported so far. */
     let seen: Candidate | null = null;
     this.log(
-      `Searching ${label} (${t.reason}): leader ` +
+      `Searching ${label}: leader ` +
         (leader ? `${formatScore(leader.score)} by "${cleanText(leader.name, 60)}"` : "none") +
         `, published ${published === null ? "none" : formatScore(published)}, area bound ${formatScore(info.area_bound)}; ` +
         `starting from ${known ? (known.source === "site" ? "the leader's packing" : "the published packing") : "nothing"}; ` +
@@ -919,7 +751,7 @@ class Volunteer {
     if (allCrashed) {
       stopped = "crashed";
       this.log(`Every job of ${label} lost its search thread; skipping it for 10 minutes`);
-      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+      this.skipUntil.set(key, this.now() + SKIP_MS);
     }
     const activeSeconds = this.clock.now() - cur.startedAt;
     this.currents.delete(cur);
@@ -980,8 +812,8 @@ class Volunteer {
     const line: HistoryLine = {
       time: new Date(this.now()).toISOString(),
       ...p,
-      reason: t.reason ?? null,
-      priority: t.priority ?? null,
+      reason: "random",
+      priority: null,
       leader_before: leader,
       leader_after: leaderAfter ?? (offer ? null : leader),
       published,
@@ -1132,20 +964,24 @@ class Volunteer {
    * Searches one space problem and submits its best if it qualifies, as searchOne does for the
    * polygon problems. False when it could not be searched.
    */
-  private async searchSpace(t: SpaceTarget, lanes: number): Promise<boolean> {
-    const p = parseSpaceId(t.id);
-    if (!p) throw new Error(`not a space problem id: ${t.id}`);
+  private async searchSpace(id: string, lanes: number): Promise<Searched> {
+    const p = parseSpaceId(id);
+    if (!p) throw new Error(`not a space problem id: ${id}`);
     const key = p.id;
     const label = p.id;
 
     const { info, answer } = await this.readSpaceProblem(this.reader, p);
     if (this.stopped) return false;
     if (!info) {
+      if (unreachable(answer)) return "unreachable";
+      // 404: the server has no such problem (an id this client's catalogue has and the server's has not)
+      const gone = answer?.status === 404;
       this.log(
-        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it for 10 minutes`,
+        `Could not read ${label} (${answer?.status === 200 ? "malformed answer" : describeAnswer(answer)}); skipping it` +
+          (gone ? "" : " for 10 minutes"),
       );
-      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
-      return false;
+      this.skipUntil.set(key, gone ? Infinity : this.now() + SKIP_MS);
+      return gone ? "skipped" : false;
     }
     if (!info.accepts_submissions) {
       const why =
@@ -1153,7 +989,7 @@ class Volunteer {
         (info.certified?.status === "infeasible" ? "no packing exists (proved)" : "its value is proven");
       this.log(`${label} is closed: ${why}. Skipping it.`);
       this.skipUntil.set(key, Infinity);
-      return false;
+      return "skipped";
     }
     const before = bestRef(info);
     const known = buildSpaceKnown(info);
@@ -1192,7 +1028,7 @@ class Volunteer {
       ? "the polygon engine's methods"
       : spaceMethodNote(p.space, chosen.method, params, Infinity);
     this.log(
-      `Searching ${label} (priority ${t.priority.toPrecision(3)}): best ` +
+      `Searching ${label}: best ` +
         (before
           ? `${formatScore(before.score)} (${before.source === "site" ? `site entry by "${cleanText(before.name, 60)}"` : "research record"})`
           : "none") +
@@ -1266,7 +1102,7 @@ class Volunteer {
     if (allCrashed) {
       stopped = "crashed";
       this.log(`Every job of ${label} lost its search thread; skipping it for 10 minutes`);
-      this.skipUntil.set(key, this.now() + TARGETS_TTL_MS);
+      this.skipUntil.set(key, this.now() + SKIP_MS);
     }
     const activeSeconds = this.clock.now() - cur.startedAt;
     this.currents.delete(cur);
@@ -1345,7 +1181,7 @@ class Volunteer {
       space: p.space,
       id: p.id,
       P: p.P,
-      priority: t.priority,
+      priority: null,
       leader_before: before,
       leader_after: after ?? (offer ? null : before),
       bound: info.bound,
