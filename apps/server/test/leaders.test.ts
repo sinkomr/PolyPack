@@ -4,6 +4,7 @@ import { LiteratureRecord } from "@polypack/geometry";
 import { hasRecord, parseSpaceId, problemOf } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
+import { readSpaceBody } from "../../web/src/tighter/space-submission";
 import { createApp } from "../src/app";
 import { LEADERS_MAX_KEYS, LEADERS_MAX_URL, RESEARCH_RECORD_NAME } from "../src/leaders";
 import { SqliteStore } from "../src/sqlite-store";
@@ -103,7 +104,7 @@ describe("GET /api/leaders", () => {
     const { status, body } = await leaders(keys);
     expect(status).toBe(200);
     expect(Object.keys(body.leaders)).toEqual(keys);
-    expect(body.leaders["4/7/2"]).toEqual({ score: 2.5, name: "ada", id: ids.poly });
+    expect(body.leaders["4/7/2"]).toEqual({ score: 2.5, name: "ada", id: ids.poly, verification: "none" });
     expect(body.leaders["3/3/5"]).toBeNull(); // no entry, no published value
     expect(body.leaders["4/4/3"]).toBeNull(); // a published value only: /api/problems shows no site entry either
     expect(body.leaders[SPHERE_BEATEN]).toMatchObject({ name: "bea", id: ids.beaten });
@@ -145,32 +146,6 @@ describe("GET /api/leaders", () => {
     expect(r.status).toBe(414);
   });
 
-  it("agrees with /api/problems and /api/spaces for the same problems", async () => {
-    const polygons = ["4/7/2", "3/3/5", "4/4/3", "5/5/2"];
-    const spaces = [SPHERE_RECORD, SPHERE_BEATEN, CLOSED, NO_RECORD];
-    const { body } = await leaders([...polygons, ...spaces]);
-    for (const k of polygons) {
-      const p = (await (await app.request(`/api/problems/${k}`)).json()) as any;
-      const b = p.site_best;
-      expect(body.leaders[k]).toEqual(b ? { score: b.score, name: b.name, id: b.id } : null);
-    }
-    for (const k of spaces) {
-      const space = k.split("/")[0];
-      const p = (await (await app.request(`/api/spaces/${space}/problems/${k}`)).json()) as any;
-      // the game's rule: the research record when it is at least as good as the site entry
-      const cert = p.certified?.score ?? null;
-      const site = p.site_best;
-      const expected =
-        cert !== null && (!site || cert <= site.score)
-          ? { score: cert, id: null }
-          : site
-            ? { score: site.score, id: site.id, name: site.name }
-            : null;
-      if (expected) expect(body.leaders[k]).toMatchObject(expected);
-      else expect(body.leaders[k]).toBeNull();
-    }
-  });
-
   it("is compressed for clients that accept it", async () => {
     const keys = Array.from({ length: 200 }, (_, i) => `3/3/${i + 1}`);
     const r = await app.request(`/api/leaders?keys=${keys.join(",")}`, { headers: { "accept-encoding": "gzip" } });
@@ -182,5 +157,93 @@ describe("GET /api/leaders", () => {
     app = createApp({ store: new SqliteStore(":memory:"), records: [] });
     const { body } = await leaders(["3/3/5", SPHERE_RECORD]);
     expect(body).toEqual({ leaders: { "3/3/5": null }, unknown: [SPHERE_RECORD] });
+  });
+});
+
+describe("GET /api/leaders against the per-problem endpoints and the game's reading", () => {
+  const sph = (id: string) => index.sphere!.byId.get(id)!.certified!.score as number;
+  it("agrees on ties, pending leaders, removals, edits, records, closed problems and disk and circle problems", async () => {
+    const st = new SqliteStore(":memory:");
+    const a = createApp({
+      store: st,
+      records: [published(4, 4, 3, "best_known"), published(5, 5, 2, "proven"), published(3, 3, 1, "proven")],
+      spaces: { index, store: st },
+    });
+    const ins = (N: number, M: number, P: number, score: number, name: string, v: NewSubmission["verification"] = "none") =>
+      st.insert({ ...entry(N, M, P, score, name), verification: v });
+    await ins(4, 7, 2, 2.5, "ada");
+    await ins(4, 7, 3, 3 * (1 + 5e-10), "early"); // a tie within the tolerance: the earlier entry leads
+    await ins(4, 7, 3, 3, "late");
+    await ins(4, 7, 4, 4, "confirmed", "confirmed"); // a pending leader with a confirmed entry behind it
+    await ins(4, 7, 4, 3.9, "pending", "pending");
+    await ins(4, 7, 5, 4.5, "ok");
+    await ins(4, 7, 5, 4.0, "rej", "rejected"); // a row an older version left
+    await st.remove(await ins(4, 7, 6, 5, "gone"));
+    await st.edit(await ins(4, 7, 7, 5, "before"), { name: "after" });
+    await ins(4, 4, 3, 4.9, "beats"); // under a published value that stands
+    await ins(5, 5, 2, 3, "ghost"); // closed
+    await ins(0, 4, 3, 1.1, "disks");
+    await ins(0, 0, 7, 3, "circles");
+
+    const ids = [...index.sphere!.byId.keys()].slice(0, 12);
+    const sub = (problem: string, score: number, name: string) => st.spaceSubmit(spaceEntry(problem, score, name));
+    const cases: string[] = [ids[0]!, ids[1]!, ids[2]!, ids[3]!, ids[4]!, ids[5]!, ids[6]!, ids[7]!];
+    await sub(ids[0]!, sph(ids[0]!) * 1.5, "worse");
+    await sub(ids[1]!, sph(ids[1]!) * 0.5, "better");
+    await sub(ids[2]!, sph(ids[2]!), "equal"); // exactly the research record: the record is shown
+    await sub(ids[3]!, sph(ids[3]!) * (1 + 5e-10), "within-tie"); // within the tolerance, slightly worse: the record
+    await sub(ids[4]!, sph(ids[4]!) * 0.5 * (1 + 5e-10), "tie-early");
+    await sub(ids[4]!, sph(ids[4]!) * 0.5, "tie-late");
+    await st.spaceRemove((await sub(ids[5]!, sph(ids[5]!) * 0.5, "removed")).id);
+    await st.spaceEdit((await sub(ids[6]!, sph(ids[6]!) * 0.5, "old-name")).id, { name: "new-name" });
+    // closed, infeasible and open problems of every space, the closed ones with a late entry the site hides
+    for (const cat of Object.values(index)) {
+      let closed = 0;
+      let open = 0;
+      for (const p of cat?.problems ?? []) {
+        if (p.closed_reason !== null && closed < 2) {
+          closed++;
+          cases.push(p.id);
+          await sub(p.id, (p.certified?.score ?? 10) * 0.5, "late-closed");
+        } else if (p.closed_reason === null && open < 2) {
+          open++;
+          cases.push(p.id);
+        }
+      }
+    }
+    for (const p of index.sphere!.problems) if (p.status === "infeasible") cases.push(p.id);
+    cases.push(NO_RECORD);
+    await sub(NO_RECORD, 9, "torus-site");
+
+    const polygons = ["4/7/2", "4/7/3", "4/7/4", "4/7/5", "4/7/6", "4/7/7", "4/4/3", "5/5/2", "3/3/1", "0/4/3", "0/0/7", "3/3/5"];
+    const keys = [...new Set([...polygons, ...cases])];
+    const r = await a.request(`/api/leaders?keys=${keys.map(encodeURIComponent).join(",")}`);
+    const body = (await r.json()) as any;
+    expect(r.status).toBe(200);
+    expect(body.unknown).toEqual([]);
+
+    for (const k of polygons) {
+      const b = ((await (await a.request(`/api/problems/${k}`)).json()) as any).site_best;
+      expect(body.leaders[k], k).toEqual(
+        b ? { score: b.score, name: b.name, id: b.id, verification: b.verification } : null,
+      );
+    }
+    expect(body.leaders["4/7/4"]).toMatchObject({ name: "pending", verification: "pending" });
+    expect(body.leaders["4/7/3"].name).toBe("early");
+    for (const k of cases) {
+      const space = k.split("/")[0];
+      const read = readSpaceBody(k, await (await a.request(`/api/spaces/${space}/problems/${k}`)).json());
+      expect(read, k).not.toBeNull();
+      const l = read!.leader;
+      // the game's own reading of the problem, with the flag a research record carries here
+      expect(body.leaders[k], k).toEqual(
+        l ? (l.id === null ? { ...l, research: true } : l) : null,
+      );
+    }
+    expect(body.leaders[ids[2]!]).toEqual({ score: sph(ids[2]!), name: RESEARCH_RECORD_NAME, id: null, research: true });
+    // site leaders carry no research flag, and some problems of the set are led by a site entry
+    const sites = Object.values<any>(body.leaders).filter((l) => l && l.id !== null);
+    expect(sites.length).toBeGreaterThan(5);
+    for (const l of sites) expect(l).not.toHaveProperty("research");
   });
 });

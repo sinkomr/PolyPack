@@ -1,4 +1,4 @@
-import { MAX_PIECES, isShapeCode } from "@polypack/geometry";
+import { MAX_PIECES, Verification, isShapeCode } from "@polypack/geometry";
 import { SpacesIndex, acceptsSubmissions, isSpaceName, parseSpaceId, problemOf } from "@polypack/spaces";
 import { Hono } from "hono";
 import { compress } from "hono/compress";
@@ -17,6 +17,8 @@ export interface LeaderInfo {
   name: string;
   /** Submission id of the site entry; null for a research record. */
   id: number | null;
+  /** A polygon leader's verification, as in `site_best` ("none", "confirmed" or "pending"); absent for space problems. */
+  verification?: Verification;
   /** Present, true, when the leader is the problem's research record and not a site entry. */
   research?: true;
 }
@@ -89,7 +91,7 @@ export function registerLeadersRoute(
     );
     for (const [key, p] of polygons) {
       const l = found.get(`${p.N}/${p.M}/${p.P}`);
-      leaders[key] = l && !ctx.closed(p.N, p.M, p.P) ? { score: l.score, name: l.name, id: l.id } : null;
+      leaders[key] = l && !ctx.closed(p.N, p.M, p.P) ? { score: l.score, name: l.name, id: l.id, verification: l.verification } : null;
     }
     // spaces: one read for the open problems
     const entered = ctx.spaceStore

@@ -127,7 +127,7 @@ const TARGETS = `{
 
 const LEADERS = `{
   "leaders": {
-    "4/7/2": {"score": 2.60512, "name": "ada", "id": 123456},
+    "4/7/2": {"score": 2.60512, "name": "ada", "id": 123456, "verification": "none"},
     "3/3/5": null,
     "sphere/0/12": {"score": 3.14159, "name": "the research record", "id": null, "research": true}
   },
@@ -590,7 +590,7 @@ Closed problems appear in <code>literature</code> only.</p>
 <p>The current <a href="#leader">leader</a> of many problems at once, for a client that holds many records and checks them in batches. <code>keys</code> is one comma-separated list of at most ${LEADERS_MAX_KEYS} keys, each a polygon problem written <code>N/M/P</code> or the id of a space problem, such as <code>sphere/0/12</code> or <code>polyhedra/&lt;code&gt;/&lt;P&gt;</code>, mixed freely. No other parameter is accepted; more than ${LEADERS_MAX_KEYS} keys, an empty list, a repeated or other parameter is a 400, and a URL over ${LEADERS_MAX_URL} characters a 414. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>
 <pre><code>${esc(LEADERS)}</code></pre>
 <table>
-<tr><th scope="row"><code>leaders</code></th><td>One entry per key asked, a repeated key once. A polygon problem's value is its <code>site_best</code> of <code>/api/problems/{N}/{M}/{P}</code>: <code>{score, name, id}</code> of the leader, or <code>null</code> when it has no entry or is <a href="#closed">closed</a>. A space problem's is its best value as <code>/api/spaces/{space}/problems/{id}</code> gives it: the site entry, or the research record when that is at least as good, written <code>{"score", "name": "the research record", "id": null, "research": true}</code>; <code>null</code> when it has neither. Configurations are not sent.</td></tr>
+<tr><th scope="row"><code>leaders</code></th><td>One entry per key asked, a repeated key once. A polygon problem's value is its <code>site_best</code> of <code>/api/problems/{N}/{M}/{P}</code>: <code>{score, name, id, verification}</code> of the leader (<code>verification</code> as in <code>site_best</code>: <code>none</code>, <code>confirmed</code> or <code>pending</code>), or <code>null</code> when it has no entry or is <a href="#closed">closed</a>. A space problem's is its best value as <code>/api/spaces/{space}/problems/{id}</code> gives it: the site entry, or the research record when that is at least as good, written <code>{"score", "name": "the research record", "id": null, "research": true}</code>; <code>null</code> when it has neither. Configurations are not sent.</td></tr>
 <tr><th scope="row"><code>unknown</code></th><td>Keys that are malformed, out of range or not in a catalogue this server holds. They do not fail the request.</td></tr>
 </table>
 
