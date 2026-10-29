@@ -14,6 +14,12 @@
 // a general-purpose solver's packings are often worse than the best known, yet close enough to
 // "agree" with a value printed to one or two decimals, whose digits they would then replace.
 //
+// A source whose file says "role": "proof" (data/sources/hosono.json) sets the status of problems
+// that other sources already give a value for, and only that: the value stays the one held, which
+// must agree with the proven value (the printed value is truncated, so the proven one is at most one
+// unit of the printed precision above it), and its coordinates stay. The file may also list
+// "not_proven" problems, which stay best_known whatever a refreshed source page says.
+//
 // data/sources/constructed.json is not a literature source: it holds coordinates that PolyPack's
 // solver constructed for records without any (scripts/construct-coordinates.ts). They are
 // attached last, only to records that still have no coordinates, and only when they are again
@@ -37,13 +43,18 @@ const DERIVED = {
 const key = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 const groups = new Map<string, LiteratureRecord[]>();
 const gaps = new Map<string, LiteratureRecord[]>();
+const proofs: { records: LiteratureRecord[]; not_proven?: { N: number; M: number; P: number; why: string }[] }[] = [];
 for (const file of readdirSync("data/sources")
   .filter((f) => f.endsWith(".json") && f !== CONSTRUCTED)
   .sort()) {
   const { records, role } = JSON.parse(readFileSync(`data/sources/${file}`, "utf8")) as {
     records: LiteratureRecord[];
-    role?: "gaps";
+    role?: "gaps" | "proof";
   };
+  if (role === "proof") {
+    proofs.push(JSON.parse(readFileSync(`data/sources/${file}`, "utf8")));
+    continue;
+  }
   const into = role === "gaps" ? gaps : groups;
   for (const r of records) into.set(key(r), [...(into.get(key(r)) ?? []), r]);
 }
@@ -122,6 +133,30 @@ for (const [k, list] of groups) {
     }
   }
   merged.set(k, winner);
+}
+
+// ---------- statuses set by a proof source [CALC] ----------
+for (const { records: proved, not_proven } of proofs) {
+  for (const p of proved) {
+    const r = merged.get(key(p));
+    if (!r) throw new Error(`${key(p)}: proof source for a problem without a record`);
+    // the held value is printed truncated ("+"), so the proven value lies in [value, value + 10^-precision]
+    const gap = p.value - r.value;
+    if (gap < -1e-9 || gap > tolerance(r) + 1e-9) {
+      throw new Error(`${key(p)}: proven value ${p.value} does not match the held value ${r.display} (${r.value})`);
+    }
+    r.status = p.status;
+    r.citation = [r.citation, p.citation].filter(Boolean).join(" ");
+    r.note = [r.note, p.note].filter(Boolean).join(" ");
+  }
+  for (const n of not_proven ?? []) {
+    const r = merged.get(key(n));
+    if (r && r.status !== "best_known") {
+      report.push(`${key(n)}: ${n.why} Status ${r.status} set back to best_known`);
+      r.status = "best_known";
+      r.note = n.why;
+    }
+  }
 }
 
 // ---------- entries derived here [CALC] ----------

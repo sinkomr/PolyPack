@@ -18,6 +18,7 @@ describe("the sources of a published record", () => {
       [2, "David Ellsworth, Squares in Squares"],
       [3, "Eckard Specht, Packomania"],
       [4, "Berthold, Kamp, Mexi, Pokutta and Polik, Packing Solutions"],
+      [5, "Hiroaki Hosono, square-packing"],
     ]);
     for (const s of SOURCES) expect(s.url).toMatch(/^https?:\/\//);
   });
@@ -80,6 +81,16 @@ describe("the sources of a published record", () => {
     expect(recordCredits({ ...r, has_coordinates: true })).toEqual([{ n: 4, what: "value and caption, coordinates" }]);
   });
 
+  it("credits the proof of a triangle record to Hosono, besides the value's source", () => {
+    const { records } = JSON.parse(readFileSync("data/records.json", "utf8")) as { records: LiteratureRecord[] };
+    const r = records.find((r) => r.N === 4 && r.M === 3 && r.P === 7)!;
+    expect(recordSources({ ...r, has_coordinates: !!r.pieces }).value).toEqual([1]);
+    expect(recordCredits({ ...r, has_coordinates: !!r.pieces })).toEqual([
+      { n: 1, what: "value and caption" },
+      { n: 5, what: "proof" },
+    ]);
+  });
+
   it("gives no number to a record derived here or taken from an unknown source", () => {
     const derived = { ...base, source_name: "PolyPack (derived here, not from the literature)", has_coordinates: true };
     expect(recordSources(derived)).toEqual({ value: [], coordinates: [] });
@@ -88,7 +99,7 @@ describe("the sources of a published record", () => {
 
   it("finds a source for every record of the data that is not derived here", () => {
     const { records } = JSON.parse(readFileSync("data/records.json", "utf8")) as { records: LiteratureRecord[] };
-    const counts = [0, 0, 0, 0, 0];
+    const counts = [0, 0, 0, 0, 0, 0];
     for (const r of records) {
       const { value, coordinates } = recordSources({ ...r, has_coordinates: !!r.pieces });
       if (r.source_name.startsWith("PolyPack")) expect(value).toEqual([]);
@@ -105,6 +116,6 @@ describe("the sources of a published record", () => {
         expect(coordinates).toEqual([from]);
       counts[value[0] ?? 0]++;
     }
-    expect(counts.every((c) => c > 0)).toBe(true);
+    expect(counts.slice(0, 5).every((c) => c > 0)).toBe(true);
   });
 });

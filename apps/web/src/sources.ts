@@ -4,7 +4,7 @@ import { el } from "./shapes-ui";
 /**
  * Credit for the published record data. The values, the captions with their finder and prover
  * attributions, and some coordinates are taken from three compilations and from one paper's
- * supplement. Wherever such data is
+ * supplement; the proof status of eight problems comes from one repository of computer-assisted proofs. Wherever such data is
  * shown, a numbered reference mark points to the note of its source; the notes are listed at the
  * foot of the records page. The numbers are fixed: they follow the order of this list.
  */
@@ -52,6 +52,16 @@ export const SOURCES: readonly Source[] = [
       "Record values and coordinates for regular polygons of 3 to 7 sides packed in each other, used where no other source gives a value: every pair with a heptagon. " +
       "The online supplement of their paper submitted to the Journal of Global Optimization, 2026 (arXiv:2605.04850); it states no licence and is used with citation.",
   },
+  {
+    n: 5,
+    author: "Hiroaki Hosono",
+    title: "square-packing",
+    url: "https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle",
+    takes:
+      "Computer-assisted proofs, October 2026, that the records for 3, 4, 6, 7, 11, 16, 22 and 29 squares in an equilateral triangle are optimal (release triangle-v1, MIT licence, accessed 2026-10-29). " +
+      "Lower and upper bound certificates are checked by two independent exact checkers, the lower bound also in Lean 4 except for 6 squares. The repository says none of this is peer reviewed. " +
+      "The status is recorded as proven (unrefereed); the values stay those of the first source.",
+  },
 ];
 
 /** How a source is named in the data and in the labels of the reference marks. */
@@ -60,7 +70,10 @@ export const sourceLabel = (s: Source) => `${s.author}, ${s.title}`;
 type Credited = Pick<
   ListedRecord,
   "source_name" | "conversion_note" | "coordinates_note" | "has_coordinates" | "citation"
->;
+> & {
+  /** Names the source of a proof that set the record's status (data/sources/hosono.json). */
+  note?: string;
+};
 
 /** The sources named in a text of the data, by note number. */
 const named = (text: string | undefined) => SOURCES.filter((s) => text?.includes(sourceLabel(s))).map((s) => s.n);
@@ -105,6 +118,8 @@ export function recordCredits(lit: Credited): Credit[] {
   const add = (n: number, part: string) => parts.set(n, [...(parts.get(n) ?? []), part]);
   value.forEach((n, i) => add(n, i > 0 ? "further digits of the value" : lit.citation ? "value and caption" : "value"));
   for (const n of coordinates) add(n, "coordinates");
+  // a source named in the note only (not as the value's or coordinates' source) proved the value
+  for (const n of named(lit.note)) if (!parts.has(n)) add(n, "proof");
   return [...parts].sort(([a], [b]) => a - b).map(([n, list]) => ({ n, what: list.join(", ") }));
 }
 
