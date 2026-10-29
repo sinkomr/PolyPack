@@ -2,9 +2,9 @@ import { improvesOn } from "@polypack/geometry";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
   PAIR_BONUS,
-  RENT_CHECK_MS,
+  RENT_PAYDAY_MS,
   RENT_GROWTH,
-  RENT_RECHECK_MS,
+  RENT_RETRY_MS,
   RENT_SHARE,
   RENT_WINDOW_MS,
   SHAPE_BONUS,
@@ -327,19 +327,19 @@ const RECORDS: How[] = [
   {
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
-      `Rent builds up between checks, even while the game is closed. Once a record's last check is ${minutes(RENT_RECHECK_MS)} old, the game asks the server who holds it, checking at most one record every ${seconds(RENT_CHECK_MS)}, with the longest unchecked first. If the record is still yours, you are paid the rent since its last check, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time.`,
+      `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
       "Rent counts as record points earned in this cycle, so it also counts toward a reset.",
     ],
     math: [
       `<var>h</var> = ${RENT_SHARE} × <var>p</var> × ${RENT_GROWTH}<sup><var>v</var></sup> × <var>m</var>`,
-      `rent paid at a check = <var>h</var> × min(<var>t</var>, ${Math.round(RENT_WINDOW_MS / 3_600_000)} h)`,
+      `rent paid at a payday = <var>h</var> × min(<var>t</var>, ${Math.round(RENT_WINDOW_MS / 3_600_000)} h)`,
     ],
     vars: [
       ["<var>h</var>", "the rent of one record, in RP an hour"],
       ["<var>p</var>", "the RP its problem earned before multipliers, less any taken back"],
       ["<var>v</var>", "your level of Higher rent (0 without it)"],
       ["<var>m</var>", "your points multiplier on that problem now (standing, collections and rules)"],
-      ["<var>t</var>", "the time since the record's last check, in hours"],
+      ["<var>t</var>", "the time since the record's last payday, in hours"],
     ],
   },
   {

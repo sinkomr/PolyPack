@@ -87,18 +87,16 @@ import {
 } from "./game";
 import {
   PAIR_BONUS,
-  RENT_CHECK_MS,
+  RENT_PAYDAY_MS,
+  RENT_RETRY_MS,
   SHAPE_BONUS,
   SHAPE_MILESTONES,
   TIER_BONUS,
   collections,
   collectionsBonus,
-  nextRentCheck,
   rentRate,
   rentWaiting,
-  settleRent,
   syncEconomy,
-  tidyRent,
 } from "./economy";
 import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
@@ -160,6 +158,7 @@ import {
 } from "./submission";
 import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
 import { renderRunsPanel } from "./runs-ui";
+import { runPayday } from "./payday";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
 import { sanitizeName } from "./names";
 import { bindNamePopup, showNamePopup } from "./name-popup";
@@ -700,8 +699,7 @@ ensureLanes();
 const laneKeys = (l: LaneView) =>
   [l.run?.key, l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
 /** The keys of the problems a lane is running evaluations on now, or has jobs queued for (an open run alone is not work). */
-const workingKeys = (l: LaneView) =>
-  [l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
+const workingKeys = (l: LaneView) => [l.current?.key, ...l.jobs.map((j) => j.key)].filter((k): k is string => !!k);
 const laneOn = (key: string) => lanes.find((l) => laneKeys(l).includes(key));
 /** The last step's change per problem, for the score panel (not saved). */
 const lastChange = new Map<string, StepChange & { evals: number; seed: number; method: string }>();
@@ -773,9 +771,10 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
     }
     config.container_phi = e.container.phi;
     // A record for P + 1 minus any one piece packs P pieces in no more room: it is part of the floor.
-    const next = p.P < MAX_PIECES ? await api.getProblem(p.N, p.M, p.P + 1) : null;
+    // a lookup that fails is no trim floor: the start goes on without it
+    const next = p.P < MAX_PIECES ? await api.getProblem(p.N, p.M, p.P + 1).catch(() => null) : null;
     const trim = next?.site_best && next.site_best.verification !== "pending" ? next.site_best.score : null;
-    const transfer = owned().has("transfer") ? await findTransfer(p) : null;
+    const transfer = owned().has("transfer") ? await findTransfer(p).catch(() => null) : null;
     if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
     const start = chooseStart({ board: config, score: e.score }, trim, transfer);
     applyLoadAll(p, start.board, start.score, trim);
@@ -1093,8 +1092,7 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
   if (!a.ok) {
     if (a.message === NOT_ISOLATED) {
       // latched: no more space problems are dealt this session, and the player is told once
-      if (!spaceBlocked)
-        say("Space problems need an isolated browser page, so they are left out here.");
+      if (!spaceBlocked) say("Space problems need an isolated browser page, so they are left out here.");
       spaceBlocked = true;
     } else say(`A run on ${problemTitle(p)} could not start (${a.message}).`);
     return false;
@@ -2452,42 +2450,50 @@ async function refreshHeld(): Promise<void> {
     if (!info) return;
     if (inFlight.has(p.key)) continue;
     noteLeader(p, info.leader);
-    payRent(p);
     persist();
     render();
     await new Promise((r) => setTimeout(r, 1000));
   }
 }
 
-// ---------- rent: one record checked at a time ----------
+// ---------- rent: a payday once a day ----------
 
-let rentChecking = false;
-let rentCheckedAt = 0;
+/** When the next payday runs (0: at once, which is how the page opens). */
+let paydayAt = 0;
+let paydayRunning = false;
 
-/** A check found the record still ours (or not): pays the rent it is owed since its last check. */
-function payRent(p: ProblemState | PastProblem): void {
-  if (settleRent(state, owned(), p, now()) > 0) reveal(state, "points", "upgrades");
-}
-
-/** With Rent: the record checked longest ago is checked, at most one every 10 s. */
-async function rentTick(): Promise<void> {
+/**
+ * With Rent: at page load and every 24 hours, all records held are looked up in batches (payday.ts)
+ * and the ones still ours pay the rent since their last payday. Records the server did not answer
+ * are tried again 10 minutes later.
+ */
+async function paydayTick(): Promise<void> {
   const o = owned();
-  if (!ownsGame || rentChecking || now() - rentCheckedAt < RENT_CHECK_MS) return;
-  tidyRent(state, o, now());
-  const p = nextRentCheck(state, o, now());
-  if (!p || inFlight.has(p.key) || ("sending" in p && p.sending)) return;
-  // a space problem is read at most once in SPACE_READ_MS with the others
-  if (!isPolygon(p) && now() - spaceReadAt < SPACE_READ_MS) return;
-  rentChecking = true;
-  rentCheckedAt = now();
+  if (!ownsGame || paydayRunning || !o.has("rent") || now() < paydayAt) return;
+  paydayRunning = true;
   try {
-    const info = await readLeader(p);
-    if (!info || inFlight.has(p.key) || !ownsGame) return;
-    noteLeader(p, info.leader);
-    payRent(p);
-    persist();
+    const r = await runPayday({
+      state,
+      owned: o,
+      now,
+      getLeaders: api.getLeaders,
+      noteLeader,
+      busy: (p) => inFlight.has(p.key) || ("sending" in p && !!p.sending),
+      active: () => ownsGame,
+      batchDone: () => {
+        reveal(state, "points", "upgrades");
+        persist();
+        render();
+      },
+    });
+    paydayAt = now() + (r.unanswered > 0 ? RENT_RETRY_MS : RENT_PAYDAY_MS);
+    if (r.paying > 0)
+      event(
+        `Payday. ${fmtInt(r.paying)} ${r.paying === 1 ? "record paid" : "records paid"} ${fmtRP(r.paid)} RP in rent.`,
+        false,
+      );
   } finally {
-    rentChecking = false;
+    paydayRunning = false;
   }
 }
 
@@ -2630,8 +2636,7 @@ function renderProblem(p: ProblemState | undefined): void {
       `Improvements here pay ${CONTEST[p.tier]} times as much as on an open problem.`;
   else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
-  else
-    note = "No one has sent a packing for this problem yet. Any board below the starting score is a new record.";
+  else note = "No one has sent a packing for this problem yet. Any board below the starting score is a new record.";
   text("t-problem-note", note);
   // before the queue, one problem at a time: the next one is earned by work
   const single = queueSize(owned()) <= 1;
@@ -3058,10 +3063,7 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
   const sig = state.queue
-    .map(
-      (p) =>
-        `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`,
-    )
+    .map((p) => `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`)
     .join(";");
   if (sig !== queueSig) {
     queueSig = sig;
@@ -3614,7 +3616,8 @@ function renderRecords(o: Owned): void {
   const rows: [string, string][] = [];
   if (rent) {
     rows.push(["Rent per hour", `${fmtRP(rentRate(state, o))} RP`]);
-    rows.push(["Rent waiting for a check", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
+    rows.push(["Rent waiting for payday", `about ${fmtRP(rentWaiting(state, o, now()))} RP`]);
+    rows.push(["Next payday", paydayAt <= now() ? "now" : `in ${fmtSpan(paydayAt - now())}`]);
     rows.push(["Rent paid", `${fmtRP(state.economy.rentPaid)} RP`]);
   }
   const c = collections(state.economy);
@@ -3624,9 +3627,9 @@ function renderRecords(o: Owned): void {
   text(
     "t-rc-note",
     rent
-      ? "Each record you hold is checked in turn. It pays the rent it built up since its last check." +
+      ? "Once a day, the game asks the server which of your records you still hold. Each one pays the rent it built up since its last payday." +
           (last
-            ? ` The last check paid +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
+            ? ` The last rent paid was +${fmtRP(last.rp)} RP on ${titleOf(last.key)}, ${fmtAgo(now() - last.at)}.`
             : "")
       : "",
   );
@@ -3859,8 +3862,7 @@ $("t-import").addEventListener("click", async () => {
     text("t-save-note", `The save could not be imported (${r.error}).`);
     return;
   }
-  if (!confirm("Replace your current game with this save? You lose the current game unless you exported it."))
-    return;
+  if (!confirm("Replace your current game with this save? You lose the current game unless you exported it.")) return;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
   state = r.state;
@@ -3987,7 +3989,7 @@ function begin(): void {
     void dealTick();
     void submitTick();
     void settleLost();
-    void rentTick();
+    void paydayTick();
     void followSpace();
     autoTick();
     render();

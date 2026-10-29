@@ -678,14 +678,14 @@ function standingRung(
 
 const RENT_MATH = [
   `${sym("h")} = 0.01 × ${sym("B")} × 1.5<sup>${sym("a")}</sup> × ${sym("m")}`,
-  `rent paid at a check = ${sym("h")} × min(${sym("Δ")}, 168)`,
+  `rent paid at a payday = ${sym("h")} × min(${sym("Δ")}, 168)`,
 ];
 const RENT_VARS: readonly Var[] = [
   [sym("h"), "a record's rent, in record points per hour"],
   [sym("B"), "the record points that problem earned, before multipliers"],
   [sym("a"), "levels of Higher rent"],
   [sym("m"), "your points multiplier now (standing, collections and the rewards of cycle rules)"],
-  [sym("Δ"), "hours since the record's last check (168 hours is a week)"],
+  [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
 ];
 
 /** A method whose runs have a warm-up (methods/ warmup), with its evaluations at tuning level 0. */
@@ -1110,11 +1110,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Records pay rent",
     cost: 200_000,
     requires: ["advance"],
-    effect: "Every record you still lead pays 1 % of what it earned, every hour.",
+    effect: "Each record you still hold pays a day of rent once a day.",
     how: {
       text: [
-        "Each record you lead pays rent every hour for as long as you lead it, even while this page is closed. The game checks your records with the server one at a time, each at most every 10 minutes. It pays the rent since a record's last check, up to a week.",
-        "If a check finds that another name has taken the record, the rent since its last check is not paid.",
+        "Each record you hold earns rent every hour, even while this page is closed. It is paid once a day. On payday, the game checks all your records with the server at once. It pays the rent for the days since each record's last payday, up to a week of them.",
+        "If another name has taken a record, the rent since its last payday is not paid.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1351,7 +1351,10 @@ export const UPGRADES: readonly Upgrade[] = [
       vars: [
         AUTO_VARS[0],
         [sym("a"), "levels of Faster auto-eval, 0 without it"],
-        [sym("C"), "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)"],
+        [
+          sym("C"),
+          "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)",
+        ],
         [sym("x"), "each evaluation a second above the first, whose price grows about 1 % an evaluation"],
         ...AUTO_VARS.slice(1),
       ],

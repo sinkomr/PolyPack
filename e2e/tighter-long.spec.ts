@@ -431,17 +431,20 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await expect(page.locator("#t-rc-sets")).toContainText("First records in these tiers: open problem");
   await expect(page.locator("#t-rc-stats")).toContainText("+5 % on all points");
 
-  // rent: the record's rent starts, and an hour later a check that finds it still ours pays it
+  // rent: the record's rent starts, the first payday (at once, with Rent owned) pays the few seconds
+  // since, and a day later the next payday finds the record still ours and pays the day
   await expect.poll(() => game(page, (s) => s.economy.checks?.[s.focus] !== undefined), { timeout: 15_000 }).toBe(true);
   const rate = await game(page, (s) => s.economy.base[s.focus]);
   expect(rate).toBeGreaterThan(0);
-  await page.evaluate(() => (window as any).tighter.skipAhead(3_600_000));
-  await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(0);
-  const paid = await game(page, (s) => s.economy.rentPaid);
-  // 1 % of what the record earned, an hour, times the collections bonus (+5 %)
-  // (relative: the second or so the test itself takes adds its share of an hour)
-  expect(paid / (0.01 * rate * 1.05)).toBeCloseTo(1, 2);
-  await expect(page.locator("#t-rc-note")).toContainText("The last check paid +");
+  await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in (23 h|1 d 0 h)/, { timeout: 20_000 });
+  const before = await game(page, (s) => s.economy.rentPaid);
+  await page.evaluate(() => (window as any).tighter.skipAhead(24 * 3_600_000));
+  await expect.poll(() => game(page, (s) => s.economy.rentPaid), { timeout: 20_000 }).toBeGreaterThan(before);
+  const paid = (await game(page, (s) => s.economy.rentPaid)) - before;
+  // 1 % of what the record earned, 24 hours, times the collections bonus (+5 %)
+  // (relative: the seconds the test itself takes add their share)
+  expect(paid / (24 * 0.01 * rate * 1.05)).toBeCloseTo(1, 2);
+  await expect(page.locator("#t-rc-note")).toContainText("The last rent paid was +");
 
   // a reset for standing, the next cycle under One method, with Head start I
   await give(page, ["standing", "rules", "head1"]);
@@ -570,7 +573,9 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
-  await expect(page.locator("#status")).toContainText(`you got ${Math.round(81 * f)} RP back for the ones you had bought`);
+  await expect(page.locator("#status")).toContainText(
+    `you got ${Math.round(81 * f)} RP back for the ones you had bought`,
+  );
   await expect(page.locator("#status")).toContainText(
     `The Seeds upgrades are gone from the tech tree. You got ${Math.round(300 * f).toLocaleString("en-US")} RP back.`,
   );

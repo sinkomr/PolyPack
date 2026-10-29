@@ -467,3 +467,30 @@ test("tighter: the game's page is cross-origin isolated (space runs share memory
   await page.goto("/index.html");
   expect(await page.evaluate(() => crossOriginIsolated)).toBe(false);
 });
+
+test("tighter: with Rent, a held record's rent arrives at payday through /api/leaders", async ({ page }) => {
+  test.setTimeout(180_000);
+  const leaderCalls: string[] = [];
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/api/leaders") leaderCalls.push(decodeURIComponent(new URL(r.url()).search));
+  });
+  await fresh(page, 7);
+  await firstRecord(page);
+  await expect.poll(async () => (await focused(page)).ourId, { timeout: 60_000 }).not.toBeNull();
+  const p = await focused(page);
+  // Rent owned (set through the handle): the record's rent starts, and the page's first payday, at once,
+  // asks about it and pays only the seconds since
+  await page.evaluate(() => (window as any).tighter.state.owned.push("rent"));
+  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(1);
+  await expect(page.locator("#t-rc-stats")).toContainText(/Next payday\s*in (23 h|1 d 0 h)/, { timeout: 20_000 });
+  const first = await page.evaluate(() => (window as any).tighter.state.economy.rentPaid);
+  expect(first).toBeLessThan(0.001);
+  // a day later it is payday again: one batch request names the record, and a day of rent is paid
+  await page.evaluate(() => (window as any).tighter.skipAhead(24 * 3_600_000));
+  await expect.poll(() => leaderCalls.length, { timeout: 30_000 }).toBe(2);
+  expect(leaderCalls[1]).toContain(p.key);
+  await expect
+    .poll(() => page.evaluate(() => (window as any).tighter.state.economy.rentPaid), { timeout: 30_000 })
+    .toBeGreaterThan(first + 0.01);
+  expect((await focused(page)).ourId).toBe(p.ourId);
+});

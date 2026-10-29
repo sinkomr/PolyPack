@@ -22,7 +22,6 @@ import {
   collections,
   collectionsBonus,
   heldRecords,
-  nextRentCheck,
   noteRecorded,
   pointsMultiplier,
   rentPerHour,
@@ -234,7 +233,7 @@ describe("Tighter rent", () => {
     expect(heldRecords(s)).toEqual([]);
   });
 
-  it("checks the record checked longest ago, starts rent for records held before Rent, and forgets the rest", () => {
+  it("starts rent for records held before Rent, and forgets the rest", () => {
     const { s, p } = game();
     confirmed(s, p, 1.2 * B, 7, T0);
     // held before Rent was bought: no rent owed for that time
@@ -256,10 +255,6 @@ describe("Tighter rent", () => {
     tidyRent(s, ownedSet(s), T0 + H);
     expect(s.economy.checks).toEqual({ [p.key]: T0 + H, "21/21/40": T0 + H });
     s.economy.checks["21/21/40"] = T0;
-    expect(nextRentCheck(s, ownedSet(s), T0 + H)!.key).toBe("21/21/40");
-    // a record checked less than ten minutes ago waits: a few records cost few requests
-    expect(nextRentCheck(s, ownedSet(s), T0 + 9 * 60_000)).toBeNull();
-    expect(nextRentCheck(s, ownedSet(s), T0 + 10 * 60_000)!.key).toBe("21/21/40");
     // a past record without a kept base pays on what it earned
     expect(rentPerHour(s, ownedSet(s), s.past[0])).toBeCloseTo(0.3, 12);
     // a problem that leaves the queue still holding its record keeps paying from the past list
