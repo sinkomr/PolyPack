@@ -31,6 +31,35 @@ describe("data/records.json", () => {
     for (const r of flagged) expect(Number(/\bProved by\b.*?\b(\d{4})\b/.exec(r.citation ?? "")?.[1])).toBeGreaterThanOrEqual(2023);
   });
 
+  it("records Hosono's eight computer-assisted triangle proofs, and no others", () => {
+    const hosono = JSON.parse(readFileSync(new URL("../../../data/sources/hosono.json", import.meta.url), "utf8")) as {
+      records: { P: number; value: number }[];
+      not_proven: { N: number; M: number; P: number }[];
+    };
+    const sides: Record<number, number> = {
+      3: 1.5 + Math.sqrt(3), 4: 3 + 2 / Math.sqrt(3), 6: 2 + 4 / Math.sqrt(3), 7: 4 + 2 / Math.sqrt(3),
+      11: 5 + 2 / Math.sqrt(3), 16: 6 + 2 / Math.sqrt(3), 22: 7 + 2 / Math.sqrt(3), 29: 8 + 2 / Math.sqrt(3),
+    };
+    expect(hosono.records.map((r) => r.P)).toEqual(Object.keys(sides).map(Number));
+    for (const [P, side] of Object.entries(sides)) {
+      const r = find(4, 3, Number(P))!;
+      expect(r.status).toBe("proven_unrefereed");
+      expect(r.note).toContain("Hiroaki Hosono, square-packing");
+      expect(r.note).toContain("triangle-v1");
+      // the stored value is the source's truncated print, below the proven side by less than one unit of its precision
+      expect(side - r.value).toBeGreaterThanOrEqual(-1e-9);
+      expect(side - r.value).toBeLessThanOrEqual(10 ** -r.display_precision);
+      expect(hosono.records.find((h) => h.P === Number(P))!.value).toBe(side);
+    }
+    // the lower bound of 6 squares has no Lean proof yet; the others do
+    expect(find(4, 3, 6)!.note).toContain("no Lean 4 proof");
+    expect(find(4, 3, 7)!.note).toContain("also checked in Lean 4");
+    // Hosono's repository lists 5 squares as not done, although Friedman's page says 2 to 7 are proved
+    expect(hosono.not_proven).toEqual([expect.objectContaining({ N: 4, M: 3, P: 5 })]);
+    for (const P of [5, 37, 46]) expect(find(4, 3, P)!.status).toBe("best_known");
+    expect(records.filter((r) => r.N === 4 && r.M === 3 && r.status === "proven_unrefereed").length).toBe(8);
+  });
+
   it("holds no value below the bound from a proven circle record", () => {
     // an M-gon of side s lies in its circumcircle, of radius s / (2 sin(π/M)); a circle record is its diameter (scripts/build-records.ts)
     const below = records.filter((r) => {

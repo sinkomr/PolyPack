@@ -34,6 +34,8 @@ The coordinates of circles in a circle for n = 101 to 500 were read on 2026-10-1
 - Two pentagons in a hexagon (below) are also in the supplement, at 1.538842, the value of PolyPack's packing. Friedman has a value for this problem, so the gaps rule leaves the supplement's out before the bound check removes Friedman's; the record stays PolyPack's own.
 - The status is `best_known` for all: the supplement claims no optimality.
 
+Hiroaki Hosono's proofs for squares in an equilateral triangle (N = 4, M = 3), `data/sources/hosono.json` (role "proof"): Hosono, square-packing, https://github.com/wand125/square-packing, folder `problems/triangle`, release `triangle-v1`, MIT licence, October 2026, accessed 2026-10-29. Computer-assisted: for P = 3, 4, 6, 7, 11, 16, 22 and 29 the lower and upper bound certificates are checked by two independent exact checkers, and the lower bound also in Lean 4 for all but P = 6, which has no Lean proof yet. The repository says none of this is peer reviewed, so the status is `proven_unrefereed`. The build keeps the value already held (Friedman's, truncated), requires it to lie within one unit of its printed precision below the proven side (3/2 + √3, 3 + 2/√3, 2 + 4/√3, 4 + 2/√3, 5 + 2/√3, 6 + 2/√3, 7 + 2/√3, 8 + 2/√3), and only sets the status, citation and note; coordinates stay. P = 5 is listed under `not_proven`: Hosono's repository says it is not done, although Friedman's page now says "Proved by Hiroaki Hosono in October 2026" for n = 2 to 7, so a refreshed `friedman.json` must not make it proven; the build sets it back to `best_known`. P = 37 and 46 are other claims and unchanged.
+
 Proofs written for PolyPack, with their review status, are in [docs/proofs/](proofs/README.md).
 
 ## Status of an entry
@@ -41,7 +43,7 @@ Proofs written for PolyPack, with their review status, are in [docs/proofs/](pro
 The project's rule: a claim of proof that is generally accepted is recorded as proven. In this file that means the source reports the result as proved and the proof is dated before the cut-off year, 2023. A more recent claim stays flagged until its acceptance is confirmed.
 
 - `proven`: the source says "Proved by ..." (before 2023) or "Trivial".
-- `proven_unrefereed`: the source says "Proved by ..." in 2023 or later. Whether the proof is peer reviewed was not checked, so these are flagged for caution. [This cut-off year is a rule of this project, not a statement by the sources.] The current build has six: squares in a circle for n = 3 to 7 (claims dated 2026) and two pentagons in a triangle (May 2026).
+- `proven_unrefereed`: the source says "Proved by ..." in 2023 or later. Whether the proof is peer reviewed was not checked, so these are flagged for caution. [This cut-off year is a rule of this project, not a statement by the sources.] The current build has fourteen: squares in a circle for n = 3 to 7 (claims dated 2026), two pentagons in a triangle (May 2026) and eight of squares in a triangle (Hosono, below).
 - `best_known`: the source says "Found by ..." or gives no attribution.
 - `trivial_tiling`: a zero-waste tiling exists [CALC]: one piece in a container of its own shape, k² squares in a square, k² triangles in a triangle.
 
