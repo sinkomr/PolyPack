@@ -4,11 +4,20 @@ import { LiteratureRecord } from "@polypack/geometry";
 import { hasRecord, parseSpaceId, problemOf } from "@polypack/spaces";
 import { loadSpacesIndex } from "@polypack/spaces/load";
 import { beforeEach, describe, expect, it } from "vitest";
-import { readSpaceBody } from "../../web/src/tighter/space-submission";
 import { createApp } from "../src/app";
 import { LEADERS_MAX_KEYS, LEADERS_MAX_URL, RESEARCH_RECORD_NAME } from "../src/leaders";
 import { SqliteStore } from "../src/sqlite-store";
 import { NewSubmission } from "../src/store";
+
+/**
+ * The game's own reading of a space problem. Loaded by a path tsc does not follow: the game's modules use the
+ * DOM, which the server's typecheck does not have; vitest resolves the import at run time.
+ */
+const GAME_READER = "../../web/src/tighter/space-submission";
+type SpaceRead = { leader: { score: number; name: string; id: number | null } | null };
+const loadReader = async () =>
+  ((await import(/* @vite-ignore */ GAME_READER)) as { readSpaceBody: (id: string, body: unknown) => SpaceRead | null })
+    .readSpaceBody;
 
 const index = loadSpacesIndex(resolve(__dirname, "../../.."));
 
@@ -163,6 +172,7 @@ describe("GET /api/leaders", () => {
 describe("GET /api/leaders against the per-problem endpoints and the game's reading", () => {
   const sph = (id: string) => index.sphere!.byId.get(id)!.certified!.score as number;
   it("agrees on ties, pending leaders, removals, edits, records, closed problems and disk and circle problems", async () => {
+    const readSpaceBody = await loadReader();
     const st = new SqliteStore(":memory:");
     const a = createApp({
       store: st,
