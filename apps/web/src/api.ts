@@ -21,6 +21,27 @@ async function getJson<T>(url: string): Promise<T | null> {
 
 export const getProblem = (N: number, M: number, P: number) => getJson<ProblemInfo>(`/api/problems/${N}/${M}/${P}`);
 
+/** One problem's leader in a /api/leaders answer: a polygon's site_best, or a space problem's best value (research: true for the research record). */
+export interface LeaderValue {
+  score: number;
+  name: string;
+  id: number | null;
+  verification?: "none" | "confirmed" | "pending";
+  research?: true;
+}
+export interface LeadersAnswer {
+  /** By key: null when the problem has no leader (or is closed). A key that is absent was not answered. */
+  leaders: Record<string, LeaderValue | null>;
+  /** Keys the server did not know or could not read. */
+  unknown: string[];
+}
+/** Most keys one /api/leaders request takes. */
+export const LEADERS_MAX_KEYS = 200;
+
+/** The leaders of up to 200 problems in one request ("N/M/P" or a space problem's id); null when it failed. */
+export const getLeaders = (keys: readonly string[]) =>
+  getJson<LeadersAnswer>(`/api/leaders?keys=${keys.map(encodeURIComponent).join(",")}`);
+
 export const getLeaderboard = (N: number, M: number, P: number) =>
   getJson<{ entries: LeaderboardEntry[]; total: number }>(`/api/leaderboard/${N}/${M}/${P}`);
 

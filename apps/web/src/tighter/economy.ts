@@ -10,9 +10,9 @@ import type { Owned } from "./upgrades";
  *
  * **Rent.** Every record the player still leads pays by the hour: 1 % of the record points that
  * problem earned (before multipliers), × 1.5 a level of Higher rent, × today's points multiplier
- * [SPEC]. Rent accrues between checks; a check (GET /api/problems) that finds the record still held
- * pays the rent since the last one, at most a week of it; a check or a live event that finds it lost
- * pays nothing for the unchecked time. The server says who leads, so rent needs no other trust.
+ * [SPEC]. Rent accrues between paydays; once a day (payday.ts) the game asks the server about every record
+ * held in batches (GET /api/leaders). A record still held pays the rent since its last payday, at most
+ * a week of it; one found lost, by that or by a live event, pays nothing for the unsettled time. The server says who leads, so rent needs no other trust.
  *
  * **Collections**, counted from records the server confirmed and kept through resets: every P of a
  * frontier pair (+2 % to all points each), 10, 30 and 100 records with one piece shape (+1 % each),
@@ -26,7 +26,7 @@ export interface EconomyState {
   tiers: string[];
   /** Record points earned per problem before multipliers (rent is a share of it). */
   base: Record<string, number>;
-  /** Per record held, while Rent is owned: when its rent was last settled by a check. */
+  /** Per record held, while Rent is owned: when its rent was last settled (a payday). */
   checks: Record<string, number>;
   /** Rent paid in all. */
   rentPaid: number;
@@ -182,7 +182,7 @@ export function noteRecorded(s: GameState, o: Owned, p: ProblemState, now: numbe
   if (o.has("rent") && e.checks[p.key] === undefined) e.checks[p.key] = now;
 }
 
-/** A record of the player's was lost: no rent for it, and none for the time since its last check. */
+/** A record of the player's was lost: no rent for it, and none for the time since its last payday. */
 export function forgetHeld(e: EconomyState, key: string): void {
   delete e.checks[key];
 }
@@ -218,12 +218,14 @@ export function syncEconomy(s: GameState): void {
 export const RENT_SHARE = 0.01;
 /** Each level of Higher rent multiplies rent by this. */
 export const RENT_GROWTH = 1.5;
-/** Rent paid at most for this long without a check. */
+/** Rent paid at most for this long without a payday. */
 export const RENT_WINDOW_MS = 7 * 24 * 3_600_000;
-/** At most one rent check this often. */
-export const RENT_CHECK_MS = 10_000;
-/** A record is checked again no sooner than this after its last check [SPEC]: few records, few requests. */
-export const RENT_RECHECK_MS = 10 * 60_000;
+/** Rent is paid once a day: a record settled less than this ago waits for the next payday. */
+export const RENT_PAYDAY_MS = 24 * 3_600_000;
+/** After a payday that left records unanswered, the next try comes this soon. */
+export const RENT_RETRY_MS = 10 * 60_000;
+/** Most records one payday request asks about (the server's limit). */
+export const RENT_BATCH = 200;
 
 type Held = ProblemState | PastProblem;
 
@@ -249,7 +251,7 @@ export function rentRate(s: GameState, o: Owned): number {
   return heldRecords(s).reduce((t, p) => t + rentPerHour(s, o, p), 0);
 }
 
-/** Rent accrued and not yet checked, across the records held (paid as each is checked). */
+/** Rent accrued and not yet paid, across the records held (paid at the next payday). */
 export function rentWaiting(s: GameState, o: Owned, now: number): number {
   if (!o.has("rent")) return 0;
   let t = 0;
@@ -274,23 +276,8 @@ export function tidyRent(s: GameState, o: Owned, now: number): void {
   for (const k of Object.keys(e.base)) if (!held.has(k) && !queued.has(k)) delete e.base[k];
 }
 
-/** The held record whose rent was checked longest ago, if that is at least RENT_RECHECK_MS ago. */
-export function nextRentCheck(s: GameState, o: Owned, now: number): Held | null {
-  if (!o.has("rent")) return null;
-  let best: Held | null = null;
-  let oldest = now - RENT_RECHECK_MS + 1;
-  for (const p of heldRecords(s)) {
-    const at = s.economy.checks[p.key];
-    if (at !== undefined && at < oldest) {
-      oldest = at;
-      best = p;
-    }
-  }
-  return best;
-}
-
 /**
- * A check found the record still the player's: pays its rent since the last check (at most a week)
+ * A payday found the record still the player's: pays its rent since the last one (at most a week)
  * and starts the next window. Returns the points paid (0 when it is not held, or without Rent).
  */
 export function settleRent(s: GameState, o: Owned, p: Held, now: number): number {
