@@ -1,11 +1,11 @@
 """The problems of the balls space (packages/balls/src/catalogue.ts) and their elementary lower bounds
 (packages/balls/src/problems.ts ballsBound), for the certifier and the record builder. Standard library only.
 
-189 problems: `ballinball`, `ballin<code>` for each of the polyhedra space's 94 solids (balls in that solid, scaled by
-s) and `<code>inball` for each of the 94 (the unit-edge solid in a ball), P from 2 to 100. The first 7 (ORIGINAL_CODES)
-are the space's first problems; the order of CODES is the TypeScript catalogue's (balls in a ball, then in the
-Platonic, Archimedean, Catalan, prism, antiprism, elongated prism, bipyramid and trapezohedron solids, then the solids in
-a ball in the same order)."""
+373 problems: `ballinball`, `ballin<code>` for each of the polyhedra space's 186 solids (the 94 of the first catalogue
+and the 92 Johnson solids; balls in that solid, scaled by s) and `<code>inball` for each of the 186 (the unit-edge solid
+in a ball), P from 2 to 100. The first 7 (ORIGINAL_CODES) are the space's first problems; the order of CODES is the
+TypeScript catalogue's (balls in a ball, then in the Platonic, Archimedean, Catalan, prism, antiprism, elongated prism,
+bipyramid, trapezohedron and Johnson solids, then the solids in a ball in the same order)."""
 import math
 import os
 import re
@@ -38,10 +38,11 @@ SCORE_PER_RADIUS = 2
 
 MIN_P, MAX_P = 2, 100
 
-_FAMILIES = ['platonic', 'archimedean', 'catalan', 'prism', 'antiprism', 'elongated_prism', 'bipyramid', 'trapezohedron']
+_FAMILIES = ['platonic', 'archimedean', 'catalan', 'prism', 'antiprism', 'elongated_prism', 'bipyramid', 'trapezohedron',
+             'johnson']
 _LABEL = {'platonic': 'Platonic solid', 'archimedean': 'Archimedean solid', 'catalan': 'Catalan solid', 'prism': 'prism',
           'antiprism': 'antiprism', 'elongated_prism': 'elongated prism', 'bipyramid': 'bipyramid',
-          'trapezohedron': 'trapezohedron'}
+          'trapezohedron': 'trapezohedron', 'johnson': 'Johnson solid'}
 
 
 def _rank(name):
@@ -109,16 +110,115 @@ def _float_vertices(name):
     return [[mid(x) * lam for x in v] for v in d['V']], d['faces']
 
 
+def _solve(A, y):
+    """Gaussian elimination with partial pivoting; None for a (nearly) singular matrix."""
+    n = len(y)
+    M = [list(row) + [y[i]] for i, row in enumerate(A)]
+    scale = max(abs(v) for row in A for v in row)
+    for i in range(n):
+        p = max(range(i, n), key=lambda r: abs(M[r][i]))
+        if abs(M[p][i]) <= 1e-11 * scale:
+            return None
+        M[i], M[p] = M[p], M[i]
+        for r in range(i + 1, n):
+            m = M[r][i] / M[i][i]
+            for j in range(i, n + 1):
+                M[r][j] -= m * M[i][j]
+    x = [0.0] * n
+    for i in range(n - 1, -1, -1):
+        x[i] = (M[i][n] - sum(M[i][j] * x[j] for j in range(i + 1, n))) / M[i][i]
+    return x
+
+
+def _ball_on(pts):
+    """(centre, r^2) of the smallest ball with the 1 to 4 points on its boundary, or None when they are degenerate."""
+    if not pts:
+        return (0.0, 0.0, 0.0), -1.0
+    a = pts[0]
+    u = [[p[k] - a[k] for k in range(3)] for p in pts[1:]]
+    if not u:
+        return tuple(a), 0.0
+    G = [[sum(p[k] * q[k] for k in range(3)) for q in u] for p in u]
+    t = _solve(G, [sum(p[k] * p[k] for k in range(3)) / 2 for p in u])
+    if t is None:
+        return None
+    x = [a[k] + sum(t[i] * u[i][k] for i in range(len(u))) for k in range(3)]
+    return tuple(x), sum((a[k] - x[k]) ** 2 for k in range(3))
+
+
+def enclosing_radius(V):
+    """Radius of the smallest ball holding the points V (Welzl's algorithm; a port of enclosingOf in
+    packages/balls/src/extent.ts, whose result the fixture bounds.json compares). Floats."""
+    P = [V[i] for i in sorted(range(len(V)), key=lambda i: (i * 2654435761) % 4294967296)]
+
+    def inside(B, p):
+        return sum((p[k] - B[0][k]) ** 2 for k in range(3)) <= B[1] * (1 + 1e-12) + 1e-15
+
+    def welzl(n, R):
+        B = _ball_on(R) or ((0.0, 0.0, 0.0), -1.0)
+        if len(R) == 4:
+            return B
+        for i in range(n):
+            if B[1] >= 0 and inside(B, P[i]):
+                continue
+            B = welzl(i, R + [P[i]])
+        return B
+    return math.sqrt(welzl(len(P), [])[1])
+
+
+def chebyshev_radius(N, b):
+    """max r with N_f . x + r <= b_f for every face f (the radius of the largest ball in the solid): a tableau simplex on
+    x+, x- and r with Bland's rule, as chebyshevOf in packages/balls/src/extent.ts. N are unit outward normals."""
+    F = len(b)
+    n = 7
+    w = n + F + 1
+    T = [[0.0] * w for _ in range(F + 1)]
+    basis = [n + f for f in range(F)]
+    for f in range(F):
+        for k in range(3):
+            T[f][k] = N[f][k]
+            T[f][3 + k] = -N[f][k]
+        T[f][6] = 1.0
+        T[f][n + f] = 1.0
+        T[f][w - 1] = b[f]
+    T[F][6] = -1.0
+    for _ in range(10000):
+        col = next((j for j in range(w - 1) if T[F][j] < -1e-13), -1)
+        if col < 0:
+            break
+        row, best = -1, math.inf
+        for f in range(F):
+            if T[f][col] > 1e-13:
+                ratio = T[f][w - 1] / T[f][col]
+                if ratio < best - 1e-15 or (abs(ratio - best) <= 1e-15 and basis[f] < basis[row]):
+                    best, row = ratio, f
+        if row < 0:
+            raise ValueError('unbounded')
+        p = T[row][col]
+        T[row] = [v / p for v in T[row]]
+        for f in range(F + 1):
+            if f != row and T[f][col] != 0:
+                m = T[f][col]
+                T[f] = [T[f][j] - m * T[row][j] for j in range(w)]
+        basis[row] = col
+    return T[F][w - 1]
+
+
+_SAFETY = 1e-9
+
+
 def geometry(name):
     """Volume, circumradius, inradius, diameter (largest vertex distance) and tangential flag of the canonical solid
     `name` (python/polyhedra/solids_exact.json), from its float vertices and the unit normals through the first vertex
     of each face; the vertex centroid is the origin. The inradius is the least face offset about the origin, and the
     circumradius the largest vertex distance: both about the centroid, which is the centre of the largest inscribed
-    and of the smallest enclosing ball of all 94 solids (container.ts in packages/balls). Floats."""
+    and of the smallest enclosing ball of the first 94 solids (container.ts in packages/balls), not of the Johnson solids,
+    so 'chebyshev' and 'enclosing' give the radii of the largest ball inside and the smallest ball outside. Floats."""
     g = _GEOMETRY.get(name)
     if g is None:
         V, faces = _float_vertices(name)
         offsets = []
+        normals = []
         vol = 0.0
         for f in faces:
             a, b, c = V[f[0]], V[f[1]], V[f[2]]
@@ -128,6 +228,7 @@ def geometry(name):
             length = math.hypot(*n)
             off = sum(n[k] * a[k] for k in range(3)) / length
             offsets.append(abs(off))
+            normals.append([(x if off >= 0 else -x) / length for x in n])
             for i in range(1, len(f) - 1):
                 b, c = V[f[i]], V[f[i + 1]]
                 vol += (a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
@@ -135,6 +236,12 @@ def geometry(name):
         diam = max(math.dist(V[i], V[j]) for i in range(len(V)) for j in range(i + 1, len(V)))
         g = {'volume': abs(vol), 'circumradius': max(math.hypot(*v) for v in V), 'inradius': min(offsets),
              'diameter': diam, 'tangential': max(offsets) - min(offsets) < 1e-12}
+        # about the best centre (extent.ts): the vertex centroid's values where it is optimal, else the optimum moved
+        # by 1e-9 of itself to keep a bound valid
+        cheb = chebyshev_radius(normals, offsets)
+        g['chebyshev'] = g['inradius'] if cheb <= g['inradius'] * (1 + 1e-9) else cheb * (1 + _SAFETY)
+        encl = enclosing_radius(V)
+        g['enclosing'] = g['circumradius'] if encl >= g['circumradius'] * (1 - 1e-9) else encl * (1 - _SAFETY)
         _GEOMETRY[name] = g
     return g
 
@@ -156,9 +263,9 @@ def parse_id(text):
 def bound(code, P):
     """The largest of the volume, one-piece and two-piece bounds (problems.ts), as a float. Balls (radius r =
     BALL_RADIUS = 1/2): volume, in a ball container of radius rho >= (P)^(1/3) r, in a solid s >= (P 4 pi r^3 / (3 V))^(1/3);
-    one piece, rho >= r in a ball, s >= 2 r in a cube, s >= r / rho in another solid; two pieces, rho >= 2 r in a ball, s >= 2 r +
+    one piece, rho >= r in a ball, s >= 2 r in a cube, s >= r / rho in another solid, rho its Chebyshev radius; two pieces, rho >= 2 r in a ball, s >= 2 r +
     2 r / sqrt 3 in a cube, in another solid s >= r / rho + 2 r / D when all its faces are at the inradius rho (D the
-    diameter) and always s >= 4 r / D. Solids in a ball: volume, circumradius, twice the inradius, all radii.
+    diameter) and always s >= 4 r / D. Solids in a ball: volume, the enclosing radius (the circumradius for the first 94 solids), twice the inradius, all radii.
     A ball container is scored by its diameter, so its bounds are doubled: score = 2 rho."""
     prob = PROBLEMS[code]
     piece, container = prob['piece'], prob['container']
@@ -172,12 +279,12 @@ def bound(code, P):
             vals = [(P * v) ** (1 / 3), D2] + ([D2 + D2 / math.sqrt(3)] if P >= 2 else [])
         else:
             c = geometry(container)
-            vals = [(P * v / c['volume']) ** (1 / 3), R / c['inradius']]
+            vals = [(P * v / c['volume']) ** (1 / 3), R / c['chebyshev']]
             if P >= 2:
                 if c['tangential']:
                     vals.append(R / c['inradius'] + D2 / c['diameter'])
                 vals.append(2 * D2 / c['diameter'])
         return float(max(vals))
-    v, Rc, r = CLOSED_FORMS[piece] if piece in CLOSED_FORMS else (lambda g: (g['volume'], g['circumradius'], g['inradius']))(geometry(piece))
+    v, Rc, r = CLOSED_FORMS[piece] if piece in CLOSED_FORMS else (lambda g: (g['volume'], g['enclosing'], g['inradius']))(geometry(piece))
     vals = [(3 * P * v / (4 * math.pi)) ** (1 / 3), Rc] + ([2 * r] if P >= 2 else [])
     return float(max(vals)) * SCORE_PER_RADIUS

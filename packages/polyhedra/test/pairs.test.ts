@@ -1,5 +1,5 @@
 /**
- * Every ordered pair of the 94 solids is a problem (catalogue.ts problemNameOf): codes that parse back, titles,
+ * Every ordered pair of the 186 solids is a problem (catalogue.ts problemNameOf): codes that parse back, titles,
  * the domain's menus, the volume bound, a lattice start and the search on a sample of pairs from every family of
  * piece and of container. P is 2 or 3 and the budgets are short: properties, not bit-exact results.
  */
@@ -30,9 +30,9 @@ import {
 } from "../src";
 
 describe("the problems of every pair of solids", () => {
-  it("name 8,836 pairs by their solids' codes, each code once and read back as the same pair", () => {
-    expect(SOLID_NAMES_LIST.length).toBe(94);
-    expect(PAIR_COUNT).toBe(8836);
+  it("name 34,596 pairs by their solids' codes, each code once and read back as the same pair", () => {
+    expect(SOLID_NAMES_LIST.length).toBe(186);
+    expect(PAIR_COUNT).toBe(34596);
     const seen = new Set<string>();
     for (const a of SOLID_NAMES_LIST)
       for (const b of SOLID_NAMES_LIST) {
@@ -45,7 +45,7 @@ describe("the problems of every pair of solids", () => {
         expect(pairCode(a.name, b.name)).toBe(code);
         expect(solidNameOfCode(a.code)).toBe(a.name);
       }
-    expect(seen.size).toBe(8836);
+    expect(seen.size).toBe(34596);
     // the 150 problems of the records keep their families, wiki flags and titles
     for (const q of PROBLEM_NAMES) {
       expect(problemNameOf(q.code)).toBe(q);
@@ -69,7 +69,7 @@ describe("the problems of every pair of solids", () => {
     expect(problemTitle("nonsense")).toBe("nonsense");
     const titles = new Set<string>();
     for (const a of SOLID_NAMES_LIST) for (const b of SOLID_NAMES_LIST) titles.add(problemTitle(`${a.code}in${b.code}`));
-    expect(titles.size).toBe(8836);
+    expect(titles.size).toBe(34596);
   });
 
   it("refuse what is not a pair", () => {
@@ -84,7 +84,7 @@ describe("the problems of every pair of solids", () => {
   it("keep no memory of what is not a pair, so that junk ids cannot grow it", () => {
     problemNameOf("kttinpkd");
     const size = PAIR_CACHE.size;
-    expect(size).toBeLessThanOrEqual(8686);
+    expect(size).toBeLessThanOrEqual(34446);
     for (let i = 0; i < 20_000; i++) {
       expect(problemNameOf(`junk${i}in${i * 7}`)).toBeNull();
       problemNameOf(`cubin${i}`);
@@ -92,18 +92,18 @@ describe("the problems of every pair of solids", () => {
     expect(PAIR_CACHE.size).toBe(size);
   });
 
-  it("are offered in two menus of 94 solids, grouped by family, that make the codes", () => {
+  it("are offered in two menus of 186 solids, grouped by family, that make the codes", () => {
     const d = polyhedraDomain.info;
     type Field = { key: string; values?: string[]; titles?: Record<string, string>; groups?: Record<string, string>; min?: number; max?: number };
     const [piece, container, P] = d.fields as Field[];
     expect([piece.key, container.key, P.key]).toEqual(["piece", "container", "P"]);
     expect(piece.values).toEqual(SOLIDS_BY_GROUP.map((s) => s.code));
-    expect(new Set(piece.values).size).toBe(94);
+    expect(new Set(piece.values).size).toBe(186);
     expect(container.values).toEqual(piece.values);
     // the pattern names the two menus, so that a page that knows only fields by name composes the id
     expect(d.id).toBe("polyhedra/<piece>in<container>/<P>");
     expect(d.joined).toEqual([{ key: "code", parts: ["piece", "container"], separator: "in" }]);
-    expect(d.problems).toBe(8836 * (POLYHEDRA_MAX_P - 1));
+    expect(d.problems).toBe(34596 * (POLYHEDRA_MAX_P - 1));
     expect([P.min, P.max]).toEqual([2, 500]);
     // the groups come in runs, one per family, so that the menu has one heading for each
     const runs: string[] = [];

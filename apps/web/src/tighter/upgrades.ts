@@ -6,10 +6,8 @@ import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from ".
 import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
-import { BALLS_CODES } from "@polypack/balls/catalogue";
-import { PAIR_COUNT } from "@polypack/polyhedra/catalogue";
 import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
-import { SliceId, sliceById, solidsOfSlice } from "./slices";
+import { GAME_BALLS_COUNT, GAME_PAIR_COUNT, SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
 
 /**
@@ -847,7 +845,7 @@ function sliceCard(id: CardSliceId, requires: UpgradeId[], effect: string, what:
  */
 function polyWhat(id: SliceId, what: string): string {
   const n = solidsOfSlice(id);
-  return `The dealer also deals ${what} (${n} solids) as pieces and as containers. A problem pairs a piece solid with a container solid, from any family that is open, this one included. Each pair has 2 to 500 pieces. With every family open, that is ${PAIR_COUNT.toLocaleString("en-US")} kinds of problem.`;
+  return `The dealer also deals ${what} (${n} solids) as pieces and as containers. A problem pairs a piece solid with a container solid, from any family that is open, this one included. Each pair has 2 to 500 pieces. With every family open, that is ${GAME_PAIR_COUNT.toLocaleString("en-US")} kinds of problem.`;
 }
 
 const nf = (n: number) => n.toLocaleString("en-US");
@@ -950,7 +948,7 @@ const SLICE_CARDS: Upgrade[] = [
     "balls",
     ["poly-platonic"],
     "The dealer also deals problems with balls, as pieces or as the container.",
-    `The dealer also deals packings with balls. They are balls of diameter 1 in the smallest ball or the smallest copy of a solid, and unit solids in the smallest ball. Each has 2 to 100 pieces. A solid is dealt once its family is open. With every family open, that is ${BALLS_CODES.length} kinds of problem. Most have no record yet.`,
+    `The dealer also deals packings with balls. They are balls of diameter 1 in the smallest ball or the smallest copy of a solid, and unit solids in the smallest ball. Each has 2 to 100 pieces. A solid is dealt once its family is open. With every family open, that is ${GAME_BALLS_COUNT} kinds of problem. Most have no record yet.`,
   ),
 ];
 

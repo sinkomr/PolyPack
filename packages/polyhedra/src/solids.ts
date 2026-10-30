@@ -102,10 +102,11 @@ for (const d of SOLID_DATA) BY_CODE.set(d.code, d.name);
 /**
  * The name of every solid of the problems: upstream's 56 in upstream's order (Platonic, Archimedean, Catalan, prisms,
  * antiprisms, elongated prisms), then PolyPack's 38 (prisms, antiprisms, elongated prisms with 7, 9, 10 and 11 sides;
- * bipyramids; trapezohedra). The 92 Johnson solids are in the data and getSolid knows them, but they are listed apart
- * (JOHNSON_SOLID_NAMES) until problems use them.
+ * bipyramids; trapezohedra), then the 92 Johnson solids in Johnson's order (also listed apart, JOHNSON_SOLID_NAMES).
  */
-export const SOLID_NAMES: readonly string[] = SOLID_DATA.filter((d) => d.family !== "johnson").map((d) => d.name);
+export const SOLID_NAMES: readonly string[] = SOLID_DATA.filter((d) => d.family !== "johnson")
+  .concat(SOLID_DATA.filter((d) => d.family === "johnson"))
+  .map((d) => d.name);
 
 /** The names of the 92 Johnson solids, J1 to J92 in Johnson's order (codes j01 to j92). */
 export const JOHNSON_SOLID_NAMES: readonly string[] = SOLID_DATA.filter((d) => d.family === "johnson").map((d) => d.name);

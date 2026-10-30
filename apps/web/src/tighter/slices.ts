@@ -151,6 +151,12 @@ export const SOLID_FAMILY_SLICE: Readonly<Partial<Record<SolidFamily, SliceId>>>
 export const solidsOfSlice = (slice: SliceId): number =>
   SOLID_NAMES_LIST.filter((s) => SOLID_FAMILY_SLICE[s.family] === slice).length;
 
+/** The solids some slice opens: the catalogue's less the families no slice has (the Johnson solids, until they are added). */
+const GAME_SOLIDS = SOLID_NAMES_LIST.filter((s) => SOLID_FAMILY_SLICE[s.family] !== undefined).length;
+/** The kinds of polyhedra problem the game deals with every family open (pairs of its solids), and of balls problem. */
+export const GAME_PAIR_COUNT = GAME_SOLIDS * GAME_SOLIDS;
+export const GAME_BALLS_COUNT = 1 + 2 * GAME_SOLIDS;
+
 /** The later opened (dearer) of two slices. */
 export const laterSlice = (a: SliceId, b: SliceId): SliceId =>
   SLICES.findIndex((s) => s.id === a) >= SLICES.findIndex((s) => s.id === b) ? a : b;

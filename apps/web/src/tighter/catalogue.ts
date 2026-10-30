@@ -105,8 +105,11 @@ export function requiredSlices(id: string): SliceId[] | null {
   if (f.family === "balls") {
     const p = BALLS_BY_CODE.get(f.code);
     if (!p) return null;
-    const solid = solidSlice(p.piece === "ball" ? p.container : p.piece);
-    return solid ? ["balls", solid] : ["balls"];
+    const name = p.piece === "ball" ? p.container : p.piece;
+    if (name === "ball") return ["balls"];
+    // a solid whose family opens no slice (the Johnson solids, until they are added) is never dealt
+    const solid = solidSlice(name);
+    return solid ? ["balls", solid] : null;
   }
   return null;
 }

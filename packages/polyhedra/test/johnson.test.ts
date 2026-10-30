@@ -99,12 +99,14 @@ const VEF: [number, number, number][] = [
 ];
 
 describe("Johnson solids", () => {
-  it("are 92 in the data, named j01 to j92, and apart from the 94 solids of the problems", () => {
+  it("are 92 in the data, named j01 to j92, and the last 92 of the 186 solids of the problems", () => {
     expect(JOHNSON_SOLID_NAMES).toHaveLength(92);
     expect(JOHNSON_SOLIDS).toHaveLength(92);
     expect(JOHNSON_SOLIDS.map((s) => s.name)).toEqual([...JOHNSON_SOLID_NAMES]);
-    expect(SOLID_NAMES).toHaveLength(94);
-    expect(SOLID_NAMES_LIST).toHaveLength(94);
+    expect(SOLID_NAMES).toHaveLength(186);
+    expect(SOLID_NAMES_LIST).toHaveLength(186);
+    expect(SOLID_NAMES.slice(94)).toEqual([...JOHNSON_SOLID_NAMES]);
+    expect(SOLID_NAMES_LIST.slice(94)).toEqual([...JOHNSON_SOLIDS]);
     JOHNSON_SOLIDS.forEach((s, i) => {
       expect(s.code).toBe(`j${String(i + 1).padStart(2, "0")}`);
       expect(s.code).not.toContain("in");

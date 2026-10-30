@@ -13,9 +13,9 @@ import {
 import { PROBLEM_CODES, PROBLEM_ORDER, SOLID_NAMES_LIST, problemNameOf } from "../src/catalogue";
 
 describe("solids", () => {
-  it("has upstream's 56 solids and PolyPack's 38, each a closed convex polyhedron centred at the origin", () => {
-    expect(SOLID_NAMES.length).toBe(94);
-    expect(SOLID_NAMES.slice(56)).toEqual([
+  it("has upstream's 56 solids, PolyPack's 38 and the 92 Johnson solids, each a closed convex polyhedron centred at the origin", () => {
+    expect(SOLID_NAMES.length).toBe(186);
+    expect(SOLID_NAMES.slice(56, 94)).toEqual([
       ...["prism7", "prism9", "prism10", "prism11", "antiprism7", "antiprism9", "antiprism10", "antiprism11"],
       ...[7, 9, 10, 11].flatMap((k) => ["l15", "l2", "l3"].map((t) => `prism${k}_${t}`)),
       ...[3, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => `bipyramid${n}`),

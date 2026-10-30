@@ -12,7 +12,15 @@ import { containerOf } from "../src/container";
 const solids: Record<string, unknown> = {};
 for (const name of SOLID_NAMES) {
   const c = containerOf(name);
-  solids[name] = { volume: c.volume, inradius: c.inradius, circumradius: c.circumradius, diameter: c.diameter, tangential: c.tangential };
+  solids[name] = {
+    volume: c.volume,
+    inradius: c.inradius,
+    chebyshev: c.chebyshev,
+    circumradius: c.circumradius,
+    enclosing: c.enclosing,
+    diameter: c.diameter,
+    tangential: c.tangential,
+  };
 }
 const bounds = BALLS_PROBLEMS.flatMap((p) =>
   [2, 13, 100].map((P) => {
@@ -20,4 +28,4 @@ const bounds = BALLS_PROBLEMS.flatMap((p) =>
     return { code: p.code, P, value: b.value, kind: b.kind };
   }),
 );
-process.stdout.write(JSON.stringify({ generated: "2026-10-27", solids, bounds }) + "\n");
+process.stdout.write(JSON.stringify({ generated: "2026-10-30", solids, bounds }) + "\n");

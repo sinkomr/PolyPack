@@ -24,6 +24,7 @@ import {
   formatBallsId,
 } from "./catalogue";
 import { containerKind, containerOfProblem } from "./container";
+import { enclosingRadius } from "./extent";
 
 export type { BallsProblem };
 
@@ -60,9 +61,10 @@ export interface BallsBound {
  * radius: the bounds below are on rho (rho = s / 2), converted once at the end of the function:
  *  - volume: P pieces of volume v fit only if the container's volume is at least P v: s >= (3 P v / (4 pi))^(1/3)
  *    for a ball container, s >= (P v / V)^(1/3) for the canonical solid of volume V (the cube has V = 1);
- *  - one piece: a ball container holds a solid only if rho >= its circumradius (the vertex centroid of each of the
- *    solids is the centre of its smallest enclosing ball, container.ts); a solid container s C holds a ball of radius
- *    r only if s >= r / rho, rho the inradius of C (the centroid is the centre of the largest inscribed ball);
+ *  - one piece: a ball container holds a solid only if rho >= the radius of the solid's smallest enclosing ball (its
+ *    circumradius for the first 94 solids, whose vertex centroid is that ball's centre; extent.ts for the Johnson
+ *    solids); a solid container s C holds a ball of radius r only if s >= r / rho, rho the radius of the largest
+ *    ball in C (C's inradius for the first 94 solids; its Chebyshev radius, container.ts, for the Johnson solids);
  *  - two pieces (P >= 2): two disjoint balls of radius r have centres at least 2 r apart, inside the container
  *    shrunk by r: the ball of radius rho - r (rho >= 2 r), or, for a solid C with all faces at its inradius rho (the
  *    tangential solids, among them the cube), the solid (s - r / rho) C, whose diameter is (s - r / rho) D, so
@@ -109,9 +111,9 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
     } else {
       const title = TITLES.get(problem.container) ?? problem.container;
       cands.push({
-        value: R / C!.inradius,
+        value: R / C!.chebyshev,
         kind: "one piece",
-        label: `[EST] a ball of diameter ${BALL_DIAMETER} needs a scale s >= ${R} / ${C!.inradius.toPrecision(7)}, the inradius of the ${title}`,
+        label: `[EST] a ball of diameter ${BALL_DIAMETER} needs a scale s >= ${R} / ${C!.chebyshev.toPrecision(7)}, the inradius of the ${title}`,
       });
       if (P >= 2) {
         if (C!.tangential)
@@ -130,9 +132,9 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
   } else {
     const S = getSolid(problem.piece);
     cands.push({
-      value: S.circumradius,
+      value: enclosingRadius(S),
       kind: "one piece",
-      label: `[EST] a ${S.title} needs a ball of radius at least its circumradius ${S.circumradius.toPrecision(7)}, so a diameter s of at least twice that`,
+      label: `[EST] a ${S.title} needs a ball of radius at least its circumradius ${enclosingRadius(S).toPrecision(7)}, so a diameter s of at least twice that`,
     });
     if (P >= 2)
       cands.push({

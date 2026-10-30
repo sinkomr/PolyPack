@@ -37,7 +37,8 @@ class JohnsonTable(unittest.TestCase):
     def test_catalogue(self):
         js = catalogue.johnson_solids()
         self.assertEqual(len(js), 92)
-        self.assertEqual(len(catalogue.solids()), 94)
+        self.assertEqual(len(catalogue.named_solids()), 94)
+        self.assertEqual(len(catalogue.solids()), 186)
         self.assertEqual(len(catalogue.all_solids()), 186)
         self.assertEqual([c for _, c, *_ in js], [f'j{j:02d}' for j in range(1, 93)])
         self.assertTrue(all('in' not in c for _, c, *_ in js))

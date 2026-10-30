@@ -7,9 +7,10 @@
  * docs/spaces/POLYHEDRA.md) in themselves and in a cube. No imports, so that a page can name problems without loading the solids' coordinates; problems.ts builds the
  * same list with the solids attached.
  *
- * Beyond those 150, every ordered pair (piece, container) of the 94 solids is a problem family too (8,836 in all,
- * P = 2 to 500, no research records): problemNameOf reads the code `<piece code>in<container code>` of any pair,
- * with the family "pairs" for the 8,686 that are not among the 150.
+ * Beyond those 150, every ordered pair (piece, container) of the 186 solids (the 94 above and the 92 Johnson solids,
+ * J1 to J92, codes j01 to j92) is a problem family too (34,596 in all, P = 2 to 500, no research records):
+ * problemNameOf reads the code `<piece code>in<container code>` of any pair, with the family "pairs" for the 34,446 that
+ * are not among the 150.
  */
 
 export type SolidFamily =
@@ -157,7 +158,8 @@ function buildSolids(): SolidName[] {
 /**
  * The 92 Johnson solids (Johnson 1966; python/polyhedra/johnson_table.py), in Johnson's order: family "johnson", codes
  * j01 to j92 (no "in", so that pair codes such as j05inj92 parse), names in snake_case, titles "J<n> <name>". Unit edges,
- * regular faces, geometry in solids.data.ts. Not part of SOLID_NAMES_LIST: no problem, page or game uses them yet.
+ * regular faces, geometry in solids.data.ts. They are the last 92 of SOLID_NAMES_LIST, so that every ordered pair of
+ * them with the 94 others is a problem (family "pairs"); the 150 named problems have none of them.
  */
 const JOHNSON_TITLES: readonly string[] = [
   "square pyramid", "pentagonal pyramid", "triangular cupola", "square cupola", "pentagonal cupola",
@@ -199,8 +201,8 @@ export const JOHNSON_SOLIDS: readonly SolidName[] = JOHNSON_TITLES.map((t, i) =>
   title: `J${i + 1} ${t}`,
 }));
 
-/** Every solid's name, code and title: upstream's 56 in upstream's order, then PolyPack's 38. */
-export const SOLID_NAMES_LIST: readonly SolidName[] = buildSolids();
+/** Every solid's name, code and title: upstream's 56 in upstream's order, then PolyPack's 38, then the 92 Johnson solids. */
+export const SOLID_NAMES_LIST: readonly SolidName[] = [...buildSolids(), ...JOHNSON_SOLIDS];
 const SOLID_BY_NAME = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s]));
 const SOLID_BY_CODE = new Map(SOLID_NAMES_LIST.map((s) => [s.code, s]));
 
