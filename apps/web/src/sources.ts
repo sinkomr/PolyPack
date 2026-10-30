@@ -4,7 +4,7 @@ import { el } from "./shapes-ui";
 /**
  * Credit for the published record data. The values, the captions with their finder and prover
  * attributions, and some coordinates are taken from three compilations and from one paper's
- * supplement; the proof status of eight problems comes from one repository of computer-assisted proofs. Wherever such data is
+ * supplement; the proof status of ten problems comes from one repository of computer-assisted proofs. Wherever such data is
  * shown, a numbered reference mark points to the note of its source; the notes are listed at the
  * foot of the records page. The numbers are fixed: they follow the order of this list.
  */
@@ -58,9 +58,10 @@ export const SOURCES: readonly Source[] = [
     title: "square-packing",
     url: "https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle",
     takes:
-      "Computer-assisted proofs, October 2026, that the records for 3, 4, 6, 7, 11, 16, 22 and 29 squares in an equilateral triangle are optimal (release triangle-v1, MIT licence, accessed 2026-10-29). " +
-      "Lower and upper bound certificates are checked by two independent exact checkers, the lower bound also in Lean 4 except for 6 squares. The repository says none of this is peer reviewed. " +
-      "The status is recorded as proven (unrefereed); the values stay those of the first source.",
+      "Computer-assisted proofs, October 2026, that the records for 3, 4, 6, 7, 11, 16, 22, 29, 37 and 46 squares in an equilateral triangle are optimal (release triangle-v1, MIT licence, accessed 2026-10-29). " +
+      "Lower and upper bound certificates are checked by two independent exact checkers, the lower bound also in Lean 4 except for 6 and 46 squares. The repository says none of this is peer reviewed. " +
+      "The status is recorded as proven (unrefereed); the values stay those of the first source, except 37 squares, whose value is the proven side 9 + 2/√3 (the first source's earlier 10.15299 lay below the lower bound). " +
+      "The exact packings for 37 and 46 squares (MIT licence, repository commit 7a47ab9) are the coordinates of those two records.",
   },
 ];
 
@@ -118,8 +119,8 @@ export function recordCredits(lit: Credited): Credit[] {
   const add = (n: number, part: string) => parts.set(n, [...(parts.get(n) ?? []), part]);
   value.forEach((n, i) => add(n, i > 0 ? "further digits of the value" : lit.citation ? "value and caption" : "value"));
   for (const n of coordinates) add(n, "coordinates");
-  // a source named in the note only (not as the value's or coordinates' source) proved the value
-  for (const n of named(lit.note)) if (!parts.has(n)) add(n, "proof");
+  // a source named in the note that is not the value's source proved the value (it may also have given the coordinates)
+  for (const n of named(lit.note)) if (!value.includes(n)) add(n, "proof");
   return [...parts].sort(([a], [b]) => a - b).map(([n, list]) => ({ n, what: list.join(", ") }));
 }
 

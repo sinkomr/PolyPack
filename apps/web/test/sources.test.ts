@@ -91,6 +91,18 @@ describe("the sources of a published record", () => {
     ]);
   });
 
+  it("credits Hosono with both the coordinates and the proof of 37 and 46 squares in a triangle", () => {
+    const { records } = JSON.parse(readFileSync("data/records.json", "utf8")) as { records: LiteratureRecord[] };
+    for (const P of [37, 46]) {
+      const r = records.find((r) => r.N === 4 && r.M === 3 && r.P === P)!;
+      expect(recordSources({ ...r, has_coordinates: true })).toEqual({ value: [1], coordinates: [5] });
+      expect(recordCredits({ ...r, has_coordinates: true })).toEqual([
+        { n: 1, what: "value and caption" },
+        { n: 5, what: "coordinates, proof" },
+      ]);
+    }
+  });
+
   it("gives no number to a record derived here or taken from an unknown source", () => {
     const derived = { ...base, source_name: "PolyPack (derived here, not from the literature)", has_coordinates: true };
     expect(recordSources(derived)).toEqual({ value: [], coordinates: [] });
@@ -105,8 +117,10 @@ describe("the sources of a published record", () => {
       if (r.source_name.startsWith("PolyPack")) expect(value).toEqual([]);
       else expect(value.length).toBeGreaterThan(0);
       // coordinates in the data are Packomania's, read from Ellsworth's drawings (squares in a
-      // square only), Berthold et al.'s with their values, or constructed here
-      const from = r.source_name.startsWith("Berthold") ? 4 : r.N === 4 && r.M === 4 ? 2 : 3;
+      // square only), Berthold et al.'s with their values, Hosono's exact packings (37 and 46 squares
+      // in a triangle), or constructed here
+      const hosono = r.N === 4 && r.M === 3 && (r.P === 37 || r.P === 46);
+      const from = hosono ? 5 : r.source_name.startsWith("Berthold") ? 4 : r.N === 4 && r.M === 4 ? 2 : 3;
       expect(coordinates.every((n) => n === from)).toBe(true);
       if (
         r.pieces &&
