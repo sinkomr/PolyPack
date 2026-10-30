@@ -17,8 +17,12 @@
 // A source whose file says "role": "proof" (data/sources/hosono.json) sets the status of problems
 // that other sources already give a value for, and only that: the value stays the one held, which
 // must agree with the proven value (the printed value is truncated, so the proven one is at most one
-// unit of the printed precision above it), and its coordinates stay. The file may also list
-// "not_proven" problems, which stay best_known whatever a refreshed source page says.
+// unit of the printed precision above it), and its coordinates stay, unless the record has none and
+// the proof entry carries an exact packing ("pieces"), which is attached after the check below that
+// every stored packing gives the stored value. An entry with "supersedes" replaces a held value that
+// lies below the proven side (a withdrawn claim): it applies only while the held value is that one.
+// The file may also list "not_proven" problems, which stay best_known whatever a refreshed source
+// page says.
 //
 // data/sources/constructed.json is not a literature source: it holds coordinates that PolyPack's
 // solver constructed for records without any (scripts/construct-coordinates.ts). They are
@@ -43,7 +47,10 @@ const DERIVED = {
 const key = (r: { N: number; M: number; P: number }) => `${r.N}/${r.M}/${r.P}`;
 const groups = new Map<string, LiteratureRecord[]>();
 const gaps = new Map<string, LiteratureRecord[]>();
-const proofs: { records: LiteratureRecord[]; not_proven?: { N: number; M: number; P: number; why: string }[] }[] = [];
+type Proof = LiteratureRecord & {
+  supersedes?: { value: number; display: string; accessed: string; conversion_note: string };
+};
+const proofs: { records: Proof[]; not_proven?: { N: number; M: number; P: number; why: string }[] }[] = [];
 for (const file of readdirSync("data/sources")
   .filter((f) => f.endsWith(".json") && f !== CONSTRUCTED)
   .sort()) {
@@ -140,14 +147,36 @@ for (const { records: proved, not_proven } of proofs) {
   for (const p of proved) {
     const r = merged.get(key(p));
     if (!r) throw new Error(`${key(p)}: proof source for a problem without a record`);
-    // the held value is printed truncated ("+"), so the proven value lies in [value, value + 10^-precision]
-    const gap = p.value - r.value;
-    if (gap < -1e-9 || gap > tolerance(r) + 1e-9) {
-      throw new Error(`${key(p)}: proven value ${p.value} does not match the held value ${r.display} (${r.value})`);
+    if (p.supersedes && r.value === p.supersedes.value && r.display === p.supersedes.display) {
+      // the held value is a withdrawn claim below the proven side: the proven value replaces it
+      if (p.value < r.value) throw new Error(`${key(p)}: proven value ${p.value} is below the held ${r.display}`);
+      r.value = p.value;
+      r.display = p.display;
+      r.display_precision = p.display_precision;
+      r.accessed = p.supersedes.accessed;
+      r.conversion_note = `${r.conversion_note} ${p.supersedes.conversion_note}`;
+      r.citation = p.citation;
+      r.note = p.note;
+    } else {
+      // the held value is printed truncated ("+"), so the proven value lies in [value, value + 10^-precision]
+      const gap = p.value - r.value;
+      if (gap < -1e-9 || gap > tolerance(r) + 1e-9) {
+        throw new Error(`${key(p)}: proven value ${p.value} does not match the held value ${r.display} (${r.value})`);
+      }
+      r.citation = [r.citation, p.citation].filter(Boolean).join(" ");
+      r.note = [r.note, p.note].filter(Boolean).join(" ");
     }
     r.status = p.status;
-    r.citation = [r.citation, p.citation].filter(Boolean).join(" ");
-    r.note = [r.note, p.note].filter(Boolean).join(" ");
+    if (p.pieces && !r.pieces) {
+      // the packing must give the stored value, as the checks at the end require of every record
+      const e = evaluate({ N: p.N, M: p.M, P: p.P, pieces: p.pieces, container_phi: p.container_phi ?? 0 });
+      if (!e.valid || Math.abs(e.score! - r.value) > Math.max(1e-8, 2 * tolerance(r))) {
+        throw new Error(`${key(p)}: the proof source's packing gives ${e.valid ? e.score : e.reasons.join("; ")}, not ${r.display}`);
+      }
+      r.pieces = p.pieces;
+      r.container_phi = p.container_phi;
+      r.coordinates_note = p.coordinates_note;
+    }
   }
   for (const n of not_proven ?? []) {
     const r = merged.get(key(n));

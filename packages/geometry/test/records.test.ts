@@ -31,14 +31,15 @@ describe("data/records.json", () => {
     for (const r of flagged) expect(Number(/\bProved by\b.*?\b(\d{4})\b/.exec(r.citation ?? "")?.[1])).toBeGreaterThanOrEqual(2023);
   });
 
-  it("records Hosono's eight computer-assisted triangle proofs, and no others", () => {
+  it("records Hosono's ten computer-assisted triangle proofs, and no others", () => {
     const hosono = JSON.parse(readFileSync(new URL("../../../data/sources/hosono.json", import.meta.url), "utf8")) as {
-      records: { P: number; value: number }[];
+      records: { P: number; value: number; pieces?: unknown[] }[];
       not_proven: { N: number; M: number; P: number }[];
     };
     const sides: Record<number, number> = {
       3: 1.5 + Math.sqrt(3), 4: 3 + 2 / Math.sqrt(3), 6: 2 + 4 / Math.sqrt(3), 7: 4 + 2 / Math.sqrt(3),
       11: 5 + 2 / Math.sqrt(3), 16: 6 + 2 / Math.sqrt(3), 22: 7 + 2 / Math.sqrt(3), 29: 8 + 2 / Math.sqrt(3),
+      37: 9 + 2 / Math.sqrt(3), 46: 10 + 2 / Math.sqrt(3),
     };
     expect(hosono.records.map((r) => r.P)).toEqual(Object.keys(sides).map(Number));
     for (const [P, side] of Object.entries(sides)) {
@@ -56,8 +57,31 @@ describe("data/records.json", () => {
     expect(find(4, 3, 7)!.note).toContain("also checked in Lean 4");
     // Hosono's repository lists 5 squares as not done, although Friedman's page says 2 to 7 are proved
     expect(hosono.not_proven).toEqual([expect.objectContaining({ N: 4, M: 3, P: 5 })]);
-    for (const P of [5, 37, 46]) expect(find(4, 3, P)!.status).toBe("best_known");
-    expect(records.filter((r) => r.N === 4 && r.M === 3 && r.status === "proven_unrefereed").length).toBe(8);
+    expect(find(4, 3, 5)!.status).toBe("best_known");
+    expect(records.filter((r) => r.N === 4 && r.M === 3 && r.status === "proven_unrefereed").length).toBe(10);
+  });
+
+  it("holds Hosono's exact packings for 37 and 46 squares, and 37 at the proven side, not Costantino's withdrawn value", () => {
+    const r37 = find(4, 3, 37)!;
+    const r46 = find(4, 3, 46)!;
+    expect(r37.value).toBe(9 + 2 / Math.sqrt(3));
+    expect(r37.value).toBeGreaterThan(10.15299);
+    expect(r37.note).toContain("10.15299");
+    expect(r37.note).toContain("ruled out");
+    // 46 keeps the value of the packing found first (Wolk), which the proof reaches to the printed digits
+    expect(r46.value).toBe(11.1547);
+    expect(r46.citation).toContain("Joshua Wolk");
+    expect(r46.note).toContain("not in Lean 4");
+    for (const r of [r37, r46]) {
+      expect(r.status).toBe("proven_unrefereed");
+      expect(r.pieces).toHaveLength(r.P);
+      expect(r.coordinates_note).toContain("Hiroaki Hosono, square-packing");
+      expect(r.coordinates_note).toContain("MIT");
+      const e = evaluate({ N: 4, M: 3, P: r.P, pieces: r.pieces!, container_phi: r.container_phi ?? 0 });
+      expect(e.valid).toBe(true);
+      // Hosono's packings are exact at 9 + 2/sqrt(3) and 10 + 2/sqrt(3)
+      expect(Math.abs(e.score! - (r.P === 37 ? 9 : 10) - 2 / Math.sqrt(3))).toBeLessThan(1e-12);
+    }
   });
 
   it("holds no value below the bound from a proven circle record", () => {

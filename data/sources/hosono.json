@@ -1,6 +1,6 @@
 {
  "role": "proof",
- "description": "Status authority for eight problems of squares in an equilateral triangle (N = 4, M = 3). The build keeps the value of the record already held, checks that it agrees with the proven side, and sets the status, citation and note. Hosono's repository lists n = 5 as not done, so it is not here; see not_proven.",
+ "description": "Status authority for ten problems of squares in an equilateral triangle (N = 4, M = 3). The build keeps the value of the record already held, checks that it agrees with the proven side, and sets the status, citation and note. Hosono's repository lists n = 5 as not done, so it is not here; see not_proven. For P = 37 and 46 the file also carries the exact packing of the repository, converted to site poses, which the build attaches when the record has no coordinates; P = 37 has a \"supersedes\" entry because the value first held (Costantino's 10.15299) lies below the proven lower bound.",
  "release": "triangle-v1",
  "not_proven": [
   {
@@ -122,6 +122,463 @@
    "accessed": "2026-10-29",
    "citation": "s = 8 + 2/√3. Proved by Hiroaki Hosono in October 2026 (computer-assisted).",
    "note": "Proved side 8 + 2/√3, by the computer-assisted proof of Hiroaki Hosono, square-packing, https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle (release triangle-v1, MIT licence, October 2026, accessed 2026-10-29). The lower and upper bound certificates are checked by two independent exact checkers. The lower bound is also checked in Lean 4. The repository's README says none of this is peer reviewed."
+  },
+  {
+   "N": 4,
+   "M": 3,
+   "P": 37,
+   "value": 10.154700538379252,
+   "display": "10.154700538379",
+   "display_precision": 12,
+   "status": "proven_unrefereed",
+   "source_name": "Hiroaki Hosono, square-packing: squares in an equilateral triangle",
+   "source_url": "https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle",
+   "accessed": "2026-10-29",
+   "supersedes": {
+    "value": 10.15299,
+    "display": "10.15299+",
+    "accessed": "2026-10-29",
+    "conversion_note": "The value is now the proven side 9 + 2/√3, stored to 12 decimals; Friedman's page of 2026-10-29 prints 10.15470."
+   },
+   "citation": "s = 9 + 2/√3 = 10.15470. Proved by Hiroaki Hosono in October 2026 (Erich Friedman, Packing Center: Squares in Triangles, read 2026-10-29; computer-assisted).",
+   "note": "Proved side 9 + 2/√3, by the computer-assisted proof of Hiroaki Hosono, square-packing, https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle (release triangle-v1, MIT licence, October 2026, accessed 2026-10-29). The lower and upper bound certificates are checked by two independent exact checkers. The lower bound is also checked in Lean 4. The repository's README says none of this is peer reviewed. The value 10.15299 listed earlier on Friedman's page (Gianluca Costantino, May 2026, read 2026-10-07) is no longer listed there and lies below the proven lower bound 9 + 2/√3 = 10.15470, so it is ruled out.",
+   "pieces": [
+    {
+     "x": -4.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -3.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -2.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 0.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 3.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 4.0,
+     "y": -2.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -3.4226497308103743,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -2.4226497308103743,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.4226497308103743,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.42264973081037427,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 0.5773502691896257,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.5773502691896257,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.5773502691896257,
+     "y": -1.4314095446866493,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -2.8452994616207485,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.8452994616207485,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.8452994616207485,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 0.15470053837925146,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.1547005383792515,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.1547005383792515,
+     "y": -0.4314095446866495,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -2.267949192431123,
+     "y": 0.5685904553133505,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.2679491924311228,
+     "y": 0.5685904553133505,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.2679491924311228,
+     "y": 0.5685904553133505,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.690598923241497,
+     "y": 1.568590455313351,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.6905989232414971,
+     "y": 1.568590455313351,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.316987298107781,
+     "y": 0.8496793685588859,
+     "theta": -0.26179938779914935
+    },
+    {
+     "x": 1.8169872981077808,
+     "y": 1.7157047723433247,
+     "theta": -0.26179938779914935
+    },
+    {
+     "x": 1.3169872981077808,
+     "y": 2.581730176127763,
+     "theta": -0.26179938779914935
+    },
+    {
+     "x": 1.1709618943233422,
+     "y": 0.8346535946781716,
+     "theta": -0.26179938779914935
+    },
+    {
+     "x": 0.670961894323342,
+     "y": 1.7006789984626103,
+     "theta": -0.26179938779914935
+    },
+    {
+     "x": -1.166987298107781,
+     "y": 2.8415377972630944,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.6669872981077808,
+     "y": 3.7075632010475332,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.16698729810778068,
+     "y": 4.573588604831972,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.075961894323342,
+     "y": 2.731249228966092,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 0.424038105676658,
+     "y": 3.5972746327505307,
+     "theta": 0.26179938779914913
+    }
+   ],
+   "container_phi": 0,
+   "coordinates_note": "Coordinates from Hiroaki Hosono, square-packing, https://github.com/wand125/square-packing/blob/7a47ab9a91706e3b4afdd12764262d4bdb197d3f/problems/triangle/certificates/n37/upper/n37_packing.json (commit 7a47ab9, MIT licence, read 2026-10-29): an exact packing, coordinates in Q(√3), converted to site poses (unit squares, the triangle's centroid at the origin, container_phi 0). PolyPack's exact check over Q(√3) (corners in the closed triangle, every pair separated by an edge normal) and the shared geometry both accept it at side 9 + 2/√3."
+  },
+  {
+   "N": 4,
+   "M": 3,
+   "P": 46,
+   "value": 11.154700538379252,
+   "display": "11.154700538379",
+   "display_precision": 12,
+   "status": "proven_unrefereed",
+   "source_name": "Hiroaki Hosono, square-packing: squares in an equilateral triangle",
+   "source_url": "https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle",
+   "accessed": "2026-10-29",
+   "citation": "s = 10 + 2/√3. Proved by Hiroaki Hosono in October 2026 (computer-assisted).",
+   "note": "Proved side 10 + 2/√3, by the computer-assisted proof of Hiroaki Hosono, square-packing, https://github.com/wand125/square-packing/tree/triangle-v1/problems/triangle (release triangle-v1, MIT licence, October 2026, accessed 2026-10-29). The lower and upper bound certificates are checked by two independent exact checkers. The lower bound is checked by the two exact checkers, not in Lean 4. The repository's README says none of this is peer reviewed.",
+   "pieces": [
+    {
+     "x": -0.10983756729740643,
+     "y": 5.249925111424051,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.8208375672974064,
+     "y": 4.018436987242579,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 0.46768783648703216,
+     "y": 4.25022845344043,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -1.3243375672974063,
+     "y": 3.1463494056316486,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.03581216351296779,
+     "y": 3.3781408718294994,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 1.3138375672974063,
+     "y": 3.1645359391111216,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -1.8273375672974064,
+     "y": 2.2751278494245035,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.5393121635129677,
+     "y": 2.5060532902185697,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 0.4802132402714707,
+     "y": 2.271923089180393,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 2.0103375672974066,
+     "y": 1.9581625516393992,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -2.3308375672974067,
+     "y": 1.4030402678135738,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -1.0428121635129677,
+     "y": 1.6339657086076402,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.023286759728529338,
+     "y": 1.3998355075694626,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 1.264312163512968,
+     "y": 1.2503164547311336,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": 2.5138375672974065,
+     "y": 1.0860749700284695,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -2.8343375672974065,
+     "y": 0.5309526862026442,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -1.5458121635129678,
+     "y": 0.7627441524004952,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -0.5267867597285294,
+     "y": 0.5277479259585334,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": 1.7678121635129678,
+     "y": 0.37822887312020437,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": 3.0173375672974068,
+     "y": 0.21398738841753973,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": 0.6867867597285295,
+     "y": 0.2506197967475128,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -2.258350269189626,
+     "y": -0.7060846792814619,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.2713121635129676,
+     "y": -0.49385870849072544,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": 3.5208375672974066,
+     "y": -0.6581001931933899,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -3.265350269189626,
+     "y": -0.5950846792814621,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.1902867597285294,
+     "y": -0.6214677848634168,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -1.2513502691896257,
+     "y": -0.4280846792814619,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.2443502691896257,
+     "y": -0.7060846792814619,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 4.024337567297406,
+     "y": -1.5301877748043196,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": 2.8698121635129676,
+     "y": -1.5304911168206985,
+     "theta": -0.2617993877991496
+    },
+    {
+     "x": -4.024337567297406,
+     "y": -1.5301877748043196,
+     "theta": 0.26179938779914913
+    },
+    {
+     "x": -2.834350269189626,
+     "y": -1.713084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.6796497308103744,
+     "y": -1.713084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 0.18664973081037428,
+     "y": -1.713084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.8203502691896257,
+     "y": -1.713084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.8273502691896257,
+     "y": -1.713084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -2.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 4.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 3.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 2.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 1.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": 0.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -0.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -1.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -3.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    },
+    {
+     "x": -4.5,
+     "y": -2.720084679281462,
+     "theta": -0.7853981633974483
+    }
+   ],
+   "container_phi": 0,
+   "coordinates_note": "Coordinates from Hiroaki Hosono, square-packing, https://github.com/wand125/square-packing/blob/7a47ab9a91706e3b4afdd12764262d4bdb197d3f/problems/triangle/certificates/n46/upper/n46_packing.json (commit 7a47ab9, MIT licence, read 2026-10-29): an exact packing, coordinates in Q(√3), converted to site poses (unit squares, the triangle's centroid at the origin, container_phi 0). PolyPack's exact check over Q(√3) (corners in the closed triangle, every pair separated by an edge normal) and the shared geometry both accept it at side 10 + 2/√3."
   }
  ]
 }
