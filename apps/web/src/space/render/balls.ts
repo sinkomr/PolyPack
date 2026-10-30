@@ -5,7 +5,7 @@
  *  - the pieces: one instanced mesh, of a sphere (unit balls) or of the Platonic solid (with its edges merged into
  *    one set of line segments), one matrix and one colour per piece;
  *  - the container: a ball as a faint see-through sphere with three great circles, or a solid (the cube, or any of the
- *    polyhedra space's other 93, scaled by s) as its edges over faint see-through faces;
+ *    polyhedra space's other 185, scaled by s) as its edges over faint see-through faces;
  *  - views: "Solid" (opaque pieces) and "See-through" (translucent pieces, to see the inner ones);
  *  - drag or the arrow keys turn it; it is drawn only when something changes.
  *
@@ -17,7 +17,7 @@ import type * as T from "three";
 import { BALL_RADIUS, ballContainerRadius, ballsProblemOf } from "@polypack/balls/catalogue";
 import { getSolid, type Solid } from "@polypack/polyhedra";
 import type { SpaceConfig } from "@polypack/spaces";
-import { type SpaceRenderer, cssVar, fitCanvas, isDark, onDrag } from "./common";
+import { type SpaceRenderer, cssVar, lowerTitle, fitCanvas, isDark, onDrag } from "./common";
 
 type Three = typeof import("three");
 
@@ -67,8 +67,8 @@ function rotation(w: number, x: number, y: number, z: number): number[] {
 /** "13 balls in a ball of radius 3.000000, drawn in 3D." and "13 balls in a pentakis dodecahedron scaled by 3.000000, drawn in 3D." */
 function describeText(title: string, container: string, P: number, s: number): string {
   const at = title.lastIndexOf(" in ");
-  const what = title.slice(0, at).toLowerCase();
-  const into = title.slice(at + 4).toLowerCase();
+  const what = lowerTitle(title.slice(0, at));
+  const into = lowerTitle(title.slice(at + 4));
   const how = container === "ball" ? "of diameter" : container === "cube" ? "of edge" : "scaled by";
   return `${P} ${what} in ${into} ${how} ${s.toFixed(6)}, drawn in 3D.`;
 }

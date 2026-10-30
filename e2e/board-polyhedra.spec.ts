@@ -71,8 +71,8 @@ test("3D in 3D > Polyhedra opens a problem, draws it with three.js loaded for th
   await expect(page.locator("#space-shown")).toHaveText("the research record");
   await expect(page.locator("#space-f-piece")).toHaveValue("cub");
   await expect(page.locator("#space-f-container")).toHaveValue("cub");
-  await expect(page.locator("#space-f-piece option")).toHaveCount(94);
-  await expect(page.locator("#space-f-container option")).toHaveCount(94);
+  await expect(page.locator("#space-f-piece option")).toHaveCount(186);
+  await expect(page.locator("#space-f-container option")).toHaveCount(186);
   await expect(page.locator("#space-f-P option")).toHaveCount(499);
 
   // the drawing turns with the keyboard and the views
@@ -285,7 +285,7 @@ test("the dimensions page lists 3D in 3D with the polyhedra records and links th
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="polyhedra"]');
   await expect(card.getByRole("heading", { name: "Polyhedra", exact: true })).toBeVisible();
   // 8,836 pairs x P = 2..500; the 14,850 research records stop at P = 100 and cover 150 pairs
-  await expect(card).toContainText("4,409,164, 4,394,314 without a record yet");
+  await expect(card).toContainText("17,263,404, 17,248,554 without a record yet");
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="polyhedra"]')).toBeChecked();
   // the table starts at cubes in a cube, P = 2 to 100

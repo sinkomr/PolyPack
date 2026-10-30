@@ -137,7 +137,7 @@ It stops once it has made no progress for the longer of two spans. One is half t
 
 ## Optional: other dimensions
 
-The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. By default the client draws Flat problems, in 2D in 2D: polygons in polygons. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic or Catalan solid, a prism or an antiprism, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki); and Balls (3D in 3D: unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary`, `polyhedra` and `balls`. `all` names all seven. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
+The site files every kind of problem under a dimension: the pieces' dimension, "in" or "on", and the container's dimension. By default the client draws Flat problems, in 2D in 2D: polygons in polygons. Seven more kinds come from PolyPack's research: Curved (2D in 2D at constant curvature); Polyhedral surfaces, Sphere and Torus (2D on 3D: pieces on the surface of a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism, on the whole sphere and on flat tori); Polytope boundaries (3D on 4D: unit balls and cubes on the boundary of a tesseract); Polyhedra (3D in 3D: equal solids in the smallest copy of a container solid, the problems of polyhedrainpolyhedra.wiki); and Balls (3D in 3D: unit balls in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball). The site's Dimensions page, `/dimensions.html`, lists them, and `docs/spaces/*.md` describes each. The API, the client's files and the rest of this section call these kinds spaces: `curved`, `surface`, `sphere`, `torus`, `boundary`, `polyhedra` and `balls`. `all` names all seven. The client searches them only with `--dimensions` (or its earlier name, `--spaces`):
 
 ```sh
 node polypack-volunteer.mjs --name "your name" --dimensions all
@@ -150,15 +150,15 @@ node polypack-volunteer.mjs --name "your name" --dimensions boundary --only-dime
 
   | Kind      | Problems   | Share with `all` |
   | --------- | ---------- | ---------------- |
-  | Flat      | 4,900,500  | 42.8 %           |
-  | polyhedra | 4,409,164  | 38.5 %           |
-  | curved    | 990,000    | 8.6 %            |
-  | surface   | 970,200    | 8.5 %            |
-  | torus     | 148,500    | 1.3 %            |
-  | balls     | 18,711     | 0.16 %           |
-  | sphere    | 9,900      | 0.09 %           |
-  | boundary  | 32         | 0.0003 %         |
-  | All       | 11,447,007 | 100 %            |
+  | polyhedra | 17,263,404 | 66.0 %           |
+  | Flat      | 4,900,500  | 18.7 %           |
+  | surface   | 2,791,800  | 10.7 %           |
+  | curved    | 990,000    | 3.8 %            |
+  | torus     | 148,500    | 0.57 %           |
+  | balls     | 36,927     | 0.14 %           |
+  | sphere    | 9,900      | 0.04 %           |
+  | boundary  | 32         | 0.0001 %         |
+  | All       | 26,141,063 | 100 %            |
 
   A problem searched here in the last 7 days is drawn again as for flat problems. `--max-P` cuts each kind's range of P, and a kind left with no problem is dropped.
 - **The start.** It reads the problem, `GET /api/spaces/<space>/problems/<id>`, and starts from the better of its two configurations: the research record's and the site leader's. Closed problems (a proven value, or no packing at all) are skipped.

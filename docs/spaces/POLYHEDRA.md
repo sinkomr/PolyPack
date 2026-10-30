@@ -157,7 +157,7 @@ planar faces and the stated edges but not regular bases (an equilateral heptagon
 `test_certify.py` checks exactly that each base is concyclic at one height (with unit edges, so regular). An
 independent review matched all 20 solids to their textbook definitions exactly [CALC].
 
-**Johnson solids** (geometry 2026-10-29; in the problems of this space and of Balls since 2026-10-30; no page, surface or game uses them yet). The 92 convex
+**Johnson solids** (geometry 2026-10-29; in the problems of this space, of Balls and of Surfaces since 2026-10-30; the game does not use them). The 92 convex
 solids with regular faces other than the Platonic, Archimedean, prisms and antiprisms [EST: Johnson, "Convex polyhedra
 with regular faces", Canad. J. Math. 18 (1966) 169-200; complete by Zalgaller (1967)] are the family `johnson` of
 `solids_exact.json` (entries 95 to 186), `solids.data.ts` and the catalogues: names in snake case, `square_pyramid` to

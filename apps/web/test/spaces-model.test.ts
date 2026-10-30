@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import type { CertifiedStatus, SpaceName, SpaceProblemSummary } from "@polypack/spaces";
+import { type CertifiedStatus, SURFACE_JOHNSON, type SpaceName, type SpaceProblemSummary } from "@polypack/spaces";
 import { SOLID_FACES as SEARCH_FACES } from "@polypack/spaces/search";
 import { describe, expect, it } from "vitest";
 import {
@@ -22,6 +22,8 @@ import {
   round6,
   sentence,
   settleFilters,
+  solidGroup,
+  solidTitle,
   shownFields,
   siteBelowCertified,
   stateHash,
@@ -122,6 +124,26 @@ describe("names and numbers", () => {
     expect(day("yesterday")).toBe("yesterday");
     expect(sentence("smaller is better")).toBe("smaller is better.");
     expect(sentence("Smaller is better. ")).toBe("Smaller is better.");
+  });
+});
+
+describe("the surface solids' titles and groups", () => {
+  it("names each solid by its family, the Johnson solids as J<n> <name>", () => {
+    expect(solidTitle("square_pyramid")).toBe("J1 square pyramid");
+    expect(solidTitle("triangular_hebesphenorotunda")).toBe("J92 triangular hebesphenorotunda");
+    expect(solidTitle("prism5")).toBe("pentagonal prism");
+    expect(solidTitle("rhombic_dodecahedron")).toBe("rhombic dodecahedron");
+    expect(solidGroup("cube")).toBe("Platonic solids");
+    expect(solidGroup("snub_cube")).toBe("Archimedean solids");
+    expect(solidGroup("rhombic_triacontahedron")).toBe("Catalan solids");
+    expect(solidGroup("antiprism4")).toBe("Antiprisms");
+    expect(solidGroup("prism7")).toBe("Prisms");
+    expect(solidGroup("gyrobifastigium")).toBe("Johnson solids");
+    const johnson = SURFACE_JOHNSON.map(solidGroup);
+    expect(new Set(johnson)).toEqual(new Set(["Johnson solids"]));
+    expect(SURFACE_JOHNSON).toHaveLength(92);
+    expect(new Set(SURFACE_JOHNSON.map(solidTitle)).size).toBe(92);
+    expect(SURFACE_JOHNSON.every((n, i) => solidTitle(n).startsWith(`J${i + 1} `))).toBe(true);
   });
 });
 
