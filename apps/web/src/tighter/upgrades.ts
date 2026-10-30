@@ -6,7 +6,7 @@ import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from ".
 import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
 import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
-import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, domainProblems } from "./catalogue";
+import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, SURFACE_JOHNSON, domainProblems } from "./catalogue";
 import { GAME_BALLS_COUNT, GAME_PAIR_COUNT, SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
 
@@ -758,7 +758,8 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
   "surf-prisms": 0.002,
   "surf-archimedean": 0.005,
-  "surf-catalan-a": 0.01,
+  "surf-johnson": 0.02,
+  "surf-catalan-a": 0.03,
   "surf-catalan-b": 0.05,
   "surf-catalan-c": 0.15,
   sphere: 0.3,
@@ -769,6 +770,7 @@ export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   "poly-prisms": 0.1,
   "poly-antiprisms": 0.15,
   "poly-elongated": 0.25,
+  "poly-johnson": 0.35,
   "poly-duals": 0.4,
   balls: 0.5,
 };
@@ -873,8 +875,14 @@ const SLICE_CARDS: Upgrade[] = [
     `The dealer also deals pieces packed on the surface of an Archimedean solid, such as the cuboctahedron, the snub cube or the truncated icosahedron. A piece may bend over an edge. The faces are regular, so a packing that stays on one face would be a plain 2D packing, and only packings that bend over an edge are dealt. ${SURFACE_PIECES}`,
   ),
   sliceCard(
-    "surf-catalan-a",
+    "surf-johnson",
     ["surf-archimedean"],
+    `The dealer also deals pieces packed on the ${SURFACE_JOHNSON.length} Johnson solids.`,
+    `The dealer also deals pieces packed on the surface of a Johnson solid, such as the square pyramid, the pentagonal rotunda or the triangular hebesphenorotunda. A piece may bend over an edge. Johnson solids have regular faces, so a packing that stays on one face would be a plain 2D packing, and only packings that bend over an edge are dealt. ${SURFACE_PIECES}`,
+  ),
+  sliceCard(
+    "surf-catalan-a",
+    ["surf-johnson"],
     "The dealer also deals pieces packed on 6 Catalan solids with 12 or 24 faces.",
     `The dealer also deals pieces packed on the rhombic dodecahedron and the triakis tetrahedron (12 faces). It also deals the deltoidal icositetrahedron, the pentagonal icositetrahedron, the tetrakis hexahedron and the triakis octahedron (24 faces). A piece may bend over an edge. ${SURFACE_PIECES}`,
   ),
@@ -937,6 +945,12 @@ const SLICE_CARDS: Upgrade[] = [
     ["poly-antiprisms"],
     "The dealer can use the elongated prisms as pieces and containers.",
     polyWhat("poly-elongated", "the prisms of height 1.5, 2 and 3"),
+  ),
+  sliceCard(
+    "poly-johnson",
+    ["poly-antiprisms"],
+    "The dealer can use the Johnson solids as pieces and containers.",
+    polyWhat("poly-johnson", "the Johnson solids"),
   ),
   sliceCard(
     "poly-duals",

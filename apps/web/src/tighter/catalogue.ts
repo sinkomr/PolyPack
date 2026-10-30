@@ -8,7 +8,7 @@ import { SLICES, SOLID_FAMILY_SLICE, SliceId, laterSlice } from "./slices";
 /**
  * The problems each slice (slices.ts) may deal, enumerated lazily: surfaces are 712,800 problems
  * and balls are 693, so those are drawn from parameter ranges with the dealer's seeded generator.
- * Polyhedra problems are every ordered pair of the 94 solids (8,836, of which 150 have records), drawn
+ * Polyhedra problems are every ordered pair of the 186 solids (34,596, of which 150 have records), drawn
  * from the solids of the open families. Curved, sphere and torus are domains of the spaces package
  * (SPACE_DOMAINS: any piece, any P, a problem without a record is open), drawn from parameter ranges
  * written out below (a test checks them against the package); the records listing of the server
@@ -57,12 +57,111 @@ export const SURFACE_PRISMS: readonly string[] = [
   ...[3, 5, 6, 7, 8, 9, 10, 11, 12].map((k) => `prism${k}`),
   ...[4, 5, 6, 7, 8, 9, 10, 11, 12].map((k) => `antiprism${k}`),
 ];
+/**
+ * The 92 Johnson solids of the surface space (J1 to J92). Their faces are regular, so without folding each is a
+ * 2D in 2D packing of its faces: only the folded surfaces are dealt.
+ */
+export const SURFACE_JOHNSON: readonly string[] = [
+  "square_pyramid",
+  "pentagonal_pyramid",
+  "triangular_cupola",
+  "square_cupola",
+  "pentagonal_cupola",
+  "pentagonal_rotunda",
+  "elongated_triangular_pyramid",
+  "elongated_square_pyramid",
+  "elongated_pentagonal_pyramid",
+  "gyroelongated_square_pyramid",
+  "gyroelongated_pentagonal_pyramid",
+  "triangular_bipyramid",
+  "pentagonal_bipyramid",
+  "elongated_triangular_bipyramid",
+  "elongated_square_bipyramid",
+  "elongated_pentagonal_bipyramid",
+  "gyroelongated_square_bipyramid",
+  "elongated_triangular_cupola",
+  "elongated_square_cupola",
+  "elongated_pentagonal_cupola",
+  "elongated_pentagonal_rotunda",
+  "gyroelongated_triangular_cupola",
+  "gyroelongated_square_cupola",
+  "gyroelongated_pentagonal_cupola",
+  "gyroelongated_pentagonal_rotunda",
+  "gyrobifastigium",
+  "triangular_orthobicupola",
+  "square_orthobicupola",
+  "square_gyrobicupola",
+  "pentagonal_orthobicupola",
+  "pentagonal_gyrobicupola",
+  "pentagonal_orthocupolarotunda",
+  "pentagonal_gyrocupolarotunda",
+  "pentagonal_orthobirotunda",
+  "elongated_triangular_orthobicupola",
+  "elongated_triangular_gyrobicupola",
+  "elongated_square_gyrobicupola",
+  "elongated_pentagonal_orthobicupola",
+  "elongated_pentagonal_gyrobicupola",
+  "elongated_pentagonal_orthocupolarotunda",
+  "elongated_pentagonal_gyrocupolarotunda",
+  "elongated_pentagonal_orthobirotunda",
+  "elongated_pentagonal_gyrobirotunda",
+  "gyroelongated_triangular_bicupola",
+  "gyroelongated_square_bicupola",
+  "gyroelongated_pentagonal_bicupola",
+  "gyroelongated_pentagonal_cupolarotunda",
+  "gyroelongated_pentagonal_birotunda",
+  "augmented_triangular_prism",
+  "biaugmented_triangular_prism",
+  "triaugmented_triangular_prism",
+  "augmented_pentagonal_prism",
+  "biaugmented_pentagonal_prism",
+  "augmented_hexagonal_prism",
+  "parabiaugmented_hexagonal_prism",
+  "metabiaugmented_hexagonal_prism",
+  "triaugmented_hexagonal_prism",
+  "augmented_dodecahedron",
+  "parabiaugmented_dodecahedron",
+  "metabiaugmented_dodecahedron",
+  "triaugmented_dodecahedron",
+  "metabidiminished_icosahedron",
+  "tridiminished_icosahedron",
+  "augmented_tridiminished_icosahedron",
+  "augmented_truncated_tetrahedron",
+  "augmented_truncated_cube",
+  "biaugmented_truncated_cube",
+  "augmented_truncated_dodecahedron",
+  "parabiaugmented_truncated_dodecahedron",
+  "metabiaugmented_truncated_dodecahedron",
+  "triaugmented_truncated_dodecahedron",
+  "gyrate_rhombicosidodecahedron",
+  "parabigyrate_rhombicosidodecahedron",
+  "metabigyrate_rhombicosidodecahedron",
+  "trigyrate_rhombicosidodecahedron",
+  "diminished_rhombicosidodecahedron",
+  "paragyrate_diminished_rhombicosidodecahedron",
+  "metagyrate_diminished_rhombicosidodecahedron",
+  "bigyrate_diminished_rhombicosidodecahedron",
+  "parabidiminished_rhombicosidodecahedron",
+  "metabidiminished_rhombicosidodecahedron",
+  "gyrate_bidiminished_rhombicosidodecahedron",
+  "tridiminished_rhombicosidodecahedron",
+  "snub_disphenoid",
+  "snub_square_antiprism",
+  "sphenocorona",
+  "augmented_sphenocorona",
+  "sphenomegacorona",
+  "hebesphenomegacorona",
+  "disphenocingulum",
+  "bilunabirotunda",
+  "triangular_hebesphenorotunda",
+];
 
 /** The solids of a surface slice. */
 const SURFACE_SOLIDS: Partial<Record<SliceId, readonly string[]>> = {
   "surf-platonic": SURFACE_PLATONIC,
   "surf-prisms": SURFACE_PRISMS,
   "surf-archimedean": SURFACE_ARCHIMEDEAN,
+  "surf-johnson": SURFACE_JOHNSON,
   "surf-catalan-a": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] <= 24),
   "surf-catalan-b": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] >= 30 && CATALAN_FACES[s] <= 60),
   "surf-catalan-c": SURFACE_CATALAN.filter((s) => CATALAN_FACES[s] >= 120),
@@ -107,7 +206,7 @@ export function requiredSlices(id: string): SliceId[] | null {
     if (!p) return null;
     const name = p.piece === "ball" ? p.container : p.piece;
     if (name === "ball") return ["balls"];
-    // a solid whose family opens no slice (the Johnson solids, until they are added) is never dealt
+    // a solid whose family opens no slice is never dealt
     const solid = solidSlice(name);
     return solid ? ["balls", solid] : null;
   }
@@ -124,7 +223,7 @@ export function dealableIn(id: string, open: readonly SliceId[]): boolean {
 
 /**
  * The slice of a space problem's id, or null for a problem no slice deals: a surface without
- * folding on a Platonic or Archimedean solid, a prism or an antiprism (each is a 2D in 2D packing of its faces), or an id
+ * folding on a Platonic, Archimedean or Johnson solid, a prism or an antiprism (each is a 2D in 2D packing of its faces), or an id
  * that is not a space problem's.
  */
 export function sliceOfId(id: string): SliceId | null {
@@ -142,10 +241,11 @@ export function sliceOfId(id: string): SliceId | null {
       return need ? need.reduce(laterSlice) : null;
     }
     case "surface": {
-      if (f.mode === "nofold") return f.solid in CATALAN_FACES ? "surf-nofold-catalan" : null;
+      if (f.mode === "nofold") return f.solid in CATALAN_FACES ? "surf-nofold-catalan" : null; // Johnson faces are regular: never
       if (SURFACE_PLATONIC.includes(f.solid)) return "surf-platonic";
       if (SURFACE_PRISMS.includes(f.solid)) return "surf-prisms";
       if (SURFACE_ARCHIMEDEAN.includes(f.solid)) return "surf-archimedean";
+      if (SURFACE_JOHNSON.includes(f.solid)) return "surf-johnson";
       const faces = CATALAN_FACES[f.solid];
       if (faces === undefined) return null;
       return faces <= 24 ? "surf-catalan-a" : faces <= 60 ? "surf-catalan-b" : "surf-catalan-c";

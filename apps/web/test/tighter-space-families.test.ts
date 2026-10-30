@@ -5,7 +5,6 @@ import {
   SURFACE_ARCHIMEDEAN as PKG_ARCHIMEDEAN,
   SURFACE_CATALAN as PKG_CATALAN,
   SURFACE_PLATONIC as PKG_PLATONIC,
-  SURFACE_JOHNSON,
   SURFACE_SOLIDS,
   parseSpaceId,
 } from "@polypack/spaces";
@@ -19,6 +18,7 @@ import {
   TORUS_LATTICES,
   STARTER_P,
   SURFACE_CATALAN,
+  SURFACE_JOHNSON,
   SURFACE_PLATONIC,
   SURFACE_PRISMS,
   dealtFromListing,
@@ -162,11 +162,14 @@ describe("Tighter catalogue", () => {
     expect([...SURFACE_PLATONIC]).toEqual([...PKG_PLATONIC]);
     expect([...SURFACE_CATALAN].sort()).toEqual([...PKG_CATALAN].sort());
     expect([...SURFACE_ARCHIMEDEAN]).toEqual([...PKG_ARCHIMEDEAN]);
-    const solids = [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_CATALAN, ...SURFACE_PRISMS].sort();
-    // the Johnson surfaces are not dealt until the game adds them: no slice holds one, in either mode
-    expect(solids).toEqual([...SURFACE_SOLIDS].filter((n) => !SURFACE_JOHNSON.includes(n)).sort());
-    for (const solid of SURFACE_JOHNSON)
-      for (const mode of ["fold", "nofold"]) expect(sliceOfId(`surface/${solid}/${mode}/4/12`)).toBeNull();
+    const solids = [
+      ...SURFACE_PLATONIC,
+      ...SURFACE_ARCHIMEDEAN,
+      ...SURFACE_CATALAN,
+      ...SURFACE_PRISMS,
+      ...SURFACE_JOHNSON,
+    ].sort();
+    expect(solids).toEqual([...SURFACE_SOLIDS].sort());
   });
 
   it("never deals a surface without folding on a Platonic or Archimedean solid, a prism or an antiprism", () => {
@@ -177,7 +180,7 @@ describe("Tighter catalogue", () => {
         if (f.mode === "nofold") expect(SURFACE_CATALAN).toContain(f.solid);
         expect(inSlice(slice.id, k.id)).toBe(true);
       }
-    for (const solid of [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_PRISMS])
+    for (const solid of [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_PRISMS, ...SURFACE_JOHNSON])
       expect(sliceOfId(`surface/${solid}/nofold/4/12`)).toBeNull();
   });
 
@@ -186,6 +189,7 @@ describe("Tighter catalogue", () => {
     expect(sliceOfId("surface/prism5/fold/4/12")).toBe("surf-prisms");
     expect(sliceOfId("surface/snub_cube/fold/4/12")).toBe("surf-archimedean");
     expect(sliceOfId("surface/cuboctahedron/nofold/4/12")).toBeNull();
+    expect(sliceOfId("surface/pentagonal_rotunda/fold/4/12")).toBe("surf-johnson");
     expect(sliceOfId("surface/antiprism12/fold/0/12")).toBe("surf-prisms");
     expect(sliceOfId("surface/rhombic_dodecahedron/fold/4/12")).toBe("surf-catalan-a");
     expect(sliceOfId("surface/triakis_octahedron/fold/4/12")).toBe("surf-catalan-a");
