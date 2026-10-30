@@ -264,7 +264,7 @@ unpolished (a loose packing). The certifier's tests, the validator's and the sea
 client's (a job started from one) share them. They are not records.
 
 **Johnson test packings** (2026-10-30; `python/balls/fixtures/johnson_packings.json`, made by `packages/balls/scripts/gen-johnson-packings.ts`,
-`python3 python/balls/test_johnson_packings.py`, `packages/balls/test/johnson.test.ts`). 12: balls in J12, J44 (chiral) and J92 (an fcc and an
+`python3 python/balls/test_johnson_balls.py`, `packages/balls/test/johnson.test.ts`). 12: balls in J12, J44 (chiral) and J92 (an fcc and an
 hcp lattice cut, P = 5 to 14, `latticeCut` and `legalizeBalls`) and J1, J44 and J92 in a ball (a coarse grid in random orientations,
 P = 2 to 5, `legalizeSolids`), each with a clearance of about 1e-10, no search. All 12 are certified exactly and valid in the float
 validator at tolerance 0, and none is below its bound. For each, a piece moved until it overlaps a neighbour by 1e-9 and one

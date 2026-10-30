@@ -17,7 +17,7 @@ TESTS = [
     "polyhedra/test_certify.py",
     "polyhedra/test_johnson.py",
     "polyhedra/test_johnson_packings.py",
-    "balls/test_johnson_packings.py",
+    "balls/test_johnson_balls.py",
     "sphere/test_certify.py",
     "surface/test_cert.py",
     "surface/test_general.py",

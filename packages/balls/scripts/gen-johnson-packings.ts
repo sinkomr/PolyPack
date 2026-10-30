@@ -1,6 +1,6 @@
 /**
  * Writes python/balls/fixtures/johnson_packings.json: test packings of the balls space with Johnson solids, for
- * python/balls/test_johnson_packings.py (which certifies each exactly) and packages/balls/test/johnson.test.ts (which
+ * python/balls/test_johnson_balls.py (which certifies each exactly) and packages/balls/test/johnson.test.ts (which
  * checks that the float validator agrees). No search: balls in J12 (triangular bipyramid), J44 (chiral) and J92 are an fcc or hcp lattice cut legalized with a clearance of 1e-10 (latticeCut, legalizeBalls); J1, J44 and
  * J92 in a ball are solids on a coarse grid in random orientations legalized the same way (legalizeSolids). They are
  * packings to test with, not good ones. Each also has two adversarial variants: a piece moved until it overlaps a

@@ -612,10 +612,14 @@ comparable with the first build.
 ## 5b. Kernel for the generic methods
 
 `surfaceKernel({ solid, N, P, mode })` (`packages/surface/src/kernel.ts`) lets the generic search
-methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 49 older solids: with
+methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 141 solids: with
 folding (`mode` "fold", the default) and without ("nofold"). The nofold problems of the Platonic
 solids are planar problems of one face and keep the polygon solver's methods; on the other solids
 the kernel's nofold mode serves them, so every problem offers Auto and the generic methods.
+Known limitation [CALC, 2026-10-30]: at a vertex where three triangles meet (a cone angle of exactly pi: the tetrahedron,
+J7, J12 and a few other Johnson solids), the kernel's fold energy can jump, so its gradient check fails on some seeds
+(J12 5 of 40, J7 1 of 40, the tetrahedron 1 of 40). This slows searches near such vertices; validity is unaffected,
+since the validators and the certifier decide it.
 
 - **State.** Per piece, (u, v) = (x, y) / s in its anchor face's frame, and theta for polygons:
   the fold search's packing on the solid of scale 1, pieces scaled by 1/s. The size is s, the

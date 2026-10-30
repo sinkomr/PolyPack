@@ -242,8 +242,8 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
     case "surface": {
       const pattern =
         "surface/<solid>/<mode>/<N>/<P>, solid a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron), " +
-        "an Archimedean solid (such as snub_cube), a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12) or an antiprism " +
-        "(antiprism4 to antiprism12), mode fold or nofold";
+        "an Archimedean solid (such as snub_cube), a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12), an antiprism " +
+        "(antiprism4 to antiprism12) or a Johnson solid (such as square_pyramid or snub_disphenoid), mode fold or nofold";
       if (parts.length !== 5) return bad(pattern);
       const [, solid, mode, n, p] = parts;
       const N = shapeCode(n);

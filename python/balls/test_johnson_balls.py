@@ -2,7 +2,7 @@
 """Exact certification of test packings of the balls space with Johnson solids
 (python/balls/fixtures/johnson_packings.json, written by packages/balls/scripts/gen-johnson-packings.ts).
 
-Run: python3 python/balls/test_johnson_packings.py. Balls in J12, J44 (chiral) and J92 (fcc and hcp lattice cuts), and J1, J44
+Run: python3 python/balls/test_johnson_balls.py. Balls in J12, J44 (chiral) and J92 (fcc and hcp lattice cuts), and J1, J44
 and J92 in a ball (a coarse grid in random orientations), each legalized with a clearance of about 1e-10, and for each two
 adversarial variants (a piece moved until it overlaps a neighbour, or sticks out of the container, by 1e-9). The certifier must
 prove every packing, refuse every variant, and give the bounds of the Johnson problems the TypeScript catalogue gives, which
