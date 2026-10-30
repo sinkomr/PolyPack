@@ -7,7 +7,7 @@ const records = loadSurfaceRecords();
 describe("the surface domain", () => {
   it("holds every solid, both modes, N = 0 and 3 to 100, P = 1 to 100", () => {
     expect(SURFACE_NS.length).toBe(99);
-    expect(surfaceDomain.info.problems).toBe(49 * 2 * 99 * 100);
+    expect(surfaceDomain.info.problems).toBe(141 * 2 * 99 * 100);
     for (const n of ARCHIMEDEAN_NAMES) {
       expect(surfaceDomain.info.fields[0].groups![n]).toBe("Archimedean");
       expect(surfaceDomain.info.fields[0].titles![n]).toBeTruthy();
