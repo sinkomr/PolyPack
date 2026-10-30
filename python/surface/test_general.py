@@ -93,7 +93,10 @@ class Structure(unittest.TestCase):
             self.assertEqual(S.faces, data[name]["faces"], name)
             self.assertEqual([[list(e) for e in row] for row in S.adj], data[name]["adj"], name)
             for v, c in enumerate(S.cone):
-                self.assertTrue((c - iv.pi).a > 0, (name, v))
+                # a vertex of three triangles (Johnson solids) has exactly pi, which an enclosure cannot show is > pi
+                exact = sum((S.corner_pi[f][k] for f, face in enumerate(S.faces) for k, w in enumerate(face) if w == v
+                             and S.corner_pi[f] is not None), Fr(0))
+                self.assertTrue((c - iv.pi).a > 0 or exact == 1, (name, v))
                 self.assertAlmostEqual(mid(c / iv.pi), data[name]["cone_angles_over_pi"][v], places=12)
             # Gauss-Bonnet: the defects sum to 4 pi
             total = sum((2 * iv.pi - c for c in S.cone), iv.mpf(0))
@@ -101,7 +104,8 @@ class Structure(unittest.TestCase):
             self.assertLess(max(abs(float(d.a)), abs(float(d.b))), 1e-30, name)
 
     def test_regular_faces_are_the_regular_frames(self):
-        for name in general.ARCHIMEDEAN + general.PRISMS + general.ANTIPRISMS:
+        # Johnson faces too: their frame origin is the face centre (not the foot from the solid's centre)
+        for name in general.ARCHIMEDEAN + general.PRISMS + general.ANTIPRISMS + general.JOHNSON:
             S = get_general(name)
             for f in range(S.F):
                 M = S.sides[f]
@@ -177,6 +181,91 @@ class Structure(unittest.TestCase):
         bad["needle"]["faces"] = bad["needle"]["faces"][:3]
         with self.assertRaises(SolidError):
             GeneralSolid("needle", bad)
+
+
+class JohnsonSolids(unittest.TestCase):
+    def test_frame_origin_is_the_face_centre_not_the_foot(self):
+        # the circumcentre of a Johnson face is the mean of its vertices; the foot of the perpendicular from
+        # the solid's centre is elsewhere on most faces (the solids have no sphere through or touching them)
+        off = 0
+        for name in ("square_pyramid", "triangular_cupola", "elongated_square_gyrobicupola", "snub_disphenoid",
+                     "sphenocorona", "triangular_hebesphenorotunda"):
+            S = get_general(name)
+            self.assertTrue(S.johnson and all(S.regular), name)
+            for f, face in enumerate(S.faces):
+                P = [S.pts[v] for v in face]
+                n = len(P)
+                cen = [sum((p[t] for p in P[1:]), P[0][t]) / n for t in range(3)]
+                nrm = general._cross3(general._sub3(P[1], P[0]), general._sub3(P[2], P[0]))
+                # the centre is the foot exactly when it is parallel to the face normal
+                perp = general._cross3(nrm, tuple(cen))
+                if any(not c.is_zero() for c in perp):
+                    off += 1
+        self.assertGreater(off, 20)
+
+    def test_cone_angles_are_exact(self):
+        # three triangles meet at the apex of the triangular bipyramid: exactly pi (an enclosure cannot decide it)
+        S = get_general("triangular_bipyramid")
+        exact = sorted(sum((S.corner_pi[f][k] for f, face in enumerate(S.faces) for k, w in enumerate(face) if w == v),
+                           Fr(0)) for v in range(S.V))
+        self.assertEqual(exact, [Fr(1), Fr(1), Fr(4, 3), Fr(4, 3), Fr(4, 3)])
+
+    def test_johnson_packings_certify(self):
+        packings = load(HERE, "fixtures", "johnson_packings.json")["packings"]
+        self.assertEqual(len({p["solid"] for p in packings}), 11)
+        self.assertEqual({p["N"] for p in packings}, {0, 3, 4})
+        self.assertGreaterEqual(len(packings), 130)
+        for r in packings:
+            c = certify(r, "1e-12")
+            if r["mode"] == "fold" and r["how"] == "constructed":
+                # a piece pair facing each other across an edge: certified by chains, and not as nofold
+                self.assertEqual(c["method"], "chains", r["id"])
+                self.assertFalse(ok(dict(r, mode="nofold"), "1e-12"), r["id"])
+            if r["mode"] == "nofold":
+                self.assertEqual(certify(dict(r, mode="fold"), "1e-12")["method"], "inside_faces", r["id"])
+            self.assertGreaterEqual(Fr(c["score_cert"]), Fr(r["s"]) / (1 - Fr("1e-12")))
+
+    def test_agrees_with_the_typescript_validator(self):
+        data = load(HERE, "fixtures", "crosscheck_johnson.json")["cases"]
+        self.assertGreaterEqual(len(data), 300)
+        self.assertEqual(len({c["solid"] for c in data}), 92)
+        self.assertGreaterEqual(sum(1 for c in data if c["ts_valid"]), 100)
+        for c in data:
+            self.assertEqual(ok(c, "1e-9"), c["ts_valid"], c["id"])
+
+    def test_refusals_on_johnson_solids(self):
+        names = ("square_pyramid", "triangular_cupola", "snub_disphenoid", "triangular_bipyramid",
+                 "gyroelongated_triangular_bicupola", "triangular_hebesphenorotunda")
+        for name in names:
+            S = get_general(name)
+            s = 8.0
+            # a disk overlapping its neighbour across the fold edge by 1e-9 is refused, 1e-9 apart is fine
+            f, k = 0, 0
+            m = edge_point(S, s, f, k, 0.5)
+            nx, ny = inward(S, s, f, k)
+            for d, want in ((0.5 - 0.5e-9, False), (0.5 + 0.5e-9, True)):
+                p = (m[0] + d * nx, m[1] + d * ny)
+                g, q, _ = to_neighbour(S, s, f, k, (m[0] - d * nx, m[1] - d * ny))
+                self.assertEqual(ok(rec(name, "fold", 0, s, [(f, p[0], p[1], 0.0), (g, q[0], q[1], 0.0)]), "1e-12"), want, (name, d))
+            # a square whose side is parallel to the wall: crossing the edge by 1e-9 is refused without folding
+            # (it is a valid fold), 1e-9 inside is valid in both modes
+            th = math.atan2(-ny, -nx) - math.pi / 2 - math.pi / 4
+            for d, want in ((0.5 - 1e-9, False), (0.5 + 1e-9, True)):
+                r = rec(name, "nofold", 4, s, [(f, m[0] + d * nx, m[1] + d * ny, th)])
+                self.assertEqual(ok(r, "1e-12"), want, (name, d))
+                self.assertTrue(ok(dict(r, mode="fold"), "1e-12"), (name, d))
+            # a disk covering a vertex (a cone point, the apex of three triangles included) is refused at 1/2 - 1e-9/2
+            kinds = {}
+            for v, c in enumerate(S.cone):
+                kinds.setdefault(round(mid(c), 9), v)
+            for v in kinds.values():
+                f = next(i for i, face in enumerate(S.faces) if v in face)
+                k = S.faces[f].index(v)
+                V = S.frame_vertex(Fr(s), f, k)
+                vx, vy = mid(V[0]), mid(V[1])
+                L = math.hypot(vx, vy)
+                for d, want in ((0.5 - 0.5e-9, False), (0.5 + 0.5e-9, True)):
+                    self.assertEqual(ok(rec(name, "fold", 0, s, [(f, vx * (1 - d / L), vy * (1 - d / L), 0.0)]), "1e-12"), want, (name, v, d))
 
 
 class ArchimedeanPackings(unittest.TestCase):

@@ -5,6 +5,7 @@ import {
   SURFACE_ARCHIMEDEAN as PKG_ARCHIMEDEAN,
   SURFACE_CATALAN as PKG_CATALAN,
   SURFACE_PLATONIC as PKG_PLATONIC,
+  SURFACE_JOHNSON,
   SURFACE_SOLIDS,
   parseSpaceId,
 } from "@polypack/spaces";
@@ -162,7 +163,10 @@ describe("Tighter catalogue", () => {
     expect([...SURFACE_CATALAN].sort()).toEqual([...PKG_CATALAN].sort());
     expect([...SURFACE_ARCHIMEDEAN]).toEqual([...PKG_ARCHIMEDEAN]);
     const solids = [...SURFACE_PLATONIC, ...SURFACE_ARCHIMEDEAN, ...SURFACE_CATALAN, ...SURFACE_PRISMS].sort();
-    expect(solids).toEqual([...SURFACE_SOLIDS].sort());
+    // the Johnson surfaces are not dealt until the game adds them: no slice holds one, in either mode
+    expect(solids).toEqual([...SURFACE_SOLIDS].filter((n) => !SURFACE_JOHNSON.includes(n)).sort());
+    for (const solid of SURFACE_JOHNSON)
+      for (const mode of ["fold", "nofold"]) expect(sliceOfId(`surface/${solid}/${mode}/4/12`)).toBeNull();
   });
 
   it("never deals a surface without folding on a Platonic or Archimedean solid, a prism or an antiprism", () => {

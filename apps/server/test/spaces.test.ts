@@ -219,7 +219,7 @@ describe("GET /api/spaces", () => {
     // surface: the problems of its domain, 2038 of them with a record
     expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
-      ["surface", 970200],
+      ["surface", 2791800],
       ["curved", 990000],
       ["sphere", 9900],
       ["torus", 148500],

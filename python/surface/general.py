@@ -1,5 +1,5 @@
 """Certifier for packings on the general convex polyhedral surfaces: the 13 Archimedean and 13 Catalan solids, the prisms
-with 3 and 5 to 12 sides and the antiprisms with 4 to 12 sides (the five Platonic solids keep their
+with 3 and 5 to 12 sides, the antiprisms with 4 to 12 sides and the 92 Johnson solids (the five Platonic solids keep their
 exact path in cert.py and geom.py).
 
 Built independently of the TypeScript code, from the polyhedra space's exact solids
@@ -11,12 +11,15 @@ Exact checks of each solid (numfield.El arithmetic, exact signs): the faces are 
 polygons, counter-clockwise seen from outside; every other vertex lies strictly inside every face
 plane; every directed edge occurs once, so the faces glue into a closed surface; Euler's formula.
 Archimedean, prism and antiprism faces are checked to be regular with their centre at the foot of the
-perpendicular from the origin. Interval checks: every cone angle is at least pi (the boundary rule
-of docs/spaces/SURFACE, section 1, needs it; a solid with a sharper vertex is refused).
+perpendicular from the origin; Johnson faces are checked to be regular (their centre is not the foot in general).
+Cone angles: every one is at least pi (the boundary rule of docs/spaces/SURFACE, section 1, needs it; a solid with
+a sharper vertex is refused), decided exactly where every face at the vertex is regular (a vertex of three triangles
+has exactly pi, which no interval decides), by intervals otherwise.
 
-Face frames (as in packages/surface/src/solids.ts): the origin is the foot of the perpendicular
-from the solid's centre to the face plane, and the last edge (frame vertex M - 1 to 0) runs along +x
-at the bottom. The foot is exact in the field; frame coordinates are exact field elements divided
+Face frames (as in packages/surface/src/solids.ts): the origin is the face centre, and the last edge (frame vertex
+M - 1 to 0) runs along +x at the bottom. The face centre is the foot of the perpendicular from the solid's centre to
+the face plane for the Archimedean, Catalan, prism and antiprism faces, and the circumcentre of the regular face, the
+mean of its vertices, for the Johnson faces (which have no circumsphere or insphere about the centre). Either is exact in the field; frame coordinates are exact field elements divided
 by square roots of field elements, enclosed in mpmath intervals at 128 bits, and so are the gluing
 motions (rotation as an interval cosine and sine, translation) and their compositions.
 
@@ -59,7 +62,35 @@ CATALAN = ("triakis_tetrahedron", "rhombic_dodecahedron", "triakis_octahedron", 
            "deltoidal_hexecontahedron", "disdyakis_triacontahedron", "pentagonal_hexecontahedron")
 PRISMS = tuple("prism%d" % n for n in (3, 5, 6, 7, 8, 9, 10, 11, 12))
 ANTIPRISMS = tuple("antiprism%d" % n for n in range(4, 13))
-GENERAL_SOLIDS = ARCHIMEDEAN + CATALAN + PRISMS + ANTIPRISMS
+# the 92 Johnson solids, J1 to J92 in Johnson's order (names as in the polyhedra space)
+JOHNSON = tuple("""
+square_pyramid pentagonal_pyramid triangular_cupola square_cupola pentagonal_cupola pentagonal_rotunda
+elongated_triangular_pyramid elongated_square_pyramid elongated_pentagonal_pyramid gyroelongated_square_pyramid
+gyroelongated_pentagonal_pyramid triangular_bipyramid pentagonal_bipyramid elongated_triangular_bipyramid
+elongated_square_bipyramid elongated_pentagonal_bipyramid gyroelongated_square_bipyramid elongated_triangular_cupola
+elongated_square_cupola elongated_pentagonal_cupola elongated_pentagonal_rotunda gyroelongated_triangular_cupola
+gyroelongated_square_cupola gyroelongated_pentagonal_cupola gyroelongated_pentagonal_rotunda gyrobifastigium
+triangular_orthobicupola square_orthobicupola square_gyrobicupola pentagonal_orthobicupola pentagonal_gyrobicupola
+pentagonal_orthocupolarotunda pentagonal_gyrocupolarotunda pentagonal_orthobirotunda elongated_triangular_orthobicupola
+elongated_triangular_gyrobicupola elongated_square_gyrobicupola elongated_pentagonal_orthobicupola
+elongated_pentagonal_gyrobicupola elongated_pentagonal_orthocupolarotunda elongated_pentagonal_gyrocupolarotunda
+elongated_pentagonal_orthobirotunda elongated_pentagonal_gyrobirotunda gyroelongated_triangular_bicupola
+gyroelongated_square_bicupola gyroelongated_pentagonal_bicupola gyroelongated_pentagonal_cupolarotunda
+gyroelongated_pentagonal_birotunda augmented_triangular_prism biaugmented_triangular_prism triaugmented_triangular_prism
+augmented_pentagonal_prism biaugmented_pentagonal_prism augmented_hexagonal_prism parabiaugmented_hexagonal_prism
+metabiaugmented_hexagonal_prism triaugmented_hexagonal_prism augmented_dodecahedron parabiaugmented_dodecahedron
+metabiaugmented_dodecahedron triaugmented_dodecahedron metabidiminished_icosahedron tridiminished_icosahedron
+augmented_tridiminished_icosahedron augmented_truncated_tetrahedron augmented_truncated_cube biaugmented_truncated_cube
+augmented_truncated_dodecahedron parabiaugmented_truncated_dodecahedron metabiaugmented_truncated_dodecahedron
+triaugmented_truncated_dodecahedron gyrate_rhombicosidodecahedron parabigyrate_rhombicosidodecahedron
+metabigyrate_rhombicosidodecahedron trigyrate_rhombicosidodecahedron diminished_rhombicosidodecahedron
+paragyrate_diminished_rhombicosidodecahedron metagyrate_diminished_rhombicosidodecahedron
+bigyrate_diminished_rhombicosidodecahedron parabidiminished_rhombicosidodecahedron
+metabidiminished_rhombicosidodecahedron gyrate_bidiminished_rhombicosidodecahedron tridiminished_rhombicosidodecahedron
+snub_disphenoid snub_square_antiprism sphenocorona augmented_sphenocorona sphenomegacorona hebesphenomegacorona
+disphenocingulum bilunabirotunda triangular_hebesphenorotunda
+""".split())
+GENERAL_SOLIDS = ARCHIMEDEAN + CATALAN + PRISMS + ANTIPRISMS + JOHNSON
 
 # filled lazily by load_data()
 _DATA = None
@@ -258,7 +289,10 @@ class GeneralSolid:
             self.adj.append(row)
         if self.V - self.E + self.F != 2:
             raise SolidError("%s: Euler characteristic" % name)
-        self.regular = [name in ARCHIMEDEAN or name.startswith("prism") or name.startswith("antiprism") for _ in faces]
+        # Johnson faces are regular too, but their frame origin is the face centre, not the foot from the origin
+        self.johnson = name in JOHNSON
+        self.regular = [name in ARCHIMEDEAN or name in JOHNSON or name.startswith("prism") or name.startswith("antiprism")
+                        for _ in faces]
         if any(self.regular):
             self._check_regular()
         self._build_frames()
@@ -293,7 +327,7 @@ class GeneralSolid:
 
     def _check_regular(self):
         """Regular unit-edge faces: all vertices equidistant from the vertex centroid, which is
-        the foot of the perpendicular from the origin. Raw edges have squared length D when
+        the foot of the perpendicular from the origin (not checked for the Johnson solids). Raw edges have squared length D when
         the source coordinates carry the common scale 1/sqrt(D)."""
         pts = self.pts
         for fi, f in enumerate(self.faces):
@@ -312,7 +346,7 @@ class GeneralSolid:
                 w = _sub3(P[k], cen)
                 if not (_dot3(w, w) - r2).is_zero():
                     raise SolidError("%s: face %d is not concyclic" % (self.name, fi))
-                if not _dot3(cen, _sub3(P[k], P[0])).is_zero():
+                if not self.johnson and not _dot3(cen, _sub3(P[k], P[0])).is_zero():
                     raise SolidError("%s: face %d is not centred at the foot" % (self.name, fi))
 
     # frames ---------------------------------------------------------------
@@ -341,7 +375,11 @@ class GeneralSolid:
                 c = _cross3(P[k], P[(k + 1) % n])
                 nrm = (nrm[0] + c[0], nrm[1] + c[1], nrm[2] + c[2])
             nn = _dot3(nrm, nrm)
-            foot = tuple(x * (_dot3(nrm, P[0]) / nn) for x in nrm)
+            if self.johnson:
+                # the circumcentre of the regular face: the mean of its vertices
+                foot = tuple(sum((p[t] for p in P[1:]), P[0][t]) / n for t in range(3))
+            else:
+                foot = tuple(x * (_dot3(nrm, P[0]) / nn) for x in nrm)
             e = _sub3(P[0], P[n - 1])
             ee = _dot3(e, e)
             ey3 = _cross3(nrm, e)
@@ -380,7 +418,21 @@ class GeneralSolid:
             for k, v in enumerate(f):
                 cone[v] = cone[v] + self.corner[fi][k]
         self.cone = cone
+        # exact (in units of pi) where every face at the vertex is regular: a vertex of three triangles has cone
+        # angle exactly pi, which an interval enclosure cannot show is not below it
+        exact = [Fr(0)] * self.V
+        all_regular = [True] * self.V
+        for fi, f in enumerate(self.faces):
+            for k, v in enumerate(f):
+                if self.corner_pi[fi] is None:
+                    all_regular[v] = False
+                else:
+                    exact[v] += self.corner_pi[fi][k]
         for v, c in enumerate(cone):
+            if all_regular[v]:
+                if not (1 <= exact[v] < 2):
+                    raise SolidError("%s: cone angle at vertex %d is not in [pi, 2 pi)" % (self.name, v))
+                continue
             if not (c - iv.pi).a >= 0:
                 raise SolidError("%s: cone angle at vertex %d is not certainly >= pi" % (self.name, v))
             if not (c - 2 * iv.pi).b < 0:

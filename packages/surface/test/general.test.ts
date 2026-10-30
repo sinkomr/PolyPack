@@ -8,6 +8,7 @@ import { pieceArea, pieceVertices } from "@polypack/geometry";
 import { describe, expect, it } from "vitest";
 import {
   ALL_SOLID_NAMES,
+  JOHNSON_NAMES,
   ANTIPRISM_NAMES,
   ARCHIMEDEAN_NAMES,
   CATALAN_NAMES,
@@ -35,7 +36,7 @@ import {
 } from "../src/index";
 import { randomPointOf, rng, walkRayOf } from "./helpers";
 
-const NEW: SolidName[] = [...ARCHIMEDEAN_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
+const NEW: SolidName[] = [...ARCHIMEDEAN_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES, ...JOHNSON_NAMES];
 /** A kite, a rhombic, an irregular-pentagon (chiral) and a sharp-vertex Catalan solid, prisms and antiprisms. */
 const SAMPLE: SolidName[] = [
   "deltoidal_icositetrahedron",
@@ -46,6 +47,12 @@ const SAMPLE: SolidName[] = [
   "prism7",
   "antiprism4",
   "antiprism9",
+  "triangular_cupola",
+  "elongated_square_gyrobicupola",
+  "gyrate_rhombicosidodecahedron",
+  "snub_disphenoid",
+  "sphenocorona",
+  "triangular_hebesphenorotunda",
 ];
 
 /** Mean edge length of the canonical solid (scale 1). */
@@ -62,9 +69,10 @@ function meanEdge(name: SolidName): number {
 }
 
 describe("general solids: structure", () => {
-  it("lists 49 solids, grouped by family", () => {
-    expect(ALL_SOLID_NAMES.length).toBe(49);
-    expect(new Set(ALL_SOLID_NAMES).size).toBe(49);
+  it("lists 141 solids, grouped by family", () => {
+    expect(ALL_SOLID_NAMES.length).toBe(141);
+    expect(new Set(ALL_SOLID_NAMES).size).toBe(141);
+    expect(JOHNSON_NAMES.length).toBe(92);
     expect(CATALAN_NAMES.length).toBe(13);
     expect(ARCHIMEDEAN_NAMES.length).toBe(13);
     expect(PRISM_NAMES).toEqual(["prism3", "prism5", "prism6", "prism7", "prism8", "prism9", "prism10", "prism11", "prism12"]);
@@ -83,7 +91,7 @@ describe("general solids: structure", () => {
       const s = 1.37;
       for (let f = 0; f < S.F; f++) {
         expect(S.faces[f][0]).toBe(Math.min(...S.faces[f]));
-        // the frame origin (foot of the solid's centre) lies inside the face
+        // the frame origin (the foot of the solid's centre; the face centre of a Johnson solid) lies inside the face
         expect(faceDepth(S, 1, f, 0, 0)).toBeGreaterThan(0);
         // counter-clockwise frame, positive area
         expect(faceArea(S, f)).toBeGreaterThan(0);
@@ -224,6 +232,51 @@ describe("general solids: structure", () => {
         expect([...S.corner[fi]].sort().map((a) => a.toFixed(10))).toEqual([...S.corner[0]].sort().map((a) => a.toFixed(10)));
       });
     }
+  });
+});
+
+describe("Johnson solids", () => {
+  it("have regular unit-edge faces, framed at the face centre (not at the foot from the solid's centre)", () => {
+    expect(JOHNSON_NAMES.length).toBe(92);
+    let farFromFoot = 0;
+    for (const name of JOHNSON_NAMES) {
+      const S = getSolid(name);
+      expect(S.family).toBe("johnson");
+      expect(S.title).toMatch(/^J\d+ /);
+      expect(S.regular.every(Boolean)).toBe(true);
+      expect(meanEdge(name)).toBeCloseTo(1, 12);
+      S.faces.forEach((f, fi) => {
+        const M = f.length;
+        for (let k = 0; k < M; k++) expect(faceVertex(S, 2, fi, k)).toEqual(frameVertex(M, 2, k));
+        // the frame origin is the face centre: the mean of the face's vertices
+        const mean = [0, 1, 2].map((t) => f.reduce((u, v) => u + S.vertices[v][t], 0) / M);
+        const o = faceTo3D(S, 1, fi, 0, 0);
+        expect(Math.hypot(o[0] - mean[0], o[1] - mean[1], o[2] - mean[2])).toBeLessThan(1e-12);
+        // ... and the foot of the perpendicular from the solid's centre (the origin of the other families) is elsewhere
+        const { ex, ey } = S.frame3D[fi];
+        const nrm = [ex[1] * ey[2] - ex[2] * ey[1], ex[2] * ey[0] - ex[0] * ey[2], ex[0] * ey[1] - ex[1] * ey[0]];
+        const h = mean[0] * nrm[0] + mean[1] * nrm[1] + mean[2] * nrm[2];
+        const foot = [h * nrm[0], h * nrm[1], h * nrm[2]];
+        if (Math.hypot(foot[0] - mean[0], foot[1] - mean[1], foot[2] - mean[2]) > 1e-3) farFromFoot++;
+      });
+    }
+    // most Johnson faces are off the foot, which is why the origin could not stay the foot
+    expect(farFromFoot).toBeGreaterThan(500);
+  });
+
+  it("have vertices of three or more regular faces: cone angles from exactly pi, never nearer 2 pi than pi/30", () => {
+    let lowest = Infinity;
+    let deficit = Infinity;
+    for (const name of JOHNSON_NAMES) {
+      const S = getSolid(name);
+      for (const c of S.vertexCone) {
+        expect(c / Math.PI).toBeGreaterThanOrEqual(1 - 1e-12);
+        lowest = Math.min(lowest, c / Math.PI);
+        deficit = Math.min(deficit, 2 - c / Math.PI);
+      }
+    }
+    expect(lowest).toBeCloseTo(1, 12);
+    expect(deficit).toBeCloseTo(1 / 30, 12);
   });
 });
 
