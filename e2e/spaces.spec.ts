@@ -106,7 +106,7 @@ test("the records table loads the problems of each space", async ({ page, reques
     // the balls kind's problems are a domain without records yet: its table is empty and its note says so
     if (space === "balls") {
       expect(data.problems).toEqual([]);
-      await expect(page.locator("#space-note")).toHaveText(/^No records yet\. All 18,711 problems of this kind are open/);
+      await expect(page.locator("#space-note")).toHaveText(/^No records yet\. All 36,927 problems of this kind are open/);
       await expect(rows(page)).toHaveCount(0);
       continue;
     }

@@ -3,7 +3,7 @@ import { type SpaceProblemResponse, validateSpaceSubmission } from "@polypack/sp
 import { DEFAULT_PROBLEM } from "../apps/web/src/space/model";
 import { LAZY_VIEW, openProblem } from "./helpers";
 
-// 3D in 3D > Balls on the board: unit balls in a ball or in one of 94 solids, and each of those solids in a ball.
+// 3D in 3D > Balls on the board: unit balls in a ball or in one of 186 solids, and each of those solids in a ball.
 // The space ships without research records, so every problem opens empty ("No record yet"), runs from a new arrangement, and its first valid
 // entry is kept by the local server (playwright.config.ts).
 
@@ -76,11 +76,13 @@ test("3D in 3D > Balls opens a problem without a record, runs from a new arrange
   await expect(facts).toContainText("Entriesopen");
   await expect(page.locator("#space-score-label")).toHaveText("Container diameter d");
   await expect(page.locator("#space-solve-start")).toHaveValue("fresh");
-  // 189 problems in 16 menu groups: balls in a ball or a Platonic solid first
-  await expect(page.locator("#space-f-code option")).toHaveCount(189);
-  await expect(page.locator("#space-f-code optgroup")).toHaveCount(16);
+  // 373 problems in 18 menu groups: balls in a ball or a Platonic solid first
+  await expect(page.locator("#space-f-code option")).toHaveCount(373);
+  await expect(page.locator("#space-f-code optgroup")).toHaveCount(18);
   await expect(page.locator("#space-f-code option").first()).toHaveText("Balls in a ball");
   await expect(page.locator('#space-f-code optgroup[label="Balls in a Catalan solid"] option')).toHaveCount(13);
+  await expect(page.locator('#space-f-code optgroup[label="Balls in a Johnson solid"] option')).toHaveCount(92);
+  await expect(page.locator('#space-f-code optgroup[label="Johnson solids in a ball"] option').first()).toHaveText("J1 square pyramids in a ball");
   await expect(page.locator("#space-f-P option")).toHaveCount(99);
 
   const status = await runFor(page, 40000);
@@ -211,12 +213,12 @@ test("the dimensions page lists Balls under 3D in 3D, its problems without recor
   await page.goto("/dimensions.html");
   const card = page.locator('#dimension-groups > section[data-dimension="3-in-3"] li[data-space="balls"]');
   await expect(card.getByRole("heading", { name: "Balls", exact: true })).toBeVisible();
-  await expect(card).toContainText("18,711, none with a record yet");
+  await expect(card).toContainText("36,927, none with a record yet");
   // its problems are a domain: the records table lists none, and says where to work on them
   await card.getByRole("link", { name: /^Records/ }).click();
   await expect(page.locator('#space-pick input[value="balls"]')).toBeChecked();
   await expect(page.locator("#space-note")).toHaveText(
-    "No records yet. All 18,711 problems of this kind are open: choose one on the board, or let the volunteer client search them.",
+    "No records yet. All 36,927 problems of this kind are open: choose one on the board, or let the volunteer client search them.",
   );
   await page.goto("/dimensions.html");
   await page

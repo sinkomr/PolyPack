@@ -110,7 +110,7 @@ test("the problem picker groups the solids by family, in order", async ({ page }
   await page.goto(`/#space=${SHOWN[1]}`);
   await expect(page.locator("#space-problem-note")).toHaveText(`Problem ${SHOWN[1]}`, LAZY_VIEW);
   const groups = await page.locator("#space-f-solid optgroup").evaluateAll((gs) => gs.map((g) => (g as HTMLOptGroupElement).label));
-  expect(groups).toEqual(["Platonic solids", "Archimedean", "Catalan solids", "Prisms", "Antiprisms"]);
+  expect(groups).toEqual(["Platonic solids", "Archimedean", "Catalan solids", "Prisms", "Antiprisms", "Johnson solids"]);
   // the picker offers the space's whole domain, not only the problems with a record
   await expect(page.locator('#space-f-solid optgroup[label="Prisms"] option')).toHaveText(
     ["Triangular", "Pentagonal", "Hexagonal", "Heptagonal", "Octagonal", "Enneagonal", "Decagonal", "Hendecagonal", "Dodecagonal"].map((b) => `${b} prism`),
