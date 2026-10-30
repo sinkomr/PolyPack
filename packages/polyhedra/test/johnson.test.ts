@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { JOHNSON_SOLID_NAMES, SOLID_NAMES, getSolid, solidNameOfCode } from "../src";
 import { JOHNSON_SOLIDS, SOLID_NAMES_LIST } from "../src/catalogue";
@@ -164,5 +165,129 @@ describe("Johnson solids", () => {
     expect(getSolid("snub_disphenoid").volume).toBeCloseTo(0.8594936461913, 11);
     expect(getSolid("bilunabirotunda").volume).toBeCloseTo((17 + 9 * Math.sqrt(5)) / 12, 12);
     expect(getSolid("triangular_hebesphenorotunda").volume).toBeCloseTo((15 + 7 * Math.sqrt(5)) / 6, 12);
+  });
+});
+
+/**
+ * Which solid each name is. V, E and F do not tell the ortho and gyro forms, the para and meta forms or the gyrate
+ * rhombicosidodecahedra apart, so each solid is pinned by a hash of its sorted squared vertex distances (6 decimals).
+ * The values were taken after an independent check that every solid is congruent to published coordinates
+ * (D. McCooey's tables; J12 to J17 rebuilt independently), and all 92 differ.
+ */
+const DISTANCE_HASH: Record<string, string> = {
+  square_pyramid: "a0c006ca96dcfe33",
+  pentagonal_pyramid: "58aa16aa81c5b9cf",
+  triangular_cupola: "5b925d8330fb1395",
+  square_cupola: "b5a701618256f63d",
+  pentagonal_cupola: "2603cb7dc159c41d",
+  pentagonal_rotunda: "40ed813154d8b96a",
+  elongated_triangular_pyramid: "60435f2c201abcc0",
+  elongated_square_pyramid: "3db21fa368a7ec88",
+  elongated_pentagonal_pyramid: "426748656f72ecc4",
+  gyroelongated_square_pyramid: "1ebeeb6c3a0f1675",
+  gyroelongated_pentagonal_pyramid: "c02f5ebc42a3f545",
+  triangular_bipyramid: "e6e7323f37c718a9",
+  pentagonal_bipyramid: "b1b5b1f5d13ec268",
+  elongated_triangular_bipyramid: "82883f2395b561a6",
+  elongated_square_bipyramid: "04fbeb1367750ae1",
+  elongated_pentagonal_bipyramid: "20df8028256b0af1",
+  gyroelongated_square_bipyramid: "98367d16957be04d",
+  elongated_triangular_cupola: "31477bafc84977d2",
+  elongated_square_cupola: "695986573e921552",
+  elongated_pentagonal_cupola: "b2d11f2b3d77e4ee",
+  elongated_pentagonal_rotunda: "25d88e6582650c52",
+  gyroelongated_triangular_cupola: "68e9effcdfaca65c",
+  gyroelongated_square_cupola: "57fb20b7d4c30182",
+  gyroelongated_pentagonal_cupola: "519d15785e00712a",
+  gyroelongated_pentagonal_rotunda: "9f7c79610a86c721",
+  gyrobifastigium: "b6b069c396690387",
+  triangular_orthobicupola: "99ff59e7bc918a22",
+  square_orthobicupola: "d55bbfc0769bbdde",
+  square_gyrobicupola: "2ad940c33ae1ea72",
+  pentagonal_orthobicupola: "d7985f00b85de165",
+  pentagonal_gyrobicupola: "6fd56cf902c83c34",
+  pentagonal_orthocupolarotunda: "3a83f89707bd6656",
+  pentagonal_gyrocupolarotunda: "ef4b175a7d3eee94",
+  pentagonal_orthobirotunda: "1e690f95b5aa5ccf",
+  elongated_triangular_orthobicupola: "df5f31c4f0a5811f",
+  elongated_triangular_gyrobicupola: "6dd86daec0b3d770",
+  elongated_square_gyrobicupola: "f834eb8235cf296e",
+  elongated_pentagonal_orthobicupola: "1133423669e45069",
+  elongated_pentagonal_gyrobicupola: "f1ccd4b53cb4b5cf",
+  elongated_pentagonal_orthocupolarotunda: "ea4b2fbbae753556",
+  elongated_pentagonal_gyrocupolarotunda: "570018bd79404b01",
+  elongated_pentagonal_orthobirotunda: "39683fc3367a2301",
+  elongated_pentagonal_gyrobirotunda: "9ee358884e90ad7a",
+  gyroelongated_triangular_bicupola: "c0a262c38e65b66a",
+  gyroelongated_square_bicupola: "1dbf6edb08c3fefd",
+  gyroelongated_pentagonal_bicupola: "0a90a0d94fbb2b23",
+  gyroelongated_pentagonal_cupolarotunda: "bc761cde08ec5682",
+  gyroelongated_pentagonal_birotunda: "83017fc767b84e1e",
+  augmented_triangular_prism: "1b765fcb71dc5839",
+  biaugmented_triangular_prism: "e649a8cb69f72087",
+  triaugmented_triangular_prism: "29d0905a905f9884",
+  augmented_pentagonal_prism: "3745cf9483d91272",
+  biaugmented_pentagonal_prism: "205ae889cd202f32",
+  augmented_hexagonal_prism: "7e86795ee00afe17",
+  parabiaugmented_hexagonal_prism: "421a2b4a7bb07a06",
+  metabiaugmented_hexagonal_prism: "a35b1dd637527a43",
+  triaugmented_hexagonal_prism: "248be3b68cb8ec74",
+  augmented_dodecahedron: "22f23657a2432b35",
+  parabiaugmented_dodecahedron: "f3631df3d5cb2588",
+  metabiaugmented_dodecahedron: "6843fe7ea7d96fe1",
+  triaugmented_dodecahedron: "0aba350b2a73ff16",
+  metabidiminished_icosahedron: "46ed254ab01d86c7",
+  tridiminished_icosahedron: "31e82f62d716ea79",
+  augmented_tridiminished_icosahedron: "9599b3eece98d7e9",
+  augmented_truncated_tetrahedron: "d8e80babac65b72b",
+  augmented_truncated_cube: "78e664c34db05bf1",
+  biaugmented_truncated_cube: "28d4768c5f1f4ff4",
+  augmented_truncated_dodecahedron: "949c54f726fa36dc",
+  parabiaugmented_truncated_dodecahedron: "867a19984d5e8bc9",
+  metabiaugmented_truncated_dodecahedron: "2efb192625da61ca",
+  triaugmented_truncated_dodecahedron: "e2498780f8ca6fb9",
+  gyrate_rhombicosidodecahedron: "5282bc573d9d58e4",
+  parabigyrate_rhombicosidodecahedron: "5a099f1dec995334",
+  metabigyrate_rhombicosidodecahedron: "75efcfcb9dd98223",
+  trigyrate_rhombicosidodecahedron: "d763dfce77f0b0b4",
+  diminished_rhombicosidodecahedron: "6df861ab184cadfe",
+  paragyrate_diminished_rhombicosidodecahedron: "0995a37eededdb2c",
+  metagyrate_diminished_rhombicosidodecahedron: "ba8524bc1a55680e",
+  bigyrate_diminished_rhombicosidodecahedron: "2cfa2f6ea42f5130",
+  parabidiminished_rhombicosidodecahedron: "613ba01e3ab327e4",
+  metabidiminished_rhombicosidodecahedron: "2bcc083fd6aa71b3",
+  gyrate_bidiminished_rhombicosidodecahedron: "800fa7c79dda8c83",
+  tridiminished_rhombicosidodecahedron: "73d4bccdf425a610",
+  snub_disphenoid: "f67dfb87f6e27d86",
+  snub_square_antiprism: "189e9dd41e285ec5",
+  sphenocorona: "0718fc4193bd57f9",
+  augmented_sphenocorona: "bb9961754a0ad865",
+  sphenomegacorona: "5c1d82fbaa93de79",
+  hebesphenomegacorona: "dd93444b6e23c7d3",
+  disphenocingulum: "fa3a125ad00daef5",
+  bilunabirotunda: "7a4d5ea0d3cef5cc",
+  triangular_hebesphenorotunda: "08f69b1e9b4df375",
+};
+
+const distanceHash = (name: string): string => {
+  const V = getSolid(name).V;
+  const n = V.length / 3;
+  const d: string[] = [];
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++) {
+      const dx = V[3 * i] - V[3 * j];
+      const dy = V[3 * i + 1] - V[3 * j + 1];
+      const dz = V[3 * i + 2] - V[3 * j + 2];
+      d.push((dx * dx + dy * dy + dz * dz).toFixed(6));
+    }
+  d.sort();
+  return createHash("sha256").update(d.join(",")).digest("hex").slice(0, 16);
+};
+
+describe("Johnson solids are the solids their names say", () => {
+  it("each has its pinned distance hash, and no two share one", () => {
+    expect(Object.keys(DISTANCE_HASH)).toEqual([...JOHNSON_SOLID_NAMES]);
+    for (const name of JOHNSON_SOLID_NAMES) expect(distanceHash(name), name).toBe(DISTANCE_HASH[name]);
+    expect(new Set(Object.values(DISTANCE_HASH)).size).toBe(92);
   });
 });
