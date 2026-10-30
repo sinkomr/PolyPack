@@ -15,6 +15,7 @@ TESTS = [
     "curved/test_certify.py",
     "curved/test_bounds.py",
     "polyhedra/test_certify.py",
+    "polyhedra/test_johnson.py",
     "sphere/test_certify.py",
     "surface/test_cert.py",
     "surface/test_general.py",

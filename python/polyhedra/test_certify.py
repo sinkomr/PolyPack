@@ -144,7 +144,7 @@ class NewSolids(unittest.TestCase):
         self.assertEqual(catalogue.PROBLEMS['pr10l15incub'], ('prism10_l15', 'cube', 'prisms'))
         self.assertEqual(catalogue.parse_id('polyhedra/ap10incub/100'), ('ap10incub', 100))
         self.assertIsNone(catalogue.parse_id('polyhedra/pr13incub/2'))
-        self.assertEqual(sorted(cg.EXACT), sorted(n for n, *_ in catalogue.solids()))
+        self.assertEqual(sorted(cg.EXACT), sorted(n for n, *_ in catalogue.all_solids()))
 
     def regular_base(self, S, idx):
         """The vertices idx lie exactly on one circle about the z axis and at one height; returns (r^2, z)."""
@@ -344,7 +344,7 @@ class Duals(unittest.TestCase):
 
     def test_catalogue_matches_the_exact_file(self):
         exact = read_json(os.path.join(HERE, 'solids_exact.json'))
-        self.assertEqual(sorted(exact), sorted(n for n, *_ in catalogue.solids()))
+        self.assertEqual(sorted(exact), sorted(n for n, *_ in catalogue.all_solids()))
         self.assertEqual(catalogue.PROBLEMS['bp5incub'], ('bipyramid5', 'cube', 'bipyramids'))
         self.assertEqual(catalogue.PROBLEMS['tz11intz11'], ('trapezohedron11', 'trapezohedron11', 'trapezohedra'))
         self.assertNotIn('bp4inbp4', catalogue.PROBLEMS)

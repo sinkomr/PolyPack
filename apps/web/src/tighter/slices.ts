@@ -135,7 +135,7 @@ export const sliceById = (id: SliceId): Slice => SLICES.find((s) => s.id === id)
 export const isSliceId = (v: unknown): v is SliceId => typeof v === "string" && SLICES.some((s) => s.id === v);
 
 /** The slice (card) that opens each family of solids; the order of SLICES is the order the cards are opened and priced in. */
-export const SOLID_FAMILY_SLICE: Readonly<Record<SolidFamily, SliceId>> = {
+export const SOLID_FAMILY_SLICE: Readonly<Partial<Record<SolidFamily, SliceId>>> = {
   archimedean: "poly-archimedean",
   catalan: "poly-catalan",
   platonic: "poly-platonic",
@@ -144,6 +144,7 @@ export const SOLID_FAMILY_SLICE: Readonly<Record<SolidFamily, SliceId>> = {
   elongated_prism: "poly-elongated",
   bipyramid: "poly-duals",
   trapezohedron: "poly-duals",
+  // johnson: no slice yet, so the game never deals a Johnson solid
 };
 
 /** The number of solids a family slice opens, counted from the polyhedra catalogue (0 for a slice that is no family). */

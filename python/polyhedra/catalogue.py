@@ -79,6 +79,18 @@ def solids():
     return out
 
 
+def johnson_solids():
+    """(name, code, family, title) of the 92 Johnson solids (Johnson 1966): codes j01 to j92, names in snake_case,
+    titles 'J<n> <name>'. Kept apart from solids(), which lists the 94 solids of the problems."""
+    from johnson_table import JOHNSON, code, sname, title
+    return [(sname(j), code(j), 'johnson', title(j)) for j in sorted(JOHNSON)]
+
+
+def all_solids():
+    """solids() followed by johnson_solids(): every solid that solids_exact.json and solids.data.ts hold."""
+    return solids() + johnson_solids()
+
+
 def problems(wiki_only=False):
     """(code, piece, container, family) of the 150 problems: upstream's 86 in upstream's order, then PolyPack's 64
     (only upstream's with wiki_only)."""

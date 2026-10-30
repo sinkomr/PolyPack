@@ -111,7 +111,8 @@ describe("the problems of every pair of solids", () => {
       const g = piece.groups![v];
       if (runs.at(-1) !== g) runs.push(g);
     }
-    expect(runs).toEqual(Object.values(SOLID_GROUPS));
+    // the Johnson solids have a group but no solid in the menus yet
+    expect(runs).toEqual(Object.values(SOLID_GROUPS).filter((g) => g !== "Johnson solids"));
     expect(piece.titles!.pr12l3).toBe("dodecagonal prism of height 3");
     // prisms come by their number of sides, the prisms of height 1.5, 2 and 3 after them
     const order = piece.values!;

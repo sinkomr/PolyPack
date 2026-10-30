@@ -68,6 +68,7 @@ const FAMILY_LABEL: Record<SolidName["family"], string> = {
   elongated_prism: "elongated prism",
   bipyramid: "bipyramid",
   trapezohedron: "trapezohedron",
+  johnson: "Johnson solid",
 };
 const FAMILY_ORDER = Object.keys(FAMILY_LABEL) as SolidName["family"][];
 const FAMILY_PLURAL: Record<SolidName["family"], string> = {
@@ -79,6 +80,7 @@ const FAMILY_PLURAL: Record<SolidName["family"], string> = {
   elongated_prism: "Elongated prisms",
   bipyramid: "Bipyramids",
   trapezohedron: "Trapezohedra",
+  johnson: "Johnson solids",
 };
 
 /** Sort key of a solid within its family: the number of sides, then the height of an elongated prism. */

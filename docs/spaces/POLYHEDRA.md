@@ -157,6 +157,71 @@ planar faces and the stated edges but not regular bases (an equilateral heptagon
 `test_certify.py` checks exactly that each base is concyclic at one height (with unit edges, so regular). An
 independent review matched all 20 solids to their textbook definitions exactly [CALC].
 
+**Johnson solids** (2026-10-29; geometry only: no problem, page, surface, ball or game uses them yet). The 92 convex
+solids with regular faces other than the Platonic, Archimedean, prisms and antiprisms [EST: Johnson, "Convex polyhedra
+with regular faces", Canad. J. Math. 18 (1966) 169-200; complete by Zalgaller (1967)] are the family `johnson` of
+`solids_exact.json` (entries 95 to 186), `solids.data.ts` and the catalogues: names in snake case, `square_pyramid` to
+`triangular_hebesphenorotunda`, codes `j01` to `j92` (no "in", so a pair code such as `j05inj92` parses), titles
+"J<n> <name>" (so "J12 triangular bipyramid" is not the catalogue's bipyramids, the duals of the prisms). Unit edges, regular
+faces, centred at the vertex centroid, faces counter-clockwise from outside. `getSolid` knows them; `SOLID_NAMES` and
+`SOLID_NAMES_LIST` (the 94 solids of the problems) do not list them, `JOHNSON_SOLID_NAMES` and `JOHNSON_SOLIDS` do.
+`python/polyhedra/catalogue.py` has `johnson_solids()` and `all_solids()` (the 94 and the 92).
+
+- *Construction* (`johnson.py`, `johnson_build.py`, `johnson_geom.py`, `johnson_tower.py`; exact, in a tower of real
+  quadratic extensions of Q, so no float decides anything). J1 to J83 are built as the names say: a pyramid, cupola or
+  the pentagonal rotunda is glued on a face (its new vertices follow from the unit edges: the top polygon above the
+  midpoints of the base edges, the height from one lateral edge), the prism or antiprism between two caps likewise;
+  J49 to J57 put square pyramids on squares of the triangular, pentagonal and hexagonal prism, J58 to J64 pyramids on a
+  dodecahedron and cuts of an icosahedron, J65 to J71 cupolae on the truncated tetrahedron, cube and dodecahedron, and J72 to
+  J83 turn (gyrate) or remove (diminish) pentagonal cupolae of the rhombicosidodecahedron, in the positions the names
+  give (para: opposite; meta: two axes at 116.57 degrees; tri: three pairwise meta). Where a name allows two ways
+  (ortho or gyro, the turn of a cupola on a face) the one that leaves a convex solid with regular faces and the right
+  face counts is taken, and ortho means that the top polygons of the two end caps project onto the same points. J87 is J86
+  with a square pyramid on a square. J84 to J86 and J88 to J92 are elementary: for J84 to J86 and J88 to J90 `johnson_search.py` finds the unit-edge
+  vertex set for the solid's point group by random-start least squares on symmetry orbits, `johnson_refine.py` refines it
+  to 400 to 16,000 digits (unit edges and every chord of every face polygon, the group's relations, centroid 0),
+  `johnson_derive.py` finds the minimal polynomial of a primitive element by integer relations (LLL, python-flint)
+  and every coordinate as a polynomial in it, and the result (`johnson_elementary.json`) is only a proposal that the
+  proof below accepts or refuses. For J91 and J92 the search found nothing in the time given, so they were seeded from the coordinates in Wikipedia's articles ("Bilunabirotunda",
+  "Triangular hebesphenorotunda"; edge sqrt 5 - 1, rescaled), which the refinement then replaced by its own digits.
+- *Proof at build and in `test_johnson.py`* (`johnson_prove.py`, standard library; `python3 python/polyhedra/johnson.py`
+  fails on any mismatch) [CALC]: in Q(alpha) with exact signs, the vertices are distinct and their centroid is the origin;
+  every edge of every face has length exactly 1; every face is planar and regular (convex, counter-clockwise, all
+  vertices at one distance from the face's centre); every face plane has all other vertices strictly inside (so the solid
+  is strictly convex and the listed faces are its facets) and every edge is on two faces; V, E, F and the faces by number
+  of sides equal the table of `johnson_table.py` (Johnson 1966, as in Wikipedia's "Johnson solid" and MathWorld, and Euler's
+  formula holds for each). As a cross-check in floating point, the order of the symmetry group of each vertex set equals
+  the known one (e.g. 10 for J72, 2 for J78, 5 for J47). `certify_general.py` loads all of them (its own self-check passes),
+  and `certify.py` proves a two-piece packing of J1, J6, J48, J84 and J90 in a cube (`fixtures/johnson_start.json`, made
+  with `latticeStart`). Volumes: J1 sqrt 2/6, J6 (45 + 17 sqrt 5)/12, J84 0.859494, J91 (17 + 9 sqrt 5)/12, J92 (15 + 7 sqrt 5)/6
+  agree with the literature.
+- *Orientation.* Axial solids (J1 to J48): the symmetry axis is z, the first-named cap (the cupola of a cupolarotunda,
+  the pyramid of a pyramid, the rotunda of J21 and J25) on top (+z), the base polygon of that cap with a vertex on +x.
+  J49 to J57: z is the axis of the augmented square (J50, J53, J56: the sum of the two squares' normals, J55 the first
+  square's, J51 and J57 the prism axis), x the prism axis (J49, J52, J54, J55) or the difference of the two normals (J50, J53,
+  J56) or the first square's normal (J51, J57). J58 to J83: z is the symmetry axis through the first modified face
+  (one modification and para pairs: its normal; meta pairs: the sum of the two normals; three: their sum; J78, J79
+  and J82, which have only a mirror plane: the axis of the single removed (J78, J79) or gyrated (J82) cupola) and x
+  the direction of the first vertex of that face (one and para), the difference of the normals (meta), the first
+  normal (three), or the other cupola(e) (J78, J79, J82). J84 to J92: the symmetry axes of the point group are the
+  coordinate axes, as `johnson_search.py` defines them (D2d, D4d: z is the S4 or S8 axis; C2v: z is the 2-fold axis, the
+  mirror planes are xz and yz; D2h: the coordinate planes are mirrors; C3v: z is the 3-fold axis, y = 0 a mirror); the
+  signs are those stored.
+- *Handedness.* J44 to J48 are chiral (rotation groups D3, D4, D5, C5 and D5): only one of the
+  two enantiomers is stored. Going from the +z cap to the -z cap, the nearest vertex of the lower cap's top polygon is
+  reached from a vertex of the upper cap's top polygon by turning anticlockwise (seen from +z) by less than half a
+  step of the polygon (`handedness == +1` in `johnson_build.py`); the mirror image would have more than half a step. J22
+  to J25 (one cupola on an antiprism) have mirror planes and are not chiral.
+- *Fields.* Every solid is stored in the existing format (minimal polynomial, isolating interval, coordinates over
+  Q(alpha); `D` null), with alpha a primitive element of the coordinate field. Degrees: 2 for J1, J8, J15, J60, J62, J70,
+  J74, J81, J91; 4 for 64 solids; 8 for J22 to J25, J44 to J48, J52, J53, J64, J86; and J84 12, J87 16, J89 20, J85 24,
+  J88 32, J90 48. Nothing exceeds 64, so no change of format was needed. The six solids above 8 (J84, J85, J87 to J90) are
+  the elementary ones with squares or a snub; their coordinates are roots of polynomials of those degrees (the
+  coordinates of J88 have degree 16 and 32, of J90 24 and 2). `certify_general.py` loads J90, the hardest, in about 30 s
+  and the others in under 5 s [CALC; Apple Silicon].
+- *Not done here.* No problems, no surfaces, no balls, no game: `SOLID_FAMILY_SLICE` of Tighter maps "johnson" to nothing,
+  so the game never deals one. No packing was searched.
+
 **Problems and ids.** A problem is named by upstream's code `<piece>in<container>` from three-to-five letter
 solid codes, e.g. `cubintet` (cubes in a tetrahedron) or `pr3l15incub` (triangular prisms of height 1.5 in a
 cube). With P pieces its id is `polyhedra/<code>/<P>`, e.g. `polyhedra/cubintet/12`; the wiki shows the same case
