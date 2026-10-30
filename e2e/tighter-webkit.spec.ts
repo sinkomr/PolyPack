@@ -26,11 +26,15 @@ async function safari(playwright: {
   const errors: string[] = [];
   // WebKit can report a same-origin /api/ fetch that failed in transit as a page error; the test is about the worker
   const transit = /Fetch API cannot load[\s\S]*access control checks/;
+  // match the whole error (its message, its text and its stack): WebKit does not always put the
+  // network failure in `message`, and a filter on `message` alone let it through on CI
+  const isTransit = (e: Error) => transit.test(`${e.message ?? ""}\n${String(e)}\n${e.stack ?? ""}`);
   page.on("pageerror", (e) => {
-    if (!transit.test(String(e.message))) errors.push(String(e));
+    if (!isTransit(e)) errors.push(String(e));
   });
   page.on("console", (m) => {
-    if (m.type() === "error" && /worker|Embedder|module/i.test(m.text())) errors.push(m.text());
+    if (m.type() === "error" && !transit.test(m.text()) && /worker|Embedder|module/i.test(m.text()))
+      errors.push(m.text());
   });
   await page.goto(`${URL}?seed=7&tutorial=off`);
   await page.evaluate(() => localStorage.clear());
