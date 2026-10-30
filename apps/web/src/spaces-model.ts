@@ -1,6 +1,9 @@
 import { BALLS_CODES, ballsTitle } from "@polypack/balls/catalogue";
-import { PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
+import { JOHNSON_SOLIDS, PROBLEM_ORDER, problemTitle } from "@polypack/polyhedra/catalogue";
 import {
+  SURFACE_ARCHIMEDEAN,
+  SURFACE_CATALAN,
+  SURFACE_JOHNSON,
   SURFACE_SOLIDS,
   type SpaceInfo,
   type SpaceName,
@@ -171,8 +174,13 @@ const BASES: Record<string, string> = {
   "12": "dodecagonal",
 };
 
-/** A surface solid in words: "cube", "rhombic dodecahedron", "pentagonal prism", "square antiprism". */
+/** The Johnson solids by name: the surface space and the polyhedra space name them alike (J1 square pyramid). */
+const JOHNSON_TITLE = new Map(JOHNSON_SOLIDS.map((s) => [s.name, s.title]));
+
+/** A surface solid in words: "cube", "rhombic dodecahedron", "pentagonal prism", "square antiprism", "J1 square pyramid". */
 export function solidTitle(name: string): string {
+  const j = JOHNSON_TITLE.get(name);
+  if (j) return j;
   const m = /^(anti)?prism(\d+)$/.exec(name);
   if (m) return `${BASES[m[2]] ?? `${m[2]}-gonal`} ${m[1] ? "antiprism" : "prism"}`;
   return name.replace(/_/g, " ");
@@ -182,6 +190,9 @@ export function solidTitle(name: string): string {
 export function solidGroup(name: string): string {
   const i = (SURFACE_SOLIDS as readonly string[]).indexOf(name);
   if (i >= 0 && i < 5) return "Platonic solids";
+  if (SURFACE_ARCHIMEDEAN.includes(name)) return "Archimedean solids";
+  if (SURFACE_CATALAN.includes(name)) return "Catalan solids";
+  if (SURFACE_JOHNSON.includes(name)) return "Johnson solids";
   if (name.startsWith("prism")) return "Prisms";
   if (name.startsWith("antiprism")) return "Antiprisms";
   return "Catalan solids";
@@ -275,7 +286,7 @@ export const SPACE_FIELDS: Record<SpaceName, FieldSpec[]> = {
       start: "cubincub",
     },
   ],
-  // balls/<code>/<P>: balls in a ball and in each of the 94 solids, then each solid in a ball
+  // balls/<code>/<P>: balls in a ball and in each of the 186 solids, then each solid in a ball
   balls: [
     {
       key: "code",

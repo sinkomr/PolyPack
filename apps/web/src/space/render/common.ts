@@ -5,6 +5,9 @@
  */
 import type { SpaceConfig } from "@polypack/spaces";
 
+/** A title in running text: lower case, but a Johnson solid keeps its capital J ("J44 gyroelongated triangular bicupola"). */
+export const lowerTitle = (t: string): string => t.toLowerCase().replace(/\bj(\d+)\b/g, "J$1");
+
 export interface SpaceRenderer {
   /** The drawing: a canvas or an svg element that fills its box. */
   readonly element: HTMLElement | SVGSVGElement;

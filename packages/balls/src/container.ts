@@ -15,16 +15,21 @@
  * face normals and offsets s b_f - r, the container "shrunk inward by r"; for the tangential solids (all b_f equal
  * to the inradius rho) it is the container itself scaled to s - r / rho.
  *
- * Two facts about all 94 solids, used by the bounds [EST, and checked on the data to 4e-16 by a linear programme and
- * a minimisation]: the vertex centroid is the centre of the largest inscribed ball (so the inradius, the least
+ * Two facts about the first 94 solids, used by the bounds [EST, and checked on the data to 4e-16 by a linear programme
+ * and a minimisation]: the vertex centroid is the centre of the largest inscribed ball (so the inradius, the least
  * offset, is the Chebyshev radius) and of the smallest enclosing ball (so the circumradius, the largest vertex
  * distance, is the radius of the smallest ball holding the solid). Both because each is unique or averages to a
- * point fixed by the solid's symmetries, and the only point fixed by the symmetry group of each of the 94 solids
+ * point fixed by the solid's symmetries, and the only point fixed by the symmetry group of each of those 94 solids
  * (the Platonic, Archimedean and Catalan point groups, and the dihedral groups D_nh and D_nd of the prisms,
- * antiprisms, elongated prisms, bipyramids and trapezohedra, n >= 3) is the centroid.
+ * antiprisms, elongated prisms, bipyramids and trapezohedra, n >= 3) is the centroid. [CALC] The 92 Johnson solids
+ * (added 2026-10-30) are another matter: a pyramid, a cupola or a rotunda has only an axis of symmetry, and most of
+ * the others a point group that fixes more than a point or none, so for them the two radii about the centroid are
+ * not the Chebyshev radius and the enclosing radius. The bounds read those from extent.ts (`chebyshev` below, and
+ * enclosingRadius); only the kernels, which place things about the centroid, keep using `inradius` and `circumradius`.
  */
 import { type Solid, getSolid } from "@polypack/polyhedra";
 import type { BallsProblem } from "./catalogue";
+import { chebyshevRadius, enclosingRadius } from "./extent";
 
 export type ContainerKind = "ball" | "cube" | "polyhedron";
 
@@ -38,10 +43,17 @@ export interface Container {
   F: number;
   N: Float64Array;
   b: Float64Array;
-  /** Least offset: the radius of the largest ball in the canonical solid (about the origin). */
+  /** Least offset: the radius of the largest ball about the origin in the canonical solid. */
   inradius: number;
+  /**
+   * The radius of the largest ball anywhere in the canonical solid (extent.ts): the inradius for the first 94 solids,
+   * more for a Johnson solid whose centroid is not the centre of its largest inscribed ball. The lower bounds use this.
+   */
+  chebyshev: number;
   /** Largest vertex distance from the origin. */
   circumradius: number;
+  /** The radius of the smallest ball holding the canonical solid anywhere (extent.ts): the circumradius for the first 94 solids. */
+  enclosing: number;
   /** Largest distance of two vertices (the canonical solid's diameter). */
   diameter: number;
   volume: number;
@@ -79,7 +91,9 @@ export function containerOf(name: string): Container {
     N: solid.N,
     b: solid.offsets,
     inradius: solid.inradius,
+    chebyshev: chebyshevRadius(solid),
     circumradius: solid.circumradius,
+    enclosing: enclosingRadius(solid),
     diameter,
     volume: solid.volume,
     tangential: solid.tangential,

@@ -167,7 +167,7 @@ describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
     expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
-    expect(cat("balls").domain!.info.problems).toBe(18711);
+    expect(cat("balls").domain!.info.problems).toBe(36927);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
 
@@ -329,17 +329,17 @@ describe("the catalogues", () => {
     // Domain spaces load even without records; balls ships no records file at all
     expect(Object.keys(loaded).sort()).toEqual(["balls", "curved", "polyhedra", "sphere", "surface", "torus"]);
     expect(loaded.polyhedra!.problems).toHaveLength(0);
-    expect(loaded.polyhedra!.domain!.info.problems).toBe(4409164);
+    expect(loaded.polyhedra!.domain!.info.problems).toBe(17263404);
     expect(loaded.balls!.problems).toHaveLength(0);
-    expect(loaded.balls!.domain!.info.problems).toBe(18711);
+    expect(loaded.balls!.domain!.info.problems).toBe(36927);
     expect(loaded.surface!.problems).toHaveLength(0);
-    expect(loaded.surface!.domain!.info.problems).toBe(970200);
+    expect(loaded.surface!.domain!.info.problems).toBe(2791800);
     expect(logs).toEqual(
       SPACE_NAMES.map((s) =>
         s === "balls"
-          ? "[spaces] balls: a domain of 18711 problems, 0 with a record (no records file)"
+          ? "[spaces] balls: a domain of 36927 problems, 0 with a record (no records file)"
           : s === "surface"
-            ? "[spaces] surface: a domain of 970200 problems, 0 with a record (no records file)"
+            ? "[spaces] surface: a domain of 2791800 problems, 0 with a record (no records file)"
             : loaded[s]?.domain
               ? `[spaces] ${s}: a domain of ${loaded[s]!.domain!.info.problems} problems, 0 with a record (no records file)`
               : `[spaces] no ${s} records (${join("data", s, "records.json")} is missing)`,

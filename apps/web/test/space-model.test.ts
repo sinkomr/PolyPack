@@ -637,7 +637,7 @@ describe("3D on 4D on the board", () => {
 describe("3D in 3D: balls on the board", () => {
   const rule = { bound: null, certified: null };
 
-  it("picks one of the 189 problems in groups, then P from 2 to 100, from its domain", () => {
+  it("picks one of the 373 problems in groups, then P from 2 to 100, from its domain", () => {
     // no records: the picker is the domain's
     expect(catalogue("balls").problems).toHaveLength(0);
     const domain = catalogue("balls").domain!.info;
@@ -645,7 +645,7 @@ describe("3D in 3D: balls on the board", () => {
     expect(pick.id).toBe("balls/ballinball/13");
     expect(pick.fields.map((f) => f.label)).toEqual(["Problem", "Pieces (P)"]);
     const options = pick.fields[0].options;
-    expect(options).toHaveLength(189);
+    expect(options).toHaveLength(373);
     expect(options.slice(0, 3).map((o) => o.text)).toEqual(["Balls in a ball", "Balls in a tetrahedron", "Balls in a cube"]);
     expect(options.find((o) => o.value === "ballinpkd")).toMatchObject({
       text: "Balls in a pentakis dodecahedron",
@@ -661,8 +661,8 @@ describe("3D in 3D: balls on the board", () => {
       expect(o.group).toBeDefined();
       if (runs[runs.length - 1] !== o.group) runs.push(o.group!);
     }
-    expect(runs).toHaveLength(16);
-    expect(new Set(runs).size).toBe(16);
+    expect(runs).toHaveLength(18);
+    expect(new Set(runs).size).toBe(18);
     expect(["tetinball", "cubinball", "octinball", "dodinball", "icoinball"].map((c) => options.find((o) => o.value === c)!.group)).toEqual(
       Array(5).fill("Platonic solids in a ball"),
     );
@@ -750,7 +750,7 @@ describe("3D in 3D: polyhedra on the board", () => {
         }
   });
 
-  it("picks the piece and the container in two menus of the 94 solids, grouped, and composes the code", () => {
+  it("picks the piece and the container in two menus of the 186 solids, grouped, and composes the code", () => {
     const info = SPACE_DOMAINS.polyhedra!.info;
     const pick = pickFromDomain("polyhedra", info, fieldsOfId("polyhedra", DEFAULT_PROBLEM.polyhedra));
     expect(pick.id).toBe("polyhedra/cubincub/11");
@@ -760,8 +760,8 @@ describe("3D in 3D: polyhedra on the board", () => {
       ["P", "Pieces (P)", "11"],
     ]);
     for (const f of pick.fields.slice(0, 2)) {
-      expect(f.options).toHaveLength(94);
-      expect(new Set(f.options.map((o) => o.group)).size).toBe(8);
+      expect(f.options).toHaveLength(186);
+      expect(new Set(f.options.map((o) => o.group)).size).toBe(9);
     }
     expect(pick.fields[0].options[0]).toEqual({ value: "tet", text: "tetrahedron", group: "Platonic solids" });
     // a menu's change keeps the others

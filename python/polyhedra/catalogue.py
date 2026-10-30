@@ -67,8 +67,9 @@ def _prism_problems(prisms, antiprisms):
     return out
 
 
-def solids():
-    """(name, code, family, title) of every solid: upstream's 56 in upstream's order of families, then PolyPack's 38."""
+def named_solids():
+    """(name, code, family, title) of the 94 solids of the 150 named problems: upstream's 56 in upstream's order of
+    families, then PolyPack's 38."""
     out = [(s, AB[s], 'platonic', s) for s in PLATONIC]
     out += [(s, AB[s], 'archimedean', s.replace('_', ' ')) for s in ARCHIMEDEAN]
     out += [(s, AB[s], 'catalan', s.replace('_', ' ')) for s in CATALAN]
@@ -77,6 +78,33 @@ def solids():
     out += [(f'bipyramid{k}', f'bp{k}', 'bipyramid', f'{POLY[k]} bipyramid') for k in BIPYRAMID_K]
     out += [(f'trapezohedron{k}', f'tz{k}', 'trapezohedron', f'{POLY[k]} trapezohedron') for k in TRAPEZOHEDRON_K]
     return out
+
+
+def johnson_solids():
+    """(name, code, family, title) of the 92 Johnson solids (Johnson 1966): codes j01 to j92, names in snake_case,
+    titles 'J<n> <name>'."""
+    import os
+    import sys
+    here = os.path.dirname(os.path.abspath(__file__))
+    added = here not in sys.path
+    if added:
+        sys.path.append(here)      # johnson_table sits beside this file, whoever imported it and from where
+    try:
+        from johnson_table import JOHNSON, code, sname, title
+    finally:
+        if added:
+            sys.path.remove(here)
+    return [(sname(j), code(j), 'johnson', title(j)) for j in sorted(JOHNSON)]
+
+
+def solids():
+    """(name, code, family, title) of the 186 solids of the problems, in the order of SOLID_NAMES_LIST in
+    packages/polyhedra/src/catalogue.ts: the 94 of named_solids(), then the 92 Johnson solids. Every ordered pair of
+    them is a problem (pair_problem)."""
+    return named_solids() + johnson_solids()
+
+
+all_solids = solids          # the name this had while the Johnson solids were not yet in the problems
 
 
 def problems(wiki_only=False):
@@ -99,9 +127,35 @@ def problems(wiki_only=False):
     return [(f'{AB[p]}in{AB[c]}', p, c, fam) for p, c, fam in out]
 
 
-PROBLEMS = {code: (piece, container, family) for code, piece, container, family in problems()}
+PROBLEMS = {code: (piece, container, family) for code, piece, container, family in problems()}   # the 150 named ones
 WIKI_PROBLEMS = frozenset(code for code, *_ in problems(wiki_only=True))   # the 86 that polyhedrainpolyhedra.wiki lists
 ID_RE = re.compile(r'^polyhedra/([a-z0-9]+)/([1-9][0-9]{0,3})$')
+
+
+def pair_problem(code):
+    """(piece, container, family) of any problem code: one of the 150 named problems (their family), or `<piece
+    code>in<container code>` of any ordered pair of the 186 solids (family 'pairs'); None for anything else. The code
+    is read at an 'in' with a solid's code on each side, as problemNameOf in packages/polyhedra/src/catalogue.ts does."""
+    if not isinstance(code, str):
+        return None
+    if code in PROBLEMS:
+        return PROBLEMS[code]
+    codes = _code_names()
+    i = code.find('in', 1)
+    while i != -1:
+        if code[:i] in codes and code[i + 2:] in codes:
+            return codes[code[:i]], codes[code[i + 2:]], 'pairs'
+        i = code.find('in', i + 1)
+    return None
+
+
+_CODE_NAMES = {}
+
+
+def _code_names():
+    if not _CODE_NAMES:
+        _CODE_NAMES.update({c: n for n, c, *_ in solids()})
+    return _CODE_NAMES
 
 
 def parse_id(text):

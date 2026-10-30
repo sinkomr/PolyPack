@@ -73,14 +73,14 @@ export const DIMENSIONS: readonly Dimension[] = [
     id: "2-on-3",
     label: "2D on 3D",
     summary:
-      "Polygons and disks on a closed surface, with no container: the surface of a polyhedron (a Platonic, Archimedean or Catalan solid, a prism or an antiprism), a sphere or a flat torus. A flat torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth.",
+      "Polygons and disks on a closed surface, with no container: the surface of a polyhedron (a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism), a sphere or a flat torus. A flat torus is pictured as a surface in 3D, although it cannot be embedded there both flat and smooth.",
     families: [
       {
         space: "surface",
         name: "Polyhedral surfaces",
         short: "Surfaces",
         summary:
-          "Pieces on the surface of a Platonic solid, an Archimedean solid, a Catalan solid, a prism or an antiprism, with or without folding over its edges.",
+          "Pieces on the surface of one of 141 solids: a Platonic, Archimedean, Catalan or Johnson solid, a prism or an antiprism, with or without folding over its edges.",
         available: true,
       },
       {
@@ -109,7 +109,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Polyhedra",
         short: "Polyhedra",
         summary:
-          "Equal polyhedra in the smallest copy of a container polyhedron: Platonic, Archimedean and Catalan solids, prisms and antiprisms, up to 100 pieces.",
+          "Equal polyhedra in the smallest copy of a container polyhedron: Platonic, Archimedean, Catalan and Johnson solids, prisms and antiprisms, up to 500 pieces.",
         available: true,
       },
       {
@@ -117,7 +117,7 @@ export const DIMENSIONS: readonly Dimension[] = [
         name: "Balls",
         short: "Balls",
         summary:
-          "Balls of diameter 1 in the smallest ball or in one of 94 solids, and each of those solids in the smallest ball, up to 100 pieces.",
+          "Balls of diameter 1 in the smallest ball or in one of 186 solids, and each of those solids in the smallest ball, up to 100 pieces.",
         available: true,
       },
     ],

@@ -1,5 +1,5 @@
 /**
- * Solid pairs and piece ranges, independent of the research records: every ordered pair of the 94 solids, P = 2 to
+ * Solid pairs and piece ranges, independent of the research records: every ordered pair of the 186 solids, P = 2 to
  * 500. The board picks the piece and the container in two menus (grouped by the solids' families); the code of the
  * problem is the two solids' codes joined by "in" (catalogue.ts).
  */

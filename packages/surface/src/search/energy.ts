@@ -91,7 +91,7 @@ function canonicalizeGeneral(solid: Solid, s: number, p: SurfacePose): SurfacePo
   }
   // circling a vertex without landing (see canonicalize): pull the centre towards the frame origin,
   // which lies inside the face (the foot of the solid's centre on a face of a convex solid that has
-  // an insphere or a circumsphere about that centre)
+  // an insphere or a circumsphere about that centre; the face centre on a Johnson solid)
   for (let k = 0; k < 60 && faceDepth(solid, s, face, x, y) < 0; k++) {
     x *= 0.7;
     y *= 0.7;

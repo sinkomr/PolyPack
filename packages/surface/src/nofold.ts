@@ -195,7 +195,7 @@ export function surfaceNofoldNote(id: string, drawableScore?: number, compact = 
   ];
   split.faces.forEach((f, i) => {
     if (i) parts.push("; ");
-    parts.push(`${f.F} ${plural(pieceName(f.M))}: `);
+    parts.push(`${f.F} ${f.F === 1 ? pieceName(f.M) : plural(pieceName(f.M))}: `);
     if (f.k === 0) parts.push("empty");
     else
       parts.push(

@@ -132,7 +132,7 @@ class NewSolids(unittest.TestCase):
     """PolyPack's prisms and antiprisms (7, 9, 10, 11 sides), checked exactly in their number fields Q(alpha)."""
 
     def test_catalogue(self):
-        self.assertEqual(len(catalogue.solids()), 94)
+        self.assertEqual(len(catalogue.named_solids()), 94)
         self.assertEqual(len(catalogue.PROBLEMS), 150)
         self.assertEqual(len(catalogue.WIKI_PROBLEMS), 86)
         new = [c for c in catalogue.PROBLEMS if c not in catalogue.WIKI_PROBLEMS]
@@ -144,7 +144,7 @@ class NewSolids(unittest.TestCase):
         self.assertEqual(catalogue.PROBLEMS['pr10l15incub'], ('prism10_l15', 'cube', 'prisms'))
         self.assertEqual(catalogue.parse_id('polyhedra/ap10incub/100'), ('ap10incub', 100))
         self.assertIsNone(catalogue.parse_id('polyhedra/pr13incub/2'))
-        self.assertEqual(sorted(cg.EXACT), sorted(n for n, *_ in catalogue.solids()))
+        self.assertEqual(sorted(cg.EXACT), sorted(n for n, *_ in catalogue.all_solids()))
 
     def regular_base(self, S, idx):
         """The vertices idx lie exactly on one circle about the z axis and at one height; returns (r^2, z)."""
@@ -233,7 +233,7 @@ class NewSolids(unittest.TestCase):
         # walls): certified; the upper piece moved 3e-7 down (an overlap of 1e-7): refused; a cube 2e-7 narrower
         # than they need (a protrusion of 1e-7): refused
         # (the bipyramids and trapezohedra have their own pairs below: stacked along z they meet apex to apex)
-        names = [n for n, _, fam, _ in catalogue.solids()[56:] if fam not in ('bipyramid', 'trapezohedron')]
+        names = [n for n, _, fam, _ in catalogue.named_solids()[56:] if fam not in ('bipyramid', 'trapezohedron')]
         self.assertEqual(len(names), 20)
         for name in names:
             V = cg.get_solid(name).Vf
@@ -344,7 +344,7 @@ class Duals(unittest.TestCase):
 
     def test_catalogue_matches_the_exact_file(self):
         exact = read_json(os.path.join(HERE, 'solids_exact.json'))
-        self.assertEqual(sorted(exact), sorted(n for n, *_ in catalogue.solids()))
+        self.assertEqual(sorted(exact), sorted(n for n, *_ in catalogue.all_solids()))
         self.assertEqual(catalogue.PROBLEMS['bp5incub'], ('bipyramid5', 'cube', 'bipyramids'))
         self.assertEqual(catalogue.PROBLEMS['tz11intz11'], ('trapezohedron11', 'trapezohedron11', 'trapezohedra'))
         self.assertNotIn('bp4inbp4', catalogue.PROBLEMS)

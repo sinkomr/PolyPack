@@ -38,7 +38,7 @@ describe("ids and bounds", () => {
     for (const bad of ["balls/ballinball/013", "balls/ballinball/+3", "balls/ballinballs/3", "balls/ballinball", "polyhedra/cubincub/3", 3])
       expect(typeof parseBallsId(bad)).toBe("string");
     expect(BALLS_CODES.slice(0, 1)).toEqual(["ballinball"]);
-    expect(BALLS_CODES).toHaveLength(189);
+    expect(BALLS_CODES).toHaveLength(373);
     expect(BALLS_ORIGINAL_CODES.every((c) => BALLS_CODES.includes(c))).toBe(true);
   });
 
@@ -55,8 +55,8 @@ describe("ids and bounds", () => {
 });
 
 describe("the catalogue", () => {
-  it("has a domain of the 189 problems for P = 2 to 100, with their bounds, and a sample of small P first from the first 7", () => {
-    expect(ballsDomain.info.problems).toBe(189 * (BALLS_MAX_P - BALLS_MIN_P + 1));
+  it("has a domain of the 373 problems for P = 2 to 100, with their bounds, and a sample of small P first from the first 7", () => {
+    expect(ballsDomain.info.problems).toBe(373 * (BALLS_MAX_P - BALLS_MIN_P + 1));
     expect(ballsDomain.info.fields.map((f) => f.key)).toEqual(["code", "P"]);
     const all = ballsDomain.sample(10000);
     expect(all).toHaveLength(693);

@@ -14,7 +14,7 @@
 import type * as T from "three";
 import { getProblem, getSolid, type Pose, type Solid } from "@polypack/polyhedra";
 import type { SpaceConfig } from "@polypack/spaces";
-import { type SpaceRenderer, cssVar, fitCanvas, isDark, onDrag } from "./common";
+import { type SpaceRenderer, cssVar, lowerTitle, fitCanvas, isDark, onDrag } from "./common";
 
 type Three = typeof import("three");
 
@@ -65,7 +65,7 @@ function rotation(w: number, x: number, y: number, z: number): number[] {
 /** "11 cubes in a cube of scale 2.881711, drawn in 3D." (P is at least 2, so the title's plural fits.) */
 function describeText(title: string, P: number, s: number): string {
   const at = title.lastIndexOf(" in ");
-  return `${P} ${title.slice(0, at).toLowerCase()} in ${title.slice(at + 4)} of scale ${s.toFixed(6)}, drawn in 3D.`;
+  return `${P} ${lowerTitle(title.slice(0, at))} in ${title.slice(at + 4)} of scale ${s.toFixed(6)}, drawn in 3D.`;
 }
 
 export function polyhedraRenderer(

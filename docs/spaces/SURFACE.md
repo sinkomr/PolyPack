@@ -5,7 +5,7 @@
 container. The API calls it the space `surface`.
 
 PolyPack's pieces (disks of diameter 1, or regular N-gons of side 1, N = 3 to 100) packed on the surface of
-a convex solid scaled by s: a Platonic solid, one of the 13 Archimedean or 13 Catalan solids, a prism (3 and 5 to 12
+a convex solid scaled by s: a Platonic solid, one of the 13 Archimedean or 13 Catalan solids, one of the 92 Johnson solids, a prism (3 and 5 to 12
 sides) or an antiprism (4 to 12 sides). The score is the smallest s. Two tracks:
 
 - **nofold**: every piece lies in one closed face;
@@ -16,8 +16,8 @@ Every table entry carries a certificate checked by an independent rigorous certi
 `data/surface/records.json`; results summary: [SURFACE_RESULTS.md](SURFACE_RESULTS.md). The tables
 cover the Platonic solids with N in {0, 3, 4, 5, 6, 8}; the other solids, and N = 7 and 9 to 100,
 have problems but no records yet. The problems are a domain of ranges (`packages/surface/src/domain.ts`,
-registered in `packages/spaces/src/domain.ts`): 49 solids, both modes, 99 shapes and P = 1 to 100,
-970,200 problems, each with the larger of its area and one-piece bounds (2.6); 2038 have a record.
+registered in `packages/spaces/src/domain.ts`): 141 solids (49 before the 92 Johnson solids were added on 2026-10-30), both modes, 99 shapes
+and P = 1 to 100, 2,791,800 problems (970,200 before), each with the larger of its area and one-piece bounds (2.6); 2038 have a record.
 
 Labels: [EST] established and sourced, [CALC] computed or proved here, [SPEC] speculation.
 
@@ -94,7 +94,7 @@ or three cone angles [CALC]:
 | antiprism n (n = 4 to 12) | 2 regular n-gons, 2n triangles | 1 + (n - 2)/n at every vertex |
 | Catalan solids | 12 to 120 congruent faces: isosceles or scalene triangles, kites, rhombi, irregular pentagons | 2 or 3 values per solid, from 1.1186 (triakis tetrahedron, 6-valent vertices) to 1.9840 |
 
-Every cone angle of the 49 solids lies in [pi, 2 pi) [CALC: `packages/surface/test/general.test.ts`,
+Every cone angle of the 141 solids lies in [pi, 2 pi) [CALC: `packages/surface/test/general.test.ts`,
 `python/surface/test_general.py`], so the boundary rule below holds on all of them; the certifier
 refuses a solid with a sharper vertex. A Catalan face is tangential: every edge of a Catalan solid
 touches the midsphere, which meets a face plane in a circle tangent to the face's edges, centred at
@@ -136,11 +136,38 @@ just inside and outside a vertex's distance threshold (1/2 from the centre) and 
 on all 13 solids. The general methods kernels need no changes: tests exercise their contracts,
 charts, energy, gradients, conversion, validation and finish on the mixed faces.
 
-**Frames of any face.** The origin is the foot of the perpendicular from the solid's centre to the
-face plane, and the last edge (frame vertex M - 1 to frame vertex 0) runs along +x at the bottom.
-On a regular face (Platonic and Archimedean solids, prisms, antiprisms: the vertices lie on a sphere about the
-centre, so the foot is the face centre) this is the regular frame above; a Catalan face's origin is
-its incentre. Gluing maps rotate by (direction of f's edge k) + pi - (direction of g's edge l).
+**Frames of any face.** The origin is the face centre, and the last edge (frame vertex M - 1 to frame vertex 0) runs
+along +x at the bottom. The face centre is the foot of the perpendicular from the solid's centre to the face plane for
+every family except the Johnson solids. On a regular face of the Platonic and Archimedean solids, prisms and
+antiprisms the vertices lie on a sphere about the centre, so the foot is the circumcentre; a Catalan face's foot is its
+incentre. A Johnson solid has neither a circumsphere nor an insphere about its centre (the vertex centroid), so the foot
+is generally not the centre of its regular face: for a Johnson face the origin is the circumcentre, the mean of the
+face's vertices (`frameOf` in `packages/surface/src/solids.ts`, `_build_frames_at` in `python/surface/general.py`), and
+the face is exactly the regular frame above with the bottom edge horizontal and frame vertex k at angle
+-pi/2 + pi/M + 2 pi k/M. Gluing maps rotate by (direction of f's edge k) + pi - (direction of g's edge l).
+
+**Johnson solids** (2026-10-30). The 92 convex solids with regular faces (Johnson 1966) [EST], J1 to J92 in Johnson's order,
+are the polyhedra space's unit-edge solids ([POLYHEDRA.md](POLYHEDRA.md), "Johnson solids"; the five chiral ones, J44
+to J48, in one handedness) in its vertex order, and s is their edge. Ids use that space's snake_case names:
+`surface/square_pyramid/fold/4/6`, `surface/gyroelongated_square_bicupola/nofold/0/20`,
+`surface/triangular_hebesphenorotunda/fold/3/8`. None of the names is another surface's, and the title is "J<n> <name>".
+All faces are regular (triangles, squares, pentagons, hexagons, octagons or decagons, 1 to 4 kinds per solid), with the
+frame above. Every vertex has at least three faces, so its cone angle is at least pi, and exactly pi where three
+triangles meet (the apexes of the triangular bipyramid J12, the elongated triangular pyramid J7 and others, as on the
+tetrahedron); the largest is 59 pi/30 (deficit pi/30, as on the truncated icosidodecahedron). The certifier decides
+the cone-angle rule exactly (in multiples of pi) where all faces at a vertex are regular, as an enclosure cannot show an
+angle equal to pi is not below it. Nofold values split among the face kinds as for the Archimedean solids; the note
+links the 2D in 2D problems of each kind. 
+
+Checks [CALC]: `packages/surface/test/johnson.test.ts` and `general.test.ts` (frames at the face centre, the cone
+angles, the development), and `python/surface/test_general.py` (class JohnsonSolids). 132 test packings, no records, on J1, J3, J6, J12,
+J37, J44, J72, J84, J86, J90 and J92 with N = 0, 3 and 4, folding and not (`python/surface/fixtures/johnson_packings.json`,
+`packages/surface/scripts/build-johnson-packings.ts`: constructed pairs across an edge and per-face-kind placements, and
+short seeded searches), are valid in the TypeScript validator and certified by `cert.py` at 1e-12. 300 random
+configurations on all 92 solids (`crosscheck_johnson.json`, `gen-crosscheck.ts --johnson`) get the same verdict from both.
+Refusals tested on six solids: a disk overlapping its neighbour across a fold edge by 1e-9, a disk over a vertex, a
+square crossing an edge by 1e-9 without folding. Loading J90 (a number field of degree 48) takes about 45 s in the
+certifier; the others a few seconds at most.
 
 **Pieces and sizes.** As in 2D in 2D: N = 0 or 3 to 100 and P up to 100, with and without folding, on
 every solid. Nothing in the geometry depends on N (a regular 100-gon of side 1 has circumradius 15.9,
@@ -454,7 +481,7 @@ from (2.4); on the other solids the face's own edge lines, from `faceCutsOf`.
 TypeScript: exact checks (field arithmetic, exact signs) that every face is planar, convex and
 counter-clockwise from outside, that every other vertex lies strictly inside every face plane, that
 the faces glue into a closed surface with Euler characteristic 2, and that prism and antiprism faces
-are regular and centred at the foot; interval checks that every cone angle is at least pi. Frames
+are regular and centred at the foot (Johnson faces: regular, with their centre the frame origin); every cone angle is at least pi, exactly where all its faces are regular, by intervals otherwise. Frames
 are exact field elements over square roots, enclosed at 320 bits and kept as 128-bit intervals, and
 so are the gluing motions and their compositions. Fields of degree up to 20 make exact chain
 topology too costly, so it is decided otherwise:
@@ -585,10 +612,14 @@ comparable with the first build.
 ## 5b. Kernel for the generic methods
 
 `surfaceKernel({ solid, N, P, mode })` (`packages/surface/src/kernel.ts`) lets the generic search
-methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 49 solids: with
+methods (`docs/methods/dimensions/README.md`) run on the surface problems of all 141 solids: with
 folding (`mode` "fold", the default) and without ("nofold"). The nofold problems of the Platonic
 solids are planar problems of one face and keep the polygon solver's methods; on the other solids
 the kernel's nofold mode serves them, so every problem offers Auto and the generic methods.
+Known limitation [CALC, 2026-10-30]: at a vertex where three triangles meet (a cone angle of exactly pi: the tetrahedron,
+J7, J12 and a few other Johnson solids), the kernel's fold energy can jump, so its gradient check fails on some seeds
+(J12 5 of 40, J7 1 of 40, the tetrahedron 1 of 40). This slows searches near such vertices; validity is unaffected,
+since the validators and the certifier decide it.
 
 - **State.** Per piece, (u, v) = (x, y) / s in its anchor face's frame, and theta for polygons:
   the fold search's packing on the solid of scale 1, pieces scaled by 1/s. The size is s, the
@@ -767,7 +798,7 @@ is served by the site, at `/spaces/surface.html`.
 
 ## 9. Limitations and open questions
 
-- The Archimedean and Catalan solids, prisms and antiprisms, and N = 7 and 9 to 100 on every solid, have no records:
+- The Archimedean, Catalan and Johnson solids, prisms and antiprisms, and N = 7 and 9 to 100 on every solid, have no records:
   their problems are open, and only test packings exist. Archimedean, prism and antiprism nofold values are 2D in
   2D values (2.1b); Catalan nofold problems are new 2D problems with irregular containers (2.1c).
 - The certifier of the other solids refuses degenerate configurations (a centre exactly in line with

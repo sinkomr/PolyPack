@@ -79,7 +79,7 @@ const shape = (text: string) => {
  */
 export function parseSearchProblem(id: unknown): SearchProblem | null {
   if (typeof id !== "string" || id.length > 120) return null;
-  let m = /^surface\/([a-z][a-z0-9_]{1,40})\/(fold|nofold)\/(\d{1,3})\/(\d{1,3})$/.exec(id);
+  let m = /^surface\/([a-z][a-z0-9_]{1,60})\/(fold|nofold)\/(\d{1,3})\/(\d{1,3})$/.exec(id);
   if (m) {
     const N = shape(m[3]);
     const P = count(m[4]);

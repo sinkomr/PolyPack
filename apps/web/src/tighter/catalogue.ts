@@ -77,12 +77,15 @@ const BALLS_BY_CODE = new Map(BALLS_PROBLEMS.map((p) => [p.code, p]));
 /** The slice of the solid's family, or null for "ball" or a name that is no solid. */
 const solidSlice = (name: string): SliceId | null => {
   const s = SOLID_BY_NAME.get(name);
-  return s ? SOLID_FAMILY_SLICE[s.family] : null;
+  return s ? (SOLID_FAMILY_SLICE[s.family] ?? null) : null;
 };
 
 /** The solids of the families open in `open`. */
 const openSolids = (open: readonly SliceId[]) =>
-  SOLID_NAMES_LIST.filter((s) => open.includes(SOLID_FAMILY_SLICE[s.family]));
+  SOLID_NAMES_LIST.filter((s) => {
+    const f = SOLID_FAMILY_SLICE[s.family];
+    return f !== undefined && open.includes(f);
+  });
 
 /**
  * The slices a problem needs open to be dealt: for a pair of solids the slices of the piece's and the
@@ -102,8 +105,11 @@ export function requiredSlices(id: string): SliceId[] | null {
   if (f.family === "balls") {
     const p = BALLS_BY_CODE.get(f.code);
     if (!p) return null;
-    const solid = solidSlice(p.piece === "ball" ? p.container : p.piece);
-    return solid ? ["balls", solid] : ["balls"];
+    const name = p.piece === "ball" ? p.container : p.piece;
+    if (name === "ball") return ["balls"];
+    // a solid whose family opens no slice (the Johnson solids, until they are added) is never dealt
+    const solid = solidSlice(name);
+    return solid ? ["balls", solid] : null;
   }
   return null;
 }

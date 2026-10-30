@@ -198,12 +198,12 @@ class CrossCheck(unittest.TestCase):
 
 
 class Catalogue(unittest.TestCase):
-    """The 189 problems and their bounds agree with packages/balls (fixtures/bounds.json, scripts/gen-bounds.ts)."""
+    """The 373 problems and their bounds agree with packages/balls (fixtures/bounds.json, scripts/gen-bounds.ts)."""
 
     def test_codes_ids_and_titles(self):
         c = balls_catalogue
-        self.assertEqual(len(c.CODES), 189)
-        self.assertEqual(len(set(c.CODES)), 189)
+        self.assertEqual(len(c.CODES), 373)
+        self.assertEqual(len(set(c.CODES)), 373)
         self.assertEqual(c.ORIGINAL_CODES, ['ballinball', 'ballincub', 'tetinball', 'cubinball', 'octinball', 'dodinball', 'icoinball'])
         self.assertEqual(c.PROBLEMS['ballinpkd'], {'piece': 'ball', 'container': 'pentakis_dodecahedron', 'title': 'Balls in a pentakis dodecahedron'})
         self.assertEqual(c.PROBLEMS['kttinball']['title'], 'Triakis tetrahedra in a ball')
@@ -219,12 +219,12 @@ class Catalogue(unittest.TestCase):
     def test_bounds_and_solid_geometry_match_the_typescript(self):
         with open(os.path.join(HERE, 'fixtures', 'bounds.json')) as f:
             d = json.load(f)
-        self.assertEqual(len(d['solids']), 94)
-        self.assertEqual(len(d['bounds']), 189 * 3)
+        self.assertEqual(len(d['solids']), 186)
+        self.assertEqual(len(d['bounds']), 373 * 3)
         for name, g in d['solids'].items():
             h = balls_catalogue.geometry(name)
             self.assertEqual(h['tangential'], g['tangential'], name)
-            for k in ('volume', 'inradius', 'circumradius', 'diameter'):
+            for k in ('volume', 'inradius', 'chebyshev', 'circumradius', 'enclosing', 'diameter'):
                 self.assertAlmostEqual(h[k] / g[k], 1.0, delta=1e-12, msg=f'{name} {k}')
         for b in d['bounds']:
             self.assertAlmostEqual(bound(b['code'], b['P']) / b['value'], 1.0, delta=1e-12, msg=str(b))

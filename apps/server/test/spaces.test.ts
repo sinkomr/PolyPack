@@ -219,13 +219,13 @@ describe("GET /api/spaces", () => {
     // surface: the problems of its domain, 2038 of them with a record
     expect(r.spaces.find((s) => s.space === "surface")!.records).toBe(2038);
     expect(r.spaces.map((s) => [s.space, s.problems])).toEqual([
-      ["surface", 970200],
+      ["surface", 2791800],
       ["curved", 990000],
       ["sphere", 9900],
       ["torus", 148500],
       ["boundary", 32],
-      ["polyhedra", 4409164],
-      ["balls", 18711],
+      ["polyhedra", 17263404],
+      ["balls", 36927],
     ]);
     for (const s of r.spaces) {
       // the balls space has no standalone viewer: its problems are drawn on the board
@@ -1047,7 +1047,7 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     console.log(`[CALC] server ${code}/500: ${checks[0].workMs.toFixed(1)} ms work, max slice ${checks[0].longestSliceMs.toFixed(1)} ms, body ${Buffer.byteLength(body)} bytes`);
   });
 
-  it.each(["kttinpkd", "pr12l3intet", "bp12inap4"])("takes %s, a pair without a record, as a problem of the domain", async (code) => {
+  it.each(["kttinpkd", "pr12l3intet", "bp12inap4", "j92inj44", "j06incub", "cubinj01"])("takes %s, a pair without a record, as a problem of the domain", async (code) => {
     const id = `polyhedra/${code}/7`;
     makeApp({}, index);
     const p = (await get(`/api/spaces/polyhedra/problems/${id}`)).body as SpaceProblemResponse;
@@ -1062,11 +1062,11 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect(low.status).toBe(422);
     // a code that is no pair is no problem
     expect((await get("/api/spaces/polyhedra/problems/polyhedra/kttinxyz/7")).status).toBe(400);
-    // the domain tells the board its two menus, not 8,836 codes
+    // the domain tells the board its two menus, not 34,596 codes
     const listing = (await get("/api/spaces")).body as { spaces: { space: string; domain?: { fields: { key: string }[]; problems: number } }[] };
     const d = listing.spaces.find((x) => x.space === "polyhedra")!.domain!;
     expect(d.fields.map((f) => f.key)).toEqual(["piece", "container", "P"]);
-    expect(d.problems).toBe(94 * 94 * 499);
+    expect(d.problems).toBe(186 * 186 * 499);
   });
 
   /** Two unit cubes side by side along x, `gap` apart (negative: overlapping), in a cube of edge s. */

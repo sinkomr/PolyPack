@@ -7,13 +7,22 @@
  * docs/spaces/POLYHEDRA.md) in themselves and in a cube. No imports, so that a page can name problems without loading the solids' coordinates; problems.ts builds the
  * same list with the solids attached.
  *
- * Beyond those 150, every ordered pair (piece, container) of the 94 solids is a problem family too (8,836 in all,
- * P = 2 to 500, no research records): problemNameOf reads the code `<piece code>in<container code>` of any pair,
- * with the family "pairs" for the 8,686 that are not among the 150.
+ * Beyond those 150, every ordered pair (piece, container) of the 186 solids (the 94 above and the 92 Johnson solids,
+ * J1 to J92, codes j01 to j92) is a problem family too (34,596 in all, P = 2 to 500, no research records):
+ * problemNameOf reads the code `<piece code>in<container code>` of any pair, with the family "pairs" for the 34,446 that
+ * are not among the 150.
  */
 
 export type SolidFamily =
-  "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "elongated_prism" | "bipyramid" | "trapezohedron";
+  | "platonic"
+  | "archimedean"
+  | "catalan"
+  | "prism"
+  | "antiprism"
+  | "elongated_prism"
+  | "bipyramid"
+  | "trapezohedron"
+  | "johnson";
 export type ProblemFamily = "platonic" | "archimedean" | "catalan" | "prisms" | "bipyramids" | "trapezohedra" | "pairs";
 
 export interface SolidName {
@@ -146,8 +155,54 @@ function buildSolids(): SolidName[] {
   return out;
 }
 
-/** Every solid's name, code and title: upstream's 56 in upstream's order, then PolyPack's 38. */
-export const SOLID_NAMES_LIST: readonly SolidName[] = buildSolids();
+/**
+ * The 92 Johnson solids (Johnson 1966; python/polyhedra/johnson_table.py), in Johnson's order: family "johnson", codes
+ * j01 to j92 (no "in", so that pair codes such as j05inj92 parse), names in snake_case, titles "J<n> <name>". Unit edges,
+ * regular faces, geometry in solids.data.ts. They are the last 92 of SOLID_NAMES_LIST, so that every ordered pair of
+ * them with the 94 others is a problem (family "pairs"); the 150 named problems have none of them.
+ */
+const JOHNSON_TITLES: readonly string[] = [
+  "square pyramid", "pentagonal pyramid", "triangular cupola", "square cupola", "pentagonal cupola",
+  "pentagonal rotunda", "elongated triangular pyramid", "elongated square pyramid", "elongated pentagonal pyramid",
+  "gyroelongated square pyramid", "gyroelongated pentagonal pyramid", "triangular bipyramid", "pentagonal bipyramid",
+  "elongated triangular bipyramid", "elongated square bipyramid", "elongated pentagonal bipyramid",
+  "gyroelongated square bipyramid", "elongated triangular cupola", "elongated square cupola",
+  "elongated pentagonal cupola", "elongated pentagonal rotunda", "gyroelongated triangular cupola",
+  "gyroelongated square cupola", "gyroelongated pentagonal cupola", "gyroelongated pentagonal rotunda",
+  "gyrobifastigium", "triangular orthobicupola", "square orthobicupola", "square gyrobicupola",
+  "pentagonal orthobicupola", "pentagonal gyrobicupola", "pentagonal orthocupolarotunda",
+  "pentagonal gyrocupolarotunda", "pentagonal orthobirotunda", "elongated triangular orthobicupola",
+  "elongated triangular gyrobicupola", "elongated square gyrobicupola", "elongated pentagonal orthobicupola",
+  "elongated pentagonal gyrobicupola", "elongated pentagonal orthocupolarotunda",
+  "elongated pentagonal gyrocupolarotunda", "elongated pentagonal orthobirotunda",
+  "elongated pentagonal gyrobirotunda", "gyroelongated triangular bicupola", "gyroelongated square bicupola",
+  "gyroelongated pentagonal bicupola", "gyroelongated pentagonal cupolarotunda",
+  "gyroelongated pentagonal birotunda", "augmented triangular prism", "biaugmented triangular prism",
+  "triaugmented triangular prism", "augmented pentagonal prism", "biaugmented pentagonal prism",
+  "augmented hexagonal prism", "parabiaugmented hexagonal prism", "metabiaugmented hexagonal prism",
+  "triaugmented hexagonal prism", "augmented dodecahedron", "parabiaugmented dodecahedron",
+  "metabiaugmented dodecahedron", "triaugmented dodecahedron", "metabidiminished icosahedron",
+  "tridiminished icosahedron", "augmented tridiminished icosahedron", "augmented truncated tetrahedron",
+  "augmented truncated cube", "biaugmented truncated cube", "augmented truncated dodecahedron",
+  "parabiaugmented truncated dodecahedron", "metabiaugmented truncated dodecahedron",
+  "triaugmented truncated dodecahedron", "gyrate rhombicosidodecahedron", "parabigyrate rhombicosidodecahedron",
+  "metabigyrate rhombicosidodecahedron", "trigyrate rhombicosidodecahedron", "diminished rhombicosidodecahedron",
+  "paragyrate diminished rhombicosidodecahedron", "metagyrate diminished rhombicosidodecahedron",
+  "bigyrate diminished rhombicosidodecahedron", "parabidiminished rhombicosidodecahedron",
+  "metabidiminished rhombicosidodecahedron", "gyrate bidiminished rhombicosidodecahedron",
+  "tridiminished rhombicosidodecahedron", "snub disphenoid", "snub square antiprism", "sphenocorona",
+  "augmented sphenocorona", "sphenomegacorona", "hebesphenomegacorona", "disphenocingulum", "bilunabirotunda",
+  "triangular hebesphenorotunda",
+];
+export const JOHNSON_SOLIDS: readonly SolidName[] = JOHNSON_TITLES.map((t, i) => ({
+  name: t.replace(/ /g, "_"),
+  code: `j${String(i + 1).padStart(2, "0")}`,
+  family: "johnson",
+  title: `J${i + 1} ${t}`,
+}));
+
+/** Every solid's name, code and title: upstream's 56 in upstream's order, then PolyPack's 38, then the 92 Johnson solids. */
+export const SOLID_NAMES_LIST: readonly SolidName[] = [...buildSolids(), ...JOHNSON_SOLIDS];
 const SOLID_BY_NAME = new Map(SOLID_NAMES_LIST.map((s) => [s.name, s]));
 const SOLID_BY_CODE = new Map(SOLID_NAMES_LIST.map((s) => [s.code, s]));
 
@@ -275,6 +330,7 @@ export const SOLID_GROUPS: Record<SolidFamily, string> = {
   elongated_prism: "Prisms of height 1.5, 2 and 3",
   bipyramid: "Bipyramids",
   trapezohedron: "Trapezohedra",
+  johnson: "Johnson solids",
 };
 
 /** Rank of a solid in a menu: by group, then (prisms, antiprisms, elongated prisms) by sides and height. */

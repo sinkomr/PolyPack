@@ -8,13 +8,13 @@ and Catalan solids in themselves, prisms and antiprisms in themselves and in a c
 and 64 of PolyPack's own in the same scheme: prisms and antiprisms with 7, 9, 10 and 11 sides in themselves and
 in a cube, and their prisms of height 1.5, 2 and 3 in a cube; and the bipyramids and trapezohedra, the duals of the
 prisms and antiprisms, in themselves and in a cube (150 problems with records); and, since 2026-10-26, every other
-ordered pair of the 94 solids (8,836 pairs in all, without records, see "Every pair" in §1). The score is s;
+ordered pair of the 186 solids, the 94 above and the 92 Johnson solids (34,596 pairs in all, without records, see "Every pair" in §1). The score is s;
 smaller is better. In code and data the space is called `polyhedra`.
 
 **Summary** (2026-10-27).
 
-- The domain covers **4,409,164 problems**, the 8,836 ordered pairs of the 94 solids (8,686 of them new, without
-  records) at P = 2 to 500. The 150 pairs of the records keep their codes, ids, titles and records; P = 101 to 500
+- The domain covers **17,263,404 problems** (4,409,164 before the Johnson solids joined on 2026-10-30), the 34,596 ordered pairs of the 186
+  solids (34,446 of them without records) at P = 2 to 500. The 150 pairs of the records keep their codes, ids, titles and records; P = 101 to 500
   of those and every P of the new pairs start without research records; entries use the same volume bound and must
   pass the strict check [CALC].
 - `data/polyhedra/records.json` holds **14,850 records**, one for each of the 150 problems and P = 2 to 100 (the
@@ -157,6 +157,113 @@ planar faces and the stated edges but not regular bases (an equilateral heptagon
 `test_certify.py` checks exactly that each base is concyclic at one height (with unit edges, so regular). An
 independent review matched all 20 solids to their textbook definitions exactly [CALC].
 
+**Johnson solids** (geometry 2026-10-29; in the problems of this space, of Balls and of Surfaces since 2026-10-30; the game does not use them). The 92 convex
+solids with regular faces other than the Platonic, Archimedean, prisms and antiprisms [EST: Johnson, "Convex polyhedra
+with regular faces", Canad. J. Math. 18 (1966) 169-200; complete by Zalgaller (1967)] are the family `johnson` of
+`solids_exact.json` (entries 95 to 186), `solids.data.ts` and the catalogues: names in snake case, `square_pyramid` to
+`triangular_hebesphenorotunda`, codes `j01` to `j92` (no "in", so a pair code such as `j05inj92` parses), titles
+"J<n> <name>" (so "J12 triangular bipyramid" is not the catalogue's bipyramids, the duals of the prisms). Unit edges, regular
+faces, centred at the vertex centroid, faces counter-clockwise from outside. They are the last 92 of `SOLID_NAMES` and
+`SOLID_NAMES_LIST` (186 solids; `JOHNSON_SOLID_NAMES` and `JOHNSON_SOLIDS` list them apart), so every ordered pair with
+them is a problem (family `pairs`, no records). `python/polyhedra/catalogue.py` has `solids()` (the 186), `named_solids()` (the
+94), `johnson_solids()` (the 92; `all_solids` is `solids`) and `pair_problem(code)` (the pair of any code). The 150 named
+problems, their ids, records and order are unchanged.
+
+- *Construction* (`johnson.py`, `johnson_build.py`, `johnson_geom.py`, `johnson_tower.py`; exact, in a tower of real
+  quadratic extensions of Q, so no float decides anything). J1 to J83 are built as the names say: a pyramid, cupola or
+  the pentagonal rotunda is glued on a face (its new vertices follow from the unit edges: the top polygon above the
+  midpoints of the base edges, the height from one lateral edge), the prism or antiprism between two caps likewise;
+  J49 to J57 put square pyramids on squares of the triangular, pentagonal and hexagonal prism, J58 to J64 pyramids on a
+  dodecahedron and cuts of an icosahedron, J65 to J71 cupolae on the truncated tetrahedron, cube and dodecahedron, and J72 to
+  J83 turn (gyrate) or remove (diminish) pentagonal cupolae of the rhombicosidodecahedron, in the positions the names
+  give (para: opposite; meta: two axes at 116.57 degrees; tri: three pairwise meta). Where a name allows two ways
+  (ortho or gyro, the turn of a cupola on a face) the one that leaves a convex solid with regular faces and the right
+  face counts is taken, and ortho means that the top polygons of the two end caps project onto the same points. J87 is J86
+  with a square pyramid on a square. J84 to J86 and J88 to J92 are elementary: for J84 to J86 and J88 to J90 `johnson_search.py` finds the unit-edge
+  vertex set for the solid's point group by random-start least squares on symmetry orbits, `johnson_refine.py` refines it
+  to 400 to 16,000 digits (unit edges and every chord of every face polygon, the group's relations, centroid 0),
+  `johnson_derive.py` finds the minimal polynomial of a primitive element by integer relations (LLL, python-flint)
+  and every coordinate as a polynomial in it, and the result (`johnson_elementary.json`) is only a proposal that the
+  proof below accepts or refuses. For J91 and J92 the search found nothing in the time given, so they were seeded from the coordinates in Wikipedia's articles ("Bilunabirotunda",
+  "Triangular hebesphenorotunda"; edge sqrt 5 - 1, rescaled), which the refinement then replaced by its own digits.
+  This derivation is a one-off: it needs python-flint and the search's intermediate files, which are not kept, so it is
+  not part of the build. Nothing depends on it: `johnson_elementary.json` is committed, and the proof below checks it
+  on every build.
+- *Proof at build and in `test_johnson.py`* (`johnson_prove.py`, standard library; `python3 python/polyhedra/johnson.py`
+  fails on any mismatch) [CALC]: in Q(alpha) with exact signs, the vertices are distinct and their centroid is the origin;
+  every edge of every face has length exactly 1; every face is planar and regular (convex, counter-clockwise, all
+  vertices at one distance from the face's centre); every face plane has all other vertices strictly inside (so the solid
+  is strictly convex and the listed faces are its facets) and every edge is on two faces; V, E, F and the faces by number
+  of sides equal the table of `johnson_table.py` (Johnson 1966, as in Wikipedia's "Johnson solid" and MathWorld, and Euler's
+  formula holds for each). As a cross-check in floating point, the order of the symmetry group of each vertex set equals
+  the known one (e.g. 10 for J72, 2 for J78, 5 for J47). `certify_general.py` loads all of them (its own self-check passes),
+  and `certify.py` proves a two-piece packing of J1, J6, J48, J84 and J90 in a cube (`fixtures/johnson_start.json`, made
+  with `latticeStart`). Volumes: J1 sqrt 2/6, J6 (45 + 17 sqrt 5)/12, J84 0.859494, J91 (17 + 9 sqrt 5)/12, J92 (15 + 7 sqrt 5)/6
+  agree with the literature.
+- *Orientation.* Axial solids (J1 to J48): the symmetry axis is z, the first-named cap (the cupola of a cupolarotunda,
+  the pyramid of a pyramid, the rotunda of J21 and J25) on top (+z), the base polygon of that cap with a vertex on +x.
+  J49 to J57: z is the axis of the augmented square (J50, J53, J56: the sum of the two squares' normals, J55 the first
+  square's, J51 and J57 the prism axis), x the prism axis (J49, J52, J54, J55) or the difference of the two normals (J50, J53,
+  J56) or the first square's normal (J51, J57). J58 to J83: z is the symmetry axis through the first modified face
+  (one modification and para pairs: its normal; meta pairs: the sum of the two normals; three: their sum; J78, J79
+  and J82, which have only a mirror plane: the axis of the single removed (J78, J79) or gyrated (J82) cupola) and x
+  the direction of the first vertex of that face (one and para), the difference of the normals (meta), the first
+  normal (three), or the other cupola(e) (J78, J79, J82). J84 to J92: the symmetry axes of the point group are the
+  coordinate axes, as `johnson_search.py` defines them (D2d, D4d: z is the S4 or S8 axis; C2v: z is the 2-fold axis, the
+  mirror planes are xz and yz; D2h: the coordinate planes are mirrors; C3v: z is the 3-fold axis, y = 0 a mirror); the
+  signs are those stored.
+- *Handedness.* J44 to J48 are chiral (rotation groups D3, D4, D5, C5 and D5): only one of the
+  two enantiomers is stored. Going from the +z cap to the -z cap, the nearest vertex of the lower cap's top polygon is
+  reached from a vertex of the upper cap's top polygon by turning anticlockwise (seen from +z) by less than half a
+  step of the polygon (`handedness == +1` in `johnson_build.py`); the mirror image would have more than half a step. J22
+  to J25 (one cupola on an antiprism) have mirror planes and are not chiral.
+- *Fields.* Every solid is stored in the existing format (minimal polynomial, isolating interval, coordinates over
+  Q(alpha); `D` null), with alpha a primitive element of the coordinate field. Degrees: 2 for J1, J8, J15, J60, J62, J70,
+  J74, J81, J91; 4 for 64 solids; 8 for J22 to J25, J44 to J48, J52, J53, J64, J86; and J84 12, J87 16, J89 20, J85 24,
+  J88 32, J90 48. Nothing exceeds 64, so no change of format was needed. The six solids above 8 (J84, J85, J87 to J90) are
+  the elementary ones with squares or a snub; their coordinates are roots of polynomials of those degrees (the
+  coordinates of J88 have degree 16 and 32, of J90 24 and 2). `certify_general.py` loads J90, the hardest, in about 30 s
+  and the others in under 5 s [CALC; Apple Silicon].
+- *In the problems* (2026-10-30). The 92 are full members of the catalogue: 186 solids, every ordered pair a problem family
+  (34,596 pairs, 17,263,404 problems, P = 2 to 500, no records, no baselines). The 150 named problems, their ids, records and
+  order are unchanged; so are all earlier ids of Balls (373 codes now, `docs/spaces/BALLS.md`). Surfaces, the pages and the
+  game do not use them yet: `SOLID_FAMILY_SLICE` of Tighter maps "johnson" to nothing, and the game's counts and draws
+  are those of the 94 solids (a test, `apps/web/test/tighter-johnson-excluded.test.ts`). No packing was searched for.
+- *The generic code on solids that are neither centrally symmetric nor vertex-transitive, and mostly have no insphere* [CALC,
+  reviewed one file at a time; tests in `packages/polyhedra/test/johnson-packings.test.ts`]. Fine as it was: the separating-axis
+  test (`geom.ts`; its candidate axes, face normals and Gauss-map-pruned edge crosses, are complete for any convex
+  polyhedra: the tests compare with 4,000 random directions on eight solids without symmetry, and see an exact penetration
+  depth for overlapping pieces); the validator (`validate.ts`: the reach test `2 R + tol` uses the circumradius about the
+  centroid, which is where the piece's centre is, so it is a valid bound for any solid); the box-lattice start
+  (`kernel-seeds.ts latticeSeed`: it works with the support h_f of the turned piece in each container face direction and the
+  container's offsets b_f > 0, never with an insphere); the legalization and polish (`polish.ts`: the inner-ball argument
+  needs a ball of radius `inradius` = the least offset about the centroid inside the piece, which holds for any convex
+  piece whose centre is the centroid; the container translation LP is generic); the volume bound (volume only; the
+  volume is the divergence-theorem sum over the faces, `Solid.volume`); `draw.ts` (the container's circumradius about the
+  origin covers the container for any solid; the depth sort by centres is the same cosmetic approximation as for the
+  elongated prisms); `certify.py` and `certify_general.py` (they take the exact enclosures of the vertices and the
+  face planes of the stored field, with the unit-edge self-check, and the candidate axes from float proposals).
+  **A real gap**, in Balls only: its lower bounds divided by the centroid's inradius and asked for the centroid's
+  circumradius, which are the Chebyshev and enclosing radii for the first 94 solids (the symmetry argument of
+  `container.ts`) but not for a Johnson solid. A ball in a square pyramid fits from s = 0.5 / 0.2588, not 0.5 / 0.1414; a
+  square pyramid fits in a ball of radius 0.7071, not 0.7211; the old bound would have been too strong. They now use the true
+  radii (`packages/balls/src/extent.ts`; see BALLS.md).
+- *Test packings* (`fixtures/johnson_packings.json`, made by `scripts/gen-johnson-packings.ts`, certified exactly by
+  `test_johnson_packings.py`, and checked by the float validator). 44: J1, J3, J6, J12, J37, J44 (chiral), J72, J84, J86, J90
+  and J92, each in a cube, in itself, in another Johnson solid (J92, J84, J90, J50, J9, J63, J1, J72, J3, J12, J44) and in an
+  Archimedean solid, P = 2 to 6, each the box-lattice start (`latticeStart`) with a clearance of 1e-10 of its scale. All 44 are
+  certified (smallest wall slack 1.4e-11, smallest pair gap 7.1e-11); the certifier's slacks are at most the float
+  validator's gaps and agree to 1e-9. For each, a piece moved until it overlaps its neighbour by 1e-9 (42 of the 44 have a near
+  pair) and one moved out of the container by 1e-9: all are refused by the validator (at tolerance 0, and at 1e-11) and by
+  the certifier. A quaternion of any norm (7.3, 1e-5, 5e48 times a unit one) gives the same gaps in the validator and is certified;
+  a zero quaternion is refused by both. The longest certificate is J90's solid itself (about 25 s, the exact check of its
+  number field of degree 48), the rest take 0.1 s or less each. They are packings to test with, not good ones.
+- *Server memory and bundle size* [CALC; Apple Silicon, Node 26]. `solids.data.ts` (186 solids) is loaded with the solids' module,
+  as the 94 were: the module's heap is 6.6 MB, 3.1 MB for the 94; the server's heap after loading the spaces index is 37 MB,
+  and the first check of a Johnson problem (J92 in J44, P = 6) adds under 0.5 MB. Configurations are not
+  in this data: they load on demand as before, and Johnson problems have none. In the web build the three chunks that carry
+  the solids (`model`, `run-worker`, `worker`) each grew by the Johnson data, about 360 KB raw and 44 KB gzipped.
+
 **Problems and ids.** A problem is named by upstream's code `<piece>in<container>` from three-to-five letter
 solid codes, e.g. `cubintet` (cubes in a tetrahedron) or `pr3l15incub` (triangular prisms of height 1.5 in a
 cube). With P pieces its id is `polyhedra/<code>/<P>`, e.g. `polyhedra/cubintet/12`; the wiki shows the same case
@@ -168,21 +275,21 @@ eight for antiprisms (`ap7inap7`, ...), and `pr7l15incub`, `pr7l2incub`, `pr7l3i
 families `bipyramids` and `trapezohedra` (no code of the wiki starts with `bp` or `tz`). There are no published
 values for them; their records are PolyPack research only.
 
-**Every pair** (2026-10-26). Every ordered pair (piece, container) of the 94 solids is a problem family, P = 2 to
-500: 94 x 94 = 8,836 codes `<piece code>in<container code>`, 150 of them the problems above and **8,686 new**
+**Every pair** (2026-10-26; the 92 Johnson solids added 2026-10-30). Every ordered pair (piece, container) of the 186 solids is a problem family, P = 2 to
+500: 186 x 186 = 34,596 codes `<piece code>in<container code>` (8,836 = 94 x 94 before the Johnson solids), 150 of them the problems above and **34,446 new**
 (family `pairs` in `catalogue.ts`, `wiki: false`). The code is read by splitting at an `in` that has a solid code on
-each side (`problemNameOf`; the 8,836 codes are distinct and each reads back as its own pair, tested), so the
+each side (`problemNameOf`; the 34,596 codes are distinct and each reads back as its own pair, tested), so the
 codes need no list: `kttinpkd` is triakis tetrahedra in a pentakis dodecahedron. Titles are made from the solids'
 names the same way ("Triakis tetrahedra in a pentakis dodecahedron", "Dodecagonal prisms of height 3 in a
 heptagonal bipyramid"). The new pairs ship without records and without baselines: no packing was searched for
 them. Their lower bound is the volume bound above, labelled "volume bound; [CALC]" like the existing ones, and an
 entry must pass the same strict check; a start is the box-lattice patch of §8 ("Large problems"). Pairs where
 piece and container are far apart in size (500 truncated icosidodecahedra in the tetrahedron of edge 1 needs s of
-about 200; the largest container scale over all 8,836 pairs at P = 500 is below the server's limit of 1e6, and
+about 200; the largest container scale over all 8,836 pairs of the first 94 solids at P = 500 (the lattice starts of the four Johnson solids of largest volume in the tetrahedron, the square pyramid, the triangular bipyramid and the cube at P = 500 need s below 150 and have coordinates below 75 [CALC]) is below the server's limit of 1e6, and
 the largest coordinate of a lattice start below 1e4) are valid problems; nothing in the validator or the server
 treats a pair apart [CALC]. A pair whose piece is larger than its container (a cube of edge 1 in an octahedron of
-edge 1) is an ordinary problem with s above 1 for every P. Pieces and containers that are the same solid (the 94
-self-packings, 27 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The nightly snapshot holds the leading site entry of any open problem of the domain, new pairs and P = 101 to 500 included (`snapshotSpaces`; domain problems without a record are listed after the records, by P). The volunteers' work list
+edge 1) is an ordinary problem with s above 1 for every P. Pieces and containers that are the same solid (the 186
+self-packings, 119 of them new) have s = 1 for P = 1 only, so P = 2 is already a search. The nightly snapshot holds the leading site entry of any open problem of the domain, new pairs and P = 101 to 500 included (`snapshotSpaces`; domain problems without a record are listed after the records, by P). The volunteers' work list
 (`domain.sample`) offered only the unrecorded range P = 101 to 500 of the 150 pairs; since it was removed on
 2026-10-29 the volunteer client draws from every pair and P at random.
 
@@ -864,11 +971,11 @@ another address meanwhile were answered as usual (before: 820 ms of lag, and 503
 bipyramids and trapezohedra joined, 3.4 MB with the wiki's 8,514);
 `/api/spaces/polyhedra/problems/<id>` adds the research configuration, read from its problem's file (§2).
 
-**Board.** Dimension 3D in 3D, kind Polyhedra (`docs/spaces/BOARD.md`, "3D in 3D"): two menus of the 94 solids,
+**Board.** Dimension 3D in 3D, kind Polyhedra (`docs/spaces/BOARD.md`, "3D in 3D"): two menus of the 186 solids,
 Piece and Container, grouped by family (Platonic, Archimedean and Catalan solids, prisms, antiprisms, prisms of
-height 1.5, 2 and 3, bipyramids, trapezohedra; prisms by their number of sides), which make the code, and P.
+height 1.5, 2 and 3, bipyramids, trapezohedra, Johnson solids; prisms by their number of sides), which make the code, and P.
 `/api/spaces` describes the domain with those two fields and `joined: [{key: "code", parts: ["piece",
-"container"], separator: "in"}]` (`packages/spaces/src/domain.ts`), not with 8,836 codes; an address
+"container"], separator: "in"}]` (`packages/spaces/src/domain.ts`), not with 34,596 codes; an address
 `#space=polyhedra/cubintet/12` opens as before. The board shows the values, a three.js drawing (instanced pieces and merged edges, solid or see-through, turned by drag or
 keys; about 1 ms a frame for 100 of the largest solids on an Apple M1 Pro), and rounds of the search in a Web
 Worker of at most about 20 s on a machine 3.5 times slower than the measured costs (16,800 evaluations at 11
@@ -884,7 +991,7 @@ option the client never asks the server about it. Its jobs are sized by time lik
 every evaluation: an abort of a job on 100 truncated icosidodecahedra from the record was answered after 0.16 to
 0.33 s (the job then checks its best), of a fresh job on 100 pentagonal hexecontahedra within 10 ms [CALC]; a test
 requires 2 s, and that a paused job uses no processor time (`apps/volunteer/test/pool.spaces.test.ts`). Since 0.3.0
-(2026-10-29) it draws from every problem of the kinds it asks for at random, so the 4,409,164 polyhedra problems get
+(2026-10-29) it draws from every problem of the kinds it asks for at random, so the 4,409,164 polyhedra problems of the time got
 38.5% of its draws with `--dimensions all`; before, it read the whole targets list and drew a space uniformly among
 those it asked for.
 

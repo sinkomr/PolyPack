@@ -1,6 +1,6 @@
 /**
- * The surface kernel (src/kernel.ts) beyond the Platonic solids: the Catalan solids, prisms and
- * antiprisms, folding and without folding. The Platonic tests (kernel.test.ts) are unchanged; here:
+ * The surface kernel (src/kernel.ts) beyond the Platonic solids: the Catalan solids, prisms,
+ * antiprisms and Johnson solids, folding and without folding. The Platonic tests (kernel.test.ts) are unchanged; here:
  * the kernel contract on a spread of solids, N and P in both modes, the certified test packings of
  * python/surface/fixtures/general_packings.json (there are no records of these solids) through
  * fromConfig, validate and finish, the bound of every problem, and the parts that read the faces one
@@ -59,6 +59,14 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
     ["antiprism7", "fold", 4, 30],
     ["antiprism12", "fold", 0, 5],
     ["antiprism12", "nofold", 12, 30],
+    // Johnson solids without a vertex of three triangles (a cone angle of exactly pi; see SURFACE.md, kernel)
+    ["triangular_cupola", "fold", 0, 2],
+    ["triangular_cupola", "nofold", 3, 3],
+    ["pentagonal_rotunda", "fold", 4, 5],
+    ["square_gyrobicupola", "nofold", 6, 5],
+    ["snub_disphenoid", "fold", 3, 5],
+    ["disphenocingulum", "fold", 0, 3],
+    ["triangular_hebesphenorotunda", "nofold", 0, 5],
   ];
   for (const [solid, mode, N, P] of problems)
     it(`passes the kernel contract: ${solid} ${mode}, N = ${N}, P = ${P}`, () => {
@@ -73,8 +81,10 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
 
   it("states the records' bounds to the last bit, and on the other solids bounds checked independently", () => {
     // every Platonic record, fold and nofold (python/surface/tables.py computed their bounds)
-    const records: { id: string; solid: SolidName; mode: Mode; N: number; P: number; bound: { value: number } }[] = loadSurfaceRecords();
-    for (const r of records) expect(surfaceKernel({ solid: r.solid, N: r.N, P: r.P, mode: r.mode }).bound, r.id).toBe(r.bound.value);
+    const records: { id: string; solid: SolidName; mode: Mode; N: number; P: number; bound: { value: number } }[] =
+      loadSurfaceRecords();
+    for (const r of records)
+      expect(surfaceKernel({ solid: r.solid, N: r.N, P: r.P, mode: r.mode }).bound, r.id).toBe(r.bound.value);
     // the other solids, against the area from 3D cross products and a sampled corner radius
     for (const solid of ALL_SOLID_NAMES.filter((n) => !getSolid(n).uniform))
       for (const N of [0, 3, 6, 12, 100])
@@ -113,7 +123,8 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
           for (;;) {
             const x = (2 * r() - 1) * s;
             const y = (2 * r() - 1) * s;
-            if (faceShapes(S)[0].b.every((b, j) => F.nx[j] * x + F.ny[j] * y <= b * s)) return { face: 0, x, y, theta: 7 * r() };
+            if (faceShapes(S)[0].b.every((b, j) => F.nx[j] * x + F.ny[j] * y <= b * s))
+              return { face: 0, x, y, theta: 7 * r() };
           }
         });
         const state = k.fromConfig({ s, pieces })!;

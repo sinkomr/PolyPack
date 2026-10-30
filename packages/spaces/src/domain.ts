@@ -73,11 +73,11 @@ export interface SpaceDomain {
 
 /** The spaces whose problems are given by a domain. */
 export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
-  // 3D in 3D, polyhedra: every ordered pair of the 94 solids, P = 2 to 500; records for 150 pairs, through P = 100
+  // 3D in 3D, polyhedra: every ordered pair of the 186 solids, P = 2 to 500; records for 150 pairs, through P = 100
   polyhedra: polyhedraDomain,
   // 3D in 3D, balls: 7 problems for P = 2 to 100, without records (docs/spaces/BALLS.md)
   balls: ballsDomain,
-  // 2D on 3D, polyhedral surfaces: 49 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
+  // 2D on 3D, polyhedral surfaces: 141 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
   // for the Platonic solids with N in {0, 3, 4, 5, 6, 8} (docs/spaces/SURFACE.md)
   surface: surfaceDomain,
   curved: curvedDomain,

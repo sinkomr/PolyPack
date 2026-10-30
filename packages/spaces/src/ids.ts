@@ -26,7 +26,7 @@ import { SpaceName, isSpaceName } from "./types";
 
 /**
  * The solids of the surface space, in the order the catalogue lists them: the Platonic solids, the
- * Archimedean solids (polyhedra catalogue order), Catalan solids (by number of faces), the prisms and the antiprisms (by number of sides). The same
+ * Archimedean solids (polyhedra catalogue order), Catalan solids (by number of faces), the prisms and the antiprisms (by number of sides), the 92 Johnson solids (J1 to J92). The same
  * list as ALL_SOLID_NAMES of @polypack/surface (a test checks it), written out here so that pages
  * reading ids need no geometry.
  */
@@ -80,6 +80,98 @@ export const SURFACE_SOLIDS = [
   "antiprism10",
   "antiprism11",
   "antiprism12",
+  "square_pyramid",
+  "pentagonal_pyramid",
+  "triangular_cupola",
+  "square_cupola",
+  "pentagonal_cupola",
+  "pentagonal_rotunda",
+  "elongated_triangular_pyramid",
+  "elongated_square_pyramid",
+  "elongated_pentagonal_pyramid",
+  "gyroelongated_square_pyramid",
+  "gyroelongated_pentagonal_pyramid",
+  "triangular_bipyramid",
+  "pentagonal_bipyramid",
+  "elongated_triangular_bipyramid",
+  "elongated_square_bipyramid",
+  "elongated_pentagonal_bipyramid",
+  "gyroelongated_square_bipyramid",
+  "elongated_triangular_cupola",
+  "elongated_square_cupola",
+  "elongated_pentagonal_cupola",
+  "elongated_pentagonal_rotunda",
+  "gyroelongated_triangular_cupola",
+  "gyroelongated_square_cupola",
+  "gyroelongated_pentagonal_cupola",
+  "gyroelongated_pentagonal_rotunda",
+  "gyrobifastigium",
+  "triangular_orthobicupola",
+  "square_orthobicupola",
+  "square_gyrobicupola",
+  "pentagonal_orthobicupola",
+  "pentagonal_gyrobicupola",
+  "pentagonal_orthocupolarotunda",
+  "pentagonal_gyrocupolarotunda",
+  "pentagonal_orthobirotunda",
+  "elongated_triangular_orthobicupola",
+  "elongated_triangular_gyrobicupola",
+  "elongated_square_gyrobicupola",
+  "elongated_pentagonal_orthobicupola",
+  "elongated_pentagonal_gyrobicupola",
+  "elongated_pentagonal_orthocupolarotunda",
+  "elongated_pentagonal_gyrocupolarotunda",
+  "elongated_pentagonal_orthobirotunda",
+  "elongated_pentagonal_gyrobirotunda",
+  "gyroelongated_triangular_bicupola",
+  "gyroelongated_square_bicupola",
+  "gyroelongated_pentagonal_bicupola",
+  "gyroelongated_pentagonal_cupolarotunda",
+  "gyroelongated_pentagonal_birotunda",
+  "augmented_triangular_prism",
+  "biaugmented_triangular_prism",
+  "triaugmented_triangular_prism",
+  "augmented_pentagonal_prism",
+  "biaugmented_pentagonal_prism",
+  "augmented_hexagonal_prism",
+  "parabiaugmented_hexagonal_prism",
+  "metabiaugmented_hexagonal_prism",
+  "triaugmented_hexagonal_prism",
+  "augmented_dodecahedron",
+  "parabiaugmented_dodecahedron",
+  "metabiaugmented_dodecahedron",
+  "triaugmented_dodecahedron",
+  "metabidiminished_icosahedron",
+  "tridiminished_icosahedron",
+  "augmented_tridiminished_icosahedron",
+  "augmented_truncated_tetrahedron",
+  "augmented_truncated_cube",
+  "biaugmented_truncated_cube",
+  "augmented_truncated_dodecahedron",
+  "parabiaugmented_truncated_dodecahedron",
+  "metabiaugmented_truncated_dodecahedron",
+  "triaugmented_truncated_dodecahedron",
+  "gyrate_rhombicosidodecahedron",
+  "parabigyrate_rhombicosidodecahedron",
+  "metabigyrate_rhombicosidodecahedron",
+  "trigyrate_rhombicosidodecahedron",
+  "diminished_rhombicosidodecahedron",
+  "paragyrate_diminished_rhombicosidodecahedron",
+  "metagyrate_diminished_rhombicosidodecahedron",
+  "bigyrate_diminished_rhombicosidodecahedron",
+  "parabidiminished_rhombicosidodecahedron",
+  "metabidiminished_rhombicosidodecahedron",
+  "gyrate_bidiminished_rhombicosidodecahedron",
+  "tridiminished_rhombicosidodecahedron",
+  "snub_disphenoid",
+  "snub_square_antiprism",
+  "sphenocorona",
+  "augmented_sphenocorona",
+  "sphenomegacorona",
+  "hebesphenomegacorona",
+  "disphenocingulum",
+  "bilunabirotunda",
+  "triangular_hebesphenorotunda",
 ] as const;
 /** The Platonic solids of the surface space: their nofold problems are planar problems of one face. */
 export const SURFACE_PLATONIC = SURFACE_SOLIDS.slice(0, 5);
@@ -87,6 +179,8 @@ export const SURFACE_PLATONIC = SURFACE_SOLIDS.slice(0, 5);
 export const SURFACE_ARCHIMEDEAN: readonly string[] = SURFACE_SOLIDS.slice(5, 18);
 /** The Catalan solids of the surface space: their faces are irregular, so their nofold problems are no 2D in 2D problem. */
 export const SURFACE_CATALAN: readonly string[] = SURFACE_SOLIDS.slice(18, 31);
+/** The 92 Johnson solids of the surface space (J1 to J92): regular faces of several kinds, no symmetry in general. */
+export const SURFACE_JOHNSON: readonly string[] = SURFACE_SOLIDS.slice(-92);
 export const SURFACE_MODES = ["fold", "nofold"] as const;
 /** The lattice families of the torus space, in the order the catalogue lists them. */
 export const TORUS_FAMILIES = ["sq", "hex", "free"] as const;
@@ -148,8 +242,8 @@ export function parseSpaceId(space: SpaceName, id: unknown): ParsedSpaceId | str
     case "surface": {
       const pattern =
         "surface/<solid>/<mode>/<N>/<P>, solid a Platonic solid (tetrahedron, cube, octahedron, dodecahedron, icosahedron), " +
-        "an Archimedean solid (such as snub_cube), a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12) or an antiprism " +
-        "(antiprism4 to antiprism12), mode fold or nofold";
+        "an Archimedean solid (such as snub_cube), a Catalan solid (such as rhombic_dodecahedron), a prism (prism3, prism5 to prism12), an antiprism " +
+        "(antiprism4 to antiprism12) or a Johnson solid (such as square_pyramid or snub_disphenoid), mode fold or nofold";
       if (parts.length !== 5) return bad(pattern);
       const [, solid, mode, n, p] = parts;
       const N = shapeCode(n);

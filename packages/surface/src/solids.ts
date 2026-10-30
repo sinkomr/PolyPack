@@ -1,21 +1,26 @@
 /**
  * Convex polyhedral surfaces: the five Platonic solids, the 13 Archimedean and 13 Catalan solids, the prisms with 3 and 5
- * to 12 sides and the antiprisms with 4 to 12 sides, each a closed surface of convex polygons glued
+ * to 12 sides, the antiprisms with 4 to 12 sides and the 92 Johnson solids, each a closed surface of convex polygons glued
  * edge to edge, flat except at the vertices (cone points).
  *
  * Conventions (fixed; the Python certifier rebuilds them independently and the two must agree):
  * - Platonic solids: vertices in a documented order (see `vertexList`), at unit edge length. The other
  *   solids: the polyhedra space's canonical solids (python/polyhedra/solids_exact.json), in its vertex
- *   order and scale (unit edges for Archimedean solids, prisms and antiprisms; Catalan solids are the polar reciprocals of
- *   the unit-edge Archimedean solids about the midsphere). The score s is the scale factor of that
- *   canonical solid, which for the Platonic and Archimedean solids and the prisms and antiprisms is the edge length.
+ *   order and scale (unit edges for Archimedean solids, prisms, antiprisms and Johnson solids; Catalan solids are the
+ *   polar reciprocals of the unit-edge Archimedean solids about the midsphere). The score s is the scale factor of that
+ *   canonical solid, which for the Platonic, Archimedean and Johnson solids and the prisms and antiprisms is the edge length.
+ *   The 92 Johnson solids are named as in the polyhedra space (`square_pyramid`, `gyroelongated_square_bicupola`, ...; J1 to
+ *   J92 in Johnson's order); none of the names is another solid's.
  * - A face is the cycle of its vertex ids, counter-clockwise seen from outside, rotated so that its
  *   smallest vertex id comes first. Faces are sorted lexicographically by these cycles.
- * - Face frame: the origin is the foot of the perpendicular from the solid's centre to the face plane,
- *   and the last edge (frame vertex M - 1 to frame vertex 0) is horizontal at the bottom, running in
+ * - Face frame: the origin is the face centre (see below), and the last edge (frame vertex M - 1 to frame vertex 0) is horizontal at the bottom, running in
  *   +x. Frame vertex k is the 3D vertex faces[f][k] and edge k runs from frame vertex k to k + 1, so
- *   frame vertex 0 is the bottom right corner. For a regular face (all faces
- *   of the Platonic and Archimedean solids, prisms and antiprisms: their centre is the foot) this is the regular M-gon
+ *   frame vertex 0 is the bottom right corner. The face centre is the foot of the perpendicular from the solid's centre
+ *   to the face plane for the Platonic, Archimedean, Catalan, prism and antiprism faces, which have a circumsphere or an
+ *   insphere about the solid's centre (the foot is the circumcentre of a regular face, the incentre of a Catalan face).
+ *   The Johnson solids have neither in general, so for them it is the circumcentre of the regular face (the mean of its
+ *   vertices), not the foot (`frameOf`). For a regular face (all faces
+ *   of the Platonic, Archimedean and Johnson solids, prisms and antiprisms) this is the regular M-gon
  *   of side s centred at the origin with a horizontal bottom edge, PolyPack's container convention with
  *   phi = 0: frame vertex k at angle -pi/2 + pi/M + 2 pi k/M (`frameVertex`). Catalan faces are
  *   irregular but tangential (every edge touches the midsphere), and the foot is their incentre.
@@ -60,8 +65,9 @@ export type CatalanName =
   | "pentagonal_hexecontahedron";
 export type PrismName = `prism${3 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
 export type AntiprismName = `antiprism${4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12}`;
-export type SolidName = PlatonicName | ArchimedeanName | CatalanName | PrismName | AntiprismName;
-export type SolidFamily = "platonic" | "archimedean" | "catalan" | "prism" | "antiprism";
+export type JohnsonName = (typeof JOHNSON_NAMES)[number];
+export type SolidName = PlatonicName | ArchimedeanName | CatalanName | PrismName | AntiprismName | JohnsonName;
+export type SolidFamily = "platonic" | "archimedean" | "catalan" | "prism" | "antiprism" | "johnson";
 
 /** The five Platonic solids (the solids of the space before 2026-10-26), in their catalogue order. */
 export const SOLID_NAMES: readonly PlatonicName[] = ["tetrahedron", "cube", "octahedron", "dodecahedron", "icosahedron"];
@@ -102,8 +108,113 @@ export const PRISM_NAMES: readonly PrismName[] = [3, 5, 6, 7, 8, 9, 10, 11, 12].
 export const ANTIPRISM_NAMES: readonly AntiprismName[] = [4, 5, 6, 7, 8, 9, 10, 11, 12].map(
   (n) => `antiprism${n}` as AntiprismName,
 );
-/** Every solid of the space, grouped by family (Platonic, Archimedean, Catalan, prisms, antiprisms) in catalogue order within each family. */
-export const ALL_SOLID_NAMES: readonly SolidName[] = [...SOLID_NAMES, ...ARCHIMEDEAN_NAMES, ...CATALAN_NAMES, ...PRISM_NAMES, ...ANTIPRISM_NAMES];
+/** The 92 Johnson solids, J1 to J92 in Johnson's order (the polyhedra space's names and order). */
+export const JOHNSON_NAMES = [
+  "square_pyramid",
+  "pentagonal_pyramid",
+  "triangular_cupola",
+  "square_cupola",
+  "pentagonal_cupola",
+  "pentagonal_rotunda",
+  "elongated_triangular_pyramid",
+  "elongated_square_pyramid",
+  "elongated_pentagonal_pyramid",
+  "gyroelongated_square_pyramid",
+  "gyroelongated_pentagonal_pyramid",
+  "triangular_bipyramid",
+  "pentagonal_bipyramid",
+  "elongated_triangular_bipyramid",
+  "elongated_square_bipyramid",
+  "elongated_pentagonal_bipyramid",
+  "gyroelongated_square_bipyramid",
+  "elongated_triangular_cupola",
+  "elongated_square_cupola",
+  "elongated_pentagonal_cupola",
+  "elongated_pentagonal_rotunda",
+  "gyroelongated_triangular_cupola",
+  "gyroelongated_square_cupola",
+  "gyroelongated_pentagonal_cupola",
+  "gyroelongated_pentagonal_rotunda",
+  "gyrobifastigium",
+  "triangular_orthobicupola",
+  "square_orthobicupola",
+  "square_gyrobicupola",
+  "pentagonal_orthobicupola",
+  "pentagonal_gyrobicupola",
+  "pentagonal_orthocupolarotunda",
+  "pentagonal_gyrocupolarotunda",
+  "pentagonal_orthobirotunda",
+  "elongated_triangular_orthobicupola",
+  "elongated_triangular_gyrobicupola",
+  "elongated_square_gyrobicupola",
+  "elongated_pentagonal_orthobicupola",
+  "elongated_pentagonal_gyrobicupola",
+  "elongated_pentagonal_orthocupolarotunda",
+  "elongated_pentagonal_gyrocupolarotunda",
+  "elongated_pentagonal_orthobirotunda",
+  "elongated_pentagonal_gyrobirotunda",
+  "gyroelongated_triangular_bicupola",
+  "gyroelongated_square_bicupola",
+  "gyroelongated_pentagonal_bicupola",
+  "gyroelongated_pentagonal_cupolarotunda",
+  "gyroelongated_pentagonal_birotunda",
+  "augmented_triangular_prism",
+  "biaugmented_triangular_prism",
+  "triaugmented_triangular_prism",
+  "augmented_pentagonal_prism",
+  "biaugmented_pentagonal_prism",
+  "augmented_hexagonal_prism",
+  "parabiaugmented_hexagonal_prism",
+  "metabiaugmented_hexagonal_prism",
+  "triaugmented_hexagonal_prism",
+  "augmented_dodecahedron",
+  "parabiaugmented_dodecahedron",
+  "metabiaugmented_dodecahedron",
+  "triaugmented_dodecahedron",
+  "metabidiminished_icosahedron",
+  "tridiminished_icosahedron",
+  "augmented_tridiminished_icosahedron",
+  "augmented_truncated_tetrahedron",
+  "augmented_truncated_cube",
+  "biaugmented_truncated_cube",
+  "augmented_truncated_dodecahedron",
+  "parabiaugmented_truncated_dodecahedron",
+  "metabiaugmented_truncated_dodecahedron",
+  "triaugmented_truncated_dodecahedron",
+  "gyrate_rhombicosidodecahedron",
+  "parabigyrate_rhombicosidodecahedron",
+  "metabigyrate_rhombicosidodecahedron",
+  "trigyrate_rhombicosidodecahedron",
+  "diminished_rhombicosidodecahedron",
+  "paragyrate_diminished_rhombicosidodecahedron",
+  "metagyrate_diminished_rhombicosidodecahedron",
+  "bigyrate_diminished_rhombicosidodecahedron",
+  "parabidiminished_rhombicosidodecahedron",
+  "metabidiminished_rhombicosidodecahedron",
+  "gyrate_bidiminished_rhombicosidodecahedron",
+  "tridiminished_rhombicosidodecahedron",
+  "snub_disphenoid",
+  "snub_square_antiprism",
+  "sphenocorona",
+  "augmented_sphenocorona",
+  "sphenomegacorona",
+  "hebesphenomegacorona",
+  "disphenocingulum",
+  "bilunabirotunda",
+  "triangular_hebesphenorotunda",
+] as const;
+/**
+ * Every solid of the space, grouped by family (Platonic, Archimedean, Catalan, prisms, antiprisms, Johnson) in catalogue
+ * order within each family.
+ */
+export const ALL_SOLID_NAMES: readonly SolidName[] = [
+  ...SOLID_NAMES,
+  ...ARCHIMEDEAN_NAMES,
+  ...CATALAN_NAMES,
+  ...PRISM_NAMES,
+  ...ANTIPRISM_NAMES,
+  ...JOHNSON_NAMES,
+];
 
 export interface EdgeRef {
   face: number;
@@ -297,8 +408,12 @@ function cornerAngle(poly: Float64Array, k: number): number {
   return Math.atan2(bx * ay - by * ax, ax * bx + ay * by);
 }
 
-/** The frame of a face from its 3D vertices: origin at the foot from the solid's centre, edge n - 1 along +x. */
-function frameOf(pts: V3[]): { o: V3; ex: V3; ey: V3; flat: Float64Array } {
+/**
+ * The frame of a face from its 3D vertices, edge n - 1 along +x. The origin is the foot of the perpendicular from the
+ * solid's centre, or with `atFaceCentre` (the Johnson solids) the circumcentre of the regular face, the mean of its
+ * vertices, which the foot is not unless the solid has a sphere through (or touching) its faces about the centre.
+ */
+function frameOf(pts: V3[], atFaceCentre: boolean): { o: V3; ex: V3; ey: V3; flat: Float64Array } {
   const n = pts.length;
   // outward normal from the polygon's vector area (the cycle runs counter-clockwise from outside)
   let nrm: V3 = [0, 0, 0];
@@ -310,7 +425,9 @@ function frameOf(pts: V3[]): { o: V3; ex: V3; ey: V3; flat: Float64Array } {
   nrm = [nrm[0] / ln, nrm[1] / ln, nrm[2] / ln];
   let off = 0;
   for (const p of pts) off += dot(nrm, p) / n;
-  const o: V3 = [nrm[0] * off, nrm[1] * off, nrm[2] * off];
+  const o: V3 = atFaceCentre
+    ? [0, 1, 2].map((t) => pts.reduce((a, p) => a + p[t], 0) / n) as V3
+    : [nrm[0] * off, nrm[1] * off, nrm[2] * off];
   // the bottom edge, from frame vertex n - 1 to frame vertex 0, runs along +x
   const e = sub(pts[0], pts[n - 1]);
   const le = Math.hypot(...e);
@@ -350,11 +467,11 @@ export function getSolid(name: SolidName): Solid {
       return r;
     }),
   );
-  const frames = faces.map((f) => frameOf(f.map((v) => vertices[v])));
+  const frames = faces.map((f) => frameOf(f.map((v) => vertices[v]), data?.family === "johnson"));
   const regular = faces.map((f, fi) => {
     if (uniform) return true;
     if (data!.family === "catalan") return false;
-    // Archimedean solids, prisms and antiprisms: every face is the regular polygon of its frame; check it
+    // Archimedean and Johnson solids, prisms and antiprisms: every face is the regular polygon of its frame; check it
     const M = f.length;
     const flat = frames[fi].flat;
     for (let k = 0; k < M; k++) {

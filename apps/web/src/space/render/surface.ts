@@ -1,6 +1,6 @@
 /**
- * Drawing of a packing on the surface of a convex solid (surface/<solid>/<mode>/<N>/<P>: a Platonic or
- * Catalan solid, a prism or an antiprism): the solid itself, which turns, or a net of it, flat.
+ * Drawing of a packing on the surface of a convex solid (surface/<solid>/<mode>/<N>/<P>: a Platonic, Archimedean,
+ * Catalan or Johnson solid, a prism or an antiprism): the solid itself, which turns, or a net of it, flat.
  * Ported from packages/surface/viz/app.ts and the net search of packages/surface/scripts/build-viz.ts.
  * Faces may differ in shape and number of sides; each is drawn from its own frame (faceVertex).
  *

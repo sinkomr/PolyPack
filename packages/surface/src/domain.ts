@@ -1,6 +1,6 @@
 /**
  * The problems of the surface space as a domain of parameter ranges (for packages/spaces' SPACE_DOMAINS):
- * surface/<solid>/<mode>/<N>/<P> for the 49 solids, fold and nofold, N = 0 (disks) or 3 to 100, and
+ * surface/<solid>/<mode>/<N>/<P> for the 141 solids, fold and nofold, N = 0 (disks) or 3 to 100, and
  * P = 1 to 100, as in 2D in 2D. Records exist only for the Platonic solids with N in {0, 3, 4, 5, 6, 8}
  * (data/surface/records.json); every other problem starts without one.
  *
@@ -25,7 +25,7 @@ export const SURFACE_NS: readonly number[] = [0, ...Array.from({ length: SURFACE
 const PIECES: Record<number, string> = { 0: "disk", 3: "triangle", 4: "square", 5: "pentagon", 6: "hexagon", 7: "heptagon", 8: "octagon" };
 const pieceTitle = (N: number) => PIECES[N] ?? `${N}-gon`;
 
-const FAMILY: Record<string, string> = { platonic: "Platonic solids", archimedean: "Archimedean", catalan: "Catalan solids", prism: "Prisms", antiprism: "Antiprisms" };
+const FAMILY: Record<string, string> = { platonic: "Platonic solids", archimedean: "Archimedean", catalan: "Catalan solids", prism: "Prisms", antiprism: "Antiprisms", johnson: "Johnson solids" };
 // titles and families without building the solids (this module is read where ids are listed)
 const DATA = new Map(GENERAL_SOLID_DATA.map((d) => [d.name, d]));
 const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
