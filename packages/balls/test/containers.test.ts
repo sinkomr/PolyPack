@@ -1,6 +1,6 @@
 /**
- * The balls of any solid and the solids in a ball: the catalogue of 189 problems (balls in a ball and in each of the
- * polyhedra space's 94 solids, each of the 94 solids in a ball), the container's geometry (a ball of radius r lies in
+ * The balls of any solid and the solids in a ball: the catalogue of 373 problems (balls in a ball and in each of the
+ * polyhedra space's 186 solids, each of the 186 solids in a ball), the container's geometry (a ball of radius r lies in
  * s C iff N_f . c <= s b_f - r for every face), the bounds, the validator, the search and the kernel on these
  * problems. The search tests assert properties (validity, the bound, determinism), not seeded outcomes, which may
  * differ between Node versions and platforms.
@@ -35,6 +35,7 @@ import {
 } from "../src";
 import { latticeCut } from "../src/ball-pieces";
 import { containerOf, containerOfProblem, wallGap } from "../src/container";
+import { enclosingRadius } from "../src/extent";
 
 const problem = (code: string): BallsProblem => getBallsProblem(code)!;
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -42,17 +43,17 @@ const containers = BALLS_PROBLEMS.filter((p) => p.piece === "ball" && p.containe
 const pieces = BALLS_PROBLEMS.filter((p) => p.piece !== "ball");
 
 describe("the catalogue of the solids", () => {
-  it("has 189 codes: balls in a ball, in each of the 94 solids, and each of the 94 solids in a ball", () => {
-    expect(SOLID_NAMES).toHaveLength(94);
-    expect(BALLS_CODES).toHaveLength(1 + 94 + 94);
-    expect(new Set(BALLS_CODES).size).toBe(189);
-    expect(containers).toHaveLength(94);
-    expect(pieces).toHaveLength(94);
+  it("has 373 codes: balls in a ball, in each of the 186 solids, and each of the 186 solids in a ball", () => {
+    expect(SOLID_NAMES).toHaveLength(186);
+    expect(BALLS_CODES).toHaveLength(1 + 186 + 186);
+    expect(new Set(BALLS_CODES).size).toBe(373);
+    expect(containers).toHaveLength(186);
+    expect(pieces).toHaveLength(186);
     for (const s of SOLID_NAMES_LIST) {
       expect(problem(`ballin${s.code}`), s.name).toMatchObject({ piece: "ball", container: s.name });
       expect(problem(`${s.code}inball`), s.name).toMatchObject({ piece: s.name, container: "ball" });
     }
-    expect(ballsDomain.info.problems).toBe(189 * (BALLS_MAX_P - BALLS_MIN_P + 1));
+    expect(ballsDomain.info.problems).toBe(373 * (BALLS_MAX_P - BALLS_MIN_P + 1));
   });
 
   it("keeps the first 7 problems as they were", () => {
@@ -77,7 +78,7 @@ describe("the catalogue of the solids", () => {
     expect(problem("ballintz8").title).toBe("Balls in an octagonal trapezohedron");
     expect(problem("tz8inball").title).toBe("Octagonal trapezohedra in a ball");
     expect(problem("sncinball").title).toBe("Snub cubes in a ball");
-    expect(new Set(BALLS_PROBLEMS.map((p) => p.title)).size).toBe(189);
+    expect(new Set(BALLS_PROBLEMS.map((p) => p.title)).size).toBe(373);
   });
 
   it("groups the menu: each group is one run of codes, the groups name the family", () => {
@@ -93,6 +94,7 @@ describe("the catalogue of the solids", () => {
       "Balls in an elongated prism",
       "Balls in a bipyramid",
       "Balls in a trapezohedron",
+      "Balls in a Johnson solid",
       "Platonic solids in a ball",
       "Archimedean solids in a ball",
       "Catalan solids in a ball",
@@ -101,6 +103,7 @@ describe("the catalogue of the solids", () => {
       "Elongated prisms in a ball",
       "Bipyramids in a ball",
       "Trapezohedra in a ball",
+      "Johnson solids in a ball",
     ]);
     // prisms by sides, the elongated ones by sides and then height
     const prisms = BALLS_CODES.filter((c) => /^ballinpr\d+$/.test(c));
@@ -137,9 +140,9 @@ describe("the catalogue of the solids", () => {
 });
 
 describe("the container's geometry", () => {
-  it("has the inradius and circumradius of every solid at its vertex centroid (random directions do not improve either)", () => {
+  it("has the inradius and circumradius of each of the first 94 solids at its vertex centroid (random directions do not improve either)", () => {
     const rng = mulberry32(11);
-    for (const name of SOLID_NAMES) {
+    for (const name of SOLID_NAMES.slice(0, 94)) {
       const C = containerOf(name);
       const S = C.solid;
       // the inscribed radius at c: the least face distance b_f - N_f . c; the circumscribed one: the largest vertex distance
@@ -248,9 +251,13 @@ describe("the container's geometry", () => {
   it("gives bounds that every valid packing respects, and one-piece bounds that a centred ball attains", () => {
     for (const p of containers) {
       const C = containerOfProblem(p)!;
-      const one = BALL_RADIUS / C.inradius;
-      expect(validateBalls(p, { s: one * (1 + 1e-12), pieces: [[0, 0, 0]] }, { tol: 0 }).valid, p.code).toBe(true);
-      expect(validateBalls(p, { s: one * (1 - 1e-8), pieces: [[0, 0, 0]] }, { tol: 0 }).valid, p.code).toBe(false);
+      // a ball at the centroid fits from R / inradius on; the bound is R / chebyshev, which is the same where the
+      // centroid is the centre of the largest inscribed ball (the first 94 solids) and less where it is not (Johnson)
+      const one = BALL_RADIUS / C.chebyshev;
+      const centred = BALL_RADIUS / C.inradius;
+      expect(validateBalls(p, { s: centred * (1 + 1e-12), pieces: [[0, 0, 0]] }, { tol: 0 }).valid, p.code).toBe(true);
+      expect(validateBalls(p, { s: centred * (1 - 1e-8), pieces: [[0, 0, 0]] }, { tol: 0 }).valid, p.code).toBe(false);
+      expect(one, p.code).toBeLessThanOrEqual(centred);
       for (const P of [2, 7, 100]) {
         const b = ballsBound(p, P);
         expect(b.value, `${p.code} ${P}`).toBeGreaterThanOrEqual(one * (1 - 1e-12));
@@ -268,7 +275,7 @@ describe("the container's geometry", () => {
       const S = getSolid(p.piece);
       for (const P of [2, 30]) {
         const b = ballsBound(p, P);
-        expect(b.value, p.code).toBeGreaterThanOrEqual(S.circumradius);
+        expect(b.value, p.code).toBeGreaterThanOrEqual(enclosingRadius(S));
         expect(b.value, p.code).toBeGreaterThanOrEqual(2 * S.inradius);
       }
     }
@@ -314,7 +321,7 @@ describe("the validator with a solid container", () => {
     }
   });
 
-  it("validates the solids in a ball for all 94 solids: one at the origin needs a container of diameter twice its circumradius", () => {
+  it("validates the solids in a ball for all 186 solids: one at the origin needs a container of diameter twice its circumradius", () => {
     for (const p of pieces) {
       const S = getSolid(p.piece);
       const one = (s: number) => validateBalls(p, { s, pieces: [[0, 0, 0, 1, 0, 0, 0]] }, { tol: 0 }).valid;
@@ -367,7 +374,7 @@ describe("the lattice start for solids of any shape", () => {
 });
 
 describe("the search with a solid container", () => {
-  it("returns a valid packing no smaller than the bound for balls in each of the 94 solids, P = 2 and 3", async () => {
+  it("returns a valid packing no smaller than the bound for balls in each of the 186 solids, P = 2 and 3", async () => {
     for (const p of containers)
       for (const P of [2, 3]) {
         await tick();
@@ -380,7 +387,7 @@ describe("the search with a solid container", () => {
     await tick();
   });
 
-  it("returns a valid packing for each of the 94 solids in a ball, P = 2 and 3", async () => {
+  it("returns a valid packing for each of the 186 solids in a ball, P = 2 and 3", async () => {
     for (const p of pieces)
       for (const P of [2, 3]) {
         await tick();
@@ -560,7 +567,7 @@ describe("the certifier's fixtures", () => {
     };
     expect(Object.keys(fixture.solids)).toEqual([...SOLID_NAMES]);
     for (const [name, g] of Object.entries(fixture.solids)) expect(containerOf(name), name).toMatchObject(g);
-    expect(fixture.bounds).toHaveLength(189 * 3);
+    expect(fixture.bounds).toHaveLength(373 * 3);
     for (const b of fixture.bounds) expect(ballsBound(problem(b.code), b.P), `${b.code} ${b.P}`).toMatchObject({ value: b.value, kind: b.kind });
   });
 });

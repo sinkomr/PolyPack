@@ -149,7 +149,7 @@ export function ballsBound(problem: BallsProblem, P: number): BallsBound {
 }
 
 /**
- * The domain of the space (packages/spaces domain.ts): the 189 codes and P = BALLS_MIN_P to BALLS_MAX_P, each problem
+ * The domain of the space (packages/spaces domain.ts): the 373 codes and P = BALLS_MIN_P to BALLS_MAX_P, each problem
  * with its elementary bound as a listing shows it ("volume bound; [EST] ..."). The space ships no research records,
  * so every problem starts without one. The board's menu groups the codes (BallsProblem.group). Its sample takes small
  * P first, the space's first 7 codes (BALLS_ORIGINAL_CODES) in their first order, as the volunteers' work list offered

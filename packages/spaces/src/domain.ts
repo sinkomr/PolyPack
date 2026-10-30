@@ -73,7 +73,7 @@ export interface SpaceDomain {
 
 /** The spaces whose problems are given by a domain. */
 export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
-  // 3D in 3D, polyhedra: every ordered pair of the 94 solids, P = 2 to 500; records for 150 pairs, through P = 100
+  // 3D in 3D, polyhedra: every ordered pair of the 186 solids, P = 2 to 500; records for 150 pairs, through P = 100
   polyhedra: polyhedraDomain,
   // 3D in 3D, balls: 7 problems for P = 2 to 100, without records (docs/spaces/BALLS.md)
   balls: ballsDomain,

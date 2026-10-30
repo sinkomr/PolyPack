@@ -1,20 +1,20 @@
 # 3D in 3D: balls in a ball or a solid, solids in a ball
 
 The second kind of 3D in 3D, beside Polyhedra ([POLYHEDRA.md](POLYHEDRA.md)): P balls of diameter 1 (radius 1/2) packed in
-the smallest ball or the smallest copy of any of the polyhedra space's 94 solids (a cube, a Catalan solid, a prism,
-an antiprism, ...), and P unit-edge solids, any of the 94 (tetrahedra, cubes, ..., triakis tetrahedra, prisms), packed
-in the smallest ball, for P = 2 to 100: 189 problems and 18,711 cases. The score is the container's size s: the diameter
+the smallest ball or the smallest copy of any of the polyhedra space's 186 solids (a cube, a Catalan solid, a prism,
+an antiprism, a Johnson solid, ...), and P unit-edge solids, any of the 186 (tetrahedra, cubes, ..., triakis tetrahedra, prisms, Johnson solids), packed
+in the smallest ball, for P = 2 to 100: 373 problems and 36,927 cases (189 and 18,711 before the 92 Johnson solids joined on 2026-10-30). The score is the container's size s: the diameter
 of the container ball, or the scale of the container solid (the edge of the cube); smaller is better. This follows
 PolyPack's 2D conventions (N = 0 for circle pieces of diameter 1, M = 0 for circle containers, the score of a circle
 container its diameter). Since 2026-10-27 balls have diameter 1 and a ball container is scored by its diameter; before, balls had radius 1 and the score was the radius. The space had no records, so only entries and the test packings were affected (§4). In code and data the space is called `balls`.
 
 **Summary** (2026-10-25; the solids as containers and as pieces 2026-10-26).
 
-- The space started with 7 problems (balls in a ball and in a cube, the five Platonic solids in a ball) and has 189:
-  balls in each of the 94 solids, and each of the 94 solids in a ball (§1). The first 7 keep their codes and ids,
+- The space started with 7 problems (balls in a ball and in a cube, the five Platonic solids in a ball) and has 373:
+  balls in each of the 186 solids, and each of the 186 solids in a ball (§1); every earlier code and id is unchanged. The first 7 keep their codes and ids,
   and the volunteers' default draw still samples these 7 only (`BALLS_ORIGINAL_CODES`, §7).
-- The space ships **without research records**. Its 18,711 problems are given by a domain (`ballsDomain`, registered
-  in `SPACE_DOMAINS` of `packages/spaces/src/domain.ts`: the 189 codes and P = 2 to 100), each answered with an
+- The space ships **without research records**. Its 36,927 problems are given by a domain (`ballsDomain`, registered
+  in `SPACE_DOMAINS` of `packages/spaces/src/domain.ts`: the 373 codes and P = 2 to 100), each answered with an
   elementary lower bound and the status `no_record`; the site's board, the volunteer client and later research fill
   them in. The first valid entry of a problem is kept, then better ones; every entry must pass the strict check (§7).
 - What ships is the machinery: the float validator, the search the board and the volunteer client run, the board's
@@ -34,8 +34,8 @@ Labels: [EST] established and sourced, [CALC] computed here, [SPEC] speculation.
 with `ball` or one of the polyhedra space's solid codes (`tet`, `cub`, `oct`, `dod`, `ico`, `tte`, `ktt`, `pr3`,
 `pr3l15`, `ap5`, `bp7`, `tz8`, ...) for the piece or the container: `ballinball` (balls in a ball),
 `ballin<solid>` (balls in that solid: `ballincub` in a cube, `ballinpkd` in a pentakis dodecahedron, `ballinpr3` in a
-triangular prism) and `<solid>inball` (that solid in a ball: `tetinball`, `kttinball`, `pr3l15inball`). That is 1 + 94
-+ 94 = 189 codes, 182 of them new; the first 7 (`ballinball`, `ballincub`, `tetinball`, `cubinball`, `octinball`,
+triangular prism) and `<solid>inball` (that solid in a ball: `tetinball`, `kttinball`, `pr3l15inball`). That is 1 + 186
++ 186 = 373 codes, 366 of them new (the 92 Johnson solids give `ballinj01` to `ballinj92` and `j01inball` to `j92inball`); the first 7 (`ballinball`, `ballincub`, `tetinball`, `cubinball`, `octinball`,
 `dodinball`, `icoinball`) are as they were. With P pieces the id is `balls/<code>/<P>`, e.g. `balls/ballinball/13`,
 `balls/ballinpkd/20`, `balls/pr3l15inball/7`. Ids are accepted only in that one written form. Titles read
 "Balls in a pentakis dodecahedron", "Triakis tetrahedra in a ball", "Balls in a triangular prism of height 1.5". The
@@ -73,9 +73,9 @@ H(q) / |q|^2) and centred at (x, y, z), as in the polyhedra space.
 The float validator (`packages/balls/src/validate.ts`) applies these at PolyPack's tolerance 1e-9: an overlap or
 protrusion deeper than 1e-9 rejects the configuration.
 
-**Score and bounds.** s. Every problem carries the largest of three elementary lower bounds [EST], written with the ball radius r = 1/2 and, for a ball container, its radius rho_B = s / 2: the volume bound (the pieces' total volume is at most the container's: s >= P^(1/3) for balls in a ball, since (s/2)^3 >= P (1/2)^3; s >= (pi P / 6)^(1/3) for balls in a cube, s >= (pi P / (6 V))^(1/3) for balls in another solid of volume V, and s >= 2 (3 P v / (4 pi))^(1/3) for solids of volume v in a ball); one piece (s >= twice the circumradius of a solid, the centre of its smallest enclosing ball being its vertex centroid; s >= r / rho for a ball in a solid of inradius rho, so s >= 1 for a ball in a cube); two pieces (two balls have centres at least 1 apart in the ball of radius (s - 1) / 2, so s >= 2, or in the cube of edge s - 1 whose diameter is (s - 1) sqrt 3, so s >= 1 + 1 / sqrt 3; in a solid with all faces at its inradius rho and diameter D (the tangential solids: the Platonic, Catalan, bipyramid and trapezohedron ones) the centres lie in (s - r / rho) C, so s >= r / rho + 2 r / D, which two balls at the ends of a diameter attain exactly, a test checks it; in any solid the width of the shrunk container in every direction is the solid's less 2 r, so a pair 2 r apart needs a direction of width 4 r, s >= 4 r / D; two solids hold disjoint balls of their inradius, so a ball container has radius at least 2 times that inradius, s >= 4 times it). The bounds are far below the best known values: they only refuse sizes that are plainly impossible. (Before 2026-10-27, with radius-1 balls: balls in a ball and the solids' ball bounds were radii, so a solid's bound doubled, and every size for a ball in a solid was twice as large.)
+**Score and bounds.** s. Every problem carries the largest of three elementary lower bounds [EST], written with the ball radius r = 1/2 and, for a ball container, its radius rho_B = s / 2: the volume bound (the pieces' total volume is at most the container's: s >= P^(1/3) for balls in a ball, since (s/2)^3 >= P (1/2)^3; s >= (pi P / 6)^(1/3) for balls in a cube, s >= (pi P / (6 V))^(1/3) for balls in another solid of volume V, and s >= 2 (3 P v / (4 pi))^(1/3) for solids of volume v in a ball); one piece (s >= twice the radius of a solid's smallest enclosing ball, which is its circumradius about the vertex centroid for the first 94 solids and smaller for most Johnson solids; s >= r / rho for a ball in a solid whose largest inscribed ball has radius rho, so s >= 1 for a ball in a cube, rho being the inradius for the first 94 solids and larger for most Johnson solids); two pieces (two balls have centres at least 1 apart in the ball of radius (s - 1) / 2, so s >= 2, or in the cube of edge s - 1 whose diameter is (s - 1) sqrt 3, so s >= 1 + 1 / sqrt 3; in a solid with all faces at its inradius rho and diameter D (the tangential solids: the Platonic, Catalan, bipyramid and trapezohedron ones) the centres lie in (s - r / rho) C, so s >= r / rho + 2 r / D, which two balls at the ends of a diameter attain exactly, a test checks it; in any solid the width of the shrunk container in every direction is the solid's less 2 r, so a pair 2 r apart needs a direction of width 4 r, s >= 4 r / D; two solids hold disjoint balls of their inradius, so a ball container has radius at least 2 times that inradius, s >= 4 times it). The bounds are far below the best known values: they only refuse sizes that are plainly impossible. (Before 2026-10-27, with radius-1 balls: balls in a ball and the solids' ball bounds were radii, so a solid's bound doubled, and every size for a ball in a solid was twice as large.)
 
-**Two facts about the 94 solids** [EST, and checked by a linear programme and a minimisation on the data to 4e-16]:
+**Two facts about the first 94 solids** [EST, and checked by a linear programme and a minimisation on the data to 4e-16]:
 the vertex centroid is the centre of each solid's largest inscribed ball and of its smallest enclosing ball, so the
 inradius (the least face offset) and the circumradius (the largest vertex distance) the bounds, the search and the
 kernel use are the true Chebyshev and enclosing radii, also for the long and the spiky ones (the circumradius is up to
@@ -85,12 +85,29 @@ symmetry, an inscribed ball of the Chebyshev radius can be averaged over the sym
 fixed by each solid's symmetry group (the Platonic, Archimedean and Catalan point groups, the dihedral groups D_nh
 and D_nd of the prisms, antiprisms, elongated prisms, bipyramids and trapezohedra, n >= 3) is the centroid.
 
+**Not for the 92 Johnson solids** [CALC, 2026-10-30]. A pyramid, a cupola or a rotunda has only an axis, and most of the others
+a group that fixes more than a point or none, so the vertex centroid is not the centre of the largest inscribed ball or of the
+smallest enclosing ball. For the square pyramid (edge 1) the inradius about the centroid is 0.1414 and the largest inscribed
+ball has radius 0.2588; the circumradius about the centroid is 0.7211 and the smallest enclosing ball has radius 0.7071. A bound
+written with the centroid's values would be too strong (for the ball in the pyramid, 0.5 / 0.1414 against the true 0.5 / 0.2588). The bounds therefore
+use the Chebyshev radius `Container.chebyshev` and the enclosing radius `Container.enclosing` (`packages/balls/src/extent.ts`; in
+python `balls_catalogue.geometry` gives `chebyshev` and `enclosing`): the first by a tableau simplex on the linear programme
+max r with N_f . x + r <= b_f, the second by Welzl's algorithm; for the first 94 solids they are the inradius and the
+circumradius, exactly (those values are kept when the optimum agrees with them to 1e-9), so no earlier bound changes (the
+fixture `bounds.json` has the same 567 values for the old codes). Where they differ the result is moved by 1e-9 of itself in
+the safe direction. TypeScript and Python are two implementations and agree to 1e-12 on all 186 solids; brute force over the
+vertices (enclosing) and over four tight faces (inscribed) agrees to 1e-9 on the small Johnson solids (a test). The kernels, the
+search and the legalization keep the centroid's `inradius` and `circumradius`, which they only use as lengths (steps, reach
+of the neighbour test, the scaling of centres), where any ball in and any ball around the piece is valid. The tangential
+two-piece bound needs every face at the same distance from the centroid, which is then also the Chebyshev radius, and holds
+for a Johnson solid if it happens to be so (the flag is computed, none of the 92 is).
+
 ## 2. A domain without records, and records to come
 
-The space's problems are its domain, `ballsDomain` (`packages/balls/src/problems.ts`): the fields `code` (the 189
-codes, with their titles and the menu's groups) and `P` (2 to 100), 18,711 problems; `bound(id)` gives a problem's
+The space's problems are its domain, `ballsDomain` (`packages/balls/src/problems.ts`): the fields `code` (the 373
+codes, with their titles and the menu's groups) and `P` (2 to 100), 36,927 problems; `bound(id)` gives a problem's
 elementary bound, and `sample(limit)` the problems in the order the volunteers' work list offered them until it was
-removed on 2026-10-29, small P first, from the first 7 codes only (693 problems). All 18,711 are on the board and the
+removed on 2026-10-29, small P first, from the first 7 codes only (693 problems). All 36,927 are on the board and the
 API, open to entries, and since then in the volunteer client's random draw. `packages/spaces`
 loads the space without a records file (`SPACE_DOMAINS`, `buildSpaceCatalogue`, `problemOf`): its catalogue holds no
 records, and any id of the domain answers with `status: "no_record"`, `certified: null` and its bound. Nothing of
@@ -212,7 +229,7 @@ each other or 1e-9 out of the ball fail, and exactly touching ones are not certi
 its neighbour fails; an icosahedron 1e-10 inside and 1e-9 outside its ball, also with a quaternion of 5e48;
 malformed numbers (strings, booleans, NaN, infinities, wrong lengths, zero quaternions, s <= 0); every field check,
 wrong P and ids out of range; `proven` without a proof; the 42 test packings (all certified, wall gaps 1e-10; those
-of P = 5 and 13 fail when their container is shrunk by 1e-8 relative); and the cross-check below. The 189-code catalogue, the solids' volume, inradius, circumradius, diameter and tangential
+of P = 5 and 13 fail when their container is shrunk by 1e-8 relative); and the cross-check below. The 373-code catalogue, the solids' volume, inradius, Chebyshev radius, circumradius, enclosing radius, diameter and tangential
 flag (computed from the exact solids' coordinates at 80 bits) and the bounds of every problem at P = 2, 13 and 100
 agree with the TypeScript ones to 1e-12 (`fixtures/bounds.json`, written by `packages/balls/scripts/gen-bounds.ts`,
 which a TypeScript test keeps current); a centred ball in the octahedron passes from s = sqrt 6 on and fails by 1e-15
@@ -245,6 +262,15 @@ pair gaps of 1e-10 and up.
 from short runs of the search (seconds to a minute each), and at P = 100 a new start of the search, legalized and
 unpolished (a loose packing). The certifier's tests, the validator's and the search's tests and the volunteer
 client's (a job started from one) share them. They are not records.
+
+**Johnson test packings** (2026-10-30; `python/balls/fixtures/johnson_packings.json`, made by `packages/balls/scripts/gen-johnson-packings.ts`,
+`python3 python/balls/test_johnson_packings.py`, `packages/balls/test/johnson.test.ts`). 12: balls in J12, J44 (chiral) and J92 (an fcc and an
+hcp lattice cut, P = 5 to 14, `latticeCut` and `legalizeBalls`) and J1, J44 and J92 in a ball (a coarse grid in random orientations,
+P = 2 to 5, `legalizeSolids`), each with a clearance of about 1e-10, no search. All 12 are certified exactly and valid in the float
+validator at tolerance 0, and none is below its bound. For each, a piece moved until it overlaps a neighbour by 1e-9 and one
+that sticks out of the container by 1e-9 are refused by both, at tolerance 0 and 1e-11. A solid's quaternion of any norm is read as its
+rotation. The search tests of `containers.test.ts` run a search at P = 2 and 3 on every Johnson container and piece, and the kernel's contract
+holds on eight Johnson problems (`johnson.test.ts`).
 
 ## 5. Validator and search (`packages/balls`)
 
@@ -330,8 +356,8 @@ P from 2 to `SPACE_MAX_P.balls` = 100, the validator above at the touching toler
 1e-11, and the search as a job (method "balls penalty basin hopping"). The space has no standalone viewer: its
 `viewer` is the board (`/#space=balls`).
 
-**API.** `/api/spaces` counts its 18,711 problems and 0 records and describes its `domain` (the id pattern
-`balls/<code>/<P>`, the 189 codes with their titles and menu groups, P from 2 to 100); `/api/spaces/balls/problems` lists its records
+**API.** `/api/spaces` counts its 36,927 problems and 0 records and describes its `domain` (the id pattern
+`balls/<code>/<P>`, the 373 codes with their titles and menu groups, P from 2 to 100); `/api/spaces/balls/problems` lists its records
 (none yet); `/api/spaces/balls/problems/<id>` answers for any id of the domain, with `status: "no_record"`,
 `certified: null`, `certified_config: null`, its bound, and the site leader's configuration once there is one. An
 entry is kept when it is valid, also at the strict tolerance 1e-11, and beats the site leader by the tie tolerance
@@ -346,7 +372,7 @@ of the space that held more than the catalogue without records does): heap 49.8 
 to 49.4 MB without it, about 0.5 MB more; the resident memory, 172 to 180 MB, did not differ beyond its noise on the
 loaded machine.
 
-**Board.** Balls, under 3D in 3D in the Problem set menu ([BOARD.md](BOARD.md)): a picker of the 189 problems in 16 groups (`Balls in a Catalan solid`, `Prisms in a ball`, ...,
+**Board.** Balls, under 3D in 3D in the Problem set menu ([BOARD.md](BOARD.md)): a picker of the 373 problems in 18 groups (the Johnson solids add `Balls in a Johnson solid` and `Johnson solids in a ball`) (`Balls in a Catalan solid`, `Prisms in a ball`, ...,
 the `groups` of the domain's field, one `optgroup` each) and P, built from the domain; a problem
 without an entry shows "No record yet: run the optimizer or submit one." over the empty drawing and runs from a new
 arrangement; the three.js drawing (instanced spheres or solids, the container a faint ball with three great circles
@@ -355,7 +381,7 @@ the piece and container (`ballsRound`: balls in a solid with F faces cost 1 + F 
 89 solids 5 microseconds a piece). The Method select offers the eight generic methods beside Auto (§8).
 
 **Volunteer client.** `--dimensions balls` (or `all`) adds the space to the opt-in list of kinds; without the option
-the client never asks the server about it, and with it, since 0.3.0, it draws from all 18,711 problems of the domain
+the client never asks the server about it, and with it, since 0.3.0, it draws from all 18,711 problems (36,927 since the Johnson solids) of the domain
 at random (before, from the first 7 problems, the work list's sample, §2). It searches a problem without an entry from a new arrangement and applies
 the strict check before it sends a result.
 
@@ -470,13 +496,13 @@ K = 10,000,000 (`GENERIC_ROUND_K_BALL_PIECES`: rounds of 0.5 to 2 s up to P = 33
 2.5 s at P = 80) and solids K = 150,000 (`GENERIC_ROUND_K.balls`: 1 to 3.5 s up to P = 30; beyond, the floor of
 5,000 makes them longer, about 12 s for 80 dodecahedra).
 
-**Tests.** `test/containers.test.ts` (the new problems): the 189 codes, titles, groups and ids; the container's
-geometry (the inradius and circumradius at the centroid, no random direction improves either; the gap to the walls
+**Tests.** `test/containers.test.ts` (the new problems): the 373 codes, titles, groups and ids; the container's
+geometry (the inradius and circumradius at the centroid of the first 94 solids, no random direction improves either; the gap to the walls
 against planes built from the faces' vertices; two balls at the ends of a diameter attaining the two-piece bound of
-eight tangential solids; one ball at s = r / rho valid and 1e-8 below it not, for all 93 non-cube containers); the
+eight tangential solids; one ball at s = r / rho valid and 1e-8 below it not, for all 93 non-cube containers of the first 94 solids; for a Johnson container the centroid's ball fits from s = r / inradius on and the bound is r / Chebyshev radius); the
 validator with solid containers (valid, borderline and invalid at both tolerances); the lattice cut against a brute-force
 enumeration for thin and long containers at P = 100; searches that return a valid packing at or above the bound for
-balls in each of the 94 solids and each of the 94 solids in a ball at P = 2 and 3; reproducibility, stops and warm
+balls in each of the 186 solids and each of the 186 solids in a ball at P = 2 and 3; reproducibility, stops and warm
 starts; the kernel's contract on 17 problems (one container and one piece solid of each family, the long and the flat
 prisms among them) at P = 2 and 4; gradients; energy zero exactly when valid at tolerance 0, and clear() against the
 validator, a few units of rounding either side of contact; and every method on 7 of them at P = 3 (from a found

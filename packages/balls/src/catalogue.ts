@@ -1,6 +1,6 @@
 /**
  * The problems of the balls space without their geometry: P unit balls in the smallest ball or in the smallest
- * copy of any of the polyhedra space's 94 solids, and P unit-edge solids (any of the 94) in the smallest ball.
+ * copy of any of the polyhedra space's 186 solids, and P unit-edge solids (any of the 186) in the smallest ball.
  * Names only, so that a page can name problems without loading any coordinates (the polyhedra space's catalogue
  * is as light).
  *
@@ -9,8 +9,8 @@
  * them), the container `ball` or a solid's code. With P pieces its id is `balls/<code>/<P>`, e.g.
  * "balls/ballinball/13", "balls/ballinpkd/20" (balls in a pentakis dodecahedron), "balls/ap5inball/7".
  *
- * Without a piece or container of the other kind there are 1 + 94 + 94 = 189 codes: balls in a ball, balls in
- * each of the 94 solids, and each of the 94 solids in a ball. The first 7 (BALLS_ORIGINAL_CODES) are the space's
+ * Without a piece or container of the other kind there are 1 + 186 + 186 = 373 codes: balls in a ball, balls in
+ * each of the 186 solids (the 94 of the first catalogue and the 92 Johnson solids), and each of the 186 solids in a ball. The first 7 (BALLS_ORIGINAL_CODES) are the space's
  * first problems, and their ids are unchanged.
  */
 import { SOLID_NAMES_LIST, type SolidName, pluralTitle } from "@polypack/polyhedra/catalogue";
@@ -89,7 +89,7 @@ function solidRank(s: SolidName): [number, number] {
   return m ? [Number(m[1]), m[2] ? ["l15", "l2", "l3"].indexOf(m[2]) : 0] : [0, 0];
 }
 
-/** The 94 solids in the order of the board's menu: by family, then (prisms and the like) by sides and height. */
+/** The 186 solids in the order of the board's menu: by family, then (prisms and the like) by sides and height. */
 const SOLIDS: readonly SolidName[] = FAMILY_ORDER.flatMap((f) =>
   SOLID_NAMES_LIST.filter((s) => s.family === f)
     .map((s, i) => ({ s, i, k: solidRank(s) }))
@@ -140,7 +140,7 @@ export const BALLS_ORIGINAL_CODES: readonly string[] = [
 
 /**
  * One container and one piece solid from each family, the long and the flat among the prisms: a sample for the
- * tests that cannot run the 189 problems (the kernel's contract, every method, Auto).
+ * tests that cannot run the 373 problems (the kernel's contract, every method, Auto).
  */
 export const BALLS_FAMILY_SAMPLE: readonly string[] = [
   "ballintet",
@@ -165,7 +165,7 @@ export const BALLS_FAMILY_SAMPLE: readonly string[] = [
 /** The codes in catalogue order. */
 export const BALLS_CODES: readonly string[] = BALLS_PROBLEMS.map((p) => p.code);
 
-/** A few codes for a message ("ballinball, ballincub, ..."), the list being 189 long. */
+/** A few codes for a message ("ballinball, ballincub, ..."), the list being 373 long. */
 export const BALLS_CODES_HINT = `${BALLS_CODES.slice(0, 6).join(", ")}, ... (<piece>in<container>, the piece or the container ball or a solid's code of the polyhedra space; GET /api/spaces lists them)`;
 
 /** Smallest and largest P of the catalogue. */

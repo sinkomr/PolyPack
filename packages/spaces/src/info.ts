@@ -233,13 +233,13 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     space: "balls",
     title: "Balls",
     summary:
-      "3D in 3D: balls of diameter 1 packed in the smallest ball or in the smallest copy of any of the polyhedra space's 94 solids (the classic sphere-packing problems, and balls in a cube, a prism, a Catalan solid), and each of the 94 solids packed in the smallest ball. The problems have no research records yet; the first valid entry of each is kept.",
+      "3D in 3D: balls of diameter 1 packed in the smallest ball or in the smallest copy of any of the polyhedra space's 186 solids (the classic sphere-packing problems, and balls in a cube, a prism, a Catalan solid), and each of the 94 solids packed in the smallest ball. The problems have no research records yet; the first valid entry of each is kept.",
     score:
       "the container's size s: the diameter of the container ball, or the scale of the container solid (the edge of the cube); smaller is better",
     problem_id: "balls/<code>/<P>",
     conventions: {
       problems:
-        "code is <piece>in<container>, 189 of them: ballinball (balls in a ball), ballin<solid> (balls in a solid: ballincub, ballinpkd, ballinpr3, ...) and <solid>inball (a solid in a ball: tetinball, kttinball, pr3l15inball, ...), with <solid> the polyhedra space's code of one of its 94 solids (GET /api/spaces lists all 189); P from 2 to 100",
+        "code is <piece>in<container>, 373 of them: ballinball (balls in a ball), ballin<solid> (balls in a solid: ballincub, ballinpkd, ballinpr3, ...) and <solid>inball (a solid in a ball: tetinball, kttinball, pr3l15inball, ...), with <solid> the polyhedra space's code of one of its 186 solids (GET /api/spaces lists all 373); P from 2 to 100",
       units: `balls have diameter 1 (radius ${BALL_RADIUS}); the solids are the polyhedra space's canonical solids (edge 1 for the Platonic, Archimedean, prism and antiprism solids, 1.5, 2 or 3 for the lateral edges of the elongated prisms, the Catalan, bipyramid and trapezohedron solids their duals), centred at their vertex centroid at the origin`,
       container:
         "the ball of diameter s about the origin, or s times a canonical solid of the polyhedra space about its vertex centroid (for the cube the cube [-s/2, s/2]^3 of edge s with its faces normal to the axes): the intersection of the half-spaces N_f . x <= s b_f over its faces, N_f the unit outward normal and b_f the offset of face f",

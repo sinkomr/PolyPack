@@ -12,7 +12,7 @@
  * pieces has the PolyPack id `polyhedra/<code>/<P>`, e.g. "polyhedra/cubintet/12". The wiki shows the
  * same case at https://polyhedrainpolyhedra.wiki/#cubintet_n12.
  *
- * Every other ordered pair of the 94 solids is a problem too (2026-10-26; family "pairs", no wiki page, no record):
+ * Every other ordered pair of the 186 solids is a problem too (2026-10-26; family "pairs", no wiki page, no record):
  * the same code scheme, e.g. "ktt" in "pkd" is "kttinpkd" (triakis tetrahedra in a pentakis dodecahedron).
  */
 import { PROBLEM_NAMES, type ProblemFamily, type ProblemName, problemNameOf } from "./catalogue";
