@@ -140,7 +140,7 @@ def main():
         '// alejandrozu/platonic-packing (MIT; commit cbf76f2f, src/solids_exact.json; see THIRD_PARTY_NOTICES.md), then',
         '// PolyPack\'s 20 prisms and antiprisms with 7, 9, 10 and 11 sides and 18 bipyramids and trapezohedra, then the 92',
         '// Johnson solids (python/polyhedra/johnson.py). Exact',
-        '// coordinates evaluated at 100 digits and rounded to binary64. Do not edit by hand.',
+        '// coordinates evaluated at 400 digits and rounded to binary64. Do not edit by hand.',
         '',
         'export interface SolidData {',
         '  name: string;',

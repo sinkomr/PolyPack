@@ -184,6 +184,9 @@ faces, centred at the vertex centroid, faces counter-clockwise from outside. `ge
   and every coordinate as a polynomial in it, and the result (`johnson_elementary.json`) is only a proposal that the
   proof below accepts or refuses. For J91 and J92 the search found nothing in the time given, so they were seeded from the coordinates in Wikipedia's articles ("Bilunabirotunda",
   "Triangular hebesphenorotunda"; edge sqrt 5 - 1, rescaled), which the refinement then replaced by its own digits.
+  This derivation is a one-off: it needs python-flint and the search's intermediate files, which are not kept, so it is
+  not part of the build. Nothing depends on it: `johnson_elementary.json` is committed, and the proof below checks it
+  on every build.
 - *Proof at build and in `test_johnson.py`* (`johnson_prove.py`, standard library; `python3 python/polyhedra/johnson.py`
   fails on any mismatch) [CALC]: in Q(alpha) with exact signs, the vertices are distinct and their centroid is the origin;
   every edge of every face has length exactly 1; every face is planar and regular (convex, counter-clockwise, all
