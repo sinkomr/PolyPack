@@ -26,6 +26,7 @@ import { MAX_STAGES, MIN_OBSERVED_EVALS } from "../src/tighter/runplan";
 import { RESET_MIN, resetThreshold, standingMultiplier } from "../src/tighter/standing";
 import { GREEDY_BUDGET, MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "../src/tighter/transfer";
 import { MYSTERY, shopView } from "../src/tighter/shop";
+import { SLICES } from "../src/tighter/slices";
 import {
   AUTO_SLACK_SECONDS,
   COMPACT_EVALS,
@@ -73,7 +74,7 @@ describe("Tighter shop", () => {
     expect(v.owned).toBe(0);
     expect(v.total).toBe(inTheFirstDimension().length);
     // the first card can be worked toward; the rest are locked or mysteries
-    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "2,000 RP", needs: [] });
+    expect(card(v, "trace")).toMatchObject({ state: "dear", price: "100 RP", needs: [] });
     expect(card(v, "click2")).toMatchObject({ state: "locked", needs: ["Trace detail"], price: "150 RP" });
     expect(card(v, "click2")!.label).toBe("2 evaluations per click: needs Trace detail");
     expect(row(v, "clicks").cards[0].id).toBe("trace");
@@ -466,6 +467,7 @@ describe("Tighter dimension cards", () => {
         "curved",
         "surf-prisms",
         "surf-archimedean",
+        "surf-johnson",
         "surf-catalan-a",
         "surf-catalan-b",
         "surf-catalan-c",
@@ -485,11 +487,12 @@ describe("Tighter dimension cards", () => {
     const v = shopView(rest([], 1, dims), funds, 8);
     expect(card(v, "surf-prisms")).toMatchObject({ state: "buyable", name: "Prism and antiprism surfaces" });
     expect(card(v, "surf-archimedean")).toMatchObject({ state: "locked", needs: ["Prism and antiprism surfaces"] });
-    expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"] });
+    expect(card(v, "surf-johnson")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"], name: "Johnson surfaces" });
+    expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Johnson surfaces"] });
     for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
       expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
     const w = shopView(
-      rest(["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b"], 1, dims),
+      rest(["surf-prisms", "surf-archimedean", "surf-johnson", "surf-catalan-a", "surf-catalan-b"], 1, dims),
       funds,
       8,
     );
@@ -504,10 +507,10 @@ describe("Tighter dimension cards", () => {
     expect(costOf(o(2), "curved")).toBe(0.3 * resetThreshold(2));
     const T1 = resetThreshold(1);
     expect(
-      (["surf-prisms", "surf-archimedean", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const).map((id) =>
-        costOf(o(1), id),
-      ),
-    ).toEqual([0.002 * T1, 0.005 * T1, 0.01 * T1, 0.05 * T1, 0.15 * T1]);
+      (
+        ["surf-prisms", "surf-archimedean", "surf-johnson", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const
+      ).map((id) => costOf(o(1), id)),
+    ).toEqual([0.002 * T1, 0.005 * T1, 0.02 * T1, 0.03 * T1, 0.05 * T1, 0.15 * T1]);
     expect((["sphere", "torus", "surf-nofold-catalan"] as const).map((id) => costOf(o(1), id))).toEqual([
       0.3 * T1,
       0.4 * T1,
@@ -522,11 +525,15 @@ describe("Tighter dimension cards", () => {
           "poly-prisms",
           "poly-antiprisms",
           "poly-elongated",
+          "poly-johnson",
           "poly-duals",
           "balls",
         ] as const
       ).map((id) => costOf(o(2), id)),
-    ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.4 * T2, 0.5 * T2]);
+    ).toEqual([0.01 * T2, 0.03 * T2, 0.1 * T2, 0.15 * T2, 0.25 * T2, 0.35 * T2, 0.4 * T2, 0.5 * T2]);
+    // the card order is the price order, which laterSlice relies on
+    const order = SLICES.filter((s) => s.family === "polyhedra" && s.late).map((s) => costOf(o(2), s.id as never));
+    expect(order).toEqual([...order].sort((a, b) => a! - b!));
     // Quick study takes its 10 % a level off these prices as off any price in record points
     expect(costOf(o(1), "surf-prisms")).toBe(10_000_000);
     const studied = owning(["study"], { study: 2 }, null, [], [], 1, ["2-in-2", "2-on-3"]);

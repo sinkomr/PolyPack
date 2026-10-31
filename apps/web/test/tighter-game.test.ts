@@ -218,10 +218,10 @@ describe("Tighter upgrades", () => {
   });
 
   it("open fast: Auto-eval and 5 evaluations per click are a few hundred points apiece", () => {
-    // Trace detail costs 2,000 (Michael, 2026-10-28): with points scaled by a problem's cost per evaluation
-    // the first Compact paid enough to open Auto-eval and 5 per click within about 10 s at 1,000, so the
-    // first purchase now takes a little more of the opening; the rungs after it stay a few hundred points
-    expect(cost("trace")).toBe(2000);
+    // Trace detail costs 100 (Michael, 2026-10-30): it was 2,000 from 2026-10-28, but a first Compact
+    // does not always pay a big first record (a site record or a trim floor can be in the way), and then
+    // the first purchase took far too long
+    expect(cost("trace")).toBe(100);
     expect(cost("click2") + cost("auto1")).toBeLessThanOrEqual(250);
     for (const id of ["click3", "click4", "click5"] as UpgradeId[]) expect(cost(id)).toBeLessThanOrEqual(350);
     // and the cost of the first five rungs after the first record stays a few hundred points each
