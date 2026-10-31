@@ -291,8 +291,6 @@ export function createApp(opts: AppOptions): Hono {
   // process while it does, so answers are kept until an entry of that pair changes. A new entry
   // clears its own pair; an administrator's change, rare, clears all. The bytes kept are bounded.
   const recordsCache = new Map<string, string>();
-  /** The answer of /api/records/pairs, until an entry changes. */
-  let pairsCache: string | null = null;
   let recordsCacheBytes = 0;
   const forgetRecords = (key?: string) => {
     if (key === undefined) {
@@ -339,21 +337,69 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   // Which pairs of shapes have anything to show: a published value or a listed entry. The records page
-  // marks them in its menus. One query over the listing index, kept until any entry changes.
+  // marks them in its menus and asks on every load, while entries arrive every second, so reading the
+  // pairs from the store for each answer scanned every entry again and again, and held the live server
+  // for about 53 s. The pairs with a listed entry are kept in memory instead. The first request reads
+  // them once with store.pairs() (not at start-up: createApp cannot wait for the store, and the
+  // server would open its port late); a new entry adds its pair; only a change that may take the last
+  // entry out of a pair makes the next request read them again. See entriesChanged for who calls what.
+  const published = new Map<string, number>();
+  for (const r of opts.records) published.set(`${r.N}/${r.M}`, (published.get(`${r.N}/${r.M}`) ?? 0) + 1);
+  /** The "N/M" of every pair with a listed entry; null before the first request and after a change that may have emptied a pair. */
+  let sitePairs: Set<string> | null = null;
+  /** The answer for sitePairs, built when asked for and again after the set changes. */
+  let pairsBody: string | null = null;
+  let pairsReading: Promise<string> | null = null;
+  /** Counts the changes that may have emptied a pair, so that a reading one of them overlapped is done again. */
+  let pairsShrunk = 0;
+  /** While the store is read: the pairs of entries added since it began, which the reading may lack. */
+  let pairsAdded: Set<string> | null = null;
+  const pairsAnswer = (sites: Set<string>): string => {
+    const keys = new Set([...published.keys(), ...sites]);
+    const pairs = [...keys]
+      .map((k) => k.split("/").map(Number) as [number, number])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+      .map(([N, M]) => ({ N, M, published: published.get(`${N}/${M}`) ?? 0, site: sites.has(`${N}/${M}`) }));
+    return JSON.stringify({ pairs });
+  };
+  /** An entry was stored in the pair `key` ("N/M"): the pair has a listed entry from now on. */
+  const pairAdded = (key: string) => {
+    pairsAdded?.add(key);
+    if (sitePairs && !sitePairs.has(key)) {
+      sitePairs.add(key);
+      pairsBody = null;
+    }
+  };
+  /** An entry was deleted, and with it perhaps the last of its pair: the next request reads the pairs again. */
+  const pairsMayHaveShrunk = () => {
+    pairsShrunk++;
+    sitePairs = null;
+    pairsBody = null;
+  };
+  // With a store that answers asynchronously, requests that arrive during a reading share it.
+  const readPairs = (): Promise<string> => {
+    pairsReading ??= (async () => {
+      for (;;) {
+        const shrunk = pairsShrunk;
+        const added = (pairsAdded = new Set<string>());
+        const sites = new Set((await store.pairs()).map(({ N, M }) => `${N}/${M}`));
+        // an entry deleted while this was read may still be in it
+        if (shrunk !== pairsShrunk) continue;
+        for (const key of added) sites.add(key);
+        sitePairs = sites;
+        return (pairsBody = pairsAnswer(sites));
+      }
+    })().finally(() => {
+      pairsReading = null;
+      pairsAdded = null;
+    });
+    return pairsReading;
+  };
+
   app.use("/api/records/pairs", compress());
   app.get("/api/records/pairs", async (c) => {
-    if (pairsCache === null) {
-      const published = new Map<string, number>();
-      for (const r of opts.records) published.set(`${r.N}/${r.M}`, (published.get(`${r.N}/${r.M}`) ?? 0) + 1);
-      const site = new Set((await store.pairs()).map(({ N, M }) => `${N}/${M}`));
-      const keys = new Set([...published.keys(), ...site]);
-      const pairs = [...keys]
-        .map((k) => k.split("/").map(Number) as [number, number])
-        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
-        .map(([N, M]) => ({ N, M, published: published.get(`${N}/${M}`) ?? 0, site: site.has(`${N}/${M}`) }));
-      pairsCache = JSON.stringify({ pairs });
-    }
-    return c.body(pairsCache, 200, { "content-type": "application/json" });
+    const body = sitePairs === null ? await readPairs() : (pairsBody ??= pairsAnswer(sitePairs));
+    return c.body(body, 200, { "content-type": "application/json" });
   });
 
   // Who holds how many records: the leader of every open problem, counted by the exact name it was
@@ -394,10 +440,13 @@ export function createApp(opts: AppOptions): Hono {
   }
   let leaders: LeadersReading | null = null;
   let entriesVersion = 0;
-  /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
+  /**
+   * Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". The pairs with a
+   * listed entry (/api/records/pairs) are not told by this: the caller tells them with pairAdded or,
+   * where an entry may have left the listing, pairsMayHaveShrunk.
+   */
   const entriesChanged = (key?: string) => {
     forgetRecords(key);
-    pairsCache = null;
     entriesVersion++;
     if (leaders) leaders.current = false;
   };
@@ -628,7 +677,10 @@ export function createApp(opts: AppOptions): Hono {
     // A problem keeps only its leader (and, behind a pending leader, the record it displaced): the
     // entry may already have been deleted (`kept` is false). After the insert and the prune, so that
     // no answer computed in between is kept:
-    entriesChanged(`${config.N}/${config.M}`);
+    const pair = `${config.N}/${config.M}`;
+    entriesChanged(pair);
+    // the pair has a listed entry now; if the prune deleted this one at once, the leader that stays is in the same pair
+    pairAdded(pair);
     if (beats) {
       log(
         `[review] submission ${id} by "${name}" for N=${config.N} M=${config.M} P=${config.P}: ` +
@@ -733,6 +785,8 @@ export function createApp(opts: AppOptions): Hono {
     }
     const ok = await store.review(body.id as number, body.decision);
     if (ok) entriesChanged();
+    // a confirmed entry stays listed; a rejected one is deleted, and its pair may have no entry left
+    if (ok && body.decision === "rejected") pairsMayHaveShrunk();
     if (ok) log(`[review] submission ${body.id} marked ${body.decision}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such pending submission" }, 404);
   });
@@ -745,6 +799,7 @@ export function createApp(opts: AppOptions): Hono {
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
     const ok = await store.remove(body.id as number);
     if (ok) entriesChanged();
+    if (ok) pairsMayHaveShrunk();
     if (ok) log(`[review] submission ${body.id} removed`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
   });
@@ -785,6 +840,7 @@ export function createApp(opts: AppOptions): Hono {
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
     const ok = await store.edit(body.id as number, changes);
+    // name, note and provenance only: the entry stays in its pair, so the pairs are not touched
     if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
     return ok ? c.json({ ok: true }) : c.json({ error: "no such listed submission" }, 404);
