@@ -401,6 +401,33 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// Alt+R runs the optimizer, Alt+A accepts its result, Alt+S submits to the leaderboard, on this board and on the
+// other kinds' boards alike. A shortcut clicks its button, so it does nothing while the button is disabled. Keys are
+// read by their position (e.code), since Option+R types "®" on a Mac; the capture phase keeps the board's own A key
+// (add a piece) from also seeing Alt+A. Not while typing in a field.
+const SHORTCUTS: Record<string, { poly: string; space?: string }> = {
+  KeyR: { poly: "solve-run", space: "space-solve-run" },
+  KeyA: { poly: "solve-accept" },
+  KeyS: { poly: "submit", space: "space-submit" },
+};
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat) return;
+    const shortcut = SHORTCUTS[e.code];
+    if (!shortcut) return;
+    const t = e.target as HTMLElement;
+    if (t.tagName === "INPUT" || t.tagName === "SELECT" || t.tagName === "TEXTAREA" || t.isContentEditable) return;
+    const id = layout.dataset.space ? shortcut.space : shortcut.poly;
+    if (!id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const button = document.getElementById(id) as HTMLButtonElement | null;
+    if (button && !button.disabled) button.click();
+  },
+  { capture: true },
+);
+
 // ---------- numeric fields ----------
 
 phiInput.addEventListener("change", () => {

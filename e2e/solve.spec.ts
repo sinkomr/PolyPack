@@ -611,3 +611,28 @@ test("solve: a worker that dies before it is ready is replaced and the status sa
   await page.click("#solve-run");
   expect((await completed(page)).strict).toBe(true);
 });
+
+test("solve: Alt+R runs the optimizer, Alt+A accepts its result and Alt+S submits it", async ({ page }) => {
+  // an open problem, so that its result can be submitted
+  await openProblem(page, 4, 9, 3);
+  await page.fill("#name", "Playwright");
+  await choose(page, "seed");
+  // not while typing in a field: the evaluations field has the focus after choose()
+  await page.locator("#solve-evals").press("Alt+R");
+  expect(await lastResult(page)).toBeNull();
+  // focus off the field: the page itself has it now
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("Alt+R");
+  await expect.poll(() => lastResult(page), { timeout: 30_000 }).not.toBeNull();
+  const r = await completed(page);
+  expect(r.valid && r.strict).toBe(true);
+  await page.keyboard.press("Alt+A");
+  await expect(page.locator("#count")).toContainText("3 / 3");
+  // the board's own A key (add a piece) does not also see Alt+A
+  await page.locator("#board").focus();
+  await page.locator("#board").press("Alt+A");
+  await expect(page.locator("#count")).toContainText("3 / 3");
+  const [sent] = await Promise.all([page.waitForRequest("**/api/submit"), page.keyboard.press("Alt+S")]);
+  expect(sent.postDataJSON().pieces).toHaveLength(3);
+  expect(sent.postDataJSON().found_with).toBe("optimizer");
+});
