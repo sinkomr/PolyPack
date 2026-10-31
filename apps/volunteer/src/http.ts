@@ -26,7 +26,14 @@ export const realSleep: Sleep = (ms, signal) => delay(ms, undefined, { signal })
 export const RATE_LIMIT_WAIT_MS = 65_000;
 export const RATE_LIMIT_RETRIES = 3;
 export const MAX_BACKOFF_MS = 60_000;
-export const SUBMISSIONS_PER_MINUTE = 6;
+/**
+ * Submissions the client sends at most within SUBMISSION_WINDOW_MS: the server's limit per address, 120 a minute
+ * (apps/server/src/limits.ts). 6 until 0.3.1, when a client sent a few an hour; since problems are drawn at random most
+ * searches end in a first entry, and 6 a minute held the threads back. The window is a second longer than the
+ * server's, so that a request that travels faster than the one before it cannot bring a 121st into one of its windows.
+ */
+export const SUBMISSIONS_PER_MINUTE = 120;
+export const SUBMISSION_WINDOW_MS = 61_000;
 export const MAX_ANSWER_BYTES = 16 * 1024 * 1024;
 /** POSTs of one submission whose fate stayed unknown, each followed by a re-read of the problem. */
 export const MAX_SUBMIT_ATTEMPTS = 3;
@@ -162,7 +169,7 @@ export class Api {
     this.timeoutMs = o.timeoutMs ?? 30_000;
     this.maxAnswerBytes = o.maxAnswerBytes ?? MAX_ANSWER_BYTES;
     this.onUpgradeRequired = o.onUpgradeRequired;
-    this.pacer = new Pacer(SUBMISSIONS_PER_MINUTE, 60_000, o.now ?? Date.now, (ms) => this.sleep(ms, this.signal));
+    this.pacer = new Pacer(SUBMISSIONS_PER_MINUTE, SUBMISSION_WINDOW_MS, o.now ?? Date.now, (ms) => this.sleep(ms, this.signal));
   }
 
   /** One request, never retried here. */
