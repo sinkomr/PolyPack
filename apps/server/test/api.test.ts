@@ -1621,4 +1621,237 @@ describe("GET /api/records/pairs", () => {
       { N: 4, M: 4, published: 1, site: true },
     ]);
   });
+
+  // The route keeps the pairs with a listed entry in memory (see createApp). Each test below builds its own
+  // app on a store whose `pairs` is counted: that is the one query that scans every entry.
+  const admin = (path: string, body: object) =>
+    app.request(path, {
+      method: "POST",
+      headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const pairsApp = (records: LiteratureRecord[] = [fakeRecord], store = new SqliteStore(":memory:")) => {
+    const reads = vi.spyOn(store, "pairs");
+    app = createApp({ store, records, adminToken: "secret", clientIp: () => ip, log: (m) => logs.push(m) });
+    return { store, reads };
+  };
+  const pairsText = async () => (await app.request("/api/records/pairs")).text();
+  const sites = async () =>
+    Object.fromEntries(
+      (await get("/api/records/pairs")).body.pairs.map((p: { N: number; M: number; site: boolean }) => [
+        `${p.N}/${p.M}`,
+        p.site,
+      ]),
+    );
+  // an entry for the store itself, without a packing: one problem (P = 1) of the pair N/M
+  const seedEntry = (N: number, M: number): NewSubmission => ({
+    N,
+    M,
+    P: 1,
+    score: 1,
+    name: "ann",
+    agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00.000Z",
+    verification: "none",
+    literature_value: null,
+    strict_check: null,
+  });
+  // two or more squares in a row in a circle: an entry of the pair 4/0, which has no published value
+  const circle = (P: number, name = "ann") => ({ ...squares(P, { name }), M: 0 });
+  // three squares in a corner of a square of side 2: a claim that beats the published 5 of fakeRecord
+  const claim = (name: string) => ({
+    ...squares(3, { name }),
+    pieces: [
+      { x: 0, y: 0, theta: SQ },
+      { x: 1, y: 0, theta: SQ },
+      { x: 0, y: 1, theta: SQ },
+    ],
+  });
+
+  it("reads the store once, however many entries arrive after", async () => {
+    const { reads } = pairsApp();
+    expect(await sites()).toEqual({ "4/4": false });
+    expect(reads).toHaveBeenCalledTimes(1);
+    // entries of a pair that has one already, of new pairs, and an entry that is deleted at once
+    for (const body of [squares(2), squares(4), circle(2), circle(2, "bob"), squares(2, { name: "cat" })]) {
+      expect((await submit(body)).status).toBe(200);
+      await get("/api/records/pairs");
+    }
+    expect(await sites()).toEqual({ "4/0": true, "4/4": true });
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it("is told of a pair that had nothing by its first entry", async () => {
+    const { reads } = pairsApp();
+    expect(await sites()).toEqual({ "4/4": false });
+    // a pair with a published value gains its site entry, and a pair without anything appears
+    expect((await submit(squares(2))).status).toBe(200);
+    expect(await sites()).toEqual({ "4/4": true });
+    expect((await submit(circle(2))).status).toBe(200);
+    expect((await get("/api/records/pairs")).body).toEqual({
+      pairs: [
+        { N: 4, M: 0, published: 0, site: true },
+        { N: 4, M: 4, published: 1, site: true },
+      ],
+    });
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it("reads the store again only where an entry can leave the listing", async () => {
+    const { reads } = pairsApp();
+    const lone = (await submit(circle(2))).body.id;
+    const pending = (await submit(claim("dan"))).body;
+    expect(pending.pending_verification).toBe(true);
+    expect(await sites()).toEqual({ "4/0": true, "4/4": true });
+    expect(reads).toHaveBeenCalledTimes(1);
+
+    // an edit and a confirmation leave every entry where it was
+    expect((await admin("/api/admin/edit", { id: lone, name: "ann the second" })).status).toBe(200);
+    expect((await admin("/api/admin/review", { id: pending.id, decision: "confirmed" })).status).toBe(200);
+    expect(await sites()).toEqual({ "4/0": true, "4/4": true });
+    expect(reads).toHaveBeenCalledTimes(1);
+
+    // the only entry of a pair removed: the pair goes, the published pair stays, without a site entry
+    expect((await admin("/api/admin/remove", { id: lone })).status).toBe(200);
+    expect(await sites()).toEqual({ "4/4": true });
+    expect(reads).toHaveBeenCalledTimes(2);
+    expect((await admin("/api/admin/remove", { id: pending.id })).status).toBe(200);
+    expect((await get("/api/records/pairs")).body).toEqual({ pairs: [{ N: 4, M: 4, published: 1, site: false }] });
+    expect(reads).toHaveBeenCalledTimes(3);
+
+    // a rejected claim, the pair's only entry
+    const second = (await submit(claim("eve"))).body;
+    expect(await sites()).toEqual({ "4/4": true });
+    expect((await admin("/api/admin/review", { id: second.id, decision: "rejected" })).status).toBe(200);
+    expect(await sites()).toEqual({ "4/4": false });
+    expect(reads).toHaveBeenCalledTimes(4);
+
+    // nothing was changed by a refused request
+    expect((await admin("/api/admin/remove", { id: second.id })).status).toBe(404);
+    expect((await admin("/api/admin/review", { id: second.id, decision: "rejected" })).status).toBe(404);
+    expect(await sites()).toEqual({ "4/4": false });
+    expect(reads).toHaveBeenCalledTimes(4);
+  });
+
+  it("keeps a pair whose entry was removed while another stays", async () => {
+    pairsApp();
+    const first = (await submit(circle(2))).body.id;
+    // another problem of the same pair
+    expect((await submit(circle(3))).status).toBe(200);
+    expect(await sites()).toEqual({ "4/0": true, "4/4": false });
+    expect((await admin("/api/admin/remove", { id: first })).status).toBe(200);
+    expect(await sites()).toEqual({ "4/0": true, "4/4": false });
+  });
+
+  it("gives the answer the route gave when every request read the store", async () => {
+    // a few published pairs, with entries on some of them and on pairs with nothing published; 10 and 12
+    // sort after 4 as numbers and before it as text
+    const rec = (N: number, M: number, P: number): LiteratureRecord => ({ ...fakeRecord, N, M, P });
+    const records = [rec(4, 4, 3), rec(4, 4, 5), rec(3, 3, 2), rec(0, 4, 1), rec(12, 5, 7), rec(10, 3, 1)];
+    // the route as it was: the published counts and one query for every answer
+    const before = async (store: SqliteStore) => {
+      const published = new Map<string, number>();
+      for (const r of records) published.set(`${r.N}/${r.M}`, (published.get(`${r.N}/${r.M}`) ?? 0) + 1);
+      const site = new Set((await store.pairs()).map(({ N, M }) => `${N}/${M}`));
+      const keys = new Set([...published.keys(), ...site]);
+      const pairs = [...keys]
+        .map((k) => k.split("/").map(Number) as [number, number])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+        .map(([N, M]) => ({ N, M, published: published.get(`${N}/${M}`) ?? 0, site: site.has(`${N}/${M}`) }));
+      return JSON.stringify({ pairs });
+    };
+    const store = new SqliteStore(":memory:");
+    const ids = new Map<string, number>();
+    for (const [N, M] of [
+      [4, 4],
+      [10, 3],
+      [3, 3],
+      [5, 12],
+      [11, 11],
+      [0, 0],
+      [20, 3],
+    ])
+      ids.set(`${N}/${M}`, await store.insert(seedEntry(N, M)));
+    pairsApp(records, store);
+    expect(await pairsText()).toBe(await before(store));
+    // entries through the API, on a pair with nothing and on one with a published value
+    expect((await submit(circle(2))).status).toBe(200);
+    expect((await submit({ ...squares(2), N: 4, M: 5, pieces: row(2) })).status).toBe(200);
+    expect(await pairsText()).toBe(await before(store));
+    expect((await get("/api/records/pairs")).body.pairs.length).toBeGreaterThan(8);
+    // and after entries leave
+    for (const key of ["10/3", "0/0"])
+      expect((await admin("/api/admin/remove", { id: ids.get(key) })).status).toBe(200);
+    expect(await pairsText()).toBe(await before(store));
+    const shown = (await get("/api/records/pairs")).body.pairs.map((p: { N: number; M: number }) => `${p.N}/${p.M}`);
+    expect(shown).toEqual(["0/4", "3/3", "4/0", "4/4", "4/5", "5/12", "10/3", "11/11", "12/5", "20/3"]);
+  });
+
+  // A store that answers when it is told to, as a hosted one does after a network round trip.
+  const slowReading = (reads: ReturnType<typeof pairsApp>["reads"], store: SqliteStore) => {
+    const real = SqliteStore.prototype.pairs.bind(store);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    // the first reading takes its rows at once and returns them when the gate opens
+    reads.mockImplementationOnce(async () => {
+      const rows = await real();
+      await gate;
+      return rows;
+    });
+    return release;
+  };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  it("lets requests that arrive during a reading share it", async () => {
+    const { store, reads } = pairsApp();
+    const release = slowReading(reads, store);
+    const answers = [1, 2, 3].map(() => pairsText());
+    await settle();
+    expect(reads).toHaveBeenCalledTimes(1);
+    release();
+    const [a, b, c] = await Promise.all(answers);
+    expect(a).toBe(b);
+    expect(a).toBe(c);
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not lose an entry added during a reading", async () => {
+    const { store, reads } = pairsApp();
+    const release = slowReading(reads, store);
+    const answer = pairsText();
+    await settle();
+    // the reading holds the rows from before this entry
+    expect((await submit(circle(2))).status).toBe(200);
+    release();
+    expect(JSON.parse(await answer).pairs).toEqual([
+      { N: 4, M: 0, published: 0, site: true },
+      { N: 4, M: 4, published: 1, site: false },
+    ]);
+    expect(await sites()).toEqual({ "4/0": true, "4/4": false });
+    expect(reads).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not keep a pair removed during a reading", async () => {
+    const store = new SqliteStore(":memory:");
+    const gone = await store.insert(seedEntry(4, 0));
+    const { reads } = pairsApp([fakeRecord], store);
+    const release = slowReading(reads, store);
+    const answer = pairsText();
+    await settle();
+    // the reading holds the rows from before the removal
+    expect((await admin("/api/admin/remove", { id: gone })).status).toBe(200);
+    release();
+    expect(JSON.parse(await answer).pairs).toEqual([{ N: 4, M: 4, published: 1, site: false }]);
+    expect(await sites()).toEqual({ "4/4": false });
+    // the reading that overlapped the removal was done again
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
 });
