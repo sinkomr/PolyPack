@@ -28,7 +28,7 @@
  * it is cached by pose; moving one piece then costs one piece's development.
  */
 import { boundingRadius, inradius, pieceVertices } from "@polypack/geometry";
-import { type ChainNode, enumerateChains, inWedge } from "./chains";
+import { type ChainNode, countsImage, enumerateChains, inWedge, twinGroups } from "./chains";
 import { type FaceShape, faceShapes } from "./kernel-solid";
 import { type SurfacePose, developParts, wedgeHalfPlanes } from "./parts";
 import { apply } from "./rigid";
@@ -376,13 +376,15 @@ export function diskTerms(
     let gx = 0;
     let gy = 0;
     const vbest = new Map<number, [number, number, number]>();
+    // twin chains (cone angle pi) count an image once (chains.ts)
+    const groups = twinGroups(nodes);
     nodes.forEach((node, ni) => {
       const T = node.toAnchor;
       for (const j of byFace[node.face]) {
         if (j === i && ni === 0) continue;
         const q = poses[j];
         const [qx, qy] = apply(T, q.x, q.y);
-        if (!inWedge(node.wedge, p.x, p.y, qx, qy, 0)) continue;
+        if (!countsImage(nodes, groups, ni, p.x, p.y, qx, qy)) continue;
         const dx = qx - p.x;
         const dy = qy - p.y;
         const d = Math.hypot(dx, dy);
@@ -450,6 +452,7 @@ export function diskClear(solid: Solid, lam: number, poses: SurfacePose[], i: nu
   } catch (err) {
     throw new TooLarge(err instanceof Error ? err.message : String(err));
   }
+  const groups = twinGroups(nodes);
   for (let ni = 0; ni < nodes.length; ni++) {
     const node = nodes[ni];
     const T = node.toAnchor;
@@ -457,7 +460,7 @@ export function diskClear(solid: Solid, lam: number, poses: SurfacePose[], i: nu
       const q = poses[j];
       if (q.face !== node.face || (j === i && ni === 0)) continue;
       const [qx, qy] = apply(T, q.x, q.y);
-      if (!inWedge(node.wedge, p.x, p.y, qx, qy, 0)) continue;
+      if (!countsImage(nodes, groups, ni, p.x, p.y, qx, qy)) continue;
       if (Math.hypot(qx - p.x, qy - p.y) < 2 * lam - tol) return false;
     }
     const F = faces[node.face];

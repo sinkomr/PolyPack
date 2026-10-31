@@ -59,7 +59,17 @@ describe("the surface kernel on the Catalan solids, prisms and antiprisms", () =
     ["antiprism7", "fold", 4, 30],
     ["antiprism12", "fold", 0, 5],
     ["antiprism12", "nofold", 12, 30],
-    // Johnson solids without a vertex of three triangles (a cone angle of exactly pi; see SURFACE.md, kernel)
+    // vertices of three triangles (a cone angle of exactly pi: chains with twin developments, SURFACE.md, kernel)
+    ["tetrahedron", "fold", 0, 3],
+    ["tetrahedron", "fold", 3, 4],
+    ["tetrahedron", "fold", 6, 2],
+    ["elongated_triangular_pyramid", "fold", 0, 5],
+    ["elongated_triangular_pyramid", "fold", 4, 3],
+    ["elongated_triangular_pyramid", "fold", 3, 2],
+    ["triangular_bipyramid", "fold", 0, 3],
+    ["triangular_bipyramid", "fold", 3, 5],
+    ["triangular_bipyramid", "fold", 6, 2],
+    // other Johnson solids
     ["triangular_cupola", "fold", 0, 2],
     ["triangular_cupola", "nofold", 3, 3],
     ["pentagonal_rotunda", "fold", 4, 5],
