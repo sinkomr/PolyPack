@@ -294,6 +294,64 @@ describe("Tighter tech tree", () => {
   });
 });
 
+describe("Tighter tech tree summary", () => {
+  const dims = ["2-in-2", "2-on-3", "3-in-3"] as Parameters<typeof owning>[6];
+  /** Every upgrade owned except those in `except`, levels part-way: a heavy save. */
+  const heavy = (except: UpgradeId[], standing: boolean) => {
+    const ids = UPGRADES.filter((u) => !except.includes(u.id) && (standing || u.row !== "standing")).map((u) => u.id);
+    const levels: Record<string, number> = {};
+    for (const u of UPGRADES) if (u.levels) levels[u.id] = Math.ceil(u.levels.max / 2);
+    return owning(ids, levels, null, [], [], 2, dims);
+  };
+  const states: [string, ReturnType<typeof owning>][] = [
+    ["fresh", owning([])],
+    ["early", owning(["trace"])],
+    ["mid", owning(["trace", "click2", "click3", "auto1", "queue3"])],
+    ["standing owned", owning(["standing", "trace"])],
+    ["a dimension open", owning(["trace", "curved"], {}, null, [], [], 1, ["2-in-2", "2-on-3"])],
+    ["three dimensions", owning(["trace", "click2"], {}, null, [], [], 2, dims)],
+    ["heavy", heavy(["rank8", "harden", "retake"], false)],
+    ["heavy with standing", heavy(["head1", "head2"], true)],
+  ];
+  const funds = [
+    { rp: 0, standing: 0 },
+    { rp: 10, standing: 0 },
+    { rp: 150, standing: 0 },
+    { rp: 5000, standing: 3 },
+    { rp: 1e9, standing: 0 },
+    { rp: 0, standing: 1e6 },
+    { rp: 1e12, standing: 1e12 },
+  ];
+
+  it("gives the same buyable count and next target as the whole tree's view", async () => {
+    const { treeView, treeSummary } = await import("../src/tighter/shop");
+    let withNext = 0;
+    let withBuyable = 0;
+    for (const [name, o] of states)
+      for (const f of funds) {
+        const full = treeView(o, f, 8);
+        const light = treeSummary(o, f, 8);
+        expect(light.buyable, `${name} ${JSON.stringify(f)}`).toBe(full.buyable);
+        expect(light.next, `${name} ${JSON.stringify(f)}`).toEqual(full.next);
+        if (full.next) withNext++;
+        if (full.buyable) withBuyable++;
+      }
+    // the cases are not all empty ones
+    expect(withNext).toBeGreaterThan(5);
+    expect(withBuyable).toBeGreaterThan(5);
+  });
+
+  it("counts a standing-priced card as buyable but never as the next one to save record points for", async () => {
+    const { treeView, treeSummary } = await import("../src/tighter/shop");
+    const o = owning(["standing", "trace"]);
+    const rich = { rp: 0, standing: 1e6 };
+    const full = treeView(o, rich, 8);
+    expect(full.nodes.some((n) => n.currency === "standing" && n.state === "buyable")).toBe(true);
+    expect(treeSummary(o, rich, 8).buyable).toBe(full.buyable);
+    expect(treeSummary(o, { rp: 0, standing: 0 }, 8).next?.currency).toBe("rp");
+  });
+});
+
 describe("Tighter upgrade texts", () => {
   const vars = (markup: string) => [...markup.matchAll(/<var>(.*?)<\/var>/g)].map((m) => m[1]);
   const all = (u: (typeof UPGRADES)[number]) => [
@@ -487,7 +545,11 @@ describe("Tighter dimension cards", () => {
     const v = shopView(rest([], 1, dims), funds, 8);
     expect(card(v, "surf-prisms")).toMatchObject({ state: "buyable", name: "Prism and antiprism surfaces" });
     expect(card(v, "surf-archimedean")).toMatchObject({ state: "locked", needs: ["Prism and antiprism surfaces"] });
-    expect(card(v, "surf-johnson")).toMatchObject({ state: "locked", needs: ["Archimedean surfaces"], name: "Johnson surfaces" });
+    expect(card(v, "surf-johnson")).toMatchObject({
+      state: "locked",
+      needs: ["Archimedean surfaces"],
+      name: "Johnson surfaces",
+    });
     expect(card(v, "surf-catalan-a")).toMatchObject({ state: "locked", needs: ["Johnson surfaces"] });
     for (const id of ["sphere", "torus", "surf-nofold-catalan", "curved"] as const)
       expect(card(v, id)).toMatchObject({ state: "mystery", name: MYSTERY, price: null });
@@ -508,7 +570,14 @@ describe("Tighter dimension cards", () => {
     const T1 = resetThreshold(1);
     expect(
       (
-        ["surf-prisms", "surf-archimedean", "surf-johnson", "surf-catalan-a", "surf-catalan-b", "surf-catalan-c"] as const
+        [
+          "surf-prisms",
+          "surf-archimedean",
+          "surf-johnson",
+          "surf-catalan-a",
+          "surf-catalan-b",
+          "surf-catalan-c",
+        ] as const
       ).map((id) => costOf(o(1), id)),
     ).toEqual([0.002 * T1, 0.005 * T1, 0.02 * T1, 0.03 * T1, 0.05 * T1, 0.15 * T1]);
     expect((["sphere", "torus", "surf-nofold-catalan"] as const).map((id) => costOf(o(1), id))).toEqual([
