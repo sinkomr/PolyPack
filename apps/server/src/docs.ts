@@ -527,6 +527,10 @@ Fields that were not given are <code>null</code>. 404 for unknown, rejected and 
 Where that leader is still pending verification, <code>site_verified</code> lists the leader among the entries of the same <code>P</code> that are not, if there is one.
 Closed problems appear in <code>literature</code> only.</p>
 
+<h3 id="record-pairs"><code>GET /api/records/pairs</code></h3>
+<p>Every pair of shapes with something to show on the records page: <code>pairs</code> is a list of <code>{N, M, published, site}</code> by <code>N</code>, then <code>M</code>,
+where <code>published</code> counts the pair's published values and <code>site</code> says whether it has a listed site entry. Pairs with neither are left out.</p>
+
 <h3 id="leaders"><code>GET /api/leaders?keys=</code></h3>
 <p>The current <a href="#leader">leader</a> of many problems at once, for a client that holds many records and checks them in batches. <code>keys</code> is one comma-separated list of at most ${LEADERS_MAX_KEYS} keys, each a polygon problem written <code>N/M/P</code> or the id of a space problem, such as <code>sphere/0/12</code> or <code>polyhedra/&lt;code&gt;/&lt;P&gt;</code>, mixed freely. No other parameter is accepted; more than ${LEADERS_MAX_KEYS} keys, an empty list, a repeated or other parameter is a 400, and a URL over ${LEADERS_MAX_URL} characters a 414. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>
 <pre><code>${esc(LEADERS)}</code></pre>

@@ -357,6 +357,7 @@ describe("GET /api", () => {
       "GET /api/leaderboard/{N}/{M}/{P}",
       "GET /api/submissions/{id}",
       "GET /api/records?N=&amp;M=",
+      "GET /api/records/pairs",
       "GET /api/events",
       "GET /api/health",
       "GET /api/admin/pending",
@@ -1608,4 +1609,16 @@ describe("client and server agree on the corpus", () => {
       expect(turned.body.score).toBe(client.score);
     });
   }
+});
+
+describe("GET /api/records/pairs", () => {
+  it("lists the pairs with a published value or a listed entry, and follows new entries", async () => {
+    expect((await get("/api/records/pairs")).body).toEqual({ pairs: [{ N: 4, M: 4, published: 1, site: false }] });
+    expect((await submit({ ...squares(2), N: 4, M: 0, pieces: row(2) })).status).toBe(200);
+    expect((await submit(squares(2))).status).toBe(200);
+    expect((await get("/api/records/pairs")).body.pairs).toEqual([
+      { N: 4, M: 0, published: 0, site: true },
+      { N: 4, M: 4, published: 1, site: true },
+    ]);
+  });
 });

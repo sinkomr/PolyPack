@@ -59,6 +59,15 @@ export interface RecordsResponse {
 }
 export const getRecords = (N: number, M: number) => getJson<RecordsResponse>(`/api/records?N=${N}&M=${M}`);
 
+/** A pair of shapes with a published value (`published` counts them) or a listed site entry. */
+export interface RecordPair {
+  N: number;
+  M: number;
+  published: number;
+  site: boolean;
+}
+export const getRecordPairs = () => getJson<{ pairs: RecordPair[] }>("/api/records/pairs");
+
 /** Every name that leads a problem, with how many it leads and how many of those are records. */
 export const getHolders = () => getJson<HoldersResponse>("/api/holders");
 

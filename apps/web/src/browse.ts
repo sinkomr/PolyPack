@@ -1,9 +1,10 @@
-import { areaLowerBound, containerArea, pieceArea } from "@polypack/geometry";
+import { MAX_SIDES, areaLowerBound, containerArea, pieceArea } from "@polypack/geometry";
 import * as api from "./api";
 import { Atlas } from "./atlas";
 import { foundWithLabel } from "./found-with";
 import { AtlasRow, AtlasView, parseView, safeHref, verifiedEntry, viewQuery } from "./atlas-model";
 import { renderTabs } from "./records-tabs";
+import { type RecordShapes, addRecordPair, markedLabel, recordShapes } from "./record-marks";
 import { el, fillShapeSelect, shapeLabel } from "./shapes-ui";
 import { SOURCES, followSourceMarks, recordSources, renderSourceList, sourceMarks } from "./sources";
 
@@ -11,8 +12,25 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 renderTabs($("records-tabs"), "polygon");
 const nSel = $<HTMLSelectElement>("n-select");
 const mSel = $<HTMLSelectElement>("m-select");
-fillShapeSelect(nSel, false);
-fillShapeSelect(mSel, false);
+// every shape of the problem range; ✓ marks those with records once the server says which they are
+fillShapeSelect(nSel, false, MAX_SIDES);
+fillShapeSelect(mSel, false, MAX_SIDES);
+let recordMarks: RecordShapes | null = null;
+function markShapes(): void {
+  if (!recordMarks) return;
+  const marks = recordMarks;
+  const mark = (select: HTMLSelectElement, has: (n: number) => boolean) => {
+    for (const o of select.options) o.textContent = markedLabel(o.dataset.label ?? o.text, has(Number(o.value)));
+  };
+  mark(nSel, (n) => marks.pieces.has(n));
+  mark(mSel, (m) => marks.containers.get(Number(nSel.value))?.has(m) ?? false);
+}
+void api.getRecordPairs().then((r) => {
+  if (!r) return;
+  recordMarks = recordShapes(r.pairs);
+  markShapes();
+  $("record-mark-note").hidden = false;
+});
 // the notes of the sources do not depend on the server: they are there before any record is
 renderSourceList($("source-list"));
 followSourceMarks(document);
@@ -467,6 +485,11 @@ async function refresh(): Promise<void> {
     followView(atlas.view, "replace");
     return;
   }
+  // a pair that got its first record while the page was open
+  if (recordMarks && (data.literature.length || data.site.length) && !recordMarks.containers.get(N)?.has(M)) {
+    addRecordPair(recordMarks, N, M);
+    markShapes();
+  }
   const byP = new Map<number, Row>();
   const row = (P: number) => byP.get(P) ?? byP.set(P, { P, bound: areaLowerBound(N, M, P) }).get(P)!;
   for (const l of data.literature) row(l.P).lit = l;
@@ -526,10 +549,17 @@ async function refresh(): Promise<void> {
 window.addEventListener("popstate", async () => {
   const before = `${nSel.value},${mSel.value}`;
   const valid = selectFromHash();
-  if (before !== `${nSel.value},${mSel.value}`) await refresh();
+  if (before !== `${nSel.value},${mSel.value}`) {
+    markShapes();
+    await refresh();
+  }
   atlas.showPanel(valid ? parseView(location.search).p : null);
 });
-nSel.addEventListener("change", refresh);
+nSel.addEventListener("change", () => {
+  // the containers' marks are for the chosen piece
+  markShapes();
+  void refresh();
+});
 mSel.addEventListener("change", refresh);
 setInterval(() => $("live").classList.toggle("on", live.isLive()), 1500);
 refresh();

@@ -149,3 +149,20 @@ test("the record holders page counts the leads of each name", async ({ page, req
     /leads? [\d,]+ problems?; [\d,]+ of these (is a record|are records)\./,
   );
 });
+
+test("the records page offers every shape to 100 and marks the shapes with records", async ({ page }) => {
+  // shapes beyond 20 were once missing from the menus, so their links fell back to the default problem
+  await page.goto("/browse.html#84,31");
+  await expect(page.locator("#n-select")).toHaveValue("84");
+  await expect(page.locator("#m-select")).toHaveValue("31");
+  await expect(page.locator("#note")).toContainText("84-gons in a 31-gon");
+  await expect(page.locator("#n-select option")).toHaveCount(99);
+  await expect(page.locator("#m-select option")).toHaveCount(99);
+  // ✓ marks a piece with any records, and a container with records for the chosen piece
+  await expect(page.locator("#record-mark-note")).toBeVisible();
+  await expect(page.locator('#n-select option[value="4"]')).toHaveText("4 (square) ✓");
+  await expect(page.locator('#m-select option[value="4"]')).toHaveText("4 (square)");
+  await page.selectOption("#n-select", "4");
+  await expect(page.locator('#m-select option[value="4"]')).toHaveText("4 (square) ✓");
+  await expect(page.locator('#m-select option[value="31"]')).toHaveText("31");
+});

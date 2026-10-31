@@ -291,6 +291,8 @@ export function createApp(opts: AppOptions): Hono {
   // process while it does, so answers are kept until an entry of that pair changes. A new entry
   // clears its own pair; an administrator's change, rare, clears all. The bytes kept are bounded.
   const recordsCache = new Map<string, string>();
+  /** The answer of /api/records/pairs, until an entry changes. */
+  let pairsCache: string | null = null;
   let recordsCacheBytes = 0;
   const forgetRecords = (key?: string) => {
     if (key === undefined) {
@@ -336,6 +338,24 @@ export function createApp(opts: AppOptions): Hono {
     return c.body(body, 200, { "content-type": "application/json" });
   });
 
+  // Which pairs of shapes have anything to show: a published value or a listed entry. The records page
+  // marks them in its menus. One query over the listing index, kept until any entry changes.
+  app.use("/api/records/pairs", compress());
+  app.get("/api/records/pairs", async (c) => {
+    if (pairsCache === null) {
+      const published = new Map<string, number>();
+      for (const r of opts.records) published.set(`${r.N}/${r.M}`, (published.get(`${r.N}/${r.M}`) ?? 0) + 1);
+      const site = new Set((await store.pairs()).map(({ N, M }) => `${N}/${M}`));
+      const keys = new Set([...published.keys(), ...site]);
+      const pairs = [...keys]
+        .map((k) => k.split("/").map(Number) as [number, number])
+        .sort((a, b) => a[0] - b[0] || a[1] - b[1])
+        .map(([N, M]) => ({ N, M, published: published.get(`${N}/${M}`) ?? 0, site: site.has(`${N}/${M}`) }));
+      pairsCache = JSON.stringify({ pairs });
+    }
+    return c.body(pairsCache, 200, { "content-type": "application/json" });
+  });
+
   // Who holds how many records: the leader of every open problem, counted by the exact name it was
   // submitted with. The answer of /api/holders for one reading of the leaders (below).
   const countHolders = (all: ProblemLeader[]): string => {
@@ -377,6 +397,7 @@ export function createApp(opts: AppOptions): Hono {
   /** Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". */
   const entriesChanged = (key?: string) => {
     forgetRecords(key);
+    pairsCache = null;
     entriesVersion++;
     if (leaders) leaders.current = false;
   };
