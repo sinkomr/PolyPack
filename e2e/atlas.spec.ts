@@ -378,7 +378,7 @@ test("a tile opens its record, Back closes it, and the board link opens the prob
   await expect(page.locator("#m-select")).toHaveValue("0");
 
   // a panel number without a readable problem is ignored
-  await page.goto("/browse.html?size=large&p=7#99,99");
+  await page.goto("/browse.html?size=large&p=7#101,101");
   await expect(page.locator("#atlas-title")).toHaveText("The atlas of squares in a square");
   await expect(art(page, 1)).toHaveClass(/drawn/);
   await expect(detail).toBeHidden();
