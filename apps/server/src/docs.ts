@@ -542,7 +542,7 @@ where <code>published</code> counts the pair's published values and <code>site</
 <h3 id="holders"><code>GET /api/holders</code></h3>
 <p>Who holds how many records, behind the record holders page: the <a href="#leader">leader</a> of every open problem, counted by the exact name it was submitted with
 (names that differ in any character, case included, count separately). <code>holders</code> is a list of <code>{name, records, beat_published, site_bests, pending}</code>, most records first.
-Counting reads every problem, so it is done at most once every 15 minutes: the answer may be up to 15 minutes behind the latest entries.</p>
+The counts follow every entry as it changes, so the answer is current. After a server restart the first request counts every problem, in small steps that leave the server free for other requests, and answers when it is done, which takes longer the more problems there are.</p>
 <table>
 <tr><th scope="row"><code>site_bests</code></th><td>Problems the name leads, whatever the value.</td></tr>
 <tr><th scope="row"><code>records</code></th><td>Of those, the leads that are the record: at least as good as the published value, to the precision the source prints, or for a problem without one. A claim <a href="#verification">pending verification</a> is not counted until it is confirmed.</td></tr>

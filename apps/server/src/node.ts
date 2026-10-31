@@ -6,7 +6,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { compress } from "hono/compress";
 import { LiteratureRecord, closedToSubmissions } from "@polypack/geometry";
 import { loadSpacesIndex } from "@polypack/spaces/load";
-import { HOLDERS_REFRESH_MS, createApp } from "./app";
+import { createApp } from "./app";
 import { OVERLOAD_DELAY_MS } from "./limits";
 import { LoadStats, LoopDelay } from "./load";
 import { scheduleSnapshots, snapshotSource, snapshotSpaces } from "./snapshot";
@@ -80,8 +80,6 @@ const app = createApp({
   store,
   records,
   adminToken,
-  // the end-to-end tests set 0, so that the record holders page shows each entry at once
-  holdersRefreshMs: wholeNumber("HOLDERS_REFRESH_MS", HOLDERS_REFRESH_MS),
   // 0 never refuses submissions as overload; the end-to-end tests set it, since a test machine
   // under load delays the event loop without the server being overloaded
   limits: { overloadDelayMs: wholeNumber("OVERLOAD_DELAY_MS", OVERLOAD_DELAY_MS) },

@@ -4,23 +4,27 @@ import { join, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   AtlasResponse,
+  Holder,
+  HoldersResponse,
   LEADERBOARD_SIZE,
   LiteratureRecord,
   PackingConfig,
   SCORE_TIE,
   SubmitResponse,
   areaLowerBound,
+  beatsLiterature,
   closedToSubmissions,
   evaluate,
   improvesOn,
   isProven,
+  reachesLiterature,
 } from "@polypack/geometry";
 import { registry } from "@polypack/solver";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, HOLDERS_REFRESH_MS, atlasSource, createApp } from "../src/app";
+import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, HOLDERS_CHUNK, atlasSource, createApp, holderShare } from "../src/app";
 import { SOLVER_METHODS } from "../src/docs";
 import { SqliteStore } from "../src/sqlite-store";
-import { GET_MANY_LIMIT, NewSubmission } from "../src/store";
+import { GET_MANY_LIMIT, NewSubmission, ProblemLeader } from "../src/store";
 import { withUnits } from "./units";
 
 const SQ = Math.PI / 4;
@@ -634,6 +638,49 @@ describe("store: the leader per problem", () => {
     expect((await leaders())[7]).toBe(id["7c"]);
     // the count is of submissions received, not of what is still listed
     expect(await store.count(4, 4, 7)).toBe(3);
+  });
+
+  it("lists the leaders in pages that join up to the listing of all of them", async () => {
+    const store = new SqliteStore(":memory:");
+    expect(await store.leadersAfter(null, 5)).toEqual([]);
+    // entries as an older server left them: several to a problem, ties, claims and rejected rows
+    let seed = 7;
+    const rand = () => (seed = (seed * 48271) % 2147483647) / 2147483647;
+    const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
+    for (let k = 0; k < 400; k++)
+      await store.insert({
+        ...entry(
+          1 + Math.floor(rand() * 5),
+          pick([1, 2, 3, 4, 2.5, 2.5 * (1 - SCORE_TIE / 2)]),
+          pick(["none", "none", "pending", "confirmed", "rejected"] as const),
+        ),
+        N: pick([0, 3, 4, 12]),
+        M: pick([0, 4, 5]),
+        name: pick(["a", "b", "c"]),
+      });
+    const all = await store.leaders();
+    expect(all.length).toBeGreaterThan(40);
+    for (const limit of [1, 2, 3, 7, 40, all.length - 1, all.length, all.length + 1, 1000]) {
+      const pages: ProblemLeader[][] = [];
+      for (let after: ProblemLeader | null = null; ;) {
+        const page: ProblemLeader[] = await store.leadersAfter(after, limit);
+        pages.push(page);
+        // a short page is the last
+        if (page.length < limit) break;
+        after = page[page.length - 1]!;
+      }
+      expect(pages.slice(0, -1).every((page) => page.length === limit)).toBe(true);
+      expect(pages.flat()).toEqual(all);
+    }
+    // from a problem that has no entry, the next one that has
+    const gap = { N: 3, M: 5, P: 99 };
+    const beyond = (l: ProblemLeader) =>
+      l.N > gap.N || (l.N === gap.N && (l.M > gap.M || (l.M === gap.M && l.P > gap.P)));
+    expect(all.some((l) => !beyond(l))).toBe(true);
+    expect(await store.leadersAfter(gap, 1)).toEqual([all.find(beyond)]);
+    expect(await store.leadersAfter(all[all.length - 1]!, 10)).toEqual([]);
+    await expect(store.leadersAfter(null, 0)).rejects.toThrow(RangeError);
+    await expect(store.leadersAfter(null, 1.5)).rejects.toThrow(RangeError);
   });
 
   it("keeps the leader alone, also when it is not first by score", async () => {
@@ -1508,37 +1555,7 @@ describe("GET /api/holders", () => {
     ]);
   });
 
-  it("is counted again at most once every 15 minutes while entries keep changing", async () => {
-    expect(HOLDERS_REFRESH_MS).toBe(15 * 60_000);
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      vi.setSystemTime(Date.parse("2026-10-21T12:00:00Z"));
-      expect(await holders()).toEqual([]);
-      await submit(squares(2, { name: "ann" }));
-      vi.setSystemTime(Date.now() + HOLDERS_REFRESH_MS - 1);
-      expect(await holders()).toEqual([]);
-      vi.setSystemTime(Date.now() + 1);
-      expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann"]);
-      // without a change the answer stands however old it is, and the first change after the
-      // interval shows at once
-      vi.setSystemTime(Date.now() + 10 * HOLDERS_REFRESH_MS);
-      await submit(squares(4, { name: "bob" }));
-      expect((await holders()).map((h: { name: string }) => h.name)).toEqual(["ann", "bob"]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
   it("follows every change although answers are kept", async () => {
-    // counted again after every change
-    app = createApp({
-      store: new SqliteStore(":memory:"),
-      records: [fakeRecord],
-      adminToken: "secret",
-      clientIp: () => ip,
-      log: (m) => logs.push(m),
-      holdersRefreshMs: 0,
-    });
     const admin = (path: string, body: object) =>
       app.request(path, {
         method: "POST",
@@ -1567,8 +1584,484 @@ describe("GET /api/holders", () => {
     expect(await names()).toEqual(["bob:2", "ann:1"]);
   });
 
-  it("is documented", async () => {
-    expect(await (await app.request("/api")).text()).toContain("GET /api/holders");
+  it("is documented, as current", async () => {
+    const html = await (await app.request("/api")).text();
+    expect(html).toContain("GET /api/holders");
+    expect(html).toContain("The counts follow every entry as it changes, so the answer is current.");
+    expect(html).not.toContain("15 minutes");
+  });
+});
+
+// The record holders' counts are kept by the server: built once, in steps, and moved by every change of an
+// entry (see createApp). Each test below holds them to the count the route gave before they were kept: the
+// leaders of all problems, read at once and counted in one pass.
+describe("GET /api/holders: the counts kept", () => {
+  const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const adminPost = (path: string, body: object) =>
+    app.request(path, {
+      method: "POST",
+      headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const published = (
+    M: number,
+    P: number,
+    value: number,
+    status: LiteratureRecord["status"] = "best_known",
+  ): LiteratureRecord => ({
+    ...fakeRecord,
+    N: 4,
+    M,
+    P,
+    value,
+    display: value.toFixed(6),
+    display_precision: 6,
+    status,
+  });
+  // an entry for the store itself, without a packing
+  const raw = (
+    M: number,
+    P: number,
+    score: number,
+    name: string,
+    verification: NewSubmission["verification"] = "none",
+  ): NewSubmission => ({
+    N: 4,
+    M,
+    P,
+    score,
+    name,
+    agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00.000Z",
+    verification,
+    literature_value: null,
+    strict_check: null,
+  });
+  // the count as it was before the counts were kept: every leader read at once, counted in one pass
+  const counted = (all: ProblemLeader[], records: LiteratureRecord[]): string => {
+    const literature = new Map(records.map((r) => [`${r.N}/${r.M}/${r.P}`, r]));
+    const byName = new Map<string, Holder>();
+    for (const e of all) {
+      const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
+      if (closedToSubmissions(lit)) continue;
+      let h = byName.get(e.name);
+      if (!h) byName.set(e.name, (h = { name: e.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }));
+      h.site_bests++;
+      if (e.verification === "pending") h.pending++;
+      else if (!lit || reachesLiterature(e.score, lit)) {
+        h.records++;
+        if (lit && beatsLiterature(e.score, lit)) h.beat_published++;
+      }
+    }
+    const list = [...byName.values()].sort(
+      (a, b) =>
+        b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+    );
+    return JSON.stringify({ holders: list } satisfies HoldersResponse);
+  };
+  const prng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  // The store as the app sees it: every call counted, and with `hosted` each one answering after a turn of the
+  // event loop on either side, as a store over a network does.
+  const watched = (store: SqliteStore, hosted = false) => {
+    const calls: Record<string, number> = {};
+    const seen = new Proxy(store, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== "function" || typeof key !== "string") return value;
+        return async (...args: unknown[]) => {
+          calls[key] = (calls[key] ?? 0) + 1;
+          if (hosted) await tick();
+          const result = await value.apply(target, args);
+          if (hosted) await tick();
+          return result;
+        };
+      },
+    });
+    return { seen, calls };
+  };
+  const text = async () => (await app.request("/api/holders")).text();
+  const NAMES = ["ann", "Ann", "bob", "cat", "dan", "eve", "fay"];
+
+  // A store with entries as an older server left them, among them claims awaiting review and entries of closed
+  // problems, an app on it, and a random walk of changes through the routes: submissions (new problems,
+  // improvements, ties, claims that beat a published value), reviews, removals and renames.
+  const world = async (seed: number, o: { chunk: number; hosted?: boolean }) => {
+    const rand = prng(seed);
+    const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
+    const GAPS = [1, 1.05, 1.1, 1.15, 1.2, 1.3];
+    const row4 = (M: number, P: number, gap: number) =>
+      evaluate({ ...squares(P), M, pieces: row(P, gap) }).score as number;
+    // squares in a row in a container of M sides: of the problems that arrive through the routes, some have no
+    // published value, some one the closest rows reach or beat, some one a loose row does not, some are closed
+    const records: LiteratureRecord[] = [];
+    for (const M of [4, 0, 5])
+      for (let P = 1; P <= 6; P++) {
+        const kind = (M + 2 * P) % 4;
+        if (kind === 1) records.push(published(M, P, row4(M, P, 1.15)));
+        if (kind === 2) records.push(published(M, P, row4(M, P, 1), "proven"));
+        if (kind === 3) records.push(published(M, P, row4(M, P, 1.3)));
+      }
+    const store = new SqliteStore(":memory:");
+    for (let k = 0; k < 24; k++)
+      await store.insert(
+        raw(
+          pick([4, 0, 5, 6, 7, 8]),
+          1 + Math.floor(rand() * 8),
+          1 + rand() * 20,
+          pick(NAMES),
+          pick(["none", "none", "none", "pending", "confirmed"] as const),
+        ),
+      );
+    const { seen, calls } = watched(store, o.hosted);
+    app = createApp({
+      store: seen,
+      records,
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: () => {},
+      limits: { perIp: 1_000_000, verifyMsPerMinute: 1e9 },
+      holdersChunk: o.chunk,
+    });
+    const done = { submitted: 0, confirmed: 0, rejected: 0, removed: 0, renamed: 0 };
+    let fresh = 0;
+    const step = async () => {
+      const r = rand();
+      if (r < 0.55) {
+        const P = 1 + Math.floor(rand() * 6);
+        const name = rand() < 0.1 ? `new${fresh++}` : pick(NAMES);
+        const sent = await submit({ ...squares(P, { name }), M: pick([4, 0, 5]), pieces: row(P, pick(GAPS)) });
+        if (sent.status === 200) done.submitted++;
+        return;
+      }
+      const leaders = await store.leaders();
+      const some = () => (leaders.length ? pick(leaders).id : 1);
+      // an id that is no longer listed, now and then
+      const id = rand() < 0.1 ? 1 + Math.floor(rand() * 400) : some();
+      let answer: Response;
+      if (r < 0.7) {
+        const claims = await store.pending();
+        const decision = pick(["confirmed", "rejected"] as const);
+        answer = await adminPost("/api/admin/review", { id: claims.length ? pick(claims).id : id, decision });
+        if (answer.status === 200) done[decision]++;
+      } else if (r < 0.82) {
+        answer = await adminPost("/api/admin/remove", { id });
+        if (answer.status === 200) done.removed++;
+      } else {
+        // a new name, an old one in other letters, or a note only
+        const change =
+          rand() < 0.25 ? { agent_note: "checked" } : { name: rand() < 0.2 ? `new${fresh++}` : pick(NAMES) };
+        answer = await adminPost("/api/admin/edit", { id, ...change });
+        if (answer.status === 200 && "name" in change) done.renamed++;
+      }
+      expect(answer.status).toBeLessThan(500);
+    };
+    const truth = async () => counted(await store.leaders(), records);
+    return { store, records, calls, done, step, truth };
+  };
+
+  it("equals the count of all leaders at once after every few changes", async () => {
+    const seen = { claim: false, beat: false, lead: false, gone: false };
+    const total = { submitted: 0, confirmed: 0, rejected: 0, removed: 0, renamed: 0 };
+    // seeds 7 and 8 on a store that answers after a round trip; the first count begins at a different step of each
+    for (const [seed, begins] of [
+      [1, 0],
+      [2, 7],
+      [3, 19],
+      [4, 31],
+      [5, 2],
+      [6, 53],
+      [7, 0],
+      [8, 11],
+    ] as const) {
+      const w = await world(seed, { chunk: 3, hosted: seed >= 7 });
+      let before = "";
+      for (let i = 0; i < 120; i++) {
+        // the steps that follow go on while the first count runs
+        const counting = i === begins ? text() : null;
+        await w.step();
+        if (i >= begins && i % 3 === 2) {
+          const answer = await text();
+          const truth = await w.truth();
+          expect(answer).toBe(truth);
+          const list = (JSON.parse(truth) as HoldersResponse).holders;
+          seen.claim ||= list.some((h) => h.pending > 0);
+          seen.beat ||= list.some((h) => h.beat_published > 0);
+          seen.lead ||= list.some((h) => h.site_bests > h.records);
+          seen.gone ||= before !== "" && list.length < (JSON.parse(before) as HoldersResponse).holders.length;
+          before = truth;
+        }
+        await counting;
+      }
+      for (const k of Object.keys(total) as (keyof typeof total)[]) total[k] += w.done[k];
+    }
+    // the walk did what it is meant to: every kind of change happened, and the states they make
+    for (const n of Object.values(total)) expect(n).toBeGreaterThan(5);
+    expect(seen).toEqual({ claim: true, beat: true, lead: true, gone: true });
+  });
+
+  it("reads no table again once the counts are built, however entries keep changing", async () => {
+    const w = await world(11, { chunk: 5 });
+    expect(await text()).toBe(await w.truth());
+    const pages = w.calls.leadersAfter!;
+    // 24 entries of the store, in a few problems, five at a page
+    expect(pages).toBeGreaterThan(1);
+    expect(w.calls.leaders).toBeUndefined();
+    for (let i = 0; i < 40; i++) {
+      await w.step();
+      if (i % 4 === 0) expect(await text()).toBe(await w.truth());
+    }
+    expect(w.calls.leadersAfter).toBe(pages);
+    expect(w.calls.leaders).toBeUndefined();
+    expect(w.calls.pairs).toBeUndefined();
+    // an administrator's change reads its problem's leader before and after, whatever the size of the table
+    expect(w.calls.get).toBeGreaterThan(5);
+    expect(w.calls.leadersOf).toBeLessThanOrEqual(2 * w.calls.get!);
+  });
+
+  it("keeps the answer until the counts change", async () => {
+    const stringified = vi.spyOn(JSON, "stringify");
+    try {
+      const answers = () =>
+        stringified.mock.calls.filter(([v]) => typeof v === "object" && v !== null && "holders" in v).length;
+      const names = async () => JSON.parse(await text()).holders.map((h: Holder) => `${h.name}:${h.site_bests}`);
+      expect(await names()).toEqual([]);
+      expect(await names()).toEqual([]);
+      expect(answers()).toBe(1);
+      // a first lead
+      expect((await submit(squares(2, { name: "ann", pieces: row(2, 1.1) }))).body.leader).toBe(true);
+      expect(await names()).toEqual(["ann:1"]);
+      expect(await names()).toEqual(["ann:1"]);
+      expect(answers()).toBe(2);
+      // entries that change no one's counts: a worse one, a tie, a better one by the same name, a note
+      expect((await submit(squares(2, { name: "bob", pieces: row(2, 1.2) }))).body.rank).toBe(2);
+      expect((await submit(squares(2, { name: "bob", pieces: row(2, 1.1) }))).body.rank).toBe(2);
+      const better = await submit(squares(2, { name: "ann", pieces: row(2, 1.05) }));
+      expect(better.body.leader).toBe(true);
+      expect((await adminPost("/api/admin/edit", { id: better.body.id, agent_note: "checked" })).status).toBe(200);
+      expect(await names()).toEqual(["ann:1"]);
+      expect(answers()).toBe(2);
+      // the lead taken by another name, and that entry renamed
+      const taken = await submit(squares(2, { name: "bob", pieces: row(2, 1.001) }));
+      expect(taken.body.leader).toBe(true);
+      expect(await names()).toEqual(["bob:1"]);
+      expect(await names()).toEqual(["bob:1"]);
+      expect(answers()).toBe(3);
+      expect((await adminPost("/api/admin/edit", { id: taken.body.id, name: "Bob" })).status).toBe(200);
+      expect(await names()).toEqual(["Bob:1"]);
+      expect(answers()).toBe(4);
+    } finally {
+      stringified.mockRestore();
+    }
+  });
+
+  it("builds in steps that let the event loop in between, and requests that arrive meanwhile share them", async () => {
+    // 47 pairs of 50 problems: five steps of the default size
+    const store = new SqliteStore(":memory:");
+    for (let M = 4; M < 51; M++) for (let P = 1; P <= 50; P++) await store.insert(raw(M, P, P, `n${(M * P) % 7}`));
+    const problems = 47 * 50;
+    const { seen, calls } = watched(store);
+    app = createApp({ store: seen, records: [], adminToken: "secret", clientIp: () => ip, log: () => {} });
+    const events: string[] = [];
+    const real = store.leadersAfter.bind(store);
+    vi.spyOn(store, "leadersAfter").mockImplementation(async (after, limit) => {
+      expect(limit).toBe(HOLDERS_CHUNK);
+      events.push("step");
+      return real(after, limit);
+    });
+    let ticking = true;
+    const beat = () => {
+      if (!ticking) return;
+      events.push("tick");
+      setImmediate(beat);
+    };
+    // three requests, and a callback scheduled just after the build began
+    const answers = [text(), text(), text()];
+    setImmediate(beat);
+    const bodies = await Promise.all(answers);
+    ticking = false;
+    expect(bodies[1]).toBe(bodies[0]);
+    expect(bodies[2]).toBe(bodies[0]);
+    expect(bodies[0]).toBe(counted(await store.leaders(), []));
+    const steps = events.filter((e) => e === "step").length;
+    expect(steps).toBe(Math.floor(problems / HOLDERS_CHUNK) + 1);
+    expect(calls.leadersAfter).toBe(steps);
+    // the callback ran before the build was over, and the loop got a turn between every two steps
+    expect(events.indexOf("tick")).toBeLessThan(events.lastIndexOf("step"));
+    expect(events.join(" ")).not.toMatch(/step step/);
+    expect(events[0]).toBe("step");
+  });
+
+  it("counts a change made during the build once, where the build has been, is, and has yet to go", async () => {
+    // 4/4 with P = 1 .. 8 but 3, then 4/5 with P = 1 .. 4; two problems to a step, so six steps
+    const store = new SqliteStore(":memory:");
+    const id = new Map<string, number>();
+    for (const [M, P] of [
+      [4, 1],
+      [4, 2],
+      [4, 4],
+      [4, 5],
+      [4, 6],
+      [4, 7],
+      [4, 8],
+      [5, 1],
+      [5, 2],
+      [5, 3],
+      [5, 4],
+    ] as const)
+      id.set(
+        `${M}/${P}`,
+        await store.insert(
+          raw(M, P, 100 + P, M === 4 && P <= 5 ? "ann" : "bob", P === 7 || (M === 5 && P === 4) ? "pending" : "none"),
+        ),
+      );
+    app = createApp({
+      store,
+      records: [],
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: () => {},
+      holdersChunk: 2,
+    });
+    // the third step reads its rows at once and gives them when the gate opens, as a store does after a round trip
+    const real = store.leadersAfter.bind(store);
+    let steps = 0;
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    let reached!: () => void;
+    const inFlight = new Promise<void>((resolve) => (reached = resolve));
+    vi.spyOn(store, "leadersAfter").mockImplementation(async (after, limit) => {
+      const rows = await real(after, limit);
+      if (++steps === 3) {
+        reached();
+        await gate;
+      }
+      return rows;
+    });
+    const counting = text();
+    await inFlight;
+    // The build holds 4/4/1 .. 4/4/5; the step in flight has read 4/4/6 and 4/4/7; the rest is to come.
+    const changes = [
+      // where it has been: a better entry, a problem emptied, a problem that had nothing
+      submit(squares(1, { name: "cat" })),
+      adminPost("/api/admin/remove", { id: id.get("4/2") }),
+      submit(squares(3, { name: "dan" })),
+      // where it is: a better entry; a claim renamed
+      submit(squares(6, { name: "eve" })),
+      adminPost("/api/admin/edit", { id: id.get("4/7"), name: "fay" }),
+      // where it has yet to go: a better entry, a claim confirmed, a problem that has nothing yet
+      submit({ ...squares(3, { name: "gus" }), M: 5 }),
+      adminPost("/api/admin/review", { id: id.get("5/4"), decision: "confirmed" }),
+      submit({ ...squares(9, { name: "hal" }), M: 5, pieces: row(9) }),
+    ];
+    await settle();
+    open();
+    for (const answer of await Promise.all(changes)) expect(answer.status).toBe(200);
+    const answer = await counting;
+    expect(answer).toBe(counted(await store.leaders(), []));
+    expect(steps).toBeGreaterThanOrEqual(6);
+    // and the counts stand as the changes left them
+    const holders = (JSON.parse(answer) as HoldersResponse).holders;
+    const who = (name: string, records: number, site_bests: number, pending = 0) => ({
+      name,
+      records,
+      beat_published: 0,
+      site_bests,
+      pending,
+    });
+    expect(holders).toContainEqual(who("ann", 2, 2));
+    expect(holders).toContainEqual(who("bob", 4, 4));
+    expect(holders).toContainEqual(who("fay", 0, 1, 1));
+    expect(holders).toContainEqual(who("cat", 1, 1));
+    expect(await text()).toBe(answer);
+  });
+
+  it("counts changes that arrive together while a store over a network is read", async () => {
+    let during = 0;
+    for (const seed of [21, 22, 23, 24]) {
+      const w = await world(seed, { chunk: 2, hosted: true });
+      let over = false;
+      const counting = text().then(() => (over = true));
+      for (let round = 0; round < 6; round++) {
+        await Promise.all([w.step(), w.step(), w.step(), w.step()]);
+        if (!over) during += 4;
+      }
+      await counting;
+      expect(await text()).toBe(await w.truth());
+    }
+    // some of the changes came while the build was running
+    expect(during).toBeGreaterThan(0);
+  });
+
+  it("counts again from the start after a change it could not follow", async () => {
+    const w = await world(31, { chunk: 4 });
+    expect(await text()).toBe(await w.truth());
+    const pages = w.calls.leadersAfter!;
+    // the entry is removed, then the leader of its problem cannot be read
+    const store = w.store;
+    const leader = (await store.leaders()).find((l) => l.verification === "none")!;
+    const real = store.leadersOf.bind(store);
+    let reads = 0;
+    vi.spyOn(store, "leadersOf").mockImplementation(async (problems) => {
+      if (++reads === 2) throw new Error("the disk is gone");
+      return real(problems);
+    });
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await adminPost("/api/admin/remove", { id: leader.id })).status).toBe(500);
+    } finally {
+      quiet.mockRestore();
+    }
+    expect(await store.get(leader.id)).toBeNull();
+    // the next request counts the table again, and the answer is right
+    expect(await text()).toBe(await w.truth());
+    expect(w.calls.leadersAfter).toBeGreaterThan(pages);
+  });
+
+  it("gives a leader's share of its name's counts", () => {
+    const lead = (score: number, verification: ProblemLeader["verification"] = "none"): ProblemLeader => ({
+      N: 4,
+      M: 4,
+      P: 3,
+      id: 1,
+      name: "ann",
+      score,
+      verification,
+    });
+    const share = (records: number, beat_published: number, pending = 0) => ({
+      name: "ann",
+      records,
+      beat_published,
+      site_bests: 1,
+      pending,
+    });
+    // a published value of 5 to six decimals
+    const lit = published(4, 3, 5);
+    expect(holderShare(lead(4.9), lit)).toEqual(share(1, 1));
+    expect(holderShare(lead(5.0000005), lit)).toEqual(share(1, 0));
+    expect(holderShare(lead(5.1), lit)).toEqual(share(0, 0));
+    // until it is reviewed, a claim is not the record
+    expect(holderShare(lead(4.9, "pending"), lit)).toEqual(share(0, 0, 1));
+    expect(holderShare(lead(4.9, "confirmed"), lit)).toEqual(share(1, 1));
+    // no published value: the lead is the record, and there is nothing to beat
+    expect(holderShare(lead(40), undefined)).toEqual(share(1, 0));
+    expect(holderShare(lead(40, "pending"), undefined)).toEqual(share(0, 0, 1));
+    // a closed problem counts for no one
+    expect(holderShare(lead(4.9), published(4, 3, 5, "proven"))).toBeNull();
+    expect(holderShare(lead(4.9), published(4, 3, 5, "trivial_tiling"))).toBeNull();
   });
 });
 

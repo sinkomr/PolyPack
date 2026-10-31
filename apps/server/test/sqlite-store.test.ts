@@ -53,6 +53,8 @@ describe("SqliteStore query plans", () => {
     await store.bestPerP(4, 4);
     await store.bestPerP(4, 4, true);
     await store.leaders();
+    await store.leadersAfter(null, 10);
+    await store.leadersAfter({ N: 4, M: 4, P: 1 }, 10);
     await store.pairs();
     // the prune of a problem led by a pending claim, which keeps the best entry that is not
     // pending, and the prunes after a review and a removal

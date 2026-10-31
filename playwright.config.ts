@@ -21,7 +21,6 @@ export default defineConfig({
         PORT: "8788",
         DATABASE_PATH: ":memory:",
         ADMIN_TOKEN: "e2e-token",
-        HOLDERS_REFRESH_MS: "0",
         OVERLOAD_DELAY_MS: "0",
       },
       url: "http://localhost:8788/api/health",
