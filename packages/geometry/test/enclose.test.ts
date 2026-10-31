@@ -109,7 +109,8 @@ describe("enclosing polygon", () => {
       fc.property(fc.constantFrom(0, 3, 4, 5, 7), posesArb, sidesArb, phiArb, (N, poses, M, phi) => {
         const c = enclose(N, poses, M, phi);
         const v = maxViolation(N, poses, c);
-        expect(v).toBeLessThan(1e-9);
+        // rounding in the container's corners grows with its size, so the bound is relative to it
+        expect(v).toBeLessThan(1e-9 * Math.max(1, c.size));
         // shrinking by 1e-9 about the same centre must push something outside
         const shrunk = { ...c, size: c.size - 1e-9 };
         expect(maxViolation(N, poses, shrunk)).toBeGreaterThan(0);
