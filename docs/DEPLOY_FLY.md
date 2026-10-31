@@ -2,7 +2,7 @@
 
 PolyPack is one Node process that serves the built website and the API and keeps its data in one SQLite file. On [Fly.io](https://fly.io) it runs as a single small machine with a 1 GB volume for the database. The repository's `Dockerfile` and `fly.toml` describe that set-up; no Docker is needed on your own computer, because Fly builds the image.
 
-Fly.io has no free tier and asks for a payment card. See <https://fly.io/docs/about/pricing/> for current prices of a `shared-cpu-1x` machine with 512 MB and of volume storage.
+Fly.io has no free tier and asks for a payment card. See <https://fly.io/docs/about/pricing/> for current prices of a `shared-cpu-2x` machine with 1 GB (the size `fly.toml` sets since 2026-10-31; it was a `shared-cpu-1x` with 512 MB before) and of volume storage.
 
 ## First deployment
 
