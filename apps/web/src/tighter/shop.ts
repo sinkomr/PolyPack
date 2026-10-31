@@ -281,40 +281,62 @@ const DEPTH = new Map<UpgradeId, number>();
 for (const u of UPGRADES)
   DEPTH.set(u.id, u.requires.length ? 1 + Math.max(...u.requires.map((r) => DEPTH.get(r) ?? 0)) : 0);
 
+/** One upgrade of the tree with the state it is in: what both treeView and treeSummary read. */
+interface Entry {
+  u: Upgrade;
+  row: Row;
+  state: CardState;
+  /** The Lanes upgrade is finished by the CPU's cores, not by its levels. */
+  done: boolean;
+}
+
+/** Every upgrade the tree shows, in order, with its state. The one place that decides what is buyable. */
+function treeEntries(o: Owned, funds: Funds, coreCount: number): Entry[] {
+  const out: Entry[] = [];
+  const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
+  for (const { id: row } of rows)
+    for (const u of UPGRADES.filter((x) => x.row === row && exists(o, x.id))) {
+      const done = u.id === "lanesx" && lanesMaxed(o, coreCount);
+      out.push({ u, row, state: done ? "owned" : cardState(o, funds, u.id), done });
+    }
+  return out;
+}
+
+/** The upgrades that are too dear for now but cost record points: what to save up for. */
+const isSaveFor = (state: CardState, currency: Currency, cost: number | null): boolean =>
+  state === "dear" && currency === "rp" && cost !== null;
+
 /** The tree's view: every upgrade, owned ones included, with its state; the Standing row once Standing is owned. */
 export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView {
   const nodes: NodeView[] = [];
   let owned = 0;
   let mysteries = 0;
   const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
-  for (const { id: row } of rows)
-    for (const u of UPGRADES.filter((x) => x.row === row && exists(o, x.id))) {
-      const done = u.id === "lanesx" && lanesMaxed(o, coreCount);
-      const state: CardState = done ? "owned" : cardState(o, funds, u.id);
-      const depth = DEPTH.get(u.id) ?? 0;
-      if (o.has(u.id)) owned++;
-      if (state === "mystery") mysteries++;
-      if (state === "owned") {
-        const name = done && !o.has(u.id) ? `${u.name}: no core left on this CPU` : ownedName(o, u, coreCount);
-        nodes.push({
-          ...card(o, u, "locked", coreCount),
-          state,
-          row,
-          depth,
-          name: u.name,
-          price: null,
-          cost: null,
-          needs: [],
-          levelText: u.levels ? levelLine(o, u, coreCount) : null,
-          label: `${name}: owned`,
-          on: switchOf(u.id) && o.has(u.id) ? inUse(o, u.id) : null,
-        });
-        continue;
-      }
-      nodes.push({ ...card(o, u, state, coreCount), state, row, depth, on: null });
+  for (const { u, row, state, done } of treeEntries(o, funds, coreCount)) {
+    const depth = DEPTH.get(u.id) ?? 0;
+    if (o.has(u.id)) owned++;
+    if (state === "mystery") mysteries++;
+    if (state === "owned") {
+      const name = done && !o.has(u.id) ? `${u.name}: no core left on this CPU` : ownedName(o, u, coreCount);
+      nodes.push({
+        ...card(o, u, "locked", coreCount),
+        state,
+        row,
+        depth,
+        name: u.name,
+        price: null,
+        cost: null,
+        needs: [],
+        levelText: u.levels ? levelLine(o, u, coreCount) : null,
+        label: `${name}: owned`,
+        on: switchOf(u.id) && o.has(u.id) ? inUse(o, u.id) : null,
+      });
+      continue;
     }
+    nodes.push({ ...card(o, u, state, coreCount), state, row, depth, on: null });
+  }
   const buyable = nodes.filter((n) => n.state === "buyable").length;
-  const dear = nodes.filter((n) => n.state === "dear" && n.currency === "rp" && n.cost !== null);
+  const dear = nodes.filter((n) => isSaveFor(n.state, n.currency, n.cost));
   dear.sort((a, b) => a.cost! - b.cost!);
   return {
     rows,
@@ -325,6 +347,31 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
     buyable,
     next: dear[0] ?? null,
   };
+}
+
+/**
+ * What the tree's tab and the "next up" line need, without building the tree: the same buyable
+ * count and next target as treeView's, from the same entries. Only the one next card is built.
+ */
+export function treeSummary(o: Owned, funds: Funds, coreCount = cores()): Pick<TreeView, "buyable" | "next"> {
+  let buyable = 0;
+  let best: Upgrade | null = null;
+  let bestCost = Infinity;
+  for (const { u, state } of treeEntries(o, funds, coreCount)) {
+    if (state === "buyable") buyable++;
+    // the first of equal prices wins, as the stable sort in treeView leaves it
+    if (state === "dear" && currencyOf(u) === "rp") {
+      const cost = costOf(o, u.id);
+      if (isSaveFor(state, "rp", cost) && cost! < bestCost) {
+        best = u;
+        bestCost = cost!;
+      }
+    }
+  }
+  const next: NodeView | null = best
+    ? { ...card(o, best, "dear", coreCount), state: "dear", row: best.row, depth: DEPTH.get(best.id) ?? 0, on: null }
+    : null;
+  return { buyable, next };
 }
 
 /** How far (CSS pixels) a mouse press may move and still be a click, not a drag of the tree. */

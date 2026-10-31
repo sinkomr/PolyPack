@@ -129,7 +129,8 @@ import {
 } from "./rank";
 import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
-import { PHONE_QUERY, TreeRenderer, treeView } from "./shop";
+import { renderPace } from "./render-pace";
+import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
   DIMENSION_TEXT,
   MARKS,
@@ -497,11 +498,33 @@ function showSpace(p: ProblemState & SpaceKey): void {
   spaceBoard.board.show(spaceConfig(p));
 }
 
+/** The phone layout (tighter.css, "phones"): the dock's panes replace each other there. */
+const phoneLayout = matchMedia(PHONE_QUERY);
+
+/**
+ * Whether the board is out of sight: the tech tree is open, or on a phone the queue or the points
+ * pane is. It follows the page's own state, not the layout, so asking is cheap: reading the
+ * canvas's size on every render would force a layout. The dock's pane only hides the board on the
+ * phone layout (on wider screens the panel sits beside it), hence the media query.
+ */
+const boardHidden = (): boolean => treeOpen || (phoneLayout.matches && (pane === "queue" || pane === "points"));
+
 let shown = "";
-/** Puts the focused problem's board on the canvas, when it changed; a new problem is placed at once. */
+/** A forced refit that came while the board was hidden: done when it is next drawn. */
+let refitOnShow = false;
+/**
+ * Puts the focused problem's board on the canvas, when it changed; a new problem is placed at once.
+ * While the board is hidden only the game's part runs; `shown` stays, so showing it again draws it.
+ */
 function showFocus(force = false): void {
   const p = focused();
   if (p && p.phase === "bare" && ownsGame && !loading.has(p.key)) void loadAll(p).then(() => showFocus());
+  if (boardHidden()) {
+    refitOnShow ||= force;
+    return;
+  }
+  force ||= refitOnShow;
+  refitOnShow = false;
   const sig = p ? `${p.key}|${p.phase}|${p.best}` : "";
   if (!force && sig === shown) return;
   const refit = !p || !shown.startsWith(`${p.key}|`) || force;
@@ -567,6 +590,8 @@ new ResizeObserver(() => {
   const size = `${c.clientWidth}x${c.clientHeight}`;
   if (size === canvasSize) return;
   canvasSize = size;
+  // the board may have come back into view with a packing it has not drawn yet
+  showFocus();
   fitView(board.container ?? view.ghost);
 }).observe($("board"));
 
@@ -2571,14 +2596,18 @@ async function followSpace(): Promise<void> {
 
 // ---------- rendering ----------
 
-let renderFrame = 0;
-function scheduleRender(): void {
-  if (renderFrame) return;
-  renderFrame = requestAnimationFrame(() => {
-    renderFrame = 0;
-    render();
-  });
-}
+/**
+ * Renders asked for by lane progress and settles run at most ten times a second: each is a pass
+ * over the whole page, and a busy save asks once a frame. The player's actions and the ticker call
+ * render() directly and stay immediate.
+ */
+const pace = renderPace({
+  now: () => performance.now(),
+  frame: (cb) => requestAnimationFrame(cb),
+  later: (cb, ms) => window.setTimeout(cb, ms),
+  render: () => render(),
+});
+const scheduleRender = (): void => pace.request();
 
 function text(id: string, value: string): void {
   const el = $(id);
@@ -2590,6 +2619,7 @@ function show(id: string, visible: boolean): void {
 }
 
 function render(): void {
+  pace.rendered();
   const s = state;
   const o = owned();
   const p = focused();
@@ -2936,22 +2966,27 @@ function renderUpgrades(o: Owned): void {
   show("t-board-view", !treeOpen);
   show("t-upgrades", treeOpen);
   const funds = { rp: state.rp, standing: state.standing.points };
-  let v = treeView(o, funds);
-  // Faster auto-eval's card says so when more levels would run no faster on this computer
-  if (overComputerLimit(o))
-    v = {
-      ...v,
-      nodes: v.nodes.map((n) =>
-        n.id !== "autox"
-          ? n
-          : {
-              ...n,
-              levelText: `${n.levelText ?? "Level 0"}. More levels will not be faster on this computer.`,
-              how: n.how ? { ...n.how, text: [AUTO_LIMIT_WARNING, ...n.how.text] } : n.how,
-            },
-      ),
-    };
-  if (treeOpen) tree.render(v, funds);
+  // the tab count and the next-up line need only the summary; the whole view only while the tree shows
+  let v: ReturnType<typeof treeSummary> = treeSummary(o, funds);
+  if (treeOpen) {
+    let full = treeView(o, funds);
+    // Faster auto-eval's card says so when more levels would run no faster on this computer
+    if (overComputerLimit(o))
+      full = {
+        ...full,
+        nodes: full.nodes.map((n) =>
+          n.id !== "autox"
+            ? n
+            : {
+                ...n,
+                levelText: `${n.levelText ?? "Level 0"}. More levels will not be faster on this computer.`,
+                how: n.how ? { ...n.how, text: [AUTO_LIMIT_WARNING, ...n.how.text] } : n.how,
+              },
+        ),
+      };
+    tree.render(full, funds);
+    v = full;
+  }
   // near the board, always: what can be bought now, else the next upgrade to save for
   const count = $("t-tab-count");
   show("t-tab-count", v.buyable > 0);
@@ -3054,10 +3089,11 @@ for (const p of PANES) {
 
 // On a phone the totals are one line that scrolls sideways: it takes the keyboard's focus there, so
 // it can be scrolled without a finger too.
-const phoneLayout = matchMedia(PHONE_QUERY);
 const totalsFocus = () => ($("t-bar").tabIndex = phoneLayout.matches ? 0 : -1);
 totalsFocus();
 phoneLayout.addEventListener("change", totalsFocus);
+// a turn of the phone can bring the board back (or take it away) without a tap
+phoneLayout.addEventListener("change", scheduleRender);
 
 // on a phone the status line shows three lines; a tap shows all of it
 statusEl.addEventListener("click", () => {
