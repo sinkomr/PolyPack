@@ -118,8 +118,19 @@ export interface Store {
   bestPerP(N: number, M: number, verifiedOnly?: boolean): Promise<(LeaderboardEntry & { P: number })[]>;
   /** Every pair of shapes with a listed entry, by N then M. */
   pairs(): Promise<{ N: number; M: number }[]>;
-  /** The leader of every problem that has a listed entry, by N, then M, then P. */
+  /**
+   * The leader of every problem that has a listed entry, by N, then M, then P, in one read that holds
+   * the process for as long as the table is large. The server no longer calls it (see `leadersAfter`);
+   * the tests count with it, as the reference the incremental counts must equal.
+   */
   leaders(): Promise<ProblemLeader[]>;
+  /**
+   * The leaders (the rule of `leader`) of the next `limit` problems that have a listed entry after the
+   * problem `after` (null: from the first), by N, then M, then P; fewer than `limit` when the listing
+   * ends. Indexed reads whose size is `limit`, not that of the table, so that a caller can walk every
+   * leader in pages and let other work in between.
+   */
+  leadersAfter(after: { N: number; M: number; P: number } | null, limit: number): Promise<ProblemLeader[]>;
   /**
    * The leader (the rule of `leader`) of each of the given problems that has a listed entry, in one
    * indexed read; at most GET_MANY_LIMIT problems. Problems without an entry are left out.

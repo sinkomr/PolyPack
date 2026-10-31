@@ -408,6 +408,30 @@ export class SqliteStore implements Store, SpaceStore {
     return this.leadersFromRows(rows);
   }
 
+  async leadersAfter(after: { N: number; M: number; P: number } | null, limit: number): Promise<ProblemLeader[]> {
+    if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`limit must be a positive integer, got ${limit}`);
+    // shape codes are 0 or more and P is 1 or more, so (-1, -1, -1) is before every problem
+    const from = after ?? { N: -1, M: -1, P: -1 };
+    // the keys of the next `limit` problems, then their rows, so that no problem is cut in the middle;
+    // both are ranges of the listing index, which hands them over in the order asked
+    const keys = this.db
+      .prepare(
+        `SELECT n, m, p FROM submissions WHERE (n, m, p) > (?, ?, ?) AND ${LISTED}
+         GROUP BY n, m, p ORDER BY n, m, p LIMIT ?`,
+      )
+      .all(from.N, from.M, from.P, limit) as Row[];
+    if (!keys.length) return [];
+    const last = keys[keys.length - 1]!;
+    const rows = this.db
+      .prepare(
+        `SELECT n, m, p, id, name, score, verification FROM submissions
+         WHERE (n, m, p) > (?, ?, ?) AND (n, m, p) <= (?, ?, ?) AND ${LISTED}
+         ORDER BY n, m, p, score, id`,
+      )
+      .all(from.N, from.M, from.P, last.n as number, last.m as number, last.p as number) as Row[];
+    return this.leadersFromRows(rows);
+  }
+
   async leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]> {
     if (!problems.length) return [];
     if (problems.length > GET_MANY_LIMIT) throw new RangeError(`at most ${GET_MANY_LIMIT} problems per call`);

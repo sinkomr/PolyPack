@@ -78,11 +78,8 @@ export interface AppOptions {
   loopDelay?: () => number;
   /** Receives a line per submission and the counts for a line a minute (see LoadStats). */
   stats?: LoadStats;
-  /**
-   * Least age at which the leaders of every problem are read again after an entry changed, for
-   * /api/holders; HOLDERS_REFRESH_MS by default.
-   */
-  holdersRefreshMs?: number;
+  /** Problems per step of the first count of /api/holders; HOLDERS_CHUNK by default (tests use fewer). */
+  holdersChunk?: number;
   /**
    * Whether a submission to a problem with disk or ball pieces or a circle or ball container must carry
    * `"units": "diameter"` (426 without it). On by default; the gate stays until its sunset date.
@@ -120,11 +117,26 @@ export const RECORDS_CACHE_BYTES = 64 * 1024 * 1024;
 /** Most pieces one /api/atlas response carries; the rest of the range is reached through `next`. */
 export const ATLAS_MAX_PIECES = 6000;
 /**
- * How far /api/holders may lag behind the entries: the leaders it is counted from are read again at
- * most once every 15 minutes (each reading holds the event loop for about a second on the live
- * server).
+ * Problems whose leaders one step of the first count of /api/holders reads: under a millisecond of
+ * work, and some tens on the throttled CPU of the live server. The event loop is let in between steps.
  */
-export const HOLDERS_REFRESH_MS = 900_000;
+export const HOLDERS_CHUNK = 250;
+
+/**
+ * What the leader `e` of a problem adds to the counts of its name on /api/holders, given the
+ * problem's published record (if any); null when the problem is closed, which counts for no one.
+ */
+export function holderShare(e: ProblemLeader, lit: LiteratureRecord | undefined): Holder | null {
+  if (closedToSubmissions(lit)) return null;
+  const share: Holder = { name: e.name, records: 0, beat_published: 0, site_bests: 1, pending: 0 };
+  // until a claim is reviewed, the published value it claims to beat is still the record
+  if (e.verification === "pending") share.pending = 1;
+  else if (!lit || reachesLiterature(e.score, lit)) {
+    share.records = 1;
+    if (lit && beatsLiterature(e.score, lit)) share.beat_published = 1;
+  }
+  return share;
+}
 
 /**
  * Which packing the atlas draws for one P.
@@ -403,73 +415,163 @@ export function createApp(opts: AppOptions): Hono {
   });
 
   // Who holds how many records: the leader of every open problem, counted by the exact name it was
-  // submitted with. The answer of /api/holders for one reading of the leaders (below).
-  const countHolders = (all: ProblemLeader[]): string => {
-    const byName = new Map<string, Holder>();
-    for (const e of all) {
-      const lit = literature.get(`${e.N}/${e.M}/${e.P}`);
-      if (closedToSubmissions(lit)) continue;
-      let h = byName.get(e.name);
-      if (!h) byName.set(e.name, (h = { name: e.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }));
-      h.site_bests++;
-      // until a claim is reviewed, the published value it claims to beat is still the record
-      if (e.verification === "pending") h.pending++;
-      else if (!lit || reachesLiterature(e.score, lit)) {
-        h.records++;
-        if (lit && beatsLiterature(e.score, lit)) h.beat_published++;
+  // submitted with. Counting every leader held the live server for about 20 s with 290,000 problems
+  // (its CPU is throttled to a sixteenth of a core), and it was done again after every restart and
+  // every 15 minutes. So the counts are kept. The first request builds them, HOLDERS_CHUNK problems at
+  // a time with the event loop let in between, and from then on each change of an entry moves its
+  // problem's share (holderShare) from the old leader to the new one. No request reads the table again.
+  //
+  // The invariant, whenever no page of the build and no change is in progress (they take turns, see
+  // inTurn): the counts are the sum of holderShare over the leaders of the problems up to the cursor
+  // `upTo`, in the order of (N, M, P), and over the leaders of all problems once `done`. So a change
+  // to a problem up to the cursor moves its share, the old leader out and the new one in, and a change
+  // to a problem beyond it does nothing: the page that gets there reads the problem as it is then.
+  // That is why a change during the build is neither lost in the part counted nor counted twice in the
+  // part to come.
+  interface Problem {
+    N: number;
+    M: number;
+    P: number;
+  }
+  interface HolderCounts {
+    byName: Map<string, Holder>;
+    /** The last problem counted, in the order the store lists them; null before the first page. */
+    upTo: Problem | null;
+    /** True once the last page is counted. */
+    done: boolean;
+  }
+  const noCounts = (): HolderCounts => ({ byName: new Map(), upTo: null, done: false });
+  let counts = noCounts();
+  /** The answer for `counts` once they are done; null after any change of them. */
+  let holdersBody: string | null = null;
+  /** The build in progress; requests that arrive during it share it. */
+  let building: Promise<void> | null = null;
+
+  // The pages of the build and the changes of entries take turns, one at a time and in the order they
+  // began. With a store that answers asynchronously, that is what keeps a page from reading a problem
+  // between a change's reading of its leader and the change itself.
+  let turn: Promise<unknown> = Promise.resolve();
+  const inTurn = <T>(step: () => Promise<T>): Promise<T> => {
+    const mine = turn.then(step);
+    turn = mine.catch(() => {});
+    return mine;
+  };
+
+  /** Adds (`sign` 1) or takes out (-1) one leader's share. */
+  const countShare = (share: Holder, sign: 1 | -1) => {
+    let h = counts.byName.get(share.name);
+    if (!h)
+      counts.byName.set(
+        share.name,
+        (h = { name: share.name, records: 0, beat_published: 0, site_bests: 0, pending: 0 }),
+      );
+    h.records += sign * share.records;
+    h.beat_published += sign * share.beat_published;
+    h.site_bests += sign * share.site_bests;
+    h.pending += sign * share.pending;
+    // a name that leads no open problem is not listed
+    if (h.site_bests === 0) counts.byName.delete(share.name);
+  };
+  const shareOf = (e: ProblemLeader) => holderShare(e, literature.get(`${e.N}/${e.M}/${e.P}`));
+
+  /** Whether the counts include problem `p` (the build has passed it, or is done): see the invariant. */
+  const counted = (p: Problem): boolean =>
+    counts.done || (counts.upTo !== null && (p.N - counts.upTo.N || p.M - counts.upTo.M || p.P - counts.upTo.P) <= 0);
+
+  /**
+   * The leader of problem `p` was `old` and is `now` (either may be none): moves its share, if the
+   * counts include the problem. Only in a turn.
+   */
+  const leaderMoved = (p: Problem, old: ProblemLeader | null, now: ProblemLeader | null) => {
+    if (!counted(p)) return;
+    const out = old && shareOf(old);
+    const into = now && shareOf(now);
+    if (!out && !into) return;
+    // the same share (a better score of the same name, say) leaves the counts and the answer as they are
+    if (
+      out &&
+      into &&
+      out.name === into.name &&
+      out.records === into.records &&
+      out.beat_published === into.beat_published &&
+      out.pending === into.pending
+    )
+      return;
+    if (out) countShare(out, -1);
+    if (into) countShare(into, 1);
+    holdersBody = null;
+  };
+
+  /**
+   * Runs an administrator's `change` to the listed entry `id` in a turn, and moves the share of the
+   * entry's problem from the leader read before the change to the one read after it. `moves` is false
+   * for a change that cannot move a leader or a name (a note, provenance).
+   */
+  const changeEntry = (id: number, moves: boolean, change: () => Promise<boolean>): Promise<boolean> =>
+    inTurn(async () => {
+      // nothing is counted yet, or nothing counted can change
+      if (!moves || (!counts.done && counts.upTo === null)) return change();
+      try {
+        const entry = await store.get(id);
+        const p = entry && { N: entry.N, M: entry.M, P: entry.P };
+        if (!p || !counted(p)) return await change();
+        const [old] = await store.leadersOf([p]);
+        const ok = await change();
+        if (ok) leaderMoved(p, old ?? null, (await store.leadersOf([p]))[0] ?? null);
+        return ok;
+      } catch (e) {
+        // the change may be half done, or a leader unread: count again from the start
+        counts = noCounts();
+        holdersBody = null;
+        throw e;
       }
-    }
-    const list = [...byName.values()].sort(
+    });
+
+  // The first request counts every problem: a page of them in a turn, then a turn of the event loop.
+  const holdersChunk = opts.holdersChunk ?? HOLDERS_CHUNK;
+  const buildCounts = (): Promise<void> => {
+    building ??= (async () => {
+      while (!counts.done) {
+        await inTurn(async () => {
+          const page = await store.leadersAfter(counts.upTo, holdersChunk);
+          for (const e of page) {
+            const share = shareOf(e);
+            if (share) countShare(share, 1);
+          }
+          const last = page[page.length - 1];
+          if (page.length < holdersChunk || !last) counts.done = true;
+          else counts.upTo = { N: last.N, M: last.M, P: last.P };
+        });
+        if (!counts.done) await new Promise<void>((resolve) => setImmediate(resolve));
+      }
+    })().finally(() => {
+      building = null;
+    });
+    return building;
+  };
+
+  const holdersAnswer = (): string => {
+    const list = [...counts.byName.values()].sort(
       (a, b) =>
         b.records - a.records || b.site_bests - a.site_bests || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
     );
     return JSON.stringify({ holders: list } satisfies HoldersResponse);
   };
 
-  // The leader of every problem, which /api/holders is counted from. Reading it blocked the live
-  // server for about 0.9 s with 180,000 problems (2026-10-21) while entries arrived every few
-  // seconds. So a reading is kept until an entry changes, and after a change still until it is
-  // holdersRefreshMs old. Only a request reads it again, never a timer. The holders' answer is
-  // drawn from it at once, and the leaders themselves are not kept.
-  const holdersRefreshMs = opts.holdersRefreshMs ?? HOLDERS_REFRESH_MS;
-  interface LeadersReading {
-    holders: string;
-    at: number;
-    /** False once an entry has changed since the reading. */
-    current: boolean;
-  }
-  let leaders: LeadersReading | null = null;
-  let entriesVersion = 0;
   /**
    * Called after any entry was added, reviewed, removed or edited; `key` is its "N/M". The pairs with a
    * listed entry (/api/records/pairs) are not told by this: the caller tells them with pairAdded or,
-   * where an entry may have left the listing, pairsMayHaveShrunk.
+   * where an entry may have left the listing, pairsMayHaveShrunk. Nor are the holders' counts: the
+   * caller changes the entry in a turn (inTurn, changeEntry) that moves them.
    */
   const entriesChanged = (key?: string) => {
     forgetRecords(key);
-    entriesVersion++;
-    if (leaders) leaders.current = false;
-  };
-  // With a store that answers asynchronously, requests that arrive during a reading share it
-  // rather than each starting their own.
-  let reading: Promise<LeadersReading> | null = null;
-  const readLeaders = (): Promise<LeadersReading> => {
-    if (leaders && (leaders.current || Date.now() - leaders.at < holdersRefreshMs)) return Promise.resolve(leaders);
-    reading ??= (async () => {
-      const version = entriesVersion;
-      const all = await store.leaders();
-      // an entry that changed while this was read may be missing from it
-      leaders = { holders: countHolders(all), at: Date.now(), current: version === entriesVersion };
-      return leaders;
-    })().finally(() => {
-      reading = null;
-    });
-    return reading;
   };
 
-  app.get("/api/holders", async (c) =>
-    c.body((await readLeaders()).holders, 200, { "content-type": "application/json" }),
-  );
+  app.get("/api/holders", async (c) => {
+    while (!counts.done) await buildCounts();
+    return c.body((holdersBody ??= holdersAnswer()), 200, { "content-type": "application/json" });
+  });
 
   // The drawings of the records page: for each P in [from, to], the one best packing that can be
   // drawn. Bounded twice: the range by ATLAS_MAX_SPAN and the payload by ATLAS_MAX_PIECES.
@@ -654,21 +756,28 @@ export function createApp(opts: AppOptions): Hono {
     const score = container.size;
 
     // the insert, the leader and rank it gives, and the prune, in one transaction
-    const { id, before, leader, position, kept } = await store.submit({
-      N: config.N,
-      M: config.M,
-      P: config.P,
-      score,
-      name,
-      agent_note: sanitizeText(config.agent_note ?? "", MAX_NOTE_LENGTH),
-      ...provenance,
-      software: provenance.software === null ? null : sanitizeText(provenance.software, MAX_SOFTWARE_LENGTH) || null,
-      pieces: config.pieces,
-      container_phi: container.phi,
-      created_at: new Date().toISOString(),
-      verification: beats ? "pending" : "none",
-      literature_value: beats ? lit!.value : null,
-      strict_check: strict,
+    const problemKey = { N: config.N, M: config.M, P: config.P };
+    const { id, before, leader, position, kept } = await inTurn(async () => {
+      const stored = await store.submit({
+        ...problemKey,
+        score,
+        name,
+        agent_note: sanitizeText(config.agent_note ?? "", MAX_NOTE_LENGTH),
+        ...provenance,
+        software: provenance.software === null ? null : sanitizeText(provenance.software, MAX_SOFTWARE_LENGTH) || null,
+        pieces: config.pieces,
+        container_phi: container.phi,
+        created_at: new Date().toISOString(),
+        verification: beats ? "pending" : "none",
+        literature_value: beats ? lit!.value : null,
+        strict_check: strict,
+      });
+      // The holders' counts move from the leader before to the leader after, as the transaction read
+      // them (a prune does not change the leader). That leader is the entry's, or an earlier one.
+      const asLeader = (e: LeaderboardEntry | null): ProblemLeader | null =>
+        e && { ...problemKey, id: e.id, name: e.name, score: e.score, verification: e.verification };
+      leaderMoved(problemKey, asLeader(stored.before), asLeader(stored.leader));
+      return stored;
     });
     // The leader is the earliest entry among the equally good ones, so an entry that only ties the
     // smallest score is not rank 1 although nothing is strictly ahead of it.
@@ -783,7 +892,10 @@ export function createApp(opts: AppOptions): Hono {
     if (!body || !Number.isInteger(body.id) || (body.decision !== "confirmed" && body.decision !== "rejected")) {
       return c.json({ error: 'body must be {"id": number, "decision": "confirmed" | "rejected"}' }, 400);
     }
-    const ok = await store.review(body.id as number, body.decision);
+    const id = body.id as number;
+    const decision = body.decision;
+    // a confirmed claim becomes a record and a rejected one is deleted: the problem's leader may change
+    const ok = await changeEntry(id, true, () => store.review(id, decision));
     if (ok) entriesChanged();
     // a confirmed entry stays listed; a rejected one is deleted, and its pair may have no entry left
     if (ok && body.decision === "rejected") pairsMayHaveShrunk();
@@ -797,7 +909,8 @@ export function createApp(opts: AppOptions): Hono {
     if (denied) return denied;
     const body = (await c.req.json().catch(() => null)) as { id?: unknown } | null;
     if (!body || !Number.isInteger(body.id)) return c.json({ error: 'body must be {"id": number}' }, 400);
-    const ok = await store.remove(body.id as number);
+    const id = body.id as number;
+    const ok = await changeEntry(id, true, () => store.remove(id));
     if (ok) entriesChanged();
     if (ok) pairsMayHaveShrunk();
     if (ok) log(`[review] submission ${body.id} removed`);
@@ -839,7 +952,9 @@ export function createApp(opts: AppOptions): Hono {
       }
     }
     if (errors.length) return c.json({ error: errors.join("; ") }, 400);
-    const ok = await store.edit(body.id as number, changes);
+    const id = body.id as number;
+    // only a new name can change the holders' counts: the entry stays the problem's leader, or not
+    const ok = await changeEntry(id, changes.name !== undefined, () => store.edit(id, changes));
     // name, note and provenance only: the entry stays in its pair, so the pairs are not touched
     if (ok) entriesChanged();
     if (ok) log(`[review] submission ${body.id} edited: ${Object.keys(changes).join(", ") || "nothing"}`);
