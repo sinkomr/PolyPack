@@ -1,5 +1,5 @@
 import { boundingRadius, inradius } from "@polypack/geometry";
-import { ChainNode, enumerateChains, inWedge } from "../chains";
+import { ChainNode, countsImage, enumerateChains, inWedge, twinGroups } from "../chains";
 import { HalfPlanes, SurfacePose, partSeparation, pieceOutline, pieceParts } from "../parts";
 import { apply, glue } from "../rigid";
 import { Solid, faceApothem, faceDepth, faceVertex, frameVertex } from "../solids";
@@ -313,13 +313,15 @@ export function diskEnergy(solid: Solid, s: number, lam: number, poses: SurfaceP
     let gx = 0;
     let gy = 0;
     const vbest = new Map<number, [number, number, number]>();
+    // chains with the same development (cone angle pi) count an image once, over the union of wedges
+    const groups = twinGroups(nodes);
     nodes.forEach((node, ni) => {
       const T = node.toAnchor;
       for (const j of byFace[node.face]) {
         if (j === i && ni === 0) continue;
         const q = poses[j];
         const [qx, qy] = apply(T, q.x, q.y);
-        if (!inWedge(node.wedge, p.x, p.y, qx, qy, 0)) continue;
+        if (!countsImage(nodes, groups, ni, p.x, p.y, qx, qy)) continue;
         const dx = qx - p.x;
         const dy = qy - p.y;
         const d = Math.hypot(dx, dy);

@@ -50,6 +50,11 @@ export interface ChainNode {
   runCount: number;
   /** sum of the face angles at runVertex of the faces passed around it (0 when runVertex is -1) */
   runAngle?: number;
+  /**
+   * Index of the first earlier node with the same face and the same development (see
+   * `markTwins`), or undefined. Set on the later nodes of a group of twins only.
+   */
+  twin?: number;
 }
 
 export let MAX_CHAIN_DEPTH = 80;
@@ -184,5 +189,64 @@ export function enumerateChains(solid: Solid, s: number, anchor: number, cx: num
       });
     }
   }
+  markTwins(out, slack);
   return out;
+}
+
+/**
+ * Mark chains whose developments coincide. At a vertex of cone angle exactly pi (three triangles
+ * meet), going around the vertex to the left or to the right reaches the same face with the same
+ * rigid motion, since a rotation by pi equals one by -pi. The two wedges then only share a boundary
+ * ray through that vertex, and a point on it (such as a disk's own image p' = 2A - p) lies in both.
+ * Energies count a point once over a group of twins (the union of their wedges); see diskEnergy.
+ * The fields of the nodes and their order are unchanged.
+ */
+export function markTwins(nodes: ChainNode[], slack: number): void {
+  const byFace = new Map<number, number[]>();
+  nodes.forEach((n, i) => {
+    const list = byFace.get(n.face);
+    if (!list) {
+      byFace.set(n.face, [i]);
+      return;
+    }
+    for (const j of list) {
+      const a = nodes[j].toAnchor;
+      const b = n.toAnchor;
+      if (
+        Math.abs(a.c - b.c) <= slack &&
+        Math.abs(a.s - b.s) <= slack &&
+        Math.abs(a.tx - b.tx) <= slack &&
+        Math.abs(a.ty - b.ty) <= slack
+      ) {
+        n.twin = nodes[j].twin ?? j;
+        return;
+      }
+    }
+    list.push(i);
+  });
+}
+
+/** The later twins of each node that has some, by the index of the first of the group. */
+export function twinGroups(nodes: ChainNode[]): Map<number, ChainNode[]> {
+  const groups = new Map<number, ChainNode[]>();
+  for (const node of nodes)
+    if (node.twin !== undefined) {
+      const l = groups.get(node.twin);
+      if (l) l.push(node);
+      else groups.set(node.twin, [node]);
+    }
+  return groups;
+}
+
+/**
+ * Does node `ni` count the developed image (x, y) of a centre c = (cx, cy)? A twin node never does;
+ * the first of a group does when the image lies in any of the group's wedges (the shared boundary
+ * ray included, tolerance 1e-12), so the group counts it once; any other node tests its own wedge.
+ */
+export function countsImage(nodes: ChainNode[], groups: Map<number, ChainNode[]>, ni: number, cx: number, cy: number, x: number, y: number): boolean {
+  const node = nodes[ni];
+  if (node.twin !== undefined) return false;
+  const group = groups.get(ni);
+  if (!group) return inWedge(node.wedge, cx, cy, x, y, 0);
+  return inWedge(node.wedge, cx, cy, x, y, 1e-12) || group.some((m) => inWedge(m.wedge, cx, cy, x, y, 1e-12));
 }
