@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { Api, MAX_SUBMIT_ATTEMPTS, Pacer, RATE_LIMIT_WAIT_MS, compactList } from "../src/http";
+import { RateLimiter, SUBMISSIONS_PER_MINUTE as SERVER_SUBMISSIONS_PER_MINUTE } from "../../server/src/limits";
+import {
+  Api,
+  MAX_SUBMIT_ATTEMPTS,
+  Pacer,
+  RATE_LIMIT_WAIT_MS,
+  SUBMISSIONS_PER_MINUTE,
+  SUBMISSION_WINDOW_MS,
+  compactList,
+} from "../src/http";
 import { SOFTWARE_REFUSAL, type SubmitCheck } from "../src/submit";
 
 type Reply = { status: number; body?: unknown; raw?: string } | Error;
@@ -251,6 +260,40 @@ describe("POST /api/submit", () => {
 });
 
 describe("the submission pacer", () => {
+  it("keeps a client within the server's limit per address, also when requests arrive up to a second late", async () => {
+    expect(SUBMISSIONS_PER_MINUTE).toBe(SERVER_SUBMISSIONS_PER_MINUTE);
+    expect(SUBMISSION_WINDOW_MS).toBe(61_000);
+    // the client sends 400 submissions as fast as its pacer lets it; each reaches the server 0 to 999 ms later
+    let t = 0;
+    const pacer = new Pacer(
+      SUBMISSIONS_PER_MINUTE,
+      SUBMISSION_WINDOW_MS,
+      () => t,
+      async (ms) => {
+        t += ms;
+      },
+    );
+    let seed = 7;
+    const jitter = () => {
+      seed = (seed * 1103515245 + 12345) % 2 ** 31;
+      return seed % 1000;
+    };
+    const arrivals: number[] = [];
+    for (let i = 0; i < 400; i++) {
+      await pacer.acquire();
+      arrivals.push(t + jitter());
+    }
+    // the server's limiter, which opens a 60 s window at an address's first hit, refuses none of them
+    let now = 0;
+    const server = new RateLimiter(SERVER_SUBMISSIONS_PER_MINUTE, 60_000, () => now);
+    for (const at of arrivals.sort((x, y) => x - y)) {
+      now = at;
+      expect(server.allow("one address"), `arrival at ${at} ms`).toBe(true);
+    }
+    // about 118 a minute: 120 in every 61 s
+    expect(t).toBeLessThan(4 * SUBMISSION_WINDOW_MS);
+  });
+
   it("lets at most 6 submissions through per sliding minute", async () => {
     let t = 0;
     const pacer = new Pacer(

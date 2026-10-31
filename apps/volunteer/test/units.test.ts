@@ -47,8 +47,8 @@ const bestOld = (N: number, M: number, P: number, score: number) => ({
 });
 
 describe("the client's units", () => {
-  it("is version 0.3.0, sends units and works with the state it writes", () => {
-    expect(VERSION).toBe("0.3.0");
+  it("is version 0.3.1, sends units and works with the state it writes", () => {
+    expect(VERSION).toBe("0.3.1");
     expect(UNITS).toBe("diameter");
     expect(STATE_VERSION).toBe(2);
   });
