@@ -57,6 +57,15 @@ licence. Please credit the original source when reusing them.
 
 `docs/RECORDS.md` describes what was taken from each and how it was converted.
 
+## Convex polytopes in 4 to 10 dimensions
+
+The ndim package (`packages/ndim`, `python/ndim`, `docs/spaces/NDIM.md`) is PolyPack's own code. It uses
+`python/polyhedra/algebraic.py` (vendored above) for interval arithmetic and integer square roots. None of upstream's
+nD tools (`polytopes_nd.py` and `.json`, `certify_nd.py`, `ndsim.py`, `ndslp.py` of alejandrozu/platonic-packing) is
+included or was consulted. The polytopes are the regular, demi- and Gosset polytopes of H. S. M. Coxeter's _Regular
+Polytopes_ and T. Gosset's 1900 paper, with their literature counts; the E8 root system of Conway and Sloane's _Sphere
+Packings, Lattices and Groups_. No third-party data is included.
+
 ## Atlas layout
 
 The records page's atlas layout is inspired by The Squares Project

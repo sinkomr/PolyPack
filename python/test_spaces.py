@@ -14,6 +14,7 @@ TESTS = [
     "boundary/test_boundary.py",
     "curved/test_certify.py",
     "curved/test_bounds.py",
+    "ndim/test_ndim.py",
     "polyhedra/test_certify.py",
     "polyhedra/test_johnson.py",
     "polyhedra/test_johnson_packings.py",
