@@ -9,20 +9,25 @@ import {
   contestedDealable,
   drawContestedPair,
   drawWide,
+  filterSources,
+  pickSource,
+  sourceOdds,
   mulberry32,
   newDealer,
   publishedTarget,
   retakeTier,
   weaknesses,
 } from "../src/tighter/dealer";
-import { FRONTIER_P, keyOf } from "../src/tighter/frontier";
+import { FRONTIER_P, keyOf, poly } from "../src/tighter/frontier";
 import { addToQueue, applyStep, leave, newGame, newProblem, pay } from "../src/tighter/game";
 import { MAX_OFFERS, addRetake, learnOnLeave, newPicks, normalizeOffer, normalizePicks } from "../src/tighter/picks";
 import { CONTEST, Tier, costFactor } from "../src/tighter/points";
 import {
   COST_TABLE,
   Candidate,
+  Filters,
   LEARN_MIN_EVALS,
+  NO_FILTERS,
   bucketOf,
   collectorTargets,
   formatShapes,
@@ -549,5 +554,106 @@ describe("Tighter published values", () => {
     expect(r.ok && r.state.queue[0].published).toBe(9.25);
     expect(r.ok && r.state.queue[0].tier).toBe("published");
     expect(r.ok && r.state.picks.offers).toEqual(s.picks.offers);
+  });
+});
+
+describe("the wide set drawn inside the filters", () => {
+  const filters = (o: Partial<Filters>): Filters => ({ ...NO_FILTERS, ...o });
+
+  it("every draw passes, and every allowed value of each axis can come", () => {
+    const f = filters({ pieces: [3, 22, 50, 99], containers: [60, 61], minP: 45, maxP: 48 });
+    const d = newDealer(11);
+    const ns = new Set<number>();
+    const ms = new Set<number>();
+    const ps = new Set<number>();
+    for (let i = 0; i < 2000; i++) {
+      const p = drawWide(d, new Set(), () => true, 1, 1, f)!;
+      expect(passes(f, { ...p, tier: "open" })).toBe(true);
+      ns.add(p.N);
+      ms.add(p.M);
+      ps.add(p.P);
+    }
+    // 3 is not a wide side, so only 22, 50 and 99 are allowed values
+    expect([...ns].sort((a, b) => a - b)).toEqual([22, 50, 99]);
+    expect([...ms].sort((a, b) => a - b)).toEqual([60, 61]);
+    expect([...ps].sort((a, b) => a - b)).toEqual([45, 46, 47, 48]);
+  });
+
+  it("is null at once, without a draw, when an axis has no allowed value", () => {
+    for (const f of [filters({ pieces: [3, 4] }), filters({ containers: [0, 5, 15] }), filters({ maxP: 39 })]) {
+      const d = newDealer(1);
+      expect(drawWide(d, new Set(), () => true, 24, 1, f)).toBeNull();
+      expect(d.draws).toBe(0);
+    }
+  });
+
+  it("keeps its lean toward small values across the allowed ones", () => {
+    const f = filters({ pieces: [30, 40, 50, 60, 70, 80, 90] });
+    const mean = (skew: number) => {
+      const d = newDealer(5);
+      let t = 0;
+      for (let i = 0; i < 1000; i++) t += drawWide(d, new Set(), () => true, 1, skew, f)!.N;
+      return t / 1000;
+    };
+    expect(mean(2.5)).toBeLessThan(mean(1) - 5);
+  });
+});
+
+describe("what the filters leave to deal", () => {
+  const f = (o: Partial<Filters>): Filters => ({ ...NO_FILTERS, ...o });
+  const none = { contested: new Set<Tier>(), ringMin: Infinity, wide: false, space: false };
+  const reached = { contested: new Set<Tier>(["loose"]), ringMin: 300, wide: true, space: true };
+
+  it("lets everything through without filters, by what is reached", () => {
+    expect(filterSources(null, none)).toEqual({ open: true, contested: false, space: false });
+    expect(filterSources(null, reached)).toEqual({ open: true, contested: true, space: true });
+  });
+
+  it("finds small shapes only in contested problems", () => {
+    const small = f({ pieces: [3, 4, 5], containers: [3, 4, 5], minP: 280, maxP: 300 });
+    expect(filterSources(small, none)).toEqual({ open: false, contested: false, space: false });
+    expect(filterSources(small, reached)).toEqual({ open: false, contested: true, space: true });
+  });
+
+  it("finds big shapes only in open problems, and wide ones only with More open problems", () => {
+    const big = f({ pieces: [50], containers: [60], minP: 450, maxP: 500 });
+    expect(filterSources(big, { ...reached, wide: false })).toMatchObject({ open: false, contested: false });
+    expect(filterSources(big, reached)).toMatchObject({ open: true, contested: false });
+    // 50 and 60 are in the fixed list, with P = 100 among its piece counts
+    expect(filterSources(f({ pieces: [50], containers: [60], minP: 90, maxP: 110 }), none).open).toBe(true);
+  });
+
+  it("holds contested problems to the tiers and the size ring", () => {
+    expect(filterSources(f({ tiers: ["open"] }), reached).contested).toBe(false);
+    expect(filterSources(f({ tiers: ["published"] }), reached).contested).toBe(false);
+    expect(filterSources(f({ tiers: ["loose"] }), reached).open).toBe(false);
+    // 20 + 20 + 100 is below the ring of 300
+    expect(filterSources(f({ pieces: [20], containers: [20], maxP: 100 }), reached).contested).toBe(false);
+    expect(filterSources(f({ pieces: [20], containers: [20], maxP: 300 }), reached).contested).toBe(true);
+  });
+
+  it("looks in the cycle rule's own open problems when it has them", () => {
+    // "circles only": a circle piece or container with a frontier side, as standing.ts deals them
+    const circles = [poly(0, 40, 100), poly(40, 0, 100)];
+    const circleFilter = f({ pieces: [0] });
+    expect(filterSources(circleFilter, { ...none, wide: true }).open).toBe(false);
+    expect(filterSources(circleFilter, { ...none, ruled: circles }).open).toBe(true);
+    expect(filterSources(f({ pieces: [50] }), { ...none, wide: true, ruled: circles }).open).toBe(false);
+  });
+
+  it("draws among the sources left, in today's proportions", () => {
+    const all = sourceOdds({ open: true, contested: true, space: true }, 0.3);
+    expect(all.map(([s]) => s)).toEqual(["space", "contested", "open"]);
+    expect(all[0][1]).toBeCloseTo(0.3);
+    expect(all[1][1]).toBeCloseTo(0.7 * (2 / 3));
+    expect(all[2][1]).toBeCloseTo(0.7 / 3);
+    const noSpace = sourceOdds({ open: true, contested: true, space: false }, 0.3);
+    expect(noSpace[0][1]).toBeCloseTo(2 / 3);
+    expect(sourceOdds({ open: true, contested: false, space: false }, 0.3)).toEqual([["open", 1]]);
+    expect(sourceOdds({ open: false, contested: false, space: false }, 0.3)).toEqual([]);
+    expect(pickSource([], 0.5)).toBeNull();
+    expect(pickSource(all, 0.1)).toBe("space");
+    expect(pickSource(all, 0.5)).toBe("contested");
+    expect(pickSource(all, 0.99)).toBe("open");
   });
 });

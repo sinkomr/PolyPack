@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { LeadersAnswer } from "../src/api";
 import { newDealer } from "../src/tighter/dealer";
+import { NO_FILTERS, passes } from "../src/tighter/rank";
 import { FRONTIER, STARTER, keyOf, parseKey } from "../src/tighter/frontier";
 import { BATCH, FinderDeps, TakenCache, findOpen, firstDealPools } from "../src/tighter/open-finder";
 
@@ -99,5 +100,33 @@ describe("open problem finder", () => {
     const off = await find({ now: () => 0, getLeaders: async () => null });
     expect(off.offline).toBe(true);
     expect(parseKey("21/21/40")).not.toBeNull();
+  });
+
+  it("finds a narrow filter's problems in its first round of the wide set", async () => {
+    // "pieces 50, containers 60": about 461 problems, almost all open
+    const f = { ...NO_FILTERS, pieces: [50], containers: [60] };
+    const { deps, requests } = stub(() => false);
+    const r = await findOpen(deps, newDealer(7), [{ wide: true, skew: 1 }], {
+      exclude: new Set(),
+      taken: new TakenCache(() => 0),
+      allow: (p) => passes(f, { ...p, tier: "open" }),
+      within: f,
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]!.length).toBeGreaterThan(100);
+    expect(r.open.length).toBeGreaterThan(100);
+    expect(r.open.every((k) => k.family === "polygon" && k.N === 50 && k.M === 60)).toBe(true);
+  });
+
+  it("makes no request when the filters allow nothing in the wide set", async () => {
+    const f = { ...NO_FILTERS, pieces: [3, 4, 5] };
+    const { deps, requests } = stub(() => false);
+    const r = await findOpen(deps, newDealer(7), [{ wide: true, skew: 1 }], {
+      exclude: new Set(),
+      taken: new TakenCache(() => 0),
+      within: f,
+    });
+    expect(requests).toHaveLength(0);
+    expect(r.open).toEqual([]);
   });
 });

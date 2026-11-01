@@ -13,12 +13,16 @@ import {
   contestedCandidates,
   contestedDealable,
   drawContestedPair,
+  filterSources,
   nextRandom,
   openDealable,
+  pickSource,
   publishedTarget,
   retakeTier,
+  sourceOdds,
   takeToken,
 } from "./dealer";
+import type { SourceReach } from "./dealer";
 import { FinderDeps, Pool, TakenCache, findOpen, firstDealPools } from "./open-finder";
 import { SpaceBoard, mountSpaceBoard, spaceScoreBox } from "./board-space";
 import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listingOf } from "./catalogue";
@@ -119,6 +123,7 @@ import { moreDetail } from "./detail";
 import { renderMechanics } from "./mechanics";
 import {
   Candidate,
+  Filters,
   Ranked,
   collectorTargets,
   formatShapes,
@@ -1795,7 +1800,9 @@ function contestedTiers(o: ReadonlySet<UpgradeId>): Set<Tier> {
   return t;
 }
 
-const dealerFilters = () => (inUse(owned(), "filters") ? state.picks.filters : null);
+/** Set while a deal looks outside the player's filters (an empty queue, nothing that fits): the filters are not applied. */
+let filtersOff = false;
+const dealerFilters = () => (!filtersOff && inUse(owned(), "filters") ? state.picks.filters : null);
 /** The cycle's rule allows a problem: "circles only" and "small problems only" restrict polygon problems only, so space problems are dealt as usual under them. */
 const ruleOk = (p: ProblemKey): boolean => ruleAllowsProblem(state.standing, p);
 /** The player's filters and the cycle's rule allow a candidate. */
@@ -1864,6 +1871,7 @@ async function openCandidate(
     exclude,
     taken: takenCache,
     allow: pass,
+    within: dealerFilters(),
     smallest: !!firstPools,
     budget: DEAL_BATCHES - batches,
   });
@@ -2104,6 +2112,15 @@ async function collectorCandidate(io: DealIo, exclude: Set<string>): Promise<Can
   return null;
 }
 
+/** What the player has reached, as the sources of a draw go. */
+const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => ({
+  contested: contestedTiers(o),
+  ringMin: ringMin(o),
+  wide: o.has("wide"),
+  space: dealableSlices().length > 0,
+  ruled: ruleOpenProblems(state.standing),
+});
+
 /**
  * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
  * one deal in three a collection's missing problem (Collector), then draws, two in three of them
@@ -2127,18 +2144,20 @@ async function gatherCandidates(
   if (!forced && inUse(o, "collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
   if (!forced) forced = await starterCandidate(io, d, exclude);
   if (forced) exclude.add(keyOf(forced));
-  const slices = dealableSlices();
-  const share = spaceShare();
-  const contested = Number.isFinite(ringMin(o)) && contestedTiers(o).size > 0;
+  // attempts go only to sources that can give a problem the filters allow
+  const odds = sourceOdds(filterSources(dealerFilters(), sourceReach(o)), spaceShare());
   const room = want - (forced ? 1 : 0);
-  for (let attempt = 0; list.length < room && attempt < Math.max(6, room * 3) && !spentIo(io); attempt++)
+  for (let attempt = 0; list.length < room && attempt < Math.max(6, room * 3) && !spentIo(io); attempt++) {
+    const source = pickSource(odds, nextRandom(d));
+    if (!source) break;
     add(
-      slices.length && nextRandom(d) < share
+      source === "space"
         ? await spaceCandidate(io, d, exclude)
-        : contested && nextRandom(d) < 2 / 3
+        : source === "contested"
           ? await contestedCandidate(io, d, exclude)
           : await openCandidate(io, d, exclude),
     );
+  }
   return { list, forced, offline: io.offline };
 }
 
@@ -2220,11 +2239,17 @@ async function materializeSpace(c: Candidate & SpaceKey): Promise<ProblemState |
 }
 
 /** A problem dealt: into the queue, with what the learning dealer will learn from. */
-function dealt(p: ProblemState, r: { bucket: string; prior: number }, retake = false): void {
+function dealt(p: ProblemState, r: { bucket: string; prior: number }, retake = false, outside = false): void {
   takeToken(state.dealer);
   addToQueue(state, p);
   state.picks.dealt[p.key] = { bucket: r.bucket, prior: r.prior };
-  event(`${retake ? "Retake" : "Dealt"}: ${problemTitle(p)}${dealtNote(p)}.`, false);
+  // a problem dealt outside the filters is shown on the notice line, as the player may wonder why it came
+  event(
+    outside
+      ? `Nothing fits your dealer filters, so a problem outside them was dealt: ${problemTitle(p)}${dealtNote(p)}.`
+      : `${retake ? "Retake" : "Dealt"}: ${problemTitle(p)}${dealtNote(p)}.`,
+    outside,
+  );
   persist();
   showFocus();
 }
@@ -2292,7 +2317,7 @@ async function dealTick(): Promise<void> {
     const r = await deal(state.dealer);
     if (r) {
       if (out) autoDrop(out, r.p);
-      dealt(r.p, r.ranked, r.ranked.candidate.retake);
+      dealt(r.p, r.ranked, r.ranked.candidate.retake, r.outside);
     }
   } finally {
     dealing = false;
@@ -2301,15 +2326,50 @@ async function dealTick(): Promise<void> {
 }
 
 /** Offline or nothing found: ask again in a while rather than every second. */
-function pauseDealing(offline: boolean): void {
+function pauseDealing(offline: boolean, filtered = false): void {
   dealPausedUntil = now() + OFFLINE_BACKOFF_MS;
+  lastPauseOffline = offline;
   if (!state.queue.length)
     $("t-title").textContent = offline
       ? `The server cannot be reached, so no problem can be dealt. Trying again in ${OFFLINE_BACKOFF_MS / 1000} s…`
-      : "Looking for an open problem…";
+      : filtered
+        ? "Nothing fits your dealer filters. Looking again…"
+        : "Looking for an open problem…";
 }
 
-async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked } | null> {
+/**
+ * Whether the last pause was because the server could not be reached (in memory only). Saving filters
+ * ends any other pause at once, since new filters change what can be found.
+ */
+let lastPauseOffline = false;
+
+/** The filters are why a deal or an offer fill found nothing: some are set, and the server answered. */
+const filtersBlamed = (offline: boolean, found: number): boolean => !offline && found === 0 && !!dealerFilters();
+
+/**
+ * An empty queue never stays empty because of the filters: a problem is dealt as the dealer would
+ * without them (the same sources and ranking, and the cycle's rule still applies). Null when it too found nothing.
+ */
+async function dealOutsideFilters(
+  d: DealerState,
+  exclude: Set<string>,
+): Promise<{ p: ProblemState; ranked: Ranked } | null> {
+  filtersOff = true;
+  try {
+    const { list, forced, offline } = await gatherCandidates(d, dealerChoices(owned()), exclude);
+    if (offline) return null;
+    for (const r of [...(forced ? [plainRanked(forced)] : []), ...rank(d, list)]) {
+      const p = await materialize(r.candidate);
+      if (p) return { p, ranked: r };
+      skipped.add(keyOf(r.candidate));
+    }
+    return null;
+  } finally {
+    filtersOff = false;
+  }
+}
+
+async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked; outside?: boolean } | null> {
   const exclude = new Set([...seenKeys(state), ...skipped]);
   if (d.dealt === 0) {
     // the first problem comes from the starter corner while any of it is left open
@@ -2331,7 +2391,12 @@ async function deal(d: DealerState): Promise<{ p: ProblemState; ranked: Ranked }
     if (p) return { p, ranked: r };
     skipped.add(keyOf(r.candidate));
   }
-  pauseDealing(offline);
+  const filtered = filtersBlamed(offline, order.length);
+  if (filtered && !slotted(state).length) {
+    const r = await dealOutsideFilters(d, exclude);
+    if (r) return { ...r, outside: true };
+  }
+  pauseDealing(offline, filtered);
   return null;
 }
 
@@ -2358,7 +2423,12 @@ async function offerTick(o: ReadonlySet<UpgradeId>, out: ProblemState | null): P
       if (state.picks.offers.length < count)
         state.picks.offers.push({ ...r.candidate, score: r.score, prior: r.prior, bucket: r.bucket, at: now() });
     state.picks.offers.sort((a, b) => Number(b.retake) - Number(a.retake) || b.score - a.score);
-    if (!ranked.length) pauseDealing(offline);
+    if (!ranked.length) {
+      const filtered = filtersBlamed(offline, 0);
+      const r = filtered && !slotted(state).length ? await dealOutsideFilters(d, exclude) : null;
+      if (r) dealt(r.p, r.ranked, r.ranked.candidate.retake, true);
+      else pauseDealing(offline, filtered);
+    }
     persist();
   }
   const best = state.picks.offers[0];
@@ -3400,12 +3470,35 @@ function onSaveFilters(e: Event): void {
     "t-filter-note",
     none
       ? "No filters. The dealer deals from everything you have reached."
-      : "Filters saved. The dealer deals only what they allow. If nothing fits, nothing is dealt.",
+      : `Filters saved. The dealer deals what they allow. ${noMatchText(state.picks.filters, owned())}`,
   );
   event(none ? "Dealer filters cleared." : "Dealer filters saved.", false);
+  // new filters change what can be found, so a pause for finding nothing ends now (an unreachable server keeps its wait)
+  if (!lastPauseOffline) dealPausedUntil = 0;
   persist();
   render();
   void dealTick();
+}
+
+/**
+ * What to tell the player about saved filters: when no source can give a problem that passes them, why
+ * not; else that a problem outside them is dealt when the queue is empty.
+ */
+function noMatchText(f: Filters | null, o: ReadonlySet<UpgradeId>): string {
+  const reach = sourceReach(o);
+  const can = filterSources(f, reach);
+  const outside = "If the queue is empty and nothing fits, one problem outside the filters is dealt.";
+  if (can.open || can.contested || can.space) return outside;
+  const why = ["No problem you can be dealt now fits them."];
+  if (f?.tiers && !f.tiers.includes("open")) why.push("Open problems are not among the tiers you ticked.");
+  else why.push("Open problems have sides of 21 to 100 and 40 to 500 pieces.");
+  if (!reach.contested.size || !Number.isFinite(reach.ringMin))
+    why.push(
+      `Problems with 20 sides or fewer are contested problems, which need the upgrade ${upgrade("reach2").name}.`,
+    );
+  else why.push("Your shapes, piece counts and tiers match no contested problem you can be dealt.");
+  why.push(outside);
+  return why.join(" ");
 }
 
 /**
@@ -3428,6 +3521,8 @@ function onDrop(key: string): void {
   if (!p) return;
   const left = dropProblem(key);
   event(left ? `Dropped ${problemTitle(p)}.` : `${problemTitle(p)} will be dropped once its best is sent.`, false);
+  // an emptied queue is filled at once (outside the filters if nothing fits them), not after the pause of a search that found nothing
+  if (!slotted(state).length && !lastPauseOffline) dealPausedUntil = 0;
   persist();
   showFocus();
   render();
@@ -4028,6 +4123,10 @@ window.tighter = {
   /** Moves game time forward (development builds only), e.g. past the submission minute. */
   skipAhead(ms: number) {
     if (import.meta.env.DEV) clockOffset += ms;
+  },
+  /** Milliseconds left of the dealer's pause after a search that found nothing (for the tests). */
+  get dealPause() {
+    return Math.max(0, dealPausedUntil - now());
   },
   /** Lanes with work queued or going (for the tests: wait until every click has run). */
   get busy() {

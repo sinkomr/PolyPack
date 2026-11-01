@@ -1091,7 +1091,8 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "The Queue panel gets a Filters section, where you can allow only some piece shapes, container shapes, piece counts and tiers. A tier is a kind of problem, which is open, loose record, site record or published value.",
         "You write shapes as numbers and ranges, such as 0, 3-6, 21-100, where 0 means the circle. An empty list allows everything.",
-        "The dealer deals or offers a problem only if it passes every filter. If your filters allow too little, the dealer has nothing to deal and tries again after a while.",
+        "The dealer deals or offers a problem only if it passes every filter. Open problems have sides of 21 to 100 and 40 to 500 pieces. Problems with fewer sides or pieces are contested problems, which need Reach: site records.",
+        "When you save filters that no problem you can be dealt fits, the note under them says why. If your queue is empty and nothing fits, the dealer deals one problem outside your filters. A free slot in a queue that is not empty waits for a problem that fits.",
       ],
     },
     row: "dealer",

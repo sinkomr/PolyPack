@@ -1,6 +1,7 @@
 import type { LeadersAnswer } from "../api";
 import { drawWide, nextRandom } from "./dealer";
 import type { DealerState } from "./dealer";
+import type { Filters } from "./rank";
 import { ProblemKey, keyOf } from "./frontier";
 
 /** Most candidates one /api/leaders request checks (the server's limit). */
@@ -50,11 +51,22 @@ function sample(d: DealerState, list: readonly ProblemKey[], ok: (p: ProblemKey)
   return pool.slice(0, n);
 }
 
-function candidatesOf(d: DealerState, pool: Pool, ok: (p: ProblemKey) => boolean, exclude: ReadonlySet<string>) {
+/**
+ * The candidates of one pool. A list is filtered by `ok`, then sampled. The wide set is drawn inside the
+ * player's filters (`within`), so a narrow filter still finds its problems; `ok` stays as a safety net
+ * for what the filters do not say (the cycle's rule, problems taken or dealt).
+ */
+function candidatesOf(
+  d: DealerState,
+  pool: Pool,
+  ok: (p: ProblemKey) => boolean,
+  exclude: ReadonlySet<string>,
+  within: Filters | null,
+) {
   if ("keys" in pool) return sample(d, pool.keys, ok, BATCH);
   const out = new Map<string, ProblemKey>();
   for (let i = 0; i < BATCH * 3 && out.size < BATCH; i++) {
-    const k = drawWide(d, exclude, (p) => ok(p) && !out.has(keyOf(p)), 1, pool.skew);
+    const k = drawWide(d, exclude, (p) => ok(p) && !out.has(keyOf(p)), 1, pool.skew, within);
     if (k) out.set(keyOf(k), k);
   }
   return [...out.values()];
@@ -81,6 +93,8 @@ export async function findOpen(
     exclude: ReadonlySet<string>;
     taken: TakenCache;
     allow?: (p: ProblemKey) => boolean;
+    /** The player's filters, applied to the wide set before drawing. */
+    within?: Filters | null;
     smallest?: boolean;
     /** Requests left to this search. */
     budget?: number;
@@ -92,7 +106,7 @@ export async function findOpen(
   for (const pool of pools)
     for (let round = 0; round < ROUNDS_PER_POOL; round++) {
       if (res.requests >= budget) return res;
-      const cands = candidatesOf(d, pool, ok, opts.exclude);
+      const cands = candidatesOf(d, pool, ok, opts.exclude, opts.within ?? null);
       if (!cands.length) break;
       res.requests++;
       const answer = await deps.getLeaders(cands.map(keyOf));
