@@ -1,9 +1,9 @@
 import { MAX_PIECES, areaLowerBound, closedToSubmissions } from "@polypack/geometry";
 import type { ProblemInfo } from "@polypack/geometry";
 import type { RecordsResponse } from "../api";
-import { ProblemKey, keyOf, poly } from "./frontier";
+import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, keyOf, poly } from "./frontier";
 import type { Tier } from "./points";
-import { Candidate, LOOSE_WEAKNESS, NEIGHBOURS } from "./rank";
+import { Candidate, Filters, LOOSE_WEAKNESS, NEIGHBOURS, passes } from "./rank";
 
 /**
  * The dealer: which problem the player gets next, and how often (design.md §5, §6).
@@ -135,18 +135,35 @@ export function openDealable(info: ProblemInfo | null): boolean {
 /** The wider frontier (More open problems): every side from 21 to 100 and from 40 to 500 pieces. */
 export const WIDE = { minSide: 21, maxSide: 100, minP: 40, maxP: MAX_PIECES } as const;
 
-/** A random problem of the wider frontier, the player's filters and `allow` permitting, not in `exclude`. */
+/** The values of one axis of the wider frontier that the filters allow, smallest first (a shape list, or null for every one). */
+function wideValues(min: number, max: number, only: readonly number[] | null): number[] {
+  const out: number[] = [];
+  for (let v = min; v <= max; v++) if (!only || only.includes(v)) out.push(v);
+  return out;
+}
+
+/**
+ * A random problem of the wider frontier, the player's filters and `allow` permitting, not in `exclude`.
+ * The filters are applied before drawing: each side comes from the allowed shapes within 21 to 100 and
+ * the piece count from the allowed range within 40 to 500, so every allowed problem can be drawn. Null at
+ * once when an axis has no allowed value.
+ */
 export function drawWide(
   d: DealerState,
   exclude: ReadonlySet<string>,
   allow: (p: ProblemKey) => boolean = () => true,
   attempts = 24,
   skew = 1,
+  within: Filters | null = null,
 ): ProblemKey | null {
-  // skew > 1 leans each value toward its minimum (smaller problems open quicker)
-  const span = (a: number, b: number) => a + Math.floor(Math.pow(nextRandom(d), skew) * (b - a + 1));
+  const ns = wideValues(WIDE.minSide, WIDE.maxSide, within?.pieces ?? null);
+  const ms = wideValues(WIDE.minSide, WIDE.maxSide, within?.containers ?? null);
+  const ps = wideValues(Math.max(WIDE.minP, within?.minP ?? 0), Math.min(WIDE.maxP, within?.maxP ?? WIDE.maxP), null);
+  if (!ns.length || !ms.length || !ps.length) return null;
+  // skew > 1 leans each draw toward the smallest allowed value (smaller problems open quicker)
+  const pick = (values: readonly number[]) => values[Math.floor(Math.pow(nextRandom(d), skew) * values.length)];
   for (let i = 0; i < attempts; i++) {
-    const p = poly(span(WIDE.minSide, WIDE.maxSide), span(WIDE.minSide, WIDE.maxSide), span(WIDE.minP, WIDE.maxP));
+    const p = poly(pick(ns), pick(ms), pick(ps));
     if (!exclude.has(keyOf(p)) && allow(p)) return p;
   }
   return null;
@@ -172,6 +189,87 @@ export function drawContestedPair(
   const N = ns[Math.floor(nextRandom(d) * ns.length)];
   const M = ms[Math.floor(nextRandom(d) * ms.length)];
   return { N, M };
+}
+
+// ---------- what the filters leave to deal ----------
+
+/** Where a candidate can come from: open problems, contested problems (site records and published values), space problems. */
+export type Source = "open" | "contested" | "space";
+
+/** What the player has reached, as far as the sources go. */
+export interface SourceReach {
+  /** Contested tiers owned (empty without Reach: site records). */
+  contested: ReadonlySet<Tier>;
+  /** The smallest N+M+P of a contested problem (the size ring); Infinity before any ring. */
+  ringMin: number;
+  /** More open problems is owned. */
+  wide: boolean;
+  /** Some space slice is open. */
+  space: boolean;
+  /** The cycle's rule's own open problems, which replace the dealer's lists (standing.ts ruleOpenProblems); null without one. */
+  ruled?: readonly ProblemKey[] | null;
+}
+
+/** Whether any of `values` (a shape list, null for all) lies among `shapes`. */
+const anyShape = (only: readonly number[] | null, shapes: readonly number[]) =>
+  !only || shapes.some((n) => only.includes(n));
+
+/**
+ * Which sources can give a problem that passes the filters, so that a draw is not spent on one that
+ * cannot. Open problems: the cycle's rule's own list when it has one, else the frontier's list, or with
+ * More open problems sides 21 to 100 and 40 to 500 pieces. Contested: an owned tier the filter allows, shapes of 0 or 3 to 20 sides, and a size the ring
+ * allows. Space problems ignore the shape filters, so they stay possible whenever a slice is open.
+ */
+export function filterSources(f: Filters | null, reach: SourceReach): Record<Source, boolean> {
+  const tierOk = (t: Tier) => !f?.tiers || f.tiers.includes(t);
+  const minP = f?.minP ?? 1;
+  const maxP = f?.maxP ?? MAX_PIECES;
+  const shapesOk = (from: readonly number[]) =>
+    anyShape(f?.pieces ?? null, from) && anyShape(f?.containers ?? null, from);
+  const wideSides = Array.from({ length: WIDE.maxSide - WIDE.minSide + 1 }, (_, i) => WIDE.minSide + i);
+  const open =
+    tierOk("open") &&
+    (reach.ruled
+      ? reach.ruled.some((k) => passes(f, { ...k, tier: "open" }))
+      : reach.wide
+        ? shapesOk(wideSides) && Math.max(minP, WIDE.minP) <= Math.min(maxP, WIDE.maxP)
+        : shapesOk(FRONTIER_SIDES) && FRONTIER_P.some((P) => P >= minP && P <= maxP));
+  const tiers = [...reach.contested].filter(tierOk);
+  const largest = (only: readonly number[] | null | undefined) =>
+    Math.max(...CONTESTED_SIDES.filter((n) => !only || only.includes(n)));
+  const contested =
+    tiers.length > 0 &&
+    shapesOk(CONTESTED_SIDES) &&
+    largest(f?.pieces) + largest(f?.containers) + Math.min(maxP, MAX_PIECES) >= reach.ringMin;
+  return { open, contested, space: reach.space };
+}
+
+/**
+ * The odds of each possible source for one draw: today's proportions (a space share, then two in three
+ * of the rest contested, the remainder open) among the sources left, which are then scaled to add up to 1.
+ * Empty when none is possible.
+ */
+export function sourceOdds(can: Record<Source, boolean>, spaceShare: number): [Source, number][] {
+  const base: [Source, number][] = [
+    ["space", spaceShare],
+    ["contested", (1 - spaceShare) * (2 / 3)],
+    ["open", (1 - spaceShare) / 3],
+  ];
+  const left = base.filter(([s]) => can[s]);
+  const total = left.reduce((t, [, w]) => t + w, 0);
+  if (!left.length) return [];
+  // a source with weight 0 (a share of 1 with nothing else left) still counts: share them equally
+  return left.map(([s, w]) => [s, total > 0 ? w / total : 1 / left.length]);
+}
+
+/** The source a draw `r` in [0, 1) falls on, given the odds. */
+export function pickSource(odds: readonly [Source, number][], r: number): Source | null {
+  let x = r;
+  for (const [s, w] of odds) {
+    x -= w;
+    if (x < 0) return s;
+  }
+  return odds.length ? odds[odds.length - 1][0] : null;
 }
 
 /** Gap to the area bound, s / b − 1. */
