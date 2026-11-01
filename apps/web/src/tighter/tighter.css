@@ -831,6 +831,45 @@ body.tighter[data-pane="tree"] .t-banner {
   overflow: auto;
   overscroll-behavior: contain;
 }
+/* Sized to the zoomed canvas, so the scroll box scrolls the zoomed size; the canvas is scaled inside. */
+.t-tree-zoom {
+  position: relative;
+  overflow: hidden;
+}
+.t-tree-zoom > .t-tree-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+/* two fingers pinch the tree (shop.ts); one finger still scrolls, and the page does not zoom */
+.t-tree:has(.t-tree-zoom) {
+  touch-action: pan-x pan-y;
+}
+.t-zoom {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.t-zoom[hidden] {
+  display: none;
+}
+.t-zoom button {
+  min-width: 32px;
+  padding: 2px 8px;
+  font-size: 14px;
+}
+.t-zoom button:focus-visible {
+  outline: 2px solid var(--accent, currentColor);
+  outline-offset: 2px;
+}
+.t-zoom output {
+  min-width: 4ch;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
 .t-tree-canvas {
   position: relative;
   user-select: none;

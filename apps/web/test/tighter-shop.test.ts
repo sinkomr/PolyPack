@@ -25,7 +25,7 @@ import {
 import { MAX_STAGES, MIN_OBSERVED_EVALS } from "../src/tighter/runplan";
 import { RESET_MIN, resetThreshold, standingMultiplier } from "../src/tighter/standing";
 import { GREEDY_BUDGET, MAX_NEIGHBOUR_LOOKUPS, TRANSFER_MARGIN } from "../src/tighter/transfer";
-import { MYSTERY, shopView } from "../src/tighter/shop";
+import { MYSTERY, ZOOM_MAX, ZOOM_MIN, clampZoom, fitZoom, shopView, stepZoom, zoomScroll } from "../src/tighter/shop";
 import { SLICES } from "../src/tighter/slices";
 import {
   AUTO_SLACK_SECONDS,
@@ -618,5 +618,39 @@ describe("Tighter Higher rent", () => {
     expect(rentx.levels!.max).toBe(5);
     expect(costOf(owning(["rent", "rentx"], { rentx: 5 }), "rentx")).toBeNull();
     expect(costOf(owning(["rent", "rentx"], { rentx: 4 }), "rentx")).toBe(Math.round(480_000 * 1.6 ** 4));
+  });
+});
+
+describe("tree zoom", () => {
+  it("holds a zoom to 20-150 % and turns a stray value into 100 %", () => {
+    expect(clampZoom(0.1)).toBe(ZOOM_MIN);
+    expect(clampZoom(9)).toBe(ZOOM_MAX);
+    expect(clampZoom(0.8)).toBe(0.8);
+    expect(clampZoom(NaN)).toBe(1);
+  });
+
+  it("steps by 10 %, from between steps too, and stops at the ends", () => {
+    expect(stepZoom(1, 1)).toBeCloseTo(1.1);
+    expect(stepZoom(1, -1)).toBeCloseTo(0.9);
+    expect(stepZoom(0.85, 1)).toBeCloseTo(0.9);
+    expect(stepZoom(0.85, -1)).toBeCloseTo(0.8);
+    expect(stepZoom(ZOOM_MAX, 1)).toBe(ZOOM_MAX);
+    expect(stepZoom(ZOOM_MIN, -1)).toBe(ZOOM_MIN);
+  });
+
+  it("fits the layout to the box, never above 100 % or below the range", () => {
+    expect(fitZoom(1000, 500, 2000, 400)).toBeCloseTo(0.5);
+    expect(fitZoom(1000, 200, 2000, 400)).toBeCloseTo(0.5);
+    expect(fitZoom(1000, 100, 800, 400)).toBeCloseTo(0.25);
+    expect(fitZoom(1000, 50, 800, 400)).toBe(ZOOM_MIN);
+    expect(fitZoom(5000, 5000, 800, 400)).toBe(1);
+    expect(fitZoom(0, 0, 800, 400)).toBe(1);
+  });
+
+  it("keeps the point under the pointer still", () => {
+    // layout point (scroll + at) / from, at the same place on screen after
+    const scroll = zoomScroll(300, 100, 1, 0.5);
+    expect((scroll + 100) / 0.5).toBeCloseTo(400);
+    expect(zoomScroll(0, 100, 1, 0.5)).toBe(0);
   });
 });

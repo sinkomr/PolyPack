@@ -377,6 +377,36 @@ export function treeSummary(o: Owned, funds: Funds, coreCount = cores()): Pick<T
 /** How far (CSS pixels) a mouse press may move and still be a click, not a drag of the tree. */
 const DRAG_SLOP = 4;
 
+/** The tree's zoom: its range, and where the player's choice is kept (not part of the game save). */
+// 20 % lets Fit show the whole tree (about 3,200 px wide) in a laptop-sized box
+export const ZOOM_MIN = 0.2;
+export const ZOOM_MAX = 1.5;
+export const ZOOM_KEY = "tighter.treeZoom";
+
+/** A zoom held to its range (a stray value becomes 100 %). */
+export function clampZoom(z: number): number {
+  if (!Number.isFinite(z)) return 1;
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+}
+
+/** The next step of 10 % in or out: 85 % goes to 90 % or 80 %, and 90 % to 100 % or 80 %. */
+export function stepZoom(z: number, dir: 1 | -1): number {
+  const tenths = z * 10;
+  const next = dir > 0 ? Math.floor(tenths + 1e-6) + 1 : Math.ceil(tenths - 1e-6) - 1;
+  return clampZoom(next / 10);
+}
+
+/** The zoom at which a layout of this size fits the box: never above 100 %, never below the range. */
+export function fitZoom(boxW: number, boxH: number, layoutW: number, layoutH: number): number {
+  if (!(boxW > 0 && boxH > 0 && layoutW > 0 && layoutH > 0)) return 1;
+  return clampZoom(Math.min(1, boxW / layoutW, boxH / layoutH));
+}
+
+/** The scroll position that keeps the layout point under `at` (pixels from the box's edge) there. */
+export function zoomScroll(scroll: number, at: number, from: number, to: number): number {
+  return Math.max(0, ((scroll + at) / from) * to - at);
+}
+
 /** Sizes of the tree's layout, in CSS pixels. */
 export const TREE = { nodeW: 136, nodeH: 62, colGap: 26, subGap: 8, label: 22, pad: 10, left: 12 };
 
@@ -458,6 +488,16 @@ function statusText(n: NodeView): string {
 /** The id of the floating explanation, which the node it explains names as its description. */
 const TIP_ID = "t-tree-tip";
 
+/** The zoom kept from the last visit (100 % where nothing is kept or storage is blocked). */
+function loadZoom(): number {
+  try {
+    const v = parseFloat(localStorage.getItem(ZOOM_KEY) ?? "");
+    return Number.isFinite(v) ? clampZoom(v) : 1;
+  } catch {
+    return 1;
+  }
+}
+
 /** Whether the element's focus shows as the keyboard's (false where the browser cannot tell). */
 function focusVisible(e: Element): boolean {
   try {
@@ -502,6 +542,12 @@ export class TreeRenderer {
   private readonly touch: boolean;
   /** A list instead of the canvas: the phone layout. */
   private list: boolean;
+  /** The canvas's zoom (1 is 100 %), and the size of the layout it scales. */
+  private zoom = 1;
+  private layoutW = 0;
+  private layoutH = 0;
+  private zoomBox: HTMLElement | null = null;
+  private zoomControls: HTMLElement | null = null;
 
   constructor(
     private readonly box: HTMLElement,
@@ -516,9 +562,13 @@ export class TreeRenderer {
     this.touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
     const phone = typeof matchMedia === "function" ? matchMedia(PHONE_QUERY) : null;
     this.list = !!phone?.matches;
+    this.zoom = loadZoom();
+    this.zoomControls = box.parentElement?.querySelector<HTMLElement>(".t-zoom") ?? null;
+    this.wireZoom();
     this.showDetail();
     phone?.addEventListener("change", () => {
       this.list = phone.matches;
+      this.showZoomControls();
       this.showDetail();
       this.layoutSig = "";
       if (this.view) this.render(this.view, this.funds);
@@ -531,7 +581,163 @@ export class TreeRenderer {
     (box.parentElement ?? box).append(this.tip);
     box.addEventListener("scroll", () => this.placeTip(), { passive: true });
     this.dragToScroll();
+    this.zoomGestures();
+    this.showZoomControls();
     addEventListener("resize", () => this.placeTip());
+  }
+
+  /** The zoom controls show only with the canvas (the phone's list has nothing to zoom). */
+  private showZoomControls(): void {
+    if (this.zoomControls) this.zoomControls.hidden = this.list;
+  }
+
+  /** The "−", "+", "Fit" buttons and the readout in the tree's head. */
+  private wireZoom(): void {
+    const c = this.zoomControls;
+    if (!c) return;
+    const press = (name: string, f: () => void) =>
+      c.querySelector<HTMLElement>(`[data-zoom="${name}"]`)?.addEventListener("click", f);
+    press("out", () => this.setZoom(stepZoom(this.zoom, -1)));
+    press("in", () => this.setZoom(stepZoom(this.zoom, 1)));
+    press("fit", () => this.setZoom(fitZoom(this.box.clientWidth, this.box.clientHeight, this.layoutW, this.layoutH)));
+    this.showZoomValue();
+  }
+
+  private showZoomValue(): void {
+    const c = this.zoomControls;
+    if (!c) return;
+    const pct = Math.round(this.zoom * 100);
+    const out = c.querySelector<HTMLElement>("[data-zoom='value']");
+    if (out && out.textContent !== `${pct} %`) out.textContent = `${pct} %`;
+    const lo = c.querySelector<HTMLButtonElement>("[data-zoom='out']");
+    const hi = c.querySelector<HTMLButtonElement>("[data-zoom='in']");
+    if (lo) lo.disabled = this.zoom <= ZOOM_MIN + 1e-6;
+    if (hi) hi.disabled = this.zoom >= ZOOM_MAX - 1e-6;
+  }
+
+  /**
+   * Sets the canvas's zoom and keeps the point `at` (pixels from the box's top left; the middle of
+   * the box when left out) where it is on screen. The canvas is scaled with a CSS transform inside a
+   * wrapper that has the scaled size, so the scroll box, its scrollbars and the drag pan follow the
+   * zoom. `zoom` on the canvas would also work in current browsers but has differed between WebKit
+   * and Chromium in how it scales absolutely placed nodes, the SVG and getBoundingClientRect (which
+   * the tooltips use); a transform acts alike in both and leaves hit testing to the browser.
+   */
+  private setZoom(z: number, at?: { x: number; y: number }): void {
+    const next = clampZoom(z);
+    const prev = this.zoom;
+    if (Math.abs(next - prev) < 1e-9) return;
+    const box = this.box;
+    const ax = at?.x ?? box.clientWidth / 2;
+    const ay = at?.y ?? box.clientHeight / 2;
+    this.zoom = next;
+    this.applyZoom();
+    box.scrollLeft = zoomScroll(box.scrollLeft, ax, prev, next);
+    box.scrollTop = zoomScroll(box.scrollTop, ay, prev, next);
+    this.showZoomValue();
+    this.placeTip();
+    try {
+      localStorage.setItem(ZOOM_KEY, String(Math.round(next * 1000) / 1000));
+    } catch {
+      // storage blocked: the zoom lasts until the page closes
+    }
+  }
+
+  /** Sizes the wrapper to the scaled layout and scales the canvas inside it. */
+  private applyZoom(): void {
+    const wrap = this.zoomBox;
+    const canvas = wrap?.firstElementChild as HTMLElement | null;
+    if (!wrap || !canvas) return;
+    wrap.style.width = `${Math.ceil(this.layoutW * this.zoom)}px`;
+    wrap.style.height = `${Math.ceil(this.layoutH * this.zoom)}px`;
+    canvas.style.transform = this.zoom === 1 ? "" : `scale(${this.zoom})`;
+  }
+
+  /**
+   * Ctrl or ⌘ with the wheel zooms around the pointer (a trackpad pinch arrives as the same event,
+   * with ctrlKey); a plain wheel scrolls as before. Two fingers on a touch screen pinch around their
+   * midpoint: only a touchmove with two fingers is taken over, so one finger scrolls natively and a
+   * tap is never held back. "+", "−" and "0" zoom while focus is in the tree, but not in a field.
+   */
+  private zoomGestures(): void {
+    const box = this.box;
+    const spot = (cx: number, cy: number) => {
+      const r = box.getBoundingClientRect();
+      return { x: cx - r.left, y: cy - r.top };
+    };
+    box.addEventListener(
+      "wheel",
+      (e) => {
+        if (this.list || !(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        // a line or page of wheel is far more than a pixel; a pinch sends small steps
+        const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1;
+        const dy = Math.max(-30, Math.min(30, e.deltaY * unit));
+        this.setZoom(this.zoom * Math.exp(-dy * 0.01), spot(e.clientX, e.clientY));
+      },
+      { passive: false },
+    );
+    let pinch: { dist: number; zoom: number } | null = null;
+    const two = (e: TouchEvent) => {
+      const a = e.touches[0]!,
+        b = e.touches[1]!;
+      return {
+        dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        x: (a.clientX + b.clientX) / 2,
+        y: (a.clientY + b.clientY) / 2,
+      };
+    };
+    box.addEventListener(
+      "touchstart",
+      (e) => {
+        pinch = !this.list && e.touches.length === 2 ? { dist: two(e).dist || 1, zoom: this.zoom } : null;
+      },
+      { passive: true },
+    );
+    box.addEventListener(
+      "touchmove",
+      (e) => {
+        if (!pinch || this.list || e.touches.length !== 2) return;
+        // two fingers are ours; without this the browser would scroll or zoom the page
+        if (e.cancelable) e.preventDefault();
+        const t = two(e);
+        this.setZoom(pinch.zoom * (t.dist / pinch.dist), spot(t.x, t.y));
+      },
+      { passive: false },
+    );
+    const done = (e: TouchEvent) => {
+      if (e.touches.length < 2) pinch = null;
+    };
+    box.addEventListener("touchend", done, { passive: true });
+    box.addEventListener("touchcancel", done, { passive: true });
+    // Safari on a Mac sends a trackpad pinch as gesture events, not as a wheel with ctrlKey. On an
+    // iPad the touch pinch above has begun first, so the gesture is left to it.
+    let gesture: number | null = null;
+    box.addEventListener("gesturestart", (e) => {
+      if (this.list || pinch) return;
+      e.preventDefault();
+      gesture = this.zoom;
+    });
+    box.addEventListener("gesturechange", (e) => {
+      if (gesture === null) return;
+      e.preventDefault();
+      const g = e as Event & { scale: number; clientX: number; clientY: number };
+      this.setZoom(gesture * g.scale, spot(g.clientX, g.clientY));
+    });
+    box.addEventListener("gestureend", (e) => {
+      if (gesture !== null) e.preventDefault();
+      gesture = null;
+    });
+    box.addEventListener("keydown", (e) => {
+      if (this.list || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest("input, textarea, select, [contenteditable]")) return;
+      if (e.key === "+" || e.key === "=") this.setZoom(stepZoom(this.zoom, 1));
+      else if (e.key === "-" || e.key === "_") this.setZoom(stepZoom(this.zoom, -1));
+      else if (e.key === "0") this.setZoom(1);
+      else return;
+      e.preventDefault();
+    });
   }
 
   /**
@@ -636,7 +842,7 @@ export class TreeRenderer {
       return;
     }
     const first = open.length ? Math.min(...open.map((n) => n.depth)) : 0;
-    this.box.scrollLeft = Math.max(0, (first - 1) * (TREE.nodeW + TREE.colGap));
+    this.box.scrollLeft = Math.max(0, (first - 1) * (TREE.nodeW + TREE.colGap) * this.zoom);
   }
 
   /** The phone's tree: each row's upgrades as a list of the same nodes, without the lines. */
@@ -659,6 +865,7 @@ export class TreeRenderer {
       list.append(row);
     }
     const focused = document.activeElement?.closest<HTMLElement>(".t-node")?.dataset.id;
+    this.zoomBox = null;
     this.box.replaceChildren(list);
     if (focused)
       this.nodes
@@ -730,6 +937,8 @@ export class TreeRenderer {
     const canvas = el("div", "t-tree-canvas");
     canvas.style.width = `${layout.width}px`;
     canvas.style.height = `${layout.height}px`;
+    this.layoutW = layout.width;
+    this.layoutH = layout.height;
     for (const b of layout.bands) {
       const band = el("div", "t-band");
       band.dataset.row = b.id;
@@ -772,7 +981,12 @@ export class TreeRenderer {
       canvas.append(node);
     }
     const focused = document.activeElement?.closest<HTMLElement>(".t-node")?.dataset.id;
-    this.box.replaceChildren(canvas);
+    // the wrapper has the zoomed size; the canvas keeps its own and is scaled inside it
+    const wrap = el("div", "t-tree-zoom");
+    wrap.append(canvas);
+    this.zoomBox = wrap;
+    this.applyZoom();
+    this.box.replaceChildren(wrap);
     if (focused)
       this.nodes
         .get(focused as UpgradeId)
