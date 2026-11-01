@@ -179,7 +179,9 @@ describe("Tighter upgrades", () => {
     expect(buy(s, "autox")).toBe(true);
     expect(level(ownedSet(s), "autox")).toBe(1);
     const second = costOf(ownedSet(s), "autox");
-    expect(second).toBeGreaterThan(first);
+    // the first levels differ by less than a point at C3's 0.25 % a step, so they round alike
+    expect(second).toBeGreaterThanOrEqual(first);
+    expect(costOf(owning(["auto1", "autox"], { autox: 40 }), "autox")).toBeGreaterThan(first);
     expect(buy(s, "autox")).toBe(true);
     expect(level(ownedSet(s), "autox")).toBe(2);
     // standing buys standing upgrades, and Quick study lowers record-point prices by a tenth a level
@@ -841,27 +843,22 @@ describe("Tighter auto-eval's rate", () => {
     expect(msPerEval(131)).toBeGreaterThan(4);
   });
 
-  it("prices a rate by its running total: 40 for Auto-eval, then 120 x e^(0.0095 x) for each extra evaluation a second", () => {
+  it("prices a rate by its running total: 40 for Auto-eval, then 120 x 1.0025^x for each extra evaluation a second", () => {
     expect(AUTO_COST).toBe(40);
     expect(autoRunningTotal(1)).toBe(40);
-    // [rate, running total] from scratchpad/autoplot/plot3.py (c2)
+    // [rate, running total] from Michael's plot of proposal C3 (about, to the figures he gave)
     const ref: [number, number][] = [
-      [10, 1184],
-      [50, 7636],
-      [100, 20044],
-      [150, 39997],
-      [200, 72082],
-      [250, 123676],
-      [300, 206638],
-      [400, 554560],
-      [500, 1454185],
-      [750, 15758513],
-      [1000, 169544524],
+      [50, 6318],
+      [150, 21781],
+      [500, 119_000],
+      [1000, 536_000],
+      [2000, 7_000_000],
+      [3000, 86_000_000],
     ];
-    for (const [r, total] of ref) expect(Math.abs(autoRunningTotal(r) - total) / total, `rate ${r}`).toBeLessThan(5e-4);
+    for (const [r, total] of ref) expect(Math.abs(autoRunningTotal(r) - total) / total, `rate ${r}`).toBeLessThan(1e-2);
     // the sum itself
     let sum = 40;
-    for (let x = 2; x <= 300; x++) sum += 120 * Math.exp(0.0095 * x);
+    for (let x = 2; x <= 300; x++) sum += 120 * Math.pow(1.0025, x);
     expect(autoRunningTotal(300)).toBeCloseTo(sum, 6);
     // a purchase from rate r adds a step s and costs C(r + s) - C(r); the first level is the 2nd evaluation
     expect(costOf(owning(["auto1"]), "autox")).toBe(Math.round(autoRunningTotal(2) - 40));

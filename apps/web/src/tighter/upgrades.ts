@@ -41,8 +41,8 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
  * opening is cheaper (2026-10-27): a player clicking about once a second owns Auto-eval within 5 s of
  * the first record and 5 evaluations per click within 2 minutes (the slowest of 64 modelled games
  * took 107 s, a median game 28 s), so click2 to click5 cost 150, 250, 300 and 350 [CALC].
- * Reaching a rate costs 40 + the sum of 120 × e^(0.0095 x) RP for x = 2 up to the rate (2026-10-27,
- * proposal C2, scratchpad autoplot/plot3.py): 1,184 at 10 a second, 72,082 at 200, 169,544,524 at 1,000 [CALC]. The plan:
+ * Reaching a rate costs 40 + the sum of 120 × 1.0025^x RP for x = 2 up to the rate (2026-10-31,
+ * proposal C3, replacing C2's e^(0.0095 x)): 6,318 at 50 a second, 119,000 at 500, 7.0 million at 2,000 [CALC]. The plan:
  * PolyPack-ideas/idle-games/tighter/plan-2026-10-20-long-game.md.
  *
  * The rest of the game reads what the player owns only through the functions below.
@@ -300,14 +300,15 @@ export function levelOfRate(rate: number): number {
   if (r <= 1000) return 109 + Math.floor((r - 500) / 50);
   return 119 + Math.floor((r - 1000) / 100);
 }
-/** The price of each evaluation a second above the first: 120 RP × e^(0.0095 x) for the x-th. */
+/** The price of each evaluation a second above the first: 120 RP × 1.0025^x for the x-th. */
 const AUTO_RATE_PRICE = 120;
-const AUTO_RATE_K = 0.0095;
+/** ln 1.0025: the price of an evaluation a second grows 0.25 % for each one added, so 1.0025^x = e^(k x). */
+const AUTO_RATE_K = Math.log(1.0025);
 /**
  * What reaching `rate` evaluations a second costs in all (RP, before Quick study): 40 for Auto-eval,
- * then 120 × e^(0.0095 x) for each evaluation a second x from 2 up (proposal C2). In closed form
- * 40 + 120 × e^(2k) × (e^(k (rate − 1)) − 1) / (e^k − 1) with k = 0.0095. Infinity where the
- * power overflows (past about 74,000 a second, far beyond anything a player can pay).
+ * then 120 × 1.0025^x for each evaluation a second x from 2 up (proposal C3). In closed form
+ * 40 + 120 × 1.0025^2 × (1.0025^(rate − 1) − 1) / 0.0025. Infinity where the power overflows
+ * (past about 284,000 a second, far beyond anything a player can pay).
  */
 export function autoRunningTotal(rate: number): number {
   if (!(rate > 1)) return AUTO_COST;
@@ -325,9 +326,9 @@ export function autoLevelPrice(level: number): number {
 /** Levels of Faster auto-eval that Head start II gives each cycle: 9, so 10 evaluations a second as the old fifth rung did. */
 export const HEAD2_AUTO_LEVELS = 9;
 /** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
-const AUTOX_COST = AUTO_RATE_PRICE * Math.exp(2 * AUTO_RATE_K);
+const AUTOX_COST = AUTO_RATE_PRICE * 1.0025 ** 2;
 /** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
-const AUTOX_GROWTH = Math.exp(AUTO_RATE_K);
+const AUTOX_GROWTH = 1.0025;
 /** Problem slots, by upgrade (1 without any). */
 export const QUEUE: Partial<Record<UpgradeId, number>> = { queue3: 3, queue4: 4, queue6: 6 };
 /** Methods in the order they unlock, by upgrade. */
@@ -1337,8 +1338,8 @@ export const UPGRADES: readonly Upgrade[] = [
       ],
       math: [
         `${sym("r")} = ${AUTO_BASE} + ${sym("a")} for ${sym("a")} up to 49, then +5 a level up to ${sym("r")} = 200, +10 up to 500, +50 up to 1,000, and +100 after that`,
-        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + Σ 120 × e<sup>0.0095 ${sym("x")}</sup>, for ${sym("x")} = 2 to ${sym("r")}`,
-        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + 120 × e<sup>0.019</sup> × (e<sup>0.0095 (${sym("r")} − 1)</sup> − 1) / (e<sup>0.0095</sup> − 1)`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + Σ 120 × 1.0025<sup>${sym("x")}</sup>, for ${sym("x")} = 2 to ${sym("r")}`,
+        `${sym("C")}(${sym("r")}) = ${AUTO_COST} + 120 × 1.0025<sup>2</sup> × (1.0025<sup>${sym("r")} − 1</sup> − 1) / 0.0025`,
         `price of a level = ${sym("C")}(${sym("r")}<sub>new</sub>) − ${sym("C")}(${sym("r")}<sub>old</sub>)`,
         SHARE_MATH,
       ],
@@ -1349,10 +1350,10 @@ export const UPGRADES: readonly Upgrade[] = [
           sym("C"),
           "what reaching the rate costs in all, in RP before Quick study (Auto-eval's own price is the first part)",
         ],
-        [sym("x"), "each evaluation a second above the first, whose price grows about 1 % an evaluation"],
+        [sym("x"), "each evaluation a second above the first, whose price grows 0.25 % an evaluation"],
         ...AUTO_VARS.slice(1),
       ],
-      note: `${AUTO_NOTE} The price grows fast: far past 1,500 evaluations a second, no player can pay it.`,
+      note: `${AUTO_NOTE} The price grows fast: far past 3,000 evaluations a second, no player can pay it.`,
     },
     row: "auto",
     levels: { max: Infinity, growth: AUTOX_GROWTH },
