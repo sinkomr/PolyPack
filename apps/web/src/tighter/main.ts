@@ -307,6 +307,9 @@ const refundNote = (rp: number) =>
 /** What the ladder of 2026-10-27 paid back to a save (save.ts migration 7), said once as it is read. */
 const ladderNote = (rp: number) =>
   `Auto-eval now has one ladder of small steps. You keep your rate and get ${fmtInt(rp)} RP back.`;
+/** What the cheaper ladder of Faster auto-eval paid back to a save (save.ts migration 9), said once as it is read. */
+const c3Note = (rp: number) =>
+  `Faster auto-eval is cheaper now. You got back ${fmtInt(rp)} RP, the difference for the levels you own.`;
 /** Said once to a save that had reset, when it is read (save.ts migration 4). */
 const REBALANCED_NOTE =
   "Tighter changed, and resets now work differently. Your standing was cleared, and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
@@ -358,6 +361,7 @@ function initialState(): GameState {
         r.rebalanced ? REBALANCED_NOTE : "",
         r.units ? unitsNote(r.units) : "",
         r.ladder ? ladderNote(r.ladder.rp) : "",
+        r.c3 ? c3Note(r.c3.rp) : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -4074,6 +4078,7 @@ $("t-import").addEventListener("click", async () => {
     r.rebalanced ? REBALANCED_NOTE : "",
     r.units ? unitsNote(r.units) : "",
     r.ladder ? ladderNote(r.ladder.rp) : "",
+    r.c3 ? c3Note(r.c3.rp) : "",
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();

@@ -414,7 +414,8 @@ describe("Tighter upgrade texts", () => {
     );
     const math = u("autox").how.math!.map(plain);
     expect(math[0]).toContain("r = 1 + a");
-    expect(math).toContain("C(r) = 40 + Σ 120 × e0.0095 x, for x = 2 to r");
+    expect(math).toContain("C(r) = 40 + Σ 120 × 1.0025x, for x = 2 to r");
+    expect(math).toContain("C(r) = 40 + 120 × 1.00252 × (1.0025r − 1 − 1) / 0.0025");
     expect(math).toContain("rlane = r / L");
     expect(u("lanes2").how.math).toContain("<var>r</var><sub>lane</sub> = <var>r</var> / <var>L</var>");
     expect(u("wide").name).toBe("More open problems");

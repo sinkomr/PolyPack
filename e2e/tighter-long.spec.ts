@@ -564,7 +564,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // amount by what the save could buy next costs now over then: 5 evaluations per click, 350 RP now and
   // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
   const f = 350 / 780;
-  expect(s).toMatchObject({ version: 9, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 10, levels: {}, picks: 0, pipeline: [] });
   // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);

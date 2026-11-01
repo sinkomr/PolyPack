@@ -33,6 +33,7 @@ import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
 import { UnitsReport, convertSaveUnits } from "./units";
 import {
   AUTO_BASE,
+  AUTO_COST,
   EvolveMethod,
   HEAD2_AUTO_LEVELS,
   SWITCHES,
@@ -66,6 +67,9 @@ const treeMethods = () => methods(owning(UPGRADES.map((u) => u.id)));
  * - 2026-10-29: One more evaluation per click (clickx, a levelled upgrade past 10 evaluations per click)
  *   went: auto-eval outscales it. Its levels are refunded at the list prices they were bought at
  *   (RETIRED_LEVELS).
+ * - 2026-10-31 (version 10): Faster auto-eval's price ladder went from proposal C2 (120 RP × e^(0.0095 x)
+ *   for the x-th evaluation a second) to C3 (120 RP × 1.0025^x). Every save is paid back once what its
+ *   levels cost under C2 less under C3 (autoC3Refund), and keeps its levels.
  */
 const RETIRED = new Map<string, { cost: number; currency: "rp" | "standing"; group: string }>([
   ["away2", { cost: 1200, currency: "rp", group: "Away" }],
@@ -143,7 +147,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -317,14 +321,57 @@ export const MIGRATIONS: Record<number, Migration> = {
    * what it paid above the new running total for that level (ladderSave). `ladderRefund` tells the page.
    */
   7: (save) => {
-    return { ...save, ...ladderSave(save) };
+    // ladderSave prices the ladder as it is now (C3), so version 10's refund must not pay this save again
+    return { ...save, ...ladderSave(save), c3Paid: true };
   },
   /**
    * Version 9 has no One more evaluation per click (clickx). Reading the save pays its levels back
    * once (RETIRED_LEVELS); the step only moves the version, so an older page never writes over it.
    */
   8: (save) => save,
+  /**
+   * Version 10 prices Faster auto-eval by proposal C3 instead of C2. The save is paid back once the
+   * difference for its levels (autoC3Refund); a save from before version 8 was already paid by
+   * ladderSave at today's prices, and gets nothing more. `c3Refund` tells the page.
+   */
+  9: (save) => {
+    const { c3Paid, ...rest } = save;
+    if (c3Paid === true) return rest;
+    const refund = autoC3Refund(rest);
+    return refund > 0 ? { ...rest, rp: num(rest.rp, 0, 0) + refund, c3Refund: refund } : rest;
+  },
 };
+
+/**
+ * What reaching `rate` evaluations a second cost under proposal C2, the ladder until version 10:
+ * 40 + the sum of 120 × e^(0.0095 x) for x = 2 up to the rate. Kept to work out the refund of the change to C3.
+ */
+function c2RunningTotal(rate: number): number {
+  const k = 0.0095;
+  if (!(rate > 1)) return AUTO_COST;
+  return AUTO_COST + (120 * Math.exp(2 * k) * Math.expm1(k * (rate - 1))) / Math.expm1(k);
+}
+
+/**
+ * What version 10 pays back for Faster auto-eval's cheaper ladder: its levels' cost under C2 less under
+ * C3, each less what a head start gives for nothing, times the save's RP cost factor (what the save
+ * paid at today's prices, as ladderSave does). Zero without the upgrade. The levels stay.
+ */
+export function autoC3Refund(save: Record<string, unknown>): number {
+  const owned: unknown[] = Array.isArray(save.owned) ? save.owned : [];
+  if (!owned.includes("autox")) return 0;
+  const level = int(isObj(save.levels) ? save.levels.autox : 0, 0);
+  if (level < 1) return 0;
+  const rate = rateOfLevel(level);
+  const has = new Set(owned);
+  const freeRate = has.has("head2") ? rateOfLevel(HEAD2_AUTO_LEVELS) : has.has("head1") ? AUTO_BASE : 0;
+  const free = Math.min(freeRate, rate);
+  const c2 = c2RunningTotal(rate) - (free > 0 ? c2RunningTotal(free) : 0);
+  const c3 = autoRunningTotal(rate) - (free > 0 ? autoRunningTotal(free) : 0);
+  const factor = rpCostFactor(owning(savedIds(owned).filter(isUpgradeId), savedLevels(save.levels)));
+  const refund = Math.round(Math.max(0, c2 - c3) * factor);
+  return Number.isFinite(refund) ? refund : 0;
+}
 
 /**
  * Auto-eval's rungs above the first, as the tree had them until version 8 (2026-10-27): the evaluations
@@ -585,6 +632,7 @@ export type LoadResult =
       rebalanced?: { rp: number };
       units?: UnitsReport;
       ladder?: { rp: number };
+      c3?: { rp: number };
     }
   | { ok: false; error: string };
 
@@ -914,6 +962,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const rebalanced = (raw.version as number) < 5 && m.save.rebalanced !== undefined;
   const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
   const ladder = (raw.version as number) < 8 ? Math.round(num(m.save.ladderRefund, 0, 0)) : 0;
+  const c3 = (raw.version as number) < 10 ? Math.round(num(m.save.c3Refund, 0, 0)) : 0;
   const converted = units ? int(units.converted, 0) : 0;
   const dropped = units ? int(units.dropped, 0) : 0;
   const state = normalize(m.save, now);
@@ -928,6 +977,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
     ...(rebalanced ? { rebalanced: { rp: Math.round(num(m.save.rebalanced, 0, 0)) } } : {}),
     ...(converted + dropped > 0 ? { units: { converted, dropped } } : {}),
     ...(ladder > 0 ? { ladder: { rp: ladder } } : {}),
+    ...(c3 > 0 ? { c3: { rp: c3 } } : {}),
   };
 }
 

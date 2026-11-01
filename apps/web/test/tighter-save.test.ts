@@ -18,6 +18,7 @@ import {
 import { recordSend } from "../src/tighter/pacer";
 import {
   SAVE_VERSION,
+  autoC3Refund,
   autoPriceRefund,
   exportString,
   pointsScale,
@@ -29,7 +30,17 @@ import {
   readSave,
   toJson,
 } from "../src/tighter/save";
-import { autoPerSecond, autoRunningTotal, evalsPerClick, owning, upgrade } from "../src/tighter/upgrades";
+import {
+  autoLevelPrice,
+  autoPerSecond,
+  autoRunningTotal,
+  evalsPerClick,
+  levelOfRate,
+  owning,
+  rateOfLevel,
+  upgrade,
+} from "../src/tighter/upgrades";
+import { readFileSync } from "node:fs";
 
 const T0 = 1_700_000_000_000;
 
@@ -1075,5 +1086,93 @@ describe("the retired One more evaluation per click (clickx)", () => {
     const again = readSave(JSON.parse(toJson(r.state)), T0);
     expect(again.ok && again.retired).toBeUndefined();
     expect(again.ok && again.state.rp).toBe(100 + paid);
+  });
+});
+
+describe("Faster auto-eval's price ladder, C2 to C3 (version 10)", () => {
+  /** What reaching a rate cost under C2, written out from the formula in the plan. */
+  const c2 = (rate: number) => {
+    let t = 40;
+    for (let x = 2; x <= rate; x++) t += 120 * Math.exp(0.0095 * x);
+    return t;
+  };
+  const c3 = (rate: number) => {
+    let t = 40;
+    for (let x = 2; x <= rate; x++) t += 120 * Math.pow(1.0025, x);
+    return t;
+  };
+  const v9 = (rate: number, extra: string[] = [], levels: Record<string, number> = {}) => {
+    const raw = { ...JSON.parse(toJson(played())), version: 9 };
+    raw.owned = ["trace", "auto1", "autox", ...extra];
+    raw.levels = { autox: levelOfRate(rate), ...levels };
+    return raw;
+  };
+
+  it("has a running total equal to the sum, and level prices equal to its differences", () => {
+    for (const r of [2, 10, 50, 200, 850, 1000, 2000]) expect(autoRunningTotal(r) / c3(r)).toBeCloseTo(1, 9);
+    for (const l of [0, 1, 48, 49, 60, 79, 100, 119, 130])
+      expect(autoLevelPrice(l)).toBeCloseTo(autoRunningTotal(rateOfLevel(l + 1)) - autoRunningTotal(rateOfLevel(l)), 3);
+  });
+
+  it("pays a v9 save the difference of C2 and C3 for its levels, once, in spendable RP only", () => {
+    for (const rate of [50, 200, 850, 1000]) {
+      const raw = v9(rate);
+      const r = readSave(raw, T0);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      const back = Math.round(c2(rate) - c3(rate));
+      expect(back).toBeGreaterThan(0);
+      expect(r.c3).toEqual({ rp: back });
+      expect(r.state.rp).toBe(raw.rp + back);
+      expect(r.state.rpEarned).toBe(raw.rpEarned);
+      expect(r.state.standing.cycleEarned).toBe(raw.standing.cycleEarned);
+      // every level is kept
+      expect(r.state.levels.autox).toBe(levelOfRate(rate));
+      expect(autoC3Refund(raw)).toBe(back);
+    }
+  });
+
+  it("takes a head start's free rate and Quick study's price factor into account", () => {
+    const rate = 200;
+    const head = readSave(v9(rate, ["head2"]), T0);
+    const base = Math.round(c2(rate) - c2(10) - (c3(rate) - c3(10)));
+    expect(head.ok && head.c3).toEqual({ rp: base });
+    const head1 = readSave(v9(rate, ["head1"]), T0);
+    expect(head1.ok && head1.c3).toEqual({ rp: Math.round(c2(rate) - c3(rate)) });
+    const study = readSave(v9(rate, ["study"], { study: 2 }), T0);
+    expect(study.ok && study.c3).toEqual({ rp: Math.round((c2(rate) - c3(rate)) * 0.81) });
+  });
+
+  it("pays nothing to a v10 save, to a save without levels, or twice", () => {
+    const now = { ...v9(500), version: 10 };
+    const r = readSave(now, T0);
+    expect(r.ok && r.c3).toBeUndefined();
+    expect(r.ok && r.state.rp).toBe(now.rp);
+    const none = readSave({ ...v9(500), owned: ["trace", "auto1"], levels: {} }, T0);
+    expect(none.ok && none.c3).toBeUndefined();
+    const first = readSave(v9(500), T0);
+    if (!first.ok) throw new Error(first.error);
+    const again = readSave(JSON.parse(toJson(first.state)), T0);
+    expect(again.ok && again.c3).toBeUndefined();
+    expect(again.ok && again.state.rp).toBe(first.state.rp);
+  });
+
+  it("does not pay a save from before version 8 again, whose ladder step already paid at C3 prices", () => {
+    const raw = {
+      ...JSON.parse(toJson(played())),
+      version: 7,
+      owned: ["trace", "auto1", "auto2", "auto3", "auto4", "auto5"],
+      levels: {},
+    };
+    const r = readSave(raw, T0);
+    expect(r.ok && r.c3).toBeUndefined();
+  });
+
+  it("says it on load", () => {
+    const main = readFileSync(new URL("../src/tighter/main.ts", import.meta.url), "utf8");
+    expect(main).toContain(
+      "`Faster auto-eval is cheaper now. You got back ${fmtInt(rp)} RP, the difference for the levels you own.`",
+    );
+    expect(main.match(/c3Note\(r\.c3\.rp\)/g)).toHaveLength(2);
   });
 });
