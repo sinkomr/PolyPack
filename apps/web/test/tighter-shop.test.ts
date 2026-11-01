@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { plain } from "../src/tighter/how";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS, WIDE } from "../src/tighter/dealer";
 import {
-  PAIR_BONUS,
+  COMBO_BONUS,
+  COMBO_RECORDS,
   RENT_GROWTH,
   RENT_PAYDAY_MS,
   RENT_SHARE,
@@ -461,11 +462,12 @@ describe("Tighter upgrade texts", () => {
     for (const u of UPGRADES) expect(all(u).join(" "), u.id).not.toMatch(/clicks' worth|300 × /);
   });
 
-  it("call no part of the game the frontier, and name each piece shape in a container shape a shape pair", () => {
+  it("call no part of the game the frontier, and never call a set of records a pair", () => {
     for (const u of UPGRADES) expect([u.name, u.effect, ...all(u)].join(" "), u.id).not.toMatch(/frontier/i);
     const text = (id: UpgradeId) => all(UPGRADES.find((u) => u.id === id)!).join(" ");
-    expect(text("collections")).toContain("A shape pair is one piece shape in one container shape");
-    expect(text("collector")).toContain("A collection is one piece shape in one container shape");
+    expect(text("collections")).toContain("Same pieces and container. When you have 9 records");
+    expect(text("collections")).not.toMatch(/\bpairs?\b/i);
+    expect(text("collector")).not.toMatch(/\bpairs?\b/i);
   });
 
   // The texts are written in numbers; these are the game's constants they quote.
@@ -495,7 +497,9 @@ describe("Tighter upgrade texts", () => {
     expect(text("learning")).toContain("at least 200 evaluations");
     expect(text("methodMatch")).toContain("at least 20 evaluations");
     expect(text("pipeline")).toContain("up to 9 methods");
-    expect([PAIR_BONUS, SHAPE_BONUS, TIER_BONUS, [...SHAPE_MILESTONES]]).toEqual([0.02, 0.01, 0.05, [10, 30, 100]]);
+    expect([COMBO_BONUS, COMBO_RECORDS, SHAPE_BONUS, TIER_BONUS, [...SHAPE_MILESTONES]]).toEqual([
+      0.02, 9, 0.01, 0.05, [10, 30, 100],
+    ]);
     expect(text("collections")).toContain("1 + 0.02 × <var>a</var> + 0.01 × <var>b</var> + 0.05 × <var>t</var>");
     expect([TRANSFER_MARGIN, MAX_NEIGHBOUR_LOOKUPS]).toEqual([0.98, 4]);
     // 6 missing pieces fit the greedy placement's budget (33 spots tried each), 7 do not

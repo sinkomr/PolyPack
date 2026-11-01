@@ -1,7 +1,8 @@
 import { improvesOn } from "@polypack/geometry";
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import {
-  PAIR_BONUS,
+  COMBO_BONUS,
+  COMBO_RECORDS,
   RENT_PAYDAY_MS,
   RENT_GROWTH,
   RENT_RETRY_MS,
@@ -12,7 +13,7 @@ import {
   TIER_BONUS,
 } from "./economy";
 import { rulesOf } from "./families";
-import { FRONTIER_P, FRONTIER_SIDES, poly } from "./frontier";
+import { FRONTIER_P, poly } from "./frontier";
 import type { How } from "./how";
 import { METHOD_GAMES, methodLabel } from "./methods";
 import type { MethodGame } from "./methods";
@@ -344,17 +345,19 @@ const RECORDS: How[] = [
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points, and they stay through resets.",
-      `A shape pair is one piece shape in one container shape, each with ${FRONTIER_SIDES.slice(0, -1).join(", ")} or ${FRONTIER_SIDES.at(-1)} sides. It is complete when you have a confirmed record for each of its ${FRONTIER_P.length} piece counts, ${andList(FRONTIER_P.map(String))}.`,
-      `A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}.`,
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points, and they stay through resets. Only polygon problems count for now.",
+      `Same pieces and container. When you have ${COMBO_RECORDS} confirmed records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
+      `Same pieces. A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Each milestone gives +${SHAPE_BONUS * 100} %.`,
+      `Tiers. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}. Each gives +${TIER_BONUS * 100} %.`,
+      "Example. You have 9 records of 21-gons in a 24-gon, and 3 more of 21-gons in other containers. The 9 give +2 %. All 12 have 21-gon pieces, so they give +1 % more. With your first open problem and your first loose record (+10 %), every point you earn is multiplied by 1.13.",
     ],
     math: [
-      `<var>C</var> = ${PAIR_BONUS} × <var>A</var> + ${SHAPE_BONUS} × <var>K</var> + ${TIER_BONUS} × <var>Q</var>`,
+      `<var>C</var> = ${COMBO_BONUS} × <var>A</var> + ${SHAPE_BONUS} × <var>K</var> + ${TIER_BONUS} × <var>Q</var>`,
       `all points × (1 + <var>C</var>)`,
     ],
     vars: [
       ["<var>C</var>", "the collections bonus (0.05 means +5 %)"],
-      ["<var>A</var>", "your complete shape pairs"],
+      ["<var>A</var>", `your combinations of pieces and container with ${COMBO_RECORDS} records`],
       ["<var>K</var>", "the milestones your piece shapes have reached, added over every shape"],
       ["<var>Q</var>", "the tiers with a first record (0 to 4)"],
     ],

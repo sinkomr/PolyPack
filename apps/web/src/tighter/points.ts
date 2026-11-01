@@ -187,3 +187,6 @@ export function recordPoints(input: PointsInput): Points | null {
     total: w * c * k * (nibble + size + gap + bonus) * beat,
   };
 }
+
+/** Records of one piece shape in one container shape (any sides, any piece count) that a combination needs to count for Collections. */
+export const COMBO_RECORDS = 9;

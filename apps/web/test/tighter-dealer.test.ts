@@ -434,17 +434,30 @@ describe("Tighter offers and the dealer's memory", () => {
     expect(picks.retake.at(-1)).toBe("k249");
   });
 
-  it("aim the Collector at the pair nearest to complete, its missing problems in order", () => {
-    const rec = (N: number, M: number, ps: number[]) => ps.map((P) => keyOf({ family: "polygon", N, M, P }));
+  it("aim the Collector at the combination with the most records below 9, its missing piece counts in order", () => {
+    const rec = (N: number, M: number, ps: readonly number[]) => ps.map((P) => keyOf({ family: "polygon", N, M, P }));
     const recorded = new Set([...rec(21, 24, FRONTIER_P.slice(0, 7)), ...rec(30, 30, FRONTIER_P.slice(0, 3))]);
     const exclude = new Set([keyOf({ family: "polygon", N: 21, M: 24, P: FRONTIER_P[7] })]);
-    const targets = collectorTargets(recorded, exclude);
-    expect(targets[0]).toEqual({ family: "polygon", N: 21, M: 24, P: FRONTIER_P[8] });
-    expect(targets[1]).toEqual({ family: "polygon", N: 30, M: 30, P: FRONTIER_P[3] });
-    expect(targets).toHaveLength(1 + 6);
-    // a complete pair, or none begun, gives nothing
-    expect(collectorTargets(new Set(rec(21, 24, [...FRONTIER_P])), new Set())).toEqual([]);
-    expect(collectorTargets(new Set(), new Set())).toEqual([]);
+    const targets = collectorTargets(recorded, exclude, false);
+    // 21/24 has 7 records: the two frontier counts left, minus the excluded one
+    expect(targets).toEqual([{ family: "polygon", N: 21, M: 24, P: FRONTIER_P[8] }]);
+    // with More open problems, every count from 40 to 500 that has no record
+    const wide = collectorTargets(recorded, new Set(), true);
+    expect(wide).toHaveLength(461 - 7);
+    expect(wide.every((k) => k.N === 21 && k.M === 24)).toBe(true);
+    expect(wide.map((k) => k.P).slice(0, 3)).toEqual([41, 42, 43]);
+    // a complete combination, or none begun, gives nothing
+    expect(collectorTargets(new Set(rec(21, 24, FRONTIER_P)), new Set(), false)).toEqual([]);
+    expect(collectorTargets(new Set(), new Set(), true)).toEqual([]);
+    // sides without open problems are passed over; sides outside the frontier need More open problems
+    const odd = new Set([...rec(5, 7, [40, 41, 42, 43]), ...rec(22, 25, [40, 41]), ...rec(30, 30, [40])]);
+    expect(collectorTargets(odd, new Set(), false)[0]).toMatchObject({ N: 30, M: 30, P: 60 });
+    expect(collectorTargets(odd, new Set(), true)[0]).toMatchObject({ N: 22, M: 25, P: 42 });
+    // a combination whose gaps are all excluded (taken) gives way to the next one
+    const gaps = FRONTIER_P.slice(7).map((P) => keyOf({ family: "polygon", N: 21, M: 24, P }));
+    const next = collectorTargets(recorded, new Set(gaps), false);
+    expect(next.every((k) => k.N === 30 && k.M === 30)).toBe(true);
+    expect(next).toHaveLength(FRONTIER_P.length - 3);
   });
 
   it("names the dealer's upgrades as game parameters", () => {

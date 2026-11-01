@@ -29,7 +29,6 @@ import { ListedSpace, ListedSpaceProblem, SpaceListings, drawSliceProblem, listi
 import { problemTitle, rulesOf } from "./families";
 import {
   FRONTIER,
-  FRONTIER_P,
   ProblemKey,
   STARTER,
   SpaceKey,
@@ -89,7 +88,8 @@ import {
   submitTarget,
 } from "./game";
 import {
-  PAIR_BONUS,
+  COMBO_BONUS,
+  COMBO_RECORDS,
   RENT_PAYDAY_MS,
   RENT_RETRY_MS,
   SHAPE_BONUS,
@@ -2097,15 +2097,32 @@ async function retakeCandidate(io: DealIo): Promise<Candidate | null> {
   return null;
 }
 
-/** A missing problem of the player's nearest-to-complete collection, still open (Collector). */
-async function collectorCandidate(io: DealIo, exclude: Set<string>): Promise<Candidate | null> {
-  const targets = collectorTargets(new Set(state.economy.recorded), exclude).filter((k) =>
-    allowed({ ...k, tier: "open" }),
-  );
-  for (const k of targets.slice(0, 6)) {
+/**
+ * An open problem of the combination of pieces and container the player has the most records in
+ * below 9, at a piece count with no record yet (Collector). One batch finds it, one GET confirms it.
+ */
+async function collectorCandidate(io: DealIo, d: DealerState, exclude: Set<string>): Promise<Candidate | null> {
+  // problems found taken lately count as excluded, so a combination whose gaps are all taken gives way to the next
+  const unusable = { has: (k: string) => exclude.has(k) || takenCache.has(k) };
+  const targets = collectorTargets(new Set(state.economy.recorded), unusable, owned().has("wide"));
+  if (!targets.length) return null;
+  const pass = (p: ProblemKey) => allowed({ ...p, tier: "open" });
+  const found = await findOpen(finderDeps, d, [{ keys: targets }], {
+    exclude,
+    taken: takenCache,
+    allow: pass,
+    within: dealerFilters(),
+    budget: 2,
+  });
+  io.gets += found.requests;
+  if (found.offline) io.offline = true;
+  for (const k of found.open) {
+    if (spentIo(io)) return null;
     const info = await problemInfo(io, k);
     if (!info) return null;
     if (openDealable(info)) return openCandidateOf(k);
+    // a null leader also answers for a closed problem
+    takenCache.add(keyOf(k));
     skipped.add(keyOf(k));
     exclude.add(keyOf(k));
   }
@@ -2123,7 +2140,7 @@ const sourceReach = (o: ReadonlySet<UpgradeId>): SourceReach => ({
 
 /**
  * Up to `want` candidates, each checked with GET just before it counts: a retake first (Retake),
- * one deal in three a collection's missing problem (Collector), then draws, two in three of them
+ * one deal in three an open problem of the combination the player is closest to 9 records in (Collector), then draws, two in three of them
  * contested once the player reaches site records. `forced` is a candidate that must go first.
  */
 async function gatherCandidates(
@@ -2141,7 +2158,7 @@ async function gatherCandidates(
     exclude.add(keyOf(c));
   };
   if (inUse(o, "retake")) forced = await retakeCandidate(io);
-  if (!forced && inUse(o, "collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, exclude);
+  if (!forced && inUse(o, "collector") && d.dealt % 3 === 2) forced = await collectorCandidate(io, d, exclude);
   if (!forced) forced = await starterCandidate(io, d, exclude);
   if (forced) exclude.add(keyOf(forced));
   // attempts go only to sources that can give a problem the filters allow
@@ -3814,11 +3831,11 @@ function renderRecords(o: Owned): void {
     setLines("t-rc-sets", []);
     return;
   }
-  const pairName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
+  const comboName = (n: { N: number; M: number }) => problemTitle(poly(n.N, n.M, 0)).replace(/, 0 pieces$/, "");
   const lines = [
-    `${fmtInt(c.pairs)} complete shape pair${c.pairs === 1 ? "" : "s"}, with a record at all ${FRONTIER_P.length} piece counts (+${fmtPct(PAIR_BONUS, 0)} each).` +
+    `${fmtInt(c.combos)} combination${c.combos === 1 ? "" : "s"} of pieces and container with ${COMBO_RECORDS} records (+${fmtPct(COMBO_BONUS, 0)} each).` +
       (c.nearest.length
-        ? ` Closest to complete: ${andList(c.nearest.map((n) => `${pairName(n)} (${n.have} of ${FRONTIER_P.length})`))}.`
+        ? ` Closest: ${andList(c.nearest.map((n) => `${comboName(n)} (${n.have} of ${COMBO_RECORDS})`))}.`
         : ""),
     `${fmtInt(c.milestones)} shape milestone${c.milestones === 1 ? "" : "s"} at ${andList(SHAPE_MILESTONES.map(String))} records with one piece shape (+${fmtPct(SHAPE_BONUS, 0)} each).` +
       (c.shapes.length
