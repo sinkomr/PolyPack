@@ -1,7 +1,7 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
 import { msPerEval, rulesOf } from "./families";
-import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, poly } from "./frontier";
-import { CONTEST, TIERS, Tier, costFactor } from "./points";
+import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, parseKey, poly } from "./frontier";
+import { COMBO_RECORDS, CONTEST, TIERS, Tier, costFactor } from "./points";
 
 /**
  * The dealer's judgement (plan 2026-10-20 §3): what a candidate problem is expected to pay, the
@@ -258,25 +258,44 @@ export function formatShapes(list: readonly number[] | null): string {
 
 // ---------- the Collector ----------
 
+/** The piece counts the Collector looks at: the frontier's, or every count from 40 to 500 with More open problems. */
+const collectorPieces = (wide: boolean): number[] =>
+  wide ? Array.from({ length: 461 }, (_, i) => 40 + i) : [...FRONTIER_P];
+
 /**
- * Problems that would complete the player's nearest collection: for each frontier pair (N, M), all
- * of FRONTIER_P. Pairs with the most problems recorded (but not all) come first; within a pair, the
- * missing P in order. Problems in `exclude` (dealt before, or taken) are skipped.
+ * Open problems for the Collector: those of the combination of piece shape and container shape with
+ * the most records below COMBO_RECORDS, among the combinations that can have open problems (both
+ * sides in FRONTIER_SIDES, or any side from 21 to 100 with More open problems). They are the problems
+ * of that combination at a piece count the player has no record at, in order of piece count, except
+ * those in `exclude` (dealt before, or taken). Ties go to the smaller piece shape, then container.
+ * A combination whose missing problems are all excluded gives way to the next, so the Collector
+ * never sticks to one it cannot fill. Nothing when no combination has a record, or every one is complete.
  */
-export function collectorTargets(recorded: ReadonlySet<string>, exclude: ReadonlySet<string>): PolygonKey[] {
-  const pairs: { have: number; missing: PolygonKey[]; order: number }[] = [];
-  let order = 0;
-  for (const N of FRONTIER_SIDES)
-    for (const M of FRONTIER_SIDES) {
-      let have = 0;
-      const missing: PolygonKey[] = [];
-      for (const P of FRONTIER_P) {
-        const k = poly(N, M, P);
-        if (recorded.has(keyOf(k))) have++;
-        else if (!exclude.has(keyOf(k))) missing.push(k);
-      }
-      if (have > 0 && have < FRONTIER_P.length && missing.length) pairs.push({ have, missing, order: order++ });
-    }
-  pairs.sort((a, b) => b.have - a.have || a.order - b.order);
-  return pairs.flatMap((p) => p.missing);
+export function collectorTargets(
+  recorded: ReadonlySet<string>,
+  exclude: { has(key: string): boolean },
+  wide: boolean,
+): PolygonKey[] {
+  const have = new Map<string, { N: number; M: number; Ps: Set<number> }>();
+  for (const key of recorded) {
+    const p = parseKey(key);
+    if (!p || !isPolygon(p)) continue;
+    const ok = (s: number) => (wide ? s >= 21 && s <= 100 : (FRONTIER_SIDES as readonly number[]).includes(s));
+    if (!ok(p.N) || !ok(p.M)) continue;
+    const id = `${p.N}/${p.M}`;
+    const combo = have.get(id) ?? { N: p.N, M: p.M, Ps: new Set<number>() };
+    combo.Ps.add(p.P);
+    have.set(id, combo);
+  }
+  const order = [...have.values()]
+    .filter((c) => c.Ps.size < COMBO_RECORDS)
+    .sort((a, b) => b.Ps.size - a.Ps.size || a.N - b.N || a.M - b.M);
+  for (const c of order) {
+    const missing = collectorPieces(wide)
+      .filter((P) => !c.Ps.has(P))
+      .map((P) => poly(c.N, c.M, P))
+      .filter((k) => !exclude.has(keyOf(k)));
+    if (missing.length) return missing;
+  }
+  return [];
 }

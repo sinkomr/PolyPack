@@ -19,6 +19,8 @@ import {
 } from "../src/tighter/game";
 import {
   RENT_WINDOW_MS,
+  COMBO_BONUS,
+  COMBO_RECORDS,
   collections,
   collectionsBonus,
   heldRecords,
@@ -31,7 +33,7 @@ import {
   syncEconomy,
   tidyRent,
 } from "../src/tighter/economy";
-import { FRONTIER_P } from "../src/tighter/frontier";
+import { FRONTIER_P, FRONTIER_SIDES } from "../src/tighter/frontier";
 import { fromJson, toJson } from "../src/tighter/save";
 
 const T0 = 1_000_000;
@@ -265,17 +267,20 @@ describe("Tighter rent", () => {
 });
 
 describe("Tighter collections", () => {
-  it("count frontier pairs, piece-shape milestones and tier firsts", () => {
+  it("count combinations of pieces and container, piece-shape milestones and tier firsts", () => {
     const s = newGame(T0, 1);
     s.economy.recorded = FRONTIER_P.map((P) => `24/30/${P}`);
     s.economy.recorded.push(...FRONTIER_P.slice(0, 7).map((P) => `21/21/${P}`));
-    s.economy.recorded.push(...Array.from({ length: 14 }, (_, i) => `24/40/${300 + i}`));
+    s.economy.recorded.push(...Array.from({ length: 8 }, (_, i) => `24/40/${300 + i}`));
     s.economy.tiers = ["open", "loose"];
     const c = collections(s.economy);
-    expect(c.pairs).toBe(1);
-    expect(c.nearest[0]).toEqual({ N: 21, M: 21, have: 7 });
-    // 24-gons: 9 + 14 records, past the 10 milestone; 21-gons: 7
-    expect(c.shapes[0]).toEqual({ N: 24, count: 23, milestones: 1 });
+    expect(c.combos).toBe(1);
+    expect(c.nearest).toEqual([
+      { N: 24, M: 40, have: 8 },
+      { N: 21, M: 21, have: 7 },
+    ]);
+    // 24-gons: 9 + 8 records, past the 10 milestone; 21-gons: 7
+    expect(c.shapes[0]).toEqual({ N: 24, count: 17, milestones: 1 });
     expect(c.milestones).toBe(1);
     expect(c.tiers).toEqual(["open", "loose"]);
     expect(c.bonus).toBeCloseTo(0.02 + 0.01 + 0.1, 12);
@@ -300,5 +305,30 @@ describe("Tighter economy saves", () => {
     const r = fromJson(toJson(s), T0 + H);
     expect(r.ok && r.state.economy).toEqual(s.economy);
     expect(r.ok && r.state.standing).toEqual(s.standing);
+  });
+});
+
+describe("Tighter collections, the combination rule", () => {
+  it("counts every combination the old rule counted, so no bonus falls", () => {
+    for (const N of FRONTIER_SIDES)
+      for (const M of FRONTIER_SIDES) {
+        const e = newGame(T0, 1).economy;
+        // the old rule: a record at every frontier piece count of one frontier pair
+        e.recorded = FRONTIER_P.map((P) => `${N}/${M}/${P}`);
+        expect(FRONTIER_P.length).toBeGreaterThanOrEqual(COMBO_RECORDS);
+        expect(collections(e).combos).toBe(1);
+        expect(collections(e).bonus).toBeGreaterThanOrEqual(COMBO_BONUS);
+      }
+  });
+
+  it("counts 9 records of one combination at any piece counts, and 8 not", () => {
+    const e = newGame(T0, 1).economy;
+    e.recorded = Array.from({ length: 8 }, (_, i) => `3/4/${2 + i}`);
+    expect(collections(e).combos).toBe(0);
+    expect(collections(e).nearest).toEqual([{ N: 3, M: 4, have: 8 }]);
+    const f = newGame(T0, 1).economy;
+    f.recorded = [...e.recorded, "3/4/499"];
+    expect(collections(f).combos).toBe(1);
+    expect(collections(f).nearest).toEqual([]);
   });
 });

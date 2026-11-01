@@ -1,6 +1,7 @@
 import { parseDealtKey } from "./catalogue";
-import { FRONTIER_P, FRONTIER_SIDES, ProblemKey, isPolygon, parseKey } from "./frontier";
+import { ProblemKey, isPolygon, parseKey } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
+import { COMBO_RECORDS } from "./points";
 import { ruleRewardFactor, standingMultiplier } from "./standing";
 import { level } from "./upgrades";
 import type { Owned } from "./upgrades";
@@ -14,9 +15,10 @@ import type { Owned } from "./upgrades";
  * held in batches (GET /api/leaders). A record still held pays the rent since its last payday, at most
  * a week of it; one found lost, by that or by a live event, pays nothing for the unsettled time. The server says who leads, so rent needs no other trust.
  *
- * **Collections**, counted from records the server confirmed and kept through resets: every P of a
- * frontier pair (+2 % to all points each), 10, 30 and 100 records with one piece shape (+1 % each),
- * the first record in each tier (+5 % each).
+ * **Collections**, counted from records the server confirmed and kept through resets: every
+ * combination of a piece shape and a container shape with 9 records, of any sides and piece counts
+ * (+2 % to all points each), 10, 30 and 100 records with one piece shape (+1 % each), the first
+ * record in each tier (+5 % each).
  */
 
 export interface EconomyState {
@@ -86,51 +88,51 @@ export function normalizeEconomy(v: unknown): EconomyState {
 // ---------- collections ----------
 
 export interface Collections {
-  /** Frontier pairs with a record on every frontier P. */
-  pairs: number;
-  /** The pairs closest to complete (not complete), most recorded first: up to three. */
+  /** Combinations of a piece shape and a container shape with at least COMBO_RECORDS records. */
+  combos: number;
+  /** The combinations closest to COMBO_RECORDS without reaching it, most records first: up to three. */
   nearest: { N: number; M: number; have: number }[];
   /** Piece shapes with records, and the milestones (10, 30, 100) each has reached. */
   shapes: { N: number; count: number; milestones: number }[];
   milestones: number;
   /** Tiers with a first record. */
   tiers: string[];
-  /** What it adds to all points (0.02 a pair, 0.01 a milestone, 0.05 a tier first). */
+  /** What it adds to all points (0.02 a combination, 0.01 a milestone, 0.05 a tier first). */
   bonus: number;
 }
 
-export const PAIR_BONUS = 0.02;
+export { COMBO_RECORDS };
+export const COMBO_BONUS = 0.02;
 export const SHAPE_BONUS = 0.01;
 export const TIER_BONUS = 0.05;
 export const SHAPE_MILESTONES = [10, 30, 100] as const;
-const FRONTIER_SIDE_SET = new Set<number>(FRONTIER_SIDES);
-const FRONTIER_P_SET = new Set<number>(FRONTIER_P);
 
 /** Collections are counted at every paid click: kept per list of records until it changes. */
 const memo = new WeakMap<string[], { key: string; value: Collections }>();
 
-/** The player's collections, from the records confirmed (whether or not Collections is owned). */
+/**
+ * The player's collections, from the records confirmed (whether or not Collections is owned). The
+ * records are distinct problems, so a combination's count is its number of distinct piece counts.
+ */
 export function collections(e: EconomyState): Collections {
   const key = `${e.recorded.length}|${e.recorded.at(-1)}|${e.tiers.join(",")}`;
   const seen = memo.get(e.recorded);
   if (seen?.key === key) return seen.value;
-  const pairs = new Map<string, { N: number; M: number; have: number }>();
+  const combos = new Map<string, { N: number; M: number; have: number }>();
   const shapes = new Map<number, number>();
   for (const k of e.recorded) {
     const p = parseKey(k);
     // collections count polygon problems only for now
     if (!p || !isPolygon(p)) continue;
     shapes.set(p.N, (shapes.get(p.N) ?? 0) + 1);
-    if (FRONTIER_SIDE_SET.has(p.N) && FRONTIER_SIDE_SET.has(p.M) && FRONTIER_P_SET.has(p.P)) {
-      const id = `${p.N}/${p.M}`;
-      const pair = pairs.get(id) ?? { N: p.N, M: p.M, have: 0 };
-      pair.have++;
-      pairs.set(id, pair);
-    }
+    const id = `${p.N}/${p.M}`;
+    const combo = combos.get(id) ?? { N: p.N, M: p.M, have: 0 };
+    combo.have++;
+    combos.set(id, combo);
   }
-  const complete = [...pairs.values()].filter((x) => x.have >= FRONTIER_P.length).length;
-  const nearest = [...pairs.values()]
-    .filter((x) => x.have < FRONTIER_P.length)
+  const complete = [...combos.values()].filter((x) => x.have >= COMBO_RECORDS).length;
+  const nearest = [...combos.values()]
+    .filter((x) => x.have < COMBO_RECORDS)
     .sort((a, b) => b.have - a.have || a.N - b.N || a.M - b.M)
     .slice(0, 3);
   const shapeList = [...shapes.entries()]
@@ -139,12 +141,12 @@ export function collections(e: EconomyState): Collections {
   const milestones = shapeList.reduce((t, x) => t + x.milestones, 0);
   const tiers = TIERS.filter((t) => e.tiers.includes(t));
   const value: Collections = {
-    pairs: complete,
+    combos: complete,
     nearest,
     shapes: shapeList,
     milestones,
     tiers,
-    bonus: complete * PAIR_BONUS + milestones * SHAPE_BONUS + tiers.length * TIER_BONUS,
+    bonus: complete * COMBO_BONUS + milestones * SHAPE_BONUS + tiers.length * TIER_BONUS,
   };
   memo.set(e.recorded, { key, value });
   return value;
