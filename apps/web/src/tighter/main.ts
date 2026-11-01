@@ -810,7 +810,7 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
     const transfer = owned().has("transfer") ? await findTransfer(p).catch(() => null) : null;
     if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
     const start = chooseStart({ board: config, score: e.score }, trim, transfer);
-    applyLoadAll(p, start.board, start.score, trim);
+    applyLoadAll(p, start.board, start.score, trim, start.transferred ? Math.min(e.score, trim ?? Infinity) : null);
     reveal(state, "score");
     if (p.key === state.focus) {
       const b0 = rulesOf(p).bound(p)!;

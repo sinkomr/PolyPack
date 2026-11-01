@@ -766,6 +766,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     bound: isPolygon(k) ? null : posOrNull(v.bound),
     dealtAt: num(v.dealtAt, now),
     floor: posOrNull(v.floor),
+    payFrom: posOrNull(v.payFrom),
     published: posOrNull(v.published),
     phase,
     board: phase === "bare" ? null : b,
