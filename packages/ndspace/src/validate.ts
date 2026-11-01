@@ -8,7 +8,7 @@
  * time: a check that needs more is refused, with that reason, so that no input costs unbounded time. The problem set is
  * finite, so the cap is also checked against the worst problems (the tests).
  */
-import { MAX_SIZE, type NdProblem, isLoaded, loadPolytope, readPose, validateNdSteps } from "@polypack/ndim";
+import { MAX_SIZE, type NdProblem, isLoaded, loadPolytope, readPose, ndCheck as coreCheck } from "@polypack/ndim";
 import { ND_BALL, ND_INFO, ndCode, type NdProblemId } from "./catalogue";
 
 /**
@@ -103,7 +103,8 @@ export function* ndCheckSteps(
   capMs = NDIM_CHECK_MS,
   now: () => number = () => performance.now(),
 ): Generator<void, string[]> {
-  const inner = validateNdSteps(ndProblemOf(p), config, { tol, maxErrors });
+  // the core's limits (pieces, vertex and wall work) are those of the problem's registry, never of the request
+  const inner = coreCheck(ndProblemOf(p), config, { tol, maxErrors });
   let work = 0;
   for (;;) {
     const t = now();

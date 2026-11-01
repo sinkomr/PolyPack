@@ -132,6 +132,8 @@ class Placed:
             flip = 0
             if len(pose) == d + m + 1:
                 f = pose[d + m]
+                if isinstance(f, float) and f.is_integer():      # JSON has one number type: 2.0 is 2, as in the TypeScript validator
+                    f = int(f)
                 if isinstance(f, bool) or not isinstance(f, int) or not 0 <= f < (1 << d):
                     raise CertError(f'pieces[{i}]: the flip must be an integer in [0, 2^{d})')
                 if bin(f).count('1') % 2:

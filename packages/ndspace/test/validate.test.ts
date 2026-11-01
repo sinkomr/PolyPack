@@ -142,8 +142,8 @@ describe("checking a configuration", () => {
       r = steps.next();
     }
     expect(r.value).toEqual([]);
-    // 24 pieces: at least the 276 pairs
-    expect(yields).toBeGreaterThanOrEqual(276);
+    // 24 pieces: at least a turn per piece (the core batches the quick pairs)
+    expect(yields).toBeGreaterThanOrEqual(24);
   });
 
   it("stops a check whose work passes the cap, and says so", () => {

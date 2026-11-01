@@ -99,6 +99,27 @@ class Catalogue(unittest.TestCase):
         with self.assertRaises(AssertionError):
             CAT.verify(q)
 
+    def test_a_facet_repeated_at_another_scale_is_refused(self):
+        """A scaled copy of a facet in place of another is the same count of distinct lists but one half-space too few."""
+        by = {x['code']: x for x in self.doc['polytopes']}
+        for code in ('4:cube', '5:demi', '6:221', '4:24cell', '4:600cell', '7:321'):
+            e = by[code]
+            for mode in ({}, {'facet_sample': 4}):
+                f = copy.deepcopy(e)
+                f['F'][0] = [2 * x for x in f['F'][1]]
+                with self.assertRaises(AssertionError, msg=f'{code} {mode}'):
+                    CAT.verify(f, **mode)
+                f = copy.deepcopy(e)
+                f['F'][0] = [3 * x for x in f['F'][1]]
+                with self.assertRaises(AssertionError, msg=f'{code} x3 {mode}'):
+                    CAT.verify(f, **mode)
+        # reordering is not a change (the sampled mode on the largest entry is what the fast tests use)
+        f = copy.deepcopy(by['5:demi'])
+        f['F'].reverse()
+        f['V'].reverse()
+        CAT.verify(f)
+        CAT.verify(copy.deepcopy(by['4:600cell']), facet_sample=8)
+
     def test_float_data_of_the_typescript_package_is_current(self):
         pat = re.compile(r'code:\s*"([^"]+)",\s*V:\s*\[([^\]]*)\],\s*N:\s*\[([^\]]*)\],\s*b:\s*\[([^\]]*)\]')
         seen = {}
@@ -210,6 +231,14 @@ class Malformed(unittest.TestCase):
         self.refused({'s': 2.0, 'pieces': [pose + [0b110000]]}, regex='flip')
         self.refused({'s': 2.0, 'pieces': [pose + [1.5]]}, regex='flip')
         self.refused({'s': 2.0, 'pieces': [pose + [True]]}, regex='flip')
+        # an integral float is the same JSON number as the integer (as in the TypeScript validator): accepted, equal results
+        for flip in (0, 3, 6):
+            a = C.certify_config(PROB, {'s': 3.0, 'pieces': [pose + [flip]]})
+            b = C.certify_config(PROB, {'s': 3.0, 'pieces': [pose + [float(flip)]]})
+            self.assertTrue(a['ok'] and b['ok'])
+            self.assertEqual(a['min_wall_gap'], b['min_wall_gap'])
+        self.refused({'s': 2.0, 'pieces': [pose + [float('inf')]]}, regex='flip|finite')
+        self.refused({'s': 2.0, 'pieces': [pose + [1.0]]}, regex='even number')
 
     def test_problems(self):
         cfg = {'s': 2.0, 'pieces': [[0.0] * 4 + Z]}

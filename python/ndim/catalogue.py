@@ -314,12 +314,29 @@ def _slack_rows(Q):
     return on_all
 
 
+def _facet_key(F, d, axis):
+    """A key equal for two facets exactly when their half-spaces are the same: the facet scaled to a primitive integer vector
+    (axis form) or to a leading coefficient of 1 over Q(sqrt5) (q5 form). The offsets are positive, so the orientation agrees."""
+    if axis:
+        g = 0
+        for x in F:
+            g = math.gcd(g, abs(x))
+        return tuple(x // g for x in F)
+    els = [(Fr(F[2 * k]), Fr(F[2 * k + 1])) for k in range(d + 1)]
+    lead = next(el for el in els if el != (0, 0))
+    a, b = lead
+    n = a * a - 5 * b * b                          # (a + b sqrt5)(a - b sqrt5) != 0 for a nonzero element of Q(sqrt5)
+    ia, ib = a / n, -b / n                         # the inverse of the leading element
+    return tuple((x * ia + 5 * y * ib, x * ib + y * ia) for x, y in els)
+
+
 def verify(e, *, facet_sample=None):
     """Proves the entry exact (see the module docstring). Raises AssertionError with a reason; returns a summary dict.
 
     facet_sample: if given, only this many facets (spread evenly) are tested against all vertices and for the
     supporting-face rank, and the extreme point and edge tests are skipped (a partial check for the largest polytope in
-    the fast tests); the counts, the edges and the distinctness of the facets are still checked in full."""
+    the fast tests); the counts, the edges, the positivity of the offsets and the distinctness of all the facets as
+    half-spaces (a copy at another scale included) are still checked in full."""
     code, d = e['code'], e['d']
     nV, nE, nF = LITERATURE[code]
     Q = _Q(e)
@@ -351,6 +368,8 @@ def verify(e, *, facet_sample=None):
     assert len({tuple(f) for f in F}) == nF, f'{code}: repeated facets'
     for f in range(nF):                           # b > 0: the centroid 0 is strictly inside every half-space
         assert (F[f][d] > 0) if Q.axis else (_sign5(F[f][2 * d], F[f][2 * d + 1]) > 0), f'{code}: facet {f} excludes 0'
+    # distinct as half-spaces, not only as lists: a facet repeated at another scale would pass the test above
+    assert len({_facet_key(f, d, Q.axis) for f in F}) == nF, f'{code}: a facet is repeated (at another scale)'
     if facet_sample is not None:
         pick = list(range(0, nF, max(1, nF // facet_sample)))
         sub = dict(e, F=[F[f] for f in pick])
@@ -361,6 +380,7 @@ def verify(e, *, facet_sample=None):
                 f'{code}: facet {pick[k]} touches only a lower-dimensional face'
         return {'code': code, 'V': nV, 'E': len(edges), 'F': nF, 'partial': True}
     on_all = _slack_rows(Q)
+    assert len({tuple(on) for on in on_all}) == nF, f'{code}: two facets touch the same vertices'   # also catches a scaled copy
     through = [[] for _ in range(nV)]
     for f, on in enumerate(on_all):
         assert len(on) >= d
