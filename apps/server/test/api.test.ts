@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import {
   AtlasResponse,
   Holder,
+  HolderPair,
+  HolderResponse,
   HoldersResponse,
   LEADERBOARD_SIZE,
   LiteratureRecord,
@@ -21,7 +23,16 @@ import {
 } from "@polypack/geometry";
 import { registry } from "@polypack/solver";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ATLAS_MAX_PIECES, ATLAS_MAX_SPAN, HOLDERS_CHUNK, atlasSource, createApp, holderShare } from "../src/app";
+import {
+  ATLAS_MAX_PIECES,
+  ATLAS_MAX_SPAN,
+  AppOptions,
+  HOLDERS_CHUNK,
+  HOLDER_CHUNK,
+  atlasSource,
+  createApp,
+  holderShare,
+} from "../src/app";
 import { SOLVER_METHODS } from "../src/docs";
 import { SqliteStore } from "../src/sqlite-store";
 import { GET_MANY_LIMIT, NewSubmission, ProblemLeader } from "../src/store";
@@ -1588,7 +1599,10 @@ describe("GET /api/holders", () => {
     const html = await (await app.request("/api")).text();
     expect(html).toContain("GET /api/holders");
     expect(html).toContain("The counts follow every entry as it changes, so the answer is current.");
-    expect(html).not.toContain("15 minutes");
+    // the counts are current; it is the page of one name (GET /api/holder, the next section) that is kept for a while
+    const section = html.slice(html.indexOf('id="holders"'), html.indexOf('id="holder"'));
+    expect(section).toContain("GET /api/holders");
+    expect(section).not.toContain("15 minutes");
   });
 });
 
@@ -2062,6 +2076,700 @@ describe("GET /api/holders: the counts kept", () => {
     // a closed problem counts for no one
     expect(holderShare(lead(4.9), published(4, 3, 5, "proven"))).toBeNull();
     expect(holderShare(lead(4.9), published(4, 3, 5, "trivial_tiling"))).toBeNull();
+  });
+});
+
+// What one name holds (GET /api/holder): the problems it leads, by pair of shapes. The totals are the name's row of
+// GET /api/holders. The answers are kept per name (see createApp), so most of the tests below are about when a kept
+// answer may still be given.
+describe("GET /api/holder", () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+  const adminPost = (path: string, body: object) =>
+    app.request(path, {
+      method: "POST",
+      headers: { authorization: "Bearer secret", "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  const published = (
+    M: number,
+    P: number,
+    value: number,
+    status: LiteratureRecord["status"] = "best_known",
+  ): LiteratureRecord => ({
+    ...fakeRecord,
+    N: 4,
+    M,
+    P,
+    value,
+    display: value.toFixed(6),
+    display_precision: 6,
+    status,
+  });
+  // an entry for the store itself, without a packing
+  const raw = (
+    N: number,
+    M: number,
+    P: number,
+    score: number,
+    name: string,
+    verification: NewSubmission["verification"] = "none",
+  ): NewSubmission => ({
+    N,
+    M,
+    P,
+    score,
+    name,
+    agent_note: "",
+    found_with: "hand",
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00.000Z",
+    verification,
+    literature_value: null,
+    strict_check: null,
+  });
+  const prng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+
+  /** The clock of the app, which the tests move: milliseconds since the epoch. */
+  const T0 = Date.UTC(2026, 10, 1, 12, 0, 0);
+  let now = T0;
+  /**
+   * An app on `store` (the one `get` and `submit` talk to), with a count of the reads that answers make:
+   * `names` answers begun (a first page), `pages` pages of problems read.
+   */
+  const open = (store: SqliteStore, records: LiteratureRecord[] = [], more: Partial<AppOptions> = {}) => {
+    const reads = { names: 0, pages: 0 };
+    const seen = new Proxy(store, {
+      get(target, key) {
+        const value = Reflect.get(target, key, target);
+        if (typeof value !== "function") return value;
+        return (...args: unknown[]) => {
+          if (key === "problemsNamed") {
+            reads.pages++;
+            if (args[1] === null) reads.names++;
+          }
+          return value.apply(target, args);
+        };
+      },
+    });
+    now = T0;
+    app = createApp({
+      store: seen,
+      records,
+      adminToken: "secret",
+      clientIp: () => ip,
+      log: () => {},
+      limits: { perIp: 1_000_000, verifyMsPerMinute: 1e9 },
+      clock: () => now,
+      ...more,
+    });
+    return reads;
+  };
+  const holder = (name: string) => get(`/api/holder?name=${encodeURIComponent(name)}`);
+  const zero = (name: string, computed_at = new Date(T0).toISOString()) => ({
+    name,
+    records: 0,
+    beat_published: 0,
+    site_bests: 0,
+    pending: 0,
+    computed_at,
+    pairs: [],
+  });
+  const pair = (N: number, M: number, P: number[], records = P.length, beat_published = 0, pending = 0) => ({
+    N,
+    M,
+    P,
+    records,
+    beat_published,
+    pending,
+  });
+
+  it("gives what a name leads by pair of shapes, with the totals of its row in /api/holders", async () => {
+    const store = new SqliteStore(":memory:");
+    // squares in a square: 2 is proven, 3 published as 5, 4 as 3.5, 6 as 4, 7 as 5
+    const records = [
+      published(4, 2, 2, "proven"),
+      published(4, 3, 5),
+      published(4, 4, 3.5),
+      published(4, 6, 4),
+      published(4, 7, 5),
+    ];
+    for (const e of [
+      // ann: no published value; a closed problem, left out; one that reaches the published value; and more
+      raw(4, 4, 1, 1, "ann"),
+      raw(4, 4, 2, 2, "ann"),
+      raw(4, 4, 4, 3.5000000001, "ann"),
+      raw(4, 5, 1, 1, "ann"),
+      raw(4, 5, 2, 1, "ann"),
+      raw(4, 5, 3, 1, "ann"),
+      raw(0, 4, 1, 1, "ann"),
+      // a pair with a smaller N, and as many problems as (4, 4) has
+      raw(3, 3, 1, 1, "ann"),
+      raw(3, 3, 2, 1, "ann"),
+      // bob: below the published 5, and confirmed; worse than the published 4, a lead and no record; and an entry
+      // behind ann's, which leads
+      raw(4, 4, 3, 4.9, "bob", "confirmed"),
+      raw(4, 4, 6, 9, "bob"),
+      raw(4, 5, 2, 2, "bob"),
+      // a claim awaiting review, with the reviewed entry kept behind it, which leads nothing
+      raw(4, 4, 7, 5.5, "eve"),
+      raw(4, 4, 7, 4, "dan", "pending"),
+    ])
+      await store.insert(e);
+    open(store, records);
+    expect((await holder("ann")).body).toEqual({
+      name: "ann",
+      records: 8,
+      beat_published: 0,
+      site_bests: 8,
+      pending: 0,
+      computed_at: new Date(T0).toISOString(),
+      // most problems first, then by N, then by M
+      pairs: [pair(4, 5, [1, 2, 3]), pair(3, 3, [1, 2]), pair(4, 4, [1, 4]), pair(0, 4, [1])],
+    });
+    expect((await holder("bob")).body).toEqual({
+      name: "bob",
+      records: 1,
+      beat_published: 1,
+      site_bests: 2,
+      pending: 0,
+      computed_at: new Date(T0).toISOString(),
+      pairs: [pair(4, 4, [3, 6], 1, 1)],
+    });
+    // the claim leads, and is not a record until it is confirmed; the entry behind it leads nothing
+    expect((await holder("dan")).body).toEqual({
+      name: "dan",
+      records: 0,
+      beat_published: 0,
+      site_bests: 1,
+      pending: 1,
+      computed_at: new Date(T0).toISOString(),
+      pairs: [pair(4, 4, [7], 0, 0, 1)],
+    });
+    expect((await holder("eve")).body).toEqual(zero("eve"));
+    // every row of /api/holders is the totals of the answer, and the pairs add up to them
+    const rows = (await get("/api/holders")).body.holders as Holder[];
+    expect(rows.map((h) => h.name).sort()).toEqual(["ann", "bob", "dan"]);
+    for (const h of rows) {
+      const body = (await holder(h.name)).body as HolderResponse;
+      expect({ name: body.name, records: body.records, beat_published: body.beat_published }).toEqual({
+        name: h.name,
+        records: h.records,
+        beat_published: h.beat_published,
+      });
+      expect([body.site_bests, body.pending]).toEqual([h.site_bests, h.pending]);
+      const sum = (key: "records" | "beat_published" | "pending") => body.pairs.reduce((n, p) => n + p[key], 0);
+      expect(body.pairs.reduce((n, p) => n + p.P.length, 0)).toBe(h.site_bests);
+      expect([sum("records"), sum("beat_published"), sum("pending")]).toEqual([h.records, h.beat_published, h.pending]);
+    }
+  });
+
+  it("does not give a problem to a name that has an entry in it but does not lead it", async () => {
+    const store = new SqliteStore(":memory:");
+    for (const e of [
+      // the claim leads, and the record it displaced is kept behind it
+      raw(4, 4, 1, 3, "ann"),
+      raw(4, 4, 1, 2, "bob", "pending"),
+      // a near tie: the earlier entry leads although the later one is smaller, by less than the tolerance
+      raw(4, 5, 1, 1 + SCORE_TIE / 4, "early"),
+      raw(4, 5, 1, 1, "late"),
+      // beyond the tolerance, the smaller leads
+      raw(4, 6, 1, 1 + 4 * SCORE_TIE, "slow"),
+      raw(4, 6, 1, 1, "quick"),
+    ])
+      await store.insert(e);
+    open(store);
+    expect((await holder("ann")).body).toEqual(zero("ann"));
+    expect((await holder("bob")).body).toEqual({
+      ...zero("bob"),
+      site_bests: 1,
+      pending: 1,
+      pairs: [pair(4, 4, [1], 0, 0, 1)],
+    });
+    expect((await holder("late")).body).toEqual(zero("late"));
+    expect((await holder("early")).body).toEqual({
+      ...zero("early"),
+      records: 1,
+      site_bests: 1,
+      pairs: [pair(4, 5, [1])],
+    });
+    expect((await holder("slow")).body).toEqual(zero("slow"));
+    expect((await holder("quick")).body).toEqual({
+      ...zero("quick"),
+      records: 1,
+      site_bests: 1,
+      pairs: [pair(4, 6, [1])],
+    });
+    // and /api/holders agrees on who leads
+    const names = ((await get("/api/holders")).body.holders as Holder[]).map((h) => h.name);
+    expect(names.sort()).toEqual(["bob", "early", "quick"]);
+  });
+
+  it("matches the name exactly, whatever its characters", async () => {
+    const store = new SqliteStore(":memory:");
+    const names = [
+      "ann",
+      "Ann",
+      "ANN",
+      "ann ",
+      "Ann Lee",
+      "Zoë Ångström ☃ 数学",
+      "é",
+      "a/b",
+      "../a",
+      "a+b",
+      "a&b=c",
+      "100% sure",
+      "#1 ?x",
+      "50%25",
+      "%E2%98%83",
+      "a\\b",
+      "'; DROP TABLE submissions; --",
+      "a_",
+      "a%",
+    ];
+    for (const [i, name] of names.entries()) await store.insert(raw(4, 4, i + 1, 1, name));
+    open(store);
+    for (const [i, name] of names.entries()) {
+      const { status, body } = await holder(name);
+      expect(status).toBe(200);
+      expect(body).toEqual({ ...zero(name), records: 1, site_bests: 1, pairs: [pair(4, 4, [i + 1])] });
+    }
+    // not a part of a name, another normalisation of it, or an escaped one
+    for (const name of ["an", "nn", "ann  ", "Ann  Lee", "é", "e", "a", "%", "a b", "ann\0", "%61nn"])
+      expect((await holder(name)).body).toEqual(zero(name));
+    // an address that does not decode is a name like any other
+    const odd = await get("/api/holder?name=%E0%A4%A");
+    expect(odd.status).toBe(200);
+    // the name is not a path segment
+    expect((await get("/api/holder/ann")).status).toBe(404);
+  });
+
+  it("answers an unknown name with zeros, and refuses a missing, empty or too long one", async () => {
+    open(new SqliteStore(":memory:"));
+    expect(await holder("nobody")).toEqual({ status: 200, body: zero("nobody") });
+    const refused = [
+      "/api/holder",
+      "/api/holder?name=",
+      "/api/holder?name",
+      "/api/holder?other=ann",
+      `/api/holder?name=${"a".repeat(41)}`,
+      `/api/holder?name=${"é".repeat(41)}`,
+    ];
+    for (const path of refused) {
+      const { status, body } = await get(path);
+      expect([path, status]).toEqual([path, 400]);
+      expect(typeof body.error).toBe("string");
+    }
+    // 40 characters is the longest name there is
+    expect((await holder("a".repeat(40))).status).toBe(200);
+    expect((await holder("é".repeat(40))).status).toBe(200);
+  });
+
+  it("is documented, with its age", async () => {
+    const html = await (await app.request("/api")).text();
+    expect(html).toContain("GET /api/holder?name=");
+    expect(html).toContain("The answer can be up to 15 minutes old");
+    expect(html).toContain("<code>computed_at</code>");
+    expect(html).toContain("compressed for clients that send");
+  });
+
+  it("compresses a long answer for clients that accept it", async () => {
+    const store = new SqliteStore(":memory:");
+    for (let P = 1; P <= 300; P++) await store.insert(raw(4, 4, P, P, "ann"));
+    open(store);
+    const path = "/api/holder?name=ann";
+    const plain = await app.request(path);
+    expect(plain.headers.get("content-encoding")).toBeNull();
+    const text = await plain.text();
+    expect(text.length).toBeGreaterThan(1024);
+    const packed = await app.request(path, { headers: { "accept-encoding": "gzip" } });
+    expect(packed.headers.get("content-encoding")).toBe("gzip");
+    const bytes = new Uint8Array(await packed.arrayBuffer());
+    const unpacked = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"))).text();
+    expect(unpacked).toBe(text);
+  });
+
+  describe("the answers that are kept", () => {
+    const MINUTE = 60_000;
+    // Problems 1 to 4 of 4 sides in 4 are led by ann, 5 and 6 by bob, 7 by cat; dan leads nothing. The scores are
+    // large, so that a packing sent through the routes takes the lead.
+    const seeded = async () => {
+      const store = new SqliteStore(":memory:");
+      const led = [
+        [1, "ann"],
+        [2, "ann"],
+        [3, "ann"],
+        [4, "ann"],
+        [5, "bob"],
+        [6, "bob"],
+        [7, "cat"],
+      ] as const;
+      for (const [P, name] of led) await store.insert(raw(4, 4, P, 100, name));
+      return store;
+    };
+    const leads = async (name: string): Promise<number[]> =>
+      ((await holder(name)).body.pairs as HolderPair[])[0]?.P ?? [];
+    /** P squares in a row `gap` apart: the smaller the gap, the better the packing. */
+    const send = (P: number, name: string, gap = 3) => submit({ ...squares(P, { name }), M: 4, pieces: row(P, gap) });
+
+    it("are given as they were made for 15 minutes, whatever is submitted meanwhile, then made again once", async () => {
+      const reads = open(await seeded());
+      const text = async () => (await app.request("/api/holder?name=ann")).text();
+      const first = await text();
+      expect(JSON.parse(first)).toMatchObject({ name: "ann", site_bests: 4, computed_at: new Date(T0).toISOString() });
+      expect(reads.names).toBe(1);
+      // ann takes problem 5 from bob and improves problem 1
+      now = T0 + 1000;
+      expect((await send(5, "ann")).body.leader).toBe(true);
+      expect((await send(1, "ann")).body.leader).toBe(true);
+      expect((await get("/api/holders")).body.holders.find((h: Holder) => h.name === "ann").site_bests).toBe(5);
+      for (const at of [1000, 5 * MINUTE, 15 * MINUTE - 1]) {
+        now = T0 + at;
+        expect(await text()).toBe(first);
+      }
+      expect(reads.names).toBe(1);
+      // then it is made again, once, however many ask, and says when
+      now = T0 + 15 * MINUTE;
+      const together = await Promise.all([holder("ann"), holder("ann"), holder("ann")]);
+      for (const { body } of together) {
+        expect(body.pairs[0].P).toEqual([1, 2, 3, 4, 5]);
+        expect(body.computed_at).toBe(new Date(now).toISOString());
+      }
+      expect(reads.names).toBe(2);
+      // and it is given as it is made for 15 minutes more
+      now += 14 * MINUTE;
+      expect((await holder("ann")).body).toEqual(together[0]!.body);
+      expect(reads.names).toBe(2);
+    });
+
+    it("are given when another name has taken a lead, until they are older than 15 minutes", async () => {
+      const reads = open(await seeded());
+      for (const name of ["ann", "bob", "cat", "dan"]) await holder(name);
+      expect(reads.names).toBe(4);
+      // cat takes problem 5 from bob
+      expect((await send(5, "cat")).body.leader).toBe(true);
+      now = T0 + 14 * MINUTE;
+      expect(await leads("bob")).toEqual([5, 6]);
+      expect(await leads("cat")).toEqual([7]);
+      expect(reads.names).toBe(4);
+      now = T0 + 15 * MINUTE;
+      expect(await leads("bob")).toEqual([6]);
+      expect(await leads("cat")).toEqual([5, 7]);
+      expect(reads.names).toBe(6);
+      expect(await leads("ann")).toEqual([1, 2, 3, 4]);
+      expect(await leads("dan")).toEqual([]);
+      expect(reads.names).toBe(8);
+    });
+
+    it("are made again once in 15 minutes for a name that submits all the time", async () => {
+      const reads = open(await seeded());
+      for (let i = 0; i < 60; i++) {
+        // every half minute for half an hour, ann improves problem 2 and someone looks at her page
+        now = T0 + 30_000 * (i + 1);
+        expect((await send(2, "ann", 3 - i / 100)).body.leader).toBe(true);
+        expect(await leads("ann")).toEqual([1, 2, 3, 4]);
+      }
+      // made at 0:30, and at 15:30: twice, not 60 times
+      expect(reads.names).toBe(2);
+    });
+
+    it("are forgotten at once, for every name, when an administrator reviews, edits or removes an entry", async () => {
+      const store = new SqliteStore(":memory:");
+      for (const [P, name, verification] of [
+        [1, "ann", "none"],
+        [2, "ann", "none"],
+        [3, "bob", "pending"],
+        [4, "cat", "none"],
+      ] as const)
+        await store.insert(raw(4, 4, P, 10, name, verification));
+      const reads = open(store);
+      const idOf = async (P: number) => (await store.leader(4, 4, P))!.id;
+      const asked = async () => {
+        const out: Record<string, HolderResponse> = {};
+        for (const name of ["ann", "bob", "cat", "dan"]) out[name] = (await holder(name)).body;
+        return out;
+      };
+      let answers = await asked();
+      expect(reads.names).toBe(4);
+      expect(answers.bob).toMatchObject({ pending: 1, records: 0 });
+      // answers made again are the same, with their time
+      expect(await asked()).toEqual(answers);
+      expect(reads.names).toBe(4);
+
+      // a review: the claim is a record at once
+      expect((await adminPost("/api/admin/review", { id: await idOf(3), decision: "confirmed" })).status).toBe(200);
+      answers = await asked();
+      expect(reads.names).toBe(8);
+      expect(answers.bob).toMatchObject({ pending: 0, records: 1 });
+
+      // a rename: the name that lost the entry, and the one that has it now
+      expect((await adminPost("/api/admin/edit", { id: await idOf(2), name: "dan" })).status).toBe(200);
+      answers = await asked();
+      expect(reads.names).toBe(12);
+      expect(answers.ann.pairs).toEqual([pair(4, 4, [1])]);
+      expect(answers.dan.pairs).toEqual([pair(4, 4, [2])]);
+
+      // a note only: nothing a page shows changes, and every answer is made again all the same
+      const unchanged = answers;
+      expect((await adminPost("/api/admin/edit", { id: await idOf(4), agent_note: "checked" })).status).toBe(200);
+      answers = await asked();
+      expect(reads.names).toBe(16);
+      expect(answers).toEqual(unchanged);
+
+      // a removal: the entry is gone from its name's page
+      expect((await adminPost("/api/admin/remove", { id: await idOf(4) })).status).toBe(200);
+      answers = await asked();
+      expect(reads.names).toBe(20);
+      expect(answers.cat).toEqual(zero("cat", new Date(T0).toISOString()));
+
+      // the clock did not move: none of it waited for the age of an answer
+      expect(now).toBe(T0);
+    });
+
+    it("are made once for the requests that arrive while they are made", async () => {
+      const store = new SqliteStore(":memory:");
+      // 1,200 problems of ann, in three pages; bob has an entry behind one of them
+      for (let M = 3; M < 15; M++) for (let P = 1; P <= 100; P++) await store.insert(raw(4, M, P, 1, "ann"));
+      await store.insert(raw(4, 3, 1, 2, "bob"));
+      const reads = open(store);
+      const together = await Promise.all([holder("ann"), holder("ann"), holder("bob"), holder("ann"), holder("bob")]);
+      expect(together[0]!.body.site_bests).toBe(1200);
+      expect(together[1]!.body).toEqual(together[0]!.body);
+      expect(together[3]!.body).toEqual(together[0]!.body);
+      expect(together[2]!.body).toEqual(zero("bob", new Date(T0).toISOString()));
+      expect(together[4]!.body).toEqual(together[2]!.body);
+      // ann: pages of 500, 500 and 200 problems; bob: one page of one problem
+      expect(reads.pages).toBe(3 + 1);
+      expect(reads.names).toBe(2);
+      // and they are kept
+      await holder("ann");
+      expect(reads.pages).toBe(4);
+    });
+
+    it("are 32 at most, the ones asked longest ago going first", async () => {
+      const store = new SqliteStore(":memory:");
+      for (let i = 0; i < 40; i++) await store.insert(raw(4, 4, i + 1, 1, `n${i}`));
+      const reads = open(store);
+      for (let i = 0; i < 32; i++) await holder(`n${i}`);
+      expect(reads.names).toBe(32);
+      // asking n0 again makes it one of the newest
+      await holder("n0");
+      expect(reads.names).toBe(32);
+      // so n1 goes when n32 comes, and n0 stays
+      await holder("n32");
+      expect(reads.names).toBe(33);
+      await holder("n0");
+      expect(reads.names).toBe(33);
+      await holder("n1");
+      expect(reads.names).toBe(34);
+      for (let i = 33; i < 40; i++) await holder(`n${i}`);
+      expect(reads.names).toBe(41);
+      // 32 are kept, and n10 is the oldest of them
+      await holder("n10");
+      expect(reads.names).toBe(41);
+      await holder("n9");
+      expect(reads.names).toBe(42);
+    });
+
+    it("are given as they were made when a submission came while one was made", async () => {
+      const store = new SqliteStore(":memory:");
+      for (let P = 1; P <= 8; P++) await store.insert(raw(4, 4, P, 100, "ann"));
+      const reads = open(store, [], { holderChunk: 1 });
+      const real = store.problemsNamed.bind(store);
+      let steps = 0;
+      let sent: Promise<unknown> | null = null;
+      vi.spyOn(store, "problemsNamed").mockImplementation(async (name, after, limit) => {
+        // bob takes problem 1 after the first step has read it
+        if (++steps === 2 && name === "ann") sent = send(1, "bob", 2);
+        return real(name, after, limit);
+      });
+      expect(await leads("ann")).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      await sent;
+      expect((await get("/api/leaderboard/4/4/1")).body.entries[0].name).toBe("bob");
+      now = T0 + 15 * MINUTE - 1;
+      expect(await leads("ann")).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(reads.names).toBe(1);
+      now = T0 + 15 * MINUTE;
+      expect(await leads("ann")).toEqual([2, 3, 4, 5, 6, 7, 8]);
+      expect(reads.names).toBe(2);
+    });
+
+    describe("when an administrator's change comes while one is made", () => {
+      // Eight problems of ann, one to a step; the second step has the removal of problem 1 (read by the first) follow it
+      // in the turns. `during` runs once the removal is over, while the answer is still being made.
+      const walk = async (during?: () => void) => {
+        const store = new SqliteStore(":memory:");
+        for (let P = 1; P <= 8; P++) await store.insert(raw(4, 4, P, 10, "ann"));
+        const reads = open(store, [], { holderChunk: 1 });
+        const real = store.problemsNamed.bind(store);
+        let steps = 0;
+        let removal: Promise<Response> | null = null;
+        let removed = false;
+        let ran = false;
+        let doneAt = 0;
+        vi.spyOn(store, "problemsNamed").mockImplementation(async (name, after, limit) => {
+          steps++;
+          if (steps === 2)
+            removal = (async () => {
+              const r = await adminPost("/api/admin/remove", { id: 1 });
+              removed = true;
+              return r;
+            })();
+          if (removed && !ran) {
+            ran = true;
+            doneAt = steps;
+            during?.();
+          }
+          return real(name, after, limit);
+        });
+        return { reads, removal: () => removal!, ran: () => ran, doneAt: () => doneAt };
+      };
+
+      it("do not keep the answer being made", async () => {
+        const w = await walk();
+        const early = (await holder("ann")).body as HolderResponse;
+        expect((await w.removal()).status).toBe(200);
+        // the removal came in the middle of the walk, so that problem 1 was read before it
+        expect(w.ran()).toBe(true);
+        expect(w.doneAt()).toBeGreaterThan(2);
+        expect(early.pairs[0]!.P).toContain(1);
+        // that answer was not kept: the next request makes another, and problem 1 is not in it
+        const pages = w.reads.pages;
+        const late = (await holder("ann")).body as HolderResponse;
+        expect(w.reads.pages).toBeGreaterThan(pages);
+        expect(late.pairs[0]!.P).toEqual([2, 3, 4, 5, 6, 7, 8]);
+        // and this one is kept
+        const kept = w.reads.pages;
+        expect((await holder("ann")).body).toEqual(late);
+        expect(w.reads.pages).toBe(kept);
+      });
+
+      it("are not waited for by a request that comes after the change", async () => {
+        let late: Promise<{ body: HolderResponse }> | null = null;
+        const w = await walk(() => {
+          late = holder("ann");
+        });
+        const early = (await holder("ann")).body as HolderResponse;
+        expect((await w.removal()).status).toBe(200);
+        expect(w.ran()).toBe(true);
+        // the request that began before the change was given the problem; the one after it makes its own answer
+        expect(early.pairs[0]!.P).toContain(1);
+        const after = (await late!).body;
+        expect(after.pairs[0]!.P).toEqual([2, 3, 4, 5, 6, 7, 8]);
+        expect(w.reads.names).toBe(2);
+        // which is the one kept
+        await settle();
+        const pages = w.reads.pages;
+        expect((await holder("ann")).body).toEqual(after);
+        expect(w.reads.pages).toBe(pages);
+      });
+    });
+
+    it("let the event loop in between pages", async () => {
+      const store = new SqliteStore(":memory:");
+      for (let M = 3; M < 15; M++) for (let P = 1; P <= 100; P++) await store.insert(raw(4, M, P, 1, "ann"));
+      open(store);
+      const events: string[] = [];
+      const real = store.problemsNamed.bind(store);
+      vi.spyOn(store, "problemsNamed").mockImplementation(async (name, after, limit) => {
+        expect(limit).toBe(HOLDER_CHUNK);
+        events.push("page");
+        return real(name, after, limit);
+      });
+      let ticking = true;
+      const beat = () => {
+        if (!ticking) return;
+        events.push("tick");
+        setImmediate(beat);
+      };
+      const answer = holder("ann");
+      setImmediate(beat);
+      expect((await answer).body.site_bests).toBe(1200);
+      ticking = false;
+      // three pages, and the loop got a turn between every two
+      expect(events.filter((e) => e === "page")).toHaveLength(3);
+      expect(events.join(" ")).not.toMatch(/page page/);
+      expect(events.indexOf("tick")).toBeLessThan(events.lastIndexOf("page"));
+    });
+
+    it("equal the rows of /api/holders after a random walk of submissions and changes", async () => {
+      const rand = prng(5);
+      const pick = <T>(xs: readonly T[]): T => xs[Math.floor(rand() * xs.length)]!;
+      const NAMES = ["ann", "Ann", "bob", "cat", "dan", "eve", "e v e", "a/b"];
+      const records: LiteratureRecord[] = [];
+      for (const M of [4, 0, 5])
+        for (let P = 1; P <= 6; P++) {
+          const kind = (M + 2 * P) % 4;
+          const value = (gap: number) => evaluate({ ...squares(P), M, pieces: row(P, gap) }).score as number;
+          if (kind === 1) records.push(published(M, P, value(1.15)));
+          if (kind === 2) records.push(published(M, P, value(1), "proven"));
+          if (kind === 3) records.push(published(M, P, value(1.3)));
+        }
+      const store = new SqliteStore(":memory:");
+      for (let k = 0; k < 30; k++)
+        await store.insert(
+          raw(
+            4,
+            pick([4, 0, 5, 6, 7]),
+            1 + Math.floor(rand() * 8),
+            1 + rand() * 20,
+            pick(NAMES),
+            pick(["none", "none", "none", "pending", "confirmed"] as const),
+          ),
+        );
+      // pages of three problems
+      open(store, records, { holderChunk: 3 });
+      /** After a change of an administrator the answers are right at once; after a submission, once they are old. */
+      const check = async (afterAdmin: boolean) => {
+        if (!afterAdmin) now += 16 * MINUTE;
+        const rows = (await get("/api/holders")).body.holders as Holder[];
+        let leads = 0;
+        for (const name of NAMES) {
+          const { pairs, computed_at, ...totals } = (await holder(name)).body as HolderResponse;
+          expect(totals).toEqual(
+            rows.find((r) => r.name === name) ?? { name, records: 0, beat_published: 0, site_bests: 0, pending: 0 },
+          );
+          expect(new Date(computed_at).getTime()).toBeLessThanOrEqual(now);
+          expect(pairs.reduce((n, p) => n + p.P.length, 0)).toBe(totals.site_bests);
+          for (const p of pairs) expect(p.P).toEqual([...p.P].sort((a, b) => a - b));
+          leads += totals.site_bests;
+        }
+        return leads;
+      };
+      expect(await check(false)).toBeGreaterThan(0);
+      let admin = false;
+      for (let i = 0; i < 60; i++) {
+        const r = rand();
+        admin = r >= 0.6;
+        if (!admin) {
+          const P = 1 + Math.floor(rand() * 6);
+          await submit({
+            ...squares(P, { name: pick(NAMES) }),
+            M: pick([4, 0, 5]),
+            pieces: row(P, pick([1, 1.05, 1.2, 1.3])),
+          });
+        } else {
+          const leaders = await store.leaders();
+          const id = leaders.length ? pick(leaders).id : 1;
+          if (r < 0.7) await adminPost("/api/admin/review", { id, decision: pick(["confirmed", "rejected"]) });
+          else if (r < 0.85) await adminPost("/api/admin/remove", { id });
+          else await adminPost("/api/admin/edit", { id, name: pick(NAMES) });
+        }
+        if (i % 4 === 3) await check(admin);
+      }
+      await check(false);
+    });
   });
 });
 

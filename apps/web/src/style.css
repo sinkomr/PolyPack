@@ -515,6 +515,15 @@ body.scroll {
 .holders .name {
   min-width: 10em;
 }
+/* a name is free text of up to 40 characters, with no break in it if its writer chose so: it must not widen a phone's page */
+.holder-name {
+  overflow-wrap: anywhere;
+}
+/* the values of P of a pair run to hundreds: they wrap anywhere rather than widen the table */
+.holders .ranges {
+  min-width: 12em;
+  overflow-wrap: anywhere;
+}
 .terms {
   margin-top: 16px;
 }

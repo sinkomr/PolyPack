@@ -111,3 +111,36 @@ test("phone: the volunteer page and the records pages fit, with the site menu wr
     ).toBeLessThanOrEqual(1);
   }
 });
+
+test("phone: the page of a name fits, with a long name and long runs of P", async ({ page }) => {
+  const name = "W".repeat(40);
+  await page.route(/\/api\/holder\?/, (route) =>
+    route.fulfill({
+      json: {
+        name,
+        records: 250,
+        beat_published: 0,
+        site_bests: 250,
+        pending: 0,
+        computed_at: "2026-11-01T14:05:00.000Z",
+        // every second value of P: 250 runs of one
+        pairs: [
+          {
+            N: 4,
+            M: 4,
+            P: Array.from({ length: 250 }, (_, i) => 2 * i + 1),
+            records: 250,
+            beat_published: 0,
+            pending: 0,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto(`/holder.html?name=${name}`);
+  await expect(page.locator("#rows tr")).toHaveCount(1);
+  await expect(page.getByRole("heading", { name: `Records held by ${name}` })).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth),
+  ).toBeLessThanOrEqual(1);
+});

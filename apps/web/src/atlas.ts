@@ -30,7 +30,7 @@ import {
   tiltName,
   verifiedEntry,
 } from "./atlas-model";
-import { el, shapeLabel } from "./shapes-ui";
+import { el, familyName, shapeLabel, shapePlural as plural, withArticle } from "./shapes-ui";
 import { SOURCES, recordCredits, recordSources, sourceLabel, sourceMarks } from "./sources";
 
 /**
@@ -177,12 +177,6 @@ function swatch(cls: TiltClass): SVGSVGElement {
   if (fill) s.append(svg("rect", { class: "texture", x: 0, y: 0, width: 1, height: 1, fill }));
   return s;
 }
-
-const plural = (n: number) => `${shapeLabel(n)}s`;
-const withArticle = (n: number) =>
-  `${/^(8|11|18)/.test(shapeLabel(n)) || shapeLabel(n) === "octagon" ? "an" : "a"} ${shapeLabel(n)}`;
-/** "circles in a square" */
-export const familyName = (N: number, M: number) => `${plural(N)} in ${withArticle(M)}`;
 
 // ---------- the atlas ----------
 

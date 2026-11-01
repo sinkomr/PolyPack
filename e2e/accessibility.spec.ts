@@ -1,13 +1,29 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { findOverlaps } from "@polypack/geometry";
+import { type HolderResponse, findOverlaps } from "@polypack/geometry";
 import { openProblem, pieces } from "./helpers";
+
+// what a name holds, as the server answers (the page is checked with its table, whatever else the server holds)
+const HOLDER_PAGE = "/holder.html?name=Ann%20Lee";
+const HOLDER_ANSWER: HolderResponse = {
+  name: "Ann Lee",
+  records: 4,
+  beat_published: 1,
+  site_bests: 6,
+  pending: 1,
+  computed_at: "2026-11-01T14:05:00.000Z",
+  pairs: [
+    { N: 4, M: 6, P: [3, 4, 5, 6, 9], records: 3, beat_published: 1, pending: 1 },
+    { N: 0, M: 4, P: [2], records: 1, beat_published: 0, pending: 0 },
+  ],
+};
 
 for (const scheme of ["light", "dark"] as const) {
   // the atlas shell (/browse.html) is scanned in atlas.spec.ts
   test(`no automatic accessibility violations (${scheme})`, async ({ browser }) => {
     const page = await (await browser.newContext({ colorScheme: scheme })).newPage();
-    for (const path of ["/", "/holders.html", "/volunteer.html", "/api", "/admin.html"]) {
+    await page.route(/\/api\/holder\?/, (route) => route.fulfill({ json: HOLDER_ANSWER }));
+    for (const path of ["/", "/holders.html", HOLDER_PAGE, "/volunteer.html", "/api", "/admin.html"]) {
       // the default problem has no published record, so the board is checked on one that does
       if (path === "/") await openProblem(page, 4, 4, 5);
       else await page.goto(path);

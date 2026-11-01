@@ -375,9 +375,14 @@ ${conventions}
 `;
 }
 
-/** API documentation page served at /api. The atlas limits are owned by the route and passed in. */
+/** API documentation page served at /api. The limits of the atlas and of the holder page are owned by the routes and passed in. */
 export function docsPage(
-  limits: { atlasMaxSpan: number; atlasMaxPieces: number } = { atlasMaxSpan: 100, atlasMaxPieces: 6000 },
+  limits: { atlasMaxSpan: number; atlasMaxPieces: number; holderCacheNames: number; holderMaxAgeMs: number } = {
+    atlasMaxSpan: 100,
+    atlasMaxPieces: 6000,
+    holderCacheNames: 32,
+    holderMaxAgeMs: 900_000,
+  },
 ): string {
   return `<!doctype html>
 <html lang="en">
@@ -549,6 +554,15 @@ The counts follow every entry as it changes, so the answer is current. After a s
 <tr><th scope="row"><code>beat_published</code></th><td>Of the records, those below the published value by more than that precision.</td></tr>
 <tr><th scope="row"><code>pending</code></th><td>Of the leads, the claims awaiting review.</td></tr>
 </table>
+
+<h3 id="holder"><code>GET /api/holder?name=</code></h3>
+<p>What one name holds, behind the page of a record holder: the <a href="#leader">leads</a> of the exact name in <code>name</code> (URL-encoded; a name is free text and may contain <code>/</code>, so it is a query parameter, not a path segment).
+Only the exact name matches, capitals included: <code>Ann</code> and <code>ann</code> are two names, as in <a href="#holders"><code>/api/holders</code></a>. A missing or empty <code>name</code>, or one over ${MAX_NAME_LENGTH} characters, is a 400.
+The answer is <code>{name, records, beat_published, site_bests, pending, computed_at, pairs}</code>: the first five are that name's row of <code>/api/holders</code>, all zero for a name that leads nothing (200, with <code>pairs</code> empty), and <code>pairs</code> lists the pairs of shapes behind them,
+the pair with most problems led first, then by <code>N</code>, then <code>M</code>. Each is <code>{N, M, P, records, beat_published, pending}</code>, where <code>P</code> is the ascending list of the values of <code>P</code> of that pair that the name leads,
+and the other three count those problems as the same fields of <code>/api/holders</code> do. A problem whose optimum is proven takes no entries and is not listed. Answers over 1 KB are compressed for clients that send <code>Accept-Encoding</code>.</p>
+<p>The answer can be up to ${Math.round(limits.holderMaxAgeMs / 60_000)} minutes old: the server keeps the answers of the last ${limits.holderCacheNames} names asked for that long, so a name that keeps submitting does not have its answer made again for every view, and <code>computed_at</code> (an ISO 8601 time, UTC) says when this one was made.
+A removal, review or edit by an administrator is shown at once. A name with tens of thousands of leads is read in small steps that leave the server free for other requests.</p>
 
 <h3><code>GET /api/atlas?N=&amp;M=&amp;from=&amp;to=</code></h3>
 <p>The drawings behind the records page. For each <code>P</code> from <code>from</code> to <code>to</code> (plain decimal integers, at most ${limits.atlasMaxSpan} values; <code>from</code> defaults to 1)

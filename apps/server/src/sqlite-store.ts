@@ -60,6 +60,15 @@ CREATE INDEX IF NOT EXISTS submissions_listing
 DROP INDEX IF EXISTS submissions_problem;
 `;
 
+/**
+ * The problems a name has an entry in (see `problemsNamed`), read in order of (n, m, p) from the index alone.
+ * `verification` is its last column so that the filter on listed entries needs no row of the table (see
+ * LISTING_INDEX). Building it on a large database takes a while, once, when the server starts.
+ */
+const NAME_INDEX = `
+CREATE INDEX IF NOT EXISTS submissions_name ON submissions (name, n, m, p, verification);
+`;
+
 // Running count of accepted submissions per problem; the rows themselves are pruned.
 const TALLIES = `
 CREATE TABLE tallies (n INTEGER NOT NULL, m INTEGER NOT NULL, p INTEGER NOT NULL, accepted INTEGER NOT NULL,
@@ -202,6 +211,7 @@ export class SqliteStore implements Store, SpaceStore {
       if (!present.has(name)) this.db.exec(`ALTER TABLE submissions ADD COLUMN ${name} ${type}`);
     // after the added columns, which it covers; building it on a large database takes a while, once
     this.db.exec(LISTING_INDEX);
+    this.db.exec(NAME_INDEX);
     // A database from before pruning: start the tallies from what it holds, then prune it.
     if (!this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tallies'").get()) {
       this.db.exec(TALLIES);
@@ -430,6 +440,24 @@ export class SqliteStore implements Store, SpaceStore {
       )
       .all(from.N, from.M, from.P, last.n as number, last.m as number, last.p as number) as Row[];
     return this.leadersFromRows(rows);
+  }
+
+  async problemsNamed(
+    name: string,
+    after: { N: number; M: number; P: number } | null,
+    limit: number,
+  ): Promise<{ N: number; M: number; P: number }[]> {
+    if (!Number.isInteger(limit) || limit < 1) throw new RangeError(`limit must be a positive integer, got ${limit}`);
+    // shape codes are 0 or more and P is 1 or more, so (-1, -1, -1) is before every problem
+    const from = after ?? { N: -1, M: -1, P: -1 };
+    // a range of submissions_name for this name, which hands the problems over in the order asked
+    const rows = this.db
+      .prepare(
+        `SELECT n, m, p FROM submissions WHERE name = ? AND (n, m, p) > (?, ?, ?) AND ${LISTED}
+         GROUP BY n, m, p ORDER BY n, m, p LIMIT ?`,
+      )
+      .all(name, from.N, from.M, from.P, limit) as Row[];
+    return rows.map((r) => ({ N: r.n as number, M: r.m as number, P: r.p as number }));
   }
 
   async leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]> {

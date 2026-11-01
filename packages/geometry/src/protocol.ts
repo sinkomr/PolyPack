@@ -158,6 +158,30 @@ export interface HoldersResponse {
   holders: Holder[];
 }
 
+/** One pair of shapes in the answer of GET /api/holder: the problems of that pair a name leads. */
+export interface HolderPair {
+  N: number;
+  M: number;
+  /** The values of P of the pair that the name leads, ascending. */
+  P: number[];
+  /** Of those, the leading entries that are the record (see `Holder`). */
+  records: number;
+  /** Of `records`, those below the published value. */
+  beat_published: number;
+  /** Of those, claims awaiting review. */
+  pending: number;
+}
+
+/**
+ * Answer of GET /api/holder?name=: the totals of the name's row of GET /api/holders (all zero for a name that leads
+ * nothing), when they were counted, and the problems behind them by pair of shapes, the pair with most problems first.
+ */
+export interface HolderResponse extends Holder {
+  /** When the answer was made, as an ISO 8601 time (UTC). The server keeps an answer for a few minutes. */
+  computed_at: string;
+  pairs: HolderPair[];
+}
+
 /** Sent to all viewers when a problem gets a new leader; `id`, `score` and `name` are the leader's. */
 export interface LeaderboardEvent {
   N: number;

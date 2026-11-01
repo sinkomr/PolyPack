@@ -3,6 +3,7 @@ import * as api from "./api";
 import { Atlas } from "./atlas";
 import { foundWithLabel } from "./found-with";
 import { AtlasRow, AtlasView, parseView, safeHref, verifiedEntry, viewQuery } from "./atlas-model";
+import { holderHref } from "./holder-model";
 import { renderTabs } from "./records-tabs";
 import { type RecordShapes, addRecordPair, markedLabel, recordShapes } from "./record-marks";
 import { el, fillShapeSelect, shapeLabel } from "./shapes-ui";
@@ -518,7 +519,14 @@ async function refresh(): Promise<void> {
       ),
     );
     const found = foundWithLabel(r.site?.found_with);
-    tr.append(el("td", r.site ? (found ? `${r.site.name} (${found})` : r.site.name) : "—"));
+    const by = el("td", r.site ? "" : "—");
+    if (r.site) {
+      // the name leads to the page of what it holds; how the packing was found stays outside the link
+      const holder = el("a", r.site.name);
+      holder.href = holderHref(r.site.name);
+      by.append(holder, found ? ` (${found})` : "");
+    }
+    tr.append(by);
     const pub = el("td");
     if (r.lit) {
       // an address from the data is followed only when it is http(s) or a path of this site

@@ -69,6 +69,8 @@ export default defineConfig({
         // the records of the dimensions other than the polygons' (browse.html is the polygons' page)
         records: resolve(import.meta.dirname, "records.html"),
         holders: resolve(import.meta.dirname, "holders.html"),
+        // what one name holds, linked from the holders and from the records table
+        holder: resolve(import.meta.dirname, "holder.html"),
         dimensions: resolve(import.meta.dirname, "dimensions.html"),
         // the former Spaces page: it sends old links on to dimensions.html, with their query and hash
         spaces: resolve(import.meta.dirname, "spaces.html"),

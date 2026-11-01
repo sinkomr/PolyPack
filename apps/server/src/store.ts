@@ -136,6 +136,17 @@ export interface Store {
    * indexed read; at most GET_MANY_LIMIT problems. Problems without an entry are left out.
    */
   leadersOf(problems: readonly { N: number; M: number; P: number }[]): Promise<ProblemLeader[]>;
+  /**
+   * The next `limit` problems, after the problem `after` (null: from the first), by N, then M, then P, in which
+   * a listed entry has exactly this name (byte for byte, so case counts). Not the problems the
+   * name leads: an entry may sit behind a better one, so a caller asks `leadersOf` who leads them. An indexed
+   * read whose size is `limit`, so that a caller can walk a name with many entries in pages.
+   */
+  problemsNamed(
+    name: string,
+    after: { N: number; M: number; P: number } | null,
+    limit: number,
+  ): Promise<{ N: number; M: number; P: number }[]>;
   pending(): Promise<StoredSubmission[]>;
   /**
    * Decides on an entry that is pending or was confirmed, then prunes its problem. A rejected entry
