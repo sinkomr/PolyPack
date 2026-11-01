@@ -1,5 +1,5 @@
 import * as api from "./api";
-import { REFRESH_MINUTES, holderHref, holderTotals, pRanges, pairHref, timeOfDay } from "./holder-model";
+import { REFRESH_MINUTES, holderTotals, pRanges, pairHref, timeOfDay } from "./holder-model";
 import { el, familyName } from "./shapes-ui";
 
 const $ = (id: string) => document.getElementById(id)!;
