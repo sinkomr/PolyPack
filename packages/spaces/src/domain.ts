@@ -17,6 +17,7 @@
 import { polyhedraDomain } from "@polypack/polyhedra";
 import { curvedDomain, sphereDomain, torusDomain } from "./piece-domains";
 import { ballsDomain } from "@polypack/balls";
+import { ndimDomain } from "@polypack/ndspace/catalogue";
 import { surfaceDomain } from "@polypack/surface/domain";
 import type { ParsedSpaceId } from "./ids";
 import type { SpaceName } from "./types";
@@ -36,6 +37,16 @@ export interface SpaceDomainField {
   /** The range of integers, both ends included; absent for a list. */
   min?: number;
   max?: number;
+  /**
+   * For a field whose values or range depend on the value of another field (nD in nD: the shapes and the largest P of
+   * each dimension): the other field's key and, by its value, the values or the [min, max] range that hold. `values` and
+   * `min` / `max` above are then the union.
+   */
+  dependent?: {
+    on: string;
+    values?: Readonly<Record<string, readonly string[]>>;
+    ranges?: Readonly<Record<string, readonly [number, number]>>;
+  };
 }
 
 /**
@@ -77,6 +88,9 @@ export const SPACE_DOMAINS: Partial<Record<SpaceName, SpaceDomain>> = {
   polyhedra: polyhedraDomain,
   // 3D in 3D, balls: 7 problems for P = 2 to 100, without records (docs/spaces/BALLS.md)
   balls: ballsDomain,
+  // nD in nD, d = 4 to 10: every ordered pair of the dimension's polytopes and the ball, P = 2 to 40 / 32 / 24 / 20; records
+  // for the regular polytopes in 4D to 6D (docs/spaces/NDIM.md)
+  ndim: ndimDomain,
   // 2D on 3D, polyhedral surfaces: 141 solids, fold and nofold, N = 0 and 3 to 100, P = 1 to 100; records
   // for the Platonic solids with N in {0, 3, 4, 5, 6, 8} (docs/spaces/SURFACE.md)
   surface: surfaceDomain,

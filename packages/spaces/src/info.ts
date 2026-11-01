@@ -59,6 +59,8 @@ export const SPACE_RECORD_MARGIN: Record<SpaceName, number> = {
   boundary: SCORE_TIE,
   polyhedra: POLYHEDRA_RECORD_MARGIN,
   balls: SCORE_TIE,
+  // records keep the wiki's clearance of 1e-7 between pieces and from the walls (as polyhedra)
+  ndim: POLYHEDRA_RECORD_MARGIN,
 };
 
 /** Largest absolute value of a polyhedra quaternion component (only its direction matters; see the polyhedra package). */
@@ -255,6 +257,36 @@ export const SPACE_INFO: Record<SpaceName, Omit<SpaceInfo, "problems" | "records
     // no standalone viewer: the board draws every problem (#space=balls opens its first one)
     viewer: "/#space=balls",
     docs: spaceDocsUrl("BALLS.md"),
+  },
+  ndim: {
+    space: "ndim",
+    title: "nD in nD",
+    summary:
+      "4D to 10D: equal convex polytopes (the simplex, hypercube and orthoplex of each dimension, the demicube from 5D, the 24-, 120- and 600-cell in 4D, the Gosset polytopes 2_21 and 1_22 in 6D, 3_21 in 7D and 4_21 in 8D) or balls of diameter 1 packed in the smallest scaled copy of a container polytope or ball. The research records are the regular polytopes in 4D to 6D of polyhedrainpolyhedra.wiki's higher-polytope tab, re-certified; every other problem has none yet and takes its first valid entry.",
+    score:
+      "the container's size s: the scale of the container polytope (its edge when the container has unit edges), or the diameter of the container ball; smaller is better",
+    problem_id: "ndim/<d>/<piece>/<container>/<P>",
+    conventions: {
+      problems:
+        "d from 4 to 10; piece and container are a polytope of that dimension (simplex, cube, ortho, demi from 5D, 24cell, 120cell and 600cell in 4D, 221 and 122 in 6D, 321 in 7D, 421 in 8D) or ball, any ordered pair, e.g. ndim/4/cube/ortho/12 (hypercubes in an orthoplex) or ndim/6/ball/221/9; P from 2 to 40 in 4D, 32 in 5D, 24 in 6D and 20 from 7D (GET /api/spaces lists the ranges)",
+      units:
+        "polytopes have unit edges and are centred at their vertex centroid; balls have diameter 1 (radius 0.5); the catalogue is docs/spaces/NDIM.md section 2 (the generator proves each polytope in exact arithmetic)",
+      container:
+        "s times the catalogue polytope about the origin (the intersection of the half-spaces N_f . x <= s b_f, N_f the unit outward normal and b_f the offset of facet f), or the ball of diameter s about the origin",
+      pose: `a polytope piece is [t_1..t_d, k_1..k_m, flip] with m = d(d-1)/2 and the flip optional (0 when absent): the canonical piece turned by R = D (I - S)^-1 (I + S), S the skew matrix with S[i][j] = k (i < j, row by row) and D the diagonal matrix with -1 at the set bits of the flip (an even number of them), then centred at t; centre coordinates at most ${SPACE_MAX_COORD}, each k at most 32 in absolute value; a ball is its centre [t_1..t_d]`,
+      configuration: "{s, pieces: [pose, ...]} with P poses; s positive and at most 1e6",
+      score: "s; smaller is better",
+      validity:
+        VALIDITY +
+        "; two pieces overlap by their penetration depth (GJK and EPA on the Minkowski difference), a polytope sticks out by the largest N_f . x - s b_f over its vertices and facets, a ball piece by N_f . c + 0.5 - s b_f, and a ball container by the farthest point's distance minus s/2",
+      scoring: SCORING,
+      improvement: `an entry is kept only when its score is below the site leader's by more than a relative ${SCORE_TIE} and below the research record's s by more than a relative ${POLYHEDRA_RECORD_MARGIN.toExponential()}: the records keep the wiki's clearance of 1e-7 between pieces and from the walls, and removing it is not a better packing; an entry of a problem without a record, or one below the record, must also be valid with overlaps of at most ${SPACE_STRICT_TOL}`,
+      work_limit:
+        "a check is stopped, with a reason, after 4 s of processor time; checks of large containers (the 4_21 polytope has 19,440 facets) or many pieces share the server's queue of heavy checks, one at a time, and are refused with 503 when it is full",
+    },
+    // no standalone viewer: phase E of the nD plan adds the board and the records page
+    viewer: "/#space=ndim",
+    docs: spaceDocsUrl("NDIM.md"),
   },
 };
 

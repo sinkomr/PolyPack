@@ -168,6 +168,8 @@ const TURN_HELP: Record<SpaceName, string> = {
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
   balls:
     "Solid draws the pieces opaque; See-through makes them translucent, to show the inner ones. The container is drawn faint: a ball with three great circles, or a solid by its edges. Drag the drawing to turn it, or focus it and use the arrow keys (Shift for larger steps, Home to reset).",
+  // the board does not draw the nD spaces yet
+  ndim: "The board does not draw this space yet.",
 };
 
 const ENDED: Record<SpaceSearchResult["ended"], string> = {

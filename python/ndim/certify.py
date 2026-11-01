@@ -314,6 +314,8 @@ def certify_config(problem, config, clearance=0.0):
         VF = [float_world(p, vfl) for p in placed]
         nfl = PP.facets_float()[0] if PP.nF <= SAT_FACET_LIMIT else None
         NW = [float_normals(p, nfl) for p in placed] if nfl is not None else None
+        # pieces with many facets propose only the facets that face the other piece (prove_pair), from the unit facet normals
+        NFL = PP.facets_float()[0] if nfl is None else None
     for i in range(n):
         for j in range(i + 1, n):
             d2 = sum((a - b) ** 2 for a, b in zip(centers[i], centers[j]))
@@ -329,7 +331,7 @@ def certify_config(problem, config, clearance=0.0):
                 else:
                     pair_min = min(pair_min, math.sqrt(float(d2)) - 1.0)
                 continue
-            gap = prove_pair(placed, XW, VF, NW, i, j, clr)
+            gap = prove_pair(placed, XW, VF, NW, i, j, clr, NFL)
             if gap is None:
                 failures.append(('pair', i, j))
             else:
@@ -339,7 +341,7 @@ def certify_config(problem, config, clearance=0.0):
             'failures': failures[:20], 'seconds': round(time.time() - t0, 3)}
 
 
-def prove_pair(placed, XW, VF, NW, i, j, clr):
+def prove_pair(placed, XW, VF, NW, i, j, clr, NFL=None):
     """Proves pieces i and j (both polytopes) strictly separated by an explicit rational plane; returns the gap proved
     along the plane's unit normal (a float lower bound, rounded down) or None. Floating point proposes the directions:
     the line between the centres, the facet normals of both pieces when they have few facets (ranked by their float
@@ -373,6 +375,22 @@ def prove_pair(placed, XW, VF, NW, i, j, clr):
         for g, u in scored[:2]:
             if g > 0 and attempt(u, XW[i], XW[j]):
                 return best[0][0]
+    if NFL is not None:
+        # many facets (the 120- and 600-cell, 4_21, ...): the two facets of each piece that face the other most, whose normals
+        # are exact for face-to-face contacts (the closest points of GJK are not accurate enough for a gap of 1e-7)
+        cand = []
+        lu = math.sqrt(sum(x * x for x in u))
+        if lu > 0:
+            for piece, sgn in ((placed[i], 1.0), (placed[j], -1.0)):
+                R = piece.Rf
+                d = len(piece.t)
+                # world normal R n; its alignment with sgn * u is n . (R^T sgn u)
+                lu_loc = [sgn * sum(R[k][c] * u[k] for k in range(d)) / lu for c in range(d)]
+                top = sorted(range(len(NFL)), key=lambda f: -sum(a * b for a, b in zip(NFL[f], lu_loc)))[:2]
+                cand += [[sum(R[r][c] * NFL[f][c] for c in range(d)) for r in range(d)] for f in top]
+            for g, w in sorted(((gapf(w), w) for w in cand), key=lambda t: -t[0])[:2]:
+                if g > 0 and attempt(w, XW[i], XW[j]):
+                    return best[0][0]
     dist, wv = G.closest(A, B)
     if wv is not None and attempt([-x for x in wv], XW[i], XW[j]):
         return best[0][0]

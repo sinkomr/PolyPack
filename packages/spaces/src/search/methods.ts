@@ -51,6 +51,7 @@ export const AUTO_TEXT: Record<SearchKind, string> = {
     "Soft hops of a soft-to-rigid simulator and random jiggles from the best so far, each polished by a separating-plane penalty method, then the space's own validator.",
   balls:
     "Basin hopping from the best so far: move or shake some pieces, then a penalty method with the container's size as a variable (separating planes for solids), scaled apart to an exact clearance, then the space's own validator.",
+  ndim: "Basin hopping on the penalty energy of overlaps (GJK and EPA depths) with the container's size as a variable, each result scaled apart to the smallest valid size, then the space's own validator.",
 };
 
 /** The polygon method Auto runs on the face of a nofold problem. */

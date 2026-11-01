@@ -23,6 +23,7 @@ import {
 import { problemNameOf } from "@polypack/polyhedra/catalogue";
 import { POLYHEDRA_MAX_P, getProblem, latticeStart } from "@polypack/polyhedra";
 import { ballsProblemOf, parseBallsId } from "@polypack/balls/catalogue";
+import { ND_BALL, ND_MAX_P, ndInRange, parseNdId } from "@polypack/ndspace/catalogue";
 import type { SpaceConfig, SpaceName } from "../types";
 import { type SpaceValidateOptions, validateSpaceSubmission } from "../validate";
 
@@ -37,7 +38,8 @@ export type SearchProblem =
   | { space: "torus"; id: string; P: number; family: TorusFamily; N: number }
   | { space: "boundary"; id: string; P: number; polytope: PolytopeName; piece: PieceName }
   | { space: "polyhedra"; id: string; P: number; code: string }
-  | { space: "balls"; id: string; P: number; code: string };
+  | { space: "balls"; id: string; P: number; code: string }
+  | { space: "ndim"; id: string; P: number; d: number; piece: string; container: string };
 
 /**
  * The name each space's search goes by in submissions and logs: the space's API name, then what
@@ -52,6 +54,7 @@ export const SPACE_METHOD: Record<SpaceName, string> = {
   boundary: "boundary compression search",
   polyhedra: "polyhedra soft-to-rigid search",
   balls: "balls penalty basin hopping",
+  ndim: "ndim basin hopping",
 };
 
 /** The method of the surface search in its nofold mode (the nofold problems of the solids beyond the Platonic ones). */
@@ -73,7 +76,8 @@ const shape = (text: string) => {
 /**
  * A problem id as the server lists it, or null when it is not one the searches can work on:
  * surface/<solid>/<fold|nofold>/<N>/<P>, curved/<K>/<N>/<M>/<P>, sphere/<N>/<P>,
- * torus/<sq|hex|free>/<N>/<P>, boundary/<polytope>/<ball|cube>/<P>, polyhedra/<code>/<P>, balls/<code>/<P>. The
+ * torus/<sq|hex|free>/<N>/<P>, boundary/<polytope>/<ball|cube>/<P>, polyhedra/<code>/<P>, balls/<code>/<P>,
+ * ndim/<d>/<piece>/<container>/<P>. The
  * volunteer client also uses ids in file names, so only these forms pass. (The volunteer client
  * imports it as parseSpaceId.)
  */
@@ -125,6 +129,11 @@ export function parseSearchProblem(id: unknown): SearchProblem | null {
     const b = parseBallsId(id);
     if (typeof b === "string" || b.P > MAX_PIECES) return null;
     return { space: "balls", id, P: b.P, code: b.code };
+  }
+  if (id.startsWith("ndim/")) {
+    const n = parseNdId(id);
+    if (typeof n === "string" || !ndInRange(n.d, n.P) || n.P > ND_MAX_P) return null;
+    return { space: "ndim", id, P: n.P, d: n.d, piece: n.piece, container: n.container };
   }
   return null;
 }
@@ -232,6 +241,18 @@ export function readSpaceConfig(p: SearchProblem, v: unknown): SpaceConfig | nul
       }
       return { s: v.s, pieces };
     }
+    case "ndim": {
+      if (!positive(v.s) || !Array.isArray(v.pieces) || v.pieces.length !== p.P) return null;
+      // a ball is its centre (d numbers); a polytope d + d(d-1)/2 numbers and an optional flip
+      const m = (p.d * (p.d - 1)) / 2;
+      const lengths = p.piece === ND_BALL ? [p.d] : [p.d + m, p.d + m + 1];
+      const pieces: number[][] = [];
+      for (const q of v.pieces) {
+        if (!Array.isArray(q) || !lengths.includes(q.length) || !q.every(finite)) return null;
+        pieces.push([...q]);
+      }
+      return { s: v.s, pieces };
+    }
   }
 }
 
@@ -266,6 +287,7 @@ export function statedScore(p: SearchProblem, c: SpaceConfig): number {
     case "boundary":
     case "polyhedra":
     case "balls":
+    case "ndim":
       return c.s as number;
   }
 }

@@ -34,6 +34,8 @@
  *  - balls: searchBalls of packages/balls (a start is legalized and polished, else a lattice cut or random
  *    centres; then hops from the best, each polished by a penalty method with the container size as a variable;
  *    solids in a ball by separating planes), budgeted by its objective evaluations.
+ *  - ndim: no engine of its own: Auto is the generic basin hopping on the problem's kernel (runGeneric with AUTO_NDIM_METHOD),
+ *    which ends "bound" at the kernel's bound, as the generic methods do.
  * Surface problems in the nofold mode on the Platonic solids are planar problems and run on the
  * polygon solver instead (nofold.ts has the conversion); they never reach this file. On the other
  * solids (Archimedean and Catalan solids, prisms, antiprisms) the faces are not all one regular polygon, and their
@@ -145,6 +147,9 @@ export const SURFACE_FINAL_OVERRUN = 1.5;
  * jobs by time instead.
  */
 export const BOUNDARY_ROUND_EVALS = 300_000;
+
+/** The generic method that Auto runs in the nD spaces. */
+export const AUTO_NDIM_METHOD = "basin_hopping";
 
 const sleepSync = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
@@ -274,13 +279,14 @@ function runGeneric(
   job: SpaceJob,
   start: SpaceConfig | undefined,
   gate: Gate,
+  method: string = job.method ?? AUTO,
 ): { config: SpaceConfig | null; evaluations: number; termination: string; reasons: string[] } {
   const own = spaceKernel(p);
   if (!own) throw new Error(`${p.id} has no kernel`);
   const kernel: SpaceKernel = { ...own, validate: (config) => checkSpaceConfig(p.space, p.id, config, job.rule) };
-  const r = runMethod(kernel, job.method ?? AUTO, {
+  const r = runMethod(kernel, method, {
     seed: job.seed,
-    ...(job.params ? { params: job.params } : {}),
+    ...(job.params && method === job.method ? { params: job.params } : {}),
     ...(start && job.kind !== "fresh" ? { start } : {}),
     budget: job.budget.evals === undefined ? {} : { evals: job.budget.evals },
     shouldStop: () => gate.stop(),
@@ -303,6 +309,9 @@ function runEngine(
   const cap = job.budget.evals ?? Number.MAX_SAFE_INTEGER;
   const shouldStop = () => gate.stop();
   switch (p.space) {
+    case "ndim":
+      // no engine of its own: the generic basin hopping on the kernel (runGeneric); results are checked by the job's rule
+      return { ...runGeneric(p, job, start, gate, AUTO_NDIM_METHOD), reasons: [] };
     case "balls": {
       // the search polls shouldStop at every evaluation and in the work between them
       const r = searchBalls(getBallsProblem(p.code)!, p.P, {

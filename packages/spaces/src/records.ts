@@ -13,6 +13,7 @@
  */
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
+import { ND_SHAPE_NAMES } from "@polypack/ndspace/catalogue";
 import {
   BOUNDARY_PIECES,
   BOUNDARY_POLYTOPES,
@@ -89,7 +90,7 @@ export async function entryConfig(cat: SpaceCatalogue, entry: SpaceProblemEntry)
 /**
  * Where a configuration kept apart lives: the file configs/<file>.jsonl below the space's data
  * folder, and the byte offset and length of its line there. For polyhedra and balls the file is the
- * problem's code. The file name comes from a catalogue entry (a known code), never from a request.
+ * problem's code, for nD in nD "<d>-<piece>-<container>". The file name comes from a catalogue entry (a known code), never from a request.
  */
 export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "configAt">): {
   file: string;
@@ -97,14 +98,16 @@ export function configLocation(entry: Pick<SpaceProblemEntry, "fields" | "P" | "
   length: number;
 } {
   const [offset, length] = entry.configAt ?? [0, 0];
-  return { file: String(entry.fields.code), offset, length };
+  // nD in nD: one file per dimension and pair of shapes, "<d>-<piece>-<container>"
+  const f = entry.fields;
+  return { file: f.code === undefined ? `${f.d}-${f.piece}-${f.container}` : String(f.code), offset, length };
 }
 
 /** Longest line of a configuration kept apart that is read (a P = 100 configuration is about 20 kB). */
 export const CONFIG_LINE_MAX = 1_000_000;
 
 /** Spaces whose records file may keep the configurations apart. */
-const CONFIGS_APART: readonly SpaceName[] = ["polyhedra", "balls"];
+const CONFIGS_APART: readonly SpaceName[] = ["polyhedra", "balls", "ndim"];
 
 /** The loaded catalogues; a space whose records file is missing is absent. */
 export type SpacesIndex = Partial<Record<SpaceName, SpaceCatalogue>>;
@@ -125,6 +128,7 @@ function recordConfig(space: SpaceName, r: Rec): unknown {
       return r.configuration;
     case "polyhedra":
     case "balls":
+    case "ndim":
       return r.config;
   }
 }
@@ -145,6 +149,8 @@ function recordFields(space: SpaceName, r: Rec): Record<string, unknown> {
     case "polyhedra":
     case "balls":
       return { code: r.code, piece: r.piece, container: r.container, P: r.P };
+    case "ndim":
+      return { d: r.d, piece: r.piece, container: r.container, P: r.P };
   }
 }
 
@@ -172,7 +178,10 @@ function boundOf(space: SpaceName, b: unknown): { value: number; label: string }
   const kind = typeof b.kind === "string" ? b.kind.replace(/[-_]/g, " ") : "";
   // surface and curved labels carry only the kind of claim ([CALC], rigorous); their `kind` says
   // which bound it is: one word ("area", "one piece") or a sentence of its own
-  if ((space === "surface" || space === "curved" || space === "polyhedra" || space === "balls") && kind) {
+  if (
+    (space === "surface" || space === "curved" || space === "polyhedra" || space === "balls" || space === "ndim") &&
+    kind
+  ) {
     const what = /^[a-z]+( piece)?$/.test(kind) ? `${kind} bound` : kind;
     return { value, label: label ? `${what}; ${label}` : what };
   }
@@ -209,6 +218,7 @@ const ORDER: Partial<Record<SpaceName, Record<string, readonly string[]>>> = {
   boundary: { polytope: BOUNDARY_POLYTOPES, piece: BOUNDARY_PIECES },
   polyhedra: { code: PROBLEM_ORDER },
   balls: { code: BALLS_CODES },
+  ndim: { piece: ND_SHAPE_NAMES, container: ND_SHAPE_NAMES },
 };
 /** Field order of the listing. */
 const SORT_KEYS: Record<SpaceName, string[]> = {
@@ -219,6 +229,7 @@ const SORT_KEYS: Record<SpaceName, string[]> = {
   boundary: ["polytope", "piece", "P"],
   polyhedra: ["code", "P"],
   balls: ["code", "P"],
+  ndim: ["d", "piece", "container", "P"],
 };
 
 export function compareSpaceProblems(a: SpaceProblemEntry, b: SpaceProblemEntry): number {
@@ -313,7 +324,7 @@ export function buildSpaceCatalogue(space: SpaceName, file: unknown, domain?: Sp
       P: id.P,
       status,
       certified,
-      bound: boundOf(space, r.bound),
+      bound: boundOf(space, r.bound) ?? domain?.bound(id) ?? null,
       closed_reason: closedReason(space, r, status, id),
       config,
       ...(configApart ? { configApart, configAt: configAt! } : {}),

@@ -149,10 +149,71 @@ function inSpace(space: SpaceName, domain: SpaceDomain | undefined, id: string):
   return typeof parsed !== "string" && domain.bound(parsed) !== undefined;
 }
 
+/**
+ * The fields of a space whose domain has fields that depend on another (nD in nD: the shapes and the range of P of each
+ * dimension), one entry per value of the field they depend on: that value's fields. Null for the other spaces.
+ */
+function dependentGroups(
+  space: SpaceName,
+  fields: KindField[],
+): { on: string; groups: { value: string; fields: KindField[] }[] } | null {
+  const domain = SPACE_DOMAINS[space];
+  const dep = domain?.info.fields.find((f) => f.dependent);
+  if (!domain || !dep) return null;
+  const on = dep.dependent!.on;
+  const onField = fields.find((f) => f.key === on);
+  if (!onField?.values) return null;
+  const groups = onField.values.map((value) => ({
+    value,
+    fields: fields
+      .filter((f) => f.key !== on)
+      .map((f) => {
+        const info = domain.info.fields.find((x) => x.key === f.key)!;
+        const values = info.dependent?.values?.[value];
+        const range = info.dependent?.ranges?.[value];
+        if (values) return { key: f.key, values };
+        if (range)
+          return {
+            key: f.key,
+            min: f.min === undefined ? range[0] : Math.max(range[0], f.min),
+            max: f.max === undefined ? range[1] : Math.min(range[1], f.max),
+          };
+        return f;
+      }),
+  }));
+  return { on, groups };
+}
+
 /** The problems of one space, after --max-P. */
 export function spaceKind(space: SpaceName, maxP: number | null): Kind {
   const domain = SPACE_DOMAINS[space];
   const fields = spaceFields(space, maxP);
+  const dependent = dependentGroups(space, fields);
+  if (domain && dependent) {
+    // every problem as likely as any other: a value of the field the others depend on in proportion to its problems
+    const sizes = dependent.groups.map((g) => g.fields.reduce((n, f) => n * fieldSize(f), 1));
+    const total = sizes.reduce((a, b) => a + b, 0);
+    return {
+      name: space,
+      size: total,
+      draw: (random) => {
+        let r = random() * total;
+        let at = sizes.length - 1;
+        for (let i = 0; i < sizes.length; i++) {
+          if (r < sizes[i]) {
+            at = i;
+            break;
+          }
+          r -= sizes[i];
+        }
+        const g = dependent.groups[at];
+        const chosen: Record<string, string | number> = { [dependent.on]: g.value };
+        for (const f of g.fields) chosen[f.key] = f.values ? pick(f.values, random) : between(f.min!, f.max!, random);
+        const id = domainId(domain.info, chosen);
+        return inSpace(space, domain, id) ? { kind: "space", space, id } : null;
+      },
+    };
+  }
   const size = fields.reduce((n, f) => n * fieldSize(f), 1);
   return {
     name: space,

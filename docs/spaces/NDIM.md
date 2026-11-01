@@ -1,10 +1,11 @@
-# Convex packing in 4 to 10 dimensions: the core (phase A)
+# Convex packing in 4 to 10 dimensions: the core (phase A) and the nD in nD space (phase B)
 
 The d-generic core for packing equal convex pieces in a scaled convex container in dimensions d = 4 to 10: an exact
 catalogue of 34 polytopes, poses, a floating-point validator, an exact certifier, and the bounds that go with them.
 Later phases build the problem spaces ("4D in 4D" to "10D in 10D"), the boundary problems ("4D on 5D" to "9D on 10D"),
-the server registry and the site on this core. This phase adds no problem space, route, page or search. Plan and
-background: the research notes of 2026-10-30 (catalogue, validators, costs) and 2026-11-01 (phases).
+the server registry and the site on this core. Phase A (§1 to §9) adds no problem space, route, page or search; phase B
+(§10 to §12) adds the nD in nD space: problems, server rules, the wiki's records and a kernel for the generic methods.
+Plan and background: the research notes of 2026-10-30 (catalogue, validators, costs) and 2026-11-01 (phases).
 
 In code and data: `packages/ndim` (TypeScript), `python/ndim` (generator, exact certifier, tests),
 `packages/ndim/test/fixtures/packings.json` (test packings shared by both languages).
@@ -302,3 +303,135 @@ policy unless a published proof exists.
   `signedSeparation`; the validator then judges by the depth found). [6] Poses with a Cayley parameter above 32 are
   refused; use a flip. [7] The edges are not stored in the TypeScript data (they are the pairs at distance 1).
   [8] Nothing here knows about folding, the boundary ("on") problems or the site.
+
+## 10. The nD in nD space (phase B)
+
+**Structure.** One space, `ndim`, for every dimension: a problem is `ndim/<d>/<piece>/<container>/<P>`, with d from 4 to 10 and the
+two shapes the catalogue's names (`simplex`, `cube`, `ortho`, `demi`, `24cell`, `120cell`, `600cell`, `221`, `122`, `321`,
+`421`, as §2 lists them for the dimension) or `ball`: `ndim/4/cube/ortho/12` is 12 hypercubes in an orthoplex (the 16-cell),
+`ndim/8/ball/421/5` five balls in the 4_21 polytope. A single space keeps the registry, the records file and the heavy-check
+rules in one place; the site shows one entry "dD in dD" per dimension by the `d` field of the domain (phase E). Ids are accepted
+in this one form only (no leading zeros). Code: `packages/ndspace` (names, ids, bounds, domain, validation, kernel), wired in
+`packages/spaces` (types, ids, info, domain, records, validate, search) and `apps/server/src/spaces.ts`.
+
+**Problems.** Every ordered pair of the dimension's shapes, balls included (balls in each polytope, each polytope in a ball, balls
+in a ball), and P over the dimension's range, defined by ranges and never listed in memory (`SPACE_DOMAINS.ndim`):
+
+| d   | shapes (polytopes + ball) | ordered pairs | P         | problems  |
+| --- | ------------------------- | ------------- | --------- | --------- |
+| 4   | 6 + 1                     | 49            | 2 to 40   | 1,911     |
+| 5   | 4 + 1                     | 25            | 2 to 32   | 775       |
+| 6   | 6 + 1                     | 49            | 2 to 24   | 1,127     |
+| 7   | 5 + 1                     | 36            | 2 to 20   | 684       |
+| 8   | 5 + 1                     | 36            | 2 to 20   | 684       |
+| 9   | 4 + 1                     | 25            | 2 to 20   | 475       |
+| 10  | 4 + 1                     | 25            | 2 to 20   | 475       |
+|     |                           |               | **total** | **6,131** |
+
+(4D has no `demi`: the 4D demicube is the 16-cell.) The ranges of 4D to 6D are upstream's. The domain's fields are `d`, `piece`,
+`container` and `P`; the last two depend on `d` (`dependent` in the field description: the shapes of each dimension and its range
+of P). Titles are "Hypercubes in an orthoplex" with "4D:" in front.
+
+**Bounds** (`ndLowerBound`, the domain's `bound`): the larger of the volume bound (§7), the inradius bound and, in a ball container,
+the circumradius bound s >= 2 R of the piece (the circumscribed ball of a regular polytope is its smallest enclosing ball [EST]),
+lowered by 1e-12 relative because the volumes are floats [CALC]. Entries below it by more than 1e-9 relative are refused unchecked.
+
+**Server rules.** The submission route is the spaces' `POST /api/spaces/submit` with `space: "ndim"`, the id and the configuration
+`{s, pieces}` of §3; the configuration is read by `parseNdConfig` (malformed input is 400, a wrong number of pieces 422) and
+checked by `validateNdSteps` of the ndim package (§4) at the touching tolerance 1e-9, and at 1e-11 as well for an entry that
+beats a record or has none (as in every space). As in 3D in 3D, the records keep the wiki's clearance of 1e-7 between pieces and
+from the walls, so an entry beats a record only when it is below it by more than a relative 1e-6 (`SPACE_RECORD_MARGIN.ndim`, the
+polyhedra's `POLYHEDRA_RECORD_MARGIN`), below the site leader by more than the tie tolerance, and it is answered "not checked" (200,
+`checked: false`) without any geometry when its stated size cannot be kept (the checks are costly). No unit gate: the units are
+the diameter-1 ones from the start. Work bounds:
+
+- P is at most the dimension's range (the server refuses others as outside the catalogue); poses are read with the ndim limits
+  (§3: centres at most 1e4, Cayley parameters at most 32, s at most 1e6);
+- the check runs in slices (`ndCheckSteps` yields between pieces, pairs and blocks of 2,048 vertex-facet products; the server runs
+  it through `runStepsAsync`, 8 ms slices), stops after 5 reasons (an overlapping pair of 8D to 10D polytopes costs up to 0.8 s of GJK
+  and EPA [CALC]) and after 8 s of processor time (`NDIM_CHECK_MS`; the check then says so and the entry is refused);
+- pairs whose centres are closer than twice the inradius are overlaps without GJK (a bound that never exceeds the true depth);
+  a container facet that cannot lower the smallest wall gap (by the piece's circumradius) is skipped;
+- checks of more than 2e7 multiply-adds (`ndCheckOps`: pieces' vertices times the container's facets times d, and 40 nV d per pair)
+  are heavy (`ndIsHeavy`): one at a time server-wide, at most 8 waiting, else 503, as for polyhedra at P = 500; the budget charged to
+  the address is estimated at 5 + 3e-6 ops ms (at most 8 s) and corrected by the work measured. The 4_21 polytope is loaded on demand
+  (2 MB; `loadNdProblem`) before the first check that uses it.
+
+[CALC] Measured on Apple Silicon (Node 26): the largest valid cases, 20 4_21 polytopes in a 4_21 container (761 M multiply-adds),
+20 hypercubes in a 10D orthoplex, 40 120-cells in a 600-cell, took 25 to 90 ms with the facet skipping (2.3 s without), and
+two gross overlaps of 10D hypercubes 0.5 to 0.8 s each when EPA runs. The tests (`packages/ndspace/test/validate.test.ts`) check
+that the worst problems of four dimensions stay under the cap with every piece on top of the others, and
+`apps/server/test/spaces-ndim.test.ts` the submission cases and the full queue.
+
+**API text.** `GET /api/spaces` lists `ndim` with its title, summary, score, id form, conventions (problems, units, container, pose,
+configuration, validity, improvement, work limit), the domain and the number of records; the page and the viewer are phase E's.
+
+## 11. The kernel for the generic methods
+
+`ndKernel({d, piece, container, P})` (`packages/ndspace/src/kernel.ts`) implements the `packages/methods` contract, so that Auto and
+the generic methods run on every problem of the domain; `packages/spaces/src/search` builds it for `ndim/...` ids. Auto is the generic
+basin hopping on this kernel (`AUTO_NDIM_METHOD`; no engine of its own). A polytope piece has d + d(d-1)/2 variables (centre and
+a chart rotation, the Cayley parameters of a skew S times the circumradius, around an anchor R0 kept in `aux`; `rebase` folds
+C(S) = (I - S)^-1 (I + S) into R0), a ball piece d.
+
+- **Energy.** Sum of squared overlaps: of pairs, 2 r - sd with sd the signed separation of the pieces' cores by GJK and EPA
+  (`signedSeparation`), of walls, the protrusion of the farthest vertex beyond a facet of the container (or beyond the ball).
+  With the shape parameter tau the core is the piece scaled by tau and dilated by r = (1 - tau) rho (the soft pieces of harden and
+  morph; balls are their own inscribed ball). The gradient is analytic: translations by the separating direction u, rotations by
+  d(u . x)/dk_ij = 2 (a_i b_j - a_j b_i), a = (R0 (I - S)^-1)^T u, b = tau (I - S)^-1 v; at the **contact points** of the pair, not at
+  a vertex (`contact.ts`: for an edge against an edge the vertices tie and the derivative sits at the closest points of the edges,
+  found by GJK on the tangential differences of the two faces). The contract's gradient check passes on every kind of pair and wall.
+- **finish** scales the centres and the container together by f: every pair gap grows by at least 2 rho (f - 1) and every wall gap
+  by at least rho (f - 1), so the valid f form a ray; it brackets and bisects it with the validator at tolerance 0, to 1e-12, and
+  returns the smallest (it also shrinks a state that is valid with room to spare). **validate** is the server's rule (form, the lower
+  bound with its slack, the check at 1e-9).
+- **seeds**: P points of the lattice Z^d (at the centre of a cell and at a vertex), D_d, and E8 in 8D (§ `lattice.ts`), their mean at
+  the origin, in the canonical orientation and then in random common orientations, at the smallest spacing at which the pieces
+  just do not overlap (bisection on the pair test); 2^d hypercubes in the hypercube give the exact grid s = 2. **randomStart**
+  fills the container to 15 %, **randomPose** a uniform orientation (Haar, by QR), `swap` the orientations of two pieces.
+- **Poses.** The kernel's configurations use `robustPose`: the ndim package's `poseOfMatrix` solves S = (D R - I)(D R + I)^-1 for
+  each even flip D and keeps the smallest parameters, and for a rotation with an eigenvalue -1 under some D (a signed permutation
+  matrix, say) the solve is numerically singular and can return the parameters of another rotation. `robustPose` rebuilds every
+  candidate and keeps one only when it reproduces the matrix to 1e-12.
+
+Costs are declared in energy evaluations (finishCost 60 + P/2, validateCost 3). In 8D to 10D the energy of a deep overlap of
+two polytopes with hundreds of vertices costs up to 0.5 s (EPA), so the generic methods run, but slowly, there; no search was
+run for this phase beyond the tests (`packages/ndspace/test/kernel.test.ts`: `checkKernel` on 16 problems of every dimension, the
+full gradient against differences, finish, seeds, the generic methods penalty, basin_hopping and seed on a small problem).
+
+## 12. The wiki's records
+
+The 4D to 6D problems of polyhedrainpolyhedra.wiki's higher-polytope tab (36 ordered pairs of the six regular 4-polytopes with n = 2
+to 40, 9 pairs of the 5-simplex, 5-cube and 5-orthoplex with n up to 32, 9 of 6D with n up to 24: 1,890 files) are imported by
+`python/ndim/build_records.py` from alejandrozu/platonic-packing (MIT, commit 8ce7b48831804b287fd98ade4ef35f5a6d6ca188, see
+THIRD_PARTY_NOTICES.md), the same way as 3D in 3D (`docs/spaces/POLYHEDRA.md` §2):
+
+- **Frame.** Upstream's polytopes are in another frame and edge length (`src/polytopes_nd.json`). The vertex sets at unit edge are
+  matched with the catalogue's by an orthogonal map Q (backtracking on the Gram matrix of d neighbouring vertices, checked on all
+  vertices, with det Q_C = det Q_P so that the rotation stays a rotation), and each pose [c, S, D] becomes t = Q_C c / E_P,
+  R = Q_C R_up Q_P^T, with the pose of R from `robust_pose` (as above, every candidate rebuilt and compared at 1e-12), s = s_full.
+- **Certification.** Every converted record is certified again by `python/ndim/certify.py` (exact rational rotations, interval
+  enclosures, strict separation by explicit rational hyperplanes, containment by exact facets) at clearance 0, and only the ones
+  that pass are kept. The certifier's smallest proved gaps are stored with each record (`certification`). Upstream's clearance of
+  1e-7 survives the conversion to about 1e-15; some pairs show a proved gap a hair under 1e-7 (down to 9.9e-8), which is the
+  certifier's rigorous lower bound on a conservatively rounded rational plane.
+- **Result** [CALC]: 1,886 of 1,890 records certified (4D 1,403 of 1,404, 5D 278 of 279, 6D 205 of 207), 10 MB in `data/ndim`
+  (`records.json` 2.4 MB, `configs/<d>-<piece>-<container>.jsonl` one line per P, as for polyhedra). The four dropped, each for one
+  pair the certifier could not separate by a rational plane (its proposals, from the line of centres, the facet normals and GJK,
+  found none of positive margin): 5-cell in 600-cell n = 39, 6-simplex in 6-orthoplex n = 10, 6-cube in 6-orthoplex n = 8, 5-cube in
+  5-orthoplex n = 5 (hypercube pieces in an orthoplex are touching-face contacts at 1e-7). Their upstream files stay at the
+  upstream; they are not claimed.
+- **Fields of a record**: `id`, `d`, `piece`, `container`, `P`, `status` (`best_known` for all), `score_cert` (= the configuration's
+  s = upstream's s_full), `display`, `config_at`, `bound` (taken from the domain), `found_by`, `credit`, `method`, `sources`
+  (`wiki`, whose title, authors, URL, commit, licence, credit and method are given once in the file's `sources` table), `source`,
+  `origin` (upstream's file, record id, date), `wiki` (upstream's s, s_plus, s_full, s_tight), `lineage` (upstream's `search`)
+  and `certification`. Nothing is called proven.
+- **Changes forced in the core by this import**: `python/ndim/certify.py` proposes, for pieces with more than 64 facets (the 120- and
+  600-cell, 4_21), the two facets of each piece that face the other as separating directions (the closest points of GJK are too
+  inaccurate for a face-to-face contact 1e-7 apart); `packages/ndim` gains `validateNdSteps` (the sliced validator; `validateNd`
+  drives it), the `./info` entry (the catalogue's facts without the coordinates), the inscribed-ball shortcut for gross overlaps
+  and the facet skipping of the wall test. `floatgeom.MAX_CAYLEY` is 64 where the TypeScript and the docs say 32.
+
+Tests: `python/ndim/test_ndim.py` (`ImportedRecords`: a sample of nine records of every dimension certified again exactly, a
+tampered record refused, the counts), `packages/spaces/test/ndim-records.test.ts` (the index, the credits, and every record read
+back and valid at tolerance 0 by the float validator).

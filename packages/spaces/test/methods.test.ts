@@ -93,7 +93,7 @@ vi.mock("@polypack/balls", async (importOriginal) => {
  * once with no configuration, its whole budget spent.
  */
 const ENGINES: Record<
-  SpaceJob["space"],
+  Exclude<SpaceJob["space"], "ndim">,
   { fn: MockInstance; start: (args: any[]) => unknown; stub: (...args: any[]) => unknown }
 > = {
   sphere: {
@@ -325,7 +325,7 @@ describe("Auto, the space's own search", () => {
     ["polyhedra/cubincub/3", 200],
     ["balls/ballinball/5", 300],
   ] as const;
-  const spaceOf = (id: string) => id.split("/")[0] as SpaceJob["space"];
+  const spaceOf = (id: string) => id.split("/")[0] as Exclude<SpaceJob["space"], "ndim">;
   /** A valid start: the research record, or for balls, which has none, a test packing. */
   const startOf = (id: string) =>
     spaceOf(id) === "balls" ? ballsPackings.find((p) => p.id === id)!.config : recordOf(id);

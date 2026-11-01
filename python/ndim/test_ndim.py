@@ -322,5 +322,57 @@ class Adversarial(unittest.TestCase):
             self.assertEqual(r['ok'], ok, delta)
 
 
+class ImportedRecords(unittest.TestCase):
+    """The wiki's records in data/ndim (build_records.py), certified again exactly: a sample of every dimension and of the
+    pairs with big polytopes. (build_records.py certified every one when it built the file.)"""
+
+    PICK = [('4', 'cube', 'cube', 16), ('4', '24cell', '600cell', 12), ('4', '120cell', '120cell', 7), ('4', '600cell', 'simplex', 20),
+            ('4', 'simplex', 'ortho', 40), ('5', 'simplex', 'cube', 10), ('5', 'ortho', 'ortho', 32), ('6', 'cube', 'simplex', 24),
+            ('6', 'cube', 'cube', 20)]
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(ROOT, 'data', 'ndim')
+        cls.recs = {r['id']: r for r in json.load(open(os.path.join(path, 'records.json')))['records']}
+        cls.path = path
+
+    def config(self, r):
+        f = os.path.join(self.path, 'configs', f"{r['d']}-{r['piece']}-{r['container']}.jsonl")
+        with open(f, 'rb') as fh:
+            fh.seek(r['config_at'][0])
+            row = json.loads(fh.read(r['config_at'][1]))
+        self.assertEqual(row['P'], r['P'])
+        return row['config']
+
+    def test_sample_is_certified_with_the_wikis_clearance(self):
+        for d, a, b, P in self.PICK:
+            r = self.recs[f'ndim/{d}/{a}/{b}/{P}']
+            problem = {'d': int(d), 'piece': f'{d}:{a}', 'container': f'{d}:{b}'}
+            res = C.certify_config(problem, self.config(r), clearance=0.0)
+            self.assertTrue(res['ok'], (r['id'], res['failures']))
+            # the wiki keeps 1e-7 between pieces and from the walls; a few pairs a hair below it after the conversion
+            self.assertGreater(res['min_wall_gap'], 9.9e-8, r['id'])
+            self.assertGreater(res['min_pair_gap'], 9e-8, r['id'])
+            self.assertEqual(self.config(r)['s'], r['score_cert'])
+            self.assertEqual(len(self.config(r)['pieces']), P)
+
+    def test_a_tampered_record_is_refused(self):
+        r = self.recs['ndim/4/cube/cube/16']
+        problem = {'d': 4, 'piece': '4:cube', 'container': '4:cube'}
+        cfg = copy.deepcopy(self.config(r))
+        cfg['s'] = cfg['s'] - 1e-6
+        self.assertFalse(C.certify_config(problem, cfg)['ok'])
+
+    def test_counts(self):
+        by_d = {}
+        for r in self.recs.values():
+            by_d[r['d']] = by_d.get(r['d'], 0) + 1
+            self.assertEqual(r['status'], 'best_known')
+            self.assertIn('Zarzuelo', r['credit'])
+        # 36 pairs x 39, 9 x 31 and 9 x 23, less the four the certifier could not prove (docs/spaces/NDIM.md section 11)
+        self.assertEqual(sum(by_d.values()), 1886)
+        self.assertEqual(by_d, {4: 1403, 5: 278, 6: 205})
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

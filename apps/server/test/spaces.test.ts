@@ -211,7 +211,7 @@ const torusEntry = (k = 1, extra: object = {}) => ({
 });
 
 describe("GET /api/spaces", () => {
-  it("lists the seven spaces with their catalogues and the curvature sweeps", async () => {
+  it("lists the eight spaces with their catalogues and the curvature sweeps", async () => {
     makeApp({}, index);
     const { status, body } = await get("/api/spaces");
     expect(status).toBe(200);
@@ -226,10 +226,11 @@ describe("GET /api/spaces", () => {
       ["boundary", 32],
       ["polyhedra", 17263404],
       ["balls", 36927],
+      ["ndim", 6131],
     ]);
     for (const s of r.spaces) {
       // the balls space has no standalone viewer: its problems are drawn on the board
-      expect(s.viewer).toBe(s.space === "balls" ? "/#space=balls" : `/spaces/${s.space}.html`);
+      expect(s.viewer).toBe(s.space === "balls" || s.space === "ndim" ? `/#space=${s.space}` : `/spaces/${s.space}.html`);
       expect(s.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/\w+\.md$/);
       expect(s.conventions.configuration).toBeTruthy();
     }
@@ -1166,7 +1167,7 @@ describe("POST /api/spaces/submit: polyhedra (3D in 3D)", () => {
     expect((await submit(entry(cubes(2.5, -0.5)))).body).toMatchObject({ checked: false });
     expect((await submit(entry({ s: 2, pieces: [[0, 0, 0, 1, 0, 0]] }))).status).toBe(400);
     // the other kinds keep answering "valid, not kept" for such an entry
-    expect(SPACES_CHECKED_ONLY_IF_KEPT).toEqual(new Set(["polyhedra", "torus"]));
+    expect(SPACES_CHECKED_ONLY_IF_KEPT).toEqual(new Set(["polyhedra", "torus", "ndim"]));
   });
 
   it("keeps an entry only below the research record by more than a relative 1e-6, then by the tie rule", async () => {

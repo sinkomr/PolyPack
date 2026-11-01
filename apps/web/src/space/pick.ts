@@ -17,6 +17,8 @@ export const DEFAULT_PROBLEM: Record<SpaceName, string> = {
   polyhedra: "polyhedra/cubincub/11",
   // 13 balls: twelve round a thirteenth in a ball of diameter 3 (the kissing arrangement)
   balls: "balls/ballinball/13",
+  // not on the board yet (the nD plan's phase E)
+  ndim: "ndim/4/cube/cube/16",
 };
 
 /** Labels of the picker's fields, in the board's words ("Piece (N)", "Pieces (P)"). */

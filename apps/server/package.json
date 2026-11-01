@@ -11,6 +11,7 @@
   "dependencies": {
     "@hono/node-server": "^1.13.0",
     "@polypack/geometry": "*",
+    "@polypack/ndspace": "*",
     "@polypack/spaces": "*",
     "hono": "^4.6.0",
     "tsx": "^4.19.0"

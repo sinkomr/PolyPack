@@ -174,7 +174,7 @@ describe("the spaces options", () => {
     expect(run("--spaces", "torus,sphere")).toMatchObject({ spaces: ["sphere", "torus"], onlySpaces: false });
     expect(run("--spaces", "polyhedra")).toMatchObject({ spaces: ["polyhedra"], onlySpaces: false });
     expect(run("--spaces", "all", "--only-spaces")).toMatchObject({
-      spaces: ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"],
+      spaces: ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls", "ndim"],
       onlySpaces: true,
     });
     expect(run("--spaces", "Surface")).toMatchObject({ spaces: ["surface"] });
@@ -192,7 +192,7 @@ describe("the spaces options", () => {
     expect(run("--N", "4").spaces).toBeNull();
     const help = helpText(machine);
     expect(help).toMatch(/boundary \(3D on 4D: unit balls and cubes on the boundary\s+of\s+a tesseract\)/);
-    expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, polyhedra, balls, comma-separated, or all/);
+    expect(help).toMatch(/surface, curved, sphere, torus,\s+boundary, polyhedra, balls, ndim, comma-separated, or all/);
     expect(run("--dimensions", "balls")).toMatchObject({ spaces: ["balls"], onlySpaces: false });
     expect(run("--dimensions", "all").spaces).toContain("balls");
   });
@@ -203,7 +203,7 @@ describe("the spaces options", () => {
       () =>
         parseOptions(argv, machine);
     expect(bad("--spaces", "plane")).toThrow(
-      /"plane" is not one of surface, curved, sphere, torus, boundary, polyhedra, balls or all/,
+      /"plane" is not one of surface, curved, sphere, torus, boundary, polyhedra, balls, ndim or all/,
     );
     expect(bad("--spaces", "sphere,,torus")).toThrow(/empty item/);
     expect(bad("--spaces", "all,sphere")).toThrow(/cannot be combined/);
@@ -235,7 +235,7 @@ describe("the spaces options", () => {
       () =>
         parseOptions(argv, machine);
     expect(bad("--dimensions", "plane")).toThrow(
-      /^--dimensions: "plane" is not one of surface, curved, sphere, torus, boundary, polyhedra, balls or all$/,
+      /^--dimensions: "plane" is not one of surface, curved, sphere, torus, boundary, polyhedra, balls, ndim or all$/,
     );
     expect(bad("--dimensions", "all", "--spaces", "all")).toThrow(/same option/);
     expect(bad("--only-dimensions")).toThrow(/--only-dimensions needs --dimensions LIST/);

@@ -14,8 +14,8 @@
 import type { SpaceDomainInfo } from "./domain";
 
 /** Spaces that take submissions. */
-export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra" | "balls";
-export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls"];
+export type SpaceName = "surface" | "curved" | "sphere" | "torus" | "boundary" | "polyhedra" | "balls" | "ndim";
+export const SPACE_NAMES: readonly SpaceName[] = ["surface", "curved", "sphere", "torus", "boundary", "polyhedra", "balls", "ndim"];
 
 export function isSpaceName(v: unknown): v is SpaceName {
   return typeof v === "string" && (SPACE_NAMES as readonly string[]).includes(v);
@@ -43,6 +43,9 @@ export type SpaceProblemStatus = CertifiedStatus | "no_record";
  *  - polyhedra: `{ s, pieces: [[x, y, z, qw, qx, qy, qz], ...] }`, score s (scale of the container solid).
  *  - balls:   `{ s, pieces: [[x, y, z], ...] }` for balls of diameter 1, `[[x, y, z, qw, qx, qy, qz], ...]` for
  *             unit-edge Platonic solids; score s (the container ball's diameter, or the cube's edge).
+ *  - ndim:    `{ s, pieces: [[t_1..t_d, k_1..k_m, flip?], ...] }` for unit-edge polytopes of dimension d (m = d(d-1)/2
+ *             Cayley parameters), `[[t_1..t_d], ...]` for balls of diameter 1; score s (the container polytope's scale,
+ *             or the container ball's diameter).
  */
 export type SpaceConfig = Record<string, unknown>;
 
@@ -123,12 +126,12 @@ export interface SpaceProblemSummary {
   space: SpaceName;
   /**
    * The problem id, e.g. "surface/cube/fold/0/12", "curved/-1/3/4/7", "sphere/4/12", "torus/hex/5/8",
-   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12", "balls/ballinball/13".
+   * "boundary/tesseract/ball/9", "polyhedra/cubintet/12", "balls/ballinball/13", "ndim/4/cube/ortho/12".
    */
   id: string;
   /**
    * The id's fields: surface {solid, mode, N, P}; curved {K, N, M, P}; sphere {N, P}; torus {family, N, P};
-   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}; balls {code, piece, container, P}.
+   * boundary {polytope, piece, P}; polyhedra {code, piece, container, P}; balls {code, piece, container, P}; ndim {d, piece, container, P}.
    */
   fields: Record<string, string | number>;
   P: number;

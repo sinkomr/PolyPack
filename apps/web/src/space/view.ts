@@ -20,7 +20,7 @@ import { surfaceRenderer } from "./render/surface";
 import { torusRenderer } from "./render/torus";
 
 /** The problems drawn by a SpaceRenderer: the 2D kinds and 3D in 3D. */
-export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" }>;
+export type FlatDrawnProblem = Exclude<SearchProblem, { space: "boundary" } | { space: "ndim" }>;
 
 /** The renderer of a problem's space. */
 export function createRenderer(p: FlatDrawnProblem): SpaceRenderer {
@@ -61,6 +61,7 @@ const STEP = (5 * Math.PI) / 180;
  */
 export function mountSpaceView(host: HTMLElement, p: SearchProblem, label = "Drawing"): SpaceView {
   if (p.space === "boundary") return mountBoundaryView(host, p, label);
+  if (p.space === "ndim") throw new Error("the board does not draw the nD spaces yet");
   const renderer = createRenderer(p);
   const root = document.createElement("div");
   root.className = "space-view";

@@ -235,7 +235,7 @@ describe("the client with the spaces option", () => {
         decision: "dry run: would submit",
       });
       expect(output).toMatch(
-        /Also searches problems of these kinds: surface, curved, sphere, torus, boundary, polyhedra, balls \(--dimensions\)/,
+        /Also searches problems of these kinds: surface, curved, sphere, torus, boundary, polyhedra, balls, ndim \(--dimensions\)/,
       );
       // the dry run's best is kept for a real run
       expect(existsSync(join(dir, "state", "best", "spaces", "torus_sq_0_7.json"))).toBe(true);

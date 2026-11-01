@@ -59,6 +59,15 @@ import {
   validatePolyhedraAsync,
 } from "@polypack/polyhedra";
 import { type BallsConfig, getBallsProblem, ballsConfigErrors, validateBalls } from "@polypack/balls";
+import {
+  ND_MAX_P,
+  NDIM_MAX_REASONS,
+  loadNdProblem,
+  ndCheckSteps,
+  parseNdConfig,
+  type NdConfigShape,
+  type NdProblemId,
+} from "@polypack/ndspace";
 import { ParsedSpaceId, parseSpaceId } from "./ids";
 import {
   BOUNDARY_MAX_CHAINS,
@@ -94,6 +103,8 @@ export const SPACE_MAX_P: Record<SpaceName, number> = {
   polyhedra: POLYHEDRA_MAX_P,
   // [CALC] a check of 100 balls is about 5,000 distance tests; of 100 dodecahedra about 2 ms
   balls: 100,
+  // the largest P of any dimension (4D: 40); each dimension's own range is its domain's (the server refuses others)
+  ndim: ND_MAX_P,
 };
 /** Largest size (s, size, rho, L, lattice vector component) accepted. */
 export const SPACE_MAX_SIZE = 1e6;
@@ -361,8 +372,20 @@ export function parseSpaceConfig(id: ParsedSpaceId, raw: unknown): Parsed<SpaceC
     }
     case "balls":
       return parseBalls(raw, id);
+    case "ndim": {
+      const r = parseNdConfig(ndId(id), raw);
+      return r.ok ? { ok: true, config: r.config as unknown as SpaceConfig, score: r.score } : r;
+    }
   }
 }
+
+/** The nD problem of a parsed id. */
+const ndId = (id: ParsedSpaceId): NdProblemId => ({
+  d: id.fields.d as number,
+  piece: id.fields.piece as string,
+  container: id.fields.container as string,
+  P: id.P,
+});
 
 /** A balls configuration: errors of form are malformed input, except a wrong number of pieces. */
 function parseBalls(raw: Record<string, unknown>, id: ParsedSpaceId): Parsed<SpaceConfig> {
@@ -484,6 +507,9 @@ function* check(id: ParsedSpaceId, config: SpaceConfig, tol: number): Generator<
       const v = validateBalls(problem, config as unknown as BallsConfig, { tol, maxErrors: MAX_REASONS });
       return v.valid ? [] : reasonsOf(v.errors, `not a valid packing (smallest separation ${v.minPairSep})`);
     }
+    case "ndim":
+      // sliced in steps, with a cap on the work (ndspace validate.ts); the polytopes must be loaded (loadNdProblem)
+      return yield* ndCheckSteps(ndId(id), config as unknown as NdConfigShape, tol, NDIM_MAX_REASONS);
   }
 }
 
@@ -522,6 +548,8 @@ export async function validateSpaceSubmissionAsync(
   const prep = prepare(space, id, rawConfig, opts);
   const first = performance.now() - t0;
   if (!("run" in prep)) return { ...prep, workMs: first, slices: 1, longestSliceMs: first };
+  // 8D 4_21 is kept on demand (2 MB of coordinates): loaded here once, a no-op afterwards
+  if (prep.id.space === "ndim") await loadNdProblem(ndId(prep.id));
   let workMs = first;
   let slices = 1;
   let longestSliceMs = first;
@@ -550,7 +578,7 @@ export async function validateSpaceSubmissionAsync(
         ];
       }
     }
-    if (["curved", "sphere", "torus"].includes(prep.id.space)) {
+    if (["curved", "sphere", "torus", "ndim"].includes(prep.id.space)) {
       try {
         // Include preflights and geometry in the same timed slices as the synchronous check.
         const v = await runStepsAsync(

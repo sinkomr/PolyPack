@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { BALLS_CODES } from "@polypack/balls/catalogue";
+import { ND_SHAPE_NAMES } from "@polypack/ndspace/catalogue";
 import { PROBLEM_ORDER } from "@polypack/polyhedra/catalogue";
 import { ALL_SOLID_NAMES } from "@polypack/surface";
 import { TORUS_FAMILIES as TORUS_PACKAGE_FAMILIES } from "@polypack/torus";
@@ -104,7 +105,7 @@ describe("problem ids", () => {
     }
     // the balls space has a domain and no records
     // curved: 282 (the 52 records of radius-1 disks are archived in data/curved/archive)
-    expect(n).toBe(2038 + 282 + 166 + 544 + 32 + 14850);
+    expect(n).toBe(2038 + 282 + 166 + 544 + 32 + 14850 + 1886);
   });
 
   it("write K as the curved records do (Python's repr, integers without a point)", () => {
@@ -166,7 +167,7 @@ describe("problem ids", () => {
 describe("the catalogues", () => {
   it("load every record of the six files, none left out", () => {
     const counts = Object.fromEntries(SPACE_NAMES.map((s) => [s, cat(s).problems.length]));
-    expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0 });
+    expect(counts).toEqual({ surface: 2038, curved: 282, sphere: 166, torus: 544, boundary: 32, polyhedra: 14850, balls: 0, ndim: 1886 });
     expect(cat("balls").domain!.info.problems).toBe(36927);
     for (const s of SPACE_NAMES) expect(cat(s).skipped).toEqual([]);
   });
@@ -295,6 +296,12 @@ describe("the catalogues", () => {
         ["code", BALLS_CODES],
         ["P", null],
       ],
+      ndim: [
+        ["d", null],
+        ["piece", ND_SHAPE_NAMES],
+        ["container", ND_SHAPE_NAMES],
+        ["P", null],
+      ],
     };
     for (const s of SPACE_NAMES) {
       const rank = (p: SpaceProblemEntry) =>
@@ -327,10 +334,12 @@ describe("the catalogues", () => {
     const logs: string[] = [];
     const loaded = loadSpacesIndex(empty, (m) => logs.push(m));
     // Domain spaces load even without records; balls ships no records file at all
-    expect(Object.keys(loaded).sort()).toEqual(["balls", "curved", "polyhedra", "sphere", "surface", "torus"]);
+    expect(Object.keys(loaded).sort()).toEqual(["balls", "curved", "ndim", "polyhedra", "sphere", "surface", "torus"]);
     expect(loaded.polyhedra!.problems).toHaveLength(0);
     expect(loaded.polyhedra!.domain!.info.problems).toBe(17263404);
     expect(loaded.balls!.problems).toHaveLength(0);
+    expect(loaded.ndim!.problems).toHaveLength(0);
+    expect(loaded.ndim!.domain!.info.problems).toBe(6131);
     expect(loaded.balls!.domain!.info.problems).toBe(36927);
     expect(loaded.surface!.problems).toHaveLength(0);
     expect(loaded.surface!.domain!.info.problems).toBe(2791800);
@@ -745,13 +754,15 @@ describe("space metadata", () => {
     for (const s of SPACE_NAMES) {
       const i = SPACE_INFO[s];
       // the balls space has no standalone viewer: the board draws its problems
-      expect(i.viewer).toBe(s === "balls" ? "/#space=balls" : `/spaces/${s}.html`);
+      expect(i.viewer).toBe(s === "balls" || s === "ndim" ? `/#space=${s}` : `/spaces/${s}.html`);
       expect(i.docs).toMatch(/^https:\/\/github\.com\/sinkomr\/PolyPack\/blob\/main\/docs\/spaces\/[A-Z_]+\.md$/);
       expect(i.conventions.configuration).toBeTruthy();
       expect(i.conventions.validity).toMatch(/1e-9/);
       // polyhedra records keep a clearance, so beating one takes a relative 1e-6 (SPACE_RECORD_MARGIN)
       expect(i.conventions.improvement).toMatch(
-        s === "polyhedra"
+        s === "ndim"
+          ? /research record's s by more than a relative 1e-6: .*overlaps of at most 1e-11$/
+          : s === "polyhedra"
           ? /leader's by more than a relative 1e-9 and below the research record's certified s by more than a relative 1e-6: .*one below the research record must also be valid with overlaps of at most 1e-11$/
           : /by more than a relative 1e-9; one below the research record must also be valid with overlaps of at most 1e-11$/,
       );
@@ -865,8 +876,10 @@ describe("polyhedra (3D in 3D)", () => {
 
   it("beating a record takes a relative 1e-6, site entries the tie tolerance", () => {
     expect(SPACE_RECORD_MARGIN.polyhedra).toBe(1e-6);
+    // nD in nD: its records keep the wiki's clearance too
+    expect(SPACE_RECORD_MARGIN.ndim).toBe(1e-6);
     // every other space beats its records by the tie tolerance
-    for (const s of SPACE_NAMES) if (s !== "polyhedra") expect(SPACE_RECORD_MARGIN[s], s).toBe(1e-9);
+    for (const s of SPACE_NAMES) if (s !== "polyhedra" && s !== "ndim") expect(SPACE_RECORD_MARGIN[s], s).toBe(1e-9);
     // boundary: 1e-12 below a record is a tie, 2e-9 below beats it
     expect(improvesSpaceBest("boundary", 1 - 1e-12, 1, null)).toBe(false);
     expect(improvesSpaceBest("boundary", 1 - 2e-9, 1, null)).toBe(true);

@@ -191,6 +191,8 @@ export function scoreLabel(p: SearchProblem): string {
         default:
           return "Container scale s";
       }
+    case "ndim":
+      return p.container === "ball" ? "Container diameter d" : "Container scale s";
   }
 }
 
@@ -259,6 +261,7 @@ export const EVAL_UNIT: Record<SearchKind, string> = {
   boundary: "one evaluation of the penalty energy (a check of a whole packing counts as 500)",
   polyhedra: "one simulator step or one evaluation of the polish",
   balls: "one evaluation of the penalty and its gradient",
+  ndim: "one evaluation of the penalty energy (overlap depths by GJK and EPA)",
 };
 
 /**
@@ -286,6 +289,8 @@ export function evalUnit(p: SearchProblem, method?: string): string {
  * (2026-10-26, a shared and loaded machine), for rounds of 1 to 3 s like the spaces' own rounds.
  */
 export const GENERIC_ROUND_K: Record<SpaceName, number> = {
+  // the nD spaces are not on the board yet; a placeholder in the polyhedra's range
+  ndim: 100_000,
   sphere: 3_300_000,
   boundary: 2_700_000,
   torus: 900_000,
@@ -393,6 +398,7 @@ export const ROUND_EVALS: Record<SearchKind, number> = {
   // polyhedra and balls rounds depend on P and the piece (polyhedraRound, ballsRound); these are no sizes of theirs
   polyhedra: 10000,
   balls: 10000,
+  ndim: 10000,
 };
 
 /** Pieces from which a fold round has 2 compressions instead of 4. */
@@ -414,6 +420,7 @@ export const FRESH_EVALS: Record<SearchKind, number> = {
   boundary: BOUNDARY_FRESH,
   polyhedra: 10000,
   balls: 10000,
+  ndim: 10000,
 };
 
 /**
@@ -433,6 +440,7 @@ export const GROW_LIMIT: Record<SearchKind, number> = {
   boundary: 3,
   polyhedra: 2,
   balls: 2,
+  ndim: 2,
 };
 
 /**
@@ -604,13 +612,14 @@ export function defaultBudget(p: SearchProblem, method?: string): { time_s: numb
   }
   // ten rounds of about 2 to 3 s here, with room for a machine several times slower
   if (p.space === "balls") return { time_s: 60, evals: 10 * ballsRound(p.P, p.code).round };
+  if (p.space === "ndim") return { time_s: 60, evals: 30000 };
   return {
     nofold: { time_s: 15, evals: 30000 },
     curved: { time_s: 30, evals: 90 },
     sphere: { time_s: 15, evals: 20000 },
     torus: { time_s: 15, evals: 20000 },
     boundary: { time_s: 30, evals: BOUNDARY_BUDGET },
-  }[kind as Exclude<SearchKind, "surface" | "nofold-surface" | "polyhedra" | "balls">];
+  }[kind as Exclude<SearchKind, "surface" | "nofold-surface" | "polyhedra" | "balls" | "ndim">];
 }
 
 /**
@@ -631,6 +640,7 @@ export const EVALS_MAX: Record<SearchKind, number> = {
   polyhedra: 10_000_000,
   // [CALC] at 1 to 110 microseconds an evaluation (ballsRound), 10 million take 10 s to 20 minutes
   balls: 10_000_000,
+  ndim: 1_000_000,
 };
 
 /** The most evaluations the panel takes for a run of `method` on the problem. */

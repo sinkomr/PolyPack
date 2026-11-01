@@ -17,6 +17,7 @@ import { ballsKernel } from "@polypack/balls";
 import { boundaryKernel } from "@polypack/boundary";
 import { curvedKernel } from "@polypack/curved";
 import type { SpaceKernel } from "@polypack/methods";
+import { ndKernel } from "@polypack/ndspace";
 import { polyhedraKernel } from "@polypack/polyhedra";
 import { sphereKernel } from "@polypack/sphere";
 import { surfaceKernel } from "@polypack/surface";
@@ -44,6 +45,8 @@ const factories: KernelFactory = (p) => {
       return boundaryKernel({ polytope: p.polytope, piece: p.piece, P: p.P });
     case "balls":
       return ballsKernel({ code: p.code, P: p.P });
+    case "ndim":
+      return ndKernel({ d: p.d, piece: p.piece, container: p.container, P: p.P });
   }
 };
 

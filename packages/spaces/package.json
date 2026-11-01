@@ -19,6 +19,7 @@
     "@polypack/curved": "0.1.0",
     "@polypack/geometry": "0.1.0",
     "@polypack/methods": "0.1.0",
+    "@polypack/ndspace": "0.1.0",
     "@polypack/polyhedra": "0.1.0",
     "@polypack/solver": "0.1.0",
     "@polypack/sphere": "0.1.0",

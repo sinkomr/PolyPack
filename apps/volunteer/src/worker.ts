@@ -12,6 +12,7 @@
  */
 import os from "node:os";
 import { isMainThread, parentPort, workerData } from "node:worker_threads";
+import { loadNdProblem, parseNdId } from "@polypack/ndspace";
 import { inlineRunJob } from "./engine/inline";
 import { type SpaceControl, type SpaceJob, type SpaceJobResult, isSpaceJob, runSpaceJob } from "./spaces/run";
 import type { Control, Job, JobResult } from "./types";
@@ -75,6 +76,11 @@ export function runSearchThread(): void {
     if (m.type === "run") {
       const control: Control = { aborted: false, paused: false };
       current = { id: m.id, control };
+      // nD in nD: the 4_21 polytope's coordinates (2 MB) are loaded on demand, before the first job that uses it
+      if (isSpaceJob(m.job) && m.job.space === "ndim") {
+        const id = parseNdId(m.job.id);
+        if (typeof id !== "string") await loadNdProblem(id);
+      }
       const result = isSpaceJob(m.job)
         ? runSpaceJob(m.job, sharedControl(control, flags))
         : await inlineRunJob(m.job, control);

@@ -51,6 +51,7 @@ export {
   pieceWallGap,
   tightScale,
   validateNd,
+  validateNdSteps,
   type NdValidation,
   type ValidateOptions,
 } from "./validate";

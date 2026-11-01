@@ -78,6 +78,23 @@ const norm = (v: ArrayLike<number>, d: number): number => Math.sqrt(dot(v, v, d)
 
 /** Checks a configuration of a problem at its stated s. Never throws on bad input: the reasons say what is wrong. */
 export function validateNd(problem: NdProblem, config: NdConfig, opts: ValidateOptions = {}): NdValidation {
+  const steps = validateNdSteps(problem, config, opts);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
+}
+
+/**
+ * validateNd as steps for a server to run in short slices (a generator that yields between pieces, pairs and blocks of
+ * facets; the work between two yields is bounded by one piece's containment test against a block of facets, or one pair).
+ * Its result is validateNd's.
+ */
+export function* validateNdSteps(
+  problem: NdProblem,
+  config: NdConfig,
+  opts: ValidateOptions = {},
+): Generator<void, NdValidation> {
   const tol = opts.tol ?? NDIM_TOL;
   const maxErrors = opts.maxErrors ?? 20;
   const out: NdValidation = {
@@ -106,7 +123,7 @@ export function validateNd(problem: NdProblem, config: NdConfig, opts: ValidateO
   }
   // ---- containment
   for (let i = 0; i < n && out.reasons.length < maxErrors; i++) {
-    const g = wallGap(P, C, s, placed[i], d);
+    const g = yield* wallGapSteps(P, C, s, placed[i], d);
     if (g < out.minWallGap) out.minWallGap = g;
     if (!(g >= -tol)) out.reasons.push(`piece ${i} sticks out of the container by ${-g}`);
   }
@@ -117,6 +134,7 @@ export function validateNd(problem: NdProblem, config: NdConfig, opts: ValidateO
   const u = new Float64Array(d);
   for (let i = 0; i < n && out.reasons.length < maxErrors; i++) {
     for (let j = i + 1; j < n && out.reasons.length < maxErrors; j++) {
+      yield;
       let d2 = 0;
       for (let c = 0; c < d; c++) {
         const e = placed[i].t[c] - placed[j].t[c];
@@ -132,9 +150,16 @@ export function validateNd(problem: NdProblem, config: NdConfig, opts: ValidateO
         sep = quickGap(P, placed[i], placed[j], d, dist, u);
         if (!(sep >= -tol)) {
           out.pairsTested++;
-          const A = placed[i].X as Float64Array;
-          const B = placed[j].X as Float64Array;
-          sep = signedSeparation(A, P.nV, B, P.nV, d).sep;
+          // Both pieces contain the ball of their inradius about the centre, so centres closer than twice the inradius
+          // overlap by at least the difference: a cheap bound that settles gross overlaps without GJK / EPA (which cost
+          // up to a second a pair in 8 to 10 dimensions); like EPA's depth it never exceeds the true depth.
+          const inner = 2 * P.inradius - dist;
+          if (inner > tol) sep = -inner;
+          else {
+            const A = placed[i].X as Float64Array;
+            const B = placed[j].X as Float64Array;
+            sep = signedSeparation(A, P.nV, B, P.nV, d).sep;
+          }
         }
       }
       if (sep < out.minPairSep) {
@@ -149,11 +174,21 @@ export function validateNd(problem: NdProblem, config: NdConfig, opts: ValidateO
   return out;
 }
 
+/** Facets tested between two yields of wallGapSteps. */
+const WALL_BLOCK = 2048;
+
 /**
  * Gap of a piece to the walls: s b_f - max N_f . x over the piece and the container's facets (polytope container), or
- * s/2 minus the farthest point (ball container); positive: inside, negative: protrusion.
+ * s/2 minus the farthest point (ball container); positive: inside, negative: protrusion. Yields about every WALL_BLOCK
+ * vertex-facet products.
  */
-function wallGap(P: Polytope | null, C: Polytope | null, s: number, pc: Placed, d: number): number {
+function* wallGapSteps(
+  P: Polytope | null,
+  C: Polytope | null,
+  s: number,
+  pc: Placed,
+  d: number,
+): Generator<void, number> {
   if (C === null) {
     const R = s / 2;
     if (P === null) return ballInBallGap(pc.t, BALL_RADIUS, R, d);
@@ -163,7 +198,18 @@ function wallGap(P: Polytope | null, C: Polytope | null, s: number, pc: Placed, 
     return R - far;
   }
   let gap = Infinity;
+  const per = P === null ? 1 : P.nV;
+  const reachP = P === null ? BALL_RADIUS : P.circumradius;
+  let work = 0;
   for (let f = 0; f < C.nF; f++) {
+    // every vertex of the piece is within its circumradius of the centre, so the gap to facet f is at least
+    // s b_f - N_f . t - R: a facet that cannot lower the smallest gap found is skipped (the result is the same)
+    if (s * C.b[f] - dot(C.N, pc.t, d, f * d, 0) - reachP >= gap) continue;
+    if (work >= WALL_BLOCK) {
+      work = 0;
+      yield;
+    }
+    work += per;
     if (P === null) {
       gap = Math.min(gap, ballFacetGap(pc.t, BALL_RADIUS, C, f, s));
       continue;
@@ -174,6 +220,14 @@ function wallGap(P: Polytope | null, C: Polytope | null, s: number, pc: Placed, 
     gap = Math.min(gap, s * C.b[f] - top);
   }
   return gap;
+}
+
+function wallGap(P: Polytope | null, C: Polytope | null, s: number, pc: Placed, d: number): number {
+  const steps = wallGapSteps(P, C, s, pc, d);
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+  }
 }
 
 /**

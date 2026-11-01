@@ -329,6 +329,7 @@ export const SCORE_NAMES: Record<SpaceName, string> = {
   boundary: "polytope edge s",
   polyhedra: "container scale s",
   balls: "container size s",
+  ndim: "container scale s",
 };
 
 const CERTIFIED: Record<string, string> = { best_known: "best known", proven: "proven optimal" };

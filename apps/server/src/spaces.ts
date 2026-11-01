@@ -30,6 +30,7 @@ import {
   storedSpaceConfigAsync,
   validateSpaceSubmissionAsync,
 } from "@polypack/spaces";
+import { ndCheckOps, ndIsHeavy } from "@polypack/ndspace";
 import { Context, Hono } from "hono";
 import { compress } from "hono/compress";
 import {
@@ -55,8 +56,9 @@ export const SPACE_SITE_ONLY_MAX_LIMIT = 5000;
  * 0.5 s, and posting a research record or the site's best back would otherwise cost one each time. The
  * other spaces' checks are short, and they keep answering "valid, not kept" for such an entry.
  */
-export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra", "torus"]);
+export const SPACES_CHECKED_ONLY_IF_KEPT: ReadonlySet<SpaceName> = new Set<SpaceName>(["polyhedra", "torus", "ndim"]);
 /**
+ * nD in nD checks are heavy by their size (ndIsHeavy: more than 2e7 multiply-adds, i.e. about 50 ms of work).
  * Polyhedra, surface, curved, sphere and torus checks from this P on are heavy ([CALC] polyhedra about 0.7 s of work per pass at P = 500;
  * surface 100-gons at P = 100 up to about 15 ms since its check stops at the first overlaps and skips distant
  * parts, 0.57 s before; torus up to 0.5 s at P = 500 on a basis at the translate limit, 0.06 s on a reduced one): one runs at a time on the server, and at most SPACE_HEAVY_CHECKS_WAITING wait their
@@ -92,6 +94,14 @@ export interface SpaceRouteContext {
   /** null when the request carries the admin token; otherwise the refusal to send. */
   admin: (c: Context) => Response | null;
 }
+
+/** The nD problem of a parsed id. */
+const ndProblem = (id: { P: number; fields: Record<string, string | number> }) => ({
+  d: id.fields.d as number,
+  piece: id.fields.piece as string,
+  container: id.fields.container as string,
+  P: id.P,
+});
 
 /** A query value that is a plain decimal integer; anything else is NaN. */
 function decimalInteger(text: string | undefined): number {
@@ -361,7 +371,9 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
     if (!shape.ok) return reject(shape.malformed ? 400 : 422, shape.errors.slice(0, 20));
     const heavy =
       (["polyhedra", "surface", "curved", "sphere", "torus"].includes(space) && parsedId.P >= SPACE_HEAVY_CHECK_P) ||
-      (space === "sphere" && Number(parsedId.fields.N) >= 20);
+      (space === "sphere" && Number(parsedId.fields.N) >= 20) ||
+      // nD in nD: by the size of the check (vertices of the pieces times facets of the container, pairs), not by P alone
+      (space === "ndim" && ndIsHeavy(ndProblem(parsedId)));
     if (heavy && heavyRunning && heavyWaiting.length >= SPACE_HEAVY_CHECKS_WAITING)
       return reject(503, ["the server is busy checking other entries; try again in a few seconds"], OVERLOAD_RETRY_S);
     // Reserve work before checking; a many-sided sphere also queues at small P.
@@ -380,7 +392,11 @@ export function registerSpaceRoutes(app: Hono, ctx: SpaceRouteContext): void {
               Math.min(800, Math.max(5 + 0.002 * parsedId.P * parsedId.P, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides))
             : ["curved", "sphere"].includes(space)
               ? Math.min(400, 5 + 1e-5 * parsedId.P * parsedId.P * sides * sides)
-              : 5;
+              : space === "ndim"
+                ? // [CALC] about 3 ns per multiply-add of a check without the validator's facet skipping, the worst case
+                  // (docs/spaces/NDIM.md section 10); the charge is corrected by the work measured
+                  Math.min(8000, 5 + 3e-6 * ndCheckOps(ndProblem(parsedId)))
+                : 5;
     checking.add(address);
     ctx.verifyBudget.charge(address, estimate);
     let verdict: Awaited<ReturnType<typeof validateSpaceSubmissionAsync>>;

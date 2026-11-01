@@ -59,12 +59,21 @@ licence. Please credit the original source when reusing them.
 
 ## Convex polytopes in 4 to 10 dimensions
 
-The ndim package (`packages/ndim`, `python/ndim`, `docs/spaces/NDIM.md`) is PolyPack's own code. It uses
+The ndim package (`packages/ndim`, `packages/ndspace`, `python/ndim`, `docs/spaces/NDIM.md`) is PolyPack's own code. It uses
 `python/polyhedra/algebraic.py` (vendored above) for interval arithmetic and integer square roots. None of upstream's
 nD tools (`polytopes_nd.py` and `.json`, `certify_nd.py`, `ndsim.py`, `ndslp.py` of alejandrozu/platonic-packing) is
-included or was consulted. The polytopes are the regular, demi- and Gosset polytopes of H. S. M. Coxeter's _Regular
-Polytopes_ and T. Gosset's 1900 paper, with their literature counts; the E8 root system of Conway and Sloane's _Sphere
-Packings, Lattices and Groups_. No third-party data is included.
+included; `src/polytopes_nd.json` is read by `python/ndim/build_records.py` to put the records in PolyPack's frame (the
+vertex sets of upstream's regular polytopes are matched with PolyPack's own catalogue), and is not copied. The polytopes
+are the regular, demi- and Gosset polytopes of H. S. M. Coxeter's _Regular Polytopes_ and T. Gosset's 1900 paper, with their
+literature counts; the E8 root system of Conway and Sloane's _Sphere Packings, Lattices and Groups_.
+
+Data: the records of the regular polytopes in 4D, 5D and 6D of <https://github.com/alejandrozu/platonic-packing> (MIT, the
+licence quoted under "Polyhedra in polyhedra" below; Copyright (c) 2026 Alejandro Zarzuelo), at commit
+`8ce7b48831804b287fd98ade4ef35f5a6d6ca188` (30 October 2026): `records/<p>/<p>_nNN.json`, 1,890 files, of which 1,886 are
+included in `data/ndim` (configurations, credits, lineage and the wiki's values), converted to PolyPack's poses and
+certified again with `python/ndim/certify.py`. Their `found_by` and `credit` strings are kept in every record: the
+soft-to-rigid method is Yohei Nakajima's (2026), the generalization to regular polytopes of dimensions 4 to 6, the
+basin-hopping search and the certification were developed with Claude (Anthropic) under Alejandro Zarzuelo's direction.
 
 ## Atlas layout
 
