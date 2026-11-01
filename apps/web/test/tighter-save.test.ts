@@ -162,6 +162,20 @@ describe("Tighter saves", () => {
     expect(r.state.levels).toEqual({ lanesx: 2 });
   });
 
+  it("keeps a transfer's payFrom, and reads a save without it as null", () => {
+    const s = played();
+    s.queue[0].payFrom = 9.25;
+    const r = fromJson(toJson(s), T0);
+    expect(r.ok && r.state.queue[0].payFrom).toBe(9.25);
+    const raw = JSON.parse(toJson(s));
+    delete raw.queue[0].payFrom;
+    const old = readSave(raw, T0);
+    expect(old.ok && old.state.queue[0].payFrom).toBeNull();
+    raw.queue[0].payFrom = -3;
+    const bad = readSave(raw, T0);
+    expect(bad.ok && bad.state.queue[0].payFrom).toBeNull();
+  });
+
   it("give back the price of the Away upgrades and Keep the bank, once, now that auto-eval runs live", () => {
     const s = played();
     const raw = JSON.parse(toJson(s));

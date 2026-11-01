@@ -488,7 +488,7 @@ export const TRANSFERS: How = {
   text: [
     "With Transfers, a new open problem can start from the best known packing of the same shapes with fewer pieces. Without it, every piece starts on rings around the centre of the container.",
     `The game looks first at your own boards in the queue with fewer pieces. Then it looks at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the counts below the problem's among ${andList(FRONTIER_P.map(String))}. With More open problems they also include the three counts just below it. The missing pieces are placed in free space around the packing. When 6 or fewer are missing, each goes where it grows the container least.`,
-    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it.`,
+    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it. Your points still count from the start without the transfer, so a transfer costs you no points.`,
   ],
   math: [
     `use the transfer when <var>s</var><sub>T</sub> &lt; ${TRANSFER_MARGIN} × <var>s</var><sub>L</sub>`,

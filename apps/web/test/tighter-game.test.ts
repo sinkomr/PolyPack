@@ -355,6 +355,66 @@ describe("Tighter runs on the board", () => {
     expect(p.floor).toBe(9.8);
   });
 
+  describe("a transferred start", () => {
+    /** A problem whose Load all gave 10 and a transfer 8: the floor is 8, the first payment counts from 10. */
+    const transferred = () => {
+      const g = game();
+      applyLoadAll(g.p, board(3), 8, null, 10);
+      return g;
+    };
+    /** The same problem without a transfer: Load all's 10 is the floor. */
+    const plain = () => {
+      const g = game();
+      applyLoadAll(g.p, board(3), 10, null);
+      return g;
+    };
+
+    it("pays nothing for a board between the transfer start and Load all's start", () => {
+      const { s, p } = transferred();
+      expect(p.floor).toBe(8);
+      expect(p.payFrom).toBe(10);
+      // 9 is above the transfer start (8): the board does not even improve
+      const c = applyStep(s, p, step(9), T0);
+      expect(c).toMatchObject({ improved: false, counted: false });
+      expect(c.points).toBeNull();
+      expect(s.rp).toBe(0);
+    });
+
+    it("pays a first record below the transfer start from Load all's score, then from paidTo", () => {
+      const t = transferred();
+      const n = plain();
+      const ct = applyStep(t.s, t.p, step(7.5), T0);
+      const cn = applyStep(n.s, n.p, step(7.5), T0);
+      expect(ct.points!.firstBonus).toBe(true);
+      expect(ct.points!.total).toBeGreaterThan(0);
+      // the same points as a problem that began at 10, bonus included
+      expect(ct.points!.total).toBe(cn.points!.total);
+      expect(t.p.paidTo).toBe(7.5);
+      // the next payment counts from the last score paid, and is no first record
+      const c2t = applyStep(t.s, t.p, step(7, 2), T0);
+      const c2n = applyStep(n.s, n.p, step(7, 2), T0);
+      expect(c2t.points!.firstBonus).toBe(false);
+      expect(c2t.points!.total).toBe(c2n.points!.total);
+    });
+
+    it("must still beat the transfer start: a first record above the floor is no record", () => {
+      const { s, p } = transferred();
+      const c = applyStep(s, p, step(8 * (1 - 1e-12)), T0);
+      expect(c.counted).toBe(false);
+      expect(c.points).toBeNull();
+    });
+
+    it("ignores payFrom when a leader is known", () => {
+      const t = transferred();
+      const n = game();
+      applyLoadAll(n.p, board(3), 8, null);
+      for (const g of [t, n]) g.p.leader = { score: 8.5, name: "Bob", id: 4 };
+      const ct = applyStep(t.s, t.p, step(7.5), T0);
+      const cn = applyStep(n.s, n.p, step(7.5), T0);
+      expect(ct.points!.total).toBe(cn.points!.total);
+    });
+  });
+
   it("lets Evolve go on after a Compact that did not beat a trim floor", () => {
     // Compact improved the Load-all board, but not past the trim floor: no record, yet a run's board
     let { s, p } = game();

@@ -1215,6 +1215,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "When the game places a new open problem, it looks for a good packing of the same shapes with fewer pieces. This is your own board in the queue, or else the site's record for the nearest piece count it finds. It keeps those pieces where they are and adds the missing ones in free space.",
         "The game uses this start only if it is clearly smaller than the usual start, with every piece on rings around the centre. Your first record on the problem must beat the best of these starts.",
+        "Your points still count from the usual start, so a transfer saves time without costing points.",
       ],
       note: "It looks up at most 4 piece counts. With 6 or fewer pieces missing, each goes where it grows the container least. The start counts as clearly smaller when its side is under 98 % of Load all's. The starting score is the smallest of the sides below, and your first record must beat it by more than 10⁻⁹ (relative).",
       math: [

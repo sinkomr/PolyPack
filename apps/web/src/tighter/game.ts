@@ -102,6 +102,11 @@ export interface ProblemFields {
   leaving: boolean;
   /** A POST whose answer has not arrived (or was lost): what was sent, under which name, after which leader. */
   sending: PendingSend | null;
+  /**
+   * The score the first payment counts from when a transfer lowered the free floor (the score the
+   * problem would have had without it); null otherwise. The first record must still beat `floor`.
+   */
+  payFrom: number | null;
   /** The score up to which points have been paid (null: none yet, so from the leader or the floor). */
   paidTo: number | null;
   /** Points paid here that no submission has carried yet. */
@@ -284,6 +289,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     dealtAt: now,
     bound: null,
     floor: null,
+    payFrom: null,
     published: null,
     phase: "bare",
     board: null,
@@ -369,18 +375,23 @@ export function density(p: ProblemKey, s: number): number {
  */
 export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p.phase === "loaded" && p.run !== null);
 
-/** Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor. */
+/**
+ * Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor.
+ * `payFrom` is set when a transfer started the problem: the first payment then counts from it.
+ */
 export function applyLoadAll(
   p: ProblemState,
   board: PackingConfig | SpaceConfig,
   score: number,
   trimFloor: number | null,
+  payFrom: number | null = null,
 ): void {
   if (p.phase !== "bare") return;
   p.board = board;
   p.best = score;
   p.run = null;
   p.floor = trimFloor !== null && trimFloor < score ? trimFloor : score;
+  p.payFrom = payFrom;
   p.phase = "loaded";
 }
 
@@ -579,11 +590,14 @@ export function previousScore(p: ProblemState): number | null {
 }
 
 /**
- * What the next payment is measured from: the last score paid, else the score to beat; on a problem
- * with a published value, never above the published value (nothing pays until the board beats it).
+ * What the next payment is measured from: the last score paid, else the score to beat (for a first
+ * record on a transferred start, the score the problem would have had without the transfer); on a
+ * problem with a published value, never above the published value (nothing pays until the board beats it).
  */
 const payBase = (p: ProblemState): number | null => {
-  const base = p.paidTo ?? previousScore(p);
+  const fromTransfer =
+    p.paidTo === null && p.leader === null && p.verified === null && p.payFrom !== null ? p.payFrom : null;
+  const base = p.paidTo ?? fromTransfer ?? previousScore(p);
   return base !== null && p.published !== null ? Math.min(base, p.published) : base;
 };
 
@@ -676,7 +690,8 @@ export function unconfirmedPoints(s: GameState): number {
  */
 function beating(p: ProblemState, name: string): boolean {
   const leader = p.leader;
-  const other = !!leader && (leader.id === null || leader.id !== p.ourId) && sanitizeName(leader.name) !== sanitizeName(name);
+  const other =
+    !!leader && (leader.id === null || leader.id !== p.ourId) && sanitizeName(leader.name) !== sanitizeName(name);
   if (leader && !other) return false;
   const target = Math.min(other ? leader!.score : Infinity, p.published ?? Infinity);
   return p.best !== null && Number.isFinite(target) && Number(show6(p.best)) < Number(show6(target));
