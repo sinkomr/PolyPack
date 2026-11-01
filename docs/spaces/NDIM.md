@@ -371,3 +371,8 @@ policy unless a published proof exists.
   valid pair that overlaps by between tol and √d·tol, never accept an invalid one (§4). [6] Poses with a Cayley parameter above 32 are
   refused; use a flip. [7] The edges are not stored in the TypeScript data (they are the pairs at distance 1).
   [8] Nothing here knows about folding, the boundary ("on") problems or the site.
+  [9] The certifier rounds each separating hyperplane to a denominator of 10^12, so a strict gap below about 1e-12 may
+  go uncertified (incompleteness only, never an unsound verdict; irrelevant at the records' 1e-7 clearance).
+  [10] The clearance term in `certify.py` uses the midpoint of the enclosure of |N_f| rather than its upper end; the
+  error is about 1e-48 times the clearance. [11] In floats, R^T R - I reaches about 6e-15 at |k| = 32 in d = 10; the
+  exact certifier uses the exact rational rotation, so this affects only the float validator's 1e-9 tolerance.
