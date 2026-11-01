@@ -1,4 +1,5 @@
 import * as api from "./api";
+import { holderHref } from "./holder-model";
 import { el } from "./shapes-ui";
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -25,10 +26,14 @@ async function load(): Promise<void> {
     const before = holders[i - 1];
     if (!before || before.records !== h.records || before.site_bests !== h.site_bests) place = i + 1;
     const tr = el("tr");
+    // a name is only ever inserted as text
+    const name = el("td", "", "name");
+    const link = el("a", h.name);
+    link.href = holderHref(h.name);
+    name.append(link);
     tr.append(
       el("td", String(place), "num"),
-      // a name is only ever inserted as text
-      el("td", h.name, "name"),
+      name,
       el("td", count(h.records), "num"),
       el("td", count(h.beat_published), "num"),
       el("td", count(h.site_bests), "num"),

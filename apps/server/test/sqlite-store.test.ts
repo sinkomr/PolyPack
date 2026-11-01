@@ -515,3 +515,136 @@ describe("a submission", () => {
     expect((await store.submit(entry(1))).kept).toBe(true);
   });
 });
+
+describe("the problems of a name", () => {
+  const entry = (N: number, M: number, P: number, name: string, verification: "none" | "pending" = "none") => ({
+    N,
+    M,
+    P,
+    score: 1 + P,
+    name,
+    agent_note: "",
+    found_with: "hand" as const,
+    method: null,
+    method_params: null,
+    seed: null,
+    budget: null,
+    software: null,
+    pieces: [{ x: 0, y: 0, theta: 0 }],
+    container_phi: 0,
+    created_at: "2026-10-21T00:00:00Z",
+    verification,
+    literature_value: null,
+    strict_check: null,
+  });
+  const all = async (store: SqliteStore, name: string, limit = 1000) => {
+    const out: { N: number; M: number; P: number }[] = [];
+    for (let after = null as (typeof out)[number] | null; ;) {
+      const page = await store.problemsNamed(name, after, limit);
+      out.push(...page);
+      if (page.length < limit) return out;
+      after = page[page.length - 1]!;
+    }
+  };
+
+  it("lists each problem with an entry of exactly that name once, in order of (N, M, P)", async () => {
+    const store = new SqliteStore(":memory:");
+    for (const e of [
+      entry(5, 3, 2, "ann"),
+      entry(4, 4, 9, "ann"),
+      entry(4, 4, 2, "ann"),
+      // behind another entry of the same problem, and of the same name: one problem
+      entry(4, 4, 2, "ann"),
+      entry(0, 4, 7, "ann"),
+      entry(4, 4, 2, "bob"),
+      // another case, trailing text, other characters
+      entry(4, 4, 1, "Ann"),
+      entry(4, 4, 3, "ann "),
+      entry(4, 5, 3, "ann/bob"),
+      entry(4, 6, 3, "ánn"),
+    ])
+      await store.insert(e);
+    expect(await all(store, "ann")).toEqual([
+      { N: 0, M: 4, P: 7 },
+      { N: 4, M: 4, P: 2 },
+      { N: 4, M: 4, P: 9 },
+      { N: 5, M: 3, P: 2 },
+    ]);
+    expect(await all(store, "Ann")).toEqual([{ N: 4, M: 4, P: 1 }]);
+    expect(await all(store, "ann ")).toEqual([{ N: 4, M: 4, P: 3 }]);
+    expect(await all(store, "ann/bob")).toEqual([{ N: 4, M: 5, P: 3 }]);
+    expect(await all(store, "ánn")).toEqual([{ N: 4, M: 6, P: 3 }]);
+    expect(await all(store, "an")).toEqual([]);
+    expect(await all(store, "nobody")).toEqual([]);
+    // no wildcards, whatever the characters
+    expect(await all(store, "a%")).toEqual([]);
+    expect(await all(store, "an_")).toEqual([]);
+  });
+
+  it("reads a page at a time, after the problem given", async () => {
+    const store = new SqliteStore(":memory:");
+    const problems = [];
+    for (let M = 4; M <= 6; M++)
+      for (let P = 1; P <= 4; P++) {
+        await store.insert(entry(4, M, P, "ann"));
+        await store.insert(entry(4, M, P, "bob"));
+        problems.push({ N: 4, M, P });
+      }
+    expect(await store.problemsNamed("ann", null, 5)).toEqual(problems.slice(0, 5));
+    expect(await store.problemsNamed("ann", problems[4]!, 5)).toEqual(problems.slice(5, 10));
+    expect(await store.problemsNamed("ann", problems[9]!, 5)).toEqual(problems.slice(10));
+    expect(await store.problemsNamed("ann", problems[11]!, 5)).toEqual([]);
+    for (const limit of [1, 3, 5, 12, 13]) expect(await all(store, "bob", limit)).toEqual(problems);
+    await expect(store.problemsNamed("ann", null, 0)).rejects.toThrow(RangeError);
+    await expect(store.problemsNamed("ann", null, 1.5)).rejects.toThrow(RangeError);
+  });
+
+  it("leaves out rejected entries, which older databases still hold", async () => {
+    const store = new SqliteStore(":memory:");
+    const db = (store as unknown as { db: DatabaseSync }).db;
+    const gone = await store.insert(entry(4, 4, 1, "ann"));
+    await store.insert(entry(4, 4, 2, "ann", "pending"));
+    await store.insert(entry(4, 4, 3, "ann"));
+    db.prepare("UPDATE submissions SET verification = 'rejected' WHERE id = ?").run(gone);
+    expect(await all(store, "ann")).toEqual([
+      { N: 4, M: 4, P: 2 },
+      { N: 4, M: 4, P: 3 },
+    ]);
+  });
+
+  it("is answered from the index of names alone, which a database without it gains on opening", async () => {
+    const path = join(mkdtempSync(join(tmpdir(), "polypack-names-")), "names.sqlite");
+    const first = new SqliteStore(path);
+    await first.insert(entry(4, 4, 1, "ann"));
+    const old = new DatabaseSync(path);
+    old.exec("DROP INDEX submissions_name");
+    old.close();
+    const store = new SqliteStore(path);
+    const db = (store as unknown as { db: DatabaseSync }).db;
+    const columns = (db.prepare("PRAGMA index_info(submissions_name)").all() as { name: string }[]).map((c) => c.name);
+    // the name first, then the order of the pages; verification so that the listed-entries filter needs no row
+    expect(columns).toEqual(["name", "n", "m", "p", "verification"]);
+    expect(await all(store, "ann")).toEqual([{ N: 4, M: 4, P: 1 }]);
+    const plan = (
+      db
+        .prepare(
+          `EXPLAIN QUERY PLAN SELECT n, m, p FROM submissions WHERE name = ? AND (n, m, p) > (?, ?, ?)
+             AND verification != 'rejected' GROUP BY n, m, p ORDER BY n, m, p LIMIT ?`,
+        )
+        .all("ann", -1, -1, -1, 10) as { detail: string }[]
+    ).map((r) => r.detail);
+    expect(plan).toEqual([
+      expect.stringMatching(/^SEARCH submissions USING COVERING INDEX submissions_name \(name=\?/),
+    ]);
+    // the statement the store runs is that one: it prepares nothing else for a page
+    const prepared: string[] = [];
+    const prepare = db.prepare.bind(db);
+    db.prepare = ((sql: string) => {
+      prepared.push(sql);
+      return prepare(sql);
+    }) as typeof db.prepare;
+    await store.problemsNamed("ann", null, 10);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]).toMatch(/WHERE name = \? AND \(n, m, p\) > \(\?, \?, \?\) AND verification != 'rejected'/);
+  });
+});

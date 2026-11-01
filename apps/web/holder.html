@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>PolyPack — Records held by a name</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body class="scroll">
+    <header class="top">
+      <h1>PolyPack</h1>
+      <nav aria-label="Site">
+        <a href="/">Board</a>
+        <a href="/browse.html" aria-current="page">Records</a>
+        <a href="/dimensions.html">Dimensions</a>
+        <a href="/volunteer.html">Volunteer</a>
+        <a href="/api">API</a>
+        <a href="/tighter.html">Tighter</a>
+      </nav>
+    </header>
+    <main class="page">
+      <nav class="subnav" aria-label="Records">
+        <a href="/browse.html">Records across P</a>
+        <a href="/holders.html">Record holders</a>
+      </nav>
+      <h2 class="title holder-name" id="title">Records held by a name</h2>
+      <p id="note" class="note holder-name" role="status" aria-live="polite">Loading…</p>
+      <p id="asof" class="note" hidden></p>
+      <div class="table-wrap" id="results" hidden>
+        <table class="holders">
+          <thead>
+            <tr>
+              <th scope="col">Pieces in container</th>
+              <th scope="col" class="num">Problems led</th>
+              <th scope="col" class="num">Records</th>
+              <th scope="col" class="num">Beat published</th>
+              <th scope="col" class="num">Awaiting review</th>
+              <th scope="col">Values of P</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </main>
+    <script type="module" src="/src/holder.ts"></script>
+  </body>
+</html>

@@ -1,5 +1,6 @@
 import {
   AtlasResponse,
+  HolderResponse,
   HoldersResponse,
   LeaderboardEntry,
   LeaderboardEvent,
@@ -70,6 +71,20 @@ export const getRecordPairs = () => getJson<{ pairs: RecordPair[] }>("/api/recor
 
 /** Every name that leads a problem, with how many it leads and how many of those are records. */
 export const getHolders = () => getJson<HoldersResponse>("/api/holders");
+
+/**
+ * What one name leads, by pair of shapes; "refused" when the server does not take the name (a 400), null when it
+ * could not be reached or failed.
+ */
+export async function getHolder(name: string): Promise<HolderResponse | "refused" | null> {
+  try {
+    const r = await fetch(`/api/holder?name=${encodeURIComponent(name)}`);
+    if (r.status === 400) return "refused";
+    return r.ok ? ((await r.json()) as HolderResponse) : null;
+  } catch {
+    return null;
+  }
+}
 
 /** Drawable packings for P in [from, to]; `next` in the answer says where a shortened answer stopped. */
 export const getAtlas = (N: number, M: number, from: number, to: number) =>

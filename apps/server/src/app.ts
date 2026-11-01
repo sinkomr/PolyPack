@@ -2,6 +2,8 @@ import {
   AtlasResponse,
   AtlasTile,
   Holder,
+  HolderPair,
+  HolderResponse,
   HoldersResponse,
   LeaderboardEntry,
   LeaderboardEvent,
@@ -54,7 +56,7 @@ import {
 import type { SnapshotSource } from "./snapshot";
 import { registerLeadersRoute } from "./leaders";
 import { SpacesOptions, registerSpaceRoutes } from "./spaces";
-import { EntryEdit, ProblemLeader, Store, StoredSubmission } from "./store";
+import { EntryEdit, GET_MANY_LIMIT, ProblemLeader, Store, StoredSubmission } from "./store";
 
 /** Names a submission may give as its `method`: the registered search methods. */
 const METHOD_NAMES = SOLVER_METHODS.map(([name]) => name);
@@ -80,6 +82,10 @@ export interface AppOptions {
   stats?: LoadStats;
   /** Problems per step of the first count of /api/holders; HOLDERS_CHUNK by default (tests use fewer). */
   holdersChunk?: number;
+  /** Problems per step of an answer of /api/holder; HOLDER_CHUNK by default (tests use fewer). */
+  holderChunk?: number;
+  /** The time in milliseconds since the epoch, for the age of the answers of /api/holder; `Date.now` by default. */
+  clock?: () => number;
   /**
    * Whether a submission to a problem with disk or ball pieces or a circle or ball container must carry
    * `"units": "diameter"` (426 without it). On by default; the gate stays until its sunset date.
@@ -121,6 +127,18 @@ export const ATLAS_MAX_PIECES = 6000;
  * work, and some tens on the throttled CPU of the live server. The event loop is let in between steps.
  */
 export const HOLDERS_CHUNK = 250;
+/**
+ * Problems one step of GET /api/holder reads: a page of the problems that have an entry of the name and the
+ * leaders of those problems, a few milliseconds of work, with the event loop let in between steps.
+ */
+export const HOLDER_CHUNK = GET_MANY_LIMIT;
+/** Names whose answers GET /api/holder keeps; the ones asked least recently go first. */
+export const HOLDER_CACHE_NAMES = 32;
+/**
+ * How old an answer of GET /api/holder may be and still be given as it is. A submission does not change it before
+ * then, so that a name that submits all day has its answer made once in this long, not for every view.
+ */
+export const HOLDER_MAX_AGE_MS = 15 * 60_000;
 
 /**
  * What the leader `e` of a problem adds to the counts of its name on /api/holders, given the
@@ -270,6 +288,8 @@ export function createApp(opts: AppOptions): Hono {
       docsPage({
         atlasMaxSpan: ATLAS_MAX_SPAN,
         atlasMaxPieces: ATLAS_MAX_PIECES,
+        holderCacheNames: HOLDER_CACHE_NAMES,
+        holderMaxAgeMs: HOLDER_MAX_AGE_MS,
       }),
     ),
   );
@@ -505,12 +525,13 @@ export function createApp(opts: AppOptions): Hono {
   /**
    * Runs an administrator's `change` to the listed entry `id` in a turn, and moves the share of the
    * entry's problem from the leader read before the change to the one read after it. `moves` is false
-   * for a change that cannot move a leader or a name (a note, provenance).
+   * for a change that cannot move a leader or a name (a note, provenance). Whatever the change, the answers of
+   * /api/holder are all forgotten once it is made, however it ends.
    */
   const changeEntry = (id: number, moves: boolean, change: () => Promise<boolean>): Promise<boolean> =>
     inTurn(async () => {
       // nothing is counted yet, or nothing counted can change
-      if (!moves || (!counts.done && counts.upTo === null)) return change();
+      if (!moves || (!counts.done && counts.upTo === null)) return change().finally(holderClear);
       try {
         const entry = await store.get(id);
         const p = entry && { N: entry.N, M: entry.M, P: entry.P };
@@ -524,6 +545,8 @@ export function createApp(opts: AppOptions): Hono {
         counts = noCounts();
         holdersBody = null;
         throw e;
+      } finally {
+        holderClear();
       }
     });
 
@@ -571,6 +594,117 @@ export function createApp(opts: AppOptions): Hono {
   app.get("/api/holders", async (c) => {
     while (!counts.done) await buildCounts();
     return c.body((holdersBody ??= holdersAnswer()), 200, { "content-type": "application/json" });
+  });
+
+  // The page of one name: what it leads, by pair of shapes. The problems with an entry of the name are read a
+  // page at a time through submissions_name, and the leaders of that page (leadersOf) say which of them the name
+  // leads: "has an entry" is not "leads", since a better or an earlier entry of another name may lead, or a near
+  // tie. Each page is a turn, like the pages of the first count of /api/holders, and the event loop is let in
+  // between, so that a name with tens of thousands of leads never holds the server for long. A lead is
+  // classified by holderShare, as /api/holders does, so the totals are that name's row there.
+  //
+  // Answers are kept for the HOLDER_CACHE_NAMES names asked most recently, and made at most once at a time per
+  // name: a request that arrives while the answer is being made waits for it. A kept answer is given as it is for
+  // HOLDER_MAX_AGE_MS, whatever is submitted meanwhile (it says when it was made: `computed_at`), then made again.
+  // An administrator's change forgets every answer, those being made included (they are not kept, and no request
+  // that comes after the change waits for them), so that a moderation shows at once.
+  interface HolderKept {
+    body: string;
+    /** When the answer was begun, by `clock`. */
+    at: number;
+  }
+  interface HolderRun {
+    promise: Promise<string>;
+    /** False once an administrator's change came: the answer is given to those waiting, and not kept. */
+    keep: boolean;
+  }
+  const clock = opts.clock ?? Date.now;
+  const holderChunk = Math.min(opts.holderChunk ?? HOLDER_CHUNK, GET_MANY_LIMIT);
+  /** Least recently asked first. */
+  const holderKept = new Map<string, HolderKept>();
+  const holderRuns = new Map<string, HolderRun>();
+
+  /** An administrator changed an entry: every answer is out of date, and none that is being made may be kept. */
+  const holderClear = () => {
+    holderKept.clear();
+    for (const run of holderRuns.values()) run.keep = false;
+    holderRuns.clear();
+  };
+
+  const holderAnswer = async (name: string, run: HolderRun, began: number): Promise<string> => {
+    const total: Holder = { name, records: 0, beat_published: 0, site_bests: 0, pending: 0 };
+    const byPair = new Map<string, HolderPair>();
+    let after: Problem | null = null;
+    let done = false;
+    while (!done) {
+      done = await inTurn(async () => {
+        const page = await store.problemsNamed(name, after, holderChunk);
+        for (const e of await store.leadersOf(page)) {
+          const share = e.name === name ? shareOf(e) : null;
+          if (!share) continue;
+          const key = `${e.N}/${e.M}`;
+          let pair = byPair.get(key);
+          if (!pair) byPair.set(key, (pair = { N: e.N, M: e.M, P: [], records: 0, beat_published: 0, pending: 0 }));
+          // the page is in order of (N, M, P)
+          pair.P.push(e.P);
+          for (const part of [pair, total] as const) {
+            part.records += share.records;
+            part.beat_published += share.beat_published;
+            part.pending += share.pending;
+          }
+          total.site_bests += share.site_bests;
+        }
+        const last = page[page.length - 1];
+        if (page.length < holderChunk || !last) return true;
+        after = last;
+        return false;
+      });
+      if (!done) await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    const pairs = [...byPair.values()].sort((a, b) => b.P.length - a.P.length || a.N - b.N || a.M - b.M);
+    const body = JSON.stringify({
+      ...total,
+      computed_at: new Date(began).toISOString(),
+      pairs,
+    } satisfies HolderResponse);
+    if (run.keep) {
+      holderKept.delete(name);
+      holderKept.set(name, { body, at: began });
+      for (const [oldest] of holderKept) {
+        if (holderKept.size <= HOLDER_CACHE_NAMES) break;
+        holderKept.delete(oldest);
+      }
+    }
+    return body;
+  };
+
+  const holderBody = (name: string): Promise<string> | string => {
+    const kept = holderKept.get(name);
+    if (kept && clock() - kept.at < HOLDER_MAX_AGE_MS) {
+      // asked just now
+      holderKept.delete(name);
+      holderKept.set(name, kept);
+      return kept.body;
+    }
+    let run = holderRuns.get(name);
+    if (!run) {
+      const mine: HolderRun = { promise: Promise.resolve(""), keep: true };
+      mine.promise = holderAnswer(name, mine, clock()).finally(() => {
+        if (holderRuns.get(name) === mine) holderRuns.delete(name);
+      });
+      holderRuns.set(name, (run = mine));
+    }
+    return run.promise;
+  };
+
+  app.use("/api/holder", compress());
+  app.get("/api/holder", async (c) => {
+    // the name is free text: it is a query parameter, not a path segment, since it may contain "/"
+    const name = c.req.query("name");
+    if (!name) return c.json({ error: "query parameter name is required" }, 400);
+    if (name.length > MAX_NAME_LENGTH)
+      return c.json({ error: `a name has at most ${MAX_NAME_LENGTH} characters` }, 400);
+    return c.body(await holderBody(name), 200, { "content-type": "application/json" });
   });
 
   // The drawings of the records page: for each P in [from, to], the one best packing that can be

@@ -11,6 +11,13 @@ export function shapeLabel(n: number): string {
   return SHAPE_NAMES[n] ?? `${n}-gon`;
 }
 
+export const shapePlural = (n: number) => `${shapeLabel(n)}s`;
+/** "a square", "an octagon", "an 18-gon" */
+export const withArticle = (n: number) =>
+  `${/^(8|11|18)/.test(shapeLabel(n)) || shapeLabel(n) === "octagon" ? "an" : "a"} ${shapeLabel(n)}`;
+/** A pair of shapes in words: "circles in a square" */
+export const familyName = (N: number, M: number) => `${shapePlural(N)} in ${withArticle(M)}`;
+
 /** Fills a select with circle and 3..max (20 unless given); each option keeps its plain text in data-label. */
 export function fillShapeSelect(select: HTMLSelectElement, withOther: boolean, max = 20): void {
   const add = (text: string, value: string) => {
