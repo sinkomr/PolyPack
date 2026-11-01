@@ -30,7 +30,7 @@ describe("test packings", () => {
   });
   for (const f of doc.fixtures) {
     it(`${f.name}: valid at tolerance 0 is ${f.expect.valid0}`, () => {
-      const r = validateNd(f.problem, f.config, { tol: 0 });
+      const r = validateNd(f.problem, f.config, { tol: 0, limits: { maxPieces: 128 } });
       expect(r.reasons.slice(0, 3)).toEqual(f.expect.valid0 ? [] : r.reasons.slice(0, 3));
       expect(r.valid).toBe(f.expect.valid0);
       expect(r.score).toBe(f.expect.valid0 ? f.config.s : null);

@@ -16,6 +16,7 @@
  * one of a few candidate directions shows a gap of at least -tol.
  */
 import { dot, solve } from "./linalg";
+import { maxMarginSeparation } from "./margin";
 
 /** min over rows of B of u.y minus max over rows of A of u.x, for a unit vector u: a lower bound of the signed separation. */
 export function gapAlong(
@@ -212,15 +213,122 @@ function nullVector(rows: Float64Array, r: number, d: number): Float64Array | nu
 export interface PenetrationResult {
   /** Lower bound of the penetration depth of A and B (converging to it from below). */
   depth: number;
-  /** Whether the expansion ended with a facet of A - B (false: the iteration cap was reached). */
+  /**
+   * Whether the expansion ended with a facet of A - B. False: the iteration or facet cap was reached, or the polytope
+   * degenerated (a facet that could not be built); `depth` is then a lower bound that may be far below the true depth,
+   * and 0 when not even a starting simplex could be built. Callers must not accept a pair on an unconverged depth.
+   */
   converged: boolean;
   /** The unit outward normal of that facet: moving B by depth * normal (relative to A) separates the two. */
   normal: Float64Array | null;
 }
 
+/** A point is added to the starting simplex only if it lies this far (absolute, the pieces have unit edge) off the hull so far. */
+const RANK_TOL = 1e-9;
+
+/** A deterministic stream of numbers in [-1, 1) for the random fallback directions. */
+function lcg(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return (s / 2147483648) * 1 - 1;
+  };
+}
+
+/**
+ * d + 1 affinely independent points of A - B to start EPA, or null if A - B is numerically flat. The corral's points
+ * come first (those that are independent, so the origin stays inside the simplex when GJK's simplex held it). Each of the
+ * others is the support point of A - B in a direction orthogonal to the hull so far, in the sign that moves farther off
+ * it: the width of A - B in that direction is positive, so one of the two signs always lifts the rank, whatever ties
+ * the vertex lists have. Directions: the coordinate axis with the largest component outside the hull first, then seeded
+ * random ones.
+ */
+function startingSimplex(
+  A: Float64Array,
+  nA: number,
+  B: Float64Array,
+  nB: number,
+  d: number,
+  corral: Float64Array[],
+): Float64Array[] | null {
+  const pts: Float64Array[] = [];
+  const basis: Float64Array[] = [];
+  /** Removes from v its components along the basis (twice, for orthogonality to rounding) and returns its length. */
+  const reduce = (v: Float64Array): number => {
+    for (let pass = 0; pass < 2; pass++)
+      for (const b of basis) {
+        const f = dot(v, b, d);
+        for (let c = 0; c < d; c++) v[c] -= f * b[c];
+      }
+    return Math.sqrt(dot(v, v, d));
+  };
+  const offHull = (p: Float64Array): Float64Array => {
+    const v = new Float64Array(d);
+    for (let c = 0; c < d; c++) v[c] = p[c] - pts[0][c];
+    return v;
+  };
+  const tryAdd = (p: Float64Array, tol: number): boolean => {
+    if (pts.length === 0) {
+      pts.push(Float64Array.from(p));
+      return true;
+    }
+    const v = offHull(p);
+    const l = reduce(v);
+    if (!(l > tol)) return false;
+    for (let c = 0; c < d; c++) v[c] /= l;
+    basis.push(v);
+    pts.push(Float64Array.from(p));
+    return true;
+  };
+  for (const q of corral) tryAdd(q, 1e-8);
+  if (pts.length === 0) {
+    const e0 = new Float64Array(d);
+    e0[0] = 1;
+    supportDiff(A, nA, B, nB, d, e0, e0);
+    tryAdd(e0, 0);
+  }
+  const rnd = lcg(0x9e3779b9);
+  const p1 = new Float64Array(d);
+  const p2 = new Float64Array(d);
+  const dir = new Float64Array(d);
+  let attempts = 0;
+  while (pts.length < d + 1) {
+    if (attempts++ > 4 * d + 16) return null;
+    // the candidate direction: orthogonal to the hull so far
+    if (attempts <= 1 || attempts % 3 === 1) {
+      let bi = -1;
+      let bl = 0;
+      for (let i = 0; i < d; i++) {
+        const e = new Float64Array(d);
+        e[i] = 1;
+        const l = reduce(e);
+        if (l > bl + 1e-12) {
+          bl = l;
+          bi = i;
+          dir.set(e);
+        }
+      }
+      if (bi < 0 || !(bl > 1e-6)) continue;
+      for (let c = 0; c < d; c++) dir[c] /= bl;
+    } else {
+      for (let c = 0; c < d; c++) dir[c] = rnd();
+      const l = reduce(dir);
+      if (!(l > 1e-3)) continue;
+      for (let c = 0; c < d; c++) dir[c] /= l;
+    }
+    supportDiff(A, nA, B, nB, d, dir, p1);
+    for (let c = 0; c < d; c++) dir[c] = -dir[c];
+    supportDiff(A, nA, B, nB, d, dir, p2);
+    const r1 = reduce(offHull(p1));
+    const r2 = reduce(offHull(p2));
+    tryAdd(r1 >= r2 ? p1 : p2, RANK_TOL);
+  }
+  return pts;
+}
+
 /**
  * Penetration depth of two overlapping (or touching) convex hulls by EPA, started from the corral of a GJK run that ended
- * with the origin inside A - B.
+ * with the origin inside A - B. Never reports a failure as a depth of 0 with converged = true: see PenetrationResult.
  */
 export function penetrationDepth(
   A: Float64Array,
@@ -231,50 +339,8 @@ export function penetrationDepth(
   corral: Float64Array[],
   maxIter = 600,
 ): PenetrationResult {
-  const pts: Float64Array[] = corral.map((q) => Float64Array.from(q));
-  // Complete the corral to d + 1 affinely independent points. The origin lies in (or within rounding of) the affine hull
-  // of the corral, so the support point of A - B in a direction orthogonal to that hull's direction space lies off it.
-  const basis: Float64Array[] = [];
-  const orth = (v: Float64Array): number => {
-    for (const b of basis) {
-      const f = dot(v, b, d);
-      for (let c = 0; c < d; c++) v[c] -= f * b[c];
-    }
-    return Math.sqrt(dot(v, v, d));
-  };
-  for (let k = 1; k < pts.length; k++) {
-    const v = new Float64Array(d);
-    for (let c = 0; c < d; c++) v[c] = pts[k][c] - pts[0][c];
-    const l = orth(v);
-    if (l > 1e-12) {
-      for (let c = 0; c < d; c++) v[c] /= l;
-      basis.push(v);
-    }
-  }
-  while (pts.length < d + 1) {
-    let best: Float64Array | null = null;
-    let bl = 0;
-    for (let i = 0; i < d; i++) {
-      const v = new Float64Array(d);
-      v[i] = 1;
-      const l = orth(v);
-      if (l > bl) {
-        bl = l;
-        best = v;
-      }
-    }
-    if (!best) break;
-    for (let c = 0; c < d; c++) best[c] /= bl;
-    const p = new Float64Array(d);
-    supportDiff(A, nA, B, nB, d, best, p);
-    if (dot(p, best, d) < 1e-14) {
-      for (let c = 0; c < d; c++) best[c] = -best[c];
-      supportDiff(A, nA, B, nB, d, best, p);
-    }
-    pts.push(p);
-    basis.push(best);
-  }
-  if (pts.length < d + 1) return { depth: 0, converged: false, normal: null };
+  const pts = startingSimplex(A, nA, B, nB, d, corral);
+  if (!pts) return { depth: 0, converged: false, normal: null };
   // the reference point c0 inside every hull we build: the centroid of the initial simplex
   const c0 = new Float64Array(d);
   for (const q of pts) for (let c = 0; c < d; c++) c0[c] += q[c] / pts.length;
@@ -308,7 +374,7 @@ export function penetrationDepth(
     const pi = pts.length;
     pts.push(Float64Array.from(p));
     const visible: Face[] = [];
-    for (const g of faces) if (g.alive && dot(g.n, p, d) - g.off > 1e-13) visible.push(g);
+    for (const g of faces) if (g.alive && dot(g.n, p, d) - g.off > 1e-11) visible.push(g);
     if (visible.length === 0) return { depth: Math.max(0, f.off), converged: true, normal: f.n };
     const ridges = new Map<string, { ridge: number[]; count: number }>();
     for (const g of visible) {
@@ -324,10 +390,20 @@ export function penetrationDepth(
     for (const { ridge, count } of ridges.values()) {
       if (count !== 1) continue;
       const nf = makeFace([...ridge, pi]);
-      if (nf) faces.push(nf);
+      // a facet that cannot be built leaves a hole in the hull, and the nearest facet of a polytope with a hole can be
+      // too far: stop, unconverged, instead of going on
+      if (!nf) return unconverged(faces, best);
+      faces.push(nf);
     }
-    if (faces.length > 60000) break;
+    if (faces.length > MAX_EPA_FACES) break;
   }
+  return unconverged(faces, best);
+}
+
+/** The facet count at which EPA gives up (the expansion in 8 to 10 dimensions grows by thousands of facets per step). */
+const MAX_EPA_FACES = 12000;
+
+function unconverged(faces: Face[], best: number): PenetrationResult {
   let m = Infinity;
   let fm: Face | null = null;
   for (const g of faces)
@@ -342,26 +418,108 @@ export function penetrationDepth(
 const TOUCH = 1e-12;
 
 export interface Separation {
-  /** Distance when disjoint, minus the penetration depth when overlapping (a lower bound of the depth, see above). */
+  /**
+   * The signed separation: the distance when disjoint, minus the penetration depth when overlapping. Exact to about
+   * 1e-11 when `converged`. Otherwise an estimate: `lower`, a certified lower bound that may be below the true value,
+   * except for disjoint pieces closer than GJK can certify (about 1e-7), where it is GJK's distance, and for an EPA
+   * that stopped early, where it is minus its depth so far (an upper bound of the separation, usually close).
+   */
   sep: number;
   /**
    * Disjoint: the unit normal, pointing from A to B, of a separating hyperplane achieving sep. Overlapping: the unit
-   * direction in which moving B by |sep| separates the two (null if EPA found none).
+   * direction in which moving B by |sep| separates the two. Null if none was found.
    */
   dir: Float64Array | null;
-  /** False when EPA stopped at its iteration cap. */
+  /** Whether `sep` is the exact value (GJK's distance, or EPA ended with a facet of A - B), not a bound. */
   converged: boolean;
+  /**
+   * A certified lower bound of the true signed separation: the gap of a unit vector (gapAlong), so that
+   * lower >= -tol proves the pair is separated within tol. -Infinity when none was found.
+   */
+  lower: number;
+  /**
+   * An upper bound of the true signed separation: GJK's distance, minus EPA's depth (a lower bound of the depth), or the
+   * LP's bound; so that upper < -tol proves an overlap by more than tol. +Infinity when unknown.
+   */
+  upper: number;
+  /** The unit vector of `lower` (pointing from A to B), null if none. */
+  lowerDir: Float64Array | null;
 }
 
-/** The signed separation of conv(A) and conv(B) (see the module comment). */
-export function signedSeparation(A: Float64Array, nA: number, B: Float64Array, nB: number, d: number): Separation {
+export interface SeparationOptions {
+  /**
+   * The pair is only to be decided against this tolerance (tol >= 0, the validator's): the LP fallback then stops as
+   * soon as the verdict is clear, so `sep` and `lower` need not be the maximum gap. Default: full accuracy.
+   */
+  tol?: number;
+}
+
+/**
+ * The signed separation of conv(A) and conv(B) (see the module comment). Never reports a failure of EPA as a separation
+ * of 0: when EPA does not converge, or its normal does not certify its depth, the max-margin LP (margin.ts) decides, and
+ * if that is inconclusive, `lower` and `upper` bracket the answer (`sep` is `lower`).
+ */
+export function signedSeparation(
+  A: Float64Array,
+  nA: number,
+  B: Float64Array,
+  nB: number,
+  d: number,
+  opts: SeparationOptions = {},
+): Separation {
   const c = closestPoints(A, nA, B, nB, d);
   // below TOUCH the sets may touch or overlap (GJK can stall near the origin with a tiny nonzero point): EPA decides
   if (c.w && c.dist >= TOUCH) {
     const dir = new Float64Array(d);
     for (let i = 0; i < d; i++) dir[i] = -c.w[i] / c.dist;
-    return { sep: c.dist, dir, converged: true };
+    const lower = gapAlong(A, nA, B, nB, d, dir);
+    if (lower >= c.dist - 1e-9) return { sep: c.dist, dir, converged: true, lower, upper: c.dist, lowerDir: dir };
+    // GJK's direction -w / |w| has an error of about 1e-16 / |w| radians, so below |w| ~ 1e-7 its gap does not certify
+    // the distance (and GJK stops at a tolerance of 1e-15 in |w|^2, which does not prove it either): the LP certifies
+    const r = fallback(A, nA, B, nB, d, c.corral, opts, { lower, upper: c.dist, dir });
+    return { ...r, sep: c.dist };
   }
   const e = penetrationDepth(A, nA, B, nB, d, c.corral);
-  return { sep: -e.depth, dir: e.normal, converged: e.converged };
+  if (e.converged && e.normal) {
+    // the normal certifies the depth: moving B along it must separate, i.e. its gap is -depth
+    const lower = gapAlong(A, nA, B, nB, d, e.normal);
+    if (lower >= -e.depth - 1e-9)
+      return { sep: -e.depth, dir: e.normal, converged: true, lower, upper: -e.depth, lowerDir: e.normal };
+    return fallback(A, nA, B, nB, d, c.corral, opts, { lower, upper: TOUCH - e.depth, dir: e.normal });
+  }
+  const r = fallback(A, nA, B, nB, d, c.corral, opts, { lower: -Infinity, upper: TOUCH - e.depth, dir: null });
+  // EPA's depth so far is a lower bound of the depth and, in practice, close to it (the expansion stopped near the
+  // origin's nearest facet): a better estimate than the certified lower bound, but only as an estimate
+  return e.depth > 0 && e.normal ? { ...r, sep: Math.max(r.lower, -e.depth) } : r;
+}
+
+/** The LP verdict, merged with what GJK / EPA proved. */
+function fallback(
+  A: Float64Array,
+  nA: number,
+  B: Float64Array,
+  nB: number,
+  d: number,
+  corral: Float64Array[],
+  opts: SeparationOptions,
+  have: { lower: number; upper: number; dir: Float64Array | null },
+): Separation {
+  const tol = opts.tol;
+  const r = maxMarginSeparation(
+    A,
+    nA,
+    B,
+    nB,
+    d,
+    tol === undefined ? {} : { acceptAt: -tol, refuseBelow: -Math.sqrt(d) * tol },
+    corral,
+  );
+  let lower = have.lower;
+  let lowerDir = have.dir;
+  if (r.lower > lower) {
+    lower = r.lower;
+    lowerDir = r.dir;
+  }
+  const upper = Math.min(have.upper, r.upper);
+  return { sep: lower, dir: lowerDir, converged: false, lower, upper, lowerDir };
 }

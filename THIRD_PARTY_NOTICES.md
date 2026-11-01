@@ -62,7 +62,8 @@ licence. Please credit the original source when reusing them.
 The ndim package (`packages/ndim`, `python/ndim`, `docs/spaces/NDIM.md`) is PolyPack's own code. It uses
 `python/polyhedra/algebraic.py` (vendored above) for interval arithmetic and integer square roots. None of upstream's
 nD tools (`polytopes_nd.py` and `.json`, `certify_nd.py`, `ndsim.py`, `ndslp.py` of alejandrozu/platonic-packing) is
-included or was consulted. The polytopes are the regular, demi- and Gosset polytopes of H. S. M. Coxeter's _Regular
+included, and none was used to build the catalogue. An independent review afterwards compared the catalogue with
+upstream's `polytopes_nd.json` (all 12 polytopes the two share agree); that was a check, nothing of it is vendored. The polytopes are the regular, demi- and Gosset polytopes of H. S. M. Coxeter's _Regular
 Polytopes_ and T. Gosset's 1900 paper, with their literature counts; the E8 root system of Conway and Sloane's _Sphere
 Packings, Lattices and Groups_. No third-party data is included.
 

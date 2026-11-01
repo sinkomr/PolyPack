@@ -4,7 +4,7 @@ minimum-norm-point solver). The certifier uses them only to propose separating d
 import itertools
 import math
 
-MAX_CAYLEY = 64.0         # largest accepted |Cayley parameter| (the TypeScript validator's bound too)
+MAX_CAYLEY = 32.0         # largest accepted |Cayley parameter|: the same bound as the TypeScript package (pose.ts, NDIM.md §3)
 
 
 def n_params(d):

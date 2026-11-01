@@ -123,9 +123,10 @@ orthogonal with determinant det D = +1 (the flip has an even number of set bits;
 refused). Without a flip, the Cayley form covers every rotation without eigenvalue −1; with one, every rotation of the
 group can be written (half turns of an even number of axes are D itself with k = 0). The parameters are JSON numbers
 that mean exactly the rational numbers they denote, so **R is an exactly orthogonal rational matrix**: the exact
-certifier uses it as such, the floats of the validator agree with it to about 1e-15. Limits: |k| ≤ 32 (`MAX_CAYLEY`; it
-keeps I − S well conditioned), |t_i| ≤ 1e4 (`MAX_COORD`), 0 < s ≤ 1e6 (`MAX_SIZE`). A pose has d + d(d−1)/2 numbers
-(10 for d = 4, 55 for d = 10) and the optional flip; in 3 dimensions the same formula with S the cross-product matrix of v
+certifier uses it as such, the floats of the validator agree with it to about 1e-15. Limits (the same in the TypeScript
+validator and the Python certifier): |k| ≤ 32 (`MAX_CAYLEY`; it keeps I − S well conditioned), |t_i| ≤ 1e4 (`MAX_COORD`), 0 < s ≤ 1e6 (`MAX_SIZE`). A pose has d + d(d−1)/2 numbers
+(10 for d = 4, 55 for d = 10) and the optional flip, an integer-valued JSON number (`2` and `2.0` are the same number, and both
+languages accept either; a fractional flip, a negative one, one at or above 2^d, or one with an odd number of set bits is refused); in 3 dimensions the same formula with S the cross-product matrix of v
 gives H(q)/|q|² for q = (1, v), the rule of the 3D certifier [CALC].
 
 **A ball's pose** is its centre `[t_1..t_d]`.
@@ -142,18 +143,25 @@ matrix, and exactly the rotation the certifier proves things about.
 ## 4. The float validator (`packages/ndim`)
 
 ```ts
-validateNd(problem, config, { tol = 1e-9, maxErrors = 20 }): { valid, score, reasons, minWallGap, minPairSep, worstPair, pairsTested }
+validateNd(problem, config, { tol = 1e-9, maxErrors = 20, maxPairErrors = 3, limits, deadline }): { valid, score, reasons, minWallGap, minPairSep, worstPair, pairsTested }
+validateNdAsync(problem, config, { ...same, sliceMs = 20, timeoutMs }): the same plus { workMs, slices, longestSliceMs }
+ndCheck(problem, config, opts): Generator<void, NdValidation>   // the steps both of them run
 ```
 
 `score` is `config.s` when valid, else `null`; `reasons` are sentences ("pieces 3 and 7 overlap by 1.2e-9", "piece 2 sticks
-out of the container by …", malformed input). Never throws on bad input. Other exports:
+out of the container by …", malformed input, "at most 20 pieces are checked in this problem, got 300"). Never throws on bad
+input. `validateNdAsync` gives the event loop a turn (`setTimeout 0`) whenever a slice of work reaches `sliceMs`, like
+`validateAsync` of the surface space; `ndCheck` yields between pieces and pairs, so a server can also drive it itself; a
+`deadline` (a time of `performance.now()`) or `timeoutMs` ends the check as invalid with a reason. One GJK / EPA / LP run
+is not interrupted; each is bounded (below). Other exports:
 
 | function                                                                                                                                    | purpose                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | `getPolytope(code)`, `loadPolytope(code)`, `polytopeInfo(code)`, `POLYTOPE_CODES`, `polytopesOfDimension(d)`                                | catalogue                                                          |
 | `cayleyMatrix(params, d, flip)`, `cayleyOfMatrix(R, d)`, `poseOfMatrix(t, R, d)`, `readPose(d, pose, ball)`, `placeVertices`, `placeFacets` | poses and transforms                                               |
-| `signedSeparation(A, nA, B, nB, d)`, `closestPoints`, `penetrationDepth`, `gapAlong`                                                        | pair separation of two vertex sets                                 |
+| `signedSeparation(A, nA, B, nB, d, { tol })`, `closestPoints`, `penetrationDepth`, `gapAlong`, `maxMarginSeparation`                        | pair separation of two vertex sets                                 |
 | `pieceWallGap(problem, s, pose)`, `pairSeparation(problem, poseA, poseB)`, `tightScale(problem, poses)`                                     | per-piece and per-pair numbers, the smallest s holding given poses |
+| `MAX_PIECES_BY_DIM`, `MAX_BALL_PIECES`, `MAX_VERTEX_WORK`, `MAX_WALL_WORK`, `HARD_*`, `defaultLimits`, `effectiveLimits`, `sizeErrors`      | the size limits (below)                                            |
 | `ballPairGap`, `ballFacetGap`, `ballWallGap`, `ballInBallGap`                                                                               | balls as pieces                                                    |
 | `volumeBound`, `inradiusBound`, `lowerBound`, `maxPiecesByVolume`, `ballVolume`, `unitVolume`, `unitInradius`, `unitCircumradius`           | bounds (§7)                                                        |
 
@@ -163,17 +171,73 @@ signed separation of two pieces is at least −tol). The separating-axis test of
 4D on [CALC: the facets of the Minkowski difference of two polytopes come from pairs of faces F, G with dim F + dim G =
 d − 1; two 120-cells give about 1.7 million candidate axes], so the pair test is **GJK with Wolfe's minimum-norm-point
 solver** on the Minkowski difference A − B (support points of the two vertex sets, no explicit difference; accurate to
-about 1e-13) and, for overlapping pieces, **EPA** (a simplicial polytope grown inside A − B from GJK's final simplex
-until its nearest facet to the origin is a facet of A − B; the depth it reports never exceeds the true depth and converges
-to it from below, so "overlaps by more than tol" is a sound verdict). A pair is settled without either when one of a few
-candidate directions (the line between the centres and the two facet normals of each piece that face the other most)
-shows a gap of at least −tol, since any unit direction gives a lower bound of the separation. Pairs whose centres are
-farther apart than the sum of the circumradii are skipped. Two balls are compared by their centres' distance.
+about 1e-13 in the distance) and, for overlapping pieces, **EPA** (a simplicial polytope grown inside A − B from a starting
+simplex until its nearest facet to the origin is a facet of A − B; the depth it reports never exceeds the true depth and
+converges to it from below). Two balls are compared by their centres' distance.
+
+**Fail closed.** A pair is accepted only with a _certificate_: a unit vector u whose gap `min_B u.y − max_A u.x` is at least
+−tol. The gap of any unit vector is a lower bound of the signed separation (which is the maximum of the gaps), so a
+certificate proves the pair separated within tol whatever the code that found u did. Certificates come, in this order, from
+(1) a few candidate directions (the line between the centres and the two facet normals of each piece that face the other
+most), (2) the direction of GJK's closest points or EPA's facet normal, (3) the max-margin LP below. A pair is refused when
+its separation is proved below −tol: EPA's depth so far is a lower bound of the depth, and the LP's upper bound likewise.
+When neither a certificate nor a proof of overlap is found, the pair is **refused** as "could not be shown to be separated
+within the tolerance" with the interval it lies in. Only a refusal can rest on EPA's depth ("overlaps by more than tol is a
+sound verdict" holds for refusal; an _accepting_ EPA would not be sound, since an EPA that stops early reports a depth too
+small, in the worst case 0). The first version of the validator accepted on the depth: when EPA could not build its
+starting simplex (ties in the support points of coincident or aligned copies of demicubes, orthoplexes and simplices)
+it reported depth 0 and the pair passed. EPA now builds the starting simplex from the support points in directions
+orthogonal to the hull so far, in the sign that moves farther off it (one of the two always does, since A − B has
+positive width), with seeded random directions as a fallback, reports a facet it cannot build as `converged: false`, and
+`signedSeparation` returns `lower` and `upper` bounds with `sep` (the exact value when `converged`).
+
+**The max-margin LP** (`maxMarginSeparation`, `margin.ts`): maximise δ subject to `a.x <= b − δ/2` on A, `a.y >= b + δ/2` on B
+and `|a|∞ = 1`. The normalisation is not linear (a = 0 is feasible with δ = 0, which would call every overlap touching), so
+it is solved for each of the 2d choices `a_i = ±1`, the other coordinates in [−1, 1]; the largest optimum is g, the box
+margin. By cutting planes (the master LP over the d unknowns, a dense simplex with Bland's rule, the constraint
+`t <= a.(y − x)` added for the vertex pair the current a selects as most violated). Relation to the Euclidean separation
+sep (unit vectors) [CALC]: from |a|∞ ≤ |a|₂ ≤ √d |a|∞, for g ≥ 0, g/√d ≤ sep ≤ g; for g < 0, g ≤ sep ≤ g/√d. Hence
+
+- the LP's a, normalised to u = a/|a|₂, has gap g_a/|a|₂ ≤ sep: it is the certificate, and `gap(u) >= −tol` accepts;
+- `g < −√d·tol` proves a depth above tol and refuses; this is decided by the LP's upper bound;
+- between, with no certificate (an overlap of tol to √d·tol that the LP's direction does not clear), the answer is
+  "open" and the pair is refused. The band is empty at tol = 0.
+
+The fallback accepts the genuinely touching pairs: face to face (the k^d grids, aligned 24-cells face to face), shifted
+face to face, coincident faces, and slivers of overlap within tol, because the box-optimal a of those pairs is a facet
+normal, and `gap(u) = 0` or `−tol/2`. It runs when GJK's direction is too noisy to certify (distances below about 1e-7) or
+EPA does not converge, which is common for the large polytopes in 8D to 10D (4_21, the 10-cube): their A − B has too many
+facets for EPA's cap of 12,000, and the LP, which never builds facets, takes over (about 100 to 200 ms per pair at worst).
+It is bounded by 260 cuts and 140 master solves per branch; past that it is inconclusive and the pair is refused.
+
+**Limits on the work** (`limits.ts`; enforced by `configErrors`, hence by `validateNd`, before any pose is read).
+
+| limit                                       | default                                   | hard ceiling |
+| ------------------------------------------- | ----------------------------------------- | ------------ |
+| polytope pieces `P`                         | 40 (4D), 32 (5D), 24 (6D), 20 (7D to 10D) | 256          |
+| ball pieces                                 | 400, any d                                | 1,024        |
+| `P · nV · d` (world vertices, 8 bytes each) | 500,000 (4 MB)                            | 8,000,000    |
+| `P · nV · nF` (wall inequalities)           | 200,000,000                               | 4 × 10^9     |
+
+A trusted caller (tests, offline tools: the 81 cubes of the 3^4 fixture, 128 cubes of 2^7) passes `limits: { maxPieces: 128 }`
+and the like, replacing the defaults up to the ceilings; a server takes the limits from the problem registry, never from the
+request. Work
+inside the limits: the pairs are found by a sweep along the coordinate of the largest spread of the centres, and a pair whose
+centres are farther apart than the circumradii's sum plus tol costs nothing; vertices are placed only for pieces that
+have a near pair or a nearby wall; a polytope container skips a piece far from all walls (`|t| + R <= s r_in`) and,
+per facet, the vertex test when `N_f . t + R <= s b_f` (`minWallGap` is then a lower bound of the true smallest gap for those
+pieces, exact for any piece within reach of a wall; `pieceWallGap` stays exact); the check ends after `maxErrors` errors and
+after `maxPairErrors` (3) refused pairs, since each is an EPA or LP run. Measured on Apple Silicon [CALC]: 20 coincident or
+random overlapping pieces of 8:421, 10:cube, 10:demi, 9:demi: 0.2 to 0.4 s (three refused pairs); 8000 10-cubes or 300 8:421:
+refused in 2 ms (they took 784 MB and 5.5 s, and 40 s, before); 400 balls in 10D: under 30 ms.
 
 Tests: GJK/EPA against closed forms (cubes in 4D to 10D, aligned 24-cells face to face), against the 3D
 separating-axis test of the polyhedra space on 160 random polyhedron pairs (penetration depths agree to 2e-9 and the
 distance is never below the SAT value), and in 4D to 8D by the facet property (moving B by depth + 1e-6 along the returned
-direction separates the pieces, depth − 1e-6 does not).
+direction separates the pieces, depth − 1e-6 does not); the cases that used to fail open (coincident copies of every
+catalogue polytope, copies shifted along a body axis or the diagonal, copies under a common random rotation, all against exact
+depths `min_f (2 b_f − N_f . o)`), the LP against closed forms and GJK/EPA, the limits, the sweep against an all-pairs scan,
+the wall prefilter, and the slices (`packages/ndim/test/robust.test.ts`).
 
 ## 5. The exact certifier (`python/ndim/certify.py`)
 
@@ -241,14 +305,14 @@ Each fixture says what the exact certifier answers (clearance 0 and 1e-7) and wh
 tolerance 0; both languages must give those answers, and they do, for all 98. The pieces that are exactly touching are
 the instructive ones: valid in floating point, not strictly separated for the exact certifier.
 
-Further tests. TypeScript (`packages/ndim/test`, 176 tests, about 5 s): the catalogue against the literature's counts
+Further tests. TypeScript (`packages/ndim/test`, 240 tests, about 15 s): the catalogue against the literature's counts
 and against itself in floats (all inequalities, unit edges, volumes by closed forms and by sums of pyramids), poses
 (orthonormality and determinant in every d, round trips, half turns, refusal of reflections, non-orthonormal and
 non-finite matrices, malformed poses), GJK/EPA (§4), the validator (tolerance semantics at 1e-9, soundness against the full
 separation on 240 random pairs, balls, 4_21 as a container, malformed configurations and problems with their reasons,
-the cap on errors), bounds, and the on-demand loading of 4_21. Python (`python/ndim/test_ndim.py`, added to
-`python/test_spaces.py`; 19 tests, under a minute): the exact proof of every catalogue entry and that tampered data is
-refused (a moved vertex, a missing or repeated facet, a facet moved in or out, a wrong scale or radicand, an extra
+the cap on errors, and the fail-closed pair test of §4 in `robust.test.ts`), bounds, and the on-demand loading of 4_21. Python (`python/ndim/test_ndim.py`, added to
+`python/test_spaces.py`; 20 tests, under a minute): the exact proof of every catalogue entry and that tampered data is
+refused (a moved vertex, a missing or repeated facet, a facet repeated at another scale, a facet moved in or out, a wrong scale or radicand, an extra
 vertex), the generated TypeScript data, exact orthogonality of the rational rotations, pose conversion, malformed
 configurations and problems, all fixtures, and adversarial cases (coincident pieces, gaps of ±1e-9 and 0, walls,
 the clearance, a wrong separating plane, rotated 24-cells). `NDIM_SLOW=1` adds the three slowest fixtures and the
@@ -256,8 +320,8 @@ rebuild of the fixture file (about 90 s in all); CI's main job skips them.
 
 **Pairs at scale** [CALC]. Pairs dominate the cost of many pieces: in the grid of 2^d cubes every two cubes are within
 the reach 2 R = √d of each other for d ≤ 10, so 2^10 cubes would be 523,000 near pairs; the 2^10 fixture therefore uses 16
-pieces. A later phase's kernel will want a neighbour grid; the validator here scans all pairs (O(P^2) distance checks,
-cheap per pair).
+pieces. The validator finds the near pairs by a sweep along one coordinate and caps P (§4), so the many-piece
+fixtures here (81 cubes in 4D, 128 in 7D) are validated with raised limits; a later phase's kernel will want a neighbour grid.
 
 ## 7. Bounds
 
@@ -278,8 +342,8 @@ policy unless a published proof exists.
   with `poseOfMatrix`, validates with `validateNd` at tolerance 0 and states `score = s`, as the kernel's `Validation` (`{ valid, score, reasons }`)
   expects. Energy terms: `pieceWallGap`, `pairSeparation` and the ball helpers give lengths of overlaps and protrusions.
 - **Server.** Problem ids and codes are the caller's; `NdProblem` is `{ d, piece, container }` and the configuration is
-  `{ s, pieces }` as in §3. `validateNd` never throws and bounds its work (pairs farther than the reach are skipped, EPA is
-  capped); the server should call `loadPolytope("8:421")` once at start-up if an 8D problem uses it.
+  `{ s, pieces }` as in §3. `validateNd` never throws and bounds its work (the limits of §4 are enforced first; far pairs cost nothing; EPA and
+  the LP are capped); the server should drive `validateNdAsync` (or `ndCheck`) with a deadline and call `loadPolytope("8:421")` once at start-up if an 8D problem uses it.
 - **Records.** The exact certifier takes `{ problem, config }`; the wiki's 4D to 6D configurations (rotation matrices or
   Cayley parameters) are converted with `poseOfMatrix` and certified at the 1e-7 clearance before they are imported.
 - **Boundary problems** (nD on (n+1)D) need the same catalogue as containers, the chain enumerator of the 3D on 4D code
@@ -293,12 +357,17 @@ policy unless a published proof exists.
 - **Code.** The code of this phase is PolyPack's own, MIT like the rest of the repository. It uses `python/polyhedra/algebraic.py`
   (vendored from alejandrozu/platonic-packing, MIT, see THIRD_PARTY_NOTICES.md) for interval arithmetic and integer
   square roots. Upstream's nD tools (`polytopes_nd.py` and `.json`, `certify_nd.py`, `ndsim.py`, `ndslp.py`) were not
-  used: nothing of them is vendored, and the catalogue was not compared with `polytopes_nd.json`. Phase B's import of the
-  wiki's 4D to 6D records will certify them again with this certifier.
+  used: nothing of them is vendored. An independent review compared the catalogue with upstream's `polytopes_nd.json`
+  afterwards: all 12 polytopes the two share have the same vertices up to congruence (a comparison, not a source). Phase
+  B's import of the wiki's 4D to 6D records will certify them again with this certifier.
 - **Limitations.** [1] The catalogue is regular, demi- and Gosset polytopes only; 4D has no Archimedean-type pieces yet.
-  [2] The pieces of a problem share one shape. [3] The validator is O(P^2) in pairs and has no neighbour grid. [4] The
+  [2] The pieces of a problem share one shape. [3] The validator finds pairs by a sweep along one coordinate (O(P^2) in the worst case, P is capped at 20 to 40 for polytopes).
+  [4] The
   exact certifier is pure Python: containment of big polytopes in big containers takes tens of seconds (§5). [5] EPA is
-  a lower bound of the penetration depth and stops at 600 expansions (reported as `converged: false` by
-  `signedSeparation`; the validator then judges by the depth found). [6] Poses with a Cayley parameter above 32 are
+  a lower bound of the penetration depth and stops at 600 expansions or 12,000 facets (reported as `converged: false` by
+  `signedSeparation`); the validator then does not judge by the depth found: a pair is accepted only with a certificate
+  (a unit vector with gap at least −tol, from the candidate directions, GJK, EPA's normal or the max-margin LP), refused
+  when the depth or the LP's bound proves an overlap above tol, and refused as undecided otherwise, so it can refuse a
+  valid pair that overlaps by between tol and √d·tol, never accept an invalid one (§4). [6] Poses with a Cayley parameter above 32 are
   refused; use a flip. [7] The edges are not stored in the TypeScript data (they are the pairs at distance 1).
   [8] Nothing here knows about folding, the boundary ("on") problems or the site.
