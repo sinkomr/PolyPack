@@ -397,7 +397,8 @@ describe("Tighter saves", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // 20 a second: 19 levels, 9 of them free; only auto6 (3,600) was bought
-    expect(r.state.levels).toEqual({ autox: 19, head: 2 });
+    // Head start II is owned, so its cards are given at load (they are free)
+    expect(r.state.levels).toMatchObject({ autox: 19, head: 2 });
     expect(r.state.rp).toBe(s.rp + Math.round(Math.max(0, 3600 - (ladderCost(20) - ladderCost(10)))));
   });
 

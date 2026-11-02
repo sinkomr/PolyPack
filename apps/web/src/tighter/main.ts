@@ -171,6 +171,7 @@ import {
   RULES,
   bestMark,
   markProgress,
+  grantHeadStart,
   fundsOf,
   resetCycle,
   resetPreview,
@@ -340,6 +341,8 @@ const fmtRate = (r: number) => `up to ${autoRateText(r)}`;
 
 let savesDisabled = false;
 let startNote: string | null = null;
+/** Upgrades Head start gave a loaded save that owned it without them. */
+let startHeadGiven = 0;
 /** What a save from before version 4's points and prices was given, said once as it is read (save.ts). */
 const rescaleNote = (f: number) =>
   `Record points now pay mostly for how much smaller a board gets. Prices went up too. Your points were multiplied by ${f.toFixed(1)}, so they buy what they did before.`;
@@ -415,7 +418,9 @@ function initialState(): GameState {
         r.ladder ? ladderNote(r.ladder.rp) : "",
         r.c3 ? c3Note(r.c3.rp) : "",
         r.standing ? standingNote(r.standing) : "",
+        r.headStart ? headStartNote(r.headStart) : "",
       ];
+      startHeadGiven = r.headStart ?? 0;
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
     }
@@ -3493,6 +3498,11 @@ statusEl.addEventListener("click", () => {
   statusEl.dataset.open = String(statusEl.dataset.open !== "true");
 });
 
+/** The line for the upgrades Head start gave (when bought, or at load). */
+function headStartNote(n: number): string {
+  return `Head start gave you ${n} upgrade${n === 1 ? "" : "s"}.`;
+}
+
 function onBuy(id: UpgradeId): void {
   accrueAuto();
   // a lane past the CPU's cores would add nothing
@@ -3502,10 +3512,16 @@ function onBuy(id: UpgradeId): void {
   if (!buy(state, id)) return;
   // Rent bought: the records held start earning from now
   if (id === "rent") tidyRent(state, owned(), now());
+  // Head start gives its cards now as well as at each reset
+  const headGiven = id === "head" ? grantHeadStart(state, now()).length : 0;
   const u = upgrade(id);
   const l = u.levels ? ` (level ${level(owned(), id)})` : "";
   event(`Bought ${u.name}${l}. ${u.effect}`, false);
   say(`Bought ${u.name}${l}. ${u.effect}`);
+  if (headGiven > 0) {
+    event(headStartNote(headGiven), false);
+    say(headStartNote(headGiven));
+  }
   ensureLanes();
   persist();
   render();
@@ -4669,6 +4685,7 @@ window.tighter = {
 };
 
 if (startNote) say(startNote);
+if (startHeadGiven > 0) event(headStartNote(startHeadGiven), false);
 showFocus(true);
 render();
 

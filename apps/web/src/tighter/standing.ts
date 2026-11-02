@@ -11,6 +11,7 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
+import { tidyRent } from "./economy";
 import {
   EvolveMethod,
   Funds,
@@ -319,6 +320,35 @@ export function nextCycleTree(s: GameState): { owned: UpgradeId[]; levels: Parti
   for (const [id, l] of Object.entries(s.levels) as [UpgradeId, number][]) if (keptSet.has(id)) levels[id] = l;
   for (const [id, l] of Object.entries(head.levels) as [UpgradeId, number][]) levels[id] = Math.max(levels[id] ?? 0, l);
   return { owned: UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id), levels };
+}
+
+/**
+ * Gives the cards of the Head start level owned now, in the current cycle (the same ones a reset
+ * gives): every id of headStartGives not owned yet, with what it needs, and each level up to the one
+ * given. Nothing is lowered, taken away or paid for. Rent newly owned starts earning from `now`
+ * (no back-rent), and the milestones are timed. Idempotent. Returns the ids newly given.
+ */
+export function grantHeadStart(s: GameState, now: number): UpgradeId[] {
+  if (!s.owned.includes("head")) return [];
+  const head = headStartGives(level(owning(s.owned, s.levels), "head"));
+  const want = withPrerequisites(head.ids);
+  const had = new Set(s.owned);
+  const given = UPGRADES.filter((u) => want.has(u.id) && !had.has(u.id)).map((u) => u.id);
+  let raised = false;
+  for (const [id, l] of Object.entries(head.levels) as [UpgradeId, number][]) {
+    if ((s.levels[id] ?? 0) < l) {
+      s.levels[id] = l;
+      raised = true;
+    }
+  }
+  if (!given.length && !raised) return [];
+  const all = new Set([...s.owned, ...given]);
+  s.owned = UPGRADES.filter((u) => all.has(u.id)).map((u) => u.id);
+  if (given.includes("rent")) tidyRent(s, owning(s.owned, s.levels), now);
+  // the cycle rule "clicks only": Auto-eval stays off even when it was given (autoPerSecond is null under it too)
+  if (s.standing.rule === "clicks") s.settings.auto = false;
+  markProgress(s, now);
+  return given;
 }
 
 export interface ResetPreview {

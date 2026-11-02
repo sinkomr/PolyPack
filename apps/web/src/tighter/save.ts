@@ -29,7 +29,7 @@ import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { plainConfig } from "./space-submission";
 import { readLattice } from "./methods/lattice";
-import { newStanding, normalizeStanding } from "./standing";
+import { grantHeadStart, newStanding, normalizeStanding } from "./standing";
 import { UnitsReport, convertSaveUnits } from "./units";
 import {
   AUTO_BASE,
@@ -706,6 +706,8 @@ export type LoadResult =
       c3?: { rp: number };
       /** Version 11's change of standing and resets: the standing and RP it paid back, and the save's resets. */
       standing?: { standing: number; rp: number; resets: number };
+      /** The cards a save owning Head start was missing, given at load: how many. */
+      headStart?: number;
     }
   | { ok: false; error: string };
 
@@ -1067,6 +1069,8 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const state = normalize(m.save, now);
   // what the boards improved while sending was off pays now, one event per problem, as it did on consent
   if ((raw.version as number) < 7 && m.save.payWaiting === true) payAll(state);
+  // Head start works in the cycle it is bought in: a save that owns it without its cards gets them now
+  const headGiven = grantHeadStart(state, now).length;
   return {
     ok: true,
     state,
@@ -1077,6 +1081,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
     ...(converted + dropped > 0 ? { units: { converted, dropped } } : {}),
     ...(ladder > 0 ? { ladder: { rp: ladder } } : {}),
     ...(c3 > 0 ? { c3: { rp: c3 } } : {}),
+    ...(headGiven > 0 ? { headStart: headGiven } : {}),
     ...(rework
       ? {
           standing: {

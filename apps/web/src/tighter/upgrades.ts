@@ -1483,10 +1483,10 @@ export const UPGRADES: readonly Upgrade[] = [
     "head",
     "Head start",
     [],
-    "Each new cycle starts with the upgrades that cost 10,000 RP or less, and each level raises that limit.",
+    "Gives upgrades that cost 10,000 RP or less now and at each reset, and each level raises that limit.",
     {
       text: [
-        `At each reset, Head start gives you back, for nothing, the upgrades that cost ${HEAD_START_PRICES.map((p) => p.toLocaleString("en-US")).join(", ")} RP or less at levels 1, 2 and 3. Each level of an upgrade with levels counts as its own upgrade, and every upgrade comes with the ones it needs.`,
+        `When you buy a level of Head start and at each reset, it gives you, for nothing, the upgrades that cost ${HEAD_START_PRICES.map((p) => p.toLocaleString("en-US")).join(", ")} RP or less at levels 1, 2 and 3. Each level of an upgrade with levels counts as its own upgrade, and every upgrade comes with the ones it needs.`,
         `Faster auto-eval comes up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}). Keep auto-eval keeps more. Another lane, the Dimensions row and Standing itself never come back this way.`,
         "Level 2 also brings back Records pay rent, Higher rent (the first 2 levels) and Collections, and level 3 the rest of Higher rent. Prices are the ones without Quick study.",
       ],
