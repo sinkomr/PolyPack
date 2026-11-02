@@ -1669,7 +1669,7 @@ html {
   body.tighter:not([data-pane="queue"]):not([data-pane="points"]) .panel {
     display: none;
   }
-  body.tighter[data-pane="queue"] :is(#t-points-help, #t-standing, #t-records),
+  body.tighter[data-pane="queue"] :is(#t-points-help, #t-income, #t-standing, #t-records),
   body.tighter[data-pane="points"] :is(#t-queue, #t-lanes, #t-runs) {
     display: none;
   }
@@ -1859,4 +1859,25 @@ html {
 }
 .t-mech-table th {
   color: var(--muted);
+}
+
+/* the income view: record points of the last hour, a row for each group of problems */
+.t-income {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.t-income th,
+.t-income td {
+  padding: 2px 6px;
+  text-align: right;
+}
+.t-income th:first-child {
+  text-align: left;
+  font-weight: normal;
+}
+.t-income thead th,
+.t-income tfoot th,
+.t-income tfoot td {
+  font-weight: 600;
 }

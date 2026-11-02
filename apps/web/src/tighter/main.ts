@@ -117,6 +117,7 @@ import {
 import { Offer, addRetake, offerFits } from "./picks";
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
+import { GROUPS, SOURCES, income } from "./income";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
@@ -3032,8 +3033,37 @@ function renderName(): void {
 }
 
 /** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
+/** The income table as last drawn, so that the page is touched only when it changes. */
+let incomeShown = "";
+/** Record points of the last hour by problem group and source (income.ts), shown with the totals. */
+function renderIncome(): void {
+  const on = revealed(state, "points");
+  show("t-income", on);
+  if (!on) return;
+  const sums = income.sums(now());
+  const num = (n: number | undefined) => (n ? fmtInt(n) : "0");
+  const note =
+    sums.total > 0
+      ? `Record points earned in the last hour, counted since this page opened. Rent counts when a payday pays it.`
+      : "No record points yet in the last hour. Improvements and rent paydays appear here as they pay.";
+  const rows = GROUPS.filter((g) => sums.byGroup[g.id]).map(
+    (g) =>
+      `<tr><th scope="row">${g.label}</th>${SOURCES.map((s) => `<td>${num(sums.cells[`${g.id}/${s.id}`])}</td>`).join("")}<td>${num(sums.byGroup[g.id])}</td></tr>`,
+  );
+  const html =
+    `<thead><tr><th scope="col">Last hour</th>${SOURCES.map((s) => `<th scope="col">${s.label}</th>`).join("")}<th scope="col">Total</th></tr></thead>` +
+    `<tbody>${rows.join("")}</tbody>` +
+    `<tfoot><tr><th scope="row">All</th>${SOURCES.map((s) => `<td>${num(sums.bySource[s.id])}</td>`).join("")}<td>${num(sums.total)}</td></tr></tfoot>`;
+  const shown = note + html;
+  if (shown === incomeShown) return;
+  incomeShown = shown;
+  text("t-income-note", note);
+  $("t-income-table").innerHTML = html;
+}
+
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
+  renderIncome();
   // the clicks: in the evaluations' tooltip
   const evals = $("t-bar-evals-box");
   const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
@@ -3141,7 +3171,7 @@ function panesOpen(): Record<Pane, boolean> {
     board: true,
     tree: !$("t-views").hidden,
     queue: any("t-queue", "t-lanes", "t-runs"),
-    points: any("t-points-help", "t-standing", "t-records"),
+    points: any("t-points-help", "t-income", "t-standing", "t-records"),
   };
 }
 
