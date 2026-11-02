@@ -131,3 +131,93 @@ export function autoHold(opts: {
   if (opts.onBattery && !opts.battery) return "battery";
   return null;
 }
+
+/**
+ * How auto-eval's rate `rate` (evaluations a second, all lanes) is split over the lanes that have
+ * work, one entry of `msEach` (the expected ms of one evaluation on that lane's problem with its
+ * run's method) for each. Each lane gets about the same solving time, so a share is proportional to
+ * 1 / msEach. But a lane gets at least `floor` of an equal share (rate / lanes / 4), at most what its
+ * core runs (1000 / msEach a second), and what a lane cannot use goes to the others. Returns the
+ * evaluations a second for each lane, in the same order. Where every lane is at its core's limit the
+ * total is less than `rate`.
+ */
+export function laneSplit(msEach: readonly number[], rate: number, floor = 0.25): number[] {
+  const L = msEach.length;
+  if (!L || !(rate > 0)) return msEach.map(() => 0);
+  const ms = msEach.map((m) => (m > 0 ? m : 1e-6));
+  const base = ms.map((m) => Math.min((floor * rate) / L, 1000 / m));
+  const rest = rate - base.reduce((a, b) => a + b, 0);
+  // the rest goes by equal solving time on top of the floor: find the time T each lane works at
+  let lo = 0;
+  let hi = 1000;
+  for (let i = 0; i < 200; i++) {
+    const T = (lo + hi) / 2;
+    const extra = ms.reduce((a, m, k) => a + Math.max(0, Math.min(1000, T) / m - base[k]), 0);
+    if (extra > rest) hi = T;
+    else lo = T;
+  }
+  const e = ms.map((m, k) => Math.max(base[k], Math.min(1000, lo) / m));
+  const sum = e.reduce((a, b) => a + b, 0);
+  return sum > rate + 1e-6 ? e.map((x) => (x * rate) / sum) : e;
+}
+
+/** How long the measured rate looks back, and the least time of auto-eval's work it needs to speak. */
+export const AUTO_METER_WINDOW_MS = 30_000;
+export const AUTO_METER_MIN_SECONDS = 10;
+/** Below this share of the rate bought, the lanes note says the computer is the limit. */
+export const AUTO_METER_NOTE = 0.95;
+/** Below this share, Faster auto-eval's card says so (lower, so that it does not flicker). */
+export const AUTO_METER_CARD = 0.9;
+
+/**
+ * A rolling count over the last 30 s of the evaluations auto-eval was due, counted only over time when
+ * it had work and was not held, and of those it actually ran. In 1 s buckets, with times passed in.
+ */
+export class AutoMeter {
+  private readonly buckets = new Map<number, { due: number; ran: number; secs: number }>();
+
+  private bucket(now: number) {
+    const k = Math.floor(now / 1000);
+    let b = this.buckets.get(k);
+    if (!b) this.buckets.set(k, (b = { due: 0, ran: 0, secs: 0 }));
+    for (const old of this.buckets.keys()) if (old < k - AUTO_METER_WINDOW_MS / 1000 - 1) this.buckets.delete(old);
+    return b;
+  }
+
+  /** `seconds` passed up to `now` with auto-eval working at `rate` evaluations a second. */
+  addDue(now: number, rate: number, seconds: number): void {
+    if (!(seconds > 0) || !(rate > 0)) return;
+    const b = this.bucket(now);
+    b.due += rate * seconds;
+    b.secs += seconds;
+  }
+
+  /** `evals` evaluations of auto-eval ran, finishing at `now`. */
+  addRan(now: number, evals: number): void {
+    if (evals > 0) this.bucket(now).ran += evals;
+  }
+
+  /** The evaluations due and run over the window to `now`, and the seconds of work they cover. */
+  summary(now: number): { due: number; ran: number; seconds: number } {
+    const from = Math.floor((now - AUTO_METER_WINDOW_MS) / 1000);
+    let due = 0;
+    let ran = 0;
+    let seconds = 0;
+    for (const [k, b] of this.buckets)
+      if (k > from && k <= Math.floor(now / 1000)) {
+        due += b.due;
+        ran += b.ran;
+        seconds += b.secs;
+      }
+    return { due, ran, seconds };
+  }
+
+  clear(): void {
+    this.buckets.clear();
+  }
+}
+
+/** The share of the evaluations due that ran, or null while there is too little of auto-eval's work to tell. */
+export function meterShare(s: { due: number; ran: number; seconds: number }): number | null {
+  return s.seconds >= AUTO_METER_MIN_SECONDS && s.due > 0 ? s.ran / s.due : null;
+}

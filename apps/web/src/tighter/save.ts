@@ -917,6 +917,11 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       method: method as EvolveMethod,
       background: bool(settings.background, false),
       battery: bool(settings.battery, false),
+      // a whole number from 1; a save without one runs every lane it owns
+      lanesInUse:
+        Number.isInteger(settings.lanesInUse) && (settings.lanesInUse as number) >= 1
+          ? (settings.lanesInUse as number)
+          : null,
       // one of the choices, else the default; a saved null is Never
       tolerance: TOLERANCES.find((t) => t === settings.tolerance) ?? DEFAULT_TOLERANCE,
       patience,

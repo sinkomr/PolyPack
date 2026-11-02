@@ -462,6 +462,7 @@ describe("Tighter saves", () => {
       method: "mc_compress",
       background: false,
       battery: false,
+      lanesInUse: null,
       tolerance: 1e-6,
       patience: 1000,
       leadPatience: 1000,

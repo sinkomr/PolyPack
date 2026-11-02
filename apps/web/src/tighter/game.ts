@@ -167,6 +167,8 @@ export interface Settings {
   background: boolean;
   /** Keep running on battery power (where the browser tells). */
   battery: boolean;
+  /** Lanes that run (1 to the lanes owned); null: all of them. */
+  lanesInUse: number | null;
   /** Auto-advance: the smallest relative improvement that counts as progress (one of TOLERANCES). */
   tolerance: number;
   /**
@@ -267,6 +269,7 @@ export function newGame(now: number, seed: number): GameState {
       method: "mc_compress",
       background: false,
       battery: false,
+      lanesInUse: null,
       tolerance: DEFAULT_TOLERANCE,
       patience: DEFAULT_PATIENCE,
       leadPatience: DEFAULT_PATIENCE,
