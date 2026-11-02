@@ -89,7 +89,7 @@ function loaded(N: number, M: number, P: number) {
 }
 
 const OFFER_TEXT =
-  " On the boards of the other Dimensions, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
+  " Outside 2D in 2D, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
 
 describe("Tighter's methods table", () => {
   it("has an entry for every method the game runs, each registered in the worker under its solver name", () => {
@@ -248,11 +248,13 @@ describe("Tighter's methods table", () => {
 
   it("explain the stall rule from the table, every limit named", () => {
     expect(stallRule()).toBe(
-      "The game also ends a stalled run of mc_compress. Once the run has done 500 evaluations and its problem has gone 500 evaluations without progress, it counts as ended by itself." + OFFER_TEXT,
+      "The game also ends a stalled run of mc_compress. Once the run has done 500 evaluations and its problem has gone 500 evaluations without progress, it counts as ended by itself." +
+        OFFER_TEXT,
     );
     const two = { mc_compress: { restartAfter: 500 }, asc: { restartAfter: 1500 }, harden: {} };
     expect(stallRule(two)).toBe(
-      "The game also ends a stalled run of mc_compress or asc. Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. R is 500 for mc_compress and 1,500 for asc." + OFFER_TEXT,
+      "The game also ends a stalled run of mc_compress or asc. Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. R is 500 for mc_compress and 1,500 for asc." +
+        OFFER_TEXT,
     );
     expect(stallRule({ harden: {}, asc: { restartAfter: null } })).toBe("");
     // the help on runs and on pipelines says it

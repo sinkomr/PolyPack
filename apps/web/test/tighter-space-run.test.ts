@@ -303,30 +303,34 @@ describe("Tighter space runs in the run host", () => {
       let offers = 0;
       let atGain = 0;
       let stalled = false;
-      const r = runMethod({ ...k, validate: (c) => checkSpaceConfig(p.space, id, c, { noRecord: true }) as never }, "mc_compress", {
-        seed: 1000 + run,
-        start: config as never,
-        budget: { evals: 100_000 * unit, time_s: 3600 },
-        onOffer: () => void offers++,
-        onImprove: (f) => {
-          if (f.score < best * (1 - 1e-9)) {
-            lastGain = base + Math.floor(used / unit);
-            atGain = offers;
-          }
-          if (f.score < best) {
-            best = f.score;
-            config = f.config;
-          }
+      const r = runMethod(
+        { ...k, validate: (c) => checkSpaceConfig(p.space, id, c, { noRecord: true }) as never },
+        "mc_compress",
+        {
+          seed: 1000 + run,
+          start: config as never,
+          budget: { evals: 100_000 * unit, time_s: 3600 },
+          onOffer: () => void offers++,
+          onImprove: (f) => {
+            if (f.score < best * (1 - 1e-9)) {
+              lastGain = base + Math.floor(used / unit);
+              atGain = offers;
+            }
+            if (f.score < best) {
+              best = f.score;
+              config = f.config;
+            }
+          },
+          shouldStop: (u) => {
+            used = u;
+            const e = u / unit;
+            if (base + e >= total) return true;
+            stalled = stallEnds(R, e, base + e - lastGain, offers - atGain);
+            if (stalled) ended.push({ evals: e, offers: offers - atGain });
+            return stalled;
+          },
         },
-        shouldStop: (u) => {
-          used = u;
-          const e = u / unit;
-          if (base + e >= total) return true;
-          stalled = stallEnds(R, e, base + e - lastGain, offers - atGain);
-          if (stalled) ended.push({ evals: e, offers: offers - atGain });
-          return stalled;
-        },
-      });
+      );
       global = base + Math.floor(Math.max(used, r.evaluations) / unit);
     }
     // every run the game ended had handed back a packing since the last progress, and the board moved

@@ -216,7 +216,7 @@ const runRules = () => [runEndRules(), stallRule()].filter(Boolean).join(" ");
 
 /** The part of the stall rule that gives a run on another Dimension's board time to hand back a result (game.ts stallEnds). */
 const OFFER_WAIT =
-  " On the boards of the other Dimensions, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
+  " Outside 2D in 2D, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
 
 /**
  * The sentences on the runs the game ends at a stall (each method's restartAfter, in its file in
