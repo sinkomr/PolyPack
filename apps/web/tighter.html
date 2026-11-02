@@ -189,6 +189,7 @@
           <p id="t-deal" class="note"></p>
           <div id="t-offers" class="t-offers" hidden>
             <h3>Offers</h3>
+            <p class="note">An offer leaves after 30 minutes, and its place is filled at the next deal. A retake does not leave. Skip removes an offer, and that problem is not offered again until you reload the page.</p>
             <ol id="t-offer-list" class="t-offer-list" aria-label="Problems offered, best first"></ol>
           </div>
           <fieldset id="t-advance" class="t-advance" hidden>
@@ -240,6 +241,13 @@
                 <label class="t-check"><input id="t-f-tier-loose" type="checkbox" /> loose records</label>
                 <label class="t-check"><input id="t-f-tier-batch" type="checkbox" /> site records</label>
                 <label class="t-check"><input id="t-f-tier-published" type="checkbox" /> published values</label>
+              </fieldset>
+              <fieldset class="t-f-tiers">
+                <legend>Held by</legend>
+                <label class="t-check"><input id="t-f-tighter" type="checkbox" /> only site records held by other Tighter players</label>
+                <label class="t-check"><input id="t-f-rivals" type="checkbox" /> only records held by my rivals</label>
+                <p class="note">A rival is a name that took a record from you. The most recent 20 are kept.</p>
+                <ul id="t-rivals" class="t-rivals" aria-label="Rivals"></ul>
               </fieldset>
               <p class="note">Shapes: 0 is the circle, then the number of sides. Empty means all.</p>
               <div class="row wrap">

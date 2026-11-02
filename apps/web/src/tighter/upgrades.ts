@@ -642,6 +642,7 @@ function pickRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade {
       text: [
         `When a slot is free and a deal is earned, the dealer shows you up to ${n} problems, best first (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks your choice with the server as you take it, and it removes any offer that your upgrades, filters or the cycle rule no longer allow.`,
         "With Auto-advance and auto-eval on, a stalled problem is replaced by the best offer, and the game also takes the top offer for you whenever a lane has no problem to work on.",
+        "An offer that is 30 minutes old leaves, and its place is filled at the next deal. An offer for a retake does not leave. Skip removes an offer, and the game does not offer that problem again until you reload the page.",
       ],
       note: "Each offer is a separate draw, so the dealer's best-of choice does not apply to offers. The first problem of a game is always dealt for you.",
     },
@@ -1093,6 +1094,7 @@ export const UPGRADES: readonly Upgrade[] = [
         "The Queue panel gets a Filters section, where you can allow only some piece shapes, container shapes, piece counts and tiers. A tier is a kind of problem, which is open, loose record, site record or published value.",
         "You write shapes as numbers and ranges, such as 0, 3-6, 21-100, where 0 means the circle. An empty list allows everything.",
         "The dealer deals or offers a problem only if it passes every filter. Open problems have sides of 21 to 100 and 40 to 500 pieces. Problems with fewer sides or pieces are contested problems, which need Reach: site records.",
+        "Two more choices limit the dealer to site records that other players hold. One keeps only records held by other Tighter players. The other keeps only records held by your rivals. A rival is a name that took a record from you. The game keeps the latest 20, with the number of records each took, and you can remove any of them. It asks the server what a rival holds at most once every 15 minutes for each name, and at most 3 times a minute in all.",
         "When you save filters that no problem you can be dealt fits, the note under them says why. If your queue is empty and nothing fits, the dealer deals one problem outside your filters. A free slot in a queue that is not empty waits for a problem that fits.",
       ],
     },

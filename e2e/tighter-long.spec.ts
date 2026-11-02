@@ -242,7 +242,7 @@ test("long game: offers to pick from, best first; filters saved and applied; dea
   expect([...scores].sort((a, b) => b - a)).toEqual(scores);
   // taking one deals it into the queue and focuses it
   const taken = await game(page, (s) => `${s.picks.offers[1].N}/${s.picks.offers[1].M}/${s.picks.offers[1].P}`);
-  await offers.nth(1).locator("button").click();
+  await offers.nth(1).locator("button.t-take").click();
   await expect.poll(() => game(page, (s) => s.queue.map((p: { key: string }) => p.key))).toEqual([first.key, taken]);
   await expect.poll(() => game(page, (s) => s.focus)).toBe(taken);
   await expect.poll(() => logText(page)).toContain("Dealt:");
@@ -744,7 +744,7 @@ test("long game: with Your pick and two lanes, Auto-advance compacts every new p
   for (let i = 0; i < 5; i++) {
     const n = await game(page, (s) => s.queue.length);
     await expect(offers.first()).toBeVisible({ timeout: 30_000 });
-    await offers.first().locator("button").click();
+    await offers.first().locator("button.t-take").click();
     await expect.poll(() => game(page, (s) => s.queue.length), { timeout: 30_000 }).toBe(n + 1);
   }
   // a problem past its patience with auto-eval off waits, and the queue says what it waits for
