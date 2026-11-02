@@ -57,20 +57,21 @@ describe("Tighter record points", () => {
     const w = shapeWeight(33, 47);
     // (b) paid 37.28 and (d) 2114.18 with a step term of 1 + log10(Δ / F); it is now 0.1 times that
     const decades = (a: number, b: number) => Math.log10((1 - b / a) / 1e-9);
-    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 11.863522, tier: "open" })!.improvement / k).toBeCloseTo(
-      37.28 - 0.9 * (1 + decades(11.887296419456838, 11.863522)) * w,
-      1,
-    );
-    expect(recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 10.834199, tier: "open" })!.improvement / k).toBeCloseTo(
-      2114.18 - 0.9 * (1 + decades(11.887296419456838, 10.834199)) * w,
-      1,
-    );
+    expect(
+      recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 11.863522, tier: "open" })!.improvement / k,
+    ).toBeCloseTo(37.28 - 0.9 * (1 + decades(11.887296419456838, 11.863522)) * w, 1);
+    expect(
+      recordPoints({ ...P33, sPrev: 11.887296419456838, sNew: 10.834199, tier: "open" })!.improvement / k,
+    ).toBeCloseTo(2114.18 - 0.9 * (1 + decades(11.887296419456838, 10.834199)) * w, 1);
   });
 
   it("pays a flat bonus with no weight, tier or cost factor in it", () => {
     const s = 15.656167;
     for (const tier of TIERS) {
-      for (const family of [{ N: 7, M: 7, P: 197 }, { N: 100, M: 100, P: 300 }]) {
+      for (const family of [
+        { N: 7, M: 7, P: 197 },
+        { N: 100, M: 100, P: 300 },
+      ]) {
         const input = { family: "polygon" as const, ...family, sPrev: s, sNew: s * (1 - 5e-4), tier };
         const plain = recordPoints(input)!;
         const lead = recordPoints({ ...input, bonus: "lead" })!;
@@ -149,7 +150,15 @@ describe("Tighter record points", () => {
       let prev = s0;
       for (let i = 1; i <= clicks; i++) {
         const next = s0 * (1 - (cut * i) / clicks);
-        total += recordPoints({ family: "polygon", N: 21, M: 24, P: 40, sPrev: prev, sNew: next, tier: "open" })!.improvement;
+        total += recordPoints({
+          family: "polygon",
+          N: 21,
+          M: 24,
+          P: 40,
+          sPrev: prev,
+          sNew: next,
+          tier: "open",
+        })!.improvement;
         steps += recordPoints({
           family: "polygon",
           N: 21,

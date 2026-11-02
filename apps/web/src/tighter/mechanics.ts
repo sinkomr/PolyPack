@@ -119,7 +119,9 @@ function families(): Family[] {
       how: {
         ...queue,
         vars: (queue.vars ?? []).map((v) =>
-          v[0] === sym("q") ? [sym("q"), "the slots in the queue (1 at the start, or the lanes you own if that is more)"] : v,
+          v[0] === sym("q")
+            ? [sym("q"), "the slots in the queue (1 at the start, or the lanes you own if that is more)"]
+            : v,
         ),
         note: "The table gives, for each size, the clicks that earn one deal and the evaluations of auto-eval that do the same.",
       },

@@ -3747,9 +3747,7 @@ let offersSig = "";
 /** What an offer pays on top of improvements, in the offers' words. */
 function offerBonus(x: Offer): string {
   if (state.bonusPaid[keyOf(x)] === state.standing.resets) return "its bonus is paid this cycle";
-  return x.tier === "open"
-    ? `bonus ${fmtInt(FIRST_BONUS)} RP`
-    : `bonus ${fmtInt(LEAD_BONUS)} RP if you take the lead`;
+  return x.tier === "open" ? `bonus ${fmtInt(FIRST_BONUS)} RP` : `bonus ${fmtInt(LEAD_BONUS)} RP if you take the lead`;
 }
 
 /** A sentence for a payment that paid a bonus, else nothing. */

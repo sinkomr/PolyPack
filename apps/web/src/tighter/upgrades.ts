@@ -684,7 +684,10 @@ const RENT_MATH = [
 ];
 const RENT_VARS: readonly Var[] = [
   [sym("h"), "a record's rent, in record points per hour"],
-  [sym("B"), "the record points that problem earned from its improvements, before multipliers (bonuses are not counted)"],
+  [
+    sym("B"),
+    "the record points that problem earned from its improvements, before multipliers (bonuses are not counted)",
+  ],
   [sym("a"), "levels of Higher rent"],
   [sym("m"), "your points multiplier now (resets, collections and the rewards of cycle rules)"],
   [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
@@ -1768,7 +1771,10 @@ export function laneCount(o: Owned, coreCount = cores()): number {
 
 /** Problem slots: the queue cards' size, or one for each lane owned when that is more (no cap; the "Lanes in use" setting does not count). */
 export function queueSize(o: Owned): number {
-  return Math.max(laneCount(o), highest(o, QUEUE, 1, (a, b) => a > b));
+  return Math.max(
+    laneCount(o),
+    highest(o, QUEUE, 1, (a, b) => a > b),
+  );
 }
 
 /** Problems with a site record (N, M ≤ 20) are dealt down to this N+M+P; Infinity before Reach. */

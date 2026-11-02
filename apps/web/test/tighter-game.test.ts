@@ -699,7 +699,14 @@ describe("Tighter points per click", () => {
     p.floor = 1.3 * B;
     p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
     expect(applyStep(s, p, step(1.29 * B, 1), T0).points!.bonus).toBe("lead");
-    applyAnswer(s, p, { score: 1.3 * B, name: "Bob", id: 4 }, 1.29 * B, { kind: "leader", score: 1.29 * B, id: 17, pending: false }, T0);
+    applyAnswer(
+      s,
+      p,
+      { score: 1.3 * B, name: "Bob", id: 4 },
+      1.29 * B,
+      { kind: "leader", score: 1.29 * B, id: 17, pending: false },
+      T0,
+    );
     applyLeader(p, { score: 1.27 * B, name: "Bob", id: 5 }, s, T0);
     expect(applyStep(s, p, step(1.26 * B, 3), T0).points!.bonus).toBeNull();
   });
