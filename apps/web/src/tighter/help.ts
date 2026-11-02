@@ -256,7 +256,7 @@ const COUNTS: How = {
       "<var>c</var><sub>deal</sub>",
       "the clicks that earn you one new problem, which the game deals (gives you) once a slot of your queue is free",
     ],
-    ["<var>q</var>", "the slots in your queue (1 at the start)"],
+    ["<var>q</var>", "the slots in your queue (1 at the start, or the lanes you own if that is more)"],
     ["<var>c</var>", "the clicks a stretch of work counts as"],
     ["<var>e</var><sub>you</sub>", "the evaluations of your own clicks in it"],
     ["<var>e</var><sub>auto</sub>", "auto-eval's evaluations in it"],
@@ -353,7 +353,7 @@ const RECORDS: How[] = [
 const AUTO: How = {
   text: [
     "Auto-eval runs evaluations for you while it is on, alongside your own clicks. Its rate is in evaluations a second, and it is set by Auto-eval and Faster auto-eval. Upgrades of evaluations per click make your own clicks bigger but do not speed auto-eval up. Its evaluations pay just as yours do.",
-    "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving.",
+    "A lane is a solver worker in your browser. It holds one open run, and each lane works on a different problem. The lanes share auto-eval's rate, so more lanes let more problems progress at once, but they add no evaluations. A lane with nothing to work on leaves its share to the others. Without Auto-advance, lane 1 works on the problem on the board, and each other lane works on another problem in the queue that already has a record. Auto-advance also moves on from problems that have stopped improving. The queue has a slot for every lane.",
     "Auto-eval runs only while this page is open in the tab that holds the game. It pauses while the tab is hidden, unless you own Continuous and allowed it in Settings, and it pauses on battery power, unless you allowed that in Settings. While it is off or paused it earns nothing, and it does not catch up later. Your own clicks never pause.",
     `Auto-eval gives each lane its evaluations in small batches, so a lane's worker gets only a few messages a second. A batch is at most about ${AUTO_JOB_SECONDS} s of your computer's time, judged from how long that problem's evaluations have taken here. So a click of yours waits behind very little, even on a large problem or with a slow method.`,
     "The lanes do not get equal numbers of evaluations. Each lane that has work gets about the same solving time, so a lane on a large problem, where an evaluation takes longer, runs fewer evaluations a second than a lane on a small one. Every lane still gets at least a quarter of an equal share. The total stays at the rate you bought. The Lanes panel has a setting for how many of your lanes run.",

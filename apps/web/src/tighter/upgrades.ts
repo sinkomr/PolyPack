@@ -474,6 +474,7 @@ function queueRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade 
         "The queue holds the problems you work on, one in each slot. The dealer earns a deal as you and auto-eval work. A deal puts a new problem in a free slot.",
         `Work counts in clicks. An Evolve click counts as one, however many evaluations it runs. ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The dealer saves up at most one deal for each slot. If the queue is empty, it deals a problem anyway, and your next work pays for it.`,
         "A problem leaves the queue when you drop it or when Auto-advance replaces it.",
+        "The queue never has fewer slots than you have lanes. If you own more lanes than this card gives slots, the queue has one slot for each lane, and the dealer works with that size.",
       ],
       math: [
         `${t} ← min(${sym("q")}, ${t} + ${sym("q")} × ${sym("c")} / ${DEAL_CLICKS})`,
@@ -1078,6 +1079,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         `${LANE_TEXT} Your own clicks go to the lane that holds the problem on the board.`,
         "Without Auto-advance, the first lane works on the problem on the board and the second on the next problem in the queue. With it, a lane stays on its problem while it makes progress. Otherwise it moves to the problem that is still improving and has run the fewest evaluations since progress.",
+        "The queue has a slot for each lane, so it holds at least 2 problems.",
       ],
       math: LANE_MATH,
       vars: LANE_VARS,
@@ -1247,7 +1249,11 @@ export const UPGRADES: readonly Upgrade[] = [
     requires: ["lanes2", "continuous"],
     effect: "Each level adds one lane, up to one less than your computer's cores.",
     how: {
-      text: [LANE_TEXT, "Levels past your cores less one add nothing, so the shop stops offering them."],
+      text: [
+        LANE_TEXT,
+        "Levels past your cores less one add nothing, so the shop stops offering them.",
+        "Each lane also adds a slot to the queue when you own more lanes than the Problem queue card has slots.",
+      ],
       math: LANE_MATH,
       vars: LANE_VARS,
       note: `Each level costs 2.2 times the one before. ${LANE_NOTE}`,
@@ -1760,8 +1766,9 @@ export function laneCount(o: Owned, coreCount = cores()): number {
   return Math.min(2 + level(o, "lanesx"), Math.max(2, coreCount - 1));
 }
 
+/** Problem slots: the queue cards' size, or one for each lane owned when that is more (no cap; the "Lanes in use" setting does not count). */
 export function queueSize(o: Owned): number {
-  return highest(o, QUEUE, 1, (a, b) => a > b);
+  return Math.max(laneCount(o), highest(o, QUEUE, 1, (a, b) => a > b));
 }
 
 /** Problems with a site record (N, M ≤ 20) are dealt down to this N+M+P; Infinity before Reach. */

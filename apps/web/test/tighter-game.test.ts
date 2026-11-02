@@ -315,6 +315,26 @@ describe("Tighter upgrades", () => {
     expect(laneCount(none)).toBe(1);
     expect(laneCount(o("lanes2"))).toBe(2);
   });
+
+  it("grows the queue with the lanes owned, with no cap, and never below the queue cards", () => {
+    const cores = 40;
+    const lanes = (n: number) => owning(["lanes2", "lanesx"], { lanesx: n });
+    expect(laneCount(lanes(20), cores)).toBe(22);
+    // queueSize reads this machine's cores: pin them for the test
+    const saved = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+    Object.defineProperty(globalThis, "navigator", { value: { hardwareConcurrency: cores }, configurable: true });
+    try {
+      expect(queueSize(owning(["lanes2"]))).toBe(2);
+      expect(queueSize(lanes(10))).toBe(12);
+      expect(queueSize(lanes(30))).toBe(32);
+      expect(queueSize(owning(["lanes2", "queue3", "queue4", "queue6"]))).toBe(6);
+      const big = owning(["lanes2", "lanesx", "queue3", "queue4", "queue6"], { lanesx: 12 });
+      expect(queueSize(big)).toBe(14);
+    } finally {
+      if (saved) Object.defineProperty(globalThis, "navigator", saved);
+      else delete (globalThis as { navigator?: unknown }).navigator;
+    }
+  });
 });
 
 describe("Tighter runs on the board", () => {
