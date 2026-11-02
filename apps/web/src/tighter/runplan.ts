@@ -7,7 +7,7 @@ import type { EvolveMethod } from "./upgrades";
  * How runs are planned (plan §4).
  *
  * - Method match: with "Auto" chosen, the game picks each new run's method (and with Auto-tune its
- *   tuning level) by Thompson sampling over arms (kind of problem × method @ level). An arm's reward
+ *   tuning level) by Thompson sampling over arms (kind of problem and board stage × method @ level). An arm's reward
  *   is the RP earned on the problem during one run, per evaluation of that run, observed when the
  *   run ends or is replaced. Runs of every mode are observed, so the bandit has learned something by
  *   the time Method match is bought.
@@ -44,7 +44,7 @@ export function normalizeRunPlan(v: unknown, known: readonly string[]): RunPlanS
     pipeline: Array.isArray(v.pipeline)
       ? (v.pipeline.filter((m) => typeof m === "string" && known.includes(m)) as EvolveMethod[]).slice(0, MAX_STAGES)
       : [],
-    bandit: normalizeBandit(v.bandit),
+    bandit: stageArms(normalizeBandit(v.bandit)),
     draws: Number.isSafeInteger(v.draws) && (v.draws as number) >= 0 ? (v.draws as number) : 0,
   };
 }
@@ -67,10 +67,23 @@ function shapeClass(N: number): string {
   return "r";
 }
 
-/** A kind of problem for the bandit: tier, size ring and piece-shape class, e.g. "open|t120|r". */
-export function problemKind(p: PolygonKey & { tier: string }): string {
+/**
+ * The stage of a board when a run opens on it: "fresh" while no run on the problem has ended by itself
+ * and it is under its patience without progress, else "stalled". Fresh boards pay about ten times what
+ * stalled ones do, so the bandit keeps the two apart.
+ */
+export type BoardStage = "fresh" | "stalled";
+export const STAGES: readonly BoardStage[] = ["fresh", "stalled"];
+export const boardStage = (endedRuns: number, sinceGain: number, patience: number): BoardStage =>
+  endedRuns === 0 && sinceGain < patience ? "fresh" : "stalled";
+
+/**
+ * A kind of problem for the bandit: tier, size ring and piece-shape class, e.g. "open|t120|r", and with
+ * a stage "open|t120|r|fresh".
+ */
+export function problemKind(p: PolygonKey & { tier: string }, stage?: BoardStage): string {
   const t = p.N + p.M + p.P;
-  return `${p.tier}|t${RINGS.find((r) => t >= r) ?? 0}|${shapeClass(p.N)}`;
+  return `${p.tier}|t${RINGS.find((r) => t >= r) ?? 0}|${shapeClass(p.N)}${stage ? `|${stage}` : ""}`;
 }
 
 /** The arm of a method at a tuning level on a kind of problem: "open|t120|r|mc_compress@2". */
@@ -80,6 +93,28 @@ export const armKey = (kind: string, method: EvolveMethod, level: number): strin
 export function parseArm(key: string): { kind: string; method: EvolveMethod; level: number } | null {
   const m = /^(.*)\|([a-z_]+)@(\d)$/.exec(key);
   return m ? { kind: m[1], method: m[2] as EvolveMethod, level: Number(m[3]) } : null;
+}
+
+/**
+ * Arms learned before the stage joined the kind have no stage in their key. Each is copied to both
+ * stages (the old mean mixed fresh and stalled runs, so it is the best guess for either), and the new
+ * runs then separate them. Keys that already have a stage stay as they are, and a copy never replaces
+ * an arm the stage already has.
+ */
+export function stageArms(bandit: Bandit): Bandit {
+  const out: Bandit = {};
+  const staged = (k: string) => /\|(fresh|stalled)\|[a-z_]+@\d$/.test(k);
+  for (const [k, a] of Object.entries(bandit)) if (staged(k)) out[k] = a;
+  for (const [k, a] of Object.entries(bandit)) {
+    if (staged(k)) continue;
+    const m = /^(.*)\|([a-z_]+@\d)$/.exec(k);
+    if (!m) {
+      out[k] = a;
+      continue;
+    }
+    for (const st of STAGES) out[`${m[1]}|${st}|${m[2]}`] ??= { ...a };
+  }
+  return out;
 }
 
 /**

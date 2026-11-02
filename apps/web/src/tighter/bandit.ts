@@ -23,7 +23,7 @@ export interface Prior {
 }
 
 /** Most arms kept; the least observed are forgotten first. */
-export const MAX_ARMS = 600;
+export const MAX_ARMS = 1200;
 
 /** Adds one observed reward to an arm. */
 export function observe(b: Bandit, key: string, reward: number): void {

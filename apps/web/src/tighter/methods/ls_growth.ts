@@ -95,6 +95,7 @@ export function largerText(d: number): string {
 
 export const lsGrowthGame: MethodGame = {
   effect: "Adds ls_growth, which regrows the pieces in your container and often packs them denser.",
+  bestFor: "It earned little in short tests, so it may need longer runs than the tests gave it.",
   how: (select) => ({
     text: [
       "ls_growth is Lubachevsky–Stillinger growth. The container stays fixed. The pieces start smaller, move around at random and slowly grow, bouncing off each other and the walls. The run ends when they jam and cannot grow any more.",

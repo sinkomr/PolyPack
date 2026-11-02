@@ -112,6 +112,7 @@ function played(): GameState {
   s.picks.rivals.push({ name: "Ada Lovelace", took: 3 }, { name: "Bob", took: 1 });
   s.picks.filters = { pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null, tighter: true, rivals: true };
   s.runplan.bandit["open|mc_compress"] = { n: 1, mean: 2, m2: 0 };
+  s.runplan.bandit["open|t80|r|stalled|harden@1"] = { n: 3, mean: 0.5, m2: 0.02 };
   s.pacer = recordSend(s.pacer, p.key, T0 + 3500);
   s.autoDue = 12.75;
   s.autoAt = T0 + 4000;
@@ -174,6 +175,21 @@ describe("Tighter saves", () => {
     // a deal made on credit stays in debt
     expect(r.state.dealer).toMatchObject({ tokens: -0.5, credit: 12.5, seed: 1234 });
     expect(r.state.levels).toEqual({ lanesx: 2 });
+  });
+
+  it("reads Method match's arms from before the board stages as arms of both stages", () => {
+    const s = played();
+    s.runplan.bandit = { "open|t80|r|harden@1": { n: 4, mean: 2, m2: 0.1 } };
+    const r = fromJson(toJson(s), T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.runplan.bandit).toEqual({
+      "open|t80|r|fresh|harden@1": { n: 4, mean: 2, m2: 0.1 },
+      "open|t80|r|stalled|harden@1": { n: 4, mean: 2, m2: 0.1 },
+    });
+    // read again, nothing changes
+    const again = fromJson(toJson(r.state), T0);
+    expect(again.ok && again.state.runplan.bandit).toEqual(r.state.runplan.bandit);
   });
 
   it("keeps the flat bonuses paid and the open bonus, and reads a save without them as none", () => {

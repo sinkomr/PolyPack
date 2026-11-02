@@ -79,6 +79,7 @@ function ended(v: RunView, title: string): string | null {
 
 export const shrinkRepairGame: MethodGame = {
   effect: "Adds shrink_repair, which shrinks the container and then moves the pieces until none overlap.",
+  bestFor: "In tests it paid well on a fresh board, and it still made progress on a stalled one.",
   how: (select) => ({
     text: [
       "shrink_repair makes the container a little smaller, so that some pieces overlap. It then moves the pieces around until none of them overlap any more. When that works, the packing is smaller than before.",

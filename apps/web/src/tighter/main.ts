@@ -187,7 +187,7 @@ import {
   submissionBody,
   troubleText,
 } from "./submission";
-import { RunChoice, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
+import { BoardStage, RunChoice, boardStage, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
 import { renderRunsPanel } from "./runs-ui";
 import { runPayday } from "./payday";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
@@ -288,8 +288,11 @@ const sideWord = (p: ProblemKey) => rulesOf(p).scoreWord(p);
  */
 const SPACE_EVAL_MS = 5;
 const tableMsOf = (p: ProblemKey): number => (isPolygon(p) ? msPerEval(p.N + p.M + p.P) : SPACE_EVAL_MS);
-/** The kind of problem the bandit learns a space problem's methods for: its tier and its family. */
-const kindOf = (p: ProblemKey & { tier: string }): string => (isPolygon(p) ? problemKind(p) : `${p.tier}|${p.family}`);
+/** The board's stage for Method match: fresh until a run on it ends by itself or it reaches its patience without progress. */
+const stageOf = (p: ProblemState): BoardStage => boardStage(p.endedRuns, p.sinceGain, stallAfter(state, p));
+/** The kind of problem the bandit learns a problem's methods for: its tier, family (polygons: size and piece shape) and stage. */
+const kindOf = (p: ProblemState & { tier: string }): string =>
+  isPolygon(p) ? problemKind(p, stageOf(p)) : `${p.tier}|${p.family}|${stageOf(p)}`;
 
 /** What a read of a problem's leader gives: whether it takes entries, and who leads it. */
 interface LeaderRead {
@@ -1009,7 +1012,7 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
     chooseRun(state.runplan, {
-      kind: problemKind(needPolygon(p, "run kinds")),
+      kind: kindOf(p),
       methods: ms,
       levelOf: (m) => tuningLevel(o, m),
       tune: withLevels,
@@ -1085,6 +1088,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
   const params = methodParams(owned(), method, level);
   // drawn before anything awaits, so that two runs opening at once on one problem never share a seed
   const seed = reserveSeed(state, p);
+  const kind = kindOf(p);
   // a problem's run lives in one lane: a run on it elsewhere closes first
   for (const other of lanes)
     if (other !== lv && other.run?.key === p.key) {
@@ -1133,7 +1137,7 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     stage: a.state.stage,
     origin: setup.start,
     startScore,
-    kind: problemKind(q),
+    kind,
     rpAt: basePoints(p),
     evalsAt: 0,
   };
@@ -3094,7 +3098,7 @@ function renderToolbar(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): 
     ? "Your pipeline in the Runs panel picks each new run's method."
     : canAuto && state.runplan.auto
       ? "The game picks each new run's method from what has paid best on similar problems."
-      : "The method your clicks use. Changing it starts a new run.";
+      : `The method your clicks use. Changing it starts a new run. ${methodGame(state.settings.method).bestFor ?? ""}`.trim();
   show("t-auto", autoPerSecond(o) !== null);
   const autoBtn = $<HTMLButtonElement>("t-auto");
   autoBtn.setAttribute("aria-pressed", String(state.settings.auto));

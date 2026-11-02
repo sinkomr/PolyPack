@@ -70,6 +70,11 @@ export interface MethodGame {
    */
   effect?: string;
   /**
+   * One plain sentence on what the method is best for, as far as the bench tests show, shown under
+   * the card's effect and in the Method list's help. Say "in tests" where the evidence is thin.
+   */
+  bestFor?: string;
+  /**
    * The method card's "How it works". `select` is the shared sentence on choosing a method in the
    * Method list, for the How's note.
    */

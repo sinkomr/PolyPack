@@ -130,6 +130,7 @@ const PRESETS: readonly Record<string, unknown>[] = [{}, { kickMagnitude: 0.25 }
 
 export const basinHoppingGame: MethodGame = {
   effect: `Adds ${LABEL}, which moves several pieces at once and works best on pieces with few sides.`,
+  bestFor: "In tests it gained nothing in its first 1,000 evaluations, and each evaluation is slow, so give it long runs.",
   how: (select) => ({
     text: [
       `A ${LABEL} run lasts ${int(L)} evaluations and starts from the problem's best board. It first repairs that board, and then it makes hops until ${int(R)} evaluations are left. It uses those last evaluations to refine the best packing it found, and then the run ends by itself.`,

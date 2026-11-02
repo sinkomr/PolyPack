@@ -93,6 +93,7 @@ export function ascStepNote(v: RunView): string | null {
 
 export const ascGame: MethodGame = {
   effect: "Adds asc, which loosens the packing and squeezes it again, so tight boards can still shrink.",
+  bestFor: "In tests it paid about as much per evaluation as penalty on a fresh board, and little on a stalled one.",
   how: (select) => ({
     text: [
       ASC_TEXT,

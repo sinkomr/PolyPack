@@ -447,9 +447,10 @@ export const METHOD_MATCH: How = {
   text: [
     "Method match learns which method pays best on each kind of problem. When Auto is chosen in the toolbar, it picks the method for each new run. With Auto-tune it also picks the method's setting, from level 0 up to the tuning level you own.",
     "A kind of problem combines its tier (open problem, loose record, site record or published value), its size and its pieces. The size is the piece's sides plus the container's sides plus the number of pieces. It falls in a band: 300 or more, 200 to 299, 120 to 199, 80 to 119, 50 to 79, 30 to 49, or under 30. The pieces are circles, 3 to 8 sides, 9 to 20 sides, or more than 20 sides.",
+    "A kind also has a stage. A board is fresh while no run on its problem has ended by itself and it has gone fewer evaluations without progress than your patience. After that it is stalled. Fresh boards pay about ten times what stalled ones do, so the game learns each stage on its own. A run teaches the stage it started in.",
     `After each run, the game records its value. That is the RP its problem earned during the run, before multipliers, divided by the run's evaluations. Runs of every method count, even before you own Method match. Compact and runs shorter than ${MIN_OBSERVED_EVALS} evaluations are the only ones that do not count.`,
     "To choose, the game draws a random value for each method from what it has learned. The draw is centred on the method's average and narrows as the method gets more runs, and the method with the highest draw is the one that runs. This way methods with few runs still get tried, and the best one is chosen more and more often.",
-    "A method not yet tried on a kind of problem starts from the average of the methods tried on that kind, or on any kind if none has been tried. Its spread is at least as wide as that average, so it still gets a fair chance.",
+    "A method not yet tried on a kind of problem and stage starts from the average of the methods tried on that kind and stage, or on any kind if none has been tried. Its spread is at least as wide as that average, so it still gets a fair chance.",
   ],
   math: [
     `<var>y</var> = <var>p</var> / <var>e</var>`,
@@ -461,7 +462,7 @@ export const METHOD_MATCH: How = {
     ["<var>y</var>", "the value of one run, in RP an evaluation"],
     ["<var>p</var>", "the RP the problem earned during the run, before multipliers"],
     ["<var>e</var>", `the run's evaluations (at least ${MIN_OBSERVED_EVALS})`],
-    ["<var>n</var>", "the method's runs on this kind of problem"],
+    ["<var>n</var>", "the method's runs on this kind of problem and stage"],
     ["<var>ȳ</var>", "the average value of those runs"],
     ["<var>v</var>", "the variance of their values (with a single run, the starting spread squared)"],
     [

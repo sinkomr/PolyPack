@@ -61,6 +61,7 @@ const warming = (v: RunView) => v.warmup > 0 && v.evaluations < v.warmup;
 
 export const morphGame: MethodGame = {
   effect: "Adds morph, which repacks your board as discs and then as the true pieces.",
+  bestFor: "It earned little in short tests.",
   how: (select) => ({
     text: [
       `morph repacks your board in ${MORPH_PRESET.stages} stages. In the first, the disc stage, each piece is the disc inscribed in it. In the second stage each piece is its true shape. A run starts from your best board and nudges every piece at random.`,

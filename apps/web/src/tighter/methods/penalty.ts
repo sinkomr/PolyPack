@@ -53,6 +53,7 @@ const SETTLE_DETAIL = `The settle uses ${SETTLE_PARAMS.sweepsPerEvaluation} swee
 
 export const penaltyGame: MethodGame = {
   effect: "Adds penalty, which squeezes your board and runs mc_compress between squeezes.",
+  bestFor: "In tests it paid about as much per evaluation as shrink_repair, harden and asc on a fresh board, and little on a stalled one.",
   how: (select) => ({
     text: [PENALTY_TEXT, SETTLE_TEXT],
     math: [

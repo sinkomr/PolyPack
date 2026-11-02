@@ -115,6 +115,7 @@ const orList = (xs: readonly string[]) =>
 
 export const hardenGame: MethodGame = {
   effect: `Adds harden, which squeezes your board slowly, in runs of ${count(LEVEL0)} evaluations.`,
+  bestFor: "In tests it paid well on a fresh board, and it still made progress on a stalled one.",
   how: (select) => ({
     text: [
       "harden is Nakajima's soft-to-rigid method. The pieces push each other apart where they overlap, while the container presses inward. In every step the pieces and the container move a little, and the game adds some random noise.",

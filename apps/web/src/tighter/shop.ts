@@ -49,6 +49,8 @@ export interface CardView {
   name: string;
   /** What it does, in a sentence; ?????? for a mystery. */
   effect: string;
+  /** A method card's "best for" sentence. */
+  bestFor?: string;
   /** What exactly happens (How it works); null for a mystery. */
   how: How | null;
   /** The price of the upgrade or of its next level; null for a mystery. */
@@ -175,6 +177,7 @@ export function card(o: Owned, u: Upgrade, state: CardView["state"], coreCount: 
     state,
     name: u.name,
     effect: u.effect,
+    ...(u.bestFor ? { bestFor: u.bestFor } : {}),
     how: u.how,
     cost,
     currency,
@@ -925,7 +928,7 @@ export class TreeRenderer {
       more.textContent = "i";
       node.append(more);
     } else {
-      const effect = el("p", "t-list-effect", n.effect);
+      const effect = el("p", "t-list-effect", n.bestFor ? `${n.effect} ${n.bestFor}` : n.effect);
       effect.id = `t-effect-${n.id}`;
       node.append(effect, moreDetail(n.how!, n.name, "t-list-how"));
       btn.setAttribute("aria-describedby", effect.id);
@@ -1091,6 +1094,7 @@ export class TreeRenderer {
       el("p", "t-detail-status", statusText(n)),
     ];
     if (n.state !== "mystery") parts.push(el("p", "t-detail-effect", n.effect));
+    if (n.state !== "mystery" && n.bestFor) parts.push(el("p", "t-detail-effect", n.bestFor));
     if (n.state === "buyable" || n.state === "dear") {
       const buy = el("button", "t-detail-buy primary", `Buy for ${n.price!.replace(/^next level /, "")}`);
       buy.type = "button";
@@ -1140,6 +1144,7 @@ export class TreeRenderer {
           n.on === null ? statusText(n) : `${statusText(n)} Press it to turn it ${n.on ? "off" : "on"}.`,
         ),
         ...(mystery ? [] : [el("p", "t-tree-tip-effect", n.effect)]),
+        ...(mystery || !n.bestFor ? [] : [el("p", "t-tree-tip-effect", n.bestFor)]),
         ...(n.on === null ? [] : [el("p", "t-tree-tip-effect", offText(n.id)!)]),
       );
       this.tip.hidden = false;

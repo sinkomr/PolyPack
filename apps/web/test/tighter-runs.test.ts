@@ -5,6 +5,8 @@ import { OpenRun, resolvedParams } from "../src/tighter/open-run";
 import { MAX_TUNING, isTunable, presetParams, tuningLevels } from "../src/tighter/presets";
 import {
   MAX_STAGES,
+  boardStage,
+  stageArms,
   MIN_OBSERVED_EVALS,
   addStage,
   armKey,
@@ -99,6 +101,54 @@ describe("Tighter method match", () => {
     expect(problemKind({ family: "polygon", N: 12, M: 5, P: 20, tier: "loose" })).toBe("loose|t30|m");
     expect(parseArm(armKey(kind, "mc_compress", 2))).toEqual({ kind, method: "mc_compress", level: 2 });
     expect(parseArm("nonsense")).toBeNull();
+  });
+
+  it("adds the board's stage to the kind: fresh until a run ended by itself or the patience passed", () => {
+    const p = { family: "polygon", N: 21, M: 24, P: 40, tier: "open" } as const;
+    expect(problemKind(p, "fresh")).toBe("open|t80|r|fresh");
+    expect(problemKind(p, "stalled")).toBe("open|t80|r|stalled");
+    expect(boardStage(0, 0, 1000)).toBe("fresh");
+    expect(boardStage(0, 999, 1000)).toBe("fresh");
+    expect(boardStage(0, 1000, 1000)).toBe("stalled");
+    expect(boardStage(1, 0, 1000)).toBe("stalled");
+    expect(parseArm(armKey("open|t80|r|stalled", "harden", 1))).toEqual({
+      kind: "open|t80|r|stalled",
+      method: "harden",
+      level: 1,
+    });
+  });
+
+  it("observes a run under the stage it started in, and keeps the stages apart", () => {
+    const plan = newRunPlan();
+    observeRun(plan, `${kind}|fresh`, "harden", 0, 50, 100);
+    observeRun(plan, `${kind}|stalled`, "harden", 0, 5, 100);
+    expect(plan.bandit[armKey(`${kind}|fresh`, "harden", 0)]).toEqual({ n: 1, mean: 0.5, m2: 0 });
+    expect(plan.bandit[armKey(`${kind}|stalled`, "harden", 0)]).toEqual({ n: 1, mean: 0.05, m2: 0 });
+    expect(learned(plan, `${kind}|stalled`).map((t) => t.runs)).toEqual([1]);
+    expect(priorFor(plan.bandit, `${kind}|stalled`).mean).toBeCloseTo(0.05);
+  });
+
+  it("gives each arm learned before the stages to both stages, and keeps staged arms as they are", () => {
+    const old = { n: 4, mean: 2, m2: 0.1 };
+    const staged = { n: 9, mean: 7, m2: 0.5 };
+    const out = stageArms({
+      [armKey(kind, "harden", 0)]: old,
+      [armKey(`${kind}|fresh`, "harden", 0)]: staged,
+      [armKey("open|t30|f", "asc", 2)]: old,
+    });
+    expect(out[armKey(`${kind}|stalled`, "harden", 0)]).toEqual(old);
+    // an arm the stage already has is not overwritten by the copy
+    expect(out[armKey(`${kind}|fresh`, "harden", 0)]).toEqual(staged);
+    expect(out[armKey("open|t30|f|fresh", "asc", 2)]).toEqual(old);
+    expect(out[armKey("open|t30|f|stalled", "asc", 2)]).toEqual(old);
+    expect(out[armKey(kind, "harden", 0)]).toBeUndefined();
+    expect(stageArms(out)).toEqual(out);
+    // a copy is its own arm
+    expect(out[armKey("open|t30|f|fresh", "asc", 2)]).not.toBe(out[armKey("open|t30|f|stalled", "asc", 2)]);
+    expect(normalizeRunPlan({ bandit: { [armKey(kind, "asc", 0)]: old } }, []).bandit).toEqual({
+      [armKey(`${kind}|fresh`, "asc", 0)]: old,
+      [armKey(`${kind}|stalled`, "asc", 0)]: old,
+    });
   });
 
   it("learns what a run paid per evaluation, and ignores runs too short to tell", () => {

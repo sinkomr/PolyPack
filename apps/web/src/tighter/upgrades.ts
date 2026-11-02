@@ -178,6 +178,8 @@ export interface Upgrade {
   requires: UpgradeId[];
   /** What the player gets, in one short sentence. */
   effect: string;
+  /** A method card's "best for" sentence, from its file in methods/ (what the tests found it good for). */
+  bestFor?: string;
   /**
    * What exactly happens, with the rule as formulas and every variable defined: the tree shows it on
    * hover or focus, and on a phone behind "How it works".
@@ -498,7 +500,7 @@ function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery 
   const m = METHOD[id]!;
   const g = methodGame(m);
   const name = g.name ?? `Method: ${methodLabel(m)}`;
-  return { id, name, cost, requires, effect: g.effect!, how: g.how!(SELECT), row: "methods", mystery };
+  return { id, name, cost, requires, effect: g.effect!, ...(g.bestFor ? { bestFor: g.bestFor } : {}), how: g.how!(SELECT), row: "methods", mystery };
 }
 
 /**
@@ -1382,11 +1384,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Method match",
     cost: 1_280_000,
     requires: ["learning", "shrink"],
-    effect: "With Auto chosen, the game picks each new run's method from what has paid.",
+    effect: "With Auto chosen, the game picks each new run's method from what has paid on fresh and on stalled boards.",
     how: {
       text: [
-        "The game sorts problems into kinds by tier, size and piece shape. It keeps track of how many record points (RP) each method earned per evaluation on each kind. It learns this from every run, even before you buy Method match.",
-        "With Auto chosen in the Method list, each new run uses the method that looks best for that kind of problem. The game sometimes tries a method it knows less about, so new methods get their turn.",
+        "The game sorts problems into kinds by tier, size and piece shape. It also notes whether the board is fresh or stalled. It keeps track of how many record points (RP) each method earned per evaluation on each kind and stage. It learns this from every run, even before you buy Method match.",
+        "With Auto chosen in the Method list, each new run uses the method that looks best for that kind of problem at that stage. Fresh boards pay about ten times what stalled ones do, so keeping the stages apart lets the game learn which methods are for stalled boards. The game sometimes tries a method it knows less about, so new methods get their turn.",
       ],
       math: [
         `${sym("y")} = ${sym("G")} / ${sym("E")}`,
@@ -1402,13 +1404,13 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("z"), "a random draw from the standard normal distribution"],
         [sym("μ"), "the arm's expected value"],
         [sym("σ"), "its uncertainty"],
-        [sym("μ", "0"), "the mean y of the arms tried on this kind (0 before any)"],
+        [sym("μ", "0"), "the mean y of the arms tried on this kind and stage (0 before any)"],
         [sym("σ", "0"), "the spread of those arms' means, at least |μ₀| (1 before any)"],
         [sym("n"), "runs the arm has learned from"],
         [sym("ȳ"), "the mean of their y"],
         [sym("v"), "the variance of their y (σ₀² until there are two)"],
       ],
-      note: "Kinds are tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind. The method with the highest draw θ runs, which is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind, with a spread as wide as that mean. Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
+      note: "Kinds are tier, size (N + M + P of at least 300, 200, 120, 80, 50, 30, or less) and piece shape (circle, 3 to 8 sides, 9 to 20, or more). A board is fresh while no run on its problem has ended by itself and it has gone fewer evaluations without progress than its patience. Otherwise it is stalled. A run teaches the stage it started in. Every run that ends or is replaced after at least 20 evaluations teaches its arm, one method at one setting on one kind and stage. Saves from before the stages give each old arm to both stages. The method with the highest draw θ runs, which is Thompson sampling. An untried arm is expected to pay the mean of the arms tried on that kind and stage, with a spread as wide as that mean. Compact's runs teach nothing. Pipelines, when set, decide the method before Method match does.",
     },
     row: "runs",
     mystery: true,
