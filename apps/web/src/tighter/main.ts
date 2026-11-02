@@ -121,6 +121,7 @@ import { Offer, addRetake, expireOffers, offerFits, skipOffer } from "./picks";
 import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./rivals";
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
+import { GROUPS, SOURCES, income } from "./income";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
@@ -148,7 +149,16 @@ import {
   laneSplit,
   meterShare,
 } from "./scheduler";
-import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import {
+  RetiredRefund,
+  SAVE_FAILED_TEXT,
+  STORAGE_KEY,
+  tryWrite,
+  exportString,
+  fromJson,
+  importString,
+  toJson,
+} from "./save";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
@@ -416,12 +426,14 @@ function saveNow(): void {
   clearTimeout(saveTimer);
   saveTimer = 0;
   if (savesDisabled || !ownsGame) return;
-  try {
+  // storage full or unavailable: the game goes on in memory, and the player is told until a save works
+  const ok = tryWrite(() => {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
-  } catch {
-    // storage full or unavailable: the game goes on in memory
-  }
+  });
+  const warning = $("t-save-warning");
+  warning.textContent = ok ? "" : SAVE_FAILED_TEXT;
+  warning.hidden = ok;
 }
 /** Saves soon: clicks come many a second, so saves are spaced. */
 function persist(): void {
@@ -3221,9 +3233,38 @@ function renderName(): void {
   text("t-name-note", `Your records are sent to PolyPack as “${state.name}”.`);
 }
 
+/** The income table as last drawn, so that the page is touched only when it changes. */
+let incomeShown = "";
+/** Record points of the last hour by problem group and source (income.ts), shown with the totals. */
+function renderIncome(): void {
+  const on = revealed(state, "points");
+  show("t-income", on);
+  if (!on) return;
+  const sums = income.sums(now());
+  const num = (n: number | undefined) => (n ? fmtInt(n) : "0");
+  const note =
+    sums.total > 0
+      ? `Record points earned in the last hour, counted since this page opened. Rent counts when a payday pays it.`
+      : "No record points yet in the last hour. Improvements and rent paydays appear here as they pay.";
+  const rows = GROUPS.filter((g) => sums.byGroup[g.id]).map(
+    (g) =>
+      `<tr><th scope="row">${g.label}</th>${SOURCES.map((s) => `<td>${num(sums.cells[`${g.id}/${s.id}`])}</td>`).join("")}<td>${num(sums.byGroup[g.id])}</td></tr>`,
+  );
+  const html =
+    `<thead><tr><th scope="col">Last hour</th>${SOURCES.map((s) => `<th scope="col">${s.label}</th>`).join("")}<th scope="col">Total</th></tr></thead>` +
+    `<tbody>${rows.join("")}</tbody>` +
+    `<tfoot><tr><th scope="row">All</th>${SOURCES.map((s) => `<td>${num(sums.bySource[s.id])}</td>`).join("")}<td>${num(sums.total)}</td></tr></tfoot>`;
+  const shown = note + html;
+  if (shown === incomeShown) return;
+  incomeShown = shown;
+  text("t-income-note", note);
+  $("t-income-table").innerHTML = html;
+}
+
 /** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
+  renderIncome();
   // the clicks: in the evaluations' tooltip
   const evals = $("t-bar-evals-box");
   const tip = `Evaluations run in all, by your clicks and by auto-eval. Clicks so far: ${fmtInt(state.stats.clicks)}.`;
@@ -3331,7 +3372,7 @@ function panesOpen(): Record<Pane, boolean> {
     board: true,
     tree: !$("t-views").hidden,
     queue: any("t-queue", "t-lanes", "t-runs"),
-    points: any("t-points-help", "t-standing", "t-records"),
+    points: any("t-points-help", "t-income", "t-standing", "t-records"),
   };
 }
 

@@ -1233,3 +1233,18 @@ describe("Faster auto-eval's price ladder, C2 to C3 (version 10)", () => {
     expect(main.match(/c3Note\(r\.c3\.rp\)/g)).toHaveLength(2);
   });
 });
+
+describe("tryWrite", () => {
+  it("says whether a write worked and never retries", async () => {
+    const { tryWrite } = await import("../src/tighter/save");
+    let calls = 0;
+    expect(tryWrite(() => void calls++)).toBe(true);
+    expect(
+      tryWrite(() => {
+        calls++;
+        throw new DOMException("full", "QuotaExceededError");
+      }),
+    ).toBe(false);
+    expect(calls).toBe(2);
+  });
+});

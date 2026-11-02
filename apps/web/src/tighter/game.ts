@@ -2,6 +2,7 @@ import { containerArea, improvesOn, pieceArea } from "@polypack/geometry";
 import type { PackingConfig } from "@polypack/geometry";
 import type { SpaceConfig } from "@polypack/spaces";
 import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
+import { income } from "./income";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
 import { FLOOR, Points, Tier, recordPoints, show6 } from "./points";
@@ -679,6 +680,7 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   s.rpEarned += points.total;
   s.standing.cycleEarned += points.total;
   p.rp += points.total;
+  income.add(Date.now(), points.total, "record", p.tier);
   pushRpTrace(p);
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);

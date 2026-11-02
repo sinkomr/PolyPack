@@ -1,6 +1,7 @@
 import { parseDealtKey } from "./catalogue";
 import { ProblemKey, isPolygon, parseKey } from "./frontier";
 import type { GameState, PastProblem, ProblemState } from "./game";
+import { income } from "./income";
 import { COMBO_RECORDS } from "./points";
 import { ruleRewardFactor, standingMultiplier } from "./standing";
 import { level } from "./upgrades";
@@ -295,5 +296,6 @@ export function settleRent(s: GameState, o: Owned, p: Held, now: number): number
   s.standing.cycleEarned += rp;
   e.rentPaid += rp;
   e.lastRent = { key: p.key, rp, at: now };
+  income.add(now, rp, "rent", p.tier);
   return rp;
 }
