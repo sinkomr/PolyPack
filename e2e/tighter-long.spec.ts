@@ -483,7 +483,9 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   expect(after.standing.dimensions).toEqual(["2-in-2", "2-on-3"]);
   // kept: the Standing row's options; granted: Head start level 1's upgrades. Standing, rent and collections went.
   expect(after.owned).toEqual(expect.arrayContaining(["rules", "head", "trace", "click5", "auto1"]));
-  expect(after.owned).not.toContain("click6");
+  // level 1 gives back every card priced up to 10,000 RP: 6 evaluations per click (3,200) yes, 10 (11,000) no
+  expect(after.owned).toContain("click6");
+  expect(after.owned).not.toContain("click10");
   expect(after.owned).not.toContain("standing");
   expect(after.owned).not.toContain("rent");
   expect(after.owned).not.toContain("collections");
@@ -492,7 +494,7 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   expect(after.recorded).toContain(p.key);
   expect(after.ourId).toBe(p.ourId);
   await expect(page.locator("#t-bar-standing")).toHaveText("1 · ×2");
-  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×5");
+  await expect(page.locator("#t-evolve")).toHaveText("Evolve ×9");
   // the rule holds: with Basin hopping owned, the select still offers only mc_compress
   await give(page, ["basin"]);
   await expect(page.locator('#t-method option[value="basin_hopping"]')).toBeDisabled();
@@ -511,7 +513,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await page.waitForTimeout(300);
   expect(await noOverflow(page)).toBe(true);
   await page.locator("#t-standing").screenshot({ path: test.info().outputPath("standing-390.png") });
-  await page.locator("#t-records").screenshot({ path: test.info().outputPath("records-390.png") });
+  // the reset took Records pay rent and Collections, and the Records panel shows only with one of them
+  await expect(page.locator("#t-records")).toBeHidden();
   expect(await axe(page)).toEqual([]);
   expect(errors).toEqual([]);
 });
@@ -580,7 +583,7 @@ test("long game: a save from the per-click build (no new fields) loads and plays
   // amount by what the save could buy next costs now over then: 5 evaluations per click, 350 RP now and
   // 780 then. The opening's prices came down, so the factor is below 1 (the migrated amounts shrink on purpose)
   const f = 350 / 780;
-  expect(s).toMatchObject({ version: 10, levels: {}, picks: 0, pipeline: [] });
+  expect(s).toMatchObject({ version: 11, levels: {}, picks: 0, pipeline: [] });
   // and version 8 pays back the 40 RP that Auto-eval costs less now (80 then)
   expect(s.rp).toBeCloseTo((123.5 + 81) * f + Math.round(300 * f) + 40, 6);
   await expect(page.locator("#status")).toContainText(`Your points were multiplied by ${f.toFixed(1)}`);
