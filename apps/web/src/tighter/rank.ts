@@ -175,6 +175,10 @@ export interface Filters {
   minP: number;
   maxP: number;
   tiers: Tier[] | null;
+  /** Deal only site records held by another Tighter player (contested problems). Absent means off. */
+  tighter?: boolean;
+  /** Deal only records held by the player's rivals. Absent means off. */
+  rivals?: boolean;
 }
 
 export const NO_FILTERS: Filters = { pieces: null, containers: null, minP: 1, maxP: 500, tiers: null };
@@ -202,6 +206,8 @@ export function normalizeFilters(v: unknown): Filters | null {
     minP,
     maxP,
     tiers: tiers && tiers.length ? tiers : null,
+    ...(o.tighter === true ? { tighter: true } : {}),
+    ...(o.rivals === true ? { rivals: true } : {}),
   };
 }
 

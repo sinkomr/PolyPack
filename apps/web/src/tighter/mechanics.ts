@@ -1,7 +1,18 @@
 import { AUTO_CLICK_EVALS, DEAL_CLICKS } from "./dealer";
 import { HELP, METHOD_MATCH, PIPELINE, TRANSFERS } from "./help";
 import { How, renderMechanic, sym } from "./how";
-import { AUTO_STEPS, CLICK, QUEUE, RING, ROWS, UPGRADES, autoLevelPrice, levelOfRate, rateOfLevel, upgrade } from "./upgrades";
+import {
+  AUTO_STEPS,
+  CLICK,
+  QUEUE,
+  RING,
+  ROWS,
+  UPGRADES,
+  autoLevelPrice,
+  levelOfRate,
+  rateOfLevel,
+  upgrade,
+} from "./upgrades";
 import type { UpgradeId } from "./upgrades";
 
 /**
@@ -157,7 +168,7 @@ function families(): Family[] {
       how: {
         ...pick,
         text: [
-          "When a slot is free and a deal is saved, the dealer draws problems one at a time and shows up to the number in the table as offers, best first by the value it expects them to pay (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks an offer with the server as you take it, and removes offers that your tree, your filters or the cycle's rule no longer allow.",
+          "When a slot is free and a deal is saved, the dealer draws problems one at a time and shows up to the number in the table as offers, best first by the value it expects them to pay (see Dealer: best of 2). Nothing more is dealt until you take one. The game checks an offer with the server as you take it, and removes offers that your tree, your filters or the cycle's rule no longer allow. An offer also leaves 30 minutes after it was made, unless it is a retake, and Skip removes one at once.",
           ...text(pick).slice(1),
         ],
       },
@@ -174,7 +185,10 @@ function autoStepTable(): MechanicTable {
     const last = Number.isFinite(below) ? levelOfRate(below) : null;
     const first = levelOfRate(from) + 1;
     const levels = last === null ? `${int(first)} on` : `${int(first)} to ${int(last)}`;
-    const rates = last === null ? `${int(rateOfLevel(first))}, ${int(rateOfLevel(first + 1))}, ...` : `${int(rateOfLevel(first))} to ${int(below)}`;
+    const rates =
+      last === null
+        ? `${int(rateOfLevel(first))}, ${int(rateOfLevel(first + 1))}, ...`
+        : `${int(rateOfLevel(first))} to ${int(below)}`;
     const row = [levels, `+${int(step)}`, rates, int(Math.round(autoLevelPrice(first - 1)))];
     from = below;
     return row;

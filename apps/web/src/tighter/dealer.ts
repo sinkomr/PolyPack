@@ -241,6 +241,10 @@ export function filterSources(f: Filters | null, reach: SourceReach): Record<Sou
     tiers.length > 0 &&
     shapesOk(CONTESTED_SIDES) &&
     largest(f?.pieces) + largest(f?.containers) + Math.min(maxP, MAX_PIECES) >= reach.ringMin;
+  // records held by Tighter players or by rivals are site records: no open problem and no space problem is one
+  // (rivals' records come from /api/holder and may have more than 20 sides, so the shape test is left to the draw)
+  if (f?.rivals) return { open: false, contested: tiers.length > 0, space: false };
+  if (f?.tighter) return { open: false, contested, space: false };
   return { open, contested, space: reach.space };
 }
 
@@ -313,6 +317,8 @@ export interface ContestedOptions {
   exclude: ReadonlySet<string>;
   /** Filters and the cycle's rule. */
   allow?: (c: Candidate) => boolean;
+  /** When given, only site entries it accepts are candidates (held by a Tighter player, say); a published value needs a site entry it accepts. */
+  heldBy?: (e: { name: string; agent_note?: string }) => boolean;
 }
 
 /**
@@ -335,6 +341,7 @@ export function contestedCandidates(records: RecordsResponse, opts: ContestedOpt
   };
   for (const e of records.site) {
     if (e.verification === "pending" || e.P < 2 || lit.has(e.P)) continue;
+    if (opts.heldBy && !opts.heldBy(e)) continue;
     const weakness = weak.get(e.P) ?? 0;
     consider({
       family: "polygon",
@@ -355,6 +362,7 @@ export function contestedCandidates(records: RecordsResponse, opts: ContestedOpt
     const e = site.get(r.P);
     if (e?.verification === "pending") continue;
     if (!r.has_coordinates && !e) continue;
+    if (opts.heldBy && !(e && opts.heldBy(e))) continue;
     consider({
       family: "polygon",
       N,

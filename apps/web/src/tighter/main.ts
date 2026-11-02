@@ -114,7 +114,8 @@ import {
   pause,
   recordSend,
 } from "./pacer";
-import { Offer, addRetake, offerFits } from "./picks";
+import { Offer, addRetake, expireOffers, offerFits, skipOffer } from "./picks";
+import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./rivals";
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
@@ -1701,6 +1702,8 @@ async function submit(p: ProblemState): Promise<void> {
           (a.takenBack > 0 ? ` ${fmtRP(a.takenBack)} RP taken back.` : "") +
           (a.points ? ` Your board still beats it, and pays +${fmtRP(a.points.total)} RP.` : ""),
       );
+      // the answer does not say whose entry it was: the record's holder is read, and becomes a rival
+      if (isPolygon(p)) void readRival(p);
       break;
     case "closed":
       event(
@@ -1722,6 +1725,15 @@ let lostChecking = false;
 let lostCheckAfter = 0;
 
 /** Reads the record of the oldest send left without an answer, once it is LOST_ANSWER_MS old. */
+/** Reads the record's holder after a "behind" answer, to learn the name of the entry that was first. */
+async function readRival(p: ProblemState): Promise<void> {
+  const { answer: info } = await within(SEND_TIMEOUT_MS, readLeader(p), null);
+  if (!info || !ownsGame) return;
+  noteRival(p.key, info.leader);
+  persist();
+  render();
+}
+
 async function settleLost(): Promise<void> {
   if (!ownsGame || submitting || lostChecking || now() < lostCheckAfter || now() < state.pacer.pausedUntil) return;
   const p = state.queue.find((q) => q.sending && !inFlight.has(q.key) && now() - q.sending.at >= LOST_ANSWER_MS);
@@ -1895,7 +1907,14 @@ async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<strin
   if (!pair) return null;
   const records = await pairRecords(io, pair.N, pair.M);
   if (!records) return null;
-  const list = contestedCandidates(records, { ringMin: ringMin(o), tiers: contestedTiers(o), exclude, allow: allowed });
+  const heldBy = f?.tighter ? (e: { name: string; agent_note?: string }) => heldByTighter(e, state.name) : undefined;
+  const list = contestedCandidates(records, {
+    ringMin: ringMin(o),
+    tiers: contestedTiers(o),
+    exclude,
+    allow: allowed,
+    heldBy,
+  });
   if (!list.length) return null;
   const c = list[Math.floor(nextRandom(d) * list.length)];
   const info = await problemInfo(io, c);
@@ -1904,6 +1923,60 @@ async function contestedCandidate(io: DealIo, d: DealerState, exclude: Set<strin
   // the pair's records changed since they were read
   recordsCache.delete(`${pair.N}/${pair.M}`);
   exclude.add(keyOf(c));
+  return null;
+}
+
+/** Reads of what the rivals hold (GET /api/holder): each name at most once in 15 minutes, a few requests a minute in all. */
+const holderReader = new HolderReader(api.getHolder, now);
+
+/**
+ * A record held by one of the player's rivals (the filter Records held by my rivals): a rival is drawn
+ * at random, the problems it holds come from GET /api/holder, and one of them is checked with GET just
+ * before it counts. It is dealt as a site record of its tier. Null when no rival holds a problem that fits.
+ */
+async function rivalCandidate(io: DealIo, d: DealerState, exclude: Set<string>): Promise<Candidate | null> {
+  const o = owned();
+  const f = dealerFilters();
+  const rivals = state.picks.rivals;
+  if (!rivals.length) return null;
+  const tiers = contestedTiers(o);
+  const start = Math.floor(nextRandom(d) * rivals.length);
+  for (let i = 0; i < rivals.length && !spentIo(io); i++) {
+    const rival = rivals[(start + i) % rivals.length].name;
+    const held = await holderReader.get(rival);
+    if (!held) continue;
+    const fits = heldKeys(held).filter((key) => {
+      const k = parseKey(key);
+      if (!k || !isPolygon(k) || exclude.has(key) || problem(state, key)) return false;
+      return passes(f, k) && ruleOk(k) && k.N + k.M + k.P >= ringMin(o);
+    });
+    if (!fits.length) continue;
+    const k = needPolygon(parseKey(fits[Math.floor(nextRandom(d) * fits.length)])!, "Rivals");
+    const info = await problemInfo(io, k);
+    if (!info) return null;
+    const lead = info.site_best;
+    exclude.add(keyOf(k));
+    // still theirs, open, and not awaiting review
+    if (!info.accepts_submissions || !lead || lead.verification === "pending") continue;
+    if (sanitizeName(lead.name) !== rival) continue;
+    const records = k.N <= 20 && k.M <= 20 ? await pairRecords(io, k.N, k.M) : null;
+    if (f?.tighter) {
+      const e = records?.site.find((x) => x.P === k.P);
+      if (!e || !heldByTighter(e, state.name)) continue;
+    }
+    const lit = info.literature?.status === "best_known" ? info.literature : null;
+    const tier = lit ? "published" : retakeTier(k.N, k.M, k.P, records);
+    if (!tiers.has(tier) || !allowed({ ...k, tier })) continue;
+    return {
+      ...k,
+      tier,
+      weakness: null,
+      leader: { score: lead.score, name: lead.name, id: lead.id },
+      target: lit ? publishedTarget(lit) : null,
+      source: lit ? `${lit.display} (${lit.source_name})` : null,
+      retake: false,
+    };
+  }
   return null;
 }
 
@@ -2175,7 +2248,9 @@ async function gatherCandidates(
       source === "space"
         ? await spaceCandidate(io, d, exclude)
         : source === "contested"
-          ? await contestedCandidate(io, d, exclude)
+          ? dealerFilters()?.rivals
+            ? await rivalCandidate(io, d, exclude)
+            : await contestedCandidate(io, d, exclude)
           : await openCandidate(io, d, exclude),
     );
   }
@@ -2317,6 +2392,8 @@ async function dealTick(): Promise<void> {
   const o = owned();
   const move = plan(o);
   if (picking(o)) {
+    // an offer older than 30 minutes leaves; its place is filled at the next deal
+    if (expireOffers(state.picks, now()) > 0) persist();
     if (state.picks.offers.some((x) => !offerAllowed(o, x)))
       state.picks.offers = state.picks.offers.filter((x) => offerAllowed(o, x));
     const out = move?.replace ?? null;
@@ -2527,6 +2604,18 @@ async function takeOffer(x: Offer, auto = false, out: ProblemState | null = null
   if (!out) say(auto ? `Auto-advance took ${title}, the best offer.` : `You took ${title}.`);
 }
 
+/** Skip: the offer leaves and its problem is not offered again this session. */
+function onSkipOffer(key: string): void {
+  if (!ownsGame) return;
+  const x = skipOffer(state.picks, key);
+  if (!x) return;
+  skipped.add(keyOf(x));
+  event(`Skipped the offer of ${problemTitle(x)}.`, false);
+  persist();
+  render();
+  void dealTick();
+}
+
 async function onTakeOffer(key: string): Promise<void> {
   const x = state.picks.offers.find((y) => keyOf(y) === key);
   if (!x || dealing || !ownsGame) return;
@@ -2557,6 +2646,17 @@ function workText(clicks: number, more = true): string {
  * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
  * answer would have) and tells the player when a record of theirs was beaten.
  */
+/** Counted already: a rival's taking of one record (problem and entry), so that an answer and a later read do not both count it. */
+const rivalCounted = new Set<string>();
+
+/** A name took a record from the player: it goes to the front of the rivals (once for each entry). */
+function noteRival(key: string, leader: Leader | null): void {
+  if (!leader || leader.id === null) return;
+  const mark = `${key}#${leader.id}`;
+  if (rivalCounted.has(mark)) return;
+  if (addRival(state.picks.rivals, leader.name, state.name)) rivalCounted.add(mark);
+}
+
 function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void {
   const r = applyLeader(p, leader, state, now());
   if (r.reconciled && leader) {
@@ -2569,6 +2669,7 @@ function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void 
     // Retake: a record lost after it left the queue is offered again first
     const retake = inUse(owned(), "retake") && !problem(state, p.key);
     if (retake) addRetake(state.picks, p.key);
+    noteRival(p.key, leader);
     event(
       `Your record on ${problemTitle(p)} was beaten${leader ? ` by ${leader.name}, with ${show6(leader.score)}` : ""}.` +
         (retake ? " It will be the first problem offered to you again (Retake)." : ""),
@@ -3426,11 +3527,21 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
         `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · pays ×${CONTEST[x.tier]}` +
         ` · about ${tableMsOf(x).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
+      btn.className = "t-take";
       btn.textContent = "Take";
       btn.disabled = !due || dealing;
       btn.setAttribute("aria-label", `Take ${title}`);
       btn.addEventListener("click", () => void onTakeOffer(keyOf(x)));
-      li.append(h, meta, btn);
+      const skip = document.createElement("button");
+      skip.className = "t-skip";
+      skip.textContent = "Skip";
+      skip.disabled = dealing;
+      skip.setAttribute("aria-label", `Skip ${title}`);
+      skip.addEventListener("click", () => onSkipOffer(keyOf(x)));
+      const btns = document.createElement("div");
+      btns.className = "t-offer-btns";
+      btns.append(btn, skip);
+      li.append(h, meta, btns);
       return li;
     }),
   );
@@ -3442,9 +3553,32 @@ function renderFilters(o: Owned): void {
   show("t-filters", inUse(o, "filters"));
   if (!inUse(o, "filters")) return;
   const f = state.picks.filters;
-  const sig = JSON.stringify(f);
+  const sig = JSON.stringify([f, state.picks.rivals]);
   if (sig === filtersShown) return;
   filtersShown = sig;
+  $<HTMLInputElement>("t-f-tighter").checked = !!f?.tighter;
+  $<HTMLInputElement>("t-f-rivals").checked = !!f?.rivals;
+  const rivalList = $("t-rivals");
+  rivalList.replaceChildren(
+    ...(state.picks.rivals.length
+      ? state.picks.rivals.map((r) => {
+          const li = document.createElement("li");
+          const label = document.createElement("span");
+          label.textContent = `${r.name}, ${r.took} ${r.took === 1 ? "record" : "records"} taken`;
+          const rm = document.createElement("button");
+          rm.type = "button";
+          rm.textContent = "Remove";
+          rm.setAttribute("aria-label", `Remove ${r.name} from my rivals`);
+          rm.addEventListener("click", () => {
+            removeRival(state.picks.rivals, r.name);
+            persist();
+            render();
+          });
+          li.append(label, rm);
+          return li;
+        })
+      : [Object.assign(document.createElement("li"), { textContent: "No rivals yet." })]),
+  );
   $<HTMLInputElement>("t-f-pieces").value = formatShapes(f?.pieces ?? null);
   $<HTMLInputElement>("t-f-containers").value = formatShapes(f?.containers ?? null);
   $<HTMLInputElement>("t-f-minp").value = String(f?.minP ?? 1);
@@ -3475,14 +3609,19 @@ function onSaveFilters(e: Event): void {
     text("t-filter-note", "Keep at least one tier ticked.");
     return;
   }
-  const filters = {
+  const tighter = $<HTMLInputElement>("t-f-tighter").checked;
+  const rivals = $<HTMLInputElement>("t-f-rivals").checked;
+  const filters: Filters = {
     pieces: pieces as number[] | null,
     containers: containers as number[] | null,
     minP,
     maxP,
     tiers: tiers.length === TIERS.length ? null : tiers,
+    ...(tighter ? { tighter: true } : {}),
+    ...(rivals ? { rivals: true } : {}),
   };
-  const none = !filters.pieces && !filters.containers && minP === 1 && maxP === 500 && !filters.tiers;
+  const none =
+    !filters.pieces && !filters.containers && minP === 1 && maxP === 500 && !filters.tiers && !tighter && !rivals;
   state.picks.filters = none ? null : filters;
   // offers drawn under the old filters make way for new ones
   state.picks.offers = state.picks.offers.filter((x) => passes(state.picks.filters, x));
@@ -3518,6 +3657,10 @@ function noMatchText(f: Filters | null, o: ReadonlySet<UpgradeId>): string {
       `Problems with 20 sides or fewer are contested problems, which need the upgrade ${upgrade("reach2").name}.`,
     );
   else why.push("Your shapes, piece counts and tiers match no contested problem you can be dealt.");
+  if (f?.rivals)
+    why.push(
+      `${state.picks.rivals.length ? "None of your rivals holds a record that fits." : "You have no rivals yet."}`,
+    );
   why.push(outside);
   return why.join(" ");
 }
@@ -3963,6 +4106,8 @@ $("t-f-clear").addEventListener("click", () => {
   $<HTMLInputElement>("t-f-minp").value = "1";
   $<HTMLInputElement>("t-f-maxp").value = "500";
   for (const t of TIERS) $<HTMLInputElement>(`t-f-tier-${t}`).checked = true;
+  $<HTMLInputElement>("t-f-tighter").checked = false;
+  $<HTMLInputElement>("t-f-rivals").checked = false;
   $<HTMLFormElement>("t-filter-form").requestSubmit();
 });
 $("t-evolve").addEventListener("click", () => press());

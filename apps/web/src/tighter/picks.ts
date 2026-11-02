@@ -3,6 +3,7 @@ import { parseDealtKey } from "./catalogue";
 import { isPolygon, keyOf } from "./frontier";
 import { CONTEST, Tier } from "./points";
 import { Candidate, Filters, learn, normalizeFilters } from "./rank";
+import { MAX_RIVALS, Rival, normalizeRivals } from "./rivals";
 
 /**
  * The dealer's own state (plan 2026-10-20 §3): offers waiting for the player's pick, filters, what
@@ -36,9 +37,18 @@ export interface PicksState {
   retake: string[];
   /** Problems dealt and not yet left, by key. */
   dealt: Record<string, Dealt>;
+  /** Names that took records from the player, newest first (rivals.ts). */
+  rivals: Rival[];
 }
 
-export const newPicks = (): PicksState => ({ offers: [], filters: null, bandit: {}, retake: [], dealt: {} });
+export const newPicks = (): PicksState => ({
+  offers: [],
+  filters: null,
+  bandit: {},
+  retake: [],
+  dealt: {},
+  rivals: [],
+});
 
 /** Most offers kept (Your pick: 5). */
 export const MAX_OFFERS = 5;
@@ -114,7 +124,33 @@ export function normalizePicks(v: unknown): PicksState {
       ? [...new Set(v.retake.filter((k): k is string => typeof k === "string" && validKey(k)))].slice(-MAX_RETAKES)
       : [],
     dealt,
+    rivals: normalizeRivals(v.rivals).slice(0, MAX_RIVALS),
   };
+}
+
+/** An offer older than this leaves (a retake never does). */
+export const OFFER_LIFE_MS = 30 * 60_000;
+
+/** Whether an offer has outlived OFFER_LIFE_MS at `now`. An offer without a time (an old save) and a retake do not expire. */
+export const offerExpired = (x: Offer, now: number): boolean => !x.retake && x.at > 0 && now - x.at > OFFER_LIFE_MS;
+
+/** Removes the expired offers; returns how many left. Their places are filled at the next deal. */
+export function expireOffers(picks: PicksState, now: number): number {
+  const before = picks.offers.length;
+  picks.offers = picks.offers.filter((x) => !offerExpired(x, now));
+  return before - picks.offers.length;
+}
+
+/**
+ * Skips an offer: it leaves, and a skipped retake is not offered again (its key leaves the retake list).
+ * The caller keeps the key out of this session's draws. Returns the offer removed, or null.
+ */
+export function skipOffer(picks: PicksState, key: string): Offer | null {
+  const x = picks.offers.find((y) => keyOf(y) === key);
+  if (!x) return null;
+  picks.offers = picks.offers.filter((y) => y !== x);
+  picks.retake = picks.retake.filter((k) => k !== key);
+  return x;
 }
 
 /**

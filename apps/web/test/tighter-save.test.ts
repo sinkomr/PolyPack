@@ -109,6 +109,8 @@ function played(): GameState {
   s.economy.rentPaid = 12.5;
   s.picks.bandit.open = { n: 3, mean: 0.25, m2: 0.01 };
   s.picks.retake.push("21/21/40");
+  s.picks.rivals.push({ name: "Ada Lovelace", took: 3 }, { name: "Bob", took: 1 });
+  s.picks.filters = { pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null, tighter: true, rivals: true };
   s.runplan.bandit["open|mc_compress"] = { n: 1, mean: 2, m2: 0 };
   s.pacer = recordSend(s.pacer, p.key, T0 + 3500);
   s.autoDue = 12.75;
@@ -134,6 +136,18 @@ function played(): GameState {
 }
 
 describe("Tighter saves", () => {
+  it("load a save made before rivals and the held-by filters, with none of them", () => {
+    const s = played();
+    const o = JSON.parse(toJson(s));
+    delete o.picks.rivals;
+    o.picks.filters = { pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null };
+    const r = fromJson(JSON.stringify(o), T0 + 5000);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.picks.rivals).toEqual([]);
+    expect(r.state.picks.filters).toEqual({ pieces: [4], containers: null, minP: 1, maxP: 500, tiers: null });
+  });
+
   it("round-trip through JSON with every value kept to the last bit", () => {
     const s = played();
     const r = fromJson(toJson(s), T0 + 5000);
