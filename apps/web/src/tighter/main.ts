@@ -89,6 +89,8 @@ import {
   stallAfter,
   stallEnds,
   submitTarget,
+  multiplierFor,
+  type PaidPoints,
 } from "./game";
 import {
   COMBO_BONUS,
@@ -123,7 +125,8 @@ import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { GROUPS, SOURCES, income } from "./income";
-import { FIRST_BONUS, LEAD_BONUS, TIERS, TIER_LABEL, Tier, show6 } from "./points";
+import { FIRST_BONUS, LEAD_BONUS, TIERS, TIER_LABEL, Tier, costFactor, shapeWeight, show6 } from "./points";
+import { bonusKindOf, bonusRow, multiplierRow, multiplierTitle, payDetail } from "./pay-text";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
 import { renderMechanics } from "./mechanics";
@@ -3155,9 +3158,13 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
       chip.className = "chip good";
       chip.textContent = fmtChange(c.before, c.after) + (c.points ? ` · +${fmtRP(c.points.total)} RP` : "");
       if (delta.textContent !== chip.textContent) delta.replaceChildren(chip);
-    } else text("t-delta", c ? "no change" : "—");
+    } else {
+      text("t-delta", c ? "no change" : "—");
+    }
   }
   text("t-prob-rp", fmtRP(p.rp));
+  renderPays(p);
+  renderPayDetail(p);
   text(
     "t-record",
     p.ourId !== null
@@ -3167,6 +3174,34 @@ function renderScore(p: ProblemState | undefined, o: ReadonlySet<UpgradeId>): vo
         : "none yet",
   );
   renderTraces(p, o.has("trace"));
+}
+
+/** The More detail button under the score box: how the last payment on the board's problem was made up. */
+function renderPayDetail(p: ProblemState): void {
+  const row = $("t-pay-more");
+  const c = lastChange.get(p.key);
+  const why = c?.improved && c.points ? payDetail(c.points as PaidPoints) : [];
+  const sig = why.join("|");
+  if (row.dataset.sig === sig) return;
+  row.dataset.sig = sig;
+  row.replaceChildren(...(why.length ? [moreDetail({ text: why }, "the last payment", "t-pay-detail")] : []));
+}
+
+/** The score box's two pay rows: what multiplies the problem's improvements, and the bonus it can still pay. */
+function renderPays(p: ProblemState): void {
+  const o = owned();
+  const standing = standingMultiplier(state.standing);
+  const collectionsF = 1 + collectionsBonus(state, o);
+  // the rule rewards are what is left of the game's own multiplier, so this row never prices pay itself
+  const rules = multiplierFor(state, p) / (standing * collectionsF);
+  const parts = { shape: rulesOf(p).weight(p), cost: costFactor(p), standing, collections: collectionsF, rules };
+  text("t-pays", multiplierRow(parts));
+  $("t-pays").title = multiplierTitle();
+  const spent = state.bonusPaid[p.key] === state.standing.resets;
+  const hasRecord = p.paidTo !== null || p.leader !== null || p.verified !== null || p.published !== null;
+  text("t-bonus", bonusRow(bonusKindOf({ hasRecord }), spent));
+  $("t-bonus").title =
+    "A flat bonus, paid once per problem each cycle and not multiplied. The first record on a problem that has none pays only the bonus.";
 }
 
 /**
