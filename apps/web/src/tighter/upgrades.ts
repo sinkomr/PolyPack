@@ -1336,7 +1336,7 @@ export const UPGRADES: readonly Upgrade[] = [
     effect: "Each level makes auto-eval faster, by 1 evaluation a second at first and more later, with no last level.",
     how: {
       text: [
-        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it.`,
+        `Each level raises auto-eval's rate by a few evaluations a second: ${AUTO_STEP_TEXT}. The rate is for all your lanes together, and the lanes share it. Each lane that has work gets about the same solving time.`,
         `You can buy as many levels as you like. Each extra evaluation a second costs a little more than the one before, so the price of a level grows slowly. At some point your computer is the limit, and levels past that run no faster. The card and the Lanes panel tell you when auto-eval asks for more than this computer can run.`,
       ],
       math: [
@@ -1712,15 +1712,15 @@ export const AUTO_JOB_SECONDS = 0.25;
 
 /**
  * The evaluations of auto-eval's next job in a lane, from the evaluations due (all lanes'): what is due,
- * at most AUTO_JOB_SECONDS of a lane's share of the rate (the rate over `lanes`) and at least 1, or 0
+ * at most AUTO_JOB_SECONDS of a lane's share of the rate (`laneRate`, else the rate over `lanes`) and at least 1, or 0
  * while less than one is due. With `msEach`, the expected ms of one evaluation on the job's problem,
  * also at most AUTO_JOB_SECONDS of the solver's time: where the CPU cannot keep up with the share, a
  * job that size would keep a click waiting for seconds.
  */
-export function autoJobEvals(o: Owned, due: number, lanes = 1, msEach = 0): number {
+export function autoJobEvals(o: Owned, due: number, lanes = 1, msEach = 0, laneRate?: number): number {
   // a hair either way, so that a rounding error (a share a hair over a whole number of evaluations a
   // quarter second, or a sum of fractions just short of 1 due) does not change a job's size
-  const share = Math.ceil(((autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9);
+  const share = Math.ceil((laneRate ?? (autoPerSecond(o) ?? 0) / Math.max(1, lanes)) * AUTO_JOB_SECONDS - 1e-9);
   const timed = msEach > 0 ? Math.floor((AUTO_JOB_SECONDS * 1000) / msEach + 1e-9) : Infinity;
   const most = Math.max(1, Math.min(share, timed));
   return Math.max(0, Math.min(most, Math.floor(due + 1e-9)));

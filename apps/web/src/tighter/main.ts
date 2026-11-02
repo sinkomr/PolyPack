@@ -132,7 +132,18 @@ import {
   passes,
   rankCandidates,
 } from "./rank";
-import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
+import {
+  AUTO_LIMIT_WARNING,
+  AUTO_METER_CARD,
+  AUTO_METER_NOTE,
+  AutoMeter,
+  Speeds,
+  autoHold,
+  autoOverLimit,
+  autoTarget,
+  laneSplit,
+  meterShare,
+} from "./scheduler";
 import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
@@ -185,6 +196,7 @@ import {
   Owned,
   RUN_BUDGET,
   UpgradeId,
+  AUTO_SLACK_SECONDS,
   autoCap,
   autoJobEvals,
   autoPerSecond,
@@ -689,19 +701,25 @@ interface LaneView {
   current: Job | null;
   /** The open run's state during a long step (Compact's, or many evaluations a click). */
   progress: RunState | null;
+  /** Auto-eval's evaluations this lane may still take (its share of the rate, as accrued; below zero: owed). */
+  autoDue: number;
+  /** This lane's share of auto-eval's rate at the last accrual, evaluations a second (laneSplit). */
+  autoRate: number;
 }
 
 /** Most clicks a lane holds before it has caught up; more are not taken. */
 const MAX_QUEUED_CLICKS = 20;
 
 const lanes: LaneView[] = [];
+/** The lanes that run: those owned, or fewer where the player's "Lanes in use" setting says so. */
+const lanesWanted = (o: Owned) => Math.max(1, Math.min(laneCount(o), state.settings.lanesInUse ?? Infinity));
 /**
  * As many lanes as the player owns (up to the CPU's cores less one). A lane no longer owned (after a
  * reset) goes once it is idle: its run closes, its worker stops, and auto-eval's jobs it held are
  * due again.
  */
 function ensureLanes(): void {
-  const want = laneCount(owned());
+  const want = lanesWanted(owned());
   while (lanes.length > want) {
     const lv = lanes[lanes.length - 1];
     if (lv.pumping || lv.current) break;
@@ -717,6 +735,8 @@ function ensureLanes(): void {
       pumping: false,
       current: null,
       progress: null,
+      autoDue: 0,
+      autoRate: 0,
     };
     lv.lane.onProgress = (s) => {
       // a space run reports at its steps only: its live progress is not drawn yet
@@ -928,6 +948,7 @@ async function pump(lv: LaneView): Promise<void> {
       if (!ran && !job.click) {
         // a job that could not run is due again, and the next tick tries again
         state.autoDue += job.evals;
+        lv.autoDue += job.evals;
         break;
       }
     }
@@ -1219,6 +1240,7 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     }
     const done = Math.max(0, t.state.evaluations - run.evaluations);
     observeSpeed(run, p, done, t.ms);
+    if (!job.click) autoMeter.addRan(now(), done);
     track(run, t.state);
     if (t.state.ended) lv.run = null;
     if (problem(state, p.key) !== p) {
@@ -1420,12 +1442,77 @@ let autoRan = false;
 function accrueAuto(): void {
   const o = owned();
   const runs = autoRuns(o);
+  const t = now();
+  const elapsed = Math.max(0, t - state.autoAt) / 1000;
   // the rate is all lanes' together: they share it
-  accrue(state, now(), runs && autoRan ? (autoPerSecond(o) ?? 0) : 0, autoCap(o));
+  accrue(state, t, runs && autoRan ? (autoPerSecond(o) ?? 0) : 0, autoCap(o));
+  if (runs && autoRan) accrueLanes(o, t, elapsed);
   autoRan = runs;
   // a Compact's debt stays: switching auto-eval off and on does not cancel it
-  if (!runs) state.autoDue = Math.min(0, state.autoDue);
+  if (!runs) {
+    state.autoDue = Math.min(0, state.autoDue);
+    for (const lv of lanes) lv.autoDue = Math.min(0, lv.autoDue);
+  }
 }
+
+/** What auto-eval ran and was due over the last 30 s, while it had work and was not held. */
+const autoMeter = new AutoMeter();
+
+/** The target a lane's next auto-eval job would take, or null (no work for it). */
+function laneAutoTarget(lv: LaneView, o: Owned) {
+  const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
+  return autoTarget({
+    lane: lanes.indexOf(lv),
+    queue: state.queue,
+    focus: state.focus,
+    busy,
+    owned: o,
+    // with Auto-advance a lane keeps to its run's problem until that problem stalls
+    current: lv.run?.key ?? null,
+    stall: stallAfter(state),
+  });
+}
+
+/** The expected ms of one evaluation of the lane's auto-eval work (0 when it has none). */
+function laneWorkMs(lv: LaneView, o: Owned): number {
+  const target = laneAutoTarget(lv, o);
+  const tp = target ? problem(state, target.key) : undefined;
+  if (!target || !tp) return 0;
+  const key =
+    target.action === "compact"
+      ? runSpeedKey(tp, "mc_compress", isPolygon(tp) ? tuningLevel(o, "mc_compress") : 0)
+      : jobSpeedKey(lv, tp, o);
+  return speeds.msEach(key, tableMsOf(tp));
+}
+
+/**
+ * Splits auto-eval's rate over the lanes that have work (scheduler.ts laneSplit: about equal solving
+ * time each, at least a quarter of an equal share) and adds `elapsed` seconds of each lane's share to
+ * its due evaluations. With no lane working, the lanes share it equally, as they did before. Also
+ * counts the time for the measured rate while some lane has auto-eval's work and no click is running.
+ */
+function accrueLanes(o: Owned, t: number, elapsed: number): void {
+  const R = autoPerSecond(o) ?? 0;
+  const ms = lanes.map((lv) => laneWorkMs(lv, o));
+  const working = lanes.map((_, i) => i).filter((i) => ms[i] > 0);
+  const idx = working.length ? working : lanes.map((_, i) => i);
+  const shares = laneSplit(
+    idx.map((i) => (ms[i] > 0 ? ms[i] : 1)),
+    R,
+  );
+  lanes.forEach((lv, i) => {
+    const k = idx.indexOf(i);
+    lv.autoRate = k < 0 ? 0 : shares[k];
+    const cap = Math.max(COMPACT_EVALS, lv.autoRate * AUTO_SLACK_SECONDS);
+    lv.autoDue =
+      k < 0 ? Math.min(0, lv.autoDue) : Math.min(Math.max(cap, lv.autoDue), lv.autoDue + elapsed * lv.autoRate);
+  });
+  const clicking = lanes.some((lv) => lv.jobs.length || lv.current?.click);
+  if (working.length && !clicking) autoMeter.addDue(t, R, Math.min(elapsed, 5));
+}
+
+/** The share of auto-eval's evaluations that ran over the last 30 s (null: too little to tell). */
+const measuredShare = () => meterShare(autoMeter.summary(now()));
 
 /**
  * How many times slower than the machine of rank.ts's cost table this device runs an evaluation, for
@@ -1461,6 +1548,9 @@ function jobSpeedKey(lv: LaneView, p: ProblemState, o: Owned): string | null {
 function overComputerLimit(o: Owned): boolean {
   const rate = autoPerSecond(o);
   const p = focused();
+  const share = measuredShare();
+  // what auto-eval really ran, when it had work for long enough to tell (a margin keeps it from flickering)
+  if (share !== null) return share < AUTO_METER_CARD;
   if (rate === null || !p || !speeds.measured) return false;
   const msEach = speeds.msEach(lanes[0] ? jobSpeedKey(lanes[0], p, o) : null, tableMsOf(p));
   return autoOverLimit(rate, laneCount(o), msEach);
@@ -1481,19 +1571,13 @@ let autoTurn = 0;
  */
 function autoJob(lv: LaneView): Job | null {
   const o = owned();
-  const n = autoJobEvals(o, state.autoDue, laneCount(o));
+  // the lane takes from its own share (laneSplit), and from the total, which stays at the rate
+  const due = Math.min(state.autoDue, lv.autoDue);
+  const laneRate = lv.autoRate > 0 ? lv.autoRate : undefined;
+  const n = autoJobEvals(o, due, lanes.length, 0, laneRate);
   if (autoPerSecond(o) === null || !state.settings.auto || holdReason() || n < 1) return null;
-  const busy = new Set(lanes.filter((l) => l !== lv).flatMap(laneKeys));
-  const target = autoTarget({
-    lane: lanes.indexOf(lv),
-    queue: state.queue,
-    focus: state.focus,
-    busy,
-    owned: o,
-    // with Auto-advance a lane keeps to its run's problem until that problem stalls
-    current: lv.run?.key ?? null,
-    stall: stallAfter(state),
-  });
+  if (lanes.indexOf(lv) >= lanesWanted(o)) return null;
+  const target = laneAutoTarget(lv, o);
   if (!target) return null;
   autoTurn = lanes.indexOf(lv) + 1;
   if (target.action === "compact") {
@@ -1501,13 +1585,15 @@ function autoJob(lv: LaneView): Job | null {
     // owed (autoDue below zero), repaid before any lane's next job: waiting for 100 due at once never
     // ended while another lane took each job as it came due, so new problems sat uncompacted.
     state.autoDue -= COMPACT_EVALS;
+    lv.autoDue -= COMPACT_EVALS;
     return { key: target.key, evals: COMPACT_EVALS, click: false, compact: true };
   }
   const tp = problem(state, target.key);
   // at most a quarter second of this device's time on that problem, with that run's method
   const msEach = tp ? speeds.msEach(jobSpeedKey(lv, tp, o), tableMsOf(tp)) : 0;
-  const evals = tp ? autoJobEvals(o, state.autoDue, laneCount(o), msEach) : n;
+  const evals = tp ? autoJobEvals(o, due, lanes.length, msEach, laneRate) : n;
   state.autoDue -= evals;
+  lv.autoDue -= evals;
   return { key: target.key, evals, click: false, compact: false };
 }
 
@@ -3604,19 +3690,37 @@ function renderLanes(o: Owned): void {
         `run at ${runAt(lv.run, lv.progress?.evaluations ?? lv.run.evaluations)}${note}`;
       if (lv.jobs.length) msg += ` · ${lv.jobs.length} click${lv.jobs.length === 1 ? "" : "s"} waiting`;
     } else msg = `Lane ${i + 1}: no open run`;
+    if (lanes.length > 1 && lv.autoRate > 0 && autoPerSecond(o) !== null && state.settings.auto)
+      msg += ` · auto-eval gets ${autoRateText(lv.autoRate)}`;
     if (line.textContent !== msg) line.textContent = msg;
   });
-  // the lanes share auto-eval's rate
+  // "Lanes in use": 1 to the lanes owned
+  const owns = laneCount(o);
+  show("t-lanes-use-box", owns > 1);
+  const use = $<HTMLInputElement>("t-lanes-use");
+  use.max = String(owns);
+  if (document.activeElement !== use) use.value = String(Math.min(owns, state.settings.lanesInUse ?? owns));
+  // the lanes share auto-eval's rate by solving time
   const rate = autoPerSecond(o);
   show("t-lanes-note", rate !== null);
-  if (rate !== null)
+  if (rate !== null) {
+    const sum = autoMeter.summary(now());
+    const share = meterShare(sum);
+    const ran = share !== null && share < AUTO_METER_NOTE;
     text(
       "t-lanes-note",
       (lanes.length > 1
-        ? `The ${lanes.length} lanes share auto-eval's ${fmtRate(rate)}. Each runs ${fmtRate(rate / lanes.length)}.`
-        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) + (overComputerLimit(o) ? ` ${AUTO_LIMIT_WARNING}` : ""),
+        ? `The ${lanes.length} lanes share auto-eval's ${fmtRate(rate)}. Each lane that has work gets about the same solving time, so a lane on a large problem runs fewer evaluations a second.`
+        : `Auto-eval runs ${fmtRate(rate)} in this lane.`) +
+        (ran
+          ? ` Auto-eval ran ${fmtCount(sum.ran / sum.seconds)} of its ${fmtCount(sum.due / sum.seconds)} evaluations a second in the last 30 s. Your computer is the limit.`
+          : ""),
     );
+  }
 }
+
+/** A rate of evaluations as a number for a sentence: whole above 10, else one decimal. */
+const fmtCount = (r: number) => (r >= 10 ? Math.round(r).toLocaleString("en-US") : String(Math.round(r * 10) / 10));
 
 function renderRuns(o: Owned): void {
   const p = focused();
@@ -4020,6 +4124,16 @@ $("t-bg").addEventListener("change", () => {
   state.settings.background = $<HTMLInputElement>("t-bg").checked;
   persist();
   applyHold();
+});
+$("t-lanes-use").addEventListener("change", () => {
+  const owns = laneCount(owned());
+  const n = Math.floor(Number($<HTMLInputElement>("t-lanes-use").value));
+  // all lanes is the default, kept as null
+  state.settings.lanesInUse = !Number.isFinite(n) || n >= owns ? null : Math.max(1, n);
+  persist();
+  ensureLanes();
+  kickLanes();
+  render();
 });
 $("t-battery").addEventListener("change", () => {
   state.settings.battery = $<HTMLInputElement>("t-battery").checked;
