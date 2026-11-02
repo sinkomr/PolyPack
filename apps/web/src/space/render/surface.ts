@@ -13,6 +13,7 @@ import type { SpaceConfig } from "@polypack/spaces";
 import {
   IDENTITY,
   type Rigid,
+  type Solid,
   type SolidName,
   type SurfacePose,
   apply,
@@ -21,6 +22,7 @@ import {
   faceVertex,
   getSolid,
   glue,
+  partsScale,
   pieceParts,
 } from "@polypack/surface";
 import { type SpaceRenderer, cssVar, fitCanvas, onDrag, pieceFill, piecesText } from "./common";
@@ -102,6 +104,19 @@ interface DrawPart {
   piece: number;
   face: number;
   poly: Float64Array;
+}
+
+/**
+ * The parts of every piece on the faces of the solid of edge s, each in its face's frame, in site units.
+ * pieceParts takes the kernels' scale, a disk's radius, so a disk of diameter 1 passes partsScale(0) = 1/2.
+ */
+export function drawnParts(S: Solid, s: number, N: number, pieces: readonly SurfacePose[]): DrawPart[] {
+  const out: DrawPart[] = [];
+  pieces.forEach((pose, i) => {
+    for (const part of pieceParts(S, s, N, pose, i, partsScale(N)))
+      if (part.poly.length >= 6) out.push({ piece: i, face: part.face, poly: part.poly });
+  });
+  return out;
 }
 
 const START_ROT: [number, number] = [0.6, -0.5];
@@ -282,11 +297,7 @@ export function surfaceRenderer(solid: SolidName, N: number, P: number, mode: "f
     draw(c: SpaceConfig) {
       const cfg = c as unknown as { s: number; pieces: SurfacePose[] };
       s = cfg.s;
-      parts = [];
-      cfg.pieces.forEach((pose, i) => {
-        for (const part of pieceParts(S, s, N, pose, i))
-          if (part.poly.length >= 6) parts.push({ piece: i, face: part.face, poly: part.poly });
-      });
+      parts = drawnParts(S, s, N, cfg.pieces);
       drawn = true;
       redraw();
     },
