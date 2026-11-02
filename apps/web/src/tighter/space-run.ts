@@ -59,6 +59,7 @@ export class SpaceRun {
   private ended = false;
   private closedEarly = false;
   private error: string | undefined;
+  private offers = 0;
   private blockedMs = 0;
   private lastProgress = 0;
 
@@ -105,6 +106,7 @@ export class SpaceRun {
       score: this.score,
       last: this.last,
       found: this.found,
+      offers: this.offers,
       ended: this.ended,
       closed: this.closedEarly,
       ...(this.error ? { error: this.error } : {}),
@@ -165,6 +167,9 @@ export class SpaceRun {
         budget: { evals: this.request.budget.evals * unit, time_s: 3600 },
         shouldStop: this.poll,
         now: () => (performance.now() - this.blockedMs) / 1000,
+        onOffer: () => {
+          this.offers++;
+        },
         onImprove: (f) => {
           this.best = structuredClone(f.config as SpaceConfig);
           this.score = f.score;

@@ -482,9 +482,21 @@ export function reserveSeed(s: GameState, p: ProblemState): number {
  * has done R evaluations (its start's scoring included), and the problem has gone R evaluations
  * without progress.
  */
-export function stallEnds(restartAfter: number | null | undefined, runEvaluations: number, sinceGain: number): boolean {
-  return restartAfter != null && restartAfter > 0 && runEvaluations >= restartAfter && sinceGain >= restartAfter;
+export function stallEnds(
+  restartAfter: number | null | undefined,
+  runEvaluations: number,
+  sinceGain: number,
+  offersSinceGain?: number,
+): boolean {
+  if (!(restartAfter != null && restartAfter > 0 && runEvaluations >= restartAfter && sinceGain >= restartAfter))
+    return false;
+  // a run that reports its offers also waits until its method has handed back a finished packing since
+  // the problem's last progress; a method that never does is ended after STALL_NO_OFFER_FACTOR times R
+  return offersSinceGain === undefined || offersSinceGain >= 1 || sinceGain >= STALL_NO_OFFER_FACTOR * restartAfter;
 }
+
+/** A run that reports offers but makes none ends at a stall after this many times its method's restartAfter. */
+export const STALL_NO_OFFER_FACTOR = 20;
 
 /** The game ended the problem's run at a stall (stallEnds): it counts as a run that ended by itself. */
 export function endRunAtStall(p: ProblemState): void {

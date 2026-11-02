@@ -1,6 +1,8 @@
 import { Worker } from "node:worker_threads";
 import { afterEach, describe, expect, it } from "vitest";
 import { checkSpaceConfig, parseSearchProblem, spaceKernel } from "@polypack/spaces/search";
+import { runMethod } from "@polypack/methods";
+import { stallEnds } from "../src/tighter/game";
 import { createRunHost } from "../src/tighter/run-host";
 import type { HostReply } from "../src/tighter/run-host";
 import { Lane } from "../src/tighter/lanes";
@@ -253,6 +255,85 @@ describe("Tighter lanes closed while opening", () => {
 });
 
 describe("Tighter space runs in the run host", () => {
+  it("count the packings the method hands back, in the state a step reports", () => {
+    const unit = 20;
+    const req = request("balls", BALLS, { budget: { evals: 150 }, unit, seed: 3 });
+    const one = drive(req, () => 1);
+    const free = drive(req, () => 10_000);
+    let before = 0;
+    for (const p of one.pauses) {
+      expect(p.state.offers).toBeGreaterThanOrEqual(before);
+      before = p.state.offers;
+    }
+    expect(free.final.offers).toBeGreaterThan(0);
+    expect(one.final.offers).toBe(free.final.offers);
+  });
+
+  it("count offers without changing any result of the framework", () => {
+    const k = spaceKernel(parseSearchProblem(SPHERE)!)!;
+    const o = { seed: 5, budget: { evals: 3000 } };
+    let n = 0;
+    const plain = runMethod(k, "mc_compress", o);
+    const counted = runMethod(k, "mc_compress", { ...o, onOffer: () => void n++ });
+    expect(counted).toEqual(plain);
+    expect(n).toBeGreaterThan(0);
+  });
+
+  // Tetrahedron, 30 triangles folded over its edges: one finished packing costs more than the
+  // stall rule's 500 game evaluations, so a run ended at 500 never handed one back and the board
+  // stayed at 7.9 for ever. The run is the game's: its stall decision (stallEnds) between pauses.
+  it("are not ended by the stall rule before their first finished packing", () => {
+    const id = "surface/tetrahedron/fold/3/30";
+    const R = 500;
+    const p = parseSearchProblem(id)!;
+    const unit = Math.max(1, Math.round((6 * 20) / (p as { P: number }).P));
+    const k = spaceKernel(p)!;
+    const start = spaceStart({ family: "surface", id, seed: 1 });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+    let best = start.score;
+    let config: unknown = start.config;
+    let global = 0;
+    let lastGain = 0;
+    let used = 0;
+    const total = 1500;
+    const ended: { evals: number; offers: number }[] = [];
+    for (let run = 1; global < total; run++) {
+      const base = global;
+      let offers = 0;
+      let atGain = 0;
+      let stalled = false;
+      const r = runMethod({ ...k, validate: (c) => checkSpaceConfig(p.space, id, c, { noRecord: true }) as never }, "mc_compress", {
+        seed: 1000 + run,
+        start: config as never,
+        budget: { evals: 100_000 * unit, time_s: 3600 },
+        onOffer: () => void offers++,
+        onImprove: (f) => {
+          if (f.score < best * (1 - 1e-9)) {
+            lastGain = base + Math.floor(used / unit);
+            atGain = offers;
+          }
+          if (f.score < best) {
+            best = f.score;
+            config = f.config;
+          }
+        },
+        shouldStop: (u) => {
+          used = u;
+          const e = u / unit;
+          if (base + e >= total) return true;
+          stalled = stallEnds(R, e, base + e - lastGain, offers - atGain);
+          if (stalled) ended.push({ evals: e, offers: offers - atGain });
+          return stalled;
+        },
+      });
+      global = base + Math.floor(Math.max(used, r.evaluations) / unit);
+    }
+    // every run the game ended had handed back a packing since the last progress, and the board moved
+    expect(ended.every((x) => x.offers >= 1)).toBe(true);
+    expect(best).toBeLessThan(0.8 * start.score);
+  }, 60_000);
+
   it("open, step through the shared control, answer each pause, and close", () => {
     const replies: HostReply[] = [];
     const control = new SpaceRunControl();

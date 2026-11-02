@@ -214,6 +214,10 @@ export function runEndRules(games: Readonly<Record<string, MethodGame>> = METHOD
 /** The sentences after a run's general rule: the methods' own rules, then the stall rule, or "". */
 const runRules = () => [runEndRules(), stallRule()].filter(Boolean).join(" ");
 
+/** The part of the stall rule that gives a run on another Dimension's board time to hand back a result (game.ts stallEnds). */
+const OFFER_WAIT =
+  " On the boards of the other Dimensions, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
+
 /**
  * The sentences on the runs the game ends at a stall (each method's restartAfter, in its file in
  * methods/), or "" when no method has one: "The game also ends a stalled run of mc_compress. Once
@@ -229,11 +233,11 @@ export function stallRule(games: Readonly<Record<string, MethodGame>> = METHOD_G
   const head = `The game also ends a stalled run of ${which.length < 2 ? which[0] : `${which.slice(0, -1).join(", ")} or ${which.at(-1)}`}.`;
   if (limits.length === 1) {
     const r = int(limits[0].r);
-    return `${head} Once the run has done ${r} evaluations and its problem has gone ${r} evaluations without progress, it counts as ended by itself.`;
+    return `${head} Once the run has done ${r} evaluations and its problem has gone ${r} evaluations without progress, it counts as ended by itself.${OFFER_WAIT}`;
   }
   return (
     `${head} Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. ` +
-    `R is ${andList(limits.map((x) => `${int(x.r)} for ${x.m}`))}.`
+    `R is ${andList(limits.map((x) => `${int(x.r)} for ${x.m}`))}.${OFFER_WAIT}`
   );
 }
 

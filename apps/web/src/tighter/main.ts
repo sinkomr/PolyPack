@@ -702,6 +702,9 @@ interface OpenRunView {
   last: number | null;
   runBest: number | null;
   found: number | null;
+  /** Finished packings its method has handed back (a space run reports it; a 2D run does not), and the count at the problem's last progress. */
+  offers?: number;
+  offersAtGain: number;
   stage?: RunStage;
   /** The board it opened from (the method's startFrom), and the problem's best then. */
   origin: PackingConfig | SpaceConfig | null;
@@ -718,6 +721,7 @@ function track(run: OpenRunView, st: RunState | SpaceRunState): void {
   run.last = st.last;
   run.runBest = st.score;
   run.found = st.found;
+  run.offers = isSpaceRunState(st) ? st.offers : undefined;
   run.stage = st.stage;
 }
 
@@ -1151,6 +1155,8 @@ async function openRun(lv: LaneView, p: ProblemState, want: WantedRun, job: Job)
     last: a.state.last,
     runBest: a.state.score,
     found: a.state.found,
+    offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
+    offersAtGain: 0,
     stage: a.state.stage,
     origin: setup.start,
     startScore,
@@ -1215,6 +1221,8 @@ async function openSpaceRun(lv: LaneView, p: ProblemState & SpaceKey, want: Want
     last: a.state.last,
     runBest: a.state.score,
     found: a.state.found,
+    offers: isSpaceRunState(a.state) ? a.state.offers : undefined,
+    offersAtGain: 0,
     stage: a.state.stage,
     origin: start,
     startScore,
@@ -1263,7 +1271,12 @@ async function runJob(lv: LaneView, job: Job): Promise<boolean> {
     if (
       !job.compact &&
       goesOn(lv.run) &&
-      stallEnds(methodGame(lv.run.method).restartAfter, lv.run.evaluations, p.sinceGain)
+      stallEnds(
+        methodGame(lv.run.method).restartAfter,
+        lv.run.evaluations,
+        p.sinceGain,
+        lv.run.offers === undefined ? undefined : lv.run.offers - lv.run.offersAtGain,
+      )
     ) {
       await endStalledRun(lv, p, lv.run);
       if (problem(state, job.key) !== p) return false;
@@ -1361,6 +1374,8 @@ function settle(
     },
     now(),
   );
+  // the offers the stall rule waits for count from the problem's latest progress
+  if (p.sinceGain === 0) run.offersAtGain = run.offers ?? 0;
   lastChange.set(p.key, { ...change, evals: done, seed: run.seed, method: run.method });
   if (change.firstRecord) {
     reveal(state, "log");

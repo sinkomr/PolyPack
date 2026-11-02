@@ -121,7 +121,8 @@ export interface MethodGame {
    * included) and the problem has gone R evaluations without progress (ProblemState.sinceGain). The
    * run counts as ended by itself: the pipeline moves on, Method match learns from it, and the next
    * run opens from the problem's best board with a new seed. Default: null, only the method's own
-   * rule or the budget ends a run.
+   * rule or the budget ends a run. A run that reports its offers (a space run) must also have made
+   * one since the problem's last progress (stallEnds), up to 20 R evaluations.
    */
   restartAfter?: number | null;
   /**

@@ -88,6 +88,9 @@ function loaded(N: number, M: number, P: number) {
   return { s, p, board };
 }
 
+const OFFER_TEXT =
+  " On the boards of the other Dimensions, the run also waits until its method has handed back at least one finished packing since the problem last made progress.";
+
 describe("Tighter's methods table", () => {
   it("has an entry for every method the game runs, each registered in the worker under its solver name", () => {
     expect(Object.keys(METHOD_GAMES).sort()).toEqual([...ALL].sort());
@@ -226,6 +229,14 @@ describe("Tighter's methods table", () => {
     expect(stallEnds(null, 1e6, 1e6)).toBe(false);
     expect(stallEnds(undefined, 1e6, 1e6)).toBe(false);
     expect(stallEnds(0, 1e6, 1e6)).toBe(false);
+    // a run that reports offers also waits for one since the problem's last progress, up to 20 R
+    expect(stallEnds(R, 800, 800, 0)).toBe(false);
+    expect(stallEnds(R, 800, 20 * R - 1, 0)).toBe(false);
+    expect(stallEnds(R, 800, 20 * R, 0)).toBe(true);
+    expect(stallEnds(R, 800, 800, 1)).toBe(true);
+    expect(stallEnds(R, 499, 5000, 3)).toBe(false);
+    expect(stallEnds(R, 5000, 499, 3)).toBe(false);
+    expect(stallEnds(null, 1e6, 1e6, 0)).toBe(false);
     // it counts as a run that ended by itself: the pipeline goes on to its next stage
     const { p } = loaded(21, 24, 12);
     const pipeline: EvolveMethod[] = ["mc_compress", "asc", "harden"];
@@ -237,11 +248,11 @@ describe("Tighter's methods table", () => {
 
   it("explain the stall rule from the table, every limit named", () => {
     expect(stallRule()).toBe(
-      "The game also ends a stalled run of mc_compress. Once the run has done 500 evaluations and its problem has gone 500 evaluations without progress, it counts as ended by itself.",
+      "The game also ends a stalled run of mc_compress. Once the run has done 500 evaluations and its problem has gone 500 evaluations without progress, it counts as ended by itself." + OFFER_TEXT,
     );
     const two = { mc_compress: { restartAfter: 500 }, asc: { restartAfter: 1500 }, harden: {} };
     expect(stallRule(two)).toBe(
-      "The game also ends a stalled run of mc_compress or asc. Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. R is 500 for mc_compress and 1,500 for asc.",
+      "The game also ends a stalled run of mc_compress or asc. Once the run has done R evaluations and its problem has gone R evaluations without progress, it counts as ended by itself. R is 500 for mc_compress and 1,500 for asc." + OFFER_TEXT,
     );
     expect(stallRule({ harden: {}, asc: { restartAfter: null } })).toBe("");
     // the help on runs and on pipelines says it

@@ -40,6 +40,8 @@ export interface SpaceRunState {
   last: number | null;
   /** The best score the method found itself, its start excluded. */
   found: number | null;
+  /** Finished packings the method has handed back so far (the framework's ctx.offer that finished). */
+  offers: number;
   stage?: RunStage;
   ended: boolean;
   closed: boolean;
