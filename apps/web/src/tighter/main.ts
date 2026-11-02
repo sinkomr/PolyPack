@@ -1724,7 +1724,6 @@ const LOST_ANSWER_MS = 120_000;
 let lostChecking = false;
 let lostCheckAfter = 0;
 
-/** Reads the record of the oldest send left without an answer, once it is LOST_ANSWER_MS old. */
 /** Reads the record's holder after a "behind" answer, to learn the name of the entry that was first. */
 async function readRival(p: ProblemState): Promise<void> {
   const { answer: info } = await within(SEND_TIMEOUT_MS, readLeader(p), null);
@@ -1734,6 +1733,7 @@ async function readRival(p: ProblemState): Promise<void> {
   render();
 }
 
+/** Reads the record of the oldest send left without an answer, once it is LOST_ANSWER_MS old. */
 async function settleLost(): Promise<void> {
   if (!ownsGame || submitting || lostChecking || now() < lostCheckAfter || now() < state.pacer.pausedUntil) return;
   const p = state.queue.find((q) => q.sending && !inFlight.has(q.key) && now() - q.sending.at >= LOST_ANSWER_MS);
@@ -2642,10 +2642,6 @@ function workText(clicks: number, more = true): string {
 
 // ---------- records held: live leader changes ----------
 
-/**
- * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
- * answer would have) and tells the player when a record of theirs was beaten.
- */
 /** Counted already: a rival's taking of one record (problem and entry), so that an answer and a later read do not both count it. */
 const rivalCounted = new Set<string>();
 
@@ -2657,6 +2653,10 @@ function noteRival(key: string, leader: Leader | null): void {
   if (addRival(state.picks.rivals, leader.name, state.name)) rivalCounted.add(mark);
 }
 
+/**
+ * A leader read from the server: settles a send whose answer was lost (its points confirmed, as its
+ * answer would have) and tells the player when a record of theirs was beaten.
+ */
 function noteLeader(p: ProblemState | PastProblem, leader: Leader | null): void {
   const r = applyLeader(p, leader, state, now());
   if (r.reconciled && leader) {
