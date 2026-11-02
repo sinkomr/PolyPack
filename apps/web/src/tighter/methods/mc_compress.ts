@@ -29,7 +29,7 @@ export const MC_COMPRESS_VARS = (n: string): readonly Var[] => [
 ];
 
 export const mcCompressGame: MethodGame = {
-  bestFor: "It costs the least per evaluation, so it pays most when your computer is the limit.",
+  bestFor: "It costs the least per evaluation, so on a fresh board it pays most when your computer is the limit.",
   /**
    * Bench (presets.ts), 300 evaluations: 10 sweeps −6.79 / −4.04 / −7.30 %; 15: −7.40 / −4.41 /
    * −7.50; 20: −7.46 / −4.55 / −7.62; 30: −7.66 / −4.78 / −7.74. Time per evaluation +0 to +30 %.
