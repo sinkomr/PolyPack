@@ -9,7 +9,7 @@ import {
   GameState,
   LOG_LIMIT,
   Leader,
-  PATIENCES,
+  parsePatience,
   PAST_LIMIT,
   PastProblem,
   PendingSend,
@@ -779,6 +779,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     closed: bool(v.closed, false),
     refused,
     leaving: bool(v.leaving, false),
+    kept: bool(v.kept, false),
     sending: pendingSend(v.sending),
     paidTo: phase === "ready" ? posOrNull(v.paidTo) : null,
     unconfirmed: num(v.unconfirmed, 0, 0),
@@ -893,6 +894,11 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
   const evaluations = int(stats.evaluations, 0);
   const allMethods = methods(owning(owned, levels));
   const method = allMethods.find((m) => m === settings.method) ?? "mc_compress";
+  const patienceOr = (v: unknown, fallback: number | null): number | null => {
+    const r = parsePatience(v);
+    return r === undefined ? fallback : r;
+  };
+  const patience = patienceOr(settings.patience, DEFAULT_PATIENCE);
   const focus =
     typeof save.focus === "string" && queue.some((p) => p.key === save.focus) ? save.focus : (queue[0]?.key ?? null);
   return {
@@ -913,8 +919,9 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
       battery: bool(settings.battery, false),
       // one of the choices, else the default; a saved null is Never
       tolerance: TOLERANCES.find((t) => t === settings.tolerance) ?? DEFAULT_TOLERANCE,
-      patience:
-        settings.patience === null ? null : (PATIENCES.find((w) => w === settings.patience) ?? DEFAULT_PATIENCE),
+      patience,
+      // a save from before the second patience keeps its one value for both
+      leadPatience: patienceOr(settings.leadPatience, patience),
       off: SWITCHES.filter((id) => Array.isArray(settings.off) && settings.off.includes(id)),
     },
     stats: {

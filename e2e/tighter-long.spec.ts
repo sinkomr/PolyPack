@@ -609,7 +609,7 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   await firstRecord(page);
   const first = await focused(page);
   // the board counts the problem's evaluations, and those since its last progress
-  const count = /^[\d,]+ evaluations? · [\d,]+ since progress$/;
+  const count = /^[\d,]+ evaluations? · [\d,]+ since progress(?: · [\d,]+ RP a minute)?$/;
   await expect(page.locator("#t-problem-count")).toHaveText(count);
   // three slots filled, each with a first record
   await give(page, ["queue3", "auto1", "advance"]);
@@ -628,12 +628,18 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   // the settings, once Auto-advance is owned: labelled, the defaults chosen
   await expect(page.locator("#t-advance")).toBeVisible();
   await expect(page.getByLabel("Tolerance", { exact: true })).toHaveValue("1e-6");
-  await expect(page.getByLabel("Patience", { exact: true })).toHaveValue("1000");
+  await expect(page.locator("#t-patience")).toHaveValue("1000");
+  await expect(page.locator("#t-patience-lead")).toHaveValue("1000");
   await page.getByLabel("Tolerance", { exact: true }).selectOption("1e-3");
-  await page.getByLabel("Patience", { exact: true }).selectOption("250");
-  expect(await game(page, (s) => [s.settings.tolerance, s.settings.patience])).toEqual([1e-3, 250]);
+  await page.locator("#t-patience").fill("250");
+  await page.locator("#t-patience").press("Tab");
+  await page.locator("#t-patience-lead").fill("250");
+  await page.locator("#t-patience-lead").press("Tab");
+  expect(await game(page, (s) => [s.settings.tolerance, s.settings.patience, s.settings.leadPatience])).toEqual([
+    1e-3, 250, 250,
+  ]);
   await expect(page.locator("#t-advance-note")).toContainText("at least 0.1 % smaller");
-  await expect(page.locator("#t-advance-note")).toContainText("After 250 evaluations without progress");
+  await expect(page.locator("#t-advance-note")).toContainText("drops a problem after 250 evaluations without progress");
   expect(await axe(page)).toEqual([]);
 
   // the first problem stops making progress while no deal is earned: it stays, and the queue says why
@@ -667,14 +673,15 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
     .toContain(first.key);
 
   // Never: nothing leaves, however long it goes without progress
-  await page.getByLabel("Patience", { exact: true }).selectOption("never");
+  await page.locator("#t-patience-never").check();
+  await page.locator("#t-patience-lead-never").check();
   const second = keys.find((k: string) => k !== first.key)!;
   await page.evaluate((key) => {
     const s = (window as any).tighter.state;
     s.dealer.tokens = 3;
     s.queue.find((p: { key: string }) => p.key === key).sinceGain = 50_000;
   }, second);
-  await expect(page.locator("#t-advance-note")).toContainText("Auto-advance keeps every problem in the queue");
+  await expect(page.locator("#t-advance-note")).toContainText("Auto-advance does not drop a problem");
   await page.waitForTimeout(3000);
   expect(await game(page, (s) => s.queue.map((p: { key: string }) => p.key))).toContain(second);
   await expect(page.locator("#t-deal")).not.toContainText("without progress");
@@ -685,6 +692,40 @@ test("long game: Auto-advance's tolerance and patience; a problem that stops mak
   expect(await noOverflow(page)).toBe(true);
   expect(await axe(page)).toEqual([]);
   expect(errors).toEqual([]);
+});
+
+test("long game: a queue row's buttons stay the same elements while its problem improves, and Keep holds a problem", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await fresh(page, 27);
+  await setName(page, "E2E Rows");
+  await firstRecord(page);
+  await give(page, ["queue3", "auto1", "advance"]);
+  const row = page.locator("#t-queue-list > li").first();
+  await expect(row.locator("button")).toHaveCount(3);
+  // tag the row and its buttons, then improve the problem and run it: the counters change in place
+  await page.evaluate(() => {
+    const li = document.querySelector("#t-queue-list > li") as any;
+    li.__tag = true;
+    for (const b of li.querySelectorAll("button")) b.__tag = true;
+    const s = (window as any).tighter.state;
+    const p = s.queue.find((q: { key: string }) => q.key === li.dataset.key);
+    p.best *= 0.99;
+    p.evaluations += 5000;
+    p.sinceGain = 0;
+  });
+  await expect(row.locator(".t-q-count")).toContainText("5,");
+  const same = await page.evaluate(() => {
+    const li = document.querySelector("#t-queue-list > li") as any;
+    return !!li.__tag && [...li.querySelectorAll("button")].every((b: any) => b.__tag);
+  });
+  expect(same).toBe(true);
+  // Keep toggles and is saved with the problem
+  const keep = row.getByRole("button", { name: /^Keep / });
+  await keep.click();
+  await expect(row.locator('[data-act="keep"]')).toHaveText("Kept");
+  expect(await game(page, (s) => s.queue[0].kept)).toBe(true);
 });
 
 test("long game: with Your pick and two lanes, Auto-advance compacts every new problem and replaces stalled ones", async ({

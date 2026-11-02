@@ -719,18 +719,18 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
   const e = sym("e");
   return {
     text: [
-      "You set two values in the Queue panel. The tolerance is the smallest improvement that counts as progress. The patience is how many evaluations a problem may run without progress before it is replaced." +
+      "You set the tolerance and two patiences in the Queue panel. The tolerance is the smallest improvement that counts as progress. A patience is how many evaluations a problem may run without progress before it is replaced. One patience is for problems where the record is not yours, and the other is for problems where your entry leads." +
         " Each problem in the queue counts the evaluations it has run since its last progress. The queue shows the count, as in “830 since progress”." +
         (warm.length
           ? ` ${firsts.charAt(0).toUpperCase()}${firsts.slice(1)} ${warm.length === 1 ? "are its" : "are their"} warm-up, and they do not add to the count.`
           : ""),
-      `While auto-eval is on, a problem that reaches the patience is replaced as soon as a deal is earned. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
+      `While auto-eval is on, a problem that reaches its patience is replaced as soon as a deal is earned. A problem you keep with the Keep button is never replaced this way, and Drop still removes it. Each slot earns a deal every ${DEAL_CLICKS} clicks, and ${AUTO_CLICK_EVALS} evaluations of auto-eval count as one click. The old problem leaves as if you had pressed Drop, and its best record is sent first. The new problem takes its slot, so the queue never shrinks. Until then the lanes work on the other problems.`,
       "Auto-eval compacts new problems first (100 evaluations of mc_compress, the same as your first click). After that, a lane stays on its problem while it makes progress. Otherwise it takes the problem that is still improving and has run the fewest evaluations since progress.",
     ],
     math: [
       `${sym("s")} &lt; ${sym("s", "ref")} × (1 − ${sym("τ")}) ⇒ ${sym("s", "ref")} ← ${sym("s")}, ${n} ← 0`,
       warm.length ? `otherwise ${n} ← ${n} + ${e} − ${sym("e", "warm")}` : `otherwise ${n} ← ${n} + ${e}`,
-      `replaced once ${n} ≥ ${sym("W")} and a deal is earned`,
+      `replaced once ${n} ≥ ${sym("W")} and a deal is earned, unless it is kept`,
     ],
     vars: [
       [sym("s"), "the problem's best side now"],
@@ -741,9 +741,9 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
       ...(warm.length
         ? [[sym("e", "warm"), `the evaluations among e in a run's warm-up, ${firsts} (0 for other runs)`] as const]
         : []),
-      [sym("W"), "the patience, 250 to 20,000 evaluations or Never (1,000 at first)"],
+      [sym("W"), "the patience that applies to it, 100 to 10,000,000 evaluations or Never (1,000 at first)"],
     ],
-    note: "With Your pick, the new problem is the best offer. With the patience at Never, nothing leaves, and the lanes count a problem as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). The patience goes from 250 to 20,000 evaluations (1,000 at first).",
+    note: "With Your pick, the new problem is the best offer. With the patience at Never, that kind of problem does not leave, and the lanes count it as stalled after 1,000 evaluations without progress. With auto-eval off, nothing leaves by itself. The tolerance goes from 10⁻⁹ to 10⁻³ (10⁻⁶ at first). Each patience is any whole number from 100 to 10,000,000 evaluations (1,000 at first).",
   };
 }
 

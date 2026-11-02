@@ -13,6 +13,8 @@ import {
   leaveReason,
   newGame,
   newProblem,
+  parsePatience,
+  patienceFor,
   seenKeys,
   slotted,
   stallAfter,
@@ -223,13 +225,61 @@ describe("Tighter Auto-advance", () => {
     const { s, q } = full();
     s.dealer.tokens = 3;
     q[0].sinceGain = 1e6;
-    s.settings.patience = null;
+    s.settings.patience = s.settings.leadPatience = null;
     expect(advancePlan(s, o)).toEqual({ replace: null, due: null });
     // the lanes' order still knows when a problem has stalled
     expect(stallAfter(s)).toBe(1000);
-    s.settings.patience = 20000;
+    s.settings.patience = s.settings.leadPatience = 20000;
     expect(stallAfter(s)).toBe(20000);
     expect(advancePlan(s, o).replace).toBe(q[0]);
+  });
+
+  it("uses the patience for records that are not yours, and the lead patience once your entry leads", () => {
+    const { s, q } = full();
+    s.settings.patience = 500;
+    s.settings.leadPatience = 3000;
+    q[0].sinceGain = 600;
+    q[1].sinceGain = 600;
+    q[0].ourId = null;
+    q[0].leader = { score: 9, name: "Bo", id: 2 };
+    expect(patienceFor(s, q[0])).toBe(500);
+    expect(patienceFor(s, q[1])).toBe(3000);
+    expect(leaveReason(s, q[0])).toBe("stalled");
+    expect(leaveReason(s, q[1])).toBeNull();
+    q[1].sinceGain = 3000;
+    expect(leaveReason(s, q[1])).toBe("stalled");
+    // the lanes' order follows the same choice, and Never counts as the default
+    expect(stallAfter(s, q[0])).toBe(500);
+    expect(stallAfter(s, q[1])).toBe(3000);
+    s.settings.leadPatience = null;
+    expect(leaveReason(s, q[1])).toBeNull();
+    expect(stallAfter(s, q[1])).toBe(1000);
+    // without a problem: the smaller of the two
+    expect(stallAfter(s)).toBe(500);
+  });
+
+  it("never drops a kept problem by itself, and Drop still works on it", () => {
+    const { s, q } = full();
+    s.dealer.tokens = 3;
+    q[0].sinceGain = 1e6;
+    q[0].kept = true;
+    expect(leaveReason(s, q[0])).toBeNull();
+    expect(advancePlan(s, o)).toEqual({ replace: null, due: null });
+    q[0].kept = false;
+    expect(advancePlan(s, o).replace).toBe(q[0]);
+    q[0].kept = true;
+    expect(drop(s, q[0].key, T0)).toBe(true);
+    expect(slotted(s).map((p) => p.key)).not.toContain(q[0].key);
+  });
+
+  it("reads a patience as any whole number from 100 to 10,000,000, with null for Never", () => {
+    expect(parsePatience("100")).toBe(100);
+    expect(parsePatience("10000000")).toBe(10_000_000);
+    expect(parsePatience(" 12,345 ")).toBe(12_345);
+    expect(parsePatience(4321)).toBe(4321);
+    expect(parsePatience(null)).toBeNull();
+    for (const bad of ["99", "10000001", "1.5", "", "abc", "1e3", "-500", "Never", undefined, 99.5, NaN, Infinity, {}])
+      expect(parsePatience(bad)).toBeUndefined();
   });
 
   it("marks a dropped problem with an unsent best as leaving, and frees its slot for the replacement", () => {

@@ -46,7 +46,10 @@ import {
   AdvancePlan,
   GameState,
   Leader,
-  PATIENCES,
+  DEFAULT_PATIENCE,
+  PATIENCE_MAX,
+  PATIENCE_MIN,
+  parsePatience,
   PastProblem,
   ProblemState,
   StepChange,
@@ -955,7 +958,7 @@ function wantedRun(p: ProblemState, o: Owned, lv: LaneView, compact: boolean, ev
   const r = lv.run && lv.lane.open && lv.run.key === p.key ? lv.run : null;
   const owns = o.has("lattice");
   const ruleOk = ruleAllowsMethod(state.standing, "seed");
-  if (latticeDue(p, { owns, ruleOk, stall: stallAfter(state), evals, building: r?.mode === "lattice" }))
+  if (latticeDue(p, { owns, ruleOk, stall: stallAfter(state, p), evals, building: r?.mode === "lattice" }))
     return { method: "seed", level: 0, mode: "lattice" };
   const tune = o.has("autoTune") && state.runplan.auto;
   const draw = (ms: readonly EvolveMethod[], withLevels: boolean) =>
@@ -1248,7 +1251,7 @@ async function endStalledRun(lv: LaneView, p: ProblemState, run: OpenRunView): P
   const smaller = smallerText(sideWord(p), run.startScore, run.runBest);
   event(
     `The run on ${title} made no progress in ${evals(limit)}, so the game ended it.` +
-      `${smaller ? ` ${smaller}` : ""} A new run starts from the best board${nextStageText(p)}.`,
+      `${smaller ? ` ${smaller}` : ""} ${title} stays in the queue. Its next run starts from the best board${nextStageText(p)}, when a lane or a click next works on it.`,
     p.key === state.focus,
   );
   persist();
@@ -3228,6 +3231,7 @@ function onSwitch(id: UpgradeId): void {
 }
 
 let queueSig = "";
+/** The problem's rows under the pointer must not move or be replaced while lanes improve them: the rows are built only when the problems or their order change. */
 function renderQueue(o: ReadonlySet<UpgradeId>): void {
   show("t-queue", revealed(state, "queue"));
   if (!revealed(state, "queue")) return;
@@ -3235,82 +3239,151 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   text("t-queue-heading", `Queue · ${slots} ${slots === 1 ? "slot" : "slots"}`);
   text("t-queue-work", queueWorkText(o));
   const list = $("t-queue-list");
-  const sig = state.queue
-    .map((p) => `${p.key}|${p.phase}|${p.best}|${p.ourId}|${p.leader?.score}|${p.leaving}|${p.key === state.focus}`)
-    .join(";");
+  // a problem that is leaving (dropped, its best still to be sent) is no row: one line under the list counts them
+  const rows = slotted(state);
+  const sig = rows.map((p) => p.key).join(";");
   if (sig !== queueSig) {
     queueSig = sig;
+    // keyboard focus on a button survives the rebuild
+    const active = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
+    const refocus = active ? { key: active.closest("li")?.dataset.key, cls: active.dataset.act } : null;
     list.replaceChildren(
-      ...state.queue.map((p) => {
+      ...rows.map((p) => {
         const li = document.createElement("li");
-        if (p.key === state.focus) li.className = "focus";
-        const gap = p.best !== null && p.phase !== "bare" ? ` · gap ${fmtPct(gapTo(p, p.best))}` : "";
-        const status = p.leaving
-          ? " · leaving"
-          : p.ourId !== null
-            ? " · yours"
-            : p.tier === "published"
-              ? " · published value"
-              : p.tier !== "open"
-                ? p.leader?.id === null && !isPolygon(p)
-                  ? " · research record to beat"
-                  : ` · ${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
-                : p.phase === "bare"
-                  ? " · no record yet"
-                  : "";
         li.dataset.key = p.key;
-        li.append(`${problemTitle(p)}${gap}${status}`);
-        const actions = document.createElement("span");
-        actions.className = "t-q-actions";
-        if (p.key !== state.focus && !p.leaving) {
-          const showBtn = document.createElement("button");
-          showBtn.textContent = "Show";
-          showBtn.setAttribute("aria-label", `Show ${problemTitle(p)} on the board`);
-          showBtn.addEventListener("click", () => {
-            state.focus = p.key;
+        const title = document.createElement("span");
+        title.className = "t-q-title";
+        const status = document.createElement("span");
+        status.className = "t-q-status";
+        const count = document.createElement("span");
+        count.className = "t-q-count";
+        const side = document.createElement("div");
+        side.className = "t-q-actions";
+        const live = document.createElement("span");
+        live.className = "t-q-live";
+        live.textContent = "Working";
+        const button = (act: string, label: string, click: () => void) => {
+          const b = document.createElement("button");
+          b.dataset.act = act;
+          b.textContent = label;
+          b.addEventListener("click", click);
+          return b;
+        };
+        const key = p.key;
+        side.append(
+          button("show", "Show", () => {
+            state.focus = key;
             persist();
             showFocus();
             render();
-          });
-          actions.append(showBtn);
-        }
-        if (!p.leaving) {
-          const dropBtn = document.createElement("button");
-          dropBtn.textContent = "Drop";
-          dropBtn.setAttribute("aria-label", `Drop ${problemTitle(p)} from the queue`);
-          dropBtn.addEventListener("click", () => onDrop(p.key));
-          actions.append(dropBtn);
-        }
-        const count = document.createElement("span");
-        count.className = "t-q-count";
-        li.append(actions, count);
+          }),
+          button("keep", "Keep", () => {
+            const q = problem(state, key);
+            if (!q) return;
+            q.kept = !q.kept;
+            persist();
+            render();
+          }),
+          button("drop", "Drop", () => onDrop(key)),
+        );
+        li.append(title, side, status, live, count);
         return li;
       }),
     );
+    if (refocus)
+      list.querySelector<HTMLElement>(`li[data-key="${CSS.escape(refocus.key ?? "")}"] [data-act="${refocus.cls}"]`)?.focus();
   }
-  // the counters change with every step: they are written in place, so the rows (and their buttons
-  // under the pointer) are rebuilt only when the signature above changes
+  // everything that changes while lanes work is written in place: no row, button or mark is replaced or moves
   const busy = new Set(lanes.flatMap(workingKeys));
+  const t = now();
+  sampleRp(t);
   for (const li of list.children as HTMLCollectionOf<HTMLElement>) {
     const p = problem(state, li.dataset.key ?? null);
-    // the "Working" mark is text as well as a dot, so it reads without colour; it is added and
-    // removed in place, so the buttons beside it never move
-    const mark = li.querySelector(".t-q-live");
-    const working = busy.has(li.dataset.key ?? "");
-    if (working && !mark) {
-      const live = document.createElement("span");
-      live.className = "t-q-live";
-      live.textContent = "Working";
-      li.querySelector(".t-q-actions")?.before(live);
-    } else if (!working && mark) mark.remove();
-    const count = li.querySelector(".t-q-count");
-    const value = p ? countText(p) : "";
-    if (count && count.textContent !== value) count.textContent = value;
+    if (!p) continue;
+    const gap = p.best !== null && p.phase !== "bare" ? `gap ${fmtPct(gapTo(p, p.best))}` : "";
+    const status =
+      p.ourId !== null
+        ? "yours"
+        : p.tier === "published"
+          ? "published value"
+          : p.tier !== "open"
+            ? p.leader?.id === null && !isPolygon(p)
+              ? "research record to beat"
+              : `${TIER_LABEL[p.tier]} by ${p.leader?.name ?? "?"}`
+            : p.phase === "bare"
+              ? "no record yet"
+              : "";
+    const focus = p.key === state.focus;
+    li.classList.toggle("focus", focus);
+    setText(li.querySelector(".t-q-title"), problemTitle(p));
+    setText(li.querySelector(".t-q-status"), [gap, status].filter(Boolean).join(" · "));
+    setText(li.querySelector(".t-q-count"), countText(p));
+    // the "Working" mark is text as well as a dot, so it reads without colour; its slot is always there
+    li.querySelector(".t-q-live")?.classList.toggle("on", busy.has(p.key));
+    const showBtn = li.querySelector<HTMLButtonElement>('[data-act="show"]')!;
+    showBtn.style.visibility = focus ? "hidden" : "";
+    showBtn.disabled = focus;
+    showBtn.setAttribute("aria-label", `Show ${problemTitle(p)} on the board`);
+    const keep = li.querySelector<HTMLButtonElement>('[data-act="keep"]')!;
+    setText(keep, p.kept ? "Kept" : "Keep");
+    keep.setAttribute("aria-pressed", String(p.kept));
+    keep.setAttribute(
+      "aria-label",
+      p.kept ? `Kept ${problemTitle(p)}, Auto-advance will not drop it` : `Keep ${problemTitle(p)}, so that Auto-advance does not drop it`,
+    );
+    li.querySelector('[data-act="drop"]')?.setAttribute("aria-label", `Drop ${problemTitle(p)} from the queue`);
   }
+  const leaving = state.queue.filter((p) => p.leaving).length;
+  const note = $("t-queue-leaving");
+  note.hidden = leaving === 0;
+  setText(
+    note,
+    leaving === 1
+      ? "1 problem is leaving. It goes once its best is sent."
+      : `${leaving} problems are leaving. They go once their best is sent.`,
+  );
   text("t-deal", dealText(o));
   renderAdvance(o);
   renderOffers(o);
   renderFilters(o);
+}
+
+/** Sets an element's text only when it differs, so that an unchanged line is not touched. */
+function setText(el: Element | null, value: string): void {
+  if (el && el.textContent !== value) el.textContent = value;
+  // a cut line shows in full as the tooltip
+  if (el instanceof HTMLElement && el.classList.contains("t-q-status") && el.title !== value) el.title = value;
+}
+
+/** What each problem in the queue has paid, sampled while the page runs: [time, RP] (nothing is saved). */
+const RP_WINDOW_MS = 10 * 60_000;
+const rpSamples = new Map<string, [number, number][]>();
+function sampleRp(t: number): void {
+  for (const k of [...rpSamples.keys()]) if (!state.queue.some((p) => p.key === k)) rpSamples.delete(k);
+  for (const p of state.queue) {
+    let s = rpSamples.get(p.key);
+    if (!s) {
+      // a problem dealt within the window started at 0 RP when it arrived
+      s = t - p.dealtAt < RP_WINDOW_MS && p.dealtAt <= t ? [[p.dealtAt, 0]] : [];
+      rpSamples.set(p.key, s);
+    }
+    if (!s.length || t - s[s.length - 1][0] >= 5000) s.push([t, p.rp]);
+    // keep one sample from before the window, so that the rate covers all of it
+    while (s.length > 1 && s[1][0] <= t - RP_WINDOW_MS) s.shift();
+  }
+}
+
+/** RP a minute the problem paid over the last 10 minutes it was in the queue (since it arrived if less); null before 30 seconds of history. */
+function rpPerMinute(p: ProblemState): number | null {
+  const s = rpSamples.get(p.key);
+  if (!s?.length) return null;
+  const t = now();
+  // the latest sample at or before the window's start, else the first one (the problem's arrival)
+  let base = s[0];
+  for (const x of s) if (x[0] <= t - RP_WINDOW_MS) base = x;
+  const span = t - base[0];
+  if (!(span >= 30_000)) return null;
+  return Math.max(0, p.rp - base[1]) / (span / 60_000);
 }
 
 /** One plain sentence on which problem clicks work on, and which problems auto-eval works on. */
@@ -3334,10 +3407,11 @@ function stepping(p: ProblemState): number {
   return lv?.progress && lv.run ? Math.max(0, lv.progress.evaluations - lv.run.evaluations) : 0;
 }
 
-/** A problem's counters, live: "12,345 evaluations · 830 since progress". */
+/** A problem's counters, live: "12,345 evaluations · 830 since progress · 1,240 RP a minute". */
 function countText(p: ProblemState): string {
   const going = stepping(p);
-  return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress`;
+  const rate = rpPerMinute(p);
+  return `${evals(p.evaluations + going)} · ${fmtInt(p.sinceGain + going)} since progress${rate === null ? "" : ` · ${fmtInt(rate)} RP a minute`}`;
 }
 
 /** The queue's dealing line: when the next problem comes, and with Auto-advance which one leaves next. */
@@ -3378,21 +3452,32 @@ const fmtTolerance = (t: number) => `${(t * 100).toFixed(Math.max(0, Math.round(
 function renderAdvance(o: Owned): void {
   show("t-advance", o.has("advance"));
   if (!o.has("advance")) return;
-  const { tolerance, patience } = state.settings;
+  const { tolerance, patience, leadPatience } = state.settings;
   const tol = $<HTMLSelectElement>("t-tolerance");
-  const pat = $<HTMLSelectElement>("t-patience");
   const tv = `1e${Math.round(Math.log10(tolerance))}`;
-  const pv = patience === null ? "never" : String(patience);
   if (tol.value !== tv) tol.value = tv;
-  if (pat.value !== pv) pat.value = pv;
+  patienceFields("t-patience", patience);
+  patienceFields("t-patience-lead", leadPatience);
+  const when = (n: number | null, who: string) =>
+    n === null
+      ? `With ${who}, Auto-advance does not drop a problem.`
+      : `With ${who}, it drops a problem after ${evals(n)} without progress, once a new one can take its slot.`;
   text(
     "t-advance-note",
     `A problem makes progress when its best gets at least ${fmtTolerance(tolerance)} smaller than at its last progress. ` +
-      (patience === null
-        ? "Auto-advance keeps every problem in the queue. The lanes go first to problems that are making progress."
-        : `After ${evals(patience)} without progress, Auto-advance drops the problem once a new one can take its slot.`) +
+      `${when(patience, "a record that is not yours")} ${when(leadPatience, "your entry leading")} ` +
+      "A problem you keep with Keep is never dropped this way." +
       (state.settings.auto ? "" : " Auto-advance works only while auto-eval is on."),
   );
+}
+
+/** One patience's number field and Never box, written from the setting (the field being typed in is left alone). */
+function patienceFields(id: string, value: number | null): void {
+  const input = $<HTMLInputElement>(id);
+  const never = $<HTMLInputElement>(`${id}-never`);
+  never.checked = value === null;
+  input.disabled = value === null;
+  if (value !== null && document.activeElement !== input && input.value !== String(value)) input.value = String(value);
 }
 
 let offersSig = "";
@@ -4002,15 +4087,31 @@ $("t-tolerance").addEventListener("change", () => {
   persist();
   render();
 });
-$("t-patience").addEventListener("change", () => {
-  const v = $<HTMLSelectElement>("t-patience").value;
-  const w = v === "never" ? null : Number(v);
-  if (!PATIENCES.includes(w)) return;
-  state.settings.patience = w;
-  persist();
-  render();
-  void dealTick();
-});
+/** The number field and the Never box of one patience (the saved setting `which`). */
+function bindPatience(id: string, which: "patience" | "leadPatience"): void {
+  const input = $<HTMLInputElement>(id);
+  const never = $<HTMLInputElement>(`${id}-never`);
+  const set = (v: number | null) => {
+    state.settings[which] = v;
+    persist();
+    render();
+    void dealTick();
+  };
+  input.addEventListener("change", () => {
+    const v = parsePatience(input.value);
+    if (typeof v === "number") return set(v);
+    // not a whole number from the minimum to the maximum: the field shows the setting again
+    input.value = String(state.settings[which] ?? DEFAULT_PATIENCE);
+    say(`A patience is a whole number from ${fmtInt(PATIENCE_MIN)} to ${fmtInt(PATIENCE_MAX)}.`);
+  });
+  never.addEventListener("change", () => {
+    if (never.checked) return set(null);
+    const v = parsePatience(input.value);
+    set(typeof v === "number" ? v : DEFAULT_PATIENCE);
+  });
+}
+bindPatience("t-patience", "patience");
+bindPatience("t-patience-lead", "leadPatience");
 $("t-next").addEventListener("click", () => {
   const p = focused();
   if (!p || clicksToDeal() > 0) return;

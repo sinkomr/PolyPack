@@ -120,13 +120,44 @@ canvas#board[hidden] {
   border-bottom: 1px solid var(--border);
   font-size: 13.5px;
 }
+/*
+ * A row: the title and the actions on one line, then the gap and standing with the "Working" mark's
+ * slot, then the counters. Every line has a fixed height, so no button moves while the numbers change.
+ */
+.t-queue li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+}
 .t-queue li.focus {
   font-weight: 600;
 }
+.t-queue .t-q-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.t-queue .t-q-status {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  min-height: 1.3em;
+}
 .t-queue .t-q-actions {
-  display: inline-flex;
+  display: grid;
+  grid-template-columns: 48px 52px 48px;
   gap: 4px;
-  margin-left: 4px;
+}
+.t-queue .t-q-actions button {
+  min-width: 0;
+  padding: 1px 4px;
+}
+.t-queue .t-q-count {
+  grid-column: 1 / -1;
 }
 .t-queue button,
 .t-lanes button {
@@ -136,7 +167,7 @@ canvas#board[hidden] {
 }
 /* each problem's evaluations, updated in place while it runs */
 .t-queue .t-q-count {
-  display: block;
+  min-height: 2.6em;
   color: var(--muted);
   font-size: 12px;
   font-weight: 400;
@@ -144,10 +175,15 @@ canvas#board[hidden] {
 }
 /* the mark on a problem a lane is working on */
 .t-queue .t-q-live {
-  margin: 0 4px;
+  width: 70px;
+  justify-self: end;
+  visibility: hidden;
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
+}
+.t-queue .t-q-live.on {
+  visibility: visible;
 }
 .t-queue .t-q-live::before {
   content: "";
@@ -184,8 +220,18 @@ canvas#board[hidden] {
   font-weight: 600;
 }
 .t-advance .row > label:first-child {
-  flex-basis: 76px;
+  flex-basis: 150px;
   font-size: 13px;
+}
+.t-advance input[type="number"] {
+  width: 110px;
+}
+.t-advance .t-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 .t-advance .note {
   margin: 0;

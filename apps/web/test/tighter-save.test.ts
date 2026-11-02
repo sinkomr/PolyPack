@@ -464,6 +464,7 @@ describe("Tighter saves", () => {
       battery: false,
       tolerance: 1e-6,
       patience: 1000,
+      leadPatience: 1000,
       off: [],
     });
     expect(s.stats).toEqual({
@@ -518,7 +519,7 @@ describe("Tighter saves", () => {
     const r = fromJson(toJson(normalize(raw, T0)), T0);
     expect(r.ok && r.state.settings.patience).toBeNull();
     raw.settings.tolerance = 0.5;
-    raw.settings.patience = 1234;
+    raw.settings.patience = 0.5;
     expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
     raw.settings.tolerance = "1e-3";
     raw.settings.patience = "never";
@@ -527,6 +528,33 @@ describe("Tighter saves", () => {
     delete raw.settings.tolerance;
     delete raw.settings.patience;
     expect(normalize(raw, T0).settings).toMatchObject({ tolerance: 1e-6, patience: 1000 });
+  });
+
+  it("keep any whole-number patience from 100 to 10,000,000 for each of the two, Never included, and a kept problem", () => {
+    const raw = JSON.parse(toJson(played()));
+    raw.settings.patience = 1234;
+    raw.settings.leadPatience = 10_000_000;
+    raw.queue[0].kept = true;
+    const back = fromJson(JSON.stringify(raw), T0);
+    expect(back.ok && back.state.settings).toMatchObject({ patience: 1234, leadPatience: 10_000_000 });
+    expect(back.ok && back.state.queue.map((p) => p.kept)).toEqual(raw.queue.map((_: unknown, i: number) => i === 0));
+    raw.settings.patience = null;
+    raw.settings.leadPatience = 100;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: null, leadPatience: 100 });
+    const again = fromJson(toJson(normalize(raw, T0)), T0);
+    expect(again.ok && again.state.settings).toMatchObject({ patience: null, leadPatience: 100 });
+    // out of range or not whole: the default, and the lead patience copies the other when it is missing (an older save)
+    raw.settings.patience = 99;
+    raw.settings.leadPatience = 10_000_001;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: 1000, leadPatience: 1000 });
+    raw.settings.patience = 5000;
+    delete raw.settings.leadPatience;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: 5000, leadPatience: 5000 });
+    raw.settings.patience = null;
+    expect(normalize(raw, T0).settings).toMatchObject({ patience: null, leadPatience: null });
+    // a save without the flag has no kept problem
+    delete raw.queue[0].kept;
+    expect(normalize(raw, T0).queue[0].kept).toBe(false);
   });
 
   it("keep the dealer's switches turned off, in their order, and drop anything that is not a switch", () => {

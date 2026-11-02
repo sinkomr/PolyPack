@@ -100,6 +100,8 @@ export interface ProblemFields {
   refused: { score: number; reasons: string[] } | null;
   /** Dropped from the queue; leaves once its best has been sent (or there is nothing to send). */
   leaving: boolean;
+  /** The player pressed Keep: Auto-advance never drops this problem (Drop still does). */
+  kept: boolean;
   /** A POST whose answer has not arrived (or was lost): what was sent, under which name, after which leader. */
   sending: PendingSend | null;
   /**
@@ -167,8 +169,13 @@ export interface Settings {
   battery: boolean;
   /** Auto-advance: the smallest relative improvement that counts as progress (one of TOLERANCES). */
   tolerance: number;
-  /** Auto-advance: evaluations without progress before a problem leaves the queue (one of PATIENCES; null: never). */
+  /**
+   * Auto-advance: evaluations without progress before a problem leaves the queue while the record on
+   * it is not yours (any whole number from PATIENCE_MIN to PATIENCE_MAX; null: never).
+   */
   patience: number | null;
+  /** The same, once your entry leads the problem (null: never). */
+  leadPatience: number | null;
   /** The dealer's switches turned off in the tech tree (upgrades.ts SWITCHES). */
   off: UpgradeId[];
 }
@@ -233,7 +240,14 @@ export const PAST_LIMIT = 3000;
  * progress before a problem leaves the queue (null: never).
  */
 export const TOLERANCES: readonly number[] = [1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3];
-export const PATIENCES: readonly (number | null)[] = [250, 500, 1000, 2000, 5000, 10000, 20000, null];
+export const PATIENCE_MIN = 100;
+export const PATIENCE_MAX = 10_000_000;
+/** A patience as typed or saved: a whole number from PATIENCE_MIN to PATIENCE_MAX, or null for Never (undefined when it is neither). */
+export function parsePatience(v: unknown): number | null | undefined {
+  if (v === null) return null;
+  const n = typeof v === "string" ? (/^\s*\d[\d,]*\s*$/.test(v) ? Number(v.replace(/[,\s]/g, "")) : NaN) : v;
+  return typeof n === "number" && Number.isInteger(n) && n >= PATIENCE_MIN && n <= PATIENCE_MAX ? n : undefined;
+}
 export const DEFAULT_TOLERANCE = 1e-6;
 export const DEFAULT_PATIENCE = 1000;
 
@@ -255,6 +269,7 @@ export function newGame(now: number, seed: number): GameState {
       battery: false,
       tolerance: DEFAULT_TOLERANCE,
       patience: DEFAULT_PATIENCE,
+      leadPatience: DEFAULT_PATIENCE,
       off: [],
     },
     stats: {
@@ -302,6 +317,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     closed: false,
     refused: null,
     leaving: false,
+    kept: false,
     sending: null,
     paidTo: null,
     unconfirmed: 0,
@@ -335,8 +351,19 @@ export const ownedSet = (s: GameState): Owned =>
 /** The tolerance progress is measured with: the player's with Auto-advance, else any improvement that counts. */
 export const progressTolerance = (s: GameState): number => (ownedSet(s).has("advance") ? s.settings.tolerance : FLOOR);
 
-/** Evaluations without progress after which a problem has stalled, for the lanes' order: the patience, or with Never its default. */
-export const stallAfter = (s: GameState): number => s.settings.patience ?? DEFAULT_PATIENCE;
+/** The patience that applies to a problem: the lead one once your entry leads it, else the other (null: never). */
+export const patienceFor = (s: GameState, p: ProblemState): number | null =>
+  p.ourId !== null ? s.settings.leadPatience : s.settings.patience;
+
+/**
+ * Evaluations without progress after which a problem has stalled, for the lanes' order: its patience,
+ * or with Never its default. Without a problem, the smaller of the two patiences.
+ */
+export const stallAfter = (s: GameState, p?: ProblemState): number =>
+  (p
+    ? patienceFor(s, p)
+    : Math.min(s.settings.patience ?? DEFAULT_PATIENCE, s.settings.leadPatience ?? DEFAULT_PATIENCE)) ??
+  DEFAULT_PATIENCE;
 
 export function log(s: GameState, now: number, text: string): void {
   s.log.push({ t: now, text });
@@ -934,11 +961,12 @@ export function leave(s: GameState, key: string, now: number): void {
 
 /**
  * Why Auto-advance takes a problem out of the queue, or null while it stays: it ran the player's
- * patience of evaluations without progress. Nothing with the patience at Never is dropped this way.
+ * patience of evaluations without progress (patienceFor). A kept problem, and one whose patience is
+ * Never, is not dropped this way.
  */
 export function leaveReason(s: GameState, p: ProblemState): "stalled" | null {
-  const patience = s.settings.patience;
-  if (patience === null || p.leaving || p.closed) return null;
+  const patience = patienceFor(s, p);
+  if (patience === null || p.kept || p.leaving || p.closed) return null;
   return p.sinceGain >= patience ? "stalled" : null;
 }
 

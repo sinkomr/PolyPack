@@ -185,6 +185,7 @@
           <h2 id="t-queue-heading">Queue</h2>
           <p id="t-queue-work" class="note"></p>
           <ol id="t-queue-list" class="t-queue"></ol>
+          <p id="t-queue-leaving" class="note" hidden></p>
           <p id="t-deal" class="note"></p>
           <div id="t-offers" class="t-offers" hidden>
             <h3>Offers</h3>
@@ -205,17 +206,14 @@
               </select>
             </div>
             <div class="row">
-              <label for="t-patience">Patience</label>
-              <select id="t-patience" aria-describedby="t-advance-note">
-                <option value="250">250 evaluations</option>
-                <option value="500">500 evaluations</option>
-                <option value="1000">1,000 evaluations (the default)</option>
-                <option value="2000">2,000 evaluations</option>
-                <option value="5000">5,000 evaluations</option>
-                <option value="10000">10,000 evaluations</option>
-                <option value="20000">20,000 evaluations</option>
-                <option value="never">Never</option>
-              </select>
+              <label for="t-patience">Patience, record not yours</label>
+              <input id="t-patience" type="number" inputmode="numeric" min="100" max="10000000" step="1" aria-describedby="t-advance-note" />
+              <label class="t-check-inline"><input id="t-patience-never" type="checkbox" /> Never</label>
+            </div>
+            <div class="row">
+              <label for="t-patience-lead">Patience, your entry leads</label>
+              <input id="t-patience-lead" type="number" inputmode="numeric" min="100" max="10000000" step="1" aria-describedby="t-advance-note" />
+              <label class="t-check-inline"><input id="t-patience-lead-never" type="checkbox" /> Never</label>
             </div>
             <p id="t-advance-note" class="note"></p>
           </fieldset>
