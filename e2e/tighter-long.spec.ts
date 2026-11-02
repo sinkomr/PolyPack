@@ -350,8 +350,8 @@ test("long game: Auto picks each run's method; a pipeline moves to its next meth
   await expect(page.locator("#t-runs")).toBeVisible();
   await expect(page.locator("#t-runs")).toContainText("Auto is on");
   await click(page);
-  const method = await page.locator("#t-runinfo").textContent();
-  expect(method).toMatch(/^(mc_compress|basin_hopping|shrink_repair) /);
+  // the run opens after the click's job starts: wait for the run line to name its method
+  await expect(page.locator("#t-runinfo")).toHaveText(/^(mc_compress|basin_hopping|shrink_repair) /);
   // back to a chosen method
   await select.selectOption("mc_compress");
   await expect.poll(() => game(page, (s) => s.runplan.auto)).toBe(false);
