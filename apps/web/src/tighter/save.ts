@@ -982,6 +982,20 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   };
 }
 
+/** What the player is told while the browser refuses to keep the save. */
+export const SAVE_FAILED_TEXT =
+  "The game could not be saved in this browser. Progress since the last save will be lost if you reload. Export your save from Settings to keep it.";
+
+/** Runs a write to storage once: true when it worked, false when it threw (quota or otherwise). It never retries. */
+export function tryWrite(write: () => void): boolean {
+  try {
+    write();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function toJson(state: GameState): string {
   return JSON.stringify({ ...state, version: SAVE_VERSION });
 }

@@ -134,7 +134,16 @@ import {
   rankCandidates,
 } from "./rank";
 import { AUTO_LIMIT_WARNING, Speeds, autoHold, autoOverLimit, autoTarget } from "./scheduler";
-import { RetiredRefund, STORAGE_KEY, exportString, fromJson, importString, toJson } from "./save";
+import {
+  RetiredRefund,
+  SAVE_FAILED_TEXT,
+  STORAGE_KEY,
+  tryWrite,
+  exportString,
+  fromJson,
+  importString,
+  toJson,
+} from "./save";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
 import {
@@ -401,12 +410,14 @@ function saveNow(): void {
   clearTimeout(saveTimer);
   saveTimer = 0;
   if (savesDisabled || !ownsGame) return;
-  try {
+  // storage full or unavailable: the game goes on in memory, and the player is told until a save works
+  const ok = tryWrite(() => {
     state.pacer = compactPacer(state.pacer, now());
     localStorage.setItem(STORAGE_KEY, toJson(state));
-  } catch {
-    // storage full or unavailable: the game goes on in memory
-  }
+  });
+  const warning = $("t-save-warning");
+  warning.textContent = ok ? "" : SAVE_FAILED_TEXT;
+  warning.hidden = ok;
 }
 /** Saves soon: clicks come many a second, so saves are spaced. */
 function persist(): void {
