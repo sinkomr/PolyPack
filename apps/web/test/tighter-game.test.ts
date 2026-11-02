@@ -356,23 +356,16 @@ describe("Tighter runs on the board", () => {
   });
 
   describe("a transferred start", () => {
-    /** A problem whose Load all gave 10 and a transfer 8: the floor is 8, the first payment counts from 10. */
+    /** A problem whose Load all gave 10 and a transfer 8: the floor is 8. */
     const transferred = () => {
       const g = game();
-      applyLoadAll(g.p, board(3), 8, null, 10);
-      return g;
-    };
-    /** The same problem without a transfer: Load all's 10 is the floor. */
-    const plain = () => {
-      const g = game();
-      applyLoadAll(g.p, board(3), 10, null);
+      applyLoadAll(g.p, board(3), 8, null);
       return g;
     };
 
-    it("pays nothing for a board between the transfer start and Load all's start", () => {
+    it("pays nothing for a board above the transfer start", () => {
       const { s, p } = transferred();
       expect(p.floor).toBe(8);
-      expect(p.payFrom).toBe(10);
       // 9 is above the transfer start (8): the board does not even improve
       const c = applyStep(s, p, step(9), T0);
       expect(c).toMatchObject({ improved: false, counted: false });
@@ -380,21 +373,15 @@ describe("Tighter runs on the board", () => {
       expect(s.rp).toBe(0);
     });
 
-    it("pays a first record below the transfer start from Load all's score, then from paidTo", () => {
-      const t = transferred();
-      const n = plain();
-      const ct = applyStep(t.s, t.p, step(7.5), T0);
-      const cn = applyStep(n.s, n.p, step(7.5), T0);
-      expect(ct.points!.firstBonus).toBe(true);
-      expect(ct.points!.total).toBeGreaterThan(0);
-      // the same points as a problem that began at 10, bonus included
-      expect(ct.points!.total).toBe(cn.points!.total);
-      expect(t.p.paidTo).toBe(7.5);
-      // the next payment counts from the last score paid, and is no first record
-      const c2t = applyStep(t.s, t.p, step(7, 2), T0);
-      const c2n = applyStep(n.s, n.p, step(7, 2), T0);
-      expect(c2t.points!.firstBonus).toBe(false);
-      expect(c2t.points!.total).toBe(c2n.points!.total);
+    it("pays a first record only its bonus, then counts from it", () => {
+      const { s, p } = transferred();
+      const c = applyStep(s, p, step(7.5), T0);
+      expect(c.points!.bonus).toBe("first");
+      expect(c.points!.total).toBe(1000);
+      expect(p.paidTo).toBe(7.5);
+      const c2 = applyStep(s, p, step(7, 2), T0);
+      expect(c2.points!.bonus).toBeNull();
+      expect(c2.points!.delta).toBeCloseTo(1 - 7 / 7.5, 12);
     });
 
     it("must still beat the transfer start: a first record above the floor is no record", () => {
@@ -402,16 +389,6 @@ describe("Tighter runs on the board", () => {
       const c = applyStep(s, p, step(8 * (1 - 1e-12)), T0);
       expect(c.counted).toBe(false);
       expect(c.points).toBeNull();
-    });
-
-    it("ignores payFrom when a leader is known", () => {
-      const t = transferred();
-      const n = game();
-      applyLoadAll(n.p, board(3), 8, null);
-      for (const g of [t, n]) g.p.leader = { score: 8.5, name: "Bob", id: 4 };
-      const ct = applyStep(t.s, t.p, step(7.5), T0);
-      const cn = applyStep(n.s, n.p, step(7.5), T0);
-      expect(ct.points!.total).toBe(cn.points!.total);
     });
   });
 
@@ -530,20 +507,21 @@ describe("Tighter runs on the board", () => {
 });
 
 describe("Tighter points per click", () => {
-  it("pay each improving click at once, the first record with its bonus", () => {
+  it("pay each improving click at once, the first record only its bonus", () => {
     const { s, p } = game();
     applyLoadAll(p, board(3), 1.28 * B, null);
     // Compact: the first record, against the free floor
     const c1 = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
     expect(c1.firstRecord).toBe(true);
-    expect(c1.points!.firstBonus).toBe(true);
+    expect(c1.points!.bonus).toBe("first");
+    expect(c1.points!.total).toBe(1000);
     expect(s.rp).toBeCloseTo(c1.points!.total, 12);
     expect(s.rpEarned).toBeCloseTo(c1.points!.total, 12);
     expect(p.paidTo).toBe(1.2 * B);
     expect(p.unconfirmed).toBeCloseTo(c1.points!.total, 12);
     // the next click is measured from what was paid, without the bonus
     const c2 = applyStep(s, p, step(1.19 * B, 2), T0);
-    expect(c2.points!.firstBonus).toBe(false);
+    expect(c2.points!.bonus).toBeNull();
     expect(c2.points!.delta).toBeCloseTo(1 - 1.19 / 1.2, 12);
     expect(s.rp).toBeCloseTo(c1.points!.total + c2.points!.total, 12);
     expect(p.rp).toBeCloseTo(s.rp, 12);
@@ -564,13 +542,13 @@ describe("Tighter points per click", () => {
     applyLoadAll(p, board(3), 1.28 * B, null);
     const c1 = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
     const c2 = applyStep(s, p, step(1.18 * B, 2), T0);
-    expect(c1.points!.firstBonus).toBe(true);
+    expect(c1.points!.bonus).toBe("first");
     expect(s.rp).toBeCloseTo(c1.points!.total + c2.points!.total, 12);
     expect(p.paidTo).toBe(1.18 * B);
     expect(payAll(s)).toBe(0);
   });
 
-  it("measure a dealt record from its leader, and pay double from the beat until the entry is accepted", () => {
+  it("measure a dealt record from its leader, and pay the lead bonus once, on the payment that passes it", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
     const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
@@ -584,49 +562,113 @@ describe("Tighter points per click", () => {
     expect(pendingPoints(p, s.name)).toBeNull();
     expect(hasUnsent(p)).toBe(false);
     const c1 = applyStep(s, p, step(1.29 * B, 1), T0);
-    expect(c1.points!.beatBonus).toBe(true);
-    expect(c1.points!.c).toBe(3);
-    expect(c1.points!.firstBonus).toBe(false);
-    // every payment from the moment the board passes Bob's record is doubled, until the server accepts it
+    expect(c1.points!.bonus).toBe("lead");
+    expect(c1.points!.bonusRp).toBe(10_000);
+    expect(c1.points!.improvement).toBeGreaterThan(0);
+    expect(c1.points!.total).toBeCloseTo(c1.points!.improvement + 10_000, 9);
+    expect(s.bonusPaid[p.key]).toBe(0);
+    // later payments, before and after the server accepts the entry, pay no second bonus
     const c2 = applyStep(s, p, step(1.28 * B, 2), T0);
-    expect(c2.points!.beatBonus).toBe(true);
-    const c3 = applyStep(s, p, step(1.27 * B, 3), T0);
-    expect(c3.points!.beat).toBe(2);
-    applyAnswer(s, p, p.leader, 1.27 * B, { kind: "leader", score: 1.27 * B, id: 17, pending: false }, T0);
-    // accepted: our own record pays the plain factor
-    expect(applyStep(s, p, step(1.26 * B, 4), T0).points!.beat).toBe(1);
+    expect(c2.points!.bonus).toBeNull();
+    expect(c2.points!.total).toBe(c2.points!.improvement);
+    applyAnswer(s, p, p.leader, 1.28 * B, { kind: "leader", score: 1.28 * B, id: 17, pending: false }, T0);
+    expect(applyStep(s, p, step(1.27 * B, 3), T0).points!.bonus).toBeNull();
   });
 
-  it("pays no double on our own record, and none before the board passes the other record", () => {
-    const s = newGame(T0, 1);
-    s.name = "Ada";
-    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
-    addToQueue(s, p);
-    p.phase = "ready";
-    p.board = board(3);
-    p.best = 1.3 * B;
-    p.floor = 1.3 * B;
-    p.leader = { score: 1.3 * B, name: "Ada", id: 4 };
-    p.ourId = 4;
-    expect(applyStep(s, p, step(1.29 * B, 1), T0).points!.beat).toBe(1);
-    expect(applyStep(s, p, step(1.28 * B, 2), T0).points!.beat).toBe(1);
-  });
-
-  it("pays no double while the board is not visibly better than the other record", () => {
-    const s = newGame(T0, 1);
-    s.name = "Ada";
-    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
-    addToQueue(s, p);
-    p.phase = "ready";
-    p.board = board(3);
-    p.best = 1.3 * B;
-    p.floor = 1.3 * B;
-    p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
+  it("pays no lead bonus on our own record, nor before the board passes the other record visibly and by 1e-6", () => {
+    const make = (name: string, id: number | null) => {
+      const s = newGame(T0, 1);
+      s.name = "Ada";
+      const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
+      addToQueue(s, p);
+      p.phase = "ready";
+      p.board = board(3);
+      p.best = 1.3 * B;
+      p.floor = 1.3 * B;
+      p.leader = { score: 1.3 * B, name, id: 4 };
+      if (id !== null) p.ourId = id;
+      return { s, p };
+    };
+    const own = make("Ada", 4);
+    expect(applyStep(own.s, own.p, step(1.29 * B, 1), T0).points!.bonus).toBeNull();
     // better by 2e-9 of the score: an improvement, but the same at 6 decimals
-    expect(applyStep(s, p, step(1.3 * B * (1 - 2e-9), 1), T0).points?.beat ?? 1).toBe(1);
+    const tiny = make("Bob", null);
+    expect(applyStep(tiny.s, tiny.p, step(1.3 * B * (1 - 2e-9), 1), T0).points?.bonus ?? null).toBeNull();
+    // visible at 6 decimals but under 1e-6 relative: still no bonus, and the bonus is not spent
+    const edge = make("Bob", null);
+    edge.p.leader = { score: 1000, name: "Bob", id: 4 };
+    edge.p.best = edge.p.floor = 1000;
+    const c = applyStep(edge.s, edge.p, step(1000 * (1 - 5e-7), 1), T0);
+    expect(c.points?.bonus ?? null).toBeNull();
+    expect(edge.s.bonusPaid[edge.p.key]).toBeUndefined();
+    // the next payment that passes by 1e-6 pays it
+    expect(applyStep(edge.s, edge.p, step(1000 * (1 - 2e-6), 2), T0).points!.bonus).toBe("lead");
   });
 
-  it("pays double on each step across a beat, a refusal keeps it, and a lost lead opens a new window", () => {
+  it("pays the lead bonus on a published value, and never the flat bonuses with a multiplier", () => {
+    const s = newGame(T0, 1);
+    s.name = "Ada";
+    s.standing.points = 5;
+    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "published", T0);
+    addToQueue(s, p);
+    p.phase = "ready";
+    p.board = board(3);
+    p.best = 1.3 * B;
+    p.floor = 1.3 * B;
+    p.published = 1.2 * B;
+    // above the published value nothing pays
+    expect(pendingPoints(p, s.name, s)).toBeNull();
+    const c = applyStep(s, p, step(1.1 * B, 1), T0);
+    expect(c.points!.bonus).toBe("lead");
+    expect(c.points!.total).toBeCloseTo(c.points!.improvement * c.points!.multiplier + 10_000, 6);
+    // rent's base counts the improvement only
+    expect(s.economy.base[p.key]).toBeCloseTo(c.points!.improvement, 6);
+  });
+
+  it("pays each flat bonus once per problem per cycle, keyed by the reset count", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 10, null);
+    expect(applyStep(s, p, step(9.5, 1), T0).points!.bonus).toBe("first");
+    // the problem is dealt again with no record kept (its first record not confirmed, as after a drop)
+    p.paidTo = null;
+    p.verified = null;
+    p.leader = null;
+    expect(pendingPoints(p, s.name, s)!.bonus).toBeNull();
+    // a reset opens a new cycle: nothing was cleared, and the bonus is due again
+    s.standing.resets = 1;
+    expect(pendingPoints(p, s.name, s)!.bonus).toBe("first");
+  });
+
+  it("takes the bonus back with the points when the server was not first, and pays it again later", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 10, null);
+    applyStep(s, p, step(9.5, 1, { evaluations: 100 }), T0);
+    expect(s.bonusPaid[p.key]).toBe(0);
+    expect(p.bonusOpen).toBe(true);
+    markSending(p, 9.5, "Ada", null, T0);
+    expect(p.bonusOpen).toBe(false);
+    expect(p.sending!.bonus).toBe(true);
+    const a = applyAnswer(s, p, null, 9.5, { kind: "behind", score: 9.5, leaderScore: 9.0 }, T0);
+    expect(a.takenBack).toBe(1000);
+    expect(s.rp).toBe(0);
+    expect(s.bonusPaid[p.key]).toBeUndefined();
+    // Bob's 9.0 is now the record: passing it pays the lead bonus
+    const c = applyStep(s, p, step(8.9, 2), T0);
+    expect(c.points!.bonus).toBe("lead");
+  });
+
+  it("keeps the bonus when the server makes the entry leader", () => {
+    const { s, p } = game();
+    applyLoadAll(p, board(3), 10, null);
+    applyStep(s, p, step(9.5, 1), T0);
+    markSending(p, 9.5, "Ada", null, T0);
+    const a = applyAnswer(s, p, null, 9.5, { kind: "leader", score: 9.5, id: 3, pending: false }, T0);
+    expect(a.confirmed).toBe(1000);
+    expect(s.bonusPaid[p.key]).toBe(0);
+    expect(s.rp).toBe(1000);
+  });
+
+  it("pays the lead bonus only once when the lead is taken back from another name in the same cycle", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
     const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
@@ -636,57 +678,10 @@ describe("Tighter points per click", () => {
     p.best = 1.3 * B;
     p.floor = 1.3 * B;
     p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
-    const beats: number[] = [];
-    for (let i = 1; i <= 4; i++) beats.push(applyStep(s, p, step((1.3 - 0.01 * i) * B, i), T0).points!.beat);
-    expect(beats).toEqual([2, 2, 2, 2]);
-    // a send that is refused leaves Bob's record in place: the next step still pays double
-    markSending(p, 1.26 * B, s.name, p.leader, T0);
-    applyAnswer(
-      s,
-      p,
-      { score: 1.3 * B, name: "Bob", id: 4 },
-      1.26 * B,
-      { kind: "refused", status: 422, reasons: ["x"] },
-      T0,
-    );
-    expect(applyStep(s, p, step(1.25 * B, 5), T0).points!.beat).toBe(2);
-    // accepted: back to 1
-    applyAnswer(
-      s,
-      p,
-      { score: 1.3 * B, name: "Bob", id: 4 },
-      1.25 * B,
-      { kind: "leader", score: 1.25 * B, id: 17, pending: false },
-      T0,
-    );
-    expect(applyStep(s, p, step(1.24 * B, 6), T0).points!.beat).toBe(1);
-    // Carol takes the lead below our board: the next beat of her record is a new window, step after step
-    applyLeader(p, { score: 1.2 * B, name: "Carol", id: 5 }, s, T0);
-    // an improvement on our own last payment that is still above Carol's record pays the plain factor
-    expect(applyStep(s, p, step(1.23 * B, 7), T0).points!.beat).toBe(1);
-    expect(applyStep(s, p, step(1.19 * B, 8), T0).points!.beat).toBe(2);
-    expect(applyStep(s, p, step(1.18 * B, 9), T0).points!.beat).toBe(2);
-  });
-
-  it("pays the beat factor again each time the lead is taken back from another name", () => {
-    const s = newGame(T0, 1);
-    s.name = "Ada";
-    s.consent = true;
-    const p = newProblem({ family: "polygon", N: 24, M: 30, P: 3 }, "loose", T0);
-    addToQueue(s, p);
-    p.phase = "ready";
-    p.board = board(3);
-    p.best = 1.3 * B;
-    p.floor = 1.3 * B;
-    p.leader = { score: 1.3 * B, name: "Bob", id: 4 };
-    const c1 = applyStep(s, p, step(1.29 * B, 1), T0);
-    expect(c1.points!.beat).toBe(2);
-    applyAnswer(s, p, 1.3 * B, 1.29 * B, { kind: "leader", score: 1.29 * B, id: 17, pending: false }, T0);
-    // leading: a nibble pays the plain factor
-    expect(applyStep(s, p, step(1.28 * B, 2), T0).points!.beat).toBe(1);
-    // Bob takes the lead back (a check), and the retake is a beat again
+    expect(applyStep(s, p, step(1.29 * B, 1), T0).points!.bonus).toBe("lead");
+    applyAnswer(s, p, { score: 1.3 * B, name: "Bob", id: 4 }, 1.29 * B, { kind: "leader", score: 1.29 * B, id: 17, pending: false }, T0);
     applyLeader(p, { score: 1.27 * B, name: "Bob", id: 5 }, s, T0);
-    expect(applyStep(s, p, step(1.26 * B, 3), T0).points!.beat).toBe(2);
+    expect(applyStep(s, p, step(1.26 * B, 3), T0).points!.bonus).toBeNull();
   });
 });
 
@@ -823,9 +818,9 @@ describe("Tighter answers from the server", () => {
     expect(recordsHeld(s)).toBe(1);
     expect(applyLeader(p, { score: 9.2, name: "Bob", id: 18 }).lost).toBe(true);
     expect(recordsHeld(s)).toBe(0);
-    // taking it back from another name pays the beat bonus, measured from what was paid
+    // taking it back from another name pays no second bonus in the same cycle, and is measured from what was paid
     const c = applyStep(s, p, step(9.1, 2), T0);
-    expect(c.points!.beatBonus).toBe(true);
+    expect(c.points!.bonus).toBeNull();
     expect(c.points!.delta).toBeCloseTo(1 - 9.1 / 9.5, 12);
     expect(submitTarget(p, 9.2)).toBe(9.2);
     expect(submitTarget(p, null)).toBe(10);

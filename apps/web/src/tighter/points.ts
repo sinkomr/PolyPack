@@ -5,38 +5,44 @@ import type { ProblemKey } from "./frontier";
 /**
  * Record points (RP), design.md §5. For a verified improvement from s_prev to s_new:
  *
- *   RP = w · c · k · [ (1 + log10(Δ / F)) + W_s ln(s_prev / s_new) + W_g ln(g_prev / g_new) + bonus ] · beat
+ *   RP = w · k · [ STEP_WEIGHT · (1 + log10(Δ / F)) + W_s ln(s_prev / s_new) + W_g ln(g_prev / g_new) ] · multiplier + bonus
  *
  * k is the cost factor, the ms an evaluation of the problem takes over the ms at N+M+P = 85, so that
- * a slow problem pays about as much per second of solver time as a fast one. `beat` is 2 for the
- * improvement while the board is past another name's record or a published value and the server has not yet made our entry the leader, and 1 otherwise.
+ * a slow problem pays about as much per second of solver time as a fast one. With Δ = 1 − s_new /
+ * s_prev, g = s / areaLowerBound − 1 and w = d(N) d(M). The multiplier (standing, collections, rules)
+ * is game.ts's and applies to the bracket only.
  *
- * with Δ = 1 − s_new / s_prev, g = s / areaLowerBound − 1, w = d(N) d(M) and c the contest weight
- * of the problem's tier. Only improvements that count are paid: those `improvesOn` accepts, i.e.
- * Δ > F with F = SCORE_TIE = 1e-9 relative, exactly the improvements the server makes leader.
- * Everything here is game-only arithmetic on server-visible numbers.
+ * The bonus is flat, with no multiplier of any kind [SPEC, Michael 2026-11-01, replacing the tier
+ * weights of 1, 3, 10 and 100, the double pay for beating a record, and the first-record bonus of 10]:
+ *   FIRST_BONUS (1,000) for the first record on a problem that has none. That payment pays only the
+ *     bonus: the cut from the starting score is not paid, later payments count from the first record.
+ *   LEAD_BONUS (10,000) for the payment whose board passes a record held by another name, a
+ *     published value or a research record, visibly at 6 decimals and by LEAD_MIN relative. That
+ *     payment also pays the bracket for the margin past the record.
+ * game.ts decides which bonus is due (once per problem per cycle) and passes it as `bonus`.
+ *
+ * Only improvements that count are paid: those `improvesOn` accepts, i.e. Δ > F with F = SCORE_TIE =
+ * 1e-9 relative, exactly the improvements the server makes leader. Everything here is game-only
+ * arithmetic on server-visible numbers.
  *
  * The size and gap terms telescope: over a run they add up to W_s ln(s₀/s₁) + W_g ln(g₀/g₁)
  * whatever path it takes, so they pay for how much smaller the board got. The step term is paid once
- * for each step that improves. With weights of 100 (until 2026-10-22) the step term was 80 to 99 % of
- * what methods earned, so points counted improving steps: mc_compress, which improves a hair on
- * almost every evaluation, out-earned methods that cut the side 10 to 60 times more. At 10,000 each,
- * the methods' points per evaluation rank as their side cuts do on the method reports' measured runs
- * (Spearman 0.99 at 40-evaluation jobs, 0.77 at 10-evaluation clicks), and a nibble still pays its
- * step term of 1 to about 6 points (methods-2026-10-22/economy.md) [CALC].
+ * for each step that improves, and counts a tenth of what it did so that many tiny steps pay little:
+ * a nibble pays 0.1 to about 0.7 points (it paid 1 to 6) [CALC].
  */
 
 /** The floor F: the smallest relative improvement that counts, equal to the server's tie tolerance. */
 export const FLOOR = SCORE_TIE;
 
 /**
- * Contest weight c of a tier (design.md §6, plan 2026-10-20 §3): open problems (no entry yet), loose
- * site records (clearly weaker than their neighbours in P), every other site record without a
- * published value, and problems with a best-known published value, which a record must beat.
+ * The tiers of a problem, categories for dealing, filters and the income table (design.md §6): open
+ * problems (no entry yet), loose site records (clearly weaker than their neighbours in P), every
+ * other site record without a published value, and problems with a best-known published value.
+ * They no longer weigh the pay.
  */
-export const CONTEST = { open: 1, loose: 3, batch: 10, published: 100 } as const;
-export type Tier = keyof typeof CONTEST;
-export const TIERS = Object.keys(CONTEST) as Tier[];
+export const TIERS = ["open", "loose", "batch", "published"] as const;
+export type Tier = (typeof TIERS)[number];
+export const isTier = (v: unknown): v is Tier => typeof v === "string" && (TIERS as readonly string[]).includes(v);
 
 /** How the game names a tier to the player. */
 export const TIER_LABEL: Record<Tier, string> = {
@@ -63,18 +69,16 @@ export const GAP_WEIGHT = 10_000;
 export const RESET_MIN = 1_000_000_000;
 /** What each cycle's threshold is times the last one's. */
 export const RESET_GROWTH = 5;
-/** A first record whose gap beats the free floor's by at least 10 %. */
-export const FIRST_RECORD_BONUS = 10;
-export const FIRST_RECORD_GAP_RATIO = 0.9;
-/**
- * What every improvement pays times from the moment the board is visibly (at 6 decimals) past a
- * record held by another name, or a published value, until the server makes our entry the leader
- * [SPEC, Michael 2026-10-27: beating a record should pay noticeably more than a first record, "not
- * insanely more"; the double pay lasts until the new record is accepted]. An additive bonus could
- * not do it: the terms it would add to are in the hundreds to thousands.
- */
-export const BEAT_OTHER_FACTOR = 2;
-
+/** The weight of the step term, a tenth of what it was [SPEC, Michael 2026-11-01]. */
+export const STEP_WEIGHT = 0.1;
+/** The flat bonus for the first record on a problem that has none. */
+export const FIRST_BONUS = 1_000;
+/** The flat bonus for taking the lead on a problem that already has a record. */
+export const LEAD_BONUS = 10_000;
+/** The board must pass the record by at least this relative margin for the lead bonus. */
+export const LEAD_MIN = 1e-6;
+export type BonusKind = "first" | "lead";
+export const BONUS_RP: Record<BonusKind, number> = { first: FIRST_BONUS, lead: LEAD_BONUS };
 /** The cost model's reference: ms of one mc_compress evaluation at N+M+P = 85, where the factor is 1. */
 export const REFERENCE_SIZE = 85;
 
@@ -106,10 +110,8 @@ export type PointsInput = ProblemKey & {
   /** The verified new score. */
   sNew: number;
   tier: Tier;
-  /** This is the problem's first record: it has no leader and sPrev is its free floor. */
-  first?: boolean;
-  /** The board is past another name's record (or a published value) and our entry is not yet the leader: the payment is doubled. */
-  beatOther?: boolean;
+  /** The flat bonus this payment earns (game.ts decides, once per problem per cycle), if any. */
+  bonus?: BonusKind | null;
 };
 
 export interface Points {
@@ -118,19 +120,18 @@ export interface Points {
   /** Decades of Δ above the floor: log10(Δ / F), never negative. */
   decades: number;
   w: number;
-  c: number;
   /** The cost factor k (costFactor). */
   k: number;
-  /** BEAT_OTHER_FACTOR when this improvement is the paid beat of a record, else 1. */
-  beat: number;
+  /** STEP_WEIGHT · (1 + decades). */
   nibble: number;
   size: number;
   gap: number;
-  bonus: number;
-  /** Which bonuses were paid. */
-  firstBonus: boolean;
-  beatBonus: boolean;
-  /** w · c · k · (nibble + size + gap + bonus) · beat. */
+  /** w · k · (nibble + size + gap), before the multiplier; 0 for a first record, which pays only its bonus. */
+  improvement: number;
+  /** The flat bonus kind paid with this improvement, and its RP (0 without). */
+  bonus: BonusKind | null;
+  bonusRp: number;
+  /** improvement + bonusRp (game.ts applies the multiplier to the improvement only). */
   total: number;
 }
 
@@ -155,8 +156,7 @@ export function recordPoints(input: PointsInput): Points | null {
   const decades = Math.max(0, Math.log10(delta / FLOOR));
   const rules = rulesOf(input);
   const w = rules.weight(input);
-  const c = CONTEST[input.tier];
-  const nibble = 1 + decades;
+  const nibble = STEP_WEIGHT * (1 + decades);
   const size = SIZE_WEIGHT * Math.log(sPrev / sNew);
   const bound = rules.bound(input);
   if (bound === null) throw new Error(`no bound for ${input.family}`);
@@ -165,27 +165,12 @@ export function recordPoints(input: PointsInput): Points | null {
   // A gap at or below zero cannot occur for the dealt problems (P >= 2 and gap > 0); guard anyway,
   // since ln(g_prev / g_new) would be undefined or infinite.
   const gap = gPrev > 0 && gNew > 0 ? GAP_WEIGHT * Math.log(gPrev / gNew) : 0;
-  const firstBonus = !!input.first && gNew > 0 && gNew <= FIRST_RECORD_GAP_RATIO * gPrev;
-  // the caller says whether the board is visibly past another name's record (game.ts beating)
-  const beatBonus = !!input.beatOther;
-  const bonus = firstBonus ? FIRST_RECORD_BONUS : 0;
   const k = costFactor(input);
-  const beat = beatBonus ? BEAT_OTHER_FACTOR : 1;
-  return {
-    delta,
-    decades,
-    w,
-    c,
-    k,
-    beat,
-    nibble,
-    size,
-    gap,
-    bonus,
-    firstBonus,
-    beatBonus,
-    total: w * c * k * (nibble + size + gap + bonus) * beat,
-  };
+  const bonus = input.bonus ?? null;
+  const bonusRp = bonus ? BONUS_RP[bonus] : 0;
+  // a first record pays only its bonus: the cut from the starting score is not paid
+  const improvement = bonus === "first" ? 0 : w * k * (nibble + size + gap);
+  return { delta, decades, w, k, nibble, size, gap, improvement, bonus, bonusRp, total: improvement + bonusRp };
 }
 
 /** Records of one piece shape in one container shape (any sides, any piece count) that a combination needs to count for Collections. */

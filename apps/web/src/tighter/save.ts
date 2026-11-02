@@ -22,7 +22,7 @@ import {
 } from "./game";
 import { generatePlayerName, sanitizeName } from "./names";
 import { PacerState, newPacer } from "./pacer";
-import { CONTEST, Tier } from "./points";
+import { Tier, isTier } from "./points";
 import type { RunRecord } from "./submission";
 import { normalizeEconomy } from "./economy";
 import { normalizePicks } from "./picks";
@@ -644,7 +644,7 @@ const int = (v: unknown, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGE
 const posOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null);
 const bool = (v: unknown, fallback: boolean): boolean => (typeof v === "boolean" ? v : fallback);
 const str = (v: unknown, fallback: string, max = 200): string => (typeof v === "string" ? v.slice(0, max) : fallback);
-const tier = (v: unknown): Tier => (typeof v === "string" && v in CONTEST ? (v as Tier) : "open");
+const tier = (v: unknown): Tier => (isTier(v) ? v : "open");
 const idOrNull = (v: unknown): number | null => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : null);
 
 /** Runs the migrations from the save's version up to SAVE_VERSION. */
@@ -704,6 +704,7 @@ function pendingSend(v: unknown): PendingSend | null {
     leaderBefore: leader(v.leaderBefore),
     at: num(v.at, 0),
     rp: num(v.rp, 0, 0),
+    ...(v.bonus === true ? { bonus: true } : {}),
   };
 }
 
@@ -766,7 +767,6 @@ function problemState(v: unknown, now: number): ProblemState | null {
     bound: isPolygon(k) ? null : posOrNull(v.bound),
     dealtAt: num(v.dealtAt, now),
     floor: posOrNull(v.floor),
-    payFrom: posOrNull(v.payFrom),
     published: posOrNull(v.published),
     phase,
     board: phase === "bare" ? null : b,
@@ -783,6 +783,7 @@ function problemState(v: unknown, now: number): ProblemState | null {
     sending: pendingSend(v.sending),
     paidTo: phase === "ready" ? posOrNull(v.paidTo) : null,
     unconfirmed: num(v.unconfirmed, 0, 0),
+    bonusOpen: bool(v.bonusOpen, false),
     trace: phase === "bare" ? [] : trace,
     rpTrace,
     evaluations,
@@ -961,7 +962,18 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     economy: normalizeEconomy(save.economy),
     picks: normalizePicks(save.picks),
     runplan: normalizeRunPlan(save.runplan, treeMethods()),
+    // optional: a save without it has paid no bonus
+    bonusPaid: readBonusPaid(save.bonusPaid),
   };
+}
+
+/** The flat bonuses paid, by problem key and the reset count when paid (game.ts bonusPaid). */
+function readBonusPaid(v: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!isObj(v)) return out;
+  for (const [k, n] of Object.entries(v).slice(0, 100_000))
+    if (typeof n === "number" && Number.isSafeInteger(n) && n >= 0) out[k] = n;
+  return out;
 }
 
 /** Reads a save document (already parsed from JSON). */

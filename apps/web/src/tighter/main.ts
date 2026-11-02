@@ -122,7 +122,7 @@ import { HolderReader, addRival, heldByTighter, heldKeys, removeRival } from "./
 import { SLICES, SliceId, sliceById } from "./slices";
 import { openSlices } from "./unlocks";
 import { GROUPS, SOURCES, income } from "./income";
-import { CONTEST, TIERS, TIER_LABEL, Tier, show6 } from "./points";
+import { FIRST_BONUS, LEAD_BONUS, TIERS, TIER_LABEL, Tier, show6 } from "./points";
 import { HELP, MIN_STEP, andList, lowerFirst, smallerText, superscript } from "./help";
 import { moreDetail } from "./detail";
 import { renderMechanics } from "./mechanics";
@@ -846,7 +846,7 @@ async function loadAll(p0: ProblemState): Promise<boolean> {
     const transfer = owned().has("transfer") ? await findTransfer(p).catch(() => null) : null;
     if (problem(state, p.key) !== p || p.phase !== "bare") return p.phase !== "bare";
     const start = chooseStart({ board: config, score: e.score }, trim, transfer);
-    applyLoadAll(p, start.board, start.score, trim, start.transferred ? Math.min(e.score, trim ?? Infinity) : null);
+    applyLoadAll(p, start.board, start.score, trim);
     reveal(state, "score");
     if (p.key === state.focus) {
       const b0 = rulesOf(p).bound(p)!;
@@ -1338,7 +1338,10 @@ function settle(
           ? `New record ${show6(p.best!)}. No one had sent a packing of ${problemTitle(p).replace(/, (\d+) pieces$/, " with $1 pieces")} before.`
           : `New best ${show6(p.best!)} on ${problemTitle(p)}.`,
     };
-    event(`New record ${show6(p.best!)} on ${problemTitle(p)}.`, false);
+    const bonus = change.points?.bonus
+      ? ` It earns the ${change.points.bonus === "first" ? "first-record" : "lead"} bonus of ${fmtInt(change.points.bonusRp)} RP.`
+      : "";
+    event(`New record ${show6(p.best!)} on ${problemTitle(p)}.${bonus}`, false);
   }
   if (change.points) reveal(state, "points", "upgrades");
   if (run.mode === "lattice") {
@@ -1372,7 +1375,7 @@ function stepMessage(p: ProblemState, c: StepChange, run: OpenRunView, job: Job,
     `an improvement of ${fmtRelative(1 - c.after / c.before)}`;
   if (!c.counted)
     return `${text}. That is too small to count (under ${MIN_STEP}), so it will be paid together with the next step that counts.`;
-  text += c.points ? `, worth +${fmtRP(c.points.total)} RP.` : ".";
+  text += c.points ? `, worth +${fmtRP(c.points.total)} RP.${bonusSentence(c.points)}` : ".";
   return text;
 }
 
@@ -2358,13 +2361,20 @@ async function gatherCandidates(
   return { list, forced, offline: io.offline };
 }
 
+/** Tells the ranking that the player's flat bonus on the candidate is already paid this cycle. */
+function markSpent(c: Candidate): void {
+  c.bonusSpent = state.bonusPaid[keyOf(c)] === state.standing.resets;
+}
+
 /** The candidates in order, best first: the learning dealer's draws once owned, else the prior. */
 function rank(d: DealerState, list: readonly Candidate[]): Ranked[] {
+  list.forEach(markSpent);
   return rankCandidates(list, inUse(owned(), "learning") ? state.picks.bandit : null, () => nextRandom(d));
 }
 
 /** A ranking for a candidate dealt without one (the first deal, a forced one). */
 function plainRanked(c: Candidate): Ranked {
+  markSpent(c);
   return rankCandidates([c], null, () => 0.5)[0];
 }
 
@@ -2997,12 +3007,12 @@ function renderProblem(p: ProblemState | undefined): void {
         : "");
   else if (p.tier === "published")
     note =
-      `Beat the published value ${show6(p.published!)} to earn points. Below it, improvements pay ${CONTEST.published} times as much as on an open problem, and an administrator reviews the record. Beating an existing record pays double on your accepted new record.` +
+      `Beat the published value ${show6(p.published!)} to earn points. Taking the lead pays a ${fmtInt(LEAD_BONUS)} RP bonus, and an administrator reviews the record.` +
       (p.leader ? ` The site's record is ${show6(p.leader.score)}, by ${p.leader.name}.` : "");
   else if (p.leader && p.tier !== "open" && !p.run)
     note =
       `${TIER_LABEL[p.tier][0].toUpperCase()}${TIER_LABEL[p.tier].slice(1)} ${show6(p.leader.score)} by ${p.leader.name}, ${fmtPct(gapTo(p, p.leader.score))} above the ${isPolygon(p) ? "area bound" : "bound"}. ` +
-      `Improvements here pay ${CONTEST[p.tier]} times as much as on an open problem.`;
+      `Taking the lead here pays a ${fmtInt(LEAD_BONUS)} RP bonus.`;
   else if (p.leader) note = `The record is ${show6(p.leader.score)}, by ${p.leader.name}.`;
   else if (p.phase === "ready") note = "Your record has not been sent yet.";
   else note = "No one has sent a packing for this problem yet. Any board below the starting score is a new record.";
@@ -3717,6 +3727,22 @@ function patienceFields(id: string, value: number | null): void {
 
 let offersSig = "";
 /** Your pick: the offers, best first, each with what it is expected to pay and a Take button. */
+/** What an offer pays on top of improvements, in the offers' words. */
+function offerBonus(x: Offer): string {
+  if (state.bonusPaid[keyOf(x)] === state.standing.resets) return "its bonus is paid this cycle";
+  return x.tier === "open"
+    ? `bonus ${fmtInt(FIRST_BONUS)} RP`
+    : `bonus ${fmtInt(LEAD_BONUS)} RP if you take the lead`;
+}
+
+/** A sentence for a payment that paid a bonus, else nothing. */
+function bonusSentence(points: { bonus: "first" | "lead" | null; bonusRp: number }): string {
+  if (!points.bonus) return "";
+  return points.bonus === "first"
+    ? ` That is the ${fmtInt(points.bonusRp)} RP bonus for the first record on this problem. The first record pays only the bonus.`
+    : ` That includes the ${fmtInt(points.bonusRp)} RP bonus for taking the lead.`;
+}
+
 function renderOffers(o: ReadonlySet<UpgradeId>): void {
   const box = $("t-offers");
   show("t-offers", picking(o) && state.picks.offers.length > 0);
@@ -3743,7 +3769,7 @@ function renderOffers(o: ReadonlySet<UpgradeId>): void {
       meta.className = "note";
       // what the dealer knows, not a promise: the ranking itself is an estimate
       meta.textContent =
-        `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · pays ×${CONTEST[x.tier]}` +
+        `${i === 0 ? "Best offer · " : ""}${x.retake ? "Retake · " : ""}${what} · ${offerBonus(x)}` +
         ` · about ${tableMsOf(x).toFixed(1)} ms an evaluation`;
       const btn = document.createElement("button");
       btn.className = "t-take";

@@ -176,18 +176,28 @@ describe("Tighter saves", () => {
     expect(r.state.levels).toEqual({ lanesx: 2 });
   });
 
-  it("keeps a transfer's payFrom, and reads a save without it as null", () => {
+  it("keeps the flat bonuses paid and the open bonus, and reads a save without them as none", () => {
     const s = played();
-    s.queue[0].payFrom = 9.25;
+    s.bonusPaid = { "7/7/20": 2, "24/30/60": 0 };
+    s.queue[0].bonusOpen = true;
+    markSending(s.queue[0], 9, "Ada", null, T0);
+    s.queue[0].bonusOpen = true;
     const r = fromJson(toJson(s), T0);
-    expect(r.ok && r.state.queue[0].payFrom).toBe(9.25);
+    expect(r.ok && r.state.bonusPaid).toEqual({ "7/7/20": 2, "24/30/60": 0 });
+    expect(r.ok && r.state.queue[0].bonusOpen).toBe(true);
+    expect(r.ok && r.state.queue[0].sending?.bonus).toBe(true);
     const raw = JSON.parse(toJson(s));
-    delete raw.queue[0].payFrom;
+    delete raw.bonusPaid;
+    delete raw.queue[0].bonusOpen;
+    delete raw.queue[0].sending.bonus;
     const old = readSave(raw, T0);
-    expect(old.ok && old.state.queue[0].payFrom).toBeNull();
-    raw.queue[0].payFrom = -3;
+    expect(old.ok && old.state.bonusPaid).toEqual({});
+    expect(old.ok && old.state.queue[0].bonusOpen).toBe(false);
+    expect(old.ok && old.state.queue[0].sending?.bonus).toBeUndefined();
+    raw.bonusPaid = { a: -1, b: 1.5, c: "x", d: 3 };
     const bad = readSave(raw, T0);
-    expect(bad.ok && bad.state.queue[0].payFrom).toBeNull();
+    expect(bad.ok && bad.state.bonusPaid).toEqual({ d: 3 });
+    expect(JSON.parse(toJson(s)).version).toBe(10);
   });
 
   it("give back the price of the Away upgrades and Keep the bank, once, now that auto-eval runs live", () => {

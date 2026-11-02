@@ -21,7 +21,7 @@ import {
 import { FRONTIER_P, keyOf, poly } from "../src/tighter/frontier";
 import { addToQueue, applyStep, leave, newGame, newProblem, pay } from "../src/tighter/game";
 import { MAX_OFFERS, addRetake, learnOnLeave, newPicks, normalizeOffer, normalizePicks } from "../src/tighter/picks";
-import { CONTEST, Tier, costFactor } from "../src/tighter/points";
+import { FIRST_BONUS, LEAD_BONUS, Tier, costFactor } from "../src/tighter/points";
 import {
   COST_TABLE,
   Candidate,
@@ -38,6 +38,8 @@ import {
   parseShapes,
   passes,
   RP_PER_EVAL,
+  BONUS_EVALS,
+  expectedBonus,
   priorPerEval,
   rankCandidates,
   room,
@@ -276,20 +278,38 @@ describe("Tighter ranking", () => {
     expect(room("batch", 0)).toBeLessThan(room("loose", 0.005));
     expect(room("published", null)).toBeLessThan(room("batch", 0));
     const small = priorPerEval(cand({ family: "polygon", N: 7, M: 7, P: 300, tier: "batch", weakness: 0 }));
+    // the improvement pay plus the expected lead bonus over BONUS_EVALS evaluations
     expect(small).toBeCloseTo(
-      CONTEST.batch * room("batch", 0) * costFactor({ family: "polygon", N: 7, M: 7, P: 300 }) * RP_PER_EVAL,
+      room("batch", 0) * costFactor({ family: "polygon", N: 7, M: 7, P: 300 }) * RP_PER_EVAL +
+        (LEAD_BONUS * room("batch", 0)) / BONUS_EVALS,
       12,
     );
     expect(RP_PER_EVAL).toBe(4);
-    // a published value is expected to pay less per evaluation than a site record, whatever its weight
-    expect(CONTEST.published * room("published", null)).toBeLessThan(CONTEST.batch * room("batch", 0));
+    // a published value is expected to pay less per evaluation than a site record
+    expect(room("published", null)).toBeLessThan(room("batch", 0));
     // the shape weight: 100-gons in a 100-gon pay a twenty-fifth of what heptagons do
     // (same cost factor at the same N+M+P is not given, so the factor is taken out)
     const per = (N: number, M: number) =>
-      priorPerEval(cand({ family: "polygon", N, M, P: 60 })) / costFactor({ family: "polygon", N, M, P: 60 });
+      priorPerEval(cand({ family: "polygon", N, M, P: 60, bonusSpent: true })) /
+      costFactor({ family: "polygon", N, M, P: 60 });
     expect(per(100, 100)).toBeCloseTo(per(7, 7) / 25, 12);
     // the prior grows with the cost of an evaluation: a 300-piece problem pays more per evaluation than a 40-piece one
     expect(priorPerEval(cand({ P: 300 }))).toBeGreaterThan(priorPerEval(cand({ P: 40 })));
+  });
+
+  it("prices the flat bonus: an open problem's sure 1,000, a contested one's chance of the lead, none once paid", () => {
+    const open = cand({ family: "polygon", N: 24, M: 30, P: 60 });
+    const loose = cand({ N: 7, M: 7, P: 90, tier: "loose", weakness: 0.01, leader: { score: 9, name: "x", id: 1 } });
+    const batch = cand({ N: 7, M: 7, P: 90, tier: "batch", weakness: 0, leader: { score: 9, name: "x", id: 1 } });
+    expect(expectedBonus(open)).toBe(FIRST_BONUS);
+    expect(expectedBonus(loose)).toBeCloseTo(LEAD_BONUS * (0.3 + 25 * 0.01), 9);
+    expect(expectedBonus(batch)).toBeCloseTo(LEAD_BONUS * 0.1, 9);
+    expect(expectedBonus({ ...loose, bonusSpent: true })).toBe(0);
+    expect(expectedBonus({ ...open, bonusSpent: true })).toBe(0);
+    // a weaker record is more likely to fall, so it ranks higher
+    expect(expectedBonus({ ...loose, weakness: 0.02 })).toBeGreaterThan(expectedBonus(loose));
+    // a spent bonus lowers the prior by its share
+    expect(priorPerEval(open) - priorPerEval({ ...open, bonusSpent: true })).toBeCloseTo(FIRST_BONUS / BONUS_EVALS, 12);
   });
 
   it("rank retakes first, then by expected points per second of solver time", () => {
@@ -305,7 +325,7 @@ describe("Tighter ranking", () => {
 
   it("learns which buckets pay, and ranks by what it learned once the learning dealer is owned", () => {
     const open = cand({ family: "polygon", N: 24, M: 30, P: 60 });
-    const loose = cand({ N: 7, M: 7, P: 300, tier: "loose", weakness: 0.01, leader: { score: 9, name: "x", id: 1 } });
+    const loose = cand({ N: 7, M: 7, P: 60, tier: "loose", weakness: 0.02, leader: { score: 9, name: "x", id: 1 } });
     // the prior prefers the loose record
     expect(rankCandidates([open, loose], null, generator(2))[0].candidate).toBe(loose);
     const b = {};
@@ -501,7 +521,7 @@ describe("Tighter published values", () => {
     return { N, M, P, pieces, container_phi: 0 };
   }
 
-  it("pay nothing until the board beats the published value, then pay from it at 100x", () => {
+  it("pay nothing until the board beats the published value, then pay from it with the lead bonus", () => {
     const s = newGame(T0, 1);
     s.name = "Ada";
     const p = newProblem({ family: "polygon", N: 7, M: 7, P: 40 }, "published", T0);
@@ -535,7 +555,7 @@ describe("Tighter published values", () => {
     expect(s.rp).toBe(0);
     const c2 = step(8.9);
     expect(c2.points).not.toBeNull();
-    expect(c2.points!.c).toBe(100);
+    expect(c2.points!.bonus).toBe("lead");
     // measured from the published value, not from the site record
     expect(c2.points!.delta).toBeCloseTo(1 - 8.9 / 9, 12);
     expect(pay(s, p)).toBeNull();

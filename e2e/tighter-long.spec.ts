@@ -419,6 +419,8 @@ test("long game: records counted, rent paid on a check, a reset under a rule tha
   await firstRecord(page);
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 20_000 }).not.toBeNull();
   const p = await focused(page);
+  // a first record pays only its flat bonus, which rent's base does not count: give the record a base
+  await page.evaluate((k) => ((window as any).tighter.state.economy.base[k] = 5000), p.key);
   // a confirmed record is remembered for collections, with its tier
   await expect.poll(() => game(page, (s) => s.economy.recorded)).toContain(p.key);
   await give(page, ["rent", "collections"]);

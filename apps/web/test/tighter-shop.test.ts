@@ -13,7 +13,7 @@ import {
   TIER_BONUS,
 } from "../src/tighter/economy";
 import { resolvedParams } from "../src/tighter/open-run";
-import { CONTEST } from "../src/tighter/points";
+import { TIERS } from "../src/tighter/points";
 import {
   LEARN_MIN_EVALS,
   LOOSE_WEAKNESS,
@@ -485,14 +485,14 @@ describe("Tighter upgrade texts", () => {
     ]);
     expect(text("rent")).toContain("0.01 × <var>B</var> × 1.5<sup>");
     expect(text("rent")).toContain("On payday, the game checks all your records");
-    expect(CONTEST).toEqual({ open: 1, loose: 3, batch: 10, published: 100 });
+    expect(TIERS).toEqual(["open", "loose", "batch", "published"]);
     expect([room("open", null), room("loose", 1), room("batch", null), room("published", null)]).toEqual([
       1, 1, 0.1, 0.004,
     ]);
     expect(room("loose", 0.01)).toBeCloseTo(0.3 + 25 * 0.01, 12);
     expect([RP_PER_EVAL, LOOSE_WEAKNESS, NEIGHBOURS, msPerEval(85)]).toEqual([4, 0.005, 3, 1.77]);
-    expect(text("rank2")).toContain("× 4 ×");
-    expect(text("learning")).toContain("(w × c × R × κ × 4");
+    expect(text("rank2")).toContain("× 4 + <var>B</var> / 1000");
+    expect(text("learning")).toContain("(w × R × κ × 4");
     expect(text("reach2")).toContain("≥ 0.005");
     expect([LEARN_MIN_EVALS, MAX_RATIO, MIN_OBSERVED_EVALS, MAX_STAGES]).toEqual([200, 20, 20, 9]);
     expect(text("learning")).toContain("at least 200 evaluations");

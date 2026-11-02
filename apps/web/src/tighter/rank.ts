@@ -1,7 +1,7 @@
 import { Bandit, Prior, observe, sampleArm } from "./bandit";
 import { msPerEval, rulesOf } from "./families";
 import { FRONTIER_P, FRONTIER_SIDES, PolygonKey, ProblemKey, isPolygon, keyOf, parseKey, poly } from "./frontier";
-import { COMBO_RECORDS, CONTEST, TIERS, Tier, costFactor } from "./points";
+import { COMBO_RECORDS, FIRST_BONUS, LEAD_BONUS, TIERS, Tier, costFactor } from "./points";
 
 /**
  * The dealer's judgement (plan 2026-10-20 §3): what a candidate problem is expected to pay, the
@@ -10,13 +10,13 @@ import { COMBO_RECORDS, CONTEST, TIERS, Tier, costFactor } from "./points";
  *
  * The ranking score is an expected number of record points per second of solver time:
  *
- *   score = w · c · room · RP_PER_EVAL · correction · speed
+ *   score = (w · room · RP_PER_EVAL + bonus per evaluation) · correction · speed
  *
  * The prior itself (record points per evaluation) is also scaled by the cost factor of points.ts, as
  * pay is, so the learning dealer's ratios of pay to prior stay near 1.
  *
- * with w the shape weight, c the contest weight of the tier, room what the tier and the record's
- * weakness leave to gain, correction the learning dealer's draw for the candidate's bucket (1
+ * with w the shape weight, room what the tier and the record's weakness leave to gain, bonus per
+ * evaluation the expected flat bonus (points.ts) over BONUS_EVALS, correction the learning dealer's draw for the candidate's bucket (1
  * without it), and speed √(cost of an evaluation at N+M+P = 85 / cost at the candidate's size).
  * The square root splits the difference between a clicking player (a click is one click whatever
  * the cost of its evaluation) and auto-eval (which runs as many evaluations as the CPU allows, up
@@ -58,6 +58,8 @@ export interface CandidateFields {
   retake: boolean;
   /** A space problem's lower bound as the server gave it (polygons' is computed). */
   bound?: number | null;
+  /** The player's flat bonus on this problem is already paid this cycle (not saved with an offer). */
+  bonusSpent?: boolean;
 }
 export type Candidate = ProblemKey & CandidateFields;
 
@@ -84,9 +86,35 @@ export function room(tier: Tier, weakness: number | null): number {
  */
 export const RP_PER_EVAL = 4;
 
-/** The prior: expected record points per evaluation. */
-export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null }): number {
-  return rulesOf(c).weight(c) * CONTEST[c.tier] * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL;
+/**
+ * The evaluations a problem is spread over when its flat bonus is turned into points per evaluation
+ * [SPEC]: the default patience, the evaluations without progress after which a problem leaves.
+ */
+export const BONUS_EVALS = 1000;
+
+/**
+ * The chance that the player takes the lead on a contested problem [SPEC]: what the tier and the
+ * record's weakness leave to gain (room), since a loose record falls more easily than a tight one
+ * and a published value hardly ever.
+ */
+export const leadChance = (tier: Tier, weakness: number | null): number => (tier === "open" ? 0 : room(tier, weakness));
+
+/**
+ * The flat bonus a candidate is expected to pay (points.ts): an open problem's sure FIRST_BONUS, a
+ * contested one's LEAD_BONUS times the chance of the lead; none once the player's bonus on the
+ * problem is paid this cycle.
+ */
+export function expectedBonus(c: { tier: Tier; weakness: number | null; bonusSpent?: boolean }): number {
+  if (c.bonusSpent) return 0;
+  return c.tier === "open" ? FIRST_BONUS : LEAD_BONUS * leadChance(c.tier, c.weakness);
+}
+
+/**
+ * The prior: expected record points per evaluation, the improvement pay (shape weight, room, cost
+ * factor) plus the expected flat bonus over BONUS_EVALS evaluations.
+ */
+export function priorPerEval(c: ProblemKey & { tier: Tier; weakness: number | null; bonusSpent?: boolean }): number {
+  return rulesOf(c).weight(c) * room(c.tier, c.weakness) * costFactor(c) * RP_PER_EVAL + expectedBonus(c) / BONUS_EVALS;
 }
 
 /** The size rings, largest first (plan §3): ring k holds N+M+P ≥ RINGS[k] and below RINGS[k − 1]. */
@@ -156,9 +184,11 @@ export function rankCandidates(cands: readonly Candidate[], bandit: Bandit | nul
       if (!draws.has(bucket)) draws.set(bucket, sampleArm(bandit, bucket, CORRECTION_PRIOR, rand));
       correction = Math.max(0.01, draws.get(bucket)!);
     }
-    // the prior carries the cost factor, as pay does; the ranking keeps its own cost term (speedFactor),
-    // so the cost factor is divided out of it and a problem's rank does not move with the pay scaling
-    const score = (prior / costFactor(candidate)) * correction * speedFactor(sizeOf(candidate));
+    // the improvement part of the prior carries the cost factor, as pay does; the ranking keeps its own
+    // cost term (speedFactor), so the cost factor is divided out of it; the flat bonus has no cost factor
+    // in it, so it is left as it is
+    const bonus = expectedBonus(candidate) / BONUS_EVALS;
+    const score = ((prior - bonus) / costFactor(candidate) + bonus) * correction * speedFactor(sizeOf(candidate));
     return { candidate, score, prior, bucket };
   });
   return out.sort((a, b) => Number(b.candidate.retake) - Number(a.candidate.retake) || b.score - a.score);

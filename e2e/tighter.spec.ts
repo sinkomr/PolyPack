@@ -483,6 +483,8 @@ test("tighter: with Rent, a held record's rent arrives at payday through /api/le
   await expect.poll(async () => (await focused(page)).ourId, { timeout: 60_000 }).not.toBeNull();
   const p = await focused(page);
   heldKey = p.key;
+  // a first record pays only its flat bonus, which rent's base does not count: give the record a base
+  await page.evaluate((k) => ((window as any).tighter.state.economy.base[k] = 5000), p.key);
   // Rent owned (set through the handle): the record's rent starts, and the page's first payday, at once,
   // asks about it and pays only the seconds since
   await page.evaluate(() => (window as any).tighter.state.owned.push("rent"));

@@ -77,18 +77,23 @@ describe("Tighter points multiplier", () => {
   it("multiplies what each click pays, and takes back exactly what was paid", () => {
     const { s, p } = game();
     s.standing.total = 5;
-    const c = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    // the first record pays only its flat bonus, which no multiplier touches and rent does not count
+    const first = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
+    expect(first.points!.total).toBe(1000);
+    expect(s.economy.base[p.key]).toBeUndefined();
+    const c = applyStep(s, p, step(1.1 * B, 2), T0);
     const paid = c.points as NonNullable<typeof c.points> & { base: number; multiplier: number };
     expect(paid.multiplier).toBeCloseTo(1.5, 12);
+    expect(paid.base).toBeGreaterThan(0);
     expect(paid.total).toBeCloseTo(paid.base * 1.5, 9);
-    expect(s.rp).toBeCloseTo(paid.total, 9);
-    expect(p.unconfirmed).toBeCloseTo(paid.total, 9);
-    expect(s.standing.cycleEarned).toBeCloseTo(paid.total, 9);
+    expect(s.rp).toBeCloseTo(1000 + paid.total, 9);
+    expect(p.unconfirmed).toBeCloseTo(1000 + paid.total, 9);
+    expect(s.standing.cycleEarned).toBeCloseTo(1000 + paid.total, 9);
     expect(s.economy.base[p.key]).toBeCloseTo(paid.base, 9);
     // the server makes another entry leader first: everything paid comes back out, the cycle's count too
     markSending(p, 1.2 * B, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 1.2 * B, { kind: "behind", leaderScore: 1.1 * B }, T0);
-    expect(a.takenBack).toBeCloseTo(paid.total, 9);
+    expect(a.takenBack).toBeCloseTo(1000 + paid.total, 9);
     expect(s.rp).toBeCloseTo(0, 9);
     expect(s.rpEarned).toBeCloseTo(0, 9);
     expect(s.standing.cycleEarned).toBeCloseTo(0, 9);
@@ -99,12 +104,14 @@ describe("Tighter points multiplier", () => {
     const { s, p } = game();
     s.standing.total = 10;
     applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
-    // the step paid at once: what it would pay again, measured from the start
-    p.paidTo = null;
+    applyStep(s, p, step(1.1 * B, 2), T0);
+    // the step paid at once: what it would pay again, measured from the first record
+    p.paidTo = 1.2 * B;
     const plain = pendingPoints(p, s.name)!;
     const multiplied = pendingPoints(p, s.name, s)!;
     expect(plain.multiplier).toBe(1);
     expect(multiplied.total).toBeCloseTo(plain.total * 2, 9);
+    expect(plain.bonus).toBeNull();
   });
 
   it("stacks standing, collections and the rules finished", () => {
@@ -191,6 +198,8 @@ describe("Tighter rent", () => {
     const { s, p } = game();
     s.owned.push("rent");
     confirmed(s, p, 1.2 * B, 7, T0);
+    // the first record pays only a bonus, which rent's base does not count: an improvement gives the record a base
+    applyStep(s, p, step(1.19 * B, 8), T0);
     return { s, p };
   }
 

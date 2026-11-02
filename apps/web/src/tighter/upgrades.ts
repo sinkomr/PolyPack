@@ -5,7 +5,7 @@ import type { How, Var } from "./how";
 import { METHOD_GAMES, isSelectable, methodGame, methodLabel, warmupOf } from "./methods";
 import { MC_COMPRESS_MATH, MC_COMPRESS_NOTE, MC_COMPRESS_TEXT, MC_COMPRESS_VARS } from "./methods/mc_compress";
 import { presetParams, tuningLevels } from "./presets";
-import { BEAT_OTHER_FACTOR, RESET_GROWTH, RESET_MIN } from "./points";
+import { FIRST_BONUS, LEAD_BONUS, RESET_GROWTH, RESET_MIN } from "./points";
 import { DOMAIN_MAX_P, SURFACE_ARCHIMEDEAN, SURFACE_JOHNSON, domainProblems } from "./catalogue";
 import { GAME_BALLS_COUNT, GAME_PAIR_COUNT, SliceId, sliceById, solidsOfSlice } from "./slices";
 import { RP_PER_EVAL, msPerEval } from "./rank";
@@ -367,6 +367,7 @@ export const RING: Partial<Record<UpgradeId, number>> = {
 const listed = (xs: readonly string[]) =>
   xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`;
 /** A number as the shop writes it: whole, or to one decimal ("2.5"). */
+const rpText = (x: number) => x.toLocaleString("en-US");
 const number = (x: number) => (Math.abs(x - Math.round(x)) < 1e-9 ? String(Math.round(x)) : x.toFixed(1));
 const seconds = (x: number) => `${number(x)} s`;
 
@@ -596,11 +597,12 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
     how: {
       text: [
         `When a deal is due, the dealer draws ${k} problems and checks each with the server. It ranks them and deals the best one. If that one cannot be read, it deals the next. Problems from Retake and Collector come before the ranked ones.`,
-        "The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
+        `The dealer ranks problems by how many record points each should pay per evaluation, and problems that run faster rank higher. The points count the expected improvement pay and the expected bonus. An open problem is sure to pay its ${rpText(FIRST_BONUS)} RP bonus. On a problem that already has a record, the bonus is ${rpText(LEAD_BONUS)} RP times the chance of taking the lead, which the dealer takes to be the room left, and it counts for nothing once the bonus is paid this cycle. The bonus is spread over 1,000 evaluations.`,
+        " Speed counts only as a square root, because your clicks cost the same however long an evaluation takes, while your computer limits auto-eval on larger problems.",
       ],
       note: `${number(RP_PER_EVAL)} is about the record points an evaluation earns on a fresh open problem with w = 1.`,
       math: [
-        `${sym("V")} = ${sym("w")} × ${sym("c")} × ${sym("R")} × ${number(RP_PER_EVAL)} × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
+        `${sym("V")} = (${sym("w")} × ${sym("R")} × ${number(RP_PER_EVAL)} + ${sym("B")} / 1000) × ${sym("θ")} × √(${sym("t", "85")} / ${sym("t")})`,
         `${sym("w")} = ${sym("d")}(${sym("N")}) × ${sym("d")}(${sym("M")})`,
         `${sym("d")}(${sym("x")}) = 1 for a circle or ${sym("x")} ≤ 20, else 20 / ${sym("x")}`,
       ],
@@ -611,8 +613,8 @@ function dealerRung(id: UpgradeId, cost: number, requires: UpgradeId[]): Upgrade
         [sym("M"), "sides of the container (0 for a circle)"],
         [`${sym("d")}(${sym("x")})`, "how far a shape with x sides is from a circle"],
         [
-          sym("c"),
-          "the contest weight, 1 for an open problem, 3 for a loose record, 10 for another site record and 100 for a published value",
+          sym("B"),
+          `the expected bonus, ${rpText(FIRST_BONUS)} for an open problem, ${rpText(LEAD_BONUS)} × R for a site record or a published value, and 0 once it is paid this cycle`,
         ],
         [
           sym("R"),
@@ -680,7 +682,7 @@ const RENT_MATH = [
 ];
 const RENT_VARS: readonly Var[] = [
   [sym("h"), "a record's rent, in record points per hour"],
-  [sym("B"), "the record points that problem earned, before multipliers"],
+  [sym("B"), "the record points that problem earned from its improvements, before multipliers (bonuses are not counted)"],
   [sym("a"), "levels of Higher rent"],
   [sym("m"), "your points multiplier now (standing, collections and the rewards of cycle rules)"],
   [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
@@ -1028,11 +1030,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: site records",
     cost: 48000,
     requires: ["basin"],
-    effect: "The dealer also deals weak site records, worth 3 times the points.",
+    effect: "The dealer also deals weak site records, where taking the lead pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} With Reach, two in three draws are contested problems.`,
-        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 3.",
+        "A loose record is a site record that is weaker than the records of similar problems. Reach deals loose records of size 300 and up. Your board starts from the leader's packing. Taking the lead on one pays a 10,000 RP bonus.",
       ],
       math: [
         `${sym("g")} = ${sym("s")} / ${sym("b")} − 1`,
@@ -1180,11 +1182,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: every site record",
     cost: 320_000,
     requires: ["ring200"],
-    effect: "The dealer also deals all other site records, worth 10 times the points.",
+    effect: "The dealer also deals all other site records, where taking the lead pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} This adds every site record that has no published value, loose or not.`,
-        "Your board starts from the leader's packing, and every point that an improvement on it pays is multiplied by 10. These records have been worked on a lot, so the dealer expects little room to improve them.",
+        "Your board starts from the leader's packing. Taking the lead on one pays a 10,000 RP bonus. These records have been worked on a lot, so the dealer expects little room to improve them.",
       ],
       note: "The dealer expects 0.1 of the room an open problem has.",
     },
@@ -1201,8 +1203,8 @@ export const UPGRADES: readonly Upgrade[] = [
     how: {
       text: [
         "Sometimes another name takes a record of yours on a problem that is no longer in your queue. That problem then goes on a retake list, and at each deal the oldest problem on the list comes before all others, as long as someone else still leads it.",
-        `It starts from the new leader's packing, which your board must beat by more than one billionth. Beating an existing record pays double on your accepted new record, and that goes for each time you take the lead back.`,
-        "A problem with a shape of more than 20 sides counts as a loose record, worth 3 times the points. Problems with smaller shapes rank like other site records, or like published values where there is one.",
+        `It starts from the new leader's packing, which your board must beat by more than one billionth. Taking the lead pays a 10,000 RP bonus, but only once for each problem in each cycle.`,
+        "A problem with a shape of more than 20 sides counts as a loose record. Problems with smaller shapes rank like other site records, or like published values where there is one.",
       ],
     },
     row: "dealer",
@@ -1217,7 +1219,6 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "When the game places a new open problem, it looks for a good packing of the same shapes with fewer pieces. This is your own board in the queue, or else the site's record for the nearest piece count it finds. It keeps those pieces where they are and adds the missing ones in free space.",
         "The game uses this start only if it is clearly smaller than the usual start, with every piece on rings around the centre. Your first record on the problem must beat the best of these starts.",
-        "Your points still count from the usual start, so a transfer saves time without costing points.",
       ],
       note: "It looks up at most 4 piece counts. With 6 or fewer pieces missing, each goes where it grows the container least. The start counts as clearly smaller when its side is under 98 % of Load all's. The starting score is the smallest of the sides below, and your first record must beat it by more than 10⁻⁹ (relative).",
       math: [
@@ -1314,7 +1315,7 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("E"), "the evaluations it ran"],
         [
           sym("p"),
-          `the record points per evaluation the dealer expected (w × c × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points)`,
+          `the record points per evaluation the dealer expected (w × R × κ × ${number(RP_PER_EVAL)}, with κ the cost factor of the points, plus the expected bonus)`,
         ],
         [sym("θ"), "the kind's correction for this ranking"],
         [sym("z"), "a random draw from the standard normal distribution"],
@@ -1408,11 +1409,11 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Reach: published values",
     cost: 4_000_000,
     requires: ["batch", "ring120"],
-    effect: "The dealer also deals problems with a published value, worth 100 times the points.",
+    effect: "The dealer also deals problems with a published value, where beating it pays a bonus.",
     how: {
       text: [
         `${RING_TEXT} This adds problems with a best-known value in the literature. Proven values are never dealt.`,
-        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on every point is multiplied by 100.",
+        "Your board starts from the best packing the site can draw, which is a site record or the published coordinates. Nothing pays until your board goes below the published value by at least its last printed digit, and from then on your board is past the published value. That pays the 10,000 RP bonus for taking the lead.",
         "A record below a published value waits for an administrator's review. Many published values are excellent, so the dealer expects little room to improve them.",
       ],
       note: "The dealer expects 0.004 of the room an open problem has.",

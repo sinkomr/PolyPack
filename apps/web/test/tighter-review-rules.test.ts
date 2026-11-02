@@ -84,7 +84,7 @@ describe("tighter review: points", () => {
       if (!(sNew > b)) continue;
       const tier = rnd() < 0.5 ? "open" : "loose";
       const first = rnd() < 0.3;
-      const pts = recordPoints({ family: "polygon", N, M, P, sPrev, sNew, tier, first, beatOther: false });
+      const pts = recordPoints({ family: "polygon", N, M, P, sPrev, sNew, tier, bonus: first ? "first" : null });
       const d = 1 - sNew / sPrev;
       if (!(sNew < sPrev * (1 - SCORE_TIE))) {
         expect(pts).toBeNull();
@@ -92,14 +92,14 @@ describe("tighter review: points", () => {
       }
       const gp = sPrev / b - 1,
         gn = sNew / b - 1;
-      const bonus = first && gn <= 0.9 * gp ? 10 : 0;
       const want =
         shapeWeight(N, M) *
-        (tier === "open" ? 1 : 3) *
         (msPerEval(N + M + P) / msPerEval(85)) *
-        (1 + Math.log10(d / 1e-9) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn) + bonus);
+        (0.1 * (1 + Math.log10(d / 1e-9)) + 10_000 * Math.log(sPrev / sNew) + 10_000 * Math.log(gp / gn));
       expect(pts).not.toBeNull();
-      expect(Math.abs(pts!.total - want)).toBeLessThan(1e-12 * Math.max(1, want));
+      // a first record pays only its flat bonus; any other payment its improvement
+      const total = first ? 1000 : want;
+      expect(Math.abs(pts!.total - total)).toBeLessThan(1e-12 * Math.max(1, total));
     }
   });
 
@@ -153,7 +153,7 @@ describe("tighter review: points", () => {
       T0,
     ).points;
     expect(pts).not.toBeNull();
-    expect(pts!.beatBonus).toBe(false);
+    expect(pts!.bonus).toBeNull();
   });
 });
 
@@ -243,7 +243,7 @@ describe("tighter review fixes: regressions", () => {
     expect(p.sending).toBeNull();
   });
 
-  it("a board that still beats the rival found by a 'behind' answer pays the beat-other double", () => {
+  it("a board that still beats the rival found by a 'behind' answer pays the lead bonus", () => {
     const { s, p } = readyProblem();
     // a better board than the rival's 10.99999, sent as 11 and answered "behind"
     applyStep(
@@ -254,7 +254,7 @@ describe("tighter review fixes: regressions", () => {
     );
     markSending(p, 10.9, "Ada", null, T0);
     const a = applyAnswer(s, p, null, 10.9, { kind: "behind", score: 10.9, leaderScore: 10.95 }, T0);
-    expect(a.points?.beatBonus).toBe(true);
+    expect(a.points?.bonus).toBe("lead");
   });
 
   it("the pending send survives a save and a reload, with the points it carries", () => {
@@ -267,6 +267,7 @@ describe("tighter review fixes: regressions", () => {
       name: "Ada 3",
       leaderBefore: { score: 12, name: "Bob", id: 2 },
       at: T0,
+      bonus: true,
       rp: paid,
     });
   });

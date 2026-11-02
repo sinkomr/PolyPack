@@ -85,6 +85,8 @@ describe("Tighter seams", () => {
   it("pay no rent for the time a record was lost to a faster entry, even when it is won back", () => {
     const { s, p } = withRecord();
     owning(s, ["rent"]);
+    // the first record paid only its bonus, which rent does not count: the record has earned 100 from improvements
+    s.economy.base[p.key] = 100;
     applyAnswer(s, p, null, 6.5, { kind: "leader", score: 6.5, id: 3, pending: false }, T0);
     expect(s.economy.checks[p.key]).toBe(T0);
     // another entry got there first: the record is lost at once

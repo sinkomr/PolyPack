@@ -26,13 +26,12 @@ import {
   RATE_LIMITED_BACKOFF_MS,
 } from "./pacer";
 import {
-  BEAT_OTHER_FACTOR,
-  CONTEST,
-  FIRST_RECORD_BONUS,
-  FIRST_RECORD_GAP_RATIO,
+  FIRST_BONUS,
   FLOOR,
   GAP_WEIGHT,
+  LEAD_BONUS,
   SIZE_WEIGHT,
+  STEP_WEIGHT,
   TIER_LABEL,
   costFactor,
   recordPoints,
@@ -109,8 +108,8 @@ function exampleLine(delta: number, label: string): string {
         : `<var>t</var><sub>size</sub> = ${r.size.toFixed(2)}, <var>t</var><sub>gap</sub> = ${r.gap.toFixed(2)}`;
   const sum = r.nibble + r.size + r.gap;
   return (
-    `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(0)}, ${terms}, ` +
-    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.total.toFixed(2)} RP`
+    `<var>Δ</var> ${label} gives <var>t</var><sub>step</sub> = ${r.nibble.toFixed(2)}, ${terms}, ` +
+    `so ${exampleW.toFixed(3)} × ${r.k.toFixed(3)} × ${sum.toFixed(sum < 10 ? 3 : 2)} = ${r.improvement.toFixed(2)} RP`
   );
 }
 
@@ -120,15 +119,16 @@ const POINTS: How[] = [
       `You earn record points (RP) whenever a click makes your board smaller by more than ${MIN_STEP} of its size, which is the same limit the server uses. The points are paid right away, whether you pressed Evolve yourself or auto-eval did it for you.`,
       "Your records are sent to PolyPack under your display name, and points are paid from your very first click. You can change the name at any time in Settings.",
       "Each payment is made of a few parts. The two biggest parts reward a smaller side and a side that is closer to the area bound. The area bound is the smallest side that the total area of the pieces allows. Over a whole run they add up to the same total however many clicks it takes, so a run that shrinks the side more pays more.",
-      `Every click that improves the board also pays a small step part, which is larger for larger steps. The first click on a new problem (Compact, ${int(COMPACT_EVALS)} evaluations at once) usually pays the most, because a new board has the most room to shrink.`,
-      "The payment is then multiplied by three weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The contest weight makes problems that other players work on, and published values, pay more. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
-      "Beating an existing record pays double on your accepted new record. Every payment is doubled from the moment your board is better than the other record, until the server accepts your board as the new record. After that, payments are single again.",
+      `Every click that improves the board also pays a small step part, which is larger for larger steps.`,
+      "The payment is then multiplied by two weights. The shape weight makes shapes with many sides pay less, because they are close to circles. The cost weight lets slow problems pay about as much per second as fast ones. Your points multiplier applies as well.",
+      `Two bonuses come on top. The first record on a problem pays a ${int(FIRST_BONUS)} RP bonus. That payment pays only the bonus, and later payments count from your first record. Taking the lead on a problem that already has a record pays a ${int(LEAD_BONUS)} RP bonus. The record can be another name's, a published value or a research record. The bonus is paid on the payment whose board is better than that record, at 6 decimals and by at least one millionth. That payment also pays the usual parts for how far the board is past the record.`,
+      "A bonus is paid at most once for each problem in each cycle. Weights and multipliers do not change it, and it does not count toward rent. If the server does not accept your board as the record, the bonus is taken back with the other points, and it can be paid again later.",
       "The server checks every record you send, and a board is usually sent within a minute. If the server does not accept it as the record, for example because another name got there first, the points paid for that board are taken back. Points you have already spent are not owed, and your balance never goes below 0.",
     ],
     math: [
       `<var>Δ</var> = 1 − <var>s</var><sub>new</sub> / <var>s</var><sub>prev</sub>, paid only when <var>Δ</var> &gt; <var>F</var>`,
-      `RP = <var>m</var> × <var>w</var> × <var>c</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub> + <var>B</var>) × <var>β</var>`,
-      `<var>t</var><sub>step</sub> = 1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>)`,
+      `RP = <var>m</var> × <var>w</var> × <var>κ</var> × (<var>t</var><sub>step</sub> + <var>t</var><sub>size</sub> + <var>t</var><sub>gap</sub>) + <var>B</var>`,
+      `<var>t</var><sub>step</sub> = ${STEP_WEIGHT} × (1 + log<sub>10</sub>(<var>Δ</var> / <var>F</var>))`,
       `<var>t</var><sub>size</sub> = ${int(SIZE_WEIGHT)} × ln(<var>s</var><sub>prev</sub> / <var>s</var><sub>new</sub>)`,
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = <var>s</var><sub>prev</sub> / <var>b</var> − 1, <var>g</var><sub>new</sub> = <var>s</var><sub>new</sub> / <var>b</var> − 1`,
@@ -140,7 +140,7 @@ const POINTS: How[] = [
       ["<var>F</var>", `${MIN_STEP}, the smallest improvement that counts`],
       [
         "<var>s</var><sub>prev</sub>",
-        "the side the payment is measured from. It is the side at your last payment on this problem, or before any payment the current record, or with no record the starting score (the side your first record must beat).",
+        "the side the payment is measured from. It is the side at your last payment on this problem, or before any payment the current record. Your first record pays only its bonus, so the next payment counts from it.",
       ],
       [
         "<var>s</var><sub>new</sub>",
@@ -164,20 +164,12 @@ const POINTS: How[] = [
       ["<var>d</var>(<var>n</var>)", "how distinct a shape with n sides is (n = 0 for a circle)"],
       ["<var>N</var>, <var>M</var>", "the number of sides of a piece and of the container (0 for a circle)"],
       [
-        "<var>c</var>",
-        `the contest weight, which is ${CONTEST.open} for an ${TIER_LABEL.open} (no entry yet), ${CONTEST.loose} for a ${TIER_LABEL.loose} (a site record clearly weaker than its neighbours), ${CONTEST.batch} for any other ${TIER_LABEL.batch} and ${CONTEST.published} for a ${TIER_LABEL.published} from the literature`,
-      ],
-      [
         "<var>B</var>",
-        `bonus points, ${FIRST_RECORD_BONUS} for a problem's first record when its gap is at most ${FIRST_RECORD_GAP_RATIO} of the starting score's gap, otherwise 0`,
+        `the flat bonus, ${int(FIRST_BONUS)} for the first record on a problem (that payment counts only the bonus, not the other terms), ${int(LEAD_BONUS)} for taking the lead on a problem that has a record, and 0 on any other payment. It is paid at most once for each problem in each cycle, and no weight or multiplier changes it`,
       ],
       [
         "<var>κ</var>",
         "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
-      ],
-      [
-        "<var>β</var>",
-        `${BEAT_OTHER_FACTOR} for every payment while your board is better, at 6 decimals, than another name's record or a published value and the server has not yet made your entry the record. It starts again each time another name takes the lead and you beat it. Otherwise 1`,
       ],
       ["<var>m</var>", "your points multiplier"],
       ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
@@ -202,7 +194,7 @@ const POINTS: How[] = [
       ["<var>κ</var>", `the cost factor here, ${costFactor(EXAMPLE).toFixed(3)}`],
       [
         "<var>b</var>",
-        `the area bound here, ${exampleBound.toFixed(6)}. The board's side is ${exampleSide.toFixed(6)}, 20 % above it. The contest weight of an open problem is ${CONTEST.open}.`,
+        `the area bound here, ${exampleBound.toFixed(6)}. The board's side is ${exampleSide.toFixed(6)}, 20 % above it.`,
       ],
     ],
     note: "The step term depends only on how big the step is. It does not grow as your record gets better, which is why it rises and falls from one click to the next. The size and gap terms of many small steps add up to those of one big step that shrinks the side as much.",
@@ -493,7 +485,7 @@ export const TRANSFERS: How = {
   text: [
     "With Transfers, a new open problem can start from the best known packing of the same shapes with fewer pieces. Without it, every piece starts on rings around the centre of the container.",
     `The game looks first at your own boards in the queue with fewer pieces. Then it looks at the site's records for up to ${MAX_NEIGHBOUR_LOOKUPS} smaller piece counts, closest first. Those are the counts below the problem's among ${andList(FRONTIER_P.map(String))}. With More open problems they also include the three counts just below it. The missing pieces are placed in free space around the packing. When 6 or fewer are missing, each goes where it grows the container least.`,
-    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it. Your points still count from the start without the transfer, so a transfer costs you no points.`,
+    `The transfer is used only when its side is more than ${pct(1 - TRANSFER_MARGIN)} smaller than the rings' side. The starting score is then the smallest of the rings' side, the transferred side and the record for one more piece. The transferred board is never sent unless you improve it.`,
   ],
   math: [
     `use the transfer when <var>s</var><sub>T</sub> &lt; ${TRANSFER_MARGIN} × <var>s</var><sub>L</sub>`,

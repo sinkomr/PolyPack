@@ -5,7 +5,7 @@ import { DealerState, canDeal, creditOf, earn, newDealer } from "./dealer";
 import { income } from "./income";
 import { PolygonKey, ProblemKey, isPolygon, keyOf, keyPart, poly } from "./frontier";
 import { PacerState, newPacer } from "./pacer";
-import { FLOOR, Points, Tier, recordPoints, show6 } from "./points";
+import { BonusKind, FLOOR, LEAD_MIN, Points, Tier, recordPoints, show6 } from "./points";
 import type { RunRecord, SubmitOutcome } from "./submission";
 import { generatePlayerName, sanitizeName } from "./names";
 import { EconomyState, addBase, forgetHeld, newEconomy, noteRecorded, pointsMultiplier, takeBase } from "./economy";
@@ -54,6 +54,8 @@ export interface PendingSend {
   at: number;
   /** Points paid for the improvements this send carries: kept if it leads, taken back if not. */
   rp: number;
+  /** A flat bonus (points.ts) is among the points this send carries: taken back with them. */
+  bonus?: boolean;
 }
 
 export interface ProblemFields {
@@ -105,15 +107,12 @@ export interface ProblemFields {
   kept: boolean;
   /** A POST whose answer has not arrived (or was lost): what was sent, under which name, after which leader. */
   sending: PendingSend | null;
-  /**
-   * The score the first payment counts from when a transfer lowered the free floor (the score the
-   * problem would have had without it); null otherwise. The first record must still beat `floor`.
-   */
-  payFrom: number | null;
   /** The score up to which points have been paid (null: none yet, so from the leader or the floor). */
   paidTo: number | null;
   /** Points paid here that no submission has carried yet. */
   unconfirmed: number;
+  /** A flat bonus was paid here since the last confirmation, so a take-back takes it too and lets it be paid again. */
+  bonusOpen: boolean;
   /** The board's score after each counted improvement, by evaluations run here (thinned when long). */
   trace: [number, number][];
   /** The RP paid here so far (`rp`) after each payment or take-back, by evaluations run here (thinned like `trace`). */
@@ -232,6 +231,12 @@ export interface GameState {
   economy: EconomyState;
   picks: PicksState;
   runplan: RunPlanState;
+  /**
+   * The flat bonuses paid (points.ts): for each problem key, the number of resets when it was paid. A
+   * bonus is paid at most once per problem per cycle, so one paid at the current reset count is spent
+   * and nothing needs clearing at a reset.
+   */
+  bonusPaid: Record<string, number>;
 }
 
 export const TRACE_LIMIT = 400;
@@ -298,6 +303,7 @@ export function newGame(now: number, seed: number): GameState {
     economy: newEconomy(),
     picks: newPicks(),
     runplan: newRunPlan(),
+    bonusPaid: {},
   };
 }
 
@@ -308,7 +314,6 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     dealtAt: now,
     bound: null,
     floor: null,
-    payFrom: null,
     published: null,
     phase: "bare",
     board: null,
@@ -325,6 +330,7 @@ export function newProblem(p: ProblemKey, tier: Tier, now: number): ProblemState
     sending: null,
     paidTo: null,
     unconfirmed: 0,
+    bonusOpen: false,
     trace: [],
     rpTrace: [],
     evaluations: 0,
@@ -408,21 +414,18 @@ export const evolvable = (p: ProblemState): boolean => p.phase === "ready" || (p
 
 /**
  * Load all: the Load-all board becomes the problem's board and, with the trim floor, its free floor.
- * `payFrom` is set when a transfer started the problem: the first payment then counts from it.
  */
 export function applyLoadAll(
   p: ProblemState,
   board: PackingConfig | SpaceConfig,
   score: number,
   trimFloor: number | null,
-  payFrom: number | null = null,
 ): void {
   if (p.phase !== "bare") return;
   p.board = board;
   p.best = score;
   p.run = null;
   p.floor = trimFloor !== null && trimFloor < score ? trimFloor : score;
-  p.payFrom = payFrom;
   p.phase = "loaded";
 }
 
@@ -621,18 +624,31 @@ export function previousScore(p: ProblemState): number | null {
 }
 
 /**
- * What the next payment is measured from: the last score paid, else the score to beat (for a first
- * record on a transferred start, the score the problem would have had without the transfer); on a
- * problem with a published value, never above the published value (nothing pays until the board beats it).
+ * What the next payment is measured from: the last score paid, else the score to beat; on a problem
+ * with a published value, never above the published value (nothing pays until the board beats it).
+ * A first record pays only its bonus, so later payments count from its score (paidTo).
  */
 const payBase = (p: ProblemState): number | null => {
-  const fromTransfer =
-    p.paidTo === null && p.leader === null && p.verified === null && p.payFrom !== null ? p.payFrom : null;
-  const base = p.paidTo ?? fromTransfer ?? previousScore(p);
+  const base = p.paidTo ?? previousScore(p);
   return base !== null && p.published !== null ? Math.min(base, p.published) : base;
 };
 
-function pointsFor(p: ProblemState, name: string): Points | null {
+/** Whether the problem's flat bonus is spent this cycle. Without the game state, nothing is. */
+const bonusSpent = (p: ProblemState, s?: GameState): boolean => !!s && s.bonusPaid[p.key] === s.standing.resets;
+
+/**
+ * The flat bonus the next payment earns, or null (points.ts): "first" for the first record on a
+ * problem without any record, "lead" when the board passes another name's record or a published
+ * value visibly and by LEAD_MIN relative; never twice per problem in a cycle.
+ */
+function bonusFor(p: ProblemState, name: string, s?: GameState): BonusKind | null {
+  if (bonusSpent(p, s)) return null;
+  if (p.paidTo === null && p.leader === null && p.verified === null && p.published === null) return "first";
+  const target = beatenTarget(p, name);
+  return target !== null && p.best !== null && p.best <= target * (1 - LEAD_MIN) ? "lead" : null;
+}
+
+function pointsFor(p: ProblemState, name: string, s?: GameState): Points | null {
   if (p.phase !== "ready" || p.best === null || !p.run || p.closed) return null;
   const sPrev = payBase(p);
   if (sPrev === null) return null;
@@ -642,15 +658,14 @@ function pointsFor(p: ProblemState, name: string): Points | null {
     sPrev,
     sNew: p.best,
     tier: p.tier,
-    first: p.paidTo === null && p.leader === null && p.verified === null,
-    // a published value is a record too: the first payment below it beats it
-    beatOther: beating(p, name),
+    bonus: bonusFor(p, name, s),
   });
 }
 
 /**
  * Points as paid: the improvement's own points (`base`, design §5) times the multiplier of the
- * moment (standing, collections, rules finished); `total` is what was paid, and what a take-back takes.
+ * moment (standing, collections, rules finished), plus the flat bonus, which no multiplier touches;
+ * `total` is what was paid, and what a take-back takes. Rent counts `base` only.
  */
 export interface PaidPoints extends Points {
   base: number;
@@ -662,18 +677,18 @@ export const multiplierFor = (s: GameState, p: ProblemState): number =>
   pointsMultiplier(s, ownedSet(s), p, p.run?.method ?? null);
 
 function withMultiplier(points: Points, multiplier: number): PaidPoints {
-  return { ...points, base: points.total, multiplier, total: points.total * multiplier };
+  return { ...points, base: points.improvement, multiplier, total: points.improvement * multiplier + points.bonusRp };
 }
 
 /** Points the board would pay now, with the game state's multiplier when it is given. */
 export function pendingPoints(p: ProblemState, name: string, s?: GameState): PaidPoints | null {
-  const points = pointsFor(p, name);
+  const points = pointsFor(p, name, s);
   return points ? withMultiplier(points, s ? multiplierFor(s, p) : 1) : null;
 }
 
 /** Pays the board's improvement since the last payment, as one event. */
 export function pay(s: GameState, p: ProblemState): PaidPoints | null {
-  const own = pointsFor(p, s.name);
+  const own = pointsFor(p, s.name, s);
   if (!own) return null;
   const points = withMultiplier(own, multiplierFor(s, p));
   s.rp += points.total;
@@ -684,6 +699,10 @@ export function pay(s: GameState, p: ProblemState): PaidPoints | null {
   pushRpTrace(p);
   p.unconfirmed += points.total;
   addBase(s.economy, p.key, points.base);
+  if (points.bonus) {
+    s.bonusPaid[p.key] = s.standing.resets;
+    p.bonusOpen = true;
+  }
   p.paidTo = p.best;
   return points;
 }
@@ -713,20 +732,19 @@ export function unconfirmedPoints(s: GameState): number {
 }
 
 /**
- * Whether every payment on the problem now pays double: the board is visibly past another name's
- * record (or a published value), and the server has not yet made our entry the leader. The window
- * opens with the first payment that passes the record and closes when an answer makes our entry
- * the leader (applyAnswer sets `leader` to it); when another name leads again, the next beat opens a
- * new one. Our own record never pays double. The name is compared as the server stores it (it
- * strips angle brackets, for one), and a leader read from a "behind" answer has no id.
+ * The score of a record held by another name or a published value that the board is visibly (at 6
+ * decimals) past, or null: the lead bonus's condition (and, in the server's terms, a beat that the
+ * server has not yet made our entry the leader of). Our own record is not one to beat. The name is
+ * compared as the server stores it (it strips angle brackets, for one), and a leader read from a
+ * "behind" answer has no id.
  */
-function beating(p: ProblemState, name: string): boolean {
+function beatenTarget(p: ProblemState, name: string): number | null {
   const leader = p.leader;
   const other =
     !!leader && (leader.id === null || leader.id !== p.ourId) && sanitizeName(leader.name) !== sanitizeName(name);
-  if (leader && !other) return false;
+  if (leader && !other) return null;
   const target = Math.min(other ? leader!.score : Infinity, p.published ?? Infinity);
-  return p.best !== null && Number.isFinite(target) && Number(show6(p.best)) < Number(show6(target));
+  return p.best !== null && Number.isFinite(target) && Number(show6(p.best)) < Number(show6(target)) ? target : null;
 }
 
 // ---------- the server ----------
@@ -744,6 +762,8 @@ export function markSending(
   now: number,
 ): void {
   p.sending = { score, name: sanitizeName(name), leaderBefore, at: now, rp: p.unconfirmed };
+  if (p.bonusOpen) p.sending.bonus = true;
+  p.bonusOpen = false;
   p.unconfirmed = 0;
 }
 
@@ -798,6 +818,9 @@ export function applyAnswer(
     // another entry got there first: nothing paid since the last confirmation was a record
     takenBack = takeBack(s, p, carried + p.unconfirmed);
     p.unconfirmed = 0;
+    // the flat bonus went with them, and may be paid again
+    if (p.sending?.bonus || p.bonusOpen) delete s.bonusPaid[p.key];
+    p.bonusOpen = false;
     // a record of ours it overtook is lost now: no rent for it from its last check on
     if (p.ourId !== null) forgetHeld(s.economy, p.key);
     p.ourId = null;
@@ -811,13 +834,17 @@ export function applyAnswer(
   } else if (outcome.kind === "closed") {
     takenBack = takeBack(s, p, carried + p.unconfirmed);
     p.unconfirmed = 0;
+    if (p.sending?.bonus || p.bonusOpen) delete s.bonusPaid[p.key];
+    p.bonusOpen = false;
     p.closed = true;
   } else if (outcome.kind === "refused") {
     takenBack = takeBack(s, p, carried);
+    if (p.sending?.bonus) delete s.bonusPaid[p.key];
     p.refused = { score: sentScore, reasons: outcome.reasons };
   } else if (outcome.kind === "rate-limited") {
     // not looked at: the points ride with the next submission
     p.unconfirmed += carried;
+    if (p.sending?.bonus) p.bonusOpen = true;
   }
   // Without an answer the send may still have reached the server: it is kept to be recognised later.
   if (outcome.kind !== "offline") {
@@ -859,6 +886,7 @@ export function applyLeader(
     }
     p.sending = null;
     p.unconfirmed += send.rp;
+    if (send.bonus) p.bonusOpen = true;
   }
   const held = p.ourId !== null;
   const ours = leader !== null && leader.id !== null && leader.id === p.ourId;

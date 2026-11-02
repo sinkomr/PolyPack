@@ -56,10 +56,10 @@ describe("Tighter's explanations", () => {
     expect([...placed].sort()).toEqual(Object.keys(HELP).sort());
   });
 
-  it("work the points example out: the step term is 1, 4, 7 and 8 for steps of 10⁻⁹ to 10⁻²", () => {
+  it("work the points example out: the step term is 0.10, 0.40, 0.70 and 0.80 for steps of 10⁻⁹ to 10⁻²", () => {
     const example = (HELP.points as How[])[1];
-    const steps = (example.math ?? []).map((line) => /t<\/var><sub>step<\/sub> = (\d+)/.exec(line)?.[1]);
-    expect(steps).toEqual(["1", "4", "7", "8"]);
+    const steps = (example.math ?? []).map((line) => /t<\/var><sub>step<\/sub> = (\d+\.\d+)/.exec(line)?.[1]);
+    expect(steps).toEqual(["0.10", "0.40", "0.70", "0.80"]);
   });
 
   it("give auto-eval's rate as a target in evaluations a second, which evaluations per click do not change", () => {

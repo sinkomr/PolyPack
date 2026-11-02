@@ -1,7 +1,7 @@
 import { Bandit, normalizeBandit } from "./bandit";
 import { parseDealtKey } from "./catalogue";
 import { isPolygon, keyOf } from "./frontier";
-import { CONTEST, Tier } from "./points";
+import { Tier, isTier } from "./points";
 import { Candidate, Filters, learn, normalizeFilters } from "./rank";
 import { MAX_RIVALS, Rival, normalizeRivals } from "./rivals";
 
@@ -75,7 +75,7 @@ function leader(v: unknown): Candidate["leader"] {
 export function normalizeOffer(v: unknown): Offer | null {
   if (!isObj(v)) return null;
   const k = parseDealtKey(typeof v.id === "string" && v.family !== "polygon" ? v.id : `${v.N}/${v.M}/${v.P}`);
-  if (!k || typeof v.tier !== "string" || !(v.tier in CONTEST)) return null;
+  if (!k || !isTier(v.tier)) return null;
   const tier = v.tier as Tier;
   const lead = leader(v.leader);
   // a contested offer starts from its leader; a published one from its leader or the published packing
