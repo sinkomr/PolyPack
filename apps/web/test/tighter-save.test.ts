@@ -197,7 +197,7 @@ describe("Tighter saves", () => {
     raw.bonusPaid = { a: -1, b: 1.5, c: "x", d: 3 };
     const bad = readSave(raw, T0);
     expect(bad.ok && bad.state.bonusPaid).toEqual({ d: 3 });
-    expect(JSON.parse(toJson(s)).version).toBe(10);
+    expect(JSON.parse(toJson(s)).version).toBe(SAVE_VERSION);
   });
 
   it("give back the price of the Away upgrades and Keep the bank, once, now that auto-eval runs live", () => {
