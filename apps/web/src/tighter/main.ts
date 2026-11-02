@@ -3043,7 +3043,6 @@ function renderName(): void {
   text("t-name-note", `Your records are sent to PolyPack as “${state.name}”.`);
 }
 
-/** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 /** The income table as last drawn, so that the page is touched only when it changes. */
 let incomeShown = "";
 /** Record points of the last hour by problem group and source (income.ts), shown with the totals. */
@@ -3072,6 +3071,7 @@ function renderIncome(): void {
   $("t-income-table").innerHTML = html;
 }
 
+/** The points themselves are in the totals; the panel keeps their explanations and the name nudge. */
 function renderPoints(): void {
   show("t-points-help", revealed(state, "points"));
   renderIncome();
