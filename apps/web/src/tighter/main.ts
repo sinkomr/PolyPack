@@ -3473,7 +3473,10 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
   if (sig !== queueSig) {
     queueSig = sig;
     // keyboard focus on a button survives the rebuild
-    const active = document.activeElement instanceof HTMLElement && list.contains(document.activeElement) ? document.activeElement : null;
+    const active =
+      document.activeElement instanceof HTMLElement && list.contains(document.activeElement)
+        ? document.activeElement
+        : null;
     const refocus = active ? { key: active.closest("li")?.dataset.key, cls: active.dataset.act } : null;
     list.replaceChildren(
       ...rows.map((p) => {
@@ -3519,7 +3522,9 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
       }),
     );
     if (refocus)
-      list.querySelector<HTMLElement>(`li[data-key="${CSS.escape(refocus.key ?? "")}"] [data-act="${refocus.cls}"]`)?.focus();
+      list
+        .querySelector<HTMLElement>(`li[data-key="${CSS.escape(refocus.key ?? "")}"] [data-act="${refocus.cls}"]`)
+        ?.focus();
   }
   // everything that changes while lanes work is written in place: no row, button or mark is replaced or moves
   const busy = new Set(lanes.flatMap(workingKeys));
@@ -3557,7 +3562,9 @@ function renderQueue(o: ReadonlySet<UpgradeId>): void {
     keep.setAttribute("aria-pressed", String(p.kept));
     keep.setAttribute(
       "aria-label",
-      p.kept ? `Kept ${problemTitle(p)}, Auto-advance will not drop it` : `Keep ${problemTitle(p)}, so that Auto-advance does not drop it`,
+      p.kept
+        ? `Kept ${problemTitle(p)}, Auto-advance will not drop it`
+        : `Keep ${problemTitle(p)}, so that Auto-advance does not drop it`,
     );
     li.querySelector('[data-act="drop"]')?.setAttribute("aria-label", `Drop ${problemTitle(p)} from the queue`);
   }
