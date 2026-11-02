@@ -85,7 +85,10 @@ export interface MethodRunOptions {
   shouldStop?: (used: number, finishing?: boolean) => boolean;
   /** Called with every improvement of the best. */
   onImprove?: (best: Finished) => void;
-  /** Called each time the method hands a state back that finishes (ctx.offer), before it is checked or kept. Counting changes no result. */
+  /**
+   * Called each time the method hands back a state that finishes (ctx.offer): after finish has validated it, before it
+   * is kept. Counting changes no result; an exception thrown here ends the run.
+   */
   onOffer?: () => void;
   /** Seconds, monotonic; default performance.now() / 1000. */
   now?: () => number;
