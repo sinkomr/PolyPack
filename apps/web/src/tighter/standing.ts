@@ -11,19 +11,33 @@ import {
 } from "./frontier";
 import { RESET_GROWTH, RESET_MIN } from "./points";
 import type { GameState } from "./game";
-import { EvolveMethod, HEAD2_AUTO_LEVELS, UPGRADES, UpgradeId, currencyOf, upgrade } from "./upgrades";
+import {
+  EvolveMethod,
+  Funds,
+  UPGRADES,
+  UpgradeId,
+  canBuy,
+  costOf,
+  currencyOf,
+  headStartGives,
+  level,
+  owning,
+  upgrade,
+} from "./upgrades";
 
 /**
  * Standing: the reset currency (plan §5).
  *
- * A reset trades the cycle's record points and the main tree for standing. Records stay on the
- * server and keep paying rent; collections, the dealer's learning, the queue and the lifetime counts
- * stay too. Every point of standing ever earned adds 10 % to all record points, and standing buys
- * the Standing row: head starts that make the opening of a new cycle a sprint, rows that survive
- * resets, and mechanics that exist nowhere else (Pipelines, Auto-tune). A cycle may be played under
- * a rule (circles only, small problems, clicks only, one method): finishing it under the rule pays
- * extra standing and a reward of the rule's own, for good. The rules also aim the players' compute at
- * one family of problems.
+ * Buying the Standing card in the tech tree is the reset (2026-11-01). It costs the cycle's threshold
+ * in record points (resetThreshold) and needs as many confirmed record points earned in the cycle. A
+ * reset trades the cycle's record points and the main tree for 1 standing point (2 when the cycle was
+ * played under a rule) and doubles all record points for good. Records stay on the server, and the
+ * dealer's learning, the queue and the lifetime counts stay. Rent, Higher rent and Collections go like
+ * the other cards, unless Head start gives them back. Standing buys the Standing row: Head start,
+ * rows that survive resets, and mechanics that exist nowhere else (Pipelines, Auto-tune). A cycle may
+ * be played under a rule (circles only, small problems, clicks only, one method): finishing it under
+ * the rule pays one more standing point and a reward of the rule's own, for good. The rules also aim
+ * the players' compute at one family of problems.
  *
  * The One seed rule (id "seed") was dropped with the Seeds row on 2026-10-22. A save read with it as
  * the cycle's rule goes on without a rule, and a finished "seed" rule, its reward and its history
@@ -36,7 +50,7 @@ export interface CycleRecord {
   endedAt: number;
   /** Record points earned in the cycle. */
   earned: number;
-  /** Standing it gave. */
+  /** Standing points it gave. */
   gain: number;
   rule: string | null;
   /** Milestones reached: ms since the cycle began, by mark id. */
@@ -46,7 +60,7 @@ export interface CycleRecord {
 export interface StandingState {
   /** Standing to spend on the Standing row. */
   points: number;
-  /** Standing ever earned: each point adds 10 % to all record points, spent or not. */
+  /** Standing ever earned, spent or not (shown; the multiplier comes from the resets). */
   total: number;
   resets: number;
   /** Record points earned in this cycle (since the last reset). */
@@ -135,8 +149,8 @@ export function normalizeStanding(v: unknown, now: number): StandingState {
   };
 }
 
-/** The multiplier standing puts on every record point: 1 + 0.1 per point of standing ever earned. */
-export const standingMultiplier = (s: StandingState): number => 1 + 0.1 * s.total;
+/** The multiplier standing puts on every record point: each reset doubles it, 2^resets. */
+export const standingMultiplier = (s: StandingState): number => Math.pow(2, s.resets);
 
 // ---------- cycle rules ----------
 
@@ -262,36 +276,11 @@ export const DIMENSION_TEXT: Readonly<Record<DimensionId, { label: string; what:
 export const heldCount = (s: GameState) =>
   s.queue.filter((p) => p.ourId !== null).length + s.past.filter((p) => p.ourId !== null).length;
 
-/** Standing points a reset gives at its threshold, and the root's factor [SPEC]. */
-export const GAIN_AT_THRESHOLD = 5;
+/** Standing points a reset gives, and one more for finishing the cycle under a rule. */
+export const RESET_GAIN = 1;
+export const RULE_GAIN = 1;
+export const resetGain = (rule: string | null): number => RESET_GAIN + (rule ? RULE_GAIN : 0);
 
-/**
- * Standing a reset gives now [SPEC]: ⌊5 √(cycle RP / threshold)⌋, nothing before the cycle has
- * earned the threshold (resetThreshold). The records held no longer count.
- */
-export function standingGain(cycleEarned: number, threshold = RESET_MIN): number {
-  if (!(cycleEarned >= threshold)) return 0;
-  return Math.floor(GAIN_AT_THRESHOLD * Math.sqrt(cycleEarned / threshold) + 1e-9);
-}
-
-/** Standing for finishing a cycle under a rule, on top of the gain: half again, at least one. */
-export const ruleBonus = (gain: number) => (gain > 0 ? Math.max(1, Math.ceil(gain / 2)) : 0);
-
-/** Record points of this cycle at which the next point of standing comes. */
-export function nextStandingAt(cycleEarned: number, threshold = RESET_MIN): number {
-  const g = standingGain(cycleEarned, threshold);
-  if (g === 0) return threshold;
-  return Math.max(threshold, Math.ceil((threshold * (g + 1) ** 2) / GAIN_AT_THRESHOLD ** 2 - 1e-6));
-}
-
-/** Upgrades a reset never takes: the Standing row, Standing itself, and records' own (rent, collections). */
-export const ALWAYS_KEPT: readonly UpgradeId[] = ["standing", "rent", "rentx", "collections"];
-/** Head starts: owned at once when a cycle begins (with their prerequisites). */
-export const HEAD_STARTS: Readonly<Partial<Record<UpgradeId, readonly UpgradeId[]>>> = {
-  head1: ["trace", "click2", "click3", "click4", "click5", "auto1"],
-  head2: ["queue3", "autox", "basin"],
-  head3: ["reach2", "advance", "lanes2"],
-};
 const METHOD_IDS: readonly UpgradeId[] = ["basin", "shrink", "penalty", "lattice", "harden", "morph", "asc", "growth"];
 
 /** The upgrades and every prerequisite they need. */
@@ -306,39 +295,42 @@ function withPrerequisites(ids: Iterable<UpgradeId>): Set<UpgradeId> {
   return want;
 }
 
-/** What a reset keeps of what the player owns, and what head starts give: the next cycle's tree. */
+/**
+ * What a reset keeps of what the player owns, and what Head start gives: the next cycle's tree. The
+ * standing options stay (the Standing card does not: it is bought again for the next reset), Keep
+ * auto-eval keeps the Auto-eval row and Keep methods the methods.
+ */
 export function nextCycleTree(s: GameState): { owned: UpgradeId[]; levels: Partial<Record<UpgradeId, number>> } {
   const has = new Set(s.owned);
   const kept = s.owned.filter((id) => {
     const u = upgrade(id);
     return (
-      currencyOf(u) === "standing" ||
-      ALWAYS_KEPT.includes(id) ||
-      (has.has("keepAuto") && u.row === "auto") ||
-      (has.has("keepMethods") && METHOD_IDS.includes(id))
+      id !== "standing" &&
+      (currencyOf(u) === "standing" ||
+        (has.has("keepAuto") && u.row === "auto") ||
+        (has.has("keepMethods") && METHOD_IDS.includes(id)))
     );
   });
-  const heads = Object.entries(HEAD_STARTS)
-    .filter(([id]) => has.has(id as UpgradeId))
-    .flatMap(([, ids]) => ids!);
+  const head = headStartGives(has.has("head") ? level(owning(s.owned, s.levels), "head") : 0);
   const keptSet = new Set(kept);
-  const owned = new Set([...kept, ...withPrerequisites(heads)]);
-  // levels stay only with the upgrades kept (a head start grants first levels only, bar Head start II's
-  // levels of Faster auto-eval, which it brings up to the rate of the old fifth rung)
+  const owned = new Set([...kept, ...withPrerequisites(head.ids)]);
+  // levels stay with the upgrades kept, and Head start brings the levels it gives up to its own
   const levels: Partial<Record<UpgradeId, number>> = {};
   for (const [id, l] of Object.entries(s.levels) as [UpgradeId, number][]) if (keptSet.has(id)) levels[id] = l;
-  if (has.has("head2")) levels.autox = Math.max(levels.autox ?? 0, HEAD2_AUTO_LEVELS);
+  for (const [id, l] of Object.entries(head.levels) as [UpgradeId, number][]) levels[id] = Math.max(levels[id] ?? 0, l);
   return { owned: UPGRADES.filter((u) => owned.has(u.id)).map((u) => u.id), levels };
 }
 
 export interface ResetPreview {
-  /** Standing the reset gives, the rule's bonus included (0: it cannot reset yet). */
+  /** Whether the Standing card can be bought now (its price in RP in hand, and as many confirmed this cycle). */
+  can: boolean;
+  /** Standing points the reset gives: 1, and 1 more under a rule. */
   gain: number;
   ruleBonus: number;
-  /** Record points still to earn before a reset is possible (0 when it is). */
+  /** What Standing costs now, in record points. */
+  price: number;
+  /** Confirmed record points of this cycle still to earn before the card can be bought (0 when enough). */
   short: number;
-  /** Record points of this cycle at which the next point of standing comes. */
-  nextAt: number;
   held: number;
   /** The dimension this reset opens (null: none, or it is open already). */
   opens: DimensionId | null;
@@ -358,19 +350,35 @@ export function confirmedCycleEarned(s: GameState): number {
   return Math.max(0, s.standing.cycleEarned - waiting);
 }
 
+/** What the player can pay with, Standing's confirmed points included (upgrades.ts canBuy). */
+export const fundsOf = (s: GameState): Funds => ({
+  rp: s.rp,
+  standing: s.standing.points,
+  confirmed: confirmedCycleEarned(s),
+});
+
 export function resetPreview(s: GameState): ResetPreview {
   const held = heldCount(s);
   const earned = confirmedCycleEarned(s);
-  const threshold = resetThreshold(s.standing.resets);
-  const gain = standingGain(earned, threshold);
+  const o = owning(
+    s.owned,
+    s.levels,
+    s.standing.rule,
+    s.standing.rulesDone,
+    s.settings.off,
+    s.standing.resets,
+    s.standing.dimensions,
+  );
+  const price = costOf(o, "standing") ?? resetThreshold(s.standing.resets);
+  const bonus = s.standing.rule ? RULE_GAIN : 0;
   const opened = dimensionOpenedBy(s.standing.resets + 1);
-  const bonus = s.standing.rule ? ruleBonus(gain) : 0;
   const next = nextCycleTree(s).owned;
   return {
-    gain: gain + bonus,
+    can: canBuy(o, fundsOf(s), "standing").ok,
+    gain: RESET_GAIN + bonus,
     ruleBonus: bonus,
-    short: gain > 0 ? 0 : Math.max(0, threshold - earned),
-    nextAt: nextStandingAt(earned, threshold),
+    price,
+    short: Math.max(0, price - earned),
     held,
     opens: opened && !s.standing.dimensions.includes(opened) ? opened : null,
     keeps: next,
@@ -379,15 +387,15 @@ export function resetPreview(s: GameState): ResetPreview {
 }
 
 /**
- * Resets the cycle, when it can (Standing owned, the gain at least one): standing gained, the rule
+ * Resets the cycle, when the Standing card can be bought (resetPreview.can): standing gained, the rule
  * finished, the tree as nextCycleTree says, record points back to zero (less any still waiting for
- * the server, which carry over), the next cycle begun under the rule chosen for it. Records,
- * collections, rent, the queue and every lifetime count stay. Returns the standing gained, or 0.
+ * the server, which carry over), the next cycle begun under the rule chosen for it. Records, the
+ * list of records, the queue and every lifetime count stay. Rent restarts from now for the records
+ * held if the new tree has Rent, and the rent not yet paid is lost. Returns the standing gained, or 0.
  */
 export function resetCycle(s: GameState, now: number): number {
-  if (!s.owned.includes("standing")) return 0;
   const preview = resetPreview(s);
-  if (preview.gain <= 0) return 0;
+  if (!preview.can) return 0;
   const st = s.standing;
   markProgress(s, now);
   st.history.push({
@@ -412,6 +420,10 @@ export function resetCycle(s: GameState, now: number): number {
   const tree = nextCycleTree(s);
   s.owned = tree.owned;
   s.levels = tree.levels;
+  // rent accrued and not paid is lost; with Rent back (Head start), the records held start earning now
+  s.economy.checks = {};
+  if (s.owned.includes("rent"))
+    for (const p of [...s.queue, ...s.past]) if (p.ourId !== null) s.economy.checks[p.key] = now;
   s.rp = Math.min(s.rp, waiting);
   st.cycleEarned = waiting;
   st.cycleStartedAt = now;

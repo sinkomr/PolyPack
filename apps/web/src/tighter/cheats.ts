@@ -138,6 +138,8 @@ export function mountCheats(dialogBody: HTMLElement, host: CheatHost): HTMLEleme
   const earned = el("input");
   earned.id = "t-cheat-earned";
   earned.type = "checkbox";
+  // a reset needs confirmed points earned in the cycle, so granted points count as earned unless the tester unticks it
+  earned.checked = true;
   const earnedLabel = el("label", undefined, "t-check");
   earnedLabel.append(earned, " Count added record points as earned this cycle, toward standing milestones and a reset");
   const note = el("p", undefined, "note");

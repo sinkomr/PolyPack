@@ -25,7 +25,8 @@ import { RP_PER_EVAL, msPerEval } from "./rank";
  * nothing has a last rung.
  *
  * The whole tree shows in the shop. A mystery upgrade shows as ?????? until every prerequisite is
- * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets.
+ * owned. Standing upgrades are paid in standing (the reset currency) and are kept through resets. The
+ * Standing card itself is the reset: buying it ends the cycle (standing.ts resetCycle).
  *
  * Costs (2026-10-22, with the size and gap weights at 10,000, points.ts): priced in a pacing model of
  * real mc_compress runs from Load all (16 games of one click a second, the first problem from the
@@ -136,9 +137,7 @@ export type UpgradeId =
   | "collections"
   | "standing"
   // standing (paid in standing, kept through resets)
-  | "head1"
-  | "head2"
-  | "head3"
+  | "head"
   | "keepAuto"
   | "keepMethods"
   | "study"
@@ -323,8 +322,10 @@ export function autoLevelPrice(level: number): number {
   // Infinity less Infinity is NaN: a level nobody can pay for is Infinity
   return Number.isFinite(price) ? price : Infinity;
 }
-/** Levels of Faster auto-eval that Head start II gives each cycle: 9, so 10 evaluations a second as the old fifth rung did. */
+/** Levels of Faster auto-eval that Head start gives each cycle at most: 9, so 10 evaluations a second (Keep auto-eval keeps more). */
 export const HEAD2_AUTO_LEVELS = 9;
+/** What each level of Head start gives back: the upgrades whose own price is at most this (in RP, without Quick study). */
+export const HEAD_START_PRICES: readonly number[] = [10_000, 1_000_000, 100_000_000];
 /** Faster auto-eval's first level costs this (the card's list price): the 2nd evaluation a second. */
 const AUTOX_COST = AUTO_RATE_PRICE * 1.0025 ** 2;
 /** Reference growth of the price an evaluation a second, shown in the data; costOf prices levels by autoLevelPrice. */
@@ -664,16 +665,16 @@ const LANE_TEXT =
   "A lane is a worker that runs one problem. Two lanes never work on the same problem. The lanes share auto-eval's rate, so a new lane lets one more problem progress at once but adds no evaluations. If evaluations are slow, more lanes also spread the work over more cores.";
 const LANE_NOTE = "A lane with nothing to work on leaves its share to the others.";
 
+/** Every Standing-row option costs 1 standing point, and each level of a levelled one costs 1. */
 function standingRung(
   id: UpgradeId,
   name: string,
-  cost: number,
   requires: UpgradeId[],
   effect: string,
   how: How,
   levels?: { max: number; growth: number },
 ): Upgrade {
-  return { id, name, cost, requires, effect, how, row: "standing", mystery: true, currency: "standing", levels };
+  return { id, name, cost: 1, requires, effect, how, row: "standing", mystery: true, currency: "standing", levels };
 }
 
 const RENT_MATH = [
@@ -684,7 +685,7 @@ const RENT_VARS: readonly Var[] = [
   [sym("h"), "a record's rent, in record points per hour"],
   [sym("B"), "the record points that problem earned from its improvements, before multipliers (bonuses are not counted)"],
   [sym("a"), "levels of Higher rent"],
-  [sym("m"), "your points multiplier now (standing, collections and the rewards of cycle rules)"],
+  [sym("m"), "your points multiplier now (resets, collections and the rewards of cycle rules)"],
   [sym("Δ"), "hours since the record's last payday (24 hours a day, 168 hours at most)"],
 ];
 
@@ -756,7 +757,7 @@ export function advanceHow(warm: readonly Warmup[] = warmups()): How {
  * What a slice card costs, as a share of the cycle's reset threshold T [SPEC]: the ladder of each
  * dimension is priced against the cycle it opens in, so that it is bought in that cycle's first
  * hours (2D on 3D) or its middle (3D in 3D), and the late cards near its end. One table, to tune.
- * Curved costs 1,500,000,000 in the first cycle, half the Standing card (SLICE_FIRST_CYCLE).
+ * Curved costs 1,500,000,000 in the first cycle, 1.5 times the Standing card (SLICE_FIRST_CYCLE).
  */
 export const SLICE_SHARE: Readonly<Record<CardSliceId, number>> = {
   curved: 0.3,
@@ -1114,6 +1115,7 @@ export const UPGRADES: readonly Upgrade[] = [
       text: [
         "Each record you hold earns rent every hour, even while this page is closed. It is paid once a day. On payday, the game checks all your records with the server at once. It pays the rent for the days since each record's last payday, up to a week of them.",
         "If another name has taken a record, the rent since its last payday is not paid.",
+        "A reset takes this upgrade away unless Head start gives it back. No rent builds up while you do not own it. When you own it again, every record you still hold starts earning from that moment, and rent that was not paid before is lost.",
       ],
       math: RENT_MATH,
       vars: RENT_VARS,
@@ -1158,10 +1160,10 @@ export const UPGRADES: readonly Upgrade[] = [
     name: "Collections",
     cost: 280_000,
     requires: ["queue3", "reach2"],
-    effect: "Groups of similar records add to all your points, and the bonus stays through resets.",
+    effect: "Groups of similar records add to all your points.",
     how: {
       text: [
-        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now.",
+        "Every record the server confirmed for you counts, even if someone beat it later. Only polygon problems count for now. A reset takes this upgrade away, but your records still count when you buy it again.",
         "Same pieces and container. When you have 9 records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +2 %. The piece counts can be anything.",
         "Same pieces. When you have 10 records with the same pieces, in any container, you get +1 %. You get 1 % more at 30 records, and again at 100.",
         "Tiers. Your first record in each tier adds 5 %. The tiers are open problems, loose records, site records and published values.",
@@ -1430,27 +1432,24 @@ export const UPGRADES: readonly Upgrade[] = [
   {
     id: "standing",
     name: "Standing",
-    cost: 3_000_000_000,
+    cost: RESET_MIN,
     requires: ["collections", "rent", "ring120"],
-    effect: "You can reset for standing, and each point of standing adds 10 % to all points.",
+    effect: "Buying it resets the game, gives you 1 standing point and doubles all your points.",
     how: {
       text: [
-        `A reset ends the cycle, the play since the last reset. Your record points and most upgrades go back to zero, and you get standing. The first cycle can be reset once it has earned ${RESET_MIN.toLocaleString("en-US")} record points that the server has confirmed. Each later cycle needs ${RESET_GROWTH} times as many as the one before.`,
-        "Your records stay on the server and keep paying rent. Your collections, the dealer's learning and the queue stay too, and so do Records pay rent, Higher rent and Collections. Every point of standing you earn adds 10 % to all record points, whether you spend it or not, and you can also spend standing on the Standing row.",
+        `Standing is the reset. It costs ${RESET_MIN.toLocaleString("en-US")} RP in the first cycle, and ${RESET_GROWTH} times as much after each reset. You can buy it when you have that many RP to spend and this cycle has earned at least that many that the server has confirmed. The game asks you to confirm before it resets.`,
+        "A reset takes your record points and most of your upgrades. Records pay rent, Higher rent and Collections go too, unless Head start gives them back. Your records stay on the server, and your list of records, the dealer's learning, the queue and every count stay. Standing and the Standing row stay, but you buy the Standing card again for the next reset.",
+        "Each reset gives 1 standing point to spend on the Standing row, and 1 more if you finished the cycle under a rule. Each reset also doubles all your record points. After 3 resets they pay 8 times as much.",
         "The first reset opens 2D on 3D, where pieces are packed on the surfaces of solids. The second opens 3D in 3D, where solids are packed in solids. An opened dimension stays open, but its cards in the Dimensions row must be bought again in each cycle.",
       ],
       math: [
-        `${sym("S")} = ⌊5 × √(${sym("E")} / ${sym("T")})⌋`,
         `${sym("T")} = ${RESET_MIN.toLocaleString("en-US")} × ${RESET_GROWTH}<sup>${sym("r")}</sup>`,
-        `${sym("m", "s")} = 1 + 0.1 × ${sym("S", "all")}`,
+        `${sym("m", "s")} = 2<sup>${sym("r")}</sup>`,
       ],
       vars: [
-        [sym("S"), "the standing a reset gives (5 at the threshold)"],
-        [sym("E"), "the record points of this cycle that the server has confirmed (at least T)"],
-        [sym("T"), "the record points this cycle needs for a reset"],
+        [sym("T"), "the price of Standing, and the record points this cycle must have earned and the server confirmed"],
         [sym("r"), "the resets you have made so far (0 in the first cycle)"],
         [sym("m", "s"), "the multiplier standing puts on every record point"],
-        [sym("S", "all"), "the standing you have ever earned"],
       ],
     },
     row: "records",
@@ -1460,45 +1459,29 @@ export const UPGRADES: readonly Upgrade[] = [
   ringRung("ringAll", 24_000_000, ["ring30"], true),
   // ---- standing: paid in standing, kept through resets ----
   standingRung(
-    "head1",
-    "Head start I",
-    1,
-    ["standing"],
-    "Each new cycle starts with 2 to 5 evaluations per click and Auto-eval.",
+    "head",
+    "Head start",
+    [],
+    "Each new cycle starts with the upgrades that cost 10,000 RP or less, and each level raises that limit.",
     {
       text: [
-        `Every reset starts the next cycle with Trace detail, 2 to 5 evaluations per click, and Auto-eval at ${autoRateText(AUTO_BASE)}.`,
+        `At each reset, Head start gives you back, for nothing, the upgrades that cost ${HEAD_START_PRICES.map((p) => p.toLocaleString("en-US")).join(", ")} RP or less at levels 1, 2 and 3. Each level of an upgrade with levels counts as its own upgrade, and every upgrade comes with the ones it needs.`,
+        `Faster auto-eval comes up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}). Keep auto-eval keeps more. Another lane, the Dimensions row and Standing itself never come back this way.`,
+        "Level 2 also brings back Records pay rent, Higher rent (the first 2 levels) and Collections, and level 3 the rest of Higher rent. Prices are the ones without Quick study.",
       ],
     },
-  ),
-  standingRung(
-    "head2",
-    "Head start II",
-    3,
-    ["head1"],
-    "Each new cycle also starts with Basin hopping and the queue of 3.",
-    {
-      text: [
-        `Every reset also starts the next cycle with the basin_hopping method and what it needs (6 to 10 evaluations per click). It also gives Faster auto-eval up to level ${HEAD2_AUTO_LEVELS} (${autoRateText(rateOfLevel(HEAD2_AUTO_LEVELS))}) and a queue of 3.`,
-      ],
-    },
+    { max: 3, growth: 1 },
   ),
   standingRung(
     "rules",
     "Cycle rules",
-    3,
-    ["standing"],
+    [],
     "Before a reset, you can pick a rule for the next cycle and earn a lasting reward.",
     {
       text: [
-        "Before a reset, you can pick a rule for the next cycle in the Standing panel. You then play that cycle under the rule, and when you reset at its end, you get extra standing and the rule's reward for good.",
+        "When you buy Standing, you can pick a rule for the next cycle. You then play that cycle under the rule, and when you reset at its end, you get 1 more standing point and the rule's reward for good.",
         "Circles only deals only problems with circles, and it pays 1.5 times the points on them. Small problems only deals only problems of size 120 or less, and it pays 1.5 times the points on them. Clicks only turns auto-eval off and gives one more evaluation per click. One method allows only mc_compress, and it pays 1.5 times the points on the improvements it finds.",
         "Circles only and Small problems only apply to the problems of 2D in 2D. Other dimensions are dealt as usual and pay no reward from these rules.",
-      ],
-      math: [`${sym("S", "rule")} = max(1, ⌈${sym("S")} / 2⌉)`],
-      vars: [
-        [sym("S", "rule"), "the extra standing for finishing a cycle under a rule"],
-        [sym("S"), "the standing the reset gives otherwise"],
       ],
       note: "Size is N + M + P. Rewards multiply with each other and with your other multipliers.",
     },
@@ -1506,8 +1489,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "pipeline",
     "Pipelines",
-    4,
-    ["standing"],
+    [],
     "You put methods in order, and each new run on a problem uses the next one.",
     {
       text: [
@@ -1525,8 +1507,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "keepAuto",
     "Keep auto-eval",
-    5,
-    ["head1"],
+    ["head"],
     "Your Auto-eval upgrades survive resets, Faster auto-eval's levels included.",
     {
       text: [
@@ -1537,8 +1518,7 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "autoTune",
     "Auto-tune",
-    6,
-    ["standing"],
+    [],
     "With Auto chosen, the game also picks each run's tuning level from what has paid.",
     {
       text: [
@@ -1551,19 +1531,7 @@ export const UPGRADES: readonly Upgrade[] = [
       ],
     },
   ),
-  standingRung(
-    "head3",
-    "Head start III",
-    8,
-    ["head2"],
-    "Each new cycle also starts with Auto-advance, the second lane and Reach.",
-    {
-      text: [
-        "Every reset also starts the next cycle with Reach: site records, Auto-advance and the Second lane, and what they need.",
-      ],
-    },
-  ),
-  standingRung("keepMethods", "Keep methods", 10, ["keepAuto"], "The methods you own survive resets.", {
+  standingRung("keepMethods", "Keep methods", ["keepAuto"], "The methods you own survive resets.", {
     text: [
       `At a reset, you keep every Method upgrade you own (${listed(Object.values(METHOD).map((m) => methodLabel(m!)))}). Their tuning upgrades go back to zero. Under the One method rule, only mc_compress runs in that cycle.`,
     ],
@@ -1571,12 +1539,11 @@ export const UPGRADES: readonly Upgrade[] = [
   standingRung(
     "study",
     "Quick study",
-    2,
-    ["standing"],
+    [],
     "Each level makes every record-point price 10 % cheaper.",
     {
       text: [
-        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change.",
+        "Each level multiplies every price in record points by 0.9. At level 1 you pay 0.9 of the price, at level 2 0.81, at level 5 about 0.59 and at level 10 about 0.35. Prices in standing do not change, and neither does the price of Standing.",
       ],
       math: [`${sym("p")} = round(${sym("p", "0")} × 0.9<sup>${sym("a")}</sup>)`],
       vars: [
@@ -1584,9 +1551,8 @@ export const UPGRADES: readonly Upgrade[] = [
         [sym("p", "0"), "the price without Quick study"],
         [sym("a"), "levels of Quick study"],
       ],
-      note: "Each level costs 1.6 times the one before, in standing.",
     },
-    { max: 10, growth: 1.6 },
+    { max: 10, growth: 1 },
   ),
   // ---- dimensions ----
   ...SLICE_CARDS,
@@ -1613,6 +1579,8 @@ export function costOf(o: Owned, id: UpgradeId): number | null {
   if (!u) return null;
   const l = level(o, id);
   if (u.levels ? l >= u.levels.max : l > 0) return null;
+  // Standing's price is the cycle's reset threshold, and Quick study does not discount it
+  if (id === "standing") return Math.round(thresholdAfter(o.resets ?? 0));
   const base = isCardSlice(id)
     ? slicePrice(id, o.resets ?? 0)
     : id === "autox"
@@ -1631,13 +1599,24 @@ export function isRevealed(o: Owned, id: UpgradeId): boolean {
 
 /** Upgrades that can be bought next (prerequisites owned, a level left): the shop's open cards. */
 export function available(o: Owned): Upgrade[] {
-  return UPGRADES.filter((u) => exists(o, u.id) && costOf(o, u.id) !== null && u.requires.every((r) => o.has(r)));
+  return UPGRADES.filter(
+    (u) =>
+      exists(o, u.id) &&
+      (u.row !== "standing" || standingRowOpen(o)) &&
+      costOf(o, u.id) !== null &&
+      u.requires.every((r) => o.has(r)),
+  );
 }
+
+/** The Standing row is open from the first reset on (Standing is bought as the reset, and again each cycle). */
+export const standingRowOpen = (o: Owned): boolean => o.has("standing") || (o.resets ?? 0) > 0;
 
 /** What the player can pay with. */
 export interface Funds {
   rp: number;
   standing: number;
+  /** Record points of this cycle the server confirmed (standing.ts confirmedCycleEarned): Standing needs its price in these too. */
+  confirmed?: number;
 }
 
 export type BuyCheck = { ok: true } | { ok: false; reason: "owned" | "locked" | "points" };
@@ -1651,7 +1630,10 @@ export function canBuy(o: Owned, funds: Funds | number, id: UpgradeId): BuyCheck
   const f = typeof funds === "number" ? { rp: funds, standing: 0 } : funds;
   const have = currencyOf(u) === "rp" ? f.rp : f.standing;
   // A tiny tolerance so that 4.9999999999 RP after floating sums still buys a 5 RP card.
-  if (have + 1e-9 < cost) return { ok: false, reason: "points" };
+  if (!(have + 1e-9 >= cost)) return { ok: false, reason: "points" };
+  // a reset trades only points the server confirmed
+  if (id === "standing" && f.confirmed !== undefined && !(f.confirmed + 1e-9 >= cost))
+    return { ok: false, reason: "points" };
   return { ok: true };
 }
 
@@ -1860,4 +1842,40 @@ export function laneLevelsUseful(coreCount = cores()): number {
 /** Another lane is owned to every level this CPU can use: buying more would add nothing. */
 export function lanesMaxed(o: Owned, coreCount = cores()): boolean {
   return o.has("lanes2") && level(o, "lanesx") >= laneLevelsUseful(coreCount);
+}
+
+// ---------- Head start ----------
+
+/** The list price of level `l` + 1 of an upgrade in record points (level 0 is the first), without Quick study. */
+export function listPrice(id: UpgradeId, l = 0): number {
+  const u = upgrade(id);
+  return id === "autox" ? autoLevelPrice(l) : u.levels ? u.cost * Math.pow(u.levels.growth, l) : u.cost;
+}
+
+/**
+ * The upgrades a level of Head start gives at the start of a cycle, with their levels: every card paid
+ * in record points, and every level of a levelled one, whose own list price is at most the level's
+ * limit, and what they need. Never given: Standing, the Dimensions row's cards, Another lane, and
+ * Faster auto-eval's levels past HEAD2_AUTO_LEVELS.
+ */
+export function headStartGives(headLevel: number): { ids: UpgradeId[]; levels: Partial<Record<UpgradeId, number>> } {
+  const limit = HEAD_START_PRICES[Math.min(headLevel, HEAD_START_PRICES.length) - 1];
+  const levels: Partial<Record<UpgradeId, number>> = {};
+  const ids = new Set<UpgradeId>();
+  if (limit === undefined) return { ids: [], levels };
+  const add = (id: UpgradeId) => {
+    if (ids.has(id)) return;
+    ids.add(id);
+    for (const r of upgrade(id).requires) add(r);
+  };
+  for (const u of UPGRADES) {
+    if (currencyOf(u) !== "rp" || u.id === "standing" || u.id === "lanesx" || isCardSlice(u.id)) continue;
+    const most = u.id === "autox" ? HEAD2_AUTO_LEVELS : (u.levels?.max ?? 1);
+    let n = 0;
+    while (n < most && listPrice(u.id, n) <= limit) n++;
+    if (n === 0) continue;
+    add(u.id);
+    if (u.levels) levels[u.id] = n;
+  }
+  return { ids: UPGRADES.filter((u) => ids.has(u.id)).map((u) => u.id), levels };
 }

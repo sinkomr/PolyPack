@@ -133,7 +133,7 @@ const POINTS: How[] = [
       `<var>t</var><sub>gap</sub> = ${int(GAP_WEIGHT)} × ln(<var>g</var><sub>prev</sub> / <var>g</var><sub>new</sub>)`,
       `<var>g</var><sub>prev</sub> = <var>s</var><sub>prev</sub> / <var>b</var> − 1, <var>g</var><sub>new</sub> = <var>s</var><sub>new</sub> / <var>b</var> − 1`,
       `<var>w</var> = <var>d</var>(<var>N</var>) × <var>d</var>(<var>M</var>), where <var>d</var>(<var>n</var>) = 1 for <var>n</var> ≤ 20 and 20 / <var>n</var> above`,
-      `<var>m</var> = (1 + 0.1 × <var>T</var>) × (1 + <var>C</var>) × <var>R</var>`,
+      `<var>m</var> = 2<sup><var>n</var></sup> × (1 + <var>C</var>) × <var>R</var>`,
     ],
     vars: [
       ["<var>Δ</var>", "the relative improvement of this step (0.001 means the side shrank by 0.1 %)"],
@@ -172,7 +172,7 @@ const POINTS: How[] = [
         "the cost factor, the time one evaluation of the problem takes over the time one takes at N + M + P = 85, from a fixed table, so that a slow problem pays about as much for a second of work as a fast one",
       ],
       ["<var>m</var>", "your points multiplier"],
-      ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
+      ["<var>n</var>", "the resets you have made, each of which doubles your points"],
       ["<var>C</var>", "the collections bonus (0.05 means +5 %, and 0 without Collections)"],
       [
         "<var>R</var>",
@@ -268,44 +268,36 @@ const COUNTS: How = {
 
 const STANDING: How = {
   text: [
-    "A cycle is the time between two resets. When you reset, you trade this cycle's record points and most of your tech tree for standing.",
-    "Each point of standing adds 10 % to all the record points you earn, and it counts whether you spend it or not. You can spend standing on the upgrades in the Standing row of the tech tree, and resets keep those upgrades.",
-    `You can reset once this cycle has earned ${int(RESET_MIN)} RP that the server has confirmed. Each cycle needs 5 times as many as the one before it, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points that are still waiting for the server carry over into the next cycle.`,
+    "A cycle is the time between two resets. You reset by buying the Standing card in the tech tree, and you buy it again for each reset. The game asks you to confirm first. A reset takes this cycle's record points and most of your tech tree, and it gives you standing to spend.",
+    "Each reset gives 1 standing point, and 1 more if you finished the cycle under a rule. You can spend standing on the upgrades in the Standing row of the tech tree, and resets keep those upgrades. Each reset also doubles all the record points you earn.",
+    `Standing costs ${int(RESET_MIN)} RP in the first cycle. You need that many RP to spend, and this cycle must have earned at least that many RP that the server has confirmed. Each cycle costs 5 times as much as the one before it, so ${int(resetThreshold(1))} in the second cycle and ${int(resetThreshold(2))} in the third. Points that are still waiting for the server carry over into the next cycle.`,
     `The first reset opens ${DIMENSION_TEXT["2-on-3"].label}, ${DIMENSION_TEXT["2-on-3"].what}. The second opens ${DIMENSION_TEXT["3-in-3"].label}, ${DIMENSION_TEXT["3-in-3"].what}. A dimension stays open for good, and the problems in it are dealt by cards in the Dimensions row, which you buy again in each cycle. Curved problems, a part of ${DIMENSION_TEXT["2-in-2"].label}, have a card from the first cycle on.`,
-    "A reset takes away your RP and every upgrade bought with RP, the Dimensions row included. The only exceptions are Records pay rent, Higher rent, Collections and Standing. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods. Head starts give their upgrades back at once, at level 1.",
-    "A reset keeps your records on the server, and they go on paying rent. It also keeps your collections, your standing, the Standing row, the queue, what the dealer has learned and every count.",
+    "A reset takes away your RP and every upgrade bought with RP, the Dimensions row included. Records pay rent, Higher rent and Collections go too. Head start gives back the upgrades whose own price is small enough, and level 2 brings back Records pay rent and Collections. Keep auto-eval also keeps the Auto-eval row, and Keep methods keeps your methods.",
+    "A reset keeps your records on the server. They earn rent again once you own Records pay rent, from that moment on, and the rent that built up before is not paid. A reset also keeps your list of records, your standing, the Standing row, the queue, what the dealer has learned and every count.",
   ],
   math: [
-    `<var>G</var> = ⌊5 × √(<var>E</var> / <var>R</var>)⌋, once <var>E</var> ≥ <var>R</var>`,
-    `<var>R</var> = ${int(RESET_MIN)} × 5<sup><var>n</var></sup>`,
-    `<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉), added only for a cycle played under a rule`,
-    `multiplier on all points = 1 + 0.1 × <var>T</var>`,
-    `<var>E</var><sub>next</sub> = <var>R</var> × ((<var>G</var> + 1) / 5)<sup>2</sup>`,
+    `<var>P</var> = ${int(RESET_MIN)} × 5<sup><var>n</var></sup>`,
+    `<var>G</var> = 1, or 2 for a cycle played under a rule`,
+    `multiplier on all points = 2<sup><var>n</var></sup>`,
   ],
   vars: [
-    ["<var>G</var>", "the standing a reset gives now"],
-    ["<var>E</var>", "the record points earned in this cycle and confirmed by the server, rent included"],
-    ["<var>R</var>", "the record points this cycle needs for a reset (the threshold)"],
-    ["<var>n</var>", "the resets you have made so far (0 in the first cycle)"],
-    ["<var>G</var><sub>rule</sub>", "the extra standing for finishing a cycle under a rule"],
-    ["<var>T</var>", "the standing you have earned in all cycles, spent or not"],
     [
-      "<var>E</var><sub>next</sub>",
-      "the confirmed record points of this cycle at which the reset gives one more standing",
+      "<var>P</var>",
+      "the price of Standing, and the record points this cycle must have earned and the server confirmed",
     ],
+    ["<var>n</var>", "the resets you have made so far (0 in the first cycle)"],
+    ["<var>G</var>", "the standing points the reset gives"],
   ],
   note: "The milestones show how long this cycle took to reach a few key upgrades, next to your fastest earlier cycle.",
 };
 
 const RULES_HOW: How = {
   text: [
-    "Before a reset you can choose a rule for the next cycle, and the rule limits that whole cycle. If you finish a cycle under a rule, the reset gives half again as much standing, rounded up and at least 1 more. You also keep the rule's reward for good, but it comes only once per rule, while the extra standing comes every time you finish a cycle under it.",
+    "When you buy Standing, you can choose a rule for the next cycle, and the rule limits that whole cycle. If you finish a cycle under a rule, the reset gives 1 more standing point. You also keep the rule's reward for good, but it comes only once per rule, while the extra standing point comes every time you finish a cycle under it.",
     ...RULES.map((r) => `${r.name}. ${r.limit} Once finished, ${lowerFirst(r.reward)}`),
   ],
-  math: [`<var>G</var><sub>rule</sub> = max(1, ⌈<var>G</var> / 2⌉)`, `<var>R</var> = 1.5<sup><var>j</var></sup>`],
+  math: [`<var>R</var> = 1.5<sup><var>j</var></sup>`],
   vars: [
-    ["<var>G</var><sub>rule</sub>", "the extra standing for finishing a cycle under a rule"],
-    ["<var>G</var>", "the standing the reset gives without the rule"],
     ["<var>R</var>", "the multiplier the finished rules put on a problem's points"],
     [
       "<var>j</var>",
@@ -321,7 +313,7 @@ const RECORDS: How[] = [
     text: [
       `Once you own Records pay rent, every record you still hold earns rent each hour. The rent is ${pct(RENT_SHARE)} of the points its problem paid before multipliers, and each level of Higher rent multiplies it by ${RENT_GROWTH}. Your points multiplier at that moment applies as well.`,
       `Rent builds up all the time, even while the game is closed. When the page opens, and every ${Math.round(RENT_PAYDAY_MS / 3_600_000)} hours after that, it is payday. The game asks the server about all your records at once, in groups of up to 200. A record that is still yours pays the rent since its last payday, for at most ${Math.round(RENT_WINDOW_MS / 86_400_000)} days. If someone has beaten it, you are paid nothing for that time. A record you won during the day is paid for its part of a day. A record the server could not answer is tried again after ${minutes(RENT_RETRY_MS)}.`,
-      "Rent counts as record points earned in this cycle, so it also counts toward a reset.",
+      "Rent counts as record points earned in this cycle, so it also counts toward a reset. A reset takes Records pay rent away unless Head start gives it back. No rent builds up while you do not own it. Once you own it again, every record you still hold starts earning from that moment, and the rent that was not paid before is lost.",
     ],
     math: [
       `<var>h</var> = ${RENT_SHARE} × <var>p</var> × ${RENT_GROWTH}<sup><var>v</var></sup> × <var>m</var>`,
@@ -331,13 +323,13 @@ const RECORDS: How[] = [
       ["<var>h</var>", "the rent of one record, in RP an hour"],
       ["<var>p</var>", "the RP its problem earned before multipliers, less any taken back"],
       ["<var>v</var>", "your level of Higher rent (0 without it)"],
-      ["<var>m</var>", "your points multiplier on that problem now (standing, collections and rules)"],
+      ["<var>m</var>", "your points multiplier on that problem now (resets, collections and rules)"],
       ["<var>t</var>", "the time since the record's last payday, in hours"],
     ],
   },
   {
     text: [
-      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points, and they stay through resets. Only polygon problems count for now.",
+      "Collections count every problem where the server confirmed a record of yours, even one that was beaten later. Once you own Collections, they add to all your points. A reset takes the card away, but your records still count when you buy it again. Only polygon problems count for now.",
       `Same pieces and container. When you have ${COMBO_RECORDS} confirmed records with the same pieces in the same container, such as 21-gons in a 24-gon, you get +${COMBO_BONUS * 100} %. The piece counts can be anything.`,
       `Same pieces. A piece shape reaches a milestone at ${andList(SHAPE_MILESTONES.map(String))} confirmed records with that piece, in any container. Each milestone gives +${SHAPE_BONUS * 100} %.`,
       `Tiers. A tier first is your first confirmed record in each tier, which are ${andList(Object.values(TIER_LABEL).map((t) => `${t}s`))}. Each gives +${TIER_BONUS * 100} %.`,

@@ -103,6 +103,7 @@ import {
   rentRate,
   rentWaiting,
   syncEconomy,
+  tidyRent,
 } from "./economy";
 import { Lane, NOT_ISOLATED, isSpaceRunState } from "./lanes";
 import { methodGame, methodLabel, runSetup, warmIn, warmupOf } from "./methods";
@@ -167,8 +168,8 @@ import {
   RULES,
   bestMark,
   markProgress,
+  fundsOf,
   resetCycle,
-  resetThreshold,
   resetPreview,
   ruleAllowsMethod,
   ruleAllowsProblem,
@@ -336,6 +337,16 @@ const ladderNote = (rp: number) =>
 /** What the cheaper ladder of Faster auto-eval paid back to a save (save.ts migration 9), said once as it is read. */
 const c3Note = (rp: number) =>
   `Faster auto-eval is cheaper now. You got back ${fmtInt(rp)} RP, the difference for the levels you own.`;
+/** What version 11's change of standing paid back to a save (save.ts standingRework), said once as it is read. */
+const standingNote = (r: { standing: number; rp: number; resets: number }) =>
+  "Resets work differently now. You reset by buying the Standing card in the tech tree, and you buy it again for each reset. Each reset gives 1 standing point, or 2 under a rule, and doubles all your points. Every Standing-row option now costs 1 standing point, and the three Head starts are one upgrade with 3 levels. Records pay rent, Higher rent and Collections now go at a reset, unless Head start gives them back." +
+  (r.standing > 0
+    ? ` You got ${fmtInt(r.standing)} standing points back for what you had paid above the new prices.`
+    : "") +
+  (r.rp > 0 ? ` You had bought Standing without a reset, so you got ${fmtRP(r.rp)} RP back.` : "") +
+  (r.resets > 0
+    ? ` You keep your ${fmtInt(r.resets)} resets, so your points now pay ×${fmtInt(Math.pow(2, r.resets))}.`
+    : "");
 /** Said once to a save that had reset, when it is read (save.ts migration 4). */
 const REBALANCED_NOTE =
   "Tighter changed, and resets now work differently. Your standing was cleared, and the record points your finished cycles earned are back to spend. Your records and upgrades are kept.";
@@ -388,6 +399,7 @@ function initialState(): GameState {
         r.units ? unitsNote(r.units) : "",
         r.ladder ? ladderNote(r.ladder.rp) : "",
         r.c3 ? c3Note(r.c3.rp) : "",
+        r.standing ? standingNote(r.standing) : "",
       ];
       if (notes.some(Boolean)) startNote = notes.filter(Boolean).join(" ");
       return r.state;
@@ -2980,6 +2992,7 @@ function render(): void {
       : "Auto-eval pauses while this tab is hidden. The Continuous upgrade lets it keep running.",
   );
   renderStanding(o);
+  renderResetDialog(o);
   renderRecords(o);
   renderDock();
 }
@@ -3286,7 +3299,7 @@ const tree = new TreeRenderer(
   $("t-shop-summary"),
   $("t-tree-detail"),
   (id) => onBuy(id),
-  (id) => canBuy(owned(), { rp: state.rp, standing: state.standing.points }, id).ok,
+  (id) => canBuy(owned(), fundsOf(state), id).ok,
   (id) => onSwitch(id),
 );
 /** The tech tree is the view in place of the board (kept while the page is open). */
@@ -3297,7 +3310,7 @@ function renderUpgrades(o: Owned): void {
   if (!on) treeOpen = false;
   show("t-board-view", !treeOpen);
   show("t-upgrades", treeOpen);
-  const funds = { rp: state.rp, standing: state.standing.points };
+  const funds = fundsOf(state);
   // the tab count and the next-up line need only the summary; the whole view only while the tree shows
   let v: ReturnType<typeof treeSummary> = treeSummary(o, funds);
   if (treeOpen) {
@@ -3436,7 +3449,11 @@ function onBuy(id: UpgradeId): void {
   accrueAuto();
   // a lane past the CPU's cores would add nothing
   if (id === "lanesx" && lanesMaxed(owned())) return;
+  // Standing is the reset: it asks first
+  if (id === "standing") return openResetDialog();
   if (!buy(state, id)) return;
+  // Rent bought: the records held start earning from now
+  if (id === "rent") tidyRent(state, owned(), now());
   const u = upgrade(id);
   const l = u.levels ? ` (level ${level(owned(), id)})` : "";
   event(`Bought ${u.name}${l}. ${u.effect}`, false);
@@ -4096,15 +4113,19 @@ function setLines(id: string, lines: string[]): void {
   );
 }
 
-let confirmingReset = false;
 let rulesSig = "";
+const resetDialog = $<HTMLDialogElement>("t-reset");
+const dimensionSentence = (d: keyof typeof DIMENSION_TEXT) =>
+  `${DIMENSION_TEXT[d].label}, with ${DIMENSION_TEXT[d].what}`;
+const plural = (n: number, one: string, many: string) => `${fmtInt(n)} ${n === 1 ? one : many}`;
 
 function renderStanding(o: Owned): void {
   const st = state.standing;
   markProgress(state, now());
-  const visible = o.has("standing");
+  // the Standing card is bought as the reset and bought again each cycle, so the panel stays once a reset has been made
+  const visible = o.has("standing") || st.resets > 0;
   show("t-bar-standing-box", visible || st.total > 0);
-  text("t-bar-standing", `${fmtInt(st.points)} · ×${standingMultiplier(st).toFixed(1)}`);
+  text("t-bar-standing", `${fmtInt(st.points)} · ×${fmtInt(standingMultiplier(st))}`);
   show("t-standing", visible);
   if (!visible) return;
   // the standing to spend and its multiplier are in the totals
@@ -4129,43 +4150,65 @@ function renderStanding(o: Owned): void {
     }),
   );
   const pv = resetPreview(state);
-  const rule = ruleById(st.rule);
-  const opensText = pv.opens
-    ? ` This reset opens ${DIMENSION_TEXT[pv.opens].label}: ${DIMENSION_TEXT[pv.opens].what}.`
-    : "";
+  const opensText = pv.opens ? ` The reset opens ${dimensionSentence(pv.opens)}.` : "";
   text(
     "t-st-preview",
-    pv.gain > 0
-      ? `Reset now for ${fmtInt(pv.gain)} standing${pv.ruleBonus ? `, ${fmtInt(pv.ruleBonus)} of it for finishing under ${rule!.name}` : ""}. ` +
-          `All points would then pay ×${(standingMultiplier(st) + 0.1 * pv.gain).toFixed(1)}, up from ×${standingMultiplier(st).toFixed(1)}. ` +
-          `You get one more standing at ${fmtInt(pv.nextAt)} confirmed RP this cycle.` +
+    pv.can
+      ? `You can buy Standing in the tech tree now. It resets the game for ${plural(pv.gain, "standing point", "standing points")}, and all points then pay ×${fmtInt(standingMultiplier(st) * 2)}, up from ×${fmtInt(standingMultiplier(st))}.` +
           opensText
-      : `A reset needs ${fmtInt(resetThreshold(st.resets))} RP earned this cycle and confirmed by the server. ${fmtInt(Math.ceil(pv.short))} more to go. ` +
-          `The more RP you earn past that, the more standing it gives.` +
+      : `Standing costs ${fmtInt(pv.price)} RP. You need that many RP to spend, and this cycle must have earned that many RP that the server has confirmed. ` +
+          (pv.short > 0
+            ? `${fmtInt(Math.ceil(pv.short))} more confirmed RP to go.`
+            : `You have enough confirmed RP, and need ${fmtInt(Math.ceil(pv.price - state.rp))} more RP to spend.`) +
           opensText,
   );
-  const btn = $<HTMLButtonElement>("t-st-reset");
-  btn.disabled = pv.gain <= 0 || !ownsGame;
-  show("t-st-reset", !confirmingReset);
-  show("t-st-confirm", confirmingReset && pv.gain > 0);
-  if (confirmingReset) {
-    const kept = [
-      pv.held === 1 ? "the 1 record you hold and its rent" : `the ${fmtInt(pv.held)} records you hold and their rent`,
-      `your collections (+${fmtPct(collectionsBonus(state, o), 0)})`,
-      "standing and every standing upgrade",
-      o.has("keepAuto") ? "the Auto-eval upgrades" : "",
-      o.has("keepMethods") ? "your methods" : "",
-      "the queue, what the dealer has learned and every count",
-    ].filter(Boolean);
-    const next = ruleById(st.nextRule);
-    text(
-      "t-st-confirm-text",
-      `You get ${fmtInt(pv.gain)} standing. You lose ${fmtRP(state.rp)} RP to spend and ${fmtInt(pv.loses.length)} upgrade${pv.loses.length === 1 ? "" : "s"}. ` +
-        `You keep ${andList(kept)}. The next cycle starts with ${fmtInt(pv.keeps.length)} upgrades` +
-        (next ? ` and is played under ${next.name}. ${next.limit}` : ".") +
-        (pv.opens ? ` It opens ${DIMENSION_TEXT[pv.opens].label}: ${DIMENSION_TEXT[pv.opens].what}.` : ""),
-    );
+  // what only standing buys
+  const left = UPGRADES.filter((u) => u.currency === "standing" && costOf(o, u.id) !== null);
+  text(
+    "t-st-only",
+    left.length
+      ? `Standing buys ${andList(left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`))}. They are in the tech tree's Standing row. Resets keep them.`
+      : "You own every standing upgrade.",
+  );
+  show("t-st-history-box", st.history.length > 0);
+  setLines(
+    "t-st-history",
+    st.history
+      .map(
+        (h, i) =>
+          `Cycle ${i + 1 + Math.max(0, st.resets - st.history.length)} lasted ${fmtSpan(h.endedAt - h.startedAt)} and earned ${fmtRP(h.earned)} RP and ${plural(h.gain, "standing point", "standing points")}${h.rule ? `, under ${ruleById(h.rule)?.name ?? h.rule}` : ""}.`,
+      )
+      .reverse(),
+  );
+}
+
+/** The reset's confirm: what resets, what stays, and the rule for the next cycle (Cycle rules). */
+function renderResetDialog(o: Owned): void {
+  if (!resetDialog.open) return;
+  const st = state.standing;
+  const pv = resetPreview(state);
+  if (!pv.can) {
+    // the points it needed are gone (taken back, or spent): nothing to confirm
+    resetDialog.close();
+    return;
   }
+  const rentBack = pv.keeps.includes("rent");
+  const collectionsBack = pv.keeps.includes("collections");
+  const parts = [
+    `You get ${plural(pv.gain, "standing point", "standing points")} to spend, and all points will pay ×${fmtInt(standingMultiplier(st) * 2)}, up from ×${fmtInt(standingMultiplier(st))}.`,
+    `You lose ${fmtRP(state.rp)} RP to spend and ${plural(pv.loses.length, "upgrade", "upgrades")}. The next cycle starts with ${plural(pv.keeps.length, "upgrade", "upgrades")}.`,
+    `You keep ${pv.held === 0 ? "" : pv.held === 1 ? "the 1 record you hold, " : `the ${fmtInt(pv.held)} records you hold, `}your list of records, the dealer's learning, the queue, your standing and every count.` +
+      (o.has("keepAuto") ? " You also keep the Auto-eval upgrades." : "") +
+      (o.has("keepMethods") ? " You also keep your methods." : ""),
+    rentBack
+      ? `Records pay rent comes back, and your records start earning rent again from the moment of the reset. Rent that built up and was not paid is lost.`
+      : `Records pay rent goes until you buy it again. Rent that built up and was not paid is lost, and no rent builds up while you do not own it.` +
+        (o.has("collections") && !collectionsBack
+          ? " Collections goes too, so its bonus is off until you buy it again. Your records still count for it."
+          : ""),
+  ];
+  if (pv.opens) parts.push(`It opens ${dimensionSentence(pv.opens)}.`);
+  text("t-st-confirm-text", parts.join(" "));
   // cycle rules: the next cycle's, chosen here
   show("t-st-rules", o.has("rules"));
   if (o.has("rules")) {
@@ -4183,32 +4226,22 @@ function renderStanding(o: Owned): void {
     text(
       "t-st-rule-note",
       (chosen
-        ? `${chosen.name}. ${chosen.limit} Finishing a cycle under it gives 50 % more standing (at least 1 more)` +
+        ? `${chosen.name}. ${chosen.limit} Finishing that cycle under it gives 1 more standing point` +
           (st.rulesDone.includes(chosen.id)
             ? ". You have finished it before, so its reward already holds."
             : `, and from then on ${lowerFirst(chosen.reward)}`)
-        : "No rule chosen. A rule limits the next cycle. Finish a cycle under it for extra standing and a lasting reward.") +
+        : "No rule chosen. A rule limits the next cycle. Finish a cycle under it for 1 more standing point and a lasting reward.") +
         (st.rulesDone.length ? ` Finished so far: ${andList(st.rulesDone.map((id) => ruleById(id)!.name))}.` : ""),
     );
   }
-  // what only standing buys
-  const left = UPGRADES.filter((u) => u.currency === "standing" && costOf(o, u.id) !== null);
-  text(
-    "t-st-only",
-    left.length
-      ? `Standing buys ${andList(left.map((u) => `${u.name} (${fmtInt(costOf(o, u.id)!)})`))}. They are in the tech tree's Standing row. Resets keep them.`
-      : "You own every standing upgrade.",
-  );
-  show("t-st-history-box", st.history.length > 0);
-  setLines(
-    "t-st-history",
-    st.history
-      .map(
-        (h, i) =>
-          `Cycle ${i + 1 + Math.max(0, st.resets - st.history.length)} lasted ${fmtSpan(h.endedAt - h.startedAt)} and earned ${fmtRP(h.earned)} RP and ${fmtInt(h.gain)} standing${h.rule ? `, under ${ruleById(h.rule)?.name ?? h.rule}` : ""}.`,
-      )
-      .reverse(),
-  );
+}
+
+/** Buying the Standing card is the reset: the confirm opens, and only Reset now buys it. */
+function openResetDialog(): void {
+  if (!ownsGame || !resetPreview(state).can) return;
+  if (!resetDialog.open) resetDialog.showModal();
+  renderResetDialog(owned());
+  $("t-st-no").focus();
 }
 
 function renderRecords(o: Owned): void {
@@ -4258,8 +4291,8 @@ function renderRecords(o: Owned): void {
 
 /** Resets the cycle for standing: lanes stop and start again with the next cycle's tree. */
 async function doReset(): Promise<void> {
-  confirmingReset = false;
-  if (!ownsGame || resetPreview(state).gain <= 0) return render();
+  resetDialog.close();
+  if (!ownsGame || !resetPreview(state).can) return render();
   for (const l of lanes) {
     l.jobs = [];
     l.lane.terminate();
@@ -4270,22 +4303,25 @@ async function doReset(): Promise<void> {
   const rule = ruleById(state.standing.rule);
   const opens = resetPreview(state).opens;
   const gain = resetCycle(state, now());
+  // the dealer's lanes were stopped for the reset: a new cycle starts them again
   ensureLanes();
   lastChange.clear();
   banner = null;
   if (gain > 0) {
     const st = state.standing;
     const next = ruleById(st.rule);
-    const opened = opens ? ` It opens ${DIMENSION_TEXT[opens].label}: ${DIMENSION_TEXT[opens].what}.` : "";
+    const opened = opens ? ` It opens ${dimensionSentence(opens)}.` : "";
     event(
-      `Reset for ${fmtInt(gain)} standing. All points now pay ×${standingMultiplier(st).toFixed(1)}.` +
+      `Bought Standing and reset for ${plural(gain, "standing point", "standing points")}. All points now pay ×${fmtInt(standingMultiplier(st))}.` +
         (rule ? ` You finished a cycle under ${rule.name}. Its reward is yours for good.` : "") +
         opened,
     );
     say(
       `Cycle ${fmtInt(st.resets + 1)} begins with ${fmtInt(state.owned.length)} upgrades.` +
         (next ? ` It is played under ${next.name}. ${next.limit}` : "") +
-        " Your records stay on the server and keep paying rent.",
+        (state.owned.includes("rent")
+          ? " Your records stay on the server and earn rent again."
+          : " Your records stay on the server. They earn rent again once you own Records pay rent."),
     );
   }
   saveNow();
@@ -4460,16 +4496,7 @@ $("t-battery").addEventListener("change", () => {
   persist();
   applyHold();
 });
-$("t-st-reset").addEventListener("click", () => {
-  if (resetPreview(state).gain <= 0) return;
-  confirmingReset = true;
-  render();
-  $("t-st-no").focus();
-});
-$("t-st-no").addEventListener("click", () => {
-  confirmingReset = false;
-  render();
-});
+$("t-st-no").addEventListener("click", () => resetDialog.close());
 $("t-st-yes").addEventListener("click", () => void doReset());
 $("t-st-rule").addEventListener("change", () => {
   const v = $<HTMLSelectElement>("t-st-rule").value;
@@ -4513,6 +4540,7 @@ $("t-import").addEventListener("click", async () => {
     r.units ? unitsNote(r.units) : "",
     r.ladder ? ladderNote(r.ladder.rp) : "",
     r.c3 ? c3Note(r.c3.rp) : "",
+    r.standing ? standingNote(r.standing) : "",
   ].filter(Boolean);
   text("t-save-note", ["Save imported.", ...notes].join(" "));
   render();
@@ -4525,7 +4553,7 @@ $("t-import").addEventListener("click", async () => {
 const HOW_LEAD: Record<string, string> = {
   points: "Record points are what you earn when a board gets smaller.",
   counts: "Clicks, evaluations and runs are the three ways your work is counted.",
-  standing: "Your standing grows as you earn points, and a reset starts a new cycle.",
+  standing: "You reset by buying Standing, and each reset gives you standing to spend and doubles your points.",
   records: "A record you still hold can keep paying you rent, and collections add a bonus.",
   auto: "Auto-eval works for you in the background, spread over your lanes.",
   running: "Auto-eval pauses in a few situations, and you can change some of them.",

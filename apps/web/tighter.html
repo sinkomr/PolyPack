@@ -272,22 +272,6 @@
           <details class="t-how-more" data-how="standing">
             <summary>How standing and resets work</summary>
           </details>
-          <div id="t-st-rules" class="t-st-rules" hidden>
-            <label for="t-st-rule">Rule for the next cycle</label>
-            <select id="t-st-rule"></select>
-            <p id="t-st-rule-note" class="note"></p>
-            <details class="t-how-more" data-how="rules">
-              <summary>How cycle rules work</summary>
-            </details>
-          </div>
-          <button id="t-st-reset" class="wide" disabled>Reset for standing</button>
-          <div id="t-st-confirm" class="t-st-confirm" role="group" aria-labelledby="t-st-confirm-text" hidden>
-            <p id="t-st-confirm-text"></p>
-            <div class="row wrap">
-              <button id="t-st-yes" class="primary">Reset now</button>
-              <button id="t-st-no">Cancel</button>
-            </div>
-          </div>
           <p id="t-st-only" class="note"></p>
           <details id="t-st-history-box" class="t-st-history-box" hidden>
             <summary>Past cycles</summary>
@@ -354,6 +338,27 @@
         </button>
       </div>
     </div>
+
+    <dialog id="t-reset" class="t-dialog" aria-labelledby="t-reset-heading">
+      <div class="t-dialog-head">
+        <h2 id="t-reset-heading">Buy Standing and reset</h2>
+      </div>
+      <div class="t-dialog-body">
+        <p id="t-st-confirm-text"></p>
+        <div id="t-st-rules" class="t-st-rules" hidden>
+          <label for="t-st-rule">Rule for the next cycle</label>
+          <select id="t-st-rule"></select>
+          <p id="t-st-rule-note" class="note"></p>
+          <details class="t-how-more" data-how="rules">
+            <summary>How cycle rules work</summary>
+          </details>
+        </div>
+        <div class="row wrap">
+          <button id="t-st-yes" class="primary" type="button">Reset now</button>
+          <button id="t-st-no" type="button">Cancel</button>
+        </div>
+      </div>
+    </dialog>
 
     <dialog id="t-mechanics" class="t-dialog t-mechanics-dialog" aria-labelledby="t-mechanics-heading">
       <div class="t-dialog-head">

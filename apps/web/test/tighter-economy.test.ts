@@ -76,16 +76,16 @@ function confirmed(s: GameState, p: ProblemState, score: number, id: number, now
 describe("Tighter points multiplier", () => {
   it("multiplies what each click pays, and takes back exactly what was paid", () => {
     const { s, p } = game();
-    s.standing.total = 5;
+    s.standing.resets = 1;
     // the first record pays only its flat bonus, which no multiplier touches and rent does not count
     const first = applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
     expect(first.points!.total).toBe(1000);
     expect(s.economy.base[p.key]).toBeUndefined();
     const c = applyStep(s, p, step(1.1 * B, 2), T0);
     const paid = c.points as NonNullable<typeof c.points> & { base: number; multiplier: number };
-    expect(paid.multiplier).toBeCloseTo(1.5, 12);
+    expect(paid.multiplier).toBeCloseTo(2, 12);
     expect(paid.base).toBeGreaterThan(0);
-    expect(paid.total).toBeCloseTo(paid.base * 1.5, 9);
+    expect(paid.total).toBeCloseTo(paid.base * 2, 9);
     expect(s.rp).toBeCloseTo(1000 + paid.total, 9);
     expect(p.unconfirmed).toBeCloseTo(1000 + paid.total, 9);
     expect(s.standing.cycleEarned).toBeCloseTo(1000 + paid.total, 9);
@@ -102,7 +102,7 @@ describe("Tighter points multiplier", () => {
 
   it("shows unpaid points with the multiplier when the game is given", () => {
     const { s, p } = game();
-    s.standing.total = 10;
+    s.standing.resets = 1;
     applyStep(s, p, step(1.2 * B, 1, { evaluations: 100 }), T0);
     applyStep(s, p, step(1.1 * B, 2), T0);
     // the step paid at once: what it would pay again, measured from the first record
@@ -116,20 +116,20 @@ describe("Tighter points multiplier", () => {
 
   it("stacks standing, collections and the rules finished", () => {
     const { s, p } = game();
-    s.standing.total = 2;
+    s.standing.resets = 2;
     s.standing.rulesDone = ["small", "circles", "method"];
     s.economy.tiers = ["open"];
     const without = pointsMultiplier(s, ownedSet(s), p, "mc_compress");
     // Collections not owned: no bonus yet; small problem (N+M+P = 57) and mc_compress: ×1.5 twice
-    expect(without).toBeCloseTo(1.2 * 1.5 * 1.5, 12);
+    expect(without).toBeCloseTo(4 * 1.5 * 1.5, 12);
     s.owned.push("collections");
-    expect(pointsMultiplier(s, ownedSet(s), p, "mc_compress")).toBeCloseTo(1.2 * 1.05 * 2.25, 12);
+    expect(pointsMultiplier(s, ownedSet(s), p, "mc_compress")).toBeCloseTo(4 * 1.05 * 2.25, 12);
     expect(pointsMultiplier(s, ownedSet(s), { family: "polygon", N: 0, M: 40, P: 200 }, "basin_hopping")).toBeCloseTo(
-      1.2 * 1.05 * 1.5,
+      4 * 1.05 * 1.5,
       12,
     );
     expect(pointsMultiplier(s, ownedSet(s), { family: "polygon", N: 40, M: 40, P: 200 }, null)).toBeCloseTo(
-      1.2 * 1.05,
+      4 * 1.05,
       12,
     );
   });
@@ -221,7 +221,7 @@ describe("Tighter rent", () => {
     expect(rentWaiting(s, o, T0 + 2 * H)).toBe(0);
     s.owned.push("rentx");
     s.levels.rentx = 2;
-    s.standing.total = 10;
+    s.standing.resets = 1;
     expect(rentPerHour(s, ownedSet(s), p)).toBeCloseTo(0.01 * base * 2.25 * 2, 12);
   });
 
@@ -242,6 +242,21 @@ describe("Tighter rent", () => {
     expect(s.economy.checks[p.key]).toBeUndefined();
     expect(settleRent(s, ownedSet(s), p, T0 + 6 * H)).toBe(0);
     expect(heldRecords(s)).toEqual([]);
+  });
+
+  it("builds no rent without Rent, and no back rent once it is owned again", () => {
+    const { s, p } = game();
+    confirmed(s, p, 1.2 * B, 7, T0);
+    // a reset took Rent away: nothing accrues for days, however long the record is held
+    expect(rentRate(s, ownedSet(s))).toBe(0);
+    expect(rentWaiting(s, ownedSet(s), T0 + 5 * 24 * H)).toBe(0);
+    expect(settleRent(s, ownedSet(s), p, T0 + 5 * 24 * H)).toBe(0);
+    expect(s.economy.checks).toEqual({});
+    // Rent owned again: the record starts earning at that moment
+    s.owned.push("rent");
+    tidyRent(s, ownedSet(s), T0 + 5 * 24 * H);
+    expect(rentWaiting(s, ownedSet(s), T0 + 5 * 24 * H)).toBe(0);
+    expect(settleRent(s, ownedSet(s), p, T0 + 5 * 24 * H + H)).toBeCloseTo(rentPerHour(s, ownedSet(s), p), 12);
   });
 
   it("starts rent for records held before Rent, and forgets the rest", () => {

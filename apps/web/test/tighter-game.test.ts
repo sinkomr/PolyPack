@@ -160,12 +160,13 @@ describe("Tighter upgrades", () => {
     expect(cardState(none, funds, "harden")).toBe("mystery");
     expect(isRevealed(owning(["lattice"]), "harden")).toBe(true);
     expect(cardState(owning(["lattice"]), { rp: 1e6, standing: 0 }, "harden")).toBe("buyable");
-    // the standing row is paid in standing and hidden until Standing is owned
+    // the standing row is paid in standing and hidden until the first reset
     expect(UPGRADES.filter((u) => u.row === "standing").every((u) => u.currency === "standing" && u.mystery)).toBe(
       true,
     );
-    expect(cardState(owning(["standing"]), { rp: 1e9, standing: 0 }, "head1")).toBe("dear");
-    expect(cardState(owning(["standing"]), { rp: 0, standing: 1 }, "head1")).toBe("buyable");
+    const reset = owning([], {}, null, [], [], 1);
+    expect(cardState(reset, { rp: 1e9, standing: 0 }, "head")).toBe("dear");
+    expect(cardState(reset, { rp: 0, standing: 1 }, "head")).toBe("buyable");
     expect(ROWS.map((r) => r.id)).toEqual(expect.arrayContaining([...new Set(UPGRADES.map((u) => u.row))]));
   });
 
@@ -185,12 +186,11 @@ describe("Tighter upgrades", () => {
     expect(buy(s, "autox")).toBe(true);
     expect(level(ownedSet(s), "autox")).toBe(2);
     // standing buys standing upgrades, and Quick study lowers record-point prices by a tenth a level
-    s.owned.push("standing");
     s.standing.points = 2;
     expect(buy(s, "study")).toBe(true);
-    expect(s.standing.points).toBe(0);
+    expect(s.standing.points).toBe(1);
     expect(costOf(ownedSet(s), "autox")).toBeLessThan(Math.round(costOf(owning(["auto1"], { autox: 2 }), "autox")));
-    expect(costOf(ownedSet(s), "study")).toBe(Math.round(2 * 1.6));
+    expect(costOf(ownedSet(s), "study")).toBe(1);
     expect(laneCount(owning(["lanes2"]), 16)).toBe(2);
     expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 5 }), 16)).toBe(7);
     expect(laneCount(owning(["lanes2", "lanesx"], { lanesx: 30 }), 8)).toBe(7);

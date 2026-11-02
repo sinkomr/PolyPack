@@ -381,7 +381,7 @@ describe("Tighter saves", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     // 20 a second: 19 levels, 9 of them free; only auto6 (3,600) was bought
-    expect(r.state.levels).toEqual({ autox: 19 });
+    expect(r.state.levels).toEqual({ autox: 19, head: 2 });
     expect(r.state.rp).toBe(s.rp + Math.round(Math.max(0, 3600 - (ladderCost(20) - ladderCost(10)))));
   });
 
@@ -1003,8 +1003,10 @@ describe("Tighter saves of version 4", () => {
     expect(r.rebalanced).toBeUndefined();
     expect(r.state.queue[0]).toMatchObject({ family: "polygon", N: 24, M: 30, P: 40, bound: null });
     expect(r.state.past[0]).toMatchObject({ family: "polygon", N: 21, M: 21, P: 40 });
-    expect(r.state.rp).toBe(s.rp);
-    expect(r.state.owned).toEqual(s.owned);
+    // the Standing card it held before any reset is paid back in RP (version 11: buying it is the reset)
+    expect(r.state.rp).toBeCloseTo(s.rp + 3_000_000_000, 4);
+    expect(r.state.owned).toEqual(s.owned.filter((id) => id !== "standing"));
+    expect(r.standing).toEqual({ standing: 0, rp: 3_000_000_000, resets: 0 });
     expect(r.state.standing).toMatchObject({ points: 3, total: 5, rule: "circles", dimensions: ["2-in-2"] });
     expect(r.state.picks).toEqual(s.picks);
     expect(r.state.version).toBe(SAVE_VERSION);
@@ -1241,6 +1243,79 @@ describe("Faster auto-eval's price ladder, C2 to C3 (version 10)", () => {
       "`Faster auto-eval is cheaper now. You got back ${fmtInt(rp)} RP, the difference for the levels you own.`",
     );
     expect(main.match(/c3Note\(r\.c3\.rp\)/g)).toHaveLength(2);
+  });
+});
+
+describe("Standing as the reset, and one standing point an option (version 11)", () => {
+  /** A save as version 10 wrote it: Standing owned, some standing options bought, some standing unspent. */
+  const v10 = (owned: string[], levels: Record<string, number> = {}, resets = 2, points = 4) => {
+    const raw = JSON.parse(toJson(played()));
+    return {
+      ...raw,
+      version: 10,
+      owned: ["trace", "rent", "collections", ...owned],
+      levels,
+      rp: 500,
+      standing: { ...raw.standing, resets, points, total: 9 },
+    };
+  };
+
+  it("turns the three Head starts into the levels of one, and keeps every other option", () => {
+    const r = readSave(v10(["standing", "head1", "head2", "head3", "rules", "keepAuto"]), T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.owned).toEqual(expect.arrayContaining(["head", "rules", "keepAuto", "rent", "collections"]));
+    for (const id of ["standing", "head1", "head2", "head3"]) expect(r.state.owned).not.toContain(id);
+    expect(r.state.levels.head).toBe(3);
+    // the resets count and the unspent standing stay
+    expect(r.state.standing).toMatchObject({ resets: 2, total: 9 });
+    // paid 1 + 3 + 8 + 3 + 5 = 20, owns 3 + 1 + 1 = 5 now: 15 back, on top of the 4 unspent
+    expect(r.state.standing.points).toBe(4 + 15);
+    expect(r.standing).toEqual({ standing: 15, rp: 0, resets: 2 });
+    expect(r.state.rp).toBe(500);
+  });
+
+  it("refunds what Quick study cost beyond 1 a level, and takes the highest Head start owned", () => {
+    // Quick study level 3 cost 2 + 3 + 5 = 10 (2 × 1.6^j rounded), 3 levels now; Head start II alone cost 1 + 3 for level 2
+    const r = readSave(v10(["standing", "head1", "head2", "study"], { study: 3 }), T0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.levels).toMatchObject({ head: 2, study: 3 });
+    expect(r.state.standing.points).toBe(4 + (4 + 10 - 5));
+    expect(r.standing).toMatchObject({ standing: 9 });
+    // Head start I alone: it cost 1, it is level 1 at 1: nothing back
+    const one = readSave(v10(["standing", "head1"]), T0);
+    expect(one.ok && one.state.levels.head).toBe(1);
+    expect(one.ok && one.standing).toEqual({ standing: 0, rp: 0, resets: 2 });
+  });
+
+  it("takes Standing out of owned so it is bought as the next reset, and gives a card bought before any reset its RP back", () => {
+    const after = readSave(v10(["standing"]), T0);
+    expect(after.ok && after.state.owned).not.toContain("standing");
+    // no standing options: nothing to refund, a notice all the same (what resets do now)
+    expect(after.ok && after.standing).toEqual({ standing: 0, rp: 0, resets: 2 });
+    const before = readSave(v10(["standing"], {}, 0, 0), T0);
+    expect(before.ok && before.state.rp).toBe(500 + 3_000_000_000);
+    expect(before.ok && before.standing).toEqual({ standing: 0, rp: 3_000_000_000, resets: 0 });
+  });
+
+  it("gives a save that never owned Standing no notice, and reads a version 11 save as it is", () => {
+    const none = readSave(v10([]), T0);
+    expect(none.ok && none.standing).toBeUndefined();
+    expect(none.ok && none.state.owned).toEqual(expect.arrayContaining(["rent", "collections"]));
+    const s = played();
+    s.owned.push("head", "standing");
+    s.levels.head = 2;
+    const again = readSave(JSON.parse(toJson(s)), T0);
+    expect(again.ok && again.standing).toBeUndefined();
+    expect(again.ok && again.state.levels.head).toBe(2);
+    expect(again.ok && again.state.owned).toContain("standing");
+  });
+
+  it("says it on load, in the page and on an import", () => {
+    const main = readFileSync(new URL("../src/tighter/main.ts", import.meta.url), "utf8");
+    expect(main).toContain("Resets work differently now. You reset by buying the Standing card");
+    expect(main.match(/standingNote\(r\.standing\)/g)).toHaveLength(2);
   });
 });
 

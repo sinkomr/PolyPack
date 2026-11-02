@@ -262,7 +262,7 @@ export const DEFAULT_PATIENCE = 1000;
 export function newGame(now: number, seed: number): GameState {
   return {
     // save.ts SAVE_VERSION (save.ts imports this file, so the number is written out)
-    version: 10,
+    version: 11,
     createdAt: now,
     rp: 0,
     rpEarned: 0,
@@ -936,6 +936,8 @@ export function accrue(s: GameState, now: number, perSecond: number, cap: number
 
 /** Buys an upgrade, or its next level, with record points or standing. */
 export function buy(s: GameState, id: UpgradeId): boolean {
+  // the Standing card is the reset, and resetCycle (standing.ts) buys it
+  if (id === "standing") return false;
   const o = ownedSet(s);
   if (!canBuy(o, { rp: s.rp, standing: s.standing.points }, id).ok) return false;
   const cost = costOf(o, id)!;

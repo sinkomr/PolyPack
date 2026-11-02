@@ -408,23 +408,11 @@ canvas#board[hidden] {
   font-size: 14px;
 }
 .t-st-rules[hidden],
-.t-st-confirm[hidden],
 .t-st-history-box[hidden] {
   display: none;
 }
-#t-st-reset {
-  margin-top: 10px;
-}
-.t-st-confirm {
-  margin-top: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
-  font-size: 13.5px;
-}
-.t-st-confirm p {
-  margin: 0 0 8px;
+#t-reset .row {
+  margin-top: 12px;
 }
 .t-st-history-box {
   margin-top: 8px;

@@ -20,7 +20,6 @@ import {
   normalizeStanding,
   resetThreshold,
   ruleAllowsProblem,
-  standingGain,
 } from "../src/tighter/standing";
 import { methodsFor } from "../src/tighter/upgrades";
 
@@ -145,11 +144,9 @@ describe("Tighter standing across dimensions", () => {
     expect(dimensionOpenedBy(3)).toBeNull();
   });
 
-  it("ask 5 times the record points of the cycle before, and take the threshold in the gain", () => {
+  it("ask 5 times the record points of the cycle before", () => {
     expect([0, 1, 2, 3].map(resetThreshold)).toEqual([1e9, 5e9, 2.5e10, 1.25e11]);
     expect(resetThreshold(0)).toBe(RESET_MIN);
-    expect(standingGain(RESET_MIN)).toBe(standingGain(RESET_MIN, resetThreshold(0)));
-    expect(standingGain(RESET_MIN, 2 * RESET_MIN)).toBe(0);
   });
 });
 

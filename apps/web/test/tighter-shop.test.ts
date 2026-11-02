@@ -167,18 +167,36 @@ describe("Tighter shop", () => {
   });
 
   it("shows an upgrade kept through a reset as owned, though its prerequisites are not", () => {
-    const v = shopView(owning(["standing"]), broke, 8);
-    expect(card(v, "standing")).toBeUndefined();
-    expect(row(v, "records").owned).toEqual(["Standing"]);
+    const v = shopView(owning(["keepAuto"]), broke, 8);
+    expect(card(v, "keepAuto")).toBeUndefined();
   });
 
-  it("shows the Standing row, priced in standing, once Standing is owned", () => {
-    const v = shopView(owning(["standing"]), { rp: 1e9, standing: 2 }, 8);
+  it("shows the Standing row, priced at 1 standing, from the first reset on", () => {
+    expect(shopView(owning([]), { rp: 1e9, standing: 2 }, 8).rows.find((r) => r.id === "standing")).toBeUndefined();
+    const v = shopView(owning([], {}, null, [], [], 1), { rp: 0, standing: 2 }, 8);
     const r = row(v, "standing");
-    expect(r.cards.find((c) => c.id === "head1")).toMatchObject({ state: "buyable", price: "1 standing" });
-    expect(r.cards.find((c) => c.id === "head1")!.label).toBe("Buy Head start I for 1 standing");
-    expect(r.cards.find((c) => c.id === "head3")).toMatchObject({ state: "mystery", needs: [MYSTERY] });
-    expect(r.cards.find((c) => c.id === "rules")).toMatchObject({ state: "dear", price: "3 standing" });
+    expect(r.cards.find((c) => c.id === "head")).toMatchObject({ state: "buyable", price: "1 standing" });
+    expect(r.cards.find((c) => c.id === "head")!.label).toBe("Buy Head start for 1 standing");
+    expect(r.cards.find((c) => c.id === "keepAuto")).toMatchObject({ state: "mystery", needs: ["Head start"] });
+    expect(r.cards.find((c) => c.id === "rules")).toMatchObject({ state: "buyable", price: "1 standing" });
+    expect(r.cards.find((c) => c.id === "study")).toMatchObject({ state: "buyable", price: "1 standing" });
+  });
+
+  it("sells Standing as a reset, when its price is in hand and earned and confirmed this cycle", () => {
+    const o = owning(["collections", "rent", "ring120"]);
+    const funds = { rp: RESET_MIN, standing: 0, confirmed: RESET_MIN };
+    expect(shopView(o, funds, 8).rows.flatMap((r) => r.cards).find((c) => c.id === "standing")).toMatchObject({
+      state: "buyable",
+      price: "1,000,000,000 RP",
+    });
+    expect(
+      shopView(o, { ...funds, confirmed: RESET_MIN - 1 }, 8)
+        .rows.flatMap((r) => r.cards)
+        .find((c) => c.id === "standing"),
+    ).toMatchObject({ state: "dear" });
+    // 5 times as much in the second cycle, and Quick study does not discount it
+    const second = owning(["collections", "rent", "ring120", "study"], { study: 3 }, null, [], [], 1);
+    expect(costOf(second, "standing")).toBe(5 * RESET_MIN);
   });
 });
 
@@ -215,7 +233,7 @@ describe("Tighter shop chips", () => {
 });
 
 describe("Tighter tech tree", () => {
-  it("shows every upgrade as a node with its state, owned ones included, the Standing row once Standing is owned", async () => {
+  it("shows every upgrade as a node with its state, owned ones included, the Standing row from the first reset on", async () => {
     const { treeView, MYSTERY: M } = await import("../src/tighter/shop");
     const funds = { rp: 2000, standing: 0 };
     const v = treeView(owning(["trace"]), funds, 8);
@@ -230,9 +248,10 @@ describe("Tighter tech tree", () => {
     const poor = treeView(owning(["trace"]), { rp: 10, standing: 0 }, 8);
     expect(poor.buyable).toBe(0);
     expect(poor.next?.id).toBe("click2");
-    const st = treeView(owning(["standing"]), funds, 8);
+    expect(v.rows.map((r) => r.id)).not.toContain("standing");
+    const st = treeView(owning(["trace"], {}, null, [], [], 1), funds, 8);
     expect(st.rows.map((r) => r.id)).toContain("standing");
-    expect(st.nodes.find((n) => n.id === "head1")!.state).toBe("dear");
+    expect(st.nodes.find((n) => n.id === "head")!.state).toBe("dear");
   });
 
   it("gives an owned dealer upgrade a switch, on or off, and no other node one", async () => {
@@ -254,7 +273,7 @@ describe("Tighter tech tree", () => {
 
   it("lays every node out to the right of its prerequisites, without two nodes in one place", async () => {
     const { treeView, treeLayout, TREE } = await import("../src/tighter/shop");
-    const v = treeView(owning(["standing"]), { rp: 0, standing: 0 }, 8);
+    const v = treeView(owning(["standing"], {}, null, [], [], 1), { rp: 0, standing: 0 }, 8);
     const l = treeLayout(v.rows, v.nodes);
     expect(l.at.size).toBe(v.nodes.length);
     const seen = new Set<string>();
@@ -308,11 +327,11 @@ describe("Tighter tech tree summary", () => {
     ["fresh", owning([])],
     ["early", owning(["trace"])],
     ["mid", owning(["trace", "click2", "click3", "auto1", "queue3"])],
-    ["standing owned", owning(["standing", "trace"])],
+    ["after a reset", owning(["trace"], {}, null, [], [], 1)],
     ["a dimension open", owning(["trace", "curved"], {}, null, [], [], 1, ["2-in-2", "2-on-3"])],
     ["three dimensions", owning(["trace", "click2"], {}, null, [], [], 2, dims)],
     ["heavy", heavy(["rank8", "harden", "retake"], false)],
-    ["heavy with standing", heavy(["head1", "head2"], true)],
+    ["heavy with standing", heavy(["head"], true)],
   ];
   const funds = [
     { rp: 0, standing: 0 },
@@ -344,7 +363,7 @@ describe("Tighter tech tree summary", () => {
 
   it("counts a standing-priced card as buyable but never as the next one to save record points for", async () => {
     const { treeView, treeSummary } = await import("../src/tighter/shop");
-    const o = owning(["standing", "trace"]);
+    const o = owning(["trace"], {}, null, [], [], 1);
     const rich = { rp: 0, standing: 1e6 };
     const full = treeView(o, rich, 8);
     expect(full.nodes.some((n) => n.currency === "standing" && n.state === "buyable")).toBe(true);
@@ -437,8 +456,7 @@ describe("Tighter upgrade texts", () => {
     // Faster auto-eval has no last level, and says that the computer is the limit
     expect(text("autox")).toContain("You can buy as many levels as you like");
     expect(text("autox")).toContain("At some point your computer is the limit");
-    expect(text("head1")).toContain("Auto-eval at 1 evaluation a second");
-    expect(text("head2")).toContain("Faster auto-eval up to level 9 (10 evaluations a second)");
+    expect(text("head")).toContain("Faster auto-eval comes up to level 9 (10 evaluations a second)");
   });
 
   it("say that the lanes share auto-eval's rate, and never that each lane runs it", () => {
@@ -508,10 +526,10 @@ describe("Tighter upgrade texts", () => {
     expect(text("transfer")).toContain("6 or fewer");
     expect(WIDE).toMatchObject({ minSide: 21, maxSide: 100, minP: 40, maxP: 500 });
     expect(RESET_MIN).toBe(1_000_000_000);
-    expect(standingMultiplier({ total: 1 } as Parameters<typeof standingMultiplier>[0])).toBeCloseTo(1.1, 12);
-    expect(text("standing")).toContain("earned 1,000,000,000 record points");
+    expect(standingMultiplier({ resets: 3 } as Parameters<typeof standingMultiplier>[0])).toBe(8);
+    expect(text("standing")).toContain("costs 1,000,000,000 RP in the first cycle");
     expect(text("standing")).toContain("1,000,000,000 × 5<sup>");
-    expect(text("standing")).toContain("⌊5 × √(");
+    expect(text("standing")).toContain("2<sup>");
     expect(rpCostFactor(owning(["study"], { study: 2 }))).toBeCloseTo(0.81, 12);
   });
 });

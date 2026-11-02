@@ -29,7 +29,7 @@ import { normalizePicks } from "./picks";
 import { normalizeRunPlan } from "./runplan";
 import { plainConfig } from "./space-submission";
 import { readLattice } from "./methods/lattice";
-import { HEAD_STARTS, newStanding, normalizeStanding } from "./standing";
+import { newStanding, normalizeStanding } from "./standing";
 import { UnitsReport, convertSaveUnits } from "./units";
 import {
   AUTO_BASE,
@@ -147,7 +147,7 @@ const SHRUNK = new Map<UpgradeId, { max: number; cost: number; growth: number }>
  * misread old saves bumps SAVE_VERSION and adds a step to MIGRATIONS, and so does anything a save
  * must get exactly once (a refund): a page of an older version never writes over a newer save.
  */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 export const STORAGE_KEY = "tighter.save";
 
 /** Step k turns a save of version k into one of version k + 1. */
@@ -271,7 +271,10 @@ export const MIGRATIONS: Record<number, Migration> = {
       0,
     );
     // the standing card and everything bought with standing
-    const gone = (id: unknown) => id === "standing" || (isUpgradeId(id) && currencyOf(upgrade(id)) === "standing");
+    const gone = (id: unknown) =>
+      id === "standing" ||
+      (typeof id === "string" && id in OLD_HEAD_STARTS) ||
+      (isUpgradeId(id) && currencyOf(upgrade(id)) === "standing");
     const reset = newStanding(0);
     return {
       ...out,
@@ -340,7 +343,67 @@ export const MIGRATIONS: Record<number, Migration> = {
     const refund = autoC3Refund(rest);
     return refund > 0 ? { ...rest, rp: num(rest.rp, 0, 0) + refund, c3Refund: refund } : rest;
   },
+  /**
+   * Version 11 makes buying the Standing card the reset, gives each reset 1 standing point (2 under a
+   * rule) and every Standing-row option a price of 1 (standingRework, below). `standingRework` tells the page.
+   */
+  10: (save) => standingRework(save),
 };
+
+/** What a standing option cost until version 11, in standing: Head start I, II and III, the others, and Quick study's first level (2 × 1.6^level). */
+const OLD_STANDING_PRICES: Readonly<Record<string, number>> = {
+  head1: 1,
+  head2: 3,
+  rules: 3,
+  pipeline: 4,
+  keepAuto: 5,
+  autoTune: 6,
+  head3: 8,
+  keepMethods: 10,
+};
+const OLD_STANDING_CARD_PRICE = 3_000_000_000;
+
+/**
+ * Version 11's step for a save that had Standing or standing options. Head start I, II and III become the
+ * levels 1, 2 and 3 of Head start (the highest owned). Every other standing option stays. What the
+ * save paid beyond 1 standing for each option or level it now owns comes back as standing to spend,
+ * and its unspent standing stays. The Standing card leaves `owned`: it is bought again as the next
+ * reset. A save that held the card but had never reset gets its list price back in RP, since the card
+ * does the reset now. The resets count and everything else stay.
+ */
+export function standingRework(save: Record<string, unknown>): Record<string, unknown> {
+  const owned: unknown[] = Array.isArray(save.owned) ? save.owned : [];
+  const st = isObj(save.standing) ? save.standing : null;
+  const resets = st ? int(st.resets, 0) : 0;
+  const has = new Set(owned);
+  const heads = ["head1", "head2", "head3"].filter((id) => has.has(id));
+  const others = Object.keys(OLD_STANDING_PRICES).filter((id) => !id.startsWith("head") && has.has(id));
+  const studyLevel = has.has("study") ? int(isObj(save.levels) ? save.levels.study : 1, 1, 1, 10) : 0;
+  if (!has.has("standing") && heads.length === 0 && others.length === 0 && studyLevel === 0) return save;
+  let paid = 0;
+  for (const id of [...heads, ...others]) paid += OLD_STANDING_PRICES[id];
+  for (let j = 0; j < studyLevel; j++) paid += Math.round(2 * Math.pow(1.6, j));
+  const headLevel = heads.length ? Math.max(...heads.map((id) => Number(id.slice(4)))) : 0;
+  const nowOwned = headLevel + others.length + studyLevel;
+  const refund = Math.max(0, paid - nowOwned);
+  // the card paid in RP before any reset gets that back, at the price the save's Quick study gave it
+  const factor = rpCostFactor(owning(savedIds(owned).filter(isUpgradeId), savedLevels(save.levels)));
+  const cardRefund = has.has("standing") && resets === 0 ? Math.round(OLD_STANDING_CARD_PRICE * factor) : 0;
+  const kept = owned.filter((id) => id !== "standing" && !(typeof id === "string" && id in OLD_HEAD_STARTS));
+  if (headLevel > 0) kept.push("head");
+  const levels = Object.fromEntries(
+    Object.entries(isObj(save.levels) ? save.levels : {}).filter(([id]) => !(id in OLD_HEAD_STARTS)),
+  );
+  if (headLevel > 0) levels.head = headLevel;
+  return {
+    ...save,
+    owned: kept,
+    levels,
+    rp: num(save.rp, 0, 0) + cardRefund,
+    standing: st ? { ...st, points: num(st.points, 0, 0) + refund } : save.standing,
+    standingRework: { standing: refund, rp: cardRefund, resets, head: headLevel },
+  };
+}
 
 /**
  * What reaching `rate` evaluations a second cost under proposal C2, the ladder until version 10:
@@ -388,6 +451,12 @@ const OLD_RUNGS: Readonly<Record<string, { rate: number; cost: number }>> = {
   auto9: { rate: 100, cost: 22400 },
   auto10: { rate: 150, cost: 36000 },
 };
+/** What Head start I, II and III gave each cycle (with prerequisites) until version 11, for the old migrations' refunds. */
+const OLD_HEAD_STARTS: Readonly<Record<string, readonly string[]>> = {
+  head1: ["trace", "click2", "click3", "click4", "click5", "auto1"],
+  head2: ["queue3", "autox", "basin"],
+  head3: ["reach2", "advance", "lanes2"],
+};
 /** The rungs Head start I and II gave each cycle for nothing, before version 8. */
 const OLD_HEAD_RUNGS: Readonly<Record<string, readonly string[]>> = {
   head1: ["auto1"],
@@ -398,9 +467,11 @@ const OLD_AUTO1_COST = 80;
 /** Faster auto-eval before version 8: 10 evaluations a second a level, 10 levels, level j + 1 at 80,000 × 1.6^j. */
 const OLD_AUTOX = { step: 10, max: 10, cost: 80_000, growth: 1.6 };
 
-/** The ids of a save's `owned` list that the tree knows, and the retired Auto-eval rungs the old migrations still price. */
+/** The ids of a save's `owned` list that the tree knows, and the retired Auto-eval rungs and Head starts the old migrations still price. */
 function savedIds(v: unknown): string[] {
-  return (Array.isArray(v) ? v : []).filter((id) => isUpgradeId(id) || (typeof id === "string" && id in OLD_RUNGS));
+  return (Array.isArray(v) ? v : []).filter(
+    (id) => isUpgradeId(id) || (typeof id === "string" && (id in OLD_RUNGS || id in OLD_HEAD_STARTS)),
+  );
 }
 
 /** A save's levels of levelled upgrades, as the migrations read them: whole, at least 1, within range. */
@@ -555,7 +626,7 @@ export function autoPriceRefund(ids: readonly string[], levels: Partial<Record<U
     free.add(id);
     if (isUpgradeId(id)) for (const r of upgrade(id).requires) give(r);
   };
-  for (const [h, list] of Object.entries(HEAD_STARTS)) if (owned.has(h)) list?.forEach(give);
+  for (const [h, list] of Object.entries(OLD_HEAD_STARTS)) if (owned.has(h)) list.forEach(give);
   for (const [h, list] of Object.entries(OLD_HEAD_RUNGS)) if (owned.has(h)) list.forEach(give);
   let refund = 0;
   for (const [id, before] of Object.entries(AUTO_BEFORE) as [string, number][])
@@ -633,6 +704,8 @@ export type LoadResult =
       units?: UnitsReport;
       ladder?: { rp: number };
       c3?: { rp: number };
+      /** Version 11's change of standing and resets: the standing and RP it paid back, and the save's resets. */
+      standing?: { standing: number; rp: number; resets: number };
     }
   | { ok: false; error: string };
 
@@ -988,6 +1061,7 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
   const units = (raw.version as number) < 6 && isObj(m.save.unitsConverted) ? m.save.unitsConverted : null;
   const ladder = (raw.version as number) < 8 ? Math.round(num(m.save.ladderRefund, 0, 0)) : 0;
   const c3 = (raw.version as number) < 10 ? Math.round(num(m.save.c3Refund, 0, 0)) : 0;
+  const rework = (raw.version as number) < 11 && isObj(m.save.standingRework) ? m.save.standingRework : null;
   const converted = units ? int(units.converted, 0) : 0;
   const dropped = units ? int(units.dropped, 0) : 0;
   const state = normalize(m.save, now);
@@ -1003,6 +1077,15 @@ export function readSave(raw: unknown, now: number, migrations: Record<number, M
     ...(converted + dropped > 0 ? { units: { converted, dropped } } : {}),
     ...(ladder > 0 ? { ladder: { rp: ladder } } : {}),
     ...(c3 > 0 ? { c3: { rp: c3 } } : {}),
+    ...(rework
+      ? {
+          standing: {
+            standing: int(rework.standing, 0),
+            rp: Math.round(num(rework.rp, 0, 0)),
+            resets: int(rework.resets, 0),
+          },
+        }
+      : {}),
   };
 }
 

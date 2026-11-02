@@ -21,6 +21,7 @@ import {
   lanesMaxed,
   level,
   offText,
+  standingRowOpen,
   switchOf,
   upgrade,
 } from "./upgrades";
@@ -31,7 +32,7 @@ import {
  * explanation and its price) until every prerequisite is owned; its card still says what it needs,
  * a prerequisite that is itself an unrevealed mystery reading ?????? too. A dimension's cards (the
  * Dimensions row) exist only while the dimension is open (upgrades.ts exists). The Standing row (paid in
- * standing) shows only once Standing is owned.
+ * standing) shows once a reset has been made (Standing is bought as the reset, and bought again each cycle).
  *
  * `shopView` and `treeView` are pure (the tests read them); `TreeRenderer` draws the tree in its
  * own pane, as columns of upgrades with lines from each prerequisite (the tech-tree concept,
@@ -194,7 +195,7 @@ export function shopView(o: Owned, funds: Funds, coreCount = cores()): ShopView 
   let mysteries = 0;
   for (const { id: row, title } of ROWS) {
     // standing is paid in standing: its row shows once Standing is owned
-    if (row === "standing" && !o.has("standing")) continue;
+    if (row === "standing" && !standingRowOpen(o)) continue;
     const list = UPGRADES.filter((u) => u.row === row && exists(o, u.id));
     const owned: string[] = [];
     const cards: CardView[] = [];
@@ -293,7 +294,7 @@ interface Entry {
 /** Every upgrade the tree shows, in order, with its state. The one place that decides what is buyable. */
 function treeEntries(o: Owned, funds: Funds, coreCount: number): Entry[] {
   const out: Entry[] = [];
-  const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
+  const rows = ROWS.filter((r) => r.id !== "standing" || standingRowOpen(o));
   for (const { id: row } of rows)
     for (const u of UPGRADES.filter((x) => x.row === row && exists(o, x.id))) {
       const done = u.id === "lanesx" && lanesMaxed(o, coreCount);
@@ -311,7 +312,7 @@ export function treeView(o: Owned, funds: Funds, coreCount = cores()): TreeView 
   const nodes: NodeView[] = [];
   let owned = 0;
   let mysteries = 0;
-  const rows = ROWS.filter((r) => r.id !== "standing" || o.has("standing"));
+  const rows = ROWS.filter((r) => r.id !== "standing" || standingRowOpen(o));
   for (const { u, row, state, done } of treeEntries(o, funds, coreCount)) {
     const depth = DEPTH.get(u.id) ?? 0;
     if (o.has(u.id)) owned++;
