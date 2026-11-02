@@ -190,7 +190,16 @@ import {
   submissionBody,
   troubleText,
 } from "./submission";
-import { BoardStage, RunChoice, boardStage, chooseRun, observeRun, pipelineMethod, planRandom, problemKind } from "./runplan";
+import {
+  BoardStage,
+  RunChoice,
+  boardStage,
+  chooseRun,
+  observeRun,
+  pipelineMethod,
+  planRandom,
+  problemKind,
+} from "./runplan";
 import { renderRunsPanel } from "./runs-ui";
 import { runPayday } from "./payday";
 import { TransferStart, chooseStart, neighbourPs, scoredTransfer } from "./transfer";
@@ -3184,7 +3193,7 @@ function renderPayDetail(p: ProblemState): void {
   const sig = why.join("|");
   if (row.dataset.sig === sig) return;
   row.dataset.sig = sig;
-  row.replaceChildren(...(why.length ? [moreDetail({ text: why }, "the last payment", "t-pay-detail")] : []));
+  row.replaceChildren(...(why.length ? [moreDetail({ text: why }, "The last payment", "t-pay-detail")] : []));
 }
 
 /** The score box's two pay rows: what multiplies the problem's improvements, and the bonus it can still pay. */

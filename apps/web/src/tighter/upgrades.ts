@@ -500,7 +500,17 @@ function methodRung(id: UpgradeId, cost: number, requires: UpgradeId[], mystery 
   const m = METHOD[id]!;
   const g = methodGame(m);
   const name = g.name ?? `Method: ${methodLabel(m)}`;
-  return { id, name, cost, requires, effect: g.effect!, ...(g.bestFor ? { bestFor: g.bestFor } : {}), how: g.how!(SELECT), row: "methods", mystery };
+  return {
+    id,
+    name,
+    cost,
+    requires,
+    effect: g.effect!,
+    ...(g.bestFor ? { bestFor: g.bestFor } : {}),
+    how: g.how!(SELECT),
+    row: "methods",
+    mystery,
+  };
 }
 
 /**
