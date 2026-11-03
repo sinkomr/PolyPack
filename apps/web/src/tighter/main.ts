@@ -165,7 +165,7 @@ import {
   toExportJson,
   toJson,
 } from "./save";
-import { Archive, archiveOf, archiveReady, attachArchive, idbStore } from "./archive";
+import { Archive, archiveOf, archiveReady, attachArchive, idbStore, newArchiveId } from "./archive";
 import { recoverRecords } from "./recovery";
 import { renderPace } from "./render-pace";
 import { PHONE_QUERY, TreeRenderer, treeSummary, treeView } from "./shop";
@@ -447,8 +447,10 @@ function initialState(): GameState {
 let state = initialState();
 // collections and the first cycle's earnings, for a save from before records were an economy
 syncEconomy(state);
-// the records past the save's limit live in IndexedDB (archive.ts): they load right after the save
-attachArchive(state, new Archive(idbStore()));
+// the records past the save's limit live in IndexedDB (archive.ts): they load right after the save,
+// from the database this save names (it is written with the save before any row is)
+state.archiveId ??= newArchiveId();
+attachArchive(state, new Archive(idbStore(state.archiveId)));
 try {
   // ask the browser not to clear the archive when it is short of space
   void navigator.storage?.persist?.().catch(() => undefined);
@@ -4719,9 +4721,11 @@ async function doImport(source: string): Promise<void> {
   await archiveLoaded;
   for (const l of lanes) l.lane.terminate();
   lanes.length = 0;
-  // the imported game's archived records replace the current ones
-  const a = archiveOf(state) ?? new Archive(idbStore());
+  // the imported game's archived records replace the current ones, in this save's database
+  state.archiveId ??= newArchiveId();
+  const a = archiveOf(state) ?? new Archive(idbStore(state.archiveId));
   a.replaceAll(r.archive ?? []);
+  r.state.archiveId = state.archiveId;
   state = r.state;
   attachArchive(state, a);
   syncEconomy(state);

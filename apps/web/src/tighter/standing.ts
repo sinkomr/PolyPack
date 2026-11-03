@@ -214,12 +214,7 @@ export function rentClass(p: ProblemKey): number {
 }
 /** The rules' reward factor shared by every problem of a class (the method rule needs a run, which a past entry has not). */
 export function rentClassFactor(s: StandingState, c: number): number {
-  let f = 1;
-  if (c < 4) {
-    if (s.rulesDone.includes("circles") && c & 1) f *= 1.5;
-    if (s.rulesDone.includes("small") && c & 2) f *= 1.5;
-  }
-  return f;
+  return c < 4 ? shapeRuleFactor(s, (c & 1) !== 0, (c & 2) !== 0) : 1;
 }
 
 /**
@@ -257,12 +252,19 @@ const SMALL_FRONTIER: readonly ProblemKey[] = FRONTIER.filter(isSmall);
 
 /** The rules' rewards on one improvement's points: the product of those finished that apply. */
 export function ruleRewardFactor(s: StandingState, p: ProblemKey, method: string | null): number {
+  let f = isPolygon(p) ? shapeRuleFactor(s, hasCircles(p), isSmall(p)) : 1;
+  if (s.rulesDone.includes("method") && method === "mc_compress") f *= RULE_REWARD;
+  return f;
+}
+
+/** What a completed rule multiplies the points of the problems it was about by. */
+const RULE_REWARD = 1.5;
+
+/** The polygon rules' rewards: circles only, and small problems only. */
+function shapeRuleFactor(s: StandingState, circles: boolean, small: boolean): number {
   let f = 1;
-  if (isPolygon(p)) {
-    if (s.rulesDone.includes("circles") && hasCircles(p)) f *= 1.5;
-    if (s.rulesDone.includes("small") && isSmall(p)) f *= 1.5;
-  }
-  if (s.rulesDone.includes("method") && method === "mc_compress") f *= 1.5;
+  if (s.rulesDone.includes("circles") && circles) f *= RULE_REWARD;
+  if (s.rulesDone.includes("small") && small) f *= RULE_REWARD;
   return f;
 }
 

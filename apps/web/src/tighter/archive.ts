@@ -43,16 +43,27 @@ export class MemoryStore implements ArchiveStore {
   }
 }
 
-export const DB_NAME = "tighter";
+/** The database of a save's archive: one per save (GameState.archiveId), so a new game never reads another's rows. */
+export const dbName = (archiveId: string) => `tighter-archive-${archiveId}`;
 export const STORE_NAME = "records";
 
-/** The IndexedDB store, or null where the browser has none. */
-export function idbStore(): ArchiveStore | null {
+/** A new archive id: 16 random bytes, base64url. */
+export function newArchiveId(): string {
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return btoa(String.fromCharCode(...b))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+/** The IndexedDB store of the save whose archive id this is, or null where the browser has none. */
+export function idbStore(archiveId: string): ArchiveStore | null {
   if (typeof indexedDB === "undefined") return null;
   let opened: Promise<IDBDatabase> | null = null;
   const open = () =>
     (opened ??= new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(dbName(archiveId), 1);
       req.onupgradeneeded = () => {
         if (!req.result.objectStoreNames.contains(STORE_NAME))
           req.result.createObjectStore(STORE_NAME, { keyPath: "key" });

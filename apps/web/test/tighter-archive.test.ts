@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { HolderResponse } from "@polypack/geometry";
 import type { LeadersAnswer } from "../src/api";
-import { Archive, MemoryStore, archiveOf, attachArchive, ensureArchive } from "../src/tighter/archive";
+import {
+  Archive,
+  MemoryStore,
+  archiveOf,
+  attachArchive,
+  dbName,
+  ensureArchive,
+  newArchiveId,
+} from "../src/tighter/archive";
 import type { ArchiveRow } from "../src/tighter/archive";
 import { RENT_WINDOW_MS, rentPerHour, rentRate, rentWaiting, tidyRent } from "../src/tighter/economy";
 import {
@@ -21,7 +29,8 @@ import { runPayday } from "../src/tighter/payday";
 import type { PaydayDeps } from "../src/tighter/payday";
 import { recoverRecords } from "../src/tighter/recovery";
 import { archiveRows, exportString, fromJson, importString, toExportJson, toJson } from "../src/tighter/save";
-import { heldCount } from "../src/tighter/standing";
+import { heldCount, rentClass, rentClassFactor, ruleRewardFactor } from "../src/tighter/standing";
+import { poly } from "../src/tighter/frontier";
 
 const T0 = 1_000_000_000;
 const H = 3_600_000;
@@ -397,5 +406,29 @@ describe("many archived rows", () => {
     const t2 = performance.now();
     for (let i = 0; i < 100; i++) rentWaiting(s, o, T0 + H);
     expect((performance.now() - t2) / 100).toBeLessThan(5);
+  });
+});
+
+describe("the archive belongs to its save", () => {
+  it("has a database per archive id, and the id round-trips through the save", () => {
+    const a = newArchiveId();
+    const b = newArchiveId();
+    expect(a).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(a).not.toBe(b);
+    expect(dbName(a)).not.toBe(dbName(b));
+    const s = newGame(T0, 7);
+    s.archiveId = a;
+    const back = fromJson(toJson(s), T0);
+    expect(back.ok && back.state.archiveId).toBe(a);
+    // a malformed id is not read: the page then names a new one
+    const bad = fromJson(JSON.stringify({ ...JSON.parse(toJson(s)), archiveId: "../x" }), T0);
+    expect(bad.ok && bad.state.archiveId).toBeUndefined();
+  });
+
+  it("gives an archived record the rules' rewards a problem in the save would get", () => {
+    const s = newGame(T0, 7);
+    s.standing.rulesDone = ["circles", "small"];
+    for (const p of [poly(0, 4, 5), poly(0, 30, 80), poly(5, 6, 7), poly(21, 40, 90)])
+      expect(rentClassFactor(s.standing, rentClass(p))).toBe(ruleRewardFactor(s.standing, p, null));
   });
 });

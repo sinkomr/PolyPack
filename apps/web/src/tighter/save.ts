@@ -1071,6 +1071,10 @@ export function normalize(save: Record<string, unknown>, now: number): GameState
     bonusPaid: readBonusPaid(save.bonusPaid),
     // optional: set once the records lost from the save were looked for on the server
     ...(save.archiveRecovered === true ? { archiveRecovered: true } : {}),
+    // optional: the name of this save's record archive (a save without one gets a new one at load)
+    ...(typeof save.archiveId === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(save.archiveId)
+      ? { archiveId: save.archiveId }
+      : {}),
   };
 }
 

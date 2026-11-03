@@ -248,6 +248,8 @@ export interface GameState {
   bonusPaid: Record<string, number>;
   /** Set once the records lost from the save were looked for on the server (recovery.ts). */
   archiveRecovered?: boolean;
+  /** Names this save's record archive in IndexedDB (archive.ts): another save, or a new game, has its own. */
+  archiveId?: string;
 }
 
 export const TRACE_LIMIT = 400;
